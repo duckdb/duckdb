@@ -1,0 +1,40 @@
+# name: test/sql/parser/deeply_nested_types.test
+# description: Deeply nested type expressions parse and bind within the expression depth limit
+# group: [parser]
+
+statement ok
+SET max_expression_depth=1000;
+
+foreach depth 1 10 100
+
+query I
+FROM query('SELECT (NULL::' || repeat('MAP(INTEGER, ', {depth}) || 'INTEGER' || repeat(')', {depth}) || ') IS NULL');
+----
+true
+
+query I
+FROM query('SELECT (NULL::' || repeat('STRUCT(a ', {depth}) || 'INTEGER' || repeat(')', {depth}) || ') IS NULL');
+----
+true
+
+query I
+FROM query('SELECT (NULL::' || repeat('UNION(u ', {depth}) || 'INTEGER' || repeat(')', {depth}) || ') IS NULL');
+----
+true
+
+query I
+FROM query('SELECT (NULL::' || repeat('TUPLE(', {depth}) || 'INTEGER' || repeat(')', {depth}) || ') IS NULL');
+----
+true
+
+query I
+FROM query('SELECT (NULL::' || repeat('MAP(INTEGER, STRUCT(a ', {depth}) || 'INTEGER[]' || repeat('))', {depth}) || ') IS NULL');
+----
+true
+
+endloop
+
+query I
+SELECT typeof(NULL::MAP(INTEGER, STRUCT(a UNION(u TUPLE(INTEGER[], VARCHAR))))[]);
+----
+MAP(INTEGER, STRUCT(a UNION(u TUPLE(INTEGER[], VARCHAR))))[]

@@ -412,6 +412,8 @@ static const TransformFrameOps SCHEMA_RESERVED_TYPE_NAME_OPS = {
 static const TransformFrameOps TYPE_MODIFIERS_OPS = {"TypeModifiers",
                                                      &PEGTransformerFactory::InitializeTypeModifiersTrampoline,
                                                      &PEGTransformerFactory::FinalizeTypeModifiersTrampoline};
+static const TransformFrameOps NESTED_TYPE_OPS = {"NestedType", &PEGTransformerFactory::InitializeNestedTypeTrampoline,
+                                                  &PEGTransformerFactory::FinalizeNestedTypeTrampoline};
 static const TransformFrameOps ROW_TYPE_OPS = {"RowType", &PEGTransformerFactory::InitializeRowTypeTrampoline,
                                                &PEGTransformerFactory::FinalizeRowTypeTrampoline};
 static const TransformFrameOps SETOF_TYPE_OPS = {"SetofType", &PEGTransformerFactory::InitializeSetofTypeTrampoline,
@@ -3197,6 +3199,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"CatalogReservedSchemaTypeName", &CATALOG_RESERVED_SCHEMA_TYPE_NAME_OPS},
 	    {"SchemaReservedTypeName", &SCHEMA_RESERVED_TYPE_NAME_OPS},
 	    {"TypeModifiers", &TYPE_MODIFIERS_OPS},
+	    {"NestedType", &NESTED_TYPE_OPS},
 	    {"RowType", &ROW_TYPE_OPS},
 	    {"SetofType", &SETOF_TYPE_OPS},
 	    {"UnionType", &UNION_TYPE_OPS},
@@ -6642,6 +6645,49 @@ PEGTransformerFactory::FinalizeTypeModifiersTrampoline(PEGTransformer &transform
 	return transformer.MakeResult<vector<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
+void PEGTransformerFactory::InitializeNestedTypeTrampoline(PEGTransformer &transformer,
+                                                           GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &repeat_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	idx_t dynamic_child_count = 0;
+	if (repeat_opt.HasResult()) {
+		auto &repeat_pr = repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto repeat_children = repeat_pr.GetChildren();
+		dynamic_child_count = repeat_children.size();
+		process.ReserveChildSlots(2 + dynamic_child_count - 1);
+		for (idx_t i = repeat_children.size(); i > 0; i--) {
+			auto child_idx = i - 1;
+			process.PushChild({transformer.GetRule("ArrayBounds"), repeat_children[child_idx].get()}, 1 + child_idx);
+		}
+	} else {
+		process.ReserveChildSlots(2 - 1);
+	}
+	process.PushChild({transformer.GetRule("TypeVariations"), list_pr.GetChild(0)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeNestedTypeTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	idx_t dynamic_child_count = 0;
+	auto &dynamic_repeat_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (dynamic_repeat_opt.HasResult()) {
+		auto &dynamic_repeat_pr = dynamic_repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
+		dynamic_child_count = dynamic_repeat_children.size();
+	}
+	auto type_variations = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	optional<vector<int64_t>> array_bounds {};
+	if (dynamic_child_count > 0) {
+		vector<int64_t> array_bounds_value;
+		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
+			array_bounds_value.push_back(process.TakeResult<int64_t>(i));
+		}
+		array_bounds = std::move(array_bounds_value);
+	}
+	auto result = TransformNestedType(transformer, std::move(type_variations), array_bounds);
+	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
+}
+
 void PEGTransformerFactory::InitializeRowTypeTrampoline(PEGTransformer &transformer,
                                                         GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
@@ -6654,11 +6700,11 @@ void PEGTransformerFactory::InitializeRowTypeTrampoline(PEGTransformer &transfor
 
 arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeRowTypeTrampoline(PEGTransformer &transformer,
                                                                                  GeneratedTransformProcess &process) {
-	optional<child_list_t<LogicalType>> col_id_type_list {};
+	optional<vector<pair<Identifier, unique_ptr<ParsedExpression>>>> col_id_type_list {};
 	if (process.child_results[0]) {
-		col_id_type_list = process.TakeResult<child_list_t<LogicalType>>(0);
+		col_id_type_list = process.TakeResult<vector<pair<Identifier, unique_ptr<ParsedExpression>>>>(0);
 	}
-	auto result = TransformRowType(transformer, col_id_type_list);
+	auto result = TransformRowType(transformer, std::move(col_id_type_list));
 	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
 }
 
@@ -6666,13 +6712,13 @@ void PEGTransformerFactory::InitializeSetofTypeTrampoline(PEGTransformer &transf
                                                           GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(1);
-	process.PushChild({transformer.GetRule("Type"), list_pr.GetChild(1)}, 0);
+	process.PushChild({transformer.GetRule("NestedType"), list_pr.GetChild(1)}, 0);
 }
 
 arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSetofTypeTrampoline(PEGTransformer &transformer,
                                                                                    GeneratedTransformProcess &process) {
-	auto type = process.TakeResult<LogicalType>(0);
-	auto result = TransformSetofType(transformer, type);
+	auto nested_type = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	auto result = TransformSetofType(transformer, std::move(nested_type));
 	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
 }
 
@@ -6685,8 +6731,8 @@ void PEGTransformerFactory::InitializeUnionTypeTrampoline(PEGTransformer &transf
 
 arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeUnionTypeTrampoline(PEGTransformer &transformer,
                                                                                    GeneratedTransformProcess &process) {
-	auto col_id_type_list = process.TakeResult<child_list_t<LogicalType>>(0);
-	auto result = TransformUnionType(transformer, col_id_type_list);
+	auto col_id_type_list = process.TakeResult<vector<pair<Identifier, unique_ptr<ParsedExpression>>>>(0);
+	auto result = TransformUnionType(transformer, std::move(col_id_type_list));
 	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
 }
 
@@ -6708,12 +6754,12 @@ PEGTransformerFactory::FinalizeColIdTypeListTrampoline(PEGTransformer &transform
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
-	vector<pair<Identifier, LogicalType>> col_id_type;
+	vector<pair<Identifier, unique_ptr<ParsedExpression>>> col_id_type;
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
-		col_id_type.push_back(process.TakeResult<pair<Identifier, LogicalType>>(i));
+		col_id_type.push_back(process.TakeResult<pair<Identifier, unique_ptr<ParsedExpression>>>(i));
 	}
-	auto result = TransformColIdTypeList(transformer, col_id_type);
-	return transformer.MakeResult<child_list_t<LogicalType>>(result);
+	auto result = TransformColIdTypeList(transformer, std::move(col_id_type));
+	return transformer.MakeResult<vector<pair<Identifier, unique_ptr<ParsedExpression>>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeMapTypeTrampoline(PEGTransformer &transformer,
@@ -6727,7 +6773,7 @@ void PEGTransformerFactory::InitializeMapTypeTrampoline(PEGTransformer &transfor
 		process.ReserveChildSlots(1 + dynamic_child_count - 1);
 		for (idx_t i = list_items.size(); i > 0; i--) {
 			auto child_idx = i - 1;
-			process.PushChild({transformer.GetRule("Type"), list_items[child_idx].get()}, 0 + child_idx);
+			process.PushChild({transformer.GetRule("NestedType"), list_items[child_idx].get()}, 0 + child_idx);
 		}
 	} else {
 		process.ReserveChildSlots(1 - 1);
@@ -6743,16 +6789,16 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeMapTypeTrampoline
 		auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(dynamic_list_opt.GetResult()));
 		dynamic_child_count = dynamic_list_items.size();
 	}
-	optional<vector<LogicalType>> type {};
-	auto &type_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
-	if (type_opt.HasResult()) {
-		vector<LogicalType> type_value;
+	optional<vector<unique_ptr<ParsedExpression>>> nested_type {};
+	auto &nested_type_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (nested_type_opt.HasResult()) {
+		vector<unique_ptr<ParsedExpression>> nested_type_value;
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
-			type_value.push_back(process.TakeResult<LogicalType>(i));
+			nested_type_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
-		type = std::move(type_value);
+		nested_type = std::move(nested_type_value);
 	}
-	auto result = TransformMapType(transformer, type);
+	auto result = TransformMapType(transformer, std::move(nested_type));
 	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
 }
 
@@ -6764,7 +6810,7 @@ void PEGTransformerFactory::InitializeTupleTypeTrampoline(PEGTransformer &transf
 	process.ReserveChildSlots(1 + dynamic_child_count - 1);
 	for (idx_t i = list_items.size(); i > 0; i--) {
 		auto child_idx = i - 1;
-		process.PushChild({transformer.GetRule("Type"), list_items[child_idx].get()}, 0 + child_idx);
+		process.PushChild({transformer.GetRule("NestedType"), list_items[child_idx].get()}, 0 + child_idx);
 	}
 }
 
@@ -6773,11 +6819,11 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTupleTypeTrampoli
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(1)));
 	auto dynamic_child_count = dynamic_list_items.size();
-	vector<LogicalType> type;
+	vector<unique_ptr<ParsedExpression>> nested_type;
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
-		type.push_back(process.TakeResult<LogicalType>(i));
+		nested_type.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
-	auto result = TransformTupleType(transformer, type);
+	auto result = TransformTupleType(transformer, std::move(nested_type));
 	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
 }
 
@@ -6785,16 +6831,16 @@ void PEGTransformerFactory::InitializeColIdTypeTrampoline(PEGTransformer &transf
                                                           GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(2);
-	process.PushChild({transformer.GetRule("Type"), list_pr.GetChild(1)}, 1);
+	process.PushChild({transformer.GetRule("NestedType"), list_pr.GetChild(1)}, 1);
 	process.PushChild({transformer.GetRule("ColId"), list_pr.GetChild(0)}, 0);
 }
 
 arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColIdTypeTrampoline(PEGTransformer &transformer,
                                                                                    GeneratedTransformProcess &process) {
 	auto col_id = process.TakeResult<Identifier>(0);
-	auto type = process.TakeResult<LogicalType>(1);
-	auto result = TransformColIdType(transformer, col_id, type);
-	return transformer.MakeResult<pair<Identifier, LogicalType>>(result);
+	auto nested_type = process.TakeResult<unique_ptr<ParsedExpression>>(1);
+	auto result = TransformColIdType(transformer, col_id, std::move(nested_type));
+	return transformer.MakeResult<pair<Identifier, unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeArrayBoundsTrampoline(PEGTransformer &transformer,

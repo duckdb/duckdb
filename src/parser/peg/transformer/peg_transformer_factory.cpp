@@ -162,6 +162,7 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 	//===--------------------------------------------------------------------===//
 	grammar.SetExpressionDepth("SingleExpression", ExpressionDepthKind::NESTING);
 	grammar.SetExpressionDepth("Type", ExpressionDepthKind::NESTING);
+	grammar.SetExpressionDepth("NestedType", ExpressionDepthKind::NESTING);
 	grammar.SetExpressionDepth("LambdaArrowExpression", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("LogicalOrExpression", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("LogicalAndExpression", ExpressionDepthKind::CHAIN);

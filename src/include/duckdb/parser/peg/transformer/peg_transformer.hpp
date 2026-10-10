@@ -165,11 +165,8 @@ DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.arena_ptr<Transfo
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.bool", bool);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.case_insensitive_map_t<unique_ptr<ParsedExpression>>",
                                       case_insensitive_map_t<unique_ptr<ParsedExpression>>);
-DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.child_list_t<LogicalType>", child_list_t<LogicalType>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.int64_t", int64_t);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.optional_idx", optional_idx);
-DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.pair<Identifier, LogicalType>",
-                                      pair<Identifier, LogicalType>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.pair<Identifier, unique_ptr<CommonTableExpressionInfo>>",
                                       pair<Identifier, unique_ptr<CommonTableExpressionInfo>>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.pair<Identifier, unique_ptr<ParsedExpression>>",
@@ -238,6 +235,8 @@ DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<PivotColum
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<WindowBoundaryExpression>",
                                       vector<WindowBoundaryExpression>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<bool>", vector<bool>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<pair<Identifier, unique_ptr<ParsedExpression>>>",
+                                      vector<pair<Identifier, unique_ptr<ParsedExpression>>>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<string>", vector<string>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<unique_ptr<ParsedExpression>>",
                                       vector<unique_ptr<ParsedExpression>>);
@@ -1146,6 +1145,9 @@ public:
 	static void InitializeTypeModifiersTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeTypeModifiersTrampoline(PEGTransformer &transformer,
 	                                                                       GeneratedTransformProcess &process);
+	static void InitializeNestedTypeTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeNestedTypeTrampoline(PEGTransformer &transformer,
+	                                                                    GeneratedTransformProcess &process);
 	static void InitializeRowTypeTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeRowTypeTrampoline(PEGTransformer &transformer,
 	                                                                 GeneratedTransformProcess &process);
@@ -4354,19 +4356,26 @@ public:
 	                                                     const Identifier &reserved_type_name);
 	static vector<unique_ptr<ParsedExpression>>
 	TransformTypeModifiers(PEGTransformer &transformer, optional<vector<unique_ptr<ParsedExpression>>> expression);
-	static unique_ptr<ParsedExpression> TransformRowType(PEGTransformer &transformer,
-	                                                     const optional<child_list_t<LogicalType>> &col_id_type_list);
-	static unique_ptr<ParsedExpression> TransformSetofType(PEGTransformer &transformer, const LogicalType &type);
-	static unique_ptr<ParsedExpression> TransformUnionType(PEGTransformer &transformer,
-	                                                       const child_list_t<LogicalType> &col_id_type_list);
-	static child_list_t<LogicalType> TransformColIdTypeList(PEGTransformer &transformer,
-	                                                        const vector<pair<Identifier, LogicalType>> &col_id_type);
+	static unique_ptr<ParsedExpression> TransformNestedType(PEGTransformer &transformer,
+	                                                        unique_ptr<ParsedExpression> type_variations,
+	                                                        const optional<vector<int64_t>> &array_bounds);
+	static unique_ptr<ParsedExpression>
+	TransformRowType(PEGTransformer &transformer,
+	                 optional<vector<pair<Identifier, unique_ptr<ParsedExpression>>>> col_id_type_list);
+	static unique_ptr<ParsedExpression> TransformSetofType(PEGTransformer &transformer,
+	                                                       unique_ptr<ParsedExpression> nested_type);
+	static unique_ptr<ParsedExpression>
+	TransformUnionType(PEGTransformer &transformer,
+	                   vector<pair<Identifier, unique_ptr<ParsedExpression>>> col_id_type_list);
+	static vector<pair<Identifier, unique_ptr<ParsedExpression>>>
+	TransformColIdTypeList(PEGTransformer &transformer,
+	                       vector<pair<Identifier, unique_ptr<ParsedExpression>>> col_id_type);
 	static unique_ptr<ParsedExpression> TransformMapType(PEGTransformer &transformer,
-	                                                     const optional<vector<LogicalType>> &type);
+	                                                     optional<vector<unique_ptr<ParsedExpression>>> nested_type);
 	static unique_ptr<ParsedExpression> TransformTupleType(PEGTransformer &transformer,
-	                                                       const vector<LogicalType> &type);
-	static pair<Identifier, LogicalType> TransformColIdType(PEGTransformer &transformer, const Identifier &col_id,
-	                                                        const LogicalType &type);
+	                                                       vector<unique_ptr<ParsedExpression>> nested_type);
+	static pair<Identifier, unique_ptr<ParsedExpression>>
+	TransformColIdType(PEGTransformer &transformer, const Identifier &col_id, unique_ptr<ParsedExpression> nested_type);
 	static int64_t TransformArrayKeyword(PEGTransformer &transformer);
 	static int64_t TransformArrayKeywordWithBounds(PEGTransformer &transformer, const int64_t &square_brackets_array);
 	static int64_t TransformSquareBracketsArray(PEGTransformer &transformer,
