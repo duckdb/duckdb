@@ -183,11 +183,30 @@ static bool TryPrimitiveComparisonExecute(const Vector &left, const Vector &righ
 #endif
 }
 
+static idx_t GetComparisonCount(const Vector &left, const Vector &right, const char *fname) {
+	const bool left_is_const = left.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	const bool right_is_const = right.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	if (!left_is_const && !right_is_const && left.size() != right.size()) {
+		throw InternalException("Mismatch in input vector sizes for %s - left has %d rows but right has %d", fname,
+		                        left.size(), right.size());
+	}
+	return left_is_const ? right.size() : left.size();
+}
+
 template <class PREDICATE>
 static void ComparatorToBoolean(const Vector &left, const Vector &right, Vector &result, const ExpressionType comp,
                                 PREDICATE predicate) {
 	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
 	Vector comparator_result(LogicalType::TINYINT);
+	if (left.GetVectorType() == VectorType::CONSTANT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		const auto count = GetComparisonCount(left, right, "Comparator");
+		VectorOperations::ComparatorFill(left, right, comparator_result, 1, comp);
+		auto cmp_data = comparator_result.Values<int8_t>();
+		auto entry = cmp_data[0];
+		auto value = entry.IsValid() ? Value::BOOLEAN(predicate(entry.GetValue())) : Value(LogicalType::BOOLEAN);
+		result.Reference(value, count_t(count));
+		return;
+	}
 	VectorOperations::Comparator(left, right, comparator_result, comp);
 	const auto count = comparator_result.size();
 	auto cmp_data = comparator_result.Values<int8_t>();
@@ -201,16 +220,6 @@ static void ComparatorToBoolean(const Vector &left, const Vector &right, Vector 
 			result_data.WriteValue(predicate(entry.GetValue()));
 		}
 	}
-}
-
-static idx_t GetComparisonCount(const Vector &left, const Vector &right, const char *fname) {
-	const bool left_is_const = left.GetVectorType() == VectorType::CONSTANT_VECTOR;
-	const bool right_is_const = right.GetVectorType() == VectorType::CONSTANT_VECTOR;
-	if (!left_is_const && !right_is_const && left.size() != right.size()) {
-		throw InternalException("Mismatch in input vector sizes for %s - left has %d rows but right has %d", fname,
-		                        left.size(), right.size());
-	}
-	return left_is_const ? right.size() : left.size();
 }
 
 void VectorOperations::Equals(const Vector &left, const Vector &right, Vector &result) {

@@ -1,0 +1,34 @@
+# name: test/sql/types/nested/nested_constant_comparison.test
+# description: Comparing constant nested values yields a constant that can be folded
+# group: [nested]
+
+query IIIIII
+SELECT [1] IN ([1], [2], [3]),
+	[4] IN ([1], [2], [3]),
+	[4] IN ([1], [2], NULL),
+	NULL::INT[] IN ([1], [2], [3]),
+	[1] NOT IN ([1], [2], [3]),
+	[4] NOT IN ([1], [2], [3]);
+----
+true	false	NULL	NULL	false	true
+
+query III
+SELECT {'a': 1, 'b': 'x'} IN ({'a': 1, 'b': 'x'}, {'a': 2, 'b': 'y'}),
+	[1, 2]::INT[2] IN ([1, 2]::INT[2], [3, 4]::INT[2]),
+	MAP {1: 2} IN (MAP {1: 2}, MAP {3: 4});
+----
+true	true	true
+
+# intervals compare normalized and collations apply inside nested values
+query II
+SELECT [INTERVAL 30 DAY] IN ([INTERVAL 1 MONTH], [INTERVAL 1 DAY]),
+	['A' COLLATE NOCASE] IN (['a'], ['b']);
+----
+true	true
+
+query I
+SELECT l IN ([0], [1], [2]) FROM (VALUES ([0]), ([5]), (NULL)) t(l);
+----
+true
+false
+NULL
