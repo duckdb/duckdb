@@ -31,7 +31,7 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 		for (idx_t i = 0; i < target_children.size(); i++) {
 			auto &name = target_children[i].first;
 			if (target_children_map.find(name) != target_children_map.end()) {
-				throw NotImplementedException("Error while casting - duplicate name \"%s\" in struct", name);
+				throw NotImplementedException("Error while casting - duplicate name %s in struct", name);
 			}
 			target_children_map[name] = i;
 		}

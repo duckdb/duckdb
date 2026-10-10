@@ -196,7 +196,7 @@ void PEGTransformerFactory::SplitGenericOptions(const vector<GenericCopyOption> 
 			options[option.name.GetIdentifierName()] = Value(true);
 		} else if (option.children.size() == 1) {
 			if (option.children[0].IsNull()) {
-				throw BinderException("NULL is not supported as a valid option for %s option \"%s\"", statement_name,
+				throw BinderException("NULL is not supported as a valid option for %s option %s", statement_name,
 				                      option.name);
 			}
 			options[option.name.GetIdentifierName()] = option.children[0];

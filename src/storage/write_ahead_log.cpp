@@ -549,8 +549,8 @@ void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 	auto &parent = entry.Parent().Cast<DuckTableEntry>();
 	auto added_oids = parent.GetAddedUniqueIndexOids(table);
 	if (added_oids.size() != 1) {
-		throw InternalException("WriteAlter: expected one added UNIQUE constraint on table \"%s\", found %llu",
-		                        parent.name, added_oids.size());
+		throw InternalException("WriteAlter: expected one added UNIQUE constraint on table %s, found %llu", parent.name,
+		                        added_oids.size());
 	}
 	auto &list = parent.GetStorage().GetDataTableInfo()->GetIndexes();
 	SerializeIndex(GetDatabase(), serializer, list, added_oids[0]);

@@ -28,7 +28,7 @@ void CatalogEntryMap::AddEntry(unique_ptr<CatalogEntry> entry) {
 	auto name = entry->name;
 
 	if (entries.find(name) != entries.end()) {
-		throw InternalException("Entry with name \"%s\" already exists", name);
+		throw InternalException("Entry with name %s already exists", name);
 	}
 	entries.insert(make_pair(name, std::move(entry)));
 }
@@ -38,7 +38,7 @@ void CatalogEntryMap::UpdateEntry(unique_ptr<CatalogEntry> catalog_entry) {
 
 	auto entry = entries.find(name);
 	if (entry == entries.end()) {
-		throw InternalException("Entry with name \"%s\" does not exist", name);
+		throw InternalException("Entry with name %s does not exist", name);
 	}
 
 	auto existing = std::move(entry->second);
@@ -54,7 +54,7 @@ void CatalogEntryMap::DropEntry(CatalogEntry &entry) {
 	auto &name = entry.name;
 	auto chain = GetEntry(name);
 	if (!chain) {
-		throw InternalException("Attempting to drop entry with name \"%s\" but no chain with that name exists", name);
+		throw InternalException("Attempting to drop entry with name %s but no chain with that name exists", name);
 	}
 	auto child = entry.TakeChild();
 	if (!entry.HasParent()) {
@@ -118,7 +118,7 @@ bool CatalogSet::VerifyVacancy(CatalogTransaction transaction, CatalogEntry &ent
 		// A transaction that is not visible to our snapshot has already made a change to this entry.
 		// Because of Catalog limitations we can't push our change on this, even if the change was made by another
 		// active transaction that might end up being aborted. So we have to cancel this transaction.
-		throw TransactionException("Catalog write-write conflict on create with \"%s\"", entry.name);
+		throw TransactionException("Catalog write-write conflict on create with %s", entry.name);
 	}
 	// The entry is visible to our snapshot
 	if (!entry.deleted) {
@@ -133,16 +133,15 @@ static bool IsDependencyEntry(CatalogEntry &entry) {
 
 void CatalogSet::CheckCatalogEntryInvariants(CatalogEntry &value, const Identifier &name) {
 	if (value.internal && !catalog.IsSystemCatalog() && name != DEFAULT_SCHEMA) {
-		throw InternalException("Attempting to create internal entry \"%s\" in non-system catalog - internal entries "
+		throw InternalException("Attempting to create internal entry %s in non-system catalog - internal entries "
 		                        "can only be created in the system catalog",
 		                        name);
 	}
 	if (!value.internal) {
 		if (!value.temporary && catalog.IsSystemCatalog() && !IsDependencyEntry(value)) {
-			throw InternalException(
-			    "Attempting to create non-internal entry \"%s\" in system catalog - the system catalog "
-			    "can only contain internal entries",
-			    name);
+			throw InternalException("Attempting to create non-internal entry %s in system catalog - the system catalog "
+			                        "can only contain internal entries",
+			                        name);
 		}
 		if (value.temporary && !catalog.IsTemporaryCatalog()) {
 			throw InternalException("Attempting to create temporary entry %s in non-temporary catalog", name);

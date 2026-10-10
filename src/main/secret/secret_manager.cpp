@@ -807,7 +807,7 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntryInternal(cons
 		}
 	}
 
-	throw SerializationException("Failed to deserialize secret '%s' from '%s': file appears empty! Please remove the "
+	throw SerializationException("Failed to deserialize secret %s from '%s': file appears empty! Please remove the "
 	                             "file, restart and try again",
 	                             entry_name, secret_path);
 }

@@ -2091,8 +2091,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(
 		}
 		for (auto &replace_entry : result->ReplaceList()) {
 			if (result->ExcludeList().find(QualifiedColumnName(replace_entry.first)) != result->ExcludeList().end()) {
-				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and REPLACE list",
-				                      replace_entry.first);
+				throw ParserException("Column %s cannot occur in both EXCLUDE and REPLACE list", replace_entry.first);
 			}
 		}
 	}

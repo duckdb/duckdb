@@ -342,7 +342,7 @@ shared_ptr<const AggregateFunction> GetCollatedMinMaxFunction(ClientContext &con
 	    error_context);
 	if (!func) {
 		throw NotImplementedException(
-		    "Failure while binding function \"%s\" using collations - arg_min/arg_max do not exist in the "
+		    "Failure while binding function %s using collations - arg_min/arg_max do not exist in the "
 		    "catalog - load the core_functions module to fix this issue",
 		    name);
 	}

@@ -169,7 +169,7 @@ static unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, cons
 			};
 			// no matching member tag found in the target set
 			auto message =
-			    StringUtil::Format("Type %s can't be cast as %s. The member '%s' is not present in target union",
+			    StringUtil::Format("Type %s can't be cast as %s. The member %s is not present in target union",
 			                       source.ToString(), target.ToString(), source_member_name);
 			throw ConversionException(message);
 		}

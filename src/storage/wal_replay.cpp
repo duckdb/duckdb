@@ -1122,7 +1122,7 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 		return;
 	}
 	if (table_name.empty()) {
-		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger \"%s\"",
+		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger %s",
 		                        info.GetQualifiedName().Name());
 	}
 	// the trigger lives in the same (possibly nested) schema as its base table

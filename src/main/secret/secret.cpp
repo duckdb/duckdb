@@ -260,7 +260,7 @@ void CreateSecretFunctionSet::AddFunction(CreateSecretFunction &function, OnCrea
 	if (ProviderExists(function.provider)) {
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw InternalException(
-			    "Attempted to override a Create Secret Function with OnCreateConflict::ERROR_ON_CONFLICT for: '%s'",
+			    "Attempted to override a Create Secret Function with OnCreateConflict::ERROR_ON_CONFLICT for: %s",
 			    function.provider);
 		} else if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 			functions[function.provider] = function;

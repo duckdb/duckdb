@@ -55,20 +55,20 @@ static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry 
 		} else if (function.function || function.bind_replace || function.bind_operator) {
 			has_standard_table_function = true;
 		} else {
-			throw InternalException("Function \"%s\" has neither in_out_function nor function defined",
+			throw InternalException("Function %s has neither in_out_function nor function defined",
 			                        table_function.name);
 		}
 	}
 	if (has_table_parameter) {
 		if (table_function.functions.Size() != 1) {
 			throw InternalException(
-			    "Function \"%s\" has a TABLE parameter, and multiple function overloads - this is not supported",
+			    "Function %s has a TABLE parameter, and multiple function overloads - this is not supported",
 			    table_function.name);
 		}
 		return TableFunctionBindType::TABLE_PARAMETER_FUNCTION;
 	}
 	if (has_in_out_function && has_standard_table_function) {
-		throw InternalException("Function \"%s\" is both an in_out_function and a table function", table_function.name);
+		throw InternalException("Function %s is both an in_out_function and a table function", table_function.name);
 	}
 	return has_in_out_function ? TableFunctionBindType::TABLE_IN_OUT_FUNCTION
 	                           : TableFunctionBindType::STANDARD_TABLE_FUNCTION;
@@ -244,14 +244,13 @@ BoundStatement Binder::BindTableFunctionInternal(BoundTableFunction &table_funct
 				}
 				new_plan->ResolveOperatorTypes();
 				if (new_plan->types.size() != return_names.size()) {
-					throw InternalException("Failed to bind \"%s\": return_types/names must have same size",
+					throw InternalException("Failed to bind %s: return_types/names must have same size",
 					                        table_function.GetName());
 				}
 				for (auto &binding : new_plan->GetColumnBindings()) {
 					if (binding.table_index != bind_index) {
-						throw InternalException(
-						    "Failed to bind \"%s\": root bind index must be the passed in bind index",
-						    table_function.GetName());
+						throw InternalException("Failed to bind %s: root bind index must be the passed in bind index",
+						                        table_function.GetName());
 					}
 				}
 				auto setof_column_name = ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
@@ -277,7 +276,7 @@ BoundStatement Binder::BindTableFunctionInternal(BoundTableFunction &table_funct
 			}
 		}
 		if (!table_function.bind) {
-			throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
+			throw BinderException("Failed to bind %s: nullptr returned from bind_replace without bind function",
 			                      table_function.GetName());
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
@@ -303,18 +302,17 @@ BoundStatement Binder::BindTableFunctionInternal(BoundTableFunction &table_funct
 			}
 		}
 	} else {
-		throw InvalidInputException("Cannot call function \"%s\" directly - it has no bind function",
+		throw InvalidInputException("Cannot call function %s directly - it has no bind function",
 		                            table_function.GetName());
 	}
 	if (bind_data && !bind_data->SupportStatementCache()) {
 		SetAlwaysRequireRebind();
 	}
 	if (return_types.size() != return_names.size()) {
-		throw InternalException("Failed to bind \"%s\": return_types/names must have same size",
-		                        table_function.GetName());
+		throw InternalException("Failed to bind %s: return_types/names must have same size", table_function.GetName());
 	}
 	if (return_types.empty()) {
-		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
+		throw InternalException("Failed to bind %s: Table function must return at least one column",
 		                        table_function.GetName());
 	}
 	auto setof_column_name = ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);

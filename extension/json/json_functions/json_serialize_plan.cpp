@@ -84,7 +84,7 @@ static unique_ptr<FunctionData> JsonSerializePlanBind(BindScalarFunctionInput &i
 			}
 			optimize = BooleanValue::Get(input.GetConstant(i));
 		} else {
-			throw BinderException(StringUtil::Format("json_serialize_plan: Unknown argument '%s'", alias));
+			throw BinderException(StringUtil::Format("json_serialize_plan: Unknown argument %s", alias));
 		}
 	}
 	return make_uniq<JsonSerializePlanBindData>(skip_if_null, skip_if_empty, skip_if_default, format, optimize);

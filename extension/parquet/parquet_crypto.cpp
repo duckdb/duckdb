@@ -162,7 +162,7 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const V
 		} else if (struct_key == "column_keys") {
 			throw NotImplementedException("Parquet encryption_config column_keys not yet implemented");
 		} else {
-			throw BinderException("Unknown key in encryption_config \"%s\"", struct_key);
+			throw BinderException("Unknown key in encryption_config %s", struct_key);
 		}
 	}
 }

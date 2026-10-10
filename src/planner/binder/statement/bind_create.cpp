@@ -180,7 +180,7 @@ void Binder::SearchSchema(CreateInfo &info) {
 		// a catalog was given but no schema: use the catalog's default schema
 		auto default_schema = search_path->GetDefaultSchema(context, catalog);
 		if (!default_schema) {
-			throw BinderException("Catalog \"%s\" has no default schema - specify a schema explicitly", catalog);
+			throw BinderException("Catalog %s has no default schema - specify a schema explicitly", catalog);
 		}
 		schema_path.push_back(*default_schema);
 	} else if (IsInvalidCatalog(catalog)) {
@@ -490,7 +490,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			auto default_expr = param_expr->Copy();
 			auto bound_default = binder.Bind(default_expr);
 			if (!bound_default->IsFoldable()) {
-				auto msg = StringUtil::Format("Default value '%s' for parameter '%s' is not a constant expression.",
+				auto msg = StringUtil::Format("Default value '%s' for parameter %s is not a constant expression.",
 				                              param_expr->ToString(), param_name);
 				throw BinderException(msg);
 			}
@@ -523,7 +523,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 				}
 				if (CastFunctionSet::ImplicitCastCost(context, val_type, type) < 0) {
 					auto msg = StringUtil::Format(
-					    "Default value '%s' for parameter '%s' cannot be implicitly cast to '%s'.",
+					    "Default value '%s' for parameter %s cannot be implicitly cast to '%s'.",
 					    function->default_parameters[param_name]->ToString(), param_name, type.ToString());
 					throw BinderException(msg + " Please add an explicit type cast.");
 				}
@@ -707,7 +707,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	if (create_trigger_info.event_type == TriggerEventType::UPDATE_EVENT && !create_trigger_info.columns.empty()) {
 		for (const auto &col_name : create_trigger_info.columns) {
 			if (!table.ColumnExists(col_name)) {
-				throw BinderException("Column \"%s\" does not exist in table \"%s\"", col_name, table.name);
+				throw BinderException("Column %s does not exist in table %s", col_name, table.name);
 			}
 		}
 	}
@@ -772,7 +772,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			if (entry.internal) {
 				return;
 			}
-			throw BinderException("Trigger \"%s\" cannot reference \"%s\" from a different catalog (\"%s\")",
+			throw BinderException("Trigger %s cannot reference %s from a different catalog (%s)",
 			                      create_trigger_info.GetTriggerName(), entry.name, entry.ParentCatalog().GetName());
 		}
 		DependencyDependentFlags flags;
@@ -821,7 +821,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		}
 		if (BoundBodyContainsTrigger(*bound_body.plan)) {
 			throw NotImplementedException(
-			    "FOR EACH ROW trigger \"%s\" on table \"%s\" writes to a table that has its own FOR EACH ROW "
+			    "FOR EACH ROW trigger %s on table %s writes to a table that has its own FOR EACH ROW "
 			    "trigger (cascading row triggers are not yet supported)",
 			    create_trigger_info.GetTriggerName(), table.name);
 		}
