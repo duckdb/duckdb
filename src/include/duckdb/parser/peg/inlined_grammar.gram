@@ -833,7 +833,7 @@ CatalogSessionTarget <- CatalogName
 CopyStatement <- 'COPY' CopyVariations
 CopyVariations <- CopyTable / CopySelect / CopyFromDatabase
 
-CopyTable <- BaseTableName InsertColumnList? FromOrTo CopyFileName CopyOptions?
+CopyTable <- BaseTableName InsertColumnList? FromOrTo CopyFileName CopyLegacyOption? CopyOptions?
 FromOrTo <- CopyFrom / CopyTo
 CopyFrom <- 'FROM'
 CopyTo <- 'TO'
@@ -847,6 +847,9 @@ CopyFileNameIdentifier <- Identifier
 CopyFileNameIdentifierColId <- IdentifierColId
 IdentifierColId <- Identifier CopyFileNameSuffix+
 CopyFileNameSuffix <- '.' ColId
+
+CopyLegacyOption <- 'USING'? 'DELIMITERS' StringLiteral
+
 CopyOptions <- 'WITH'? CopyOptionList
 CopyOptionList <- CopyGenericOptionList / SpecializedOptionList
 SpecializedOptionList <- SpecializedOption SpecializedOptionTail*
@@ -1110,7 +1113,11 @@ DeallocateStatement <- 'DEALLOCATE' DeallocatePrepare? ColIdOrString
 DeallocatePrepare <- 'PREPARE'
 
 DeleteStatement <- WithClause? 'DELETE' 'FROM' TargetOptAlias DeleteUsingClause? WhereClause? ReturningClause?
-TruncateStatement <- 'TRUNCATE' 'TABLE'? BaseTableName
+TruncateStatement <- 'TRUNCATE' 'TABLE'? BaseTableName TruncateOptions?
+# DropBehavior first, so CASCADE/RESTRICT are not consumed as an alias
+TruncateOptions <- TruncateDropBehavior / TruncateAliasOptions
+TruncateAliasOptions <- TargetAlias TruncateDropBehavior?
+TruncateDropBehavior <- DropBehavior
 TargetOptAlias <- BaseTableName TargetAlias?
 TargetAlias <- 'AS'? ColId
 DeleteUsingClause <- 'USING' List(TableRef)
@@ -1616,7 +1623,7 @@ ExternalResourceSource <- ExternalResourceCreateClause / ExternalResourceReferen
 ExternalResourceCreateClause <- 'NEW' 'TEMPORARY' ExternalResourceKeyword StringLiteral ExternalResourceCreationOptions?
 ExternalResourceReferenceClause <- ExternalResourceKeyword ColId
 
-InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
+InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? OverridingClause? InsertValues OnConflictClause? ReturningClause?
 
 OrAction <- InsertOrReplace / InsertOrIgnore
 InsertOrReplace <- 'OR' 'REPLACE'
@@ -1626,6 +1633,8 @@ InsertByNameOrder <- 'BY' InsertByName
 InsertByPositionOrder <- 'BY' InsertByPosition
 InsertByName <- 'NAME'
 InsertByPosition <- 'POSITION'
+OverridingClause <- 'OVERRIDING' OverridingScope 'VALUE'
+OverridingScope <- 'USER' / 'SYSTEM'
 
 InsertTarget <- BaseTableName InsertAlias?
 InsertAlias <- 'AS' Identifier
@@ -1646,7 +1655,7 @@ OnConflictIndexTarget <- 'ON' 'CONSTRAINT' ConstraintName
 
 OnConflictAction <- OnConflictUpdate / OnConflictNothing
 
-OnConflictUpdate <- 'DO' 'UPDATE' 'SET' UpdateSetClause WhereClause?
+OnConflictUpdate <- 'DO' 'UPDATE' 'SET' UpdateSetClauseList WhereClause?
 OnConflictNothing <- 'DO' 'NOTHING'
 
 ReturningClause <- 'RETURNING' TargetList
@@ -1685,7 +1694,7 @@ InsertValuesList <- InsertColumnList? 'VALUES' Parens(List(Expression))
 DoNothingMatchClause <- 'DO' 'NOTHING'
 ErrorMatchClause <- 'ERROR' Expression?
 UpdateMatchSetClause <- 'SET' UpdateMatchSetInfo
-UpdateMatchSetInfo <- UpdateSetClause / StarSymbol
+UpdateMatchSetInfo <- UpdateSetClauseList / StarSymbol
 AndExpression <- 'AND' Expression
 NotMatchedClause <- 'WHEN' 'NOT' 'MATCHED' BySourceOrTarget? AndExpression? 'THEN' MatchedClauseAction
 BySourceOrTarget <- BySource / ByTarget
@@ -2000,15 +2009,15 @@ ReadOnly <- 'ONLY'
 ReadWrite <- 'WRITE'
 AbortOrRollback <- 'ABORT' / 'ROLLBACK'
 CommitOrEnd <- 'COMMIT' / 'END'
-UpdateStatement <- WithClause? 'UPDATE' UpdateTarget UpdateSetClause FromClause? WhereClause? ReturningClause?
+UpdateStatement <- WithClause? 'UPDATE' UpdateTarget UpdateSetClauseList FromClause? WhereClause? ReturningClause?
 
 UpdateTarget <- BaseTableSet / BaseTableAliasSet
 BaseTableSet <- BaseTableName 'SET'
 BaseTableAliasSet <- BaseTableName UpdateAlias? 'SET'
 UpdateAlias <- 'AS'? ColId
-UpdateSetClause <- UpdateSetElementList / UpdateSetTuple
+UpdateSetClauseList <- List(UpdateSetClause)
+UpdateSetClause <- UpdateSetElement / UpdateSetTuple
 UpdateSetTuple <- Parens(List(ColumnName)) '=' Expression
-UpdateSetElementList <- List(UpdateSetElement)
 UpdateSetElement <- UpdateSetColumnTarget '=' Expression
 UpdateSetColumnTarget <- ColumnName DotIdentifier*
 

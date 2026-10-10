@@ -1272,6 +1272,9 @@ public:
 	static void InitializeCopyFileNameSuffixTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeCopyFileNameSuffixTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
+	static void InitializeCopyLegacyOptionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeCopyLegacyOptionTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
 	static void InitializeCopyOptionsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeCopyOptionsTrampoline(PEGTransformer &transformer,
 	                                                                     GeneratedTransformProcess &process);
@@ -1968,6 +1971,17 @@ public:
 	static void InitializeTruncateStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeTruncateStatementTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
+	static void InitializeTruncateOptionsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeTruncateOptionsTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static void InitializeTruncateAliasOptionsTrampoline(PEGTransformer &transformer,
+	                                                     GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeTruncateAliasOptionsTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
+	static void InitializeTruncateDropBehaviorTrampoline(PEGTransformer &transformer,
+	                                                     GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeTruncateDropBehaviorTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
 	static void InitializeTargetOptAliasTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeTargetOptAliasTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
@@ -4080,16 +4094,16 @@ public:
 	static void InitializeUpdateAliasTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeUpdateAliasTrampoline(PEGTransformer &transformer,
 	                                                                     GeneratedTransformProcess &process);
+	static void InitializeUpdateSetClauseListTrampoline(PEGTransformer &transformer,
+	                                                    GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeUpdateSetClauseListTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
 	static void InitializeUpdateSetClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeUpdateSetClauseTrampoline(PEGTransformer &transformer,
 	                                                                         GeneratedTransformProcess &process);
 	static void InitializeUpdateSetTupleTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeUpdateSetTupleTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
-	static void InitializeUpdateSetElementListTrampoline(PEGTransformer &transformer,
-	                                                     GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue> FinalizeUpdateSetElementListTrampoline(PEGTransformer &transformer,
-	                                                                              GeneratedTransformProcess &process);
 	static void InitializeUpdateSetElementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeUpdateSetElementTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
@@ -4391,12 +4405,11 @@ public:
 	                                                             const Identifier &catalog_name);
 	static unique_ptr<SQLStatement> TransformCopyStatement(PEGTransformer &transformer,
 	                                                       unique_ptr<SQLStatement> copy_variations);
-	static unique_ptr<SQLStatement> TransformCopyTable(PEGTransformer &transformer,
-	                                                   unique_ptr<BaseTableRef> base_table_name,
-	                                                   const optional<vector<string>> &insert_column_list,
-	                                                   const bool &from_or_to,
-	                                                   unique_ptr<ParsedExpression> copy_file_name,
-	                                                   const optional<vector<GenericCopyOption>> &copy_options);
+	static unique_ptr<SQLStatement>
+	TransformCopyTable(PEGTransformer &transformer, unique_ptr<BaseTableRef> base_table_name,
+	                   const optional<vector<string>> &insert_column_list, const bool &from_or_to,
+	                   unique_ptr<ParsedExpression> copy_file_name, const optional<GenericCopyOption> &legacy_option,
+	                   const optional<vector<GenericCopyOption>> &copy_options);
 	static bool TransformCopyFrom(PEGTransformer &transformer);
 	static bool TransformCopyTo(PEGTransformer &transformer);
 	static unique_ptr<SQLStatement> TransformCopySelect(PEGTransformer &transformer,
@@ -4411,6 +4424,8 @@ public:
 	                                                                         const Identifier &identifier_col_id);
 	static Identifier TransformIdentifierColId(PEGTransformer &transformer, const Identifier &identifier,
 	                                           const vector<Identifier> &copy_file_name_suffix);
+	static GenericCopyOption TransformCopyLegacyOption(PEGTransformer &transformer, const bool &has_result,
+	                                                   const string &delimiter);
 	static vector<GenericCopyOption> TransformCopyOptions(PEGTransformer &transformer, const bool &has_result,
 	                                                      const vector<GenericCopyOption> &copy_option_list);
 	static vector<GenericCopyOption>
@@ -4735,7 +4750,11 @@ public:
 	                         optional<unique_ptr<ParsedExpression>> where_clause,
 	                         optional<vector<unique_ptr<ParsedExpression>>> returning_clause);
 	static unique_ptr<SQLStatement> TransformTruncateStatement(PEGTransformer &transformer, const bool &has_result,
-	                                                           unique_ptr<BaseTableRef> base_table_name);
+	                                                           unique_ptr<BaseTableRef> base_table_name,
+	                                                           optional<bool> truncate_options);
+	static bool TransformTruncateAliasOptions(PEGTransformer &transformer, const Identifier &target_alias,
+	                                          optional<bool> truncate_drop_behavior);
+	static bool TransformTruncateDropBehavior(PEGTransformer &transformer, const bool &drop_behavior);
 	static unique_ptr<BaseTableRef> TransformTargetOptAlias(PEGTransformer &transformer,
 	                                                        unique_ptr<BaseTableRef> base_table_name,
 	                                                        const optional<Identifier> &target_alias);
@@ -5350,8 +5369,8 @@ public:
 	TransformInsertStatement(PEGTransformer &transformer, optional<CommonTableExpressionMap> with_clause,
 	                         const optional<OnConflictAction> &or_action, unique_ptr<BaseTableRef> insert_target,
 	                         const optional<InsertColumnOrder> &by_name_or_position,
-	                         const optional<vector<string>> &insert_column_list, InsertValues insert_values,
-	                         optional<unique_ptr<OnConflictInfo>> on_conflict_clause,
+	                         const optional<vector<string>> &insert_column_list, bool has_overriding_clause,
+	                         InsertValues insert_values, optional<unique_ptr<OnConflictInfo>> on_conflict_clause,
 	                         optional<vector<unique_ptr<ParsedExpression>>> returning_clause);
 	static OnConflictAction TransformInsertOrReplace(PEGTransformer &transformer);
 	static OnConflictAction TransformInsertOrIgnore(PEGTransformer &transformer);
@@ -5836,15 +5855,14 @@ public:
 	                                                       const optional<Identifier> &update_alias);
 	static Identifier TransformUpdateAlias(PEGTransformer &transformer, const bool &has_result,
 	                                       const Identifier &col_id);
+	static unique_ptr<UpdateSetInfo> TransformUpdateSetClauseList(PEGTransformer &transformer,
+	                                                              vector<unique_ptr<UpdateSetInfo>> update_set_info);
 	static unique_ptr<UpdateSetInfo> TransformUpdateSetTuple(PEGTransformer &transformer,
 	                                                         const vector<Identifier> &column_name,
 	                                                         unique_ptr<ParsedExpression> expression);
-	static unique_ptr<UpdateSetInfo>
-	TransformUpdateSetElementList(PEGTransformer &transformer,
-	                              vector<pair<string, unique_ptr<ParsedExpression>>> update_set_element);
-	static pair<string, unique_ptr<ParsedExpression>>
-	TransformUpdateSetElement(PEGTransformer &transformer, const string &update_set_column_target,
-	                          unique_ptr<ParsedExpression> expression);
+	static unique_ptr<UpdateSetInfo> TransformUpdateSetElement(PEGTransformer &transformer,
+	                                                           const string &update_set_column_target,
+	                                                           unique_ptr<ParsedExpression> expression);
 	static string TransformUpdateSetColumnTarget(PEGTransformer &transformer, const Identifier &column_name,
 	                                             const optional<vector<Identifier>> &dot_identifier);
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer, const QualifiedName &use_target);

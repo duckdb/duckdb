@@ -304,9 +304,10 @@ UpdateSetInfo:
   type: "unique_ptr<UpdateSetInfo>"
   by_value: true
   rules:
+    - UpdateSetClauseList
     - UpdateSetClause
     - UpdateSetTuple
-    - UpdateSetElementList
+    - UpdateSetElement
     - UpdateMatchSetClause
     - UpdateMatchSetInfo
 
@@ -928,6 +929,7 @@ GenericCopyOption:
     - PartitionedByCopyOption
     - SpecializedOption
     - SpecializedOptionTail
+    - CopyLegacyOption
     - SingleOption
     - EncodingOption
     - ForceQuoteOption
@@ -1168,6 +1170,9 @@ Bool:
     - Materialized
     - SampleUnit
     - DropBehavior
+    - TruncateOptions
+    - TruncateAliasOptions
+    - TruncateDropBehavior
     - CascadeDropBehavior
     - RestrictDropBehavior
     - AnyOrAll
@@ -1712,10 +1717,6 @@ overrides:
   NullsFirstOrLast:
     type: "OrderByNullType"
     default_initializer: "ORDER_DEFAULT"
-  # update.gram
-  UpdateSetElement:
-    type: "pair<string, unique_ptr<ParsedExpression>>"
-    by_value: true
 
 # ---------------------------------------------------------------------------
 # matcher.cpp rule overrides
@@ -1963,3 +1964,4 @@ excluded_rules:
   # expression.gram rules kept manual during incremental transformer generation migration
   - OverClause
   - PrefixExpression
+  - OverridingClause
