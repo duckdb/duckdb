@@ -81,14 +81,7 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, DataChunk &
 	}
 	if (!state.offset.IsValid()) {
 		Value val = PhysicalLimit::GetDelimiter(context, chunk, offset_val.GetValueExpression());
-		if (!val.IsNull()) {
-			offset = val.GetValue<idx_t>();
-		} else {
-			offset = 0;
-		}
-		if (offset.GetIndex() > 1ULL << 62ULL) {
-			throw BinderException("Max value %lld for LIMIT/OFFSET is %lld", offset.GetIndex(), 1ULL << 62ULL);
-		}
+		offset = PhysicalLimit::GetLimitValue(val, 0);
 	}
 
 	if (!PhysicalLimit::HandleOffset(chunk, state.current_offset, offset.GetIndex(), NumericLimits<idx_t>::Maximum())) {
