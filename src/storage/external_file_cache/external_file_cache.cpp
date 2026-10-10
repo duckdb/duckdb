@@ -14,6 +14,33 @@
 
 namespace duckdb {
 
+namespace {
+
+bool IsDroppedBlock(CacheBlock &block) {
+	const annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
+	if (block.state != CacheBlockState::LOADED || !block.block_handle) {
+		return false;
+	}
+	auto &memory = block.block_handle->GetMemory();
+	return memory.IsUnloaded() && !memory.MustWriteToTemporaryFile();
+}
+
+bool IsLoadedBlock(CacheBlock &block) {
+	const annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
+	return block.state == CacheBlockState::LOADED;
+}
+
+idx_t GapBlockCount(idx_t nr_bytes, idx_t max_block_size) {
+	return (nr_bytes + max_block_size - 1) / max_block_size;
+}
+
+//! Whether the last modified timestamp is usable as a cache validator
+bool HasUsableLastModified(timestamp_t last_modified) {
+	return last_modified.IsFinite() && last_modified != timestamp_t(0);
+}
+
+} // namespace
+
 bool CacheValidationInfo::IsCacheReuseProhibited() const {
 	return cache_valid_until && *cache_valid_until == timestamp_t::ninfinity();
 }
@@ -90,24 +117,6 @@ bool ExternalFileCache::ShouldCacheFile(const string &path) const {
 	return Settings::Get<CacheLocalFilesSetting>(db);
 }
 
-static bool IsDroppedBlock(CacheBlock &block) {
-	const annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
-	if (block.state != CacheBlockState::LOADED || !block.block_handle) {
-		return false;
-	}
-	auto &memory = block.block_handle->GetMemory();
-	return memory.IsUnloaded() && !memory.MustWriteToTemporaryFile();
-}
-
-static bool IsLoadedBlock(CacheBlock &block) {
-	const annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
-	return block.state == CacheBlockState::LOADED;
-}
-
-static idx_t GapBlockCount(idx_t nr_bytes, idx_t max_block_size) {
-	return (nr_bytes + max_block_size - 1) / max_block_size;
-}
-
 vector<shared_ptr<CacheBlock>> ExternalFileCache::AcquireBlocks(CachedFile &cached_file, idx_t location, idx_t nr_bytes,
                                                                 idx_t max_block_size) {
 	D_ASSERT(nr_bytes > 0);
@@ -131,7 +140,7 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::AcquireBlocks(CachedFile &cach
 	idx_t pos = location;
 	while (pos < end) {
 		if (it != blocks.end() && it->first <= pos) {
-			if (!IsDroppedBlock(*it->second)) {
+			if (!IsDroppedBlock(*it->second) || it->second.use_count() > 1) {
 				result.push_back(it->second);
 				pos = it->first + it->second->size;
 				++it;
@@ -182,11 +191,6 @@ idx_t ExternalFileCache::GetContentGeneration(CachedFile &cached_file) {
 
 ExternalFileCache::CachedFile::CachedFile(string path_p, idx_t generation_p)
     : path(std::move(path_p)), generation(generation_p) {
-}
-
-//! Whether the last modified timestamp is usable as a cache validator
-static bool HasUsableLastModified(timestamp_t last_modified) {
-	return last_modified.IsFinite() && last_modified != timestamp_t(0);
 }
 
 bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
