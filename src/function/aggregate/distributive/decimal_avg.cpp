@@ -121,7 +121,8 @@ static unique_ptr<FunctionData> BindDecimalAverage(BindAggregateFunctionInput &i
 	auto &input_type = arguments[0]->GetReturnType();
 
 	if (input_type.id() == LogicalTypeId::UNKNOWN) {
-		return nullptr;
+		// unresolved prepared parameter - defer binding until the type is known
+		throw ParameterNotResolvedException();
 	}
 	if (input_type.id() != LogicalTypeId::DECIMAL) {
 		throw InvalidInputException("decimal_average requires a DECIMAL argument, got %s — "
