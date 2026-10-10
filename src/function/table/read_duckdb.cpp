@@ -234,7 +234,8 @@ DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const 
 	}
 	auto &table = tables[0].get();
 	for (auto &col : table.GetColumns().Logical()) {
-		columns.emplace_back(col.Name().GetIdentifierName(), col.Type());
+		// create the child column definitions as well, so that STRUCT children are mapped by name
+		columns.push_back(MultiFileColumnDefinition::CreateFromNameAndType(col.Name(), col.Type()));
 	}
 	column_count = columns.size();
 	schema_name = table.ParentSchema().name;
@@ -383,6 +384,9 @@ bool DuckDBMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifi
 bool DuckDBMultiFileInfo::ParseOption(ClientContext &context, const Identifier &key, const Value &val,
                                       MultiFileOptions &file_options, BaseFileReaderOptions &options_p) {
 	auto &options = options_p.Cast<DuckDBFileReaderOptions>();
+	if ((key == "schema_name" || key == "table_name") && val.IsNull()) {
+		throw BinderException("read_duckdb parameter %s cannot be NULL", key);
+	}
 	if (key == "schema_name") {
 		options.schema_name = Identifier(StringValue::Get(val));
 		return true;
