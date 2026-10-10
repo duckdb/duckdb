@@ -43,11 +43,25 @@ struct LogicalPlanSQLExportOptions {
 	optional<vector<Identifier>> output_names;
 };
 
+struct LogicalPlanSQLExportReplacement {
+	reference<LogicalOperator> op;
+	LogicalPlanSQLExportRelation relation;
+};
+
 class LogicalPlanSQLExporter {
 public:
 	//! Export a verified plan to an owned query with positional binding/type fields.
 	DUCKDB_API static LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
 	Export(ClientContext &context, LogicalOperator &root, const LogicalPlanSQLExportOptions &options = {});
+
+	//! Export an already resolved plan using owned SQL relations at explicit subtree boundaries.
+	//! Checks existing binding/type metadata without re-resolving the input. Each replacement preserves
+	//! the replaced subtree's visible bindings and types and is materialized once in the returned SQL.
+	//! Replacements must be disjoint, reachable subtrees. Neither the plan nor replacement ASTs are consumed.
+	DUCKDB_API static LogicalPlanSQLExportResult
+	ExportWithSources(ClientContext &context, LogicalOperator &root,
+	                  const vector<LogicalPlanSQLExportReplacement> &replacements,
+	                  const LogicalPlanSQLExportOptions &options = {});
 };
 
 } // namespace duckdb

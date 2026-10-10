@@ -5,6 +5,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -17,6 +18,8 @@
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include <functional>
 
 namespace duckdb {
 
@@ -282,6 +285,81 @@ LogicalPlanSQLExporter::Export(ClientContext &context, LogicalOperator &root,
 		return result;
 	}
 	return ApplyOutputNames(std::move(result), *options.output_names);
+}
+
+LogicalPlanSQLExportResult
+LogicalPlanSQLExporter::ExportWithSources(ClientContext &context, LogicalOperator &root,
+                                          const vector<LogicalPlanSQLExportReplacement> &replacements,
+                                          const LogicalPlanSQLExportOptions &options) {
+	auto verification = LogicalPlanVerifier::VerifyResolvedBindings(root);
+	if (verification.HasError()) {
+		return LogicalPlanSQLExportResult::Failure(verification);
+	}
+	auto invalid = [](const string &message) {
+		auto issue = SQLExportHelpers::MakeIssue(
+		    LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, LogicalPlanVerificationPhase::PLAN_EXPORT,
+		    LogicalPlanVerificationPath(), LogicalPlanVerificationConstructIdentity::ExportFeature("source_boundary"),
+		    message);
+		return LogicalPlanSQLExportResult::Failure({std::move(issue)});
+	};
+	unordered_set<LogicalOperator *> boundaries;
+	for (auto &replacement : replacements) {
+		auto &op = replacement.op.get();
+		if (!boundaries.insert(&op).second || !replacement.relation.query) {
+			return invalid("SQL source replacement requires a unique subtree and an owned relation");
+		}
+		auto bindings = op.GetColumnBindings();
+		if (replacement.relation.fields.size() != bindings.size() || op.types.size() != bindings.size()) {
+			return invalid("SQL source replacement width differs from its subtree");
+		}
+		for (idx_t i = 0; i < bindings.size(); i++) {
+			auto &field = replacement.relation.fields[i];
+			auto &type = field.optimizer_type ? *field.optimizer_type : field.type;
+			if (field.source_binding != bindings[i] || !field.type.IsComplete() ||
+			    !type.EqualsIncludingCollation(op.types[i])) {
+				return invalid("SQL source replacement bindings or types differ from its subtree");
+			}
+		}
+	}
+	unordered_set<LogicalOperator *> reached;
+	bool overlap = false;
+	std::function<void(LogicalOperator &, bool)> visit = [&](LogicalOperator &op, bool replaced) {
+		if (boundaries.count(&op)) {
+			overlap |= replaced;
+			reached.insert(&op);
+			replaced = true;
+		}
+		for (auto &child : op.children) {
+			visit(*child, replaced);
+		}
+	};
+	visit(root, false);
+	if (overlap || reached.size() != boundaries.size()) {
+		return invalid("SQL source replacements must be disjoint subtrees of this plan");
+	}
+	LogicalPlanSQLExportContext state(context);
+	vector<LogicalPlanSQLExportSource> sources;
+	for (auto &replacement : replacements) {
+		sources.push_back({replacement.op,
+		                   state.NextRelationAlias(Identifier("__export_source")),
+		                   {replacement.relation.query->Copy(), replacement.relation.fields}});
+	}
+	auto exported = state.ExportChild(root, LogicalPlanVerificationPath(), sources);
+	if (exported.HasError()) {
+		return LogicalPlanSQLExportResult::Failure(exported);
+	}
+	auto result = std::move(exported.GetValue().relation);
+	for (auto &source : sources) {
+		auto info = make_uniq<CommonTableExpressionInfo>();
+		for (idx_t i = 0; i < source.relation.fields.size(); i++) {
+			info->aliases.push_back(LogicalPlanSQLExportHelpers::FieldIdentifier(i));
+		}
+		info->query_node = std::move(source.relation.query);
+		info->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+		result.query->cte_map.map.insert(source.name, std::move(info));
+	}
+	auto success = LogicalPlanSQLExportResult::Success(std::move(result));
+	return options.output_names ? ApplyOutputNames(std::move(success), *options.output_names) : std::move(success);
 }
 
 } // namespace duckdb
