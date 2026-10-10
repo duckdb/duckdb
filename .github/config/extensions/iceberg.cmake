@@ -1,14 +1,8 @@
-# Windows tests for iceberg currently not working
-IF (NOT WIN32)
-  set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
-else ()
-  set(LOAD_ICEBERG_TESTS "")
-endif()
 if (NOT MINGW)
   duckdb_extension_load(iceberg
-     #FIXME: restore autoloading tests ${LOAD_ICEBERG_TESTS}
-            GIT_URL https://github.com/duckdb/duckdb-iceberg
-            GIT_TAG 5b9ff899a17edc4289c4b3760a58c931736b4863
-            APPLY_PATCHES
-            )
+      LOAD_TESTS
+      GIT_URL https://github.com/duckdb/duckdb-iceberg
+      GIT_TAG e4950259ba8a3ac5b49b1cbb86e45be0215fead1
+      APPLY_PATCHES
+  )
 endif()
