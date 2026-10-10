@@ -7,9 +7,11 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/common/helper.hpp"
@@ -18,6 +20,7 @@
 #include "json_transform.hpp"
 #include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/main/query_result.hpp"
 
 namespace duckdb {
 
@@ -143,6 +146,40 @@ static void BindJSONCopyToJSONFunction(Binder &binder, BoundStatement &bound, co
 	projection.ResolveOperatorTypes();
 }
 
+//! RETURN_COLUMN_TYPES describes the query being copied, not the to_json column the rewrite writes. Every column of the
+//! query is referenced in the rewrite's projection, by struct_pack or as a partition column, so its name and type are
+//! taken from there rather than from binding the query again, which would repeat the side effects of binding it.
+static void SetJSONCopyQueryColumns(BoundStatement &bound) {
+	auto &copy = bound.plan->Cast<LogicalCopyToFile>();
+	if (copy.children.empty() || copy.children[0]->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+		throw InternalException("Expected JSON COPY rewrite to bind a top-level projection");
+	}
+	auto &projection = copy.children[0]->Cast<LogicalProjection>();
+	vector<optional_ptr<const BoundColumnRefExpression>> query_columns;
+	for (auto &expression : projection.expressions) {
+		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+		    *expression, [&](const BoundColumnRefExpression &column_ref) {
+			    auto column_index = column_ref.Binding().column_index.GetIndex();
+			    if (column_index >= query_columns.size()) {
+				    query_columns.resize(column_index + 1);
+			    }
+			    query_columns[column_index] = &column_ref;
+		    });
+	}
+	vector<Identifier> query_names;
+	vector<LogicalType> query_types;
+	for (auto &column : query_columns) {
+		if (!column) {
+			throw InternalException("Expected JSON COPY rewrite to reference every column of the query");
+		}
+		query_names.push_back(column->GetAlias());
+		query_types.push_back(column->GetReturnType());
+	}
+	QueryResult::DeduplicateColumns(query_names);
+	copy.query_names = std::move(query_names);
+	copy.query_types = std::move(query_types);
+}
+
 static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt, const JSONCopyToFormat format) {
 	static const identifier_set_t SUPPORTED_BASE_OPTIONS {
 	    "compression",      "encoding",         "use_tmp_file",   "overwrite_or_ignore", "overwrite",
@@ -152,6 +189,7 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 
 	auto &copy_info = *stmt.info;
 
+	bool return_column_types = false;
 	// Parse the options, creating options for the CSV writer while doing so
 	string date_format;
 	string timestamp_format;
@@ -234,6 +272,9 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 			// Handled below by keeping the partition columns inside the JSON object. We do not forward this to the
 			// CSV writer, as that would write the (separate) partition columns as their own JSON lines.
 			write_partition_columns = GetJSONCopyBoolean(binder, format, option_name, option_values);
+		} else if (option_name == "return_column_types") {
+			return_column_types = GetJSONCopyBoolean(binder, format, option_name, option_values);
+			csv_copy_options.insert(kv);
 		} else if (SUPPORTED_BASE_OPTIONS.find(option_name) != SUPPORTED_BASE_OPTIONS.end()) {
 			if (!option_values.empty() && option_values.back().IsNull()) {
 				ThrowJSONCopyNullException(format, option_name);
@@ -320,6 +361,9 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 	copy_info.options["header"] = {{0}};
 
 	auto result = binder.Bind(stmt);
+	if (return_column_types) {
+		SetJSONCopyQueryColumns(result);
+	}
 	if (!is_geojson) {
 		BindJSONCopyToJSONFunction(binder, result, date_format, timestamp_format);
 	}

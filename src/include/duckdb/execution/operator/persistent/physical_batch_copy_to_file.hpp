@@ -33,6 +33,10 @@ public:
 	string file_path;
 	bool use_tmp_file;
 	CopyFunctionReturnType return_type;
+	//! Whether to also return the names and types of the copied query (RETURN_COLUMN_TYPES)
+	bool return_column_types = false;
+	vector<Identifier> query_names;
+	vector<LogicalType> query_types;
 	bool write_empty_file;
 
 	//! Fine-grained control over writes

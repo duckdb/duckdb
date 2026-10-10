@@ -3874,6 +3874,15 @@ string PhysicalCopyToFile::GetNonTmpFile(ClientContext &context, const string &t
 	return StringUtil::ReplaceFileName(tmp_file_path, base);
 }
 
+void PhysicalCopyToFile::ReturnColumnTypes(DataChunk &chunk, const vector<Identifier> &query_names,
+                                           const vector<LogicalType> &query_types) {
+	auto column_types = GetCopyColumnTypes(query_names, query_types);
+	auto row_count = chunk.data[0].size();
+	for (idx_t row = 0; row < row_count; row++) {
+		chunk.data.back().Append(column_types);
+	}
+}
+
 void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, CopyToFileInfo &info) {
 	auto &file_stats = *info.file_stats;
 
@@ -3903,6 +3912,19 @@ void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, CopyToFileInfo &info
 	}
 	chunk.data[6].Append(
 	    Value::MAP(LogicalType::VARCHAR, LogicalType::VARIANT(), std::move(extra_keys), std::move(extra_values)));
+}
+
+void PhysicalCopyToFile::ReturnNoFileStatistics(DataChunk &chunk) {
+	// filename VARCHAR
+	chunk.data[0].Append(Value(LogicalType::VARCHAR));
+	// count BIGINT
+	chunk.data[1].Append(Value::UBIGINT(0));
+	// file size bytes, footer size bytes, column statistics, partition keys and extra info are NULL
+	auto statistics_column_count =
+	    GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType::WRITTEN_FILE_STATISTICS, false).size();
+	for (idx_t col_idx = 2; col_idx < statistics_column_count; col_idx++) {
+		chunk.data[col_idx].Append(Value(chunk.data[col_idx].GetType()));
+	}
 }
 
 bool PhysicalCopyToFile::Rotate() const {
@@ -4271,6 +4293,13 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 			}
 			ReturnStatistics(chunk, file_entry);
 		}
+		if (return_column_types) {
+			if (gstate.output_files.WrittenFileCount() == 0) {
+				// WRITE_EMPTY_FILE false, or PARTITION_BY without rows, writes no file
+				ReturnNoFileStatistics(chunk);
+			}
+			ReturnColumnTypes(chunk, query_names, query_types);
+		}
 		source_state.offset += count;
 		return source_state.offset < gstate.output_files.WrittenFileCount() ? SourceResultType::HAVE_MORE_OUTPUT
 		                                                                    : SourceResultType::FINISHED;
@@ -4297,6 +4326,9 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 		throw NotImplementedException("Unknown CopyFunctionReturnType");
 	}
 
+	if (return_column_types) {
+		ReturnColumnTypes(chunk, query_names, query_types);
+	}
 	return SourceResultType::FINISHED;
 }
 

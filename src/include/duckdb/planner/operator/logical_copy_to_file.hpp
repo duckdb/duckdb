@@ -48,6 +48,7 @@ public:
 	optional_idx file_size_bytes;
 	bool rotate;
 	CopyFunctionReturnType return_type;
+	bool return_column_types = false;
 
 	bool partition_output;
 	bool write_partition_columns;
@@ -61,6 +62,9 @@ public:
 
 	vector<Identifier> names;
 	vector<LogicalType> expected_types;
+	//! The names and types of the copied query before the copy function changes them, for RETURN_COLUMN_TYPES
+	vector<Identifier> query_names;
+	vector<LogicalType> query_types;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
@@ -75,7 +79,7 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		types = GetCopyFunctionReturnLogicalTypes(return_type);
+		types = GetCopyFunctionReturnLogicalTypes(return_type, return_column_types);
 	}
 };
 } // namespace duckdb

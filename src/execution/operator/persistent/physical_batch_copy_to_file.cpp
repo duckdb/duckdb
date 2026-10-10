@@ -727,6 +727,9 @@ SourceResultType PhysicalBatchCopyToFile::GetDataInternal(ExecutionContext &cont
 		if (g.written_file_info) {
 			g.written_file_info->file_path = std::move(fp);
 			PhysicalCopyToFile::ReturnStatistics(chunk, *g.written_file_info);
+		} else if (return_column_types) {
+			// WRITE_EMPTY_FILE false writes no file without rows
+			PhysicalCopyToFile::ReturnNoFileStatistics(chunk);
 		}
 		break;
 	}
@@ -734,6 +737,9 @@ SourceResultType PhysicalBatchCopyToFile::GetDataInternal(ExecutionContext &cont
 		throw NotImplementedException("Unknown CopyFunctionReturnType");
 	}
 
+	if (return_column_types) {
+		PhysicalCopyToFile::ReturnColumnTypes(chunk, query_names, query_types);
+	}
 	return SourceResultType::FINISHED;
 }
 
