@@ -1,4 +1,4 @@
-#include "duckdb/execution/in_value_set.hpp"
+#include "duckdb/execution/expression_executor/in_list_lookup.hpp"
 
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/string_map_set.hpp"
@@ -17,7 +17,7 @@ namespace duckdb {
 namespace {
 
 template <class T>
-class TemplatedInValueSet : public InValueSet {
+class TemplatedInListLookup : public InListLookup {
 	//! Integer values spanning at most this many slots (or 32 per value) are stored in a bitmap
 	static constexpr uint64_t MAX_BITMAP_RANGE = 1ULL << 16;
 	static constexpr bool SUPPORTS_BITMAP = std::is_integral<T>::value && !std::is_same<T, bool>::value;
@@ -185,14 +185,14 @@ private:
 };
 
 template <>
-string_t TemplatedInValueSet<string_t>::StoreValue(const string_t &value) {
+string_t TemplatedInListLookup<string_t>::StoreValue(const string_t &value) {
 	return heap.AddBlob(value);
 }
 
 //! Nested values are looked up by their sort key, which is equal exactly when the values compare equal
-class SortKeyInValueSet : public InValueSet {
+class SortKeyInListLookup : public InListLookup {
 public:
-	explicit SortKeyInValueSet(LogicalType type_p) : type(std::move(type_p)) {
+	explicit SortKeyInListLookup(LogicalType type_p) : type(std::move(type_p)) {
 	}
 
 protected:
@@ -250,38 +250,38 @@ private:
 	StringHeap heap;
 };
 
-unique_ptr<InValueSet> CreateTemplatedInValueSet(const LogicalType &type) {
+unique_ptr<InListLookup> CreateTemplatedInListLookup(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		return make_uniq<TemplatedInValueSet<bool>>();
+		return make_uniq<TemplatedInListLookup<bool>>();
 	case PhysicalType::INT8:
-		return make_uniq<TemplatedInValueSet<int8_t>>();
+		return make_uniq<TemplatedInListLookup<int8_t>>();
 	case PhysicalType::INT16:
-		return make_uniq<TemplatedInValueSet<int16_t>>();
+		return make_uniq<TemplatedInListLookup<int16_t>>();
 	case PhysicalType::INT32:
-		return make_uniq<TemplatedInValueSet<int32_t>>();
+		return make_uniq<TemplatedInListLookup<int32_t>>();
 	case PhysicalType::INT64:
-		return make_uniq<TemplatedInValueSet<int64_t>>();
+		return make_uniq<TemplatedInListLookup<int64_t>>();
 	case PhysicalType::UINT8:
-		return make_uniq<TemplatedInValueSet<uint8_t>>();
+		return make_uniq<TemplatedInListLookup<uint8_t>>();
 	case PhysicalType::UINT16:
-		return make_uniq<TemplatedInValueSet<uint16_t>>();
+		return make_uniq<TemplatedInListLookup<uint16_t>>();
 	case PhysicalType::UINT32:
-		return make_uniq<TemplatedInValueSet<uint32_t>>();
+		return make_uniq<TemplatedInListLookup<uint32_t>>();
 	case PhysicalType::UINT64:
-		return make_uniq<TemplatedInValueSet<uint64_t>>();
+		return make_uniq<TemplatedInListLookup<uint64_t>>();
 	case PhysicalType::INT128:
-		return make_uniq<TemplatedInValueSet<hugeint_t>>();
+		return make_uniq<TemplatedInListLookup<hugeint_t>>();
 	case PhysicalType::UINT128:
-		return make_uniq<TemplatedInValueSet<uhugeint_t>>();
+		return make_uniq<TemplatedInListLookup<uhugeint_t>>();
 	case PhysicalType::FLOAT:
-		return make_uniq<TemplatedInValueSet<float>>();
+		return make_uniq<TemplatedInListLookup<float>>();
 	case PhysicalType::DOUBLE:
-		return make_uniq<TemplatedInValueSet<double>>();
+		return make_uniq<TemplatedInListLookup<double>>();
 	case PhysicalType::INTERVAL:
-		return make_uniq<TemplatedInValueSet<interval_t>>();
+		return make_uniq<TemplatedInListLookup<interval_t>>();
 	case PhysicalType::VARCHAR:
-		return make_uniq<TemplatedInValueSet<string_t>>();
+		return make_uniq<TemplatedInListLookup<string_t>>();
 	default:
 		return nullptr;
 	}
@@ -345,7 +345,7 @@ bool IsNestedType(const LogicalType &type) {
 
 } // namespace
 
-bool InValueSet::IsSupported(const BoundOperatorExpression &expr) {
+bool InListLookup::IsSupported(const BoundOperatorExpression &expr) {
 	auto &children = expr.GetChildren();
 	if (children.size() <= MIN_VALUE_COUNT) {
 		return false;
@@ -363,15 +363,15 @@ bool InValueSet::IsSupported(const BoundOperatorExpression &expr) {
 	return true;
 }
 
-unique_ptr<InValueSet> InValueSet::Create(const BoundOperatorExpression &expr) {
+unique_ptr<InListLookup> InListLookup::Create(const BoundOperatorExpression &expr) {
 	D_ASSERT(IsSupported(expr));
 	auto &children = expr.GetChildren();
 	auto &type = children[0]->GetReturnType();
-	unique_ptr<InValueSet> result;
+	unique_ptr<InListLookup> result;
 	if (IsNestedType(type)) {
-		result = make_uniq<SortKeyInValueSet>(type);
+		result = make_uniq<SortKeyInListLookup>(type);
 	} else {
-		result = CreateTemplatedInValueSet(type);
+		result = CreateTemplatedInListLookup(type);
 	}
 	for (idx_t child_idx = 1; child_idx < children.size(); child_idx++) {
 		result->Add(children[child_idx]->Cast<BoundConstantExpression>().GetValue());
@@ -380,7 +380,7 @@ unique_ptr<InValueSet> InValueSet::Create(const BoundOperatorExpression &expr) {
 	return result;
 }
 
-void InValueSet::Probe(const Vector &input, idx_t count, bool negate, Vector &result) const {
+void InListLookup::Probe(const Vector &input, idx_t count, bool negate, Vector &result) const {
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		Vector constant_result(LogicalType::BOOLEAN, 1);
 		ProbeValues(input, 1, negate, constant_result);

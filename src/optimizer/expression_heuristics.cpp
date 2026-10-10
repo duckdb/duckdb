@@ -1,5 +1,5 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
-#include "duckdb/execution/in_value_set.hpp"
+#include "duckdb/execution/expression_executor/in_list_lookup.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -154,8 +154,8 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundFunctionExpression &expr) 
 
 idx_t ExpressionHeuristics::ExpressionCost(const BoundOperatorExpression &expr, ExpressionType expr_type) {
 	if ((expr_type == ExpressionType::COMPARE_IN || expr_type == ExpressionType::COMPARE_NOT_IN) &&
-	    InValueSet::IsSupported(expr)) {
-		// hashing and probing the lookup set costs about as much as a few comparisons
+	    InListLookup::IsSupported(expr)) {
+		// probing the lookup costs about as much as a few comparisons
 		return Cost(*expr.GetChildren()[0]) + 20;
 	}
 	idx_t sum = 0;

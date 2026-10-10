@@ -10,7 +10,7 @@ add_library_unity(
   execute_operator.cpp
   execute_parameter.cpp
   execute_reference.cpp
-  in_value_set.cpp)
+  in_list_lookup.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_expression_executor>
     PARENT_SCOPE)
