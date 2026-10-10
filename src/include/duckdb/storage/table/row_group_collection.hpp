@@ -145,7 +145,8 @@ public:
 	void UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, Vector &row_ids,
 	                  const vector<column_t> &column_path, DataChunk &updates);
 
-	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
+	//! Returns whether global_stats contains newly checkpointed statistics.
+	bool Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
 	//! Decides how vacuum handles this table's indexes.
 	VacuumIndexStrategy
