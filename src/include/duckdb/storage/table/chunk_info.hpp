@@ -67,6 +67,8 @@ public:
 	idx_t GetRowCount(ScanOptions options, idx_t max_count);
 	//! Returns whether or not a single row in the ChunkVectorInfo should be used or not for the given transaction
 	bool Fetch(TransactionData transaction, row_t row);
+	//! Whether any of the rows (ids[i] - offset) was deleted by another transaction
+	bool HasConflictingDelete(transaction_t transaction_id, const row_t ids[], idx_t count, row_t offset) const;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end);
 	bool Cleanup(VisibilityBound lowest_visibility_bound) const;
 	string ToString(idx_t max_count) const;
@@ -80,6 +82,13 @@ public:
 	//! i.e. after calling this function, rows will hold [0..actual_delete_count] row ids of the actually deleted tuples
 	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, const DeleteInfo &info);
+	//! Records the updated columns, throws if another transaction deleted one of the rows (ids[i] - offset)
+	void Update(transaction_t transaction_id, const vector<PhysicalIndex> &column_ids, const row_t ids[], idx_t count,
+	            row_t offset);
+	//! The (sorted) columns that were updated in this vector
+	const vector<storage_t> &UpdatedColumns() const {
+		return updated_columns;
+	}
 
 	//! Attempts to compress the per-row insert/delete ids into constants. Ids that precede
 	//! lowest_visibility_bound look the same to every active and future transaction, so they can collapse
@@ -146,6 +155,8 @@ private:
 	//! until a further delete re-arms it). CompressVersionIds returns the cached SETTLED without
 	//! re-scanning the ids while this is false.
 	bool recheck_compression = true;
+	//! The columns that were updated in this vector, so a delete only checks those for conflicting updates
+	vector<storage_t> updated_columns;
 };
 
 } // namespace duckdb

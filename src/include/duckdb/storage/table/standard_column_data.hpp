@@ -66,6 +66,8 @@ public:
 
 	bool IsPersistent() override;
 	bool HasAnyChanges() const override;
+	bool HasConflictingUpdate(TransactionData transaction, idx_t vector_index, const row_t rows[],
+	                          idx_t count) const override;
 	PersistentColumnData Serialize() override;
 	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 

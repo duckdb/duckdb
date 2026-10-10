@@ -4,6 +4,7 @@
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -1368,6 +1369,14 @@ void RowGroup::Update(TransactionData transaction, DuckTableEntry &table_entry, 
 		}
 		MergeStatistics(column.index, *col_data.GetUpdateStatistics());
 	}
+	if (!transaction.transaction) {
+		return;
+	}
+	// record and check after the update is in place: of a racing update and delete of a row, one finds the other
+	auto vector_idx = (UnsafeNumericCast<idx_t>(ids[offset]) - row_group_start) / STANDARD_VECTOR_SIZE;
+	auto vector_start = UnsafeNumericCast<row_t>(row_group_start + vector_idx * STANDARD_VECTOR_SIZE);
+	GetOrCreateVersionInfo().UpdateRows(transaction.GetTransactionId(), vector_idx, column_ids, ids + offset, count,
+	                                    vector_start);
 }
 
 void RowGroup::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, DataChunk &updates,
@@ -2170,6 +2179,19 @@ idx_t RowGroup::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t
 	return GetOrCreateVersionInfo().DeleteRows(vector_idx, transaction_id, rows, count);
 }
 
+bool RowGroup::HasConflictingUpdate(TransactionData transaction, idx_t vector_idx, const row_t rows[], idx_t count) {
+	for (auto c : GetOrCreateVersionInfo().GetUpdatedColumns(vector_idx)) {
+		// ALTER shares the version info with row groups of another column layout; an updated column is loaded
+		if (c >= columns.size() || !ColumnIsLoaded(c)) {
+			continue;
+		}
+		if (columns[c]->HasConflictingUpdate(transaction, vector_idx, rows, count)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void VersionDeleteState::Delete(row_t row_id) {
 	D_ASSERT(row_id >= 0);
 	idx_t vector_idx = UnsafeNumericCast<idx_t>(row_id) / STANDARD_VECTOR_SIZE;
@@ -2196,6 +2218,10 @@ void VersionDeleteState::Flush() {
 		// now push the delete into the undo buffer, but only if any deletes were actually performed
 		transaction.transaction->PushDelete(table_entry, info.GetOrCreateVersionInfo(), current_chunk, rows,
 		                                    actual_delete_count, base_row + chunk_row);
+		// check after the delete is in place: of a racing delete and update of a row, at least one finds the other
+		if (info.HasConflictingUpdate(transaction, current_chunk, rows, actual_delete_count)) {
+			throw TransactionException("Conflict on tuple deletion!");
+		}
 	}
 	count = 0;
 }

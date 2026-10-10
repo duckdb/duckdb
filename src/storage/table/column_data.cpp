@@ -123,6 +123,12 @@ bool ColumnData::HasAnyChanges() const {
 	return HasChanges();
 }
 
+bool ColumnData::HasConflictingUpdate(TransactionData transaction, idx_t vector_index, const row_t rows[],
+                                      idx_t count) const {
+	lock_guard<mutex> update_guard(update_lock);
+	return updates && updates->HasConflictingUpdate(transaction, vector_index, rows, count);
+}
+
 idx_t ColumnData::GetMaxEntry() {
 	return count;
 }

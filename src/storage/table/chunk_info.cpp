@@ -274,6 +274,35 @@ bool ChunkVectorInfo::Fetch(TransactionData transaction, row_t row) {
 	return UseVersion(transaction, fetch_insert_id) && !UseVersion(transaction, fetch_deleted_id);
 }
 
+bool ChunkVectorInfo::HasConflictingDelete(transaction_t transaction_id, const row_t ids[], idx_t count,
+                                           row_t offset) const {
+	switch (delete_state) {
+	case DeleteIdState::CONSTANT:
+		return ConstantDeleteId() != NOT_DELETED_ID && ConstantDeleteId() != transaction_id;
+	case DeleteIdState::MASKED:
+		// the mask only holds committed deletes, i.e. deletes by other transactions
+		for (idx_t i = 0; i < count; i++) {
+			if (deleted_mask.RowIsValid(NumericCast<idx_t>(ids[i] - offset))) {
+				return true;
+			}
+		}
+		return false;
+	case DeleteIdState::ARRAY: {
+		auto segment = allocator.GetHandle(GetDeletedPointer());
+		auto deleted = segment.GetPtr<transaction_t>();
+		for (idx_t i = 0; i < count; i++) {
+			auto delete_id = deleted[ids[i] - offset];
+			if (delete_id != NOT_DELETED_ID && delete_id != transaction_id) {
+				return true;
+			}
+		}
+		return false;
+	}
+	default:
+		throw InternalException("Unknown DeleteIdState in HasConflictingDelete");
+	}
+}
+
 IndexPointer ChunkVectorInfo::GetInsertedPointer() const {
 	if (HasConstantInsertionId()) {
 		throw InternalException("ChunkVectorInfo: insert id requested but insertions were not initialized");
@@ -382,14 +411,12 @@ static bool DeletesEntireVector(const row_t rows[], idx_t count) {
 }
 
 idx_t ChunkVectorInfo::Delete(transaction_t transaction_id, row_t rows[], idx_t count) {
-	if (HasConstantDeleteId() && ConstantDeleteId() != NOT_DELETED_ID) {
-		// all rows in this vector share the same deleted id - the rows we are trying to delete are already deleted
-		if (ConstantDeleteId() == transaction_id) {
-			// the rows were deleted by this transaction already - skip
-			return 0;
-		}
-		// the rows were deleted by another transaction - conflict
+	if (HasConflictingDelete(transaction_id, rows, count, 0)) {
 		throw TransactionException("Conflict on tuple deletion!");
+	}
+	if (HasConstantDeleteId() && ConstantDeleteId() != NOT_DELETED_ID) {
+		// all rows in this vector were deleted by this transaction already - skip
+		return 0;
 	}
 	if (HasConstantDeleteId() && count == STANDARD_VECTOR_SIZE && DeletesEntireVector(rows, count)) {
 		// no rows were deleted yet and we are deleting the entire vector
@@ -405,23 +432,27 @@ idx_t ChunkVectorInfo::Delete(transaction_t transaction_id, row_t rows[], idx_t 
 	idx_t deleted_tuples = 0;
 	for (idx_t i = 0; i < count; i++) {
 		if (deleted[rows[i]] == transaction_id) {
+			// the tuple was deleted by this transaction already - skip
 			continue;
 		}
-		// first check the chunk for conflicts
-		if (deleted[rows[i]] != NOT_DELETED_ID) {
-			// tuple was already deleted by another transaction - conflict
-			// unset any deleted tuples we set in this loop
-			for (idx_t k = 0; k < i; k++) {
-				deleted[rows[k]] = NOT_DELETED_ID;
-			}
-			throw TransactionException("Conflict on tuple deletion!");
-		}
-		// after verifying that there are no conflicts we mark the tuple as deleted
 		deleted[rows[i]] = transaction_id;
 		rows[deleted_tuples] = rows[i];
 		deleted_tuples++;
 	}
 	return deleted_tuples;
+}
+
+void ChunkVectorInfo::Update(transaction_t transaction_id, const vector<PhysicalIndex> &column_ids, const row_t ids[],
+                             idx_t count, row_t offset) {
+	for (auto &column_id : column_ids) {
+		auto entry = std::lower_bound(updated_columns.begin(), updated_columns.end(), column_id.index);
+		if (entry == updated_columns.end() || *entry != column_id.index) {
+			updated_columns.insert(entry, column_id.index);
+		}
+	}
+	if (HasConflictingDelete(transaction_id, ids, count, offset)) {
+		throw TransactionException("Conflict on update!");
+	}
 }
 
 void ChunkVectorInfo::CommitDelete(transaction_t commit_id, const DeleteInfo &info) {
@@ -624,6 +655,10 @@ void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t e
 bool ChunkVectorInfo::Cleanup(VisibilityBound lowest_visibility_bound) const {
 	if (AnyDeleted()) {
 		// if any rows are deleted we can't clean-up
+		return false;
+	}
+	if (!updated_columns.empty()) {
+		// a later delete still has to check the updated columns
 		return false;
 	}
 	// check if the insertion markers have to be used by all transactions going forward
