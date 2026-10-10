@@ -615,7 +615,16 @@ int32_t Date::ExtractWeekNumberRegular(date_t date, bool monday_first) {
 // Returns the date of the monday of the current week.
 date_t Date::GetMondayOfCurrentWeek(date_t date) {
 	int32_t dotw = Date::ExtractISODayOfTheWeek(date);
-	return date - (dotw - 1);
+	return Date::SubtractDays(date, dotw - 1);
+}
+
+date_t Date::SubtractDays(date_t date, int64_t days) {
+	static const auto min_days = Date::FromDate(DATE_MIN_YEAR, DATE_MIN_MONTH, DATE_MIN_DAY).days;
+	const auto result = int64_t(date.days) - days;
+	if (result < min_days || result > NumericLimits<int32_t>::Maximum() - 1) {
+		throw OutOfRangeException("Date out of range: subtracting %d days from %s", days, Date::ToString(date));
+	}
+	return date_t(int32_t(result));
 }
 
 } // namespace duckdb
