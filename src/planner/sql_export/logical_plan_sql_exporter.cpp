@@ -4,7 +4,10 @@
 #include "duckdb/planner/sql_export/bound_expression_sql_exporter_internal.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -31,14 +34,16 @@ static LogicalPlanVerificationIssue UnsupportedOperator(const LogicalPlanVerific
 	                                   "The logical operator does not have a SQL AST representation in this exporter");
 }
 
-static optional<Value> ConstantSQLInput(const Expression &expression, LogicalOperator &input) {
+static optional<Value> ConstantSQLInput(const Expression &expression, LogicalOperator &input,
+                                        const LogicalPlanSQLExportContext &context) {
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 		return expression.Cast<BoundConstantExpression>().GetValue();
 	}
 	if (auto wrapped = CMUtils::GetWrappedInput(expression)) {
-		return ConstantSQLInput(*wrapped, input);
+		return ConstantSQLInput(*wrapped, input, context);
 	}
-	if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF || input.children.size() != 1) {
+	if (context.FindSource(input) || expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+	    input.children.size() != 1) {
 		return {};
 	}
 	auto &column = expression.Cast<BoundColumnRefExpression>();
@@ -51,7 +56,7 @@ static optional<Value> ConstantSQLInput(const Expression &expression, LogicalOpe
 		if (column.Binding().table_index != projection.table_index) {
 			return {};
 		}
-		return ConstantSQLInput(*projection.expressions[column.Binding().column_index], *input.children[0]);
+		return ConstantSQLInput(*projection.expressions[column.Binding().column_index], *input.children[0], context);
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &aggregate = input.Cast<LogicalAggregate>();
@@ -64,14 +69,14 @@ static optional<Value> ConstantSQLInput(const Expression &expression, LogicalOpe
 				return {};
 			}
 		}
-		return ConstantSQLInput(*aggregate.groups[index], *input.children[0]);
+		return ConstantSQLInput(*aggregate.groups[index], *input.children[0], context);
 	}
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 	case LogicalOperatorType::LOGICAL_TOP_N:
 	case LogicalOperatorType::LOGICAL_LIMIT:
 	case LogicalOperatorType::LOGICAL_DISTINCT:
-		return ConstantSQLInput(expression, *input.children[0]);
+		return ConstantSQLInput(expression, *input.children[0], context);
 	default:
 		return {};
 	}
@@ -140,15 +145,23 @@ struct LogicalPlanSQLExportContext::SourceScope {
 LogicalPlanSQLExportContext::LogicalPlanSQLExportContext(ClientContext &context_p) : context(context_p) {
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportContext::Export(LogicalOperator &op,
-                                                               const LogicalPlanVerificationPath &path) {
+optional_ptr<const LogicalPlanSQLExportSource>
+LogicalPlanSQLExportContext::FindSource(const LogicalOperator &op) const {
 	for (auto scope = source_scope; scope; scope = scope->parent) {
 		for (auto &source : scope->sources) {
 			if (&source.op.get() == &op) {
-				return EnsureSQLProjection(LogicalPlanSQLExportResult::Success(
-				    {CreateNamedSource(source.name, source.relation.fields), source.relation.fields}));
+				return &source;
 			}
 		}
+	}
+	return nullptr;
+}
+
+LogicalPlanSQLExportResult LogicalPlanSQLExportContext::Export(LogicalOperator &op,
+                                                               const LogicalPlanVerificationPath &path) {
+	if (auto source = FindSource(op)) {
+		return EnsureSQLProjection(LogicalPlanSQLExportResult::Success(
+		    {CreateNamedSource(source->name, source->relation.fields), source->relation.fields}));
 	}
 	ancestors.push_back(op);
 	auto result = op.ToSQL(*this, path);
@@ -190,6 +203,22 @@ Identifier LogicalPlanSQLExportContext::NextRelationAlias(const Identifier &pref
 	}
 }
 
+void LogicalPlanSQLExportContext::ReserveRelationNames(QueryNode &query) {
+	std::function<void(const ParsedExpression &)> visit_expression = [&](const ParsedExpression &expression) {
+		if (expression.GetExpressionClass() == ExpressionClass::SUBQUERY) {
+			ReserveRelationNames(*expression.Cast<SubqueryExpression>().Subquery()->node);
+		}
+		ParsedExpressionIterator::EnumerateChildren(expression, visit_expression);
+	};
+	ParsedExpressionIterator::EnumerateQueryNodeChildren(
+	    query, [&](unique_ptr<ParsedExpression> &expression) { visit_expression(*expression); },
+	    [&](TableRef &ref) {
+		    if (ref.type == TableReferenceType::BASE_TABLE) {
+			    relation_aliases.insert(ref.Cast<BaseTableRef>().Table());
+		    }
+	    });
+}
+
 LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
 LogicalPlanSQLExportContext::ExportChild(LogicalOperator &child, const LogicalPlanVerificationPath &path) {
 	auto exported = Export(child, path);
@@ -220,7 +249,7 @@ LogicalPlanVerificationResult<unique_ptr<ParsedExpression>> LogicalPlanSQLExport
 			if (arguments[i]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				continue;
 			}
-			auto value = ConstantSQLInput(*arguments[i], *op.children[0]);
+			auto value = ConstantSQLInput(*arguments[i], *op.children[0], *this);
 			if (value && value->type().EqualsIncludingCollation(arguments[i]->GetReturnType())) {
 				if (!restored) {
 					restored = expression.Copy();
@@ -339,6 +368,11 @@ LogicalPlanSQLExporter::ExportWithSources(ClientContext &context, LogicalOperato
 	}
 	LogicalPlanSQLExportContext state(context);
 	vector<LogicalPlanSQLExportSource> sources;
+	// All definitions share a CTE scope. Reserve references from every replacement
+	// before allocating any name, so a generated source cannot capture another query's input.
+	for (auto &replacement : replacements) {
+		state.ReserveRelationNames(*replacement.relation.query);
+	}
 	for (auto &replacement : replacements) {
 		sources.push_back({replacement.op,
 		                   state.NextRelationAlias(Identifier("__export_source")),

@@ -33,6 +33,10 @@ public:
 	}
 
 	Identifier NextRelationAlias(const Identifier &preferred = Identifier());
+	//! Reserve parsed relation names before introducing generated CTEs around a query.
+	void ReserveRelationNames(QueryNode &query);
+	//! The effective source boundary, including enclosing export scopes.
+	optional_ptr<const LogicalPlanSQLExportSource> FindSource(const LogicalOperator &op) const;
 	LogicalPlanVerificationResult<LogicalPlanSQLExportedChild> ExportChild(LogicalOperator &child,
 	                                                                       const LogicalPlanVerificationPath &path);
 	LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
