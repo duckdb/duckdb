@@ -33,8 +33,10 @@ public:
 	//! The identifiers that refer to the same data as the given zone, including the zone itself.
 	//! Returns an empty list if the zone has no aliases.
 	static vector<string> GetEquivalentIds(const string &id);
-	//! The time zone of the host, or nullptr if it cannot be determined
+	//! The zone configured through TZ, or else the zone of the host; nullptr if neither can be determined
 	static unique_ptr<TimeZone> TryCreateDefault();
+	//! The time zone of the host, or nullptr if it cannot be determined
+	static unique_ptr<TimeZone> TryCreateHost();
 
 	const string &GetId() const {
 		return id;

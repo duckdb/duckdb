@@ -19,6 +19,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/os_util.hpp"
 #include "duckdb/main/extension_repository_manager.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -1105,7 +1106,7 @@ void HTTPProxySetting::SetGlobal(DatabaseInstance *, DBConfig &config, const Val
 }
 
 void HTTPProxySetting::ResetGlobal(DatabaseInstance *, DBConfig &config) {
-	config.options.http_proxy = FileSystem::GetEnvVariable("HTTP_PROXY");
+	config.options.http_proxy = OSUtil::GetConfigurationEnv("HTTP_PROXY");
 }
 
 //===----------------------------------------------------------------------===//

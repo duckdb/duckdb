@@ -394,6 +394,8 @@ public:
 	void RunSchemaDumpQuery(const string &zQuery);
 	void RunTableDumpQuery(const string &zSelect);
 	void OpenDB(ShellOpenFlags open_flags = ShellOpenFlags::EXIT_ON_FAILURE);
+	//! Progress bar and error rendering for the open database, following the console and agent mode
+	void ApplyDisplaySettings();
 
 	void SetOrClearFlag(ShellFlags mFlag, const string &zArg);
 	bool ShellHasFlag(ShellFlags flag) {
@@ -418,6 +420,10 @@ public:
 	idx_t GetScreenHeight();
 	idx_t GetMaxRenderWidth() const;
 	string GetSystemPager();
+	//! A variable the shell configures itself from, read through the database; empty if unset
+	string GetEnv(const string &name);
+	//! The home directory, from the home_directory setting or the environment
+	string GetHomeDirectory();
 	unique_ptr<PagerState> SetupPager();
 	static void StartPagerDisplay();
 	static void FinishPagerDisplay();

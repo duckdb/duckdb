@@ -3,6 +3,7 @@
 #include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
+#include "duckdb/main/os_util.hpp"
 #include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
@@ -664,7 +665,8 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 #else
 	idx_t physical_cores = std::thread::hardware_concurrency();
 #ifdef __linux__
-	if (const char *slurm_cpus = getenv("SLURM_CPUS_ON_NODE")) {
+	string slurm_cpus;
+	if (OSUtil::GetConfigurationEnv("SLURM_CPUS_ON_NODE", slurm_cpus)) {
 		idx_t slurm_threads;
 		if (TryCast::Operation<string_t, idx_t>(string_t(slurm_cpus), slurm_threads)) {
 			return MaxValue<idx_t>(slurm_threads, 1);
@@ -692,15 +694,17 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 
 #ifdef __linux__
 	// Check SLURM environment variables first
-	const char *slurm_mem_per_node = getenv("SLURM_MEM_PER_NODE");
-	const char *slurm_mem_per_cpu = getenv("SLURM_MEM_PER_CPU");
+	string slurm_mem_per_node;
+	string slurm_mem_per_cpu;
+	OSUtil::GetConfigurationEnv("SLURM_MEM_PER_NODE", slurm_mem_per_node);
+	OSUtil::GetConfigurationEnv("SLURM_MEM_PER_CPU", slurm_mem_per_cpu);
 
-	if (slurm_mem_per_node) {
+	if (!slurm_mem_per_node.empty()) {
 		auto limit = ParseMemoryLimitSlurm(slurm_mem_per_node);
 		if (limit.IsValid()) {
 			return limit.GetIndex();
 		}
-	} else if (slurm_mem_per_cpu) {
+	} else if (!slurm_mem_per_cpu.empty()) {
 		auto mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
 		if (mem_per_cpu.IsValid()) {
 			idx_t num_threads = GetSystemMaxThreads(fs);
@@ -789,7 +793,8 @@ optional_idx DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 
 // Right now we only really care about access mode when comparing DBConfigs
 bool DBConfigOptions::operator==(const DBConfigOptions &other) const {
-	return other.access_mode == access_mode && other.user_options == user_options;
+	return other.access_mode == access_mode && other.user_options == user_options &&
+	       other.configuration_env == configuration_env;
 }
 
 bool DBConfig::operator==(const DBConfig &other) {

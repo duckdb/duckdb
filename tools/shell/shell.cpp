@@ -54,6 +54,7 @@
 #include "duckdb/common/time_point.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/os_util.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
@@ -1270,6 +1271,10 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 	duckdb::shared_ptr<duckdb::LogStorage> storage_ptr = std_out_log_storage;
 
 	if (!db) {
+		// the variables the shell configures itself from, readable through the database regardless of external access
+		for (auto variable : {"DUCKDB_PAGER", "PAGER", "DUCKDB_HISTORY", "TEMP", "TMP"}) {
+			config.options.configuration_env.insert(variable);
+		}
 		try {
 			db = make_uniq<duckdb::DuckDB>(zDbFilename.c_str(), &config);
 			RegisterShellLogger(*db, storage_ptr);
@@ -1284,29 +1289,34 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 				ShellState::Exit(1);
 			}
 		}
-		auto &client_config = duckdb::ClientConfig::GetConfig(*conn->context);
-		if (stdout_is_console) {
-			client_config.display_create_func = CreateProgressBar;
-		} else if (agent_mode_active) {
-			// no terminal to draw a progress bar on - print periodic progress lines to stderr instead
-			client_config.display_create_func = CreateAgentProgressBar;
-		}
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif
 		db->LoadStaticExtension<duckdb::ShellExtension>();
+		// before the configuration is locked in safe mode
+		ApplyDisplaySettings();
 		if (safe_mode) {
 			ExecuteQuery("SET enable_external_access=false");
 			ExecuteQuery("SET lock_configuration=true");
 		}
-		if (stdout_is_console || agent_mode_active) {
-			ExecuteQuery("PRAGMA enable_progress_bar");
-			ExecuteQuery("PRAGMA enable_print_progress_bar");
-		}
-		if (agent_mode_active) {
-			// structured errors: the engine renders them as JSON instead of a LINE/caret block
-			ExecuteQuery("SET errors_as_json = true");
-		}
+	}
+}
+
+void ShellState::ApplyDisplaySettings() {
+	auto &client_config = duckdb::ClientConfig::GetConfig(*conn->context);
+	if (stdout_is_console) {
+		client_config.display_create_func = CreateProgressBar;
+	} else if (agent_mode_active) {
+		// no terminal to draw a progress bar on - print periodic progress lines to stderr instead
+		client_config.display_create_func = CreateAgentProgressBar;
+	}
+	if (stdout_is_console || agent_mode_active) {
+		ExecuteQuery("PRAGMA enable_progress_bar");
+		ExecuteQuery("PRAGMA enable_print_progress_bar");
+	}
+	if (agent_mode_active) {
+		// structured errors: the engine renders them as JSON instead of a LINE/caret block
+		ExecuteQuery("SET errors_as_json = true");
 	}
 }
 
@@ -1438,17 +1448,28 @@ FILE *ShellState::OpenOutputFile(const char *zFile, int bTextMode) {
 	return f;
 }
 
-string ShellState::GetSystemPager() {
-	const char *duckdb_pager = getenv("DUCKDB_PAGER");
-
-	// Try DUCKDB_PAGER first (highest priority for env vars)
-	if (duckdb_pager && strlen(duckdb_pager) > 0) {
-		return duckdb_pager;
+string ShellState::GetEnv(const string &name) {
+	if (!db) {
+		return string();
 	}
+	return duckdb::OSUtil::Get(*db->instance).GetEnvUnrestricted(name);
+}
 
-	// Try PAGER next
-	const char *pager = getenv("PAGER");
-	if (pager && strlen(pager) > 0) {
+string ShellState::GetHomeDirectory() {
+	if (!db) {
+		return string();
+	}
+	return duckdb::FileSystem::GetHomeDirectory(*db->instance);
+}
+
+string ShellState::GetSystemPager() {
+	// DUCKDB_PAGER takes priority over PAGER
+	auto pager = GetEnv("DUCKDB_PAGER");
+	if (!pager.empty()) {
+		return pager;
+	}
+	pager = GetEnv("PAGER");
+	if (!pager.empty()) {
 		return pager;
 	}
 
@@ -1721,13 +1742,13 @@ void ShellState::NewTempFile(const char *zSuffix) {
 	zTempFile = string();
 	/* If db is an in-memory database then the TEMPFILENAME file-control
 	** will not work and we will need to fallback to guessing */
-	const char *zTemp;
 	uint64_t r;
 	GenerateRandomBytes(sizeof(r), &r);
-	zTemp = getenv("TEMP");
-	if (zTemp == 0)
-		zTemp = getenv("TMP");
-	if (zTemp == 0) {
+	auto zTemp = GetEnv("TEMP");
+	if (zTemp.empty()) {
+		zTemp = GetEnv("TMP");
+	}
+	if (zTemp.empty()) {
 #ifdef _WIN32
 		zTemp = "\\tmp";
 #else
@@ -3245,11 +3266,6 @@ int ShellState::ProcessInput(InputMode mode) {
 	return errCnt > 0;
 }
 
-static string GetHomeDirectory() {
-	duckdb::LocalFileSystem lfs;
-	return lfs.GetHomeDirectory();
-}
-
 string ShellState::GetDefaultDuckDBRC() {
 	duckdb::LocalFileSystem lfs;
 	return lfs.JoinPath(GetHomeDirectory(), ".duckdbrc");
@@ -3524,6 +3540,7 @@ static const AgentEnvironmentMarker AGENT_ENVIRONMENT_MARKERS[] = {{"AI_AGENT", 
                                                                    {"COPILOT_AGENT_SESSION_ID", "github-copilot"},
                                                                    {nullptr, nullptr}};
 
+// Agent mode is decided before any database exists, so these read the process environment directly
 bool ShellState::DetectAgentEnvironment(string &agent_name, string &marker) {
 	for (idx_t i = 0; AGENT_ENVIRONMENT_MARKERS[i].variable; i++) {
 		auto &entry = AGENT_ENVIRONMENT_MARKERS[i];
@@ -3950,8 +3967,6 @@ int RunShell(int argc, const char **argv) {
 		/* Run commands received from standard input
 		 */
 		if (data.stdin_is_interactive) {
-			string zHome;
-			const char *zHistory;
 			ShellHighlight highlight(data);
 
 			auto startup_version = StringUtil::Format("DuckDB %s (%s", duckdb::DuckDB::LibraryVersion(),
@@ -3968,14 +3983,11 @@ int RunShell(int argc, const char **argv) {
 				highlight.PrintText("Enter \".help\" for usage hints.\n", PrintOutput::STDOUT,
 				                    HighlightElementType::STARTUP_TEXT);
 			}
-			zHistory = getenv("DUCKDB_HISTORY");
-			if (!zHistory) {
-				zHome = GetHomeDirectory() + "/.duckdb_history";
-				zHistory = zHome.c_str();
+			auto zHistory = data.GetEnv("DUCKDB_HISTORY");
+			if (zHistory.empty()) {
+				zHistory = data.GetHomeDirectory() + "/.duckdb_history";
 			}
-			if (zHistory) {
-				data.ShellLoadHistory(zHistory);
-			}
+			data.ShellLoadHistory(zHistory.c_str());
 #ifdef HAVE_LINENOISE
 			if (data.rl_version == ReadLineVersion::LINENOISE) {
 				linenoiseSetCompletionCallback(linenoise_completion);
@@ -3984,10 +3996,8 @@ int RunShell(int argc, const char **argv) {
 #endif
 			data.in = 0;
 			rc = data.ProcessInput(InputMode::STANDARD);
-			if (zHistory) {
-				data.ShellSetHistoryMaxLength(2000);
-				data.ShellSaveHistory(zHistory);
-			}
+			data.ShellSetHistoryMaxLength(2000);
+			data.ShellSaveHistory(zHistory.c_str());
 		} else {
 			data.in = stdin;
 			rc = data.ProcessInput(InputMode::STANDARD);

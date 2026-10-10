@@ -1,5 +1,7 @@
 #include "duckdb/main/secret/default_secrets.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/os_util.hpp"
 
 namespace duckdb {
 
@@ -54,29 +56,24 @@ vector<CreateSecretFunction> CreateHTTPSecretFunctions::GetDefaultSecretFunction
 	return result;
 }
 
-static const char *TryGetEnv(const char *name) {
-	const char *res = std::getenv(name);
-	if (res) {
-		return res;
-	}
-	return std::getenv(StringUtil::Upper(name).c_str());
+static bool GetEnv(ClientContext &context, const string &name, string &value) {
+	auto &os_util = OSUtil::Get(*context.db);
+	return os_util.GetEnv(name, value) || os_util.GetEnv(StringUtil::Upper(name), value);
 }
 
 unique_ptr<BaseSecret> CreateHTTPSecretFunctions::CreateHTTPSecretFromEnv(ClientContext &context,
                                                                           CreateSecretInput &input) {
 	auto secret = make_uniq<KeyValueSecret>(input.scope, input.type, input.provider, input.name);
 
-	auto http_proxy = TryGetEnv("http_proxy");
-	if (http_proxy) {
-		secret->secret_map["http_proxy"] = Value(http_proxy);
+	string value;
+	if (GetEnv(context, "http_proxy", value)) {
+		secret->secret_map["http_proxy"] = Value(value);
 	}
-	auto http_proxy_password = TryGetEnv("http_proxy_password");
-	if (http_proxy_password) {
-		secret->secret_map["http_proxy_password"] = Value(http_proxy_password);
+	if (GetEnv(context, "http_proxy_password", value)) {
+		secret->secret_map["http_proxy_password"] = Value(value);
 	}
-	auto http_proxy_username = TryGetEnv("http_proxy_username");
-	if (http_proxy_username) {
-		secret->secret_map["http_proxy_username"] = Value(http_proxy_username);
+	if (GetEnv(context, "http_proxy_username", value)) {
+		secret->secret_map["http_proxy_username"] = Value(value);
 	}
 
 	// Allow overwrites
