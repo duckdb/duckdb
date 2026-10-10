@@ -501,6 +501,10 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 	}
 	auto &column_ref = func.GetChildren()[0]->Cast<BoundColumnRefExpression>();
 	auto &constant_value_expr = func.GetChildren()[1]->Cast<BoundConstantExpression>();
+	if (constant_value_expr.GetValue().IsNull()) {
+		// prefix(col, NULL) is NULL and filters out every row - leave the filter in place, do not push it down
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
 	auto prefix_string = StringValue::Get(constant_value_expr.GetValue());
 	if (prefix_string.empty()) {
 		// empty prefix - skip
