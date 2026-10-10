@@ -668,7 +668,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 
 		//! Convert the root 'value' -> 'untyped_value_index'
 		auto &value = schema.children[1];
-		D_ASSERT(value.name == "value");
+		if (schema.children[0].name != "metadata" || value.name != "value") {
+			return nullptr;
+		}
 		auto value_stats = ParquetStatisticsUtils::TransformColumnStatistics(value, columns, can_have_nan);
 		//! Best-effort: nodes whose stats can't be converted are left UNKNOWN (not fully shredded) rather
 		//! than discarding the statistics for the entire variant column
