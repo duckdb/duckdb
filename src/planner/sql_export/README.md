@@ -12,6 +12,8 @@ GROUP BY category;
 
 The result has the usual `explain_key` and `explain_value` VARCHAR columns and one row. Its key is `sql`; its value is the generated query. Execute that value as a separate SQL statement to obtain the query result. The `explain_output` setting does not change this result.
 
+The returned SQL is always formatted using the core SQL formatter's defaults, independently of loaded extensions. Formatting is performed when the statement is planned, including for prepared statements. The CLI applies SQL syntax highlighting on terminals according to `.highlight`; API values and redirected output contain plain SQL without color codes.
+
 The generated query preserves SQL semantics when rebound under the same catalog, settings, extensions, and external environment. It preserves output column names, column order, logical types, NULLs, duplicates, sampling, and ordering required by SQL. Without an ordering guarantee, row order may differ.
 
 This is generated SQL, not recovery of the original query text. Optimizer rewrites can change expressions, join order, and query structure. Generated relation names and nested queries are expected. Formatting and SQL text are not stable across DuckDB versions. Rebinding may rediscover files, infer schemas, and observe current catalog or runtime state, as ordinary SQL does; the output is not a frozen execution snapshot or a portable catalog bundle.
