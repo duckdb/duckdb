@@ -2,6 +2,8 @@
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
@@ -558,6 +560,51 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 //! * @param offset The offset into the result where to write the converted values
 //! * @param count The amount of values we're converting
 //! * @param row The row of the Variant to pull data from, if 'IsValid()' is true
+//! Maps cannot have NULL or duplicate keys - such rows are set to NULL, reporting the error
+static bool VerifyConvertedMaps(FromVariantConversionData &conversion_data, Vector &result, idx_t offset, idx_t count) {
+	bool all_valid = true;
+	SelectionVector row_sel(1);
+	for (idx_t i = 0; i < count; i++) {
+		if (FlatVector::IsNull(result, offset + i)) {
+			continue;
+		}
+		row_sel.set_index(0, offset + i);
+		auto reason = MapVector::CheckMapValidity(result, 1, row_sel);
+		if (reason == MapInvalidReason::VALID) {
+			continue;
+		}
+		if (conversion_data.error.empty()) {
+			conversion_data.error =
+			    reason == MapInvalidReason::DUPLICATE_KEY ? "Map keys must be unique." : "Map keys can not be NULL.";
+		}
+		FlatVector::SetNull(result, offset + i, true);
+		all_valid = false;
+	}
+	return all_valid;
+}
+
+//! A VARIANT holds a MAP as a list of {key, value} structs - cast it to the entries of the target MAP
+static optional<Value> TryCastVariantValueToMap(FromVariantConversionData &conversion_data, const Value &value,
+                                                const LogicalType &target_type) {
+	auto entry_type = ListType::GetChildType(target_type);
+	auto entries = conversion_data.TryCastAs(value, LogicalType::LIST(entry_type), nullptr, true);
+	if (!entries) {
+		return entries;
+	}
+	if (entries->IsNull()) {
+		return Value(target_type);
+	}
+	try {
+		return Value::MAP(entry_type, ListValue::GetChildren(*entries));
+	} catch (const InvalidInputException &ex) {
+		// the entries do not form a valid map (e.g. duplicate keys)
+		if (conversion_data.error.empty()) {
+			conversion_data.error = ErrorData(ex).RawMessage();
+		}
+		return optional<Value>();
+	}
+}
+
 static bool CastVariant(FromVariantConversionData &conversion_data, Vector &result, const SelectionVector &sel,
                         idx_t offset, idx_t count, optional_idx row) {
 	auto &target_type = result.GetType();
@@ -583,9 +630,13 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			}
 			break;
 		case LogicalTypeId::LIST:
-		case LogicalTypeId::MAP: {
 			if (ConvertVariantToList(conversion_data, result, sel, offset, count, row)) {
 				return true;
+			}
+			break;
+		case LogicalTypeId::MAP: {
+			if (ConvertVariantToList(conversion_data, result, sel, offset, count, row)) {
+				return VerifyConvertedMaps(conversion_data, result, offset, count);
 			}
 			break;
 		}
@@ -616,7 +667,9 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			uint32_t value_index = sel[i];
 			auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, value_index);
 			try {
-				auto cast_value = conversion_data.TryCastAs(value, target_type, nullptr, true);
+				auto cast_value = target_type.id() == LogicalTypeId::MAP
+				                      ? TryCastVariantValueToMap(conversion_data, value, target_type)
+				                      : conversion_data.TryCastAs(value, target_type, nullptr, true);
 				if (!cast_value) {
 					cast_value = Value(target_type);
 					all_valid = false;
@@ -628,6 +681,9 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 				FlatVector::SetNull(result, offset + i, true);
 				all_valid = false;
 			}
+		}
+		if (target_type.id() == LogicalTypeId::MAP) {
+			all_valid = VerifyConvertedMaps(conversion_data, result, offset, count) && all_valid;
 		}
 		return all_valid;
 	} else {
