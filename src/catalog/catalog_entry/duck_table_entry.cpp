@@ -873,7 +873,10 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	if (create_info->columns.empty()) {
 		throw CatalogException("Cannot drop column: table only has one column remaining!");
 	}
-	auto adjusted_indices = column_dependency_manager.RemoveColumn(removed_index, columns.LogicalColumnCount());
+	// operate on a copy: this is the live catalog entry, and mutating it here races with concurrent ALTERs and leaves
+	// the dependency map corrupted if a later step throws and the ALTER is rolled back
+	auto column_dependencies = column_dependency_manager.Copy();
+	auto adjusted_indices = column_dependencies.RemoveColumn(removed_index, columns.LogicalColumnCount());
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_constraints = binder->BindConstraints(constraints, name, columns);

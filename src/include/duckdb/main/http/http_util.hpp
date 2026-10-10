@@ -46,6 +46,9 @@ struct HTTPParams {
 	bool follow_location = true;
 	bool override_verify_ssl = false;
 	bool verify_ssl = true;
+	//! When set, the caller performs its own file access control, so the central enable_external_access check in
+	//! HTTPUtil::Request is skipped (used by extension installation, which gates on allowed_directories itself)
+	bool skip_external_access_check = false;
 
 	string http_proxy;
 	idx_t http_proxy_port = 0;

@@ -475,9 +475,25 @@ static LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, 
 	return LogicalTypeComparisonResult::DIFFERENT_TYPES;
 }
 
+//! Resolve any ANY in the target type by substituting the matching part of the source, so we never cast a value to a
+//! type that still contains ANY - ANY has no physical representation, so building such a vector throws. This happens
+//! e.g. when an ARRAY argument fills a LIST(ANY) parameter (the file list of the multi-file readers).
+static LogicalType ResolveAnyInParameterType(const LogicalType &target, const LogicalType &source) {
+	if (target.id() == LogicalTypeId::ANY) {
+		return source;
+	}
+	if (target.id() == LogicalTypeId::LIST &&
+	    (source.id() == LogicalTypeId::LIST || source.id() == LogicalTypeId::ARRAY)) {
+		auto &source_child =
+		    source.id() == LogicalTypeId::LIST ? ListType::GetChildType(source) : ArrayType::GetChildType(source);
+		return LogicalType::LIST(ResolveAnyInParameterType(ListType::GetChildType(target), source_child));
+	}
+	return target;
+}
+
 Value FunctionBinder::CastToParameterType(ClientContext &context, Value value, const LogicalType &parameter_type) {
 	if (RequiresCast(value.type(), parameter_type) == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
-		return value.CastAs(context, parameter_type);
+		return value.CastAs(context, ResolveAnyInParameterType(parameter_type, value.type()));
 	}
 	return value;
 }

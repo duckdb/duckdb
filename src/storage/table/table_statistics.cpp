@@ -29,6 +29,8 @@ void TableStatistics::InitializeEmpty(const TableStatistics &other) {
 	D_ASSERT(Empty());
 	D_ASSERT(!table_sample);
 
+	// hold other's lock while reading its stats - a concurrent ANALYZE/VACUUM can replace them (e.g. SetDistinct)
+	lock_guard<mutex> l(*other.stats_lock);
 	stats_lock = make_shared_ptr<mutex>();
 	if (other.table_sample) {
 		D_ASSERT(other.table_sample->type == SampleType::RESERVOIR_SAMPLE);

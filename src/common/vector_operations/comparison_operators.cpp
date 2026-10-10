@@ -191,6 +191,13 @@ static void ComparatorToBoolean(const Vector &left, const Vector &right, Vector 
 	VectorOperations::Comparator(left, right, comparator_result, comp);
 	const auto count = comparator_result.size();
 	auto cmp_data = comparator_result.Values<int8_t>();
+	if (left.GetVectorType() == VectorType::CONSTANT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// the comparison of two constants is a constant
+		auto entry = cmp_data[0];
+		auto value = entry.IsValid() ? Value::BOOLEAN(predicate(entry.GetValue())) : Value(LogicalType::BOOLEAN);
+		result.Reference(value, count_t(count));
+		return;
+	}
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<bool>(result, count);
 	for (idx_t i = 0; i < count; i++) {

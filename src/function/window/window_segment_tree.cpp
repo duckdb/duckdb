@@ -82,6 +82,8 @@ public:
 	                        data_ptr_t current_state);
 	//! Writes result and calls destructors
 	void Finalize(Vector &result, idx_t count);
+	//! Calls the destructors of the accumulation states (statef) without finalizing
+	void Destroy(idx_t count);
 
 	void Combine(WindowSegmentTreePart &other, idx_t count);
 
@@ -297,6 +299,14 @@ void WindowSegmentTreePart::Finalize(Vector &result, idx_t count) {
 	}
 }
 
+void WindowSegmentTreePart::Destroy(idx_t count) {
+	if (!aggr.function.HasStateDestructorCallback()) {
+		return;
+	}
+	AggregateFinalizeInputData aggr_input_data(aggr, allocator);
+	aggr.function.GetStateDestructorCallback()(statef, aggr_input_data, count);
+}
+
 WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(ClientContext &client, const WindowSegmentTree &aggregator,
                                                            idx_t group_count, const ValidityMask &partition_mask)
     : WindowAggregatorGlobalState(client, aggregator, group_count), tree(aggregator), levels_flat_native(client, aggr) {
@@ -466,6 +476,10 @@ void WindowSegmentTreeLocalState::Evaluate(ExecutionContext &context, const Wind
 
 		// 4. combine the buffer state into the Segment Tree State
 		part->Combine(*right_part, count);
+
+		// right_part's states are re-initialized on every chunk, so destroy them after combining to avoid leaking
+		// aggregate states that own heap memory (e.g. histogram, reservoir_quantile)
+		right_part->Destroy(count);
 	} else {
 		part->Evaluate(gtstate, window_begin, window_end, nullptr, result, count, row_idx, WindowSegmentTreePart::FULL);
 	}
