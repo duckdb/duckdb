@@ -263,6 +263,10 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 				}
 			}
 			if (StringUtil::CharacterIsSpace(buf[pos])) {
+				if (pos == start_pos) {
+					// a sign followed only by whitespace is not a number
+					return false;
+				}
 				// skip any trailing spaces
 				while (++pos < len) {
 					if (!StringUtil::CharacterIsSpace(buf[pos])) {
