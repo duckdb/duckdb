@@ -62,6 +62,8 @@
         "test/sql/aggregate/aggregates/test_approx_quantile.test",
         "test/sql/aggregate/aggregates/test_binned_histogram.test",
         "test/sql/aggregate/aggregates/test_bitstring_agg.test",
+        "test/sql/types/bit/bit_sort_key_order.test",
+        "test/sql/types/time/timetz_minmax_order.test",
         "test/sql/aggregate/aggregates/test_entropy.test",
         "test/sql/aggregate/aggregates/test_histogram.test",
         "test/sql/aggregate/aggregates/test_histogram_3529.test",
