@@ -65,6 +65,12 @@
         "test/sql/optimizer/secure_view_statistics.test",
         "test/sql/window/test_window_agg_stats_propagation.test"
       ]
+    },
+    {
+      "reason": "Dynamic join filter pushdown pruning requires the optimizer and is not preserved across logical plan serialization.",
+      "paths": [
+        "test/optimizer/pushdown/join_filter_pushdown_nested_build.test"
+      ]
     }
   ]
 }
