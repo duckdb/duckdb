@@ -422,6 +422,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 		throw IOException("FIXED_LEN_BYTE_ARRAY requires length to be set");
 	}
 	if (s_ele.__isset.type_length) {
+		if (s_ele.type_length < 0) {
+			throw IOException("Invalid negative type_length %d for column \"%s\"", s_ele.type_length, s_ele.name);
+		}
 		schema.type_length = NumericCast<uint32_t>(s_ele.type_length);
 	}
 	schema.parquet_type = s_ele.type;
@@ -1244,7 +1247,11 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema(ClientContext &contex
 		throw InvalidInputException("Failed to read Parquet file \"%s\": Root element of Parquet file must be a struct",
 		                            file.path);
 	}
-	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
+	if (next_schema_idx != file_meta_data->schema.size() - 1) {
+		throw InvalidInputException("Failed to read Parquet file \"%s\": schema has elements that are not part of the "
+		                            "schema tree",
+		                            file.path);
+	}
 	if (!file_meta_data->row_groups.empty() && next_file_idx != file_meta_data->row_groups[0].columns.size()) {
 		throw InvalidInputException("Failed to read Parquet file \"%s\": row group does not have enough columns",
 		                            file.path);
