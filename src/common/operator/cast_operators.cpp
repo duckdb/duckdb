@@ -1134,6 +1134,13 @@ static bool TryCastTimestampBase(const SRC &input, DST &result, bool strict = tr
 			++result.value;
 		}
 		result.value /= 2;
+		//	Rounding away from the epoch can push the result past the maximum representable instant, which is bounded
+		//	by the microsecond range. A finer destination (e.g. ns) has a strictly narrower range and cannot overflow.
+		if (DST::PRECISION <= timestamp_t::PRECISION) {
+			int64_t micros;
+			const int64_t to_micros = timestamp_t::PRECISION / DST::PRECISION;
+			return TryMultiplyOperator::Operation(result.value, to_micros, micros);
+		}
 		return true;
 	}
 }
