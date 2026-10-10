@@ -1,7 +1,7 @@
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(mysql_scanner
             GIT_URL https://github.com/duckdb/duckdb-mysql
-            GIT_TAG 5c219c915871415785d31cd10762809e7a4f651a
+            GIT_TAG accd6a798c8bd82a5e741f028d2c62608a093e29
             SUBMODULES database-connector
             APPLY_PATCHES
             )
