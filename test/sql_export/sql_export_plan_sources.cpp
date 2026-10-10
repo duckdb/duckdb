@@ -1,3 +1,4 @@
+#include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -571,6 +572,314 @@ TEST_CASE("Logical plan SQL export rejects incomplete secure view metadata",
 		                        {{LogicalPlanVerificationPathComponentType::OPERATOR_CHILD, 0}}});
 		connection.Rollback();
 	}
+}
+
+// SQL cannot supply a typed replacement for an existing operator, forge an invalid
+// boundary, or observe whether verification repaired the caller's type vector.
+TEST_CASE("Resolved subtree export preserves its original plan", "[sql_export][logical_plan_sql_export][plan_views]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto plan = OptimizeLogicalPlanExportQuery(
+	    connection, "WITH q AS MATERIALIZED (SELECT i FROM range(3) t(i)) SELECT i+1 FROM q");
+	REQUIRE(LogicalPlanVerifier::VerifyAlways(*plan).IsSuccess());
+	auto source = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET);
+	REQUIRE(source);
+	auto &get = source->Cast<LogicalGet>();
+	auto original_owner = plan.get();
+	auto original_bind_data = get.bind_data.get();
+	auto original_types = plan->types;
+	auto original_bindings = plan->GetColumnBindings();
+	auto source_bindings = get.GetColumnBindings();
+	get.function.to_sql = [](ClientContext &, const LogicalGet &) -> TableFunctionToSQLResult {
+		return {nullptr, "opaque_original_source"};
+	};
+	auto relation = [&]() {
+		Parser parser(*connection.context);
+		parser.ParseQuery("SELECT 42::BIGINT AS i");
+		vector<LogicalPlanSQLExportField> fields;
+		for (idx_t i = 0; i < get.types.size(); i++) {
+			fields.push_back({source_bindings[i], get.types[i]});
+		}
+		return LogicalPlanSQLExportRelation {std::move(parser.statements[0]->Cast<SelectStatement>().node),
+		                                     std::move(fields)};
+	};
+
+	SECTION("sources precede materialized CTE consumers") {
+		for (idx_t repeat = 0; repeat < 2; repeat++) {
+			vector<LogicalPlanSQLExportReplacement> replacements;
+			replacements.push_back({get, relation()});
+			auto exported = LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements);
+			REQUIRE(exported.IsSuccess());
+			auto result = connection.Query(exported.GetValue().query->ToString());
+			REQUIRE_NO_FAIL(*result);
+			REQUIRE(result->RowCount() == 1);
+			REQUIRE(result->Collection().GetValue(0, 0) == Value::BIGINT(43));
+		}
+	}
+	SECTION("unreplaced sources remain opaque") {
+		RequirePlanExportIssue(LogicalPlanSQLExporter::ExportWithSources(*connection.context, get, {}),
+		                       LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE);
+	}
+	SECTION("incomplete fields") {
+		auto replacement = relation();
+		replacement.fields.clear();
+		vector<LogicalPlanSQLExportReplacement> replacements;
+		replacements.push_back({get, std::move(replacement)});
+		RequirePlanExportIssue(LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements),
+		                       LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
+	}
+	SECTION("wrong type") {
+		auto replacement = relation();
+		replacement.fields[0].type = LogicalType::INTEGER;
+		vector<LogicalPlanSQLExportReplacement> replacements;
+		replacements.push_back({get, std::move(replacement)});
+		RequirePlanExportIssue(LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements),
+		                       LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
+	}
+	SECTION("duplicate boundary") {
+		vector<LogicalPlanSQLExportReplacement> replacements;
+		replacements.push_back({get, relation()});
+		replacements.push_back({get, relation()});
+		RequirePlanExportIssue(LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements),
+		                       LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
+	}
+	SECTION("overlapping boundaries") {
+		auto root_relation = relation();
+		root_relation.fields[0].source_binding = original_bindings[0];
+		vector<LogicalPlanSQLExportReplacement> replacements;
+		replacements.push_back({*plan, std::move(root_relation)});
+		replacements.push_back({get, relation()});
+		RequirePlanExportIssue(LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements),
+		                       LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
+	}
+	SECTION("foreign boundary") {
+		auto other = OptimizeLogicalPlanExportQuery(connection, "SELECT i FROM range(4) t(i)");
+		REQUIRE(LogicalPlanVerifier::VerifyAlways(*other).IsSuccess());
+		auto other_get = FindLogicalPlanExportOperator(*other, LogicalOperatorType::LOGICAL_GET);
+		REQUIRE(other_get);
+		auto replacement = relation();
+		replacement.fields[0].source_binding = other_get->GetColumnBindings()[0];
+		vector<LogicalPlanSQLExportReplacement> replacements;
+		replacements.push_back({*other_get, std::move(replacement)});
+		RequirePlanExportIssue(LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements),
+		                       LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
+	}
+	SECTION("read-only verification never repairs unresolved types") {
+		plan->types.clear();
+		REQUIRE(LogicalPlanVerifier::VerifyResolvedBindings(*plan).HasError());
+		REQUIRE(plan->types.empty());
+		plan->types = original_types;
+		REQUIRE(LogicalPlanVerifier::VerifyResolvedBindings(*plan).IsSuccess());
+	}
+	REQUIRE(plan.get() == original_owner);
+	REQUIRE(get.bind_data.get() == original_bind_data);
+	REQUIRE(plan->types == original_types);
+	REQUIRE(plan->GetColumnBindings() == original_bindings);
+	REQUIRE(get.GetColumnBindings() == source_bindings);
+	connection.Rollback();
+}
+
+static unique_ptr<LogicalOperator> BindResolvedReplacementPlan(Connection &connection, const string &sql) {
+	Parser parser(*connection.context);
+	parser.ParseQuery(sql);
+	Planner planner(*connection.context);
+	planner.CreatePlan(std::move(parser.statements[0]));
+	REQUIRE(LogicalPlanVerifier::VerifyAlways(*planner.plan).IsSuccess());
+	return std::move(planner.plan);
+}
+
+static LogicalPlanSQLExportRelation ReplacementRelation(Connection &connection, LogicalOperator &op,
+                                                        const string &sql) {
+	Parser parser(*connection.context);
+	parser.ParseQuery(sql);
+	auto bindings = op.GetColumnBindings();
+	vector<LogicalPlanSQLExportField> fields;
+	for (idx_t i = 0; i < bindings.size(); i++) {
+		fields.push_back({bindings[i], op.types[i]});
+	}
+	return {std::move(parser.statements[0]->Cast<SelectStatement>().node), std::move(fields)};
+}
+
+static void RequireReplacementResult(Connection &connection, LogicalOperator &plan,
+                                     const vector<LogicalPlanSQLExportReplacement> &replacements,
+                                     const string &expected_sql) {
+	auto exported = LogicalPlanSQLExporter::ExportWithSources(*connection.context, plan, replacements);
+	REQUIRE(exported.IsSuccess());
+	auto sql = exported.GetValue().query->ToString();
+	INFO(sql);
+	auto actual = connection.Query(sql);
+	auto expected = connection.Query(expected_sql);
+	REQUIRE_NO_FAIL(*actual);
+	REQUIRE_NO_FAIL(*expected);
+	REQUIRE(actual->GetTypes() == expected->GetTypes());
+	REQUIRE(actual->RowCount() == expected->RowCount());
+	for (idx_t row = 0; row < expected->RowCount(); row++) {
+		for (idx_t column = 0; column < expected->GetTypes().size(); column++) {
+			REQUIRE(Value::NotDistinctFrom(actual->Collection().GetValue(column, row),
+			                               expected->Collection().GetValue(column, row)));
+		}
+	}
+}
+
+// Only the API can select an existing operator as a replacement boundary. The
+// assertions below execute SQL to distinguish replacement from original input.
+TEST_CASE("Resolved replacements take precedence over CTE producer shortcuts",
+          "[sql_export][logical_plan_sql_export][plan_view_regression]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	string query, replacement_sql, expected_sql;
+	bool recursive = false;
+	SECTION("identity projection producer") {
+		query = "WITH q AS MATERIALIZED (SELECT i FROM range(3) t(i)) SELECT i+1 FROM q";
+		replacement_sql = "SELECT 42::BIGINT AS i";
+		expected_sql = "SELECT 43::BIGINT";
+	}
+	SECTION("recursive producer") {
+		query = "WITH RECURSIVE q(i) AS MATERIALIZED "
+		        "(SELECT 1 UNION ALL SELECT i+1 FROM q WHERE i<3) SELECT i+1 FROM q";
+		replacement_sql = "SELECT 42::INTEGER AS i";
+		expected_sql = "SELECT 43::INTEGER";
+		recursive = true;
+	}
+	auto plan = BindResolvedReplacementPlan(connection, query);
+	auto cte = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_MATERIALIZED_CTE);
+	REQUIRE(cte);
+	auto boundary = recursive ? FindLogicalPlanExportOperator(*cte, LogicalOperatorType::LOGICAL_RECURSIVE_CTE)
+	                          : optional_ptr<LogicalOperator>(cte->children[0].get());
+	REQUIRE(boundary);
+	if (!recursive) {
+		REQUIRE(boundary->type == LogicalOperatorType::LOGICAL_PROJECTION);
+		auto fields = LogicalPlanSQLExportHelpers::CreateFields(*boundary->children[0], {});
+		REQUIRE(fields.IsSuccess());
+		REQUIRE(
+		    LogicalPlanSQLExportHelpers::IsIdentityProjection(boundary->Cast<LogicalProjection>(), fields.GetValue()));
+	}
+	vector<LogicalPlanSQLExportReplacement> replacements;
+	replacements.push_back({*boundary, ReplacementRelation(connection, *boundary, replacement_sql)});
+	auto original_sql = replacements[0].relation.query->ToString();
+	for (idx_t repeat = 0; repeat < 2; repeat++) {
+		RequireReplacementResult(connection, *plan, replacements, expected_sql);
+		REQUIRE(replacements[0].relation.query->ToString() == original_sql);
+	}
+	connection.Rollback();
+}
+
+TEST_CASE("Aggregate recovery does not inspect a replaced projection",
+          "[sql_export][logical_plan_sql_export][plan_view_regression]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto plan = BindResolvedReplacementPlan(connection, "SELECT sum(x) FROM (SELECT 1 AS x FROM range(3)) t");
+	auto aggregate = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY);
+	REQUIRE(aggregate);
+	auto &boundary = *aggregate->children[0];
+	REQUIRE(boundary.type == LogicalOperatorType::LOGICAL_PROJECTION);
+	auto ordinary = LogicalPlanSQLExporter::Export(*connection.context, *plan);
+	auto unchanged = LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, {});
+	REQUIRE(ordinary.IsSuccess());
+	REQUIRE(unchanged.IsSuccess());
+	REQUIRE(ordinary.GetValue().query->ToString() == unchanged.GetValue().query->ToString());
+	RequireReplacementResult(connection, *plan, {}, "SELECT sum(x) FROM (SELECT 1 AS x FROM range(3)) t");
+	vector<LogicalPlanSQLExportReplacement> replacements;
+	replacements.push_back({boundary, ReplacementRelation(connection, boundary, "SELECT 42::INTEGER AS x")});
+	RequireReplacementResult(connection, *plan, replacements, "SELECT sum(42::INTEGER)");
+	connection.Rollback();
+}
+
+TEST_CASE("Generated source names do not capture replacement catalog references",
+          "[sql_export][logical_plan_sql_export][plan_view_regression]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE __export_source(c0 BIGINT); "
+	                                 "INSERT INTO __export_source VALUES (42),(42),(NULL); "
+	                                 "CREATE TABLE r0 AS FROM __export_source"));
+	connection.BeginTransaction();
+	auto plan = BindResolvedReplacementPlan(connection,
+	                                        "SELECT a.i,b.i FROM range(1) a(i), range(1) b(i) ORDER BY b.i NULLS LAST");
+	auto cross = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_CROSS_PRODUCT);
+	REQUIRE(cross);
+	for (auto sql : {"SELECT c0 FROM __export_source", "SELECT c0 FROM __EXPORT_SOURCE",
+	                 "SELECT (SELECT max(c0) FROM __export_source) AS c0 "
+	                 "UNION ALL SELECT c0 FROM __export_source WHERE c0 IS NULL "
+	                 "UNION ALL SELECT max(c0) FROM __export_source",
+	                 "WITH local_q AS MATERIALIZED (SELECT c0 FROM __export_source) SELECT c0 FROM local_q",
+	                 "SELECT max::BIGINT AS c0 FROM (SUMMARIZE SELECT c0 FROM __export_source), range(2) "
+	                 "UNION ALL SELECT NULL::BIGINT",
+	                 "SELECT c0 FROM __export_source UNION ALL SELECT c0 FROM r0 WHERE false"}) {
+		CAPTURE(sql);
+		vector<LogicalPlanSQLExportReplacement> replacements;
+		replacements.push_back(
+		    {*cross->children[0], ReplacementRelation(connection, *cross->children[0], "SELECT 1::BIGINT")});
+		replacements.push_back({*cross->children[1], ReplacementRelation(connection, *cross->children[1], sql)});
+		RequireReplacementResult(connection, *plan, replacements,
+		                         "SELECT 1::BIGINT,c0 FROM __export_source ORDER BY c0 NULLS LAST");
+	}
+	vector<LogicalPlanSQLExportReplacement> root_replacement;
+	root_replacement.push_back({*plan, ReplacementRelation(connection, *plan, "SELECT 7::BIGINT,8::BIGINT")});
+	RequireReplacementResult(connection, *plan, root_replacement, "SELECT 7::BIGINT,8::BIGINT");
+	connection.Rollback();
+}
+
+// Unlike parser-produced SELECT nodes, an API-built SELECT may have no from_table.
+TEST_CASE("Replacement name reservation accepts a SELECT without a FROM node",
+          "[sql_export][logical_plan_sql_export][plan_view_null_from]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto plan = BindResolvedReplacementPlan(connection, "SELECT 1::BIGINT");
+	auto relation = ReplacementRelation(connection, *plan, "SELECT 42::BIGINT");
+	relation.query->Cast<SelectNode>().from_table.reset();
+	vector<LogicalPlanSQLExportReplacement> replacements;
+	replacements.push_back({*plan, std::move(relation)});
+	RequireReplacementResult(connection, *plan, replacements, "SELECT 42::BIGINT");
+	REQUIRE_FALSE(replacements[0].relation.query->Cast<SelectNode>().from_table);
+	connection.Rollback();
+}
+
+TEST_CASE("LIMIT reconstruction respects replacement boundaries",
+          "[sql_export][logical_plan_sql_export][plan_view_limit]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto plan = BindResolvedReplacementPlan(connection, "SELECT i FROM range(3) t(i) LIMIT (SELECT 2::BIGINT)");
+	auto limit = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_LIMIT);
+	REQUIRE(limit);
+	auto &input = *limit->children[0];
+	REQUIRE(input.type == LogicalOperatorType::LOGICAL_PROJECTION);
+	SECTION("row-stream projection cannot supply an independent SQL limit") {
+		REQUIRE(input.types.size() == 2);
+		vector<LogicalPlanSQLExportReplacement> replacements;
+		replacements.push_back(
+		    {input, ReplacementRelation(connection, input, "SELECT i,1::BIGINT AS n FROM range(3) t(i)")});
+		auto exported = LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements);
+		if (exported.IsSuccess()) {
+			auto sql = exported.GetValue().query->ToString();
+			auto actual = connection.Query(sql);
+			REQUIRE_NO_FAIL(*actual);
+			INFO(sql);
+			CAPTURE(actual->RowCount());
+			REQUIRE(exported.HasError());
+		}
+		REQUIRE(plan->children[0].get() == limit.get());
+		RequirePlanExportIssue(exported, LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE,
+		                       {LogicalPlanVerificationPathRoot::LOGICAL_PLAN,
+		                        {{LogicalPlanVerificationPathComponentType::OPERATOR_CHILD, 0},
+		                         {LogicalPlanVerificationPathComponentType::OPERATOR_CHILD, 0}}});
+		REQUIRE(exported.GetIssues()[0].construct ==
+		        LogicalPlanVerificationConstructIdentity::ExportFeature("limit_binding"));
+	}
+	SECTION("independent scalar source remains replaceable") {
+		auto cross = FindLogicalPlanExportOperator(input, LogicalOperatorType::LOGICAL_CROSS_PRODUCT);
+		REQUIRE(cross);
+		auto &scalar = *cross->children[1];
+		REQUIRE(scalar.types == vector<LogicalType> {LogicalType::BIGINT});
+		vector<LogicalPlanSQLExportReplacement> replacements;
+		replacements.push_back({scalar, ReplacementRelation(connection, scalar, "SELECT 1::BIGINT")});
+		RequireReplacementResult(connection, *plan, replacements, "SELECT 0::BIGINT");
+	}
+	connection.Rollback();
 }
 
 } // namespace logical_plan_sql_export_test

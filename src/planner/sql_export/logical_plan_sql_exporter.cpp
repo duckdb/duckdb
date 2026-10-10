@@ -4,7 +4,11 @@
 #include "duckdb/planner/sql_export/bound_expression_sql_exporter_internal.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -17,6 +21,8 @@
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include <functional>
 
 namespace duckdb {
 
@@ -28,14 +34,16 @@ static LogicalPlanVerificationIssue UnsupportedOperator(const LogicalPlanVerific
 	                                   "The logical operator does not have a SQL AST representation in this exporter");
 }
 
-static optional<Value> ConstantSQLInput(const Expression &expression, LogicalOperator &input) {
+static optional<Value> ConstantSQLInput(const Expression &expression, LogicalOperator &input,
+                                        const LogicalPlanSQLExportContext &context) {
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 		return expression.Cast<BoundConstantExpression>().GetValue();
 	}
 	if (auto wrapped = CMUtils::GetWrappedInput(expression)) {
-		return ConstantSQLInput(*wrapped, input);
+		return ConstantSQLInput(*wrapped, input, context);
 	}
-	if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF || input.children.size() != 1) {
+	if (context.FindSource(input) || expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+	    input.children.size() != 1) {
 		return {};
 	}
 	auto &column = expression.Cast<BoundColumnRefExpression>();
@@ -48,7 +56,7 @@ static optional<Value> ConstantSQLInput(const Expression &expression, LogicalOpe
 		if (column.Binding().table_index != projection.table_index) {
 			return {};
 		}
-		return ConstantSQLInput(*projection.expressions[column.Binding().column_index], *input.children[0]);
+		return ConstantSQLInput(*projection.expressions[column.Binding().column_index], *input.children[0], context);
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &aggregate = input.Cast<LogicalAggregate>();
@@ -61,14 +69,14 @@ static optional<Value> ConstantSQLInput(const Expression &expression, LogicalOpe
 				return {};
 			}
 		}
-		return ConstantSQLInput(*aggregate.groups[index], *input.children[0]);
+		return ConstantSQLInput(*aggregate.groups[index], *input.children[0], context);
 	}
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 	case LogicalOperatorType::LOGICAL_TOP_N:
 	case LogicalOperatorType::LOGICAL_LIMIT:
 	case LogicalOperatorType::LOGICAL_DISTINCT:
-		return ConstantSQLInput(expression, *input.children[0]);
+		return ConstantSQLInput(expression, *input.children[0], context);
 	default:
 		return {};
 	}
@@ -137,15 +145,23 @@ struct LogicalPlanSQLExportContext::SourceScope {
 LogicalPlanSQLExportContext::LogicalPlanSQLExportContext(ClientContext &context_p) : context(context_p) {
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportContext::Export(LogicalOperator &op,
-                                                               const LogicalPlanVerificationPath &path) {
+optional_ptr<const LogicalPlanSQLExportSource>
+LogicalPlanSQLExportContext::FindSource(const LogicalOperator &op) const {
 	for (auto scope = source_scope; scope; scope = scope->parent) {
 		for (auto &source : scope->sources) {
 			if (&source.op.get() == &op) {
-				return EnsureSQLProjection(LogicalPlanSQLExportResult::Success(
-				    {CreateNamedSource(source.name, source.relation.fields), source.relation.fields}));
+				return &source;
 			}
 		}
+	}
+	return nullptr;
+}
+
+LogicalPlanSQLExportResult LogicalPlanSQLExportContext::Export(LogicalOperator &op,
+                                                               const LogicalPlanVerificationPath &path) {
+	if (auto source = FindSource(op)) {
+		return EnsureSQLProjection(LogicalPlanSQLExportResult::Success(
+		    {CreateNamedSource(source->name, source->relation.fields), source->relation.fields}));
 	}
 	ancestors.push_back(op);
 	auto result = op.ToSQL(*this, path);
@@ -187,6 +203,22 @@ Identifier LogicalPlanSQLExportContext::NextRelationAlias(const Identifier &pref
 	}
 }
 
+void LogicalPlanSQLExportContext::ReserveRelationNames(QueryNode &query) {
+	std::function<void(const ParsedExpression &)> visit_expression = [&](const ParsedExpression &expression) {
+		if (expression.GetExpressionClass() == ExpressionClass::SUBQUERY) {
+			ReserveRelationNames(*expression.Cast<SubqueryExpression>().Subquery()->node);
+		}
+		ParsedExpressionIterator::EnumerateChildren(expression, visit_expression);
+	};
+	ParsedExpressionIterator::EnumerateQueryNodeChildren(
+	    query, [&](unique_ptr<ParsedExpression> &expression) { visit_expression(*expression); },
+	    [&](TableRef &ref) {
+		    if (ref.type == TableReferenceType::BASE_TABLE) {
+			    relation_aliases.insert(ref.Cast<BaseTableRef>().Table());
+		    }
+	    });
+}
+
 LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
 LogicalPlanSQLExportContext::ExportChild(LogicalOperator &child, const LogicalPlanVerificationPath &path) {
 	auto exported = Export(child, path);
@@ -217,7 +249,7 @@ LogicalPlanVerificationResult<unique_ptr<ParsedExpression>> LogicalPlanSQLExport
 			if (arguments[i]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				continue;
 			}
-			auto value = ConstantSQLInput(*arguments[i], *op.children[0]);
+			auto value = ConstantSQLInput(*arguments[i], *op.children[0], *this);
 			if (value && value->type().EqualsIncludingCollation(arguments[i]->GetReturnType())) {
 				if (!restored) {
 					restored = expression.Copy();
@@ -282,6 +314,91 @@ LogicalPlanSQLExporter::Export(ClientContext &context, LogicalOperator &root,
 		return result;
 	}
 	return ApplyOutputNames(std::move(result), *options.output_names);
+}
+
+LogicalPlanSQLExportResult
+LogicalPlanSQLExporter::ExportWithSources(ClientContext &context, LogicalOperator &root,
+                                          const vector<LogicalPlanSQLExportReplacement> &replacements,
+                                          const LogicalPlanSQLExportOptions &options) {
+	auto verification = LogicalPlanVerifier::VerifyResolvedBindings(root);
+	if (verification.HasError()) {
+		return LogicalPlanSQLExportResult::Failure(verification);
+	}
+	auto invalid = [](const string &message) {
+		auto issue = SQLExportHelpers::MakeIssue(
+		    LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, LogicalPlanVerificationPhase::PLAN_EXPORT,
+		    LogicalPlanVerificationPath(), LogicalPlanVerificationConstructIdentity::ExportFeature("source_boundary"),
+		    message);
+		return LogicalPlanSQLExportResult::Failure({std::move(issue)});
+	};
+	unordered_set<LogicalOperator *> boundaries;
+	for (auto &replacement : replacements) {
+		auto &op = replacement.op.get();
+		if (!boundaries.insert(&op).second || !replacement.relation.query) {
+			return invalid("SQL source replacement requires a unique subtree and an owned relation");
+		}
+		auto bindings = op.GetColumnBindings();
+		if (replacement.relation.fields.size() != bindings.size() || op.types.size() != bindings.size()) {
+			return invalid("SQL source replacement width differs from its subtree");
+		}
+		for (idx_t i = 0; i < bindings.size(); i++) {
+			auto &field = replacement.relation.fields[i];
+			auto &type = field.optimizer_type ? *field.optimizer_type : field.type;
+			if (field.source_binding != bindings[i] || !field.type.IsComplete() ||
+			    !type.EqualsIncludingCollation(op.types[i])) {
+				return invalid("SQL source replacement bindings or types differ from its subtree");
+			}
+		}
+	}
+	unordered_set<LogicalOperator *> reached;
+	bool overlap = false;
+	std::function<void(LogicalOperator &, bool)> visit = [&](LogicalOperator &op, bool replaced) {
+		if (boundaries.count(&op)) {
+			overlap |= replaced;
+			reached.insert(&op);
+			replaced = true;
+		}
+		for (auto &child : op.children) {
+			visit(*child, replaced);
+		}
+	};
+	visit(root, false);
+	if (overlap || reached.size() != boundaries.size()) {
+		return invalid("SQL source replacements must be disjoint subtrees of this plan");
+	}
+	LogicalPlanSQLExportContext state(context);
+	vector<LogicalPlanSQLExportSource> sources;
+	// All definitions share a CTE scope. Reserve references from every replacement
+	// before allocating any name, so a generated source cannot capture another query's input.
+	for (auto &replacement : replacements) {
+		state.ReserveRelationNames(*replacement.relation.query);
+	}
+	for (auto &replacement : replacements) {
+		sources.push_back({replacement.op,
+		                   state.NextRelationAlias(Identifier("__export_source")),
+		                   {replacement.relation.query->Copy(), replacement.relation.fields}});
+	}
+	auto exported = state.ExportChild(root, LogicalPlanVerificationPath(), sources);
+	if (exported.HasError()) {
+		return LogicalPlanSQLExportResult::Failure(exported);
+	}
+	auto result = std::move(exported.GetValue().relation);
+	auto consumers = std::move(result.query->cte_map);
+	result.query->cte_map = CommonTableExpressionMap();
+	for (auto &source : sources) {
+		auto info = make_uniq<CommonTableExpressionInfo>();
+		for (idx_t i = 0; i < source.relation.fields.size(); i++) {
+			info->aliases.push_back(LogicalPlanSQLExportHelpers::FieldIdentifier(i));
+		}
+		info->query_node = std::move(source.relation.query);
+		info->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+		result.query->cte_map.map.insert(source.name, std::move(info));
+	}
+	for (auto &consumer : consumers.map) {
+		result.query->cte_map.map.insert(consumer.first, std::move(consumer.second));
+	}
+	auto success = LogicalPlanSQLExportResult::Success(std::move(result));
+	return options.output_names ? ApplyOutputNames(std::move(success), *options.output_names) : std::move(success);
 }
 
 } // namespace duckdb
