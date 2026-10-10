@@ -308,6 +308,8 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 
 void StorageManager::WALFinishCheckpoint(unique_lock<mutex> &) {
 	D_ASSERT(wal.get());
+	// the header is written - the next checkpoint includes the commits of the checkpoint WAL
+	wal->MarkPendingBlocksAsCheckpointed();
 
 	// "wal" points to the checkpoint WAL
 	// first check if the checkpoint WAL has been written to
@@ -672,15 +674,18 @@ void SingleFileStorageCommitState::RevertCommit() {
 		wal.Truncate(initial_wal_size);
 	}
 	auto &block_manager = storage.GetBlockManager();
+	unordered_set<block_id_t> reverted_blocks;
 	for (auto &entry : optimistically_written_data) {
 		for (auto &rg_entry : entry.second) {
 			if (rg_entry.second.row_group_data) {
 				for (auto &block_id : rg_entry.second.row_group_data->GetBlockIds()) {
 					block_manager.MarkBlockAsModified(block_id);
+					reverted_blocks.insert(block_id);
 				}
 			}
 		}
 	}
+	wal.RemovePendingCheckpointBlocks(reverted_blocks);
 	state = WALCommitState::TRUNCATED;
 }
 

@@ -23,6 +23,8 @@
 #include "duckdb/storage/wal_entry.hpp"
 #include "duckdb/main/attached_database.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 constexpr uint64_t WAL_VERSION_NUMBER = 2;
@@ -505,11 +507,36 @@ void WriteAheadLog::WriteRowGroupData(const PersistentCollectionData &data) {
 	serializer.WriteProperty(101, "row_group_data", data);
 	serializer.End();
 
+	// only the checkpoint WAL has a checkpoint iteration - the running checkpoint does not include this commit
+	if (checkpoint_iteration.IsValid()) {
+		for (auto &block_id : data.GetBlockIds()) {
+			pending_checkpoint_blocks.push_back(block_id);
+		}
+		return;
+	}
 	// mark written blocks as checkpointed
 	auto &block_manager = GetDatabase().GetStorageManager().GetBlockManager();
 	for (auto &block_id : data.GetBlockIds()) {
 		block_manager.MarkBlockAsCheckpointed(block_id);
 	}
+}
+
+void WriteAheadLog::RemovePendingCheckpointBlocks(const unordered_set<block_id_t> &block_ids) {
+	if (block_ids.empty() || pending_checkpoint_blocks.empty()) {
+		return;
+	}
+	pending_checkpoint_blocks.erase(
+	    std::remove_if(pending_checkpoint_blocks.begin(), pending_checkpoint_blocks.end(),
+	                   [&](block_id_t block_id) { return block_ids.find(block_id) != block_ids.end(); }),
+	    pending_checkpoint_blocks.end());
+}
+
+void WriteAheadLog::MarkPendingBlocksAsCheckpointed() {
+	auto &block_manager = GetDatabase().GetStorageManager().GetBlockManager();
+	for (auto &block_id : pending_checkpoint_blocks) {
+		block_manager.MarkBlockAsCheckpointed(block_id);
+	}
+	pending_checkpoint_blocks.clear();
 }
 
 void WriteAheadLog::WriteDelete(DataChunk &chunk) {
