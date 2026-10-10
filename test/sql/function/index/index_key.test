@@ -129,6 +129,31 @@ SELECT index_key({'table': 'tbl2'}, 'FOREIGN_tbl2_1', 1);
 
 ########################################################################################################################
 #                                                                                                                      #
+#   Explicit index sharing a name with a constraint-backed index                                                       #
+#                                                                                                                      #
+########################################################################################################################
+
+statement ok
+CREATE TABLE tbl_collide(a INTEGER PRIMARY KEY, b VARCHAR);
+
+statement ok
+CREATE INDEX PRIMARY_tbl_collide_0 ON tbl_collide(b);
+
+statement error
+SELECT index_key({'table': 'tbl_collide'}, 'PRIMARY_tbl_collide_0', 1);
+----
+Binder Error: index_key: index name "PRIMARY_tbl_collide_0" is ambiguous on table tbl_collide, it matches 2 indexes
+
+statement ok
+DROP INDEX PRIMARY_tbl_collide_0;
+
+query I
+SELECT index_key({'table': 'tbl_collide'}, 'PRIMARY_tbl_collide_0', 1);
+----
+\x80\x00\x00\x01
+
+########################################################################################################################
+#                                                                                                                      #
 #   Type handling on key columns                                                                                       #
 #                                                                                                                      #
 ########################################################################################################################
