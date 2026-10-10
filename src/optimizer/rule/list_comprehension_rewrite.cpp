@@ -43,14 +43,6 @@ bool IsStructPack(const BoundFunctionExpression &expr) {
 	return expr.Function().GetName() == "struct_pack";
 }
 
-optional_ptr<Expression> UnwrapCasts(optional_ptr<Expression> expr) {
-	while (BoundCastExpression::IsCast(*expr)) {
-		auto &cast_expr = expr->Cast<BoundFunctionExpression>();
-		expr = BoundCastExpression::ChildMutable(cast_expr).get();
-	}
-	return expr;
-}
-
 optional_ptr<Expression> FindStructPackChildByName(BoundFunctionExpression &struct_pack, const string &name) {
 	D_ASSERT(struct_pack.GetReturnType().id() == LogicalTypeId::STRUCT);
 	for (auto &child : struct_pack.GetChildren()) {
@@ -95,8 +87,14 @@ void RemoveIndexInputSlot(unique_ptr<Expression> &expr) {
 	                                                });
 }
 
-bool MatchesStructFieldProjection(Expression &expr, const string &field_name) {
-	auto base = UnwrapCasts(expr);
+//! Matches the lambda body `s.<field_name>` the parser emits for a list comprehension. Casts are value-changing in
+//! general and the rewrite does not recreate them, so only the exact projection matches - except the cast to BOOLEAN
+//! on the filter, which the rewrite adds back itself.
+bool MatchesStructFieldProjection(Expression &expr, const string &field_name, bool allow_boolean_cast) {
+	optional_ptr<Expression> base = &expr;
+	if (allow_boolean_cast && BoundCastExpression::IsCast(expr) && expr.GetReturnType() == LogicalType::BOOLEAN) {
+		base = BoundCastExpression::ChildMutable(expr.Cast<BoundFunctionExpression>()).get();
+	}
 	if (base->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return false;
 	}
@@ -105,20 +103,20 @@ bool MatchesStructFieldProjection(Expression &expr, const string &field_name) {
 		return false;
 	}
 
-	auto struct_arg = UnwrapCasts(*extract_expr.GetChildren()[0]);
-	if (struct_arg->GetExpressionClass() != ExpressionClass::BOUND_REF) {
+	auto &struct_arg = *extract_expr.GetChildren()[0];
+	if (struct_arg.GetExpressionClass() != ExpressionClass::BOUND_REF) {
 		return false;
 	}
-	auto &struct_ref = struct_arg->Cast<BoundReferenceExpression>();
+	auto &struct_ref = struct_arg.Cast<BoundReferenceExpression>();
 	if (struct_ref.Index() != 0) {
 		return false;
 	}
 
-	auto field_arg = UnwrapCasts(*extract_expr.GetChildren()[1]);
-	if (field_arg->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+	auto &field_arg = *extract_expr.GetChildren()[1];
+	if (field_arg.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 		return false;
 	}
-	auto &field_constant = field_arg->Cast<BoundConstantExpression>();
+	auto &field_constant = field_arg.Cast<BoundConstantExpression>();
 	if (field_constant.GetValue().IsNull() || field_constant.GetValue().type() != LogicalTypeId::VARCHAR) {
 		return false;
 	}
@@ -198,8 +196,8 @@ unique_ptr<ListComprehensionMatch> MatchListComprehensionRewrite(ClientContext &
 	if (!list_filter_bind.lambda_expr || !root_bind.lambda_expr) {
 		return nullptr;
 	}
-	if (!MatchesStructFieldProjection(*list_filter_bind.lambda_expr, "filter") ||
-	    !MatchesStructFieldProjection(*root_bind.lambda_expr, "result")) {
+	if (!MatchesStructFieldProjection(*list_filter_bind.lambda_expr, "filter", true) ||
+	    !MatchesStructFieldProjection(*root_bind.lambda_expr, "result", false)) {
 		return nullptr;
 	}
 	if (list_filter_expr.GetChildren().empty()) {
@@ -216,11 +214,12 @@ unique_ptr<ListComprehensionMatch> MatchListComprehensionRewrite(ClientContext &
 	if (!inner_bind.lambda_expr) {
 		return nullptr;
 	}
-	auto inner_base = UnwrapCasts(*inner_bind.lambda_expr);
-	if (inner_base->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+	// a cast around the struct_pack would be dropped by the rewrite - only the exact packing matches
+	auto &inner_base = *inner_bind.lambda_expr;
+	if (inner_base.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return nullptr;
 	}
-	auto &struct_pack = inner_base->Cast<BoundFunctionExpression>();
+	auto &struct_pack = inner_base.Cast<BoundFunctionExpression>();
 	if (!IsStructPack(struct_pack)) {
 		return nullptr;
 	}
