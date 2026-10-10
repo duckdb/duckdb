@@ -1,0 +1,32 @@
+# name: test/sql/types/variant/variant_contains_deep.test
+# description: variant_contains on a very deeply nested VARIANT errors instead of overflowing the stack
+# group: [variant]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+WITH RECURSIVE r(n, v) AS (
+  SELECT 0, [1]::VARIANT
+  UNION ALL
+  SELECT n + 1, list_value(v)::VARIANT FROM r WHERE n < 25000
+)
+SELECT variant_contains(v, 1::VARIANT) FROM r WHERE n = 25000;
+----
+<REGEX>:Invalid Input Error.*nested more than.*
+
+# nesting within the limit keeps working
+query II
+WITH RECURSIVE r(n, v) AS (
+  SELECT 0, [1]::VARIANT
+  UNION ALL
+  SELECT n + 1, list_value(v)::VARIANT FROM r WHERE n < 200
+)
+SELECT variant_contains(v, 1::VARIANT), variant_contains(v, 2::VARIANT) FROM r WHERE n = 200;
+----
+true	false
+
+query I
+SELECT variant_contains({'a': [{'c': 1}, {'b': 'x'}]}::VARIANT, {'b': 'x'}::VARIANT);
+----
+true
