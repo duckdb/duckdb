@@ -2201,14 +2201,18 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 	// TODO: only need this if we have a deletion vector?
 	state.group_offset = GetRowGroupOffset(*this, state.group_index);
 
-	uint64_t to_scan_compressed_bytes = 0;
+	auto &group = GetGroup(state);
+	// several readers can read the same column chunk (e.g. two fields of one variant column), count each chunk once
+	unordered_set<idx_t> scanned_column_chunks;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto col_idx = MultiFileLocalIndex(i);
 		PrepareRowGroupBuffer(context, state, col_idx);
-		to_scan_compressed_bytes += state.GetColumnReader(i).TotalCompressedSize();
+		state.GetColumnReader(i).GatherColumnChunks(scanned_column_chunks);
 	}
-
-	auto &group = GetGroup(state);
+	uint64_t to_scan_compressed_bytes = 0;
+	for (auto column_chunk : scanned_column_chunks) {
+		to_scan_compressed_bytes += NumericCast<uint64_t>(group.columns[column_chunk].meta_data.total_compressed_size);
+	}
 	const bool row_group_skipped = state.offset_in_group == (idx_t)group.num_rows;
 	if (row_group_skipped) {
 		++state.row_groups_skipped;

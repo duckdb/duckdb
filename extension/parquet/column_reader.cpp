@@ -166,12 +166,11 @@ void ColumnReader::ValidateColumnMetadata(idx_t row_group_num_rows, const Column
 	                                Reader().GetFileName().c_str());
 }
 
-uint64_t ColumnReader::TotalCompressedSize() {
+void ColumnReader::GatherColumnChunks(unordered_set<idx_t> &column_chunks) {
 	if (IsSkipped()) {
-		return 0;
+		return;
 	}
-
-	return chunk->meta_data.total_compressed_size;
+	column_chunks.insert(ColumnIndex());
 }
 
 // Note: It's not trivial to determine where all Column data is stored. Chunk->file_offset
