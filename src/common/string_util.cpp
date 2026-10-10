@@ -526,18 +526,17 @@ bool StringUtil::CIEndsWith(const string &str, const string &suffix) {
 bool StringUtil::CILessThan(const string &s1, const string &s2) {
 	const auto charmap = ASCII_TO_UPPER_MAP;
 
-	unsigned char u1 {}, u2 {};
-
-	idx_t length = MinValue<idx_t>(s1.length(), s2.length());
-	length += s1.length() != s2.length();
+	// compare the common prefix byte-by-byte (treating an embedded NUL as a regular byte)
+	const idx_t length = MinValue<idx_t>(s1.length(), s2.length());
 	for (idx_t i = 0; i < length; i++) {
-		u1 = (unsigned char)s1[i];
-		u2 = (unsigned char)s2[i];
-		if (charmap[u1] != charmap[u2]) {
-			break;
+		const auto u1 = charmap[(unsigned char)s1[i]];
+		const auto u2 = charmap[(unsigned char)s2[i]];
+		if (u1 != u2) {
+			return u1 < u2;
 		}
 	}
-	return (charmap[u1] - charmap[u2]) < 0;
+	// the prefixes are equal - the shorter string sorts first
+	return s1.length() < s2.length();
 }
 
 idx_t StringUtil::CIFind(const vector<Identifier> &vector, const Identifier &search_string) {
