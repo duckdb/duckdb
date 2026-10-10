@@ -31,6 +31,8 @@ struct CheckpointOptions {
 	//! The WAL lock - in case we are holding it during the entire checkpoint.
 	//! This is only required if we are doing a checkpoint instead of writing to the WAL
 	optional_ptr<unique_lock<mutex>> wal_lock;
+	//! Whether the user requested this checkpoint: it then fails instead of silently skipping.
+	bool explicit_checkpoint = false;
 };
 
 } // namespace duckdb

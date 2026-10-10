@@ -486,7 +486,10 @@ IndexStorageInfo IndexEntry::SerializeToDisk(QueryContext context, const case_in
 	if (owned_index->IsBound()) {
 		return owned_index->Cast<BoundIndex>().SerializeToDisk(context, options);
 	}
-	return owned_index->Cast<UnboundIndex>().CopyStorageInfo();
+	auto &unbound_index = owned_index->Cast<UnboundIndex>();
+	// The checkpoint binds indexes with buffered replays before it starts, or does not run at all.
+	D_ASSERT(!unbound_index.HasBufferedReplays());
+	return unbound_index.CopyStorageInfo();
 }
 
 IndexStorageInfo IndexEntry::SerializeToWAL(const case_insensitive_map_t<Value> &options) {

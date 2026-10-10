@@ -3,10 +3,12 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 
 namespace duckdb {
@@ -65,16 +67,29 @@ IndexStorageInfo UnboundIndex::CopyStorageInfo() const {
 }
 
 unique_ptr<BoundIndex> UnboundIndex::Bind(IndexBinder &binder, const vector<LogicalType> &physical_column_types) {
+	if (storage_reclaimed) {
+		throw FatalException("Cannot bind index %s: its storage was already reclaimed", GetIndexName());
+	}
 	auto bound_index = binder.BindIndex(*this);
 	storage_reclaimed = true;
 	if (HasBufferedReplays()) {
-		bound_index->ApplyBufferedReplays(physical_column_types, buffered_replays, mapped_column_ids);
+		try {
+			bound_index->ApplyBufferedReplays(physical_column_types, buffered_replays, mapped_column_ids);
+		} catch (std::exception &ex) {
+			// The bound index releases the on-disk blocks when it is destroyed: binding cannot be retried.
+			ErrorData error(ex);
+			throw FatalException("Failed to apply buffered replays to index %s: %s", GetIndexName(),
+			                     error.RawMessage());
+		}
 	}
 	return bound_index;
 }
 
 void UnboundIndex::BufferChunk(DataChunk &table_chunk, Vector &row_ids, const BufferedIndexReplay replay_type) {
 	D_ASSERT(!column_ids.empty());
+
+	// A checkpoint must bind this index before it can persist these operations.
+	db.GetStorageManager().MarkBufferedIndexReplays();
 
 	// table_chunk is in physical table layout: data[j] holds the data of physical column j.
 	// Reference this index's own columns directly by their physical offset.
