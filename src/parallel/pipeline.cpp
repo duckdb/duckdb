@@ -37,6 +37,17 @@ PipelineTask::PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
 	}
 }
 
+PipelineTask::~PipelineTask() {
+	if (!pipeline_executor) {
+		return;
+	}
+	// the task ends without finishing its pipeline: keep the operator metrics gathered so far
+	try {
+		pipeline_executor->FlushUnfinishedProfile();
+	} catch (...) { // NOLINT
+	}
+}
+
 TaskExecutionResult PipelineTask::ExecuteTask(TaskExecutionMode mode) {
 	if (!pipeline_executor) {
 		pipeline_executor = make_uniq<PipelineExecutor>(pipeline.GetClientContext(), pipeline, reserved_batch_index);

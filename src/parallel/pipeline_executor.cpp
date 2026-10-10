@@ -77,6 +77,18 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	InitializeChunk(final_chunk);
 }
 
+void PipelineExecutor::FlushUnfinishedProfile() {
+	if (finalized) {
+		return;
+	}
+	// the source never finished, so its scan metrics have not been collected yet
+	if (!source_profiling_finalized && local_source_state && global_source_state) {
+		context.thread.profiler.FinishSource(*pipeline.source, *global_source_state, *local_source_state);
+		source_profiling_finalized = true;
+	}
+	pipeline.executor.Flush(thread);
+}
+
 void PipelineExecutor::Reset() {
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(context.client);
 
