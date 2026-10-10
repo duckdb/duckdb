@@ -12,7 +12,7 @@ DUCKDB_CPP_EXTENSION_ENTRYPOINT(Extension &extension, Context &context) {
 	(void)extension;
 
 	// Binding a type proves the context is live and has a transaction: this reaches into the catalog.
-	const auto type = context.ParseType("STRUCT(a INTEGER, b VARCHAR)");
+	const auto type = context.GetFactory().ParseType("STRUCT(a INTEGER, b VARCHAR)");
 
 	context.Log(LogLevel::LOG_INFO, "cpp_api_demo loaded, parsed " + type.ToText(), LOG_TYPE);
 }

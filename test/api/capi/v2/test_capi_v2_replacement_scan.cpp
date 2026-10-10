@@ -86,12 +86,14 @@ DUCKDB_V2_ERROR ReplClaimFunction(duckdb_v2_replacement_scan_info_handle info, c
 // Claims every name with range(2).
 void ReplClaimRange(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_context_handle context,
                     duckdb_v2_error_info_handle *err) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	ReplRecordName(info, err);
 	if (ReplClaimFunction(info, "range", err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_value_handle value = nullptr;
-	if (duckdb_v2_value_create_bigint_with_context(context, 2, &value, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_value_create_bigint(factory, 2, &value, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	auto rc = duckdb_v2_replacement_scan_add_argument(info, value, err);
@@ -143,10 +145,12 @@ void ReplClaimUnknown(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_con
 // Exercises the claim-form rules, then claims by function.
 void ReplClaimRules(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_context_handle context,
                     duckdb_v2_error_info_handle *err) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	// An argument before a function name is refused. The error slot is not touched by a failing call, so these
 	// probes pass nullptr and read the return code instead.
 	duckdb_v2_value_handle value = nullptr;
-	if (duckdb_v2_value_create_bigint_with_context(context, 1, &value, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_value_create_bigint(factory, 1, &value, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	repl_observed.bare_argument_rc = duckdb_v2_replacement_scan_add_argument(info, value, nullptr);
@@ -161,7 +165,7 @@ void ReplClaimRules(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_conte
 	repl_observed.mixed_form_rc = duckdb_v2_replacement_scan_set_subquery(info, &sql_str, nullptr);
 
 	duckdb_v2_value_handle two = nullptr;
-	if (duckdb_v2_value_create_bigint_with_context(context, 2, &two, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_value_create_bigint(factory, 2, &two, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_replacement_scan_add_argument(info, two, err);
@@ -220,9 +224,9 @@ void ReplClaimWithUserData(duckdb_v2_replacement_scan_info_handle info, duckdb_v
 // Creates a scan on the connection with the given callback, registers it, and destroys the handle.
 void ReplRegisterOnConnection(duckdb_v2_connection_handle conn, duckdb_v2_replacement_scan_callback_fn callback) {
 	duckdb_v2_replacement_scan_handle scan = nullptr;
-	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_replacement_scan_create(FactoryOf(conn), &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_replacement_scan_set_callback(scan, callback, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_replacement_scan(conn, scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_replacement_scan_destroy(&scan) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(scan == nullptr);
 }
@@ -282,17 +286,16 @@ DUCKDB_V2_ERROR ReplQueryError(duckdb_v2_connection_handle conn, const char *sql
 // ---------------------------------------------------------------------------
 
 // A single-column BIGINT collection holding the given values.
-duckdb_v2_column_data_collection_handle ReplMakeCollection(duckdb_v2_connection_handle conn,
+duckdb_v2_column_data_collection_handle ReplMakeCollection(duckdb_v2_factory_handle factory,
                                                            const std::vector<int64_t> &values) {
-	auto bigint = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto bigint = MakeType(factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 	duckdb_v2_logical_type_handle types[1] = {bigint};
 
 	duckdb_v2_column_data_collection_handle cdc = nullptr;
-	REQUIRE(duckdb_v2_column_data_collection_create_with_connection(conn, types, 1, &cdc, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_column_data_collection_create(factory, types, 1, &cdc, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	auto chunk_rc = duckdb_v2_data_chunk_create_with_connection(conn, types, 1, &chunk, nullptr);
+	auto chunk_rc = duckdb_v2_data_chunk_create(factory, types, 1, &chunk, nullptr);
 	duckdb_v2_logical_type_destroy(&bigint);
 	REQUIRE(chunk_rc == DUCKDB_V2_ERROR_NONE);
 
@@ -369,12 +372,12 @@ void ReplClaimCollection(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_
 // Registers a collection-serving scan whose user data is the caller-owned registry.
 void ReplRegisterRegistry(duckdb_v2_connection_handle conn, ReplRegistry &registry) {
 	duckdb_v2_replacement_scan_handle scan = nullptr;
-	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_replacement_scan_create(FactoryOf(conn), &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_replacement_scan_set_callback(scan, ReplClaimCollection, nullptr) == DUCKDB_V2_ERROR_NONE);
 	// The registry outlives the database, so nothing to destroy.
 	duckdb_v2_opaque user_data = {&registry, nullptr, nullptr};
 	REQUIRE(duckdb_v2_replacement_scan_set_user_data(scan, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_replacement_scan(conn, scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_replacement_scan_destroy(&scan);
 }
 
@@ -438,10 +441,9 @@ TEST_CASE("V2 replacement scan: connection scope and precedence", "[capi_v2][rep
 
 	// An instance-scoped scan reaches every connection, including ones opened afterwards.
 	duckdb_v2_replacement_scan_handle instance_scan = nullptr;
-	REQUIRE(duckdb_v2_replacement_scan_create_with_instance(fx.instance, &instance_scan, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_replacement_scan_create(fx.factory, &instance_scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_replacement_scan_set_callback(instance_scan, ReplClaimRange, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_replacement_scan_register(instance_scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_instance_register_replacement_scan(fx.instance, instance_scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_replacement_scan_destroy(&instance_scan);
 
 	REQUIRE(ReplQueryI64(other, "SELECT * FROM anything") == std::vector<int64_t> {0, 1});
@@ -531,11 +533,11 @@ TEST_CASE("V2 replacement scan: user data flows and is destroyed once", "[capi_v
 	{
 		EnvFixture fx;
 		duckdb_v2_replacement_scan_handle scan = nullptr;
-		REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_replacement_scan_create(fx.factory, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_replacement_scan_set_callback(scan, ReplClaimWithUserData, nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_opaque user_data = {new std::string("planted"), ReplDestroyUserData, nullptr};
 		REQUIRE(duckdb_v2_replacement_scan_set_user_data(scan, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_connection_register_replacement_scan(fx.conn, scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 		// Destroying the builder does not affect the registered scan or free the user data.
 		REQUIRE(duckdb_v2_replacement_scan_destroy(&scan) == DUCKDB_V2_ERROR_NONE);
 
@@ -552,17 +554,19 @@ TEST_CASE("V2 replacement scan: registration refusals", "[capi_v2][replacement_s
 	// No callback.
 	{
 		duckdb_v2_replacement_scan_handle scan = nullptr;
-		REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_replacement_scan_create(fx.factory, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_connection_register_replacement_scan(fx.conn, scan, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_replacement_scan_destroy(&scan);
 	}
 	// Registering twice from one handle.
 	{
 		duckdb_v2_replacement_scan_handle scan = nullptr;
-		REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_replacement_scan_create(fx.factory, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_replacement_scan_set_callback(scan, ReplDecline, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_replacement_scan(fx.conn, scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_connection_register_replacement_scan(fx.conn, scan, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_replacement_scan_destroy(&scan);
 	}
 }
@@ -571,18 +575,17 @@ TEST_CASE("V2 replacement scan: null arguments and destroy null-safety", "[capi_
 	EnvFixture fx;
 
 	duckdb_v2_replacement_scan_handle scan = nullptr;
-	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(nullptr, &scan, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_replacement_scan_create(nullptr, &scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(scan == nullptr);
-	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_create_with_instance(nullptr, &scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_create_with_extension(nullptr, &scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_replacement_scan_create(fx.factory, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_register_replacement_scan(nullptr, scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_instance_register_replacement_scan(nullptr, scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_extension_register_replacement_scan(nullptr, scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
-	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_replacement_scan_create(fx.factory, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_replacement_scan_set_callback(nullptr, ReplDecline, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_replacement_scan_set_user_data(scan, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_register(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_register_replacement_scan(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	// The info accessors reject a null handle and a null out-parameter alike.
 	void *data = nullptr;
@@ -609,7 +612,7 @@ TEST_CASE("V2 replacement scan: null arguments and destroy null-safety", "[capi_
 
 TEST_CASE("V2 replacement scan: claims a column data collection", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
-	auto cdc = ReplMakeCollection(fx.conn, {10, 20});
+	auto cdc = ReplMakeCollection(fx.factory, {10, 20});
 
 	ReplRegistry registry;
 	registry.name = "my_batch";
@@ -636,7 +639,7 @@ TEST_CASE("V2 replacement scan: claims a column data collection", "[capi_v2][rep
 
 TEST_CASE("V2 replacement scan: collection column names", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
-	auto cdc = ReplMakeCollection(fx.conn, {5, 6});
+	auto cdc = ReplMakeCollection(fx.factory, {5, 6});
 
 	ReplRegistry registry;
 	registry.name = "named_batch";
@@ -657,7 +660,7 @@ TEST_CASE("V2 replacement scan: collection column names", "[capi_v2][replacement
 
 TEST_CASE("V2 replacement scan: a prepared collection claim caches its borrow", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
-	auto cdc = ReplMakeCollection(fx.conn, {10, 20});
+	auto cdc = ReplMakeCollection(fx.factory, {10, 20});
 
 	ReplRegistry registry;
 	registry.name = "cached_batch";
@@ -693,7 +696,7 @@ TEST_CASE("V2 replacement scan: a prepared collection claim caches its borrow", 
 
 TEST_CASE("V2 replacement scan: empty collection binds and yields no rows", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
-	auto cdc = ReplMakeCollection(fx.conn, {});
+	auto cdc = ReplMakeCollection(fx.factory, {});
 
 	ReplRegistry registry;
 	registry.name = "empty_batch";
@@ -708,7 +711,7 @@ TEST_CASE("V2 replacement scan: empty collection binds and yields no rows", "[ca
 
 TEST_CASE("V2 replacement scan: collection column name validation", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
-	auto cdc = ReplMakeCollection(fx.conn, {1, 2});
+	auto cdc = ReplMakeCollection(fx.factory, {1, 2});
 
 	ReplRegistry registry;
 	registry.name = "probe_batch";

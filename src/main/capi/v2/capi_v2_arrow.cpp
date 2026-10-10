@@ -368,9 +368,9 @@ DUCKDB_V2_ERROR duckdb_v2_arrow_importer_create(duckdb_v2_context_handle context
 	*out_importer = nullptr;
 	return WithErrorHandler(err, [&]() {
 		auto importer = duckdb::make_uniq<CV2ArrowImporter>();
-		importer->context = Convert(context);
+		importer->context = &Convert(context)->context;
 		importer->batch_size = batch_size;
-		duckdb::ArrowTableFunction::PopulateArrowTableSchema(*Convert(context), importer->table, *schema);
+		duckdb::ArrowTableFunction::PopulateArrowTableSchema(Convert(context)->context, importer->table, *schema);
 		*out_importer = Convert(importer.release());
 	});
 }
@@ -509,7 +509,7 @@ DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_create(duckdb_v2_context_handle context
 		return NullArgumentError(err, __func__, "names");
 	}
 	return WithErrorHandler(err, [&]() {
-		auto &ctx = *Convert(context);
+		auto &ctx = Convert(context)->context;
 		auto exporter = duckdb::make_uniq<CV2ArrowExporter>();
 		exporter->batch_size = batch_size;
 		exporter->types.reserve(count);

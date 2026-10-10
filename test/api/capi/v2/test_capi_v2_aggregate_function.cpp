@@ -24,7 +24,7 @@ duckdb_v2_identifier_t AggName(const char *s) {
 // Create an aggregate function on the connection with the given name.
 duckdb_v2_aggregate_function_handle MakeAggregate(duckdb_v2_connection_handle conn, const char *name) {
 	duckdb_v2_aggregate_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_aggregate_function_create_with_connection(conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_create(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto str = Convert(name);
 	REQUIRE(duckdb_v2_aggregate_function_set_name(function, &str, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return function;
@@ -150,11 +150,11 @@ void SumFinalize(duckdb_v2_aggregate_function_finalize_info_handle info, duckdb_
 }
 
 // Registers my_sum on the connection and destroys the builder handle.
-void RegisterMySum(duckdb_v2_connection_handle conn) {
-	auto integer = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto bigint = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+void RegisterMySum(EnvFixture &fx) {
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto bigint = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 
-	auto function = MakeAggregate(conn, "my_sum");
+	auto function = MakeAggregate(fx.conn, "my_sum");
 	auto sig = AggSigOf(function);
 	AggSigParam(sig, "x", integer);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, bigint, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -164,7 +164,7 @@ void RegisterMySum(duckdb_v2_connection_handle conn) {
 	REQUIRE(duckdb_v2_aggregate_function_set_combine_callback(function, SumCombine, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_set_finalize_callback(function, SumFinalize, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_destroy(&function) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(function == nullptr);
 	duckdb_v2_logical_type_destroy(&integer);
@@ -216,6 +216,8 @@ void AggFlowDestroyBindData(void *) {
 
 void AggFlowBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_aggregate_function_bind_info_handle result,
                  duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	if (duckdb_v2_function_bind_get_user_data(info, &agg_flow.user_data_in_bind, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
@@ -225,7 +227,7 @@ void AggFlowBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_aggregate_f
 	}
 	// Resolve the declared ANY return type to a concrete INTEGER.
 	duckdb_v2_logical_type_handle integer = nullptr;
-	if (duckdb_v2_context_create_type_from_id(context, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0, &integer,
+	if (duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0, &integer,
 	                                          err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
@@ -345,6 +347,8 @@ struct {
 
 void AggArgProbeBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_aggregate_function_bind_info_handle result,
                      duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	if (duckdb_v2_function_bind_get_arg_count(info, &agg_arg_probe.arg_count, nullptr, nullptr, nullptr, err) !=
 	    DUCKDB_V2_ERROR_NONE) {
 		return;
@@ -378,7 +382,7 @@ void AggArgProbeBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_aggrega
 	}
 
 	duckdb_v2_logical_type_handle integer = nullptr;
-	if (duckdb_v2_context_create_type_from_id(context, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0, &integer,
+	if (duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0, &integer,
 	                                          err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
@@ -420,7 +424,7 @@ void AggArgProbeFinalize(duckdb_v2_aggregate_function_finalize_info_handle info,
 
 TEST_CASE("V2 aggregate: register on connection and execute", "[capi_v2][aggregate_function]") {
 	EnvFixture fx;
-	RegisterMySum(fx.conn);
+	RegisterMySum(fx);
 
 	// Ungrouped, more rows than one chunk, so the callbacks see full vectors.
 	REQUIRE(AggQueryI64(fx.conn, "SELECT my_sum(r::INTEGER) FROM range(5000) t(r)") == 5000LL * 4999 / 2);
@@ -443,8 +447,8 @@ TEST_CASE("V2 aggregate: register on connection and execute", "[capi_v2][aggrega
 
 TEST_CASE("V2 aggregate: bind callback resolves ANY return and bind data flows", "[capi_v2][aggregate_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto any = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto any = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
 
 	auto function = MakeAggregate(fx.conn, "any_double");
 	auto sig = AggSigOf(function);
@@ -458,7 +462,7 @@ TEST_CASE("V2 aggregate: bind callback resolves ANY return and bind data flows",
 	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_set_finalize_callback(function, AggFlowFinalize, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_aggregate_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 	duckdb_v2_logical_type_destroy(&any);
@@ -496,8 +500,8 @@ TEST_CASE("V2 aggregate: bind callback resolves ANY return and bind data flows",
 
 TEST_CASE("V2 aggregate: bind reads argument count, types and constants", "[capi_v2][aggregate_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto any = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto any = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
 
 	// agg_arg_probe(x ANY, y INTEGER) -> ANY
 	auto function = MakeAggregate(fx.conn, "agg_arg_probe");
@@ -513,7 +517,7 @@ TEST_CASE("V2 aggregate: bind reads argument count, types and constants", "[capi
 	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_set_finalize_callback(function, AggArgProbeFinalize, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_aggregate_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 	duckdb_v2_logical_type_destroy(&any);
@@ -555,7 +559,7 @@ TEST_CASE("V2 aggregate: bind reads argument count, types and constants", "[capi
 // An error set in the update callback's slot fails the query with its code.
 TEST_CASE("V2 aggregate: update error propagates to the result", "[capi_v2][aggregate_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 
 	auto function = MakeAggregate(fx.conn, "agg_always_fails");
 	auto sig = AggSigOf(function);
@@ -568,7 +572,7 @@ TEST_CASE("V2 aggregate: update error propagates to the result", "[capi_v2][aggr
 	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_set_finalize_callback(function, AggNoopFinalize, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_aggregate_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 
@@ -594,8 +598,8 @@ TEST_CASE("V2 aggregate: update error propagates to the result", "[capi_v2][aggr
 
 TEST_CASE("V2 aggregate: registration refusals", "[capi_v2][aggregate_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto any = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto any = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
 
 	// Sets every required callback except one, controlled by the arguments.
 	auto configure = [&](duckdb_v2_aggregate_function_handle function, bool with_size, bool with_init, bool with_update,
@@ -620,12 +624,12 @@ TEST_CASE("V2 aggregate: registration refusals", "[capi_v2][aggregate_function]"
 	// No name.
 	{
 		duckdb_v2_aggregate_function_handle function = nullptr;
-		REQUIRE(duckdb_v2_aggregate_function_create_with_connection(fx.conn, &function, nullptr) ==
-		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_aggregate_function_create(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 		auto sig = AggSigOf(function);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 		configure(function, true, true, true, true, true);
-		REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_aggregate_function_destroy(&function);
 	}
 
@@ -635,7 +639,8 @@ TEST_CASE("V2 aggregate: registration refusals", "[capi_v2][aggregate_function]"
 		auto sig = AggSigOf(function);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 		configure(function, missing != 0, missing != 1, missing != 2, missing != 3, missing != 4);
-		REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_aggregate_function_destroy(&function);
 	}
 
@@ -643,7 +648,8 @@ TEST_CASE("V2 aggregate: registration refusals", "[capi_v2][aggregate_function]"
 	{
 		auto function = MakeAggregate(fx.conn, "no_return");
 		configure(function, true, true, true, true, true);
-		REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_aggregate_function_destroy(&function);
 	}
 
@@ -653,7 +659,8 @@ TEST_CASE("V2 aggregate: registration refusals", "[capi_v2][aggregate_function]"
 		auto sig = AggSigOf(function);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, any, nullptr) == DUCKDB_V2_ERROR_NONE);
 		configure(function, true, true, true, true, true);
-		REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_aggregate_function_destroy(&function);
 	}
 
@@ -665,17 +672,16 @@ TEST_CASE("V2 aggregate: null arguments and destroy null-safety", "[capi_v2][agg
 	EnvFixture fx;
 
 	duckdb_v2_aggregate_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_aggregate_function_create_with_connection(nullptr, &function, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_aggregate_function_create(nullptr, &function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(function == nullptr);
-	REQUIRE(duckdb_v2_aggregate_function_create_with_connection(fx.conn, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_aggregate_function_create(fx.factory, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
-	REQUIRE(duckdb_v2_aggregate_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_create(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_set_name(function, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_aggregate_function_get_signature(nullptr, &sig, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_aggregate_function_register(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, nullptr, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	duckdb_v2_aggregate_function_destroy(&function);
 
@@ -690,8 +696,8 @@ TEST_CASE("V2 aggregate: null arguments and destroy null-safety", "[capi_v2][agg
 
 TEST_CASE("V2 aggregate: function properties", "[capi_v2][aggregate_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto bigint = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto bigint = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 
 	// Both COMMON and AGGREGATE group keys are accepted.
 	auto function = MakeAggregate(fx.conn, "prop_sum");
@@ -722,7 +728,7 @@ TEST_CASE("V2 aggregate: function properties", "[capi_v2][aggregate_function]") 
 	                                                  static_cast<DUCKDB_V2_FUNCTION_PROPERTY_VALUE>(0x7F0000),
 	                                                  nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
-	REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_aggregate_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 	duckdb_v2_logical_type_destroy(&bigint);
@@ -785,9 +791,9 @@ void WeightedUpdate(duckdb_v2_aggregate_function_update_info_handle info, duckdb
 
 TEST_CASE("V2 aggregate: named-only arguments reach update", "[capi_v2][aggregate_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto bigint = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
-	auto one = MakeInt32Value(fx.conn, 1);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto bigint = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto one = MakeInt32Value(fx.factory, 1);
 
 	auto function = MakeAggregate(fx.conn, "weighted_sum");
 	auto sig = AggSigOf(function);
@@ -803,7 +809,7 @@ TEST_CASE("V2 aggregate: named-only arguments reach update", "[capi_v2][aggregat
 	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_set_combine_callback(function, SumCombine, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_set_finalize_callback(function, SumFinalize, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_aggregate_function_destroy(&function);
 	duckdb_v2_value_destroy(&one);
 	duckdb_v2_logical_type_destroy(&bigint);

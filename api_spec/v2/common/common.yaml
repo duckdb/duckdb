@@ -44,14 +44,24 @@ handles:
       instance with its own LOCAL settings and transaction state. Always
       destroy via `[[connection_destroy]]`.
     cleanup_with: connection_destroy
+  config:
+    description: |
+      A borrowed handle to the scope config options are read from and written
+      at. Taken from an instance (`[[instance_get_config]]`), a connection
+      (`[[connection_get_config]]`) or a context (`[[context_get_config]]`),
+      and valid for as long as its source is; the caller never destroys it.
+      An instance's config is the GLOBAL scope alone; a connection's or a context's config reads that client's cascade
+      (its SESSION value, else the GLOBAL one, else the default) and writes at
+      any scope the option supports.
   option:
     description: |
-      An opaque, owned, read-only descriptor of a single config option as seen
-      from an instance, connection, or context: its canonical name, current
-      setting, default setting, description, target scope, and aliases.
-      Returned by the *_get_option and *_get_option_by_index functions; the
-      caller always destroys it via `[[option_destroy]]`. Options are written with
-      the *_set_option functions, which take a name and a setting directly.
+      An opaque, owned, read-only descriptor of a single config option as
+      registered on an instance: its canonical name, default value,
+      description, the scopes it may be written at, and aliases. It carries no
+      current value: read that with the *_get_option_value functions, and
+      write it with the *_set_option functions. Returned by the
+      *_get_option_by_name and *_get_option_by_index functions; the caller
+      always destroys it via `[[option_destroy]]`.
     cleanup_with: option_destroy
   # Error reporting. Every fallible function takes a trailing
   # `error_info *err` out-parameter.
@@ -129,11 +139,21 @@ handles:
       DuckDB. Handed out within DuckDB-managed scopes — function bind / init /
       exec callbacks, replacement scans, and the extension entrypoint — and
       valid only for the duration of that scope; the caller never destroys it.
-      A context is the scope for reading (settings, the file system) and for
-      constructing values and types, not for registration: catalog entries and
-      instance-level hooks are installed through an extension or a connection.
-      A transaction is always active while a context is handed out, which is
-      what the context-scoped constructors assume.
+      Within that scope a transaction is already active. A context reaches
+      the same capabilities a connection does, through
+      `[[context_get_factory]]`, `[[context_get_config]]`,
+      `[[context_get_file_system]]` and `[[context_log]]`.
+  factory:
+    description: |
+      A borrowed handle to the scope values, types, data chunks and column
+      data collections are created in. Taken from an instance
+      (`[[instance_get_factory]]`), a connection
+      (`[[connection_get_factory]]`) or a context (`[[context_get_factory]]`),
+      and valid for as long as its source is; the caller never destroys it.
+      A factory resolves in the scope of its source: a connection's or a
+      context's factory reaches the catalog and the client's settings, while an
+      instance's factory knows only the built-in types and casts, with
+      default settings, and refuses anything that needs a catalog.
 structs:
   str:
     description: |
