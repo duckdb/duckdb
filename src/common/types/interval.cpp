@@ -140,7 +140,10 @@ interval_parse_number:
 			return false;
 		}
 		string_t nr_string(str + start_pos, UnsafeNumericCast<uint32_t>(pos - start_pos));
-		if (!TryCast::Operation<string_t, int64_t>(nr_string, number)) {
+		// parse the magnitude, so that the minimum int64 value can be negated
+		uint64_t magnitude;
+		const auto max_magnitude = UnsafeNumericCast<uint64_t>(NumericLimits<int64_t>::Maximum()) + (negative ? 1 : 0);
+		if (!TryCast::Operation<string_t, uint64_t>(nr_string, magnitude) || magnitude > max_magnitude) {
 			AssignInvalidInputErrorOrThrow(CastExceptionText<string_t, int64_t>(nr_string), error_message);
 			return false;
 		}
@@ -158,23 +161,28 @@ interval_parse_number:
 			}
 		}
 		if (negative) {
-			number = -number;
+			number =
+			    magnitude == max_magnitude ? NumericLimits<int64_t>::Minimum() : -UnsafeNumericCast<int64_t>(magnitude);
 			fraction = -fraction;
+		} else {
+			number = UnsafeNumericCast<int64_t>(magnitude);
 		}
 		goto interval_parse_identifier;
 	}
 interval_parse_time : {
 	// parse the remainder of the time as a Time type
 	dtime_t time;
-	idx_t pos;
-	if (!Time::TryConvertInterval(str + start_pos, len - start_pos, pos, time)) {
+	idx_t time_pos;
+	if (!Time::TryConvertInterval(str + start_pos, len - start_pos, time_pos, time, false, nullptr, negative)) {
 		return false;
 	}
-	if (!IntervalTryAddition<int64_t>(result.micros, negative ? -time.value : time.value, 1, error_message)) {
+	if (!IntervalTryAddition<int64_t>(result.micros, time.value, 1, error_message)) {
 		return false;
 	}
 	found_any = true;
-	goto end_of_string;
+	// continue with the remainder of the string (e.g. "ago")
+	pos = start_pos + time_pos;
+	goto standard_interval;
 }
 interval_parse_identifier:
 	for (; pos < len; pos++) {

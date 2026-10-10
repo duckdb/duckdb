@@ -7,6 +7,7 @@
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/storage/caching_mode.hpp"
 #include "json_scan.hpp"
 
@@ -199,6 +200,15 @@ idx_t JSONFileHandle::ReadFromCache(char *&pointer, idx_t &size, atomic<idx_t> &
 JSONReader::JSONReader(ClientContext &context, JSONReaderOptions options_p, OpenFileInfo file_p)
     : file(std::move(file_p)), context(context), options(std::move(options_p)), initialized(false),
       next_buffer_index(0), thrown(false) {
+	read_flags = JSONCommon::READ_INSITU_FLAG;
+	for (auto &type : options.sql_type_list) {
+		if (TypeVisitor::Contains(type, LogicalTypeId::DECIMAL)) {
+			// read numbers as raw text, so that DECIMAL values are not converted through a double
+			read_flags &= ~YYJSON_READ_BIGNUM_AS_RAW;
+			read_flags |= YYJSON_READ_NUMBER_AS_RAW;
+			break;
+		}
+	}
 }
 
 void JSONReader::OpenJSONFile() {
@@ -772,8 +782,7 @@ bool JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
 		doc = JSONCommon::ReadDocumentUnsafe(json_start, json_size, JSONCommon::READ_STOP_FLAG,
 		                                     scan_state.allocator.GetYYAlc(), &err);
 	} else {
-		doc = JSONCommon::ReadDocumentUnsafe(json_start, remaining, JSONCommon::READ_INSITU_FLAG,
-		                                     scan_state.allocator.GetYYAlc(), &err);
+		doc = JSONCommon::ReadDocumentUnsafe(json_start, remaining, read_flags, scan_state.allocator.GetYYAlc(), &err);
 	}
 	if (err.code != YYJSON_READ_SUCCESS) {
 		auto can_ignore_this_error = options.ignore_errors;
