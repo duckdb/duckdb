@@ -349,6 +349,8 @@ LogicalPlanSQLExporter::ExportWithSources(ClientContext &context, LogicalOperato
 		return LogicalPlanSQLExportResult::Failure(exported);
 	}
 	auto result = std::move(exported.GetValue().relation);
+	auto consumers = std::move(result.query->cte_map);
+	result.query->cte_map = CommonTableExpressionMap();
 	for (auto &source : sources) {
 		auto info = make_uniq<CommonTableExpressionInfo>();
 		for (idx_t i = 0; i < source.relation.fields.size(); i++) {
@@ -357,6 +359,9 @@ LogicalPlanSQLExporter::ExportWithSources(ClientContext &context, LogicalOperato
 		info->query_node = std::move(source.relation.query);
 		info->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
 		result.query->cte_map.map.insert(source.name, std::move(info));
+	}
+	for (auto &consumer : consumers.map) {
+		result.query->cte_map.map.insert(consumer.first, std::move(consumer.second));
 	}
 	auto success = LogicalPlanSQLExportResult::Success(std::move(result));
 	return options.output_names ? ApplyOutputNames(std::move(success), *options.output_names) : std::move(success);
