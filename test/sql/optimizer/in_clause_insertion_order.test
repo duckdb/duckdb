@@ -1,0 +1,67 @@
+# name: test/sql/optimizer/in_clause_insertion_order.test
+# description: Large IN lists preserve insertion order
+# group: [optimizer]
+
+statement ok
+SET threads=8;
+
+statement ok
+CREATE TABLE t AS SELECT ('s' || (i % 20))::VARCHAR AS symbol, i::BIGINT AS ts FROM range(1000000) tbl(i);
+
+query II
+EXPLAIN SELECT ts FROM t WHERE symbol IN ('s0', 's2', 's4', 's6', 's8', 's10', 's12', 's14', 's16', 's18');
+----
+physical_plan	<!REGEX>:.*MARK.*
+
+query I
+SELECT ts FROM t WHERE symbol IN ('s0', 's2', 's4', 's6', 's8', 's10', 's12', 's14', 's16', 's18') LIMIT 3 OFFSET 100000;
+----
+200000
+200002
+200004
+
+query I
+SELECT ts FROM t WHERE symbol NOT IN ('s1', 's3', 's5', 's7', 's9', 's11', 's13', 's15', 's17', 's19') LIMIT 3 OFFSET 100000;
+----
+200000
+200002
+200004
+
+query II
+SELECT ts, symbol IN ('s0', 's2', 's4', 's6', 's8', 's10', 's12', 's14', 's16', 's18') FROM t LIMIT 3 OFFSET 100001;
+----
+100001	false
+100002	true
+100003	false
+
+statement ok
+CREATE TABLE filtered AS SELECT ts FROM t WHERE symbol IN ('s0', 's2', 's4', 's6', 's8', 's10', 's12', 's14', 's16', 's18');
+
+query II
+SELECT count(*), count(*) FILTER (WHERE d < 0) FROM (SELECT ts - lag(ts) OVER (ORDER BY rowid) AS d FROM filtered);
+----
+500000	0
+
+statement ok
+COPY (SELECT ts FROM t WHERE symbol IN ('s0', 's2', 's4', 's6', 's8', 's10', 's12', 's14', 's16', 's18')) TO '__TEST_DIR__/in_clause_order.csv' (HEADER false);
+
+statement ok
+CREATE TABLE copied AS SELECT * FROM read_csv('__TEST_DIR__/in_clause_order.csv', header = false, columns = {'ts': 'BIGINT'});
+
+query II
+SELECT count(*), count(*) FILTER (WHERE d < 0) FROM (SELECT ts - lag(ts) OVER (ORDER BY rowid) AS d FROM copied);
+----
+500000	0
+
+# sparse output must not be held back
+statement ok
+SET threads=1;
+
+statement ok
+CREATE TABLE sparse AS SELECT ts FROM t
+WHERE symbol IN ('s0', 's2', 's4', 's6', 's8', 's10', 's12', 's14', 's16', 's18') AND (ts % 1000 < 3 OR ts > 999000);
+
+query II
+SELECT count(*), count(*) FILTER (WHERE d < 0) FROM (SELECT ts - lag(ts) OVER (ORDER BY rowid) AS d FROM sparse);
+----
+2498	0

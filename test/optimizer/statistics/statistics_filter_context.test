@@ -29,7 +29,7 @@ statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 # price > 100 is FALSE or NULL from statistics. In filter context it cannot make the OR pass, so the
-# address-only predicate is pushed below the join before the large IN clause becomes a MARK join.
+# address-only predicate is pushed below the join.
 query II
 EXPLAIN SELECT count(*)
 FROM filter_context_address address
@@ -38,7 +38,7 @@ WHERE substring(zip, 1, 5) IN ('10000', '30000', '40000', '50000', '60000', '700
 	OR state = 'CA'
 	OR price > 100;
 ----
-logical_opt	<REGEX>:.*INNER.*IN \(\.\.\.\).*MARK.*filter_context_address.*
+logical_opt	<REGEX>:.*INNER.*IN \('10000'.*filter_context_address.*
 
 query II
 EXPLAIN SELECT count(*)
@@ -78,7 +78,7 @@ WHERE substring(zip, 1, 5) IN ('10000', '30000', '40000', '50000', '60000', '700
 	OR state = 'CA'
 	OR price > 100;
 ----
-logical_opt	<REGEX>:.*INNER.*IN \(\.\.\.\).*MARK.*filter_context_address.*
+logical_opt	<REGEX>:.*INNER.*IN \('10000'.*filter_context_address.*
 
 query I
 SELECT count(*)
@@ -98,7 +98,7 @@ JOIN filter_context_sales_not_null sales USING (k)
 WHERE substring(zip, 1, 5) IN ('10000', '30000', '40000', '50000', '60000', '70000')
 	OR price IS NULL;
 ----
-logical_opt	<REGEX>:.*INNER.*IN \(\.\.\.\).*MARK.*filter_context_address.*
+logical_opt	<REGEX>:.*INNER.*IN \('10000'.*filter_context_address.*
 
 query I
 SELECT count(*)

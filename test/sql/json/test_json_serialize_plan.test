@@ -34,9 +34,9 @@ SELECT json_serialize_plan('SELECT *, 1 + 2 FROM tbl1', skip_null := true, skip_
 ----
 <REGEX>:.*LOGICAL_PROJECTION.*LOGICAL_GET.*
 
-# Optimized IN clauses use LogicalColumnDataGet internally
+# Large constant IN lists stay in the filter
 query II
-SELECT plan::VARCHAR LIKE '%LOGICAL_CHUNK_GET%', plan::VARCHAR NOT LIKE '%"column_ids"%'
+SELECT plan::VARCHAR LIKE '%COMPARE_IN%', plan::VARCHAR NOT LIKE '%LOGICAL_CHUNK_GET%'
 FROM (
 	SELECT json_serialize_plan(
 		'SELECT i FROM range(20) t(i) WHERE i IN (1, 3, 5, 7, 9, 11)',

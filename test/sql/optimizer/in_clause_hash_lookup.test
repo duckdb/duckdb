@@ -1,0 +1,361 @@
+# name: test/sql/optimizer/in_clause_hash_lookup.test
+# description: Large constant IN lists are evaluated with a hash lookup matching regular equality
+# group: [optimizer]
+
+# NULL semantics
+query IIII
+SELECT 3 IN (1, 2, 3, 4, 5), 9 IN (1, 2, 3, 4, 5), 9 IN (1, 2, 3, 4, NULL), NULL::INT IN (1, 2, 3, 4, 5);
+----
+true	false	NULL	NULL
+
+query IIII
+SELECT 3 NOT IN (1, 2, 3, 4, 5), 9 NOT IN (1, 2, 3, 4, 5), 9 NOT IN (1, 2, 3, 4, NULL), 3 NOT IN (1, 2, 3, 4, NULL);
+----
+false	true	NULL	false
+
+statement ok
+CREATE TABLE vals AS SELECT
+	CASE WHEN i % 17 = 0 THEN NULL ELSE i % 40 END AS i,
+	(i % 40)::TINYINT AS ti,
+	(i % 40)::UTINYINT AS uti,
+	(i % 40)::HUGEINT AS hi,
+	(i % 40)::UHUGEINT AS uhi,
+	(i % 40)::DECIMAL(18, 3) / 4 AS dec,
+	(i % 40)::DECIMAL(38, 2) / 4 AS bigdec,
+	CASE i % 5 WHEN 0 THEN 'nan'::DOUBLE WHEN 1 THEN -0.0::DOUBLE ELSE (i % 40) / 2 END AS d,
+	CASE i % 5 WHEN 0 THEN 'nan'::FLOAT WHEN 1 THEN -0.0::FLOAT ELSE (i % 40) / 2 END AS f,
+	CASE WHEN i % 3 = 0 THEN 'a fairly long string value ' || (i % 40) ELSE 's' || (i % 40) END AS s,
+	('s' || (i % 40))::BLOB AS b,
+	DATE '2024-01-01' + (i % 40)::INT AS dt,
+	TIMESTAMP '2024-01-01' + INTERVAL (i % 40) HOUR AS ts,
+	INTERVAL (i % 40) DAY AS iv,
+	i % 2 = 0 AS bo,
+	[i % 4] AS l
+FROM range(5000) tbl(i);
+
+query I
+SELECT bool_and((i IN (1, 5, 9, 13, 17, 21, NULL)) IS NOT DISTINCT FROM (i = 1 OR i = 5 OR i = 9 OR i = 13 OR i = 17 OR i = 21 OR i = NULL)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((i NOT IN (1, 5, 9, 13, 17, 21)) IS NOT DISTINCT FROM (i <> 1 AND i <> 5 AND i <> 9 AND i <> 13 AND i <> 17 AND i <> 21)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((ti IN (1, 5, 9, 13, 17, 21)) = (ti = 1 OR ti = 5 OR ti = 9 OR ti = 13 OR ti = 17 OR ti = 21)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((uti IN (1, 5, 9, 13, 17, 21)) = (uti = 1 OR uti = 5 OR uti = 9 OR uti = 13 OR uti = 17 OR uti = 21)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((hi IN (1, 5, 9, 13, 17, 170141183460469231731687303715884105727)) = (hi = 1 OR hi = 5 OR hi = 9 OR hi = 13 OR hi = 17 OR hi = 170141183460469231731687303715884105727)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((uhi IN (1, 5, 9, 13, 17, 21)) = (uhi = 1 OR uhi = 5 OR uhi = 9 OR uhi = 13 OR uhi = 17 OR uhi = 21)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((dec IN (0.25, 1.5, 2.75, 4, 9.75, 7)) = (dec = 0.25 OR dec = 1.5 OR dec = 2.75 OR dec = 4 OR dec = 9.75 OR dec = 7)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((bigdec IN (0.25, 1.5, 2.75, 4, 9.75, 7)) = (bigdec = 0.25 OR bigdec = 1.5 OR bigdec = 2.75 OR bigdec = 4 OR bigdec = 9.75 OR bigdec = 7)) FROM vals;
+----
+true
+
+# NaN equals NaN and -0.0 equals 0.0
+query II
+SELECT count(*) FILTER (WHERE d IN ('nan'::DOUBLE, 0.0, 1.5, 3, 7.5, 12)), count(*) FILTER (WHERE d = 'nan'::DOUBLE OR d = 0.0 OR d = 1.5 OR d = 3 OR d = 7.5 OR d = 12) FROM vals;
+----
+2250	2250
+
+query II
+SELECT count(*) FILTER (WHERE f IN ('nan'::FLOAT, 0.0, 1.5, 3, 7.5, 12)), count(*) FILTER (WHERE f = 'nan'::FLOAT OR f = 0.0 OR f = 1.5 OR f = 3 OR f = 7.5 OR f = 12) FROM vals;
+----
+2250	2250
+
+query I
+SELECT bool_and((s IN ('s1', 's5', 'a fairly long string value 3', 'a fairly long string value 9', 's22', 's')) = (s = 's1' OR s = 's5' OR s = 'a fairly long string value 3' OR s = 'a fairly long string value 9' OR s = 's22' OR s = 's')) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((b IN ('s1'::BLOB, 's5'::BLOB, 's9'::BLOB, 's13'::BLOB, 's17'::BLOB)) = (b = 's1'::BLOB OR b = 's5'::BLOB OR b = 's9'::BLOB OR b = 's13'::BLOB OR b = 's17'::BLOB)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((dt IN (DATE '2024-01-02', DATE '2024-01-06', DATE '2024-01-10', DATE '2024-01-14', DATE '2024-01-18')) = (dt = DATE '2024-01-02' OR dt = DATE '2024-01-06' OR dt = DATE '2024-01-10' OR dt = DATE '2024-01-14' OR dt = DATE '2024-01-18')) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((ts IN (TIMESTAMP '2024-01-01 01:00', TIMESTAMP '2024-01-01 05:00', TIMESTAMP '2024-01-01 09:00', TIMESTAMP '2024-01-01 13:00', TIMESTAMP '2024-01-02 01:00')) = (ts = TIMESTAMP '2024-01-01 01:00' OR ts = TIMESTAMP '2024-01-01 05:00' OR ts = TIMESTAMP '2024-01-01 09:00' OR ts = TIMESTAMP '2024-01-01 13:00' OR ts = TIMESTAMP '2024-01-02 01:00')) FROM vals;
+----
+true
+
+# intervals compare normalized: 30 days equals 1 month
+query II
+SELECT count(*) FILTER (WHERE iv IN (INTERVAL 1 MONTH, INTERVAL 1 DAY, INTERVAL 48 HOUR, INTERVAL 5 DAY, INTERVAL 9 DAY)), count(*) FILTER (WHERE iv = INTERVAL 1 MONTH OR iv = INTERVAL 1 DAY OR iv = INTERVAL 48 HOUR OR iv = INTERVAL 5 DAY OR iv = INTERVAL 9 DAY) FROM vals;
+----
+625	625
+
+query I
+SELECT bool_and((bo IN (true, true, true, true, true)) = bo) FROM vals;
+----
+true
+
+# nested types are looked up by their sort key
+query I
+SELECT bool_and((l IN ([0], [1], [5], [6], [7])) = (l = [0] OR l = [1] OR l = [5] OR l = [6] OR l = [7])) FROM vals;
+----
+true
+
+statement ok
+CREATE TABLE nested AS SELECT
+	CASE WHEN i % 13 = 0 THEN NULL ELSE [i % 7, CASE WHEN i % 5 = 0 THEN NULL ELSE i % 3 END] END AS l,
+	[CASE i % 4 WHEN 0 THEN -0.0 WHEN 1 THEN 'nan'::DOUBLE ELSE i % 3 END] AS d,
+	{'a': i % 4, 'b': CASE WHEN i % 6 = 0 THEN NULL ELSE 's' || (i % 3) END} AS st,
+	[i % 3, i % 2]::INT[2] AS arr,
+	[[i % 2], [i % 3]] AS ll
+FROM range(3000) t(i);
+
+# NULLs nested inside values compare equal
+query I
+SELECT bool_and((l IN ([1, 1], [2, NULL], [3, 0], [0, 2], [6, NULL], [5, 1])) IS NOT DISTINCT FROM (l = [1, 1] OR l = [2, NULL] OR l = [3, 0] OR l = [0, 2] OR l = [6, NULL] OR l = [5, 1])) FROM nested;
+----
+true
+
+query I
+SELECT bool_and((l NOT IN ([1, 1], [2, NULL], [3, 0], [0, 2], [6, NULL], NULL)) IS NOT DISTINCT FROM (l <> [1, 1] AND l <> [2, NULL] AND l <> [3, 0] AND l <> [0, 2] AND l <> [6, NULL] AND l <> NULL)) FROM nested;
+----
+true
+
+# NaN equals NaN and -0.0 equals 0.0
+query I
+SELECT bool_and((d IN ([0.0], ['nan'::DOUBLE], [5.0], [6.0], [7.0], [8.0])) IS NOT DISTINCT FROM (d = [0.0] OR d = ['nan'::DOUBLE] OR d = [5.0] OR d = [6.0] OR d = [7.0] OR d = [8.0])) FROM nested;
+----
+true
+
+query I
+SELECT bool_and((st IN ({'a': 1, 'b': 's1'}, {'a': 0, 'b': NULL}, {'a': 2, 'b': 's2'}, {'a': 3, 'b': 's0'}, {'a': 9, 'b': 'x'}, {'a': 2, 'b': NULL})) IS NOT DISTINCT FROM (st = {'a': 1, 'b': 's1'} OR st = {'a': 0, 'b': NULL} OR st = {'a': 2, 'b': 's2'} OR st = {'a': 3, 'b': 's0'} OR st = {'a': 9, 'b': 'x'} OR st = {'a': 2, 'b': NULL})) FROM nested;
+----
+true
+
+query I
+SELECT bool_and((arr IN ([0, 0]::INT[2], [1, 1]::INT[2], [2, 0]::INT[2], [5, 5]::INT[2], [6, 6]::INT[2], [7, 7]::INT[2])) IS NOT DISTINCT FROM (arr = [0, 0]::INT[2] OR arr = [1, 1]::INT[2] OR arr = [2, 0]::INT[2] OR arr = [5, 5]::INT[2] OR arr = [6, 6]::INT[2] OR arr = [7, 7]::INT[2])) FROM nested;
+----
+true
+
+query I
+SELECT bool_and((ll IN ([[0], [0]], [[1], [2]], [[0], [1]], [[5], [5]], [[6], [6]], [[7], [7]])) IS NOT DISTINCT FROM (ll = [[0], [0]] OR ll = [[1], [2]] OR ll = [[0], [1]] OR ll = [[5], [5]] OR ll = [[6], [6]] OR ll = [[7], [7]])) FROM nested;
+----
+true
+
+statement ok
+CREATE TABLE maps_unions AS SELECT
+	CASE WHEN i % 13 = 0 THEN NULL WHEN i % 2 = 0 THEN MAP {i % 3: i % 4, 9: 1} ELSE MAP {9: 1, i % 3: i % 4} END AS m,
+	CASE WHEN i % 11 = 0 THEN NULL WHEN i % 2 = 0 THEN (i % 4)::INT::UNION(a INT, b VARCHAR)
+		ELSE ((i % 4)::VARCHAR)::UNION(a INT, b VARCHAR) END AS u,
+	MAP {'k' || (i % 3): CASE WHEN i % 5 = 0 THEN NULL ELSE [i % 2] END} AS mn
+FROM range(3000) t(i);
+
+# map equality depends on the entry order
+query I
+SELECT bool_and((m IN (MAP {0: 0, 9: 1}, MAP {9: 1, 1: 1}, MAP {2: 2, 9: 1}, MAP {9: 1, 0: 3}, MAP {5: 5}, MAP {9: 1})) IS NOT DISTINCT FROM (m = MAP {0: 0, 9: 1} OR m = MAP {9: 1, 1: 1} OR m = MAP {2: 2, 9: 1} OR m = MAP {9: 1, 0: 3} OR m = MAP {5: 5} OR m = MAP {9: 1})) FROM maps_unions;
+----
+true
+
+query I
+SELECT bool_and((m NOT IN (MAP {0: 0, 9: 1}, MAP {9: 1, 1: 1}, MAP {2: 2, 9: 1}, MAP {5: 5}, MAP {9: 1}, NULL)) IS NOT DISTINCT FROM (m <> MAP {0: 0, 9: 1} AND m <> MAP {9: 1, 1: 1} AND m <> MAP {2: 2, 9: 1} AND m <> MAP {5: 5} AND m <> MAP {9: 1} AND m <> NULL)) FROM maps_unions;
+----
+true
+
+query I
+SELECT bool_and((mn IN (MAP {'k0': [0]}, MAP {'k1': NULL}, MAP {'k2': [1]}, MAP {'k0': NULL}, MAP {'x': [5]}, MAP {'k1': [7]})) IS NOT DISTINCT FROM (mn = MAP {'k0': [0]} OR mn = MAP {'k1': NULL} OR mn = MAP {'k2': [1]} OR mn = MAP {'k0': NULL} OR mn = MAP {'x': [5]} OR mn = MAP {'k1': [7]})) FROM maps_unions;
+----
+true
+
+# union values with a different tag are not equal
+query I
+SELECT bool_and((u IN (0::UNION(a INT, b VARCHAR), 2::UNION(a INT, b VARCHAR), '1'::UNION(a INT, b VARCHAR), '3'::UNION(a INT, b VARCHAR), 7::UNION(a INT, b VARCHAR), 'x'::UNION(a INT, b VARCHAR))) IS NOT DISTINCT FROM (u = 0::UNION(a INT, b VARCHAR) OR u = 2::UNION(a INT, b VARCHAR) OR u = '1'::UNION(a INT, b VARCHAR) OR u = '3'::UNION(a INT, b VARCHAR) OR u = 7::UNION(a INT, b VARCHAR) OR u = 'x'::UNION(a INT, b VARCHAR))) FROM maps_unions;
+----
+true
+
+query II
+SELECT count(*) FILTER (WHERE u IN (1::UNION(a INT, b VARCHAR), 3::UNION(a INT, b VARCHAR), '0'::UNION(a INT, b VARCHAR), '2'::UNION(a INT, b VARCHAR), 5::UNION(a INT, b VARCHAR), 'y'::UNION(a INT, b VARCHAR))),
+	count(*) FILTER (WHERE u IN (0::UNION(a INT, b VARCHAR), 2::UNION(a INT, b VARCHAR), '1'::UNION(a INT, b VARCHAR), '3'::UNION(a INT, b VARCHAR), 5::UNION(a INT, b VARCHAR), 'y'::UNION(a INT, b VARCHAR)))
+FROM maps_unions;
+----
+0	2727
+
+# sort keys do not normalize intervals or apply collations, these fall back to pairwise comparison
+query III
+SELECT [INTERVAL 30 DAY] IN ([INTERVAL 1 MONTH], [INTERVAL 1 DAY], [INTERVAL 2 DAY], [INTERVAL 3 DAY], [INTERVAL 4 DAY]),
+	['A' COLLATE NOCASE] IN (['a'], ['b'], ['c'], ['d'], ['e']),
+	NULL::INT[] IN ([1], [2], [3], [4], [5]);
+----
+true	true	NULL
+
+# enums and uuids
+statement ok
+CREATE TYPE mood AS ENUM ('a', 'b', 'c', 'd', 'e', 'f', 'g');
+
+query I
+SELECT count(*) FROM (SELECT ('abcdefg'[i % 7 + 1])::mood AS m FROM range(700) tbl(i)) WHERE m IN ('a', 'c', 'e', 'f', 'g');
+----
+500
+
+query I
+SELECT count(*) FROM (SELECT ('00000000-0000-0000-0000-00000000000' || (i % 10))::UUID AS u FROM range(100) tbl(i))
+WHERE u IN ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000005');
+----
+50
+
+# collations apply to the IN values
+query I
+SELECT 'HELLO' COLLATE NOCASE IN ('hello', 'a', 'b', 'c', 'd', 'e');
+----
+true
+
+# constant probe values over many rows
+statement ok
+PRAGMA disable_optimizer;
+
+query IIIIII
+SELECT count(*) FILTER (WHERE 3 IN (1, 2, 3, 4, 5, 6)),
+	count(*) FILTER (WHERE 7 IN (1, 2, 3, 4, 5, 6)),
+	count(*) FILTER (WHERE 7 NOT IN (1, 2, 3, 4, 5, 6)),
+	count(*) FILTER (WHERE (7 IN (1, 2, 3, 4, 5, NULL)) IS NULL),
+	count(*) FILTER (WHERE (NULL::INT IN (1, 2, 3, 4, 5, 6)) IS NULL),
+	count(*) FILTER (WHERE [2] IN ([1], [2], [3], [4], [5], [6]))
+FROM range(5000);
+----
+5000	0	5000	5000	5000	5000
+
+statement ok
+PRAGMA enable_optimizer;
+
+# a constant IN is folded
+query II
+EXPLAIN SELECT i FROM range(10) t(i) WHERE 3 IN (1, 2, 3, 4, 5, 6) AND i NOT IN (7, 8, 9, 10, 11, 12) AND 7 NOT IN (1, 2, 3, 4, 5, 6);
+----
+physical_plan	<!REGEX>:.*IN \(1, 2.*
+
+query I
+SELECT count(*) FROM range(10) t(i) WHERE 3 IN (1, 2, 3, 4, 5, 6) AND 7 NOT IN (1, 2, 3, 4, 5, 6);
+----
+10
+
+# empty input does not evaluate the constants
+query I
+SELECT count(*) FROM vals WHERE false AND i IN (1, 2, 3, 4, 5, 6);
+----
+0
+
+# large IN lists used as a filter
+query I
+SELECT (SELECT count(*) FROM vals WHERE i IN (1, 5, 9, 13, 17, 21, 1000)) = (SELECT count(*) FROM vals WHERE i = 1 OR i = 5 OR i = 9 OR i = 13 OR i = 17 OR i = 21 OR i = 1000);
+----
+true
+
+query I
+SELECT (SELECT count(*) FROM vals WHERE i IN (1, 5, 9, 13, 17, NULL)) = (SELECT count(*) FROM vals WHERE i = 1 OR i = 5 OR i = 9 OR i = 13 OR i = 17);
+----
+true
+
+query I
+SELECT (SELECT count(*) FROM vals WHERE i NOT IN (1, 5, 9, 13, 17, 21)) = (SELECT count(*) FROM vals WHERE i <> 1 AND i <> 5 AND i <> 9 AND i <> 13 AND i <> 17 AND i <> 21);
+----
+true
+
+query I
+SELECT (SELECT count(*) FROM vals WHERE s IN ('s1', 's5', 'a fairly long string value 3', 's22', 's', 'x')) = (SELECT count(*) FROM vals WHERE s = 's1' OR s = 's5' OR s = 'a fairly long string value 3' OR s = 's22' OR s = 's' OR s = 'x');
+----
+true
+
+# dictionary compressed input
+load __TEST_DIR__/in_clause_hash_lookup.db
+
+statement ok
+CREATE TABLE dict AS SELECT CASE WHEN i % 11 = 0 THEN NULL ELSE 'value_' || (i % 50) END AS s FROM range(200000) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT count(*) FILTER (WHERE s IN ('value_1', 'value_7', 'value_13', 'value_42', 'value_49', 'missing')),
+	count(*) FILTER (WHERE s = 'value_1' OR s = 'value_7' OR s = 'value_13' OR s = 'value_42' OR s = 'value_49' OR s = 'missing')
+FROM dict;
+----
+18183	18183
+
+query I
+SELECT count(*) FROM dict WHERE (s NOT IN ('value_1', 'value_7', 'value_13', 'value_42', 'value_49', NULL)) IS NULL;
+----
+181817
+
+# IN as part of a join condition
+query I
+SELECT count(*) FROM range(100) a(x), range(100) b(y) WHERE x = y AND (x IN (1, 2, 3, 4, 5, 6) OR y > 90);
+----
+15
+
+# hash joins push the build keys into the probe scan as an IN filter
+statement ok
+CREATE TABLE probe AS SELECT i AS id, i::INT AS id32, 'k' || (i % 5000) AS s FROM range(2000000) t(i);
+
+statement ok
+CREATE TABLE build AS SELECT * FROM (VALUES (3), (1001), (250007), (700001), (1200003), (1999999), (42)) t(k);
+
+statement ok
+CREATE TABLE build_s AS SELECT * FROM (VALUES ('k3'), ('k17'), ('k250'), ('k4999'), ('k1000'), ('k77'), ('missing')) t(k);
+
+statement ok
+CHECKPOINT;
+
+query II
+EXPLAIN ANALYZE SELECT count(*), sum(id) FROM probe JOIN build ON id = k;
+----
+analyzed_plan	<REGEX>:.*id IN \(3, 42, 1001, 250007, 700001, 1200003, 1999999\).*
+
+query II
+SELECT count(*), sum(id) FROM probe JOIN build ON id = k;
+----
+7	4151056
+
+query II
+SELECT count(*), sum(id) FROM probe JOIN build ON id32 = k;
+----
+7	4151056
+
+query II
+SELECT count(*), sum(id) FROM probe JOIN build_s ON s = k;
+----
+2400	2396538400
+
+statement ok
+SET dynamic_or_filter_threshold = 0;
+
+query II
+SELECT count(*), sum(id) FROM probe JOIN build ON id = k;
+----
+7	4151056
+
+query II
+SELECT count(*), sum(id) FROM probe JOIN build_s ON s = k;
+----
+2400	2396538400
+
+statement ok
+RESET dynamic_or_filter_threshold;

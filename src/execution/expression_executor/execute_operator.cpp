@@ -1,20 +1,49 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/expression_executor/in_list_lookup.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundOperatorExpression &expr,
-                                                                ExpressionExecutorState &root) {
-	auto result = make_uniq<ExpressionState>(expr, root);
-	for (auto &child : expr.GetChildren()) {
-		result->AddChild(*child);
+namespace {
+
+struct InExpressionState : public ExpressionState {
+	InExpressionState(const BoundOperatorExpression &expr, ExpressionExecutorState &root)
+	    : ExpressionState(expr, root) {
 	}
 
+	//! Set when the IN is evaluated with a lookup, then only the probe expression has a child state
+	bool use_lookup = false;
+	//! Built on first execution
+	unique_ptr<InListLookup> lookup;
+};
+
+} // namespace
+
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundOperatorExpression &expr,
+                                                                ExpressionExecutorState &root) {
+	auto expression_type = expr.GetExpressionType();
+	if (expression_type != ExpressionType::COMPARE_IN && expression_type != ExpressionType::COMPARE_NOT_IN) {
+		auto result = make_uniq<ExpressionState>(expr, root);
+		for (auto &child : expr.GetChildren()) {
+			result->AddChild(*child);
+		}
+		result->Finalize();
+		return result;
+	}
+	auto result = make_uniq<InExpressionState>(expr, root);
+	result->use_lookup = InListLookup::IsSupported(expr);
+	if (result->use_lookup) {
+		result->AddChild(*expr.GetChildren()[0]);
+	} else {
+		for (auto &child : expr.GetChildren()) {
+			result->AddChild(*child);
+		}
+	}
 	result->Finalize();
-	return result;
+	return std::move(result);
 }
 
 template <bool HAS_VALID_SEL, bool HAS_NULL_SEL>
@@ -91,6 +120,15 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		Vector left(expr.GetChildren()[0]->GetReturnType());
 		// eval left side
 		Execute(*expr.GetChildren()[0], state->child_states[0].get(), sel, count, left);
+
+		auto &in_state = state->Cast<InExpressionState>();
+		if (in_state.use_lookup) {
+			if (!in_state.lookup) {
+				in_state.lookup = InListLookup::Create(expr);
+			}
+			in_state.lookup->Probe(left, count, expression_type == ExpressionType::COMPARE_NOT_IN, result);
+			return;
+		}
 
 		// init result to false
 		Vector intermediate(LogicalType::BOOLEAN);
