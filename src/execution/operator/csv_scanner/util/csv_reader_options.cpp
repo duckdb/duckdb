@@ -295,7 +295,11 @@ void CSVReaderOptions::SetReadOption(const Identifier &loption, const Value &val
 	} else if (loption == "ignore_errors") {
 		ignore_errors.Set(ParseBoolean(value, loption));
 	} else if (loption == "buffer_size") {
-		buffer_size_option.Set(NumericCast<idx_t>(ParseInteger(value, loption)));
+		auto buffer_size = ParseInteger(value, loption);
+		if (buffer_size < 0) {
+			throw InvalidInputException("Buffer Size option must be higher than 0");
+		}
+		buffer_size_option.Set(NumericCast<idx_t>(buffer_size));
 		if (buffer_size_option == 0) {
 			throw InvalidInputException("Buffer Size option must be higher than 0");
 		}
