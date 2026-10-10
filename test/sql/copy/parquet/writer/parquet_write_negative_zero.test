@@ -1,0 +1,32 @@
+# name: test/sql/copy/parquet/writer/parquet_write_negative_zero.test
+# description: Dictionary encoding keeps -0.0 and 0.0 apart (#25781)
+# group: [writer]
+
+require parquet
+
+foreach type FLOAT DOUBLE
+
+# two distinct values over a hundred rows make the writer choose dictionary encoding
+statement ok
+COPY (SELECT CASE WHEN i % 2 = 0 THEN 0.0::${type} ELSE -0.0::${type} END AS c FROM range(100) t(i)) TO '__TEST_DIR__/negative_zero.parquet' (FORMAT PARQUET);
+
+query I
+SELECT DISTINCT encodings FROM parquet_metadata('__TEST_DIR__/negative_zero.parquet')
+----
+PLAIN_DICTIONARY
+
+query II
+SELECT count(*) FILTER (WHERE signbit(c)), count(*) FILTER (WHERE NOT signbit(c)) FROM read_parquet('__TEST_DIR__/negative_zero.parquet')
+----
+50	50
+
+# NaNs still share one dictionary entry
+statement ok
+COPY (SELECT CASE WHEN i % 2 = 0 THEN 'nan'::${type} ELSE -0.0::${type} END AS c FROM range(100) t(i)) TO '__TEST_DIR__/negative_zero.parquet' (FORMAT PARQUET);
+
+query III
+SELECT count(*) FILTER (WHERE isnan(c)), count(*) FILTER (WHERE signbit(c)), count(*) FILTER (WHERE NOT isnan(c) AND NOT signbit(c)) FROM read_parquet('__TEST_DIR__/negative_zero.parquet')
+----
+50	50	0
+
+endloop

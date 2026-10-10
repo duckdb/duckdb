@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-// special double/float class to deal with dictionary encoding and NaN equality
+// special double/float class to deal with dictionary encoding: NaNs are equal, -0.0 and 0.0 are not
 struct double_na_equal {
 	double_na_equal() : val(0) {
 	}
@@ -28,7 +28,8 @@ struct double_na_equal {
 		if (std::isnan(val) && std::isnan(right)) {
 			return true;
 		}
-		return val == right;
+		// a dictionary entry stands for the bytes written, so -0.0 and 0.0 are different values
+		return val == right && std::signbit(val) == std::signbit(right);
 	}
 
 	bool operator!=(const double &right) const {
@@ -52,7 +53,8 @@ struct float_na_equal {
 		if (std::isnan(val) && std::isnan(right)) {
 			return true;
 		}
-		return val == right;
+		// a dictionary entry stands for the bytes written, so -0.0 and 0.0 are different values
+		return val == right && std::signbit(val) == std::signbit(right);
 	}
 
 	bool operator!=(const float &right) const {
