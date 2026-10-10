@@ -1,0 +1,59 @@
+# name: test/sql/optimizer/constant_or_null_folded_null_argument.test
+# description: Statistics propagation must not fail when it wraps a comparison whose side folds to NULL into constant_or_null
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification
+
+# A column that is NULL in every row: statistics prove it has no valid values
+statement ok
+CREATE TABLE products(version VARCHAR);
+
+statement ok
+INSERT INTO products VALUES (NULL), (NULL), (NULL);
+
+# split_part is a macro over CASE: version IS NOT NULL folds to false through the statistics, the CASE then folds to
+# NULL, and the comparison against the constant is rewritten into constant_or_null(true, NULL, '0').
+# Binding that call must not fold it away - the caller requires a function expression back.
+query I
+SELECT count(*) FROM products WHERE split_part(version, '.', 1) <> '0';
+----
+0
+
+query I
+SELECT count(*) FROM products WHERE split_part(version, '.', 1) = '0';
+----
+0
+
+query I
+SELECT count(*) FROM products WHERE split_part(version, '.', 1) IS DISTINCT FROM '0';
+----
+3
+
+# The same shape without the macro
+query I
+SELECT count(*) FROM products WHERE (CASE WHEN version IS NOT NULL THEN 'a' END) <> '0';
+----
+0
+
+query I
+SELECT (CASE WHEN version IS NOT NULL THEN 'a' END) <> '0' FROM products;
+----
+NULL
+NULL
+NULL
+
+# Once a single row is not NULL the statistics no longer prove the column all-NULL and the query always worked
+statement ok
+INSERT INTO products VALUES ('1.2.3');
+
+query I
+SELECT count(*) FROM products WHERE split_part(version, '.', 1) <> '0';
+----
+1
+
+# Binding a user-level call with a NULL argument still folds to a typed NULL constant
+query II
+SELECT split_part(NULL, '.', 1) IS NULL, typeof(upper(NULL));
+----
+true	VARCHAR

@@ -183,6 +183,13 @@ public:
 	                                                     ErrorData &error, bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
 
+	//! As above, but performs no constant folding: the call is never replaced by a constant (the DEFAULT_NULL_HANDLING
+	//! shortcut), so the result is always a bound call. For internal callers that rewrite an expression into a function
+	//! call and require a BoundFunctionExpression back (optimizer rules, statistics propagation, column mapping).
+	DUCKDB_API unique_ptr<Expression>
+	BindScalarFunctionWithoutFolding(const ScalarFunctionCatalogEntry &function,
+	                                 vector<pair<Identifier, unique_ptr<Expression>>> arguments, ErrorData &error);
+
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(shared_ptr<const ScalarFunction> function,
 	                                                     vector<unique_ptr<Expression>> children,
 	                                                     vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
@@ -347,6 +354,12 @@ private:
 	                           vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args);
 	//! Cast a set of expressions to the arguments of this function
 	void CastToFunctionArguments(BoundSimpleFunction &function, vector<unique_ptr<Expression>> &children);
+
+	//! Shared implementation of the catalog-entry binds; fold_constants enables the DEFAULT_NULL_HANDLING shortcut
+	unique_ptr<Expression> BindScalarFunctionInternal(const ScalarFunctionCatalogEntry &function,
+	                                                  vector<pair<Identifier, unique_ptr<Expression>>> arguments,
+	                                                  ErrorData &error, bool is_operator, optional_ptr<Binder> binder,
+	                                                  bool fold_constants);
 
 	void ResolveTemplateTypes(BoundSimpleFunction &bound_function, const vector<unique_ptr<Expression>> &children);
 	void CheckTemplateTypesResolved(const BoundSimpleFunction &bound_function);
