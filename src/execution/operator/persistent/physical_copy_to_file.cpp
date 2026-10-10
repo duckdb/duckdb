@@ -3911,6 +3911,11 @@ bool PhysicalCopyToFile::Rotate() const {
 
 static bool PhysicalCopyRotateNow(const PhysicalCopyToFile &op, GlobalFileState &global_state)
     DUCKDB_REQUIRES(global_state.lock) {
+	if (global_state.num_batches == 0) {
+		// never rotate a file that holds no data yet - e.g. a CSV header or a Parquet header can exceed the
+		// file size limit by itself, and rotating would then create new empty files forever
+		return false;
+	}
 	if (op.file_size_bytes.IsValid()) {
 		return op.function.file_size_bytes(*global_state.data) >= op.file_size_bytes.GetIndex();
 	}

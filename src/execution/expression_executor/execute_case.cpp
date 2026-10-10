@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
@@ -239,6 +240,30 @@ void ExpressionExecutor::FillSwitch(const Vector &vector, Vector &result, const 
 		}
 
 		result.Verify();
+		break;
+	}
+	case PhysicalType::ARRAY: {
+		const bool is_constant = vector.GetVectorType() == VectorType::CONSTANT_VECTOR;
+		if (!is_constant) {
+			// below code needs constant or flat arrays
+			vector.Flatten();
+		}
+		ValidityFillLoop(vector, result, sel, count);
+		auto array_size = ArrayType::GetSize(result.GetType());
+		auto child_count = count * array_size;
+		SelectionVector source_sel(child_count);
+		SelectionVector result_sel(child_count);
+		for (idx_t i = 0; i < count; i++) {
+			auto source_idx = is_constant ? 0 : i;
+			auto result_idx = sel.get_index(i);
+			for (idx_t k = 0; k < array_size; k++) {
+				source_sel.set_index(i * array_size + k, source_idx * array_size + k);
+				result_sel.set_index(i * array_size + k, result_idx * array_size + k);
+			}
+		}
+		Vector source_child(ArrayVector::GetChild(vector), source_sel, child_count);
+		source_child.Flatten();
+		FillSwitch(source_child, ArrayVector::GetChildMutable(result), result_sel, NumericCast<sel_t>(child_count));
 		break;
 	}
 	default:

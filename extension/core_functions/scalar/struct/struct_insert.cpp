@@ -34,6 +34,11 @@ static unique_ptr<FunctionData> StructInsertBind(BindScalarFunctionInput &input)
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto &names = *input.GetArgumentNames();
+	for (auto &argument : arguments) {
+		if (argument->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		}
+	}
 	if (LogicalTypeId::STRUCT != arguments[0]->GetReturnType().id()) {
 		throw InvalidInputException("The first argument to struct_insert must be a STRUCT");
 	}

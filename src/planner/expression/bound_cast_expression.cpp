@@ -298,6 +298,11 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	if (source_type.id() == LogicalTypeId::BIGNUM) {
 		return true;
 	}
+	// Floating point values that are not finite (NaN, inf) cannot be represented as a BIGNUM
+	if (target_type.id() == LogicalTypeId::BIGNUM &&
+	    (source_type.id() == LogicalTypeId::FLOAT || source_type.id() == LogicalTypeId::DOUBLE)) {
+		return true;
+	}
 	// Casts of nested types are executed on the child types - recurse into them
 	if (source_type.IsNested() || target_type.IsNested()) {
 		return NestedCastCanThrow(source_type, target_type);

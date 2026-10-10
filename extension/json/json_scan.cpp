@@ -315,8 +315,16 @@ bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const 
 	if (key == "records") {
 		// records is tri-state: 'auto', 'true' or 'false'. Accept a boolean for the latter two, since
 		// records = false reads more naturally than records = 'false'.
-		auto arg = value.type().id() == LogicalTypeId::BOOLEAN ? string(BooleanValue::Get(value) ? "true" : "false")
-		                                                       : StringValue::Get(value);
+		string arg;
+		if (value.type().id() == LogicalTypeId::BOOLEAN) {
+			arg = BooleanValue::Get(value) ? "true" : "false";
+		} else if (value.type().id() == LogicalTypeId::VARCHAR) {
+			arg = StringValue::Get(value);
+		} else {
+			throw BinderException("read_json \"records\" parameter must be a string ('auto', 'true' or 'false') or "
+			                      "a boolean, not %s",
+			                      value.type().ToString());
+		}
 		if (arg == "auto") {
 			options.record_type = JSONRecordType::AUTO_DETECT;
 		} else if (arg == "true") {

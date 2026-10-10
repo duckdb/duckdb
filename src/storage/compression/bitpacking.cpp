@@ -81,6 +81,58 @@ static void ValidateBitpackingMode(BitpackingMode mode) {
 	throw DataCorruptionException("Corrupted bitpacking segment: read exceeds the segment row count");
 }
 
+[[noreturn]] static void ThrowBitpackingInvalidBoolean() {
+	throw DataCorruptionException("Corrupted bitpacking segment: BOOL group contains values other than 0 and 1");
+}
+
+//! BOOL is bitpacked as int8_t - verify from the group header that the group can only decode to 0 and 1. The values of
+//! DELTA_FOR groups also depend on the deltas, so these are verified after decoding (VerifyBooleanValues).
+template <class T>
+static void ValidateBooleanGroup(BitpackingMode mode, bitpacking_width_t width, T frame_of_reference, T &constant,
+                                 idx_t count) {
+	auto first = static_cast<int64_t>(frame_of_reference);
+	int64_t last;
+	switch (mode) {
+	case BitpackingMode::CONSTANT:
+		if (constant == NumericLimits<T>::Minimum()) {
+			// groups that only contain NULLs store the initial maximum as their constant
+			constant = 0;
+		}
+		first = static_cast<int64_t>(constant);
+		last = first;
+		break;
+	case BitpackingMode::FOR:
+		if (width > 1) {
+			ThrowBitpackingInvalidBoolean();
+		}
+		last = first + width;
+		break;
+	case BitpackingMode::CONSTANT_DELTA:
+		last = first + static_cast<int64_t>(count - 1) * static_cast<int64_t>(constant);
+		break;
+	case BitpackingMode::DELTA_FOR:
+		// the deltas between 0 and 1 values are in [-1, 1]
+		if (width > 2 || first < -1 || first + (int64_t(1) << width) - 1 > 1) {
+			ThrowBitpackingInvalidBoolean();
+		}
+		return;
+	default:
+		ThrowBitpackingInvalidBoolean();
+	}
+	if (first < 0 || first > 1 || last < 0 || last > 1) {
+		ThrowBitpackingInvalidBoolean();
+	}
+}
+
+template <class T>
+static void VerifyBooleanValues(const T *values, idx_t count) {
+	for (idx_t i = 0; i < count; i++) {
+		if (values[i] != 0 && values[i] != 1) {
+			ThrowBitpackingInvalidBoolean();
+		}
+	}
+}
+
 template <class T, class T_U = typename MakeUnsigned<T>::type>
 static bitpacking_width_t ValidateBitpackingWidth(T stored_width) {
 	if (static_cast<T_U>(stored_width) > sizeof(T) * 8) {
@@ -711,8 +763,9 @@ public:
 	explicit BitpackingScanState(BufferHandle handle_p, ColumnSegment &segment)
 	    : handle(std::move(handle_p)),
 	      reader(CompressionSegmentReader::FromSegment(handle, segment, "bitpacking segment")),
-	      segment_count(segment.count.load()), group_count(segment_count / BITPACKING_METADATA_GROUP_SIZE +
-	                                                       (segment_count % BITPACKING_METADATA_GROUP_SIZE != 0)),
+	      is_bool(segment.GetType().InternalType() == PhysicalType::BOOL), segment_count(segment.count.load()),
+	      group_count(segment_count / BITPACKING_METADATA_GROUP_SIZE +
+	                  (segment_count % BITPACKING_METADATA_GROUP_SIZE != 0)),
 	      metadata_table_start(GetMetadataTableStart(reader, group_count)),
 	      metadata_table(reader.GetArray<bitpacking_metadata_encoded_t>(metadata_table_start, group_count)) {
 		if (metadata_table_start < BitpackingPrimitives::BITPACKING_HEADER_SIZE) {
@@ -726,6 +779,8 @@ public:
 	BufferHandle handle;
 	//! Group data between the segment header and reverse metadata table.
 	CompressionSegmentReader reader;
+	//! BOOL segments are bitpacked as int8_t, but may only contain 0 and 1
+	bool is_bool;
 	//! Segment row count retained for consistent group bounds.
 	idx_t segment_count;
 
@@ -833,6 +888,10 @@ public:
 		// The row count for this group comes from the segment count read from disk.
 		auto group_row_count = MinValue<idx_t>(BITPACKING_METADATA_GROUP_SIZE,
 		                                       segment_count - group_index * BITPACKING_METADATA_GROUP_SIZE);
+		if (is_bool) {
+			ValidateBooleanGroup<T>(current_group.mode, current_width, current_frame_of_reference, current_constant,
+			                        group_row_count);
+		}
 
 		// The payload size comes from the group row count and width read from disk, so calculate and validate it.
 		idx_t algorithm_group_count = 0;
@@ -1056,6 +1115,9 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 			ApplyFrameOfReference<T_S>(current_results, static_cast<T_S>(current_group.frame_of_reference));
 			current_group.delta_offset =
 			    static_cast<T>(DeltaDecode<T_S>(current_results, static_cast<T_S>(current_group.delta_offset)));
+			if (scan_state.is_bool) {
+				VerifyBooleanValues(current_result_ptr, to_scan);
+			}
 		} else {
 			ApplyFrameOfReference<T>(unsafe_array_ptr<T>(current_result_ptr, to_scan),
 			                         current_group.frame_of_reference);
@@ -1130,6 +1192,9 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 		value += static_cast<T_U>(group.delta_offset);
 	}
 	*current_result_ptr = static_cast<T>(value);
+	if (scan_state.is_bool) {
+		VerifyBooleanValues(current_result_ptr, 1);
+	}
 }
 
 template <class T>

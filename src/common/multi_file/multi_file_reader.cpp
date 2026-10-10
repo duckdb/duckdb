@@ -454,6 +454,9 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 		}
 		// verify that all the children of the struct value are VARCHAR
 		auto &children = StructValue::GetChildren(val);
+		if (children.empty()) {
+			throw InvalidInputException("'hive_types' must specify the type of at least one column");
+		}
 		for (idx_t i = 0; i < children.size(); i++) {
 			const Value &child = children[i];
 			if (child.type().id() != LogicalType::VARCHAR) {

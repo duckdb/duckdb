@@ -142,7 +142,7 @@ void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 				    entry.second.ToString());
 			}
 		} else if (entry.first == "mmap_reserve_size") {
-			mmap_reserve_size = DBConfig::ParseMemoryLimit(entry.second.ToString());
+			mmap_reserve_size = DBConfig::ParseMemoryLimitOrMaximum(entry.second.ToString());
 		} else {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}

@@ -3,6 +3,7 @@
 
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -918,13 +919,20 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data) {
 }
 
 void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
-	D_ASSERT(type.InternalType() == column_data.logical_type.InternalType());
+	if (type.InternalType() != column_data.logical_type.InternalType()) {
+		throw DataCorruptionException("Column data of type %s found for a column of type %s", column_data.logical_type,
+		                              type);
+	}
 	// construct the segments based on the data pointers
 	this->count = 0;
 	for (auto &data_pointer : column_data.pointers) {
 		// Update the count and statistics
 		data_pointer.row_start = count;
-		this->count += data_pointer.tuple_count;
+		idx_t new_count;
+		if (!TryAddOperator::Operation<idx_t, idx_t, idx_t>(count.load(), data_pointer.tuple_count, new_count)) {
+			throw DataCorruptionException("Column data has more rows than can be represented");
+		}
+		this->count = new_count;
 
 		// Merge the statistics. If this is a child column, the target_stats reference will point into the parents stats
 		// otherwise if this is a top level column, `stats->statistics` == `target_stats`
@@ -1030,14 +1038,21 @@ static PersistentColumnData GetPersistentColumnDataType(Deserializer &deserializ
 	}
 
 	// Otherwise, the type of this segment may depend on extra data
+	auto &column_type = deserializer.Get<const LogicalType &>();
 	switch (extra_data->GetType()) {
 	case ExtraPersistentColumnDataType::VARIANT: {
+		if (column_type.id() != LogicalTypeId::VARIANT) {
+			throw DataCorruptionException("VARIANT column data found for a column of type %s", column_type);
+		}
 		auto unshredded_type = VariantShredding::GetUnshreddedType();
 		PersistentColumnData result(LogicalType::VARIANT());
 		result.extra_data = std::move(extra_data);
 		return result;
 	}
 	case ExtraPersistentColumnDataType::GEOMETRY: {
+		if (column_type.id() != LogicalTypeId::GEOMETRY) {
+			throw DataCorruptionException("GEOMETRY column data found for a column of type %s", column_type);
+		}
 		const auto &geometry_data = extra_data->Cast<GeometryPersistentColumnData>();
 		// WKB is stored as the column's own type, which may carry type parameters (e.g., a CRS)
 		PersistentColumnData result(geometry_data.storage_type == GeometryStorageType::WKB

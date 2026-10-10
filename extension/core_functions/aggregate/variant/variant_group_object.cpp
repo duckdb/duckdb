@@ -89,6 +89,13 @@ public:
 		const auto &keys = entries[0];
 		const auto &values = entries[1];
 
+		// keys are verified to be non-NULL on update, but the state can also be imported
+		const auto key_validity = keys.Validity();
+		for (idx_t i = 0; key_validity.CanHaveNull() && i < key_validity.size(); i++) {
+			if (!key_validity.IsValid(i)) {
+				throw InvalidInputException("variant_group_object key cannot be NULL");
+			}
+		}
 		// The VARIANT type does not support duplicate keys
 		if (const auto duplicate = HasDuplicateKeys(keys)) {
 			throw InvalidInputException("variant_group_object contains duplicate key \"%s\"", *duplicate);
