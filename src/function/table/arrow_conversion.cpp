@@ -238,13 +238,6 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, idx_t chunk_off
 	auto &child_array = *array.children[0];
 	auto &child_type = list_info.GetChild();
 
-	if (list_size == 0 && start_offset == 0) {
-		D_ASSERT(!child_array.dictionary);
-		ArrowToDuckDBConversion::ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state, list_size,
-		                                             child_type, -1);
-		return;
-	}
-
 	auto array_physical_type = child_type.GetPhysicalType();
 	switch (array_physical_type) {
 	case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
