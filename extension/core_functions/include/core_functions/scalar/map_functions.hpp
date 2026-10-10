@@ -17,8 +17,8 @@ namespace duckdb {
 
 struct CardinalityFun {
 	static constexpr const char *Name = "cardinality";
-	static constexpr const char *Parameters = "map";
-	static constexpr const char *Description = "Returns the size of the map (or the number of entries in the map)";
+	static constexpr const char *Parameters = "map_or_list";
+	static constexpr const char *Description = "Returns the number of entries in the map or list";
 	static constexpr const char *Example = "cardinality( map([4, 2], ['a', 'b']) );";
 	static constexpr const char *Categories = "";
 
@@ -56,9 +56,13 @@ struct MapExtractFun {
 };
 
 struct ElementAtFun {
-	using ALIAS = MapExtractFun;
-
 	static constexpr const char *Name = "element_at";
+	static constexpr const char *Parameters = "map_or_list,key_or_index";
+	static constexpr const char *Description = "For a map, returns a list containing the value for the given key, or an empty list if the key is not present (same as map_extract). For a list, returns the element at the given 1-based index (negative indexes count from the end), or NULL if the index is out of range (same as list_extract)";
+	static constexpr const char *Example = "element_at([4, 5, 6], 3)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct MapExtractValueFun {

@@ -25,6 +25,12 @@ struct ApproxCountDistinctFun {
 	static AggregateFunction GetFunction();
 };
 
+struct ApproxDistinctFun {
+	using ALIAS = ApproxCountDistinctFun;
+
+	static constexpr const char *Name = "approx_distinct";
+};
+
 struct ArgMinFun {
 	static constexpr const char *Name = "arg_min";
 	static constexpr const char *Parameters = "arg,val,N";

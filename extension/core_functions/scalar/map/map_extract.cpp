@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/function/scalar/list_functions.hpp"
 #include "core_functions/scalar/map_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/list/contains_or_position.hpp"
@@ -127,6 +128,22 @@ ScalarFunction MapExtractFun::GetFunction() {
 	fun.GetSignature().AddParameter("map", LogicalType::MAP(key_type, val_type)).AddParameter("key", key_type);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
+}
+
+ScalarFunctionSet ElementAtFun::GetFunctions() {
+	ScalarFunctionSet set;
+	// element_at(map, key): same as map_extract
+	set.AddFunction(MapExtractFun::GetFunction());
+	// element_at(list, index): same as list_extract (1-based, negative index counts from the end, NULL when the index
+	// is out of range). Only the LIST overload is added, not the VARCHAR one.
+	auto list_extract = ListExtractFun::GetFunctions();
+	for (idx_t i = 0; i < list_extract.Size(); i++) {
+		auto &fun = list_extract.GetFunctionByOffset(i);
+		if (fun->GetSignature().GetParameter(0).GetType().id() == LogicalTypeId::LIST) {
+			set.AddFunction(*fun);
+		}
+	}
+	return set;
 }
 
 } // namespace duckdb

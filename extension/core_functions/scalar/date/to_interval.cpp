@@ -1,4 +1,5 @@
 #include "core_functions/scalar/date_functions.hpp"
+#include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
@@ -175,6 +176,50 @@ struct ToMicroSecondsOperator {
 	}
 };
 
+//! to_interval(part, value): builds an interval from a date part name (same vocabulary as date_part/date_diff) and a
+//! count, dispatching to the to_<unit> operators above. Used by the dateadd/date_add(part, n, ts) compatibility macros.
+struct ToIntervalOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA part, TB value) {
+		DatePartSpecifier specifier;
+		const auto part_name = part.GetString();
+		if (!TryGetDatePartSpecifier(part_name, specifier)) {
+			throw InvalidInputException("to_interval: date part \"%s\" not recognized", part_name);
+		}
+		switch (specifier) {
+		case DatePartSpecifier::MILLENNIUM:
+			return ToMillenniaOperator::Operation<TB, TR>(value);
+		case DatePartSpecifier::CENTURY:
+			return ToCenturiesOperator::Operation<TB, TR>(value);
+		case DatePartSpecifier::DECADE:
+			return ToDecadesOperator::Operation<TB, TR>(value);
+		case DatePartSpecifier::YEAR:
+			return ToYearsOperator::Operation<TB, TR>(value);
+		case DatePartSpecifier::QUARTER:
+			return ToQuartersOperator::Operation<TB, TR>(value);
+		case DatePartSpecifier::MONTH:
+			return ToMonthsOperator::Operation<TB, TR>(value);
+		case DatePartSpecifier::WEEK:
+			return ToWeeksOperator::Operation<TB, TR>(value);
+		case DatePartSpecifier::DAY:
+			return ToDaysOperator::Operation<TB, TR>(value);
+		case DatePartSpecifier::HOUR:
+			return ToHoursOperator::Operation<TB, TR>(value);
+		case DatePartSpecifier::MINUTE:
+			return ToMinutesOperator::Operation<TB, TR>(value);
+		case DatePartSpecifier::SECOND:
+			return ToSecondsOperator::Operation<TB, TR>(value);
+		case DatePartSpecifier::MILLISECONDS:
+			return ToMilliSecondsOperator::Operation<TB, TR>(value);
+		case DatePartSpecifier::MICROSECONDS:
+			return ToMicroSecondsOperator::Operation<TB, TR>(value);
+		default:
+			throw InvalidInputException("to_interval: date part \"%s\" cannot be used to construct an interval",
+			                            part_name);
+		}
+	}
+};
+
 template <typename OP>
 ScalarFunctionSet GetIntegerIntervalFunctions() {
 	ScalarFunctionSet function_set;
@@ -250,6 +295,14 @@ ScalarFunction ToMillisecondsFun::GetFunction() {
 	ScalarFunction function({}, LogicalType::INTERVAL,
 	                        ScalarFunction::UnaryFunction<double, interval_t, ToMilliSecondsOperator>);
 	function.GetSignature().AddParameter("double", LogicalType::DOUBLE);
+	function.SetFallible();
+	return function;
+}
+
+ScalarFunction ToIntervalFun::GetFunction() {
+	ScalarFunction function({}, LogicalType::INTERVAL,
+	                        ScalarFunction::BinaryFunction<string_t, int64_t, interval_t, ToIntervalOperator>);
+	function.GetSignature().AddParameter("part", LogicalType::VARCHAR).AddParameter("value", LogicalType::BIGINT);
 	function.SetFallible();
 	return function;
 }

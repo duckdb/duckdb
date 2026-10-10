@@ -521,6 +521,16 @@ struct ToHoursFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ToIntervalFun {
+	static constexpr const char *Name = "to_interval";
+	static constexpr const char *Parameters = "part,value";
+	static constexpr const char *Description = "Construct an interval of `value` units of the given date `part` (e.g. 'day', 'month', 'hour'). The part names are those accepted by date_part";
+	static constexpr const char *Example = "to_interval('day', 5)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct ToMicrosecondsFun {
 	static constexpr const char *Name = "to_microseconds";
 	static constexpr const char *Parameters = "integer";
@@ -534,7 +544,7 @@ struct ToMicrosecondsFun {
 struct ToMillenniaFun {
 	static constexpr const char *Name = "to_millennia";
 	static constexpr const char *Parameters = "integer";
-	static constexpr const char *Description = "Construct a millenium interval";
+	static constexpr const char *Description = "Construct a millennium interval";
 	static constexpr const char *Example = "to_millennia(1)";
 	static constexpr const char *Categories = "";
 
