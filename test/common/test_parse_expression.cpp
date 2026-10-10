@@ -128,3 +128,38 @@ TEST_CASE("Standalone parser options can be customized", "[parse_expression]") {
 	REQUIRE(expressions[0]->Cast<ColumnRefExpression>().GetColumnName().GetIdentifierName() == "MIXEDCASE");
 	REQUIRE(expressions[1]->Cast<FunctionExpression>().GetQualifiedName().Name() == "//");
 }
+
+TEST_CASE("Parser::Tokenize does not emit trailing token beyond input", "[parse_expression]") {
+	std::vector<string> test_queries = {"select 1", "select 1;", "create table zebra (bar varchar);", "", "  "};
+	for (const auto &sql : test_queries) {
+		auto tokens = Parser::Tokenize(sql);
+		for (const auto &token : tokens) {
+			REQUIRE(token.start < sql.size());
+		}
+	}
+	// "select 1" has 8 chars -> 2 tokens: "select" (start index 0) and "1" (start index 7)
+	auto tokens = Parser::Tokenize("select 1");
+	REQUIRE(tokens.size() == 2);
+	REQUIRE(tokens[0].start == 0);
+	REQUIRE(tokens[0].type == SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD);
+	REQUIRE(tokens[1].start == 7);
+	REQUIRE(tokens[1].type == SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT);
+
+	// "select 1;" has 9 chars -> 3 tokens: "select" (start index 0), "1" (start index 7), ";" (start index 8)
+	tokens = Parser::Tokenize("select 1;");
+	REQUIRE(tokens.size() == 3);
+	REQUIRE(tokens[0].start == 0);
+	REQUIRE(tokens[0].type == SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD);
+	REQUIRE(tokens[1].start == 7);
+	REQUIRE(tokens[1].type == SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT);
+	REQUIRE(tokens[2].start == 8);
+	REQUIRE(tokens[2].type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR);
+
+	// empty input produces 0 tokens
+	tokens = Parser::Tokenize("");
+	REQUIRE(tokens.empty());
+
+	// whitespace-only input produces 0 tokens
+	tokens = Parser::Tokenize("  ");
+	REQUIRE(tokens.empty());
+}
