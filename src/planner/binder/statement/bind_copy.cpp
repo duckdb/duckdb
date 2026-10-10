@@ -480,7 +480,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			if (option_values.empty()) {
 				throw BinderException("BATCHES_PER_FILE/ROW_GROUPS_PER_FILE cannot be empty");
 			}
-			parsed_options.batches_per_file = option_values[0].GetValue<uint64_t>();
+			auto batches_per_file = option_values[0].GetValue<uint64_t>();
+			if (batches_per_file == 0 || batches_per_file == DConstants::INVALID_INDEX) {
+				throw BinderException("BATCHES_PER_FILE/ROW_GROUPS_PER_FILE must be a positive number");
+			}
+			parsed_options.batches_per_file = batches_per_file;
 		} else if (option_name == "partition_by") {
 			auto converted = ConvertVectorToValue(std::move(option_values));
 			parsed_options.partition_cols = ParseColumnsOrdered(converted, select_node.names, option_name);
