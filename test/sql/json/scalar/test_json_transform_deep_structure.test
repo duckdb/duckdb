@@ -1,0 +1,24 @@
+# name: test/sql/json/scalar/test_json_transform_deep_structure.test
+# description: json_transform with a very deeply nested structure errors instead of overflowing the stack
+# group: [scalar]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT json_transform('1', repeat('{"a":', 6000) || '"VARCHAR"' || repeat('}', 6000));
+----
+<REGEX>:Binder Error.*maximum recursion depth.*
+
+statement error
+SELECT json_transform('1', repeat('[', 6000) || '"VARCHAR"' || repeat(']', 6000));
+----
+<REGEX>:Binder Error.*maximum recursion depth.*
+
+# nesting within the limit keeps working
+query I
+SELECT json_transform(repeat('[', 100) || '1' || repeat(']', 100), repeat('[', 100) || '"INTEGER"' || repeat(']', 100)) IS NOT NULL;
+----
+true
