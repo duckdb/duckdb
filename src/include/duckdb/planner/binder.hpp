@@ -184,6 +184,8 @@ private:
 struct GlobalBinderState {
 	//! The count of bound_tables
 	idx_t bound_tables = 0;
+	//! The number of lambda parameters generated for macro arguments that are evaluated once
+	idx_t macro_argument_count = 0;
 	//! Statement properties
 	StatementProperties prop;
 	//! Binding mode
