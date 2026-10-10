@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -525,6 +526,22 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			source->column_name_alias.emplace_back(column.Name());
 		}
 	}
+	// cast the conflict columns to the column types, so conflicts are detected in the type of the table
+	auto cast_star = make_uniq<StarExpression>();
+	for (auto &distinct_on_columns : all_distinct_on_columns) {
+		for (auto &col : distinct_on_columns) {
+			auto &col_type = columns.GetColumn(col).Type();
+			cast_star->ReplaceListMutable()[col] =
+			    make_uniq<CastExpression>(col_type, make_uniq<ColumnRefExpression>(col));
+		}
+	}
+	auto cast_stmt = make_uniq<SelectStatement>();
+	auto cast_node = make_uniq<SelectNode>();
+	cast_node->select_list.push_back(std::move(cast_star));
+	cast_node->from_table = std::move(source);
+	cast_stmt->node = std::move(cast_node);
+	source = make_uniq<SubqueryRef>(std::move(cast_stmt), "excluded");
+
 	// push DISTINCT ON(unique_columns)
 	for (auto &distinct_on_columns : all_distinct_on_columns) {
 		auto distinct_stmt = make_uniq<SelectStatement>();
