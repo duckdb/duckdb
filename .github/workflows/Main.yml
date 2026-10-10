@@ -193,7 +193,7 @@ jobs:
           if [[ "${{ github.event_name }}" != "pull_request" || "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
             extra_exclude_archs=
           else
-            extra_exclude_archs=windows_amd64\;wasm_eh
+            extra_exclude_archs=windows_amd64\;wasm_base
           fi
 
           echo "extra_exclude_archs=$extra_exclude_archs" >> "$GITHUB_OUTPUT"
@@ -447,7 +447,7 @@ jobs:
           toolchain: main
         rust:
           config: duckdb/.github/config/rust_based_extensions.cmake
-          default_exclude_archs: wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64_mingw;linux_amd64_musl
+          default_exclude_archs: wasm_base;wasm_threads;windows_amd64_rtools;windows_amd64_mingw;linux_amd64_musl
           toolchain: rust
       extension_repository: duckdb/extension-template
       extension_ref: main
@@ -636,9 +636,9 @@ jobs:
           path: extension_entries.hpp.diff
           if-no-files-found: error
 
- wasm-eh:
-    name: Wasm EH
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'wasm-eh') }}
+ wasm-base:
+    name: Wasm base
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'wasm-base') }}
     needs:
       - prepare
       - linux-relassert
@@ -663,7 +663,7 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
       with:
-        key: wasm-eh-emscripten-6.0.9
+        key: wasm-base-emscripten-6.0.9
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Build
@@ -1382,7 +1382,7 @@ jobs:
       - tidy-check
       - extensions-build
       - extensions-deploy
-      - wasm-eh
+      - wasm-base
       - linux-release
       - codecov
       - linux-release-tests
