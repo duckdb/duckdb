@@ -66,6 +66,7 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &deserializer) {
 	if (type == QueryNodeType::CTE_NODE) {
 		result = std::move(result->Cast<CTENode>().child);
 	}
+	QueryNode::VerifyDeserialized(result);
 	return result;
 }
 
