@@ -1,0 +1,53 @@
+# name: test/sql/types/variant/list_copy_shredded_variant_child.test
+# description: Copying list children whose child vector is a shredded VARIANT
+# group: [variant]
+
+# Casting a scanned column to VARIANT[] produces a list with a SHREDDED VARIANT child.
+# Functions that copy the list child (list_concat, ||, list_resize, list_append, list_prepend)
+# must only read the rows that belong to the copied range, not twice the offset.
+
+statement ok
+CREATE TABLE t AS SELECT [NULL::INT] x FROM range(3000);
+
+query I
+SELECT count(list_concat(x::VARIANT[], [])) FROM t;
+----
+3000
+
+query I
+SELECT count(list_concat([], x::VARIANT[])) FROM t;
+----
+3000
+
+query I
+SELECT count(x::VARIANT[] || x::VARIANT[]) FROM t;
+----
+3000
+
+query I
+SELECT count(list_resize(x::VARIANT[], 3)) FROM t;
+----
+3000
+
+query I
+SELECT count(list_append(x::VARIANT[], NULL::VARIANT)) FROM t;
+----
+3000
+
+query I
+SELECT count(list_prepend(NULL::VARIANT, x::VARIANT[])) FROM t;
+----
+3000
+
+# values are copied correctly for every row (non-zero offsets)
+statement ok
+CREATE TABLE u AS SELECT i, [i, i + 1]::VARIANT[] x FROM range(5) t(i);
+
+query II
+SELECT i, list_concat(x, [99]::VARIANT[])::VARCHAR FROM u ORDER BY i;
+----
+0	[0, 1, 99]
+1	[1, 2, 99]
+2	[2, 3, 99]
+3	[3, 4, 99]
+4	[4, 5, 99]
