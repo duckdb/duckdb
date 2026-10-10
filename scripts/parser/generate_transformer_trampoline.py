@@ -13,6 +13,7 @@ from grammar_types import (
     load_grammar_types,
     load_matcher_rule_overrides,
     load_collapsible_rules,
+    load_expression_depth_rules,
     load_packrat_memoized_rules,
 )
 from transformer_trampoline_config import (
@@ -97,6 +98,8 @@ PACKRAT_START_BLOCK = SEPARATOR + "\t// START GENERATED PACKRAT MEMOIZED RULES\n
 PACKRAT_END_BLOCK = SEPARATOR + "\t// END GENERATED PACKRAT MEMOIZED RULES\n" + SEPARATOR
 COLLAPSIBLE_START_BLOCK = SEPARATOR + "\t// START GENERATED COLLAPSIBLE RULES\n" + SEPARATOR
 COLLAPSIBLE_END_BLOCK = SEPARATOR + "\t// END GENERATED COLLAPSIBLE RULES\n" + SEPARATOR
+DEPTH_START_BLOCK = SEPARATOR + "\t// START GENERATED EXPRESSION DEPTH RULES\n" + SEPARATOR
+DEPTH_END_BLOCK = SEPARATOR + "\t// END GENERATED EXPRESSION DEPTH RULES\n" + SEPARATOR
 RESULT_TYPE_SEPARATOR = "//===--------------------------------------------------------------------===//\n"
 RESULT_TYPE_START_BLOCK = RESULT_TYPE_SEPARATOR + "// START GENERATED TRANSFORM RESULT TYPES\n" + RESULT_TYPE_SEPARATOR
 RESULT_TYPE_END_BLOCK = RESULT_TYPE_SEPARATOR + "// END GENERATED TRANSFORM RESULT TYPES\n" + RESULT_TYPE_SEPARATOR
@@ -254,7 +257,7 @@ def typed_result_expr(cpp_type, expr, by_value):
     move_expr = expr if by_value else expr
     if by_value:
         move_expr = f"std::move({expr})"
-    return f"make_uniq<TypedTransformResult<{cpp_type}>>({move_expr})"
+    return f"transformer.MakeResult<{cpp_type}>({move_expr})"
 
 
 class RuleCapabilityStatus(Enum):
@@ -374,7 +377,7 @@ class UseGramPreviewEmitter:
                 f"\tstatic void {init_name(rule_name)}(PEGTransformer &transformer, GeneratedTransformProcess &process);\n"
             )
             lines.append(
-                f"\tstatic unique_ptr<TransformResultValue> {finalize_name(rule_name)}(PEGTransformer &transformer, "
+                f"\tstatic arena_ptr<TransformResultValue> {finalize_name(rule_name)}(PEGTransformer &transformer, "
                 f"GeneratedTransformProcess &process);\n"
             )
         lines.append(
@@ -382,7 +385,7 @@ class UseGramPreviewEmitter:
             "GeneratedTransformProcess &process);\n"
         )
         lines.append(
-            "\tstatic unique_ptr<TransformResultValue> "
+            "\tstatic arena_ptr<TransformResultValue> "
             "FinalizeIdentifierOrKeywordTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);\n"
         )
         for rule_name in self.emitted_rules():
@@ -393,7 +396,7 @@ class UseGramPreviewEmitter:
                 f"GeneratedTransformProcess &process);\n"
             )
             lines.append(
-                f"\tstatic unique_ptr<TransformResultValue> {self.finalize_hook(rule_name)}(PEGTransformer &transformer, "
+                f"\tstatic arena_ptr<TransformResultValue> {self.finalize_hook(rule_name)}(PEGTransformer &transformer, "
                 f"GeneratedTransformProcess &process);\n"
             )
         for rule_name in self.emitted_rules():
@@ -592,14 +595,14 @@ class UseGramPreviewEmitter:
             lines.append("\tauto child_rule = choice_result.GetRule();")
             lines.append("\tif (!child_rule) {")
             lines.append(
-                "\t\tthrow InternalException(\"No transform process registered for rule '%s'\", choice_result.name);"
+                "\t\tthrow InternalException(\"No transform process registered for rule '%s'\", choice_result.Name());"
             )
             lines.append("\t}")
             lines.append("\tprocess.PushChild({*child_rule, choice_result}, 0);")
             lines.append("}")
             lines.append("")
             lines.append(
-                f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+                f"arena_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
                 f"GeneratedTransformProcess &process) {{"
             )
             lines.append(f"\tauto result = process.TakeResult<{cpp_type}>(0);")
@@ -618,7 +621,7 @@ class UseGramPreviewEmitter:
         lines.append("}")
         lines.append("")
         lines.append(
-            "unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline("
+            "arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline("
             "PEGTransformer &transformer, GeneratedTransformProcess &process) {"
         )
         lines.append("\tauto result = TransformIdentifierOrKeyword(transformer, process.parse_result);")
@@ -667,7 +670,7 @@ class UseGramPreviewEmitter:
         lines.append("}")
         lines.append("")
         lines.append(
-            f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+            f"arena_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"GeneratedTransformProcess &process) {{"
         )
         lines.append(f"\tauto result = {result_expr};")
@@ -861,7 +864,7 @@ class UseGramPreviewEmitter:
         lines = self.emit_sequence_initialize(rule_name, sequence_ast)
         lines.append("")
         lines.append(
-            f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+            f"arena_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"GeneratedTransformProcess &process) {{"
         )
         lines.extend(self.emit_sequence_forward_finalize_body(rule_name, plan, child_arg))
@@ -876,7 +879,7 @@ class UseGramPreviewEmitter:
         literal_values = literal_string_values(ast)
         lines.append("")
         lines.append(
-            f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+            f"arena_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"GeneratedTransformProcess &process) {{"
         )
         if self.is_parse_result_syntax_only_rule(rule_name, ast):
@@ -928,7 +931,7 @@ class UseGramPreviewEmitter:
         )
         lines.append("")
         lines.append(
-            f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+            f"arena_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"GeneratedTransformProcess &process) {{"
         )
         if self.is_parse_result_manual_choice_rule(rule_name, ast):
@@ -1047,7 +1050,7 @@ class UseGramPreviewEmitter:
         )
         if self.cpp_type(rule_name) == "Identifier":
             direct_conditions = [
-                "choice_result.name.empty()",
+                "choice_result.Name().empty()",
                 "choice_result.type == ParseResultType::IDENTIFIER",
                 "choice_result.type == ParseResultType::KEYWORD",
                 "choice_result.type == ParseResultType::STRING",
@@ -1056,7 +1059,7 @@ class UseGramPreviewEmitter:
             lines.append("\t\treturn;")
             lines.append("\t}")
             if direct_string_names:
-                direct_string_conditions = [f'choice_result.name == "{name}"' for name in direct_string_names]
+                direct_string_conditions = [f'choice_result.Name() == "{name}"' for name in direct_string_names]
                 lines.append("\tif (!has_transform_process && (" + " || ".join(direct_string_conditions) + ")) {")
                 lines.append("\t\treturn;")
                 lines.append("\t}")
@@ -1071,12 +1074,12 @@ class UseGramPreviewEmitter:
             lines.append("\t\treturn;")
             lines.append("\t}")
             if external_string_names:
-                external_string_conditions = [f'choice_result.name == "{name}"' for name in external_string_names]
+                external_string_conditions = [f'choice_result.Name() == "{name}"' for name in external_string_names]
                 lines.append("\tif (!has_transform_process && (" + " || ".join(external_string_conditions) + ")) {")
                 lines.append("\t\treturn;")
                 lines.append("\t}")
         if syntax_only_alternatives:
-            syntax_only_conditions = [f'choice_result.name == "{name}"' for name in syntax_only_alternatives]
+            syntax_only_conditions = [f'choice_result.Name() == "{name}"' for name in syntax_only_alternatives]
             lines.append("\tif (!has_transform_process && (" + " || ".join(syntax_only_conditions) + ")) {")
             lines.append("\t\treturn;")
             lines.append("\t}")
@@ -1099,7 +1102,7 @@ class UseGramPreviewEmitter:
         else:
             lines.append("\tif (!has_transform_process) {")
             lines.append(
-                "\t\tthrow InternalException(\"No transform process registered for rule '%s'\", choice_result.name);"
+                "\t\tthrow InternalException(\"No transform process registered for rule '%s'\", choice_result.Name());"
             )
             lines.append("\t}")
         lines.append("\tprocess.PushChild({*child_rule, choice_result}, 0);")
@@ -1122,7 +1125,7 @@ class UseGramPreviewEmitter:
 
         lines.append("")
         lines.append(
-            f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+            f"arena_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"GeneratedTransformProcess &process) {{"
         )
         child_arg = self.auto_sequence_forward_child(rule_name, plan)
@@ -1562,6 +1565,21 @@ def write_collapsible_rules(collapsible_rules):
     print(f"Updated {transformer_factory_cpp_path}")
 
 
+def write_expression_depth_rules(nesting_rules, chain_rules):
+    content = transformer_factory_cpp_path.read_text()
+    lines = [f'\tgrammar.SetExpressionDepth("{rule}", ExpressionDepthKind::NESTING);\n' for rule in nesting_rules]
+    lines += [f'\tgrammar.SetExpressionDepth("{rule}", ExpressionDepthKind::CHAIN);\n' for rule in chain_rules]
+    content = replace_generated_block(
+        content,
+        DEPTH_START_BLOCK,
+        DEPTH_END_BLOCK,
+        "".join(lines),
+        transformer_factory_cpp_path,
+    )
+    transformer_factory_cpp_path.write_text(content)
+    print(f"Updated {transformer_factory_cpp_path}")
+
+
 def generate_transform_result_types(rule_types, additional_result_types):
     result_types = sorted({info.cpp_type for info in rule_types.values()}.union(additional_result_types))
     lines = []
@@ -1612,6 +1630,7 @@ def main():
         collapsible_rules = load_collapsible_rules(grammar_types_file, emitter.emitted_ops_rules())
         write_packrat_memoized_rules(packrat_rules)
         write_collapsible_rules(collapsible_rules)
+        write_expression_depth_rules(*load_expression_depth_rules(grammar_types_file, all_rules.keys()))
     elif args.report:
         print(f"grammar files: {', '.join(grammar_files)}")
         print(emitter.emit_report())

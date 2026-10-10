@@ -11,6 +11,12 @@
 			]
 		},
 		{
+			"reason": "Asserts that a non-shreddable VARIANT overlay is scanned as a FLAT_VECTOR; this config forces all vectors to be shredded",
+			"paths": [
+				"test/issues/general/test_24298.test"
+			]
+		},
+		{
 			"reason": "Shredding a VARIANT nested thousands of levels deep recurses past the stack before the function runs",
 			"paths": [
 				"test/sql/types/variant/variant_contains_deep.test"
