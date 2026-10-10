@@ -1,0 +1,38 @@
+# name: test/sql/function/timestamp/make_timestamp_range.test
+# description: make_timestamp(micros) and make_timestamptz(micros) reject values below the minimum timestamp
+# group: [timestamp]
+
+require icu
+
+statement ok
+SET TimeZone = 'UTC'
+
+query II
+SELECT make_timestamp(-9223372022400000000)::VARCHAR, make_timestamptz(-9223372022400000000)::VARCHAR
+----
+290309-12-22 (BC) 00:00:00	290309-12-22 (BC) 00:00:00+00
+
+statement error
+SELECT make_timestamp(-9223372022400000001)
+----
+Timestamp microseconds out of range
+
+statement error
+SELECT make_timestamp(-9223372036854775808)
+----
+Timestamp microseconds out of range
+
+statement error
+SELECT make_timestamptz(-9223372030000000000)
+----
+Timestamp microseconds out of range
+
+statement error
+SELECT make_timestamptz(-9223372036854775808)
+----
+Timestamp microseconds out of range
+
+query I
+SELECT make_timestamp(9223372036854775806)::VARCHAR
+----
+294247-01-10 04:00:54.775806

@@ -110,7 +110,7 @@ struct MakeTimestampOperator {
 	template <typename T, typename RESULT_TYPE>
 	static RESULT_TYPE Operation(T value) {
 		const auto result = RESULT_TYPE(value);
-		if (!result.IsFinite()) {
+		if (!result.IsFinite() || !result.IsValid()) {
 			throw ConversionException("Timestamp microseconds out of range: %ld", value);
 		}
 		return RESULT_TYPE(value);
