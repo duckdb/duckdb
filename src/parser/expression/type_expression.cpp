@@ -111,7 +111,7 @@ string TypeExpression::ToString() const {
 				PushChild(stack, *params[0]);
 				stack.push_back(StackItem {nullptr, "MAP("});
 			} else if (qual.empty() && type_name == "VARCHAR" && !params.empty() && params.back()->HasAlias() &&
-			         params.back()->GetAlias() == "collation") {
+			           params.back()->GetAlias() == "collation") {
 				// Special case for VARCHAR with collation
 				auto &collate_expr = params.back()->Cast<ConstantExpression>();
 				stack.push_back(StackItem {

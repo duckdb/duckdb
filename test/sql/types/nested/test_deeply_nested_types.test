@@ -28,3 +28,9 @@ INTEGER[][][][][]
 # Collation propagation on nested LIST
 statement ok
 SELECT list_contains(CAST(NULL AS VARCHAR[][][][][]), 'abc' COLLATE NOCASE);
+
+# Mixed STRUCT, MAP, UNION, LIST and ARRAY nesting (parsed and bound type names)
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT CAST(NULL AS STRUCT(a INTEGER[3], "b c" MAP(VARCHAR, UNION(x INTEGER, y VARCHAR[]))[])[][2]));
+----
+CAST(NULL AS STRUCT(a INTEGER[3], "b c" MAP(VARCHAR, UNION(x INTEGER, y VARCHAR[]))[])[][2])	STRUCT(a INTEGER[3], "b c" MAP(VARCHAR, UNION(x INTEGER, y VARCHAR[]))[])[][2]
