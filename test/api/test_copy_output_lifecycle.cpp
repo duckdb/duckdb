@@ -381,7 +381,7 @@ TEST_CASE("Partitioned COPY bounds overlapping input and wakes combined producer
 	    *info, std::async(std::launch::async, [&]() { return copy.Sink(second_context, second_chunk, second_input); }));
 	if (!info->WaitForFlush()) {
 		if (stalled.sink.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-			stalled.sink.get();
+			(void)stalled.sink.get();
 		}
 		FAIL("The first flush did not reach the stall");
 	}

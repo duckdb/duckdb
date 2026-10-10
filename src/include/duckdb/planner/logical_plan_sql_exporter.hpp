@@ -28,7 +28,7 @@ struct LogicalPlanSQLExportField {
 	//! Type represented by the exported SQL expression.
 	LogicalType type;
 	//! Optimizer-selected type accepted from the bound plan, when different.
-	optional<LogicalType> optimizer_type;
+	optional<LogicalType> optimizer_type = {};
 };
 
 struct LogicalPlanSQLExportRelation {
