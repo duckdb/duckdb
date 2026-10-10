@@ -719,13 +719,7 @@ vector<Value> BindCopyOption(ClientContext &context, Binder &binder, const Ident
 			return result;
 		}
 	}
-	const bool is_partition_by = name == "partition_by";
 	TableFunctionBinder option_binder(binder, context, "Copy", "Copy options", conversion_policy);
-
-	if (is_partition_by) {
-		// Partition columns such as 'user' must not resolve to SQL value functions.
-		option_binder.DisableSQLValueFunctions();
-	}
 	auto bound_expr = option_binder.Bind(expr);
 	if (bound_expr->HasParameter()) {
 		throw ParameterNotResolvedException();
@@ -804,7 +798,7 @@ void Binder::BindCopyOptions(CopyInfo &info, const CopyFunction &function) {
 			partition_path = std::move(option_expr);
 			continue;
 		}
-		// column list options accept bare column names
+		// column list options accept bare column names, also ones that spell a SQL value function such as user
 		auto copy_option = copy_options.find(option_name);
 		const bool is_column_list =
 		    copy_option != copy_options.end() && copy_option->second.type == LogicalType::LIST(LogicalType::VARCHAR);
