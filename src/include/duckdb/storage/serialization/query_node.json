@@ -35,11 +35,6 @@
     "includes": [
       "duckdb/parser/tableref/emptytableref.hpp"
     ],
-    "finalize_deserialization": [
-      "if (!result->from_table) {",
-      "\tresult->from_table = make_uniq<EmptyTableRef>();",
-      "}"
-    ],
     "members": [
       {
         "id": 200,
@@ -88,6 +83,18 @@
         "name": "qualify",
         "type": "ParsedExpression*"
       }
+    ],
+    "finalize_deserialization": [
+      "if (!result->from_table) {",
+      "\tresult->from_table = make_uniq<EmptyTableRef>();",
+      "}",
+      "for (auto &grouping_set : result->groups.grouping_sets) {",
+      "\tfor (auto &group_index : grouping_set) {",
+      "\t\tif (!group_index.IsValid() || group_index.GetIndex() >= result->groups.group_expressions.size()) {",
+      "\t\t\tthrow SerializationException(\"Grouping set refers to a group that does not exist\");",
+      "\t\t}",
+      "\t}",
+      "}"
     ]
   },
   {

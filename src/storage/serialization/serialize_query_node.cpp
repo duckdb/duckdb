@@ -222,6 +222,13 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &deserializer) {
 	if (!result->from_table) {
 		result->from_table = make_uniq<EmptyTableRef>();
 	}
+	for (auto &grouping_set : result->groups.grouping_sets) {
+		for (auto &group_index : grouping_set) {
+			if (!group_index.IsValid() || group_index.GetIndex() >= result->groups.group_expressions.size()) {
+				throw SerializationException("Grouping set refers to a group that does not exist");
+			}
+		}
+	}
 	return std::move(result);
 }
 
