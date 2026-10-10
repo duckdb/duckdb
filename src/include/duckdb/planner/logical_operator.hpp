@@ -92,6 +92,14 @@ public:
 
 	virtual unique_ptr<LogicalOperator> Copy(ClientContext &context) const;
 
+	//! Copy a supported native query tree in the same live context, without rebinding scans.
+	//! Preserves scan bind data and cardinality caches; expression function state follows ordinary
+	//! Copy's serialize-or-rebind contract. It is not an Expression::Copy clone of expression bind data.
+	//! Use only when that expression reconstruction is valid for the plan. Rejects unsupported process-local/shared
+	//! state and noncopyable bind data; never falls back to ordinary serialization-based Copy.
+	//! Registered function definitions and external storage follow FunctionData::Copy's lifetime contract.
+	unique_ptr<LogicalOperator> CopyPreservingBoundState(ClientContext &context) const;
+
 	virtual bool RequireOptimizer() const {
 		return true;
 	}
