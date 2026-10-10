@@ -497,6 +497,22 @@ struct DecimalCastData {
 	StoreType limit;
 };
 
+//! StoreType max/min divided by 10, for the overflow check in DecimalCastOperation::HandleDigit.
+//! Function-local statics so each division runs once per instantiation rather than once per
+//! digit: hugeint_t::operator/ is not constexpr, so NumericLimits<T>::Maximum() / 10 is a real
+//! 128-bit division (Hugeint::DivMod) that the compiler cannot fold away.
+template <class T>
+struct DecimalCastDiv10 {
+	static const T Min() {
+		static const T value = UnsafeNumericCast<T>(NumericLimits<T>::Minimum() / 10);
+		return value;
+	}
+	static const T Max() {
+		static const T value = UnsafeNumericCast<T>(NumericLimits<T>::Maximum() / 10);
+		return value;
+	}
+};
+
 struct DecimalCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleDigit(T &state, uint8_t digit) {
@@ -510,12 +526,12 @@ struct DecimalCastOperation {
 		}
 		state.digit_count++;
 		if (NEGATIVE) {
-			if (state.result < (NumericLimits<typename T::StoreType>::Minimum() / 10)) {
+			if (state.result < DecimalCastDiv10<typename T::StoreType>::Min()) {
 				return false;
 			}
 			state.result = state.result * 10 - digit;
 		} else {
-			if (state.result > (NumericLimits<typename T::StoreType>::Maximum() / 10)) {
+			if (state.result > DecimalCastDiv10<typename T::StoreType>::Max()) {
 				return false;
 			}
 			state.result = state.result * 10 + digit;
