@@ -224,3 +224,14 @@ query I
 SELECT decimal_division(127, 4.00, 2);
 ----
 31.75
+
+# Arguments in different physical tiers resolve to the same result type when the plan is deserialized
+query II
+SELECT decimal_division(1.5::DECIMAL(18,1), 4.00), typeof(decimal_division(1.5::DECIMAL(18,1), 4.00));
+----
+0.375000	DECIMAL(25,6)
+
+query II
+SELECT decimal_division(1::BIGINT, 4.00), typeof(decimal_division(1::BIGINT, 4.00));
+----
+0.250000	DECIMAL(27,6)
