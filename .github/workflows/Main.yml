@@ -55,26 +55,26 @@ jobs:
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64;job.priority=2' || 'ubuntu-latest' }}
     outputs:
       duckdb_commit: ${{ steps.version.outputs.duckdb_commit }}
-      runner_linux_small: ${{ fromJSON(steps.selection.outputs.runners).linux_small }}
-      runner_linux_x64: ${{ fromJSON(steps.selection.outputs.runners).linux_x64 }}
-      runner_linux_22_x64: ${{ fromJSON(steps.selection.outputs.runners).linux_22_x64 }}
-      runner_linux_arm64: ${{ fromJSON(steps.selection.outputs.runners).linux_arm64 }}
-      runner_windows_2022_x64: ${{ fromJSON(steps.selection.outputs.runners).windows_2022_x64 }}
-      runner_macos_arm64: ${{ fromJSON(steps.selection.outputs.runners).macos_arm64 }}
-      runner_macos_14_arm64: ${{ fromJSON(steps.selection.outputs.runners).macos_14_arm64 }}
-      runners: ${{ steps.selection.outputs.runners }}
+      runner_linux_small: ${{ fromJSON(steps.config.outputs.runners).linux_small }}
+      runner_linux_x64: ${{ fromJSON(steps.config.outputs.runners).linux_x64 }}
+      runner_linux_22_x64: ${{ fromJSON(steps.config.outputs.runners).linux_22_x64 }}
+      runner_linux_arm64: ${{ fromJSON(steps.config.outputs.runners).linux_arm64 }}
+      runner_windows_2022_x64: ${{ fromJSON(steps.config.outputs.runners).windows_2022_x64 }}
+      runner_macos_arm64: ${{ fromJSON(steps.config.outputs.runners).macos_arm64 }}
+      runner_macos_14_arm64: ${{ fromJSON(steps.config.outputs.runners).macos_14_arm64 }}
+      runners: ${{ steps.config.outputs.runners }}
       images: ${{ steps.config.outputs.images }}
       image_version: ${{ steps.config.outputs.image_version }}
-      linux_release_matrix: ${{ steps.selection.outputs.linux_release_matrix }}
-      linux_musl_matrix: ${{ steps.selection.outputs.linux_musl_matrix }}
+      linux_release_matrix: ${{ steps.config.outputs.linux_release_matrix }}
+      linux_musl_matrix: ${{ steps.config.outputs.linux_musl_matrix }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
       changed_tests_files: ${{ steps.changed.outputs.tests_all_changed_files }}
       changed_slow_tests_files: ${{ steps.changed.outputs.tests_slow_all_changed_files }}
       run_slow_tests: ${{ steps.config.outputs.run_slow_tests }}
       extensions_extra_exclude_archs: ${{ steps.config.outputs.extra_exclude_archs }}
-      enabled_jobs: ${{ steps.selection.outputs.enabled_jobs }}
-      save_cache: ${{ steps.selection.outputs.save_cache }}
-      reduced_ci_mode: ${{ steps.selection.outputs.reduced_ci_mode }}
+      enabled_jobs: ${{ steps.config.outputs.enabled_jobs }}
+      save_cache: ${{ steps.config.outputs.save_cache }}
+      reduced_ci_mode: ${{ steps.config.outputs.reduced_ci_mode }}
       runner_provider: ${{ steps.runners.outputs.runner_provider }}
       skip_tests: ${{ steps.config.outputs.skip_tests }}
       duckdb_version: ${{ steps.version.outputs.duckdb_version }}
@@ -143,6 +143,7 @@ jobs:
         id: changed
         uses: tj-actions/changed-files@v47
         with:
+          separator: "\n"
           files_yaml: |
             github:
               - .github/**
@@ -159,14 +160,23 @@ jobs:
             tests_slow:
               - test/**/*.cpp
               - test/**/*.test_slow
+            format:
+              - CMakeLists.txt
+              - src/**
+              - benchmark/**
+              - test/**
+              - tools/**
+              - examples/**
+              - extension/**
+              - scripts/**
 
       - name: Lint CI
         if: steps.changed.outputs.github_any_changed == 'true'
         timeout-minutes: 10
         uses: duckdb/duckdb-ci/lint-ci@main
 
-      - name: Select CI jobs
-        id: selection
+      - name: Configure CI
+        id: config
         shell: bash
         run: |
           skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
@@ -180,11 +190,6 @@ jobs:
             --reduced-ci-mode "${{ (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.run_all)) && 'enabled' || 'disabled' }}" \
             --runners '${{ steps.runners.outputs.runners }}' \
             --runner-provider '${{ steps.runners.outputs.runner_provider }}'
-
-      - name: Configure CI
-        id: config
-        run: |
-          make test_ci
 
           # clang-cl Windows extension builds are not yet stable, skip them on pull requests
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
@@ -203,7 +208,6 @@ jobs:
             run_slow_tests=false
           fi
           echo "run_slow_tests=$run_slow_tests" >> "$GITHUB_OUTPUT"
-          skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
           echo "skip_tests=$skip_tests" >> "$GITHUB_OUTPUT"
 
           image_version="$(<scripts/ci/image_version.txt)"
@@ -226,25 +230,23 @@ jobs:
             echo "images=$images"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Install tools
-        timeout-minutes: 10
-        run: python3 scripts/ci/retry.py --timeout 2m -- make -j4 format_tools
-
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      - name: Install C API header generation tools
+      - name: Run prepare checks
+        timeout-minutes: 10
+        env:
+          CHANGED_FORMAT_FILES: ${{ steps.changed.outputs.format_all_changed_files }}
         run: |
-          python3 -m pip install -U pip
-          python3 -m pip install --group api_spec/pyproject.toml:generate
-          python3 -m pip install cxxheaderparser pcpp
-
-      - name: Check format
-        run: |
-          make format-check-silent enum-integrity-check extension-patch-check -j -Otarget
+          python3 scripts/ci/retry.py --timeout 2m -- make -j4 prepare_tools
+          printf '%s\n' "$CHANGED_FORMAT_FILES" > "$RUNNER_TEMP/changed-format-files.txt"
+          PYTHON=.cache/prepare-venv/bin/python \
+            make test_ci generate-files extension-patch-check -j "$(nproc)" -Otarget
+          PYTHON=.cache/prepare-venv/bin/python \
+            FORMAT_FILES_FROM="$RUNNER_TEMP/changed-format-files.txt" \
+            make format-check-files enum-integrity-check -j "$(nproc)" -Otarget
           echo "::group::Check generated files"
-          make generate-files
           git diff --exit-code
           echo "::endgroup::"
 
@@ -273,7 +275,7 @@ jobs:
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-        fetch_depth: 0
+        fetch_depth: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}
         ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
     - uses: ./.github/actions/ccache-action
@@ -380,7 +382,7 @@ jobs:
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-        fetch_depth: 0
+        fetch_depth: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}
         ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
     - name: Tidy Check (clangd)
@@ -689,7 +691,7 @@ jobs:
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-        fetch_depth: 0
+        fetch_depth: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}
         ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
     - uses: ./.github/actions/ccache-action
@@ -906,7 +908,7 @@ jobs:
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-        fetch_depth: 0
+        fetch_depth: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}
         ref: ${{ needs.prepare.outputs.duckdb_commit }}
 
     - name: Download linux release artifact
