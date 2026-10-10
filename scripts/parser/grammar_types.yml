@@ -515,6 +515,7 @@ Expression:
     - NoneLiteral
     - NumberLiteral
     - TypeVariations
+    - NestedType
     - TimeType
     - NumericType
     - SimpleNumericType
@@ -1613,8 +1614,12 @@ BinaryExpressionTail:
 
 overrides:
   # common.gram
-  ColIdType: "pair<Identifier, LogicalType>"
-  ColIdTypeList: "child_list_t<LogicalType>"
+  ColIdType:
+    type: "pair<Identifier, unique_ptr<ParsedExpression>>"
+    by_value: true
+  ColIdTypeList:
+    type: "vector<pair<Identifier, unique_ptr<ParsedExpression>>>"
+    by_value: true
   # create_index.gram
   RelOption:
     type: "pair<Identifier, unique_ptr<ParsedExpression>>"
@@ -1847,6 +1852,7 @@ matcher_rule_overrides:
 expression_depth_nesting_rules:
   - SingleExpression
   - Type
+  - NestedType
 
 expression_depth_chain_rules:
   - LambdaArrowExpression
