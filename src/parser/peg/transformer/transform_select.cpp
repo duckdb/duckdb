@@ -4,6 +4,7 @@
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression_map.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/peg/ast/distinct_clause.hpp"
 #include "duckdb/parser/peg/ast/join_prefix.hpp"
 #include "duckdb/parser/peg/ast/join_qualifier.hpp"
@@ -851,6 +852,7 @@ LimitPercentResult PEGTransformerFactory::TransformLimitExpression(PEGTransforme
 
 struct GroupingExpressionMap {
 	parsed_expression_map_t<ProjectionIndex> map;
+	idx_t max_expression_depth;
 };
 
 static void CheckGroupingSetMax(idx_t count) {
@@ -878,6 +880,8 @@ static GroupingSet VectorToGroupingSet(vector<ProjectionIndex> &indexes) {
 
 void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
                                                  GroupByNode &result, vector<ProjectionIndex> &result_set) {
+	// hashing into the map recurses, so reject an over-deep expression first
+	Parser::VerifyExpressionDepth(*expression, map.max_expression_depth);
 	if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &func = expression->Cast<FunctionExpression>();
 		if (func.FunctionName() == "row") {
@@ -971,6 +975,7 @@ GroupByNode PEGTransformerFactory::TransformGroupByList(PEGTransformer &transfor
                                                         vector<GroupByExpressionInfo> group_by_expression) {
 	GroupByNode result;
 	GroupingExpressionMap map;
+	map.max_expression_depth = transformer.options.max_expression_depth;
 
 	for (auto &group_by_expr : group_by_expression) {
 		vector<GroupingSet> next_sets = GroupByExpressionUnfolding(group_by_expr, map, result);
