@@ -383,6 +383,18 @@ ParquetVariantIterator::ParquetVariantIterator(Vector &metadata_vec) : metadata(
 void ParquetVariantIterator::BeginRow(idx_t row) {
 	current_row = row;
 	current_metadata.reset();
+	binary_value_budget = 0;
+}
+
+void ParquetVariantIterator::AddBinaryValueBudget(idx_t blob_size) const {
+	binary_value_budget += blob_size;
+}
+
+void ParquetVariantIterator::ConsumeBinaryValueBudget() const {
+	if (binary_value_budget == 0) {
+		throw IOException("Corrupted VARIANT 'value' buffer, nested values share their data");
+	}
+	binary_value_budget--;
 }
 
 const VariantMetadata &ParquetVariantIterator::GetMetadata() const {
@@ -422,6 +434,7 @@ ParquetVariantNode ParquetVariantIterator::ResolveGroup(const ShreddedGroupView 
 						    "Partially shredded objects have to encode Object Variants in the 'value'");
 					}
 					overlay = overlay_data;
+					AddBinaryValueBudget(overlay_blob.GetSize());
 				}
 				return ParquetVariantNode::MakeShredded(*this, view, index, overlay, overlay_end);
 			}
@@ -437,6 +450,7 @@ ParquetVariantNode ParquetVariantIterator::ResolveGroup(const ShreddedGroupView 
 		auto data = const_data_ptr_cast(value_blob.GetData());
 		auto end = data + value_blob.GetSize();
 		CheckBinaryRead(data, 1, end);
+		AddBinaryValueBudget(value_blob.GetSize());
 		if (view.has_typed_value && view.kind == ParquetGroupKind::OBJECT &&
 		    VariantValueMetadata::FromHeaderByte(data[0]).basic_type == VariantBasicType::OBJECT) {
 			throw InvalidInputException(
@@ -461,6 +475,7 @@ ParquetVariantNode ParquetVariantIterator::BinaryRoot() const {
 	auto value_start = blob_start + variant_metadata.total_size;
 	//! The value's header byte must be readable
 	CheckBinaryRead(value_start, 1, blob_end);
+	AddBinaryValueBudget(NumericCast<idx_t>(blob_end - value_start));
 	return ParquetVariantNode::MakeBinary(*this, value_start, blob_end);
 }
 
@@ -647,6 +662,7 @@ ParquetObjectIterator::ParquetObjectIterator(const ParquetVariantIterator &state
 			if (typed_keys.count(key.GetString())) {
 				continue;
 			}
+			state.ConsumeBinaryValueBudget();
 			ordered_entries.push_back(
 			    ParquetObjectEntry {key, ParquetVariantNode::MakeBinary(state, reader.Child(i), overlay_end)});
 		}
@@ -658,6 +674,7 @@ ParquetObjectIterator::ParquetObjectIterator(const ParquetVariantIterator &state
                                              const_data_ptr_t data, const_data_ptr_t end) {
 	BinaryObjectReader reader(metadata, data, end);
 	for (idx_t i = 0; i < reader.count; i++) {
+		state.ConsumeBinaryValueBudget();
 		ordered_entries.push_back(
 		    ParquetObjectEntry {reader.Key(i), ParquetVariantNode::MakeBinary(state, reader.Child(i), end)});
 	}
@@ -695,10 +712,12 @@ ParquetVariantNode ParquetArrayIterator::operator[](idx_t i) const {
 	auto child = values + offset;
 	//! The child's header byte must be readable
 	CheckBinaryRead(child, 1, binary_end);
+	state.get().ConsumeBinaryValueBudget();
 	return ParquetVariantNode::MakeBinary(state.get(), child, binary_end);
 }
 
 void ParquetVariantIterator::EmitBinary(const_data_ptr_t data, const_data_ptr_t end, VariantBuilder &builder) const {
+	AddBinaryValueBudget(NumericCast<idx_t>(end - data));
 	EmitIterator(ParquetVariantNode::MakeBinary(*this, data, end), builder);
 }
 

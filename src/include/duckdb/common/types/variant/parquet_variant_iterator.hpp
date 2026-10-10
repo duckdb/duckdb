@@ -232,6 +232,12 @@ public:
 	//! Emit the binary value in ['data', 'end') of the current row into the builder (BeginRow must precede)
 	DUCKDB_API void EmitBinary(const_data_ptr_t data, const_data_ptr_t end, VariantBuilder &builder) const;
 
+	//! Register a binary value blob of the given size, whose (nested) values can then be read
+	void AddBinaryValueBudget(idx_t blob_size) const;
+	//! Account for reading a nested binary value. Every value occupies at least one byte of its blob, so reading
+	//! more values than the registered blobs contain bytes means that values are shared, which is not allowed.
+	void ConsumeBinaryValueBudget() const;
+
 private:
 	ShreddedGroupView root_view;
 
@@ -239,6 +245,8 @@ private:
 
 	idx_t current_row = 0;
 	mutable unique_ptr<VariantMetadata> current_metadata;
+	//! The number of nested binary values that can still be read for the current row
+	mutable idx_t binary_value_budget = 0;
 };
 
 //! Convert a Parquet VARIANT (metadata + group) into DuckDB's SHREDDED VARIANT format: the Parquet
