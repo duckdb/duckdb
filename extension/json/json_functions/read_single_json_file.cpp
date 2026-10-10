@@ -204,6 +204,18 @@ static void ReadSingleJSONFileFinishBatch(ClientContext &context, TableFunctionI
 	lstate.scan_initialized = false;
 }
 
+//! The size of the file as stored: what a JSON scan reports as its bytes scanned - JSON is row-oriented, there is no
+//! column layout to read part of, so a scan reads the file whole
+static optional_idx ReadSingleJSONFileSize(const TableFunctionInput &input) {
+	auto &gstate = input.global_state->Cast<ReadSingleJSONFileGlobalState>();
+	if (!gstate.reader || !gstate.reader->HasFileHandle()) {
+		// the file has not been opened yet - the caller falls back to the size the file list reported
+		return optional_idx();
+	}
+	// the size of the handle the file was opened with - the compressed size for a compressed file
+	return gstate.reader->GetFileHandle().FileSize();
+}
+
 static void ReadSingleJSONFileFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
 	auto &gstate = input.global_state->Cast<ReadSingleJSONFileGlobalState>();
 	auto &lstate = input.local_state->Cast<ReadSingleJSONFileLocalState>();
@@ -335,6 +347,9 @@ TableFunction JSONFunctions::GetJSONTableFunction(Identifier name, shared_ptr<JS
 	settings.combine_schema = ReadSingleJSONFileCombineSchema;
 	settings.claim_batch = ReadSingleJSONFileClaimBatch;
 	settings.finish_batch = ReadSingleJSONFileFinishBatch;
+	// JSON is row-oriented: a scan reads the file whole, and reports its stored size as the bytes scanned
+	settings.bytes_scanned_reporting = BytesScannedReporting::STORED_FILE_SIZE;
+	settings.file_size = ReadSingleJSONFileSize;
 	return TableFunctionMultiFileWrapper::CreateFunction(std::move(single_file_function), std::move(name),
 	                                                     std::move(settings));
 }

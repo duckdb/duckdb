@@ -1,6 +1,7 @@
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/multi_file/union_by_name.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
@@ -16,6 +17,38 @@ MultiFileGlobalState::~MultiFileGlobalState() {
 	if (read_ahead) {
 		// the file opens scheduled on the async pool reference this state - wait for them before it goes away
 		read_ahead->CancelAndDrain();
+	}
+}
+
+void MultiFileGlobalState::ReportBytesScannedOnScanStart(ClientContext &context, MultiFileReaderData &reader_data) {
+	if (reader_data.bytes_scanned_reported) {
+		return;
+	}
+	reader_data.bytes_scanned_reported = true;
+	// a scan run outside the query plan (e.g. an extension reading its own metadata files) is not the query's scan
+	if (!reader_data.reader || !op) {
+		return;
+	}
+	auto &reader = *reader_data.reader;
+	switch (reader.GetBytesScannedReporting()) {
+	case BytesScannedReporting::COUNTED_BY_READER:
+		// the reader counts the bytes it reads as it reads them, through the metrics of its scan
+		return;
+	case BytesScannedReporting::STORED_FILE_SIZE: {
+		// the scan reads the file whole - its stored size is the bytes scanned, known now
+		auto file_size = reader.GetStoredFileSize();
+		if (!file_size.IsValid()) {
+			// the size of the file is not known - there is nothing to report
+			return;
+		}
+		// handed over to the operator metrics once (MultiFileFunction::MultiFileGetMetrics), and added to the running
+		// total of the query right away, like the Parquet reader does for a row group
+		bytes_scanned_unreported += file_size.GetIndex();
+		QueryProfiler::Get(context).TrackBytesScanned(file_size.GetIndex());
+		return;
+	}
+	default:
+		throw InternalException("Unknown BytesScannedReporting");
 	}
 }
 

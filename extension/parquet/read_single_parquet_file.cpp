@@ -409,9 +409,10 @@ static void ReadSingleParquetFileGetMetrics(TableFunctionGetMetricsInput &input)
 		return;
 	}
 	auto &gstate = input.global_state->Cast<ReadSingleParquetFileGlobalState>();
-	// the row groups scanned are drained, so each is reported once; the number to scan is the size of this file,
-	// which our caller reports as-is
+	// the row groups and bytes scanned are drained, so each is reported once; the number to scan is the size of this
+	// file, which our caller reports as-is
 	input.operator_metrics.row_groups_scanned += gstate.state.row_groups_scanned_unreported.exchange(0);
+	input.operator_metrics.bytes_scanned += gstate.state.bytes_scanned_unreported.exchange(0);
 	input.operator_metrics.total_row_groups_to_scan += gstate.state.total_row_groups_to_scan.load();
 }
 
@@ -539,6 +540,9 @@ TableFunctionMultiFileSettings ParquetScanFunction::GetMultiFileSettings() {
 	settings.get_file_columns = ReadSingleParquetFileColumns;
 	// the order the filters are best applied in is learned while reading, and carries over to the next file
 	settings.reuses_local_state = true;
+	// Parquet is columnar: only the column chunks of the projected columns are read, and their compressed size is
+	// counted per row group as they are read (ReadSingleParquetFileGetMetrics)
+	settings.bytes_scanned_reporting = BytesScannedReporting::COUNTED_BY_READER;
 	return settings;
 }
 

@@ -25,10 +25,12 @@ public:
 	//! counted more, so that a reader can be released without losing what it counted.
 	//! "scanned" is handed over and cleared on every report - the profiler sums what each thread reports, so a
 	//! scanned row group must be handed over exactly once. "total" is the size of the scan, which every thread
-	//! reports identically and the profiler does not sum, so it is never cleared
+	//! reports identically and the profiler does not sum, so it is never cleared. "bytes scanned" is handed over
+	//! like "scanned"
 	mutex metrics_lock;
 	idx_t collected_scanned = 0;
 	idx_t collected_total = 0;
+	idx_t collected_bytes_scanned = 0;
 };
 
 class TableFunctionMultiFileLocalState : public LocalTableFunctionState {
@@ -43,6 +45,8 @@ public:
 	shared_ptr<BaseFileReader> reader;
 	//! The local state of the wrapped function
 	unique_ptr<LocalTableFunctionState> local_state;
+	//! Whether what the first scan of the current batch counted has been collected
+	bool batch_metrics_collected = true;
 };
 
 //===--------------------------------------------------------------------===//
@@ -223,6 +227,7 @@ void TableFunctionFileReader::CollectMetrics(ClientContext &context, GlobalTable
 	TableFunctionGetMetricsInput input(context, bind_data.get(), nullptr, global_state.get(), file_metrics);
 	function.get_metrics(input);
 	gstate.collected_scanned += file_metrics.row_groups_scanned;
+	gstate.collected_bytes_scanned += file_metrics.bytes_scanned;
 	// the function reports the size of its file as a whole - only add what it has grown by since we last asked
 	gstate.collected_total += file_metrics.total_row_groups_to_scan - collected_file_total;
 	collected_file_total = file_metrics.total_row_groups_to_scan;
@@ -312,6 +317,7 @@ bool TableFunctionFileReader::TryInitializeScan(ClientContext &context, GlobalTa
 	SetScanState(gstate);
 	InitializeFunctionState(context);
 	auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();
+	lstate.batch_metrics_collected = false;
 	if (!function.init_local) {
 		// the wrapped function has no local state - it can only be scanned by a single thread
 		bool expected = false;
@@ -350,7 +356,7 @@ AsyncResult TableFunctionFileReader::ScheduleIO(ClientContext &context, GlobalTa
 	return result;
 }
 
-AsyncResult TableFunctionFileReader::Scan(ClientContext &context, GlobalTableFunctionState &,
+AsyncResult TableFunctionFileReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate,
                                           LocalTableFunctionState &lstate_p, DataChunk &chunk) {
 	auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();
 	TableFunctionInput input(bind_data.get(), lstate.local_state.get(), global_state.get());
@@ -358,6 +364,12 @@ AsyncResult TableFunctionFileReader::Scan(ClientContext &context, GlobalTableFun
 	input.async_result = AsyncResultType::IMPLICIT;
 	input.results_execution_mode = AsyncResultsExecutionMode::SYNCHRONOUS;
 	function.function(context, input, chunk);
+	if (!lstate.batch_metrics_collected) {
+		// the first scan of a batch can count what it scans (Parquet counts a row group then), and the file may
+		// already have been finished - collect it, as ScheduleIO does
+		CollectMetrics(context, gstate);
+		lstate.batch_metrics_collected = true;
+	}
 	if (chunk.size() == 0 && !settings.claim_batch) {
 		// an empty chunk signals the end of the scan for this thread - when the function scans in batches it only
 		// signals the end of the current batch, and the next batch is claimed by TryInitializeScan
@@ -383,6 +395,22 @@ double TableFunctionFileReader::GetProgressInFile(ClientContext &context) {
 
 InsertionOrderPreservingMap<Value> TableFunctionFileReader::GetMetadata() const {
 	return metadata;
+}
+
+BytesScannedReporting TableFunctionFileReader::GetBytesScannedReporting() const {
+	return settings.bytes_scanned_reporting;
+}
+
+optional_idx TableFunctionFileReader::GetStoredFileSize() const {
+	if (settings.file_size && global_state) {
+		// the wrapped function has the file open - the size of its handle is the size of the file as stored
+		TableFunctionInput input(bind_data.get(), nullptr, global_state.get());
+		auto file_size = settings.file_size(input);
+		if (file_size.IsValid()) {
+			return file_size;
+		}
+	}
+	return BaseFileReader::GetStoredFileSize();
 }
 
 //===--------------------------------------------------------------------===//
@@ -775,6 +803,8 @@ static void TableFunctionMultiFileGetMetrics(TableFunctionGetMetricsInput &input
 	// the row groups scanned are handed over once - the profiler sums what every thread reports
 	input.operator_metrics.row_groups_scanned += scan_state.collected_scanned;
 	scan_state.collected_scanned = 0;
+	input.operator_metrics.bytes_scanned += scan_state.collected_bytes_scanned;
+	scan_state.collected_bytes_scanned = 0;
 	// the size of the scan is reported as-is - it is not summed across the threads that report it
 	input.operator_metrics.total_row_groups_to_scan = scan_state.collected_total;
 }

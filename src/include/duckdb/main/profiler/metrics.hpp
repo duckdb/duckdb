@@ -29,6 +29,13 @@ struct MetricQuerySQL {
 	static constexpr const char *Unit = "";
 	static constexpr const char *TypeStr = "string";
 };
+struct MetricQueryTotalBytesScanned {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "query.total_bytes_scanned";
+	static constexpr const char *Description = "Cumulative bytes scanned by the query, however many bytes were read from storage to scan them. Each scan reports what its reader scanned: the compressed size of the column chunks read for a columnar format (Parquet), the stored size of every file read for a row-oriented format";
+	static constexpr const char *Unit = "bytes";
+	static constexpr const char *TypeStr = "uint64";
+};
 struct MetricQueryTotalIntermediateRows {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "query.total_intermediate_rows";
@@ -184,6 +191,13 @@ struct MetricStorageWriteToWALLatency {
 };
 
 // Operator metrics
+struct MetricOperatorBytesScanned {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "operator.bytes_scanned";
+	static constexpr const char *Description = "Bytes scanned by the operator, as its reader counts them: the compressed size of the column chunks read for a columnar format (Parquet), the stored size of every file read for a row-oriented format (CSV, JSON, Avro)";
+	static constexpr const char *Unit = "bytes";
+	static constexpr const char *TypeStr = "uint64";
+};
 struct MetricOperatorCPUTime {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "operator.cpu_time";

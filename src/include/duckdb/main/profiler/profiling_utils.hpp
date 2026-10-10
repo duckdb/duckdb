@@ -39,6 +39,9 @@ public:
 	// Always-tracked byte counters (used by progress bar even when profiling is disabled)
 	atomic<idx_t> bytes_read;
 	atomic<idx_t> bytes_written;
+	// Always tracked as well, so it can be read while the query runs: the compressed size of the column data scanned.
+	// Not reported - query.total_bytes_scanned is summed over the operator tree, so that secure views hide theirs
+	atomic<idx_t> bytes_scanned;
 	// Thread-safe memory allocation counter (updated from allocator callbacks on any thread)
 	atomic<idx_t> total_memory_allocated;
 
@@ -57,6 +60,9 @@ public:
 
 	void UpdateBytesWritten(idx_t n) {
 		bytes_written += n;
+	}
+	void UpdateBytesScanned(idx_t n) {
+		bytes_scanned += n;
 	}
 
 	void UpdateTotalMemoryAllocated(idx_t n) {
@@ -86,6 +92,9 @@ public:
 	idx_t GetBytesWritten() const {
 		return bytes_written.load();
 	}
+	idx_t GetBytesScanned() const {
+		return bytes_scanned.load();
+	}
 
 	idx_t GetTotalMemoryAllocated() const {
 		return total_memory_allocated.load();
@@ -105,6 +114,7 @@ public:
 		string_counters.clear();
 		bytes_read = 0;
 		bytes_written = 0;
+		// bytes_scanned is not reset here, so it can be read after a failed query; StartQuery resets it
 		total_memory_allocated = 0;
 
 		query_sql = "";
@@ -126,6 +136,7 @@ public:
 		}
 		bytes_read += other.bytes_read.load();
 		bytes_written += other.bytes_written.load();
+		bytes_scanned += other.bytes_scanned.load();
 		total_memory_allocated += other.total_memory_allocated.load();
 	}
 

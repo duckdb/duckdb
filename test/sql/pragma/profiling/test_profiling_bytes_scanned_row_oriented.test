@@ -1,0 +1,190 @@
+# name: test/sql/pragma/profiling/test_profiling_bytes_scanned_row_oriented.test
+# description: Test bytes_scanned as a row-oriented format reports it (CSV, JSON): the stored size of every file scanned, alone and joined with Parquet
+# group: [profiling]
+
+require parquet
+
+require json
+
+statement ok
+COPY (SELECT range AS i, repeat('x', 100) || range AS s FROM range(4096)) TO '{TEST_DIR}/whole_file_1.csv' (HEADER);
+
+statement ok
+COPY (SELECT range AS i, repeat('x', 100) || range AS s FROM range(4096)) TO '{TEST_DIR}/whole_file_2.csv' (HEADER);
+
+statement ok
+COPY (SELECT range AS i, repeat('x', 100) || range AS s FROM range(4096)) TO '{TEST_DIR}/whole_file.csv.gz' (HEADER, COMPRESSION gzip);
+
+statement ok
+COPY (SELECT range AS i, repeat('x', 100) || range AS s FROM range(4096)) TO '{TEST_DIR}/whole_file.json' (FORMAT json);
+
+statement ok
+COPY (SELECT range AS i, repeat('x', 100) || range AS s FROM range(4096)) TO '{TEST_DIR}/whole_file.parquet' (ROW_GROUP_SIZE 2048);
+
+# the sizes of the files as stored
+statement ok
+CREATE TABLE sizes AS SELECT parse_filename(filename) AS file, size FROM read_blob('{TEST_DIR}/whole_file*');
+
+query I
+SELECT count(*) FROM sizes;
+----
+5
+
+# the compressed file is much smaller than the plain one
+query I
+SELECT (SELECT size FROM sizes WHERE file = 'whole_file.csv.gz') * 4 < (SELECT size FROM sizes WHERE file = 'whole_file_1.csv');
+----
+true
+
+# the bytes scanned by every scan operator of a profile
+statement ok
+CREATE MACRO scan_bytes(profile) AS TABLE
+WITH RECURSIVE ops(op) AS (
+    SELECT unnest(operator)::JSON AS op FROM read_json(profile)
+    UNION ALL
+    SELECT unnest((op->'children')::JSON[]) FROM ops WHERE json_array_length(op->'children') > 0
+)
+SELECT (op->>'bytes_scanned')::BIGINT AS bytes FROM ops WHERE op->>'type' = 'TABLE_SCAN';
+
+# CSV is row-oriented: a scan reads the file whole however many columns are projected, and reports its stored size
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/whole_file_csv.json';
+
+statement ok
+SET tracked_metrics = ['query.total_bytes_scanned', 'operator.bytes_scanned', 'operator.type'];
+
+statement ok
+SELECT sum(i) FROM read_csv('{TEST_DIR}/whole_file_1.csv');
+
+statement ok
+PRAGMA disable_profiling;
+
+query II
+SELECT query.total_bytes_scanned = (SELECT size FROM sizes WHERE file = 'whole_file_1.csv'),
+       (SELECT sum(bytes) FROM scan_bytes('{TEST_DIR}/whole_file_csv.json')) = query.total_bytes_scanned
+FROM '{TEST_DIR}/whole_file_csv.json';
+----
+true	true
+
+# a compressed file reports its compressed size - what is stored and downloaded
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/whole_file_csv_gz.json';
+
+statement ok
+SET tracked_metrics = ['query.total_bytes_scanned'];
+
+statement ok
+SELECT sum(i) FROM read_csv('{TEST_DIR}/whole_file.csv.gz');
+
+statement ok
+PRAGMA disable_profiling;
+
+query I
+SELECT query.total_bytes_scanned = (SELECT size FROM sizes WHERE file = 'whole_file.csv.gz')
+FROM '{TEST_DIR}/whole_file_csv_gz.json';
+----
+true
+
+# JSON likewise
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/whole_file_json.json';
+
+statement ok
+SET tracked_metrics = ['query.total_bytes_scanned'];
+
+statement ok
+SELECT sum(i) FROM read_json('{TEST_DIR}/whole_file.json');
+
+statement ok
+PRAGMA disable_profiling;
+
+query I
+SELECT query.total_bytes_scanned = (SELECT size FROM sizes WHERE file = 'whole_file.json')
+FROM '{TEST_DIR}/whole_file_json.json';
+----
+true
+
+# several files: every file scanned is reported once
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/whole_file_glob.json';
+
+statement ok
+SET tracked_metrics = ['query.total_bytes_scanned'];
+
+statement ok
+SELECT sum(i) FROM read_csv('{TEST_DIR}/whole_file_*.csv');
+
+statement ok
+PRAGMA disable_profiling;
+
+query I
+SELECT query.total_bytes_scanned = (SELECT sum(size) FROM sizes WHERE file LIKE 'whole_file_%.csv')
+FROM '{TEST_DIR}/whole_file_glob.json';
+----
+true
+
+# a scan stopped by a LIMIT still reports the file it started: the stored size is reported in full, never less
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/whole_file_limit.json';
+
+statement ok
+SET tracked_metrics = ['query.total_bytes_scanned'];
+
+statement ok
+SELECT i FROM read_csv('{TEST_DIR}/whole_file_1.csv') LIMIT 1;
+
+statement ok
+PRAGMA disable_profiling;
+
+query I
+SELECT query.total_bytes_scanned = (SELECT size FROM sizes WHERE file = 'whole_file_1.csv')
+FROM '{TEST_DIR}/whole_file_limit.json';
+----
+true
+
+# each scan reports what its reader scanned - Parquet the column chunks read, CSV the file - and the query total is the sum of both
+statement ok
+CREATE TABLE chunks AS SELECT path_in_schema AS col, total_compressed_size AS bytes FROM parquet_metadata('{TEST_DIR}/whole_file.parquet');
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/whole_file_mixed.json';
+
+statement ok
+SET tracked_metrics = ['query.total_bytes_scanned', 'operator.bytes_scanned', 'operator.type'];
+
+statement ok
+SELECT count(*) FROM read_parquet('{TEST_DIR}/whole_file.parquet') p JOIN read_csv('{TEST_DIR}/whole_file_1.csv') c USING (i);
+
+statement ok
+PRAGMA disable_profiling;
+
+query I
+SELECT query.total_bytes_scanned = (SELECT sum(bytes) FROM chunks WHERE col = 'i') + (SELECT size FROM sizes WHERE file = 'whole_file_1.csv')
+FROM '{TEST_DIR}/whole_file_mixed.json';
+----
+true
+
+# one scan operator reports the Parquet chunks, the other the CSV file
+query I
+SELECT list_sort(list(bytes)) = list_sort([(SELECT sum(bytes) FROM chunks WHERE col = 'i'), (SELECT size FROM sizes WHERE file = 'whole_file_1.csv')])
+FROM scan_bytes('{TEST_DIR}/whole_file_mixed.json');
+----
+true

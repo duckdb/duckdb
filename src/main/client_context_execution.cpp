@@ -32,6 +32,8 @@ namespace duckdb {
 void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStatement &statement) {
 	// check if we are on AutoCommit. In this case we should start a transaction
 	D_ASSERT(!active_query);
+	// not reset on Rollback, so a statement that fails before StartQuery must not report the previous one's
+	QueryProfiler::Get(*this).ResetBytesScanned();
 	auto &db_inst = DatabaseInstance::GetDatabase(*this);
 	if (ValidChecker::IsInvalidated(db_inst)) {
 		throw ErrorManager::InvalidatedDatabase(*this, ValidChecker::InvalidatedMessage(db_inst));

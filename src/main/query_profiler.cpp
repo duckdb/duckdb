@@ -140,6 +140,7 @@ void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, b
 	// Always reset byte counters at the start of each query so the progress bar shows per-query values
 	query_metrics.bytes_read = 0;
 	query_metrics.bytes_written = 0;
+	query_metrics.bytes_scanned = 0;
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
 	}
@@ -275,6 +276,14 @@ void QueryProfiler::TrackBytesWritten(const idx_t amount) {
 	query_metrics.UpdateBytesWritten(amount);
 }
 
+void QueryProfiler::TrackBytesScanned(const idx_t amount) {
+	query_metrics.UpdateBytesScanned(amount);
+}
+
+void QueryProfiler::ResetBytesScanned() {
+	query_metrics.bytes_scanned = 0;
+}
+
 void QueryProfiler::TrackTotalMemoryAllocated(const idx_t amount) {
 	query_metrics.UpdateTotalMemoryAllocated(amount);
 }
@@ -305,6 +314,10 @@ idx_t QueryProfiler::GetBytesRead() const {
 
 idx_t QueryProfiler::GetBytesWritten() const {
 	return query_metrics.GetBytesWritten();
+}
+
+idx_t QueryProfiler::GetBytesScanned() const {
+	return query_metrics.GetBytesScanned();
 }
 
 MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {
@@ -462,6 +475,8 @@ void OperatorMetrics::MergeInternal(const OperatorMetrics &other) {
 	intermediate_size_bytes += other.intermediate_size_bytes;
 	rows_scanned += other.rows_scanned;
 	row_groups_scanned += other.row_groups_scanned;
+	bytes_scanned += other.bytes_scanned;
+	bytes_scanned_reported = bytes_scanned_reported || other.bytes_scanned_reported;
 	if (other.system_peak_buffer_manager_memory > system_peak_buffer_manager_memory) {
 		system_peak_buffer_manager_memory = other.system_peak_buffer_manager_memory;
 	}
@@ -751,6 +766,10 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 	}
 	if (info.MetricIsTracked<MetricOperatorRowGroupsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result["row_groups_scanned"] = Value::UBIGINT(row_groups_scanned);
+	}
+	if (info.MetricIsTracked<MetricOperatorBytesScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN &&
+	    bytes_scanned_reported) {
+		result["bytes_scanned"] = Value::UBIGINT(bytes_scanned);
 	}
 	if (info.MetricIsTracked<MetricOperatorTotalRowGroupsToScan>() &&
 	    operator_type == PhysicalOperatorType::TABLE_SCAN) {
@@ -1137,6 +1156,7 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		metrics->SetMetric<MetricQueryTotalIntermediateSizeBytes>(cumulative_metrics.intermediate_size_bytes);
 		metrics->SetMetric<MetricQueryTotalRowGroupsScanned>(cumulative_metrics.row_groups_scanned);
 		metrics->SetMetric<MetricQueryTotalRowGroupsToScan>(cumulative_metrics.total_row_groups_to_scan);
+		metrics->SetMetric<MetricQueryTotalBytesScanned>(cumulative_metrics.bytes_scanned);
 	}
 	query_metrics.FinalizeMetrics(*metrics);
 	metrics_finalized = true;

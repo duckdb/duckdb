@@ -133,6 +133,9 @@ struct MultiFileReaderData {
 	weak_ptr<BaseFileReader> closed_reader;
 	//! Flag to indicate the file is being opened
 	MultiFileFileState file_state;
+	//! Whether the bytes scanned known when the scan of the file starts have been reported - see
+	//! MultiFileGlobalState::ReportBytesScannedOnScanStart
+	bool bytes_scanned_reported = false;
 	//! Mutexes to wait for the file when it is being opened
 	unique_ptr<mutex> file_mutex;
 	//! Options for opening the file
@@ -180,6 +183,9 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	atomic<idx_t> file_index;
 	//! Number of files that were actually opened by the scan
 	atomic<idx_t> files_opened = 0;
+	//! Bytes scanned reported for the files of this scan (BytesScannedReporting::STORED_FILE_SIZE), not yet handed
+	//! over to the metrics of the operator
+	atomic<idx_t> bytes_scanned_unreported = 0;
 	//! Index of the lowest file we know we have completely read
 	mutable idx_t completed_file_index = 0;
 	//! The current set of readers
@@ -207,6 +213,15 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	bool CanRemoveColumns() const {
 		return !projection_ids.empty();
 	}
+
+	//! Report the bytes scanned that are known when the scan of a file starts, the first time its reader is claimed
+	//! for scanning. Every reader reports the bytes its scan scans; how depends on the format (BytesScannedReporting).
+	//! A reader of a row-oriented format reports the stored size of its file, which a scan reads whole - that is
+	//! reported here, into the metrics of the operator and the running total of the query. A reader of a columnar
+	//! format counts the column chunks it reads as it reads them, and is left to it. Reporting at the first scan
+	//! bills a file whose scan a LIMIT or an error stops part-way, and never a file that was opened to determine the
+	//! schema but not scanned. Must hold "lock"
+	void ReportBytesScannedOnScanStart(ClientContext &context, MultiFileReaderData &reader_data);
 };
 
 //! Lifecycle of the job a scanning thread currently holds
