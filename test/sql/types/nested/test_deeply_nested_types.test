@@ -1,5 +1,5 @@
 # name: test/sql/types/nested/test_deeply_nested_types.test
-# description: Test deeply nested LIST and ARRAY types without stack overflow
+# description: Test deeply nested LIST, ARRAY, STRUCT, MAP and UNION types without stack overflow
 # group: [nested]
 
 statement ok
