@@ -1,7 +1,8 @@
 UseStatement <- 'USE' UseTarget
 
-UseTarget <- UseTargetCatalogSchema / SchemaNameAsUseTarget / CatalogNameAsUseTarget
+UseTarget <- UseTargetCatalogSchema / SchemaNameAsUseTarget / CatalogNameAsUseTarget / StringLiteralAsUseTarget
 SchemaNameAsUseTarget <- SchemaName
 CatalogNameAsUseTarget <- CatalogName
+StringLiteralAsUseTarget <- StringLiteralIdentifier
 UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
 DotIdentifier <- '.' Identifier

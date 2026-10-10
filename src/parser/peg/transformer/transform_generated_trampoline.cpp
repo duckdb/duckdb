@@ -3021,6 +3021,9 @@ static const TransformFrameOps SCHEMA_NAME_AS_USE_TARGET_OPS = {
 static const TransformFrameOps CATALOG_NAME_AS_USE_TARGET_OPS = {
     "CatalogNameAsUseTarget", &PEGTransformerFactory::InitializeCatalogNameAsUseTargetTrampoline,
     &PEGTransformerFactory::FinalizeCatalogNameAsUseTargetTrampoline};
+static const TransformFrameOps STRING_LITERAL_AS_USE_TARGET_OPS = {
+    "StringLiteralAsUseTarget", &PEGTransformerFactory::InitializeStringLiteralAsUseTargetTrampoline,
+    &PEGTransformerFactory::FinalizeStringLiteralAsUseTargetTrampoline};
 static const TransformFrameOps USE_TARGET_CATALOG_SCHEMA_OPS = {
     "UseTargetCatalogSchema", &PEGTransformerFactory::InitializeUseTargetCatalogSchemaTrampoline,
     &PEGTransformerFactory::FinalizeUseTargetCatalogSchemaTrampoline};
@@ -4113,6 +4116,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"UseTarget", &USE_TARGET_OPS},
 	    {"SchemaNameAsUseTarget", &SCHEMA_NAME_AS_USE_TARGET_OPS},
 	    {"CatalogNameAsUseTarget", &CATALOG_NAME_AS_USE_TARGET_OPS},
+	    {"StringLiteralAsUseTarget", &STRING_LITERAL_AS_USE_TARGET_OPS},
 	    {"UseTargetCatalogSchema", &USE_TARGET_CATALOG_SCHEMA_OPS},
 	    {"DotIdentifier", &DOT_IDENTIFIER_OPS},
 	    {"VacuumStatement", &VACUUM_STATEMENT_OPS},
@@ -25134,6 +25138,21 @@ PEGTransformerFactory::FinalizeCatalogNameAsUseTargetTrampoline(PEGTransformer &
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto catalog_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
 	auto result = TransformCatalogNameAsUseTarget(transformer, catalog_name);
+	return transformer.MakeResult<QualifiedName>(result);
+}
+
+void PEGTransformerFactory::InitializeStringLiteralAsUseTargetTrampoline(PEGTransformer &transformer,
+                                                                         GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("StringLiteralIdentifier"), list_pr.GetChild(0)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeStringLiteralAsUseTargetTrampoline(PEGTransformer &transformer,
+                                                                  GeneratedTransformProcess &process) {
+	auto string_literal_identifier = process.TakeResult<Identifier>(0);
+	auto result = TransformStringLiteralAsUseTarget(transformer, string_literal_identifier);
 	return transformer.MakeResult<QualifiedName>(result);
 }
 

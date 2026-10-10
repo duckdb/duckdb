@@ -4111,6 +4111,10 @@ public:
 	                                                       GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeCatalogNameAsUseTargetTrampoline(PEGTransformer &transformer,
 	                                                                                GeneratedTransformProcess &process);
+	static void InitializeStringLiteralAsUseTargetTrampoline(PEGTransformer &transformer,
+	                                                         GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeStringLiteralAsUseTargetTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static void InitializeUseTargetCatalogSchemaTrampoline(PEGTransformer &transformer,
 	                                                       GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeUseTargetCatalogSchemaTrampoline(PEGTransformer &transformer,
@@ -5850,6 +5854,8 @@ public:
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer, const QualifiedName &use_target);
 	static QualifiedName TransformSchemaNameAsUseTarget(PEGTransformer &transformer, const Identifier &schema_name);
 	static QualifiedName TransformCatalogNameAsUseTarget(PEGTransformer &transformer, const Identifier &catalog_name);
+	static QualifiedName TransformStringLiteralAsUseTarget(PEGTransformer &transformer,
+	                                                       const Identifier &string_literal_identifier);
 	static QualifiedName TransformUseTargetCatalogSchema(PEGTransformer &transformer, const Identifier &catalog_name,
 	                                                     const Identifier &reserved_schema_name,
 	                                                     const optional<vector<Identifier>> &dot_identifier);
