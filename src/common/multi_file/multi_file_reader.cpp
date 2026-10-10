@@ -393,7 +393,7 @@ bool MultiFileReader::ParseCopyOption(const Identifier &key, const vector<Value>
 	string error_message;
 	auto value = values[0].DefaultTryCastAs(LogicalType::BOOLEAN, &error_message);
 	if (!value) {
-		throw InvalidInputException("Unable to cast \"%s\" to BOOLEAN for boolean option \"%s\"", values[0].ToString(),
+		throw InvalidInputException("Unable to cast \"%s\" to BOOLEAN for boolean option %s", values[0].ToString(),
 		                            key);
 	}
 	options.file_row_number = BooleanValue::Get(*value);
@@ -1239,7 +1239,7 @@ void MultiFileOptions::SetMaximumSampleFiles(const Identifier &key, const Value 
 		throw BinderException("Cannot use NULL as argument to key %s", key);
 	}
 	if (!TrySetMaximumSampleFiles(val)) {
-		throw BinderException("\"%s\" parameter must be positive, or -1 to remove the limit on the number of files "
+		throw BinderException("%s parameter must be positive, or -1 to remove the limit on the number of files "
 		                      "used to determine the schema.",
 		                      key);
 	}
@@ -1273,7 +1273,7 @@ void MultiFileOptions::SetColumnStatistics(const Identifier &key, const Value &v
 	auto cast = val.DefaultTryCastAs(target, &error);
 	if (!cast) {
 		throw InvalidInputException(
-		    "'%s' must be a MAP of column name to a MAP of statistic name ('min', 'max', 'count', 'null_count', "
+		    "%s must be a MAP of column name to a MAP of statistic name ('min', 'max', 'count', 'null_count', "
 		    "'distinct_count') to its value, but '%s' was provided",
 		    key, val.type().ToString());
 	}

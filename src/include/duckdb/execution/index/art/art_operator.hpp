@@ -156,7 +156,7 @@ public:
 				// Local append and delete indexes should not contain such gates either.
 				// Note that VerifyLeaf may still legitimately observe the temporary duplicate
 				// leaf state.
-				throw FatalException("Corrupted unique ART index \"%s\": encountered an existing gated leaf in unique "
+				throw FatalException("Corrupted unique ART index %s: encountered an existing gated leaf in unique "
 				                     "index while inserting",
 				                     art.name);
 			}

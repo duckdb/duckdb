@@ -54,7 +54,7 @@ static unique_ptr<FunctionData> StructInsertBind(BindScalarFunctionInput &input)
 	// Loop through the fields that are inserted
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		if (name_collision_set.find(names[i]) != name_collision_set.end()) {
-			throw BinderException("Duplicate struct entry name \"%s\"", names[i]);
+			throw BinderException("Duplicate struct entry name %s", names[i]);
 		}
 		name_collision_set.insert(names[i]);
 		new_children.emplace_back(make_pair(names[i], arguments[i]->GetReturnType()));

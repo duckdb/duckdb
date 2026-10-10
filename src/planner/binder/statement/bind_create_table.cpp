@@ -198,7 +198,7 @@ unique_ptr<BoundConstraint> Binder::BindUniqueConstraint(const Constraint &const
 
 		auto physical_index = col.Physical();
 		if (index_set.find(physical_index) != index_set.end()) {
-			throw ParserException("column \"%s\" appears twice in primary key constraint", col_name);
+			throw ParserException("column %s appears twice in primary key constraint", col_name);
 		}
 		indexes.push_back(physical_index);
 		index_set.insert(physical_index);
@@ -298,7 +298,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 		auto bound_expression = expr_binder.Bind(expression);
 		D_ASSERT(bound_expression);
 		if (bound_expression->HasSubquery()) {
-			throw BinderException("Failed to bind generated column '%s' because the expression contains a subquery",
+			throw BinderException("Failed to bind generated column %s because the expression contains a subquery",
 			                      col.Name());
 		}
 		if (col.Type().id() == LogicalTypeId::ANY) {

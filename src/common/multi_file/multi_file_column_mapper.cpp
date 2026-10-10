@@ -119,7 +119,7 @@ struct FieldIdMapper : public ColumnMapper {
 	static unique_ptr<Expression> GetDefault(ClientContext &context, const MultiFileColumnDefinition &column) {
 		auto &default_val = column.default_expression;
 		if (!default_val) {
-			throw InvalidInputException("Field \"%s\" (field id %d) is missing from the file schema and has no default "
+			throw InvalidInputException("Field %s (field id %d) is missing from the file schema and has no default "
 			                            "expression",
 			                            column.name, column.GetIdentifierFieldId());
 		}
@@ -869,7 +869,7 @@ Value MultiFileColumnMapper::GetConstantValue(MultiFileGlobalIndex global_index)
 		}
 	}
 	auto &global_column = global_columns[global_column_id];
-	throw InternalException("Column '%s' is not present in the file, but no constant_map entry exists for it!",
+	throw InternalException("Column %s is not present in the file, but no constant_map entry exists for it!",
 	                        global_column.name);
 }
 

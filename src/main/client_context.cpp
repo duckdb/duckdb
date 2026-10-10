@@ -177,7 +177,7 @@ void ClientContext::ConnectToCatalog(const shared_ptr<AttachedDatabase> &target)
 	// return true MUST implement RemoteExecute(string). Validation runs before mutation so a throw
 	// leaves the client unbound.
 	if (!target->GetCatalog().Supports(RemoteCapability::CONNECT)) {
-		throw InvalidInputException("Database \"%s\" does not support CONNECT", target->GetName());
+		throw InvalidInputException("Database %s does not support CONNECT", target->GetName());
 	}
 	connected_to_database = target;
 	is_connected = true;
@@ -414,7 +414,7 @@ void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &
 		auto entry = manager.GetDatabase(*this, modified_database);
 		if (!entry) {
 			// database has been detached
-			throw InvalidInputException("Database \"%s\" not found", modified_database);
+			throw InvalidInputException("Database %s not found", modified_database);
 		}
 		if (entry->IsReadOnly()) {
 			throw InvalidInputException(StringUtil::Format(

@@ -313,7 +313,7 @@ static unique_ptr<FunctionData> JSONCreateBindParams(BoundScalarFunction &bound_
 			throw ParameterNotResolvedException();
 		} else if (object && i % 2 == 0) {
 			if (type != LogicalType::VARCHAR) {
-				throw BinderException("json_object() keys must be VARCHAR, add an explicit cast to argument \"%s\"",
+				throw BinderException("json_object() keys must be VARCHAR, add an explicit cast to argument %s",
 				                      arguments[i]->GetName());
 			}
 			bound_arguments.push_back(LogicalType::VARCHAR);

@@ -96,7 +96,7 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 			auto db = manager.GetDatabase(context, entry.first);
 			if (db && !db->GetCatalog().SupportsMultipleDMLCTEs()) {
 				throw BinderException("Multiple DML statements in a single WITH clause are not supported for "
-				                      "database \"%s\"",
+				                      "database %s",
 				                      entry.first);
 			}
 		}

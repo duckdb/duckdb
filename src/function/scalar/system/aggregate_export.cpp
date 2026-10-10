@@ -909,13 +909,13 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 		throw BinderException("Cannot use EXPORT_STATE for non-combinable function %s", bound_function.GetName());
 	}
 	if (bound_function.HasExportAggregateStateCallback() != bound_function.HasImportAggregateStateCallback()) {
-		throw InternalException("Aggregate function \"%s\" must define either both or neither of the "
+		throw InternalException("Aggregate function %s must define either both or neither of the "
 		                        "export_aggregate_state/import_aggregate_state callbacks",
 		                        bound_function.GetName());
 	}
 	if (!bound_function.HasGetStateTypeCallback()) {
 		throw NotImplementedException(
-		    "Aggregate function \"%s\" does not have a state type callback defined - cannot export state",
+		    "Aggregate function %s does not have a state type callback defined - cannot export state",
 		    bound_function.GetName());
 	}
 	D_ASSERT(bound_function.HasStateSizeCallback());

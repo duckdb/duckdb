@@ -139,7 +139,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	if (!has_serialize) {
 		// If not serialized, re-bind with the copy info
 		if (!function.copy_to_bind) {
-			throw InternalException("Copy function \"%s\" has neither bind nor (de)serialize", function.name);
+			throw InternalException("Copy function %s has neither bind nor (de)serialize", function.name);
 		}
 
 		CopyFunctionBindInput function_bind_input(*copy_info, function.function_info);

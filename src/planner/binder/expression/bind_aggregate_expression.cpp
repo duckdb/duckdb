@@ -286,7 +286,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	// If the function cannot be used as an aggregate, but can be used as a window function, throw a specific error
 	// message
 	if (!aggregate->Function().CanAggregate() && aggregate->Function().CanWindow()) {
-		auto msg = StringUtil::Format("Function '%s' can only be used as a window function", func.name);
+		auto msg = StringUtil::Format("Function %s can only be used as a window function", func.name);
 		error = BinderException(msg);
 		error.AddQueryLocation(aggr);
 		error.Throw();

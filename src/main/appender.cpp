@@ -651,7 +651,7 @@ Value Appender::GetDefaultValue(idx_t column) {
 	if (it == default_values.end()) {
 		auto &name = description->columns[index].Name();
 		throw NotImplementedException(
-		    "AppendDefault is not supported for column \"%s\": not a foldable default expressions.", name);
+		    "AppendDefault is not supported for column %s: not a foldable default expressions.", name);
 	}
 	return it->second;
 }

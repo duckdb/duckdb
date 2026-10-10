@@ -190,7 +190,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateMonotoneBounds(ClientC
 		return nullptr;
 	}
 	if (out_hi < out_lo) {
-		throw InternalException("Monotonic arg annotation violated for '%s': output min exceeds output max",
+		throw InternalException("Monotonic arg annotation violated for %s: output min exceeds output max",
 		                        func.Function().GetName());
 	}
 
