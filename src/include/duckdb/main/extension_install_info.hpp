@@ -117,6 +117,8 @@ struct ExtensionRepository {
 	static string TryConvertUrlToKnownRepository(const string &url);
 	//! Try to get the backup server url of a repository url, will return empty string if the repository has no backup
 	static string TryGetBackupRepositoryUrl(const string &url);
+	//! Whether a url points into one of the official DuckDB repositories (core, nightly, community or their backups)
+	static bool IsOfficialRepositoryUrl(const string &url);
 
 	//! Get the default repository, optionally passing a config to allow
 	static ExtensionRepository GetDefaultRepository(optional_ptr<DBConfig> config);

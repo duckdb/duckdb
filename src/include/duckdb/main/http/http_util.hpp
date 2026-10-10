@@ -46,6 +46,9 @@ struct HTTPParams {
 	bool follow_location = true;
 	bool override_verify_ssl = false;
 	bool verify_ssl = true;
+	//! When set, the caller has already checked the url against the file access settings, so the central check in
+	//! HTTPUtil::Request is skipped (used by extension installation, which also allows the official repositories)
+	bool skip_external_access_check = false;
 
 	string http_proxy;
 	idx_t http_proxy_port = 0;

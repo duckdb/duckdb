@@ -201,9 +201,34 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
 
+//! Throws if the url of an extension download is not allowed by the file access settings
+static void VerifyCanDownloadExtension(DatabaseInstance &db, const string &url) {
+	if (Settings::Get<EnableExternalAccessSetting>(db) || ExtensionRepository::IsOfficialRepositoryUrl(url)) {
+		return;
+	}
+	// urls are matched against allowed_directories by prefix without being normalized, so reject dot segments
+	// (also percent-encoded) that the server could resolve to a location outside of the allowed directory
+	auto lower_url = StringUtil::Lower(url);
+	for (auto &segment : StringUtil::Split(lower_url, '/')) {
+		if (segment == "." || segment == ".." || StringUtil::Contains(segment, "%2e")) {
+			throw PermissionException("Cannot download extension from \"%s\" - urls with dot segments are not "
+			                          "allowed when external access is disabled",
+			                          url);
+		}
+	}
+	if (!db.config.CanAccessFile(url, FileType::FILE_TYPE_REGULAR)) {
+		throw PermissionException("Cannot download extension from \"%s\" - external access is disabled by "
+		                          "configuration. Add the repository to allowed_directories to allow it",
+		                          url);
+	}
+}
+
 //! Perform the GET request for an extension against a single url
 static unique_ptr<HTTPResponse> RequestExtension(DatabaseInstance &db, optional_ptr<ClientContext> context,
                                                  const string &url, const HTTPHeaders &headers) {
+	// the official repositories are reachable even when external access is disabled, any other url must be allowed
+	// through allowed_directories or allowed_paths
+	VerifyCanDownloadExtension(db, url);
 	auto &manager = db.config.GetHTTPTransportManager();
 	auto session = context ? manager.CreateSession(*context, url) : manager.CreateSession(db, url);
 	auto &params = session.Parameters();
@@ -212,6 +237,8 @@ static unique_ptr<HTTPResponse> RequestExtension(DatabaseInstance &db, optional_
 	// to avoid lengthy retry on 304
 	params.follow_location = false;
 	params.keep_alive = false;
+	// the url was checked above, which also allows the official repositories, so skip the central check
+	params.skip_external_access_check = true;
 
 	GetRequestInfo get_request(url, headers, params, nullptr, nullptr);
 	get_request.try_request = true;
