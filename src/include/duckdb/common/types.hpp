@@ -283,7 +283,7 @@ enum class LogicalTypeInfoType : uint8_t {
 //! The intrusively ref-counted data behind a LogicalType. Types without parameters use an INVALID_TYPE_INFO.
 //! Once adopted by a LogicalType the info is shared and only ever accessed as const.
 struct LogicalTypeInfo {
-	explicit LogicalTypeInfo(LogicalTypeInfoType type);
+	explicit LogicalTypeInfo(LogicalTypeInfoType type) noexcept;
 	explicit LogicalTypeInfo(LogicalTypeInfoType type, string alias);
 	virtual ~LogicalTypeInfo();
 
@@ -510,6 +510,8 @@ private:
 private:
 	//! The immortal type info of a type without parameters - created once per id
 	DUCKDB_API static const LogicalTypeInfo &GetBuiltinTypeInfo(LogicalTypeId id);
+	//! The builtin info for an id, or nullptr for an invalid id - creating the builtins never allocates, so cannot fail
+	static const LogicalTypeInfo *TryGetBuiltinTypeInfo(LogicalTypeId id) noexcept;
 	//! Takes ownership of a new info for a type with the given id - or returns the builtin info if there is none
 	static const LogicalTypeInfo &AdoptNewTypeInfo(LogicalTypeId id, unique_ptr<LogicalTypeInfo> type_info);
 	//! Creates a type whose info is never ref-counted or freed - for types that are built once and shared
@@ -636,7 +638,10 @@ struct StructType {
 	DUCKDB_API static const Identifier &GetChildName(const LogicalType &type, idx_t index);
 	DUCKDB_API static idx_t GetChildIndexUnsafe(const LogicalType &type, const string &name);
 	DUCKDB_API static idx_t GetChildCount(const LogicalType &type);
+	//! Whether the type is an unnamed struct, i.e. a TUPLE
 	DUCKDB_API static bool IsUnnamed(const LogicalType &type);
+	//! Whether all (and at least one) of the children are unnamed - LogicalType::STRUCT turns these into a TUPLE
+	DUCKDB_API static bool AllUnnamed(const child_list_t<LogicalType> &children);
 	//! Whether the type is backed by StructTypeInfo and laid out as a struct (STRUCT or TUPLE)
 	DUCKDB_API static bool IsStruct(const LogicalType &type);
 	DUCKDB_API static bool IsStruct(LogicalTypeId id);

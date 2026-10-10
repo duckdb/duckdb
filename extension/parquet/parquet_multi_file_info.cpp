@@ -122,7 +122,7 @@ static bool ParquetScanSupportPushdownExtract(const FunctionData &bind_data_p, c
 
 	auto &column = bind_data.columns[col_idx.index];
 	auto &column_type = column.type;
-	return column_type.id() == LogicalTypeId::STRUCT || column_type.id() == LogicalTypeId::VARIANT;
+	return StructType::IsStruct(column_type) || column_type.id() == LogicalTypeId::VARIANT;
 }
 
 static vector<column_t> ParquetGetRowIdColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
@@ -245,7 +245,8 @@ void ParquetScanFunction::AddNamedParameters(TableFunction &table_function) {
 		    .Add("parquet_version", LogicalType::VARCHAR)
 		    .Add("can_have_nan", LogicalType::BOOLEAN)
 		    .Add("prefetch_strategy", LogicalType::VARCHAR)
-		    .Add("utf8_validation", LogicalType::VARCHAR);
+		    .Add("utf8_validation", LogicalType::VARCHAR)
+		    .Add("int96_as", LogicalType::VARCHAR);
 	};
 	// the multi-file function already declares options of its own - the single-file function declares none
 	auto &signature = table_function.GetSignature();
@@ -329,6 +330,13 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const Identif
 		options.utf8_validation_option = StringColumnReader::GetUtf8ValidationOption(StringValue::Get(values[0]));
 		return true;
 	}
+	if (key == "int96_as") {
+		if (values.size() != 1) {
+			throw BinderException("Parquet int96_as cannot be empty!");
+		}
+		options.int96_as = ParquetInt96AsOptionFromString(StringValue::Get(values[0]));
+		return true;
+	}
 	return false;
 }
 
@@ -369,6 +377,10 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const Identifier 
 	}
 	if (key == "utf8_validation") {
 		options.utf8_validation_option = StringColumnReader::GetUtf8ValidationOption(StringValue::Get(val));
+		return true;
+	}
+	if (key == "int96_as") {
+		options.int96_as = ParquetInt96AsOptionFromString(StringValue::Get(val));
 		return true;
 	}
 	return false;

@@ -20,6 +20,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
@@ -70,7 +71,7 @@ public:
 	vector<block_id_t> row_group_blocks;
 
 	struct ReplayIndexInfo {
-		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, optional_idx index_oid)
+		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, idx_t index_oid)
 		    : index_list(index_list), index(std::move(index)), table_oid(table_oid), index_oid(index_oid) {
 		}
 
@@ -78,10 +79,8 @@ public:
 		unique_ptr<Index> index;
 		//! The oid of the table, used to uniquely identify the table (even after a rename).
 		idx_t table_oid;
-		//! The oid of the index catalog entry, used to match a DROP INDEX in the same replayed transaction.
-		//! Invalid for constraint-backed indexes (i.e., UNIQUE): they have no separate catalog entry and cannot be
-		//! targeted by DROP INDEX.
-		optional_idx index_oid;
+		//! The oid of the index, used to match a DROP INDEX in the same replayed transaction.
+		idx_t index_oid;
 	};
 	vector<ReplayIndexInfo> replay_index_infos;
 };
@@ -1004,10 +1003,10 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto index_instance = index_type->create_instance(input);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid,
-	                                      /*index_oid=*/optional_idx());
-
+	auto index_oid = DatabaseManager::Get(context).NextOid();
+	unique_info.SetBackingIndexOid(index_oid);
 	catalog.Alter(context, alter_info);
+	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid, index_oid);
 }
 
 //===--------------------------------------------------------------------===//
