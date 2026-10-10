@@ -107,6 +107,9 @@ public:
 	DUCKDB_API void TrackBytesRead(idx_t amount);
 	//! Track bytes written (always tracked, even when profiling disabled).
 	DUCKDB_API void TrackBytesWritten(idx_t amount);
+	//! Track the compressed size of column data scanned (always tracked, even when profiling disabled). Unlike
+	//! query.total_bytes_scanned, the running total includes scans inside secure views
+	DUCKDB_API void TrackBytesScanned(idx_t amount);
 	//! Track memory allocated (thread-safe; always tracked).
 	DUCKDB_API void TrackTotalMemoryAllocated(idx_t amount);
 	//! Add to a metric counter (profiling-only).
@@ -165,6 +168,7 @@ public:
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;
 	DUCKDB_API idx_t GetBytesRead() const;
 	DUCKDB_API idx_t GetBytesWritten() const;
+	DUCKDB_API idx_t GetBytesScanned() const;
 
 	//! Return the result tree (generating it if it does not yet exist)
 	QueryProfileResult &GetResult();

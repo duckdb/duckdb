@@ -605,10 +605,12 @@ AsyncResult ParquetReader::ScheduleIO(ClientContext &context, GlobalTableFunctio
 	auto &scan_state = lstate.scan_state;
 	auto read_before = scan_state.row_groups_read;
 	auto skipped_before = scan_state.row_groups_skipped;
+	auto bytes_before = scan_state.bytes_scanned;
 	auto strategy = RegisterRowGroupReads(context, scan_state);
 	auto read = scan_state.row_groups_read - read_before;
 	auto skipped = scan_state.row_groups_skipped - skipped_before;
 	gstate.row_groups_scanned_unreported += read;
+	gstate.bytes_scanned_unreported += scan_state.bytes_scanned - bytes_before;
 	gstate.total_row_groups_to_scan += read + skipped;
 	return ScheduleRowGroupReads(scan_state, strategy);
 }

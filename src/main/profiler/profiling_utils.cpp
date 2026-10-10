@@ -20,7 +20,7 @@ void QueryMetrics::FinalizeMetrics(GatheredMetrics &info) {
 	info.SetMetric<MetricSystemTotalMemoryAllocated>(GetTotalMemoryAllocated());
 }
 
-QueryMetrics::QueryMetrics() : bytes_read(0), bytes_written(0), total_memory_allocated(0) {
+QueryMetrics::QueryMetrics() : bytes_read(0), bytes_written(0), bytes_scanned(0), total_memory_allocated(0) {
 	Reset();
 }
 

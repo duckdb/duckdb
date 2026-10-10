@@ -57,6 +57,7 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/original/std/memory.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -2214,6 +2215,8 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 		++state.row_groups_skipped;
 	} else {
 		++state.row_groups_read;
+		state.bytes_scanned += to_scan_compressed_bytes;
+		QueryProfiler::Get(context).TrackBytesScanned(to_scan_compressed_bytes);
 	}
 	if (state.op) {
 		DUCKDB_LOG(context, PhysicalOperatorLogType, *state.op, "ParquetReader",
