@@ -254,7 +254,10 @@ public:
 
 	DUCKDB_API void CheckLock(const Identifier &name);
 
-	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
+	//! Parse a memory size - an unlimited size (e.g. "-1" or "none") is returned as an invalid optional_idx
+	DUCKDB_API static optional_idx ParseMemoryLimit(const string &arg);
+	//! Parse a memory size, returning NumericLimits<idx_t>::Maximum() for an unlimited size
+	DUCKDB_API static idx_t ParseMemoryLimitOrMaximum(const string &arg);
 
 	//! Returns the list of possible compression functions for the physical type.
 	DUCKDB_API vector<reference<const CompressionFunction>>
