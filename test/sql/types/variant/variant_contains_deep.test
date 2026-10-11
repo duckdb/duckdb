@@ -9,9 +9,9 @@ statement error
 WITH RECURSIVE r(n, v) AS (
   SELECT 0, [1]::VARIANT
   UNION ALL
-  SELECT n + 1, list_value(v)::VARIANT FROM r WHERE n < 25000
+  SELECT n + 1, list_value(v)::VARIANT FROM r WHERE n < 1000
 )
-SELECT variant_contains(v, 1::VARIANT) FROM r WHERE n = 25000;
+SELECT variant_contains(v, 1::VARIANT) FROM r WHERE n = 1000;
 ----
 <REGEX>:Invalid Input Error.*nested more than.*
 
@@ -20,9 +20,9 @@ query II
 WITH RECURSIVE r(n, v) AS (
   SELECT 0, [1]::VARIANT
   UNION ALL
-  SELECT n + 1, list_value(v)::VARIANT FROM r WHERE n < 200
+  SELECT n + 1, list_value(v)::VARIANT FROM r WHERE n < 100
 )
-SELECT variant_contains(v, 1::VARIANT), variant_contains(v, 2::VARIANT) FROM r WHERE n = 200;
+SELECT variant_contains(v, 1::VARIANT), variant_contains(v, 2::VARIANT) FROM r WHERE n = 100;
 ----
 true	false
 

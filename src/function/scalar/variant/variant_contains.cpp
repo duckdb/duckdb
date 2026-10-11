@@ -6,8 +6,9 @@
 
 namespace duckdb {
 
-//! Deepest nesting the comparison follows before it gives up, so a deeply nested VARIANT cannot overflow the stack
-static constexpr idx_t MAX_VARIANT_DEPTH = 1000;
+//! Deepest nesting the comparison follows before it gives up. Kept low so the recursion fits in a 128 KiB
+//! thread stack (musl), matching the JSON recursion limit.
+static constexpr idx_t MAX_VARIANT_DEPTH = 128;
 
 static void CheckDepth(idx_t depth) {
 	if (depth > MAX_VARIANT_DEPTH) {
