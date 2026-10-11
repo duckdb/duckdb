@@ -67,7 +67,10 @@ class CV2FunctionBindInfo {
 public:
 	template <class FUNC>
 	CV2FunctionBindInfo(const FUNC &function, void *user_data)
-	    : in_user_data(user_data), function(function), signature(function.GetDefinition()->GetSignature()) {
+	    : CV2FunctionBindInfo(function, function.GetDefinition()->GetSignature(), user_data) {
+	}
+	CV2FunctionBindInfo(const BoundSimpleFunction &function, const FunctionSignature &signature, void *user_data)
+	    : in_user_data(user_data), function(function), signature(signature) {
 	}
 	virtual ~CV2FunctionBindInfo() = default;
 
@@ -84,8 +87,8 @@ public:
 
 public:
 	void *in_user_data;
-	//! Whether the bind data is set through this handle - scalar functions set it through their own bind info
-	bool can_set_bind_data = true;
+	//! Why the bind data cannot be set through this handle, empty when it can
+	string bind_data_error;
 	//! The bind data the callback set, or nullptr
 	shared_ptr<CV2UserData> out_bind_data;
 
@@ -109,11 +112,11 @@ private:
 	const BindFunctionInput &input;
 };
 
-//! The arguments of a table function call: constants, the positional arguments and the named ones held apart
+//! The arguments of a table or pragma function call: constants, the positional arguments and the named ones held apart
 class CV2ConstantBindInfo final : public CV2FunctionBindInfo {
 public:
-	CV2ConstantBindInfo(const BoundTableFunction &function, void *user_data, const vector<Value> &positional,
-	                    const named_argument_map_t &named);
+	CV2ConstantBindInfo(const BoundSimpleFunction &function, const FunctionSignature &signature, void *user_data,
+	                    const vector<Value> &positional, const named_argument_map_t &named);
 
 	LogicalType GetArgType(idx_t index) const override;
 	Value GetArgValue(idx_t index) const override;

@@ -172,6 +172,10 @@ struct HandleTraits<CustomType> {
 	using handle = duckdb_v2_custom_type_handle;
 };
 template <>
+struct HandleTraits<PragmaFunction> {
+	using handle = duckdb_v2_pragma_function_handle;
+};
+template <>
 struct HandleTraits<CastFunction> {
 	using handle = duckdb_v2_cast_function_handle;
 };
@@ -1052,6 +1056,16 @@ auto Connection::Register(CastFunction &cast_function) -> void {
 auto Extension::Register(CastFunction &cast_function) -> void {
 	cast_function.PrepareRegistration();
 	CheckedAPICall(duckdb_v2_extension_register_cast_function, handle(), cast_function.handle());
+}
+
+auto Connection::Register(PragmaFunction &pragma_function) -> void {
+	pragma_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_connection_register_pragma_function, handle(), pragma_function.handle());
+}
+
+auto Extension::Register(PragmaFunction &pragma_function) -> void {
+	pragma_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_extension_register_pragma_function, handle(), pragma_function.handle());
 }
 
 auto Connection::Register(ReplacementScan &replacement_scan) -> void {
@@ -5784,6 +5798,155 @@ auto CastFunction::ExecInput::GetMode() const -> CastMode {
 
 auto CastFunction::ExecInput::GetContext() -> Context & {
 	return context;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Pragma Function
+//----------------------------------------------------------------------------------------------------------------------
+
+namespace {
+
+// The callback table for one registered pragma: rides the C user_data slot so
+// the trampolines can find it; the user's own slot (SetUserData) rides inside
+// it. Owned by the registered pragma, freed at engine teardown.
+struct PragmaFunctionInfo {
+	PragmaFunction::QueryCallback query_callback = nullptr;
+	PragmaFunction::ExecCallback exec_callback = nullptr;
+	detail::UserData user_data;
+
+	PragmaFunctionInfo(PragmaFunction::QueryCallback query_callback, PragmaFunction::ExecCallback exec_callback,
+	                   detail::UserData user_data)
+	    : query_callback(query_callback), exec_callback(exec_callback), user_data(std::move(user_data)) {
+	}
+
+	bool operator==(const PragmaFunctionInfo &other) const {
+		return query_callback == other.query_callback && exec_callback == other.exec_callback &&
+		       user_data.get() == other.user_data.get();
+	}
+};
+
+// Guard for the inputs' GetUserData: a clear error instead of a null deref.
+void *RequirePragmaUserData(const detail::UserData &user_data) {
+	auto ptr = user_data.get();
+	if (!ptr) {
+		throw InvalidInputException("no user data was set; call PragmaFunction::SetUserData before Register");
+	}
+	return ptr;
+}
+
+auto GetPragmaFunctionInfo(duckdb_v2_function_bind_info_handle info) -> const PragmaFunctionInfo & {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_function_bind_get_user_data, info, &user_data);
+	return *static_cast<const PragmaFunctionInfo *>(user_data);
+}
+
+} // namespace
+
+PragmaFunction::PragmaFunction(void *impl) : detail::Handle<PragmaFunction>(impl) {
+}
+
+PragmaFunction::~PragmaFunction() {
+	auto _h = handle();
+	duckdb_v2_pragma_function_destroy(&_h);
+}
+
+auto PragmaFunction::Create(Factory &factory) -> PragmaFunction {
+	duckdb_v2_pragma_function_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_pragma_function_create, factory.handle(), &_h);
+	return detail::HandleFactory::Make<PragmaFunction>(_h);
+}
+
+auto PragmaFunction::SetName(const std::string &name) & -> PragmaFunction & {
+	auto view = ToStr(name);
+	CheckedAPICall(duckdb_v2_pragma_function_set_name, handle(), &view);
+	return *this;
+}
+
+auto PragmaFunction::GetDocs() -> FunctionDocs {
+	duckdb_v2_function_docs_handle docs = nullptr;
+	CheckedAPICall(duckdb_v2_pragma_function_get_docs, handle(), &docs);
+	return detail::HandleFactory::Make<FunctionDocs>(docs);
+}
+
+auto PragmaFunction::GetSignature() -> FunctionSignature {
+	duckdb_v2_function_signature_handle sig = nullptr;
+	CheckedAPICall(duckdb_v2_pragma_function_get_signature, handle(), &sig);
+	return detail::HandleFactory::Make<FunctionSignature>(sig);
+}
+
+auto PragmaFunction::SetUserDataInternal(void *data, void (*destructor)(void *)) -> void {
+	user_data = detail::UserData(data, destructor);
+}
+
+auto PragmaFunction::SetQueryCallback(QueryCallback callback) & -> PragmaFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_pragma_function_set_query_callback, handle(), nullptr);
+		query_callback = nullptr;
+		return *this;
+	}
+
+	// The C-side callback is one shared trampoline; the user's callback is looked
+	// up through the info table riding the user_data slot (set by Register).
+	static auto trampoline = [](duckdb_v2_function_bind_info_handle info,
+	                            duckdb_v2_pragma_function_query_info_handle result, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			const auto &function = GetPragmaFunctionInfo(info);
+			auto input =
+			    detail::HandleFactory::Make<QueryInput>(static_cast<void *>(info), static_cast<void *>(context));
+			auto query = function.query_callback(input);
+			auto query_str = ToStr(query);
+			CheckedAPICall(duckdb_v2_pragma_function_query_set_query, result, &query_str);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_pragma_function_set_query_callback, handle(), trampoline);
+	query_callback = callback;
+	return *this;
+}
+
+auto PragmaFunction::SetExecCallback(ExecCallback callback) & -> PragmaFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_pragma_function_set_exec_callback, handle(), nullptr);
+		exec_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_function_bind_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			const auto &function = GetPragmaFunctionInfo(info);
+			auto input =
+			    detail::HandleFactory::Make<ExecInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.exec_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_pragma_function_set_exec_callback, handle(), trampoline);
+	exec_callback = callback;
+	return *this;
+}
+
+auto PragmaFunction::PrepareRegistration() -> void {
+	// The callback table rides the C user_data slot so the trampolines can find
+	// it; the user's own data (SetUserData, moved out here) rides inside it.
+	auto info = std::unique_ptr<PragmaFunctionInfo>(
+	    new PragmaFunctionInfo(query_callback, exec_callback, std::move(user_data)));
+	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<PragmaFunctionInfo>,
+	                         detail::TypedEquals<PragmaFunctionInfo>};
+	CheckedAPICall(duckdb_v2_pragma_function_set_user_data, handle(), &opaque);
+	// The pragma owns the table now.
+	info.release(); // NOLINT(bugprone-unused-return-value)
+}
+
+void *PragmaFunction::QueryInput::GetUserDataInternal() const {
+	const auto &function = *static_cast<const PragmaFunctionInfo *>(GetFunctionInfo());
+	return RequirePragmaUserData(function.user_data);
+}
+
+void *PragmaFunction::ExecInput::GetUserDataInternal() const {
+	const auto &function = *static_cast<const PragmaFunctionInfo *>(GetFunctionInfo());
+	return RequirePragmaUserData(function.user_data);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

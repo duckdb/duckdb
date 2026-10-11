@@ -19,6 +19,7 @@ add_library(
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_copy_function.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_core.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_file_system.cpp
+  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_pragma_function.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_prepared_statement.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_query.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_replacement_scan.cpp

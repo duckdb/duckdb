@@ -3129,8 +3129,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_bind_get_arg_type(duckdb_v2_func
  * Folds the argument at the given index to a constant value.
  *
  * Fails if the argument is not constant, e.g. a column reference, or if the index is out of bounds. The arguments of a
- * table function are always constant. The resulting value may be NULL. The returned value is owned by the caller and
- * must be destroyed via `duckdb_v2_value_destroy()`.
+ * table or pragma function are always constant. The resulting value may be NULL. The returned value is owned by the
+ * caller and must be destroyed via `duckdb_v2_value_destroy()`.
  *
  * history:
  * - stable: v2.0.0
@@ -3206,9 +3206,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_bind_get_arg_index(duckdb_v2_fun
 
 /*!
  * A borrowed opaque handle to the documentation of a function overload. Taken from the function it documents with
- * `duckdb_v2_scalar_function_get_docs()`, `duckdb_v2_aggregate_function_get_docs()` or
- * `duckdb_v2_table_function_get_docs()`, and valid for as long as that function handle is; the caller never destroys
- * it.
+ * `duckdb_v2_scalar_function_get_docs()`, `duckdb_v2_aggregate_function_get_docs()`,
+ * `duckdb_v2_table_function_get_docs()` or `duckdb_v2_pragma_function_get_docs()`, and valid for as long as that
+ * function handle is; the caller never destroys it.
  */
 typedef struct _duckdb_v2_function_docs {
 	void *internal_ptr;
@@ -8218,6 +8218,275 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_factory_create_common_type(duckdb_v2_fact
 #endif
 
 /* --- Struct definitions for logical_type --- */
+
+/* ============================================================================
+ * MODULE: pragma
+ * ============================================================================ */
+
+/* --- Enums for pragma --- */
+
+/* --- Struct forward declarations for pragma --- */
+
+/* --- Types for pragma --- */
+
+/*!
+ * An owned opaque handle to a custom pragma function being built. Created with `duckdb_v2_pragma_function_create()`,
+ * configured with the setter functions (e.g. `duckdb_v2_pragma_function_set_name()`,
+ * `duckdb_v2_pragma_function_set_query_callback()`, etc.) and the signature obtained via
+ * `duckdb_v2_pragma_function_get_signature()`, made available with `duckdb_v2_connection_register_pragma_function()` or
+ * `duckdb_v2_extension_register_pragma_function()`, and destroyed with `duckdb_v2_pragma_function_destroy()`.
+ */
+typedef struct _duckdb_v2_pragma_function {
+	void *internal_ptr;
+} * duckdb_v2_pragma_function_handle;
+
+/*!
+ * A borrowed opaque handle to the result of a pragma function's "query" callback. The query callback receives this
+ * handle next to a `duckdb_v2_function_bind_info_handle`, which gives access to the arguments and the user data, and
+ * uses it to set the query to run in place of the `PRAGMA` statement.
+ */
+typedef struct _duckdb_v2_pragma_function_query_info {
+	void *internal_ptr;
+} * duckdb_v2_pragma_function_query_info_handle;
+
+/* --- Constants for pragma --- */
+
+/* --- Function pointer typedefs for pragma --- */
+
+typedef void (*duckdb_v2_pragma_function_query_callback_fn)(duckdb_v2_function_bind_info_handle info,
+                                                            duckdb_v2_pragma_function_query_info_handle result,
+                                                            duckdb_v2_context_handle context,
+                                                            duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_pragma_function_exec_callback_fn)(duckdb_v2_function_bind_info_handle info,
+                                                           duckdb_v2_context_handle context,
+                                                           duckdb_v2_error_info_handle *err);
+
+/* --- Functions for pragma --- */
+
+/*!
+ * Creates a new pragma function through a factory.
+ *
+ * The function starts out empty: configure it with the setter functions (e.g. `duckdb_v2_pragma_function_set_name()`,
+ * `duckdb_v2_pragma_function_set_query_callback()`, etc.) and the signature obtained via
+ * `duckdb_v2_pragma_function_get_signature()`, then make it available with
+ * `duckdb_v2_connection_register_pragma_function()` or `duckdb_v2_extension_register_pragma_function()`. The caller
+ * owns the returned handle and must destroy it with `duckdb_v2_pragma_function_destroy()`, also after registration.
+ *
+ * The pragma function can only be registered on the database the factory belongs to.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param factory The factory to create the pragma function through.
+ * @param function On success, receives the newly created pragma function. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_pragma_function_create(duckdb_v2_factory_handle factory,
+                                                              duckdb_v2_pragma_function_handle *function,
+                                                              duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the name of the pragma function, as the `PRAGMA` statement calls it.
+ *
+ * The name is borrowed and copied. Calling this again replaces the previous name. A name must be set before
+ * registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the name of.
+ * @param name The name to set. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_pragma_function_set_name(duckdb_v2_pragma_function_handle function,
+                                                                const duckdb_v2_identifier_t *name,
+                                                                duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the documentation of the function so it can be filled in.
+ *
+ * Set a description with `duckdb_v2_function_docs_set_description()`, and add examples and categories with
+ * `duckdb_v2_function_docs_add_example()` and `duckdb_v2_function_docs_add_category()`. The documentation is modified
+ * in place and registered with the function. Optional.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to get the documentation of.
+ * @param docs The returned documentation. Borrowed and valid for the lifetime of the function handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_pragma_function_get_docs(duckdb_v2_pragma_function_handle function,
+                                                                duckdb_v2_function_docs_handle *docs,
+                                                                duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the function's signature so it can be configured.
+ *
+ * Add parameters with `duckdb_v2_function_signature_add_parameter()`. A pragma produces no value, so its signature
+ * cannot set a return type. A signature without parameters makes a pragma called as `PRAGMA name`. The signature is
+ * modified in place.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to get the signature of.
+ * @param sig The returned signature. Borrowed and valid for the lifetime of the function handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_pragma_function_get_signature(duckdb_v2_pragma_function_handle function,
+                                                                     duckdb_v2_function_signature_handle *sig,
+                                                                     duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets arbitrary user data on the pragma function.
+ *
+ * Associates an opaque pointer with the function, retrievable from the callbacks via
+ * `duckdb_v2_function_bind_get_user_data()`. The opaque handle bundles the pointer with an optional destructor, invoked
+ * when the data is no longer needed.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the user data of.
+ * @param data Opaque handle bundling the user data pointer plus an optional destructor.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_pragma_function_set_user_data(duckdb_v2_pragma_function_handle function,
+                                                                     duckdb_v2_opaque *data,
+                                                                     duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the query callback of the pragma function, making it a query pragma.
+ *
+ * The query callback is invoked before the `PRAGMA` statement is bound, and must set a SQL string through
+ * `duckdb_v2_pragma_function_query_set_query()`. The string is parsed and its statements run in place of the `PRAGMA`
+ * statement. A pragma function has either a query callback or an exec callback; registration fails when both or neither
+ * are set.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the query callback of.
+ * @param callback The query callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_pragma_function_set_query_callback(
+    duckdb_v2_pragma_function_handle function, duckdb_v2_pragma_function_query_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the exec callback of the pragma function, making it an exec pragma.
+ *
+ * The exec callback is invoked when the `PRAGMA` statement executes, and runs for its side effects: the statement
+ * produces no rows. A pragma function has either a query callback or an exec callback; registration fails when both or
+ * neither are set.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the exec callback of.
+ * @param callback The exec callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_pragma_function_set_exec_callback(
+    duckdb_v2_pragma_function_handle function, duckdb_v2_pragma_function_exec_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the SQL to run in place of the `PRAGMA` statement.
+ *
+ * The query may hold several statements, separated by semicolons. It is borrowed and copied. Calling this again
+ * replaces the previous query. The query callback must set a query.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The query info handle.
+ * @param query The SQL to run. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_pragma_function_query_set_query(duckdb_v2_pragma_function_query_info_handle info,
+                                                                       const duckdb_v2_str *query,
+                                                                       duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the pragma function, making it available to the `PRAGMA` statement.
+ *
+ * The function is registered on the connection's database, visible to every connection, in the connection's
+ * transaction: inside an explicit transaction, it is invisible to other connections until the transaction commits, and
+ * a rollback undoes it. Registration requires a name and exactly one of a query callback or an exec callback, and fails
+ * when a pragma of the same name already exists. The pragma function must have been created through a factory of the
+ * same database. The caller still owns the handle after registration and must destroy it with
+ * `duckdb_v2_pragma_function_destroy()`, which does not affect the registered function.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection to register on.
+ * @param function The pragma function to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_register_pragma_function(duckdb_v2_connection_handle conn,
+                                                                           duckdb_v2_pragma_function_handle function,
+                                                                           duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the pragma function, making it available to the `PRAGMA` statement.
+ *
+ * The function is registered on the loading extension's database and attributed to the extension. Use this from the
+ * extension's load callback. Registration requires a name and exactly one of a query callback or an exec callback, and
+ * fails when a pragma of the same name already exists. The pragma function must have been created through a factory of
+ * the same database. The caller still owns the handle after registration and must destroy it with
+ * `duckdb_v2_pragma_function_destroy()`, which does not affect the registered function.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param extension The loading extension.
+ * @param function The pragma function to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_extension_register_pragma_function(duckdb_v2_extension_handle extension,
+                                                                          duckdb_v2_pragma_function_handle function,
+                                                                          duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys the pragma function, releasing its resources.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction. Destroying the handle after registration does not affect the registered function.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_pragma_function_destroy(duckdb_v2_pragma_function_handle *function);
+
+/* --- Struct definitions for pragma --- */
 
 /* ============================================================================
  * MODULE: replacement scan

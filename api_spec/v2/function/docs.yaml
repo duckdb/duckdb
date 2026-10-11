@@ -2,7 +2,7 @@ module: function docs
 #
 # The documentation of one function overload, as `duckdb_functions()` reports it: a description, examples and
 # categories. Taken
-# from a scalar, aggregate or table function with its `*_get_docs` getter, and registered with it. Overloads registered
+# from a scalar, aggregate, table or pragma function with its `*_get_docs` getter, and registered with it. Overloads registered
 # under the same name each keep their own documentation, matched to them by their parameter types.
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -12,8 +12,8 @@ handles:
   function_docs:
     description: |
       A borrowed opaque handle to the documentation of a function overload. Taken from the function it documents with
-      `[[scalar_function_get_docs]]`, `[[aggregate_function_get_docs]]` or `[[table_function_get_docs]]`, and valid
-      for as long as that function handle is; the caller never destroys it.
+      `[[scalar_function_get_docs]]`, `[[aggregate_function_get_docs]]`, `[[table_function_get_docs]]` or
+      `[[pragma_function_get_docs]]`, and valid for as long as that function handle is; the caller never destroys it.
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Functions

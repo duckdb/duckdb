@@ -1201,6 +1201,10 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_get_docs)
 	(duckdb_v2_aggregate_function_handle function, duckdb_v2_function_docs_handle *docs,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_pragma_function)
+	(duckdb_v2_connection_handle conn, duckdb_v2_pragma_function_handle function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_pragma_function)
+	(duckdb_v2_extension_handle extension, duckdb_v2_pragma_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_function_docs_add_category)
 	(duckdb_v2_function_docs_handle docs, const duckdb_v2_str *category, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_function_docs_add_example)
@@ -1208,6 +1212,26 @@ typedef struct {
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_function_docs_set_description)
 	(duckdb_v2_function_docs_handle docs, const duckdb_v2_str *description, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_pragma_function_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_pragma_function_handle *function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_pragma_function_destroy)(duckdb_v2_pragma_function_handle *function);
+	DUCKDB_V2_ERROR(*duckdb_v2_pragma_function_get_docs)
+	(duckdb_v2_pragma_function_handle function, duckdb_v2_function_docs_handle *docs, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_pragma_function_get_signature)
+	(duckdb_v2_pragma_function_handle function, duckdb_v2_function_signature_handle *sig,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_pragma_function_query_set_query)
+	(duckdb_v2_pragma_function_query_info_handle info, const duckdb_v2_str *query, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_pragma_function_set_exec_callback)
+	(duckdb_v2_pragma_function_handle function, duckdb_v2_pragma_function_exec_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_pragma_function_set_name)
+	(duckdb_v2_pragma_function_handle function, const duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_pragma_function_set_query_callback)
+	(duckdb_v2_pragma_function_handle function, duckdb_v2_pragma_function_query_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_pragma_function_set_user_data)
+	(duckdb_v2_pragma_function_handle function, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_get_docs)
 	(duckdb_v2_scalar_function_handle function, duckdb_v2_function_docs_handle *docs, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_get_docs)
@@ -1830,9 +1854,20 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_option_get_default_scope = duckdb_v2_option_get_default_scope;
 	result.duckdb_v2_option_supports_scope = duckdb_v2_option_supports_scope;
 	result.duckdb_v2_aggregate_function_get_docs = duckdb_v2_aggregate_function_get_docs;
+	result.duckdb_v2_connection_register_pragma_function = duckdb_v2_connection_register_pragma_function;
+	result.duckdb_v2_extension_register_pragma_function = duckdb_v2_extension_register_pragma_function;
 	result.duckdb_v2_function_docs_add_category = duckdb_v2_function_docs_add_category;
 	result.duckdb_v2_function_docs_add_example = duckdb_v2_function_docs_add_example;
 	result.duckdb_v2_function_docs_set_description = duckdb_v2_function_docs_set_description;
+	result.duckdb_v2_pragma_function_create = duckdb_v2_pragma_function_create;
+	result.duckdb_v2_pragma_function_destroy = duckdb_v2_pragma_function_destroy;
+	result.duckdb_v2_pragma_function_get_docs = duckdb_v2_pragma_function_get_docs;
+	result.duckdb_v2_pragma_function_get_signature = duckdb_v2_pragma_function_get_signature;
+	result.duckdb_v2_pragma_function_query_set_query = duckdb_v2_pragma_function_query_set_query;
+	result.duckdb_v2_pragma_function_set_exec_callback = duckdb_v2_pragma_function_set_exec_callback;
+	result.duckdb_v2_pragma_function_set_name = duckdb_v2_pragma_function_set_name;
+	result.duckdb_v2_pragma_function_set_query_callback = duckdb_v2_pragma_function_set_query_callback;
+	result.duckdb_v2_pragma_function_set_user_data = duckdb_v2_pragma_function_set_user_data;
 	result.duckdb_v2_scalar_function_get_docs = duckdb_v2_scalar_function_get_docs;
 	result.duckdb_v2_table_function_get_docs = duckdb_v2_table_function_get_docs;
 	result.duckdb_v2_connection_register_multi_file_function = duckdb_v2_connection_register_multi_file_function;

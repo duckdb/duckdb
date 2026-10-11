@@ -91,6 +91,7 @@ template <class CTX>
 class TypeBuilder;
 class CustomType;
 class CastFunction;
+class PragmaFunction;
 class ReplacementScan;
 class QualifiedName;
 class TableDescription;
@@ -824,6 +825,11 @@ public:
 	/// @throws InvalidInputException When the source type, target type, or exec callback is missing, or either type is
 	/// not concrete.
 	auto Register(CastFunction &cast_function) -> void;
+	/// Registers the pragma. The function object remains valid; user data set via `SetUserData` is consumed by the
+	/// first registration.
+	/// @throws InvalidInputException When the name is missing, not exactly one of the query and exec callbacks is set,
+	/// the signature declares a return type, or a pragma of the same name already exists.
+	auto Register(PragmaFunction &pragma_function) -> void;
 	/// Registers the scan. Scans are consulted in registration order within
 	/// their scope, connection-scoped ones before database-wide ones, and the first to claim a name wins. A scan can
 	/// be registered only once.
@@ -1177,6 +1183,11 @@ public:
 	/// @throws InvalidInputException When the source type, target type, or exec callback is missing, or either type is
 	/// not concrete.
 	auto Register(CastFunction &cast_function) -> void;
+	/// Registers the pragma. The function object remains valid; user data set via `SetUserData` is consumed by the
+	/// first registration.
+	/// @throws InvalidInputException When the name is missing, not exactly one of the query and exec callbacks is set,
+	/// the signature declares a return type, or a pragma of the same name already exists.
+	auto Register(PragmaFunction &pragma_function) -> void;
 	/// Registers the scan. Scans are consulted in registration order within
 	/// their scope, connection-scoped ones before database-wide ones, and the first to claim a name wins. A scan can
 	/// be registered only once.
@@ -5830,6 +5841,142 @@ public:
 
 		void *args;
 		Context context;
+
+		void *GetUserDataInternal() const;
+	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Pragma Function
+//----------------------------------------------------------------------------------------------------------------------
+
+/// A user-defined pragma, called with the `PRAGMA` statement. Create one through a `Factory` of the database it will be
+/// registered in, describe it (name, signature, callback), then register it with `Connection::Register` or
+/// `Extension::Register`. The function object may be destroyed after registration; the registered pragma lives on in
+/// the catalog.
+///
+/// A pragma takes constant arguments and is one of two kinds, decided by the callback it is given: a query pragma
+/// returns SQL that runs in place of the `PRAGMA` statement, and an exec pragma runs for its side effects and produces
+/// no rows. Set exactly one of the two callbacks. A pragma without parameters is called as `PRAGMA name`, one with
+/// parameters as `PRAGMA name(...)`. A callback reports failure by throwing; the exception surfaces as the statement's
+/// error.
+class PragmaFunction final : public detail::Handle<PragmaFunction> {
+	friend detail::HandleFactory;
+	friend class Connection;
+	friend class Extension;
+
+public:
+	class QueryInput;
+	class ExecInput;
+
+	/// Called before the `PRAGMA` statement is bound; returns the SQL to run in its place, which may hold several
+	/// statements.
+	using QueryCallback = std::string (*)(QueryInput &input);
+	/// Called when the `PRAGMA` statement executes.
+	using ExecCallback = void (*)(ExecInput &input);
+
+	PragmaFunction(PragmaFunction &&) noexcept = default;
+	PragmaFunction &operator=(PragmaFunction &&) noexcept = default;
+
+	~PragmaFunction() override;
+
+	/// Creates an empty PragmaFunction through `factory`. Register it through a `Connection` or an `Extension` of the
+	/// factory's database.
+	static auto Create(Factory &factory) -> PragmaFunction;
+
+	/// Sets the pragma's name, as the `PRAGMA` statement calls it.
+	auto SetName(const std::string &name) & -> PragmaFunction &;
+	/// The documentation of the pragma, borrowed for in-place mutation.
+	auto GetDocs() -> FunctionDocs;
+
+	/// Calls `configure` with the documentation of the pragma, borrowed for in-place mutation.
+	template <class F>
+	auto WithDocs(F &&configure) & -> PragmaFunction & {
+		auto docs = GetDocs();
+		configure(docs);
+		return *this;
+	}
+
+	/// The pragma's signature, borrowed for in-place mutation. A pragma produces no value, so registration rejects a
+	/// signature with a return type.
+	auto GetSignature() -> FunctionSignature;
+
+	/// Calls `configure` with the pragma's signature, borrowed for in-place mutation.
+	template <class F>
+	auto WithSignature(F &&configure) & -> PragmaFunction & {
+		auto sig = GetSignature();
+		configure(sig);
+		return *this;
+	}
+
+	/// Constructs user data of type `T`, carried by the registered pragma and freed at engine teardown; read it from
+	/// the callback via the input's `GetUserData<T>`. Consumed by registration: set it again before re-registering.
+	template <class T, class... ARGS>
+	auto SetUserData(ARGS &&... args) & -> PragmaFunction & {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		SetUserDataInternal(ptr, detail::TypedDelete<T>);
+		return *this;
+	}
+
+	/// Makes this a query pragma. Registration fails when an exec callback is set as well.
+	auto SetQueryCallback(QueryCallback callback) & -> PragmaFunction &;
+	/// Makes this an exec pragma. Registration fails when a query callback is set as well.
+	auto SetExecCallback(ExecCallback callback) & -> PragmaFunction &;
+
+private:
+	explicit PragmaFunction(void *impl);
+	//! Moves what the callbacks need into the C handle, right before it is registered.
+	auto PrepareRegistration() -> void;
+
+	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
+
+	QueryCallback query_callback = nullptr;
+	ExecCallback exec_callback = nullptr;
+	detail::UserData user_data;
+
+public:
+	/// What the query callback works with: the arguments of the `PRAGMA` statement. Borrowed, valid only for the
+	/// callback duration.
+	class QueryInput final : public FunctionBindInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The user data set via `PragmaFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+	private:
+		QueryInput(void *args, void *context) : FunctionBindInput(args, context) {
+		}
+
+		/// Pragmas have no bind data
+		using FunctionBindInput::SetBindData;
+
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the exec callback works with: the arguments of the `PRAGMA` statement. Borrowed, valid only for the
+	/// callback duration.
+	class ExecInput final : public FunctionBindInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The user data set via `PragmaFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+	private:
+		ExecInput(void *args, void *context) : FunctionBindInput(args, context) {
+		}
+
+		/// Pragmas have no bind data
+		using FunctionBindInput::SetBindData;
 
 		void *GetUserDataInternal() const;
 	};
