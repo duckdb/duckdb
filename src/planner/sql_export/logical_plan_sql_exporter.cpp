@@ -160,8 +160,9 @@ LogicalPlanSQLExportContext::FindSource(const LogicalOperator &op) const {
 LogicalPlanSQLExportResult LogicalPlanSQLExportContext::Export(LogicalOperator &op,
                                                                const LogicalPlanVerificationPath &path) {
 	if (auto source = FindSource(op)) {
-		return EnsureSQLProjection(LogicalPlanSQLExportResult::Success(
-		    {CreateNamedSource(source->name, source->relation.fields), source->relation.fields}));
+		auto read = CreateNamedSource(source->name, source->relation.fields);
+		source_reads.insert(*read->from_table);
+		return EnsureSQLProjection(LogicalPlanSQLExportResult::Success({std::move(read), source->relation.fields}));
 	}
 	ancestors.push_back(op);
 	auto result = op.ToSQL(*this, path);
@@ -203,20 +204,43 @@ Identifier LogicalPlanSQLExportContext::NextRelationAlias(const Identifier &pref
 	}
 }
 
-void LogicalPlanSQLExportContext::ReserveRelationNames(QueryNode &query) {
+static void VisitRelationReferences(QueryNode &query, const std::function<void(TableRef &)> &callback) {
 	std::function<void(const ParsedExpression &)> visit_expression = [&](const ParsedExpression &expression) {
 		if (expression.GetExpressionClass() == ExpressionClass::SUBQUERY) {
-			ReserveRelationNames(*expression.Cast<SubqueryExpression>().Subquery()->node);
+			VisitRelationReferences(*expression.Cast<SubqueryExpression>().Subquery()->node, callback);
 		}
 		ParsedExpressionIterator::EnumerateChildren(expression, visit_expression);
 	};
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
-	    query, [&](unique_ptr<ParsedExpression> &expression) { visit_expression(*expression); },
-	    [&](TableRef &ref) {
-		    if (ref.type == TableReferenceType::BASE_TABLE) {
-			    relation_aliases.insert(ref.Cast<BaseTableRef>().Table());
-		    }
-	    });
+	    query, [&](unique_ptr<ParsedExpression> &expression) { visit_expression(*expression); }, callback);
+}
+
+void LogicalPlanSQLExportContext::ReserveRelationNames(QueryNode &query) {
+	VisitRelationReferences(query, [&](TableRef &ref) {
+		if (ref.type == TableReferenceType::BASE_TABLE) {
+			relation_aliases.insert(ref.Cast<BaseTableRef>().Table());
+		}
+	});
+}
+
+optional<Identifier>
+LogicalPlanSQLExportContext::FindCapturedSourceReference(QueryNode &query, const identifier_set_t &source_names) const {
+	optional<Identifier> captured;
+	VisitRelationReferences(query, [&](TableRef &ref) {
+		if (captured || ref.type != TableReferenceType::BASE_TABLE) {
+			return;
+		}
+		// Qualified references bind past the generated WITH scope.
+		auto &name = ref.Cast<BaseTableRef>().GetQualifiedName();
+		if (!name.Catalog().empty() || !name.Schema().empty()) {
+			return;
+		}
+		if (source_names.count(name.Name()) &&
+		    source_reads.find(reference<const TableRef>(ref)) == source_reads.end()) {
+			captured = name.Name();
+		}
+	});
+	return captured;
 }
 
 LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
@@ -396,6 +420,16 @@ LogicalPlanSQLExporter::ExportWithSources(ClientContext &context, LogicalOperato
 	}
 	for (auto &consumer : consumers.map) {
 		result.query->cte_map.map.insert(consumer.first, std::move(consumer.second));
+	}
+	// A source callback may emit an unqualified reference the plan verifier never sees;
+	// refuse a result whose generated names would rebind such a reference.
+	identifier_set_t source_names;
+	for (auto &source : sources) {
+		source_names.insert(source.name);
+	}
+	if (auto captured = state.FindCapturedSourceReference(*result.query, source_names)) {
+		return invalid("A generated SQL source name would capture a relation reference of the exported plan: " +
+		               captured->GetIdentifierName());
 	}
 	auto success = LogicalPlanSQLExportResult::Success(std::move(result));
 	return options.output_names ? ApplyOutputNames(std::move(success), *options.output_names) : std::move(success);
