@@ -3,6 +3,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "sql_export_test_helpers.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
@@ -819,6 +820,100 @@ TEST_CASE("Generated source names do not capture replacement catalog references"
 	vector<LogicalPlanSQLExportReplacement> root_replacement;
 	root_replacement.push_back({*plan, ReplacementRelation(connection, *plan, "SELECT 7::BIGINT,8::BIGINT")});
 	RequireReplacementResult(connection, *plan, root_replacement, "SELECT 7::BIGINT,8::BIGINT");
+	connection.Rollback();
+}
+
+TEST_CASE("Generated source names do not capture exported plan references",
+          "[sql_export][logical_plan_sql_export][plan_view_regression]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE capture_target(c0 BIGINT); INSERT INTO capture_target VALUES (7)"));
+	connection.BeginTransaction();
+	auto plan = BindResolvedReplacementPlan(connection, "SELECT a.i, c0 FROM range(1) a(i), capture_target");
+	auto cross = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_CROSS_PRODUCT);
+	REQUIRE(cross);
+	optional_ptr<LogicalGet> table_get;
+	optional_ptr<LogicalOperator> replaced;
+	for (auto &child : cross->children) {
+		auto get = FindLogicalPlanExportOperator(*child, LogicalOperatorType::LOGICAL_GET);
+		REQUIRE(get);
+		if (get->Cast<LogicalGet>().GetTable()) {
+			table_get = get->Cast<LogicalGet>();
+		} else {
+			replaced = child.get();
+		}
+	}
+	REQUIRE(table_get);
+	REQUIRE(replaced);
+	vector<LogicalPlanSQLExportReplacement> replacements;
+	replacements.push_back({*replaced, ReplacementRelation(connection, *replaced, "SELECT 1::BIGINT AS i")});
+	SECTION("an unqualified callback reference matching a generated name is refused") {
+		table_get->function.to_sql = [](ClientContext &, const LogicalGet &) -> TableFunctionToSQLResult {
+			auto reference = make_uniq<BaseTableRef>();
+			reference->SetTable(Identifier("__export_source"));
+			return {std::move(reference), {}};
+		};
+		auto exported = LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements);
+		RequirePlanExportIssue(exported, LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
+	}
+	SECTION("a non-colliding callback reference binds past the generated names") {
+		table_get->function.to_sql = [](ClientContext &, const LogicalGet &) -> TableFunctionToSQLResult {
+			auto reference = make_uniq<BaseTableRef>();
+			reference->SetTable(Identifier("capture_target"));
+			return {std::move(reference), {}};
+		};
+		RequireReplacementResult(connection, *plan, replacements, "SELECT 1::BIGINT AS i, 7::BIGINT AS c0");
+	}
+	connection.Rollback();
+}
+
+TEST_CASE("Resolved subtree export rejects a plan with a detached child",
+          "[sql_export][logical_plan_sql_export][plan_views]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto plan = BindResolvedReplacementPlan(connection, "SELECT i + 1 FROM range(3) t(i)");
+	REQUIRE_FALSE(plan->children.empty());
+	auto detached = std::move(plan->children[0]);
+	auto exported = LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, {});
+	REQUIRE(exported.HasError());
+	REQUIRE(exported.GetIssues()[0].code == LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
+	REQUIRE(StringUtil::Contains(exported.GetIssues()[0].message, "is null"));
+	plan->children[0] = std::move(detached);
+	REQUIRE(LogicalPlanVerifier::VerifyResolvedBindings(*plan).IsSuccess());
+	connection.Rollback();
+}
+
+TEST_CASE("Window ordinality fusion respects replacement boundaries",
+          "[sql_export][logical_plan_sql_export][plan_view_regression]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT * FROM range(3) WITH ORDINALITY");
+	auto window = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_WINDOW);
+	REQUIRE(window);
+	auto &boundary = *window->children[0];
+	REQUIRE(boundary.type == LogicalOperatorType::LOGICAL_GET);
+	auto &get = boundary.Cast<LogicalGet>();
+	REQUIRE(get.source_ordinality == OrdinalityType::WITH_ORDINALITY);
+	REQUIRE_FALSE(get.ordinality_idx.IsValid());
+	vector<LogicalPlanSQLExportReplacement> replacements;
+	replacements.push_back(
+	    {boundary, ReplacementRelation(connection, boundary, "SELECT 10::BIGINT UNION ALL SELECT 20::BIGINT")});
+	auto exported = LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements);
+	REQUIRE(exported.IsSuccess());
+	auto sql = exported.GetValue().query->ToString();
+	INFO(sql);
+	REQUIRE_FALSE(StringUtil::Contains(StringUtil::Lower(sql), "range("));
+	auto result = connection.Query("SELECT * FROM (" + sql + ") t ORDER BY 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->RowCount() == 2);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::BIGINT(10));
+	REQUIRE(result->Collection().GetValue(0, 1) == Value::BIGINT(20));
+	vector<Value> ordinals = {result->Collection().GetValue(1, 0), result->Collection().GetValue(1, 1)};
+	std::sort(ordinals.begin(), ordinals.end(), [](const Value &a, const Value &b) { return a < b; });
+	REQUIRE(ordinals[0] == Value::BIGINT(1));
+	REQUIRE(ordinals[1] == Value::BIGINT(2));
 	connection.Rollback();
 }
 
