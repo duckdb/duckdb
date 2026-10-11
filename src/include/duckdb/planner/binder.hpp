@@ -698,6 +698,8 @@ private:
 	                vector<unique_ptr<Expression>> &expressions, MergeIntoAction &action,
 	                const vector<BindingAlias> &source_aliases, const vector<Identifier> &source_names);
 
+	//! Run the column-list checks of a plain INSERT on an INSERT that is rewritten into a MERGE INTO
+	void CheckOnConflictInsertColumns(InsertQueryNode &node, TableCatalogEntry &table);
 	unique_ptr<MergeIntoStatement> GenerateMergeInto(InsertQueryNode &node, TableCatalogEntry &table);
 
 	static void CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
