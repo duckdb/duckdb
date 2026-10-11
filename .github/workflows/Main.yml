@@ -186,8 +186,11 @@ jobs:
         run: |
           make test_ci
 
-          if [[ "${{ github.event_name }}" != "pull_request" || "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
+          # clang-cl Windows extension builds are not yet stable, skip them on pull requests
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             extra_exclude_archs=
+          elif [[ "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
+            extra_exclude_archs=windows_amd64
           else
             extra_exclude_archs=windows_amd64\;wasm_eh
           fi

@@ -28,8 +28,7 @@ std::string ReadAll(FileHandle &file, idx_t capacity) {
 } // namespace
 
 TEST_CASE("Stable C++API: file system round-trip", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto fs = conn.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_roundtrip.bin");
@@ -53,9 +52,20 @@ TEST_CASE("Stable C++API: file system round-trip", "[cpp_api]") {
 	REQUIRE(ReadAll(file, 5) == "world");
 }
 
+TEST_CASE("Stable C++API: an instance's file system", "[cpp_api]") {
+	auto db = Instance(":memory:");
+	auto fs = db.GetFileSystem();
+	auto path = duckdb::TestCreatePath("cpp_fs_instance.bin");
+	{
+		auto file = fs.OpenFile(path, {FileFlags::WRITE, FileFlags::FILE_CREATE_NEW});
+		WriteAll(file, "hello");
+	}
+	auto file = fs.OpenFile(path, {FileFlags::READ});
+	REQUIRE(ReadAll(file, 16) == "hello");
+}
+
 TEST_CASE("Stable C++API: file flags", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto fs = conn.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_flags.bin");
@@ -94,8 +104,7 @@ TEST_CASE("Stable C++API: file flags", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: file system refusals", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto fs = conn.GetFileSystem();
 
@@ -110,8 +119,7 @@ TEST_CASE("Stable C++API: file system refusals", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: file handle close then destroy", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto fs = conn.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_close.bin");
@@ -123,8 +131,7 @@ TEST_CASE("Stable C++API: file handle close then destroy", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: positional file read and write", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto fs = conn.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_positional.bin");
@@ -150,17 +157,17 @@ TEST_CASE("Stable C++API: positional file read and write", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: file open options", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
+	auto &factory = conn.GetFactory();
 	auto fs = conn.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_options.bin");
 
 	auto options = fs.CreateOpenOptions();
 	options.SetFlag(FileFlags::WRITE)
 	    .SetFlag(FileFlags::FILE_CREATE_NEW)
-	    .SetValue("file_size", Value::Create(conn, int64_t {4}))
-	    .SetValue("made_up_option", Value::Create(conn, varchar_t("nobody-reads-this")));
+	    .SetValue("file_size", Value::Create(factory, int64_t {4}))
+	    .SetValue("made_up_option", Value::Create(factory, varchar_t("nobody-reads-this")));
 
 	{
 		auto file = fs.OpenFile(path, options);
@@ -182,8 +189,7 @@ TEST_CASE("Stable C++API: file open options", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: opening a file specified as a file struct", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto fs = conn.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_file_struct.bin");
@@ -194,9 +200,9 @@ TEST_CASE("Stable C++API: opening a file specified as a file struct", "[cpp_api]
 
 	auto file_struct = [&](Value option) {
 		std::vector<std::pair<std::string, Value>> fields;
-		fields.emplace_back("filename", Value::Create(conn, varchar_t(path)));
+		fields.emplace_back("filename", Value::Create(conn.GetFactory(), varchar_t(path)));
 		fields.emplace_back("validate_external_file_cache", std::move(option));
-		return Value::CreateStruct(conn, fields);
+		return Value::CreateStruct(conn.GetFactory(), fields);
 	};
 	auto open = [&](const Value &file) {
 		auto options = fs.CreateOpenOptions();
@@ -209,29 +215,29 @@ TEST_CASE("Stable C++API: opening a file specified as a file struct", "[cpp_api]
 	};
 
 	// a path carries no options
-	auto plain = Value::Create(conn, varchar_t(path));
+	auto plain = Value::Create(conn.GetFactory(), varchar_t(path));
 	REQUIRE(GetFilePath(plain) == path);
 	REQUIRE(read(plain) == "hello world");
 
 	// the other fields of a file struct are the options to open the file with - the external file cache reads this
 	// one, and rejects a value that is not a BOOLEAN
-	auto valid = file_struct(Value::Create(conn, false));
+	auto valid = file_struct(Value::Create(conn.GetFactory(), false));
 	REQUIRE(GetFilePath(valid) == path);
 	REQUIRE(read(valid) == "hello world");
-	REQUIRE_THROWS_WITH(open(file_struct(Value::Create(conn, varchar_t("notabool")))),
+	REQUIRE_THROWS_WITH(open(file_struct(Value::Create(conn.GetFactory(), varchar_t("notabool")))),
 	                    Catch::Contains("validate_external_file_cache"));
 	// an option set to NULL was not specified
-	auto null_option = file_struct(Value::CreateNull(conn, conn.ParseType("BOOLEAN")));
+	auto null_option = file_struct(Value::CreateNull(conn.GetFactory(), conn.GetFactory().ParseType("BOOLEAN")));
 	REQUIRE(read(null_option) == "hello world");
 
 	// refusals
-	REQUIRE_THROWS_MATCHES(GetFilePath(Value::Create(conn, int32_t(42))), Exception,
+	REQUIRE_THROWS_MATCHES(GetFilePath(Value::Create(conn.GetFactory(), int32_t(42))), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
-	REQUIRE_THROWS_MATCHES(GetFilePath(Value::CreateNull(conn, conn.ParseType("VARCHAR"))), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(GetFilePath(Value::CreateNull(conn.GetFactory(), conn.GetFactory().ParseType("VARCHAR"))),
+	                       Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	std::vector<std::pair<std::string, Value>> no_path;
-	no_path.emplace_back("file_size", Value::Create(conn, uint64_t(42)));
-	auto no_path_struct = Value::CreateStruct(conn, no_path);
+	no_path.emplace_back("file_size", Value::Create(conn.GetFactory(), uint64_t(42)));
+	auto no_path_struct = Value::CreateStruct(conn.GetFactory(), no_path);
 	REQUIRE_THROWS_MATCHES(GetFilePath(no_path_struct), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	auto options = fs.CreateOpenOptions();
 	REQUIRE_THROWS_MATCHES(options.SetValues(no_path_struct), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
