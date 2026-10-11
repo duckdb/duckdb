@@ -68,6 +68,16 @@ string ExtensionRepository::TryConvertUrlToKnownRepository(const string &url) {
 	return "";
 }
 
+string ExtensionRepository::TryGetBackupRepositoryUrl(const string &url) {
+	if (url == CORE_REPOSITORY_URL) {
+		return CORE_BACKUP_REPOSITORY_URL;
+	}
+	if (url == COMMUNITY_REPOSITORY_URL) {
+		return COMMUNITY_BACKUP_REPOSITORY_URL;
+	}
+	return "";
+}
+
 ExtensionRepository ExtensionRepository::GetDefaultRepository(optional_ptr<DBConfig> config) {
 	if (config) {
 		auto custom_extension_repo = Settings::Get<CustomExtensionRepositorySetting>(*config);

@@ -172,6 +172,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 					child_writer.WriteStringRef(string_t(string_val.GetData(), 0));
 				}
 			} else {
+				regexp_util::VerifyUTF8Result(match_group.data(), match_group.size());
 				// Every group is a substring of the original, we can find the offset via pointer
 				D_ASSERT(const_char_ptr_cast(match_group.begin()) >= string_val.GetData());
 				auto offset = UnsafeNumericCast<idx_t>(match_group.begin() - string_val.GetData());
@@ -224,6 +225,7 @@ static list_entry_t ExtractStructAllSingleTuple(const string_t &string_val, duck
 				}
 				cdata[current_list_size] = string_t(string_val.GetData(), 0);
 			} else {
+				regexp_util::VerifyUTF8Result(span.data(), span.size());
 				auto offset = span.begin() - string_val.GetData();
 				cdata[current_list_size] =
 				    string_t(string_val.GetData() + offset, UnsafeNumericCast<uint32_t>(span.size()));

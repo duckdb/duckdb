@@ -3013,7 +3013,7 @@ bool ShellState::SQLIsComplete(const char *zSql) {
 			next_state = SQLParseState::WHITESPACE;
 			break;
 		}
-			//		case '`': /* Grave-accent quoted symbols used by MySQL */
+		case '`': /* backtick-quoted identifiers */
 		case '"': /* single- and double-quoted strings */
 		case '\'': {
 			int c = *zSql;
@@ -3538,7 +3538,33 @@ bool ShellState::DetectAgentEnvironment(string &agent_name, string &marker) {
 	return false;
 }
 
+//! DUCKDB_AGENT_MODE=1/0 (on/off, true/false, yes/no) forces agent mode on or off - like -agent / -no-agent, which
+//! take precedence. Unset, empty or "auto" leaves it to the auto-detection
+static OptionType AgentModeFromEnvironment(ShellState &state) {
+	auto value = getenv("DUCKDB_AGENT_MODE");
+	if (!value || !value[0] || StringUtil::CIEquals(value, "auto")) {
+		return OptionType::DEFAULT;
+	}
+	for (auto on : {"1", "on", "true", "yes"}) {
+		if (StringUtil::CIEquals(value, on)) {
+			return OptionType::ON;
+		}
+	}
+	for (auto off : {"0", "off", "false", "no"}) {
+		if (StringUtil::CIEquals(value, off)) {
+			return OptionType::OFF;
+		}
+	}
+	state.PrintF(PrintOutput::STDERR, "warning: ignoring DUCKDB_AGENT_MODE=%s (expected 1, 0 or auto)\n", value);
+	return OptionType::DEFAULT;
+}
+
 void ShellState::DetectAgentMode() {
+	if (agent_mode == OptionType::DEFAULT) {
+		// no -agent / -no-agent on the command line - the environment may decide
+		agent_mode = AgentModeFromEnvironment(*this);
+		agent_mode_from_environment = agent_mode != OptionType::DEFAULT;
+	}
 	switch (agent_mode) {
 	case OptionType::ON:
 		agent_mode_active = true;
@@ -3574,7 +3600,8 @@ void ShellState::PrintAgentHelp(PrintOutput output, bool startup) {
 		// one line, on every run: that the shell switched modes on its own, why, how to undo it, where the rest is.
 		// A model keeps its context between runs, so the explanation is paid for once through .help agent
 		if (agent_marker.empty()) {
-			PrintF(output, "duckdb agent mode on (-agent); .help agent explains the output\n");
+			PrintF(output, "duckdb agent mode on (%s); .help agent explains the output\n",
+			       agent_mode_from_environment ? "DUCKDB_AGENT_MODE is set" : "-agent");
 		} else {
 			PrintF(output,
 			       "duckdb agent mode on: %s is set and stdout is not a terminal; -no-agent turns it off, .help agent "
@@ -3597,8 +3624,10 @@ void ShellState::PrintAgentHelp(PrintOutput output, bool startup) {
 	PrintF(output,
 	       "tips: SET max_execution_time=<ms> bounds a query; DESCRIBE <query> gives the result columns "
 	       "without running it; SUMMARIZE <table>; .tables; duckdb_functions() has descriptions and examples\n");
-	PrintF(output, "switches: -agent / -no-agent force the mode; an output mode flag (-csv, -json, ...) leaves it off; "
-	               ".startup_text none in ~/.duckdbrc hides the startup line\n");
+	PrintF(output,
+	       "switches: -agent / -no-agent force the mode, and so does DUCKDB_AGENT_MODE=1 / 0 in the environment "
+	       "(the flags win); an output mode flag (-csv, -json, ...) leaves it off; .startup_text none in "
+	       "~/.duckdbrc hides the startup line\n");
 }
 
 void ShellState::PrintExitHint(int rc) {

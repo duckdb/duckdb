@@ -298,7 +298,13 @@ idx_t DataTable::MaxThreads(ClientContext &context) const {
 		parallel_scan_vector_count = 1;
 	}
 	idx_t parallel_scan_tuple_count = STANDARD_VECTOR_SIZE * parallel_scan_vector_count;
-	return GetTotalRows() / parallel_scan_tuple_count + 1;
+	idx_t total_rows = GetTotalRows();
+	auto local_storage = LocalStorage::Get(context, db).GetStorage(*this);
+	if (local_storage) {
+		// transaction-local rows are scanned in parallel as well
+		total_rows += local_storage->GetCollection().GetTotalRows();
+	}
+	return total_rows / parallel_scan_tuple_count + 1;
 }
 
 void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state,
@@ -364,10 +370,6 @@ void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
 	info->indexes.AddIndex(std::move(index), index_oid);
 }
 
-void DataTable::AddConstraintIndex(unique_ptr<Index> index) {
-	info->indexes.AddIndex(std::move(index), /*index_oid=*/optional_idx());
-}
-
 bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {
 	auto index = info->indexes.FindForeignKeyIndex(keys, type);
 	return index != nullptr;
@@ -431,10 +433,6 @@ void DataTableInfo::VerifyIndexBuffers() const {
 
 void DataTable::CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count) {
 	row_groups->CleanupAppend(lowest_visibility_bound, start, count);
-}
-
-bool DataTable::IndexNameIsUnique(const string &name) {
-	return info->indexes.NameIsUnique(name);
 }
 
 Identifier DataTableInfo::GetSchemaName() {
@@ -1734,7 +1732,7 @@ bool DataTable::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegment
 // Index Constraint Creation
 //===--------------------------------------------------------------------===//
 void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes,
-                         const IndexConstraintType type, IndexStorageInfo index_info) {
+                         const IndexConstraintType type, IndexStorageInfo index_info, idx_t index_oid) {
 	if (!IsMainTable()) {
 		throw TransactionException("Transaction conflict: attempting to add an index to table \"%s\" but it has been "
 		                           "%s by a different transaction",
@@ -1757,7 +1755,7 @@ void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &
 	auto &io_manager = TableIOManager::Get(*this);
 	auto art = make_uniq<ART>(index_info.name, type, physical_ids, io_manager, std::move(expressions), db, nullptr,
 	                          index_info);
-	info->indexes.AddIndex(std::move(art), /*index_oid=*/optional_idx());
+	AddIndex(std::move(art), index_oid);
 }
 
 } // namespace duckdb

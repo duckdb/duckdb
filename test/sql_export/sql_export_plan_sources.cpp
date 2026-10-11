@@ -28,7 +28,7 @@ namespace logical_plan_sql_export_test {
 
 static unique_ptr<LogicalOperator> OptimizeLogicalPlanExportQueryWithRepeatedPruning(Connection &connection,
                                                                                      const string &query) {
-	Parser parser(connection.context->GetParserOptions());
+	Parser parser(*connection.context);
 	parser.ParseQuery(query);
 	REQUIRE(parser.statements.size() == 1);
 	Planner planner(*connection.context);

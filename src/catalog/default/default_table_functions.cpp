@@ -2,7 +2,6 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -101,7 +100,7 @@ DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMa
 	}
 	for (idx_t named_idx = 0; default_macro.named_parameters[named_idx].name != nullptr; named_idx++) {
 		const auto &named_param = default_macro.named_parameters[named_idx];
-		auto default_value = Parser::ParseSingleExpression(named_param.default_value);
+		auto default_value = Parser::GetBuiltinParser().ParseSingleExpression(named_param.default_value);
 		function->parameters.push_back(make_uniq<ColumnRefExpression>(named_param.name));
 		function->default_parameters.insert(Identifier(named_param.name), std::move(default_value));
 	}
@@ -117,12 +116,8 @@ DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMa
 
 unique_ptr<CreateMacroInfo>
 DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &default_macro) {
-	return CreateTableMacroInfo(default_macro, ParserOptions());
-}
-
-unique_ptr<CreateMacroInfo> DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &default_macro,
-                                                                                const ParserOptions &options) {
-	auto result = make_uniq<TableMacroFunction>(Parser::ParseSelectNode(default_macro.macro, options));
+	auto parser = Parser::GetBuiltinParser();
+	auto result = make_uniq<TableMacroFunction>(parser.ParseSelectNode(default_macro.macro));
 	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
@@ -139,19 +134,16 @@ DefaultTableFunctionGenerator::FindTableMacro(const DefaultTableMacro macros[], 
 
 unique_ptr<CatalogEntry> DefaultTableFunctionGenerator::CreateTableMacroEntry(Catalog &catalog,
                                                                               SchemaCatalogEntry &schema,
-                                                                              const DefaultTableMacro &default_macro,
-                                                                              const ParserOptions &options) {
-	auto info = CreateTableMacroInfo(default_macro, options);
+                                                                              const DefaultTableMacro &default_macro) {
+	auto info = CreateTableMacroInfo(default_macro);
 	return make_uniq_base<CatalogEntry, TableMacroCatalogEntry>(catalog, schema, *info);
 }
 
-unique_ptr<CatalogEntry> DefaultTableFunctionGenerator::CreateDefaultEntry(ClientContext &context,
+unique_ptr<CatalogEntry> DefaultTableFunctionGenerator::CreateDefaultEntry(ClientContext &,
                                                                            const Identifier &entry_name) {
-	ParserOptions options;
-	options.compiled_grammar = CompiledGrammar::Get(context);
 	auto macro = FindTableMacro(internal_table_macros, entry_name, schema.name);
 	if (macro) {
-		return CreateTableMacroEntry(catalog, schema, *macro, options);
+		return CreateTableMacroEntry(catalog, schema, *macro);
 	}
 	return nullptr;
 }

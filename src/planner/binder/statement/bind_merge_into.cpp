@@ -231,30 +231,26 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		throw NotImplementedException("MERGE INTO is not supported on tables with triggers");
 	}
 
-	if (!table.temporary) {
-		// update of persistent table: not read only!
-		auto &properties = GetStatementProperties();
-		// modification type depends on actions
-		DatabaseModificationType modification;
-		for (auto &action_condition : node.actions) {
-			for (auto &action : action_condition.second) {
-				switch (action->action_type) {
-				case MergeActionType::MERGE_UPDATE:
-					modification |= DatabaseModificationType::UPDATE_DATA;
-					break;
-				case MergeActionType::MERGE_DELETE:
-					modification |= DatabaseModificationType::DELETE_DATA;
-					break;
-				case MergeActionType::MERGE_INSERT:
-					modification |= DatabaseModificationType::INSERT_DATA;
-					break;
-				default:
-					break;
-				}
+	// modification type depends on actions
+	DatabaseModificationType modification;
+	for (auto &action_condition : node.actions) {
+		for (auto &action : action_condition.second) {
+			switch (action->action_type) {
+			case MergeActionType::MERGE_UPDATE:
+				modification |= DatabaseModificationType::UPDATE_DATA;
+				break;
+			case MergeActionType::MERGE_DELETE:
+				modification |= DatabaseModificationType::DELETE_DATA;
+				break;
+			case MergeActionType::MERGE_INSERT:
+				modification |= DatabaseModificationType::INSERT_DATA;
+				break;
+			default:
+				break;
 			}
 		}
-		properties.RegisterDBModify(table.catalog, context, modification);
 	}
+	GetStatementProperties().RegisterDBModify(table.catalog, context, modification);
 
 	// bind the source
 	auto source_binder = Binder::CreateBinder(context, this);
@@ -274,6 +270,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	// bind the WHEN NOT MATCHED BY SOURCE / TARGET merge actions
 	auto &get = bound_table.plan->Cast<LogicalGet>();
 	auto merge_into = make_uniq<LogicalMergeInto>(table);
+	merge_into->return_chunk = !node.returning_list.empty();
 	merge_into->table_index = GenerateTableIndex();
 	auto proj_index = GenerateTableIndex();
 	vector<unique_ptr<Expression>> projection_expressions;
@@ -340,10 +337,6 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	// kind of hacky, CreatePlan turns a RIGHT join into a LEFT join so the children get reversed from what we need
 	bool inverted = join.type == JoinType::RIGHT;
 	auto &source = join_ref.get().children[inverted ? 1 : 0];
-
-	if (!node.returning_list.empty()) {
-		merge_into->return_chunk = true;
-	}
 
 	// bind WHEN_MATCHED merge actions (can contain references to both source and target)
 	for (auto &entry : node.actions) {

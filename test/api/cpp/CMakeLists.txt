@@ -12,6 +12,7 @@ add_library(
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_aggregate_function.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_appender.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_arrow.cpp
+  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_arrow_result.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_cast_function.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_catalog.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_column_data_collection.cpp

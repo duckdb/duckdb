@@ -175,7 +175,7 @@ TEST_CASE("Logical plan SQL export applies requested output names", "[sql_export
 	auto rebound_query = connection.Query(rebound->Collection().GetValue(1, 0).GetValue<string>());
 	REQUIRE_NO_FAIL(*rebound_query);
 	REQUIRE(rebound_query->GetTypes() == vector<LogicalType> {LogicalType::VARCHAR, LogicalType::BIGINT});
-	Parser parser;
+	Parser parser(*connection.context);
 	parser.ParseQuery("EXPLAIN (SQL) SELECT 42");
 	auto copied = parser.statements[0]->Copy();
 	REQUIRE(copied->ToString() == "EXPLAIN (SQL) SELECT 42");

@@ -15,6 +15,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -83,7 +84,11 @@ static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) 
 	if (!TryDoubleCast(input.c_str(), input.size() - 1, percentage, false) || percentage < 0 || percentage > 100) {
 		throw InvalidInputException("Unable to parse valid percentage (input: %s)", input);
 	}
-	return LossyNumericCast<idx_t>(percentage) * get_base() / 100;
+	auto result = percentage * static_cast<double>(get_base()) / 100.0;
+	if (result >= static_cast<double>(NumericLimits<idx_t>::Maximum())) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	return LossyNumericCast<idx_t>(result);
 }
 
 //! The available system memory. The config's filesystem is not set until the database starts, but
@@ -724,9 +729,6 @@ void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, con
 				throw InvalidInputException("Shredding can consist of the nested types LIST (for ARRAY Variant values) "
 				                            "or STRUCT (for OBJECT Variant values), not %s",
 				                            type.ToString());
-			}
-			if (type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(type)) {
-				throw InvalidInputException("STRUCT types in the shredding can not be empty");
 			}
 			return false;
 		}

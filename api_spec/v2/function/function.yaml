@@ -61,7 +61,7 @@ functions:
       The bind data is stored with the bound call site and retrievable from every later callback. The opaque
       handle bundles the pointer with an optional destructor, invoked when the bind data is no longer needed,
       and an optional equality callback used when comparing two bound call sites; without one, pointer equality
-      is used.
+      is used. Scalar functions set their bind data through `[[scalar_function_bind_set_bind_data]]` instead.
     parameters:
       info:
         type: function_bind_info

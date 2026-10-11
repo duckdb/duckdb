@@ -90,6 +90,12 @@
       ]
     },
     {
+      "reason": "Calibrates exact memory-fit boundaries that shift when the optimizer is disabled.",
+      "paths": [
+        "test/sql/copy/parquet/parquet_prefetch_tracked_memory.test"
+      ]
+    },
+    {
       "reason": "Recursive CTE relies on short-circuiting optimization.",
       "paths": [
         "test/sql/cte/recursive_cte_limit.test",

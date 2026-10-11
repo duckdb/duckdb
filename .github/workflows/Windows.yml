@@ -63,6 +63,9 @@ jobs:
       shell: pwsh
       run: |
         $commands = Get-Content compile_commands.json -Raw
+        if (!$commands.Contains('clang-cl')) {
+          throw 'Windows amd64 Release compile commands are not using clang-cl'
+        }
         if (!$commands.Contains('-march=haswell') -or !$commands.Contains('-mtune=generic')) {
           throw 'Windows amd64 Release compile commands are missing the CLI architecture flags'
         }
@@ -157,6 +160,16 @@ jobs:
         path: repository
         if-no-files-found: error
 
+    - name: Package release artifact
+      shell: bash
+      run: make release-artifact RELEASE_ARTIFACT_SOURCE_DIR=. RELEASE_ARTIFACT_TARBALL=build/windows-release-amd64-build.tar.gz
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: build/windows-release-amd64-build.tar.gz
+        if-no-files-found: error
+        archive: false
+
  win-release-32:
     name: Windows (32 Bit)
     needs:
@@ -165,6 +178,9 @@ jobs:
     runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
     env:
       GEN: ninja
+      CC: clang-cl
+      CXX: clang-cl
+      EXTRA_CMAKE_VARIABLES: -DCMAKE_C_COMPILER_TARGET=i686-pc-windows-msvc -DCMAKE_CXX_COMPILER_TARGET=i686-pc-windows-msvc
 
     steps:
     - name: "Checkout"
@@ -188,7 +204,16 @@ jobs:
     - name: Build
       shell: bash
       run: |
+        clang-cl --version
         python scripts/ci/retry.py -- make windows_release_32
+
+    - name: Verify compiler
+      shell: pwsh
+      run: |
+        $commands = Get-Content compile_commands.json -Raw
+        if (!$commands.Contains('clang-cl')) {
+          throw 'Windows 32-bit compile commands are not using clang-cl'
+        }
 
     - name: Test
       shell: bash
@@ -212,7 +237,7 @@ jobs:
      GEN: ninja
      CC: clang-cl
      CXX: clang-cl
-     EXTRA_CMAKE_VARIABLES: -DBUILD_UNITTESTS=FALSE -DCMAKE_C_COMPILER_TARGET=arm64-pc-windows-msvc -DCMAKE_CXX_COMPILER_TARGET=arm64-pc-windows-msvc
+     EXTRA_CMAKE_VARIABLES: -DCMAKE_C_COMPILER_TARGET=arm64-pc-windows-msvc -DCMAKE_CXX_COMPILER_TARGET=arm64-pc-windows-msvc
 
    steps:
      - uses: actions/checkout@v6
@@ -241,6 +266,9 @@ jobs:
        shell: pwsh
        run: |
          $commands = Get-Content compile_commands.json -Raw
+         if (!$commands.Contains('clang-cl')) {
+           throw 'Windows ARM64 Release compile commands are not using clang-cl'
+         }
          if (!$commands.Contains('-march=armv8-a') -or !$commands.Contains('-mtune=generic')) {
            throw 'Windows ARM64 Release compile commands are missing the architecture flags'
          }
@@ -295,6 +323,16 @@ jobs:
          name: release-core-extensions-windows-arm64
          path: repository
          if-no-files-found: error
+
+     - name: Package release artifact
+       shell: bash
+       run: make release-artifact RELEASE_ARTIFACT_SOURCE_DIR=. RELEASE_ARTIFACT_TARBALL=build/windows-release-arm64-build.tar.gz
+
+     - uses: actions/upload-artifact@v7
+       with:
+         path: build/windows-release-arm64-build.tar.gz
+         if-no-files-found: error
+         archive: false
 
  mingw:
      name: MinGW (64 Bit)
@@ -404,3 +442,13 @@ jobs:
            name: release-core-extensions-windows-mingw
            path: build/release/repository
            if-no-files-found: error
+
+       - name: Package release artifact
+         shell: bash
+         run: make release-artifact RELEASE_ARTIFACT_TARBALL=build/windows-release-mingw-build.tar.gz
+
+       - uses: actions/upload-artifact@v7
+         with:
+           path: build/windows-release-mingw-build.tar.gz
+           if-no-files-found: error
+           archive: false

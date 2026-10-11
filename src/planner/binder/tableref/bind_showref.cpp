@@ -1,3 +1,4 @@
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -216,7 +217,8 @@ BoundStatement Binder::BindDescribeTable(ShowRef &ref) {
 	} else {
 		sql = PragmaShow(ref.GetTableName().GetIdentifierName());
 	}
-	auto select = CreateViewInfo::ParseSelect(sql);
+	auto parser = Parser::GetBuiltinParser();
+	auto select = CreateViewInfo::ParseSelect(parser, sql);
 	auto subquery = make_uniq<SubqueryRef>(std::move(select));
 	return Bind(*subquery);
 }

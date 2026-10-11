@@ -47,18 +47,19 @@ public:
 	}
 };
 
+void WriteLogResolveTypes(ResolveScalarFunctionTypesInput &input) {
+	if (input.GetArgumentCount() == 0) {
+		throw BinderException("write_log takes at least one argument");
+	}
+	if (input.GetArgumentType(0) != LogicalType::VARCHAR) {
+		throw InvalidTypeException("write_log first argument must be a VARCHAR");
+	}
+}
+
 unique_ptr<FunctionData> WriteLogBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-
-	if (arguments.empty()) {
-		throw BinderException("write_log takes at least one argument");
-	}
-
-	if (arguments[0]->GetReturnType() != LogicalType::VARCHAR) {
-		throw InvalidTypeException("write_log first argument must be a VARCHAR");
-	}
 
 	// Used to replace the actual log call with a nop: useful for benchmarking
 	auto result = make_uniq<WriteLogBindData>();
@@ -172,6 +173,7 @@ ScalarFunctionSet WriteLogFun::GetFunctions() {
 	ScalarFunction fun({{"string", LogicalType::VARCHAR}}, LogicalType::ANY, WriteLogFunction, WriteLogBind, nullptr,
 	                   nullptr, LogicalType(LogicalTypeId::INVALID), FunctionStability::VOLATILE);
 	fun.GetSignature().AddKwargs("kwargs", LogicalType::ANY);
+	fun.SetResolveTypesCallback(WriteLogResolveTypes);
 	fun.GetProperties().SetRequiresExpressionNames(true);
 	fun.SetUnbindCallback(WriteLogUnbind);
 	set.AddFunction(std::move(fun));

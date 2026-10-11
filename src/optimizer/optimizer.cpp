@@ -467,7 +467,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	bool removed_expressions = false;
 	if (!CTEContainsDML(*plan)) {
 		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
-			StatisticsPropagator propagator(*this, *plan);
+			StatisticsPropagator propagator(*this, plan);
 			propagator.PropagateStatistics(plan);
 			statistics_map = propagator.GetStatisticsMap();
 			propagated_statistics = true;
@@ -478,7 +478,7 @@ void Optimizer::RunBuiltInOptimizers() {
 		MultiStageAggregateRewriter costed_rewriter(*this, AggregateRewritePolicy::COST_BASED, false, statistics_map);
 		costed_rewriter.VisitOperator(plan);
 		if (costed_rewriter.WasChanged()) {
-			StatisticsPropagator propagator(*this, *plan);
+			StatisticsPropagator propagator(*this, plan);
 			propagator.PropagateStatistics(plan);
 			statistics_map = propagator.GetStatisticsMap();
 			removed_expressions |= propagator.HasRemovedExpressions();

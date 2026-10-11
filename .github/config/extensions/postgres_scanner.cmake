@@ -5,5 +5,6 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             GIT_URL https://github.com/duckdb/duckdb-postgres
             GIT_TAG f9db66ec5a5c35a30ce868d2b7233ffc0a21a08e
             SUBMODULES database-connector
+            APPLY_PATCHES
             )
  endif()

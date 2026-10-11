@@ -475,9 +475,11 @@ struct ICUStrptime : public ICUDateFunc {
 				    auto calendar = cal.get();
 
 				    // Extract the offset from the calendar
-				    auto offset = ExtractField(calendar, CAL_ZONE_OFFSET);
-				    offset += ExtractField(calendar, CAL_DST_OFFSET);
-				    offset /= Interval::MSECS_PER_SEC;
+				    int32_t offset;
+				    if (!TryGetTimeTZOffset(calendar, offset)) {
+					    HandleCastError::AssignError(TimeTZOffsetError(offset), parameters);
+					    return nullopt;
+				    }
 
 				    // Apply it to the offset +00 time we parsed.
 				    result = dtime_tz_t(result.time(), offset);

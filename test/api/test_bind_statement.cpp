@@ -12,7 +12,7 @@
 using namespace duckdb;
 
 static StatementSignature BindOne(Connection &con, const string &sql) {
-	Parser parser(con.context->GetParserOptions());
+	Parser parser(*con.context);
 	parser.ParseQuery(sql);
 	REQUIRE(parser.statements.size() == 1);
 	return con.context->BindStatement(std::move(parser.statements[0]));

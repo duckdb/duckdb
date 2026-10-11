@@ -275,23 +275,23 @@ public:
 		case LogicalTypeId::UNION:
 		case LogicalTypeId::VARIANT:
 		case LogicalTypeId::MAP:
-			if (!type.AuxInfo()) {
+			if (!type.HasParameters()) {
 				return true;
 			}
 			return false;
 		case LogicalTypeId::LIST:
-			if (!type.AuxInfo()) {
+			if (!type.HasParameters()) {
 				return true;
 			}
 			return TypeRequiresAssignment(ListType::GetChildType(type));
 		case LogicalTypeId::ARRAY:
-			if (!type.AuxInfo()) {
+			if (!type.HasParameters()) {
 				return true;
 			}
 			return TypeRequiresAssignment(ArrayType::GetChildType(type));
 		case LogicalTypeId::STRUCT:
 		case LogicalTypeId::TUPLE:
-			if (!type.AuxInfo()) {
+			if (!type.HasParameters()) {
 				return true;
 			}
 			if (StructType::GetChildCount(type) == 0) {

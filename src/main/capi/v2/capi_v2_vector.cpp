@@ -66,8 +66,7 @@ DUCKDB_V2_ERROR duckdb_v2_vector_get_logical_type(duckdb_v2_vector_handle vector
 		}
 		*out_type = nullptr;
 		auto *vec = Convert(vector);
-		auto *lt = new duckdb::LogicalType(vec->GetType());
-		*out_type = reinterpret_cast<_duckdb_v2_logical_type *>(lt);
+		*out_type = Convert(vec->GetType());
 	});
 }
 

@@ -3,6 +3,7 @@
 #include "duckdb/planner/logical_plan_sql_exporter.hpp"
 #include "duckdb/planner/sql_export/bound_expression_sql_exporter_internal.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -73,6 +74,19 @@ static optional<Value> ConstantSQLInput(const Expression &expression, LogicalOpe
 	}
 }
 
+static LogicalPlanSQLExportResult EnsureSQLProjection(LogicalPlanSQLExportResult result) {
+	if (result.HasError() || !result.GetValue().fields.empty() ||
+	    result.GetValue().query->type != QueryNodeType::SELECT_NODE) {
+		return result;
+	}
+	auto &select = result.GetValue().query->Cast<SelectNode>();
+	if (select.select_list.empty()) {
+		// SQL needs a SELECT expression even when the logical relation only carries row counts.
+		select.select_list.push_back(make_uniq<ConstantExpression>(Literal::Null()));
+	}
+	return result;
+}
+
 static LogicalPlanSQLExportResult ApplyOutputNames(LogicalPlanSQLExportResult result,
                                                    const vector<Identifier> &output_names) {
 	if (result.HasError()) {
@@ -81,6 +95,9 @@ static LogicalPlanSQLExportResult ApplyOutputNames(LogicalPlanSQLExportResult re
 	if (output_names.size() != result.GetValue().fields.size()) {
 		return LogicalPlanSQLExportResult::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
 		    LogicalPlanVerificationPath(), "output_names", "Output name count does not match the exported plan")});
+	}
+	if (output_names.empty()) {
+		return result;
 	}
 	if (result.GetValue().query->type == QueryNodeType::SELECT_NODE) {
 		auto &select = result.GetValue().query->Cast<SelectNode>();
@@ -125,15 +142,15 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportContext::Export(LogicalOperator &
 	for (auto scope = source_scope; scope; scope = scope->parent) {
 		for (auto &source : scope->sources) {
 			if (&source.op.get() == &op) {
-				return LogicalPlanSQLExportResult::Success(
-				    {CreateNamedSource(source.name, source.relation.fields), source.relation.fields});
+				return EnsureSQLProjection(LogicalPlanSQLExportResult::Success(
+				    {CreateNamedSource(source.name, source.relation.fields), source.relation.fields}));
 			}
 		}
 	}
 	ancestors.push_back(op);
 	auto result = op.ToSQL(*this, path);
 	ancestors.pop_back();
-	return result;
+	return EnsureSQLProjection(std::move(result));
 }
 
 void LogicalPlanSQLExportContext::PushNamedRelation(TableIndex index, const Identifier &name, bool is_recurring) {

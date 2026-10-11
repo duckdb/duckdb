@@ -106,7 +106,10 @@ bool RequiresTrackingAttaches(const string &path, const string &db_type) {
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
 	string extension = "";
-	if (FileSystem::IsRemoteFile(info.path, extension)) {
+	// a storage extension named by an explicit TYPE interprets the path itself (e.g. as a connection URI)
+	// so a remote-looking path only implies a remote file (read-only, requiring e.g. httpfs) otherwise
+	bool explicit_storage_type = !options.db_type.empty() && !StringUtil::CIEquals(options.db_type, "duckdb");
+	if (!explicit_storage_type && FileSystem::IsRemoteFile(info.path, extension)) {
 		if (options.access_mode == AccessMode::AUTOMATIC) {
 			// Attaching of remote files gets bumped to READ_ONLY
 			// This is due to the fact that on most (all?) remote files writes to DB are not available
@@ -132,7 +135,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				auto existing_mode = existing_db->IsReadOnly() ? AccessMode::READ_ONLY : AccessMode::READ_WRITE;
 				auto existing_mode_str = EnumUtil::ToString(existing_mode);
 				auto attached_mode = EnumUtil::ToString(options.access_mode);
-				throw BinderException("Database \"%s\" is already attached in %s mode, cannot re-attach in %s mode",
+				throw BinderException("Database %s is already attached in %s mode, cannot re-attach in %s mode",
 				                      info.name, existing_mode_str, attached_mode);
 			}
 			if (!options.default_table.Name().empty()) {
@@ -236,7 +239,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 				detached_db = std::move(entry.first->second);
 				databases[name] = attached_db;
 			} else {
-				throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
+				throw BinderException("Failed to attach database: database with name %s already exists", name);
 			}
 		}
 	}
