@@ -2274,6 +2274,18 @@ auto Vector::Reference(const Vector &source) -> void {
 	CheckedAPICall(duckdb_v2_vector_reference, handle(), source.handle());
 }
 
+auto Vector::Cast(Factory &factory, Vector &target) const -> void {
+	CheckedAPICall(duckdb_v2_vector_cast, factory.handle(), handle(), target.handle(), DUCKDB_V2_CAST_MODE_NORMAL,
+	               nullptr);
+}
+
+auto Vector::TryCast(Factory &factory, Vector &target) const -> bool {
+	bool converted = false;
+	CheckedAPICall(duckdb_v2_vector_cast, factory.handle(), handle(), target.handle(), DUCKDB_V2_CAST_MODE_TRY,
+	               &converted);
+	return converted;
+}
+
 auto Vector::GetSize() const -> idx_t {
 	idx_t size = 0;
 	CheckedAPICall(duckdb_v2_vector_get_size, handle(), &size);
@@ -6143,6 +6155,34 @@ FileSystem::~FileSystem() {
 
 auto FileSystem::CreateOpenOptions() const -> FileOpenOptions {
 	return FileOpenOptions::Create(*this);
+}
+
+auto FileSystem::PathExists(const std::string &path) const -> bool {
+	auto path_str = ToStr(path);
+	bool exists = false;
+	CheckedAPICall(duckdb_v2_file_system_path_exists, handle(), &path_str, &exists);
+	return exists;
+}
+
+auto FileSystem::PathIsRemote(const std::string &path) const -> bool {
+	auto path_str = ToStr(path);
+	bool is_remote = false;
+	CheckedAPICall(duckdb_v2_file_system_path_is_remote, handle(), &path_str, &is_remote);
+	return is_remote;
+}
+
+auto FileSystem::PathExpand(const std::string &path) const -> std::string {
+	auto sink = [](const duckdb_v2_str *text, void *user_data, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&] {
+			if (text->ptr && text->len) {
+				static_cast<std::string *>(user_data)->assign(text->ptr, text->len);
+			}
+		});
+	};
+	auto path_str = ToStr(path);
+	std::string out;
+	CheckedAPICall(duckdb_v2_file_system_path_expand, handle(), &path_str, sink, &out);
+	return out;
 }
 
 auto FileSystem::OpenFile(const std::string &path, std::initializer_list<FileFlags> flags) const -> FileHandle {

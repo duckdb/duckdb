@@ -1271,6 +1271,18 @@ typedef struct {
 	(duckdb_v2_custom_option_update_info_handle info, duckdb_v2_value_handle value, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_custom_option)
 	(duckdb_v2_extension_handle extension, duckdb_v2_custom_option_handle option, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_path_exists)
+	(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *path, bool *out_exists,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_path_expand)
+	(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *path, duckdb_v2_text_sink_fn sink, void *user_data,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_path_is_remote)
+	(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *path, bool *out_is_remote,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vector_cast)
+	(duckdb_v2_factory_handle factory, duckdb_v2_vector_handle source, duckdb_v2_vector_handle target,
+	 DUCKDB_V2_CAST_MODE mode, bool *out_converted, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_multi_file_function)
 	(duckdb_v2_connection_handle conn, duckdb_v2_multi_file_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_set_statistics_callback)
@@ -1922,6 +1934,10 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_custom_option_update_is_reset = duckdb_v2_custom_option_update_is_reset;
 	result.duckdb_v2_custom_option_update_set_value = duckdb_v2_custom_option_update_set_value;
 	result.duckdb_v2_extension_register_custom_option = duckdb_v2_extension_register_custom_option;
+	result.duckdb_v2_file_system_path_exists = duckdb_v2_file_system_path_exists;
+	result.duckdb_v2_file_system_path_expand = duckdb_v2_file_system_path_expand;
+	result.duckdb_v2_file_system_path_is_remote = duckdb_v2_file_system_path_is_remote;
+	result.duckdb_v2_vector_cast = duckdb_v2_vector_cast;
 	result.duckdb_v2_connection_register_multi_file_function = duckdb_v2_connection_register_multi_file_function;
 	result.duckdb_v2_copy_to_set_statistics_callback = duckdb_v2_copy_to_set_statistics_callback;
 	result.duckdb_v2_copy_to_statistics_get_bind_data = duckdb_v2_copy_to_statistics_get_bind_data;

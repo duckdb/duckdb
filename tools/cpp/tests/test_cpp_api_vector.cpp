@@ -816,3 +816,35 @@ TEST_CASE("Stable C++API: DataChunk capacity", "[cpp_api]") {
 	REQUIRE(chunk.GetCapacity() == STANDARD_VECTOR_SIZE);
 	REQUIRE(chunk.GetRowCount() == 0);
 }
+
+TEST_CASE("Stable C++API: vector cast and try cast", "[cpp_api]") {
+	using namespace duckdb::cxx;
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto &factory = conn.GetFactory();
+
+	std::vector<LogicalType> types;
+	types.push_back(factory.ParseType("VARCHAR"));
+	types.push_back(factory.ParseType("INTEGER"));
+	DataChunk chunk(factory, types);
+	auto source = chunk.GetVector(0);
+	auto target = chunk.GetVector(1);
+	source.SetSize(3);
+	source.AssignString(0, "1");
+	source.AssignString(1, "x");
+	source.AssignString(2, "3");
+
+	REQUIRE_THROWS_MATCHES(source.Cast(factory, target), Exception, HasErrorCode(DUCKDB_V2_ERROR_TYPE_CONVERSION));
+
+	REQUIRE_FALSE(source.TryCast(factory, target));
+	auto view = target.GetView();
+	REQUIRE(view.count == 3);
+	REQUIRE(view.IsValid(0));
+	REQUIRE(view.Data<int32_t>()[view.SelAt(0)] == 1);
+	REQUIRE_FALSE(view.IsValid(1));
+	REQUIRE(view.Data<int32_t>()[view.SelAt(2)] == 3);
+
+	source.AssignString(1, "2");
+	source.Cast(factory, target);
+	REQUIRE(target.GetView().Data<int32_t>()[1] == 2);
+}

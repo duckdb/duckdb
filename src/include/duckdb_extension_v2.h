@@ -1336,6 +1336,18 @@ typedef struct {
 	(duckdb_v2_custom_option_update_info_handle info, duckdb_v2_value_handle value, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_custom_option)
 	(duckdb_v2_extension_handle extension, duckdb_v2_custom_option_handle option, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_path_exists)
+	(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *path, bool *out_exists,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_path_expand)
+	(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *path, duckdb_v2_text_sink_fn sink, void *user_data,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_path_is_remote)
+	(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *path, bool *out_is_remote,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vector_cast)
+	(duckdb_v2_factory_handle factory, duckdb_v2_vector_handle source, duckdb_v2_vector_handle target,
+	 DUCKDB_V2_CAST_MODE mode, bool *out_converted, duckdb_v2_error_info_handle *err);
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_multi_file_function)
 	(duckdb_v2_connection_handle conn, duckdb_v2_multi_file_function_handle function, duckdb_v2_error_info_handle *err);
@@ -2028,6 +2040,10 @@ typedef struct {
 #define duckdb_v2_custom_option_update_is_reset       duckdb_ext_api.duckdb_v2_custom_option_update_is_reset
 #define duckdb_v2_custom_option_update_set_value      duckdb_ext_api.duckdb_v2_custom_option_update_set_value
 #define duckdb_v2_extension_register_custom_option    duckdb_ext_api.duckdb_v2_extension_register_custom_option
+#define duckdb_v2_file_system_path_exists             duckdb_ext_api.duckdb_v2_file_system_path_exists
+#define duckdb_v2_file_system_path_expand             duckdb_ext_api.duckdb_v2_file_system_path_expand
+#define duckdb_v2_file_system_path_is_remote          duckdb_ext_api.duckdb_v2_file_system_path_is_remote
+#define duckdb_v2_vector_cast                         duckdb_ext_api.duckdb_v2_vector_cast
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_connection_register_multi_file_function                                                              \
 	duckdb_ext_api.duckdb_v2_connection_register_multi_file_function

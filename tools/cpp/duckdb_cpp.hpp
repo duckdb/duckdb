@@ -2583,6 +2583,17 @@ public:
 	/// @throws InvalidInputException When the source's type does not match the vector's.
 	auto Reference(const Vector &source) -> void;
 
+	/// Casts every row into `target`, like SQL `CAST`, from this vector's type to the target's. `target` is replaced
+	/// by the result, taking this vector's size; pointers and views taken from it beforehand do not survive this.
+	/// A connection's or callback's factory casts with that client's cast functions and settings, an
+	/// instance's factory with the built-in casts only.
+	/// @throws Exception When a row does not convert; `target` is then unspecified.
+	auto Cast(Factory &factory, Vector &target) const -> void;
+
+	/// `Cast` like SQL `TRY_CAST`: a row that does not convert becomes NULL in `target` instead of failing the cast.
+	/// @return Whether every row converted.
+	auto TryCast(Factory &factory, Vector &target) const -> bool;
+
 	/// How many rows the vector holds.
 	auto GetSize() const -> idx_t;
 
@@ -6287,6 +6298,14 @@ public:
 
 	/// Creates an empty set of options for this file system, the same as `FileOpenOptions::Create(*this)`.
 	auto CreateOpenOptions() const -> FileOpenOptions;
+
+	/// Whether a file exists at `path`, routed the way `OpenFile` routes it. A directory is not a file.
+	auto PathExists(const std::string &path) const -> bool;
+	/// Whether `path` names a remote file, e.g. under `s3://` or `https://`. Decided from the path alone, so it
+	/// answers even when the extension providing the remote file system is not loaded.
+	auto PathIsRemote(const std::string &path) const -> bool;
+	/// `path` expanded as `OpenFile` expands it: a leading `~` becomes the configured home directory.
+	auto PathExpand(const std::string &path) const -> std::string;
 
 private:
 	explicit FileSystem(void *impl);
