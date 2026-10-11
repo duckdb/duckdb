@@ -7653,6 +7653,301 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_expression_cast_get_mode(duckdb_v2_expres
 /* --- Struct definitions for expression --- */
 
 /* ============================================================================
+ * MODULE: log sink
+ * ============================================================================ */
+
+/* --- Enums for log sink --- */
+
+//! The scope a log entry was written in, which decides which of its ids are present.
+typedef enum DUCKDB_V2_LOG_SCOPE {
+	//! Written for the database as a whole, carrying no connection, transaction or query id.
+	DUCKDB_V2_LOG_SCOPE_DATABASE = 10,
+
+	//! Written by a connection, carrying its connection id and, inside one, the transaction and query ids.
+	DUCKDB_V2_LOG_SCOPE_CONNECTION = 20,
+
+	//! Written by a thread executing a query, carrying the thread id next to the connection's ids.
+	DUCKDB_V2_LOG_SCOPE_THREAD = 30,
+	DUCKDB_V2_LOG_SCOPE_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_LOG_SCOPE;
+
+/* --- Struct forward declarations for log sink --- */
+
+/* --- Types for log sink --- */
+
+/*!
+ * An owned opaque handle to a log sink being built. Created with `duckdb_v2_log_sink_create()`, configured with
+ * `duckdb_v2_log_sink_set_name()`, `duckdb_v2_log_sink_set_write_callback()` and the other setters, made available with
+ * `duckdb_v2_instance_register_log_sink()` or `duckdb_v2_extension_register_log_sink()`, and destroyed with
+ * `duckdb_v2_log_sink_destroy()`.
+ */
+typedef struct _duckdb_v2_log_sink {
+	void *internal_ptr;
+} * duckdb_v2_log_sink_handle;
+
+/*!
+ * A borrowed opaque handle to the context of a log entry, received by a log sink's write callback next to the entry
+ * itself, and valid only for the duration of that call. Read the ids `duckdb_logs` reports for the entry through its
+ * getters, e.g. `duckdb_v2_log_sink_write_info_get_connection_id()`.
+ */
+typedef struct _duckdb_v2_log_sink_write_info {
+	void *internal_ptr;
+} * duckdb_v2_log_sink_write_info_handle;
+
+/*!
+ * A borrowed opaque handle received by a log sink's flush callback, and valid only for the duration of that call. It
+ * carries nothing yet.
+ */
+typedef struct _duckdb_v2_log_sink_flush_info {
+	void *internal_ptr;
+} * duckdb_v2_log_sink_flush_info_handle;
+
+/* --- Constants for log sink --- */
+
+/* --- Function pointer typedefs for log sink --- */
+
+typedef void (*duckdb_v2_log_sink_write_callback_fn)(duckdb_v2_log_sink_write_info_handle info, void *user_data,
+                                                     int64_t timestamp, DUCKDB_V2_LOG_LEVEL level,
+                                                     DUCKDB_V2_LOG_SCOPE scope, const duckdb_v2_str *type,
+                                                     const duckdb_v2_str *message, duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_log_sink_flush_callback_fn)(duckdb_v2_log_sink_flush_info_handle info, void *user_data,
+                                                     duckdb_v2_error_info_handle *err);
+
+/* --- Functions for log sink --- */
+
+/*!
+ * Creates a new log sink through a factory.
+ *
+ * The log sink starts out empty: configure it with the setter functions, then make it available with
+ * `duckdb_v2_instance_register_log_sink()` or `duckdb_v2_extension_register_log_sink()`. The caller owns the returned
+ * handle and must destroy it with `duckdb_v2_log_sink_destroy()`, also after registration.
+ *
+ * The log sink can only be registered on the instance the factory belongs to.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param factory The factory to create the log sink through.
+ * @param sink On success, receives the newly created log sink. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_log_sink_create(duckdb_v2_factory_handle factory,
+                                                       duckdb_v2_log_sink_handle *sink,
+                                                       duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the name the logging configuration refers to the log sink by.
+ *
+ * Names are matched case-insensitively. The name is borrowed and copied. Calling this again replaces the previous name.
+ * A name must be set before registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param sink The log sink to set the name of.
+ * @param name The name to set. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_log_sink_set_name(duckdb_v2_log_sink_handle sink,
+                                                         const duckdb_v2_identifier_t *name,
+                                                         duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets arbitrary user data on the log sink.
+ *
+ * Associates an opaque pointer with the sink, handed to its write and flush callbacks. The opaque handle bundles the
+ * pointer with an optional destructor, invoked when the data is no longer needed: when the instance is destroyed if the
+ * sink was registered, else when the log sink handle is.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param sink The log sink to set the user data of.
+ * @param data Opaque handle bundling the user data pointer plus an optional destructor.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_log_sink_set_user_data(duckdb_v2_log_sink_handle sink, duckdb_v2_opaque *data,
+                                                              duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the write callback of the log sink, invoked for every entry the logging configuration directs to the sink.
+ *
+ * The callback must return quickly, must be safe to run concurrently and on any thread, and must not log or change the
+ * logging configuration. A write callback must be set before registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param sink The log sink to set the write callback of.
+ * @param callback The write callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_log_sink_set_write_callback(duckdb_v2_log_sink_handle sink,
+                                                                   duckdb_v2_log_sink_write_callback_fn callback,
+                                                                   duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the optional flush callback of the log sink, invoked when DuckDB flushes its log, so entries the sink holds on
+ * to can be written out. When DuckDB flushes is up to DuckDB; entries still held when the instance is destroyed are for
+ * the user data's destructor to write out.
+ *
+ * Like the write callback, it must be safe to run on any thread, and must not log or change the logging configuration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param sink The log sink to set the flush callback of.
+ * @param callback The flush callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_log_sink_set_flush_callback(duckdb_v2_log_sink_handle sink,
+                                                                   duckdb_v2_log_sink_flush_callback_fn callback,
+                                                                   duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the id of the connection that wrote the entry, as `duckdb_logs` reports it. An entry written for the
+ * database as a whole has none: `present` then receives false and `id` is left untouched.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The write info handle of the entry.
+ * @param id Receives the connection id, if present.
+ * @param present Receives whether the entry has a connection id.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_log_sink_write_info_get_connection_id(duckdb_v2_log_sink_write_info_handle info,
+                                                                             idx_t *id, bool *present,
+                                                                             duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the id of the transaction the entry was written in, as `duckdb_logs` reports it. An entry written outside a
+ * transaction has none: `present` then receives false and `id` is left untouched.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The write info handle of the entry.
+ * @param id Receives the transaction id, if present.
+ * @param present Receives whether the entry has a transaction id.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_log_sink_write_info_get_transaction_id(duckdb_v2_log_sink_write_info_handle info,
+                                                                              idx_t *id, bool *present,
+                                                                              duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the id of the query the entry was written for, as `duckdb_logs` reports it. An entry written outside a
+ * query has none: `present` then receives false and `id` is left untouched.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The write info handle of the entry.
+ * @param id Receives the query id, if present.
+ * @param present Receives whether the entry has a query id.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_log_sink_write_info_get_query_id(duckdb_v2_log_sink_write_info_handle info,
+                                                                        idx_t *id, bool *present,
+                                                                        duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the id of the thread that wrote the entry, as `duckdb_logs` reports it. Only an entry written in the thread
+ * scope has one: otherwise `present` receives false and `id` is left untouched. The id identifies the thread that
+ * logged, which need not be the thread the write callback runs on.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The write info handle of the entry.
+ * @param id Receives the thread id, if present.
+ * @param present Receives whether the entry has a thread id.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_log_sink_write_info_get_thread_id(duckdb_v2_log_sink_write_info_handle info,
+                                                                         idx_t *id, bool *present,
+                                                                         duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the log sink on the instance, making it available to the logging configuration under its name.
+ *
+ * Registering does not direct any entries to the sink by itself; the logging configuration does. Registration is not
+ * transactional, requires a name and a write callback, and fails when the name is taken: by a sink DuckDB provides
+ * itself, such as `memory`, `stdout` or `file`, or by a sink registered before. The log sink must have been created
+ * through a factory of the same instance. Its user data passes to the registered sink. The caller still owns the handle
+ * after registration and must destroy it with `duckdb_v2_log_sink_destroy()`, which does not affect the registered
+ * sink.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance to register on.
+ * @param sink The log sink to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_register_log_sink(duckdb_v2_instance_handle instance,
+                                                                  duckdb_v2_log_sink_handle sink,
+                                                                  duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the log sink on the loading extension's instance, making it available to the logging configuration under
+ * its name.
+ *
+ * Use this from the extension's load callback. Registration follows the rules of
+ * `duckdb_v2_instance_register_log_sink()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param extension The loading extension.
+ * @param sink The log sink to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_extension_register_log_sink(duckdb_v2_extension_handle extension,
+                                                                   duckdb_v2_log_sink_handle sink,
+                                                                   duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys the log sink, releasing its resources.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction. Destroying the handle after registration does not affect the registered sink.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param sink The log sink to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_log_sink_destroy(duckdb_v2_log_sink_handle *sink);
+
+/* --- Struct definitions for log sink --- */
+
+/* ============================================================================
  * MODULE: logical_type
  * ============================================================================ */
 

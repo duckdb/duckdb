@@ -184,6 +184,10 @@ struct HandleTraits<MacroFunction> {
 	using handle = duckdb_v2_macro_function_handle;
 };
 template <>
+struct HandleTraits<LogSink> {
+	using handle = duckdb_v2_log_sink_handle;
+};
+template <>
 struct HandleTraits<PragmaFunction> {
 	using handle = duckdb_v2_pragma_function_handle;
 };
@@ -1270,6 +1274,16 @@ auto Extension::Register(ReplacementScan &replacement_scan) -> void {
 auto Instance::Register(ReplacementScan &replacement_scan) -> void {
 	replacement_scan.PrepareRegistration();
 	CheckedAPICall(duckdb_v2_instance_register_replacement_scan, handle(), replacement_scan.handle());
+}
+
+auto Instance::Register(LogSink &log_sink) -> void {
+	log_sink.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_instance_register_log_sink, handle(), log_sink.handle());
+}
+
+auto Extension::Register(LogSink &log_sink) -> void {
+	log_sink.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_extension_register_log_sink, handle(), log_sink.handle());
 }
 
 Extension::~Extension() {
@@ -6198,6 +6212,178 @@ auto MacroFunction::GetSignature() -> FunctionSignature {
 	duckdb_v2_function_signature_handle sig = nullptr;
 	CheckedAPICall(duckdb_v2_macro_function_get_signature, handle(), &sig);
 	return detail::HandleFactory::Make<FunctionSignature>(sig);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Log Sink
+//----------------------------------------------------------------------------------------------------------------------
+
+namespace {
+
+// The callback table for one registered log sink: rides the C user_data
+// slot so the trampolines can find it; the user's own slot (SetUserData) rides
+// inside it. Owned by the registered storage, freed at engine teardown.
+struct LogSinkInfo {
+	LogSink::WriteCallback write_callback = nullptr;
+	LogSink::FlushCallback flush_callback = nullptr;
+	detail::UserData user_data;
+
+	LogSinkInfo(LogSink::WriteCallback write_callback, LogSink::FlushCallback flush_callback,
+	            detail::UserData user_data)
+	    : write_callback(write_callback), flush_callback(flush_callback), user_data(std::move(user_data)) {
+	}
+};
+
+auto WriteInfo(void *info) -> duckdb_v2_log_sink_write_info_handle {
+	return static_cast<duckdb_v2_log_sink_write_info_handle>(info);
+}
+
+void *RequireLogSinkUserData(const LogSinkInfo &info) {
+	auto ptr = info.user_data.get();
+	if (!ptr) {
+		throw InvalidInputException("no user data was set; call LogSink::SetUserData before Register");
+	}
+	return ptr;
+}
+
+template <class GETTER>
+auto ReadLogEntryId(void *info, GETTER getter) -> std::optional<idx_t> {
+	idx_t id = 0;
+	bool present = false;
+	CheckedAPICall(getter, WriteInfo(info), &id, &present);
+	if (!present) {
+		return std::nullopt;
+	}
+	return id;
+}
+
+} // namespace
+
+LogSink::LogSink(void *impl) : detail::Handle<LogSink>(impl) {
+}
+
+LogSink::~LogSink() {
+	auto _h = handle();
+	duckdb_v2_log_sink_destroy(&_h);
+}
+
+auto LogSink::Create(Factory &factory) -> LogSink {
+	duckdb_v2_log_sink_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_log_sink_create, factory.handle(), &_h);
+	return detail::HandleFactory::Make<LogSink>(_h);
+}
+
+auto LogSink::SetName(const std::string &name) & -> LogSink & {
+	auto view = ToStr(name);
+	CheckedAPICall(duckdb_v2_log_sink_set_name, handle(), &view);
+	return *this;
+}
+
+auto LogSink::SetUserDataInternal(void *data, void (*destructor)(void *)) -> void {
+	user_data = detail::UserData(data, destructor);
+}
+
+auto LogSink::SetWriteCallback(WriteCallback callback) & -> LogSink & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_log_sink_set_write_callback, handle(), nullptr);
+		write_callback = nullptr;
+		return *this;
+	}
+
+	// The C-side callback is one shared trampoline; the user's callback is looked
+	// up through the info table riding the user_data slot (set by Register).
+	static auto trampoline = [](duckdb_v2_log_sink_write_info_handle info, void *user_data, int64_t timestamp,
+	                            DUCKDB_V2_LOG_LEVEL level, DUCKDB_V2_LOG_SCOPE scope, const duckdb_v2_str *type,
+	                            const duckdb_v2_str *message, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			const auto &sink = *static_cast<const LogSinkInfo *>(user_data);
+			auto entry = detail::HandleFactory::Make<Entry>(static_cast<void *>(info), user_data, timestamp,
+			                                                static_cast<LogLevel>(level), static_cast<LogScope>(scope),
+			                                                FromStr(*type), FromStr(*message));
+			sink.write_callback(entry);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_log_sink_set_write_callback, handle(), trampoline);
+	write_callback = callback;
+	return *this;
+}
+
+auto LogSink::SetFlushCallback(FlushCallback callback) & -> LogSink & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_log_sink_set_flush_callback, handle(), nullptr);
+		flush_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_log_sink_flush_info_handle, void *user_data,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			const auto &info = *static_cast<const LogSinkInfo *>(user_data);
+			auto input = detail::HandleFactory::Make<FlushInput>(user_data);
+			info.flush_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_log_sink_set_flush_callback, handle(), trampoline);
+	flush_callback = callback;
+	return *this;
+}
+
+auto LogSink::PrepareRegistration() -> void {
+	// The callback table rides the C user_data slot so the trampolines can find
+	// it; the user's own data (SetUserData, moved out here) rides inside it.
+	auto info = std::unique_ptr<LogSinkInfo>(new LogSinkInfo(write_callback, flush_callback, std::move(user_data)));
+	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<LogSinkInfo>, nullptr};
+	CheckedAPICall(duckdb_v2_log_sink_set_user_data, handle(), &opaque);
+	// The storage owns the table now.
+	info.release(); // NOLINT(bugprone-unused-return-value)
+}
+
+void *LogSink::Entry::GetUserDataInternal() const {
+	return RequireLogSinkUserData(*static_cast<const LogSinkInfo *>(user_data));
+}
+
+auto LogSink::Entry::GetTimestamp() const -> timestamp_tz_t {
+	timestamp_tz_t result;
+	result.micros = timestamp;
+	return result;
+}
+
+auto LogSink::Entry::GetLevel() const -> LogLevel {
+	return level;
+}
+
+auto LogSink::Entry::GetLogType() const -> std::string_view {
+	return type;
+}
+
+auto LogSink::Entry::GetLogMessage() const -> std::string_view {
+	return message;
+}
+
+auto LogSink::Entry::GetScope() const -> LogScope {
+	return scope;
+}
+
+auto LogSink::Entry::GetConnectionId() const -> std::optional<idx_t> {
+	return ReadLogEntryId(info, duckdb_v2_log_sink_write_info_get_connection_id);
+}
+
+auto LogSink::Entry::GetTransactionId() const -> std::optional<idx_t> {
+	return ReadLogEntryId(info, duckdb_v2_log_sink_write_info_get_transaction_id);
+}
+
+auto LogSink::Entry::GetQueryId() const -> std::optional<idx_t> {
+	return ReadLogEntryId(info, duckdb_v2_log_sink_write_info_get_query_id);
+}
+
+auto LogSink::Entry::GetThreadId() const -> std::optional<idx_t> {
+	return ReadLogEntryId(info, duckdb_v2_log_sink_write_info_get_thread_id);
+}
+
+void *LogSink::FlushInput::GetUserDataInternal() const {
+	return RequireLogSinkUserData(*static_cast<const LogSinkInfo *>(user_data));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
