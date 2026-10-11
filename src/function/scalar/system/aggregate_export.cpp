@@ -18,7 +18,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
@@ -236,7 +235,7 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 
 // looks up the aggregate function with the given name in the catalog and binds it with the given argument types
 // constant_parameters holds the values of arguments that must be re-bound with a specific constant
-// (e.g. string_agg's separator), keyed by argument index - all other arguments are bound as typed references
+// (e.g. string_agg's separator), keyed by argument index - all other arguments are bound with a NULL value
 unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context, const string &function_name,
                                                           const vector<LogicalType> &argument_types,
                                                           const map<idx_t, Value> &constant_parameters) {
@@ -272,9 +271,8 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 		}
 	}
 
-	// Rebind data arguments as typed references. NULL witnesses can trigger scalar NULL-folding
-	// inside an aggregate's binder and lose type metadata such as a collation key's collation.
-	// Arguments originally bound to constants must still carry those exact values.
+	// Bind callbacks can use NULL placeholders for parameters carried by the serialized state.
+	// Parameters required by the binding itself must retain their recorded constant values.
 	vector<unique_ptr<Expression>> args;
 	args.reserve(argument_types.size());
 	for (idx_t arg_idx = 0; arg_idx < argument_types.size(); arg_idx++) {
@@ -282,7 +280,7 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 		if (constant_entry != constant_parameters.end()) {
 			args.push_back(make_uniq<BoundConstantExpression>(constant_entry->second));
 		} else {
-			args.push_back(make_uniq<BoundReferenceExpression>(argument_types[arg_idx], arg_idx));
+			args.push_back(make_uniq<BoundConstantExpression>(Value(argument_types[arg_idx])));
 		}
 	}
 
@@ -763,7 +761,7 @@ unique_ptr<FunctionData> BindToAggregateState(INPUT &input) {
 	}
 
 	// constant_parameters holds the values of arguments that must be re-bound with a specific constant rather than a
-	// data reference (e.g. string_agg's separator), keyed by the argument's index
+	// NULL value of the argument type (e.g. string_agg's separator), keyed by the argument's index
 	map<idx_t, Value> constant_parameters;
 	if (arguments.size() > 3) {
 		auto constants_val = input.GetConstant(3);
