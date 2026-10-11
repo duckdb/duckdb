@@ -121,29 +121,6 @@ DUCKDB_V2_ERROR WriteOption(duckdb_v2_config_handle config, const char *name, du
 	return duckdb_v2_config_set_option_value(config, &name_str, value, scope, nullptr);
 }
 
-// Runs a statement to exhaustion, returning the code it failed with (execution is lazy, so a failure may only show
-// up while stepping).
-DUCKDB_V2_ERROR RunSql(duckdb_v2_connection_handle conn, const char *sql) {
-	QueryResult result;
-	auto rc = Query(conn, sql, &result);
-	auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-	while (rc == DUCKDB_V2_ERROR_NONE) {
-		duckdb_v2_data_chunk_handle chunk = nullptr;
-		rc = duckdb_v2_result_step(result, &chunk, &status, nullptr);
-		if (chunk) {
-			duckdb_v2_data_chunk_destroy(&chunk);
-		}
-		if (rc != DUCKDB_V2_ERROR_NONE || status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED ||
-		    status == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED) {
-			break;
-		}
-		if (status == DUCKDB_V2_RESULT_STEP_STATUS_WAITING) {
-			rc = duckdb_v2_result_wait(result, nullptr);
-		}
-	}
-	return rc;
-}
-
 // The descriptor of an option, owned by the caller.
 duckdb_v2_option_handle Describe(duckdb_v2_config_handle config, const char *name) {
 	auto name_str = OptionIdent(name);

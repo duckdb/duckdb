@@ -1271,6 +1271,8 @@ typedef struct {
 	(duckdb_v2_custom_option_update_info_handle info, duckdb_v2_value_handle value, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_custom_option)
 	(duckdb_v2_extension_handle extension, duckdb_v2_custom_option_handle option, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_log_sink)
+	(duckdb_v2_extension_handle extension, duckdb_v2_log_sink_handle sink, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_macro_function)
 	(duckdb_v2_extension_handle extension, duckdb_v2_macro_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_file_system_path_exists)
@@ -1282,6 +1284,27 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_file_system_path_is_remote)
 	(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *path, bool *out_is_remote,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_instance_register_log_sink)
+	(duckdb_v2_instance_handle instance, duckdb_v2_log_sink_handle sink, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_log_sink_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_log_sink_handle *sink, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_log_sink_destroy)(duckdb_v2_log_sink_handle *sink);
+	DUCKDB_V2_ERROR(*duckdb_v2_log_sink_set_flush_callback)
+	(duckdb_v2_log_sink_handle sink, duckdb_v2_log_sink_flush_callback_fn callback, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_log_sink_set_name)
+	(duckdb_v2_log_sink_handle sink, const duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_log_sink_set_user_data)
+	(duckdb_v2_log_sink_handle sink, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_log_sink_set_write_callback)
+	(duckdb_v2_log_sink_handle sink, duckdb_v2_log_sink_write_callback_fn callback, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_log_sink_write_info_get_connection_id)
+	(duckdb_v2_log_sink_write_info_handle info, idx_t *id, bool *present, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_log_sink_write_info_get_query_id)
+	(duckdb_v2_log_sink_write_info_handle info, idx_t *id, bool *present, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_log_sink_write_info_get_thread_id)
+	(duckdb_v2_log_sink_write_info_handle info, idx_t *id, bool *present, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_log_sink_write_info_get_transaction_id)
+	(duckdb_v2_log_sink_write_info_handle info, idx_t *id, bool *present, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_macro_function_create)
 	(duckdb_v2_factory_handle factory, DUCKDB_V2_MACRO_FUNCTION_TYPE type, duckdb_v2_macro_function_handle *function,
 	 duckdb_v2_error_info_handle *err);
@@ -1949,10 +1972,22 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_custom_option_update_is_reset = duckdb_v2_custom_option_update_is_reset;
 	result.duckdb_v2_custom_option_update_set_value = duckdb_v2_custom_option_update_set_value;
 	result.duckdb_v2_extension_register_custom_option = duckdb_v2_extension_register_custom_option;
+	result.duckdb_v2_extension_register_log_sink = duckdb_v2_extension_register_log_sink;
 	result.duckdb_v2_extension_register_macro_function = duckdb_v2_extension_register_macro_function;
 	result.duckdb_v2_file_system_path_exists = duckdb_v2_file_system_path_exists;
 	result.duckdb_v2_file_system_path_expand = duckdb_v2_file_system_path_expand;
 	result.duckdb_v2_file_system_path_is_remote = duckdb_v2_file_system_path_is_remote;
+	result.duckdb_v2_instance_register_log_sink = duckdb_v2_instance_register_log_sink;
+	result.duckdb_v2_log_sink_create = duckdb_v2_log_sink_create;
+	result.duckdb_v2_log_sink_destroy = duckdb_v2_log_sink_destroy;
+	result.duckdb_v2_log_sink_set_flush_callback = duckdb_v2_log_sink_set_flush_callback;
+	result.duckdb_v2_log_sink_set_name = duckdb_v2_log_sink_set_name;
+	result.duckdb_v2_log_sink_set_user_data = duckdb_v2_log_sink_set_user_data;
+	result.duckdb_v2_log_sink_set_write_callback = duckdb_v2_log_sink_set_write_callback;
+	result.duckdb_v2_log_sink_write_info_get_connection_id = duckdb_v2_log_sink_write_info_get_connection_id;
+	result.duckdb_v2_log_sink_write_info_get_query_id = duckdb_v2_log_sink_write_info_get_query_id;
+	result.duckdb_v2_log_sink_write_info_get_thread_id = duckdb_v2_log_sink_write_info_get_thread_id;
+	result.duckdb_v2_log_sink_write_info_get_transaction_id = duckdb_v2_log_sink_write_info_get_transaction_id;
 	result.duckdb_v2_macro_function_create = duckdb_v2_macro_function_create;
 	result.duckdb_v2_macro_function_destroy = duckdb_v2_macro_function_destroy;
 	result.duckdb_v2_macro_function_get_docs = duckdb_v2_macro_function_get_docs;

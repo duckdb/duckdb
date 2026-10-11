@@ -94,6 +94,7 @@ class TypeBuilder;
 class CustomType;
 class CastFunction;
 class PragmaFunction;
+class LogSink;
 class MacroFunction;
 class ReplacementScan;
 class QualifiedName;
@@ -1261,6 +1262,11 @@ public:
 	/// be registered only once.
 	/// @throws InvalidInputException When the callback is missing, or the scan is already registered.
 	auto Register(ReplacementScan &replacement_scan) -> void;
+	/// Registers the log sink, making it available to the logging configuration under its name. Not transactional;
+	/// the sink lives as long as the database. User data set via `SetUserData` is consumed by registration.
+	/// @throws InvalidInputException When the name or write callback is missing, or the name is taken, by a sink
+	/// DuckDB provides itself or by one registered before.
+	auto Register(LogSink &log_sink) -> void;
 
 	/// The file system of this database, with its GLOBAL settings and secrets. Borrowed, and valid only while the
 	/// instance is.
@@ -1352,6 +1358,11 @@ public:
 	/// be registered only once.
 	/// @throws InvalidInputException When the callback is missing, or the scan is already registered.
 	auto Register(ReplacementScan &replacement_scan) -> void;
+	/// Registers the log sink, making it available to the logging configuration under its name. Not transactional;
+	/// the sink lives as long as the database. User data set via `SetUserData` is consumed by registration.
+	/// @throws InvalidInputException When the name or write callback is missing, or the name is taken, by a sink
+	/// DuckDB provides itself or by one registered before.
+	auto Register(LogSink &log_sink) -> void;
 
 private:
 	explicit Extension(void *impl);
@@ -6211,6 +6222,149 @@ public:
 
 private:
 	explicit MacroFunction(void *impl);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Log Sink
+//----------------------------------------------------------------------------------------------------------------------
+
+/// The scope a log entry was written in, which decides which of its ids are present.
+enum class LogScope : uint8_t {
+	/// Written for the database as a whole, carrying no connection, transaction or query id.
+	DATABASE = 10,
+	/// Written by a connection, carrying its connection id and, inside one, the transaction and query ids.
+	CONNECTION = 20,
+	/// Written by a thread executing a query, carrying the thread id next to the connection's ids.
+	THREAD = 30,
+};
+
+/// Code of your own that receives DuckDB's log entries. Create one through a `Factory` of the database it will be
+/// registered in, give it a name and a write callback, then register it with `Instance::Register` or
+/// `Extension::Register`, which makes it available to the logging configuration under its name; once the
+/// configuration directs entries to it (currently with `SET logging_storage = '<name>'`), the write callback receives
+/// them. A log sink only receives entries: they cannot be read back through `duckdb_logs`.
+///
+/// Which entries a sink receives, and when and on which thread its callbacks run, are up to DuckDB: the callbacks must
+/// return quickly, must be safe to run concurrently and on any thread, and must not log or change the logging
+/// configuration. An exception a callback throws drops the entry; it never fails the operation that logged.
+class LogSink final : public detail::Handle<LogSink> {
+	friend detail::HandleFactory;
+	friend class Instance;
+	friend class Extension;
+
+public:
+	class Entry;
+	class FlushInput;
+
+	/// Called for every entry to store. Required.
+	using WriteCallback = void (*)(Entry &entry);
+	/// Called when DuckDB flushes its log, so entries the sink holds on to can be written out. When is up to DuckDB.
+	/// Optional.
+	using FlushCallback = void (*)(FlushInput &input);
+
+	LogSink(LogSink &&) noexcept = default;
+	LogSink &operator=(LogSink &&) noexcept = default;
+
+	~LogSink() override;
+
+	/// Creates an empty LogSink through `factory`. Register it through an `Instance` or an `Extension` of the
+	/// factory's database.
+	static auto Create(Factory &factory) -> LogSink;
+
+	/// Sets the name the logging configuration refers to the sink by, matched case-insensitively.
+	auto SetName(const std::string &name) & -> LogSink &;
+
+	/// Constructs user data of type `T`, carried by the registered sink and freed at database teardown; read it
+	/// from the callbacks via `GetUserData<T>`. Consumed by registration.
+	template <class T, class... ARGS>
+	auto SetUserData(ARGS &&... args) & -> LogSink & {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		SetUserDataInternal(ptr, detail::TypedDelete<T>);
+		return *this;
+	}
+
+	auto SetWriteCallback(WriteCallback callback) & -> LogSink &;
+	auto SetFlushCallback(FlushCallback callback) & -> LogSink &;
+
+private:
+	explicit LogSink(void *impl);
+	//! Moves what the callbacks need into the C handle, right before it is registered.
+	auto PrepareRegistration() -> void;
+
+	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
+
+	WriteCallback write_callback = nullptr;
+	FlushCallback flush_callback = nullptr;
+	detail::UserData user_data;
+
+public:
+	/// One log entry, borrowed for the duration of the write callback.
+	class Entry {
+		friend detail::HandleFactory;
+
+	public:
+		/// The user data set via `LogSink::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// When the entry was written.
+		auto GetTimestamp() const -> timestamp_tz_t;
+		/// The severity of the entry.
+		auto GetLevel() const -> LogLevel;
+		/// The log type the entry was written under, e.g. `QueryLog`. Valid only for the callback duration.
+		auto GetLogType() const -> std::string_view;
+		/// The message. Valid only for the callback duration.
+		auto GetLogMessage() const -> std::string_view;
+		/// The scope the entry was written in, which decides which of the ids below are present.
+		auto GetScope() const -> LogScope;
+		/// The ids `duckdb_logs` reports for the entry, each absent when the entry's scope has none. The thread id
+		/// identifies the thread that logged, which need not be the thread the write callback runs on.
+		auto GetConnectionId() const -> std::optional<idx_t>;
+		auto GetTransactionId() const -> std::optional<idx_t>;
+		auto GetQueryId() const -> std::optional<idx_t>;
+		auto GetThreadId() const -> std::optional<idx_t>;
+
+	private:
+		Entry(void *info, void *user_data, int64_t timestamp, LogLevel level, LogScope scope, std::string_view type,
+		      std::string_view message)
+		    : info(info), user_data(user_data), timestamp(timestamp), level(level), scope(scope), type(type),
+		      message(message) {
+		}
+
+		void *info;
+		void *user_data;
+		int64_t timestamp;
+		LogLevel level;
+		LogScope scope;
+		std::string_view type;
+		std::string_view message;
+
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the flush callback works with. Borrowed, valid only for the callback duration.
+	class FlushInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The user data set via `LogSink::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+	private:
+		explicit FlushInput(void *user_data) : user_data(user_data) {
+		}
+
+		void *user_data;
+
+		void *GetUserDataInternal() const;
+	};
 };
 
 //----------------------------------------------------------------------------------------------------------------------
