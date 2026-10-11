@@ -242,3 +242,17 @@ TEST_CASE("Stable C++API: opening a file specified as a file struct", "[cpp_api]
 	auto options = fs.CreateOpenOptions();
 	REQUIRE_THROWS_MATCHES(options.SetValues(no_path_struct), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
+
+TEST_CASE("Stable C++API: file system path queries", "[cpp_api]") {
+	using namespace duckdb::cxx;
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto fs = conn.GetFileSystem();
+
+	REQUIRE(fs.PathIsRemote("s3://bucket/book.xlsx"));
+	REQUIRE_FALSE(fs.PathIsRemote("/local/book.xlsx"));
+	REQUIRE_FALSE(fs.PathExists("/definitely/not/here.xlsx"));
+
+	conn.Execute("SET home_directory = '/cpp_home'").Drain();
+	REQUIRE(fs.PathExpand("~/book.xlsx") == "/cpp_home/book.xlsx");
+}

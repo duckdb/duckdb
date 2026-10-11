@@ -113,9 +113,15 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		expr_callback(tf_ref.function);
 		break;
 	}
+	case TableReferenceType::SHOW_REF: {
+		auto &show_ref = ref.Cast<ShowRef>();
+		if (show_ref.query) {
+			EnumerateQueryNodeChildren(*show_ref.query, expr_callback, ref_callback);
+		}
+		break;
+	}
 	case TableReferenceType::BASE_TABLE:
 	case TableReferenceType::EMPTY_FROM:
-	case TableReferenceType::SHOW_REF:
 	case TableReferenceType::COLUMN_DATA:
 	case TableReferenceType::DELIM_GET:
 		// these TableRefs do not need to be unfolded
@@ -156,7 +162,9 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 			expr_callback(sel_node.qualify);
 		}
 
-		EnumerateTableRefChildren(*sel_node.from_table.get(), expr_callback, ref_callback);
+		if (sel_node.from_table) {
+			EnumerateTableRefChildren(*sel_node.from_table, expr_callback, ref_callback);
+		}
 		break;
 	}
 	case QueryNodeType::SET_OPERATION_NODE: {

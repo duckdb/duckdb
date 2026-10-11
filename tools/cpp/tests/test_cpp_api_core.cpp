@@ -34,16 +34,45 @@ TEST_CASE("Stable C++API: Instance GetOption by name and option target scope", "
 	REQUIRE_THROWS_MATCHES(instance.GetConfig().DescribeOption("no_such_option"), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
+TEST_CASE("Stable C++API: instances can live in an explicit environment", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	const auto default_before = Environment::Default().GetInstanceCount();
+	{
+		Environment env;
+		REQUIRE(env.GetInstanceCount() == 0);
+		{
+			auto empty = Instance(env);
+			auto opened = Instance(env, ":memory:", StartupOptions().EnableUnsignedExtensions(false));
+			REQUIRE(env.GetInstanceCount() == 2);
+			// They are not counted in the default environment.
+			REQUIRE(Environment::Default().GetInstanceCount() == default_before);
+
+			auto conn = opened.Connect();
+			auto result = conn.Execute("SELECT 42");
+			auto chunk = result.FetchChunk();
+			REQUIRE(chunk.GetRowCount() == 1);
+		}
+		REQUIRE(env.GetInstanceCount() == 0);
+	}
+	// An instance opened without an environment lands in the default one.
+	{
+		auto instance = Instance(":memory:");
+		REQUIRE(Environment::Default().GetInstanceCount() == default_before + 1);
+	}
+	REQUIRE(Environment::Default().GetInstanceCount() == default_before);
+}
+
 TEST_CASE("Stable C++API: options can be enumerated with their metadata", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	// The count is process-wide: compare against what was alive before.
-	const auto alive_before = Instance::GetInstanceCount();
+	// The count is shared with every other test: compare against what was alive before.
+	const auto alive_before = Environment::Default().GetInstanceCount();
 	{
 		auto counted = Instance(":memory:");
-		REQUIRE(Instance::GetInstanceCount() == alive_before + 1);
+		REQUIRE(Environment::Default().GetInstanceCount() == alive_before + 1);
 	}
-	REQUIRE(Instance::GetInstanceCount() == alive_before);
+	REQUIRE(Environment::Default().GetInstanceCount() == alive_before);
 	auto instance = Instance(":memory:");
 
 	REQUIRE(instance.GetConfig().GetOptionCount() > 0);
