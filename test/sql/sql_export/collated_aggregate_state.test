@@ -14,6 +14,15 @@ SET VARIABLE collated_max_state=(SELECT max(s COLLATE NOCASE) EXPORT_STATE FROM 
 statement ok
 SET VARIABLE collated_empty_state=(SELECT max(s COLLATE NOCASE) EXPORT_STATE FROM collated_state_input WHERE false);
 
+statement ok
+SET VARIABLE canonical_count_state=(SELECT count(s) EXPORT_STATE FROM collated_state_input);
+
+statement ok
+SET VARIABLE count_star_state=(SELECT count(*) EXPORT_STATE FROM collated_state_input);
+
+statement ok
+SET VARIABLE ordered_collated_state=(SELECT first(s COLLATE NOCASE ORDER BY s COLLATE NOCASE NULLS LAST) EXPORT_STATE FROM collated_state_input);
+
 foreach mode none explain_sql_strict
 
 statement ok
@@ -64,6 +73,21 @@ FROM (SELECT cast_to_type(struct_pack(arg := s, by := lower(s)), getvariable('co
 ----
 Z	true
 
+# A state reconstructed from its typed signature must retain the complete nested type.
+query I
+SELECT get_type(state) = get_type(to_aggregate_state(state, 'arg_max',
+       [get_type(NULL::VARCHAR COLLATE NOCASE), get_type(NULL::VARCHAR COLLATE NOCASE)]))
+FROM (SELECT max(s COLLATE NOCASE) EXPORT_STATE state FROM collated_state_input);
+----
+true
+
+query TI
+SELECT finalize(combine(state, getvariable('collated_max_state'))),
+       finalize(combine(state, getvariable('collated_max_state')))='z'
+FROM (SELECT max(s COLLATE NOCASE) EXPORT_STATE state FROM collated_state_input);
+----
+Z	true
+
 # Ordinary collated aggregates and uncollated exported states retain their existing behavior.
 query TTI
 SELECT min(s COLLATE NOCASE), max(s COLLATE NOCASE), max(s COLLATE NOCASE)='z' FROM collated_state_input;
@@ -83,6 +107,26 @@ FROM (SELECT g, count(s) EXPORT_STATE state FROM collated_state_input GROUP BY g
 ----
 5
 
+query T rowsort canonical_count_constant
+SELECT getvariable('canonical_count_state');
+
+query T rowsort count_star_constant
+SELECT getvariable('count_star_state');
+
+query T rowsort ordered_collated_constant
+SELECT getvariable('ordered_collated_state');
+
+query IIT
+SELECT finalize(getvariable('canonical_count_state')), finalize(getvariable('count_star_state')),
+       finalize(getvariable('ordered_collated_state'));
+----
+5	7	a
+
+query I
+SELECT finalize(getvariable('ordered_collated_state'))='A';
+----
+true
+
 endloop
 
 reset label collated_producer
@@ -90,6 +134,12 @@ reset label collated_producer
 reset label collated_constant
 
 reset label collated_empty_constant
+
+reset label canonical_count_constant
+
+reset label count_star_constant
+
+reset label ordered_collated_constant
 
 statement ok
 RESET debug_verify_statement;

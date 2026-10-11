@@ -18,6 +18,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
@@ -271,8 +272,9 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 		}
 	}
 
-	// FIXME: this is really hacky
-	// but the aggregate state export needs a rework around how it handles more complex aggregates anyway
+	// Rebind data arguments as typed references. NULL witnesses can trigger scalar NULL-folding
+	// inside an aggregate's binder and lose type metadata such as a collation key's collation.
+	// Arguments originally bound to constants must still carry those exact values.
 	vector<unique_ptr<Expression>> args;
 	args.reserve(argument_types.size());
 	for (idx_t arg_idx = 0; arg_idx < argument_types.size(); arg_idx++) {
@@ -280,7 +282,7 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 		if (constant_entry != constant_parameters.end()) {
 			args.push_back(make_uniq<BoundConstantExpression>(constant_entry->second));
 		} else {
-			args.push_back(make_uniq<BoundConstantExpression>(Value(argument_types[arg_idx])));
+			args.push_back(make_uniq<BoundReferenceExpression>(argument_types[arg_idx], arg_idx));
 		}
 	}
 
@@ -290,7 +292,8 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 	bool signature_matches = bound_args.size() == argument_types.size();
 	for (idx_t arg_idx = 0; signature_matches && arg_idx < bound_args.size(); arg_idx++) {
 		// an ANY argument in the function signature (e.g. string_agg's data argument) matches any requested type
-		if (bound_args[arg_idx].id() != LogicalTypeId::ANY && bound_args[arg_idx] != argument_types[arg_idx]) {
+		if (bound_args[arg_idx].id() != LogicalTypeId::ANY &&
+		    !bound_args[arg_idx].EqualsIncludingCollation(argument_types[arg_idx])) {
 			signature_matches = false;
 		}
 	}
