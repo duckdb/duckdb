@@ -94,6 +94,7 @@ class TypeBuilder;
 class CustomType;
 class CastFunction;
 class PragmaFunction;
+class MacroFunction;
 class ReplacementScan;
 class QualifiedName;
 class TableDescription;
@@ -1336,6 +1337,10 @@ public:
 	/// @throws InvalidInputException When the name is missing, not exactly one of the query and exec callbacks is set,
 	/// the signature declares a return type, or a pragma of the same name already exists.
 	auto Register(PragmaFunction &pragma_function) -> void;
+	/// Registers the macro function. The function object remains valid.
+	/// @throws InvalidInputException When the name or the body is missing, the body does not parse, the signature has
+	/// a parameter that is not a standard one or declares a return type, or a function of the same name exists.
+	auto Register(MacroFunction &macro_function) -> void;
 	/// Registers the option on the database, visible to every connection. Not transactional: it takes effect at once,
 	/// also inside an explicit transaction, and a rollback does not undo it. The option object remains valid; user
 	/// data set via `SetUserData` is consumed by the first registration.
@@ -6145,6 +6150,67 @@ public:
 
 		void *GetUserDataInternal() const;
 	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Macro Function
+//----------------------------------------------------------------------------------------------------------------------
+
+/// A function defined in SQL: a call is replaced with the body, an expression for a scalar macro and a query for a
+/// table macro, which refers to the parameters by name. Create one through a `Factory` of the database it will be
+/// registered in, describe it (name, signature, body), then register it with `Extension::Register`; outside an
+/// extension, define a macro with SQL `CREATE MACRO` instead. The function object may be destroyed after
+/// registration; the registered macro lives on in the catalog.
+///
+/// A macro's parameters can always be passed by position or by name, so the signature may only hold standard
+/// parameters, optionally with a default value. A parameter of type ANY is untyped. The result follows from the body,
+/// so the signature cannot set a return type.
+class MacroFunction final : public detail::Handle<MacroFunction> {
+	friend detail::HandleFactory;
+	friend class Extension;
+
+public:
+	MacroFunction(MacroFunction &&) noexcept = default;
+	MacroFunction &operator=(MacroFunction &&) noexcept = default;
+
+	~MacroFunction() override;
+
+	/// Creates an empty scalar macro through `factory`: its body is an expression, and it is called like a scalar
+	/// function. Register it through an `Extension` of the factory's database.
+	static auto CreateScalar(Factory &factory) -> MacroFunction;
+	/// Creates an empty table macro through `factory`: its body is a SELECT query, and it is called like a table
+	/// function. Register it through an `Extension` of the factory's database.
+	static auto CreateTable(Factory &factory) -> MacroFunction;
+
+	/// Sets the macro's name, as SQL calls it.
+	auto SetName(const std::string &name) & -> MacroFunction &;
+	/// Sets the body, as SQL text: an expression for a scalar macro, a SELECT query for a table macro. Parsed at
+	/// registration; names in it are resolved when the macro is called.
+	auto SetBody(std::string_view body) & -> MacroFunction &;
+	/// The documentation of the macro, borrowed for in-place mutation.
+	auto GetDocs() -> FunctionDocs;
+
+	/// Calls `configure` with the documentation of the macro, borrowed for in-place mutation.
+	template <class F>
+	auto WithDocs(F &&configure) & -> MacroFunction & {
+		auto docs = GetDocs();
+		configure(docs);
+		return *this;
+	}
+
+	/// The macro's signature, borrowed for in-place mutation.
+	auto GetSignature() -> FunctionSignature;
+
+	/// Calls `configure` with the macro's signature, borrowed for in-place mutation.
+	template <class F>
+	auto WithSignature(F &&configure) & -> MacroFunction & {
+		auto sig = GetSignature();
+		configure(sig);
+		return *this;
+	}
+
+private:
+	explicit MacroFunction(void *impl);
 };
 
 //----------------------------------------------------------------------------------------------------------------------

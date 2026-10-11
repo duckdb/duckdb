@@ -3270,8 +3270,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_bind_get_arg_index(duckdb_v2_fun
 /*!
  * A borrowed opaque handle to the documentation of a function overload. Taken from the function it documents with
  * `duckdb_v2_scalar_function_get_docs()`, `duckdb_v2_aggregate_function_get_docs()`,
- * `duckdb_v2_table_function_get_docs()` or `duckdb_v2_pragma_function_get_docs()`, and valid for as long as that
- * function handle is; the caller never destroys it.
+ * `duckdb_v2_table_function_get_docs()`, `duckdb_v2_pragma_function_get_docs()` or
+ * `duckdb_v2_macro_function_get_docs()`, and valid for as long as that function handle is; the caller never destroys
+ * it.
  */
 typedef struct _duckdb_v2_function_docs {
 	void *internal_ptr;
@@ -8098,6 +8099,188 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_factory_create_common_type(duckdb_v2_fact
 #endif
 
 /* --- Struct definitions for logical_type --- */
+
+/* ============================================================================
+ * MODULE: macro
+ * ============================================================================ */
+
+/* --- Enums for macro --- */
+
+//! The kind of a macro function, deciding how its body is read. Pass one to `duckdb_v2_macro_function_create()`.
+typedef enum DUCKDB_V2_MACRO_FUNCTION_TYPE {
+	//! A scalar macro. The body is a single expression, and the macro is called like a scalar function.
+	DUCKDB_V2_MACRO_FUNCTION_TYPE_SCALAR = 0,
+
+	//! A table macro. The body is a single SELECT query, and the macro is called like a table function.
+	DUCKDB_V2_MACRO_FUNCTION_TYPE_TABLE = 1,
+	DUCKDB_V2_MACRO_FUNCTION_TYPE_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_MACRO_FUNCTION_TYPE;
+
+/* --- Struct forward declarations for macro --- */
+
+/* --- Types for macro --- */
+
+/*!
+ * An owned opaque handle to a macro function being built. Created with `duckdb_v2_macro_function_create()`, configured
+ * with `duckdb_v2_macro_function_set_name()`, `duckdb_v2_macro_function_set_body()` and the signature obtained via
+ * `duckdb_v2_macro_function_get_signature()`, made available with `duckdb_v2_extension_register_macro_function()`, and
+ * destroyed with `duckdb_v2_macro_function_destroy()`.
+ */
+typedef struct _duckdb_v2_macro_function {
+	void *internal_ptr;
+} * duckdb_v2_macro_function_handle;
+
+/* --- Constants for macro --- */
+
+/* --- Function pointer typedefs for macro --- */
+
+/* --- Functions for macro --- */
+
+/*!
+ * Creates a new macro function through a factory.
+ *
+ * The macro function starts out empty: configure it with the setter functions and the signature obtained via
+ * `duckdb_v2_macro_function_get_signature()`, then make it available with
+ * `duckdb_v2_extension_register_macro_function()`. The caller owns the returned handle and must destroy it with
+ * `duckdb_v2_macro_function_destroy()`, also after registration.
+ *
+ * The macro function can only be registered on the database the factory belongs to.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param factory The factory to create the macro function through.
+ * @param type Whether the macro is a scalar or a table macro.
+ * @param function On success, receives the newly created macro function. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_macro_function_create(duckdb_v2_factory_handle factory,
+                                                             DUCKDB_V2_MACRO_FUNCTION_TYPE type,
+                                                             duckdb_v2_macro_function_handle *function,
+                                                             duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the name of the macro function, as SQL calls it.
+ *
+ * The name is borrowed and copied. Calling this again replaces the previous name. A name must be set before
+ * registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The macro function to set the name of.
+ * @param name The name to set. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_macro_function_set_name(duckdb_v2_macro_function_handle function,
+                                                               const duckdb_v2_identifier_t *name,
+                                                               duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the body of the macro function, as SQL text.
+ *
+ * For a scalar macro the body is a single expression, for a table macro a single SELECT query. It refers to the
+ * parameters by name. The body is parsed at registration, which fails on a syntax error; names in it are resolved only
+ * when the macro is called, as with SQL `CREATE MACRO`. The body is borrowed and copied. Calling this again replaces
+ * the previous body. A body must be set before registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The macro function to set the body of.
+ * @param body The SQL text of the body. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_macro_function_set_body(duckdb_v2_macro_function_handle function,
+                                                               const duckdb_v2_str *body,
+                                                               duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the macro function's signature so its parameters can be declared.
+ *
+ * Add parameters with `duckdb_v2_function_signature_add_parameter()`. A macro's parameters can always be passed by
+ * position or by name, so only `FUNCTION_PARAMETER_KIND_STANDARD` parameters are accepted; a macro has no variadic
+ * parameters. A parameter of type ANY is untyped, and a parameter with a default value can be omitted by a caller. A
+ * macro's result is decided by its body, so the signature cannot set a return type. Registration fails on a signature
+ * that does not follow these rules. The signature is modified in place.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The macro function to get the signature of.
+ * @param sig The returned signature. Borrowed and valid for the lifetime of the macro function handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_macro_function_get_signature(duckdb_v2_macro_function_handle function,
+                                                                    duckdb_v2_function_signature_handle *sig,
+                                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the documentation of the macro function so it can be filled in.
+ *
+ * Set a description with `duckdb_v2_function_docs_set_description()`, and add examples and categories with
+ * `duckdb_v2_function_docs_add_example()` and `duckdb_v2_function_docs_add_category()`. The documentation is modified
+ * in place and registered with the macro function. Optional.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The macro function to get the documentation of.
+ * @param docs The returned documentation. Borrowed and valid for the lifetime of the macro function handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_macro_function_get_docs(duckdb_v2_macro_function_handle function,
+                                                               duckdb_v2_function_docs_handle *docs,
+                                                               duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the macro function, making it available for use in SQL queries.
+ *
+ * The macro function is registered on the loading extension's database and attributed to the extension. Use this from
+ * the extension's load callback. Registration requires a name and a body that parses, and a signature that follows the
+ * rules of `duckdb_v2_macro_function_get_signature()`. It fails when a function of the same name already exists: a
+ * macro function has a single overload. The macro function must have been created through a factory of the same
+ * database. The caller still owns the handle after registration and must destroy it with
+ * `duckdb_v2_macro_function_destroy()`, which does not affect the registered macro function.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param extension The loading extension.
+ * @param function The macro function to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_extension_register_macro_function(duckdb_v2_extension_handle extension,
+                                                                         duckdb_v2_macro_function_handle function,
+                                                                         duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys the macro function, releasing its resources.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction. Destroying the handle after registration does not affect the registered macro function.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The macro function to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_macro_function_destroy(duckdb_v2_macro_function_handle *function);
+
+/* --- Struct definitions for macro --- */
 
 /* ============================================================================
  * MODULE: pragma

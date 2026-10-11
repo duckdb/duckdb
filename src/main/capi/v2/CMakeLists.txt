@@ -23,6 +23,7 @@ add_library_unity(
   capi_v2_func_cast.cpp
   capi_v2_func_copy.cpp
   capi_v2_func_docs.cpp
+  capi_v2_func_macro.cpp
   capi_v2_func_pragma.cpp
   capi_v2_func_properties.cpp
   capi_v2_func_scalar.cpp

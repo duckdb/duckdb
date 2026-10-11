@@ -28,17 +28,23 @@ public:
 	//! Adds this overload's description to `info`, matched to the overload by its parameter types; the parameter names
 	//! come from the signature itself. Adds nothing when no documentation was set.
 	void AddTo(const FunctionSignature &signature, CreateFunctionInfo &info) const {
-		if (description.empty() && examples.empty() && categories.empty()) {
-			return;
-		}
-		FunctionDescription result;
+		vector<LogicalType> parameter_types;
 		for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
 			auto &parameter = signature.GetParameter(i);
 			if (parameter.IsVariadic()) {
 				continue;
 			}
-			result.parameter_types.push_back(parameter.GetType());
+			parameter_types.push_back(parameter.GetType());
 		}
+		AddTo(std::move(parameter_types), info);
+	}
+	//! As above, matched to the overload by the given parameter types
+	void AddTo(vector<LogicalType> parameter_types, CreateFunctionInfo &info) const {
+		if (description.empty() && examples.empty() && categories.empty()) {
+			return;
+		}
+		FunctionDescription result;
+		result.parameter_types = std::move(parameter_types);
 		result.description = description;
 		for (auto &entry : examples) {
 			result.examples.push_back(entry.example);

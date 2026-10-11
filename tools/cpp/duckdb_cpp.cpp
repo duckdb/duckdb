@@ -180,6 +180,10 @@ struct HandleTraits<CustomType> {
 	using handle = duckdb_v2_custom_type_handle;
 };
 template <>
+struct HandleTraits<MacroFunction> {
+	using handle = duckdb_v2_macro_function_handle;
+};
+template <>
 struct HandleTraits<PragmaFunction> {
 	using handle = duckdb_v2_pragma_function_handle;
 };
@@ -1237,6 +1241,10 @@ auto Connection::Register(PragmaFunction &pragma_function) -> void {
 auto Extension::Register(PragmaFunction &pragma_function) -> void {
 	pragma_function.PrepareRegistration();
 	CheckedAPICall(duckdb_v2_extension_register_pragma_function, handle(), pragma_function.handle());
+}
+
+auto Extension::Register(MacroFunction &macro_function) -> void {
+	CheckedAPICall(duckdb_v2_extension_register_macro_function, handle(), macro_function.handle());
 }
 
 auto Connection::Register(CustomOption &custom_option) -> void {
@@ -6140,6 +6148,56 @@ void *PragmaFunction::QueryInput::GetUserDataInternal() const {
 void *PragmaFunction::ExecInput::GetUserDataInternal() const {
 	const auto &function = *static_cast<const PragmaFunctionInfo *>(GetFunctionInfo());
 	return RequirePragmaUserData(function.user_data);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Macro Function
+//----------------------------------------------------------------------------------------------------------------------
+
+MacroFunction::MacroFunction(void *impl) : detail::Handle<MacroFunction>(impl) {
+}
+
+MacroFunction::~MacroFunction() {
+	auto _h = handle();
+	duckdb_v2_macro_function_destroy(&_h);
+}
+
+static auto CreateMacroFunction(Factory &factory, DUCKDB_V2_MACRO_FUNCTION_TYPE type) -> void * {
+	duckdb_v2_macro_function_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_macro_function_create, factory.handle(), type, &_h);
+	return _h;
+}
+
+auto MacroFunction::CreateScalar(Factory &factory) -> MacroFunction {
+	return MacroFunction(CreateMacroFunction(factory, DUCKDB_V2_MACRO_FUNCTION_TYPE_SCALAR));
+}
+
+auto MacroFunction::CreateTable(Factory &factory) -> MacroFunction {
+	return MacroFunction(CreateMacroFunction(factory, DUCKDB_V2_MACRO_FUNCTION_TYPE_TABLE));
+}
+
+auto MacroFunction::SetName(const std::string &name) & -> MacroFunction & {
+	auto view = ToStr(name);
+	CheckedAPICall(duckdb_v2_macro_function_set_name, handle(), &view);
+	return *this;
+}
+
+auto MacroFunction::SetBody(std::string_view body) & -> MacroFunction & {
+	auto view = ToStr(body);
+	CheckedAPICall(duckdb_v2_macro_function_set_body, handle(), &view);
+	return *this;
+}
+
+auto MacroFunction::GetDocs() -> FunctionDocs {
+	duckdb_v2_function_docs_handle docs = nullptr;
+	CheckedAPICall(duckdb_v2_macro_function_get_docs, handle(), &docs);
+	return detail::HandleFactory::Make<FunctionDocs>(docs);
+}
+
+auto MacroFunction::GetSignature() -> FunctionSignature {
+	duckdb_v2_function_signature_handle sig = nullptr;
+	CheckedAPICall(duckdb_v2_macro_function_get_signature, handle(), &sig);
+	return detail::HandleFactory::Make<FunctionSignature>(sig);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
