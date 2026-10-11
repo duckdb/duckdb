@@ -82,6 +82,14 @@ FROM (SELECT max(s COLLATE NOCASE) EXPORT_STATE state FROM collated_state_input)
 true
 
 query TI
+SELECT finalize(combine(state, rebound)), finalize(combine(state, rebound))='z'
+FROM (SELECT state, to_aggregate_state(state, 'arg_max',
+      [get_type(NULL::VARCHAR COLLATE NOCASE), get_type(NULL::VARCHAR COLLATE NOCASE)]) rebound
+      FROM (SELECT max(s COLLATE NOCASE) EXPORT_STATE state FROM collated_state_input));
+----
+Z	true
+
+query TI
 SELECT finalize(combine(state, getvariable('collated_max_state'))),
        finalize(combine(state, getvariable('collated_max_state')))='z'
 FROM (SELECT max(s COLLATE NOCASE) EXPORT_STATE state FROM collated_state_input);

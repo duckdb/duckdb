@@ -236,7 +236,7 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 
 // looks up the aggregate function with the given name in the catalog and binds it with the given argument types
 // constant_parameters holds the values of arguments that must be re-bound with a specific constant
-// (e.g. string_agg's separator), keyed by argument index - all other arguments are bound with a NULL value
+// (e.g. string_agg's separator), keyed by argument index - all other arguments are bound as typed references
 unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context, const string &function_name,
                                                           const vector<LogicalType> &argument_types,
                                                           const map<idx_t, Value> &constant_parameters) {
@@ -763,7 +763,7 @@ unique_ptr<FunctionData> BindToAggregateState(INPUT &input) {
 	}
 
 	// constant_parameters holds the values of arguments that must be re-bound with a specific constant rather than a
-	// NULL value of the argument type (e.g. string_agg's separator), keyed by the argument's index
+	// data reference (e.g. string_agg's separator), keyed by the argument's index
 	map<idx_t, Value> constant_parameters;
 	if (arguments.size() > 3) {
 		auto constants_val = input.GetConstant(3);
