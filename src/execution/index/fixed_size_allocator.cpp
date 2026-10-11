@@ -48,7 +48,7 @@ IndexPointer FixedSizeAllocator::New() {
 	if (!buffer_with_free_space.IsValid()) {
 		// Add a new buffer.
 		auto buffer_id = GetAvailableBufferId();
-		buffers[buffer_id] = make_uniq<FixedSizeBuffer>(block_manager, memory_tag);
+		buffers[buffer_id] = make_shared_ptr<FixedSizeBuffer>(block_manager, memory_tag);
 		buffers_with_free_space.insert(buffer_id);
 		buffer_with_free_space = buffer_id;
 
@@ -304,8 +304,13 @@ unsafe_unique_ptr<FixedSizeAllocator> FixedSizeAllocator::Persist(PartialBlockMa
 			continue;
 		}
 
-		result->buffers[buffer_id] =
-		    buffer->Persist(partial_block_manager, available_segments_per_buffer, segment_size, bitmask_offset);
+		D_ASSERT(buffer->readers == 0);
+		if (!buffer->dirty && buffer->OnDisk()) {
+			result->buffers[buffer_id] = buffer;
+		} else {
+			result->buffers[buffer_id] =
+			    buffer->Persist(partial_block_manager, available_segments_per_buffer, segment_size, bitmask_offset);
+		}
 
 		if (buffers_with_free_space.find(buffer_id) != buffers_with_free_space.end()) {
 			result->buffers_with_free_space.insert(buffer_id);
@@ -357,11 +362,11 @@ void FixedSizeAllocator::Init(const FixedSizeAllocatorInfo &info) {
 		// create the FixedSizeBuffer
 		if (info.transient_block_handles) {
 			D_ASSERT(info.transient_block_handles->size() == info.buffer_ids.size());
-			buffers[buffer_id] = make_uniq<FixedSizeBuffer>(block_manager, segment_count, allocation_size,
-			                                                std::move((*info.transient_block_handles)[i]));
+			buffers[buffer_id] = make_shared_ptr<FixedSizeBuffer>(block_manager, segment_count, allocation_size,
+			                                                      std::move((*info.transient_block_handles)[i]));
 		} else {
 			buffers[buffer_id] =
-			    make_uniq<FixedSizeBuffer>(block_manager, segment_count, allocation_size, buffer_block_pointer);
+			    make_shared_ptr<FixedSizeBuffer>(block_manager, segment_count, allocation_size, buffer_block_pointer);
 		}
 		total_segment_count += segment_count;
 	}
@@ -386,7 +391,7 @@ void FixedSizeAllocator::Deserialize(MetadataManager &metadata_manager, const Bl
 		auto segment_count = reader.Read<idx_t>();
 		auto allocation_size = reader.Read<idx_t>();
 		buffers[buffer_id] =
-		    make_uniq<FixedSizeBuffer>(block_manager, segment_count, allocation_size, buffer_block_pointer);
+		    make_shared_ptr<FixedSizeBuffer>(block_manager, segment_count, allocation_size, buffer_block_pointer);
 		total_segment_count += segment_count;
 	}
 	for (idx_t i = 0; i < buffers_with_free_space_count; i++) {
