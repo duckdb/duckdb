@@ -829,10 +829,13 @@ TEST_CASE("Stable C++API: vector cast and try cast", "[cpp_api]") {
 	DataChunk chunk(factory, types);
 	auto source = chunk.GetVector(0);
 	auto target = chunk.GetVector(1);
+	// Padded past the inline string length: a build without string inlining reads the pointer of every string, and
+	// the API leaves it unset for the strings it inlines. The integer cast skips the leading spaces.
+	const std::string pad(16, ' ');
 	source.SetSize(3);
-	source.AssignString(0, "1");
-	source.AssignString(1, "x");
-	source.AssignString(2, "3");
+	source.AssignString(0, pad + "1");
+	source.AssignString(1, pad + "x");
+	source.AssignString(2, pad + "3");
 
 	REQUIRE_THROWS_MATCHES(source.Cast(factory, target), Exception, HasErrorCode(DUCKDB_V2_ERROR_TYPE_CONVERSION));
 
@@ -844,7 +847,7 @@ TEST_CASE("Stable C++API: vector cast and try cast", "[cpp_api]") {
 	REQUIRE_FALSE(view.IsValid(1));
 	REQUIRE(view.Data<int32_t>()[view.SelAt(2)] == 3);
 
-	source.AssignString(1, "2");
+	source.AssignString(1, pad + "2");
 	source.Cast(factory, target);
 	REQUIRE(target.GetView().Data<int32_t>()[1] == 2);
 }

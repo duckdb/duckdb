@@ -27,8 +27,8 @@ static auto Convert(CV2PragmaQueryInfo *info) -> duckdb_v2_pragma_function_query
 }
 
 //! Hands the arguments of the PRAGMA statement to `callback`, and throws the error it reported
-template <class CALLBACK>
-static auto CV2PragmaInvoke(ClientContext &context, const FunctionParameters &parameters, CALLBACK &&callback) -> void {
+template <class FUNC>
+static auto CV2PragmaInvoke(ClientContext &context, const FunctionParameters &parameters, FUNC &&callback) -> void {
 	if (!parameters.function) {
 		throw InternalException("A pragma function was called without its function");
 	}

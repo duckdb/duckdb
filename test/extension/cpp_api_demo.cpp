@@ -9,9 +9,9 @@ static constexpr const char *LOG_TYPE = "CppApiDemo";
 using namespace duckdb::cxx;
 
 // Registers a macro that must be refused, logging why.
-template <class CONFIGURE>
+template <class F>
 static void RegisterRefusedMacro(Extension &extension, Context &context, const std::string &name, bool table,
-                                 CONFIGURE &&configure) {
+                                 F &&configure) {
 	auto &factory = context.GetFactory();
 	auto macro = table ? MacroFunction::CreateTable(factory) : MacroFunction::CreateScalar(factory);
 	macro.SetName(name);
