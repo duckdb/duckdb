@@ -146,7 +146,9 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::Export(const Expre
 	auto result = ExportInternal(expression, path);
 	const bool preserves_collation = expression.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT ||
 	                                 (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
-	                                  expression.GetReturnType().id() != LogicalTypeId::VARCHAR);
+	                                  expression.GetReturnType().id() != LogicalTypeId::VARCHAR) ||
+	                                 (expression.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE &&
+	                                  expression.GetReturnType().IsAggregateState());
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF || preserves_collation) {
 		return result;
 	}

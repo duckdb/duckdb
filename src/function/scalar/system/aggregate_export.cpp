@@ -855,16 +855,19 @@ unique_ptr<ParsedExpression> ExportAggregateFunction::StateToSQL(const LogicalTy
 	vector<LogicalType> types;
 	map<idx_t, Value> constants;
 	ParseStateParameters(parameters->second, types, constants);
+	// Concrete TYPE values retain collations that the SQL type name alone cannot express.
+	// Canonical ANY arguments are signature markers, not SQL value types.
+	const bool has_any = std::find(types.begin(), types.end(), LogicalType::ANY) != types.end();
 	vector<Value> signature;
 	vector<unique_ptr<ParsedExpression>> constant_arguments;
 	for (idx_t i = 0; i < types.size(); i++) {
-		if ((types[i] != LogicalType::ANY && !TypeExpression::CanRepresent(types[i])) ||
-		    TypeVisitor::Contains(types[i], [](const LogicalType &child) {
-			    return child.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(child).empty();
-		    })) {
+		if (has_any && ((types[i] != LogicalType::ANY && !TypeExpression::CanRepresent(types[i])) ||
+		                TypeVisitor::Contains(types[i], [](const LogicalType &child) {
+			                return child.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(child).empty();
+		                }))) {
 			return nullptr;
 		}
-		signature.emplace_back(types[i].ToString());
+		signature.push_back(has_any ? Value(types[i].ToString()) : Value::TYPE(types[i]));
 		auto entry = constants.find(i);
 		unique_ptr<ParsedExpression> constant;
 		try {
@@ -877,7 +880,12 @@ unique_ptr<ParsedExpression> ExportAggregateFunction::StateToSQL(const LogicalTy
 	vector<unique_ptr<ParsedExpression>> arguments;
 	arguments.push_back(std::move(value));
 	arguments.push_back(ConstantExpression::FromValue(name->second));
-	arguments.push_back(ConstantExpression::FromValue(Value::LIST(LogicalType::VARCHAR, std::move(signature))));
+	try {
+		arguments.push_back(ConstantExpression::FromValue(
+		    Value::LIST(has_any ? LogicalType::VARCHAR : LogicalType::TYPE(), std::move(signature))));
+	} catch (const NotImplementedException &) {
+		return nullptr;
+	}
 	arguments.push_back(
 	    make_uniq<FunctionExpression>(QualifiedName("system", "main", "list_value"), std::move(constant_arguments)));
 	auto orders = info->properties.find("order_bys");
