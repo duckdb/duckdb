@@ -404,9 +404,11 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const B
 			    path, "aggregate_state_try_cast",
 			    "Aggregate state TRY_CAST or custom casts require a SQL representation")});
 		}
-		auto result = ExportAggregateFunction::StateToSQL(
-		    expression.GetReturnType(),
-		    BoundExpressionSQLExportState::SQLCast(storage_type, std::move(child.GetValue())));
+		auto storage = RestoreResultType(storage_type, std::move(child.GetValue()), path);
+		if (storage.HasError()) {
+			return storage;
+		}
+		auto result = ExportAggregateFunction::StateToSQL(expression.GetReturnType(), std::move(storage.GetValue()));
 		if (!result) {
 			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
 			    path, "aggregate_state_parameters", "Aggregate state SQL parameters are not representable")});
