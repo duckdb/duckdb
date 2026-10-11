@@ -1,0 +1,77 @@
+# name: test/sql/catalog/sequence/sequence_overflow_restart.test
+# description: An exhausted sequence stays exhausted across WAL replay and checkpoints
+# group: [sequence]
+
+statement ok
+SET storage_compatibility_version = 'v2.0.0';
+
+load {TEST_DIR}/sequence_overflow_restart.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE SEQUENCE s_wal INCREMENT BY -1 NO MINVALUE START -9223372036854775808;
+
+statement ok
+CREATE SEQUENCE s_ckpt START 9223372036854775807;
+
+query I
+SELECT nextval('s_wal');
+----
+-9223372036854775808
+
+query I
+SELECT nextval('s_ckpt');
+----
+9223372036854775807
+
+statement ok
+CHECKPOINT
+
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+# s_ckpt was exhausted before the checkpoint
+statement error
+SELECT nextval('s_ckpt');
+----
+<REGEX>:.*Sequence Error.*reached maximum value of sequence.*
+
+# s_wal is restored from the checkpoint, then exhausted again via setval and replayed from the WAL
+statement error
+SELECT nextval('s_wal');
+----
+<REGEX>:.*Sequence Error.*reached minimum value of sequence.*
+
+statement ok
+SELECT setval('s_wal', -9223372036854775807, false);
+
+query I
+SELECT nextval('s_wal') FROM range(2);
+----
+-9223372036854775807
+-9223372036854775808
+
+restart
+
+statement error
+SELECT nextval('s_wal');
+----
+<REGEX>:.*Sequence Error.*reached minimum value of sequence.*
+
+statement ok
+SELECT setval('s_wal', -9223372036854775808, false);
+
+query I
+SELECT nextval('s_wal');
+----
+-9223372036854775808

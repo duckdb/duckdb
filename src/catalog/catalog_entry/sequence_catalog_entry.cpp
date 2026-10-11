@@ -6,6 +6,8 @@
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 
 #include <algorithm>
@@ -17,7 +19,8 @@ constexpr const char *SequenceCatalogEntry::Name;
 
 SequenceData::SequenceData(CreateSequenceInfo &info)
     : usage_count(info.usage_count), counter(info.start_value), last_value(info.last_value), increment(info.increment),
-      start_value(info.start_value), min_value(info.min_value), max_value(info.max_value), cycle(info.cycle) {
+      start_value(info.start_value), min_value(info.min_value), max_value(info.max_value), cycle(info.cycle),
+      exhausted(info.exhausted) {
 }
 
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info)
@@ -67,11 +70,18 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 			next_counter = data.min_value;
 		}
 	} else {
-		if (result < data.min_value || (overflow && data.increment < 0)) {
+		// storage before v2.0 cannot persist exhausted, so stop one value early there
+		bool exhausted = data.exhausted || (overflow && !CanPersistExhausted());
+		if (result < data.min_value || (exhausted && data.increment < 0)) {
 			throw SequenceException("nextval: reached minimum value of sequence %s (%lld)", name, data.min_value);
 		}
-		if (result > data.max_value || overflow) {
+		if (result > data.max_value || exhausted) {
 			throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", name, data.max_value);
+		}
+		if (overflow) {
+			// the next value does not fit in int64, so mark the sequence as exhausted
+			next_counter = result;
+			data.exhausted = true;
 		}
 	}
 	data.counter = next_counter;
@@ -83,6 +93,14 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 	return result;
 }
 
+bool SequenceCatalogEntry::CanPersistExhausted() const {
+	if (temporary) {
+		return true;
+	}
+	auto &storage = catalog.GetAttached().GetStorageManager();
+	return storage.GetStorageVersion() >= StorageVersion::V2_0_0;
+}
+
 int64_t SequenceCatalogEntry::SetValue(DuckTransaction &transaction, int64_t value, bool is_called) {
 	{
 		lock_guard<mutex> seqlock(lock);
@@ -91,6 +109,7 @@ int64_t SequenceCatalogEntry::SetValue(DuckTransaction &transaction, int64_t val
 			                        data.min_value, data.max_value);
 		}
 
+		data.exhausted = false;
 		data.counter = value;
 		if (!is_called) {
 			data.usage_count++;
@@ -105,11 +124,13 @@ int64_t SequenceCatalogEntry::SetValue(DuckTransaction &transaction, int64_t val
 	return NextValue(transaction);
 }
 
-void SequenceCatalogEntry::ReplayValue(uint64_t v_usage_count, int64_t v_counter, optional<int64_t> last_value) {
+void SequenceCatalogEntry::ReplayValue(uint64_t v_usage_count, int64_t v_counter, optional<int64_t> last_value,
+                                       bool exhausted) {
 	if (v_usage_count > data.usage_count) {
 		data.usage_count = v_usage_count;
 		data.counter = v_counter;
 		data.last_value = last_value;
+		data.exhausted = exhausted;
 	}
 }
 
@@ -128,6 +149,7 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	result->dependencies = dependencies;
 	result->comment = comment;
 	result->tags = tags;
+	result->exhausted = seq_data.exhausted;
 	return std::move(result);
 }
 

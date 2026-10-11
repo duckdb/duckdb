@@ -1,0 +1,141 @@
+# name: test/sql/catalog/sequence/sequence_int64_boundary.test
+# description: Sequences return the int64 boundary value exactly once (requires v2.0.0 storage)
+# group: [sequence]
+
+# setval to the int64 limit returns it once, then nextval fails
+statement ok
+create sequence seq8 MINVALUE -9223372036854775808 MAXVALUE 9223372036854775807 INCREMENT 1 NO CYCLE;
+
+statement ok
+SELECT setval('seq8', 9223372036854775807, false);
+
+query I
+SELECT nextval('seq8');
+----
+9223372036854775807
+
+statement error
+SELECT nextval('seq8');
+----
+<REGEX>:.*Sequence Error.*reached maximum value of sequence.*
+
+statement error
+SELECT nextval('seq8');
+----
+<REGEX>:.*Sequence Error.*reached maximum value of sequence.*
+
+statement ok
+create sequence seq9 MINVALUE -9223372036854775808 MAXVALUE 9223372036854775807 INCREMENT -1 NO CYCLE;
+
+statement ok
+SELECT setval('seq9', -9223372036854775808, false);
+
+query I
+SELECT nextval('seq9');
+----
+-9223372036854775808
+
+statement error
+SELECT nextval('seq9');
+----
+<REGEX>:.*Sequence Error.*reached minimum value of sequence.*
+
+statement error
+SELECT nextval('seq9');
+----
+<REGEX>:.*Sequence Error.*reached minimum value of sequence.*
+
+# issue #26192: the int64 boundary itself is returned exactly once
+statement ok
+CREATE SEQUENCE seq10 INCREMENT BY -1 NO MINVALUE START -9223372036854775807;
+
+query I
+SELECT nextval('seq10') FROM range(2);
+----
+-9223372036854775807
+-9223372036854775808
+
+query I
+SELECT currval('seq10');
+----
+-9223372036854775808
+
+statement error
+SELECT nextval('seq10');
+----
+<REGEX>:.*Sequence Error.*reached minimum value of sequence.*
+
+statement ok
+CREATE SEQUENCE seq11 START 9223372036854775806;
+
+query I
+SELECT nextval('seq11') FROM range(2);
+----
+9223372036854775806
+9223372036854775807
+
+statement error
+SELECT nextval('seq11');
+----
+<REGEX>:.*Sequence Error.*reached maximum value of sequence.*
+
+# a large increment that jumps past the int64 boundary still returns the last value in range
+statement ok
+CREATE SEQUENCE seq12 INCREMENT BY 5 START 9223372036854775805;
+
+query I
+SELECT nextval('seq12');
+----
+9223372036854775805
+
+statement error
+SELECT nextval('seq12');
+----
+<REGEX>:.*Sequence Error.*reached maximum value of sequence.*
+
+# setval revives an exhausted sequence
+statement ok
+SELECT setval('seq11', 9223372036854775807, false);
+
+query I
+SELECT nextval('seq11');
+----
+9223372036854775807
+
+statement error
+SELECT nextval('seq11');
+----
+<REGEX>:.*Sequence Error.*reached maximum value of sequence.*
+
+query I
+SELECT setval('seq11', 9223372036854775807, true);
+----
+9223372036854775807
+
+statement error
+SELECT nextval('seq11');
+----
+<REGEX>:.*Sequence Error.*reached maximum value of sequence.*
+
+statement ok
+SELECT setval('seq11', 9223372036854775800, false);
+
+query I
+SELECT nextval('seq11');
+----
+9223372036854775800
+
+# temporary sequences
+statement ok
+CREATE TEMPORARY SEQUENCE seq13 INCREMENT BY -1 NO MINVALUE START -9223372036854775807;
+
+query I
+SELECT nextval('seq13') FROM range(2);
+----
+-9223372036854775807
+-9223372036854775808
+
+statement error
+SELECT nextval('seq13');
+----
+<REGEX>:.*Sequence Error.*reached minimum value of sequence.*

@@ -22,6 +22,7 @@ struct SequenceValue {
 	SequenceCatalogEntry *entry;
 	uint64_t usage_count;
 	int64_t counter;
+	bool exhausted;
 };
 
 struct SequenceData {
@@ -43,6 +44,8 @@ struct SequenceData {
 	int64_t max_value;
 	//! Whether or not the sequence cycles
 	bool cycle;
+	//! Whether the final value in range has been returned
+	bool exhausted = false;
 };
 
 //! A sequence catalog entry
@@ -63,9 +66,12 @@ public:
 	int64_t CurrentValue();
 	int64_t NextValue(DuckTransaction &transaction);
 	int64_t SetValue(DuckTransaction &transaction, int64_t value, bool is_called);
-	void ReplayValue(uint64_t usage_count, int64_t counter, optional<int64_t> last_value);
+	void ReplayValue(uint64_t usage_count, int64_t counter, optional<int64_t> last_value, bool exhausted);
 
 	string ToSQL() const override;
+
+private:
+	bool CanPersistExhausted() const;
 
 private:
 	//! Lock for getting a value on the sequence

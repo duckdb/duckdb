@@ -1,0 +1,42 @@
+# name: test/sql/catalog/sequence/sequence_overflow_restart_old_storage.test
+# description: Storage versions that cannot persist exhaustion stop one value before the int64 boundary
+# group: [sequence]
+
+statement ok
+SET storage_compatibility_version = 'v1.5.2';
+
+load {TEST_DIR}/sequence_overflow_restart_old_storage.db
+
+statement ok
+CREATE SEQUENCE s INCREMENT BY -1 NO MINVALUE START -9223372036854775807;
+
+query I
+SELECT nextval('s');
+----
+-9223372036854775807
+
+statement error
+SELECT nextval('s');
+----
+<REGEX>:.*Sequence Error.*reached minimum value of sequence.*
+
+restart
+
+statement error
+SELECT nextval('s');
+----
+<REGEX>:.*Sequence Error.*reached minimum value of sequence.*
+
+# temporary sequences are never persisted, so they reach the boundary
+statement ok
+CREATE TEMPORARY SEQUENCE t START 9223372036854775807;
+
+query I
+SELECT nextval('t');
+----
+9223372036854775807
+
+statement error
+SELECT nextval('t');
+----
+<REGEX>:.*Sequence Error.*reached maximum value of sequence.*

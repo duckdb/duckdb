@@ -145,6 +145,12 @@
       "paths": [
         "test/sql/alter/alter_schema_set_schema_options.test"
       ]
+    },
+    {
+      "reason": "Returning the int64 limit from a sequence requires storage version v2.0.0 but encrypted databases use an older default storage version",
+      "paths": [
+        "test/sql/catalog/sequence/sequence_int64_boundary.test"
+      ]
     }
   ]
 }

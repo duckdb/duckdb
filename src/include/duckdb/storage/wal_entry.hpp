@@ -142,12 +142,14 @@ struct WALSequenceValue {
 	// the last value produced by the sequence; only serialized from storage version v2.0.0 onwards, and omitted when
 	// unset (so older readers can still replay sequence values that do not carry a last_value)
 	optional<int64_t> last_value;
+	// whether the final value in range has been returned
+	bool exhausted = false;
 
 	WALSequenceValue() = default;
 	WALSequenceValue(QualifiedName qualified_name_p, uint64_t usage_count, int64_t counter,
-	                 optional<int64_t> last_value)
+	                 optional<int64_t> last_value, bool exhausted)
 	    : qualified_name(std::move(qualified_name_p)), usage_count(usage_count), counter(counter),
-	      last_value(last_value) {
+	      last_value(last_value), exhausted(exhausted) {
 	}
 
 	// legacy fields serialized for storage versions older than v2.0.0 (derived from the qualified name)
