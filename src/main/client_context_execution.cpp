@@ -303,6 +303,7 @@ unique_ptr<QueryResult> ClientContext::CompleteDelegatedInternal(ClientContextLo
 	auto produced = executor.GetResult();
 	if (executor.HasStreamingResultCollector()) {
 		active_query->SetOpenResult(*produced);
+		active_query->collector_built_result = true;
 	} else {
 		CleanupInternal(lock, produced.get(), false);
 	}
@@ -383,8 +384,7 @@ QueryResultState ClientContext::FailQueryInternal(ClientContextLock &lock, BaseQ
 	return QueryResultState::EXECUTION_ERROR;
 }
 
-void ClientContext::InitialCleanup(ClientContextLock &lock) {
-	//! Abandon the query of an open result that no call ended, as Close would, and reset the interrupted flag
+void ClientContext::AbandonActiveQuery(ClientContextLock &lock) {
 	if (active_query) {
 		AbortInternal(lock);
 	}

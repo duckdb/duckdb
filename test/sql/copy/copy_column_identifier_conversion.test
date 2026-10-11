@@ -75,6 +75,15 @@ SELECT length(a), length(b), c IS NULL FROM csv_columns;
 statement ok
 DROP TABLE csv_columns;
 
+# A CSV column list can also name a column after a SQL value function.
+statement ok
+COPY (SELECT 'x' p, 'y' AS user) TO '{TEST_DIR}/copy_csv_user_column_{conversion}.csv' (HEADER, FORCE_QUOTE (p, user));
+
+query I
+SELECT replace(content, chr(10), '|') FROM read_text('{TEST_DIR}/copy_csv_user_column_{conversion}.csv');
+----
+"p","user"|"x","y"|
+
 # ORDER_BY binds its ordering terms against the COPY output columns.
 foreach ordering p 'p' (p)
 
