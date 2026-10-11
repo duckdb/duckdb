@@ -1613,17 +1613,18 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_config_get_option_value(duckdb_v2_config_
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_config_set_option(duckdb_v2_config_handle config,
-                                                         const duckdb_v2_identifier_t *name,
-                                                         duckdb_v2_value_handle value, DUCKDB_V2_SETTING_SCOPE scope,
-                                                         duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_config_set_option_value(duckdb_v2_config_handle config,
+                                                               const duckdb_v2_identifier_t *name,
+                                                               duckdb_v2_value_handle value,
+                                                               DUCKDB_V2_SETTING_SCOPE scope,
+                                                               duckdb_v2_error_info_handle *err);
 
 /*!
  * Writes an option in this config from text, the form SQL `SET` accepts.
  *
- * `duckdb_v2_config_set_option()` with the text as a VARCHAR value: the engine casts it to the option's type, so this
- * is the one-call form for a setting spelled the way SQL spells it, e.g. "1GB" for memory_limit. Scope handling and
- * errors are `duckdb_v2_config_set_option()`'s.
+ * `duckdb_v2_config_set_option_value()` with the text as a VARCHAR value: the engine casts it to the option's type, so
+ * this is the one-call form for a setting spelled the way SQL spells it, e.g. "1GB" for memory_limit. Scope handling
+ * and errors are `duckdb_v2_config_set_option_value()`'s.
  *
  * history:
  * - stable: v2.0.0
@@ -7478,6 +7479,363 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_statistics_set_file_size(duckdb_v
 #endif
 
 /* --- Struct definitions for copy --- */
+
+/* ============================================================================
+ * MODULE: custom_option
+ * ============================================================================ */
+
+/* --- Enums for custom_option --- */
+
+/* --- Struct forward declarations for custom_option --- */
+
+/* --- Types for custom_option --- */
+
+/*!
+ * An owned opaque handle to a custom option being built. Created with `duckdb_v2_custom_option_create()`, configured
+ * with the setter functions (e.g. `duckdb_v2_custom_option_set_name()`, `duckdb_v2_custom_option_set_type()`, etc.),
+ * made available with `duckdb_v2_connection_register_custom_option()` or
+ * `duckdb_v2_extension_register_custom_option()`, and destroyed with `duckdb_v2_custom_option_destroy()`.
+ */
+typedef struct _duckdb_v2_custom_option {
+	void *internal_ptr;
+} * duckdb_v2_custom_option_handle;
+
+/*!
+ * A borrowed opaque handle to an update of a custom option, received by its update callback. It gives access to the new
+ * value, the scope it is written at and the user data, and can replace the value.
+ */
+typedef struct _duckdb_v2_custom_option_update_info {
+	void *internal_ptr;
+} * duckdb_v2_custom_option_update_info_handle;
+
+/* --- Constants for custom_option --- */
+
+/* --- Function pointer typedefs for custom_option --- */
+
+typedef void (*duckdb_v2_custom_option_update_callback_fn)(duckdb_v2_custom_option_update_info_handle info,
+                                                           duckdb_v2_context_handle context,
+                                                           duckdb_v2_error_info_handle *err);
+
+/* --- Functions for custom_option --- */
+
+/*!
+ * Creates a new custom option through a factory.
+ *
+ * The option starts out empty: configure it with the setter functions, then make it available with
+ * `duckdb_v2_connection_register_custom_option()` or `duckdb_v2_extension_register_custom_option()`. The caller owns
+ * the returned handle and must destroy it with `duckdb_v2_custom_option_destroy()`, also after registration.
+ *
+ * The custom option can only be registered on the instance the factory belongs to.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param factory The factory to create the custom option through.
+ * @param option On success, receives the newly created custom option. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_option_create(duckdb_v2_factory_handle factory,
+                                                            duckdb_v2_custom_option_handle *option,
+                                                            duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the name of the custom option, as `SET` and the config functions refer to it.
+ *
+ * The name is borrowed and copied. Calling this again replaces the previous name. A name must be set before
+ * registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param option The option to set the name of.
+ * @param name The name to set. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_option_set_name(duckdb_v2_custom_option_handle option,
+                                                              const duckdb_v2_identifier_t *name,
+                                                              duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the type of the custom option. Every value written to the option is cast to it, as SQL `SET` does.
+ *
+ * The type is borrowed and copied. Optional when a default value is set, whose type the option then takes.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param option The option to set the type of.
+ * @param type The type to set. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_option_set_type(duckdb_v2_custom_option_handle option,
+                                                              duckdb_v2_logical_type_handle type,
+                                                              duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the default value of the custom option: its value until it is set, and the value `RESET` restores.
+ *
+ * The value is borrowed and copied, and cast to the option's type at registration, which fails when the cast does.
+ * Without a default value the option reads as NULL until it is set.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param option The option to set the default value of.
+ * @param value The default value. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_option_set_default_value(duckdb_v2_custom_option_handle option,
+                                                                       duckdb_v2_value_handle value,
+                                                                       duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the description of the custom option, as `duckdb_v2_option_get_description()` and `duckdb_settings()` report it.
+ *
+ * The description is borrowed and copied. Calling this again replaces the previous description.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param option The option to set the description of.
+ * @param description The description to set. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_option_set_description(duckdb_v2_custom_option_handle option,
+                                                                     const duckdb_v2_str *description,
+                                                                     duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the scope a write at `SETTING_SCOPE_DEFAULT` goes to, like SQL `SET name = value`.
+ *
+ * Must be GLOBAL or SESSION, and a scope the option supports. Defaults to SESSION, or to GLOBAL when the option does
+ * not support SESSION.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param option The option to set the default scope of.
+ * @param scope The default scope, GLOBAL or SESSION.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_option_set_default_scope(duckdb_v2_custom_option_handle option,
+                                                                       DUCKDB_V2_SETTING_SCOPE scope,
+                                                                       duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets whether the custom option can be written at a scope, as `duckdb_v2_option_supports_scope()` reports it.
+ *
+ * A custom option supports both GLOBAL and SESSION unless told otherwise. A write at a scope it does not support fails,
+ * from SQL as from `duckdb_v2_config_set_option_value()`. Registration fails when the option supports neither scope.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param option The option to configure.
+ * @param scope The scope, GLOBAL or SESSION.
+ * @param supported Whether the option can be written at the scope.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_option_set_supports_scope(duckdb_v2_custom_option_handle option,
+                                                                        DUCKDB_V2_SETTING_SCOPE scope, bool supported,
+                                                                        duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets arbitrary user data on the custom option.
+ *
+ * Associates an opaque pointer with the option, retrievable from the update callback via
+ * `duckdb_v2_custom_option_update_get_user_data()`. The opaque handle bundles the pointer with an optional destructor,
+ * invoked when the data is no longer needed: once the custom option handle is destroyed and, if it was registered, the
+ * instance is too.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param option The option to set the user data of.
+ * @param data Opaque handle bundling the user data pointer plus an optional destructor.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_option_set_user_data(duckdb_v2_custom_option_handle option,
+                                                                   duckdb_v2_opaque *data,
+                                                                   duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the optional update callback of the custom option.
+ *
+ * The callback is invoked whenever the option is set or reset, from SQL as from `duckdb_v2_config_set_option_value()`,
+ * after the new value is cast to the option's type and before it is stored. It may replace the value with
+ * `duckdb_v2_custom_option_update_set_value()`, or refuse it by reporting an error. It is not invoked for the default
+ * value at registration, nor for a value given to the instance at startup. The callback must not write options itself.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param option The option to set the update callback of.
+ * @param callback The update callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_option_set_update_callback(
+    duckdb_v2_custom_option_handle option, duckdb_v2_custom_option_update_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the user data set via `duckdb_v2_custom_option_set_user_data()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The update info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_option_update_get_user_data(
+    duckdb_v2_custom_option_update_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the value the option is updated to, already cast to the option's type. On a reset this is the default
+ * value, which may be NULL. The returned value is owned by the caller and must be destroyed via
+ * `duckdb_v2_value_destroy()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The update info handle.
+ * @param value Receives the new value. Owned by the caller; destroy via `duckdb_v2_value_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_option_update_get_value(duckdb_v2_custom_option_update_info_handle info,
+                                                                      duckdb_v2_value_handle *value,
+                                                                      duckdb_v2_error_info_handle *err);
+
+/*!
+ * Replaces the value the option is updated to, e.g. to normalize it. The value is borrowed and copied, and cast to the
+ * option's type, which fails when the cast does.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The update info handle.
+ * @param value The value to store instead. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_option_update_set_value(duckdb_v2_custom_option_update_info_handle info,
+                                                                      duckdb_v2_value_handle value,
+                                                                      duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the scope the value is written at: GLOBAL or SESSION, a DEFAULT write already resolved to the option's
+ * default scope.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The update info handle.
+ * @param scope Receives the scope.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_option_update_get_scope(duckdb_v2_custom_option_update_info_handle info,
+                                                                      DUCKDB_V2_SETTING_SCOPE *scope,
+                                                                      duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves whether the update is a reset to the default value, like SQL `RESET`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The update info handle.
+ * @param is_reset Receives whether the update is a reset.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_option_update_is_reset(duckdb_v2_custom_option_update_info_handle info,
+                                                                     bool *is_reset, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the custom option on the connection's instance, visible to every connection.
+ *
+ * Registration is not transactional: it takes effect at once, also inside an explicit transaction, and a rollback does
+ * not undo it. Registration requires a name and a type, or a default value to take the type from, and fails when an
+ * option of the same name already exists. A value given for the option at startup is picked up. The custom option must
+ * have been created through a factory of the same instance. The caller still owns the handle after registration and
+ * must destroy it with `duckdb_v2_custom_option_destroy()`, which does not affect the registered option.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection to register on.
+ * @param option The custom option to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_register_custom_option(duckdb_v2_connection_handle conn,
+                                                                         duckdb_v2_custom_option_handle option,
+                                                                         duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the custom option on the loading extension's instance, visible to every connection.
+ *
+ * Use this from the extension's load callback. Registration is not transactional, requires a name and a type, or a
+ * default value to take the type from, and fails when an option of the same name already exists. A value given for the
+ * option at startup is picked up. The custom option must have been created through a factory of the same instance. The
+ * caller still owns the handle after registration and must destroy it with `duckdb_v2_custom_option_destroy()`, which
+ * does not affect the registered option.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param extension The loading extension.
+ * @param option The custom option to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_extension_register_custom_option(duckdb_v2_extension_handle extension,
+                                                                        duckdb_v2_custom_option_handle option,
+                                                                        duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys the custom option, releasing its resources.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction. Destroying the handle after registration does not affect the registered option.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param option The option to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_option_destroy(duckdb_v2_custom_option_handle *option);
+
+/* --- Struct definitions for custom_option --- */
 
 /* ============================================================================
  * MODULE: expression

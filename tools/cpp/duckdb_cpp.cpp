@@ -52,6 +52,10 @@ struct HandleTraits<Factory> {
 	using handle = duckdb_v2_factory_handle;
 };
 template <>
+struct HandleTraits<CustomOption> {
+	using handle = duckdb_v2_custom_option_handle;
+};
+template <>
 struct HandleTraits<Config> {
 	using handle = duckdb_v2_config_handle;
 };
@@ -547,6 +551,155 @@ Instance::Instance(Environment &env, const std::string &path, const StartupOptio
 }
 
 //---------------------------------------------------------------------------
+// Custom Option
+//---------------------------------------------------------------------------
+
+namespace {
+
+// The callback table for one registered option: rides the C user_data slot so
+// the trampoline can find it; the user's own slot (SetUserData) rides inside
+// it. Owned by the registered option, freed at database teardown.
+struct CustomOptionInfo {
+	CustomOption::UpdateCallback update_callback = nullptr;
+	detail::UserData user_data;
+
+	CustomOptionInfo(CustomOption::UpdateCallback update_callback, detail::UserData user_data)
+	    : update_callback(update_callback), user_data(std::move(user_data)) {
+	}
+};
+
+auto UpdateInfo(void *args) -> duckdb_v2_custom_option_update_info_handle {
+	return static_cast<duckdb_v2_custom_option_update_info_handle>(args);
+}
+
+auto GetCustomOptionInfo(duckdb_v2_custom_option_update_info_handle info) -> const CustomOptionInfo & {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_custom_option_update_get_user_data, info, &user_data);
+	return *static_cast<const CustomOptionInfo *>(user_data);
+}
+
+} // namespace
+
+CustomOption::CustomOption(void *impl) : detail::Handle<CustomOption>(impl) {
+}
+
+CustomOption::~CustomOption() {
+	auto _h = handle();
+	duckdb_v2_custom_option_destroy(&_h);
+}
+
+auto CustomOption::Create(Factory &factory) -> CustomOption {
+	duckdb_v2_custom_option_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_custom_option_create, factory.handle(), &_h);
+	return detail::HandleFactory::Make<CustomOption>(_h);
+}
+
+auto CustomOption::SetName(const std::string &name) & -> CustomOption & {
+	auto view = ToStr(name);
+	CheckedAPICall(duckdb_v2_custom_option_set_name, handle(), &view);
+	return *this;
+}
+
+auto CustomOption::SetType(const LogicalType &type) & -> CustomOption & {
+	CheckedAPICall(duckdb_v2_custom_option_set_type, handle(), type.handle());
+	return *this;
+}
+
+auto CustomOption::SetDefaultValue(const Value &value) & -> CustomOption & {
+	CheckedAPICall(duckdb_v2_custom_option_set_default_value, handle(), value.handle());
+	return *this;
+}
+
+auto CustomOption::SetDescription(std::string_view description) & -> CustomOption & {
+	auto view = ToStr(description);
+	CheckedAPICall(duckdb_v2_custom_option_set_description, handle(), &view);
+	return *this;
+}
+
+auto CustomOption::SetDefaultScope(SettingScope scope) & -> CustomOption & {
+	CheckedAPICall(duckdb_v2_custom_option_set_default_scope, handle(), static_cast<DUCKDB_V2_SETTING_SCOPE>(scope));
+	return *this;
+}
+
+auto CustomOption::SetSupportsScope(SettingScope scope, bool supported) & -> CustomOption & {
+	CheckedAPICall(duckdb_v2_custom_option_set_supports_scope, handle(), static_cast<DUCKDB_V2_SETTING_SCOPE>(scope),
+	               supported);
+	return *this;
+}
+
+auto CustomOption::SetUserDataInternal(void *data, void (*destructor)(void *)) -> void {
+	user_data = detail::UserData(data, destructor);
+}
+
+auto CustomOption::SetUpdateCallback(UpdateCallback callback) & -> CustomOption & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_custom_option_set_update_callback, handle(), nullptr);
+		update_callback = nullptr;
+		return *this;
+	}
+
+	// The C-side callback is one shared trampoline; the user's callback is looked
+	// up through the info table riding the user_data slot (set by Register).
+	static auto trampoline = [](duckdb_v2_custom_option_update_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			const auto &option = GetCustomOptionInfo(info);
+			auto input =
+			    detail::HandleFactory::Make<UpdateInput>(static_cast<void *>(info), static_cast<void *>(context));
+			option.update_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_custom_option_set_update_callback, handle(), trampoline);
+	update_callback = callback;
+	return *this;
+}
+
+auto CustomOption::PrepareRegistration() -> void {
+	// The callback table rides the C user_data slot so the trampoline can find
+	// it; the user's own data (SetUserData, moved out here) rides inside it.
+	auto info = std::unique_ptr<CustomOptionInfo>(new CustomOptionInfo(update_callback, std::move(user_data)));
+	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<CustomOptionInfo>, nullptr};
+	CheckedAPICall(duckdb_v2_custom_option_set_user_data, handle(), &opaque);
+	// The option owns the table now.
+	info.release(); // NOLINT(bugprone-unused-return-value)
+}
+
+void *CustomOption::UpdateInput::GetUserDataInternal() const {
+	auto ptr = GetCustomOptionInfo(UpdateInfo(args)).user_data.get();
+	if (!ptr) {
+		throw InvalidInputException("no user data was set; call CustomOption::SetUserData before Register");
+	}
+	return ptr;
+}
+
+auto CustomOption::UpdateInput::GetValue() const -> Value {
+	duckdb_v2_value_handle value = nullptr;
+	CheckedAPICall(duckdb_v2_custom_option_update_get_value, UpdateInfo(args), &value);
+	return detail::HandleFactory::Make<Value>(value);
+}
+
+auto CustomOption::UpdateInput::SetValue(const Value &value) -> void {
+	CheckedAPICall(duckdb_v2_custom_option_update_set_value, UpdateInfo(args), value.handle());
+}
+
+auto CustomOption::UpdateInput::GetScope() const -> SettingScope {
+	auto scope = DUCKDB_V2_SETTING_SCOPE_DEFAULT;
+	CheckedAPICall(duckdb_v2_custom_option_update_get_scope, UpdateInfo(args), &scope);
+	return static_cast<SettingScope>(scope);
+}
+
+auto CustomOption::UpdateInput::IsReset() const -> bool {
+	bool is_reset = false;
+	CheckedAPICall(duckdb_v2_custom_option_update_is_reset, UpdateInfo(args), &is_reset);
+	return is_reset;
+}
+
+auto CustomOption::UpdateInput::GetContext() -> Context & {
+	return context;
+}
+
+//---------------------------------------------------------------------------
 // Instance Option
 //---------------------------------------------------------------------------
 
@@ -732,7 +885,7 @@ auto Config::operator[](std::string_view name) const -> OptionValue {
 
 auto Config::SetOption(std::string_view name, const Value &value, SettingScope scope) -> void {
 	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
-	CheckedAPICall(duckdb_v2_config_set_option, handle(), &name_str, value.handle(),
+	CheckedAPICall(duckdb_v2_config_set_option_value, handle(), &name_str, value.handle(),
 	               static_cast<DUCKDB_V2_SETTING_SCOPE>(scope));
 }
 
@@ -1084,6 +1237,16 @@ auto Connection::Register(PragmaFunction &pragma_function) -> void {
 auto Extension::Register(PragmaFunction &pragma_function) -> void {
 	pragma_function.PrepareRegistration();
 	CheckedAPICall(duckdb_v2_extension_register_pragma_function, handle(), pragma_function.handle());
+}
+
+auto Connection::Register(CustomOption &custom_option) -> void {
+	custom_option.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_connection_register_custom_option, handle(), custom_option.handle());
+}
+
+auto Extension::Register(CustomOption &custom_option) -> void {
+	custom_option.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_extension_register_custom_option, handle(), custom_option.handle());
 }
 
 auto Connection::Register(ReplacementScan &replacement_scan) -> void {

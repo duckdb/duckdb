@@ -5,7 +5,7 @@ module: configuration
 # A config handle is the scope options are read from and written at: take one
 # from an instance (GLOBAL alone), or from a connection or context (that
 # client's cascade). config_get_option_value reads the effective value of an
-# option and reports the scope it came from; config_set_option writes one at a
+# option and reports the scope it came from; config_set_option_value writes one at a
 # given scope. Values are typed: they carry the option's type when read, and
 # are cast to it when written, as SQL `SET` does.
 #
@@ -173,7 +173,7 @@ functions:
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
-  config_set_option:
+  config_set_option_value:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-10-08" ]
     description: |
@@ -222,10 +222,10 @@ functions:
     description: |
       Writes an option in this config from text, the form SQL `SET` accepts.
 
-      `[[config_set_option]]` with the text as a VARCHAR value: the engine casts
+      `[[config_set_option_value]]` with the text as a VARCHAR value: the engine casts
       it to the option's type, so this is the one-call form for a setting
       spelled the way SQL spells it, e.g. "1GB" for memory_limit. Scope
-      handling and errors are `[[config_set_option]]`'s.
+      handling and errors are `[[config_set_option_value]]`'s.
     role: setter
     belongs_to: config
     parameters:

@@ -102,8 +102,8 @@ TEST_CASE("V2 db option: set + get round-trip", "[capi_v2][db][option]") {
 	auto default_value = Setting(fx.instance_config, "memory_limit");
 	auto name_str = Convert("memory_limit");
 	auto setting_str = Convert("1GB");
-	REQUIRE(duckdb_v2_config_set_option(fx.instance_config, &name_str, TextValue(fx.factory, &setting_str).value,
-	                                    DUCKDB_V2_SETTING_SCOPE_DEFAULT, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_config_set_option_value(fx.instance_config, &name_str, TextValue(fx.factory, &setting_str).value,
+	                                          DUCKDB_V2_SETTING_SCOPE_DEFAULT, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto after = Setting(fx.instance_config, "memory_limit");
 	REQUIRE(!after.empty());
 	REQUIRE(after != default_value); // mutation visible
@@ -213,13 +213,13 @@ TEST_CASE("V2 db option: set rejects an unparseable setting and a null value", "
 	duckdb_v2_error_info_handle err = nullptr;
 	auto name_str = Convert("threads");
 	auto setting_str = Convert("lots");
-	REQUIRE(duckdb_v2_config_set_option(fx.instance_config, &name_str, TextValue(fx.factory, &setting_str).value,
-	                                    DUCKDB_V2_SETTING_SCOPE_DEFAULT, &err) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_config_set_option_value(fx.instance_config, &name_str, TextValue(fx.factory, &setting_str).value,
+	                                          DUCKDB_V2_SETTING_SCOPE_DEFAULT, &err) != DUCKDB_V2_ERROR_NONE);
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
 	// A null value is caught up front.
-	REQUIRE(duckdb_v2_config_set_option(fx.instance_config, &name_str, nullptr, DUCKDB_V2_SETTING_SCOPE_DEFAULT,
-	                                    nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_config_set_option_value(fx.instance_config, &name_str, nullptr, DUCKDB_V2_SETTING_SCOPE_DEFAULT,
+	                                          nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
 TEST_CASE("V2 conn option: set SESSION is invisible to other connections", "[capi_v2][conn][option]") {
@@ -233,8 +233,8 @@ TEST_CASE("V2 conn option: set SESSION is invisible to other connections", "[cap
 	// session-local — perfect for this test.
 	auto name_str = Convert("max_execution_time");
 	auto setting_str = Convert("5000");
-	REQUIRE(duckdb_v2_config_set_option(fx.config, &name_str, TextValue(fx.factory, &setting_str).value,
-	                                    DUCKDB_V2_SETTING_SCOPE_SESSION, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_config_set_option_value(fx.config, &name_str, TextValue(fx.factory, &setting_str).value,
+	                                          DUCKDB_V2_SETTING_SCOPE_SESSION, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(Setting(fx.config, "max_execution_time") == "5000");
 	// The other connection sees the static default ("0"), not "5000".
 	REQUIRE(Setting(other_config, "max_execution_time") != "5000");
@@ -251,8 +251,8 @@ TEST_CASE("V2 conn option: set GLOBAL is visible everywhere", "[capi_v2][conn][o
 
 	auto name_str = Convert("memory_limit");
 	auto setting_str = Convert("2GB");
-	REQUIRE(duckdb_v2_config_set_option(fx.config, &name_str, TextValue(fx.factory, &setting_str).value,
-	                                    DUCKDB_V2_SETTING_SCOPE_GLOBAL, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_config_set_option_value(fx.config, &name_str, TextValue(fx.factory, &setting_str).value,
+	                                          DUCKDB_V2_SETTING_SCOPE_GLOBAL, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	auto fx_setting = Setting(fx.config, "memory_limit");
 	REQUIRE(!fx_setting.empty());
@@ -269,8 +269,8 @@ TEST_CASE("V2 conn option: scope enforcement matches SQL", "[capi_v2][conn][opti
 	// GLOBAL_ONLY × LOCAL: rejected. allow_community_extensions is GLOBAL_ONLY.
 	auto name_str = Convert("allow_community_extensions");
 	auto setting_str = Convert("false");
-	REQUIRE(duckdb_v2_config_set_option(fx.config, &name_str, TextValue(fx.factory, &setting_str).value,
-	                                    DUCKDB_V2_SETTING_SCOPE_SESSION, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_config_set_option_value(fx.config, &name_str, TextValue(fx.factory, &setting_str).value,
+	                                          DUCKDB_V2_SETTING_SCOPE_SESSION, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_error_info_destroy(&err);
 }
 
@@ -279,8 +279,8 @@ TEST_CASE("V2 conn option: DEFAULT scope mirrors bare SQL `SET`", "[capi_v2][con
 	// max_execution_time is LOCAL_DEFAULT → AUTOMATIC resolves to SESSION → write succeeds.
 	auto name_str = Convert("max_execution_time");
 	auto setting_str = Convert("5000");
-	REQUIRE(duckdb_v2_config_set_option(fx.config, &name_str, TextValue(fx.factory, &setting_str).value,
-	                                    DUCKDB_V2_SETTING_SCOPE_DEFAULT, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_config_set_option_value(fx.config, &name_str, TextValue(fx.factory, &setting_str).value,
+	                                          DUCKDB_V2_SETTING_SCOPE_DEFAULT, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(Setting(fx.config, "max_execution_time") == "5000");
 }
 
@@ -289,8 +289,8 @@ TEST_CASE("V2 conn option: unknown name errors", "[capi_v2][conn][option]") {
 	duckdb_v2_error_info_handle err = nullptr;
 	auto name_str = Convert("no_such_option_xyz");
 	auto setting_str = Convert("1");
-	REQUIRE(duckdb_v2_config_set_option(fx.config, &name_str, TextValue(fx.factory, &setting_str).value,
-	                                    DUCKDB_V2_SETTING_SCOPE_DEFAULT, &err) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_config_set_option_value(fx.config, &name_str, TextValue(fx.factory, &setting_str).value,
+	                                          DUCKDB_V2_SETTING_SCOPE_DEFAULT, &err) != DUCKDB_V2_ERROR_NONE);
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
 	duckdb_v2_option_handle opt = nullptr;
@@ -364,8 +364,9 @@ TEST_CASE("V2 db option: startup options are applied when the instance is create
 		duckdb_v2_config_handle instance_config = nullptr;
 		duckdb_v2_instance_get_config(instance, &instance_config, nullptr);
 		auto read_write = Convert("READ_WRITE");
-		REQUIRE(duckdb_v2_config_set_option(instance_config, &name_str, TextValue(FactoryOf(conn), &read_write).value,
-		                                    DUCKDB_V2_SETTING_SCOPE_DEFAULT, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(
+		    duckdb_v2_config_set_option_value(instance_config, &name_str, TextValue(FactoryOf(conn), &read_write).value,
+		                                      DUCKDB_V2_SETTING_SCOPE_DEFAULT, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
 		REQUIRE(err != nullptr);
 		duckdb_v2_error_info_destroy(&err);
 
@@ -422,8 +423,8 @@ TEST_CASE("V2 context option: read through a context inside a callback", "[capi_
 	RegisterOptionProbe(fx);
 	auto name_str = Convert("max_execution_time");
 	auto setting_str = Convert("4242");
-	REQUIRE(duckdb_v2_config_set_option(fx.config, &name_str, TextValue(fx.factory, &setting_str).value,
-	                                    DUCKDB_V2_SETTING_SCOPE_SESSION, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_config_set_option_value(fx.config, &name_str, TextValue(fx.factory, &setting_str).value,
+	                                          DUCKDB_V2_SETTING_SCOPE_SESSION, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT probe_option()", &result) == DUCKDB_V2_ERROR_NONE);
@@ -543,16 +544,19 @@ TEST_CASE("V2 option: accessor null-arg validation", "[capi_v2][option]") {
 	}
 	SECTION("set_option / get_option reject null and malformed arguments") {
 		auto setting_str = Convert("1");
-		REQUIRE(duckdb_v2_config_set_option(nullptr, &name_str, TextValue(fx.factory, &setting_str).value,
-		                                    DUCKDB_V2_SETTING_SCOPE_DEFAULT, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_config_set_option_value(nullptr, &name_str, TextValue(fx.factory, &setting_str).value,
+		                                          DUCKDB_V2_SETTING_SCOPE_DEFAULT,
+		                                          nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 		auto name_str2 = duckdb_v2_str {nullptr, 1};
-		REQUIRE(duckdb_v2_config_set_option(fx.instance_config, &name_str2, TextValue(fx.factory, &setting_str).value,
-		                                    DUCKDB_V2_SETTING_SCOPE_DEFAULT, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_config_set_option_value(
+		            fx.instance_config, &name_str2, TextValue(fx.factory, &setting_str).value,
+		            DUCKDB_V2_SETTING_SCOPE_DEFAULT, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_option_handle out = nullptr;
 		REQUIRE(duckdb_v2_config_get_option_by_name(fx.instance_config, &name_str, nullptr, nullptr) ==
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
-		REQUIRE(duckdb_v2_config_set_option(nullptr, &name_str, TextValue(fx.factory, &setting_str).value,
-		                                    DUCKDB_V2_SETTING_SCOPE_DEFAULT, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_config_set_option_value(nullptr, &name_str, TextValue(fx.factory, &setting_str).value,
+		                                          DUCKDB_V2_SETTING_SCOPE_DEFAULT,
+		                                          nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 		REQUIRE(duckdb_v2_config_get_option_by_name(fx.config, &name_str, nullptr, nullptr) ==
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		REQUIRE(duckdb_v2_config_get_option_by_name(nullptr, &name_str, &out, nullptr) ==
@@ -573,8 +577,8 @@ TEST_CASE("V2 option values report the scope they were read from", "[capi_v2][op
 	// A session write is read back as SESSION by the connection, and leaves the instance's value alone.
 	auto name_str = Convert("max_execution_time");
 	auto session = Convert("5000");
-	REQUIRE(duckdb_v2_config_set_option(fx.config, &name_str, TextValue(fx.factory, &session).value,
-	                                    DUCKDB_V2_SETTING_SCOPE_SESSION, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_config_set_option_value(fx.config, &name_str, TextValue(fx.factory, &session).value,
+	                                          DUCKDB_V2_SETTING_SCOPE_SESSION, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(Setting(fx.config, "max_execution_time", &scope) == "5000");
 	REQUIRE(scope == DUCKDB_V2_SETTING_SCOPE_SESSION);
 	REQUIRE(Setting(fx.instance_config, "max_execution_time", &scope) != "5000");
@@ -582,8 +586,8 @@ TEST_CASE("V2 option values report the scope they were read from", "[capi_v2][op
 
 	// A GLOBAL write through a context reaches every connection.
 	auto global = Convert("4242");
-	REQUIRE(duckdb_v2_config_set_option(fx.config, &name_str, TextValue(fx.factory, &global).value,
-	                                    DUCKDB_V2_SETTING_SCOPE_GLOBAL, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_config_set_option_value(fx.config, &name_str, TextValue(fx.factory, &global).value,
+	                                          DUCKDB_V2_SETTING_SCOPE_GLOBAL, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_connection_handle other = nullptr;
 	REQUIRE(duckdb_v2_connection_create(fx.instance, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_config_handle other_config = nullptr;
@@ -593,8 +597,9 @@ TEST_CASE("V2 option values report the scope they were read from", "[capi_v2][op
 	duckdb_v2_connection_destroy(&other);
 
 	// An instance has no SESSION scope.
-	REQUIRE(duckdb_v2_config_set_option(fx.instance_config, &name_str, TextValue(fx.factory, &global).value,
-	                                    DUCKDB_V2_SETTING_SCOPE_SESSION, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_config_set_option_value(fx.instance_config, &name_str, TextValue(fx.factory, &global).value,
+	                                          DUCKDB_V2_SETTING_SCOPE_SESSION,
+	                                          nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	// The text setter is the one-call form, and casts like SQL `SET`.
 	auto text = Convert("1234");

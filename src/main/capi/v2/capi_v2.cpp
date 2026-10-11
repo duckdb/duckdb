@@ -414,8 +414,9 @@ static unique_ptr<CV2Option> PopulateOptionFromExtension(const Identifier &name,
 
 	out->name = name;
 	out->description = ext_option.description;
-	// an extension option can be written at either scope; AUTOMATIC writes the session unless it declares GLOBAL
-	out->supports_global = out->supports_session = true;
+	// AUTOMATIC writes the session unless the option declares GLOBAL
+	out->supports_global = ext_option.supports_global;
+	out->supports_session = ext_option.supports_session;
 	out->default_scope =
 	    ext_option.default_scope == SetScope::GLOBAL ? DUCKDB_V2_SETTING_SCOPE_GLOBAL : DUCKDB_V2_SETTING_SCOPE_SESSION;
 	out->default_value = ext_option.default_value;

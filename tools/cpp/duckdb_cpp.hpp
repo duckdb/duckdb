@@ -62,6 +62,7 @@ class Exception;
 class OptionDescription;
 struct OptionValue;
 class Config;
+class CustomOption;
 class Environment;
 class Instance;
 class Connection;
@@ -548,6 +549,116 @@ private:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+// Custom Option
+//----------------------------------------------------------------------------------------------------------------------
+
+/// A configuration setting of your own. Create one through a `Factory` of the database it will be registered in,
+/// describe it (name, type, default value, scopes), then register it with `Connection::Register` or
+/// `Extension::Register`. From then on it is a setting like any other: read and written through a `Config` and from
+/// SQL with `SET` and `RESET`, and described by `Config::DescribeOption`.
+///
+/// Registration is not transactional: a registered option is visible to every connection at once, is not undone by a
+/// rollback, and lives for as long as the database does.
+class CustomOption final : public detail::Handle<CustomOption> {
+	friend detail::HandleFactory;
+	friend class Connection;
+	friend class Extension;
+
+public:
+	class UpdateInput;
+
+	/// Called whenever the option is set or reset, after the new value is cast to the option's type and before it is
+	/// stored. May replace the value through `UpdateInput::SetValue`, or refuse it by throwing. Not called for the
+	/// default value at registration, nor for a value given to the database at startup. Must not write settings
+	/// itself.
+	using UpdateCallback = void (*)(UpdateInput &input);
+
+	CustomOption(CustomOption &&) noexcept = default;
+	CustomOption &operator=(CustomOption &&) noexcept = default;
+
+	~CustomOption() override;
+
+	/// Creates an empty CustomOption through `factory`. Register it through a `Connection` or an `Extension` of the
+	/// factory's database.
+	static auto Create(Factory &factory) -> CustomOption;
+
+	/// Sets the option's name, as `SET` and `Config` refer to it.
+	auto SetName(const std::string &name) & -> CustomOption &;
+	/// Sets the type every value written to the option is cast to. Optional when a default value is set, whose type
+	/// the option then takes.
+	auto SetType(const LogicalType &type) & -> CustomOption &;
+	/// Sets the value the option has until it is set, and that `RESET` restores. Cast to the option's type at
+	/// registration. Without one, the option reads as NULL until it is set.
+	auto SetDefaultValue(const Value &value) & -> CustomOption &;
+	/// Sets the description `OptionDescription::GetDescription` and `duckdb_settings()` report.
+	auto SetDescription(std::string_view description) & -> CustomOption &;
+	/// Sets the scope a write at `SettingScope::DEFAULT` goes to: GLOBAL or SESSION, and one the option supports.
+	/// Defaults to SESSION, or to GLOBAL when the option does not support SESSION.
+	auto SetDefaultScope(SettingScope scope) & -> CustomOption &;
+	/// Sets whether the option can be written at a scope, GLOBAL or SESSION. Both are supported unless told otherwise.
+	auto SetSupportsScope(SettingScope scope, bool supported) & -> CustomOption &;
+
+	/// Constructs user data of type `T`, carried by the registered option and freed at database teardown; read it from
+	/// the update callback via `UpdateInput::GetUserData<T>`. Consumed by registration: set it again before
+	/// re-registering.
+	template <class T, class... ARGS>
+	auto SetUserData(ARGS &&... args) & -> CustomOption & {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		SetUserDataInternal(ptr, detail::TypedDelete<T>);
+		return *this;
+	}
+
+	auto SetUpdateCallback(UpdateCallback callback) & -> CustomOption &;
+
+private:
+	explicit CustomOption(void *impl);
+	//! Moves what the callback needs into the C handle, right before it is registered.
+	auto PrepareRegistration() -> void;
+
+	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
+
+	UpdateCallback update_callback = nullptr;
+	detail::UserData user_data;
+
+public:
+	/// What the update callback works with. Borrowed, valid only for the callback duration.
+	class UpdateInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The user data set via `CustomOption::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// The value the option is updated to, cast to its type. On a reset, the default value, which may be NULL.
+		auto GetValue() const -> Value;
+		/// Replaces the value the option is updated to. Cast to the option's type.
+		auto SetValue(const Value &value) -> void;
+		/// The scope the value is written at: GLOBAL or SESSION, a DEFAULT write resolved to the default scope.
+		auto GetScope() const -> SettingScope;
+		/// Whether the update is a reset to the default value, like SQL `RESET`.
+		auto IsReset() const -> bool;
+
+		/// The context setting the option. When the option is written through the config of an `Instance`, or given
+		/// at startup, this is an internal context whose session state is discarded after the update. Borrowed, valid
+		/// only for the callback duration.
+		auto GetContext() -> Context &;
+
+	private:
+		UpdateInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
+		}
+
+		void *args;
+		Context context;
+
+		void *GetUserDataInternal() const;
+	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
 // SQL statements
 //----------------------------------------------------------------------------------------------------------------------
 // A SQL string is parsed once into statements, which can then be bound or executed repeatedly. Parsing is purely
@@ -831,6 +942,12 @@ public:
 	/// @throws InvalidInputException When the name is missing, not exactly one of the query and exec callbacks is set,
 	/// the signature declares a return type, or a pragma of the same name already exists.
 	auto Register(PragmaFunction &pragma_function) -> void;
+	/// Registers the option on the database, visible to every connection. Not transactional: it takes effect at once,
+	/// also inside an explicit transaction, and a rollback does not undo it. The option object remains valid; user
+	/// data set via `SetUserData` is consumed by the first registration.
+	/// @throws InvalidInputException When the name, or both the type and the default value, are missing, the default
+	/// value does not cast to the type, the scopes are inconsistent, or an option of the same name already exists.
+	auto Register(CustomOption &custom_option) -> void;
 	/// Registers the scan. Scans are consulted in registration order within
 	/// their scope, connection-scoped ones before database-wide ones, and the first to claim a name wins. A scan can
 	/// be registered only once.
@@ -1219,6 +1336,12 @@ public:
 	/// @throws InvalidInputException When the name is missing, not exactly one of the query and exec callbacks is set,
 	/// the signature declares a return type, or a pragma of the same name already exists.
 	auto Register(PragmaFunction &pragma_function) -> void;
+	/// Registers the option on the database, visible to every connection. Not transactional: it takes effect at once,
+	/// also inside an explicit transaction, and a rollback does not undo it. The option object remains valid; user
+	/// data set via `SetUserData` is consumed by the first registration.
+	/// @throws InvalidInputException When the name, or both the type and the default value, are missing, the default
+	/// value does not cast to the type, the scopes are inconsistent, or an option of the same name already exists.
+	auto Register(CustomOption &custom_option) -> void;
 	/// Registers the scan. Scans are consulted in registration order within
 	/// their scope, connection-scoped ones before database-wide ones, and the first to claim a name wins. A scan can
 	/// be registered only once.

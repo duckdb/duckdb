@@ -102,9 +102,9 @@ DUCKDB_V2_ERROR duckdb_v2_config_get_option_value(duckdb_v2_config_handle config
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_config_set_option(duckdb_v2_config_handle config, const duckdb_v2_identifier_t *name,
-                                            duckdb_v2_value_handle value, DUCKDB_V2_SETTING_SCOPE scope,
-                                            duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_config_set_option_value(duckdb_v2_config_handle config, const duckdb_v2_identifier_t *name,
+                                                  duckdb_v2_value_handle value, DUCKDB_V2_SETTING_SCOPE scope,
+                                                  duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(config);
 	DUCKDB_CHECK_ARG(name);
 	DUCKDB_CHECK_ARG(value);
