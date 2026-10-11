@@ -32,6 +32,8 @@
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/query_context.hpp"
+#include "duckdb/common/file_system.hpp"
 
 // The engine implements the whole V2 C API, including the unstable surface
 #ifndef DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -211,6 +213,87 @@ inline auto Convert(duckdb_v2_environment_handle env) -> CV2Environment * {
 
 class CV2Option;
 class CV2Instance;
+class CV2OptionSource;
+
+//! A config handle: the scope config options are read from and written at.
+class CV2Config {
+public:
+	virtual ~CV2Config() = default;
+
+	//! The effective value of `name`, and the scope DuckDB attributes it to. Throws for an unknown option.
+	virtual DUCKDB_V2_SETTING_SCOPE ReadValue(std::string_view name, Value &result) = 0;
+	//! Writes `name` at `scope`, which the option must support.
+	virtual void Write(const Identifier &name, const Value &value, DUCKDB_V2_SETTING_SCOPE scope) = 0;
+	//! Where option descriptors are read from. The same from every config of one instance.
+	virtual unique_ptr<CV2Option> GetOption(std::string_view name) = 0;
+	virtual unique_ptr<CV2Option> GetOptionByIndex(idx_t index) = 0;
+	virtual idx_t GetOptionCount() = 0;
+};
+
+inline auto Convert(duckdb_v2_config_handle config) -> CV2Config * {
+	return reinterpret_cast<CV2Config *>(config);
+}
+
+inline auto Convert(CV2Config *config) -> duckdb_v2_config_handle {
+	return reinterpret_cast<duckdb_v2_config_handle>(config);
+}
+
+//! An instance's config: GLOBAL only.
+class CV2InstanceConfig final : public CV2Config {
+public:
+	explicit CV2InstanceConfig(CV2Instance &instance) : instance(instance) {
+	}
+
+	DUCKDB_V2_SETTING_SCOPE ReadValue(std::string_view name, Value &result) override;
+	void Write(const Identifier &name, const Value &value, DUCKDB_V2_SETTING_SCOPE scope) override;
+	unique_ptr<CV2Option> GetOption(std::string_view name) override;
+	unique_ptr<CV2Option> GetOptionByIndex(idx_t index) override;
+	idx_t GetOptionCount() override;
+
+private:
+	CV2Instance &instance;
+};
+
+//! A factory handle: the scope values, types and data chunks are created in.
+class CV2Factory {
+public:
+	virtual ~CV2Factory() = default;
+
+	//! The database whose allocator and buffer manager back what is created.
+	virtual DatabaseInstance &GetDatabase() = 0;
+	//! The client whose catalog and settings apply, or nullptr when only the built-ins do.
+	virtual optional_ptr<ClientContext> TryGetClientContext() = 0;
+	//! Runs `fn` with a transaction active on the client, for catalog lookups.
+	virtual void WithTransaction(const std::function<void(ClientContext &)> &fn) = 0;
+};
+
+inline auto Convert(duckdb_v2_factory_handle factory) -> CV2Factory * {
+	return reinterpret_cast<CV2Factory *>(factory);
+}
+
+inline auto Convert(CV2Factory *factory) -> duckdb_v2_factory_handle {
+	return reinterpret_cast<duckdb_v2_factory_handle>(factory);
+}
+
+//! An instance's factory: built-in types and casts only, no catalog.
+class CV2InstanceFactory final : public CV2Factory {
+public:
+	explicit CV2InstanceFactory(CV2Instance &instance) : instance(instance) {
+	}
+
+	DatabaseInstance &GetDatabase() override;
+	optional_ptr<ClientContext> TryGetClientContext() override {
+		return nullptr;
+	}
+	void WithTransaction(const std::function<void(ClientContext &)> &fn) override;
+
+private:
+	CV2Instance &instance;
+};
+
+//! The common type of a non-empty set of types, folded left to right in the factory's scope. Throws
+//! NotImplementedException when there is none. Defined in capi_v2_logical_type.cpp.
+auto ResolveCommonType(CV2Factory &factory, const vector<LogicalType> &types) -> LogicalType;
 
 //! The SQL ATTACH `(KEY value)` options of one attach, as the text values a quoted literal produces. Bound to the
 //! instance handle it was created from, which is what future per-instance resources (an allocator, say) would be
@@ -232,44 +315,50 @@ inline auto Convert(CV2AttachOptions *options) -> duckdb_v2_attach_options_handl
 	return reinterpret_cast<duckdb_v2_attach_options_handle>(options);
 }
 
-//! An instance handle: a DuckDB instance plus the configuration it starts with. The instance starts on first use
-//! (instance_attach or connection_create); until then options are staged in the startup config. Every entry point
-//! holds `lock`, which also serializes use of the internal connection.
+//! Throws unless `target` is the database `what` was created for, through its factory.
+inline void CheckRegistrationTarget(const DatabaseInstance &created_for, const DatabaseInstance &target,
+                                    const char *what) {
+	if (&created_for != &target) {
+		throw InvalidInputException("the %s was created through a factory of a different database", what);
+	}
+}
+
+//! A file system handle: the file system plus the query its reads and writes are attributed to, if any.
+class CV2FileSystem {
+public:
+	CV2FileSystem(FileSystem &fs, QueryContext query) : fs(fs), query(query) {
+	}
+
+	FileSystem &fs;
+	QueryContext query;
+};
+
+//! An instance handle: a DuckDB instance, built from its startup options when the handle is created.
 class CV2Instance {
 public:
-	explicit CV2Instance(CV2Environment &env);
+	CV2Instance(CV2Environment &env, DBConfig &startup_config);
 
-	bool IsStarted() const {
-		return database != nullptr;
-	}
-	//! Starts the instance if it has not started yet, consuming the staged config.
-	void Start();
 	//! Attaches the database at `path` under `name` (derived from the path when empty), like ATTACH, optionally as
-	//! the default for new connections; starts the instance first if needed.
+	//! the default for new connections.
 	void Attach(const string &path, const Identifier &name, optional_ptr<const CV2AttachOptions> options,
 	            bool make_default);
-	//! Detaches the database attached from `path`, or attached under that name.
-	void Detach(const string &path);
-	//! Makes the database attached from `path`, or attached under that name, the default for new connections.
-	void SetDefault(const string &path);
-	//! Stages a startup option, or SET GLOBAL once started.
-	void SetOption(const Identifier &name, const string &setting);
-	unique_ptr<CV2Option> GetOption(std::string_view name);
-	idx_t GetOptionCount();
-	unique_ptr<CV2Option> GetOptionByIndex(idx_t index);
-	//! The started instance; starts it if needed.
-	DuckDB &GetDatabase();
-
-	CV2Environment &env;
-	mutex lock;
+	//! Detaches the database attached under `name`.
+	void Detach(const Identifier &name);
+	//! Makes the database attached under `name` the default for new connections.
+	void SetDefault(const Identifier &name);
+	DuckDB &GetDatabase() {
+		return *database;
+	}
 
 private:
-	//! Staged until Start consumes it.
-	unique_ptr<DBConfig> config;
-	//! The staged settings as written, by canonical name: legacy options cannot be read back from a DBConfig.
-	identifier_map_t<string> staged_settings;
+	//! Declared first: the members below are built from it.
 	shared_ptr<DuckDB> database;
-	unique_ptr<Connection> internal_connection;
+
+public:
+	CV2Environment &env;
+	CV2InstanceFactory factory;
+	CV2InstanceConfig config_handle;
+	CV2FileSystem file_system;
 };
 
 inline auto Convert(duckdb_v2_instance_handle instance) -> CV2Instance * {
@@ -280,7 +369,106 @@ inline auto Convert(CV2Instance *instance) -> duckdb_v2_instance_handle {
 	return reinterpret_cast<duckdb_v2_instance_handle>(instance);
 }
 
-using CV2Connection = duckdb::Connection;
+class CV2Context;
+
+//! A client's config: the connection's cascade (SESSION, then GLOBAL, then the default), written like SQL `SET`.
+class CV2ClientConfig final : public CV2Config {
+public:
+	explicit CV2ClientConfig(ClientContext &context) : context(context) {
+	}
+
+	DUCKDB_V2_SETTING_SCOPE ReadValue(std::string_view name, Value &result) override;
+	void Write(const Identifier &name, const Value &value, DUCKDB_V2_SETTING_SCOPE scope) override;
+	unique_ptr<CV2Option> GetOption(std::string_view name) override;
+	unique_ptr<CV2Option> GetOptionByIndex(idx_t index) override;
+	idx_t GetOptionCount() override;
+
+private:
+	ClientContext &context;
+};
+
+//! A context's factory: the context's catalog and settings.
+class CV2ContextFactory final : public CV2Factory {
+public:
+	explicit CV2ContextFactory(CV2Context &context) : context(context) {
+	}
+
+	DatabaseInstance &GetDatabase() override;
+	optional_ptr<ClientContext> TryGetClientContext() override;
+	void WithTransaction(const std::function<void(ClientContext &)> &fn) override;
+
+private:
+	CV2Context &context;
+};
+
+//! A context handle: the client context plus how a call through it obtains a transaction.
+class CV2Context {
+public:
+	explicit CV2Context(ClientContext &context)
+	    : context(context), factory(*this), config_handle(context),
+	      file_system(FileSystem::GetFileSystem(context), QueryContext(context)) {
+	}
+	virtual ~CV2Context() = default;
+
+	//! Runs `fn` with a transaction active on the context.
+	virtual void WithContext(const std::function<void(ClientContext &)> &fn) = 0;
+
+	ClientContext &context;
+	CV2ContextFactory factory;
+	CV2ClientConfig config_handle;
+	CV2FileSystem file_system;
+};
+
+inline DatabaseInstance &CV2ContextFactory::GetDatabase() {
+	return DatabaseInstance::GetDatabase(context.context);
+}
+
+inline optional_ptr<ClientContext> CV2ContextFactory::TryGetClientContext() {
+	return &context.context;
+}
+
+inline void CV2ContextFactory::WithTransaction(const std::function<void(ClientContext &)> &fn) {
+	context.WithContext(fn);
+}
+
+//! A context handed to a callback: the context lock is held and a transaction is already active.
+class CV2CallbackContext final : public CV2Context {
+public:
+	explicit CV2CallbackContext(ClientContext &context) : CV2Context(context) {
+	}
+
+	void WithContext(const std::function<void(ClientContext &)> &fn) override {
+		fn(context);
+	}
+};
+
+//! A context taken from a connection: each call joins the connection's transaction, or runs in one of its own.
+class CV2ConnectionContext final : public CV2Context {
+public:
+	explicit CV2ConnectionContext(ClientContext &context) : CV2Context(context) {
+	}
+
+	void WithContext(const std::function<void(ClientContext &)> &fn) override {
+		context.RunFunctionInTransaction([&]() { fn(context); });
+	}
+};
+
+inline auto Convert(duckdb_v2_context_handle ctx) -> CV2Context * {
+	return reinterpret_cast<CV2Context *>(ctx);
+}
+
+inline auto Convert(CV2Context *ctx) -> duckdb_v2_context_handle {
+	return reinterpret_cast<duckdb_v2_context_handle>(ctx);
+}
+
+//! A connection handle: the connection plus the context handle it lends out.
+class CV2Connection : public Connection {
+public:
+	explicit CV2Connection(DuckDB &database) : Connection(database), context_handle(*context) {
+	}
+
+	CV2ConnectionContext context_handle;
+};
 
 inline auto Convert(duckdb_v2_connection_handle conn) -> CV2Connection * {
 	return reinterpret_cast<CV2Connection *>(conn);
@@ -297,16 +485,6 @@ inline auto Convert(duckdb_v2_sql_statement_handle stmt) -> CV2SQLStatement * {
 }
 inline auto Convert(CV2SQLStatement *stmt) -> duckdb_v2_sql_statement_handle {
 	return reinterpret_cast<duckdb_v2_sql_statement_handle>(stmt);
-}
-
-using CV2Context = duckdb::ClientContext;
-
-inline auto Convert(duckdb_v2_context_handle ctx) -> CV2Context * {
-	return reinterpret_cast<CV2Context *>(ctx);
-}
-
-inline auto Convert(CV2Context *ctx) -> duckdb_v2_context_handle {
-	return reinterpret_cast<duckdb_v2_context_handle>(ctx);
 }
 
 //! The extension handle's backing struct is the load state in capi_v2_extension.cpp, not an ExtensionLoader, so it
@@ -331,41 +509,52 @@ inline auto Convert(CV2FunctionSignature *func) -> duckdb_v2_function_signature_
 	return reinterpret_cast<duckdb_v2_function_signature_handle>(func);
 }
 
-//! Where an option's current setting is read from: a started instance's context (LOCAL -> GLOBAL -> default), or the
-//! startup config of an instance that has not started (staged GLOBAL -> default).
+//! Where an option's current value is read from: a client context's cascade (SESSION -> GLOBAL -> default).
 class CV2OptionSource {
 public:
 	explicit CV2OptionSource(ClientContext &context) : context(&context), config(DBConfig::GetConfig(context)) {
 	}
-	CV2OptionSource(const DBConfig &config, const identifier_map_t<string> &staged_settings)
-	    : config(config), staged_settings(&staged_settings) {
+	//! GLOBAL -> default only.
+	explicit CV2OptionSource(DatabaseInstance &db) : config(DBConfig::GetConfig(db)) {
 	}
 
 	const DBConfig &GetConfig() const {
 		return config;
 	}
-	//! The effective setting of `name`, or `fallback` when the cascade yields NULL.
-	string ReadSetting(const Identifier &name, const string &fallback) const;
+	//! The effective value of `name`, and the scope DuckDB attributes it to. Throws for an unknown option.
+	DUCKDB_V2_SETTING_SCOPE ReadValue(std::string_view name, Value &result) const;
 
 private:
 	optional_ptr<ClientContext> context;
 	const DBConfig &config;
-	optional_ptr<const identifier_map_t<string>> staged_settings;
 };
 
 class CV2Option {
 public:
 	Identifier name;
-	string setting;
-	string default_setting;
+	Value default_value;
 	string description;
-	DUCKDB_V2_OPTION_TARGET_SCOPE target_scope = DUCKDB_V2_OPTION_TARGET_SCOPE_UNKNOWN;
+	bool supports_global = false;
+	bool supports_session = false;
+	DUCKDB_V2_SETTING_SCOPE default_scope = DUCKDB_V2_SETTING_SCOPE_GLOBAL;
 	vector<string> aliases;
 
 	static unique_ptr<CV2Option> FromIndex(const CV2OptionSource &source, idx_t index);
 	static unique_ptr<CV2Option> FromName(const CV2OptionSource &source, std::string_view name);
 	static idx_t Count(const CV2OptionSource &source);
 };
+
+//! The engine's write scope for a V2 scope.
+inline SetScope ConvertSetScope(DUCKDB_V2_SETTING_SCOPE scope) {
+	switch (scope) {
+	case DUCKDB_V2_SETTING_SCOPE_GLOBAL:
+		return SetScope::GLOBAL;
+	case DUCKDB_V2_SETTING_SCOPE_SESSION:
+		return SetScope::SESSION;
+	default:
+		return SetScope::AUTOMATIC;
+	}
+}
 
 inline auto Convert(duckdb_v2_option_handle opt) -> CV2Option * {
 	return reinterpret_cast<CV2Option *>(opt);
