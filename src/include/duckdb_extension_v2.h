@@ -1448,6 +1448,31 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_factory_create_common_type)
 	(duckdb_v2_factory_handle factory, const duckdb_v2_logical_type_handle *types, idx_t type_count,
 	 duckdb_v2_logical_type_handle *out_type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_enable_profiling)
+	(duckdb_v2_connection_handle conn, bool enabled, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_query_metrics)
+	(duckdb_v2_connection_handle conn, duckdb_v2_query_metrics_handle *metrics, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_query_metrics_destroy)(duckdb_v2_query_metrics_handle *metrics);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_get_root)
+	(duckdb_v2_query_metrics_handle metrics, duckdb_v2_query_metrics_node_handle *node,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_child)
+	(duckdb_v2_query_metrics_node_handle node, idx_t index, duckdb_v2_query_metrics_node_handle *child,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_child_count)
+	(duckdb_v2_query_metrics_node_handle node, idx_t *count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_metric)
+	(duckdb_v2_query_metrics_node_handle node, const duckdb_v2_str *name, duckdb_v2_value_handle *value, bool *present,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_metric_count)
+	(duckdb_v2_query_metrics_node_handle node, idx_t *count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_metric_name)
+	(duckdb_v2_query_metrics_node_handle node, idx_t index, duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_metric_value)
+	(duckdb_v2_query_metrics_node_handle node, idx_t index, duckdb_v2_value_handle *value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_name)
+	(duckdb_v2_query_metrics_node_handle node, duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
 #endif
 	// capigen:end appended
 } duckdb_ext_api_v2;
@@ -2193,6 +2218,39 @@ typedef struct {
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_factory_create_common_type duckdb_ext_api.duckdb_v2_factory_create_common_type
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_connection_enable_profiling duckdb_ext_api.duckdb_v2_connection_enable_profiling
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_connection_get_query_metrics duckdb_ext_api.duckdb_v2_connection_get_query_metrics
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_query_metrics_destroy duckdb_ext_api.duckdb_v2_query_metrics_destroy
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_query_metrics_get_root duckdb_ext_api.duckdb_v2_query_metrics_get_root
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_query_metrics_node_get_child duckdb_ext_api.duckdb_v2_query_metrics_node_get_child
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_query_metrics_node_get_child_count duckdb_ext_api.duckdb_v2_query_metrics_node_get_child_count
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_query_metrics_node_get_metric duckdb_ext_api.duckdb_v2_query_metrics_node_get_metric
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_query_metrics_node_get_metric_count duckdb_ext_api.duckdb_v2_query_metrics_node_get_metric_count
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_query_metrics_node_get_metric_name duckdb_ext_api.duckdb_v2_query_metrics_node_get_metric_name
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_query_metrics_node_get_metric_value duckdb_ext_api.duckdb_v2_query_metrics_node_get_metric_value
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_query_metrics_node_get_name duckdb_ext_api.duckdb_v2_query_metrics_node_get_name
 #endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION

@@ -1382,6 +1382,31 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_factory_create_common_type)
 	(duckdb_v2_factory_handle factory, const duckdb_v2_logical_type_handle *types, idx_t type_count,
 	 duckdb_v2_logical_type_handle *out_type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_enable_profiling)
+	(duckdb_v2_connection_handle conn, bool enabled, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_query_metrics)
+	(duckdb_v2_connection_handle conn, duckdb_v2_query_metrics_handle *metrics, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_query_metrics_destroy)(duckdb_v2_query_metrics_handle *metrics);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_get_root)
+	(duckdb_v2_query_metrics_handle metrics, duckdb_v2_query_metrics_node_handle *node,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_child)
+	(duckdb_v2_query_metrics_node_handle node, idx_t index, duckdb_v2_query_metrics_node_handle *child,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_child_count)
+	(duckdb_v2_query_metrics_node_handle node, idx_t *count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_metric)
+	(duckdb_v2_query_metrics_node_handle node, const duckdb_v2_str *name, duckdb_v2_value_handle *value, bool *present,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_metric_count)
+	(duckdb_v2_query_metrics_node_handle node, idx_t *count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_metric_name)
+	(duckdb_v2_query_metrics_node_handle node, idx_t index, duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_metric_value)
+	(duckdb_v2_query_metrics_node_handle node, idx_t index, duckdb_v2_value_handle *value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_name)
+	(duckdb_v2_query_metrics_node_handle node, duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
 //===--------------------------------------------------------------------===//
@@ -2025,6 +2050,17 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_table_function_get_bind_info_set_option = duckdb_v2_table_function_get_bind_info_set_option;
 	result.duckdb_v2_table_function_set_get_bind_info_callback = duckdb_v2_table_function_set_get_bind_info_callback;
 	result.duckdb_v2_factory_create_common_type = duckdb_v2_factory_create_common_type;
+	result.duckdb_v2_connection_enable_profiling = duckdb_v2_connection_enable_profiling;
+	result.duckdb_v2_connection_get_query_metrics = duckdb_v2_connection_get_query_metrics;
+	result.duckdb_v2_query_metrics_destroy = duckdb_v2_query_metrics_destroy;
+	result.duckdb_v2_query_metrics_get_root = duckdb_v2_query_metrics_get_root;
+	result.duckdb_v2_query_metrics_node_get_child = duckdb_v2_query_metrics_node_get_child;
+	result.duckdb_v2_query_metrics_node_get_child_count = duckdb_v2_query_metrics_node_get_child_count;
+	result.duckdb_v2_query_metrics_node_get_metric = duckdb_v2_query_metrics_node_get_metric;
+	result.duckdb_v2_query_metrics_node_get_metric_count = duckdb_v2_query_metrics_node_get_metric_count;
+	result.duckdb_v2_query_metrics_node_get_metric_name = duckdb_v2_query_metrics_node_get_metric_name;
+	result.duckdb_v2_query_metrics_node_get_metric_value = duckdb_v2_query_metrics_node_get_metric_value;
+	result.duckdb_v2_query_metrics_node_get_name = duckdb_v2_query_metrics_node_get_name;
 	return result;
 }
 
