@@ -71,6 +71,7 @@ public:
 	void Alter(CatalogTransaction transaction, AlterInfo &info) override;
 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
 	void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
+	void Scan(CatalogType type, VisibilityBound bound, const std::function<void(CatalogEntry &)> &callback);
 	void DropEntry(ClientContext &context, DropInfo &info) override;
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) override;
 	CatalogSet::EntryLookup LookupEntryDetailed(CatalogTransaction transaction,

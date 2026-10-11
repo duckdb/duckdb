@@ -66,8 +66,10 @@ public:
 	WALReplayState replay_state;
 
 	struct ReplayIndexInfo {
-		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, optional_idx index_oid)
-		    : index_list(index_list), index(std::move(index)), table_oid(table_oid), index_oid(index_oid) {
+		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, optional_idx index_oid,
+		                ConstraintCheckMode check_mode)
+		    : index_list(index_list), index(std::move(index)), table_oid(table_oid), index_oid(index_oid),
+		      check_mode(check_mode) {
 		}
 
 		reference<TableIndexList> index_list;
@@ -78,6 +80,8 @@ public:
 		//! Invalid for constraint-backed indexes (i.e., UNIQUE): they have no separate catalog entry and cannot be
 		//! targeted by DROP INDEX.
 		optional_idx index_oid;
+		//! The check mode of the constraint enforced by the index.
+		ConstraintCheckMode check_mode;
 	};
 	vector<ReplayIndexInfo> replay_index_infos;
 };
@@ -627,7 +631,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 
 				// Commit any outstanding indexes.
 				for (auto &info : state.replay_index_infos) {
-					info.index_list.get().AddIndex(std::move(info.index));
+					info.index_list.get().AddIndex(std::move(info.index), info.check_mode);
 				}
 				state.replay_index_infos.clear();
 
@@ -994,7 +998,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
 	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid,
-	                                      /*index_oid=*/optional_idx());
+	                                      /*index_oid=*/optional_idx(), unique_info.check_mode);
 
 	catalog.Alter(context, alter_info);
 }
@@ -1259,7 +1263,8 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_info), io_manager, db);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), table.oid, index_entry->oid);
+	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), table.oid, index_entry->oid,
+	                                      ConstraintCheckMode::DEFAULT);
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {

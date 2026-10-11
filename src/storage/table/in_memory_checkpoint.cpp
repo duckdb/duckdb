@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/in_memory_checkpoint.hpp"
 #include "duckdb/main/attached_database.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
@@ -42,15 +43,15 @@ void InMemoryCheckpointer::CreateCheckpoint() {
 		active_checkpoint.Begin(options);
 	}
 
-	vector<reference<SchemaCatalogEntry>> schemas;
-	// we scan the set of committed schemas
+	vector<reference<DuckSchemaEntry>> schemas;
+	// the schemas and tables committed before the checkpoint's bound
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
-	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
+	catalog.ScanSchemas(options.visibility_bound, [&](DuckSchemaEntry &entry) { schemas.push_back(entry); });
 
 	vector<reference<TableCatalogEntry>> tables;
 	for (const auto &schema_ref : schemas) {
 		auto &schema = schema_ref.get();
-		schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+		schema.Scan(CatalogType::TABLE_ENTRY, options.visibility_bound, [&](CatalogEntry &entry) {
 			if (entry.type == CatalogType::TABLE_ENTRY) {
 				tables.push_back(entry.Cast<TableCatalogEntry>());
 			}
