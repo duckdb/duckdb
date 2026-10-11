@@ -54,3 +54,25 @@ query T
 SELECT strftime(NULL::DATE, '%Q');
 ----
 NULL
+
+# Known return types do not invoke catalog-dependent resolve_types callbacks.
+query I
+SELECT index_key(NULL::STRUCT(t VARCHAR), 'PRIMARY_tbl1_0', 1);
+----
+NULL
+
+query I
+SELECT get_type(lower(string := NULL::VARCHAR COLLATE NOCASE))=get_type(NULL::VARCHAR COLLATE NOCASE);
+----
+true
+
+# Conflicting supplied collations cannot define one result collation, even for a typed NULL.
+statement error
+SELECT replace(NULL::VARCHAR COLLATE NOCASE, 'a' COLLATE NOACCENT, 'b');
+----
+Cannot combine types with different collation
+
+statement error
+SELECT replace('a' COLLATE NOCASE, 'a' COLLATE NOACCENT, 'b');
+----
+Cannot combine types with different collation
