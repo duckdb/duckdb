@@ -80,6 +80,10 @@ struct HandleTraits<Schema> {
 	using handle = duckdb_v2_schema_handle;
 };
 template <>
+struct HandleTraits<Environment> {
+	using handle = duckdb_v2_environment_handle;
+};
+template <>
 struct HandleTraits<Instance> {
 	using handle = duckdb_v2_instance_handle;
 };
@@ -457,20 +461,33 @@ auto RenderQuotedIdentifier(std::string_view name) -> std::string {
 // Environment
 //---------------------------------------------------------------------------
 
-namespace {
-
-//! The process-wide environment every instance is created in. Created on first use and deliberately never destroyed,
-//! so it outlives every instance, including ones destroyed during static destruction.
-auto GetEnvironment() -> duckdb_v2_environment_handle {
-	static const auto env = []() {
-		duckdb_v2_environment_handle result = nullptr;
-		CheckedAPICall(duckdb_v2_environment_create, &result);
-		return result;
-	}();
-	return env;
+Environment::Environment() {
+	duckdb_v2_environment_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_environment_create, &_h);
+	impl = _h;
 }
 
-auto CreateInstanceHandle(const std::vector<std::pair<std::string, std::string>> &options) -> void * {
+Environment::~Environment() {
+	auto _h = handle();
+	// Refused while instances are alive, which leaves the environment leaked rather than throwing from a destructor.
+	duckdb_v2_environment_destroy(&_h);
+}
+
+auto Environment::Default() -> Environment & {
+	// Deliberately never destroyed, so it outlives every instance.
+	static auto *env = new Environment();
+	return *env;
+}
+
+auto Environment::GetInstanceCount() const -> size_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_environment_get_instance_count, handle(), &count);
+	return static_cast<size_t>(count);
+}
+
+namespace {
+
+auto CreateInstanceHandle(Environment &env, const std::vector<std::pair<std::string, std::string>> &options) -> void * {
 	std::vector<duckdb_v2_str> names;
 	std::vector<duckdb_v2_str> values;
 	names.reserve(options.size());
@@ -480,7 +497,7 @@ auto CreateInstanceHandle(const std::vector<std::pair<std::string, std::string>>
 		values.push_back(ToStr(value));
 	}
 	duckdb_v2_instance_handle instance = nullptr;
-	CheckedAPICall(duckdb_v2_instance_create_with_options, GetEnvironment(), names.data(), values.data(),
+	CheckedAPICall(duckdb_v2_instance_create_with_options, env.handle(), names.data(), values.data(),
 	               static_cast<idx_t>(options.size()), &instance);
 	return instance;
 }
@@ -491,13 +508,7 @@ auto BoolText(bool value) -> std::string {
 
 } // namespace
 
-auto Instance::GetInstanceCount() -> size_t {
-	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_environment_get_instance_count, GetEnvironment(), &count);
-	return static_cast<size_t>(count);
-}
-
-Instance::Instance() : Instance(CreateInstanceHandle({})) {
+Instance::Instance() : Instance(Environment::Default()) {
 }
 
 auto Instance::StartupOptionPairs(const StartupOptions &options) -> std::vector<std::pair<std::string, std::string>> {
@@ -520,11 +531,18 @@ auto Instance::StartupOptionPairs(const StartupOptions &options) -> std::vector<
 	return result;
 }
 
-Instance::Instance(const StartupOptions &options) : Instance(CreateInstanceHandle(StartupOptionPairs(options))) {
+Instance::Instance(const StartupOptions &options) : Instance(Environment::Default(), options) {
 }
 
 Instance::Instance(const std::string &path, const StartupOptions &options)
-    : Instance(CreateInstanceHandle(StartupOptionPairs(options))) {
+    : Instance(Environment::Default(), path, options) {
+}
+
+Instance::Instance(Environment &env, const StartupOptions &options)
+    : Instance(CreateInstanceHandle(env, StartupOptionPairs(options))) {
+}
+
+Instance::Instance(Environment &env, const std::string &path, const StartupOptions &options) : Instance(env, options) {
 	Attach(path, true);
 }
 

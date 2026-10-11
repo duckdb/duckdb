@@ -62,6 +62,7 @@ class Exception;
 class OptionDescription;
 struct OptionValue;
 class Config;
+class Environment;
 class Instance;
 class Connection;
 class SqlStatement;
@@ -979,8 +980,29 @@ private:
 // Instance
 //----------------------------------------------------------------------------------------------------------------------
 // An open database: the catalog, the storage behind it, and the settings shared by every session on it. Databases are
-// opened by constructing an `Instance` and worked with through the `Connection`s they hand out. Every instance of the
-// process shares one environment, so a file can only be open in one instance at a time.
+// opened by constructing an `Instance` and worked with through the `Connection`s they hand out. Every instance lives in
+// an `Environment`, and a file can only be open in one instance of an environment at a time. Instances opened without
+// an explicit environment share the process-wide default one.
+
+/// The environment database instances are created in. Optional: an `Instance` constructed without one lives in the
+/// process-wide `Environment::Default()`. Create one explicitly to control the lifetime of the environment, or to keep
+/// a group of instances apart from the default one. It must outlive every `Instance` created in it; destroying it
+/// while instances are still alive leaks it.
+class Environment final : public detail::Handle<Environment> {
+public:
+	/// Creates a new environment.
+	Environment();
+	~Environment() override;
+	Environment(Environment &&) noexcept = default;
+	Environment &operator=(Environment &&) noexcept = default;
+
+	/// The process-wide environment instances are created in when none is given. Created on first use and never
+	/// destroyed, so it outlives every instance, including ones destroyed during static destruction.
+	static auto Default() -> Environment &;
+
+	/// How many database instances are currently alive in this environment.
+	auto GetInstanceCount() const -> size_t;
+};
 
 /// The options an `Instance` can only be given when it is created: once it exists they can no longer change, or only
 /// become stricter. Each setter returns the options, so they chain: `StartupOptions().EnableUnsignedExtensions(true)`.
@@ -1035,24 +1057,33 @@ class Instance final : public detail::Handle<Instance> {
 	friend detail::HandleFactory;
 
 public:
-	/// Creates a database instance with nothing attached. Attach a database with `Attach` and make it the default
-	/// with `SetDefault`.
+	/// Creates a database instance with nothing attached, in the default environment. Attach a database with
+	/// `Attach` and make it the default with `SetDefault`.
 	Instance();
 
-	/// Creates a database instance with nothing attached, with the options that can only be chosen at startup.
+	/// Creates a database instance with nothing attached, in the default environment, with the options that can only
+	/// be chosen at startup.
 	explicit Instance(const StartupOptions &options);
 
-	/// Creates a database instance, attaches `path`, and makes it the default database.
+	/// Creates a database instance in the default environment, attaches `path`, and makes it the default database.
 	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
 	/// @param options The options that can only be chosen at startup.
 	explicit Instance(const std::string &path, const StartupOptions &options = {});
 
+	/// Creates a database instance with nothing attached, in `env`.
+	/// @param env The environment to create the instance in. Must outlive the instance.
+	/// @param options The options that can only be chosen at startup.
+	explicit Instance(Environment &env, const StartupOptions &options = {});
+
+	/// Creates a database instance in `env`, attaches `path`, and makes it the default database.
+	/// @param env The environment to create the instance in. Must outlive the instance.
+	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
+	/// @param options The options that can only be chosen at startup.
+	Instance(Environment &env, const std::string &path, const StartupOptions &options = {});
+
 	~Instance() override;
 	Instance(Instance &&) noexcept = default;
 	Instance &operator=(Instance &&) noexcept = default;
-
-	/// How many database instances are currently alive in this process.
-	static auto GetInstanceCount() -> size_t;
 
 	/// Attaches a database to this instance, like SQL `ATTACH 'path'`, under the name derived from the path: `memory`
 	/// for an in-memory database, else the file name up to its first `.` (`/data/sales.2024.db` -> `sales`).
