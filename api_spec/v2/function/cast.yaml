@@ -24,7 +24,7 @@ enums:
       (SQL TRY_CAST, and implicit casts the engine probes speculatively)
       tolerates per-row failures: the callback writes NULL for the rows it
       could not convert instead of aborting. Read with
-      `[[cast_function_exec_get_mode]]`.
+      `[[cast_function_exec_get_mode]]`, and passed to `[[vector_cast]]`.
     values:
       CAST_MODE_NORMAL:
         value: 0

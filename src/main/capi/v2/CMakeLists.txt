@@ -10,6 +10,7 @@ add_library_unity(
   capi_v2_column_data_collection.cpp
   capi_v2_config.cpp
   capi_v2_connection.cpp
+  capi_v2_custom_option.cpp
   capi_v2_custom_type.cpp
   capi_v2_data_chunk.cpp
   capi_v2_environment.cpp
@@ -22,6 +23,8 @@ add_library_unity(
   capi_v2_func_cast.cpp
   capi_v2_func_copy.cpp
   capi_v2_func_docs.cpp
+  capi_v2_func_macro.cpp
+  capi_v2_func_pragma.cpp
   capi_v2_func_properties.cpp
   capi_v2_func_scalar.cpp
   capi_v2_func_signature.cpp

@@ -11,6 +11,7 @@ add_library_unity(
   test_capi_v2_column_data_collection.cpp
   test_capi_v2_common_type.cpp
   test_capi_v2_copy_function.cpp
+  test_capi_v2_custom_option.cpp
   test_capi_v2_custom_type.cpp
   test_capi_v2_data_chunk.cpp
   test_capi_v2_error_info.cpp
@@ -21,6 +22,7 @@ add_library_unity(
   test_capi_v2_logging.cpp
   test_capi_v2_logical_type.cpp
   test_capi_v2_option.cpp
+  test_capi_v2_pragma_function.cpp
   test_capi_v2_prepared_statement.cpp
   test_capi_v2_qname.cpp
   test_capi_v2_registration.cpp
@@ -34,6 +36,7 @@ add_library_unity(
   test_capi_v2_tokenizer.cpp
   test_capi_v2_static_extension.cpp
   test_capi_v2_value.cpp
+  test_capi_v2_vector_cast.cpp
   test_capi_v2_vector_write.cpp)
 # The tests cover the whole surface, the unstable functions included.
 target_compile_definitions(test_sql_capi_v2

@@ -138,37 +138,7 @@ BoundTableFunction::BoundTableFunction(shared_ptr<const TableFunction> function_
 
 void BoundTableFunction::SetCallArguments(const vector<Value> &parameters,
                                           const named_argument_map_t &named_parameters) {
-	auto &signature = GetSignature();
-	const auto positional_count = signature.GetPositionalParameterCount();
-	arguments.clear();
-	for (idx_t i = 0; i < positional_count; i++) {
-		arguments.push_back(signature.GetParameter(i).GetType());
-	}
-	auto args = signature.GetArgs();
-	for (idx_t i = positional_count; i < parameters.size(); i++) {
-		auto is_typed = args && args->GetType().id() != LogicalTypeId::ANY;
-		arguments.push_back(is_typed ? args->GetType() : parameters[i].type());
-	}
-	const auto positional_argument_count = arguments.size();
-
-	// only the options the signature receives by name, in the order they were passed
-	vector<Identifier> names;
-	for (auto &entry : named_parameters) {
-		auto param_idx = signature.GetParameterIndexByName(entry.first);
-		if (!param_idx.IsValid()) {
-			if (signature.GetKwargs()) {
-				names.push_back(entry.first);
-				arguments.push_back(entry.second.type());
-			}
-			continue;
-		}
-		auto &param = signature.GetParameter(param_idx.GetIndex());
-		if (!param.AcceptsPosition()) {
-			names.push_back(entry.first);
-			arguments.push_back(param.GetType());
-		}
-	}
-	SetNamedArguments(positional_argument_count, std::move(names));
+	BoundSimpleFunction::SetCallArguments(GetSignature(), parameters, named_parameters);
 }
 
 bool BoundTableFunction::operator==(const BoundTableFunction &rhs) const {
