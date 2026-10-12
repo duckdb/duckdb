@@ -77,7 +77,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 		AddToMultiStatement(multi_statement, std::move(result->info));
 	}
 	if (follow_ups.add_not_null) {
-		AddToMultiStatement(multi_statement, make_uniq<SetNotNullInfo>(alter_entry_data, column_name));
+		AddToMultiStatement(multi_statement,
+		                    make_uniq<SetNotNullInfo>(alter_entry_data, vector<Identifier> {column_name}));
 	}
 	if (follow_ups.add_unique) {
 		vector<Identifier> unique_columns;
@@ -256,8 +257,8 @@ unique_ptr<MultiStatement> PEGTransformerFactory::TransformAndMaterializeAlter(
 
 	// 3. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
 	// Reinstate the original default expression.
-	AddToMultiStatement(multi_statement,
-	                    make_uniq<SetDefaultInfo>(data, Identifier(column_name), std::move(expression)));
+	AddToMultiStatement(multi_statement, make_uniq<SetDefaultInfo>(data, vector<Identifier> {Identifier(column_name)},
+	                                                               std::move(expression)));
 
 	return multi_statement;
 }
@@ -372,22 +373,23 @@ unique_ptr<AlterTableInfo>
 PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer, const bool &has_result,
                                             unique_ptr<ColumnRefExpression> nested_column_name,
                                             unique_ptr<AlterTableInfo> alter_column_entry) {
+	//! Preserved so DuckTableEntry can detect a nested-field target; not interpreted here.
+	auto column_path = nested_column_name->ColumnNames();
 	if (alter_column_entry->alter_table_type == AlterTableType::SET_DEFAULT) {
 		auto set_default_entry = unique_ptr_cast<AlterTableInfo, SetDefaultInfo>(std::move(alter_column_entry));
-		// TODO(Dtenwolde) Figure out with nested names;
-		set_default_entry->column_name = nested_column_name->ColumnNames()[0];
+		set_default_entry->column_path = column_path;
 		return std::move(set_default_entry);
 	} else if (alter_column_entry->alter_table_type == AlterTableType::DROP_NOT_NULL) {
 		auto drop_not_null = unique_ptr_cast<AlterTableInfo, DropNotNullInfo>(std::move(alter_column_entry));
-		drop_not_null->column_name = nested_column_name->ColumnNames()[0];
+		drop_not_null->column_path = column_path;
 		return std::move(drop_not_null);
 	} else if (alter_column_entry->alter_table_type == AlterTableType::SET_NOT_NULL) {
 		auto set_not_null = unique_ptr_cast<AlterTableInfo, SetNotNullInfo>(std::move(alter_column_entry));
-		set_not_null->column_name = nested_column_name->ColumnNames()[0];
+		set_not_null->column_path = column_path;
 		return std::move(set_not_null);
 	} else if (alter_column_entry->alter_table_type == AlterTableType::ALTER_COLUMN_TYPE) {
 		auto change_column_type = unique_ptr_cast<AlterTableInfo, ChangeColumnTypeInfo>(std::move(alter_column_entry));
-		change_column_type->column_name = nested_column_name->ColumnNames()[0];
+		change_column_type->column_path = column_path;
 		return std::move(change_column_type);
 	} else {
 		throw NotImplementedException("Unrecognized type for alter column encountered");
@@ -395,15 +397,15 @@ PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer, const b
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformDropDefault(PEGTransformer &transformer) {
-	return make_uniq<SetDefaultInfo>(AlterEntryData(), "", nullptr);
+	return make_uniq<SetDefaultInfo>(AlterEntryData(), vector<Identifier> {}, nullptr);
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformChangeNullability(PEGTransformer &transformer,
                                                                              const string &drop_or_set) {
 	if (StringUtil::CIEquals(drop_or_set, "drop")) {
-		return make_uniq<DropNotNullInfo>(AlterEntryData(), "");
+		return make_uniq<DropNotNullInfo>(AlterEntryData(), vector<Identifier> {});
 	} else {
-		return make_uniq<SetNotNullInfo>(AlterEntryData(), "");
+		return make_uniq<SetNotNullInfo>(AlterEntryData(), vector<Identifier> {});
 	}
 }
 
@@ -421,7 +423,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterType(
 	if (using_expression) {
 		expression = std::move(*using_expression);
 	}
-	return make_uniq<ChangeColumnTypeInfo>(AlterEntryData(), "", alter_type, std::move(expression));
+	return make_uniq<ChangeColumnTypeInfo>(AlterEntryData(), vector<Identifier> {}, alter_type, std::move(expression));
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUsingExpression(PEGTransformer &transformer,
@@ -431,7 +433,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUsingExpression(PEG
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddDefault(PEGTransformer &transformer,
                                                                       unique_ptr<ParsedExpression> expression) {
-	return make_uniq<SetDefaultInfo>(AlterEntryData(), "", std::move(expression));
+	return make_uniq<SetDefaultInfo>(AlterEntryData(), vector<Identifier> {}, std::move(expression));
 }
 
 unique_ptr<AlterTableInfo>

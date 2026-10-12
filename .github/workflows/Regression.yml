@@ -17,11 +17,8 @@ on:
       run_slow_tests:
         default: false
         type: boolean
-      runner_linux_x64:
-        default: ubuntu-latest
-        type: string
-      runner_linux_small:
-        default: ubuntu-latest
+      runners:
+        required: true
         type: string
       runner_provider:
         required: true
@@ -48,7 +45,7 @@ env:
 jobs:
   linux-base:
     name: Linux Base
-    runs-on: ${{ inputs.runner_linux_x64 }}
+    runs-on: ${{ fromJSON(inputs.runners).linux_x64 }}
     container:
       image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     env:
@@ -76,10 +73,16 @@ jobs:
           DISABLE_SANITIZER: 1
         with:
           build: python3 scripts/ci/retry.py -- make release
-          bundle: make release-artifact
-          upload-name: linux-release-build
+          bundle: make release-artifact RELEASE_ARTIFACT_TARBALL=build/linux-release-build.tar.gz
           vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
           save-cache: ${{ inputs.save_cache }}
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ inputs.build_current_release }}
+        with:
+          path: build/linux-release-build.tar.gz
+          if-no-files-found: error
+          archive: false
 
       - name: Select base ref
         run: |
@@ -130,7 +133,7 @@ jobs:
     name: Bench ${{ matrix.name }}
     needs:
       - linux-base
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner || fromJSON(inputs.runners).linux_small }}
     container:
       image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     strategy:
@@ -141,6 +144,8 @@ jobs:
             benchmark: .github/regression/ingestion.csv
           - name: Micro
             benchmark: .github/regression/micro.csv
+            runner: ubuntu-24.04 # Needs more memory than linux_small provides.
+            memory_limit: 15GiB
           - name: Parser
             benchmark: .github/regression/parser.csv
           - name: H2OAI
@@ -149,8 +154,10 @@ jobs:
             benchmark: .github/regression/imdb.csv
           - name: CSV
             benchmark: .github/regression/csv.csv
+            runner: ubuntu-24.04 # Needs more memory than linux_small provides.
           - name: RealNest
             benchmark: .github/regression/realnest.csv
+            runner: ubuntu-24.04 # Needs more memory than linux_small provides.
             data_setup: |
               mkdir -p duckdb_benchmark_data
               python3 scripts/ci/retry.py -- wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
@@ -167,13 +174,13 @@ jobs:
       - name: Download current release artifact
         uses: actions/download-artifact@v8
         with:
-          name: linux-release-build
+          name: linux-release-build.tar.gz
           path: build/current
 
       - name: Extract current release artifact
         run: |
           rm -rf build/current/release
-          tar -xzf build/current/release-artifact.tar.gz -C build/current
+          tar -xzf build/current/linux-release-build.tar.gz -C build/current
 
       - name: Download base artifact
         uses: actions/download-artifact@v8
@@ -198,6 +205,7 @@ jobs:
             --benchmarks "${{ matrix.benchmark }}" \
             --verbose \
             --early-stop \
+            --memory-limit ${{ matrix.memory_limit || '7GiB' }} \
             --threads 2
 
   regression-bench-tpc:
@@ -205,7 +213,7 @@ jobs:
     if: ${{ github.repository_owner == 'duckdb' }}
     needs:
       - linux-base
-    runs-on: namespace-profile-linux-small
+    runs-on: ${{ fromJSON(inputs.runners).linux_small }}
     container:
       image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     strategy:
@@ -229,19 +237,19 @@ jobs:
       - name: "Checkout"
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          runner_provider: namespace
+          runner_provider: ${{ inputs.runner_provider }}
           ref: ${{ env.GIT_REF }}
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
         with:
-          name: linux-release-build
+          name: linux-release-build.tar.gz
           path: build/current
 
       - name: Extract current release artifact
         run: |
           rm -rf build/current/release
-          tar -xzf build/current/release-artifact.tar.gz -C build/current
+          tar -xzf build/current/linux-release-build.tar.gz -C build/current
 
       - name: Download base artifact
         uses: actions/download-artifact@v8
@@ -263,6 +271,7 @@ jobs:
             --verbose \
             --early-stop \
             --disable-timeout \
+            --memory-limit 7GiB \
             --benchmark-argument sf=${{ matrix.sf }} \
             --threads ${{ matrix.threads }}
 
@@ -271,7 +280,7 @@ jobs:
     if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
     needs:
       - linux-base
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(inputs.runners).linux_small }}
     container:
       image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
 
@@ -292,13 +301,13 @@ jobs:
       - name: Download current release artifact
         uses: actions/download-artifact@v8
         with:
-          name: linux-release-build
+          name: linux-release-build.tar.gz
           path: build/current
 
       - name: Extract current release artifact
         run: |
           rm -rf build/current/release
-          tar -xzf build/current/release-artifact.tar.gz -C build/current
+          tar -xzf build/current/linux-release-build.tar.gz -C build/current
 
       - name: Download base artifact
         uses: actions/download-artifact@v8
@@ -313,13 +322,20 @@ jobs:
 
       - name: Run regression benchmark
         run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --early-stop --threads 2
+          python scripts/regression/test_runner.py \
+            --old build/base/release/benchmark/benchmark_runner \
+            --new build/current/release/benchmark/benchmark_runner \
+            --benchmarks benchmark/fivetran/benchmark_list.csv \
+            --verbose \
+            --early-stop \
+            --memory-limit 7GiB \
+            --threads 2
 
   regression-test-storage:
     name: Storage Size Regression Test
     needs:
       - linux-base
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(inputs.runners).linux_small }}
     container:
       image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
 
@@ -331,13 +347,13 @@ jobs:
       - name: Download current release artifact
         uses: actions/download-artifact@v8
         with:
-          name: linux-release-build
+          name: linux-release-build.tar.gz
           path: build/current
 
       - name: Extract current release artifact
         run: |
           rm -rf build/current/release
-          tar -xzf build/current/release-artifact.tar.gz -C build/current
+          tar -xzf build/current/linux-release-build.tar.gz -C build/current
 
       - name: Download base artifact
         uses: actions/download-artifact@v8
@@ -358,7 +374,7 @@ jobs:
     name: Regression test binary size
     needs:
       - linux-base
-    runs-on: ${{ inputs.runner_linux_small }}
+    runs-on: ${{ fromJSON(inputs.runners).linux_small }}
     container:
       image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     env:
@@ -374,13 +390,13 @@ jobs:
       - name: Download current release artifact
         uses: actions/download-artifact@v8
         with:
-          name: linux-release-build
+          name: linux-release-build.tar.gz
           path: build/current
 
       - name: Extract current release artifact
         run: |
           rm -rf build/current/release
-          tar -xzf build/current/release-artifact.tar.gz -C build/current
+          tar -xzf build/current/linux-release-build.tar.gz -C build/current
 
       - name: Download base artifact
         uses: actions/download-artifact@v8
@@ -413,13 +429,13 @@ jobs:
       - name: Download current release artifact
         uses: actions/download-artifact@v8
         with:
-          name: linux-release-build
+          name: linux-release-build.tar.gz
           path: build/current
 
       - name: Extract current release artifact
         run: |
           rm -rf build/current/release
-          tar -xzf build/current/release-artifact.tar.gz -C build/current
+          tar -xzf build/current/linux-release-build.tar.gz -C build/current
 
       - name: Download base artifact
         uses: actions/download-artifact@v8

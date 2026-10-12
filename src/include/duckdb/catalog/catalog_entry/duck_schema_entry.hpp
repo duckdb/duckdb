@@ -85,6 +85,9 @@ public:
 	CatalogSet &GetCatalogSet(CatalogType type);
 
 private:
+	//! Drop an entry and remove the foreign key references to it from its referenced tables
+	bool DropEntryInternal(CatalogTransaction transaction, CatalogEntry &entry, const Identifier &name, bool cascade,
+	                       bool allow_drop_internal);
 	void OnDropEntry(CatalogTransaction transaction, CatalogEntry &entry);
 };
 } // namespace duckdb

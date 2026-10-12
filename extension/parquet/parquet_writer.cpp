@@ -7,6 +7,7 @@
 #include "parquet_crypto.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "parquet_shredding.hpp"
+#include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/serializer/async_file_writer.hpp"
@@ -478,7 +479,14 @@ struct ColumnStatsUnifier {
 
 class ParquetStatsAccumulator {
 public:
+	struct NestedColumnStats {
+		string column_name;
+		idx_t null_count = 0;
+		idx_t num_values = 0;
+	};
+
 	vector<unique_ptr<ColumnStatsUnifier>> stats_unifiers;
+	map<idx_t, NestedColumnStats> nested_stats;
 };
 
 ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, const vector<LogicalType> &types,
@@ -926,6 +934,15 @@ struct NumericStatsUnifier : public BaseNumericStatsUnifier<T> {
 	}
 };
 
+struct TimeTZStatsUnifier : public BaseNumericStatsUnifier<int64_t> {
+	string StatsToString(const string &stats) override {
+		if (stats.empty()) {
+			return string();
+		}
+		return Value::TIMETZ(ParquetIntToTimeTZ(Load<int64_t>(const_data_ptr_cast(stats.data())))).ToString();
+	}
+};
+
 template <class T>
 struct DecimalStatsUnifier : public NumericStatsUnifier<T> {
 	DecimalStatsUnifier(uint8_t width, uint8_t scale) : width(width), scale(scale) {
@@ -1124,7 +1141,7 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 	case LogicalTypeId::TIMESTAMP_NS:
 		return make_uniq<NumericStatsUnifier<timestamp_ns_t>>();
 	case LogicalTypeId::TIME_TZ:
-		return make_uniq<NumericStatsUnifier<dtime_tz_t>>();
+		return make_uniq<TimeTZStatsUnifier>();
 	case LogicalTypeId::UINTEGER:
 		return make_uniq<NumericStatsUnifier<uint32_t>>();
 	case LogicalTypeId::UBIGINT:
@@ -1179,7 +1196,7 @@ static bool IsVariantMetadataField(const ColumnWriter &writer) {
 	return name == "metadata";
 }
 
-static void GetStatsUnifier(const ColumnWriter &column_writer, vector<unique_ptr<ColumnStatsUnifier>> &unifiers,
+static void GetStatsUnifier(const ColumnWriter &column_writer, ParquetStatsAccumulator &accumulator,
                             string base_name = string()) {
 	auto &schema = column_writer.Schema();
 	if (schema.repetition_type != duckdb_parquet::FieldRepetitionType::REPEATED) {
@@ -1199,11 +1216,25 @@ static void GetStatsUnifier(const ColumnWriter &column_writer, vector<unique_ptr
 			auto &variant_writer = column_writer.parent->Cast<VariantColumnWriter>();
 			unifier->variant_type = variant_writer.TransformedType().ToString();
 		}
-		unifiers.push_back(std::move(unifier));
+		accumulator.stats_unifiers.push_back(std::move(unifier));
 		return;
 	}
+	if (schema.repetition_type != duckdb_parquet::FieldRepetitionType::REPEATED) {
+		accumulator.nested_stats[column_writer.SchemaIndex()].column_name = base_name;
+	}
 	for (auto &child_writer : children) {
-		GetStatsUnifier(*child_writer, unifiers, base_name);
+		GetStatsUnifier(*child_writer, accumulator, base_name);
+	}
+}
+
+void ParquetWriter::FlushNestedColumnStats(idx_t schema_idx, idx_t null_count, idx_t num_values) {
+	if (!written_stats) {
+		return;
+	}
+	auto entry = stats_accumulator->nested_stats.find(schema_idx);
+	if (entry != stats_accumulator->nested_stats.end()) {
+		entry->second.null_count += null_count;
+		entry->second.num_values += num_values;
 	}
 }
 
@@ -1256,6 +1287,14 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 
 void ParquetWriter::GatherWrittenStatistics() {
 	written_stats->row_count = file_meta_data.num_rows;
+
+	for (auto &entry : stats_accumulator->nested_stats) {
+		auto &stats = entry.second;
+		case_insensitive_map_t<Value> column_stats;
+		column_stats["null_count"] = Value::UBIGINT(stats.null_count);
+		column_stats["num_values"] = Value::UBIGINT(stats.num_values);
+		written_stats->column_statistics.emplace(stats.column_name, std::move(column_stats));
+	}
 
 	// finalize the min/max values and write to column stats
 	for (idx_t c = 0; c < stats_accumulator->stats_unifiers.size(); c++) {
@@ -1360,7 +1399,7 @@ void ParquetWriter::InitializeStatsUnifiers() {
 		return;
 	}
 	for (auto &column_writer : column_writers) {
-		GetStatsUnifier(*column_writer, stats_accumulator->stats_unifiers);
+		GetStatsUnifier(*column_writer, *stats_accumulator);
 	}
 }
 

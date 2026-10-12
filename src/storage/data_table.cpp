@@ -370,10 +370,6 @@ void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
 	info->indexes.AddIndex(std::move(index), index_oid);
 }
 
-void DataTable::AddConstraintIndex(unique_ptr<Index> index) {
-	info->indexes.AddIndex(std::move(index), /*index_oid=*/optional_idx());
-}
-
 bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {
 	auto index = info->indexes.FindForeignKeyIndex(keys, type);
 	return index != nullptr;
@@ -437,10 +433,6 @@ void DataTableInfo::VerifyIndexBuffers() const {
 
 void DataTable::CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count) {
 	row_groups->CleanupAppend(lowest_visibility_bound, start, count);
-}
-
-bool DataTable::IndexNameIsUnique(const string &name) {
-	return info->indexes.NameIsUnique(name);
 }
 
 Identifier DataTableInfo::GetSchemaName() {
@@ -1592,7 +1584,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	writer.SetRowGroupCount(info->CheckpointRowGroupCount(writer.GetCheckpointOptions()));
 	// checkpoint each individual row group
 	TableStatistics global_stats;
-	row_groups->Checkpoint(writer, global_stats);
+	const auto has_new_stats = row_groups->Checkpoint(writer, global_stats);
 	row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	if (writer.GetRebuildIndexes()) {
 		MetricsTimer timer;
@@ -1610,7 +1602,9 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	//   table pointer
 	//   index data
 	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
-	row_groups->SetStats(global_stats);
+	if (has_new_stats) {
+		row_groups->SetStats(global_stats);
+	}
 }
 
 void DataTable::CommitDropColumn(const idx_t column_index, CommitDropState &drop_state) {
@@ -1671,7 +1665,7 @@ bool DataTable::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegment
 // Index Constraint Creation
 //===--------------------------------------------------------------------===//
 void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes,
-                         const IndexConstraintType type, IndexStorageInfo index_info) {
+                         const IndexConstraintType type, IndexStorageInfo index_info, idx_t index_oid) {
 	if (!IsMainTable()) {
 		throw TransactionException("Transaction conflict: attempting to add an index to table \"%s\" but it has been "
 		                           "%s by a different transaction",
@@ -1694,7 +1688,7 @@ void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &
 	auto &io_manager = TableIOManager::Get(*this);
 	auto art = make_uniq<ART>(index_info.name, type, physical_ids, io_manager, std::move(expressions), db, nullptr,
 	                          index_info);
-	info->indexes.AddIndex(std::move(art), /*index_oid=*/optional_idx());
+	AddIndex(std::move(art), index_oid);
 }
 
 } // namespace duckdb

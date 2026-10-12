@@ -70,6 +70,12 @@ SELECT count(*) > 0 FROM test_vector_types(NULL::INT, NULL::VARCHAR, NULL::INT[]
 ----
 true
 
+# direct multi-file readers report completed files while their readers are still alive
+query I
+SELECT count(*) FROM (SELECT * FROM read_text('test/sql/table_function/files/*.txt') ORDER BY filename)
+----
+3
+
 # limit and top-n report progress
 statement ok
 CREATE TABLE small_integers AS SELECT i FROM range(30000) t(i)

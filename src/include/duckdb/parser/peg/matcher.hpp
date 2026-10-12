@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/arena_containers/arena_ptr.hpp"
+#include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
@@ -264,6 +265,31 @@ enum class MatcherType {
 	CUSTOM
 };
 
+//! Over-approximation of the tokens a matcher can start with (its FIRST set), computed once per grammar. Lets the
+//! matcher skip sub-matchers that certainly cannot match at the current token.
+struct MatcherFirstSet {
+	bool computed = false;
+	//! the matcher can succeed without consuming a token
+	bool nullable = false;
+	//! no information: never skip
+	bool any = false;
+	//! MatcherTokenClass bits
+	uint8_t class_mask = 0;
+	//! bitset over grammar literal ids (keywords and symbols)
+	vector<uint64_t> literals;
+	optional_ptr<const GrammarLiteralTable> table;
+
+	bool HasLiteral(idx_t literal_id) const {
+		auto word = literal_id / 64;
+		return word < literals.size() && (literals[word] >> (literal_id % 64)) & 1;
+	}
+	DUCKDB_API void AddLiteral(idx_t literal_id);
+	//! Merge other into this set, returns whether anything changed
+	DUCKDB_API bool Merge(const MatcherFirstSet &other);
+	//! False only if the matcher certainly cannot match at the current token
+	DUCKDB_API bool MightMatch(MatchState &state) const;
+};
+
 class Matcher {
 public:
 	explicit Matcher(MatcherType type = MatcherType::CUSTOM) : type(type) {
@@ -298,7 +324,12 @@ public:
 	bool HasName() const {
 		return !name.empty();
 	}
-	string GetName() const;
+	//! The stored name, which lives as long as the grammar and can therefore be referenced by a parse result
+	const string &GetName() const {
+		return name;
+	}
+	//! The name to print for this matcher, which for an unnamed one renders the grammar it matches
+	string GetPrintName() const;
 	optional_idx GetPackratId() const {
 		return packrat_id;
 	}
@@ -314,6 +345,13 @@ public:
 	}
 	bool IsCollapsible() const {
 		return collapsible;
+	}
+	//! The matcher runs the built-in implementation of its type (set by MatcherFactory, never for derived matchers)
+	void SetStructural() {
+		structural = true;
+	}
+	bool IsStructural() const {
+		return structural;
 	}
 
 public:
@@ -333,6 +371,9 @@ public:
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
+public:
+	MatcherFirstSet first_set;
+
 protected:
 	friend class MatcherAllocator;
 	MatcherType type;
@@ -340,8 +381,12 @@ protected:
 	optional_idx packrat_id;
 	bool packrat_memoized = false;
 	bool collapsible = false;
+	bool structural = false;
 	optional_ptr<const CompiledGrammarRule> rule;
 };
+
+//! Compute the FIRST sets of all matchers reachable from root
+DUCKDB_API void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table);
 
 class AtomicMatcher : public Matcher {
 public:
@@ -353,6 +398,10 @@ public:
 	}
 	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state) const final;
 	virtual MatcherResult MatchAtomic(MatchState &state) const = 0;
+	//! Describes the tokens this matcher can start with; the default (no information) never skips the matcher
+	virtual void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const {
+		first_set.any = true;
+	}
 };
 
 class KeywordInfo {
@@ -378,10 +427,42 @@ private:
 
 class ParseResultAllocator {
 public:
-	optional_ptr<ParseResult> Allocate(unique_ptr<ParseResult> parse_result);
+	ParseResultAllocator();
+	~ParseResultAllocator();
+
+	template <class RESULT, class... ARGS>
+	optional_ptr<ParseResult> Make(ARGS &&... args) {
+		static_assert(std::is_base_of<ParseResult, RESULT>::value, "Expected a parse result");
+		auto result = arena.Make<RESULT>(std::forward<ARGS>(args)...);
+		if (ParseResultNeedsDestructor<RESULT>::value) {
+			// held by an owner before growing the list, so the result is still destroyed if the growth throws
+			arena_ptr<ParseResult> owned(result);
+			pending_destructors.push_back(std::move(owned));
+		}
+		return optional_ptr<ParseResult>(result);
+	}
+
+	//! Copy a collected set of children into the arena, where it lives as long as the results it belongs to
+	unsafe_array_ptr<reference<ParseResult>> MakeChildren(const arena_vector<reference<ParseResult>> &children) {
+		auto count = children.size();
+		arena.AlignNext();
+		// an empty set still takes an address from the arena, which costs nothing and keeps the span non-null
+		auto target =
+		    reinterpret_cast<reference<ParseResult> *>(arena.Allocate(count * sizeof(reference<ParseResult>)));
+		if (count > 0) {
+			memcpy(static_cast<void *>(target), static_cast<const void *>(children.data()),
+			       count * sizeof(reference<ParseResult>));
+		}
+		return unsafe_array_ptr<reference<ParseResult>>(target, count);
+	}
 
 private:
-	vector<unique_ptr<ParseResult>> parse_results;
+	ArenaAllocator arena;
+	//! Dropping the arena reclaims the memory of every result at once but calls no destructors, so a result that
+	//! owns something has to be destroyed before that happens. An `arena_ptr` destroys what it points at without
+	//! freeing it, which is all these are here for. Only the node types that `ParseResultNeedsDestructor` selects end
+	//! up in the list, and nothing ever reads it.
+	arena_vector<arena_ptr<ParseResult>> pending_destructors;
 };
 
 template <class PROCESS, class... ARGS>
@@ -390,15 +471,23 @@ arena_ptr<MatchProcess> MatchState::Make(ARGS &&... args) {
 	return arena_ptr<MatchProcess>(context.process_allocator.Make<PROCESS>(std::forward<ARGS>(args)...));
 }
 
+void ParseResult::SetNameFrom(const CompiledGrammarRule &rule_p) {
+	name = &rule_p.name;
+}
+
+void ParseResult::SetNameFrom(const Matcher &matcher_p) {
+	name = &matcher_p.GetName();
+}
+
 template <class RESULT, class... ARGS>
 MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
 	if (!BuildParseResult()) {
 		return MatcherResult::Success();
 	}
-	auto result = context.allocator.Allocate(make_uniq<RESULT>(std::forward<ARGS>(args)...));
+	auto result = context.allocator.Make<RESULT>(std::forward<ARGS>(args)...);
 	if (rule) {
 		result->SetRule(*rule);
-		result->name = rule->name;
+		result->SetNameFrom(*rule);
 	}
 	return MatcherResult::Success(result);
 }

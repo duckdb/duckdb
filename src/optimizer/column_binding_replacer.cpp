@@ -312,6 +312,31 @@ static ReplacementBinding ResolveBoundaryReplacement(ColumnBinding binding,
 	return ReplacementBinding(binding, binding);
 }
 
+void ColumnBindingRewrite::RewriteChild(
+    unique_ptr<LogicalOperator> &op, idx_t child_index,
+    const std::function<void(unique_ptr<LogicalOperator> &, BindingReplacementGraph &)> &rewrite) {
+	if (child_index >= op->children.size()) {
+		throw InternalException("Binding rewrite child index %llu out of range", child_index);
+	}
+	auto old_child_bindings = op->children[child_index]->GetColumnBindings();
+	auto projection_map = LogicalOperatorVisitor::GetProjectionMap(*op, child_index);
+	if (projection_map && projection_map->empty()) {
+		// Freeze the implicit selection before the callback can change the child's output layout.
+		for (idx_t i = 0; i < old_child_bindings.size(); i++) {
+			projection_map->emplace_back(i);
+		}
+	}
+	BindingReplacementGraph replacements;
+	rewrite(op->children[child_index], replacements);
+	if (!op->children[child_index]) {
+		throw InternalException("Child rewrite requires a non-null child");
+	}
+	if (projection_map && old_child_bindings.empty() && !op->children[child_index]->GetColumnBindings().empty()) {
+		throw InternalException("Child rewrite cannot preserve an empty implicit projection");
+	}
+	ApplyToChild(op, child_index, std::move(old_child_bindings), replacements);
+}
+
 void ColumnBindingRewrite::ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t child_index,
                                         vector<ColumnBinding> old_child_bindings,
                                         const BindingReplacementGraph &replacements) {

@@ -10,6 +10,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/types/interval.hpp"
 #include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
@@ -507,6 +508,13 @@ T ParquetVariantNode::GetData() const {
 	case VariantPrimitiveType::DECIMAL16:
 		CheckBinaryRead(payload, sizeof(uint8_t) + sizeof(hugeint_t), binary_end);
 		return ReadBinaryDecimalValue<T>(value_metadata.primitive_type, payload);
+	case VariantPrimitiveType::TIME_NTZ_MICROS: {
+		auto micros = LoadChecked<int64_t>(payload, binary_end);
+		if (micros < 0 || micros > Interval::MICROS_PER_DAY) {
+			throw IOException("Corrupted VARIANT 'value' buffer, TIME value (%d) is out of range", micros);
+		}
+		return LoadChecked<T>(payload, binary_end);
+	}
 	default:
 		//! Fixed-width primitives are stored in the canonical little-endian layout
 		return LoadChecked<T>(payload, binary_end);
@@ -560,18 +568,36 @@ VariantDecimalProperties ParquetVariantNode::GetDecimalProperties() const {
 	auto value_metadata = VariantValueMetadata::FromHeaderByte(binary[0]);
 	auto payload = binary + 1;
 	uint8_t scale = LoadChecked<uint8_t>(payload, binary_end);
+	if (scale > Decimal::MAX_WIDTH_DECIMAL) {
+		throw IOException("Corrupted VARIANT 'value' buffer, decimal scale %d exceeds the maximum of %d", scale,
+		                  Decimal::MAX_WIDTH_DECIMAL);
+	}
 	auto value_data = payload + sizeof(uint8_t);
+	uint32_t width;
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::DECIMAL4:
-		return VariantDecimalProperties(ComputeDecimalWidth<int32_t>(LoadChecked<int32_t>(value_data, binary_end)),
-		                                scale);
+		width = ComputeDecimalWidth<int32_t>(LoadChecked<int32_t>(value_data, binary_end));
+		break;
 	case VariantPrimitiveType::DECIMAL8:
-		return VariantDecimalProperties(ComputeDecimalWidth<int64_t>(LoadChecked<int64_t>(value_data, binary_end)),
-		                                scale);
-	default:
+		width = ComputeDecimalWidth<int64_t>(LoadChecked<int64_t>(value_data, binary_end));
+		break;
+	default: {
 		D_ASSERT(value_metadata.primitive_type == VariantPrimitiveType::DECIMAL16);
-		return VariantDecimalProperties(DecimalWidth<hugeint_t>::max, scale);
+		CheckBinaryRead(value_data, sizeof(hugeint_t), binary_end);
+		hugeint_t value;
+		value.lower = Load<uint64_t>(value_data);
+		value.upper = Load<int64_t>(value_data + sizeof(uint64_t));
+		auto &limit = Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL];
+		if (value >= limit || value <= -limit) {
+			throw IOException("Corrupted VARIANT 'value' buffer, DECIMAL16 value exceeds the maximum width of %d",
+			                  Decimal::MAX_WIDTH_DECIMAL);
+		}
+		width = Decimal::MAX_WIDTH_DECIMAL;
+		break;
 	}
+	}
+	//! The scale can exceed the digits of the unscaled value (e.g. 0.005), the width must cover it
+	return VariantDecimalProperties(MaxValue<uint32_t>(width, scale), scale);
 }
 
 ParquetObjectIterator ParquetVariantNode::GetObjectChildren(VariantIterationOrder order) const {
