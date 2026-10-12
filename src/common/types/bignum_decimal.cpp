@@ -1,6 +1,7 @@
 #include "duckdb/common/types/bignum_decimal.hpp"
 
 #include "duckdb/common/bignum.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/bignum.hpp"
@@ -227,9 +228,11 @@ bool BignumDecimal::TryRescale(const string_t &value, uint8_t source_scale, uint
 		return true;
 	}
 	StringHeap heap;
+	// the operands have at most Decimal::MAX_WIDTH_DECIMAL digits, so no interrupt polling is needed
+	BignumArithmeticState state;
 	if (target_scale > source_scale) {
 		BorrowedBignum factor(string_t(PowerOfTen(target_scale - source_scale)));
-		auto scaled = BignumIntermediate::Multiply(heap, source.intermediate, factor.intermediate);
+		auto scaled = BignumIntermediate::Multiply(heap, state, source.intermediate, factor.intermediate);
 		if (!FitsWidth(scaled, target_width)) {
 			return false;
 		}
@@ -238,15 +241,20 @@ bool BignumDecimal::TryRescale(const string_t &value, uint8_t source_scale, uint
 	}
 	// scale down: divide by the power of ten and round half away from zero
 	BorrowedBignum divisor(string_t(PowerOfTen(source_scale - target_scale)));
-	auto quotient = BignumIntermediate::Divide(heap, source.intermediate, divisor.intermediate);
-	auto remainder = BignumIntermediate::Modulo(heap, source.intermediate, divisor.intermediate);
+	string_t quotient;
+	string_t remainder;
+	if (!BignumIntermediate::TryDivMod(heap, state, source.intermediate, divisor.intermediate, false, quotient) ||
+	    !BignumIntermediate::TryDivMod(heap, state, source.intermediate, divisor.intermediate, true, remainder)) {
+		throw InternalException("BignumDecimal::TryRescale: division by a power of ten failed");
+	}
+	// the blobs of the small constants must outlive the intermediates that point into them
+	OwnedBignum two(Bignum::VarcharToBignum(string_t("2")));
 	BorrowedBignum remainder_value(remainder);
-	BorrowedBignum two(string_t(Bignum::VarcharToBignum(string_t("2"))));
-	auto twice_remainder = BignumIntermediate::Multiply(heap, remainder_value.intermediate, two.intermediate);
+	auto twice_remainder = BignumIntermediate::Multiply(heap, state, remainder_value.intermediate, two.intermediate);
 	BorrowedBignum twice_remainder_value(twice_remainder);
 	if (twice_remainder_value.intermediate.IsAbsoluteBigger(divisor.intermediate) != SMALLER) {
 		// |remainder| >= divisor / 2: round away from zero
-		BorrowedBignum one(string_t(Bignum::VarcharToBignum(string_t(source.intermediate.is_negative ? "-1" : "1"))));
+		OwnedBignum one(Bignum::VarcharToBignum(string_t(source.intermediate.is_negative ? "-1" : "1")));
 		BorrowedBignum quotient_value(quotient);
 		quotient = BignumIntermediate::Add(heap, quotient_value.intermediate, one.intermediate);
 	}

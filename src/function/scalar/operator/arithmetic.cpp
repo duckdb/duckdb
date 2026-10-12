@@ -110,6 +110,11 @@ static Value NumericStatsValue(const LogicalType &type, hugeint_t value) {
 	return Value::Numeric(type, value);
 }
 
+//! The client context (if any) lets long BIGNUM multiplications and divisions check for interrupts
+static optional_ptr<ClientContext> GetBignumArithmeticContext(ExpressionState &state) {
+	return state.HasContext() ? &state.GetContext() : nullptr;
+}
+
 //===--------------------------------------------------------------------===//
 // Wide decimal arithmetic
 //===--------------------------------------------------------------------===//
@@ -149,11 +154,12 @@ static void WideDecimalMultiply(DataChunk &args, ExpressionState &state, Vector 
 	auto &heap = StringVector::GetStringHeap(result);
 	auto &result_type = result.GetType();
 	auto width = DecimalType::GetWidth(result_type);
+	BignumArithmeticState arithmetic_state(GetBignumArithmeticContext(state));
 	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
 	    args.data[0], args.data[1], result, [&](bignum_t a, bignum_t b) {
 		    const BignumIntermediate lhs(a);
 		    const BignumIntermediate rhs(b);
-		    auto product = BignumIntermediate::Multiply(heap, lhs, rhs);
+		    auto product = BignumIntermediate::Multiply(heap, arithmetic_state, lhs, rhs);
 		    if (CHECK_WIDTH && !BignumDecimal::FitsWidth(product, width)) {
 			    ThrowWideDecimalOverflow("multiplication", result_type);
 		    }
@@ -560,11 +566,6 @@ static void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &resu
 	    });
 }
 
-//! The client context (if any) lets long BIGNUM multiplications and divisions check for interrupts
-static optional_ptr<ClientContext> GetBignumArithmeticContext(ExpressionState &state) {
-	return state.HasContext() ? &state.GetContext() : nullptr;
-}
-
 static void BignumMultiply(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
 	BignumArithmeticState arithmetic_state(GetBignumArithmeticContext(state));
@@ -938,7 +939,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			function.SetFallible();
 			function.SetSerializeCallback(SerializeDecimalArithmetic);
 			function.SetDeserializeCallback(
-			    DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>);
+			    DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck, true>);
 			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 		} else if (left_type.IsIntegral()) {
