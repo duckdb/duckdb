@@ -2025,7 +2025,8 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSliceBound(
 	if (end_slice_bound && *end_slice_bound) {
 		if ((*end_slice_bound)->GetAlias() == Identifier("-")) {
 			if (!step_slice_bound) {
-				throw ParserException("The \"-\" slice bound is only valid in combination with a step, as in [:-:step]");
+				throw ParserException(
+				    "The \"-\" slice bound is only valid in combination with a step, as in [:-:step]");
 			}
 			(*end_slice_bound)->ClearAlias();
 		}
