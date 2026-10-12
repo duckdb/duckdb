@@ -216,11 +216,17 @@ static void VerifyCanDownloadExtension(DatabaseInstance &db, const string &url) 
 			                          url);
 		}
 	}
-	if (!db.config.CanAccessFile(url, FileType::FILE_TYPE_REGULAR)) {
-		throw PermissionException("Cannot download extension from \"%s\" - external access is disabled by "
-		                          "configuration. Add the repository to allowed_directories to allow it",
-		                          url);
+	if (db.config.CanAccessFile(url, FileType::FILE_TYPE_REGULAR)) {
+		return;
 	}
+	// with httpfs loaded http repositories are bumped to https: allow them if the http url is allowed
+	if (StringUtil::StartsWith(url, "https://") &&
+	    db.config.CanAccessFile("http://" + url.substr(8), FileType::FILE_TYPE_REGULAR)) {
+		return;
+	}
+	throw PermissionException("Cannot download extension from \"%s\" - external access is disabled by "
+	                          "configuration. Add the repository to allowed_directories to allow it",
+	                          url);
 }
 
 //! Perform the GET request for an extension against a single url

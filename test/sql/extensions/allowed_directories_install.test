@@ -21,7 +21,7 @@ Failed to download extension
 statement error
 INSTALL bogus FROM 'http://example.com';
 ----
-Permission Error: Cannot download extension from "http://example.com/
+<REGEX>:Permission Error: Cannot download extension from "https?://example.com/.*
 
 statement error
 INSTALL 'http://example.com/bogus.duckdb_extension';
