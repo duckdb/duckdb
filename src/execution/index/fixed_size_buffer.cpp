@@ -16,8 +16,7 @@ PartialBlockForIndex::PartialBlockForIndex(PartialBlockState state, BlockManager
 
 void PartialBlockForIndex::Flush(QueryContext context, const idx_t free_space_left) {
 	FlushInternal(free_space_left);
-	block_handle = block_manager.ConvertToPersistent(context, state.block_id, std::move(block_handle),
-	                                                 ConvertToPersistentMode::DESTRUCTIVE, MemoryTag::ART_INDEX);
+	block_handle = block_manager.ConvertToPersistent(context, state.block_id, std::move(block_handle));
 	Clear();
 }
 

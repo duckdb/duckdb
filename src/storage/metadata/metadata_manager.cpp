@@ -296,9 +296,8 @@ void MetadataManager::Flush(QueryContext context) {
 			// Convert the temporary block to a persistent block.
 			// we cannot use ConvertToPersistent as another thread might still be reading the block
 			// so we use the safe version of ConvertToPersistent
-			auto new_block =
-			    block_manager.ConvertToPersistent(context, kv.first, std::move(block_handle), std::move(handle),
-			                                      ConvertToPersistentMode::THREAD_SAFE, MemoryTag::METADATA);
+			auto new_block = block_manager.ConvertToPersistent(context, kv.first, std::move(block_handle),
+			                                                   std::move(handle), ConvertToPersistentMode::THREAD_SAFE);
 
 			guard.lock();
 			block.block = std::move(new_block);

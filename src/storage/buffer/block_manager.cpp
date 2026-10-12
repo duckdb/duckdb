@@ -46,6 +46,7 @@ shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id, MemoryT
 		auto existing_ptr = entry->second.lock();
 		if (existing_ptr) {
 			//! it hasn't! return it
+			D_ASSERT(existing_ptr->GetMemory().GetMemoryTag() == tag);
 			return existing_ptr;
 		}
 	}
@@ -58,9 +59,9 @@ shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id, MemoryT
 
 shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, block_id_t block_id,
                                                           shared_ptr<BlockHandle> old_block, BufferHandle old_handle,
-                                                          ConvertToPersistentMode mode, MemoryTag tag) {
+                                                          ConvertToPersistentMode mode, optional<MemoryTag> tag) {
 	// register a block with the new block id
-	auto new_block = RegisterBlock(block_id, tag);
+	auto new_block = RegisterBlock(block_id, tag.value_or(old_block->GetMemory().GetMemoryTag()));
 	D_ASSERT(new_block->GetMemory().GetState() == BlockState::BLOCK_UNLOADED);
 	D_ASSERT(new_block->GetMemory().GetReaders() == 0);
 
@@ -119,7 +120,7 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, 
 
 shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, block_id_t block_id,
                                                           shared_ptr<BlockHandle> old_block,
-                                                          ConvertToPersistentMode mode, MemoryTag tag) {
+                                                          ConvertToPersistentMode mode, optional<MemoryTag> tag) {
 	// pin the old block to ensure we have it loaded in memory
 	auto handle = buffer_manager.Pin(old_block);
 	return ConvertToPersistent(context, block_id, std::move(old_block), std::move(handle), mode, tag);
