@@ -1,8 +1,8 @@
 diff --git a/src/spatial/index/rtree/rtree.cpp b/src/spatial/index/rtree/rtree.cpp
-index 324d22e..6582edc 100644
+index 324d22e..8c52eb5 100644
 --- a/src/spatial/index/rtree/rtree.cpp
 +++ b/src/spatial/index/rtree/rtree.cpp
-@@ -1,8 +1,17 @@
+@@ -1,8 +1,16 @@
  #include "spatial/index/rtree/rtree.hpp"
  #include "duckdb/common/printer.hpp"
 +#include "duckdb/storage/partial_block_manager.hpp"
@@ -12,7 +12,6 @@ index 324d22e..6582edc 100644
 +void RTree::Persist(PartialBlockManager &partial_block_manager) {
 +	auto new_leaf_allocator = leaf_allocator->Persist(partial_block_manager);
 +	auto new_node_allocator = node_allocator->Persist(partial_block_manager);
-+	partial_block_manager.FlushPartialBlocks();
 +	leaf_allocator = std::move(new_leaf_allocator);
 +	node_allocator = std::move(new_node_allocator);
 +}
