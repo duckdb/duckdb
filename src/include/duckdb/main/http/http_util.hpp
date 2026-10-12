@@ -14,6 +14,9 @@
 #include "duckdb/common/enums/http_status_code.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/time_point.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/main/http/http_retry_budget.hpp"
 #include <functional>
 
 namespace duckdb {
@@ -401,6 +404,10 @@ public:
 
 	//! Whether a failed request should be retried, possibly using HTTPResponse information, and allowing overrides
 	DUCKDB_API virtual bool ShouldRetry(const BaseRequest &request, const HTTPResponse &response);
+	//! Runs before every attempt with the 1-based attempt number and the configured maximum, e.g. to tag headers.
+	DUCKDB_API virtual void PrepareAttempt(BaseRequest &request, idx_t attempt, idx_t max_attempts);
+	//! Retry quota shared by all requests of this provider against one host.
+	DUCKDB_API HTTPRetryQuota &GetRetryQuota(const string &proto_host_port);
 
 	//! Whether replaying this request is safe. POST is the only method we cannot assume is idempotent.
 	DUCKDB_API static bool IsIdempotent(RequestType type);
@@ -419,9 +426,15 @@ private:
 	                                         HTTPClientCachePolicy initial_cache_policy,
 	                                         HTTPClientCachePolicy &retry_cache_policy);
 
+private:
+	//! Protects retry_quotas.
+	mutex retry_quota_lock;
+	//! Per-host retry quotas, created on first use.
+	unordered_map<string, unique_ptr<HTTPRetryQuota>> retry_quotas;
+
 public:
 	static duckdb::unique_ptr<HTTPResponse>
-	RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request, const BaseRequest &request,
+	RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request, BaseRequest &request,
 	                    const std::function<void(void)> &retry_cb);
 };
 } // namespace duckdb

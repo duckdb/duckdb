@@ -127,13 +127,12 @@ bool HTTPResponse::ShouldRetry() const {
 	case HTTPStatusCode::RequestTimeout_408:
 	case HTTPStatusCode::ImATeapot_418:
 	case HTTPStatusCode::TooManyRequests_429:
-	case HTTPStatusCode::InternalServerError_500:
-	case HTTPStatusCode::BadGateway_502:
-	case HTTPStatusCode::ServiceUnavailable_503:
-	case HTTPStatusCode::GatewayTimeout_504:
 		return true;
-	default:
-		return false;
+	default: {
+		// Any server error is eligible, as in the AWS SDKs.
+		const auto code = static_cast<uint16_t>(status);
+		return code >= 500 && code < 600;
+	}
 	}
 }
 
@@ -143,6 +142,19 @@ bool HTTPUtil::IsIdempotent(RequestType type) {
 
 bool HTTPUtil::ShouldRetry(const BaseRequest &request, const HTTPResponse &response) {
 	return response.ShouldRetry();
+}
+
+void HTTPUtil::PrepareAttempt(BaseRequest &request, idx_t attempt, idx_t max_attempts) {
+	// default: requests are sent as-is
+}
+
+HTTPRetryQuota &HTTPUtil::GetRetryQuota(const string &proto_host_port) {
+	lock_guard<mutex> guard(retry_quota_lock);
+	auto &entry = retry_quotas[proto_host_port];
+	if (!entry) {
+		entry = make_uniq<HTTPRetryQuota>();
+	}
+	return *entry;
 }
 
 unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request) {
@@ -368,16 +380,18 @@ void HTTPUtil::DecomposeURL(const string &input, string &path_out, string &proto
 	}
 }
 
-// Retry eligible requests using an operation-local budget and the existing transport retry hook.
+// Retry eligible requests using an operation-local budget, the host's retry quota and the transport retry hook.
 duckdb::unique_ptr<HTTPResponse>
-HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request,
-                              const BaseRequest &request, const std::function<void(void)> &retry_cb) {
+HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request, BaseRequest &request,
+                              const std::function<void(void)> &retry_cb) {
 	auto &params = request.params;
 	HTTPRetryBudget local_retry_budget(params);
 	auto retry_budget = request.retry_budget;
 	if (!retry_budget) {
 		retry_budget = local_retry_budget;
 	}
+	retry_budget->BindQuota(params.http_util.GetRetryQuota(request.proto_host_port));
+	const idx_t max_attempts = params.retries + 1;
 
 	unique_ptr<HTTPResponse> response;
 	std::exception_ptr caught_e;
@@ -390,6 +404,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		    exception_error.clear();
 		    string caught_status;
 		    string caught_retry_after;
+		    params.http_util.PrepareAttempt(request, retry_budget->RetriesUsed() + 1, max_attempts);
 		    try {
 			    response = on_request();
 			    if (response) {
@@ -433,17 +448,28 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 			    }
 			    return HTTPRetryDecision::Throttled(caught_retry_after);
 		    }
-		    return HTTPRetryDecision::Retry();
+		    // Without a status the transport failed and nothing is known about the server.
+		    const bool received_status = (response && !response->HasRequestError()) || !caught_status.empty();
+		    return received_status ? HTTPRetryDecision::Retry() : HTTPRetryDecision::Transient();
 	    },
 	    retry_cb);
 
 	if (!should_retry) {
+		if (response->success) {
+			retry_budget->RecordSuccess();
+		}
 		return response;
+	}
+	string quota_note;
+	if (retry_budget->QuotaExhausted()) {
+		quota_note = StringUtil::Format(" (retry quota for '%s' exhausted: requests to this host keep failing)",
+		                                request.proto_host_port);
 	}
 	if (request.try_request) {
 		if (!response) {
 			response = make_uniq<HTTPResponse>(HTTPStatusCode::INVALID);
-			response->request_error = exception_error.empty() ? "Unknown error" : std::move(exception_error);
+			response->request_error =
+			    (exception_error.empty() ? "Unknown error" : std::move(exception_error)) + quota_note;
 		}
 		response->success = false;
 		return response;
@@ -453,11 +479,11 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		std::rethrow_exception(caught_e);
 	}
 	if (response && !response->HasRequestError()) {
-		throw HTTPException(*response, "Request returned HTTP %d for HTTP %s to '%s'",
-		                    static_cast<int>(response->status), method, request.url);
+		throw HTTPException(*response, "Request returned HTTP %d for HTTP %s to '%s'%s",
+		                    static_cast<int>(response->status), method, request.url, quota_note);
 	}
 	string error = response ? response->GetError() : "Unknown error";
-	throw IOException("%s error for HTTP %s to '%s'", error, method, request.url);
+	throw IOException("%s error for HTTP %s to '%s'%s", error, method, request.url, quota_note);
 }
 
 void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
