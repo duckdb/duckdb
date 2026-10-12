@@ -95,7 +95,7 @@ SELECT count(*) FROM read_parquet('{TEMP_DIR}/integer_as_struct.parquet', schema
 ----
 0
 
-# a field that does not cast back exactly
+# a field read with a lossy cast
 statement ok
 COPY (SELECT {'x': 1.4}::STRUCT(x DOUBLE) AS c, 1 AS k) TO '{TEMP_DIR}/double_field.parquet'
 

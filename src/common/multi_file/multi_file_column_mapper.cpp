@@ -934,8 +934,7 @@ static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expressio
 	                                          StructExtractAtFun::GetBindData(child_idx));
 }
 
-//! A cast only checks the invertibility of the outer type and matches STRUCT fields by name, so the mapping has to
-//! keep the names and positions of nested fields and every nested field has to cast back exactly
+//! A cast matches STRUCT fields by name, so nested fields need the same names and positions and invertible casts
 static bool MappedCastIsInvertible(const MultiFileIndexMapping &mapping, const LogicalType &source_type,
                                    const LogicalType &target_type) {
 	if (!BoundCastExpression::CastIsInvertible(source_type, target_type)) {
