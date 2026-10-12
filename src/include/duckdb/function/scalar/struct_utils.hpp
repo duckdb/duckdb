@@ -92,4 +92,6 @@ inline const Expression &PeelStructExtractPath(const Expression &expr, vector<St
 	return base;
 }
 
+const Expression &PeelStructExtractPath(Expression &&expr, vector<StructExtractPathEntry> &path) = delete;
+
 } // namespace duckdb
