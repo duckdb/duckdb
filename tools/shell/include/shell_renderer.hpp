@@ -50,6 +50,8 @@ struct RenderingQueryResult {
 	vector<unique_ptr<duckdb::DataChunk>> chunks;
 	bool exhausted_result = false;
 	idx_t loaded_row_count = 0;
+	//! If set, each fetched chunk is also appended here in its original types (to keep it as the last result `_`)
+	duckdb::optional_ptr<duckdb::ColumnDataCollection> retained_rows;
 
 	idx_t ColumnCount() const {
 		return metadata.ColumnCount();
@@ -126,6 +128,16 @@ public:
 	virtual void RenderFooter(PrintStream &out, ResultMetadata &result);
 	virtual const char *NullValue();
 	virtual bool RequireMaterializedResult() const = 0;
+	//! The rows a streaming renderer retained while rendering, to become the last result (`_`). Null if it retained
+	//! none
+	virtual unique_ptr<duckdb::QueryResult> TakeRetainedResult() {
+		return nullptr;
+	}
+	//! Whether the stream the result was rendered from should stay open after rendering (so that its remaining rows
+	//! can still be fetched into the last result)
+	virtual bool KeepStreamOpen() const {
+		return false;
+	}
 	virtual bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) = 0;
 	virtual unique_ptr<duckdb::DataChunk> ConvertChunk(duckdb::DataChunk &chunk);
 	virtual bool HasConvertValue() {

@@ -50,6 +50,12 @@ unique_ptr<TableRef> ShellScanLastResult(ClientContext &context, ReplacementScan
 	}
 	auto &state = duckdb_shell::ShellState::Get();
 	state.last_result_referenced = true;
+	if (!state.last_result && state.last_result_preview_cancelled) {
+		throw BinderException(
+		    "Failed to query last result \"_\": the result was a preview, and its query was cancelled "
+		    "by a later statement\nRun the query again, followed by \".materialize\" or by a statement "
+		    "that selects from \"_\" directly");
+	}
 	if (!state.last_result) {
 		throw BinderException("Failed to query last result \"_\": no result available");
 	}

@@ -100,6 +100,11 @@ struct BoxRendererConfig {
 	LargeNumberRendering large_number_rendering = LargeNumberRendering::NONE;
 	//! Hidden rows hint
 	string hidden_rows_hint;
+	//! Render only the first max_rows rows, without the last rows - for a result that was cut off, whose last rows
+	//! are not the last rows of the query
+	bool render_head_only = false;
+	//! Whether the query has more rows than the rendered result holds - the row count is then a lower bound
+	bool row_count_is_lower_bound = false;
 
 #ifndef DUCKDB_ASCII_TREE_RENDERER
 	const char *LTCORNER = "\342\224\214"; // NOLINT: "┌";
