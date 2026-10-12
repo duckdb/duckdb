@@ -49,6 +49,7 @@ public:
 
 	int64_t GetFileSize(FileHandle &handle) override;
 	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
+	optional<timestamp_t> TryGetLastModifiedTime(FileHandle &handle) override;
 	string GetVersionTag(FileHandle &handle) override;
 	FileType GetFileType(FileHandle &handle) override;
 	FileMetadata Stats(FileHandle &handle) override;

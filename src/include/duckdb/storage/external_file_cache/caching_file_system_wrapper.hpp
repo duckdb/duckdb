@@ -70,6 +70,7 @@ public:
 
 	DUCKDB_API int64_t GetFileSize(FileHandle &handle) override;
 	DUCKDB_API timestamp_t GetLastModifiedTime(FileHandle &handle) override;
+	DUCKDB_API optional<timestamp_t> TryGetLastModifiedTime(FileHandle &handle) override;
 	DUCKDB_API string GetVersionTag(FileHandle &handle) override;
 	DUCKDB_API FileType GetFileType(FileHandle &handle) override;
 	DUCKDB_API FileMetadata Stats(FileHandle &handle) override;

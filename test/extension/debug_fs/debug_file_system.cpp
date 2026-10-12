@@ -155,6 +155,11 @@ timestamp_t DebugFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	return inner.file_system.GetLastModifiedTime(inner);
 }
 
+optional<timestamp_t> DebugFileSystem::TryGetLastModifiedTime(FileHandle &handle) {
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	return inner.file_system.TryGetLastModifiedTime(inner);
+}
+
 string DebugFileSystem::GetVersionTag(FileHandle &handle) {
 	auto &inner = *handle.Cast<DebugFileHandle>().inner;
 	return inner.file_system.GetVersionTag(inner);

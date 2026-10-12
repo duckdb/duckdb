@@ -21,6 +21,7 @@ public:
 
 	int64_t GetFileSize(FileHandle &handle) override;
 	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
+	optional<timestamp_t> TryGetLastModifiedTime(FileHandle &handle) override;
 
 	void Reset(FileHandle &handle) override;
 	bool OnDiskFile(FileHandle &handle) override {

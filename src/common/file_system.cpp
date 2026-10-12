@@ -481,6 +481,18 @@ timestamp_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
 	throw NotImplementedException("%s: GetLastModifiedTime is not implemented!", GetName());
 }
 
+optional<timestamp_t> FileSystem::TryGetLastModifiedTime(FileHandle &handle) {
+	try {
+		return GetLastModifiedTime(handle);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		if (error.Type() != ExceptionType::NOT_IMPLEMENTED) {
+			throw;
+		}
+		return nullopt;
+	}
+}
+
 string FileSystem::GetVersionTag(FileHandle &handle) {
 	// Used to check cache invalidation for httpfs files with an ETag in CachingFileSystem
 	return "";
@@ -497,14 +509,9 @@ FileType FileSystem::GetFileType(FileHandle &handle) {
 FileMetadata FileSystem::Stats(FileHandle &handle) {
 	FileMetadata metadata;
 	metadata.file_size = GetFileSize(handle);
-	try {
-		metadata.last_modification_time = GetLastModifiedTime(handle);
-	} catch (std::exception &ex) {
-		// a file system that cannot tell the modification time leaves it unknown
-		ErrorData error(ex);
-		if (error.Type() != ExceptionType::NOT_IMPLEMENTED) {
-			throw;
-		}
+	auto last_modification_time = TryGetLastModifiedTime(handle);
+	if (last_modification_time) {
+		metadata.last_modification_time = *last_modification_time;
 	}
 	metadata.file_type = GetFileType(handle);
 	metadata.version_tag = GetVersionTag(handle);

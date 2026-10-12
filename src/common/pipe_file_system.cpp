@@ -64,6 +64,11 @@ timestamp_t PipeFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	return child_handle.file_system.GetLastModifiedTime(child_handle);
 }
 
+optional<timestamp_t> PipeFileSystem::TryGetLastModifiedTime(FileHandle &handle) {
+	auto &child_handle = *handle.Cast<PipeFile>().child_handle;
+	return child_handle.file_system.TryGetLastModifiedTime(child_handle);
+}
+
 void PipeFileSystem::FileSync(FileHandle &handle) {
 }
 

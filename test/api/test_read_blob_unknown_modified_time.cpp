@@ -60,6 +60,13 @@ public:
 		return last_modified;
 	}
 
+	optional<timestamp_t> TryGetLastModifiedTime(FileHandle &handle) override {
+		if (unknown_by_try_get) {
+			return nullopt;
+		}
+		return LocalFileSystem::TryGetLastModifiedTime(handle);
+	}
+
 	//! The local getters go through Stats, so they read the local metadata directly
 	int64_t GetFileSize(FileHandle &handle) override {
 		return LocalFileSystem::Stats(handle).file_size;
@@ -85,6 +92,8 @@ public:
 	//! INVALID returns last_modified, NOT_IMPLEMENTED is not implemented, any other type is thrown
 	ExceptionType error_type = ExceptionType::INVALID;
 	timestamp_t last_modified;
+	//! Whether TryGetLastModifiedTime reports an unknown time without calling GetLastModifiedTime
+	bool unknown_by_try_get = false;
 
 private:
 	string prefix;
@@ -98,7 +107,9 @@ TEST_CASE("read_blob returns NULL as the modification time of a file system that
 	auto prefix = GENERATE(string("no-modified-time://"), string("gs://no-modified-time/"));
 	auto function = GENERATE(string("read_blob"), string("read_text"));
 	auto error_type = GENERATE(ExceptionType::NOT_IMPLEMENTED, ExceptionType::INVALID, ExceptionType::IO);
-	CAPTURE(prefix, function, Exception::ExceptionTypeToString(error_type));
+	auto unknown_by_try_get = GENERATE(false, true);
+	CAPTURE(prefix, function, Exception::ExceptionTypeToString(error_type), unknown_by_try_get);
+	const auto modified_time = Timestamp::FromEpochSeconds(1000000000);
 
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -107,24 +118,30 @@ TEST_CASE("read_blob returns NULL as the modification time of a file system that
 	    con.Query(StringUtil::Format("COPY (SELECT 'hello' AS s) TO '%sfile.csv' (HEADER false)", local_prefix)));
 	auto file_system = make_uniq<ModifiedTimeFileSystem>(prefix, local_prefix);
 	file_system->error_type = error_type;
-	file_system->last_modified = Timestamp::FromEpochSeconds(1000000000);
+	file_system->last_modified = modified_time;
+	file_system->unknown_by_try_get = unknown_by_try_get;
 	FileSystem::GetFileSystem(*con.context).RegisterSubSystem(std::move(file_system));
 
 	auto file = prefix + "file.csv";
 	auto result = con.Query(StringUtil::Format("SELECT size, last_modified, content FROM %s('%s')", function, file));
-	if (error_type == ExceptionType::IO) {
+	if (error_type == ExceptionType::IO && !unknown_by_try_get) {
 		REQUIRE(result->HasError());
 		REQUIRE(StringUtil::Contains(result->GetError(), "failed to get the modification time"));
 		return;
 	}
-	auto expected_time = error_type == ExceptionType::INVALID
-	                         ? Value::TIMESTAMPTZ(timestamp_tz_t(Timestamp::FromEpochSeconds(1000000000)))
-	                         : Value();
+	auto known_time = error_type == ExceptionType::INVALID && !unknown_by_try_get;
+	auto expected_time = known_time ? Value::TIMESTAMPTZ(timestamp_tz_t(modified_time)) : Value();
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {expected_time}));
 	REQUIRE(CHECK_COLUMN(result, 2, {function == "read_blob" ? Value::BLOB("hello\n") : Value("hello\n")}));
 
 	result = con.Query(StringUtil::Format("SELECT size, last_modified IS NULL FROM %s('%s')", function, file));
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
-	REQUIRE(CHECK_COLUMN(result, 1, {error_type == ExceptionType::NOT_IMPLEMENTED}));
+	REQUIRE(CHECK_COLUMN(result, 1, {!known_time}));
+
+	auto &fs = FileSystem::GetFileSystem(*con.context);
+	auto flags = FileFlags::FILE_FLAGS_READ;
+	flags.SetCachingMode(CachingMode::CACHE_REMOTE_ONLY);
+	auto handle = fs.OpenFile(file, flags);
+	REQUIRE(fs.TryGetLastModifiedTime(*handle) == (known_time ? optional<timestamp_t>(modified_time) : nullopt));
 }

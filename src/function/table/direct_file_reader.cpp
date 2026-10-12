@@ -163,11 +163,11 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 				// correctly)
 				try {
 					D_ASSERT(file_metadata.has_value() || file_handle);
-					const auto timestamp_seconds =
-					    file_metadata ? file_metadata->last_modification_time : fs.GetLastModifiedTime(*file_handle);
-					if (timestamp_seconds.IsFinite()) {
+					const auto last_modified =
+					    file_metadata ? file_metadata->last_modification_time : fs.TryGetLastModifiedTime(*file_handle);
+					if (last_modified && last_modified->IsFinite()) {
 						FlatVector::GetDataMutable<timestamp_tz_t>(last_modified_vector)[out_idx] =
-						    timestamp_tz_t(timestamp_seconds);
+						    timestamp_tz_t(*last_modified);
 					} else {
 						// the file system does not know the modification time
 						FlatVector::SetNull(last_modified_vector, out_idx, true);

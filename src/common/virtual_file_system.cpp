@@ -248,6 +248,9 @@ int64_t VirtualFileSystem::GetFileSize(FileHandle &handle) {
 timestamp_t VirtualFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	return handle.file_system.GetLastModifiedTime(handle);
 }
+optional<timestamp_t> VirtualFileSystem::TryGetLastModifiedTime(FileHandle &handle) {
+	return handle.file_system.TryGetLastModifiedTime(handle);
+}
 string VirtualFileSystem::GetVersionTag(FileHandle &handle) {
 	return handle.file_system.GetVersionTag(handle);
 }

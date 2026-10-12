@@ -192,6 +192,20 @@ timestamp_t CachingFileSystemWrapper::GetLastModifiedTime(FileHandle &handle) {
 	return caching_handle->GetLastModifiedTime();
 }
 
+optional<timestamp_t> CachingFileSystemWrapper::TryGetLastModifiedTime(FileHandle &handle) {
+	optional_ptr<CachingFileHandle> caching_handle = GetCachingHandleIfPossible(handle);
+	if (!caching_handle) {
+		return underlying_file_system.TryGetLastModifiedTime(handle);
+	}
+
+	// the cached stats keep an unknown time as infinite
+	auto last_modified = caching_handle->GetLastModifiedTime();
+	if (!last_modified.IsFinite()) {
+		return nullopt;
+	}
+	return last_modified;
+}
+
 string CachingFileSystemWrapper::GetVersionTag(FileHandle &handle) {
 	auto *caching_handle = GetCachingHandleIfPossible(handle);
 	if (!caching_handle) {
