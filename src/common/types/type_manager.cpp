@@ -1,4 +1,6 @@
 #include "duckdb/common/types/type_manager.hpp"
+
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -100,6 +102,14 @@ static LogicalType ParseLogicalTypeInternal(const string &type_str, ClientContex
 
 LogicalType TypeManager::ParseLogicalType(const string &type_str, ClientContext &context) const {
 	return parse_function(type_str, context);
+}
+
+LogicalType TypeManager::ParseLogicalType(const string &type_str) const {
+	auto type = UnboundType::TryParseAndDefaultBind(type_str);
+	if (TypeVisitor::Contains(type, LogicalTypeId::UNBOUND)) {
+		throw InvalidInputException("Type \"%s\" is not a built-in type", type_str);
+	}
+	return type;
 }
 
 TypeManager &TypeManager::Get(DatabaseInstance &db) {

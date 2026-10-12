@@ -724,7 +724,7 @@ optional_idx RowGroupCollection::Append(DataChunk &chunk, TableAppendState &stat
 		AppendRowGroup(l, next_start);
 		// set up the append state for this row_group
 		auto last_row_group = state.row_groups->GetLastSegment(l);
-		RowGroup::InitializeAppend(*last_row_group, state.row_group_append_state);
+		RowGroup::InitializeNextAppend(*last_row_group, state.row_group_append_state);
 		state.row_group_start = next_start;
 	}
 	state.current_row += row_t(total_append_count);
@@ -1423,8 +1423,8 @@ public:
 
 						// move to the next row group
 						current_append_idx++;
-						RowGroup::InitializeAppend(*new_row_groups[current_append_idx],
-						                           append_state.row_group_append_state);
+						RowGroup::InitializeNextAppend(*new_row_groups[current_append_idx],
+						                               append_state.row_group_append_state);
 						// slice chunk for the next append
 						append_chunk.Slice(append_count, remaining);
 					}

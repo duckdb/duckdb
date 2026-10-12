@@ -206,7 +206,7 @@ private:
 	bool PreserveInsertionOrder(PhysicalOperator &plan);
 	bool UseBatchIndex(PhysicalOperator &plan);
 	optional_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOperator &probe,
-	                                                PhysicalOperator &build);
+	                                                PhysicalOperator &build, const idx_t join_cardinality);
 	optional_ptr<PhysicalOperator> PlanAsOfInequalityJoin(LogicalComparisonJoin &op, PhysicalOperator &probe,
 	                                                      PhysicalOperator &build, const idx_t lhs_cardinality,
 	                                                      const idx_t rhs_cardinality);
