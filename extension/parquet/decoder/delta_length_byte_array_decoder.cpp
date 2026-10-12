@@ -114,7 +114,7 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 			if (TouchesUtf8Boundary(char_ptr_cast(block.ptr), str_len)) {
 				string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
 			}
-			result_data.WriteValue(string_t(char_ptr_cast(block.ptr), str_len));
+			result_data.WriteStringRef(string_t(char_ptr_cast(block.ptr), str_len));
 		}
 		block.unsafe_inc(str_len);
 	}
