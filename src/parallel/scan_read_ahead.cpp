@@ -115,25 +115,43 @@ private:
 
 ScanReadAheadJob::~ScanReadAheadJob() = default;
 
-static idx_t GetOpenWindow(ClientContext &context, idx_t read_ahead_depth, bool has_memory_governor) {
-	auto window = MaxValue<idx_t>(TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() * 2,
-	                              has_memory_governor ? 0 : read_ahead_depth);
+//! The file descriptor limit is per process, so all scans share one count
+static atomic<idx_t> &OpenFileCount() {
+	static atomic<idx_t> count {0};
+	return count;
+}
+
+ReadAheadOpenFile::ReadAheadOpenFile() {
+	++OpenFileCount();
+}
+
+ReadAheadOpenFile::~ReadAheadOpenFile() {
+	--OpenFileCount();
+}
+
+idx_t ReadAheadOpenFile::Count() {
+	return OpenFileCount().load();
+}
+
+static idx_t GetOpenFileBudget(ClientContext &context) {
 	idx_t file_descriptor_limit = Settings::Get<DebugFileDescriptorLimitSetting>(context);
 	if (file_descriptor_limit == 0) {
 		auto system_limit = FileSystem::GetFileDescriptorLimit();
 		if (!system_limit.IsValid()) {
-			return window;
+			return NumericLimits<idx_t>::Maximum();
 		}
 		file_descriptor_limit = system_limit.GetIndex();
 	}
-	// files opened ahead hold descriptors until they are scanned, so only use a share of the limit
-	return MinValue<idx_t>(window, FileSystem::GetFileDescriptorShare(file_descriptor_limit));
+	// files hold their descriptors until their readers close, so only use a share of the limit
+	return FileSystem::GetFileDescriptorShare(file_descriptor_limit);
 }
 
 ScanReadAhead::ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
                              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p)
     : context(context), read_ahead_depth(read_ahead_depth_p), memory_governor(std::move(memory_governor_p)),
-      open_window(GetOpenWindow(context, read_ahead_depth, memory_governor != nullptr)) {
+      open_window(MaxValue<idx_t>(TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() * 2,
+                                  memory_governor ? 0 : read_ahead_depth)),
+      open_file_budget(GetOpenFileBudget(context)) {
 	D_ASSERT(read_ahead_depth_p > 0);
 	backlog_budget = memory_governor ? memory_governor->BackpressureBudget() : NumericLimits<idx_t>::Maximum();
 	executor = make_shared_ptr<TaskExecutor>(context, TaskSchedulerType::ASYNC);
@@ -278,12 +296,17 @@ void ScanReadAhead::SetDone() {
 
 idx_t ScanReadAhead::ReservationDepth() const {
 	// over budget one job stays queued, claimed jobs hold the budget until their task resumes
-	return pending_io_bytes.load() >= backlog_budget.load() ? 1 : read_ahead_depth;
+	const bool over_memory_budget = pending_io_bytes.load() >= backlog_budget.load();
+	const bool over_open_file_budget = ReadAheadOpenFile::Count() >= open_file_budget;
+	return over_memory_budget || over_open_file_budget ? 1 : read_ahead_depth;
 }
 
 bool ScanReadAhead::TryReserveSlot() {
 	// take the minimum job charge up front so concurrent producers cannot all pass the budget check together
-	const bool over_budget = pending_io_bytes.fetch_add(MINIMUM_JOB_IO_CHARGE) >= backlog_budget.load();
+	const bool over_memory_budget = pending_io_bytes.fetch_add(MINIMUM_JOB_IO_CHARGE) >= backlog_budget.load();
+	// queued jobs keep their files open, so the open file budget bounds the queue too
+	const bool over_budget = over_memory_budget || ReadAheadOpenFile::Count() >= open_file_budget;
+	// over budget one job stays queued, claimed jobs hold the budget until their task resumes
 	const idx_t depth = over_budget ? 1 : read_ahead_depth;
 	if (active_jobs.fetch_add(1) >= depth) {
 		--active_jobs;
@@ -346,7 +369,7 @@ void ScanReadAhead::ScheduleFileOpen(std::function<void()> open_fn, std::functio
 }
 
 bool ScanReadAhead::CanScheduleOpen(idx_t files_ahead) const {
-	return files_ahead < open_window;
+	return files_ahead < open_window && ReadAheadOpenFile::Count() < open_file_budget;
 }
 
 bool ScanReadAhead::TryRunPendingTask() {

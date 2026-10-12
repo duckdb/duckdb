@@ -437,11 +437,15 @@ public:
 
 	//! Open a file on the read-ahead async pool. Runs off the operator thread; records errors instead of throwing.
 	static void OpenMarkedFileAsync(ClientContext &context, const MultiFileBindData &bind_data,
-	                                MultiFileGlobalState &gstate, MultiFileReaderData &reader_data, idx_t file_index) {
+	                                MultiFileGlobalState &gstate, MultiFileReaderData &reader_data, idx_t file_index,
+	                                const shared_ptr<ReadAheadOpenFile> &open_file) {
 		// OpenMarkedFile expects the parallel lock unlocked on entry and locks it before it returns
 		unique_lock<mutex> parallel_lock(gstate.lock, std::defer_lock);
 		try {
-			OpenMarkedFile(context, bind_data, gstate, reader_data, file_index, parallel_lock);
+			if (OpenMarkedFile(context, bind_data, gstate, reader_data, file_index, parallel_lock)) {
+				// jobs keep the reader alive after the scan moves past the file, so it keeps the file counted
+				reader_data.reader->read_ahead_open_file = open_file;
+			}
 		} catch (std::exception &ex) {
 			if (!parallel_lock.owns_lock()) {
 				parallel_lock.lock();
@@ -479,9 +483,10 @@ public:
 				reader_data.file_state = MultiFileFileState::OPENING;
 				{
 					MultiFileReaderData *reader_ptr = &reader_data;
+					auto open_file = make_shared_ptr<ReadAheadOpenFile>();
 					read_ahead.ScheduleFileOpen(
-					    [&context, &bind_data, &gstate, reader_ptr, current_file_index]() {
-						    OpenMarkedFileAsync(context, bind_data, gstate, *reader_ptr, current_file_index);
+					    [&context, &bind_data, &gstate, reader_ptr, current_file_index, open_file]() {
+						    OpenMarkedFileAsync(context, bind_data, gstate, *reader_ptr, current_file_index, open_file);
 					    },
 					    [&gstate]() {
 						    // the reader stays in OPENING, so tell every waiter to stop instead of polling forever
@@ -1025,6 +1030,10 @@ public:
 			read_ahead.WaitForJob(*lstate.job);
 			lstate.job_state = MultiFileJobState::DECODE;
 			return ScanReadAheadAcquire::ACQUIRED;
+		}
+		if (!read_ahead.CanScheduleOpen(0)) {
+			// the open file budget is full and the finished job may hold the last reference to its reader
+			lstate.job.reset();
 		}
 		unique_ptr<ScanReadAheadJob> claimed;
 		auto acquired = read_ahead.AcquireJob(
