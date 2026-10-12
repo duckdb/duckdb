@@ -28,11 +28,16 @@ static inline string_t GetString(yyjson_val *val) {
 
 } // namespace
 
-template <bool WRITE_DATA, bool IGNORE_NULLS>
-static bool ConvertJSON(yyjson_val *val, ToVariantGlobalResultData &result, idx_t result_index, bool is_root);
+//! The maximum nesting depth of a JSON value that can be converted to a VARIANT
+static constexpr idx_t MAX_JSON_TO_VARIANT_DEPTH = 128;
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-static bool ConvertJSONArray(yyjson_val *arr, ToVariantGlobalResultData &result, idx_t result_index, bool is_root) {
+static bool ConvertJSON(yyjson_val *val, ToVariantGlobalResultData &result, idx_t result_index, bool is_root,
+                        idx_t depth);
+
+template <bool WRITE_DATA, bool IGNORE_NULLS>
+static bool ConvertJSONArray(yyjson_val *arr, ToVariantGlobalResultData &result, idx_t result_index, bool is_root,
+                             idx_t depth) {
 	yyjson_arr_iter iter;
 	yyjson_arr_iter_init(arr, &iter);
 
@@ -63,7 +68,7 @@ static bool ConvertJSONArray(yyjson_val *arr, ToVariantGlobalResultData &result,
 			variant.keys_index_validity.SetInvalid(start_child_index);
 			variant.values_index_data[start_child_index++] = values_offset_data[result_index];
 		}
-		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(val, result, result_index, false)) {
+		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(val, result, result_index, false, depth + 1)) {
 			return false;
 		}
 	}
@@ -71,7 +76,8 @@ static bool ConvertJSONArray(yyjson_val *arr, ToVariantGlobalResultData &result,
 }
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-static bool ConvertJSONObject(yyjson_val *obj, ToVariantGlobalResultData &result, idx_t result_index, bool is_root) {
+static bool ConvertJSONObject(yyjson_val *obj, ToVariantGlobalResultData &result, idx_t result_index, bool is_root,
+                              idx_t depth) {
 	yyjson_obj_iter iter;
 	yyjson_obj_iter_init(obj, &iter);
 
@@ -133,7 +139,7 @@ static bool ConvertJSONObject(yyjson_val *obj, ToVariantGlobalResultData &result
 		}
 
 		auto val = entry.value;
-		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(val, result, result_index, false)) {
+		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(val, result, result_index, false, depth + 1)) {
 			return false;
 		}
 	}
@@ -221,7 +227,11 @@ static bool ConvertJSONPrimitive(yyjson_val *val, ToVariantGlobalResultData &res
 }
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-static bool ConvertJSON(yyjson_val *val, ToVariantGlobalResultData &result, idx_t result_index, bool is_root) {
+static bool ConvertJSON(yyjson_val *val, ToVariantGlobalResultData &result, idx_t result_index, bool is_root,
+                        idx_t depth) {
+	if (depth >= MAX_JSON_TO_VARIANT_DEPTH) {
+		throw InvalidInputException("JSON exceeds maximum recursion depth of %d", MAX_JSON_TO_VARIANT_DEPTH);
+	}
 	auto values_offset_data = OffsetData::GetValues(result.offsets);
 	auto blob_offset_data = OffsetData::GetBlob(result.offsets);
 
@@ -235,9 +245,9 @@ static bool ConvertJSON(yyjson_val *val, ToVariantGlobalResultData &result, idx_
 
 	auto json_tag = unsafe_yyjson_get_tag(val);
 	if (json_tag == (YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE)) {
-		return ConvertJSONArray<WRITE_DATA, IGNORE_NULLS>(val, result, result_index, is_root);
+		return ConvertJSONArray<WRITE_DATA, IGNORE_NULLS>(val, result, result_index, is_root, depth);
 	} else if (json_tag == (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE)) {
-		return ConvertJSONObject<WRITE_DATA, IGNORE_NULLS>(val, result, result_index, is_root);
+		return ConvertJSONObject<WRITE_DATA, IGNORE_NULLS>(val, result, result_index, is_root, depth);
 	} else {
 		return ConvertJSONPrimitive<WRITE_DATA>(val, result, result_index, is_root);
 	}
@@ -289,7 +299,7 @@ bool ConvertJSONToVariant(ToVariantSourceData &source, ToVariantGlobalResultData
 		}
 		auto *root = yyjson_doc_get_root(doc);
 
-		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(root, result, result_index, is_root)) {
+		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(root, result, result_index, is_root, 0)) {
 			return false;
 		}
 		json_allocator.Reset();

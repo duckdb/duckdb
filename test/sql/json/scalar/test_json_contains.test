@@ -93,3 +93,35 @@ query T
 select json_contains('{"a": {"b": 42}}', '{"a": 42}')
 ----
 False
+
+# deeply nested haystacks are searched without recursing
+query T
+select json_contains(repeat('[', 100000) || '1' || repeat(']', 100000), '1')
+----
+True
+
+query T
+select json_contains(repeat('{"a":', 100000) || '1' || repeat('}', 100000), '"a"')
+----
+False
+
+query T
+select json_contains(repeat('[', 100000) || repeat(']', 100000), '[[[]]]')
+----
+True
+
+# deeply nested needles exceed the recursion limit
+statement error
+select json_contains(repeat('[', 100000) || repeat(']', 100000), repeat('[', 100000) || repeat(']', 100000))
+----
+JSON exceeds maximum recursion depth
+
+statement error
+select json_contains(h, n) from (values ('[1]', repeat('[', 100000) || repeat(']', 100000))) t(h, n)
+----
+JSON exceeds maximum recursion depth
+
+query T
+select json_contains(repeat('[', 200) || repeat(']', 200), repeat('[', 128) || repeat(']', 128))
+----
+True

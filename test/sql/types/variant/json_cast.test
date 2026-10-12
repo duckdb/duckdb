@@ -192,3 +192,19 @@ select {'var': a::JSON}::VARIANT from base;
 {'var': NULL}
 {'var': {'a': NULL, 'b': [1, 2, true, hello]}}
 {'var': true}
+
+# deeply nested JSON exceeds the conversion recursion limit
+statement error
+SELECT (repeat('[', 100000) || repeat(']', 100000))::JSON::VARIANT
+----
+JSON exceeds maximum recursion depth
+
+statement error
+SELECT (repeat('{"a":', 100000) || '1' || repeat('}', 100000))::JSON::VARIANT
+----
+JSON exceeds maximum recursion depth
+
+query I
+SELECT (repeat('[', 127) || repeat(']', 127))::JSON::VARIANT::VARCHAR = repeat('[', 127) || repeat(']', 127)
+----
+true

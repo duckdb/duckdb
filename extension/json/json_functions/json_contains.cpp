@@ -2,7 +2,6 @@
 
 namespace duckdb {
 
-static inline bool JSONContains(yyjson_val *haystack, yyjson_val *needle);
 static inline bool JSONFuzzyEquals(yyjson_val *haystack, yyjson_val *needle);
 
 static inline bool JSONArrayFuzzyEquals(yyjson_val *haystack, yyjson_val *needle) {
@@ -65,45 +64,51 @@ static inline bool JSONFuzzyEquals(yyjson_val *haystack, yyjson_val *needle) {
 	}
 }
 
-static inline bool JSONArrayContains(yyjson_val *haystack_array, yyjson_val *needle) {
-	D_ASSERT(yyjson_get_tag(haystack_array) == (YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE));
+static void VerifyNeedleDepth(yyjson_val *needle, vector<yyjson_val *> &container_ends) {
+	// immutable values are stored in pre-order: a container is directly followed by all of its descendants
+	container_ends.clear();
+	auto end = unsafe_yyjson_get_next(needle);
+	for (auto val = needle; val < end; val++) {
+		while (!container_ends.empty() && val >= container_ends.back()) {
+			container_ends.pop_back();
+		}
+		if (unsafe_yyjson_is_ctn(val)) {
+			container_ends.push_back(unsafe_yyjson_get_next(val));
+			if (container_ends.size() > JSONCommon::MAX_RECURSION_DEPTH) {
+				throw InvalidInputException("JSON exceeds maximum recursion depth of %d",
+				                            JSONCommon::MAX_RECURSION_DEPTH);
+			}
+		}
+	}
+}
 
-	size_t idx, max;
-	yyjson_val *child_haystack;
-	yyjson_arr_foreach(haystack_array, idx, max, child_haystack) {
-		if (JSONContains(child_haystack, needle)) {
+static bool JSONContains(yyjson_val *haystack, yyjson_val *needle, vector<yyjson_val *> &stack) {
+	stack.clear();
+	stack.push_back(haystack);
+	while (!stack.empty()) {
+		auto val = stack.back();
+		stack.pop_back();
+		if (JSONFuzzyEquals(val, needle)) {
 			return true;
+		}
+		size_t idx, max;
+		yyjson_val *key, *child;
+		switch (yyjson_get_tag(val)) {
+		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
+			yyjson_arr_foreach(val, idx, max, child) {
+				stack.push_back(child);
+			}
+			break;
+		case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
+			yyjson_obj_foreach(val, idx, max, key, child) {
+				stack.push_back(child);
+			}
+			break;
+		default:
+			break;
 		}
 	}
 	return false;
-}
-
-static inline bool JSONObjectContains(yyjson_val *haystack_object, yyjson_val *needle) {
-	D_ASSERT(yyjson_get_tag(haystack_object) == (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE));
-
-	size_t idx, max;
-	yyjson_val *key, *child_haystack;
-	yyjson_obj_foreach(haystack_object, idx, max, key, child_haystack) {
-		if (JSONContains(child_haystack, needle)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-static inline bool JSONContains(yyjson_val *haystack, yyjson_val *needle) {
-	if (JSONFuzzyEquals(haystack, needle)) {
-		return true;
-	}
-
-	switch (yyjson_get_tag(haystack)) {
-	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
-		return JSONArrayContains(haystack, needle);
-	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
-		return JSONObjectContains(haystack, needle);
-	default:
-		return false;
-	}
 }
 
 static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -113,6 +118,7 @@ static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector
 
 	const auto &haystacks = args.data[0];
 	const auto &needles = args.data[1];
+	vector<yyjson_val *> stack;
 
 	if (needles.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(needles)) {
@@ -120,16 +126,18 @@ static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector
 		}
 		auto &needle_str = *ConstantVector::GetData<string_t>(needles);
 		auto needle_doc = JSONCommon::ReadDocument(needle_str, JSONCommon::READ_FLAG, alc);
+		VerifyNeedleDepth(needle_doc->root, stack);
 		UnaryExecutor::Execute<string_t, bool>(haystacks, result, [&](string_t haystack_str) {
 			auto haystack_doc = JSONCommon::ReadDocument(haystack_str, JSONCommon::READ_FLAG, alc);
-			return JSONContains(haystack_doc->root, needle_doc->root);
+			return JSONContains(haystack_doc->root, needle_doc->root, stack);
 		});
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, bool>(
 		    haystacks, needles, result, [&](string_t haystack_str, string_t needle_str) {
 			    auto needle_doc = JSONCommon::ReadDocument(needle_str, JSONCommon::READ_FLAG, alc);
+			    VerifyNeedleDepth(needle_doc->root, stack);
 			    auto haystack_doc = JSONCommon::ReadDocument(haystack_str, JSONCommon::READ_FLAG, alc);
-			    return JSONContains(haystack_doc->root, needle_doc->root);
+			    return JSONContains(haystack_doc->root, needle_doc->root, stack);
 		    });
 	}
 }
@@ -145,8 +153,8 @@ ScalarFunctionSet JSONFunctions::GetContainsFunction() {
 	GetContainsFunctionInternal(set, LogicalType::VARCHAR, LogicalType::VARCHAR);
 	GetContainsFunctionInternal(set, LogicalType::VARCHAR, LogicalType::JSON());
 	GetContainsFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR);
-	set.SetFallible();
 	GetContainsFunctionInternal(set, LogicalType::JSON(), LogicalType::JSON());
+	set.SetFallible();
 	// TODO: implement json_contains that accepts path argument as well
 
 	return set;
