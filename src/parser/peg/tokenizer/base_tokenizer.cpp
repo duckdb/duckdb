@@ -388,10 +388,12 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 				break;
 			}
 			if (CharacterIsInitialNumber(c)) {
-				// parse a numeric literal
-				state = TokenizeState::NUMERIC;
-				last_pos = i;
-				break;
+				if (c != '.' || (i + 1 < sql.size() && sql[i + 1] == '_') == false) {
+					// parse a numeric literal
+					state = TokenizeState::NUMERIC;
+					last_pos = i;
+					break;
+				}
 			}
 			if (CharacterIsSpecialStringCharacter(c)) {
 				// Look ahead to see if a quote follows

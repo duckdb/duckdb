@@ -1,0 +1,65 @@
+# name: test/sql/parser/unquoted_underscore_digit_identifiers.test
+# description: Unquoted identifiers starting with an underscore and a digit can be qualified
+# group: [parser]
+
+statement ok
+CREATE TABLE _1099_vendors (id INTEGER, _1099_amount DECIMAL(10,2));
+
+statement ok
+INSERT INTO _1099_vendors VALUES (1, 12.5);
+
+query I
+SELECT v._1099_amount FROM _1099_vendors v;
+----
+12.50
+
+query II
+SELECT * FROM main._1099_vendors;
+----
+1	12.50
+
+query II
+SELECT * FROM memory.main._1099_vendors;
+----
+1	12.50
+
+query II
+SELECT _1099_vendors._1099_amount, main._1099_vendors.id FROM main._1099_vendors;
+----
+12.50	1
+
+# struct field access
+query II
+SELECT s._1, {'_2': 42}._2 FROM (SELECT {'_1': 7} AS s);
+----
+7	42
+
+statement ok
+CREATE SCHEMA _2_schema;
+
+statement ok
+CREATE TABLE _2_schema._3_table (_4_col INTEGER);
+
+statement ok
+INSERT INTO _2_schema._3_table VALUES (5);
+
+query I
+SELECT t._4_col FROM _2_schema._3_table t WHERE t._4_col = 5;
+----
+5
+
+query I
+SELECT memory._2_schema._3_table._4_col FROM memory._2_schema._3_table;
+----
+5
+
+# numeric literals with digit separators are unaffected
+query IIII
+SELECT 1_000, .5, 1.5_5, 1_0.2_5;
+----
+1000	0.5	1.55	10.25
+
+statement error
+SELECT ._1;
+----
+<REGEX>:Parser Error:.*syntax error.*
