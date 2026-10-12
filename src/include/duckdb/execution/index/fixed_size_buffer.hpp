@@ -88,7 +88,7 @@ private:
 
 	//! Load a buffer from disk, if not in memory.
 	void LoadFromDisk();
-	//! Reserves a free slot in the buffer and returns the corresponding offset.
+	//! Reserves a free slot in the buffer and returns the corresponding offset, marks the buffer as modified.
 	uint32_t AllocateSegment(const idx_t bitmask_count, const idx_t available_segments);
 	//! Frees the slot at the given offset in the current buffer.
 	void FreeSegment(const idx_t offset, const idx_t available_segments);
