@@ -31,11 +31,7 @@ class ProfileInjectionError(RuntimeError):
 
 
 def _finite_number(value: Any, field: str) -> float:
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(value)
-    ):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         raise ProfileInjectionError(f"profile field {field} must be a finite number")
     return float(value)
 
@@ -48,9 +44,7 @@ def load_profile(path: Path) -> dict[str, Any]:
         with opener(path, "rt", encoding="utf-8") as profile_file:
             profile = json.load(profile_file)
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ProfileInjectionError(
-            f"could not read Samply profile {path}: {error}"
-        ) from error
+        raise ProfileInjectionError(f"could not read Samply profile {path}: {error}") from error
     if not isinstance(profile, dict):
         raise ProfileInjectionError("Samply profile root must be an object")
     return profile
@@ -62,27 +56,17 @@ def write_profile_atomic(profile: dict[str, Any], output: Path) -> None:
         raise ProfileInjectionError(f"output directory does not exist: {output.parent}")
     temporary_path: Path | None = None
     try:
-        descriptor, temporary_name = tempfile.mkstemp(
-            prefix=f".{output.name}.", dir=output.parent
-        )
+        descriptor, temporary_name = tempfile.mkstemp(prefix=f".{output.name}.", dir=output.parent)
         temporary_path = Path(temporary_name)
         with os.fdopen(descriptor, "wb") as raw_file:
-            with gzip.GzipFile(
-                filename="", mode="wb", fileobj=raw_file, mtime=0
-            ) as gzip_file:
-                gzip_file.write(
-                    json.dumps(
-                        profile, separators=(",", ":"), ensure_ascii=False
-                    ).encode("utf-8")
-                )
+            with gzip.GzipFile(filename="", mode="wb", fileobj=raw_file, mtime=0) as gzip_file:
+                gzip_file.write(json.dumps(profile, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
             raw_file.flush()
             os.fsync(raw_file.fileno())
         os.replace(temporary_path, output)
         temporary_path = None
     except OSError as error:
-        raise ProfileInjectionError(
-            f"could not atomically write {output}: {error}"
-        ) from error
+        raise ProfileInjectionError(f"could not atomically write {output}: {error}") from error
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
@@ -98,10 +82,7 @@ def _log_relation(log_path: Path) -> str:
         "'transaction_id':'UBIGINT','query_id':'UBIGINT','thread_id':'UBIGINT',"
         "'timestamp':'TIMESTAMPTZ','type':'VARCHAR','log_level':'VARCHAR','message':'VARCHAR'}"
     )
-    return (
-        f"read_csv({_sql_string(log_path)}, delim=',', header=true, "
-        f"columns={columns}, quote='\"', escape='\"')"
-    )
+    return f"read_csv({_sql_string(log_path)}, delim=',', header=true, " f"columns={columns}, quote='\"', escape='\"')"
 
 
 def _query_csv(duckdb: Path, query: str) -> list[list[str]]:
@@ -115,9 +96,7 @@ def _query_csv(duckdb: Path, query: str) -> list[list[str]]:
             encoding="utf-8",
         )
     except OSError as error:
-        raise ProfileInjectionError(
-            f"could not read DuckDB log with {duckdb}: {error}"
-        ) from error
+        raise ProfileInjectionError(f"could not read DuckDB log with {duckdb}: {error}") from error
     if result.returncode != 0:
         detail = result.stderr.strip() or f"exit status {result.returncode}"
         raise ProfileInjectionError(f"could not parse DuckDB profile log: {detail}")
@@ -162,9 +141,7 @@ def read_query_events(duckdb: Path, log_path: Path) -> list[dict[str, Any]]:
     for row in _query_csv(duckdb, query):
         if len(row) != 3:
             raise ProfileInjectionError("invalid QueryLog export")
-        events.append(
-            {"query_id": int(row[0]), "timestamp_ns": int(row[1]), "sql": row[2]}
-        )
+        events.append({"query_id": int(row[0]), "timestamp_ns": int(row[1]), "sql": row[2]})
     return events
 
 
@@ -233,13 +210,9 @@ def _matching_thread(profile: dict[str, Any], pid: int) -> tuple[int, dict[str, 
             startup_time = float(thread.get("processStartupTime"))
         except (TypeError, ValueError):
             startup_time = -math.inf
-        matches.append(
-            (thread.get("isMainThread") is True, startup_time, index, thread)
-        )
+        matches.append((thread.get("isMainThread") is True, startup_time, index, thread))
     if not matches:
-        raise ProfileInjectionError(
-            f"Samply profile does not contain DuckDB process {pid}"
-        )
+        raise ProfileInjectionError(f"Samply profile does not contain DuckDB process {pid}")
     _, _, index, thread = max(matches, key=lambda match: match[:3])
     return index, thread
 
@@ -250,9 +223,7 @@ def _profiled_process_pid(profile: dict[str, Any], process_name: str) -> int:
         if not isinstance(thread, dict) or thread.get("isMainThread") is not True:
             continue
         names = (thread.get("name"), thread.get("processName"))
-        if not any(
-            isinstance(name, str) and Path(name).name == process_name for name in names
-        ):
+        if not any(isinstance(name, str) and Path(name).name == process_name for name in names):
             continue
         try:
             pid = int(float(thread.get("pid")))
@@ -261,36 +232,24 @@ def _profiled_process_pid(profile: dict[str, Any], process_name: str) -> int:
             continue
         matches.append((startup_time, pid))
     if not matches:
-        raise ProfileInjectionError(
-            f"Samply profile does not contain the {process_name} process"
-        )
+        raise ProfileInjectionError(f"Samply profile does not contain the {process_name} process")
     return max(matches)[1]
 
 
 def _marker_table(thread: dict[str, Any], thread_index: int) -> dict[str, Any]:
     markers = thread.get("markers")
     if not isinstance(markers, dict):
-        raise ProfileInjectionError(
-            f"profile thread {thread_index} is missing its marker table"
-        )
+        raise ProfileInjectionError(f"profile thread {thread_index} is missing its marker table")
     length = markers.get("length")
     if isinstance(length, bool) or not isinstance(length, int) or length < 0:
-        raise ProfileInjectionError(
-            f"profile thread {thread_index} has an invalid marker table length"
-        )
+        raise ProfileInjectionError(f"profile thread {thread_index} has an invalid marker table length")
     for column in ("category", "data", "endTime", "name", "phase", "startTime"):
         values = markers.get(column)
         if not isinstance(values, list) or len(values) != length:
-            raise ProfileInjectionError(
-                f"profile thread {thread_index} has an invalid marker column {column}"
-            )
+            raise ProfileInjectionError(f"profile thread {thread_index} has an invalid marker column {column}")
     string_array = thread.get("stringArray")
-    if not isinstance(string_array, list) or not all(
-        isinstance(value, str) for value in string_array
-    ):
-        raise ProfileInjectionError(
-            f"profile thread {thread_index} has an invalid string array"
-        )
+    if not isinstance(string_array, list) or not all(isinstance(value, str) for value in string_array):
+        raise ProfileInjectionError(f"profile thread {thread_index} has an invalid string array")
     return markers
 
 
@@ -316,10 +275,7 @@ def _ensure_duckdb_marker_schema(profile: dict[str, Any]) -> None:
         meta["markerSchema"] = schemas
     if not isinstance(schemas, list):
         raise ProfileInjectionError("profile meta.markerSchema must be an array")
-    if any(
-        isinstance(schema, dict) and schema.get("name") == "DuckDBProfile"
-        for schema in schemas
-    ):
+    if any(isinstance(schema, dict) and schema.get("name") == "DuckDBProfile" for schema in schemas):
         return
     schemas.append(
         {
@@ -377,14 +333,10 @@ def _profile_time_bounds(
     profile: dict[str, Any], thread: dict[str, Any], thread_index: int
 ) -> tuple[float, float, float]:
     start_time = _finite_number(profile["meta"].get("startTime"), "meta.startTime")
-    process_start = _finite_number(
-        thread.get("processStartupTime"), f"threads[{thread_index}].processStartupTime"
-    )
+    process_start = _finite_number(thread.get("processStartupTime"), f"threads[{thread_index}].processStartupTime")
     shutdown = thread.get("processShutdownTime")
     process_end = (
-        math.inf
-        if shutdown is None
-        else _finite_number(shutdown, f"threads[{thread_index}].processShutdownTime")
+        math.inf if shutdown is None else _finite_number(shutdown, f"threads[{thread_index}].processShutdownTime")
     )
     return start_time, process_start, process_end
 
@@ -412,9 +364,7 @@ def inject_query_markers(
         return 0
     thread_index, thread = _matching_thread(profile, pid)
     markers = _marker_table(thread, thread_index)
-    profile_start, process_start, process_end = _profile_time_bounds(
-        profile, thread, thread_index
-    )
+    profile_start, process_start, process_end = _profile_time_bounds(profile, thread, thread_index)
     category = _category(profile, "DuckDB", "purple")
     _ensure_duckdb_marker_schema(profile)
 
@@ -429,27 +379,16 @@ def inject_query_markers(
         if not total or total["start_ns"] is None or total["end_ns"] is None:
             continue
         timed_metrics = [
-            event
-            for event in metrics.values()
-            if event["start_ns"] is not None and event["end_ns"] is not None
+            event for event in metrics.values() if event["start_ns"] is not None and event["end_ns"] is not None
         ]
-        query_start = (
-            min(event["start_ns"] for event in timed_metrics) / 1_000_000
-            - profile_start
-        )
-        query_end = (
-            max(event["end_ns"] for event in timed_metrics) / 1_000_000 - profile_start
-        )
+        query_start = min(event["start_ns"] for event in timed_metrics) / 1_000_000 - profile_start
+        query_end = max(event["end_ns"] for event in timed_metrics) / 1_000_000 - profile_start
         if query_end < process_start or query_start > process_end:
             continue
         query_start = max(query_start, process_start)
         query_end = min(max(query_start, query_end), process_end)
         sql_metric = metrics.get("query.sql")
-        sql = (
-            sql_metric["value"]
-            if sql_metric
-            else query_logs.get(query_id, {}).get("sql", "<unknown>")
-        )
+        sql = sql_metric["value"] if sql_metric else query_logs.get(query_id, {}).get("sql", "<unknown>")
 
         candidates = [
             (
@@ -464,12 +403,8 @@ def inject_query_markers(
             event = metrics.get(metric)
             if not event or event["start_ns"] is None or event["end_ns"] is None:
                 continue
-            phase_start = max(
-                query_start, event["start_ns"] / 1_000_000 - profile_start
-            )
-            phase_end = min(
-                query_end, max(phase_start, event["end_ns"] / 1_000_000 - profile_start)
-            )
+            phase_start = max(query_start, event["start_ns"] / 1_000_000 - profile_start)
+            phase_end = min(query_end, max(phase_start, event["end_ns"] / 1_000_000 - profile_start))
             latest_phase_end = max(latest_phase_end, phase_end)
             candidates.append(
                 (
@@ -498,9 +433,7 @@ def inject_query_markers(
                 {"type": "DuckDBProfile", "name": "Execution", "kind": "phase"},
             )
         )
-        for start, end, title, data in sorted(
-            candidates, key=lambda candidate: (candidate[0], -candidate[1])
-        ):
+        for start, end, title, data in sorted(candidates, key=lambda candidate: (candidate[0], -candidate[1])):
             _append_marker(
                 thread,
                 markers,
@@ -517,31 +450,19 @@ def inject_query_markers(
 def _next_network_marker_id(profile: dict[str, Any]) -> int:
     used_ids = set()
     for thread in profile.get("threads", []):
-        for data in (
-            thread.get("markers", {}).get("data", [])
-            if isinstance(thread, dict)
-            else []
-        ):
-            if (
-                isinstance(data, dict)
-                and data.get("type") == "Network"
-                and isinstance(data.get("id"), int)
-            ):
+        for data in thread.get("markers", {}).get("data", []) if isinstance(thread, dict) else []:
+            if isinstance(data, dict) and data.get("type") == "Network" and isinstance(data.get("id"), int):
                 used_ids.add(data["id"])
     return max(used_ids, default=0) + 1
 
 
-def inject_http_markers(
-    profile: dict[str, Any], pid: int, http_events: Iterable[dict[str, Any]]
-) -> int:
+def inject_http_markers(profile: dict[str, Any], pid: int, http_events: Iterable[dict[str, Any]]) -> int:
     http_events = list(http_events)
     if not http_events:
         return 0
     thread_index, thread = _matching_thread(profile, pid)
     markers = _marker_table(thread, thread_index)
-    profile_start, process_start, process_end = _profile_time_bounds(
-        profile, thread, thread_index
-    )
+    profile_start, process_start, process_end = _profile_time_bounds(profile, thread, thread_index)
     category = _category(profile, "Network", "lightblue")
     marker_id = _next_network_marker_id(profile)
     added = 0
@@ -604,9 +525,7 @@ def inject_http_markers(
     return added
 
 
-def inject_profile(
-    raw_profile: Path, duckdb: Path, log_path: Path, output: Path
-) -> tuple[int, int]:
+def inject_profile(raw_profile: Path, duckdb: Path, log_path: Path, output: Path) -> tuple[int, int]:
     profile = load_profile(raw_profile)
     pid = _profiled_process_pid(profile, duckdb.name)
     metric_events = read_metric_events(duckdb, log_path)
@@ -629,9 +548,7 @@ def resolve_samply(argument: str | None) -> str:
 def resolve_duckdb(launcher_path: str | Path) -> Path:
     duckdb = Path(launcher_path).resolve().with_name("duckdb")
     if not duckdb.is_file():
-        raise ProfileInjectionError(
-            f"could not find DuckDB executable next to profile launcher: {duckdb}"
-        )
+        raise ProfileInjectionError(f"could not find DuckDB executable next to profile launcher: {duckdb}")
     return duckdb
 
 
@@ -669,33 +586,23 @@ def parse_arguments(arguments: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--samply", help="path to Samply (then SAMPLY, then PATH)")
     parser.add_argument("--duckdb", required=True, help=argparse.SUPPRESS)
-    parser.add_argument(
-        "--output", default="profile.json.gz", help="final gzip profile"
-    )
+    parser.add_argument("--output", default="profile.json.gz", help="final gzip profile")
     parser.add_argument("--rate", type=float, help="Samply sampling rate in Hz")
     parser.add_argument("--duration", type=float, help="recording duration in seconds")
     parser.add_argument("--profile-name", help="custom Samply profile name")
-    parser.add_argument(
-        "--no-open", action="store_true", help="do not open the final profile"
-    )
+    parser.add_argument("--no-open", action="store_true", help="do not open the final profile")
     parser.add_argument(
         "--keep-temp",
         action="store_true",
         help="preserve the raw profile and DuckDB log",
     )
-    parser.add_argument(
-        "command", nargs=argparse.REMAINDER, help="DuckDB arguments, preceded by --"
-    )
+    parser.add_argument("command", nargs=argparse.REMAINDER, help="DuckDB arguments, preceded by --")
     options = parser.parse_args(arguments)
     if options.command and options.command[0] == "--":
         options.command = options.command[1:]
-    if options.rate is not None and (
-        not math.isfinite(options.rate) or options.rate <= 0
-    ):
+    if options.rate is not None and (not math.isfinite(options.rate) or options.rate <= 0):
         parser.error("--rate must be positive")
-    if options.duration is not None and (
-        not math.isfinite(options.duration) or options.duration <= 0
-    ):
+    if options.duration is not None and (not math.isfinite(options.duration) or options.duration <= 0):
         parser.error("--duration must be positive")
     return options
 
@@ -736,9 +643,7 @@ def main(arguments: list[str] | None = None) -> int:
         if not log_path.is_file():
             preserve = True
             raise ProfileInjectionError("DuckDB did not create its profiling log")
-        query_markers, http_markers = inject_profile(
-            raw_profile, duckdb, log_path, output
-        )
+        query_markers, http_markers = inject_profile(raw_profile, duckdb, log_path, output)
         print(
             f"Injected {query_markers} DuckDB marker(s) and {http_markers} HTTP request(s) into {output}",
             file=sys.stderr,
@@ -746,9 +651,7 @@ def main(arguments: list[str] | None = None) -> int:
 
         load_status = 0
         if not options.no_open:
-            load_status = subprocess.run(
-                [samply, "load", str(output)], check=False
-            ).returncode
+            load_status = subprocess.run([samply, "load", str(output)], check=False).returncode
         if record_result.returncode != 0:
             preserve = True
             return record_result.returncode
@@ -770,9 +673,7 @@ def main(arguments: list[str] | None = None) -> int:
             shutil.rmtree(temporary_directory, ignore_errors=True)
 
 
-def duckdb_main(
-    arguments: list[str] | None = None, *, launcher_path: str | Path
-) -> int:
+def duckdb_main(arguments: list[str] | None = None, *, launcher_path: str | Path) -> int:
     try:
         return main(duckdb_arguments(list(arguments or []), launcher_path))
     except ProfileInjectionError as error:

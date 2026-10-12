@@ -52,9 +52,7 @@ def metric(
         "query_id": query_id,
         "metric": name,
         "value": value,
-        "start_ns": (
-            None if start_ms is None else PROFILE_START_NS + start_ms * 1_000_000
-        ),
+        "start_ns": (None if start_ms is None else PROFILE_START_NS + start_ms * 1_000_000),
         "end_ns": None if end_ms is None else PROFILE_START_NS + end_ms * 1_000_000,
     }
 
@@ -103,9 +101,7 @@ class SamplyProfileTest(unittest.TestCase):
 
     def test_ignores_metrics_without_query_bounds(self):
         profile = empty_profile()
-        added = samply_profile.inject_query_markers(
-            profile, 42, [metric(1, "query.sql", "SELECT 1")], []
-        )
+        added = samply_profile.inject_query_markers(profile, 42, [metric(1, "query.sql", "SELECT 1")], [])
         self.assertEqual(added, 0)
 
     def test_injects_native_http_marker_pair(self):
@@ -144,9 +140,7 @@ class SamplyProfileTest(unittest.TestCase):
             "response_range": "",
         }
         samply_profile.inject_http_markers(profile, 42, [event])
-        self.assertEqual(
-            profile["threads"][0]["markers"]["data"][1]["status"], "STATUS_CANCEL"
-        )
+        self.assertEqual(profile["threads"][0]["markers"]["data"][1]["status"], "STATUS_CANCEL")
 
     def test_requires_profiled_pid(self):
         event = {
@@ -205,9 +199,7 @@ class SamplyProfileTest(unittest.TestCase):
             duckdb = Path(directory) / "duckdb"
             duckdb.touch()
             arguments = samply_profile.duckdb_arguments(["-f", "query.sql"], launcher)
-        self.assertEqual(
-            arguments, ["--duckdb", str(duckdb.resolve()), "--", "-f", "query.sql"]
-        )
+        self.assertEqual(arguments, ["--duckdb", str(duckdb.resolve()), "--", "-f", "query.sql"])
 
     def test_log_readers_convert_exported_rows(self):
         rows = [
