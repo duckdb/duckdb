@@ -1728,7 +1728,7 @@ unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheck
 	return make_uniq<CheckpointTask>(checkpoint_state, segment_idx);
 }
 
-void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
+bool RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
 	auto row_groups = GetRowGroups();
 
 	CollectionCheckpointState checkpoint_state(*this, writer, global_stats, *row_groups);
@@ -1813,9 +1813,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				row_group.CheckpointDeletes(*row_group_writer);
 			}
 			writer.WriteUnchangedTable(metadata_pointer, metadata_pointers, total_rows.load(), next_row_id.load());
-			// copy over existing stats into the global stats
-			CopyStats(global_stats);
-			return;
+			return false;
 		}
 	}
 
@@ -2084,6 +2082,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	if (vacuum_state.index_strategy == VacuumIndexStrategy::REBUILD && writer.RowIdsChanged()) {
 		writer.SetRebuildIndexes();
 	}
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
