@@ -1471,6 +1471,24 @@ dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const 
 	return dtime_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
 }
 
+//! TIMETZ values are interpolated by their time normalized to UTC - the result is the normalized time at offset +00
+template <>
+dtime_tz_t InterpolateOperator::Operation(const dtime_tz_t &lo, const double d, const dtime_tz_t &hi) {
+	if (lo.sort_key() == hi.sort_key()) {
+		return lo;
+	}
+	// the sort key holds the normalized time (biased by the maximum offset) in its upper bits
+	const auto lo_micros = static_cast<double>(dtime_tz_t::decode_micros(lo.sort_key()));
+	const auto hi_micros = static_cast<double>(dtime_tz_t::decode_micros(hi.sort_key()));
+	auto micros = std::llround(lo_micros * (1.0 - d) + hi_micros * d);
+	micros -= int64_t(dtime_tz_t::MAX_OFFSET) * int64_t(dtime_tz_t::OFFSET_MICROS);
+	micros %= Interval::MICROS_PER_DAY;
+	if (micros < 0) {
+		micros += Interval::MICROS_PER_DAY;
+	}
+	return dtime_tz_t(dtime_t(micros), 0);
+}
+
 template <>
 timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d, const timestamp_t &hi) {
 	return timestamp_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));

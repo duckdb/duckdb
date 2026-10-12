@@ -67,6 +67,23 @@ TEST_CASE("Test type resolution of function with parameter expressions", "[api]"
 	REQUIRE_FAIL(con.Query("SELECT ?"));
 }
 
+TEST_CASE("Test prepared EXPLAIN ANALYZE", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto prepared = con.Prepare("EXPLAIN ANALYZE SELECT 42");
+	REQUIRE(!prepared->HasError());
+	// run another query between preparing and executing, and execute more than once
+	REQUIRE_NO_FAIL(con.Query("SELECT 1"));
+	for (idx_t i = 0; i < 2; i++) {
+		auto result = prepared->Execute();
+		REQUIRE_NO_FAIL(*result);
+		auto plan = result->Collection().GetValue(1, 0).ToString();
+		REQUIRE(!StringUtil::Contains(plan, "Query profiling is disabled"));
+		REQUIRE(StringUtil::Contains(plan, "Total Time"));
+	}
+}
+
 TEST_CASE("Test prepared statements and dependencies", "[api]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

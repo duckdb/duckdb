@@ -362,6 +362,10 @@ void IndexEntry::VerifyAppend(const shared_ptr<IndexEntry> &delete_entry, DataCh
 		}
 	}
 	bound_index.VerifyAppend(chunk, index_append_info, manager);
+	if (auto delta = deltas.Find(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT)) {
+		// rows committed while a checkpoint runs are only in this delta
+		delta->VerifyAppend(chunk, index_append_info, manager);
+	}
 }
 
 void IndexEntry::VerifyForeignKey(const shared_ptr<IndexEntry> &delete_entry, DataChunk &chunk,

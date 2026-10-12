@@ -208,9 +208,8 @@ bool QueryResult::IsOpen() {
 
 QueryResultState QueryResult::Cancelled() {
 	if (!HasError()) {
-		SetError(ErrorData(ExceptionType::INTERRUPT,
-		                   "The execution of the query was cancelled before it could finish, likely caused by "
-		                   "executing a different query"));
+		SetError(
+		    ErrorData(ExceptionType::INTERRUPT, "The execution of the query was cancelled before it could finish"));
 	}
 	return QueryResultState::EXECUTION_ERROR;
 }
@@ -354,14 +353,26 @@ void QueryResult::CompleteInternal(ClientContextLock &lock) {
 	}
 	D_ASSERT(buffer);
 	buffer->Decide(ResultLifetime::RETAINED);
-	QueryResultState state;
-	while (!IsTerminal(state = context->ExecuteTaskInternal(lock, *this))) {
-		if (state == QueryResultState::BLOCKED || state == QueryResultState::READY) {
-			context->WaitForTask(lock, *this);
+	try {
+		QueryResultState state;
+		while (!IsTerminal(state = context->ExecuteTaskInternal(lock, *this))) {
+			if (state == QueryResultState::BLOCKED || state == QueryResultState::READY) {
+				context->WaitForTask(lock, *this);
+			}
 		}
-	}
-	if (state == QueryResultState::FINISHED) {
-		EndFinishedInternal(lock);
+		if (state == QueryResultState::FINISHED) {
+			EndFinishedInternal(lock);
+		}
+	} catch (...) {
+		// the caller holds the context lock - clean up with it here, as closing this result would lock it again
+		try {
+			if (context->IsActiveResult(lock, *this)) {
+				context->CleanupInternal(lock, this, true);
+			}
+		} catch (...) { // NOLINT
+		}
+		context.reset();
+		throw;
 	}
 	context.reset();
 }
