@@ -220,6 +220,7 @@ public:
 			result->table_columns = IdentifiersToStrings(names);
 		}
 		result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
+		result->file_options.VerifyColumnStatistics(result->names, result->types);
 		return std::move(result);
 	}
 
@@ -1147,6 +1148,19 @@ public:
 			}
 		}
 
+		// statistics the caller gave for the column (the "column_statistics" option) stand in for the files' -
+		// they describe the scan as a whole, which is what the optimizer asks about, where a file's describe one file
+		if (!bind_data.file_options.column_statistics.IsNull()) {
+			auto explicit_stats = bind_data.file_options.GetColumnStatistics(col_name, bind_data.types[primary_index]);
+			if (explicit_stats) {
+				if (!column_index.IsPushdownExtract()) {
+					return explicit_stats;
+				}
+				auto storage_index = StorageIndex::FromColumnIndex(column_index);
+				return explicit_stats->PushdownExtract(storage_index.GetChildIndexes()[0]);
+			}
+		}
+
 		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
 		const bool multiple_files = bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
 		if (multiple_files && !bind_data.file_options.union_by_name) {
@@ -1282,9 +1296,9 @@ public:
 		}
 	}
 
-	static BindInfo MultiFileGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
+	static BindInfo MultiFileGetBindInfo(TableFunctionGetBindInfoInput &input) {
 		BindInfo bind_info(ScanType::EXTERNAL);
-		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
+		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 
 		vector<Value> file_path;
 		for (const auto &file : bind_data.file_list->GetDisplayFileList()) {
