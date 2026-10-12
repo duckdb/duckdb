@@ -624,7 +624,7 @@ BufferPool::MemoryUsage::MemoryUsage() {
 		v = 0;
 	}
 	for (auto &cache : memory_usage_caches) {
-		for (auto &v : cache) {
+		for (auto &v : cache.counters) {
 			v = 0;
 		}
 	}
@@ -641,7 +641,7 @@ void BufferPool::MemoryUsage::UpdateUsedMemory(MemoryTag tag, int64_t size) {
 		// Two threads may access the same cache simultaneously,
 		// ensuring correctness through atomic operations
 		auto cache_idx = (idx_t)TaskScheduler::GetEstimatedCPUId() % MEMORY_USAGE_CACHE_COUNT;
-		auto &cache = memory_usage_caches[cache_idx];
+		auto &cache = memory_usage_caches[cache_idx].counters;
 		auto new_tag_size = cache[tag_idx].fetch_add(size, std::memory_order_relaxed) + size;
 		if ((idx_t)AbsValue(new_tag_size) >= MEMORY_USAGE_CACHE_THRESHOLD) {
 			// cached tag memory usage exceeds threshold
