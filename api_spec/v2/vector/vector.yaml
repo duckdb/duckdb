@@ -201,8 +201,8 @@ functions:
       out_type:
         type: logical_type
         indirection: 1
-        kind: OUT_BORROW
-        description: Receives the caller-owned logical type handle.
+        kind: OUT
+        description: Receives the caller-owned logical type handle. Destroy via logical_type_destroy.
       err:
         type: error_info
         indirection: 1
@@ -464,8 +464,8 @@ functions:
       with the engine's conversion error, and the contents of `target` are
       unspecified. In CAST_MODE_TRY such rows are NULL in `target` instead and
       the call succeeds; compare the validity of `source` and `target` to find
-      them, and cast a failing row's value with `[[value_cast]]` for its error
-      message.
+      them. `cast_err` then receives the conversion error of one of them, e.g.
+      to report why the cast did not convert every row.
 
       A connection's or callback's factory casts with that client's cast
       functions and settings (e.g. TimeZone). An instance's factory supports
@@ -494,6 +494,15 @@ functions:
         description: |
           Optional. Receives whether every row converted. Always true when a
           CAST_MODE_NORMAL cast succeeds.
+      cast_err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: |
+          Optional. When a CAST_MODE_TRY cast succeeds without converting every
+          row, receives an opaque info handle with the conversion error of one
+          row that did not convert, which the caller must destroy via
+          error_info_destroy. Otherwise receives NULL.
       err:
         type: error_info
         indirection: 1

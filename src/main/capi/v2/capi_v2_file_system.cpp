@@ -238,6 +238,48 @@ DUCKDB_V2_ERROR duckdb_v2_file_system_path_expand(duckdb_v2_file_system_handle f
 	});
 }
 
+DUCKDB_V2_ERROR duckdb_v2_file_system_path_glob(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *pattern,
+                                                duckdb_v2_file_system_path_glob_callback_fn callback, void *user_data,
+                                                duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file_system);
+	DUCKDB_CHECK_ARG(pattern);
+	DUCKDB_CHECK_ARG(callback);
+	return WithErrorHandler(err, [&]() {
+		auto matches = Convert(file_system)->fs.Glob(duckdb::string(Convert(pattern)));
+		for (auto &match : matches) {
+			CV2ErrorInfo info;
+			auto handle = Convert(&info);
+			duckdb_v2_str path {match.path.data(), match.path.size()};
+			callback(&path, user_data, &handle);
+			if (info.HasError()) {
+				info.ThrowAsException();
+			}
+		}
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_system_path_move(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *source,
+                                                const duckdb_v2_str *target, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file_system);
+	DUCKDB_CHECK_ARG(source);
+	DUCKDB_CHECK_ARG(target);
+	return WithErrorHandler(err, [&]() {
+		Convert(file_system)->fs.MoveFile(duckdb::string(Convert(source)), duckdb::string(Convert(target)));
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_system_path_remove(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *path,
+                                                  bool *out_removed, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file_system);
+	DUCKDB_CHECK_ARG(path);
+	return WithErrorHandler(err, [&]() {
+		auto removed = Convert(file_system)->fs.TryRemoveFile(duckdb::string(Convert(path)));
+		if (out_removed) {
+			*out_removed = removed;
+		}
+	});
+}
+
 DUCKDB_V2_ERROR duckdb_v2_file_read(duckdb_v2_file_handle file, void *buffer, idx_t buffer_size, idx_t *bytes_read,
                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file);

@@ -233,8 +233,12 @@ jobs:
     - uses: ./.github/actions/swap_space
 
     - name: Build
-      shell: bash
-      run: python3 scripts/ci/retry.py -- bash -lc 'UNSAFE_NUMERIC_CAST=1 make relassert'
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      with:
+        build-type: relassert
+        build: python3 scripts/ci/retry.py -- bash -lc 'UNSAFE_NUMERIC_CAST=1 make relassert'
+        vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
+        cache-suffix: nightly_release_assert_osx_storage
 
     - name: Test
       shell: bash
@@ -465,7 +469,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: python3 scripts/ci/retry.py -- bash -lc 'CORE_EXTENSIONS="tpch" make'
+        run: python3 scripts/ci/retry.py -- bash -lc 'CORE_EXTENSIONS="tpch" LINK_CORE_EXTENSIONS=1 make'
 
       - name: Start Minio
         working-directory: ${{ github.workspace }}/duckdb-httpfs
@@ -521,12 +525,16 @@ jobs:
      - uses: ./.github/actions/swap_space
 
      - name: Build
-       shell: bash
-       run: |
-         python3 scripts/ci/retry.py -- make
+       uses: duckdb/duckdb-ci/build-duckdb@main
+       with:
+         build-type: release
+         build: |
+           python3 scripts/ci/retry.py -- make
 
-         cd unsafe
-         python3 ../scripts/ci/retry.py -- bash -lc 'UNSAFE_NUMERIC_CAST=1 DISABLE_MEMORY_SAFETY=1 make'
+           cd unsafe
+           python3 ../scripts/ci/retry.py -- bash -lc 'UNSAFE_NUMERIC_CAST=1 DISABLE_MEMORY_SAFETY=1 make'
+         vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
+         cache-suffix: nightly_regression_test_memory_safety
 
      - name: Set up benchmarks
        shell: bash
@@ -630,10 +638,14 @@ jobs:
       - uses: ./.github/actions/swap_space
 
       - name: Build
-        shell: bash
+        uses: duckdb/duckdb-ci/build-duckdb@main
         env:
           DISABLE_SANITIZER: 1
-        run: python3 scripts/ci/retry.py -- make relassert
+        with:
+          build-type: relassert
+          build: python3 scripts/ci/retry.py -- make relassert
+          vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
+          cache-suffix: nightly_force_blocking_sink_source
 
       - name: Test
         shell: bash
@@ -746,8 +758,12 @@ jobs:
      - uses: ./.github/actions/swap_space
 
      - name: Build
-       shell: bash
-       run: python3 scripts/ci/retry.py -- make relassert
+       uses: duckdb/duckdb-ci/build-duckdb@main
+       with:
+         build-type: relassert
+         build: python3 scripts/ci/retry.py -- make relassert
+         vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
+         cache-suffix: nightly_hash_zero
 
      - name: Test
        shell: bash
@@ -781,11 +797,16 @@ jobs:
         uses: ./.github/actions/ccache-action
 
       - name: Build DuckDB
-        run: |
-          python3 scripts/ci/retry.py -- make release \
-            EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake' \
-            STATICALLY_LINK_EXTENSIONS='core_functions;parquet;json;icu;tpcds;tpch;autocomplete;httpfs;inet;test_utils' \
-            DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'
+        uses: duckdb/duckdb-ci/build-duckdb@main
+        with:
+          build-type: release
+          build: |
+            python3 scripts/ci/retry.py -- make release \
+              EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake' \
+              STATICALLY_LINK_EXTENSIONS='core_functions;parquet;json;icu;tpcds;tpch;autocomplete;httpfs;inet;test_utils' \
+              DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'
+          vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
+          cache-suffix: nightly_bwc_build
 
       - name: Upload DuckDB binary
         uses: actions/upload-artifact@v7

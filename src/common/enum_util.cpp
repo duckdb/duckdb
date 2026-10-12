@@ -70,7 +70,6 @@
 #include "duckdb/common/enums/query_result_state.hpp"
 #include "duckdb/common/enums/regex_match_operator_semantics.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
-#include "duckdb/common/enums/result_eagerness.hpp"
 #include "duckdb/common/enums/result_lifetime.hpp"
 #include "duckdb/common/enums/result_ordering.hpp"
 #include "duckdb/common/enums/row_group_append_mode.hpp"
@@ -5471,24 +5470,6 @@ const char* EnumUtil::ToChars<RequestType>(RequestType value) {
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value) {
 	return static_cast<RequestType>(StringUtil::StringToEnum(GetRequestTypeValues(), 6, "RequestType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetResultEagernessValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ResultEagerness::FORCED), "FORCED" },
-		{ static_cast<uint32_t>(ResultEagerness::AUTO), "AUTO" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<ResultEagerness>(ResultEagerness value) {
-	return StringUtil::EnumToString(GetResultEagernessValues(), 2, "ResultEagerness", static_cast<uint32_t>(value));
-}
-
-template<>
-ResultEagerness EnumUtil::FromString<ResultEagerness>(const char *value) {
-	return static_cast<ResultEagerness>(StringUtil::StringToEnum(GetResultEagernessValues(), 2, "ResultEagerness", value));
 }
 
 const StringUtil::EnumStringLiteral *GetResultLifetimeValues() {
