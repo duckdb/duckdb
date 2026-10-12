@@ -21,17 +21,18 @@ FROM read_parquet('{TEMP_DIR}/integers.parquet', schema=map {
                     1: {name: 'new_column', type: 'UTINYINT', default_value: 43}
                   }, union_by_name=true)
 ----
-Binder Error: 'schema' cannot be combined with union_by_name=true or hive_partitioning=true
+Binder Error: 'schema' cannot be combined with union_by_name=true
 
-# can't combine with hive_partitioning
-statement error
+# combines with hive_partitioning: the schema says what the files hold, hive partitioning adds the
+# columns taken from their paths - of which these paths have none, so the schema is the whole scan
+query II
 SELECT *
-FROM read_parquet('{TEMP_DIR}/*.parquet', schema=map {
+FROM read_parquet('{TEMP_DIR}/integers.parquet', schema=map {
                     0: {name: 'renamed_i', type: 'BIGINT', default_value: NULL},
                     1: {name: 'new_column', type: 'UTINYINT', default_value: 43}
                   }, hive_partitioning=true)
 ----
-Binder Error: 'schema' cannot be combined with union_by_name=true or hive_partitioning=true
+42	43
 
 statement ok
 COPY (

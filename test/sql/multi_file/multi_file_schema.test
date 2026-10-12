@@ -70,7 +70,7 @@ SELECT * FROM read_csv('{TEMP_DIR}/schema_*.csv', union_by_name=true, schema=map
 	'a': {name: 'id', type: 'BIGINT', default_value: NULL}
 })
 ----
-Binder Error: 'schema' cannot be combined with union_by_name=true or hive_partitioning=true
+Binder Error: 'schema' cannot be combined with union_by_name=true
 
 statement error
 SELECT * FROM read_csv('{TEMP_DIR}/schema_*.csv', schema=42)
