@@ -215,9 +215,10 @@ static bool ConvertPrimitiveTemplated(ToVariantSourceData &source, ToVariantGlob
 
 	auto &variant = result.variant;
 	uint32_t lengths[3];
-	idx_t lengths_size = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto index = source[i];
+		// the blob space to reserve for this row - nothing for NULL rows
+		idx_t lengths_size = 0;
 
 		auto result_index = selvec ? selvec->get_index(i) : i;
 		auto &blob_offset = blob_offset_data[result_index];
@@ -225,7 +226,6 @@ static bool ConvertPrimitiveTemplated(ToVariantSourceData &source, ToVariantGlob
 		if (TYPE_ID != VariantLogicalType::VARIANT_NULL && source_validity.RowIsValid(index)) {
 			//! Write the value
 			auto &val = source_data[index];
-			lengths_size = 0;
 			GetValueSize<T>(val, lengths, lengths_size, payload);
 			WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, values_index_selvec,
 			                                 i, GetTypeId<T, TYPE_ID>(val));
