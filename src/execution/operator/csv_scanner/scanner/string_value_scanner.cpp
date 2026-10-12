@@ -1329,9 +1329,9 @@ void StringValueScanner::ProcessExtraRow() {
 			}
 			result.SetQuoted(result, iterator.pos.buffer_pos);
 			iterator.pos.buffer_pos++;
-			while (state_machine->transition_array
-			           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
-			       iterator.pos.buffer_pos < to_pos - 1) {
+			while (iterator.pos.buffer_pos < to_pos - 1 &&
+			       state_machine->transition_array
+			           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])]) {
 				iterator.pos.buffer_pos++;
 			}
 			break;
