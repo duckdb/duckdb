@@ -934,52 +934,39 @@ static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expressio
 	                                          StructExtractAtFun::GetBindData(child_idx));
 }
 
-//! A cast matches STRUCT fields by name, so the mapping has to keep the names and positions of nested fields
-static bool CastMatchesMapping(const MultiFileIndexMapping &mapping, const LogicalType &source_type,
-                               const LogicalType &target_type) {
-	if (source_type.IsNested() && source_type.id() != target_type.id()) {
+//! A cast only checks the invertibility of the outer type and matches STRUCT fields by name, so the mapping has to
+//! keep the names and positions of nested fields and every nested field has to cast back exactly
+static bool MappedCastIsInvertible(const MultiFileIndexMapping &mapping, const LogicalType &source_type,
+                                   const LogicalType &target_type) {
+	if (!BoundCastExpression::CastIsInvertible(source_type, target_type)) {
 		return false;
 	}
-	switch (source_type.id()) {
-	case LogicalTypeId::STRUCT: {
-		auto &source_children = StructType::GetChildTypes(source_type);
-		auto &target_children = StructType::GetChildTypes(target_type);
-		if (source_children.size() != target_children.size()) {
+	if (!source_type.IsNested()) {
+		return true;
+	}
+	if (source_type.id() != target_type.id()) {
+		return false;
+	}
+	auto source_children = LogicalType::GetNamedChildTypes(source_type);
+	auto target_children = LogicalType::GetNamedChildTypes(target_type);
+	if (source_children.size() != target_children.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < source_children.size(); i++) {
+		auto entry = mapping.child_mapping.find(MultiFileGlobalIndex(i));
+		if (entry == mapping.child_mapping.end() || entry->second->index.GetIndex() != i ||
+		    !(source_children[i].first == target_children[i].first) ||
+		    !MappedCastIsInvertible(*entry->second, source_children[i].second, target_children[i].second)) {
 			return false;
 		}
-		for (idx_t i = 0; i < source_children.size(); i++) {
-			auto entry = mapping.child_mapping.find(MultiFileGlobalIndex(i));
-			if (entry == mapping.child_mapping.end() || entry->second->index.GetIndex() != i ||
-			    !(source_children[i].first == target_children[i].first) ||
-			    !CastMatchesMapping(*entry->second, source_children[i].second, target_children[i].second)) {
-				return false;
-			}
-		}
-		return true;
 	}
-	case LogicalTypeId::LIST: {
-		auto entry = mapping.child_mapping.find(MultiFileGlobalIndex(0));
-		return entry != mapping.child_mapping.end() &&
-		       CastMatchesMapping(*entry->second, ListType::GetChildType(source_type),
-		                          ListType::GetChildType(target_type));
-	}
-	case LogicalTypeId::MAP: {
-		auto key = mapping.child_mapping.find(MultiFileGlobalIndex(0));
-		auto value = mapping.child_mapping.find(MultiFileGlobalIndex(1));
-		return key != mapping.child_mapping.end() && value != mapping.child_mapping.end() &&
-		       CastMatchesMapping(*key->second, MapType::KeyType(source_type), MapType::KeyType(target_type)) &&
-		       CastMatchesMapping(*value->second, MapType::ValueType(source_type), MapType::ValueType(target_type));
-	}
-	default:
-		return true;
-	}
+	return true;
 }
 
 static bool TryCastConstant(Value &constant, const MultiFileIndexMapping &mapping, const LogicalType &target_type) {
 	// this filter replaces the global one in the reader, so a constant that does not survive the cast
 	// exactly would silently change which rows match
-	if (!BoundCastExpression::CastIsInvertible(constant.type(), target_type) ||
-	    !CastMatchesMapping(mapping, constant.type(), target_type)) {
+	if (!MappedCastIsInvertible(mapping, constant.type(), target_type)) {
 		return false;
 	}
 	auto cast = constant.DefaultTryCastAs(target_type);
