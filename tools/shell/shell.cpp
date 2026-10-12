@@ -1033,6 +1033,9 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 */
 void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
 	auto &explain = statement.Cast<duckdb::ExplainStatement>();
+	if (explain.explain_type == duckdb::ExplainType::EXPLAIN_SQL) {
+		return;
+	}
 	if (explain.format != duckdb::ProfilerPrintFormat::Default()) {
 		// the user explicitly requested an output format (e.g. EXPLAIN (FORMAT json))
 		return;
@@ -1463,6 +1466,10 @@ string ShellState::GetSystemPager() {
 }
 
 bool ShellState::ShouldUsePager() {
+	if (safe_mode) {
+		// the pager runs an external command, which is not allowed in -safe mode
+		return false;
+	}
 	if (out != stdout || !stdout_is_console || !outfile.empty() || !stdin_is_interactive) {
 		// if we have an outfile specified, or we are in non-interactive/batch mode, don't use the pager
 		return false;
