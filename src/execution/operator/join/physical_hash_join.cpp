@@ -645,7 +645,7 @@ void HashJoinGlobalSinkState::PublishLayoutIfFirst(HashJoinLocalSinkState &lstat
 		// layout: a later chunk may carry no dictionary at all (NULL-only), so no thread can pin it lazily.
 		DictSurvivingInfo info;
 		info.columns.resize(build_types.size());
-		for (idx_t col = 0; col < MinValue(build_types.size(), payload_chunk.ColumnCount()); col++) {
+		for (idx_t col = 0; col < MinValue<idx_t>(build_types.size(), payload_chunk.ColumnCount()); col++) {
 			auto &incoming = payload_chunk.data[col];
 			const auto index_width = lstate.hash_table->GetDictSurvivingIndexWidth(col, incoming);
 			if (index_width != 0) {
