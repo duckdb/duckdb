@@ -430,22 +430,22 @@ jobs:
         core:
           config: duckdb/.github/config/core.cmake
           extra_toolchains: unixodbc;parser_tools
-          opt_in_archs: '${{ github.event_name == 'workflow_dispatch' && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'linux_arm64_musl') || '' }}'
+          opt_in_archs: '${{ github.event_name == 'workflow_dispatch' && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'windows_arm64;linux_arm64_musl') || '' }}'
           toolchain: main
         cloud:
           config: duckdb/.github/config/cloud.cmake
           extra_toolchains: unixodbc;parser_tools
-          opt_in_archs: '${{ github.event_name == 'workflow_dispatch' && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'linux_arm64_musl') || '' }}'
+          opt_in_archs: '${{ github.event_name == 'workflow_dispatch' && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'windows_arm64;linux_arm64_musl') || '' }}'
           toolchain: main
         search:
           config: duckdb/.github/config/search.cmake
           extra_toolchains: unixodbc;parser_tools
-          opt_in_archs: '${{ github.event_name == 'workflow_dispatch' && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'linux_arm64_musl') || '' }}'
+          opt_in_archs: '${{ github.event_name == 'workflow_dispatch' && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'windows_arm64;linux_arm64_musl') || '' }}'
           toolchain: main
         scanner:
           config: duckdb/.github/config/scanner.cmake
           extra_toolchains: unixodbc;parser_tools
-          opt_in_archs: '${{ github.event_name == 'workflow_dispatch' && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'linux_arm64_musl') || '' }}'
+          opt_in_archs: '${{ github.event_name == 'workflow_dispatch' && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'windows_arm64;linux_arm64_musl') || '' }}'
           toolchain: main
         rust:
           config: duckdb/.github/config/rust_based_extensions.cmake
