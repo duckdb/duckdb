@@ -530,150 +530,177 @@ static string TypeModifierListToString(const vector<LogicalTypeModifier> &mod_li
 }
 
 string LogicalType::ToString() const {
-	if (id() != LogicalTypeId::UNBOUND) {
-		auto alias = GetAlias();
-		if (!alias.empty()) {
-			if (HasExtensionInfo()) {
-				auto &ext_info = *GetExtensionInfo();
-				alias += TypeModifierListToString(ext_info.modifiers);
-			}
-			return alias;
-		}
-	}
-	switch (id()) {
-	case LogicalTypeId::TUPLE: {
-		if (!HasParameters()) {
-			return "TUPLE";
-		}
-		auto &child_types = StructType::GetChildTypes(*this);
-		if (child_types.empty()) {
-			return "TUPLE";
-		}
-		string ret = "TUPLE(";
-		for (size_t i = 0; i < child_types.size(); i++) {
-			ret += child_types[i].second.ToString();
-			if (i < child_types.size() - 1) {
-				ret += ", ";
-			}
-		}
-		ret += ")";
-		return ret;
-	}
-	case LogicalTypeId::STRUCT: {
-		if (!HasParameters()) {
-			return "STRUCT";
-		}
-		auto &child_types = StructType::GetChildTypes(*this);
-		if (child_types.empty()) {
-			return "STRUCT";
-		}
+	// nested types are rendered with an explicit stack to avoid unbounded recursion
+	struct StackEntry {
+		optional_ptr<const LogicalType> type;
+		string text;
+	};
+	string result;
+	vector<StackEntry> stack;
+	auto push_text = [&](string text) {
+		stack.push_back(StackEntry {nullptr, std::move(text)});
+	};
+	auto push_type = [&](const LogicalType &type) {
+		stack.push_back(StackEntry {&type, string()});
+	};
+	push_type(*this);
 
-		string ret = "STRUCT(";
-		for (size_t i = 0; i < child_types.size(); i++) {
-			ret += StringUtil::Format("%s %s", SQLIdentifier(child_types[i].first), child_types[i].second);
-			if (i < child_types.size() - 1) {
-				ret += ", ";
+	while (!stack.empty()) {
+		auto entry = std::move(stack.back());
+		stack.pop_back();
+		if (!entry.type) {
+			result += entry.text;
+			continue;
+		}
+		auto &type = *entry.type;
+		if (type.id() != LogicalTypeId::UNBOUND) {
+			auto alias = type.GetAlias();
+			if (!alias.empty()) {
+				if (type.HasExtensionInfo()) {
+					auto &ext_info = *type.GetExtensionInfo();
+					alias += TypeModifierListToString(ext_info.modifiers);
+				}
+				result += alias;
+				continue;
 			}
 		}
-		ret += ")";
-		return ret;
-	}
-	case LogicalTypeId::LIST: {
-		if (!HasParameters()) {
-			return "LIST";
-		}
-		return ListType::GetChildType(*this).ToString() + "[]";
-	}
-	case LogicalTypeId::MAP: {
-		if (!HasParameters()) {
-			return "MAP";
-		}
-		auto &key_type = MapType::KeyType(*this);
-		auto &value_type = MapType::ValueType(*this);
-		return "MAP(" + key_type.ToString() + ", " + value_type.ToString() + ")";
-	}
-	case LogicalTypeId::UNION: {
-		if (!HasParameters()) {
-			return "UNION";
-		}
-		string ret = "UNION(";
-		size_t count = UnionType::GetMemberCount(*this);
-		for (size_t i = 0; i < count; i++) {
-			auto member_name = UnionType::GetMemberName(*this, i);
-			auto member_type = UnionType::GetMemberType(*this, i).ToString();
-			ret += StringUtil::Format("%s %s", SQLIdentifier(member_name), member_type);
-			if (i < count - 1) {
-				ret += ", ";
+		switch (type.id()) {
+		case LogicalTypeId::TUPLE:
+		case LogicalTypeId::STRUCT: {
+			string name = type.id() == LogicalTypeId::TUPLE ? "TUPLE" : "STRUCT";
+			if (!type.HasParameters() || StructType::GetChildTypes(type).empty()) {
+				result += name;
+				break;
 			}
-		}
-		ret += ")";
-		return ret;
-	}
-	case LogicalTypeId::ARRAY: {
-		if (!HasParameters()) {
-			return "ARRAY";
-		}
-		auto size = ArrayType::GetSize(*this);
-		if (size == 0) {
-			return ArrayType::GetChildType(*this).ToString() + "[ANY]";
-		} else {
-			return ArrayType::GetChildType(*this).ToString() + "[" + to_string(size) + "]";
-		}
-	}
-	case LogicalTypeId::DECIMAL: {
-		if (!HasParameters()) {
-			return "DECIMAL";
-		}
-		auto width = DecimalType::GetWidth(*this);
-		auto scale = DecimalType::GetScale(*this);
-		if (width == 0) {
-			return "DECIMAL";
-		}
-		return StringUtil::Format("DECIMAL(%d,%d)", width, scale);
-	}
-	case LogicalTypeId::ENUM: {
-		string ret = "ENUM(";
-		for (idx_t i = 0; i < EnumType::GetSize(*this); i++) {
-			if (i > 0) {
-				ret += ", ";
+			auto &child_types = StructType::GetChildTypes(type);
+			auto print_names = type.id() == LogicalTypeId::STRUCT;
+			push_text(")");
+			for (idx_t i = child_types.size(); i > 0; i--) {
+				auto &child = child_types[i - 1];
+				push_type(child.second);
+				if (print_names) {
+					push_text(SQLIdentifier(child.first) + " ");
+				}
+				if (i > 1) {
+					push_text(", ");
+				}
 			}
-			ret += SQLString(EnumType::GetString(*this, i).GetString());
+			push_text(name + "(");
+			break;
 		}
-		ret += ")";
-		return ret;
-	}
-	case LogicalTypeId::UNBOUND: {
-		if (!HasParameters()) {
-			return "UNBOUND";
+		case LogicalTypeId::LIST: {
+			if (!type.HasParameters()) {
+				result += "LIST";
+				break;
+			}
+			push_text("[]");
+			push_type(ListType::GetChildType(type));
+			break;
 		}
-
-		auto &expr = UnboundType::GetTypeExpression(*this);
-		if (expr->GetExpressionType() != ExpressionType::TYPE) {
-			return "(" + expr->ToString() + ")";
-		} else {
-			return expr->ToString();
+		case LogicalTypeId::ARRAY: {
+			if (!type.HasParameters()) {
+				result += "ARRAY";
+				break;
+			}
+			auto size = ArrayType::GetSize(type);
+			push_text(size == 0 ? "[ANY]" : "[" + to_string(size) + "]");
+			push_type(ArrayType::GetChildType(type));
+			break;
+		}
+		case LogicalTypeId::MAP: {
+			if (!type.HasParameters()) {
+				result += "MAP";
+				break;
+			}
+			push_text(")");
+			push_type(MapType::ValueType(type));
+			push_text(", ");
+			push_type(MapType::KeyType(type));
+			push_text("MAP(");
+			break;
+		}
+		case LogicalTypeId::UNION: {
+			if (!type.HasParameters()) {
+				result += "UNION";
+				break;
+			}
+			auto count = UnionType::GetMemberCount(type);
+			push_text(")");
+			for (idx_t i = count; i > 0; i--) {
+				push_type(UnionType::GetMemberType(type, i - 1));
+				push_text(SQLIdentifier(UnionType::GetMemberName(type, i - 1)) + " ");
+				if (i > 1) {
+					push_text(", ");
+				}
+			}
+			push_text("UNION(");
+			break;
+		}
+		case LogicalTypeId::DECIMAL: {
+			if (!type.HasParameters()) {
+				result += "DECIMAL";
+				break;
+			}
+			auto width = DecimalType::GetWidth(type);
+			auto scale = DecimalType::GetScale(type);
+			if (width == 0) {
+				result += "DECIMAL";
+				break;
+			}
+			result += StringUtil::Format("DECIMAL(%d,%d)", width, scale);
+			break;
+		}
+		case LogicalTypeId::ENUM: {
+			result += "ENUM(";
+			for (idx_t i = 0; i < EnumType::GetSize(type); i++) {
+				if (i > 0) {
+					result += ", ";
+				}
+				result += SQLString(EnumType::GetString(type, i).GetString());
+			}
+			result += ")";
+			break;
+		}
+		case LogicalTypeId::UNBOUND: {
+			if (!type.HasParameters()) {
+				result += "UNBOUND";
+				break;
+			}
+			auto &expr = UnboundType::GetTypeExpression(type);
+			if (expr->GetExpressionType() != ExpressionType::TYPE) {
+				result += "(" + expr->ToString() + ")";
+			} else {
+				result += expr->ToString();
+			}
+			break;
+		}
+		case LogicalTypeId::SQLNULL: {
+			result += "\"NULL\"";
+			break;
+		}
+		case LogicalTypeId::TEMPLATE: {
+			if (!type.HasParameters()) {
+				result += "T";
+				break;
+			}
+			result += TemplateType::GetName(type);
+			break;
+		}
+		case LogicalTypeId::GEOMETRY: {
+			if (!GeoType::HasCRS(type)) {
+				result += "GEOMETRY";
+				break;
+			}
+			auto &crs = GeoType::GetCRS(type);
+			result += StringUtil::Format("GEOMETRY(%s)", SQLString(crs.GetDefinition()));
+			break;
+		}
+		default:
+			result += EnumUtil::ToString(type.id());
+			break;
 		}
 	}
-	case LogicalTypeId::SQLNULL: {
-		return "\"NULL\"";
-	}
-	case LogicalTypeId::TEMPLATE: {
-		if (!HasParameters()) {
-			return "T";
-		}
-		return TemplateType::GetName(*this);
-	}
-	case LogicalTypeId::GEOMETRY: {
-		if (!GeoType::HasCRS(*this)) {
-			return "GEOMETRY";
-		}
-		auto &crs = GeoType::GetCRS(*this);
-		auto crs_text = SQLString(crs.GetDefinition());
-		return StringUtil::Format("GEOMETRY(%s)", crs_text);
-	}
-	default:
-		return EnumUtil::ToString(id());
-	}
+	return result;
 }
 
 LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
