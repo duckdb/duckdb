@@ -22,7 +22,6 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/wal_entry.hpp"
-#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
@@ -512,9 +511,6 @@ void WriteAheadLog::WriteRowGroupData(const PersistentCollectionData &data) {
 	WriteAheadLogSerializer serializer(*this, WALType::ROW_GROUP_DATA);
 	serializer.WriteProperty(101, "row_group_data", data);
 	serializer.End();
-
-	// mark written blocks as checkpointed
-	DuckTransactionManager::Get(GetDatabase()).MarkWALBlocksAsCheckpointed(data.GetBlockIds());
 }
 
 void WriteAheadLog::WriteDelete(DataChunk &chunk) {

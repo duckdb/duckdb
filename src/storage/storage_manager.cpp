@@ -622,7 +622,7 @@ public:
 	//! Revert the commit
 	void RevertCommit() override;
 	// Make the commit persistent
-	void FlushCommit() override;
+	void FlushCommit(transaction_t commit_id) override;
 
 	void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                     unique_ptr<PersistentCollectionData> row_group_data) override;
@@ -684,7 +684,7 @@ void SingleFileStorageCommitState::RevertCommit() {
 	state = WALCommitState::TRUNCATED;
 }
 
-void SingleFileStorageCommitState::FlushCommit() {
+void SingleFileStorageCommitState::FlushCommit(transaction_t commit_id) {
 	if (state != WALCommitState::IN_PROGRESS) {
 		return;
 	}
@@ -704,6 +704,17 @@ void SingleFileStorageCommitState::FlushCommit() {
 
 	wal.Flush();
 	state = WALCommitState::FLUSHED;
+	// checkpoints whose bound is past the commit include the blocks of its optimistically written row groups
+	auto &block_manager = storage.GetBlockManager();
+	for (auto &entry : optimistically_written_data) {
+		for (auto &rg_entry : entry.second) {
+			if (rg_entry.second.row_group_data) {
+				for (auto &block_id : rg_entry.second.row_group_data->GetBlockIds()) {
+					block_manager.MarkBlockAsCommitted(block_id, commit_id);
+				}
+			}
+		}
+	}
 }
 
 void SingleFileStorageCommitState::AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,

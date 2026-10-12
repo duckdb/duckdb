@@ -292,7 +292,7 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 		}
 		if (commit_state) {
 			// if we have written to the WAL - flush after the commit has been successful
-			commit_state->FlushCommit();
+			commit_state->FlushCommit(commit_info.commit_id);
 		}
 		drop_state.FinalizeCommit();
 		return ErrorData();
