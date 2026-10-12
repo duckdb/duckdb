@@ -1,0 +1,30 @@
+# name: test/sql/aggregate/grouping_sets/grouping_sets_sum_having.test
+# description: Grouping sets with sum and a HAVING clause that cannot be pushed down
+# group: [grouping_sets]
+
+statement ok
+CREATE TABLE t AS SELECT range i, range % 3 g FROM range(6);
+
+query II rowsort
+SELECT g, sum(i) FROM t GROUP BY ROLLUP (g) HAVING sum(i) > 1 OR g IS NULL;
+----
+0	3
+1	5
+2	7
+NULL	15
+
+query II rowsort
+SELECT g, sum(i::BIGINT) FROM t GROUP BY GROUPING SETS ((g), ()) HAVING sum(i) > 1 OR g IS NULL;
+----
+0	3
+1	5
+2	7
+NULL	15
+
+query III rowsort
+SELECT g, sum(i), avg(i) FROM t GROUP BY CUBE (g) HAVING sum(i) > 1 OR g IS NULL;
+----
+0	3	1.5
+1	5	2.5
+2	7	3.5
+NULL	15	2.5
