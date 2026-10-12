@@ -219,7 +219,11 @@ void ClientContext::Destroy() {
 	if (transaction.HasActiveTransaction()) {
 		transaction.ResetActiveQuery();
 		if (!transaction.IsAutoCommit()) {
-			transaction.Rollback(nullptr);
+			// a destructor cannot throw: once the database is invalidated, the rollback can fail as well
+			try {
+				transaction.Rollback(nullptr);
+			} catch (...) { // NOLINT
+			}
 		}
 	}
 	CleanupInternal(*lock);

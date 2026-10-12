@@ -74,6 +74,37 @@ unique_ptr<FunctionData> MultiFileBindData::Copy() const {
 	return std::move(result);
 }
 
+bool MultiFileBindData::IsGeneratedColumn(idx_t column_idx) const {
+	if ((reader_bind.filename_idx.IsValid() && reader_bind.filename_idx.GetIndex() == column_idx) ||
+	    (reader_bind.file_row_number_idx.IsValid() && reader_bind.file_row_number_idx.GetIndex() == column_idx)) {
+		return true;
+	}
+	for (const auto &partition : reader_bind.hive_partitioning_indexes) {
+		if (partition.index == column_idx) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool MultiFileBindData::MatchesPhysicalColumn(idx_t column_idx, const Identifier &physical_name,
+                                              const LogicalType &physical_type) const {
+	return column_idx < names.size() && column_idx < types.size() && !IsGeneratedColumn(column_idx) &&
+	       names[column_idx] == physical_name && types[column_idx].EqualsIncludingCollation(physical_type);
+}
+
+bool MultiFileBindData::HasIdentityMapping(const vector<MultiFileColumnDefinition> &physical_columns) const {
+	if (physical_columns.size() != names.size() || physical_columns.size() != types.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < physical_columns.size(); i++) {
+		if (!MatchesPhysicalColumn(i, physical_columns[i].name, physical_columns[i].type)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 unique_ptr<MultiFileReader> MultiFileReader::CreateDefault(const string &function_name) {
 	auto res = make_uniq<MultiFileReader>();
 	res->function_name = Identifier(function_name);
@@ -381,6 +412,77 @@ vector<MultiFileColumnDefinition> MultiFileReader::ParseSchemaOption(ClientConte
 	return ParseSchemaMap(context, schema_value, MapType::KeyType(schema_value.type()), true);
 }
 
+void MultiFileOptions::SetBoundSchema(const Value &value, ClientContext &context) {
+	if (value.IsNull() || value.type().id() != LogicalTypeId::STRUCT) {
+		throw BinderException("'bound_schema' expects a non-NULL STRUCT of column names to type strings");
+	}
+	auto &values = StructValue::GetChildren(value);
+	if (values.empty()) {
+		throw BinderException("'bound_schema' cannot be empty");
+	}
+	for (idx_t i = 0; i < values.size(); i++) {
+		if (values[i].IsNull() || values[i].type().id() != LogicalTypeId::VARCHAR) {
+			throw BinderException("'bound_schema' types must be non-NULL VARCHAR values");
+		}
+		auto type = TransformStringToLogicalType(StringValue::Get(values[i]), context);
+		bound_schema.push_back(
+		    MultiFileColumnDefinition::CreateNested(StructType::GetChildName(value.type(), i), type));
+	}
+}
+
+void MultiFileOptions::ValidateBoundSchema() const {
+	if (bound_schema.empty()) {
+		return;
+	}
+	if (!schema.empty()) {
+		throw BinderException("'bound_schema' cannot be combined with 'schema'");
+	}
+	if (union_by_name || maximum_sample_files != 1) {
+		throw BinderException("'bound_schema' does not support union_by_name or multi-file schema sampling");
+	}
+	if (auto_detect_hive_partitioning) {
+		throw BinderException("'bound_schema' requires explicit hive_partitioning=true or false");
+	}
+	if (hive_partitioning && hive_types_autocast) {
+		throw BinderException("'bound_schema' requires hive_types_autocast=false and complete hive_types");
+	}
+	if (!hive_partitioning && !hive_types_schema.empty()) {
+		throw BinderException("'bound_schema' cannot combine hive_types with hive_partitioning=false");
+	}
+	case_insensitive_map_t<LogicalType> columns;
+	for (auto &column : bound_schema) {
+		if (!column.type.IsComplete() || !columns.emplace(column.name.GetIdentifierName(), column.type).second) {
+			throw BinderException("'bound_schema' requires complete types and distinct column names");
+		}
+	}
+	auto require_type = [&](const string &name, const LogicalType &type) {
+		auto entry = columns.find(name);
+		if (entry == columns.end() || !entry->second.EqualsIncludingCollation(type)) {
+			throw BinderException("'bound_schema' must include column \"%s\" with type %s", name, type.ToString());
+		}
+	};
+	if (filename) {
+		require_type(filename_column, LogicalType::VARCHAR);
+	}
+	if (file_row_number) {
+		require_type("file_row_number", LogicalType::BIGINT);
+		if (filename && StringUtil::CIEquals(filename_column, "file_row_number")) {
+			throw BinderException("'bound_schema' cannot assign filename and file_row_number to the same column");
+		}
+	}
+	for (auto &partition : hive_types_schema) {
+		require_type(partition.first, partition.second);
+		if ((filename && StringUtil::CIEquals(filename_column, partition.first)) ||
+		    (file_row_number && StringUtil::CIEquals("file_row_number", partition.first))) {
+			throw BinderException("'bound_schema' cannot assign generated and Hive roles to column \"%s\"",
+			                      partition.first);
+		}
+	}
+	if (allow_empty) {
+		throw BinderException("'bound_schema' does not support allow_empty");
+	}
+}
+
 bool MultiFileReader::ParseCopyOption(const Identifier &key, const vector<Value> &values, MultiFileOptions &options) {
 	if (key != "file_row_number") {
 		return false;
@@ -469,6 +571,8 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 			options.hive_types_schema[name] = transformed_type;
 		}
 		D_ASSERT(!options.hive_types_schema.empty());
+	} else if (key == "bound_schema") {
+		options.SetBoundSchema(val, context);
 	} else if (key == "schema") {
 		options.schema = ParseSchemaOption(context, val);
 		if (options.schema.empty()) {
@@ -532,27 +636,46 @@ bool MultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vect
 
 void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
                                   vector<Identifier> &names, MultiFileReaderBindData &bind_data) {
+	const bool has_bound_schema = !options.bound_schema.empty();
+	if (has_bound_schema) {
+		// Roles bind directly to their final declared positions; the physical reader's schema is unchanged.
+		names.clear();
+		return_types.clear();
+		for (auto &column : options.bound_schema) {
+			names.push_back(column.name);
+			return_types.push_back(column.type);
+		}
+	}
+	auto bind_generated_column = [&](const Identifier &name, const LogicalType &type) -> idx_t {
+		if (has_bound_schema) {
+			auto index = StringUtil::CIFind(names, name);
+			if (index == DConstants::INVALID_INDEX || !return_types[index].EqualsIncludingCollation(type)) {
+				throw BinderException("'bound_schema' column \"%s\" does not match the resolved output", name);
+			}
+			return index;
+		}
+		auto index = names.size();
+		names.push_back(name);
+		return_types.push_back(type);
+		return index;
+	};
 	// Add the file_row_number column - it is read from the row number virtual column of the reader
 	if (options.file_row_number) {
-		if (StringUtil::CIFind(names, "file_row_number") != DConstants::INVALID_INDEX) {
+		if (!has_bound_schema && StringUtil::CIFind(names, "file_row_number") != DConstants::INVALID_INDEX) {
 			throw BinderException("Option file_row_number adds column \"file_row_number\", but a column with this "
 			                      "name is also in the file");
 		}
-		bind_data.file_row_number_idx = names.size();
-		return_types.emplace_back(LogicalType::BIGINT);
-		names.emplace_back("file_row_number");
+		bind_data.file_row_number_idx = bind_generated_column("file_row_number", LogicalType::BIGINT);
 	}
 
 	// Add generated constant column for filename
 	if (options.filename) {
-		if (std::find(names.begin(), names.end(), options.filename_column) != names.end()) {
+		if (!has_bound_schema && std::find(names.begin(), names.end(), options.filename_column) != names.end()) {
 			throw BinderException("Option filename adds column \"%s\", but a column with this name is also in the "
 			                      "file. Try setting a different name: filename='<filename column name>'",
 			                      options.filename_column);
 		}
-		bind_data.filename_idx = names.size();
-		return_types.emplace_back(LogicalType::VARCHAR);
-		names.emplace_back(options.filename_column);
+		bind_data.filename_idx = bind_generated_column(Identifier(options.filename_column), LogicalType::VARCHAR);
 	}
 
 	// Add generated constant columns from hive partitioning scheme
@@ -582,12 +705,20 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 			}
 		}
 
+		if (has_bound_schema && partitions.size() != options.hive_types_schema.size()) {
+			throw BinderException("'bound_schema' requires hive_types for every Hive partition column");
+		}
 		if (!options.hive_types_schema.empty()) {
 			// verify that all hive_types are existing partitions
 			options.VerifyHiveTypesArePartitions(partitions);
 		}
 
 		for (auto &part : partitions) {
+			if (has_bound_schema) {
+				auto index = bind_generated_column(Identifier(part.first), options.GetHiveLogicalType(part.first));
+				bind_data.hive_partitioning_indexes.emplace_back(part.first, index);
+				continue;
+			}
 			idx_t hive_partitioning_index;
 			auto lookup = std::find_if(names.begin(), names.end(),
 			                           [&](const Identifier &col_name) { return col_name == part.first; });
@@ -1486,7 +1617,7 @@ unique_ptr<BaseStatistics> MultiFileOptions::GetColumnStatistics(const Identifie
 }
 
 bool MultiFileOptions::AnySet() const {
-	return filename || hive_partitioning || union_by_name || !schema.empty();
+	return filename || hive_partitioning || union_by_name || !schema.empty() || !bound_schema.empty();
 }
 
 Value MultiFileOptions::GetHivePartitionValue(const string &value, const string &key, ClientContext &context) const {

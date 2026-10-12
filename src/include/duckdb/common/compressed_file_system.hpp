@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -20,8 +21,8 @@ struct StreamData {
 	// various buffers & pointers
 	bool write = false;
 	bool refresh = false;
-	unsafe_unique_array<data_t> in_buff;
-	unsafe_unique_array<data_t> out_buff;
+	AllocatedData in_buff;
+	AllocatedData out_buff;
 	data_ptr_t out_buff_start = nullptr;
 	data_ptr_t out_buff_end = nullptr;
 	data_ptr_t in_buff_start = nullptr;

@@ -1728,7 +1728,7 @@ unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheck
 	return make_uniq<CheckpointTask>(checkpoint_state, segment_idx);
 }
 
-void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
+bool RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
 	auto row_groups = GetRowGroups();
 
 	CollectionCheckpointState checkpoint_state(*this, writer, global_stats, *row_groups);
@@ -1813,18 +1813,16 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				row_group.CheckpointDeletes(*row_group_writer);
 			}
 			writer.WriteUnchangedTable(metadata_pointer, metadata_pointers, total_rows.load(), next_row_id.load());
-			// copy over existing stats into the global stats
-			CopyStats(global_stats);
-			return;
+			return false;
 		}
 	}
 
 	// not all segments have stayed the same - we need to make a new segment tree with the new set of segments
+	// initialize new empty stats - before locking the new segment tree, as this takes the stats lock
+	global_stats.InitializeEmpty(stats);
+
 	auto new_row_groups = make_shared_ptr<RowGroupSegmentTree>(*this, row_groups->GetBaseRowId());
 	auto l = new_row_groups->Lock();
-
-	// initialize new empty stats
-	global_stats.InitializeEmpty(stats);
 
 	idx_t new_total_rows = 0;
 	idx_t new_next_row_id = 0;
@@ -2084,6 +2082,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	if (vacuum_state.index_strategy == VacuumIndexStrategy::REBUILD && writer.RowIdsChanged()) {
 		writer.SetRebuildIndexes();
 	}
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
