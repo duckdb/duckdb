@@ -185,6 +185,10 @@ static bool ConstructShreddedType(const VariantAnalyzeData &state, LogicalType &
 			//! only 10% of rows make use of the field
 			child_list_t<LogicalType> field_types;
 			for (auto &field : object_data.fields) {
+				if (field.first.empty()) {
+					//! A STRUCT field cannot have an empty name, so the empty key stays in the 'value'
+					continue;
+				}
 				LogicalType child_type;
 				if (!ConstructShreddedType(field.second, child_type)) {
 					// cannot shred on this field - skip
