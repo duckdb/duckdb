@@ -1,0 +1,162 @@
+# name: test/sql/sql_export/dml_statements.test
+# description: Export INSERT, UPDATE and DELETE statements and execute the generated SQL
+# group: [sql_export]
+
+statement ok
+CREATE TABLE dml_target(a INTEGER, b TEXT DEFAULT 'x');
+
+statement ok
+INSERT INTO dml_target VALUES (1,'p'),(2,'q'),(3,'r');
+
+# the exported statement reconstructs the bound source, including filled-in defaults
+query TT
+EXPLAIN (SQL) INSERT INTO dml_target(a) VALUES (10);
+----
+sql	INSERT INTO memory.main.dml_target (a, b) SELECT r0.c0 AS c0, CAST('x' AS VARCHAR) AS c1 FROM (VALUES (CAST(10 AS INTEGER))) AS r0(c0)
+
+query TT
+EXPLAIN (SQL) UPDATE dml_target SET b = 'z' WHERE a = 2;
+----
+sql	UPDATE memory.main.dml_target SET b = r2.c0 FROM (SELECT CAST('z' AS VARCHAR) AS c0, r0.rowid AS c1 FROM memory.main.dml_target AS r0(column0, column1) WHERE (r0.column0 = CAST(2 AS INTEGER))) AS r2(c0, c1) WHERE (dml_target.rowid = r2.c1)
+
+query TT
+EXPLAIN (SQL) DELETE FROM dml_target WHERE a = 3;
+----
+sql	DELETE FROM memory.main.dml_target WHERE (rowid = ANY(SELECT r0.rowid AS c1 FROM memory.main.dml_target AS r0(column0, column1) WHERE (r0.column0 = CAST(3 AS INTEGER))))
+
+# explaining does not execute the statement
+query II
+SELECT count(*), sum(a) FROM dml_target;
+----
+3	6
+
+# the generated statements execute with the original statements' effects
+statement ok
+INSERT INTO memory.main.dml_target (a, b) SELECT r0.c0 AS c0, CAST('x' AS VARCHAR) AS c1 FROM (VALUES (CAST(10 AS INTEGER))) AS r0(c0)
+
+statement ok
+UPDATE memory.main.dml_target SET b = r2.c0 FROM (SELECT CAST('z' AS VARCHAR) AS c0, r0.rowid AS c1 FROM memory.main.dml_target AS r0(column0, column1) WHERE (r0.column0 = CAST(2 AS INTEGER))) AS r2(c0, c1) WHERE (dml_target.rowid = r2.c1)
+
+statement ok
+DELETE FROM memory.main.dml_target WHERE (rowid = ANY(SELECT r0.rowid AS c1 FROM memory.main.dml_target AS r0(column0, column1) WHERE (r0.column0 = CAST(3 AS INTEGER))))
+
+query IT rowsort
+SELECT a, b FROM dml_target;
+----
+1	p
+10	x
+2	z
+
+# RETURNING is reconstructed with the projection's output names as aliases
+query TT
+EXPLAIN (SQL) INSERT INTO dml_target(a) VALUES (20) RETURNING a + 1 AS next_a, b;
+----
+sql	INSERT INTO memory.main.dml_target (a, b) SELECT r0.c0 AS c0, CAST('x' AS VARCHAR) AS c1 FROM (VALUES (CAST(20 AS INTEGER))) AS r0(c0) RETURNING "system".main."+"(a, CAST(1 AS INTEGER)) AS next_a, b AS b
+
+query IT
+INSERT INTO memory.main.dml_target (a, b) SELECT r0.c0 AS c0, CAST('x' AS VARCHAR) AS c1 FROM (VALUES (CAST(20 AS INTEGER))) AS r0(c0) RETURNING "system".main."+"(a, CAST(1 AS INTEGER)) AS next_a, b AS b
+----
+21	x
+
+# RETURNING may reference the table's row-id column
+query TT
+EXPLAIN (SQL) DELETE FROM dml_target WHERE a = 20 RETURNING *, rowid >= 0 AS has_row;
+----
+sql	DELETE FROM memory.main.dml_target WHERE (rowid = ANY(SELECT r0.rowid AS c1 FROM memory.main.dml_target AS r0(column0, column1) WHERE (r0.column0 = CAST(20 AS INTEGER)))) RETURNING a AS a, b AS b, (rowid >= CAST(0 AS BIGINT)) AS has_row
+
+query ITT
+DELETE FROM memory.main.dml_target WHERE (rowid = ANY(SELECT r0.rowid AS c1 FROM memory.main.dml_target AS r0(column0, column1) WHERE (r0.column0 = CAST(20 AS INTEGER)))) RETURNING a AS a, b AS b, (rowid >= CAST(0 AS BIGINT)) AS has_row
+----
+20	x	true
+
+query II
+SELECT count(*), sum(a) FROM dml_target;
+----
+3	13
+
+# more complex sources stay exportable: joins, subqueries and set expressions
+statement ok
+CREATE TABLE dml_source(a INTEGER, b TEXT);
+
+statement ok
+INSERT INTO dml_source VALUES (10,'aa'),(11,'bb');
+
+query TT
+EXPLAIN (SQL) UPDATE dml_target SET b = s.b FROM dml_source s WHERE dml_target.a = s.a;
+----
+sql	<REGEX>:UPDATE memory\.main\.dml_target SET b = .* FROM .*JOIN.* WHERE \(dml_target\.rowid = .*\)
+
+query TT
+EXPLAIN (SQL) DELETE FROM dml_target USING dml_source u WHERE dml_target.a = u.a;
+----
+sql	<REGEX>:DELETE FROM memory\.main\.dml_target WHERE \(rowid = ANY\(.*JOIN.*\)\)
+
+query TT
+EXPLAIN (SQL) DELETE FROM dml_target WHERE a = (SELECT min(a) FROM dml_target);
+----
+sql	<REGEX>:DELETE FROM memory\.main\.dml_target WHERE \(rowid = ANY\(.*\)\)
+
+query TT
+EXPLAIN (SQL) UPDATE dml_target SET a = (SELECT count(*) FROM dml_source) WHERE b = 'z';
+----
+sql	<REGEX>:UPDATE memory\.main\.dml_target SET a = .*
+
+# a table with generated columns inserts through its physical columns only
+statement ok
+CREATE TABLE dml_generated(a INTEGER, d AS (a * 2), b TEXT DEFAULT 'z');
+
+query TT
+EXPLAIN (SQL) INSERT INTO dml_generated(a) VALUES (5);
+----
+sql	<REGEX>:INSERT INTO memory\.main\.dml_generated \(a, b\) SELECT .*
+
+query TT
+EXPLAIN (SQL) INSERT INTO dml_generated(a) VALUES (5) RETURNING d;
+----
+sql	<REGEX>:INSERT INTO memory\.main\.dml_generated \(a, b\) SELECT .* RETURNING .* AS d
+
+# ON CONFLICT binds to MERGE INTO, which has no SQL export
+statement ok
+CREATE TABLE dml_keyed(a INTEGER PRIMARY KEY, b TEXT);
+
+statement error
+EXPLAIN (SQL) INSERT INTO dml_keyed VALUES (1,'p') ON CONFLICT DO NOTHING;
+----
+EXPLAIN (SQL) cannot render this query
+
+statement error
+EXPLAIN (SQL) INSERT OR REPLACE INTO dml_keyed VALUES (1,'p');
+----
+EXPLAIN (SQL) cannot render this query
+
+# a physical column shadowing the row-id name would capture the generated references
+statement ok
+CREATE TABLE dml_shadowed(rowid INTEGER, v TEXT);
+
+statement error
+EXPLAIN (SQL) DELETE FROM dml_shadowed WHERE v = 'a';
+----
+The modified table does not expose a single named row-id column
+
+statement error
+EXPLAIN (SQL) UPDATE dml_shadowed SET v = 'b';
+----
+The modified table does not expose a single named row-id column
+
+# inserting into a shadowed table needs no row-id key
+query TT
+EXPLAIN (SQL) INSERT INTO dml_shadowed VALUES (1, 'a');
+----
+sql	<REGEX>:INSERT INTO memory\.main\.dml_shadowed \(rowid, v\) SELECT .*
+
+# a data-modifying CTE is below the plan root and stays unsupported
+statement error
+EXPLAIN (SQL) WITH d AS (DELETE FROM dml_target WHERE a = 1 RETURNING a) SELECT * FROM d;
+----
+A data-modifying operator below the plan root cannot be exported
+
+# other statement types stay outside EXPLAIN (SQL)
+statement error
+EXPLAIN (SQL) CREATE TABLE dml_unexpected(i INTEGER);
+----
+EXPLAIN (SQL) supports SELECT, VALUES, WITH, INSERT, UPDATE and DELETE statements only
