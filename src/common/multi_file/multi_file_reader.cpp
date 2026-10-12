@@ -643,7 +643,7 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 			return_types.push_back(column.type);
 		}
 	}
-	auto bind_generated_column = [&](const Identifier &name, const LogicalType &type) {
+	auto bind_generated_column = [&](const Identifier &name, const LogicalType &type) -> idx_t {
 		if (has_bound_schema) {
 			auto index = StringUtil::CIFind(names, name);
 			if (index == DConstants::INVALID_INDEX || !return_types[index].EqualsIncludingCollation(type)) {
