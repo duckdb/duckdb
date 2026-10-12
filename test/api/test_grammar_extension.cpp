@@ -594,7 +594,7 @@ public:
 		changes.push_back(GrammarChange::AddTerminalRuleOverride(
 		    "GrammarExtensionTestValue", [](const PEGKeywordHelper &keyword_helper) {
 			    if (DefaultKeywordMaps::GetKeywordCategory(keyword_helper.LookupKeyword("ANSWER")) !=
-			        KeywordCategory::KEYWORD_UNRESERVED) {
+				    KeywordCategory::KEYWORD_UNRESERVED) {
 				    throw InternalException("Parser change keyword is missing from the compiled keyword helper");
 			    }
 			    return make_uniq<GrammarExtensionTestMatcher>();
@@ -615,7 +615,7 @@ public:
 		changes.push_back(
 		    GrammarChange::PrependChoice("SelectAtom", "GrammarExtensionTestAtom", [](const PEGExpression &expression) {
 			    return expression.type == PEGExpression::Type::REFERENCE &&
-			           expression.text.GetString() == "SelectParens";
+				       expression.text.GetString() == "SelectParens";
 		    }));
 		return changes;
 	}
@@ -1517,13 +1517,9 @@ TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extensi
 	REQUIRE_NOTHROW(parser.ParseQuery("ANSWER"));
 	REQUIRE(parser.statements.size() == 1);
 
+	// Without the shell extension, a bare ANSWER is not a statement.
 	auto base_parser = Parser::GetBuiltinParser();
-	REQUIRE_NOTHROW(base_parser.ParseQuery("ANSWER"));
-	REQUIRE(base_parser.statements.size() == 1);
-	auto &base_select = base_parser.statements[0]->Cast<SelectStatement>().node->Cast<SelectNode>();
-	// Without the extension, ANSWER is a table name in a FROM-first query.
-	REQUIRE(base_select.select_list[0]->GetExpressionClass() == ExpressionClass::STAR);
-	REQUIRE(base_select.from_table->type == TableReferenceType::BASE_TABLE);
+	REQUIRE_THROWS(base_parser.ParseQuery("ANSWER"));
 }
 
 class AddInvalidGrammarExtensionTestRule final : public GrammarExtension {

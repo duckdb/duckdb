@@ -110,60 +110,6 @@ static unique_ptr<ParsedExpression> TransformParserFunctionRewrite(const string 
 	return nullptr;
 }
 
-unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
-                                                    vector<unique_ptr<ParsedExpression>> expression_alias) {
-	auto expressions = std::move(expression_alias);
-	auto select_statement = make_uniq<SelectStatement>();
-	auto select_node = make_uniq<SelectNode>();
-
-	bool any_column_ref = false;
-	for (auto &expr : expressions) {
-		if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-			any_column_ref = true;
-			break;
-		}
-	}
-
-	if (any_column_ref && expressions.size() > 1) {
-		throw ParserException("Mix of table names and expressions is not supported. "
-		                      "Use SELECT to explicitly specify what you want to query.");
-	}
-
-	if (any_column_ref) {
-		// Single COLUMN_REF: treat as table scan
-		auto &col_expr = expressions[0]->Cast<ColumnRefExpression>();
-		if (col_expr.IsQualified()) {
-			if (col_expr.ColumnNames().size() >= 4) {
-				throw ParserException(
-				    "Too many qualifiers encountered. Expected \"catalog.schema.table\" or \"schema.table\"");
-			}
-			if (col_expr.ColumnNames().size() == 3) {
-				auto table_description = TableDescription(
-				    QualifiedName(col_expr.ColumnNames()[0], col_expr.ColumnNames()[1], col_expr.ColumnNames()[2]));
-				select_node->from_table = make_uniq<BaseTableRef>(table_description);
-			} else if (col_expr.ColumnNames().size() == 2) {
-				auto table_description =
-				    TableDescription(QualifiedName({col_expr.ColumnNames()[0]}, col_expr.ColumnNames()[1]));
-				select_node->from_table = make_uniq<BaseTableRef>(table_description);
-			}
-		} else {
-			auto base_table = make_uniq<BaseTableRef>();
-			base_table->SetTable(col_expr.GetColumnName());
-			select_node->from_table = std::move(base_table);
-		}
-		select_node->select_list.push_back(make_uniq<StarExpression>());
-	} else {
-		for (auto &expr : expressions) {
-			select_node->select_list.push_back(std::move(expr));
-		}
-		select_node->from_table = make_uniq<EmptyTableRef>();
-	}
-
-	select_statement->node = std::move(select_node);
-	return std::move(select_statement);
-}
-
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformBaseExpression(PEGTransformer &transformer,
                                                unique_ptr<ParsedExpression> single_expression,
