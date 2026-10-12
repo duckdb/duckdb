@@ -2,6 +2,7 @@
 
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/compressed_file_system.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
@@ -496,7 +497,15 @@ FileType FileSystem::GetFileType(FileHandle &handle) {
 FileMetadata FileSystem::Stats(FileHandle &handle) {
 	FileMetadata metadata;
 	metadata.file_size = GetFileSize(handle);
-	metadata.last_modification_time = GetLastModifiedTime(handle);
+	try {
+		metadata.last_modification_time = GetLastModifiedTime(handle);
+	} catch (std::exception &ex) {
+		// a file system that cannot tell the modification time leaves it unknown
+		ErrorData error(ex);
+		if (error.Type() != ExceptionType::NOT_IMPLEMENTED) {
+			throw;
+		}
+	}
 	metadata.file_type = GetFileType(handle);
 	metadata.version_tag = GetVersionTag(handle);
 	metadata.cache_valid_until = GetCacheValidUntil(handle);
