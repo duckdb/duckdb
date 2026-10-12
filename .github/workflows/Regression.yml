@@ -145,6 +145,7 @@ jobs:
           - name: Micro
             benchmark: .github/regression/micro.csv
             runner: ubuntu-24.04 # Needs more memory than linux_small provides.
+            memory_limit: 15GiB
           - name: Parser
             benchmark: .github/regression/parser.csv
           - name: H2OAI
@@ -204,7 +205,7 @@ jobs:
             --benchmarks "${{ matrix.benchmark }}" \
             --verbose \
             --early-stop \
-            --memory-limit 7GiB \
+            --memory-limit ${{ matrix.memory_limit || '7GiB' }} \
             --threads 2
 
   regression-bench-tpc:
