@@ -26,6 +26,7 @@
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/enums/checkpoint_on_detach.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
+#include "duckdb/common/enums/connection_type.hpp"
 #include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
@@ -208,6 +209,7 @@
 #include "duckdb/parser/peg/ast/expression_chain.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/matcher/operator_matcher.hpp"
+#include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/peg/sql_formatter.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
@@ -1487,6 +1489,24 @@ ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value)
 	return static_cast<ConflictManagerMode>(StringUtil::StringToEnum(GetConflictManagerModeValues(), 2, "ConflictManagerMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetConnectionTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ConnectionType::USER), "USER" },
+		{ static_cast<uint32_t>(ConnectionType::INTERNAL), "INTERNAL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ConnectionType>(ConnectionType value) {
+	return StringUtil::EnumToString(GetConnectionTypeValues(), 2, "ConnectionType", static_cast<uint32_t>(value));
+}
+
+template<>
+ConnectionType EnumUtil::FromString<ConnectionType>(const char *value) {
+	return static_cast<ConnectionType>(StringUtil::StringToEnum(GetConnectionTypeValues(), 2, "ConnectionType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetConstraintTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ConstraintType::INVALID), "INVALID" },
@@ -2236,6 +2256,25 @@ ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value) {
 	return static_cast<ExpressionClass>(StringUtil::StringToEnum(GetExpressionClassValues(), 40, "ExpressionClass", value));
 }
 
+const StringUtil::EnumStringLiteral *GetExpressionDepthKindValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ExpressionDepthKind::NONE), "NONE" },
+		{ static_cast<uint32_t>(ExpressionDepthKind::NESTING), "NESTING" },
+		{ static_cast<uint32_t>(ExpressionDepthKind::CHAIN), "CHAIN" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ExpressionDepthKind>(ExpressionDepthKind value) {
+	return StringUtil::EnumToString(GetExpressionDepthKindValues(), 3, "ExpressionDepthKind", static_cast<uint32_t>(value));
+}
+
+template<>
+ExpressionDepthKind EnumUtil::FromString<ExpressionDepthKind>(const char *value) {
+	return static_cast<ExpressionDepthKind>(StringUtil::StringToEnum(GetExpressionDepthKindValues(), 3, "ExpressionDepthKind", value));
+}
+
 const StringUtil::EnumStringLiteral *GetExpressionTailTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ExpressionTailType::IS_TEST), "IS_TEST" },
@@ -2466,6 +2505,25 @@ const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag
 template<>
 ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value) {
 	return static_cast<ExtensionUpdateResultTag>(StringUtil::StringToEnum(GetExtensionUpdateResultTagValues(), 8, "ExtensionUpdateResultTag", value));
+}
+
+const StringUtil::EnumStringLiteral *GetExternalFileCacheRequestSizingValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ExternalFileCacheRequestSizing::AUTO), "AUTO" },
+		{ static_cast<uint32_t>(ExternalFileCacheRequestSizing::GRID), "GRID" },
+		{ static_cast<uint32_t>(ExternalFileCacheRequestSizing::EXACT), "EXACT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ExternalFileCacheRequestSizing>(ExternalFileCacheRequestSizing value) {
+	return StringUtil::EnumToString(GetExternalFileCacheRequestSizingValues(), 3, "ExternalFileCacheRequestSizing", static_cast<uint32_t>(value));
+}
+
+template<>
+ExternalFileCacheRequestSizing EnumUtil::FromString<ExternalFileCacheRequestSizing>(const char *value) {
+	return static_cast<ExternalFileCacheRequestSizing>(StringUtil::StringToEnum(GetExternalFileCacheRequestSizingValues(), 3, "ExternalFileCacheRequestSizing", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExternalResourceOperationValues() {

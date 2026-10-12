@@ -159,6 +159,12 @@ Value::Value(const Identifier &val) : Value(val.GetIdentifierName()) {
 Value::Value(const char *val) : Value(val ? string(val) : string()) {
 }
 
+static void VerifyStringValue(const Value &value) {
+	if (!value.IsValid()) {
+		throw ErrorManager::InvalidUnicodeError(StringValue::Get(value), "value construction");
+	}
+}
+
 Value::Value(std::nullptr_t val) : Value(LogicalType::VARCHAR) {
 }
 
@@ -166,24 +172,18 @@ Value::Value(string_t val) : Value(val.GetString()) {
 }
 
 Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
-	if (!Value::StringIsValid(val.c_str(), val.size())) {
-		throw ErrorManager::InvalidUnicodeError(val, "value construction");
-	}
 	value_info_ = make_shared_ptr<StringValueInfo>(std::move(val));
+	VerifyStringValue(*this);
 }
 
 Value::Value(String val) : type_(LogicalType::VARCHAR), is_null(false) {
-	if (!Value::StringIsValid(val.c_str(), val.size())) {
-		throw ErrorManager::InvalidUnicodeError(val, "value construction");
-	}
 	value_info_ = make_shared_ptr<StringValueInfo>(val.ToStdString());
+	VerifyStringValue(*this);
 }
 
 Value::Value(std::string_view val) : type_(LogicalType::VARCHAR), is_null(false) {
-	if (!Value::StringIsValid(val.data(), val.size())) {
-		throw ErrorManager::InvalidUnicodeError(string(val), "value construction");
-	}
 	value_info_ = make_shared_ptr<StringValueInfo>(string(val));
+	VerifyStringValue(*this);
 }
 
 Value::~Value() {
@@ -2347,6 +2347,167 @@ void Value::Serialize(Serializer &serializer) const {
 	SerializeInternal(serializer, true);
 }
 
+//! Whether the value (excluding its children) is within the domain of its type
+//! Whether a child value has the type its parent expects - ANY accepts values of any type (e.g. in secrets)
+static bool ChildTypeMatches(const Value &child, const LogicalType &expected_type) {
+	return expected_type.id() == LogicalTypeId::ANY || child.type() == expected_type;
+}
+
+static bool ValueIsValidShallow(const Value &value) {
+	if (value.IsNull()) {
+		return true;
+	}
+	auto &type = value.type();
+	switch (type.id()) {
+	case LogicalTypeId::VARCHAR:
+		return Value::StringIsValid(StringValue::Get(value));
+	case LogicalTypeId::ENUM: {
+		uint64_t index;
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			index = value.GetValueUnsafe<uint8_t>();
+			break;
+		case PhysicalType::UINT16:
+			index = value.GetValueUnsafe<uint16_t>();
+			break;
+		case PhysicalType::UINT32:
+			index = value.GetValueUnsafe<uint32_t>();
+			break;
+		default:
+			throw InternalException("Invalid physical type for ENUM");
+		}
+		return index < EnumType::GetSize(type);
+	}
+	case LogicalTypeId::TIME: {
+		const auto micros = value.GetValueUnsafe<dtime_t>().value;
+		return micros >= 0 && micros <= Interval::MICROS_PER_DAY;
+	}
+	case LogicalTypeId::TIME_NS: {
+		const auto nanos = value.GetValueUnsafe<dtime_ns_t>().value;
+		return nanos >= 0 && nanos <= Interval::NANOS_PER_DAY;
+	}
+	case LogicalTypeId::TIME_TZ: {
+		const auto time_tz = value.GetValueUnsafe<dtime_tz_t>();
+		const auto micros = time_tz.time().value;
+		const auto offset = time_tz.offset();
+		return micros >= 0 && micros <= Interval::MICROS_PER_DAY && offset >= dtime_tz_t::MIN_OFFSET &&
+		       offset <= dtime_tz_t::MAX_OFFSET;
+	}
+	case LogicalTypeId::DECIMAL: {
+		const auto width = DecimalType::GetWidth(type);
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+		case PhysicalType::INT32:
+		case PhysicalType::INT64: {
+			int64_t decimal_value;
+			if (type.InternalType() == PhysicalType::INT16) {
+				decimal_value = value.GetValueUnsafe<int16_t>();
+			} else if (type.InternalType() == PhysicalType::INT32) {
+				decimal_value = value.GetValueUnsafe<int32_t>();
+			} else {
+				decimal_value = value.GetValueUnsafe<int64_t>();
+			}
+			return decimal_value > -NumericHelper::POWERS_OF_TEN[width] &&
+			       decimal_value < NumericHelper::POWERS_OF_TEN[width];
+		}
+		case PhysicalType::INT128: {
+			const auto decimal_value = value.GetValueUnsafe<hugeint_t>();
+			return decimal_value > -Hugeint::POWERS_OF_TEN[width] && decimal_value < Hugeint::POWERS_OF_TEN[width];
+		}
+		default:
+			throw InternalException("Invalid physical type for DECIMAL");
+		}
+	}
+	case LogicalTypeId::BIT: {
+		// a padding byte followed by at least one data byte, with the padding bits set
+		auto &bits = StringValue::Get(value);
+		if (bits.size() < 2) {
+			return false;
+		}
+		const auto padding = static_cast<uint8_t>(bits[0]);
+		if (padding >= 8) {
+			return false;
+		}
+		const auto padding_mask = static_cast<uint8_t>(0xFF << (8 - padding));
+		return padding == 0 || (static_cast<uint8_t>(bits[1]) & padding_mask) == padding_mask;
+	}
+	case LogicalTypeId::UNION: {
+		auto &children = StructValue::GetChildren(value);
+		if (children.size() != UnionType::GetMemberCount(type) + 1 ||
+		    children[0].type().id() != LogicalTypeId::UTINYINT || children[0].IsNull() ||
+		    children[0].GetValueUnsafe<union_tag_t>() >= UnionType::GetMemberCount(type)) {
+			return false;
+		}
+		for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(type); member_idx++) {
+			if (!ChildTypeMatches(children[member_idx + 1], UnionType::GetMemberType(type, member_idx))) {
+				return false;
+			}
+		}
+		return true;
+	}
+	case LogicalTypeId::STRUCT: {
+		auto &children = StructValue::GetChildren(value);
+		if (children.size() != StructType::GetChildCount(type)) {
+			return false;
+		}
+		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+			if (!ChildTypeMatches(children[child_idx], StructType::GetChildType(type, child_idx))) {
+				return false;
+			}
+		}
+		return true;
+	}
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP: {
+		auto &child_type = ListType::GetChildType(type);
+		for (auto &child : ListValue::GetChildren(value)) {
+			if (!ChildTypeMatches(child, child_type)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	case LogicalTypeId::ARRAY: {
+		auto &children = ArrayValue::GetChildren(value);
+		if (children.size() != ArrayType::GetSize(type)) {
+			return false;
+		}
+		auto &child_type = ArrayType::GetChildType(type);
+		for (auto &child : children) {
+			if (!ChildTypeMatches(child, child_type)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return true;
+	}
+}
+
+bool Value::IsValid() const {
+	if (!ValueIsValidShallow(*this)) {
+		return false;
+	}
+	if (is_null) {
+		return true;
+	}
+	switch (type_.InternalType()) {
+	case PhysicalType::STRUCT:
+	case PhysicalType::LIST:
+	case PhysicalType::ARRAY:
+		for (auto &child : value_info_->Get<NestedValueInfo>().GetValues()) {
+			if (!child.IsValid()) {
+				return false;
+			}
+		}
+		break;
+	default:
+		break;
+	}
+	return true;
+}
+
 Value Value::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadPropertyWithExplicitDefault<LogicalType>(100, "type", LogicalTypeId::INVALID);
 	if (type.InternalType() == PhysicalType::INVALID) {
@@ -2449,6 +2610,10 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
 			vector<Value> children;
 			obj.ReadList(100, "children", [&](Deserializer::List &list, idx_t i) {
+				if (i >= StructType::GetChildCount(type)) {
+					throw SerializationException("Failed to deserialize value: too many children for type %s",
+					                             type.ToString());
+				}
 				deserializer.Set<const LogicalType &>(StructType::GetChildType(type, i));
 				auto child = list.ReadElement<Value>();
 				deserializer.Unset<LogicalType>();
@@ -2467,6 +2632,10 @@ Value Value::Deserialize(Deserializer &deserializer) {
 	} break;
 	default:
 		throw NotImplementedException("Unimplemented type for Deserialize");
+	}
+	// the children are deserialized (and checked) through Value::Deserialize as well
+	if (!ValueIsValidShallow(new_value)) {
+		throw SerializationException("Failed to deserialize value: value is not valid for type %s", type.ToString());
 	}
 	return new_value;
 }

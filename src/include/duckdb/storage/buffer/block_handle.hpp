@@ -152,6 +152,13 @@ public:
 	bool MustWriteToTemporaryFile() const {
 		return destroy_buffer_upon == DestroyBufferUpon::BLOCK;
 	}
+	//! Returns true, if the buffer can be loaded again after it was destroyed, i.e., it is backed
+	//! by its disk block or kept alive in a temporary file. False for buffers that are destroyed
+	//! upon eviction/unpin - including replaced persistent handles whose disk block may be
+	//! rewritten in place and must not be read through them again.
+	bool CanReload() const {
+		return destroy_buffer_upon == DestroyBufferUpon::BLOCK;
+	}
 	//! Returns the memory usage.
 	idx_t GetMemoryUsage() const {
 		return memory_usage;

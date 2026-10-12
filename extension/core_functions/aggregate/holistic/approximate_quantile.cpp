@@ -270,13 +270,30 @@ void ApproxQuantileImportState(AggregateImportInputData &input) {
 		}
 		arena_vector<duckdb_tdigest::Centroid> centroids(input.allocator);
 		centroids.reserve(centroid_list.GetListLength());
+		double total_weight = 0;
 		for (const auto centroid_entry : centroid_list.GetChildValues()) {
 			const auto mean_entry = centroid_entry.template GetChildValue<0>();
 			const auto weight_entry = centroid_entry.template GetChildValue<1>();
 			if (!centroid_entry.IsValid() || !mean_entry.IsValid() || !weight_entry.IsValid()) {
 				throw InvalidInputException("Invalid approx_quantile state - the centroids cannot be NULL");
 			}
-			centroids.emplace_back(mean_entry.GetValue(), weight_entry.GetValue());
+			const auto mean = mean_entry.GetValue();
+			const auto weight = weight_entry.GetValue();
+			if (Value::IsNan(mean) || !Value::IsFinite(weight) || weight <= 0) {
+				throw InvalidInputException(
+				    "Invalid approx_quantile state - centroids must have a mean and a positive finite weight");
+			}
+			if (!centroids.empty() && mean < centroids.back().mean()) {
+				throw InvalidInputException("Invalid approx_quantile state - centroids must be sorted by their mean");
+			}
+			total_weight += weight;
+			centroids.emplace_back(mean, weight);
+		}
+		if (!Value::IsFinite(total_weight)) {
+			throw InvalidInputException("Invalid approx_quantile state - the total centroid weight must be finite");
+		}
+		if (Value::IsNan(min_entry.GetValue()) || Value::IsNan(max_entry.GetValue())) {
+			throw InvalidInputException("Invalid approx_quantile state - min and max cannot be NaN");
 		}
 		auto digest = input.allocator.Make<duckdb_tdigest::TDigest>(
 		    std::move(centroids), duckdb::arena_vector<duckdb_tdigest::Centroid>(input.allocator), 100, 0, 0);

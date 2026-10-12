@@ -14,10 +14,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op, PhysicalOperator &plan) {
 	if (op.use_tmp_file) {
-		auto &fs = FileSystem::GetFileSystem(context);
-		auto path = StringUtil::GetFilePath(op.file_path);
 		auto base = StringUtil::GetFileName(op.file_path);
-		op.file_path = fs.JoinPath(path, "tmp_" + base);
+		op.file_path = StringUtil::ReplaceFileName(op.file_path, "tmp_" + base);
 	}
 	bool preserve_insertion_order = PhysicalPlanGenerator::PreserveInsertionOrder(context, plan);
 	bool supports_batch_index = PhysicalPlanGenerator::UseBatchIndex(context, plan);
