@@ -6,9 +6,6 @@ require skip_reload
 
 require notmingw
 
-mode skip instable
-
-# FIXME: not going to do this now
 statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_optimizer_demo.duckdb_extension';
 
