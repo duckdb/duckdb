@@ -4,7 +4,8 @@
 
 require skip_reload
 
-require notmingw
+# The optimizer demo extension is not built on Windows.
+require notwindows
 
 statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_optimizer_demo.duckdb_extension';
