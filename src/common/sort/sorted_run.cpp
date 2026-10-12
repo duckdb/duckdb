@@ -253,9 +253,9 @@ static void TemplatedSort(ClientContext &context, TupleDataCollection &key_data,
 	};
 	// vergesort merges the sorted runs it finds with a temporary buffer of up to half the keys - allocate that
 	// buffer through the buffer allocator instead of letting std::inplace_merge take it from operator new
-	const idx_t merge_buffer_count = key_data.Count() / 2 + 1;
-	auto merge_buffer = BufferAllocator::Get(context).Allocate(merge_buffer_count * sizeof(SORT_KEY));
-	auto buffer_ptr = reinterpret_cast<SORT_KEY *>(merge_buffer.get());
+	SortMergeBuffer merge_buffer(BufferAllocator::Get(context), key_data.Count(), sizeof(SORT_KEY));
+	auto buffer_ptr = merge_buffer.Keys<SORT_KEY>();
+	const auto merge_buffer_count = merge_buffer.Count();
 	const auto merge = [buffer_ptr, merge_buffer_count](const BLOCK_ITERATOR &first, const BLOCK_ITERATOR &middle,
 	                                                    const BLOCK_ITERATOR &last, const std::less<SORT_KEY> &cmp) {
 		BufferedMerge<SORT_KEY>(first, middle, last, cmp, buffer_ptr, merge_buffer_count);

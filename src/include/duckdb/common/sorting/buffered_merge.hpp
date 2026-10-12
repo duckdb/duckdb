@@ -11,8 +11,41 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
+
+//! Scratch buffer for merging sorted runs: the merge is correct without it, so the allocation must never fail a sort.
+//! Starting at half the keys, the size is halved until the buffer manager can provide it (or it becomes too small to
+//! be worth having).
+class SortMergeBuffer {
+public:
+	SortMergeBuffer(Allocator &allocator, idx_t key_count, idx_t key_size) : count(0) {
+		static constexpr idx_t MINIMUM_KEYS = 1024;
+		for (idx_t keys = key_count / 2 + 1; keys >= MINIMUM_KEYS; keys /= 2) {
+			try {
+				data = allocator.Allocate(keys * key_size);
+				count = keys;
+				return;
+			} catch (OutOfMemoryException &) {
+				// try a smaller buffer
+			}
+		}
+	}
+
+	template <class SORT_KEY>
+	SORT_KEY *Keys() {
+		return reinterpret_cast<SORT_KEY *>(data.get());
+	}
+	idx_t Count() const {
+		return count;
+	}
+
+private:
+	AllocatedData data;
+	idx_t count;
+};
 
 //! Merges the sorted ranges [first, middle) and [middle, last) in place using the given scratch buffer, which must
 //! hold at least min(middle - first, last - middle) keys. The smaller side is moved into the buffer and merged back,
