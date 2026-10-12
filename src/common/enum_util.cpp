@@ -217,7 +217,6 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/simplified_token.hpp"
-#include "duckdb/parser/sql_render_context.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/external_resource_statement.hpp"
@@ -5586,24 +5585,6 @@ const char* EnumUtil::ToChars<RowIdHandling>(RowIdHandling value) {
 template<>
 RowIdHandling EnumUtil::FromString<RowIdHandling>(const char *value) {
 	return static_cast<RowIdHandling>(StringUtil::StringToEnum(GetRowIdHandlingValues(), 3, "RowIdHandling", value));
-}
-
-const StringUtil::EnumStringLiteral *GetSQLRenderModeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(SQLRenderMode::UNREDACTED), "UNREDACTED" },
-		{ static_cast<uint32_t>(SQLRenderMode::REDACTED), "REDACTED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<SQLRenderMode>(SQLRenderMode value) {
-	return StringUtil::EnumToString(GetSQLRenderModeValues(), 2, "SQLRenderMode", static_cast<uint32_t>(value));
-}
-
-template<>
-SQLRenderMode EnumUtil::FromString<SQLRenderMode>(const char *value) {
-	return static_cast<SQLRenderMode>(StringUtil::StringToEnum(GetSQLRenderModeValues(), 2, "SQLRenderMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSampleMethodValues() {

@@ -10,7 +10,6 @@
 
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/identifier.hpp"
-#include "duckdb/common/optional.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/query_parameters.hpp"
@@ -48,7 +47,7 @@ class PreparedStatement {
 public:
 	//! Create a handle to the prepared statement with the given name in the client context
 	DUCKDB_API PreparedStatement(const shared_ptr<ClientContext> &context, string name, string query,
-	                             optional<string> log_query, PreparedStatementInfo info);
+	                             bool requires_redaction, PreparedStatementInfo info);
 	//! Create a prepared statement that was not successfully prepared
 	DUCKDB_API explicit PreparedStatement(ErrorData error);
 
@@ -201,8 +200,8 @@ private:
 	string name;
 	//! The query that is being prepared
 	string query;
-	//! Redacted query text
-	optional<string> log_query;
+	//! Whether the original query contains sensitive SQL
+	bool requires_redaction = false;
 	//! Whether or not the statement was successfully prepared
 	bool success;
 	//! The error message (if success = false)

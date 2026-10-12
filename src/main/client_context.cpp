@@ -312,8 +312,9 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
 
 	auto &profiler = QueryProfiler::Get(*this);
-	const bool redact_query = statement->log_query && !Settings::Get<AllowUnredactedSecretsSetting>(*this);
-	const auto &profile_query = redact_query ? *statement->log_query : statement->query;
+	static const string redacted_query = "redacted";
+	const bool redact_query = statement->RequiresRedaction() && !Settings::Get<AllowUnredactedSecretsSetting>(*this);
+	const auto &profile_query = redact_query ? redacted_query : statement->query;
 	profiler.StartQuery(profile_query, IsExplainAnalyze(*this, statement.get()));
 	Planner logical_planner(*this);
 	if (parameters.statement_args) {
@@ -533,31 +534,15 @@ static PreparedStatementInfo GetPreparedStatementInfo(PreparedStatementData &dat
 	return info;
 }
 
-static optional<string> GetRedactedQuery(const SQLStatement &statement) {
-	if (statement.log_query) {
-		return statement.log_query;
-	}
-	SQLRenderContext render_context;
-	render_context.mode = SQLRenderMode::REDACTED;
-	render_context.probe_only = true;
-	statement.ToString(render_context);
-	if (!render_context.changed) {
-		return nullopt;
-	}
-	render_context.probe_only = false;
-	return statement.ToString(render_context);
-}
-
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
                                                              unique_ptr<SQLStatement> statement) {
 	auto statement_query = statement->query;
-	auto log_query = GetRedactedQuery(*statement);
+	auto requires_redaction = statement->RequiresRedaction();
 	// prepare the statement under a generated name - the returned PreparedStatement only refers to that name
 	auto name = "duckdb_prepare_internal_" + UUID::ToString(UUID::GenerateRandomUUID());
 	auto prepare = make_uniq<PrepareStatement>();
 	prepare->name = Identifier(name);
 	prepare->query = statement_query;
-	prepare->log_query = log_query;
 	prepare->stmt_location = statement->stmt_location;
 	prepare->statement = std::move(statement);
 
@@ -570,7 +555,7 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 		throw InternalException("PREPARE succeeded but the prepared statement was not registered");
 	}
 	return make_uniq<PreparedStatement>(shared_from_this(), std::move(name), std::move(statement_query),
-	                                    std::move(log_query), GetPreparedStatementInfo(*entry->second));
+	                                    requires_redaction, GetPreparedStatementInfo(*entry->second));
 }
 
 void ClientContext::RemovePreparedStatement(const string &name) {
@@ -728,7 +713,7 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 			auto rewritten = WrapAsSelect(std::move(remote_ref));
 			// the rewrite is invisible to the user - keep reporting the SQL they issued
 			rewritten->query = std::move(statement->query);
-			rewritten->log_query = std::move(statement->log_query);
+			rewritten->requires_redaction = statement->RequiresRedaction();
 			statement = std::move(rewritten);
 			AttachedDatabase::InvokeCloseIfLastReference(live, *this);
 			// statement is now SELECT * FROM <remote-ref>; fall through.
@@ -1019,15 +1004,13 @@ unique_ptr<QueryResult> ClientContext::SubmitInternalStatement(unique_ptr<SQLSta
 
 unique_ptr<QueryResult> ClientContext::SubmitInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
                                                       const QueryParameters &parameters, bool verify) {
-	try {
-		// Capture redacted SQL before verification or CONNECT can replace the statement.
-		statement->log_query = GetRedactedQuery(*statement);
-		if (verify) {
+	if (verify) {
+		try {
 			StatementVerification(lock, statement, parameters);
+		} catch (std::exception &ex) {
+			// preserve extra error data (like query location)
+			return ErrorResult<QueryResult>(ErrorData(ex), statement->query);
 		}
-	} catch (std::exception &ex) {
-		// preserve extra error data (like query location)
-		return ErrorResult<QueryResult>(ErrorData(ex), statement->query);
 	}
 	return SubmitStatement(lock, std::move(statement), parameters);
 }

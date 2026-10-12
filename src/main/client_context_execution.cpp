@@ -42,8 +42,9 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStateme
 	}
 
 	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
-	const bool redact_query = statement.log_query && !Settings::Get<AllowUnredactedSecretsSetting>(*this);
-	const auto &log_query = redact_query ? *statement.log_query : statement.query;
+	static const string redacted_query = "redacted";
+	const bool redact_query = statement.RequiresRedaction() && !Settings::Get<AllowUnredactedSecretsSetting>(*this);
+	const auto &log_query = redact_query ? redacted_query : statement.query;
 	LogQueryInternal(lock, log_query);
 	active_query->query = statement.query;
 

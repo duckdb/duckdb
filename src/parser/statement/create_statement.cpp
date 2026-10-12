@@ -13,12 +13,11 @@ unique_ptr<SQLStatement> CreateStatement::Copy() const {
 }
 
 string CreateStatement::ToString() const {
-	SQLRenderContext context;
-	return ToString(context);
+	return info->ToString();
 }
 
-string CreateStatement::ToString(SQLRenderContext &context) const {
-	return info->ToString(context);
+bool CreateStatement::RequiresRedaction() const {
+	return requires_redaction || info->type == CatalogType::SECRET_ENTRY;
 }
 
 } // namespace duckdb
