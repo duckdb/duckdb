@@ -46,6 +46,11 @@ bool DynamicFilterData::CompareValue(ExpressionType comparison_type, const Value
 
 FilterPropagateResult DynamicFilterData::CheckStatistics(const BaseStatistics &stats, ExpressionType comparison_type,
                                                          const Value &constant) {
+	if (!stats.CanHaveNoNull()) {
+		return comparison_type == ExpressionType::COMPARE_DISTINCT_FROM ? FilterPropagateResult::FILTER_ALWAYS_TRUE
+		                                                                : FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+
 	switch (constant.type().InternalType()) {
 	case PhysicalType::UINT8:
 	case PhysicalType::UINT16:
@@ -120,10 +125,10 @@ static idx_t DynamicFilterSelect(DataChunk &args, ExpressionState &state, option
 		constant = func_data.filter_data->constant;
 	}
 
-	SelectionVector temp_true(count);
-	auto result_true_sel = (!true_sel || (sel && true_sel.get() == sel.get())) ? &temp_true : true_sel.get();
-	auto approved_count = SelectDynamicFilter(args.data[0], comparison_type, constant, *result_true_sel, count);
-	return TranslateSelection(count, sel, *result_true_sel, approved_count, true_sel, false_sel);
+	SelectionVector temp_true;
+	auto &result_true_sel = GetFilterResultSelection(count, sel, true_sel, temp_true);
+	auto approved_count = SelectDynamicFilter(args.data[0], comparison_type, constant, result_true_sel, count);
+	return TranslateSelection(count, sel, result_true_sel, approved_count, true_sel, false_sel);
 }
 
 ScalarFunction DynamicFilterScalarFun::GetFunction(const LogicalType &input_type) {
