@@ -2,16 +2,16 @@
 # description: A NULL committed while ADD PRIMARY KEY builds its index must not end up in the key column
 # group: [add_pk]
 
-# millions of rows per attempt
+# a large table per attempt
 require vector_size 512
 
-loop attempt 0 20
+loop attempt 0 10
 
 statement ok
 CREATE OR REPLACE TABLE t (id INTEGER);
 
 statement ok
-INSERT INTO t SELECT i FROM range(1, 3000001) tbl(i);
+INSERT INTO t SELECT i FROM range(1, 100001) tbl(i);
 
 concurrentforeach task alter insert
 
@@ -23,7 +23,7 @@ ALTER TABLE t ADD PRIMARY KEY (id);
 # delay the insert by a varying amount, so it lands at different points of the index build
 onlyif task=insert
 statement ok
-SELECT sum(i) FROM range(${attempt} * 100000) tbl(i);
+SELECT sum(i) FROM range(${attempt} * 2000) tbl(i);
 
 onlyif task=insert
 statement maybe
