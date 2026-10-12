@@ -100,15 +100,20 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	// Layout-dependent state is published lazily on the first Sink chunk (see FinishInitWithLayout).
 }
 
-void JoinHashTable::FinishInitWithLayout(shared_ptr<TupleDataLayout> published_layout,
-                                         vector<uint8_t> dict_index_width_p) {
+void JoinHashTable::FinishInitWithLayout(shared_ptr<TupleDataLayout> published_layout, DictSurvivingInfo dict_info) {
 	D_ASSERT(!layout_ptr);
 	layout_ptr = std::move(published_layout);
-	if (dict_index_width_p.empty()) {
+	if (dict_info.Empty()) {
 		dict_index_width.assign(build_types.size(), 0);
+		dict_registry.assign(build_types.size(), nullptr);
+		dict_upstream_ids.assign(build_types.size(), string());
 	} else {
-		D_ASSERT(dict_index_width_p.size() == build_types.size());
-		dict_index_width = std::move(dict_index_width_p);
+		D_ASSERT(dict_info.index_width.size() == build_types.size());
+		D_ASSERT(dict_info.entries.size() == build_types.size());
+		D_ASSERT(dict_info.upstream_ids.size() == build_types.size());
+		dict_index_width = std::move(dict_info.index_width);
+		dict_registry = std::move(dict_info.entries);
+		dict_upstream_ids = std::move(dict_info.upstream_ids);
 	}
 
 	// Initialize the row matcher that are used for filtering during the probing only if there are non-equality preds
@@ -140,9 +145,6 @@ void JoinHashTable::FinishInitWithLayout(shared_ptr<TupleDataLayout> published_l
 
 	dead_end = make_unsafe_uniq_array_uninitialized<data_t>(layout_ptr->GetRowWidth());
 	memset(dead_end.get(), 0, layout_ptr->GetRowWidth());
-
-	// indexed parallel to build_types / payload columns (not to output_columns)
-	dict_registry.assign(build_types.size(), nullptr);
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -185,8 +187,8 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 
 	sink_collection->Combine(*other.sink_collection);
 
-	// Reconcile per-column pinned dictionary entries. For global dictionary producers every thread pins the
-	// same buffer_ptr, so this is normally a no-op or a "take theirs" adoption.
+	// Reconcile per-column pinned dictionary entries. Every thread receives the same buffer_ptr with the published
+	// layout, so this is normally a no-op or a "take theirs" adoption.
 	if (dict_registry.size() < other.dict_registry.size()) {
 		dict_registry.resize(other.dict_registry.size(), nullptr);
 	}
@@ -197,7 +199,7 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 		if (!dict_registry[col]) {
 			dict_registry[col] = std::move(other.dict_registry[col]);
 		} else {
-			// Both threads pinned the same upstream entry, so ids match by construction; a mismatch is a producer bug.
+			// Both threads share the published entry, so ids match by construction; a mismatch is a producer bug.
 			D_ASSERT(dict_registry[col]->id == other.dict_registry[col]->id);
 		}
 	}
@@ -539,8 +541,9 @@ uint8_t JoinHashTable::GetDictSurvivingIndexWidth(idx_t build_col_idx, const Vec
 	if (!dict_size.IsValid()) {
 		return 0;
 	}
-	// only narrow when strictly smaller than the native slot (never regress; e.g. INTEGER over a D<=256 dict)
-	const uint8_t index_width = DictIndexWidth(dict_size.GetIndex());
+	// only narrow when strictly smaller than the native slot (never regress; e.g. INTEGER over a D<=255 dict).
+	// One extra slot is reserved for the NULL index that encodes NULL-only chunks (see CreateDictSurvivingEntry).
+	const uint8_t index_width = DictIndexWidth(dict_size.GetIndex() + 1);
 	const auto native_bytes = GetTypeIdSize(type.InternalType());
 	if (index_width >= native_bytes) {
 		return 0;
@@ -548,34 +551,78 @@ uint8_t JoinHashTable::GetDictSurvivingIndexWidth(idx_t build_col_idx, const Vec
 	return index_width;
 }
 
-void JoinHashTable::PinDictSurvivingColumn(idx_t build_col_idx, const Vector &incoming, uint8_t index_width) {
-	// Slot was narrowed on the first chunk; there is no fallback for a non-dict later chunk. Throw, not D_ASSERT:
-	// the Cast<DictionaryBuffer> below is UB in release on a non-dict vector, scattering foreign bytes as indices.
-	if (incoming.GetVectorType() != VectorType::DICTIONARY_VECTOR || DictionaryVector::DictionaryId(incoming).empty() ||
-	    !DictionaryVector::IsGlobalDictionary(incoming)) {
-		throw InternalException("dict-surviving join: narrowed column %llu received a "
-		                        "non-global-dictionary chunk; build pipeline is not single-source",
+buffer_ptr<DictionaryEntry> JoinHashTable::CreateDictSurvivingEntry(const Vector &incoming) {
+	D_ASSERT(incoming.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+	D_ASSERT(DictionaryVector::IsGlobalDictionary(incoming));
+	// The upstream child is a zero-copy gather: its long strings point into the producer's row-store heap, recycled
+	// before we gather on probe. Deep-copy into a self-owned entry so it outlives them, and append one NULL slot at
+	// index upstream_count: NULL-only chunks (the unmatched-build scan of an upstream FULL/RIGHT join fills the probe
+	// columns with NULL) are stored as that index, so the regular dictionary gather reconstructs them.
+	const auto &upstream_child = DictionaryVector::Child(incoming);
+	const auto upstream_count = upstream_child.size();
+	// CreateReusableGlobalDictionary assigns a fresh id: this is a different dictionary than the upstream one (one
+	// more slot), so a downstream consumer must not treat the two as interchangeable.
+	auto owned_entry = DictionaryVector::CreateReusableGlobalDictionary(upstream_child.GetType(), upstream_count + 1);
+	if (upstream_count > 0) {
+		VectorOperations::Copy(upstream_child, owned_entry->data, upstream_count, 0, 0);
+	}
+	FlatVector::SetNull(owned_entry->data, upstream_count, true);
+	return owned_entry;
+}
+
+//! True iff every one of the first count rows of vector is NULL
+static bool VectorIsAllNull(const Vector &vector, idx_t count) {
+	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		return ConstantVector::IsNull(vector);
+	}
+	UnifiedVectorFormat format;
+	vector.ToUnifiedFormat(format);
+	if (format.validity.CannotHaveNull()) {
+		return count == 0;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		if (format.validity.RowIsValid(format.sel->get_index(i))) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void JoinHashTable::EncodeDictSurvivingColumn(idx_t build_col_idx, const Vector &incoming, idx_t count,
+                                              vector<AllocatedData> &buffers, vector<Vector> &vectors) {
+	const auto index_width = dict_index_width[build_col_idx];
+	D_ASSERT(index_width != 0);
+	auto &allocator = buffer_manager.GetBufferAllocator();
+	if (!dict_registry[build_col_idx]) {
+		throw InternalException("dict-surviving join: narrowed column %llu has no published dictionary",
 		                        static_cast<uint64_t>(build_col_idx));
 	}
-	const auto &entry = incoming.Buffer().Cast<DictionaryBuffer>().GetEntry();
-	if (dict_registry[build_col_idx]) {
-		// Subsequent chunks wrap the same entry, so ids match by construction; a mismatch is a producer bug.
-		D_ASSERT(dict_registry[build_col_idx]->id == entry.id);
+	if (incoming.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		// Slot was narrowed against one specific upstream dictionary; a different one would scatter foreign indices.
+		if (DictionaryVector::DictionaryId(incoming) != dict_upstream_ids[build_col_idx]) {
+			throw InternalException("dict-surviving join: narrowed column %llu received a chunk with an unexpected "
+			                        "dictionary; build pipeline is not single-source",
+			                        static_cast<uint64_t>(build_col_idx));
+		}
+		// Indices are < upstream size by construction, and the publisher sized the width to upstream size + 1
+		ScatterDictIndices(index_width, DictionaryVector::SelVector(incoming), count, allocator, buffers, vectors);
 		return;
 	}
-	// The upstream child is a zero-copy gather: its long strings point into the producer's row-store heap, recycled
-	// before we gather on probe. Deep-copy into a self-owned entry so it outlives them.
-	const auto &upstream_child = entry.data;
-	const auto child_count = upstream_child.size();
-	// child_count fits index_width by construction (publisher sized the width to this dict). Assert so a producer
-	// that grows the child past it fails loudly instead of truncating in the UnsafeNumericCast.
-	D_ASSERT(child_count <= (idx_t(1) << (8 * index_width)));
-	auto owned_entry = DictionaryVector::CreateReusableGlobalDictionary(upstream_child.GetType(), child_count);
-	if (child_count > 0) {
-		VectorOperations::Copy(upstream_child, owned_entry->data, child_count, 0, 0);
+	if (VectorIsAllNull(incoming, count)) {
+		// e.g. the unmatched-build scan of an upstream FULL/RIGHT join: store the reserved NULL index for every row
+		const auto null_index = dict_registry[build_col_idx]->data.size() - 1;
+		SelectionVector null_sel(count);
+		for (idx_t i = 0; i < count; i++) {
+			null_sel.set_index(i, null_index);
+		}
+		ScatterDictIndices(index_width, null_sel, count, allocator, buffers, vectors);
+		return;
 	}
-	owned_entry->id = entry.id;
-	dict_registry[build_col_idx] = std::move(owned_entry);
+	// There is no fallback for values that are not in the pinned dictionary. Throw, not D_ASSERT: storing the
+	// native bytes into a narrowed slot would corrupt the row store.
+	throw InternalException("dict-surviving join: narrowed column %llu received a non-dictionary chunk with "
+	                        "values; build pipeline is not single-source",
+	                        static_cast<uint64_t>(build_col_idx));
 }
 
 static bool MarkJoinNullRows(const UnifiedVectorFormat &format, idx_t count,
@@ -666,10 +713,8 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 			source_chunk.data[col_offset + i].Reference(incoming);
 			continue;
 		}
-		// Narrowed column: pin the dictionary, then scatter its sel indices at the chosen width in place of the value.
-		PinDictSurvivingColumn(i, incoming, index_width);
-		ScatterDictIndices(index_width, DictionaryVector::SelVector(incoming), payload.size(),
-		                   buffer_manager.GetBufferAllocator(), dict_idx_buffers, dict_idx_vectors);
+		// Narrowed column: store dictionary indices (or the reserved NULL index) at the chosen width, not the value
+		EncodeDictSurvivingColumn(i, incoming, payload.size(), dict_idx_buffers, dict_idx_vectors);
 		source_chunk.data[col_offset + i].Reference(dict_idx_vectors.back());
 	}
 	col_offset += payload.ColumnCount();
@@ -2593,10 +2638,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	aux_next_ptrs.Reset();
 	aux_next_ptrs_data = nullptr;
 	use_dict_emission = false;
-	// Drop pinned upstream dictionary entries; the next iteration's first chunk re-pins
-	for (auto &entry : dict_registry) {
-		entry.reset();
-	}
+	// dict_registry belongs to the published layout, which survives the iteration, so it is kept
 }
 
 bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {

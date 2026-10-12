@@ -14,6 +14,7 @@
 #include "duckdb/execution/join_hashtable.hpp"
 #include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
+#include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -310,6 +311,10 @@ static bool BuildSideHasMultipleSources(const PhysicalOperator &op) {
 	case PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN:
 		// CTE producers are not children of their scans and may forward different dictionaries.
 		return true;
+	case PhysicalOperatorType::LEFT_DELIM_JOIN:
+	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
+		// The output flows out of the wrapped join, which is not among the children.
+		return BuildSideHasMultipleSources(op.Cast<PhysicalDelimJoin>().join);
 	default:
 		break;
 	}
@@ -331,12 +336,13 @@ struct LayoutGate {
 	mutex publish_mutex;
 	atomic<bool> published {false};
 	shared_ptr<TupleDataLayout> layout_ptr;
-	vector<uint8_t> dict_index_width;
+	//! Per build column: slot width, owned dictionary (+ NULL slot) and upstream dictionary id; shared by all threads
+	DictSurvivingInfo dict_info;
 
 	void Reset() {
 		published.store(false, std::memory_order_release);
 		layout_ptr.reset();
-		dict_index_width.clear();
+		dict_info = DictSurvivingInfo();
 	}
 };
 
@@ -415,8 +421,8 @@ public:
 			}
 			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
 		}
-		// Keep the published layout across CTE iterations (same upstream operator, same arrival types).
-		// ResetForNewIterationSinglePartition already cleared the row data and dict_registry.
+		// Keep the published layout (and the dictionaries its narrowed slots index into) across CTE iterations
+		// (same upstream operator, same arrival types). ResetForNewIterationSinglePartition cleared the row data.
 		GlobalSinkState::Reset(context);
 	}
 
@@ -592,8 +598,10 @@ static bool CanUseDictSurvivingJoin(const PhysicalHashJoin &op, const JoinHashTa
                                     bool build_side_multi_source) {
 	// external is safe here: the dictionary is an in-memory self-owned copy and the index is a plain row-store
 	// column, so a spill/repartition preserves both (unlike the pointer-embedding dict-emission/compressed-probe paths)
-	// a multi-source build can deliver a later chunk flat or as a different dictionary under the
-	// already-narrowed slot, so disqualify the whole join (see BuildSideHasMultipleSources)
+	// a multi-source build (UNION ALL, CTE) can deliver a later chunk flat or as a different dictionary under the
+	// already-narrowed slot, so disqualify the whole join (see BuildSideHasMultipleSources). A FULL/RIGHT join in
+	// the build subtree is fine: its second phase only ever delivers NULL-only probe columns, which the reserved
+	// NULL index of the owned dictionary encodes.
 	if (build_side_multi_source) {
 		return false;
 	}
@@ -644,25 +652,36 @@ void HashJoinGlobalSinkState::PublishLayoutIfFirst(HashJoinLocalSinkState &lstat
 
 	const auto &cond_types = lstate.hash_table->condition_types;
 	const auto &build_types = lstate.hash_table->build_types;
-	layout_gate.dict_index_width.assign(build_types.size(), 0);
+	auto &dict_info = layout_gate.dict_info;
+	dict_info.index_width.assign(build_types.size(), 0);
+	dict_info.entries.assign(build_types.size(), nullptr);
+	dict_info.upstream_ids.assign(build_types.size(), string());
 
 	if (CanUseDictSurvivingJoin(op, *lstate.hash_table, can_use_perfect_hash, build_side_multi_source)) {
 		// Per-column width decision lives on the JHT (GetDictSurvivingIndexWidth); feed it each arriving vector.
+		// The dictionary a narrowed slot indexes into is created here, once, and handed to every thread with the
+		// layout: a later chunk may carry no dictionary at all (NULL-only), so no thread can pin it lazily.
 		for (idx_t col = 0; col < build_types.size(); col++) {
 			if (col >= payload_chunk.ColumnCount()) {
 				continue;
 			}
-			layout_gate.dict_index_width[col] =
-			    lstate.hash_table->GetDictSurvivingIndexWidth(col, payload_chunk.data[col]);
+			auto &incoming = payload_chunk.data[col];
+			const auto index_width = lstate.hash_table->GetDictSurvivingIndexWidth(col, incoming);
+			if (index_width == 0) {
+				continue;
+			}
+			dict_info.index_width[col] = index_width;
+			dict_info.entries[col] = JoinHashTable::CreateDictSurvivingEntry(incoming);
+			dict_info.upstream_ids[col] = DictionaryVector::DictionaryId(incoming);
 		}
 	}
 
-	auto layout = BuildJoinLayout(cond_types, build_types, lstate.hash_table->join_type, layout_gate.dict_index_width);
+	auto layout = BuildJoinLayout(cond_types, build_types, lstate.hash_table->join_type, dict_info.index_width);
 	layout_gate.layout_ptr = layout;
 
 	// global HT receives the same layout so Merge/Combine and finalize-time scans operate against it
 	if (hash_table && !hash_table->IsLayoutFinalized()) {
-		hash_table->FinishInitWithLayout(layout, layout_gate.dict_index_width);
+		hash_table->FinishInitWithLayout(layout, dict_info);
 	}
 
 	layout_gate.published.store(true, std::memory_order_release);
@@ -797,7 +816,7 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 
 	// lazy per-thread setup against the published layout
 	if (!lstate.append_state_initialised) {
-		lstate.hash_table->FinishInitWithLayout(gstate.layout_gate.layout_ptr, gstate.layout_gate.dict_index_width);
+		lstate.hash_table->FinishInitWithLayout(gstate.layout_gate.layout_ptr, gstate.layout_gate.dict_info);
 		lstate.hash_table->GetSinkCollection().InitializeAppendState(lstate.append_state);
 		lstate.append_state_initialised = true;
 	}
@@ -924,10 +943,10 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 		if (!gstate.layout_gate.published.load(std::memory_order_relaxed)) {
 			const auto &cond_types = gstate.hash_table->condition_types;
 			const auto &build_types = gstate.hash_table->build_types;
-			gstate.layout_gate.dict_index_width.assign(build_types.size(), 0);
-			// all-zero dict_index_width => BuildJoinLayout keeps every build column at its native width
+			// empty dict_info => BuildJoinLayout keeps every build column at its native width
+			gstate.layout_gate.dict_info = DictSurvivingInfo();
 			auto layout = BuildJoinLayout(cond_types, build_types, gstate.hash_table->join_type,
-			                              gstate.layout_gate.dict_index_width);
+			                              gstate.layout_gate.dict_info.index_width);
 			gstate.layout_gate.layout_ptr = layout;
 			if (!gstate.hash_table->IsLayoutFinalized()) {
 				gstate.hash_table->FinishInitWithLayout(layout);
