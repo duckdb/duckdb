@@ -66,6 +66,7 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &deserializer) {
 	if (type == QueryNodeType::CTE_NODE) {
 		result = std::move(result->Cast<CTENode>().child);
 	}
+	QueryNode::VerifyDeserialized(result);
 	return result;
 }
 
@@ -221,6 +222,13 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(208, "qualify", result->qualify);
 	if (!result->from_table) {
 		result->from_table = make_uniq<EmptyTableRef>();
+	}
+	for (auto &grouping_set : result->groups.grouping_sets) {
+		for (auto &group_index : grouping_set) {
+			if (!group_index.IsValid() || group_index.GetIndex() >= result->groups.group_expressions.size()) {
+				throw SerializationException("Grouping set refers to a group that does not exist");
+			}
+		}
 	}
 	return std::move(result);
 }

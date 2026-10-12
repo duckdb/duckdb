@@ -476,6 +476,18 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 		auto child_mapping = MapColumn(context, child_column, child_index, local_column.children, *nested_mapper);
 
 		if (child_mapping.column_index) {
+			auto &child_column_index = *child_mapping.column_index;
+			if (child_mapping.local_column && child_mapping.local_column->type.id() == LogicalTypeId::STRUCT &&
+			    !child_column_index.IsPushdownExtract()) {
+				// the extracted field is read with the type it has in this file, and then remapped to the global type
+				// (the fields of a nested struct can differ between files, e.g. with union_by_name)
+				child_column_index.SetType(child_mapping.local_column->type);
+				if (child_mapping.column_map.type().id() == LogicalTypeId::TUPLE) {
+					// the mapping of a nested struct is (local name, mapping) - we extract the field directly
+					auto map_entry = StructValue::GetChildren(child_mapping.column_map)[1];
+					child_mapping.column_map = std::move(map_entry);
+				}
+			}
 			vector<ColumnIndex> single_child;
 			single_child.push_back(std::move(*child_mapping.column_index));
 			child_mapping.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), single_child);
