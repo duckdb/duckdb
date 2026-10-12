@@ -50,6 +50,17 @@ SELECT 15::BIGNUM // 3, typeof(15::BIGNUM // 3)
 ----
 5	BIGNUM
 
+# floating point operands are not rounded to a BIGNUM, both sides are cast to DOUBLE instead
+query II
+SELECT 10::BIGNUM // 0.5::FLOAT, typeof(10::BIGNUM // 0.5::FLOAT)
+----
+20.0	DOUBLE
+
+query II
+SELECT 10::BIGNUM // 0.5::DOUBLE, typeof(10::BIGNUM // 0.5::DOUBLE)
+----
+20.0	DOUBLE
+
 # division by zero
 statement error
 SELECT 100::BIGNUM // 0::BIGNUM

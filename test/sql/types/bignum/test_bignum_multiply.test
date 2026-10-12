@@ -49,6 +49,22 @@ SELECT 3 * 5::BIGNUM, typeof(3 * 5::BIGNUM)
 ----
 15	BIGNUM
 
+# floating point operands are not rounded to a BIGNUM, both sides are cast to DOUBLE instead
+query II
+SELECT 10::BIGNUM * 1.5::FLOAT, typeof(10::BIGNUM * 1.5::FLOAT)
+----
+15.0	DOUBLE
+
+query II
+SELECT 1.5::FLOAT * 10::BIGNUM, typeof(1.5::FLOAT * 10::BIGNUM)
+----
+15.0	DOUBLE
+
+query II
+SELECT 10::BIGNUM * 1.5::DOUBLE, typeof(10::BIGNUM * 1.5::DOUBLE)
+----
+15.0	DOUBLE
+
 # results beyond the HUGEINT range
 query I
 SELECT '123456789012345678901234567890'::BIGNUM * '987654321098765432109876543210'::BIGNUM

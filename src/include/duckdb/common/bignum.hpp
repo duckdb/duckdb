@@ -10,12 +10,15 @@
 
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include <stdint.h>
 #include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
 class StringHeap;
 class ArenaAllocator;
+class ClientContext;
 
 struct bignum_t {
 	string_t data;
@@ -43,6 +46,24 @@ enum AbsoluteNumberComparison : uint8_t {
 	SMALLER = 2,
 };
 
+//! State shared by the rows of one BIGNUM multiplication or division operation: the scratch buffers hold the operands
+//! as base 2^32 digits and are reused across rows so that a vector of small values does not allocate per row, and the
+//! client context (if any) is polled for interrupts and timeouts while a long multiplication or division runs.
+struct BignumArithmeticState {
+	explicit BignumArithmeticState(optional_ptr<ClientContext> context = nullptr) : context(context) {
+	}
+
+	optional_ptr<ClientContext> context;
+	//! Digit operations performed since the last interrupt check
+	idx_t work_since_interrupt_check = 0;
+	unsafe_vector<uint32_t> lhs_digits;
+	unsafe_vector<uint32_t> rhs_digits;
+	unsafe_vector<uint32_t> result_digits;
+	unsafe_vector<uint32_t> remainder_digits;
+	unsafe_vector<uint32_t> normalized_dividend;
+	unsafe_vector<uint32_t> normalized_divisor;
+};
+
 struct BignumIntermediate {
 	BignumIntermediate() : is_negative(false), size(0), data(nullptr) {};
 	explicit BignumIntermediate(const bignum_t &value);
@@ -60,8 +81,6 @@ struct BignumIntermediate {
 	uint8_t GetAbsoluteByte(int64_t index) const;
 	//! If the most significant bit of the first byte is set.
 	bool IsMSBSet() const;
-	//! If the value is zero
-	bool IsZero() const;
 	//! Initializes our bignum to 0 and 1 byte
 	void Initialize(ArenaAllocator &allocator);
 	//! If necessary, we reallocate our intermediate to the next power of 2.
@@ -76,13 +95,13 @@ struct BignumIntermediate {
 	//! Adds two BignumIntermediates and returns a string_t result, equivalent of a +
 	static string_t Add(StringHeap &heap, const BignumIntermediate &lhs, const BignumIntermediate &rhs);
 	//! Multiplies two BignumIntermediates and returns a string_t result, equivalent of a *
-	static string_t Multiply(StringHeap &heap, const BignumIntermediate &lhs, const BignumIntermediate &rhs);
-	//! Divides lhs by rhs, truncating towards zero, and returns a string_t result, equivalent of a //
-	//! The divisor must not be zero
-	static string_t Divide(StringHeap &heap, const BignumIntermediate &lhs, const BignumIntermediate &rhs);
-	//! Computes the remainder of lhs divided by rhs (same sign as lhs) and returns a string_t result, equivalent of a %
-	//! The divisor must not be zero
-	static string_t Modulo(StringHeap &heap, const BignumIntermediate &lhs, const BignumIntermediate &rhs);
+	static string_t Multiply(StringHeap &heap, BignumArithmeticState &state, const BignumIntermediate &lhs,
+	                         const BignumIntermediate &rhs);
+	//! Divides lhs by rhs: the result is the quotient truncated towards zero (equivalent of a //) or, when
+	//! want_remainder is set, the remainder with the sign of the dividend (equivalent of a %).
+	//! Returns false without writing a result when the divisor is zero.
+	static bool TryDivMod(StringHeap &heap, BignumArithmeticState &state, const BignumIntermediate &lhs,
+	                      const BignumIntermediate &rhs, bool want_remainder, string_t &result);
 	//! Negates a value, e.g., -x
 	string_t Negate(StringHeap &heap) const;
 	void NegateInPlace();

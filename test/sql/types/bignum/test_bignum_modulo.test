@@ -51,6 +51,17 @@ SELECT 17::BIGNUM % 5, typeof(17::BIGNUM % 5)
 ----
 2	BIGNUM
 
+# floating point operands are not rounded to a BIGNUM, both sides are cast to DOUBLE instead
+query II
+SELECT 11::BIGNUM % 2.5::FLOAT, typeof(11::BIGNUM % 2.5::FLOAT)
+----
+1.0	DOUBLE
+
+query II
+SELECT 11::BIGNUM % 2.5::DOUBLE, typeof(11::BIGNUM % 2.5::DOUBLE)
+----
+1.0	DOUBLE
+
 # modulo by zero
 statement error
 SELECT 100::BIGNUM % 0::BIGNUM

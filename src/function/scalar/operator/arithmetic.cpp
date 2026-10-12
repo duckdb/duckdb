@@ -471,14 +471,20 @@ static void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &resu
 	    });
 }
 
+//! The client context (if any) lets long BIGNUM multiplications and divisions check for interrupts
+static optional_ptr<ClientContext> GetBignumArithmeticContext(ExpressionState &state) {
+	return state.HasContext() ? &state.GetContext() : nullptr;
+}
+
 static void BignumMultiply(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
-	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(args.data[0], args.data[1], result,
-	                                                      [&](bignum_t a, bignum_t b) {
-		                                                      const BignumIntermediate lhs(a);
-		                                                      const BignumIntermediate rhs(b);
-		                                                      return BignumIntermediate::Multiply(heap, lhs, rhs);
-	                                                      });
+	BignumArithmeticState arithmetic_state(GetBignumArithmeticContext(state));
+	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
+	    args.data[0], args.data[1], result, [&](bignum_t a, bignum_t b) {
+		    const BignumIntermediate lhs(a);
+		    const BignumIntermediate rhs(b);
+		    return BignumIntermediate::Multiply(heap, arithmetic_state, lhs, rhs);
+	    });
 }
 
 static void BignumNegate(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -1387,21 +1393,20 @@ unique_ptr<BaseStatistics> PropagateIntegerDivideStats(ClientContext &context, F
 template <bool NULL_ON_ZERO, bool MODULO>
 static void BignumDivideOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
-	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(args.data[0], args.data[1], result,
-	                                                      [&](bignum_t a, bignum_t b) -> optional<string_t> {
-		                                                      const BignumIntermediate lhs(a);
-		                                                      const BignumIntermediate rhs(b);
-		                                                      if (rhs.IsZero()) {
-			                                                      if (!NULL_ON_ZERO) {
-				                                                      ThrowDivisionByZero(state.expr);
-			                                                      }
-			                                                      return nullopt;
-		                                                      }
-		                                                      if (MODULO) {
-			                                                      return BignumIntermediate::Modulo(heap, lhs, rhs);
-		                                                      }
-		                                                      return BignumIntermediate::Divide(heap, lhs, rhs);
-	                                                      });
+	BignumArithmeticState arithmetic_state(GetBignumArithmeticContext(state));
+	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
+	    args.data[0], args.data[1], result, [&](bignum_t a, bignum_t b) -> optional<string_t> {
+		    const BignumIntermediate lhs(a);
+		    const BignumIntermediate rhs(b);
+		    string_t quotient_or_remainder;
+		    if (!BignumIntermediate::TryDivMod(heap, arithmetic_state, lhs, rhs, MODULO, quotient_or_remainder)) {
+			    if (!NULL_ON_ZERO) {
+				    ThrowDivisionByZero(state.expr);
+			    }
+			    return nullopt;
+		    }
+		    return quotient_or_remainder;
+	    });
 }
 
 template <bool MODULO>
