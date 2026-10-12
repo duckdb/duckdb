@@ -60,6 +60,8 @@ struct BignumIntermediate {
 	uint8_t GetAbsoluteByte(int64_t index) const;
 	//! If the most significant bit of the first byte is set.
 	bool IsMSBSet() const;
+	//! If the value is zero
+	bool IsZero() const;
 	//! Initializes our bignum to 0 and 1 byte
 	void Initialize(ArenaAllocator &allocator);
 	//! If necessary, we reallocate our intermediate to the next power of 2.
@@ -73,6 +75,14 @@ struct BignumIntermediate {
 	void AddInPlace(ArenaAllocator &allocator, const BignumIntermediate &rhs);
 	//! Adds two BignumIntermediates and returns a string_t result, equivalent of a +
 	static string_t Add(StringHeap &heap, const BignumIntermediate &lhs, const BignumIntermediate &rhs);
+	//! Multiplies two BignumIntermediates and returns a string_t result, equivalent of a *
+	static string_t Multiply(StringHeap &heap, const BignumIntermediate &lhs, const BignumIntermediate &rhs);
+	//! Divides lhs by rhs, truncating towards zero, and returns a string_t result, equivalent of a //
+	//! The divisor must not be zero
+	static string_t Divide(StringHeap &heap, const BignumIntermediate &lhs, const BignumIntermediate &rhs);
+	//! Computes the remainder of lhs divided by rhs (same sign as lhs) and returns a string_t result, equivalent of a %
+	//! The divisor must not be zero
+	static string_t Modulo(StringHeap &heap, const BignumIntermediate &lhs, const BignumIntermediate &rhs);
 	//! Negates a value, e.g., -x
 	string_t Negate(StringHeap &heap) const;
 	void NegateInPlace();

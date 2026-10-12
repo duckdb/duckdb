@@ -471,6 +471,16 @@ static void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &resu
 	    });
 }
 
+static void BignumMultiply(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &heap = StringVector::GetStringHeap(result);
+	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(args.data[0], args.data[1], result,
+	                                                      [&](bignum_t a, bignum_t b) {
+		                                                      const BignumIntermediate lhs(a);
+		                                                      const BignumIntermediate rhs(b);
+		                                                      return BignumIntermediate::Multiply(heap, lhs, rhs);
+	                                                      });
+}
+
 static void BignumNegate(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<bignum_t, string_t>(args.data[0], result, [&](bignum_t a) {
@@ -1122,6 +1132,9 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	multiply.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
+	// we can multiply bignums together
+	multiply.AddFunction(
+	    ScalarFunction({LogicalType::BIGNUM, LogicalType::BIGNUM}, LogicalType::BIGNUM, BignumMultiply));
 	multiply.SetFallible();
 
 	multiply.ApplyToFunctions(NameOperatorParameters);
@@ -1367,6 +1380,42 @@ unique_ptr<BaseStatistics> PropagateIntegerDivideStats(ClientContext &context, F
 }
 
 } // namespace
+
+//===--------------------------------------------------------------------===//
+// BIGNUM division / modulo
+//===--------------------------------------------------------------------===//
+template <bool NULL_ON_ZERO, bool MODULO>
+static void BignumDivideOperation(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &heap = StringVector::GetStringHeap(result);
+	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(args.data[0], args.data[1], result,
+	                                                      [&](bignum_t a, bignum_t b) -> optional<string_t> {
+		                                                      const BignumIntermediate lhs(a);
+		                                                      const BignumIntermediate rhs(b);
+		                                                      if (rhs.IsZero()) {
+			                                                      if (!NULL_ON_ZERO) {
+				                                                      ThrowDivisionByZero(state.expr);
+			                                                      }
+			                                                      return nullopt;
+		                                                      }
+		                                                      if (MODULO) {
+			                                                      return BignumIntermediate::Modulo(heap, lhs, rhs);
+		                                                      }
+		                                                      return BignumIntermediate::Divide(heap, lhs, rhs);
+	                                                      });
+}
+
+template <bool MODULO>
+static unique_ptr<FunctionData> BindBignumDivide(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto null_on_zero = Settings::Get<NullOnDivisionByZeroSetting>(input.GetClientContext());
+	if (null_on_zero) {
+		bound_function.SetFunctionCallback(BignumDivideOperation<true, MODULO>);
+	} else {
+		bound_function.SetFunctionCallback(BignumDivideOperation<false, MODULO>);
+	}
+	return nullptr;
+}
+
 ScalarFunctionSet OperatorFloatDivideFun::GetFunctions() {
 	ScalarFunctionSet fp_divide("/");
 	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT, nullptr,
@@ -1394,6 +1443,9 @@ ScalarFunctionSet OperatorIntegerDivideFun::GetFunctions() {
 			full_divide.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDivisionByZero<DivideOperator>));
 		}
 	}
+	// we can divide bignums by bignums
+	full_divide.AddFunction(ScalarFunction({LogicalType::BIGNUM, LogicalType::BIGNUM}, LogicalType::BIGNUM, nullptr,
+	                                       BindBignumDivide<false>));
 	full_divide.SetFallible();
 	full_divide.ApplyToFunctions(NameOperatorParameters);
 	return full_divide;
@@ -1451,6 +1503,9 @@ ScalarFunctionSet OperatorModuloFun::GetFunctions() {
 			modulo.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDivisionByZero<ModuloOperator>));
 		}
 	}
+	// we can take the remainder of bignums divided by bignums
+	modulo.AddFunction(ScalarFunction({LogicalType::BIGNUM, LogicalType::BIGNUM}, LogicalType::BIGNUM, nullptr,
+	                                  BindBignumDivide<true>));
 	modulo.SetFallible();
 
 	modulo.ApplyToFunctions(NameOperatorParameters);
