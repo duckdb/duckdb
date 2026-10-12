@@ -46,12 +46,6 @@ bool ReadAheadJobCompletion::TryPark(TableFunctionInput &data_p) {
 	return true;
 }
 
-//! Throw when the query was interrupted, otherwise yield the thread
-static void ScanReadAheadYield(ClientContext &context) {
-	context.InterruptCheck();
-	TaskScheduler::YieldThread();
-}
-
 void ReadAheadJobCompletion::WaitForIO() {
 	shared_ptr<Task> task;
 	while (pending_io_tasks.load() > 0) {
@@ -199,6 +193,8 @@ unique_ptr<ScanReadAheadJob> ScanReadAhead::ClaimJob() {
 	auto job = std::move(ready_queue.front());
 	ready_queue.pop_front();
 	ReleaseSlot();
+	progress_epoch++;
+	progress.notify_all();
 	return job;
 }
 
@@ -207,6 +203,8 @@ void ScanReadAhead::WaitForJob(ScanReadAheadJob &job) {
 	// the job's I/O has completed, release its budget charge
 	pending_io_bytes -= job.io_bytes;
 	job.io_bytes = 0;
+	// the released budget can let a waiting thread produce
+	SignalProgress();
 	ThrowIfError();
 }
 
@@ -215,6 +213,7 @@ ScanReadAheadAcquire ScanReadAhead::AcquireJob(ClientContext &context, TableFunc
                                                unique_ptr<ScanReadAheadJob> &job) {
 	D_ASSERT(!job);
 	while (true) {
+		const auto epoch = ProgressEpoch();
 		// keep the queue full before claiming
 		while (TryProduceJob(claim_and_schedule)) {
 		}
@@ -233,7 +232,7 @@ ScanReadAheadAcquire ScanReadAhead::AcquireJob(ClientContext &context, TableFunc
 		}
 		if (!job) {
 			// another thread is between claiming an assignment and pushing its job, wait for it
-			ScanReadAheadYield(context);
+			WaitForProgress(context, epoch);
 			continue;
 		}
 		// park until the job's scheduled I/O completes, the last I/O task to finish wakes the scan task
@@ -298,6 +297,8 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 		pending_jobs.erase(pending_jobs.begin());
 		next_batch_index++;
 	}
+	progress_epoch++;
+	progress.notify_all();
 }
 
 void ScanReadAhead::PushError(ErrorData error) {
@@ -331,6 +332,24 @@ void ScanReadAhead::ThrowIfError() {
 void ScanReadAhead::ReleaseSlot() {
 	D_ASSERT(active_jobs.load() > 0);
 	active_jobs--;
+}
+
+void ScanReadAhead::SignalProgress() {
+	lock_guard<mutex> guard(lock);
+	progress_epoch++;
+	progress.notify_all();
+}
+
+void ScanReadAhead::WaitForProgress(ClientContext &context, idx_t epoch) {
+	context.BlockingInterruptCheck();
+	unique_lock<mutex> guard(lock);
+	// the timeout bounds the interrupt latency
+	progress.wait_for(guard, std::chrono::milliseconds(10), [&]() { return progress_epoch != epoch; });
+}
+
+idx_t ScanReadAhead::ProgressEpoch() const {
+	lock_guard<mutex> guard(lock);
+	return progress_epoch;
 }
 
 } // namespace duckdb

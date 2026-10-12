@@ -14,6 +14,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/condition_variable.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/serializer/async_memory_governor.hpp"
@@ -177,6 +178,7 @@ private:
 				read_ahead.pending_io_bytes -= MINIMUM_JOB_IO_CHARGE;
 			}
 			--read_ahead.active_producers;
+			read_ahead.SignalProgress();
 		}
 
 		ScanReadAhead &read_ahead;
@@ -204,6 +206,12 @@ private:
 	void PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<AsyncTask>> io_tasks);
 	//! Release a read-ahead slot
 	void ReleaseSlot();
+	//! Wake the threads waiting for another thread to push a job, release a slot or finish producing
+	void SignalProgress();
+	//! Wait until the read-ahead made progress since the given epoch, or the timeout passed
+	void WaitForProgress(ClientContext &context, idx_t epoch);
+	//! The current progress epoch
+	idx_t ProgressEpoch() const;
 
 private:
 	//! Minimum budget charge per job, beyond its scheduled I/O a job carries scan-state overhead (decode buffers)
@@ -233,6 +241,10 @@ private:
 	atomic<bool> done {false};
 	//! Threads that reserved a slot but have not pushed their job yet
 	atomic<idx_t> active_producers {0};
+	//! Incremented whenever a waiting thread could make progress, guarded by lock
+	idx_t progress_epoch = 0;
+	//! Signalled together with progress_epoch
+	condition_variable progress;
 	//! File-opens scheduled on the async pool that have not completed yet, shared with the open tasks
 	shared_ptr<atomic<idx_t>> pending_opens;
 	//! Async I/O executor (async pool)
