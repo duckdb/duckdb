@@ -21,7 +21,8 @@ bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionExpressio
 	// Functions such as alias() inspect expression metadata during execution.
 	auto clone = func.Copy();
 	clone->Cast<BoundFunctionExpression>().GetChildrenMutable() = std::move(children);
-	return ExpressionExecutor::TryEvaluateScalar(context, *clone, result);
+	// a nested result with many elements is not worth materializing as a Value just to derive statistics
+	return ExpressionExecutor::TryEvaluateScalar(context, *clone, result, ExpressionExecutor::MAX_FOLDED_NESTED_ELEMENTS);
 }
 
 // Equal bounds need not imply identical inputs for certain types, so we skip this optimization for those values.
