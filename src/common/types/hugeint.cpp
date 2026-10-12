@@ -89,42 +89,6 @@ hugeint_t Hugeint::Abs(hugeint_t n) {
 // Divide
 //===--------------------------------------------------------------------===//
 
-static uint8_t PositiveHugeintHighestBit(hugeint_t bits) {
-	uint8_t out = 0;
-	if (bits.upper) {
-		out = 64;
-		uint64_t up = static_cast<uint64_t>(bits.upper);
-		while (up) {
-			up >>= 1;
-			out++;
-		}
-	} else {
-		uint64_t low = bits.lower;
-		while (low) {
-			low >>= 1;
-			out++;
-		}
-	}
-	return out;
-}
-
-static bool PositiveHugeintIsBitSet(hugeint_t lhs, uint8_t bit_position) {
-	if (bit_position < 64) {
-		return lhs.lower & (uint64_t(1) << uint64_t(bit_position));
-	} else {
-		return static_cast<uint64_t>(lhs.upper) & (uint64_t(1) << uint64_t(bit_position - 64));
-	}
-}
-
-static hugeint_t PositiveHugeintLeftShift(hugeint_t lhs, uint32_t amount) {
-	D_ASSERT(amount > 0 && amount < 64);
-	hugeint_t result;
-	result.lower = lhs.lower << amount;
-	result.upper =
-	    UnsafeNumericCast<int64_t>((UnsafeNumericCast<uint64_t>(lhs.upper) << amount) + (lhs.lower >> (64 - amount)));
-	return result;
-}
-
 hugeint_t Hugeint::DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remainder) {
 	D_ASSERT(lhs.upper >= 0);
 	// DivMod code adapted from:
@@ -136,14 +100,14 @@ hugeint_t Hugeint::DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remaind
 	div_result.upper = 0;
 	remainder = 0;
 
-	uint8_t highest_bit_set = PositiveHugeintHighestBit(lhs);
+	uint8_t highest_bit_set = HugeintHighestBit(lhs);
 	// now iterate over the amount of bits that are set in the LHS
 	for (uint8_t x = highest_bit_set; x > 0; x--) {
 		// left-shift the current result and remainder by 1
-		div_result = PositiveHugeintLeftShift(div_result, 1);
+		div_result = HugeintLeftShift(div_result, 1);
 		remainder <<= 1;
 		// we get the value of the bit at position X, where position 0 is the least-significant bit
-		if (PositiveHugeintIsBitSet(lhs, x - 1)) {
+		if (HugeintIsBitSet(lhs, x - 1)) {
 			// increment the remainder
 			remainder++;
 		}
@@ -382,93 +346,11 @@ hugeint_t Hugeint::Multiply<false>(hugeint_t lhs, hugeint_t rhs) {
 // Divide
 //===--------------------------------------------------------------------===//
 
-int Sign(hugeint_t n) {
-	return ((n > 0) - (n < 0));
-}
-
-hugeint_t Abs(hugeint_t n) {
-	D_ASSERT(n != NumericLimits<hugeint_t>::Minimum());
-	return (n * Sign(n));
-}
-
-static hugeint_t DivModMinimum(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder) {
-	D_ASSERT(lhs == NumericLimits<hugeint_t>::Minimum() || rhs == NumericLimits<hugeint_t>::Minimum());
-	if (rhs == NumericLimits<hugeint_t>::Minimum()) {
-		if (lhs == NumericLimits<hugeint_t>::Minimum()) {
-			remainder = 0;
-			return 1;
-		}
-		remainder = lhs;
-		return 0;
-	}
-
-	// Add 1 to minimum and run through DivMod again
-	hugeint_t result = Hugeint::DivMod(NumericLimits<hugeint_t>::Minimum() + 1, rhs, remainder);
-
-	// If the 1 mattered we need to adjust the result, otherwise the remainder
-	if (Abs(remainder) + 1 == Abs(rhs)) {
-		result -= Sign(rhs);
-		remainder = 0;
-	} else {
-		remainder -= 1;
-	}
-	return result;
-}
-
 // No overflow checks
 hugeint_t Hugeint::DivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder) {
-	if (rhs == 0) {
-		remainder = lhs;
-		return hugeint_t(0);
-	}
-
-	// Check if one of the sides is hugeint_t minimum, as that can't be negated.
-	if (lhs == NumericLimits<hugeint_t>::Minimum() || rhs == NumericLimits<hugeint_t>::Minimum()) {
-		return DivModMinimum(lhs, rhs, remainder);
-	}
-
-	bool lhs_negative = lhs.upper < 0;
-	bool rhs_negative = rhs.upper < 0;
-	if (lhs_negative) {
-		Hugeint::NegateInPlace<false>(lhs);
-	}
-	if (rhs_negative) {
-		Hugeint::NegateInPlace<false>(rhs);
-	}
-	// DivMod code adapted from:
-	// https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
-
-	// initialize the result and remainder to 0
-	hugeint_t div_result;
-	div_result.lower = 0;
-	div_result.upper = 0;
-	remainder.lower = 0;
-	remainder.upper = 0;
-
-	uint8_t highest_bit_set = PositiveHugeintHighestBit(lhs);
-	// now iterate over the amount of bits that are set in the LHS
-	for (uint8_t x = highest_bit_set; x > 0; x--) {
-		// left-shift the current result and remainder by 1
-		div_result = PositiveHugeintLeftShift(div_result, 1);
-		remainder = PositiveHugeintLeftShift(remainder, 1);
-
-		// we get the value of the bit at position X, where position 0 is the least-significant bit
-		if (PositiveHugeintIsBitSet(lhs, x - 1)) {
-			remainder += 1;
-		}
-		if (Hugeint::GreaterThanEquals(remainder, rhs)) {
-			// the remainder has passed the division multiplier: add one to the divide result
-			remainder -= rhs;
-			div_result += 1;
-		}
-	}
-	if (lhs_negative ^ rhs_negative) {
-		Hugeint::NegateInPlace<false>(div_result);
-	}
-	if (lhs_negative) {
-		Hugeint::NegateInPlace<false>(remainder);
-	}
-	return div_result;
+	auto result = HugeintDivMod(lhs, rhs);
+	remainder = result.remainder;
+	return result.quotient;
 }
 
 bool Hugeint::TryDivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &result, hugeint_t &remainder) {
@@ -494,9 +376,7 @@ hugeint_t Hugeint::Divide<false>(hugeint_t lhs, hugeint_t rhs) {
 
 template <>
 hugeint_t Hugeint::Modulo<false>(hugeint_t lhs, hugeint_t rhs) {
-	hugeint_t remainder;
-	(void)Hugeint::DivMod(lhs, rhs, remainder);
-	return remainder;
+	return HugeintDivMod(lhs, rhs).remainder;
 }
 
 //===--------------------------------------------------------------------===//
@@ -773,60 +653,9 @@ bool Hugeint::TryConvert(long double value, hugeint_t &result) {
 //===--------------------------------------------------------------------===//
 // hugeint_t operators
 //===--------------------------------------------------------------------===//
-hugeint_t::hugeint_t(int64_t value) {
-	auto result = Hugeint::Convert(value);
-	this->lower = result.lower;
-	this->upper = result.upper;
-}
-
-bool hugeint_t::operator==(const hugeint_t &rhs) const {
-	return Hugeint::Equals(*this, rhs);
-}
-
-bool hugeint_t::operator!=(const hugeint_t &rhs) const {
-	return Hugeint::NotEquals(*this, rhs);
-}
-
-bool hugeint_t::operator<(const hugeint_t &rhs) const {
-	return Hugeint::LessThan(*this, rhs);
-}
-
-bool hugeint_t::operator<=(const hugeint_t &rhs) const {
-	return Hugeint::LessThanEquals(*this, rhs);
-}
-
-bool hugeint_t::operator>(const hugeint_t &rhs) const {
-	return Hugeint::GreaterThan(*this, rhs);
-}
-
-bool hugeint_t::operator>=(const hugeint_t &rhs) const {
-	return Hugeint::GreaterThanEquals(*this, rhs);
-}
-
-hugeint_t hugeint_t::operator+(const hugeint_t &rhs) const {
-	return hugeint_t(upper + rhs.upper + ((lower + rhs.lower) < lower), lower + rhs.lower);
-}
-
-hugeint_t hugeint_t::operator-(const hugeint_t &rhs) const {
-	return hugeint_t(upper - rhs.upper - ((lower - rhs.lower) > lower), lower - rhs.lower);
-}
-
-hugeint_t hugeint_t::operator*(const hugeint_t &rhs) const {
-	hugeint_t result = *this;
-	result *= rhs;
-	return result;
-}
-
-hugeint_t hugeint_t::operator/(const hugeint_t &rhs) const {
-	return Hugeint::Divide<false>(*this, rhs);
-}
 
 hugeint_t hugeint_t::operator%(const hugeint_t &rhs) const {
 	return Hugeint::Modulo<false>(*this, rhs);
-}
-
-hugeint_t hugeint_t::operator-() const {
-	return Hugeint::Negate<false>(*this);
 }
 
 hugeint_t hugeint_t::operator>>(const hugeint_t &rhs) const {

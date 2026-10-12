@@ -498,19 +498,14 @@ struct DecimalCastData {
 };
 
 //! StoreType max/min divided by 10, for the overflow check in DecimalCastOperation::HandleDigit.
-//! Function-local statics so each division runs once per instantiation rather than once per
-//! digit: hugeint_t::operator/ is not constexpr, so NumericLimits<T>::Maximum() / 10 is a real
-//! 128-bit division (Hugeint::DivMod) that the compiler cannot fold away.
+//! These are forced to be compile-time constants so the division is folded away: with a hugeint_t
+//! store type it is a 128-bit division that would otherwise run for every digit. hugeint_t::operator/
+//! is constexpr, but it is too large to be inlined at the call site, so the compiler does not fold it
+//! unless constant evaluation is actually required.
 template <class T>
-struct DecimalCastDiv10 {
-	static const T Min() {
-		static const T value = UnsafeNumericCast<T>(NumericLimits<T>::Minimum() / 10);
-		return value;
-	}
-	static const T Max() {
-		static const T value = UnsafeNumericCast<T>(NumericLimits<T>::Maximum() / 10);
-		return value;
-	}
+struct DecimalCastLimits {
+	static constexpr T MaximumDiv10 = NumericLimits<T>::Maximum() / 10;
+	static constexpr T MinimumDiv10 = NumericLimits<T>::Minimum() / 10;
 };
 
 struct DecimalCastOperation {
@@ -526,12 +521,12 @@ struct DecimalCastOperation {
 		}
 		state.digit_count++;
 		if (NEGATIVE) {
-			if (state.result < DecimalCastDiv10<typename T::StoreType>::Min()) {
+			if (state.result < DecimalCastLimits<typename T::StoreType>::MinimumDiv10) {
 				return false;
 			}
 			state.result = state.result * 10 - digit;
 		} else {
-			if (state.result > DecimalCastDiv10<typename T::StoreType>::Max()) {
+			if (state.result > DecimalCastLimits<typename T::StoreType>::MaximumDiv10) {
 				return false;
 			}
 			state.result = state.result * 10 + digit;
