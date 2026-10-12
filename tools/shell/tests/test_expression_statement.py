@@ -110,3 +110,8 @@ def test_survives_reopen(shell):
     )
     result = test.run()
     result.check_stdout("2")
+
+def test_builtin_type_literal(shell):
+    test = ShellTest(shell).statement("DATE '2020-01-01';")
+    result = test.run()
+    result.check_stdout("2020-01-01")

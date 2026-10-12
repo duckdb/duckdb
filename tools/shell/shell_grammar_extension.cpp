@@ -79,10 +79,9 @@ ShellGrammarExtension::ShellGrammarExtension()
 
 vector<GrammarChange> ShellGrammarExtension::GetChanges() const {
 	vector<GrammarChange> changes;
-	// the core matcher factory suppresses autocomplete suggestions for a rule with this exact name, so a bare
-	// expression does not pollute statement-level completion
-	changes.push_back(
-	    GrammarChange::AddRule("ExpressionStatement <- List(ExpressionAlias)", StartExpressionStatementTransform));
+	// suppress suggestions so a bare expression does not pollute statement-level completion
+	changes.push_back(GrammarChange::AddRule("ExpressionStatement <- List(ExpressionAlias)",
+	                                         StartExpressionStatementTransform, true));
 	// no implicit aliases ("1 + 1 foo") - those are too easily confused with a typo'd statement
 	changes.push_back(GrammarChange::AddRule("ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression"));
 	// last alternative so every real statement is tried first
