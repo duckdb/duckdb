@@ -199,8 +199,10 @@ void BindPreparedStatementParameters(ClientContext &context, PreparedStatementDa
 	statement.Bind(context, owned_values);
 }
 
-unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
-    ClientContextLock &lock, shared_ptr<PreparedStatementData> statement_data_p, const QueryParameters &parameters) {
+unique_ptr<QueryResult>
+ClientContext::SubmitPreparedStatementInternal(ClientContextLock &lock,
+                                               shared_ptr<PreparedStatementData> statement_data_p,
+                                               const QueryParameters &parameters, Retention retention) {
 	D_ASSERT(active_query);
 	auto &statement_data = *statement_data_p;
 	BindPreparedStatementParameters(*this, statement_data, parameters);
@@ -265,8 +267,7 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 			buffer = make_shared_ptr<SimpleBufferedData>(*this, ResultLifetime::UNDECIDED, std::move(format_context),
 			                                             parameters.format);
 		}
-		if (parameters.result_eagerness == ResultEagerness::FORCED ||
-		    statement_data.properties.result_eagerness == ResultEagerness::FORCED) {
+		if (retention == Retention::RETAINED_AT_SUBMISSION) {
 			// Settled before execution starts, so no producer ever parks for the decision
 			buffer->Decide(ResultLifetime::RETAINED);
 		}
