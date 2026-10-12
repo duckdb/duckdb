@@ -1,5 +1,5 @@
 diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
-index 3a3ac60..367a61c 100644
+index 3a3ac60..9b4f88a 100644
 --- a/src/hnsw/hnsw_index.cpp
 +++ b/src/hnsw/hnsw_index.cpp
 @@ -31,6 +31,7 @@
@@ -19,14 +19,13 @@ index 3a3ac60..367a61c 100644
  
  	// We only support one ARRAY column
  	D_ASSERT(logical_types.size() == 1);
-@@ -556,25 +557,23 @@ void HNSWIndex::PersistToDisk() {
+@@ -556,25 +557,21 @@ void HNSWIndex::PersistToDisk() {
  	is_dirty = false;
  }
  
 -IndexStorageInfo HNSWIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
 -
 +IndexCheckpointResult HNSWIndex::Checkpoint(PartialBlockManager &partial_block_manager, StorageVersion) {
-+	annotated_lock_guard guard(lock);
  	PersistToDisk();
  
 +	auto new_linked_block_allocator = linked_block_allocator->Persist(partial_block_manager);
@@ -50,7 +49,6 @@ index 3a3ac60..367a61c 100644
  
 -IndexStorageInfo HNSWIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
 +IndexStorageInfo HNSWIndex::SerializeToWAL(StorageVersion version) {
-+	annotated_lock_guard guard(lock);
  
  	PersistToDisk();
  

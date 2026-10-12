@@ -62,7 +62,7 @@ index e35f303..ed3b259 100644
 \ No newline at end of file
 +} // namespace duckdb
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
-index ff55d44..6a6b13c 100644
+index ff55d44..7072db7 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
 +++ b/src/spatial/index/rtree/rtree_index.cpp
 @@ -9,6 +9,7 @@
@@ -73,13 +73,12 @@ index ff55d44..6a6b13c 100644
  #include "duckdb/storage/table/scan_state.hpp"
  #include "duckdb/main/database.hpp"
  #include "spatial/spatial_types.hpp"
-@@ -235,32 +236,20 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &row_vec) {
+@@ -235,32 +236,18 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &row_vec) {
  	ConvertToEntries(box_vec, row_vec, count, [&](const RTreeEntry &entry) { tree->Delete(entry); });
  }
  
 -IndexStorageInfo RTreeIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
 +IndexCheckpointResult RTreeIndex::Checkpoint(PartialBlockManager &partial_block_manager, StorageVersion) {
-+	annotated_lock_guard guard(lock);
 +	tree->Persist(partial_block_manager);
  
  	IndexStorageInfo info;
@@ -110,7 +109,6 @@ index ff55d44..6a6b13c 100644
  
 -IndexStorageInfo RTreeIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
 +IndexStorageInfo RTreeIndex::SerializeToWAL(StorageVersion target_version) {
-+	annotated_lock_guard guard(lock);
  
  	IndexStorageInfo info;
  	info.name = name;
