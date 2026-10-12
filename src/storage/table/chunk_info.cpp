@@ -274,35 +274,6 @@ bool ChunkVectorInfo::Fetch(TransactionData transaction, row_t row) {
 	return UseVersion(transaction, fetch_insert_id) && !UseVersion(transaction, fetch_deleted_id);
 }
 
-bool ChunkVectorInfo::HasConflictingDelete(transaction_t transaction_id, const row_t ids[], idx_t count,
-                                           row_t offset) const {
-	switch (delete_state) {
-	case DeleteIdState::CONSTANT:
-		return ConstantDeleteId() != NOT_DELETED_ID && ConstantDeleteId() != transaction_id;
-	case DeleteIdState::MASKED:
-		// the mask only holds committed deletes, i.e. deletes by other transactions
-		for (idx_t i = 0; i < count; i++) {
-			if (deleted_mask.RowIsValid(NumericCast<idx_t>(ids[i] - offset))) {
-				return true;
-			}
-		}
-		return false;
-	case DeleteIdState::ARRAY: {
-		auto segment = allocator.GetHandle(GetDeletedPointer());
-		auto deleted = segment.GetPtr<transaction_t>();
-		for (idx_t i = 0; i < count; i++) {
-			auto delete_id = deleted[ids[i] - offset];
-			if (delete_id != NOT_DELETED_ID && delete_id != transaction_id) {
-				return true;
-			}
-		}
-		return false;
-	}
-	default:
-		throw InternalException("Unknown DeleteIdState in HasConflictingDelete");
-	}
-}
-
 //! The writer of the row in the list (0 for none)
 static transaction_t FindWriter(const vector<WriterRows> &writer_rows, idx_t row) {
 	for (auto &entry : writer_rows) {
@@ -333,15 +304,47 @@ static void RemoveWriters(vector<WriterRows> &writer_rows, VisibilityBound lowes
 	                  writer_rows.end());
 }
 
-bool ChunkVectorInfo::HasConflictingUpdate(const SnapshotView &view, const row_t ids[], idx_t count,
-                                           row_t offset) const {
+bool ChunkVectorInfo::HasConflictingWrite(TransactionData transaction, const row_t ids[], idx_t count,
+                                          row_t offset) const {
+	auto transaction_id = transaction.GetTransactionId();
+	// a row deleted by another transaction
+	switch (delete_state) {
+	case DeleteIdState::CONSTANT:
+		if (ConstantDeleteId() != NOT_DELETED_ID && ConstantDeleteId() != transaction_id) {
+			return true;
+		}
+		break;
+	case DeleteIdState::MASKED:
+		// the mask only holds committed deletes, i.e. deletes by other transactions
+		for (idx_t i = 0; i < count; i++) {
+			if (deleted_mask.RowIsValid(NumericCast<idx_t>(ids[i] - offset))) {
+				return true;
+			}
+		}
+		break;
+	case DeleteIdState::ARRAY: {
+		auto segment = allocator.GetHandle(GetDeletedPointer());
+		auto deleted = segment.GetPtr<transaction_t>();
+		for (idx_t i = 0; i < count; i++) {
+			auto delete_id = deleted[ids[i] - offset];
+			if (delete_id != NOT_DELETED_ID && delete_id != transaction_id) {
+				return true;
+			}
+		}
+		break;
+	}
+	default:
+		throw InternalException("Unknown DeleteIdState in HasConflictingWrite");
+	}
+
+	// a row updated by a transaction that the transaction does not see
 	if (!row_writers) {
 		return false;
 	}
 	bool sees_all_writers = true;
 	for (auto writer_rows : {&row_writers->last, &row_writers->previous}) {
 		for (auto &entry : *writer_rows) {
-			sees_all_writers = sees_all_writers && view.Sees(entry.writer);
+			sees_all_writers = sees_all_writers && transaction.view.Sees(entry.writer);
 		}
 	}
 	if (sees_all_writers) {
@@ -354,7 +357,7 @@ bool ChunkVectorInfo::HasConflictingUpdate(const SnapshotView &view, const row_t
 		if (writer == 0) {
 			writer = FindWriter(row_writers->previous, row);
 		}
-		if (!view.Sees(writer)) {
+		if (!transaction.view.Sees(writer)) {
 			return true;
 		}
 	}
@@ -470,8 +473,7 @@ static bool CoversFirstRows(const row_t rows[], idx_t count, row_t offset) {
 
 idx_t ChunkVectorInfo::Delete(TransactionData transaction, row_t rows[], idx_t count) {
 	auto transaction_id = transaction.GetTransactionId();
-	if (HasConflictingDelete(transaction_id, rows, count, 0) ||
-	    HasConflictingUpdate(transaction.view, rows, count, 0)) {
+	if (HasConflictingWrite(transaction, rows, count, 0)) {
 		throw TransactionException("Conflict on tuple deletion!");
 	}
 	if (HasConstantDeleteId() && ConstantDeleteId() != NOT_DELETED_ID) {
@@ -505,8 +507,7 @@ idx_t ChunkVectorInfo::Delete(TransactionData transaction, row_t rows[], idx_t c
 void ChunkVectorInfo::Update(TransactionData transaction, const row_t ids[], idx_t count, row_t offset,
                              VisibilityBound lowest_visibility_bound) {
 	auto transaction_id = transaction.GetTransactionId();
-	if (HasConflictingDelete(transaction_id, ids, count, offset) ||
-	    HasConflictingUpdate(transaction.view, ids, count, offset)) {
+	if (HasConflictingWrite(transaction, ids, count, offset)) {
 		throw TransactionException("Conflict on update!");
 	}
 	if (!row_writers) {

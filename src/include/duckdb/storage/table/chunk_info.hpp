@@ -80,10 +80,6 @@ public:
 	idx_t GetRowCount(ScanOptions options, idx_t max_count);
 	//! Returns whether or not a single row in the ChunkVectorInfo should be used or not for the given transaction
 	bool Fetch(TransactionData transaction, row_t row);
-	//! Whether any of the rows (ids[i] - offset) was deleted by another transaction
-	bool HasConflictingDelete(transaction_t transaction_id, const row_t ids[], idx_t count, row_t offset) const;
-	//! Whether any of the rows (ids[i] - offset) was updated by a transaction that the view does not see
-	bool HasConflictingUpdate(const SnapshotView &view, const row_t ids[], idx_t count, row_t offset) const;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end);
 	bool Cleanup(VisibilityBound lowest_visibility_bound) const;
 	string ToString(idx_t max_count) const;
@@ -142,6 +138,8 @@ private:
 	void CompressDeleteToMask(transaction_t mask_id);
 	//! MASKED -> ARRAY: re-materialize the per-row delete array from the bitmask
 	void DecompressDeleteMask();
+	//! Whether any of the rows (ids[i] - offset) was deleted by another transaction or updated by an unseen one
+	bool HasConflictingWrite(TransactionData transaction, const row_t ids[], idx_t count, row_t offset) const;
 
 private:
 	FixedSizeAllocator &allocator;
