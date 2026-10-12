@@ -178,9 +178,21 @@ namespace duckdb_vergesort
             }
         }
 
-        template<typename RandomAccessIterator, typename Compare, typename Fallback>
+        // Merge policy used for the final pairwise run merges: std::inplace_merge allocates its temporary buffer
+        // with operator new, callers that want to control that memory pass their own merge
+        struct inplace_merge_policy
+        {
+            template<typename RandomAccessIterator, typename Compare>
+            void operator()(RandomAccessIterator first, RandomAccessIterator middle,
+                            RandomAccessIterator last, Compare compare) const
+            {
+                std::inplace_merge(first, middle, last, compare);
+            }
+        };
+
+        template<typename RandomAccessIterator, typename Compare, typename Fallback, typename Merge>
         void vergesort(RandomAccessIterator first, RandomAccessIterator last,
-                       Compare compare, std::random_access_iterator_tag, Fallback fallback)
+                       Compare compare, std::random_access_iterator_tag, Fallback fallback, Merge merge)
         {
             typedef typename std::iterator_traits<RandomAccessIterator>::difference_type difference_type;
             difference_type dist = last - first;
@@ -321,7 +333,7 @@ namespace duckdb_vergesort
                 for (typename std::list<RandomAccessIterator>::iterator it = runs.begin() ;
                      it != runs.end() && it != detail::prev(runs.end()) ;
                      ++it) {
-                    std::inplace_merge(begin, *it, *detail::next(it), compare);
+                    merge(begin, *it, *detail::next(it), compare);
 
                     // Remove the middle iterator and advance
                     it = runs.erase(it);
@@ -331,12 +343,19 @@ namespace duckdb_vergesort
         }
     }
 
+    template<typename BidirectionalIterator, typename Compare, typename Fallback, typename Merge>
+    void vergesort(BidirectionalIterator first, BidirectionalIterator last,
+                   Compare compare, Fallback fallback, Merge merge)
+    {
+        typedef typename std::iterator_traits<BidirectionalIterator>::iterator_category category;
+        detail::vergesort(first, last, compare, category(), fallback, merge);
+    }
+
     template<typename BidirectionalIterator, typename Compare, typename Fallback>
     void vergesort(BidirectionalIterator first, BidirectionalIterator last,
                    Compare compare, Fallback fallback)
     {
-        typedef typename std::iterator_traits<BidirectionalIterator>::iterator_category category;
-        detail::vergesort(first, last, compare, category(), fallback);
+        vergesort(first, last, compare, fallback, detail::inplace_merge_policy());
     }
 
     template<typename BidirectionalIterator, typename Fallback>
