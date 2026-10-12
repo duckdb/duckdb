@@ -14,6 +14,9 @@ ATTACH ':memory:' AS "my db";
 statement ok
 ATTACH ':memory:' AS "it's";
 
+statement ok
+ATTACH ':memory:' AS "my""db";
+
 # string literal naming a catalog
 statement ok
 USE 'db2'
@@ -81,6 +84,23 @@ query II
 SELECT current_catalog(), current_schema()
 ----
 it's	main
+
+# a double quote inside a string literal is a plain character
+statement ok
+USE 'my"db'
+
+query II
+SELECT current_catalog(), current_schema()
+----
+my"db	main
+
+statement ok
+USE "my""db"
+
+query I
+SELECT current_database()
+----
+my"db
 
 # a string literal is a single name, a dot inside it is not a separator
 statement error
