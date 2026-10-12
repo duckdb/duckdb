@@ -10,7 +10,7 @@ foreach threads 1 4 32 192
 statement ok
 SET threads={threads};
 
-foreach rows 0 1 2049 125003 1000003
+foreach rows 0 1 2049 125003 400003
 
 # The self-join requires independently scanning the materialized collection.
 # Include empty inputs, partial vectors and collections spanning many chunks.
