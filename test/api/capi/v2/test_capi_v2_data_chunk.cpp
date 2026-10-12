@@ -1356,4 +1356,38 @@ TEST_CASE("V2: bignum encode requires a canonical magnitude", "[capi_v2][data_ch
 	REQUIRE(len == 4);
 }
 
+TEST_CASE("V2: data_chunk_clear empties a chunk for reuse", "[capi_v2][data_chunk]") {
+	EnvFixture fx;
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	auto rc = duckdb_v2_data_chunk_create(fx.factory, &integer, 1, &chunk, nullptr);
+	duckdb_v2_logical_type_destroy(&integer);
+	REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
+
+	duckdb_v2_vector_handle vec = nullptr;
+	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_set_size(vec, 5, nullptr) == DUCKDB_V2_ERROR_NONE);
+	idx_t size = 0;
+	REQUIRE(duckdb_v2_data_chunk_get_size(chunk, &size, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(size == 5);
+
+	REQUIRE(duckdb_v2_data_chunk_clear(chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_get_size(chunk, &size, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(size == 0);
+	DUCKDB_V2_VECTOR_TYPE type = DUCKDB_V2_VECTOR_TYPE_CONSTANT;
+	REQUIRE(duckdb_v2_vector_get_vector_type(vec, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(type == DUCKDB_V2_VECTOR_TYPE_FLAT);
+
+	// Writable again.
+	REQUIRE(duckdb_v2_vector_set_size(vec, 1, nullptr) == DUCKDB_V2_ERROR_NONE);
+	void *data = nullptr;
+	REQUIRE(duckdb_v2_vector_get_data_mutable(vec, &data, nullptr) == DUCKDB_V2_ERROR_NONE);
+	static_cast<int32_t *>(data)[0] = 42;
+	REQUIRE(duckdb_v2_data_chunk_get_size(chunk, &size, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(size == 1);
+
+	REQUIRE(duckdb_v2_data_chunk_clear(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_data_chunk_destroy(&chunk);
+}
+
 } // namespace test_capi_v2

@@ -941,6 +941,18 @@ auto SqlStatement::GetText() const -> std::string_view {
 	return FromStr(text);
 }
 
+auto SqlStatement::AddCollection(std::string_view name, const ColumnDataCollection &collection,
+                                 const std::vector<std::string> &column_names) -> void {
+	auto name_str = ToStr(name);
+	std::vector<duckdb_v2_identifier_t> names;
+	names.reserve(column_names.size());
+	for (auto &column_name : column_names) {
+		names.push_back(ToStr(column_name));
+	}
+	CheckedAPICall(duckdb_v2_statement_add_collection, handle(), &name_str, collection.handle(),
+	               names.empty() ? nullptr : names.data(), names.size());
+}
+
 auto SqlStatement::GetParameterNames() const -> std::vector<std::string_view> {
 	idx_t count = 0;
 	CheckedAPICall(duckdb_v2_sql_statement_get_parameter_count, handle(), &count);
@@ -2298,14 +2310,27 @@ auto Vector::Reference(const Vector &source) -> void {
 
 auto Vector::Cast(Factory &factory, Vector &target) const -> void {
 	CheckedAPICall(duckdb_v2_vector_cast, factory.handle(), handle(), target.handle(), DUCKDB_V2_CAST_MODE_NORMAL,
-	               nullptr);
+	               nullptr, nullptr);
 }
 
-auto Vector::TryCast(Factory &factory, Vector &target) const -> bool {
+auto Vector::TryCast(Factory &factory, Vector &target, std::string *error_message) const -> bool {
 	bool converted = false;
+	duckdb_v2_error_info_handle cast_error = nullptr;
 	CheckedAPICall(duckdb_v2_vector_cast, factory.handle(), handle(), target.handle(), DUCKDB_V2_CAST_MODE_TRY,
-	               &converted);
+	               &converted, error_message ? &cast_error : nullptr);
+	if (cast_error) {
+		duckdb_v2_str text = {nullptr, 0};
+		duckdb_v2_error_info_get_text(cast_error, &text);
+		error_message->assign(text.ptr ? std::string(text.ptr, text.len) : std::string());
+		duckdb_v2_error_info_destroy(&cast_error);
+	}
 	return converted;
+}
+
+auto Vector::GetLogicalType() const -> LogicalType {
+	duckdb_v2_logical_type_handle type = nullptr;
+	CheckedAPICall(duckdb_v2_vector_get_logical_type, handle(), &type);
+	return detail::HandleFactory::Make<LogicalType>(type);
 }
 
 auto Vector::GetSize() const -> idx_t {
@@ -2375,10 +2400,7 @@ auto Vector::CheckWriteRange(idx_t start, idx_t count) const -> void {
 }
 
 auto Vector::AssignString(idx_t index, std::string_view data) -> void {
-	duckdb_v2_logical_type_handle type = nullptr;
-	CheckedAPICall(duckdb_v2_vector_get_logical_type, handle(), &type);
-	auto logical_type = detail::HandleFactory::Make<LogicalType>(type);
-	if (logical_type.GetTypeId() != LogicalTypeId::VARCHAR) {
+	if (GetLogicalType().GetTypeId() != LogicalTypeId::VARCHAR) {
 		AssignStringUnsafe(index, data);
 		return;
 	}
@@ -2459,6 +2481,10 @@ auto DataChunk::GetCapacity() const -> idx_t {
 	idx_t capacity = 0;
 	CheckedAPICall(duckdb_v2_data_chunk_get_capacity, handle(), &capacity);
 	return capacity;
+}
+
+auto DataChunk::Clear() -> void {
+	CheckedAPICall(duckdb_v2_data_chunk_clear, handle());
 }
 
 auto DataChunk::GetVectorCount() const -> idx_t {
@@ -5090,6 +5116,12 @@ auto CopyFunction::SetName(const std::string &name) & -> CopyFunction & {
 	return *this;
 }
 
+auto CopyFunction::SetFileExtension(const std::string &extension) & -> CopyFunction & {
+	auto view = ToStr(extension);
+	CheckedAPICall(duckdb_v2_copy_function_set_file_extension, handle(), &view);
+	return *this;
+}
+
 auto CopyFunction::SetUserDataInternal(void *data, void (*destructor)(void *)) -> void {
 	user_data = detail::UserData(data, destructor);
 }
@@ -6401,21 +6433,21 @@ auto FileSystem::CreateOpenOptions() const -> FileOpenOptions {
 	return FileOpenOptions::Create(*this);
 }
 
-auto FileSystem::PathExists(const std::string &path) const -> bool {
+auto FileSystem::Exists(const std::string &path) const -> bool {
 	auto path_str = ToStr(path);
 	bool exists = false;
 	CheckedAPICall(duckdb_v2_file_system_path_exists, handle(), &path_str, &exists);
 	return exists;
 }
 
-auto FileSystem::PathIsRemote(const std::string &path) const -> bool {
+auto FileSystem::IsRemote(const std::string &path) const -> bool {
 	auto path_str = ToStr(path);
 	bool is_remote = false;
 	CheckedAPICall(duckdb_v2_file_system_path_is_remote, handle(), &path_str, &is_remote);
 	return is_remote;
 }
 
-auto FileSystem::PathExpand(const std::string &path) const -> std::string {
+auto FileSystem::Expand(const std::string &path) const -> std::string {
 	auto sink = [](const duckdb_v2_str *text, void *user_data, duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&] {
 			if (text->ptr && text->len) {
@@ -6427,6 +6459,31 @@ auto FileSystem::PathExpand(const std::string &path) const -> std::string {
 	std::string out;
 	CheckedAPICall(duckdb_v2_file_system_path_expand, handle(), &path_str, sink, &out);
 	return out;
+}
+
+auto FileSystem::Glob(const std::string &pattern) const -> std::vector<std::string> {
+	auto callback = [](const duckdb_v2_str *path, void *user_data, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&] {
+			static_cast<std::vector<std::string> *>(user_data)->emplace_back(path->ptr ? path->ptr : "", path->len);
+		});
+	};
+	auto pattern_str = ToStr(pattern);
+	std::vector<std::string> matches;
+	CheckedAPICall(duckdb_v2_file_system_path_glob, handle(), &pattern_str, callback, &matches);
+	return matches;
+}
+
+auto FileSystem::Move(const std::string &source, const std::string &target) const -> void {
+	auto source_str = ToStr(source);
+	auto target_str = ToStr(target);
+	CheckedAPICall(duckdb_v2_file_system_path_move, handle(), &source_str, &target_str);
+}
+
+auto FileSystem::Remove(const std::string &path) const -> bool {
+	auto path_str = ToStr(path);
+	bool removed = false;
+	CheckedAPICall(duckdb_v2_file_system_path_remove, handle(), &path_str, &removed);
+	return removed;
 }
 
 auto FileSystem::OpenFile(const std::string &path, std::initializer_list<FileFlags> flags) const -> FileHandle {
@@ -6840,20 +6897,6 @@ auto ReplacementScan::Input::GetContext() -> Context & {
 
 namespace {
 
-bool EqualsIgnoreCase(std::string_view a, std::string_view b) {
-	if (a.size() != b.size()) {
-		return false;
-	}
-	for (size_t i = 0; i < a.size(); i++) {
-		auto lhs = static_cast<unsigned char>(a[i]);
-		auto rhs = static_cast<unsigned char>(b[i]);
-		if (std::tolower(lhs) != std::tolower(rhs)) {
-			return false;
-		}
-	}
-	return true;
-}
-
 // Parses exactly one statement out of `sql`.
 auto ParseSingleStatement(Connection &conn, const std::string &sql) -> SqlStatement {
 	auto statements = conn.ParseSQL(sql);
@@ -6867,8 +6910,8 @@ auto ParseSingleStatement(Connection &conn, const std::string &sql) -> SqlStatem
 	return first;
 }
 
-// Names the buffers the table constructor generates, so two appenders on one connection never collide.
-std::atomic<uint64_t> appender_buffer_counter {0}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+// The name the table constructor's INSERT reads the buffer under.
+constexpr const char *TABLE_APPENDER_BUFFER_NAME = "__duckdb_appender_buffer";
 
 } // namespace
 
@@ -6885,32 +6928,12 @@ void Appender::Initialize(Connection &conn, const std::string &query, std::vecto
 		throw InvalidInputException("an appender needs at least one column type");
 	}
 
-	buffer = std::make_shared<Buffer>();
-	buffer->name = buffer_name;
-	buffer->column_names = column_names;
-	buffer->collection = std::make_unique<ColumnDataCollection>(conn.GetFactory(), types);
-
-	// The scan makes the buffer visible to the statement under its name. It is connection-scoped, so it is invisible
-	// to every other connection, and it holds the buffer by shared_ptr because it outlives this object.
-	auto scan = ReplacementScan::Create(conn.GetFactory());
-	scan.SetCallback([](ReplacementScan::Input &input) {
-		auto &shared = input.GetUserData<std::shared_ptr<Buffer>>();
-		if (!shared->collection) {
-			return; // the appender is gone: decline
-		}
-		// Only an unqualified reference can be the buffer; anything catalog- or schema-qualified is a real object.
-		auto name = input.GetName();
-		if (name.GetPartCount() != 1 || !EqualsIgnoreCase(name.GetName(), shared->name)) {
-			return; // not ours: decline
-		}
-		input.SetCollection(*shared->collection, shared->column_names);
-	});
-	scan.SetUserData<std::shared_ptr<Buffer>>(buffer);
-	conn.Register(scan);
+	collection = std::make_unique<ColumnDataCollection>(conn.GetFactory(), types);
 
 	// Parsed once and re-executed per flush.
 	statement = std::make_unique<SqlStatement>(ParseSingleStatement(conn, query));
-	append_state = std::make_unique<ColumnDataCollection::AppendState>(buffer->collection->CreateAppendState());
+	statement->AddCollection(buffer_name, *collection, column_names);
+	append_state = std::make_unique<ColumnDataCollection::AppendState>(collection->CreateAppendState());
 }
 
 namespace {
@@ -6925,7 +6948,7 @@ struct AppenderTablePlan {
 
 AppenderTablePlan PlanTableAppender(Connection &conn, std::string_view table) {
 	AppenderTablePlan plan;
-	plan.buffer_name = "__appender_buffer_" + std::to_string(appender_buffer_counter++);
+	plan.buffer_name = TABLE_APPENDER_BUFFER_NAME;
 
 	// Bind rather than execute: it resolves the table and reports its columns without reading a row.
 	auto probe = ParseSingleStatement(conn, "SELECT * FROM " + std::string(table));
@@ -6955,21 +6978,14 @@ Appender::Appender(Connection &conn, std::string_view table) {
 	Initialize(conn, plan.query, std::move(plan.types), plan.buffer_name, plan.column_names);
 }
 
-Appender::~Appender() {
-	// Frees the buffer without flushing. The replacement scan outlives this object and stays registered on the
-	// connection, so the shared block survives; nulling the collection makes the scan decline from here on.
-	if (buffer) {
-		append_state.reset();
-		buffer->collection.reset();
-	}
-}
+Appender::~Appender() = default;
 
 void Appender::ResetBuffer() {
 	// Drop the append state first: it references the segments the clear releases.
 	append_state.reset();
-	buffer->collection->Clear();
+	collection->Clear();
 	try {
-		append_state = std::make_unique<ColumnDataCollection::AppendState>(buffer->collection->CreateAppendState());
+		append_state = std::make_unique<ColumnDataCollection::AppendState>(collection->CreateAppendState());
 	} catch (...) {
 		broken = true;
 		throw;
@@ -6982,7 +6998,7 @@ void Appender::AppendChunk(DataChunk &chunk) {
 	}
 	try {
 		// The append validates the chunk's columns against the buffer and refuses a mismatch before copying.
-		buffer->collection->Append(*append_state, chunk);
+		collection->Append(*append_state, chunk);
 	} catch (const Exception &ex) {
 		// A validation refusal leaves the buffer untouched; anything else may have copied part of the chunk.
 		if (ex.GetCode() != DUCKDB_V2_ERROR_INPUT_INVALID) {
@@ -6999,7 +7015,7 @@ void Appender::Flush() {
 	if (broken) {
 		throw InvalidInputException("the appender is broken after a failed buffer operation; Clear or destroy it");
 	}
-	if (buffer->collection->GetRowCount() == 0) {
+	if (collection->GetRowCount() == 0) {
 		return;
 	}
 	try {
