@@ -42,7 +42,11 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunc
 			throw BinderException("Database \"%s\" not found", db_name);
 		}
 	} else {
-		db = db_manager.GetDatabase(context, DatabaseManager::GetDefaultDatabase(context));
+		auto default_database = DatabaseManager::GetDefaultDatabase(context);
+		db = db_manager.GetDatabase(context, default_database);
+		if (!db) {
+			throw BinderException("Catalog \"%s\" does not exist!", default_database);
+		}
 	}
 	if (!db->HasStorageManager()) {
 		throw BinderException("Cannot checkpoint database \"%s\": it does not have storage", db->GetName());
