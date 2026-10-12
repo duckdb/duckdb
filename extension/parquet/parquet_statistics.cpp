@@ -243,8 +243,8 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 				    scale);
 			case PhysicalType::VARCHAR:
 				// wide decimal stored as a BIGNUM blob
-				return Value::DECIMAL(ParquetDecimalUtils::ReadWideDecimalValue(stats_data, stats.size()), width,
-				                      scale);
+				return Value::WIDEDECIMAL(ParquetDecimalUtils::ReadWideDecimalValue(stats_data, stats.size()), width,
+				                          scale);
 			default:
 				throw InvalidInputException("Unsupported internal type for decimal");
 			}

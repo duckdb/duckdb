@@ -313,7 +313,7 @@ Value Value::MinimumValue(const LogicalType &type) {
 			return Value::DECIMAL(-Hugeint::POWERS_OF_TEN[width] + 1, width, scale);
 		case PhysicalType::VARCHAR:
 			// wide decimal: -(10^width - 1)
-			return Value::DECIMAL(Bignum::VarcharToBignum(string_t("-" + string(width, '9'))), width, scale);
+			return Value::WIDEDECIMAL(Bignum::VarcharToBignum(string_t("-" + string(width, '9'))), width, scale);
 		default:
 			throw InternalException("Unknown decimal type");
 		}
@@ -414,7 +414,7 @@ Value Value::MaximumValue(const LogicalType &type) {
 			return Value::DECIMAL(Hugeint::POWERS_OF_TEN[width] - 1, width, scale);
 		case PhysicalType::VARCHAR:
 			// wide decimal: 10^width - 1
-			return Value::DECIMAL(Bignum::VarcharToBignum(string_t(string(width, '9'))), width, scale);
+			return Value::WIDEDECIMAL(Bignum::VarcharToBignum(string_t(string(width, '9'))), width, scale);
 		default:
 			throw InternalException("Unknown decimal type");
 		}
@@ -655,7 +655,7 @@ Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
 		break;
 	case PhysicalType::VARCHAR:
 		// wide decimal: the unscaled value is a BIGNUM blob
-		return Value::DECIMAL(BignumDecimal::FromInteger(hugeint_t(value)), width, scale);
+		return Value::WIDEDECIMAL(BignumDecimal::FromInteger(hugeint_t(value)), width, scale);
 	default:
 		result.value_.hugeint = value;
 		break;
@@ -668,7 +668,7 @@ Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
 Value Value::DECIMAL(hugeint_t value, uint8_t width, uint8_t scale) {
 	if (Decimal::IsWide(width)) {
 		// wide decimal: the unscaled value is a BIGNUM blob
-		return Value::DECIMAL(BignumDecimal::FromInteger(value), width, scale);
+		return Value::WIDEDECIMAL(BignumDecimal::FromInteger(value), width, scale);
 	}
 	D_ASSERT(width >= Decimal::MAX_WIDTH_INT64 && width <= Decimal::MAX_WIDTH_INT128);
 	Value result(LogicalType::DECIMAL(width, scale));
@@ -677,7 +677,7 @@ Value Value::DECIMAL(hugeint_t value, uint8_t width, uint8_t scale) {
 	return result;
 }
 
-Value Value::DECIMAL(const string &unscaled_bignum, uint8_t width, uint8_t scale) {
+Value Value::WIDEDECIMAL(const string &unscaled_bignum, uint8_t width, uint8_t scale) {
 	D_ASSERT(Decimal::IsWide(width));
 	Value result(LogicalType::DECIMAL(width, scale));
 	result.is_null = false;
