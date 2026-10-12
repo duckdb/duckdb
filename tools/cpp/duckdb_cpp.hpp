@@ -2619,8 +2619,9 @@ public:
 	auto Cast(Factory &factory, Vector &target) const -> void;
 
 	/// `Cast` like SQL `TRY_CAST`: a row that does not convert becomes NULL in `target` instead of failing the cast.
+	/// @param error_message Optional. When not every row converted, receives the conversion error of one that did not.
 	/// @return Whether every row converted.
-	auto TryCast(Factory &factory, Vector &target) const -> bool;
+	auto TryCast(Factory &factory, Vector &target, std::string *error_message = nullptr) const -> bool;
 
 	/// How many rows the vector holds.
 	auto GetSize() const -> idx_t;
@@ -2638,6 +2639,9 @@ public:
 
 	/// How the vector is laid out.
 	auto GetVectorType() const -> VectorType;
+
+	/// The logical type of the vector's rows.
+	auto GetLogicalType() const -> LogicalType;
 
 	/// The validity mask for writing, allocating it if the vector does not have one yet.
 	/// @throws InvalidInputException Unless the vector is FLAT.
@@ -2752,6 +2756,11 @@ public:
 	/// How many rows the chunk can hold, e.g. how many rows a table function may write into its output chunk in one
 	/// call. Unstable API.
 	auto GetCapacity() const -> idx_t;
+
+	/// Empties the chunk so it can be filled again: its row count becomes 0, and its vectors writable FLAT vectors of
+	/// their types, as on creation. Pointers and views taken from the chunk or its vectors beforehand do not survive
+	/// this. Not for a chunk DuckDB lends to a callback for reading.
+	auto Clear() -> void;
 
 	/// Access one column, e.g. to read or write its data.
 	/// @param index Column index in [0, GetVectorCount()).
@@ -5228,6 +5237,11 @@ public:
 	/// Sets the function's name: the format SQL selects it with, as in `COPY ... TO 'path' (FORMAT name)`.
 	auto SetName(const std::string &name) & -> CopyFunction &;
 
+	/// Sets the extension of the files the function writes, without the leading dot, e.g. `parquet`. DuckDB uses it
+	/// when it names files itself, as for `PARTITION_BY`; without it such names end in a bare dot.
+	/// @throws InvalidInputException When the extension starts with a dot.
+	auto SetFileExtension(const std::string &extension) & -> CopyFunction &;
+
 	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
 	/// any callback via the inputs' `GetUserData<T>`. Consumed by registration: set it again before
 	/// re-registering.
@@ -6525,12 +6539,24 @@ public:
 	auto CreateOpenOptions() const -> FileOpenOptions;
 
 	/// Whether a file exists at `path`, routed the way `OpenFile` routes it. A directory is not a file.
-	auto PathExists(const std::string &path) const -> bool;
+	auto Exists(const std::string &path) const -> bool;
 	/// Whether `path` names a remote file, e.g. under `s3://` or `https://`. Decided from the path alone, so it
 	/// answers even when the extension providing the remote file system is not loaded.
-	auto PathIsRemote(const std::string &path) const -> bool;
+	auto IsRemote(const std::string &path) const -> bool;
 	/// `path` expanded as `OpenFile` expands it: a leading `~` becomes the configured home directory.
-	auto PathExpand(const std::string &path) const -> std::string;
+	auto Expand(const std::string &path) const -> std::string;
+
+	/// The paths of the files matching a glob pattern, e.g. `data/*.csv`, in the order the file system lists them.
+	/// A pattern without glob characters matches the file it names, if there is one.
+	auto Glob(const std::string &pattern) const -> std::vector<std::string>;
+	/// Moves, or renames, a file. Whether an existing file at `target` is replaced, and whether the move is atomic, is
+	/// up to the file system; moving between two file systems is not supported.
+	/// @throws Exception When the file cannot be moved.
+	auto Move(const std::string &source, const std::string &target) const -> void;
+	/// Removes the file at `path`, if there is one.
+	/// @return Whether a file was removed.
+	/// @throws Exception When the file exists but cannot be removed.
+	auto Remove(const std::string &path) const -> bool;
 
 private:
 	explicit FileSystem(void *impl);

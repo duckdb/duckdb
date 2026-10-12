@@ -2310,14 +2310,27 @@ auto Vector::Reference(const Vector &source) -> void {
 
 auto Vector::Cast(Factory &factory, Vector &target) const -> void {
 	CheckedAPICall(duckdb_v2_vector_cast, factory.handle(), handle(), target.handle(), DUCKDB_V2_CAST_MODE_NORMAL,
-	               nullptr);
+	               nullptr, nullptr);
 }
 
-auto Vector::TryCast(Factory &factory, Vector &target) const -> bool {
+auto Vector::TryCast(Factory &factory, Vector &target, std::string *error_message) const -> bool {
 	bool converted = false;
+	duckdb_v2_error_info_handle cast_error = nullptr;
 	CheckedAPICall(duckdb_v2_vector_cast, factory.handle(), handle(), target.handle(), DUCKDB_V2_CAST_MODE_TRY,
-	               &converted);
+	               &converted, error_message ? &cast_error : nullptr);
+	if (cast_error) {
+		duckdb_v2_str text = {nullptr, 0};
+		duckdb_v2_error_info_get_text(cast_error, &text);
+		error_message->assign(text.ptr ? std::string(text.ptr, text.len) : std::string());
+		duckdb_v2_error_info_destroy(&cast_error);
+	}
 	return converted;
+}
+
+auto Vector::GetLogicalType() const -> LogicalType {
+	duckdb_v2_logical_type_handle type = nullptr;
+	CheckedAPICall(duckdb_v2_vector_get_logical_type, handle(), &type);
+	return detail::HandleFactory::Make<LogicalType>(type);
 }
 
 auto Vector::GetSize() const -> idx_t {
@@ -2387,10 +2400,7 @@ auto Vector::CheckWriteRange(idx_t start, idx_t count) const -> void {
 }
 
 auto Vector::AssignString(idx_t index, std::string_view data) -> void {
-	duckdb_v2_logical_type_handle type = nullptr;
-	CheckedAPICall(duckdb_v2_vector_get_logical_type, handle(), &type);
-	auto logical_type = detail::HandleFactory::Make<LogicalType>(type);
-	if (logical_type.GetTypeId() != LogicalTypeId::VARCHAR) {
+	if (GetLogicalType().GetTypeId() != LogicalTypeId::VARCHAR) {
 		AssignStringUnsafe(index, data);
 		return;
 	}
@@ -2471,6 +2481,10 @@ auto DataChunk::GetCapacity() const -> idx_t {
 	idx_t capacity = 0;
 	CheckedAPICall(duckdb_v2_data_chunk_get_capacity, handle(), &capacity);
 	return capacity;
+}
+
+auto DataChunk::Clear() -> void {
+	CheckedAPICall(duckdb_v2_data_chunk_clear, handle());
 }
 
 auto DataChunk::GetVectorCount() const -> idx_t {
@@ -5102,6 +5116,12 @@ auto CopyFunction::SetName(const std::string &name) & -> CopyFunction & {
 	return *this;
 }
 
+auto CopyFunction::SetFileExtension(const std::string &extension) & -> CopyFunction & {
+	auto view = ToStr(extension);
+	CheckedAPICall(duckdb_v2_copy_function_set_file_extension, handle(), &view);
+	return *this;
+}
+
 auto CopyFunction::SetUserDataInternal(void *data, void (*destructor)(void *)) -> void {
 	user_data = detail::UserData(data, destructor);
 }
@@ -6413,21 +6433,21 @@ auto FileSystem::CreateOpenOptions() const -> FileOpenOptions {
 	return FileOpenOptions::Create(*this);
 }
 
-auto FileSystem::PathExists(const std::string &path) const -> bool {
+auto FileSystem::Exists(const std::string &path) const -> bool {
 	auto path_str = ToStr(path);
 	bool exists = false;
 	CheckedAPICall(duckdb_v2_file_system_path_exists, handle(), &path_str, &exists);
 	return exists;
 }
 
-auto FileSystem::PathIsRemote(const std::string &path) const -> bool {
+auto FileSystem::IsRemote(const std::string &path) const -> bool {
 	auto path_str = ToStr(path);
 	bool is_remote = false;
 	CheckedAPICall(duckdb_v2_file_system_path_is_remote, handle(), &path_str, &is_remote);
 	return is_remote;
 }
 
-auto FileSystem::PathExpand(const std::string &path) const -> std::string {
+auto FileSystem::Expand(const std::string &path) const -> std::string {
 	auto sink = [](const duckdb_v2_str *text, void *user_data, duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&] {
 			if (text->ptr && text->len) {
@@ -6439,6 +6459,31 @@ auto FileSystem::PathExpand(const std::string &path) const -> std::string {
 	std::string out;
 	CheckedAPICall(duckdb_v2_file_system_path_expand, handle(), &path_str, sink, &out);
 	return out;
+}
+
+auto FileSystem::Glob(const std::string &pattern) const -> std::vector<std::string> {
+	auto callback = [](const duckdb_v2_str *path, void *user_data, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&] {
+			static_cast<std::vector<std::string> *>(user_data)->emplace_back(path->ptr ? path->ptr : "", path->len);
+		});
+	};
+	auto pattern_str = ToStr(pattern);
+	std::vector<std::string> matches;
+	CheckedAPICall(duckdb_v2_file_system_path_glob, handle(), &pattern_str, callback, &matches);
+	return matches;
+}
+
+auto FileSystem::Move(const std::string &source, const std::string &target) const -> void {
+	auto source_str = ToStr(source);
+	auto target_str = ToStr(target);
+	CheckedAPICall(duckdb_v2_file_system_path_move, handle(), &source_str, &target_str);
+}
+
+auto FileSystem::Remove(const std::string &path) const -> bool {
+	auto path_str = ToStr(path);
+	bool removed = false;
+	CheckedAPICall(duckdb_v2_file_system_path_remove, handle(), &path_str, &removed);
+	return removed;
 }
 
 auto FileSystem::OpenFile(const std::string &path, std::initializer_list<FileFlags> flags) const -> FileHandle {
