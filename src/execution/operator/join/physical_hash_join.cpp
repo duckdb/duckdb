@@ -1904,7 +1904,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			sink.owned_local_hash_tables.clear();
 			if (filter_pushdown && !sink.skip_filter_pushdown && ht.GetSinkCollection().Count() > 0) {
 				auto filter_min_max = filter_pushdown->FinalizeMinMax(*sink.global_filter_state);
-				filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht, true, false,
+				filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht, false, false,
 				                                 sink.global_filter_state.get());
 			}
 			ht.PrepareBloomFilterForFinalize();
