@@ -955,26 +955,17 @@ struct PrefixRangeBuildLane {
 	idx_t task_count = 0;
 };
 
-static void ExecuteHashJoinFinalizeTask(HashJoinGlobalSinkState &sink, optional_idx partition_idx,
-                                        optional_ptr<PrefixRangeBuildLane> prefix_range_lane) {
-	const auto &data_collection = sink.hash_table->GetDataCollection();
+static void ExecuteHashJoinFinalizeTask(HashJoinGlobalSinkState &sink, const vector<pair<idx_t, idx_t>> &chunk_ranges,
+                                        bool parallel, optional_ptr<PrefixRangeBuildLane> prefix_range_lane) {
 	optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state;
 	bool prefix_range_parallel = false;
 	if (prefix_range_lane) {
 		prefix_range_state = *prefix_range_lane->state;
 		prefix_range_parallel = prefix_range_lane->task_count > 1;
 	}
-	if (!partition_idx.IsValid() || sink.hash_table->GetRadixBits() == 0) {
-		// Unpartitioned builds still finalize over the full chunk range even if the scheduler created a
-		// single "partition 0" task, because tuple-data segments are not tagged with partition ids there.
-		sink.hash_table->Finalize(0U, data_collection.ChunkCount(), false, prefix_range_state, prefix_range_parallel);
-	} else {
-		// Parallel finalize - each thread processes one partition
-		const auto chunk_ranges = data_collection.GetChunkRangesForPartition(partition_idx.GetIndex());
-		for (auto &chunk_range : chunk_ranges) {
-			sink.hash_table->Finalize(chunk_range.first, chunk_range.second, true, prefix_range_state,
-			                          prefix_range_parallel);
-		}
+	for (auto &chunk_range : chunk_ranges) {
+		sink.hash_table->Finalize(chunk_range.first, chunk_range.second, parallel, prefix_range_state,
+		                          prefix_range_parallel);
 	}
 }
 
@@ -1048,14 +1039,15 @@ public:
 
 class HashJoinFinalizeTask : public ExecutorTask {
 public:
-	HashJoinFinalizeTask(HashJoinGlobalSinkState &sink_p, shared_ptr<Event> event, optional_idx partition_idx_p,
+	HashJoinFinalizeTask(HashJoinGlobalSinkState &sink_p, shared_ptr<Event> event,
+	                     vector<pair<idx_t, idx_t>> chunk_ranges_p, bool parallel_p,
 	                     optional_ptr<PrefixRangeBuildLane> prefix_range_lane_p = nullptr)
-	    : ExecutorTask(sink_p.context, std::move(event), sink_p.op), sink(sink_p), partition_idx(partition_idx_p),
-	      prefix_range_lane(prefix_range_lane_p) {
+	    : ExecutorTask(sink_p.context, std::move(event), sink_p.op), sink(sink_p),
+	      chunk_ranges(std::move(chunk_ranges_p)), parallel(parallel_p), prefix_range_lane(prefix_range_lane_p) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		ExecuteHashJoinFinalizeTask(sink, partition_idx, prefix_range_lane);
+		ExecuteHashJoinFinalizeTask(sink, chunk_ranges, parallel, prefix_range_lane);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -1065,7 +1057,8 @@ public:
 
 private:
 	HashJoinGlobalSinkState &sink;
-	optional_idx partition_idx;
+	vector<pair<idx_t, idx_t>> chunk_ranges;
+	bool parallel;
 	optional_ptr<PrefixRangeBuildLane> prefix_range_lane;
 };
 
@@ -1080,31 +1073,35 @@ public:
 public:
 	vector<shared_ptr<Task>> GetTasks() {
 		auto &ht = *sink.hash_table;
-		vector<optional_idx> finalize_partitions;
-		if (FinalizeSingleThreaded(sink, false)) {
-			finalize_partitions.emplace_back();
+		auto &data_collection = ht.GetDataCollection();
+		const bool parallel = !FinalizeSingleThreaded(sink, false) && ht.GetRadixBits() != 0;
+		vector<vector<pair<idx_t, idx_t>>> task_ranges;
+		if (!parallel) {
+			task_ranges.push_back({{0, data_collection.ChunkCount()}});
 		} else {
 			const auto num_partitions = RadixPartitioning::NumberOfPartitions(ht.GetRadixBits());
 			const auto &current_partitions = ht.GetCurrentPartitions();
+			const auto max_tasks_per_partition = MaxValue<idx_t>(sink.num_threads / num_partitions, 1);
 			for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
 				if (sink.external && !current_partitions.RowIsValidUnsafe(partition_idx)) {
-					continue; // Partition is not being built on
+					continue;
 				}
-				finalize_partitions.emplace_back(partition_idx);
+				SplitPartitionRanges(data_collection.GetChunkRangesForPartition(partition_idx), max_tasks_per_partition,
+				                     task_ranges);
 			}
 		}
 
-		InitializePrefixRangeLanes(ht, finalize_partitions.size());
+		InitializePrefixRangeLanes(ht, task_ranges.size());
 		vector<shared_ptr<Task>> finalize_tasks;
-		finalize_tasks.reserve(finalize_partitions.size());
-		for (idx_t task_idx = 0; task_idx < finalize_partitions.size(); task_idx++) {
+		finalize_tasks.reserve(task_ranges.size());
+		for (idx_t task_idx = 0; task_idx < task_ranges.size(); task_idx++) {
 			optional_ptr<PrefixRangeBuildLane> lane;
 			if (!prefix_range_lanes.empty()) {
 				lane = *prefix_range_lanes[task_idx % prefix_range_lanes.size()];
 				lane->task_count++;
 			}
-			finalize_tasks.push_back(
-			    make_uniq<HashJoinFinalizeTask>(sink, shared_from_this(), finalize_partitions[task_idx], lane));
+			finalize_tasks.push_back(make_uniq<HashJoinFinalizeTask>(sink, shared_from_this(),
+			                                                         std::move(task_ranges[task_idx]), parallel, lane));
 		}
 		return finalize_tasks;
 	}
@@ -1117,7 +1114,7 @@ public:
 			lane = *prefix_range_lanes[0];
 			lane->task_count = 1;
 		}
-		ExecuteHashJoinFinalizeTask(sink, optional_idx(), lane);
+		ExecuteHashJoinFinalizeTask(sink, {{0, ht.GetDataCollection().ChunkCount()}}, false, lane);
 		FinishTasks();
 	}
 
@@ -1132,6 +1129,33 @@ public:
 	static constexpr idx_t CHUNKS_PER_TASK = 64;
 
 private:
+	static void SplitPartitionRanges(vector<pair<idx_t, idx_t>> ranges, idx_t max_tasks,
+	                                 vector<vector<pair<idx_t, idx_t>>> &task_ranges) {
+		if (max_tasks == 1) {
+			task_ranges.push_back(std::move(ranges));
+			return;
+		}
+		idx_t partition_chunks = 0;
+		for (const auto &range : ranges) {
+			partition_chunks += range.second - range.first;
+		}
+		const auto chunks_per_task = MaxValue<idx_t>(CHUNKS_PER_TASK, (partition_chunks + max_tasks - 1) / max_tasks);
+		// A task can span disjoint ranges within the partition.
+		idx_t remaining = 0;
+		for (auto range : ranges) {
+			while (range.first < range.second) {
+				if (remaining == 0) {
+					task_ranges.emplace_back();
+					remaining = chunks_per_task;
+				}
+				const auto count = MinValue(range.second - range.first, remaining);
+				task_ranges.back().emplace_back(range.first, range.first + count);
+				range.first += count;
+				remaining -= count;
+			}
+		}
+	}
+
 	void FinishTasks() {
 		for (auto &lane : prefix_range_lanes) {
 			sink.hash_table->MergePrefixRangeBuildState(*lane->state);
