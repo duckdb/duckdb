@@ -319,7 +319,7 @@ class JobStagesTest(unittest.TestCase):
         self.assertTrue(selection.save_cache)
 
     def test_parse_changed_keys(self):
-        parsed = job_stages.parse_changed_keys(" tEsts_slow,extensions\ngithub tests_slow ")
+        parsed = job_stages.parse_changed_keys(" tEsts_slow,extensions\\\ngithub tests_slow ")
         self.assertEqual(parsed, {"tests_slow", "extensions", "github"})
 
     def test_parse_runners(self):

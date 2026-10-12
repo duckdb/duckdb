@@ -364,8 +364,8 @@ def resolve_reduced_ci_mode(
 
 def parse_changed_keys(value: str) -> set[str]:
     # changed-files may emit keys separated by spaces/newlines, and can be configured
-    # to use commas. Support both delimiters defensively.
-    return {token.lower() for token in re.split(r"[\s,]+", value.strip()) if token}
+    # to use commas. Its safe output mode escapes newlines with backslashes.
+    return {token.lower() for token in re.split(r"[\\\s,]+", value.strip()) if token}
 
 
 def parse_runners(value: str) -> dict[str, str]:
