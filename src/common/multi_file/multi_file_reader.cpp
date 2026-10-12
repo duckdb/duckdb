@@ -578,7 +578,8 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 		if (options.schema.empty()) {
 			throw BinderException("'schema' cannot be empty");
 		}
-		options.auto_detect_hive_partitioning = false;
+		// A given schema is not detected from the paths; that is decided where the schema is bound, so
+		// auto_detect_hive_partitioning keeps meaning what it says - whether the CALLER left it to us
 	} else if (key == "file_row_number") {
 		if (val.IsNull()) {
 			throw InvalidInputException("Cannot use NULL as argument for %s", key);
@@ -620,8 +621,9 @@ bool MultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vect
 		// the default MultiFileReader has no schema information of its own - the files have to be bound
 		return false;
 	}
-	if (options.union_by_name || options.hive_partitioning) {
-		throw BinderException("'schema' cannot be combined with union_by_name=true or hive_partitioning=true");
+	if (options.union_by_name) {
+		// both decide the schema of the scan, from the files and from the option respectively
+		throw BinderException("'schema' cannot be combined with union_by_name=true");
 	}
 	// the files are mapped onto the schema by field id when its columns are identified by INTEGER, by name otherwise
 	const bool by_field_id = options.schema[0].identifier.type().id() == LogicalTypeId::INTEGER;
@@ -1330,7 +1332,8 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 		hive_types_schema.insert(make_pair(entry.first, std::move(entry.second)));
 	}
 }
-void MultiFileOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientContext &context) {
+void MultiFileOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientContext &context,
+                                                  bool detect_partitioning) {
 	if (files.GetExpandResult() == FileExpandResult::NO_FILES) {
 		return;
 	}
@@ -1344,7 +1347,7 @@ void MultiFileOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientCo
 		hive_partitioning = true;
 		auto_detect_hive_partitioning = false;
 	}
-	if (auto_detect_hive_partitioning) {
+	if (detect_partitioning && auto_detect_hive_partitioning) {
 		hive_partitioning = AutoDetectHivePartitioningInternal(files, context);
 	}
 	if (hive_partitioning && hive_types_autocast) {

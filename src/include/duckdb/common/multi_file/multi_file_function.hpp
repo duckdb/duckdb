@@ -156,6 +156,14 @@ public:
 		bool bound_on_first_file = true;
 		if (result->multi_file_reader->Bind(result->file_options, *result->file_list, result->types, result->names,
 		                                    result->reader_bind)) {
+			// The schema is known without reading the files, so whether they are hive-partitioned is not
+			// guessed from their paths - it is asked for, with hive_partitioning or the hive_types that
+			// implies it. The keys' types are still settled from the paths. Only entered when something
+			// asked, so a reader with a schema of its own does not have its file list expanded here
+			if (result->file_options.hive_partitioning || !result->file_options.hive_types_schema.empty()) {
+				result->file_options.AutoDetectHivePartitioning(*result->file_list, context,
+				                                                /* detect_partitioning = */ false);
+			}
 			result->multi_file_reader->BindOptions(result->file_options, *result->file_list, result->types,
 			                                       result->names, result->reader_bind);
 			bound_on_first_file = false;
