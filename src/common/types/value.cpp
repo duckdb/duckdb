@@ -27,6 +27,7 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -652,6 +653,9 @@ Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
 	case PhysicalType::INT64:
 		result.value_.bigint = value;
 		break;
+	case PhysicalType::VARCHAR:
+		// wide decimal: the unscaled value is a BIGNUM blob
+		return Value::DECIMAL(BignumDecimal::FromInteger(hugeint_t(value)), width, scale);
 	default:
 		result.value_.hugeint = value;
 		break;
@@ -662,6 +666,10 @@ Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
 }
 
 Value Value::DECIMAL(hugeint_t value, uint8_t width, uint8_t scale) {
+	if (Decimal::IsWide(width)) {
+		// wide decimal: the unscaled value is a BIGNUM blob
+		return Value::DECIMAL(BignumDecimal::FromInteger(value), width, scale);
+	}
 	D_ASSERT(width >= Decimal::MAX_WIDTH_INT64 && width <= Decimal::MAX_WIDTH_INT128);
 	Value result(LogicalType::DECIMAL(width, scale));
 	result.value_.hugeint = value;

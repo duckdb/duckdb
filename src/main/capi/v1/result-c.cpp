@@ -1,6 +1,7 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/types/bignum_decimal.hpp"
 
 namespace duckdb {
 
@@ -125,6 +126,24 @@ struct CDecimalConverter : public CBaseConverter {
 		duckdb_hugeint result;
 		result.lower = static_cast<uint64_t>(input);
 		result.upper = 0;
+		return result;
+	}
+};
+
+//! Wide decimals (width > 38) store their unscaled value as a BIGNUM blob; the deprecated duckdb_decimal can only
+//! hold values that fit in 128 bits, anything larger is reported as the "cannot be converted" default of zero
+struct CWideDecimalConverter : public CBaseConverter {
+	template <class SRC, class DST>
+	static DST Convert(SRC input) {
+		duckdb_hugeint result;
+		hugeint_t value;
+		if (!BignumDecimal::TryToHugeint(input, value)) {
+			result.lower = 0;
+			result.upper = 0;
+			return result;
+		}
+		result.lower = value.lower;
+		result.upper = value.upper;
 		return result;
 	}
 };
@@ -282,6 +301,10 @@ duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result,
 		}
 		case PhysicalType::INT128: {
 			WriteData<hugeint_t, duckdb_hugeint, CHugeintConverter>(column, collection, column_ids);
+			break;
+		}
+		case PhysicalType::VARCHAR: {
+			WriteData<string_t, duckdb_hugeint, CWideDecimalConverter>(column, collection, column_ids);
 			break;
 		}
 		default:
