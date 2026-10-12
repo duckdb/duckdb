@@ -66,8 +66,7 @@ private:
 	mutex version_lock;
 	FixedSizeAllocator allocator;
 	vector<unique_ptr<ChunkVectorInfo>> vector_info;
-	//! The transactions that update rows of this row group (and have an undo entry for them), until they commit or
-	//! roll back
+	//! The transactions with an undo entry for updating rows of this row group, until they commit or roll back
 	vector<transaction_t> updating_transactions;
 	//! The newest and the oldest delete commit that has not been written by a checkpoint yet
 	optional_idx newest_uncheckpointed_delete_commit;

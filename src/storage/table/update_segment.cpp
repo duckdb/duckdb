@@ -671,8 +671,7 @@ void UpdateSegment::CleanupUpdate(UpdateInfo &info) {
 //===--------------------------------------------------------------------===//
 // Find the update of the transaction
 //===--------------------------------------------------------------------===//
-//! Sets node_ref to the transaction's own update of the vector, if any. Conflicting updates are detected per row in
-//! the version info before any column is updated
+//! Sets node_ref to the transaction's own update of the vector, if any (conflicts are detected in the version info)
 static void GetTransactionUpdate(UndoBufferPointer next_ptr, TransactionData transaction,
                                  UndoBufferReference &node_ref) {
 	while (next_ptr.IsSet()) {

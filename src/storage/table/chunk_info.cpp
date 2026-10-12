@@ -534,8 +534,7 @@ void ChunkVectorInfo::Update(TransactionData transaction, const row_t ids[], idx
 		if (entry.writer == transaction_id || moved_rows.none()) {
 			continue;
 		}
-		// the transaction sees this writer (otherwise it conflicts), but another transaction might not: it becomes the
-		// previous writer of the rows
+		// the transaction sees this writer, but others might not: it becomes the previous writer of the rows
 		entry.rows &= ~moved_rows;
 		for (auto &previous_entry : previous) {
 			previous_entry.rows &= ~moved_rows;

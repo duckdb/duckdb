@@ -58,8 +58,7 @@ struct WriterRows {
 	bitset<STANDARD_VECTOR_SIZE> rows;
 };
 
-//! The writers of the rows of a vector: the last writer of each row, and the writer before it if a transaction might
-//! not see that one yet. A row is in the rows of at most one last and one previous writer
+//! The last writer of each row of a vector, and the one before it while a transaction might not see the last one
 struct RowUpdateWriters {
 	vector<WriterRows> last;
 	vector<WriterRows> previous;
@@ -99,13 +98,10 @@ public:
 	//! Throws if one of the rows was deleted by another transaction or updated by one that the transaction does not see
 	idx_t Delete(TransactionData transaction, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, const DeleteInfo &info);
-	//! Makes the transaction the last writer of the rows (ids[i] - offset). Throws if one of the rows was deleted by
-	//! another transaction or updated by one that the transaction does not see. Writers that all transactions see
-	//! (below lowest_visibility_bound) are forgotten
+	//! Makes the transaction the last writer of the rows (ids[i] - offset), throwing on a conflict like Delete
 	void Update(TransactionData transaction, const row_t ids[], idx_t count, row_t offset,
 	            VisibilityBound lowest_visibility_bound);
-	//! Replaces the last writer old_id of the rows by new_id: a commit (transaction id to commit id), the revert of a
-	//! commit, or a rollback (to 0, which leaves the rows with their previous writers)
+	//! Renames the last writer old_id to new_id on commit, revert, or rollback (to 0, which removes it)
 	void ReplaceUpdateWriter(transaction_t old_id, transaction_t new_id);
 
 	//! Attempts to compress the per-row insert/delete ids into constants. Ids that precede
