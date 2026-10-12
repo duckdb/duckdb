@@ -528,6 +528,7 @@ static PreparedStatementInfo GetPreparedStatementInfo(PreparedStatementData &dat
 	info.properties = data.properties;
 	if (data.unbound_statement) {
 		info.named_param_map = data.unbound_statement->named_param_map;
+		info.requires_redaction = data.unbound_statement->RequiresRedaction();
 	}
 	for (auto &entry : data.value_map) {
 		LogicalType parameter_type;
@@ -541,7 +542,6 @@ static PreparedStatementInfo GetPreparedStatementInfo(PreparedStatementData &dat
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
                                                              unique_ptr<SQLStatement> statement) {
 	auto statement_query = statement->query;
-	auto requires_redaction = statement->RequiresRedaction();
 	// prepare the statement under a generated name - the returned PreparedStatement only refers to that name
 	auto name = "duckdb_prepare_internal_" + UUID::ToString(UUID::GenerateRandomUUID());
 	auto prepare = make_uniq<PrepareStatement>();
@@ -559,7 +559,7 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 		throw InternalException("PREPARE succeeded but the prepared statement was not registered");
 	}
 	return make_uniq<PreparedStatement>(shared_from_this(), std::move(name), std::move(statement_query),
-	                                    requires_redaction, GetPreparedStatementInfo(*entry->second));
+	                                    GetPreparedStatementInfo(*entry->second));
 }
 
 void ClientContext::RemovePreparedStatement(const string &name) {

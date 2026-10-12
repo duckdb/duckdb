@@ -6,9 +6,8 @@
 namespace duckdb {
 
 PreparedStatement::PreparedStatement(const shared_ptr<ClientContext> &context_p, string name_p, string query_p,
-                                     bool requires_redaction_p, PreparedStatementInfo info_p)
-    : context(context_p), name(std::move(name_p)), query(std::move(query_p)), requires_redaction(requires_redaction_p),
-      success(true), info(std::move(info_p)) {
+                                     PreparedStatementInfo info_p)
+    : context(context_p), name(std::move(name_p)), query(std::move(query_p)), success(true), info(std::move(info_p)) {
 	D_ASSERT(!context.expired());
 }
 
@@ -100,7 +99,7 @@ PreparedStatement::CreateExecuteStatement(const identifier_map_t<BoundParameterD
 	execute->name = Identifier(name);
 	// report the query that was prepared - not the generated EXECUTE - in errors and profiling output
 	execute->query = query;
-	execute->requires_redaction = requires_redaction;
+	execute->requires_redaction = info.requires_redaction;
 	execute->stmt_location = QueryLocation(0, query.size());
 	// the values are already typed - pass them in pre-bound instead of as SQL literals
 	execute->bound_values = named_values;

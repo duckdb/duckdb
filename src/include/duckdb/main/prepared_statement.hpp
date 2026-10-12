@@ -39,6 +39,8 @@ struct PreparedStatementInfo {
 	identifier_map_t<idx_t> named_param_map;
 	//! The expected type of each parameter whose type could be resolved when preparing
 	identifier_map_t<LogicalType> parameter_types;
+	//! Whether the prepared SQL contains sensitive information
+	bool requires_redaction = false;
 };
 
 //! A handle to a prepared statement that lives in the client context. The statement itself is prepared through
@@ -47,7 +49,7 @@ class PreparedStatement {
 public:
 	//! Create a handle to the prepared statement with the given name in the client context
 	DUCKDB_API PreparedStatement(const shared_ptr<ClientContext> &context, string name, string query,
-	                             bool requires_redaction, PreparedStatementInfo info);
+	                             PreparedStatementInfo info);
 	//! Create a prepared statement that was not successfully prepared
 	DUCKDB_API explicit PreparedStatement(ErrorData error);
 
@@ -200,8 +202,6 @@ private:
 	string name;
 	//! The query that is being prepared
 	string query;
-	//! Whether the original query contains sensitive SQL
-	bool requires_redaction = false;
 	//! Whether or not the statement was successfully prepared
 	bool success;
 	//! The error message (if success = false)
