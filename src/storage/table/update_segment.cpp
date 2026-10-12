@@ -70,7 +70,7 @@ string UpdateInfo::ToString() {
 	auto tuples = GetTuples();
 	idx_t value_idx = 0;
 	for (idx_t i = 0; i < N; i++) {
-		if (base_flags_offset != 0 && GetBaseFlags().IsSet(i)) {
+		if (value_mask_offset != 0 && !GetValueMask().RowIsValid(i)) {
 			result += to_string(tuples[i]) + ": (base)\n";
 			continue;
 		}
@@ -87,16 +87,16 @@ sel_t *UpdateInfo::GetTuples() {
 	return reinterpret_cast<sel_t *>(data_ptr_cast(this) + sizeof(UpdateInfo));
 }
 
-static idx_t GetBaseFlagsOffset(idx_t capacity) {
+static idx_t GetValueMaskOffset(idx_t capacity) {
 	return AlignValue<idx_t>(sizeof(UpdateInfo) + sizeof(sel_t) * capacity);
 }
 
 static idx_t GetTransactionValuesOffset(idx_t capacity) {
-	return GetBaseFlagsOffset(capacity) + sizeof(uint64_t) * UpdateBaseFlags::WordCount(capacity);
+	return GetValueMaskOffset(capacity) + ValidityMask::ValidityMaskSize(capacity);
 }
 
 data_ptr_t UpdateInfo::GetValues() {
-	if (base_flags_offset != 0) {
+	if (value_mask_offset != 0) {
 		return data_ptr_cast(this) + GetTransactionValuesOffset(max);
 	}
 	return data_ptr_cast(this) + sizeof(UpdateInfo) + sizeof(sel_t) * max;
@@ -115,9 +115,9 @@ bool UpdateInfo::HasNext() const {
 	return next.entry;
 }
 
-UpdateBaseFlags UpdateInfo::GetBaseFlags() {
-	D_ASSERT(base_flags_offset != 0);
-	return UpdateBaseFlags(reinterpret_cast<uint64_t *>(data_ptr_cast(this) + base_flags_offset));
+ValidityMask UpdateInfo::GetValueMask() {
+	D_ASSERT(value_mask_offset != 0);
+	return ValidityMask(reinterpret_cast<validity_t *>(data_ptr_cast(this) + value_mask_offset), max);
 }
 
 idx_t UpdateInfo::GetAllocSize(idx_t type_size, idx_t capacity) {
@@ -149,7 +149,7 @@ void UpdateInfo::Initialize(UpdateInfo &info, DuckTableEntry &table_entry, trans
 	info.next = UndoBufferPointer();
 	info.N = 0;
 	info.version_number = transaction_id;
-	info.base_flags_offset = 0;
+	info.value_mask_offset = 0;
 	info.value_max = UnsafeNumericCast<sel_t>(capacity);
 }
 
@@ -157,14 +157,14 @@ void UpdateInfo::Initialize(UpdateInfo &info, DuckTableEntry &table_entry, trans
                             idx_t row_group_start, idx_t capacity, idx_t value_capacity) {
 	D_ASSERT(value_capacity <= capacity);
 	Initialize(info, table_entry, transaction_id, row_group_start, capacity);
-	info.base_flags_offset = GetBaseFlagsOffset(capacity);
+	info.value_mask_offset = GetValueMaskOffset(capacity);
 	info.value_max = UnsafeNumericCast<sel_t>(value_capacity);
 }
 
 void UpdateInfo::Verify() {
 #ifdef DEBUG
 	D_ASSERT(N <= max);
-	D_ASSERT(base_flags_offset == 0 || N - GetBaseFlags().CountSet(N) <= value_max);
+	D_ASSERT(value_mask_offset == 0 || GetValueMask().CountValid(N) <= value_max);
 	auto tuples = GetTuples();
 	for (idx_t i = 1; i < N; i++) {
 		D_ASSERT(tuples[i] > tuples[i - 1] && tuples[i] < STANDARD_VECTOR_SIZE);
@@ -232,6 +232,38 @@ struct UpdateValidityResult {
 	ValidityMask &mask;
 };
 
+//! Apply the stored values of an update info to the tuples that are valid in the apply mask
+template <class T, class RESULT>
+static void ApplyUpdateInfo(UpdateInfo &info, const ValidityMask &apply_mask, RESULT &result) {
+	bool has_value_mask = info.value_mask_offset != 0;
+	ValidityMask value_mask;
+	if (has_value_mask) {
+		value_mask = info.GetValueMask();
+	}
+	if (info.N == STANDARD_VECTOR_SIZE && (!has_value_mask || value_mask.CheckAllValid(info.N))) {
+		// the update info contains every tuple of the vector with a value
+		if (apply_mask.CheckAllInvalid(STANDARD_VECTOR_SIZE)) {
+			return;
+		}
+		if (apply_mask.CheckAllValid(STANDARD_VECTOR_SIZE)) {
+			result.Apply(info);
+			return;
+		}
+	}
+	auto tuples = info.GetTuples();
+	auto info_data = info.GetData<T>();
+	idx_t value_idx = 0;
+	for (idx_t i = 0; i < info.N; i++) {
+		if (has_value_mask && !value_mask.RowIsValid(i)) {
+			continue;
+		}
+		auto value = info_data[value_idx++];
+		if (apply_mask.RowIsValid(tuples[i])) {
+			result.Set(tuples[i], value);
+		}
+	}
+}
+
 template <class T, class RESULT>
 static void FetchUpdatesInternal(const SnapshotView &view, UpdateInfo &root, RESULT &result) {
 	vector<UndoBufferReference> invisible;
@@ -241,40 +273,37 @@ static void FetchUpdatesInternal(const SnapshotView &view, UpdateInfo &root, RES
 		result.Apply(root);
 		return;
 	}
-	// applying the root overwrites the base values - save the base values the invisible updates restore
-	// this is allocated on the heap to keep the stack frame of the common case (no invisible updates) small
-	auto base_values = make_unsafe_uniq_array_uninitialized<T>(STANDARD_VECTOR_SIZE);
-	vector<bool> has_base_flags;
+	// a tuple without a stored value in an invisible update was first updated by that update: it keeps its base value
+	validity_t apply_bits[ValidityMask::STANDARD_ENTRY_COUNT];
+	memset(apply_bits, 0xFF, sizeof(apply_bits));
+	ValidityMask apply_mask(apply_bits, STANDARD_VECTOR_SIZE);
+	bool any_keep_base = false;
 	for (auto &pin : invisible) {
 		auto &info = UpdateInfo::Get(pin);
-		auto base_flags = info.GetBaseFlags();
-		has_base_flags.push_back(base_flags.AnySet(info.N));
-		if (!has_base_flags.back()) {
+		auto value_mask = info.GetValueMask();
+		if (value_mask.CheckAllValid(info.N)) {
 			continue;
 		}
+		any_keep_base = true;
 		auto tuples = info.GetTuples();
 		for (idx_t i = 0; i < info.N; i++) {
-			if (base_flags.IsSet(i)) {
-				base_values[tuples[i]] = result.Get(tuples[i]);
+			if (!value_mask.RowIsValid(i)) {
+				apply_mask.SetInvalid(tuples[i]);
 			}
 		}
 	}
-	result.Apply(root);
+	if (!any_keep_base) {
+		// all values from before the invisible updates are stored in the update infos
+		result.Apply(root);
+		for (auto &pin : invisible) {
+			result.Apply(UpdateInfo::Get(pin));
+		}
+		return;
+	}
+	ApplyUpdateInfo<T>(root, apply_mask, result);
 	// undo the invisible updates from newest to oldest
-	for (idx_t info_idx = 0; info_idx < invisible.size(); info_idx++) {
-		auto &info = UpdateInfo::Get(invisible[info_idx]);
-		if (!has_base_flags[info_idx]) {
-			// all values from before the update are stored in the update info
-			result.Apply(info);
-			continue;
-		}
-		auto tuples = info.GetTuples();
-		auto info_data = info.GetData<T>();
-		auto base_flags = info.GetBaseFlags();
-		idx_t value_idx = 0;
-		for (idx_t i = 0; i < info.N; i++) {
-			result.Set(tuples[i], base_flags.IsSet(i) ? base_values[tuples[i]] : info_data[value_idx++]);
-		}
+	for (auto &pin : invisible) {
+		ApplyUpdateInfo<T>(UpdateInfo::Get(pin), apply_mask, result);
 	}
 }
 
@@ -579,12 +608,12 @@ static void FetchRowsInternal(const SnapshotView &view, UpdateInfo &root, const 
 			if (!FindUpdatedTuple(info, row_idx, update_idx)) {
 				continue;
 			}
-			auto base_flags = info.GetBaseFlags();
-			if (base_flags.IsSet(update_idx)) {
+			auto value_mask = info.GetValueMask();
+			if (!value_mask.RowIsValid(update_idx)) {
 				value = base_value;
 			} else {
-				// only tuples without a base flag have a value
-				value = info.GetData<T>()[update_idx - base_flags.CountSet(update_idx)];
+				// values are only stored for the valid tuples
+				value = info.GetData<T>()[value_mask.CountValid(update_idx)];
 			}
 		}
 		result.Set(result_idx, value);
@@ -690,7 +719,7 @@ static void RollbackUpdate(UpdateInfo &root, UpdateInfo &rollback_info) {
 	auto root_tuples = root.GetTuples();
 	auto rollback_data = rollback_info.GetData<T>();
 	auto rollback_tuples = rollback_info.GetTuples();
-	auto base_flags = rollback_info.GetBaseFlags();
+	auto value_mask = rollback_info.GetValueMask();
 	idx_t rollback_idx = 0;
 	idx_t rollback_value_idx = 0;
 	idx_t result_count = 0;
@@ -698,7 +727,7 @@ static void RollbackUpdate(UpdateInfo &root, UpdateInfo &rollback_info) {
 		auto id = root_tuples[i];
 		auto value = root_data[i];
 		if (rollback_idx < rollback_info.N && rollback_tuples[rollback_idx] == id) {
-			if (base_flags.IsSet(rollback_idx++)) {
+			if (!value_mask.RowIsValid(rollback_idx++)) {
 				// the tuple had no update before: remove it from the root
 				continue;
 			}
@@ -958,6 +987,30 @@ static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTyp
 	}
 }
 
+//! Writes a validity mask in order, one entry at a time
+struct ValidityAppender {
+	explicit ValidityAppender(validity_t *data_p) : data(data_p) {
+	}
+
+	void Append(bool valid) {
+		current |= validity_t(valid) << (count % ValidityMask::BITS_PER_VALUE);
+		count++;
+		if (count % ValidityMask::BITS_PER_VALUE == 0) {
+			data[count / ValidityMask::BITS_PER_VALUE - 1] = current;
+			current = 0;
+		}
+	}
+	void Finalize() {
+		if (count % ValidityMask::BITS_PER_VALUE != 0) {
+			data[count / ValidityMask::BITS_PER_VALUE] = current;
+		}
+	}
+
+	validity_t *data;
+	validity_t current = 0;
+	idx_t count = 0;
+};
+
 //! Count the tuples and values the update info of the transaction requires after adding the new tuples
 static void CountUndoValues(optional_ptr<UpdateInfo> node, UpdateInfo &root, row_t *ids, idx_t count,
                             const SelectionVector &sel, idx_t vector_offset, idx_t &tuple_count, idx_t &value_count) {
@@ -965,7 +1018,7 @@ static void CountUndoValues(optional_ptr<UpdateInfo> node, UpdateInfo &root, row
 	auto node_tuples = node ? node->GetTuples() : nullptr;
 	auto root_tuples = root.GetTuples();
 	tuple_count = node_count;
-	value_count = node ? node_count - node->GetBaseFlags().CountSet(node_count) : 0;
+	value_count = node ? node->GetValueMask().CountValid(node_count) : 0;
 	idx_t node_idx = 0;
 	idx_t root_idx = 0;
 	for (idx_t i = 0; i < count; i++) {
@@ -990,26 +1043,26 @@ static void CountUndoValues(optional_ptr<UpdateInfo> node, UpdateInfo &root, row
 //! For tuples that are not yet in the root, the value before the update is the base value: these are flagged
 template <class T>
 static idx_t MergeUndoValues(UpdateInfo &node, UpdateInfo &root, row_t *ids, idx_t count, const SelectionVector &sel,
-                             idx_t vector_offset, sel_t *out_tuples, T *out_data, uint64_t *out_flags) {
+                             idx_t vector_offset, sel_t *out_tuples, T *out_data, validity_t *out_mask) {
 	auto node_tuples = node.GetTuples();
 	auto node_data = node.GetData<T>();
-	auto node_flags = node.GetBaseFlags();
+	auto node_mask = node.GetValueMask();
 	auto root_tuples = root.GetTuples();
 	auto root_data = root.GetData<T>();
 
-	UpdateBaseFlagsAppender flags_appender(out_flags);
+	ValidityAppender mask_appender(out_mask);
 	idx_t node_idx = 0;
 	idx_t node_value_idx = 0;
 	idx_t root_idx = 0;
 	idx_t result_count = 0;
 	idx_t result_value_count = 0;
 	auto copy_node_entry = [&]() {
-		bool is_base = node_flags.IsSet(node_idx);
-		if (!is_base) {
+		bool has_value = node_mask.RowIsValid(node_idx);
+		if (has_value) {
 			out_data[result_value_count++] = node_data[node_value_idx++];
 		}
 		out_tuples[result_count++] = node_tuples[node_idx++];
-		flags_appender.Append(is_base);
+		mask_appender.Append(has_value);
 	};
 	for (idx_t i = 0; i < count; i++) {
 		auto id = UnsafeNumericCast<sel_t>(UnsafeNumericCast<idx_t>(ids[sel.get_index(i)]) - vector_offset);
@@ -1024,18 +1077,18 @@ static idx_t MergeUndoValues(UpdateInfo &node, UpdateInfo &root, row_t *ids, idx
 		while (root_idx < root.N && root_tuples[root_idx] < id) {
 			root_idx++;
 		}
-		// tuples that are not in the root are flagged, and have no saved value
+		// tuples that are not in the root have no saved value - their value before the update is the base value
 		bool in_root = root_idx < root.N && root_tuples[root_idx] == id;
 		if (in_root) {
 			out_data[result_value_count++] = root_data[root_idx];
 		}
 		out_tuples[result_count++] = id;
-		flags_appender.Append(!in_root);
+		mask_appender.Append(in_root);
 	}
 	while (node_idx < node.N) {
 		copy_node_entry();
 	}
-	flags_appender.Finalize();
+	mask_appender.Finalize();
 	return result_count;
 }
 
@@ -1047,18 +1100,18 @@ static void SaveUndoValues(UpdateInfo &source, UpdateInfo &root, row_t *ids, idx
 	if (&source != &target || source.N == 0) {
 		// we are not reading from the target: write directly into it
 		result_count = MergeUndoValues<T>(source, root, ids, count, sel, vector_offset, target.GetTuples(),
-		                                  target.GetData<T>(), target.GetBaseFlags().bits);
+		                                  target.GetData<T>(), target.GetValueMask().GetData());
 	} else {
 		// merge into temporary arrays, and copy them back afterwards
 		T result_values[STANDARD_VECTOR_SIZE];
 		sel_t result_tuples[STANDARD_VECTOR_SIZE];
-		uint64_t result_flags[STANDARD_VECTOR_SIZE / 64];
-		result_count = MergeUndoValues<T>(source, root, ids, count, sel, vector_offset, result_tuples, result_values,
-		                                  result_flags);
-		auto value_count = result_count - UpdateBaseFlags(result_flags).CountSet(result_count);
+		validity_t result_mask[ValidityMask::STANDARD_ENTRY_COUNT];
+		result_count =
+		    MergeUndoValues<T>(source, root, ids, count, sel, vector_offset, result_tuples, result_values, result_mask);
+		auto value_count = ValidityMask(result_mask, STANDARD_VECTOR_SIZE).CountValid(result_count);
 		memcpy(target.GetTuples(), result_tuples, result_count * sizeof(sel_t));
 		memcpy(target.GetData<T>(), result_values, value_count * sizeof(T));
-		memcpy(target.GetBaseFlags().bits, result_flags, UpdateBaseFlags::WordCount(result_count) * sizeof(uint64_t));
+		memcpy(target.GetValueMask().GetData(), result_mask, ValidityMask::ValidityMaskSize(result_count));
 	}
 	target.N = UnsafeNumericCast<sel_t>(result_count);
 	D_ASSERT(target.N <= target.max);
@@ -1408,7 +1461,7 @@ void UpdateSegment::ReallocateRootInfoIfNeeded(UpdateInfo &current_info, idx_t u
 	new_info.max = UnsafeNumericCast<sel_t>(new_capacity);
 	new_info.prev = current_info.prev;
 	new_info.next = current_info.next;
-	new_info.base_flags_offset = 0;
+	new_info.value_mask_offset = 0;
 	new_info.value_max = UnsafeNumericCast<sel_t>(new_capacity);
 
 	memcpy(new_info.GetTuples(), current_info.GetTuples(), sizeof(sel_t) * current_info.N);
@@ -1509,11 +1562,38 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 			node = &UpdateInfo::Get(node_ref);
 			node->Verify();
 		}
-		idx_t tuple_count, value_count;
-		CountUndoValues(node, root_info, ids, count, sel, vector_offset, tuple_count, value_count);
-		if (node && tuple_count == node->N) {
-			// this transaction updated all of these tuples before - their values before the transaction are saved
-		} else if (node && tuple_count <= node->max && value_count <= node->value_max) {
+		// determine the tuples and values the update info of this transaction requires
+		// we only count them with a merge walk if they cannot be derived or bounded cheaply
+		bool save_required = true;
+		bool fits = false;
+		idx_t tuple_count = 0;
+		idx_t value_count = 0;
+		if (node) {
+			if (node->N == STANDARD_VECTOR_SIZE) {
+				// this transaction updated every tuple of the vector before - their values before it are saved
+				save_required = false;
+			} else {
+				auto node_value_count = node->GetValueMask().CountValid(node->N);
+				fits = node->N + count <= node->max && node_value_count + count <= node->value_max;
+			}
+		} else if (root_info.N == 0 || root_info.N == STANDARD_VECTOR_SIZE) {
+			// either none or all of the tuples have a value in the root
+			tuple_count = count;
+			value_count = root_info.N == 0 ? 0 : count;
+		} else {
+			CountUndoValues(node, root_info, ids, count, sel, vector_offset, tuple_count, value_count);
+		}
+		if (save_required && node && !fits) {
+			CountUndoValues(node, root_info, ids, count, sel, vector_offset, tuple_count, value_count);
+			if (tuple_count == node->N) {
+				// this transaction updated all of these tuples before - their values before it are saved
+				save_required = false;
+			}
+			fits = tuple_count <= node->max && value_count <= node->value_max;
+		}
+		if (!save_required) {
+			// the update info of this transaction does not change
+		} else if (fits) {
 			// the values from before the update fit into the update info of this transaction
 			save_undo_function(*node, root_info, ids, count, sel, vector_offset, *node);
 			node->Verify();
