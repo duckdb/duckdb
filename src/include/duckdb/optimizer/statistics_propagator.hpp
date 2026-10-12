@@ -99,6 +99,8 @@ private:
 	FilterPropagateResult ClassifyFilter(Expression &condition);
 	//! Simplify conjunctions using filter truth semantics
 	bool SimplifyFilter(unique_ptr<Expression> &condition);
+	//! Remove constant_or_null(TRUE, ...) conjuncts whose NULL checks are implied by retained predicates
+	void SimplifyConstantOrNull(vector<unique_ptr<Expression>> &expressions);
 	//! Propagate a filter condition
 	FilterPropagateResult HandleFilter(unique_ptr<Expression> &condition);
 	//! Rewrite a join whose condition can never match; returns true if the operator was replaced
