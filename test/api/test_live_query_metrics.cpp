@@ -1,6 +1,9 @@
 #include "catch.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/profiler/metrics.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -62,6 +65,62 @@ TEST_CASE("Test live query metrics of a running query are readable from another 
 		                            "WHERE metric_name = 'io.total_bytes_read' AND connection_id = " +
 		                            to_string(con.context->GetConnectionId()));
 		REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	}
+	DeleteDatabase(path);
+}
+
+//! Allocates a buffer when a query begins, before the statement is planned, and holds it until the query ends
+struct AllocateAtQueryBeginState : public ClientContextState {
+	static constexpr idx_t ALLOCATION_SIZE = 1024 * 1024;
+
+	void QueryBegin(ClientContext &context) override {
+		buffer = BufferManager::GetBufferManager(context).Allocate(MemoryTag::EXTENSION, ALLOCATION_SIZE);
+	}
+	void QueryEnd(ClientContext &context) override {
+		buffer.Destroy();
+	}
+
+	BufferHandle buffer;
+};
+
+TEST_CASE("Test live query metrics keep the memory a statement allocates before it is planned", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.context->registered_state->Insert("allocate_at_query_begin", make_shared_ptr<AllocateAtQueryBeginState>());
+
+	SECTION("profiling disabled") {
+	}
+	SECTION("profiling enabled") {
+		REQUIRE_NO_FAIL(con.Query("PRAGMA enable_profiling = 'no_output'"));
+	}
+	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+	REQUIRE(LiveMetric(con, MetricSystemTotalMemoryAllocated::Name) >= AllocateAtQueryBeginState::ALLOCATION_SIZE);
+}
+
+TEST_CASE("Test live query metrics of an idle connection show its most recent query", "[api]") {
+	auto path = TestCreatePath("live_query_metrics_idle.db");
+	DeleteDatabase(path);
+	{
+		DuckDB db(path);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range AS i FROM range(10000000)"));
+		REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
+	}
+	{
+		DuckDB db(path);
+		Connection con(db);
+
+		SECTION("profiling is disabled while the query runs") {
+			REQUIRE_NO_FAIL(con.Query("PRAGMA enable_profiling = 'no_output'"));
+			auto streaming = OpenStream(con, "SELECT i FROM t");
+			REQUIRE(streaming->Fetch());
+			ClientConfig::GetConfig(*con.context).enable_profiler = false;
+			streaming->Close();
+		}
+		SECTION("the query fails") {
+			REQUIRE_FAIL(con.Query("SELECT sum(CASE WHEN i = 9000000 THEN error('boom') ELSE i END) FROM t"));
+		}
+		REQUIRE(LiveMetric(con, MetricIOTotalBytesRead::Name) > 0);
 	}
 	DeleteDatabase(path);
 }
