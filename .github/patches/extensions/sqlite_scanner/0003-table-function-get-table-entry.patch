@@ -1,0 +1,34 @@
+diff --git a/src/sqlite_scanner.cpp b/src/sqlite_scanner.cpp
+index e32316c..ec90ecf 100644
+--- a/src/sqlite_scanner.cpp
++++ b/src/sqlite_scanner.cpp
+@@ -393,15 +393,14 @@ static InsertionOrderPreservingMap<string> SqliteToString(TableFunctionToStringI
+ 	return result;
+ }
+ 
+-BindInfo SqliteBindInfo(const optional_ptr<FunctionData> bind_data_p) {
+-	BindInfo info(ScanType::EXTERNAL);
++optional_ptr<TableCatalogEntry> SqliteGetTableEntry(optional_ptr<const FunctionData> bind_data_p) {
+ 	auto &bdata = bind_data_p->Cast<SqliteBindData>();
+ 	shared_ptr<ClientContext> ctx = bdata.context_ptr.lock();
+-	if (ctx) { // cannot fail in known scenarios
+-		auto attached_table = SQLiteTableEntry::Lookup(*ctx, bdata.qualified_table_name);
+-		info.table = attached_table.Get<SQLiteTableEntry>();
++	if (!ctx) { // cannot fail in known scenarios
++		return nullptr;
+ 	}
+-	return info;
++	auto attached_table = SQLiteTableEntry::Lookup(*ctx, bdata.qualified_table_name);
++	return attached_table.Get<SQLiteTableEntry>();
+ }
+ 
+ /*
+@@ -435,7 +434,7 @@ SqliteScanFunction::SqliteScanFunction()
+ 	to_string = SqliteToString;
+ 	serialize = SqliteScanSerialize;
+ 	deserialize = SqliteScanDeserialize;
+-	get_bind_info = SqliteBindInfo;
++	get_table_entry = SqliteGetTableEntry;
+ 	projection_pushdown = true;
+ }
+ 
