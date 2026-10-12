@@ -186,3 +186,76 @@ EXECUTE exported_part('epoch');
 -0.875
 951827696.125
 NULL
+
+# Folded parts, NULLs and infinities keep the ordinary unary semantics.
+statement ok
+CREATE TABLE boundary_dates AS
+SELECT i AS id, TIMESTAMPTZ '1999-12-20 00:00:00+00' + i * INTERVAL 1 DAY AS ts FROM range(800) t(i);
+
+statement ok
+INSERT INTO boundary_dates VALUES (800,NULL),(801,'infinity'),(802,'-infinity');
+
+query I
+SELECT count(*) FROM boundary_dates
+WHERE date_part('ho' || 'ur',ts) IS DISTINCT FROM hour(ts)
+OR date_part('epoch',ts) IS DISTINCT FROM epoch(ts);
+----
+0
+
+query TTT
+SELECT typeof(date_part('hour',NULL::TIMESTAMPTZ)),
+       typeof(date_part('hour',TIMESTAMPTZ 'infinity')),
+       typeof(date_part('epoch',TIMESTAMPTZ '-infinity'));
+----
+DOUBLE	BIGINT	DOUBLE
+
+# Rebinding also carries the unary overload's optimizer properties. Compare its
+# predicates with direct unary calls under disabled optimization at year boundaries.
+foreach timezone UTC America/Los_Angeles
+
+statement ok
+SET TimeZone='{timezone}';
+
+statement ok
+SET debug_disable_optimizer=true;
+
+statement ok
+CREATE TEMP TABLE expected_parts AS
+SELECT 'isoyear' AS part,id FROM boundary_dates WHERE isoyear(ts)=2000
+UNION ALL SELECT 'yearweek',id FROM boundary_dates WHERE yearweek(ts)=199952
+UNION ALL SELECT 'century',id FROM boundary_dates WHERE century(ts)=20
+UNION ALL SELECT 'millennium',id FROM boundary_dates WHERE millennium(ts)=2
+UNION ALL SELECT 'era',id FROM boundary_dates WHERE era(ts)=1;
+
+statement ok
+SET debug_disable_optimizer=false;
+
+statement ok
+CREATE TEMP TABLE actual_parts AS
+SELECT 'isoyear' AS part,id FROM boundary_dates WHERE date_part('isoyear',ts)=2000
+UNION ALL SELECT 'yearweek',id FROM boundary_dates WHERE date_part('yearweek',ts)=199952
+UNION ALL SELECT 'century',id FROM boundary_dates WHERE date_part('century',ts)=20
+UNION ALL SELECT 'millennium',id FROM boundary_dates WHERE date_part('millennium',ts)=2
+UNION ALL SELECT 'era',id FROM boundary_dates WHERE date_part('era',ts)=1;
+
+query I
+SELECT count(DISTINCT part) FROM expected_parts;
+----
+5
+
+query I
+SELECT count(*) FROM (
+  (SELECT * FROM actual_parts EXCEPT ALL SELECT * FROM expected_parts)
+  UNION ALL
+  (SELECT * FROM expected_parts EXCEPT ALL SELECT * FROM actual_parts)
+);
+----
+0
+
+statement ok
+DROP TABLE actual_parts;
+
+statement ok
+DROP TABLE expected_parts;
+
+endloop
