@@ -142,7 +142,9 @@ vector<BoundOrderByNode> BindOrderByNodes(Binder &binder, TableIndex table_index
 	ExpressionBinder expr_binder(*child_binder, binder.context);
 	vector<BoundOrderByNode> bound_orders;
 	for (auto &order : orders) {
-		bound_orders.emplace_back(order.type, order.null_order, expr_binder.Bind(order.expression));
+		auto expression = expr_binder.Bind(order.expression);
+		ExpressionBinder::PushCollation(binder.context, expression, expression->GetReturnType());
+		bound_orders.emplace_back(order.type, order.null_order, std::move(expression));
 	}
 	return bound_orders;
 }
