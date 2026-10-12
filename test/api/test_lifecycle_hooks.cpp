@@ -357,3 +357,28 @@ TEST_CASE("Concurrent task notifications retain states during registry mutation"
 	REQUIRE(stable_counts.stops == thread_count * task_count);
 	REQUIRE(transient_counts.destroyed == task_count);
 }
+
+struct ThrowingRollbackState : ClientContextState {
+	void TransactionRollback(MetaTransaction &transaction, ClientContext &context,
+	                         optional_ptr<ErrorData> error) override {
+		throw IOException("rollback failed");
+	}
+};
+
+TEST_CASE("Dropping a connection whose rollback fails does not terminate", "[api]") {
+	DuckDB db(nullptr);
+	{
+		Connection conn(db);
+		conn.context->registered_state->Insert("throwing_rollback", make_shared_ptr<ThrowingRollbackState>());
+		REQUIRE_NO_FAIL(conn.Query("BEGIN"));
+		REQUIRE_NO_FAIL(conn.Query("CREATE TABLE t(i INT)"));
+		// an explicit rollback reports the failure
+		REQUIRE_FAIL(conn.Query("ROLLBACK"));
+
+		REQUIRE_NO_FAIL(conn.Query("BEGIN"));
+		REQUIRE_NO_FAIL(conn.Query("SELECT 42"));
+		// leaving the scope destroys the connection with the transaction still open
+	}
+	Connection conn(db);
+	REQUIRE_NO_FAIL(conn.Query("SELECT 42"));
+}
