@@ -1064,4 +1064,16 @@ TEST_CASE("V2 copy: null arguments and destroy null-safety", "[capi_v2][copy_fun
 	REQUIRE(duckdb_v2_copy_function_destroy(&null_function) == DUCKDB_V2_ERROR_NONE);
 }
 
+TEST_CASE("V2 copy: set_file_extension", "[capi_v2][copy_function]") {
+	EnvFixture fx;
+	auto function = MakeCopy(fx.conn, "v2_copy_ext");
+	auto extension = Convert("summary");
+	REQUIRE(duckdb_v2_copy_function_set_file_extension(function, &extension, nullptr) == DUCKDB_V2_ERROR_NONE);
+	auto dotted = Convert(".summary");
+	REQUIRE(duckdb_v2_copy_function_set_file_extension(function, &dotted, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_copy_function_set_file_extension(function, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_copy_function_set_file_extension(nullptr, &extension, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_copy_function_destroy(&function);
+}
+
 } // namespace test_capi_v2
