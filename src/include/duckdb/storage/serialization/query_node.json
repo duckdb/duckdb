@@ -32,6 +32,14 @@
     "class": "SelectNode",
     "base": "QueryNode",
     "enum": "SELECT_NODE",
+    "includes": [
+      "duckdb/parser/tableref/emptytableref.hpp"
+    ],
+    "finalize_deserialization": [
+      "if (!result->from_table) {",
+      "\tresult->from_table = make_uniq<EmptyTableRef>();",
+      "}"
+    ],
     "members": [
       {
         "id": 200,

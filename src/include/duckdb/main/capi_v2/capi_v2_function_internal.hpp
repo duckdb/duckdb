@@ -12,8 +12,60 @@
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/parsed_data/create_function_info.hpp"
 
 namespace duckdb::capiv2 {
+
+//! An example of calling a function, with an optional title.
+struct CV2FunctionExample {
+	string title;
+	string example;
+};
+
+//! The documentation of one overload, as `duckdb_functions()` reports it.
+class CV2FunctionDocs {
+public:
+	//! Adds this overload's description to `info`, matched to the overload by its parameter types; the parameter names
+	//! come from the signature itself. Adds nothing when no documentation was set.
+	void AddTo(const FunctionSignature &signature, CreateFunctionInfo &info) const {
+		vector<LogicalType> parameter_types;
+		for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
+			auto &parameter = signature.GetParameter(i);
+			if (parameter.IsVariadic()) {
+				continue;
+			}
+			parameter_types.push_back(parameter.GetType());
+		}
+		AddTo(std::move(parameter_types), info);
+	}
+	//! As above, matched to the overload by the given parameter types
+	void AddTo(vector<LogicalType> parameter_types, CreateFunctionInfo &info) const {
+		if (description.empty() && examples.empty() && categories.empty()) {
+			return;
+		}
+		FunctionDescription result;
+		result.parameter_types = std::move(parameter_types);
+		result.description = description;
+		for (auto &entry : examples) {
+			result.examples.push_back(entry.example);
+		}
+		result.categories = categories;
+		info.descriptions.push_back(std::move(result));
+	}
+
+public:
+	string description;
+	vector<CV2FunctionExample> examples;
+	vector<string> categories;
+};
+
+inline auto Convert(duckdb_v2_function_docs_handle docs) -> CV2FunctionDocs * {
+	return reinterpret_cast<CV2FunctionDocs *>(docs);
+}
+
+inline auto Convert(CV2FunctionDocs *docs) -> duckdb_v2_function_docs_handle {
+	return reinterpret_cast<duckdb_v2_function_docs_handle>(docs);
+}
 
 //! The part of a bind callback every function family shares: the arguments of the call site, the user data and the
 //! bind data. The arguments are one list: the positional arguments, then the named arguments
@@ -21,7 +73,10 @@ class CV2FunctionBindInfo {
 public:
 	template <class FUNC>
 	CV2FunctionBindInfo(const FUNC &function, void *user_data)
-	    : in_user_data(user_data), function(function), signature(function.GetDefinition()->GetSignature()) {
+	    : CV2FunctionBindInfo(function, function.GetDefinition()->GetSignature(), user_data) {
+	}
+	CV2FunctionBindInfo(const BoundSimpleFunction &function, const FunctionSignature &signature, void *user_data)
+	    : in_user_data(user_data), function(function), signature(signature) {
 	}
 	virtual ~CV2FunctionBindInfo() = default;
 
@@ -38,8 +93,8 @@ public:
 
 public:
 	void *in_user_data;
-	//! Whether the bind data is set through this handle - scalar functions set it through their own bind info
-	bool can_set_bind_data = true;
+	//! Why the bind data cannot be set through this handle, empty when it can
+	string bind_data_error;
 	//! The bind data the callback set, or nullptr
 	shared_ptr<CV2UserData> out_bind_data;
 
@@ -63,11 +118,11 @@ private:
 	const BindFunctionInput &input;
 };
 
-//! The arguments of a table function call: constants, the positional arguments and the named ones held apart
+//! The arguments of a table or pragma function call: constants, the positional arguments and the named ones held apart
 class CV2ConstantBindInfo final : public CV2FunctionBindInfo {
 public:
-	CV2ConstantBindInfo(const BoundTableFunction &function, void *user_data, const vector<Value> &positional,
-	                    const named_argument_map_t &named);
+	CV2ConstantBindInfo(const BoundSimpleFunction &function, const FunctionSignature &signature, void *user_data,
+	                    const vector<Value> &positional, const named_argument_map_t &named);
 
 	LogicalType GetArgType(idx_t index) const override;
 	Value GetArgValue(idx_t index) const override;
