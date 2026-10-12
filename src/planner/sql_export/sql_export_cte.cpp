@@ -35,7 +35,19 @@ LogicalPlanSQLExportResult LogicalMaterializedCTE::ToSQL(LogicalPlanSQLExportCon
 		return LogicalPlanSQLExportResult::Failure(producer);
 	}
 	export_context.PushNamedRelation(cte.table_index, name, false);
-	auto consumer = export_context.ExportChild(*cte.children[1], LogicalPlanSQLExportHelpers::PlanChildPath(path, 1));
+	auto consumer_path = LogicalPlanSQLExportHelpers::PlanChildPath(path, 1);
+	// A data-modifying consumer exports as the statement itself rather than a relation to select from.
+	auto consumer = [&]() -> LogicalPlanVerificationResult<LogicalPlanSQLExportedChild> {
+		if (!SQLExportDMLHelpers::MatchDMLBody(*cte.children[1])) {
+			return export_context.ExportChild(*cte.children[1], consumer_path);
+		}
+		auto body = SQLExportDMLHelpers::ExportBody(export_context, *cte.children[1], consumer_path);
+		if (body.HasError()) {
+			return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Failure(body);
+		}
+		return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Success(
+		    {std::move(body.GetValue()), Identifier()});
+	}();
 	auto references = export_context.PopNamedRelation();
 	if (consumer.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(consumer);
@@ -55,6 +67,28 @@ LogicalPlanSQLExportResult LogicalMaterializedCTE::ToSQL(LogicalPlanSQLExportCon
 	}
 	info->query_node = std::move(producer.GetValue().relation.query);
 	info->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+	if (SQLExportDMLHelpers::IsDMLNode(*consumer.GetValue().relation.query)) {
+		// a data-modifying statement cannot be wrapped in a SELECT: it carries this CTE itself,
+		// in front of the definitions its export already collected
+		auto relation = std::move(consumer.GetValue().relation);
+		if (relation.fields.size() != fields.GetValue().size()) {
+			return LogicalPlanSQLExportResult::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
+			    path, "cte_dml_consumer", "The data-modifying CTE consumer does not forward the CTE's columns")});
+		}
+		for (idx_t i = 0; i < relation.fields.size(); i++) {
+			if (relation.fields[i].source_binding != fields.GetValue()[i].source_binding) {
+				return LogicalPlanSQLExportResult::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
+				    path, "cte_dml_consumer", "The data-modifying CTE consumer does not forward the CTE's columns")});
+			}
+		}
+		auto collected = std::move(relation.query->cte_map);
+		relation.query->cte_map = CommonTableExpressionMap();
+		relation.query->cte_map.map.insert(name, std::move(info));
+		for (auto &entry : collected.map) {
+			relation.query->cte_map.map.insert(entry.first, std::move(entry.second));
+		}
+		return LogicalPlanSQLExportResult::Success(std::move(relation));
+	}
 	auto select = export_context.ForwardFields(consumer.GetValue(), fields.GetValue());
 	select->from_table = LogicalPlanSQLExportHelpers::CreateSubquery(std::move(consumer.GetValue()));
 	select->cte_map.map.insert(name, std::move(info));
@@ -197,6 +231,16 @@ LogicalPlanSQLExportContext::ExportNamedProducer(LogicalOperator &op, const Logi
                                                  const Identifier &name) {
 	if (FindSource(op)) {
 		return ExportChild(op, path);
+	}
+	// A data-modifying body exports as the statement itself; parsed DML nodes are legal CTE bodies.
+	// This runs before the identity-projection reduction so a RETURNING projection stays intact.
+	if (SQLExportDMLHelpers::MatchDMLBody(op)) {
+		auto exported = SQLExportDMLHelpers::ExportBody(*this, op, path);
+		if (exported.HasError()) {
+			return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Failure(exported);
+		}
+		return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Success(
+		    {std::move(exported.GetValue()), NextRelationAlias()});
 	}
 	if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		D_ASSERT(op.children.size() == 1);

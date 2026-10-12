@@ -32,8 +32,8 @@ static LogicalPlanVerificationResult<Identifier> ExportedRowIdName(const TableCa
 	auto virtual_columns = table.GetVirtualColumns();
 	auto entry = row_id_columns.size() == 1 ? virtual_columns.find(row_id_columns[0]) : virtual_columns.end();
 	if (entry == virtual_columns.end() || table.ColumnExists(entry->second.name)) {
-		return LogicalPlanVerificationResult<Identifier>::Failure({UnsupportedDML(
-		    path, "dml_row_id", "The modified table does not expose a single named row-id column")});
+		return LogicalPlanVerificationResult<Identifier>::Failure(
+		    {UnsupportedDML(path, "dml_row_id", "The modified table does not expose a single named row-id column")});
 	}
 	return LogicalPlanVerificationResult<Identifier>::Success(Identifier(entry->second.name));
 }
@@ -194,16 +194,12 @@ static LogicalPlanSQLExportResult ExportUpdateNode(LogicalUpdate &op, LogicalPla
 	return LogicalPlanSQLExportResult::Success({std::move(node), std::move(fields.GetValue())});
 }
 
-static optional<LogicalPlanVerificationIssue> DMLBoundaryIssue(const LogicalPlanSQLExportContext &context,
-                                                               const LogicalOperator &op,
-                                                               const LogicalPlanVerificationPath &path) {
-	if (context.Ancestors().size() != 1) {
-		return UnsupportedDML(path, "dml_subplan", "A data-modifying operator below the plan root cannot be exported");
-	}
+static optional<LogicalPlanVerificationIssue> DMLStatementIssue(const LogicalOperator &op,
+                                                                const LogicalPlanVerificationPath &path) {
 	if (op.type == LogicalOperatorType::LOGICAL_UPDATE && op.Cast<LogicalUpdate>().capture_old_rows) {
 		return UnsupportedDML(path, "dml_old_rows", "UPDATE with OLD row capture cannot be exported");
 	}
-	// A bare root never returns modified rows; that shape only exists under a RETURNING projection.
+	// A bare operator never returns modified rows; that shape only exists under a RETURNING projection.
 	bool return_chunk = op.type == LogicalOperatorType::LOGICAL_INSERT   ? op.Cast<LogicalInsert>().return_chunk
 	                    : op.type == LogicalOperatorType::LOGICAL_UPDATE ? op.Cast<LogicalUpdate>().return_chunk
 	                                                                     : op.Cast<LogicalDelete>().return_chunk;
@@ -211,6 +207,15 @@ static optional<LogicalPlanVerificationIssue> DMLBoundaryIssue(const LogicalPlan
 		return UnsupportedDML(path, "dml_returning", "A data-modifying operator returning rows cannot be exported");
 	}
 	return optional<LogicalPlanVerificationIssue>();
+}
+
+static optional<LogicalPlanVerificationIssue> DMLBoundaryIssue(const LogicalPlanSQLExportContext &context,
+                                                               const LogicalOperator &op,
+                                                               const LogicalPlanVerificationPath &path) {
+	if (context.Ancestors().size() != 1) {
+		return UnsupportedDML(path, "dml_subplan", "A data-modifying operator below the plan root cannot be exported");
+	}
+	return DMLStatementIssue(op, path);
 }
 
 LogicalPlanSQLExportResult LogicalInsert::ToSQL(LogicalPlanSQLExportContext &context,
@@ -235,6 +240,73 @@ LogicalPlanSQLExportResult LogicalUpdate::ToSQL(LogicalPlanSQLExportContext &con
 		return LogicalPlanSQLExportResult::Failure({std::move(*issue)});
 	}
 	return ExportUpdateNode(*this, context, path);
+}
+
+//! An identity projection over a data-modifying body only forwards its columns under new bindings.
+static bool IsIdentityProjectionOverDML(LogicalOperator &op) {
+	if (op.type != LogicalOperatorType::LOGICAL_PROJECTION || op.children.size() != 1 ||
+	    !SQLExportDMLHelpers::MatchDMLBody(*op.children[0])) {
+		return false;
+	}
+	auto child_fields = LogicalPlanSQLExportHelpers::CreateFields(*op.children[0], LogicalPlanVerificationPath());
+	return child_fields.IsSuccess() &&
+	       LogicalPlanSQLExportHelpers::IsIdentityProjection(op.Cast<LogicalProjection>(), child_fields.GetValue());
+}
+
+bool SQLExportDMLHelpers::MatchDMLBody(LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE:
+		return true;
+	default:
+		return MatchReturningRoot(op) || IsIdentityProjectionOverDML(op);
+	}
+}
+
+bool SQLExportDMLHelpers::IsDMLNode(const QueryNode &query) {
+	switch (query.type) {
+	case QueryNodeType::INSERT_QUERY_NODE:
+	case QueryNodeType::UPDATE_QUERY_NODE:
+	case QueryNodeType::DELETE_QUERY_NODE:
+		return true;
+	default:
+		return false;
+	}
+}
+
+LogicalPlanSQLExportResult SQLExportDMLHelpers::ExportBody(LogicalPlanSQLExportContext &context, LogicalOperator &op,
+                                                           const LogicalPlanVerificationPath &path) {
+	if (auto returning = MatchReturningRoot(op)) {
+		return ExportReturning(context, *returning, optional<vector<Identifier>>(), path);
+	}
+	if (IsIdentityProjectionOverDML(op)) {
+		auto fields = LogicalPlanSQLExportHelpers::CreateFields(op, path);
+		if (fields.HasError()) {
+			return LogicalPlanSQLExportResult::Failure(fields);
+		}
+		LogicalPlanSQLExportContext::AncestorScope projection_scope(context, op);
+		auto exported = ExportBody(context, *op.children[0], LogicalPlanSQLExportHelpers::PlanChildPath(path, 0));
+		if (exported.HasError()) {
+			return exported;
+		}
+		// the projection only renames the forwarded columns' bindings
+		D_ASSERT(exported.GetValue().fields.size() == fields.GetValue().size());
+		exported.GetValue().fields = std::move(fields.GetValue());
+		return exported;
+	}
+	if (auto issue = DMLStatementIssue(op, path)) {
+		return LogicalPlanSQLExportResult::Failure({std::move(*issue)});
+	}
+	LogicalPlanSQLExportContext::AncestorScope op_scope(context, op);
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_INSERT:
+		return ExportInsertNode(op.Cast<LogicalInsert>(), context, path);
+	case LogicalOperatorType::LOGICAL_UPDATE:
+		return ExportUpdateNode(op.Cast<LogicalUpdate>(), context, path);
+	default:
+		return ExportDeleteNode(op.Cast<LogicalDelete>(), context, path);
+	}
 }
 
 optional_ptr<LogicalProjection> SQLExportDMLHelpers::MatchReturningRoot(LogicalOperator &root) {
@@ -279,24 +351,23 @@ ReturningBindingContext(ClientContext &client, const LogicalProjection &projecti
 	auto virtual_columns = table.GetVirtualColumns();
 	optional<LogicalPlanVerificationIssue> unsupported;
 	for (auto &expression : projection.expressions) {
-		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-		    *expression, [&](const BoundColumnRefExpression &column) {
-			    if (unsupported || column.Binding().table_index != table_index ||
-			        column.Binding().column_index < physical_count) {
-				    return;
-			    }
-			    for (auto &entry : virtual_columns) {
-				    if (entry.second.name != column.GetAlias() || table.ColumnExists(entry.second.name) ||
-				        !entry.second.type.EqualsIncludingCollation(column.GetReturnType())) {
-					    continue;
-				    }
-				    entries.emplace(column.Binding(),
-				                    ResolvedSQLColumnReference {{entry.second.name}, entry.second.type});
-				    return;
-			    }
-			    unsupported = UnsupportedDML(path, "dml_returning_reference",
-			                                 "RETURNING references a column SQL cannot name on the modified table");
-		    });
+		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(*expression, [&](const BoundColumnRefExpression
+		                                                                                   &column) {
+			if (unsupported || column.Binding().table_index != table_index ||
+			    column.Binding().column_index < physical_count) {
+				return;
+			}
+			for (auto &entry : virtual_columns) {
+				if (entry.second.name != column.GetAlias() || table.ColumnExists(entry.second.name) ||
+				    !entry.second.type.EqualsIncludingCollation(column.GetReturnType())) {
+					continue;
+				}
+				entries.emplace(column.Binding(), ResolvedSQLColumnReference {{entry.second.name}, entry.second.type});
+				return;
+			}
+			unsupported = UnsupportedDML(path, "dml_returning_reference",
+			                             "RETURNING references a column SQL cannot name on the modified table");
+		});
 	}
 	if (unsupported) {
 		return LogicalPlanVerificationResult<BoundExpressionSQLExportContext>::Failure({std::move(*unsupported)});
@@ -317,8 +388,8 @@ ReturningBindingContext(ClientContext &client, const LogicalProjection &projecti
 
 LogicalPlanSQLExportResult SQLExportDMLHelpers::ExportReturning(LogicalPlanSQLExportContext &context,
                                                                 LogicalProjection &root,
-                                                                const optional<vector<Identifier>> &output_names) {
-	LogicalPlanVerificationPath path;
+                                                                const optional<vector<Identifier>> &output_names,
+                                                                const LogicalPlanVerificationPath &path) {
 	auto fields = LogicalPlanSQLExportHelpers::CreateFields(root, path);
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields);
@@ -371,6 +442,8 @@ LogicalPlanSQLExportResult SQLExportDMLHelpers::ExportReturning(LogicalPlanSQLEx
 		}
 		if (output_names && output_names->size() == root.expressions.size()) {
 			expression.GetValue()->SetAlias((*output_names)[i]);
+		} else if (!root.expressions[i]->GetAlias().empty()) {
+			expression.GetValue()->SetAlias(root.expressions[i]->GetAlias());
 		}
 		returning_list.push_back(std::move(expression.GetValue()));
 	}

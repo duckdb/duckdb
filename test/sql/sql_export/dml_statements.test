@@ -149,11 +149,42 @@ EXPLAIN (SQL) INSERT INTO dml_shadowed VALUES (1, 'a');
 ----
 sql	<REGEX>:INSERT INTO memory\.main\.dml_shadowed \(rowid, v\) SELECT .*
 
-# a data-modifying CTE is below the plan root and stays unsupported
-statement error
-EXPLAIN (SQL) WITH d AS (DELETE FROM dml_target WHERE a = 1 RETURNING a) SELECT * FROM d;
+# a data-modifying CTE exports as a materialized CTE whose body is the statement
+statement ok
+CREATE TABLE dml_cte_target(a INTEGER);
+
+statement ok
+INSERT INTO dml_cte_target VALUES (1),(2),(3);
+
+query TT
+EXPLAIN (SQL) WITH d AS (DELETE FROM dml_cte_target WHERE a < 3 RETURNING a) SELECT sum(a) AS deleted_sum FROM d;
 ----
-A data-modifying operator below the plan root cannot be exported
+sql	WITH d (c0) AS MATERIALIZED (DELETE FROM memory.main.dml_cte_target WHERE (rowid = ANY(SELECT r0.rowid AS c1 FROM memory.main.dml_cte_target AS r0(column0) WHERE (r0.column0 < CAST(3 AS INTEGER)))) RETURNING a AS a) SELECT r6.c0 AS deleted_sum FROM (SELECT "system".main.sum(r3.c0) AS c0 FROM d AS r3(c0)) AS r6(c0)
+
+query I
+WITH d (c0) AS MATERIALIZED (DELETE FROM memory.main.dml_cte_target WHERE (rowid = ANY(SELECT r0.rowid AS c1 FROM memory.main.dml_cte_target AS r0(column0) WHERE (r0.column0 < CAST(3 AS INTEGER)))) RETURNING a AS a) SELECT r6.c0 AS deleted_sum FROM (SELECT "system".main.sum(r3.c0) AS c0 FROM d AS r3(c0)) AS r6(c0)
+----
+3
+
+# a data-modifying statement consuming a materialized CTE keeps the definition in front
+query TT
+EXPLAIN (SQL) WITH x AS MATERIALIZED (SELECT 3 AS v) DELETE FROM dml_cte_target WHERE a IN (SELECT v FROM x);
+----
+sql	WITH x (c0) AS MATERIALIZED (SELECT CAST(3 AS INTEGER) AS c0) DELETE FROM memory.main.dml_cte_target WHERE (rowid = ANY(SELECT r3.c1 AS c1 FROM ((SELECT r2.column0 AS c0, r2.rowid AS c1 FROM memory.main.dml_cte_target AS r2(column0) WHERE (r2.column0 >= CAST(3 AS INTEGER))) AS r3(c0, c1) SEMI JOIN x AS r4(c0) ON ((r3.c0 = r4.c0)))))
+
+statement ok
+WITH x (c0) AS MATERIALIZED (SELECT CAST(3 AS INTEGER) AS c0) DELETE FROM memory.main.dml_cte_target WHERE (rowid = ANY(SELECT r3.c1 AS c1 FROM ((SELECT r2.column0 AS c0, r2.rowid AS c1 FROM memory.main.dml_cte_target AS r2(column0) WHERE (r2.column0 >= CAST(3 AS INTEGER))) AS r3(c0, c1) SEMI JOIN x AS r4(c0) ON ((r3.c0 = r4.c0)))))
+
+query I
+SELECT count(*) FROM dml_cte_target;
+----
+0
+
+# an unreferenced data-modifying CTE would be discarded by SQL and stays unsupported
+statement error
+EXPLAIN (SQL) WITH d AS (DELETE FROM dml_target WHERE a = 1 RETURNING a) SELECT 42;
+----
+SQL would discard the unreferenced CTE producer
 
 # other statement types stay outside EXPLAIN (SQL)
 statement error
