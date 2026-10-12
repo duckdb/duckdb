@@ -268,10 +268,11 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 		throw InternalException("ColumnData::SelectVector should be able to fetch everything from one segment");
 	}
 	if (state.scan_options && state.scan_options->force_fetch_row) {
+		auto start = state.GetPositionInSegment();
 		for (idx_t i = 0; i < sel_count; i++) {
 			auto source_idx = sel.get_index(i);
 			ColumnFetchState fetch_state;
-			current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.offset_in_column + source_idx), result, i);
+			current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(start + source_idx), result, i);
 		}
 	} else {
 		current.Select(state, target_count, result, sel, sel_count);
@@ -1038,7 +1039,10 @@ static PersistentColumnData GetPersistentColumnDataType(Deserializer &deserializ
 	}
 	case ExtraPersistentColumnDataType::GEOMETRY: {
 		const auto &geometry_data = extra_data->Cast<GeometryPersistentColumnData>();
-		PersistentColumnData result(Geometry::GetVectorizedType(geometry_data.storage_type));
+		// WKB is stored as the column's own type, which may carry type parameters (e.g., a CRS)
+		PersistentColumnData result(geometry_data.storage_type == GeometryStorageType::WKB
+		                                ? deserializer.Get<const LogicalType &>()
+		                                : Geometry::GetVectorizedType(geometry_data.storage_type));
 		result.extra_data = std::move(extra_data);
 		return result;
 	}
@@ -1065,8 +1069,7 @@ PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserialize
 
 	// TODO: This is ugly
 	if (result.extra_data && result.extra_data->GetType() == ExtraPersistentColumnDataType::GEOMETRY) {
-		auto &geo_data = result.extra_data->Cast<GeometryPersistentColumnData>();
-		auto actual_type = Geometry::GetVectorizedType(geo_data.storage_type);
+		const auto &actual_type = type;
 
 		// We need to set the actual type in scope, as when we deserialize "data_pointers" we use it to detect
 		// the type of the statistics.
