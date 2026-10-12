@@ -151,8 +151,7 @@ void SentinelStreamRelease(ArrowArrayStream *stream) {
 } // namespace
 
 TEST_CASE("Stable C++API: ArrowResult fetch loop delivers batched arrays in order", "[cpp_api][arrow]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto result = conn.Execute("SELECT i FROM range(10000) t(i)", ArrowFormat {1000});
@@ -173,8 +172,7 @@ TEST_CASE("Stable C++API: ArrowResult fetch loop delivers batched arrays in orde
 }
 
 TEST_CASE("Stable C++API: ArrowResult step loop drains a result without blocking", "[cpp_api][arrow]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto statement = ParseOne(conn, "SELECT i FROM range(5000) t(i)");
@@ -213,8 +211,7 @@ TEST_CASE("Stable C++API: ArrowResult step loop drains a result without blocking
 }
 
 TEST_CASE("Stable C++API: ArrowFormat's default batch size is the engine's 131072", "[cpp_api][arrow]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	// One thread gives exact batch sizes.
 	conn.Execute("SET threads = 1").Drain();
@@ -238,8 +235,7 @@ TEST_CASE("Stable C++API: ArrowFormat's default batch size is the engine's 13107
 }
 
 TEST_CASE("Stable C++API: ArrowResult reports its schema and types", "[cpp_api][arrow]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	OwnedSchema survivor;
@@ -271,8 +267,7 @@ TEST_CASE("Stable C++API: arrays and schemas outlive the result and the database
 	OwnedSchema schema;
 	ArrowBatches batches;
 	{
-		Environment env;
-		auto db = env.Open(":memory:");
+		auto db = Instance(":memory:");
 		auto conn = db.Connect();
 		auto result = conn.Execute("SELECT i FROM range(5) t(i)", ArrowFormat {});
 		result.GetSchema(schema.schema);
@@ -286,8 +281,7 @@ TEST_CASE("Stable C++API: arrays and schemas outlive the result and the database
 }
 
 TEST_CASE("Stable C++API: ArrowResult of an expanding statement defers its schema", "[cpp_api][arrow]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	conn.Execute("CREATE TABLE sales(product VARCHAR, quarter VARCHAR, amount INTEGER)").Drain();
 	conn.Execute("INSERT INTO sales VALUES ('a', 'q1', 1), ('a', 'q2', 2)").Drain();
@@ -314,8 +308,7 @@ TEST_CASE("Stable C++API: ArrowResult of an expanding statement defers its schem
 }
 
 TEST_CASE("Stable C++API: ArrowResult binds parameters through every Execute form", "[cpp_api][arrow]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto Check = [](ArrowResult result) {
@@ -329,31 +322,30 @@ TEST_CASE("Stable C++API: ArrowResult binds parameters through every Execute for
 	auto positional = ParseOne(conn, "SELECT $1::BIGINT + i FROM range(10) t(i)");
 
 	{
-		auto value = Value::Create(conn, int64_t(10));
+		auto value = Value::Create(conn.GetFactory(), int64_t(10));
 		Check(conn.Execute(positional, &value, 1, ArrowFormat {4}));
 	}
 	{
 		std::vector<Value> params;
-		params.push_back(Value::Create(conn, int64_t(10)));
+		params.push_back(Value::Create(conn.GetFactory(), int64_t(10)));
 		Check(conn.Execute(positional, params, ArrowFormat {4}));
 	}
 	{
 		// An empty name binds positionally.
 		std::vector<NamedParam> params;
-		params.push_back({"", Value::Create(conn, int64_t(10))});
+		params.push_back({"", Value::Create(conn.GetFactory(), int64_t(10))});
 		Check(conn.Execute(positional, params, ArrowFormat {4}));
 	}
 	{
 		auto named = ParseOne(conn, "SELECT $base::BIGINT + i FROM range(10) t(i)");
 		std::vector<NamedParam> params;
-		params.push_back({"base", Value::Create(conn, int64_t(10))});
+		params.push_back({"base", Value::Create(conn.GetFactory(), int64_t(10))});
 		Check(conn.Execute(named, params, ArrowFormat {4}));
 	}
 }
 
 TEST_CASE("Stable C++API: PreparedStatement executes into Arrow repeatedly", "[cpp_api][arrow][prepared_statement]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto statement = ParseOne(conn, "SELECT i + $1::BIGINT FROM range(10) t(i)");
@@ -361,7 +353,7 @@ TEST_CASE("Stable C++API: PreparedStatement executes into Arrow repeatedly", "[c
 
 	for (int64_t base : {int64_t(0), int64_t(100)}) {
 		std::vector<Value> params;
-		params.push_back(Value::Create(conn, base));
+		params.push_back(Value::Create(conn.GetFactory(), base));
 		auto result = prepared.Execute(params, ArrowFormat {4});
 
 		// The result reports what the statement is, not EXECUTE.
@@ -375,7 +367,7 @@ TEST_CASE("Stable C++API: PreparedStatement executes into Arrow repeatedly", "[c
 	}
 
 	{
-		auto value = Value::Create(conn, int64_t(10));
+		auto value = Value::Create(conn.GetFactory(), int64_t(10));
 		auto result = prepared.Execute(&value, 1, ArrowFormat {4});
 		ArrowBatches batches;
 		FetchAll(result, batches);
@@ -386,7 +378,7 @@ TEST_CASE("Stable C++API: PreparedStatement executes into Arrow repeatedly", "[c
 		auto named_statement = ParseOne(conn, "SELECT i + $base::BIGINT FROM range(10) t(i)");
 		auto named_prepared = conn.Prepare(named_statement);
 		std::vector<NamedParam> params;
-		params.push_back({"base", Value::Create(conn, int64_t(10))});
+		params.push_back({"base", Value::Create(conn.GetFactory(), int64_t(10))});
 		ArrowBatches batches;
 		auto result = named_prepared.Execute(params, ArrowFormat {4});
 		FetchAll(result, batches);
@@ -395,8 +387,7 @@ TEST_CASE("Stable C++API: PreparedStatement executes into Arrow repeatedly", "[c
 }
 
 TEST_CASE("Stable C++API: ArrowResult drains side effects and reports shapes", "[cpp_api][arrow]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	{
@@ -414,14 +405,13 @@ TEST_CASE("Stable C++API: ArrowResult drains side effects and reports shapes", "
 		auto statement = ParseOne(conn, "INSERT INTO t SELECT * FROM range($1::BIGINT)");
 		auto prepared = conn.Prepare(statement);
 		std::vector<Value> params;
-		params.push_back(Value::Create(conn, int64_t(17)));
+		params.push_back(Value::Create(conn.GetFactory(), int64_t(17)));
 		REQUIRE(prepared.Execute(params, ArrowFormat {}).Drain() == 17);
 	}
 }
 
 TEST_CASE("Stable C++API: ArrowResult surfaces errors as exceptions", "[cpp_api][arrow]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	SECTION("a binding error throws at Execute and leaves the statement usable") {
@@ -450,7 +440,7 @@ TEST_CASE("Stable C++API: ArrowResult surfaces errors as exceptions", "[cpp_api]
 		auto statement = ParseOne(conn, "SELECT $base::BIGINT + i FROM range(10) t(i)");
 
 		std::vector<NamedParam> wrong;
-		wrong.push_back({"wrong", Value::Create(conn, int64_t(10))});
+		wrong.push_back({"wrong", Value::Create(conn.GetFactory(), int64_t(10))});
 		REQUIRE_THROWS_MATCHES(conn.Execute(statement, wrong, ArrowFormat {}), Exception,
 		                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 		auto prepared = conn.Prepare(statement);
@@ -460,14 +450,14 @@ TEST_CASE("Stable C++API: ArrowResult surfaces errors as exceptions", "[cpp_api]
 		// A statement cannot mix named and positional parameters.
 		auto two = ParseOne(conn, "SELECT $a::BIGINT + $b::BIGINT");
 		std::vector<NamedParam> mixed;
-		mixed.push_back({"a", Value::Create(conn, int64_t(1))});
-		mixed.push_back({"", Value::Create(conn, int64_t(2))});
+		mixed.push_back({"a", Value::Create(conn.GetFactory(), int64_t(1))});
+		mixed.push_back({"", Value::Create(conn.GetFactory(), int64_t(2))});
 		REQUIRE_THROWS_MATCHES(conn.Execute(two, mixed, ArrowFormat {}), Exception,
 		                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 
 		// The failures left both handles usable.
 		std::vector<NamedParam> right;
-		right.push_back({"base", Value::Create(conn, int64_t(10))});
+		right.push_back({"base", Value::Create(conn.GetFactory(), int64_t(10))});
 		ArrowBatches batches;
 		auto result = prepared.Execute(right, ArrowFormat {});
 		FetchAll(result, batches);
@@ -533,8 +523,7 @@ TEST_CASE("Stable C++API: ArrowResult surfaces errors as exceptions", "[cpp_api]
 }
 
 TEST_CASE("Stable C++API: ToArrowStream consumes the result and continues it", "[cpp_api][arrow]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	SECTION("the stream picks up where FetchArray left off") {
@@ -586,8 +575,7 @@ TEST_CASE("Stable C++API: ToArrowStream consumes the result and continues it", "
 }
 
 TEST_CASE("Stable C++API: one live result per connection, in either format", "[cpp_api][arrow]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto statement = ParseOne(conn, "SELECT 1");
@@ -613,8 +601,7 @@ TEST_CASE("Stable C++API: one live result per connection, in either format", "[c
 }
 
 TEST_CASE("Stable C++API: move assignment swaps two live ArrowResults", "[cpp_api][arrow]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn1 = db.Connect();
 	auto conn2 = db.Connect();
 
@@ -641,8 +628,7 @@ TEST_CASE("Stable C++API: move assignment swaps two live ArrowResults", "[cpp_ap
 }
 
 TEST_CASE("Stable C++API: a moved-from ArrowResult is empty and safe", "[cpp_api][arrow]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto source = conn.Execute("SELECT i FROM range(10) t(i)", ArrowFormat {});
