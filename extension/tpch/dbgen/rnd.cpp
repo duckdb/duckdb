@@ -32,7 +32,6 @@
 #include "dbgen/dss.h"
 #include "dbgen/rnd.h"
 
-const char *tpch_env_config PROTO((const char *tag, const char *dflt));
 void NthElement(DSS_HUGE, DSS_HUGE *);
 
 void dss_random(DSS_HUGE *tgt, DSS_HUGE lower, DSS_HUGE upper, seed_t *seed) {
