@@ -11,6 +11,8 @@
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -544,6 +546,20 @@ struct ICUDatePart : public ICUDateFunc {
 		return make_uniq<BindStructData>(context, std::move(part_codes));
 	}
 
+	static unique_ptr<ParsedExpression> UnbindBinaryDatePart(FunctionUnbindInput &input) {
+		auto &function = input.expression.Function();
+		D_ASSERT(input.children.size() == 1 || input.children.size() == 2);
+		vector<FunctionArgument> arguments;
+		if (input.children.size() == 1) {
+			// Constant binding replaces the binary call with its canonical unary date part.
+			arguments.emplace_back(ConstantExpression::FromValue(Value(function.GetName().GetIdentifierName())));
+		}
+		for (auto &child : input.children) {
+			arguments.emplace_back(std::move(child));
+		}
+		return make_uniq<FunctionExpression>(function.GetDefinition()->GetQualifiedName(), std::move(arguments));
+	}
+
 	static void SerializeStructFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
 	                                    const BoundScalarFunction &function) {
 		D_ASSERT(bind_data);
@@ -585,6 +601,7 @@ struct ICUDatePart : public ICUDateFunc {
 		ScalarFunction fun({}, LogicalType::DOUBLE, BinaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>,
 		                   BindBinaryDatePart);
 		fun.GetSignature().AddParameter("part", LogicalType::VARCHAR).AddParameter("ts", temporal_type);
+		fun.SetUnbindCallback(UnbindBinaryDatePart);
 		return fun;
 	}
 

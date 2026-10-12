@@ -1,0 +1,147 @@
+# name: test/sql/sql_export/icu_datepart_roundtrip.test
+# description: SQL export restores constant ICU date-part arguments removed during binding
+# group: [sql_export]
+
+require icu
+
+statement ok
+SET TimeZone='UTC';
+
+statement ok
+CREATE TABLE export_dates(id INTEGER, part VARCHAR, ts TIMESTAMPTZ);
+
+statement ok
+INSERT INTO export_dates VALUES (0,'hour','1969-12-31 23:59:59.125+00'),
+                                (1,'epoch','2000-02-29 12:34:56.125+00'),
+                                (2,NULL,NULL);
+
+statement ok
+SET debug_verify_statement='explain_sql_strict';
+
+# The bound call has one child but retains the binary date_part definition.
+query I
+SELECT date_part('hour',to_timestamp(i)) FROM range(2) t(i);
+----
+0
+0
+
+query III
+SELECT date_part('hour',ts),datepart('microseconds',ts),extract(doy FROM ts)
+FROM export_dates ORDER BY id;
+----
+23	59125000	365
+12	56125000	60
+NULL	NULL	NULL
+
+query RR
+SELECT date_part('epoch',ts),date_part(part,ts) FROM export_dates ORDER BY id;
+----
+-0.875	23
+951827696.125	951827696.125
+NULL	NULL
+
+query TT
+SELECT typeof(date_part('hour',ts)),typeof(date_part('epoch',ts)) FROM export_dates LIMIT 1;
+----
+BIGINT	DOUBLE
+
+query I
+SELECT date_part(NULL::VARCHAR,ts) FROM export_dates ORDER BY id;
+----
+NULL
+NULL
+NULL
+
+foreach timezone UTC America/Los_Angeles
+
+statement ok
+SET TimeZone='{timezone}';
+
+foreach disable false true
+
+statement ok
+SET debug_disable_optimizer={disable};
+
+query I
+SELECT count(*) FROM export_dates WHERE
+date_part('hour',ts) IS DISTINCT FROM hour(ts)
+OR date_part('dow',ts) IS DISTINCT FROM dayofweek(ts)
+OR datepart('doy',ts) IS DISTINCT FROM dayofyear(ts)
+OR date_part('milliseconds',ts) IS DISTINCT FROM millisecond(ts)
+OR date_part('microseconds',ts) IS DISTINCT FROM microsecond(ts)
+OR date_part('julian',ts) IS DISTINCT FROM julian(ts)
+OR date_part('epoch',ts) IS DISTINCT FROM epoch(ts);
+----
+0
+
+# Named arguments are restored in signature order, even when supplied in reverse order.
+query I
+SELECT count(*) FROM export_dates WHERE
+datepart(ts := ts, part := 'hour') IS DISTINCT FROM hour(ts)
+OR date_part(part := part, ts := ts) IS DISTINCT FROM
+   CASE part WHEN 'hour' THEN hour(ts)::DOUBLE WHEN 'epoch' THEN epoch(ts) END;
+----
+0
+
+# The struct overload retains its arguments and is not changed by the scalar callback.
+query I
+SELECT count(*) FROM export_dates WHERE
+date_part(['year','hour'],ts).hour IS DISTINCT FROM hour(ts);
+----
+0
+
+endloop
+
+endloop
+
+statement ok
+RESET debug_disable_optimizer;
+
+statement ok
+SET TimeZone='UTC';
+
+# Preserve the bound calendar adapters across serialization as well as SQL rebinding.
+foreach calendar gregorian buddhist
+
+statement ok
+SET Calendar='{calendar}';
+
+foreach serialize false true
+
+statement ok
+SET debug_verify_serializer={serialize};
+
+query I
+SELECT count(*) FROM export_dates WHERE
+date_part('year',ts) IS DISTINCT FROM year(ts)
+OR date_part('epoch',ts) IS DISTINCT FROM epoch(ts);
+----
+0
+
+endloop
+
+endloop
+
+statement ok
+RESET Calendar;
+
+statement ok
+SET debug_verify_serializer=false;
+
+# Prepared executions protect ordinary rebinding; strict export verification applies to SELECTs.
+statement ok
+PREPARE exported_part AS SELECT date_part($1,ts) FROM export_dates ORDER BY id;
+
+query I
+EXECUTE exported_part('hour');
+----
+23
+12
+NULL
+
+query R
+EXECUTE exported_part('epoch');
+----
+-0.875
+951827696.125
+NULL
