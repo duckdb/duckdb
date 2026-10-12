@@ -657,7 +657,7 @@ static unique_ptr<ParsedExpression> FoldConjunctionExpression(PEGTransformer &tr
 	if (!tails) {
 		return expr;
 	}
-	auto depth_guard = transformer.StackCheck(tails->size());
+	auto depth_guard = transformer.StackCheck(1);
 	for (auto &tail : *tails) {
 		expr = make_uniq<ConjunctionExpression>(conjunction_type, std::move(expr), std::move(tail));
 	}
