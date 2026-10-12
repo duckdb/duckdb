@@ -219,6 +219,8 @@ private:
 private:
 	//! Minimum budget charge per job, beyond its scheduled I/O a job carries scan-state overhead (decode buffers)
 	static constexpr idx_t MINIMUM_JOB_IO_CHARGE = 16ULL * 1024 * 1024;
+	//! Times a thread yields for another thread to push a job before it waits for it
+	static constexpr idx_t MAXIMUM_PRODUCER_YIELDS = 64;
 
 private:
 	ClientContext &context;

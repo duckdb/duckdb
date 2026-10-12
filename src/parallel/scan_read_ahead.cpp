@@ -210,6 +210,7 @@ ScanReadAheadAcquire ScanReadAhead::AcquireJob(ClientContext &context, TableFunc
                                                const ProduceJobCallback &claim_and_schedule,
                                                unique_ptr<ScanReadAheadJob> &job) {
 	D_ASSERT(!job);
+	idx_t yields = 0;
 	while (true) {
 		const auto epoch = ProgressEpoch();
 		// keep the queue full before claiming
@@ -229,8 +230,15 @@ ScanReadAheadAcquire ScanReadAhead::AcquireJob(ClientContext &context, TableFunc
 			}
 		}
 		if (!job) {
-			// another thread is between claiming an assignment and pushing its job, wait for it
-			WaitForProgress(context, epoch);
+			// another thread is between claiming an assignment and pushing its job, a short claim is caught by
+			// yielding and a long one is waited for
+			if (yields < MAXIMUM_PRODUCER_YIELDS) {
+				yields++;
+				context.InterruptCheck();
+				TaskScheduler::YieldThread();
+			} else {
+				WaitForProgress(context, epoch);
+			}
 			continue;
 		}
 		// park until the job's scheduled I/O completes, the last I/O task to finish wakes the scan task
@@ -256,13 +264,16 @@ bool ScanReadAhead::TryReserveSlot() {
 	if (active_jobs.load() >= ReservationDepth()) {
 		return false;
 	}
-	// reserve the slot and the minimum charge together
-	lock_guard<mutex> guard(lock);
-	if (active_jobs.load() >= ReservationDepth()) {
+	// take the minimum job charge up front so concurrent producers cannot all pass the budget check together
+	const bool over_budget = pending_io_bytes.fetch_add(MINIMUM_JOB_IO_CHARGE) >= backlog_budget.load();
+	const idx_t depth = over_budget ? 1 : read_ahead_depth;
+	if (active_jobs.fetch_add(1) >= depth) {
+		--active_jobs;
+		pending_io_bytes -= MINIMUM_JOB_IO_CHARGE;
+		// a concurrent attempt may have failed on this charge, let it retry
+		SignalProgress();
 		return false;
 	}
-	++active_jobs;
-	pending_io_bytes += MINIMUM_JOB_IO_CHARGE;
 	++active_producers;
 	return true;
 }
