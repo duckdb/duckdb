@@ -17,6 +17,9 @@ ATTACH ':memory:' AS "it's";
 statement ok
 ATTACH ':memory:' AS "my""db";
 
+statement ok
+ATTACH ':memory:' AS db3;
+
 # string literal naming a catalog
 statement ok
 USE 'db2'
@@ -35,13 +38,14 @@ SELECT current_catalog(), current_schema()
 ----
 db2	s2
 
+# switching from a schema back to a different catalog
 statement ok
-USE 'memory'
+USE 'db3'
 
 query II
 SELECT current_catalog(), current_schema()
 ----
-memory	main
+db3	main
 
 # quoted identifiers
 statement ok
