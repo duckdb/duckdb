@@ -135,9 +135,11 @@ protected:
 	};
 
 	struct MemoryUsage {
-		//! The maximum difference between memory statistics and actual usage is 2MB (64 * 32k)
+		//! Total memory accounting differs from actual usage by at most 2MB (64 * 32k)
 		static constexpr idx_t MEMORY_USAGE_CACHE_COUNT = 64;
 		static constexpr idx_t MEMORY_USAGE_CACHE_THRESHOLD = 32 << 10;
+		//! Per-tag statistics are flushed when read and can use a larger cache threshold.
+		static constexpr idx_t MEMORY_USAGE_TAG_CACHE_THRESHOLD = 1 << 20;
 		static constexpr idx_t TOTAL_MEMORY_USAGE_INDEX = MEMORY_TAG_COUNT;
 		using MemoryUsageCounters = array<atomic<int64_t>, MEMORY_TAG_COUNT + 1>;
 
