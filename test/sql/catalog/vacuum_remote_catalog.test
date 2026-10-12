@@ -1,0 +1,35 @@
+# name: test/sql/catalog/vacuum_remote_catalog.test
+# description: VACUUM and ANALYZE of a table that is not a DuckDB table do nothing, as without a table
+# group: [catalog]
+
+require quack
+
+require httpfs
+
+statement ok
+CALL quack_serve(token='test_token');
+
+statement ok
+ATTACH 'quack:localhost' AS qk (TOKEN 'test_token');
+
+statement ok
+CREATE TABLE qk.t AS SELECT range AS i, range::VARCHAR AS s FROM range(10);
+
+statement ok
+ANALYZE qk.t;
+
+statement ok
+VACUUM qk.t;
+
+statement ok
+VACUUM ANALYZE qk.t(i, s);
+
+statement error
+ANALYZE qk.t(missing);
+----
+<REGEX>:.*Column with name.*missing.*does not exist.*
+
+query I
+SELECT count(*) FROM qk.t;
+----
+10

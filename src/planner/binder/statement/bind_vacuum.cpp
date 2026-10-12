@@ -65,6 +65,10 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 		select_list.push_back(std::move(result.expression));
 	}
 	info.columns = non_generated_column_names;
+	if (!table.IsDuckTable()) {
+		// only DuckDB tables keep the statistics computed here, so there is nothing to scan, as without a table
+		return;
+	}
 
 	auto &column_ids = get.GetColumnIds();
 	D_ASSERT(select_list.size() == column_ids.size());
