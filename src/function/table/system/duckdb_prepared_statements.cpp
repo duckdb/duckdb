@@ -6,6 +6,8 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/parser/sql_render_context.hpp"
 
 namespace duckdb {
 
@@ -63,13 +65,16 @@ void DuckDBPreparedStatementsFunction(ClientContext &context, TableFunctionInput
 	// result_types, VARCHAR[]
 	auto &result_types_vec = output.data[3];
 
+	SQLRenderContext render_context;
+	render_context.mode =
+	    Settings::Get<AllowUnredactedSecretsSetting>(context) ? SQLRenderMode::UNREDACTED : SQLRenderMode::REDACTED;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
 		auto &name = entry.first;
 		auto &prepared_statement = *entry.second;
 
 		name_vec.Append(Value(name));
-		statement_vec.Append(Value(prepared_statement.unbound_statement->ToString()));
+		statement_vec.Append(Value(prepared_statement.unbound_statement->ToString(render_context)));
 		auto &named_parameter_map = prepared_statement.unbound_statement->named_param_map;
 		if (named_parameter_map.empty()) {
 			parameter_types_vec.Append(Value(LogicalType::LIST(LogicalType::VARCHAR)));
