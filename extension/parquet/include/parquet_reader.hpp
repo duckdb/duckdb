@@ -397,6 +397,8 @@ public:
 	                       CryptoMetaData &aad_crypto_metadata) const;
 	uint32_t ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
 	                  const uint32_t buffer_size) const;
+	//! Read directly from a prefetch buffer if it covers the current transport location, otherwise return nullptr
+	const_data_ptr_t TryDirectRead(duckdb_apache::thrift::protocol::TProtocol &iprot, const uint32_t buffer_size) const;
 	uint32_t ReadDataEncrypted(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
 	                           const uint32_t buffer_size, CryptoMetaData &aad_crypto_metadata) const;
 

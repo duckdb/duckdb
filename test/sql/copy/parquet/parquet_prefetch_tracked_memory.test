@@ -8,12 +8,13 @@ require parquet
 # reads must fit), alternative-verify builds shift both sides of that margin
 require no_alternative_verify
 
+# small data pages keep a single page's decode memory far below the prefetched span
 statement ok
-copy (select range i from range(16000000)) to '{TEST_DIR}/prefetch_tracked_big.parquet' (ROW_GROUP_SIZE 16000000);
+copy (select range i from range(16000000)) to '{TEST_DIR}/prefetch_tracked_big.parquet' (ROW_GROUP_SIZE 16000000, data_page_size_limit 1048576);
 
 # prefetch pins the full ~64MB row group span on top of the decode memory, so it OOMs where sync reads fit
 statement ok
-set memory_limit='240mb';
+set memory_limit='32mb';
 
 statement error
 select count(*), sum(i) from '{TEST_DIR}/prefetch_tracked_big.parquet';

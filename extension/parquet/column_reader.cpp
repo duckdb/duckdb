@@ -531,6 +531,16 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 		return;
 	}
 
+	// Decompress directly from the prefetch buffer when it covers the page, avoiding a copy
+	if (!reader.parquet_options.encryption_config) {
+		auto direct_ptr = reader.TryDirectRead(*protocol, compressed_page_size);
+		if (direct_ptr) {
+			DecompressInternal(chunk->meta_data.codec, direct_ptr, compressed_page_size, block->ptr,
+			                   page_hdr.uncompressed_page_size);
+			return;
+		}
+	}
+
 	ResizeableBuffer compressed_buffer;
 	compressed_buffer.resize(GetAllocator(), compressed_page_size + 1);
 	ReadData(compressed_buffer.ptr, compressed_page_size, page_hdr.type);

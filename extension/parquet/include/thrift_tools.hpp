@@ -206,6 +206,20 @@ public:
 		return len;
 	}
 
+	// Read directly from the read head covering the current location, advancing it; nullptr if not covered
+	const_data_ptr_t TryDirectRead(uint32_t len) {
+		auto prefetch_buffer = ra_buffer.GetReadHead(location);
+		if (prefetch_buffer == nullptr || location - prefetch_buffer->location + len > prefetch_buffer->size) {
+			return nullptr;
+		}
+		if (!prefetch_buffer->data_isset) {
+			prefetch_buffer->Fetch(file_handle);
+		}
+		auto result = prefetch_buffer->buffer_ptr + location - prefetch_buffer->location;
+		location += len;
+		return result;
+	}
+
 	// Prefetch a single buffer
 	void Prefetch(idx_t pos, uint64_t len) {
 		RegisterPrefetch(pos, len, false);
