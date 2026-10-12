@@ -2,6 +2,7 @@
 
 import os
 import re
+import subprocess
 
 import pytest
 from conftest import ShellTest
@@ -1448,5 +1449,60 @@ def test_about(shell):
 
     result = test.run()
     result.check_stdout("DuckDB is an in-process analytical database management system designed for fast ")
+
+
+def test_a_select_that_writes_keeps_its_rows_when_the_renderer_stops_early(shell):
+    # agent mode's renderer stops reading after a cap of rows; the insert must not be undone by that
+    test = (
+        ShellTest(shell)
+        .add_argument("-agent")
+        .statement("create table t(i bigint)")
+        .statement("with ins as (insert into t select range from range(200000) returning i) select * from ins")
+        .statement("select count(*) as c from t")
+    )
+    result = test.run()
+    result.check_stdout("| 200000 |")
+
+
+def run_shell(shell, arguments, sql, timeout=120):
+    # the same environment the ShellTest harness builds, so an agent running the tests does not switch on agent mode
+    environment = os.environ.copy()
+    for key in ShellTest.AGENT_ENVIRONMENT_VARIABLES:
+        environment.pop(key, None)
+    return subprocess.run(
+        [shell, "--batch", "--no-init"] + arguments + ["-c", sql],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        env=environment,
+    )
+
+
+def test_a_select_that_writes_keeps_its_rows_when_the_output_pipe_closes(shell, tmp_path):
+    database = (tmp_path / "pipe.db").as_posix()
+    created = run_shell(shell, [database], "create table t(i bigint)")
+    assert created.returncode == 0, created.stderr
+    insert = "with ins as (insert into t select range from range(200000) returning i) select * from ins"
+    environment = os.environ.copy()
+    for key in ShellTest.AGENT_ENVIRONMENT_VARIABLES:
+        environment.pop(key, None)
+    reader = subprocess.Popen(
+        [shell, "--batch", "--no-init", "-csv", database, "-c", insert],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=environment,
+    )
+    try:
+        # stop reading after the header, as `| head -1` would, then let the closed pipe stop the shell
+        assert reader.stdout.readline().strip() == "i"
+        reader.stdout.close()
+        _, stderr = reader.communicate(timeout=120)
+    finally:
+        reader.kill()
+        reader.wait(timeout=60)
+    counted = run_shell(shell, [database, "-csv", "-noheader"], "select count(*) from t")
+    assert counted.returncode == 0, counted.stderr
+    assert counted.stdout.strip() == "200000", stderr
 
 # fmt: on

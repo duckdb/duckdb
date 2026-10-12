@@ -141,7 +141,7 @@ struct DuckDBAdbcStreamWrapper {
 
 	//! Drained into `materialized` and reset when another statement runs on the connection
 	duckdb::unique_ptr<duckdb::QueryResultStream<duckdb::ArrowFormat>> stream;
-	//! A result that completed at submission, which no later statement on the connection affects
+	//! A result the driver completed before handing it out, which no later statement on the connection affects
 	duckdb::unique_ptr<duckdb::QueryResult> result;
 	duckdb::ArrowSchemaWrapper schema;
 	//! What MaterializeStreams drained, handed out before the error it ran into, if any
@@ -207,10 +207,9 @@ static void CopySchema(const ArrowSchema &source, duckdb::ArrowSchemaWrapper &ta
 	}
 }
 
-//! A result that cannot stream completes here, so that the next statement on the connection leaves it intact.
 //! rows_affected stays -1, which ADBC defines as unknown, unless the statement reports a changed-row count
 static AdbcStatusCode ExecuteArrow(duckdb::PreparedStatementWrapper &prepared, DuckDBAdbcStreamWrapper &out,
-                                   int64_t &rows_affected, struct AdbcError *error) {
+                                   bool reads_to_the_end, int64_t &rows_affected, struct AdbcError *error) {
 	out.stream.reset();
 	out.result.reset();
 	rows_affected = -1;
@@ -218,8 +217,8 @@ static AdbcStatusCode ExecuteArrow(duckdb::PreparedStatementWrapper &prepared, D
 	try {
 		duckdb::QueryParameters parameters(duckdb::make_shared_ptr<duckdb::ArrowFormat>(STANDARD_VECTOR_SIZE));
 		auto result = prepared.statement->Submit(prepared.values, parameters);
-		if (!result->HasError() &&
-		    result->GetStatementProperties().result_eagerness != duckdb::ResultEagerness::FORCED) {
+		if (!result->HasError() && duckdb::StreamsByDefault(prepared.statement->GetStatementType(),
+		                                                    result->GetStatementProperties(), reads_to_the_end)) {
 			out.stream = duckdb::make_uniq<duckdb::QueryResultStream<duckdb::ArrowFormat>>(std::move(result));
 			CopySchema(out.stream->FormatState().Schema(), out.schema);
 			return ADBC_STATUS_OK;
@@ -2181,11 +2180,12 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 					return ADBC_STATUS_INVALID_ARGUMENT;
 				}
 			}
-			auto status = ExecuteArrow(prepared, *stream_wrapper, affected, error);
+			// Only the last row's result is handed out, and which row is last is not known without consuming the
+			// next one, so no run counts on being read to its end
+			auto status = ExecuteArrow(prepared, *stream_wrapper, false, affected, error);
 			if (status != ADBC_STATUS_OK) {
 				return status;
 			}
-			// Recreate wrappers for next iteration
 			arrow_array_wrapper = duckdb::ArrowArrayWrapper();
 			stream.get_next(&stream, &arrow_array_wrapper.arrow_array);
 		}
@@ -2194,7 +2194,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
 	} else {
-		auto status = ExecuteArrow(prepared, *stream_wrapper, affected, error);
+		auto status = ExecuteArrow(prepared, *stream_wrapper, out != nullptr, affected, error);
 		if (status != ADBC_STATUS_OK) {
 			return status;
 		}

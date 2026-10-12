@@ -5922,7 +5922,7 @@ TEST_CASE("ADBC - Each bound parameter row runs the statement once", "[adbc]") {
 	int64_t rows_affected = 0;
 
 	SECTION("a query hands out the result of the last row") {
-		// More rows than one array, so every earlier row leaves an unfinished stream behind
+		// More rows than one array, so a streamed run would leave an unfinished result behind for every earlier row
 		REQUIRE(SUCCESS(
 		    AdbcStatementSetSqlQuery(&statement, "SELECT ?::BIGINT * 10 AS r FROM range(3000)", &db.adbc_error)));
 		REQUIRE(SUCCESS(AdbcStatementBindStream(&statement, &input, &db.adbc_error)));
@@ -5951,6 +5951,159 @@ TEST_CASE("ADBC - Each bound parameter row runs the statement once", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
 	if (input.release) {
 		input.release(&input);
+	}
+}
+
+TEST_CASE("ADBC - A write executed without an output stream keeps its rows", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	for (auto sql : {"INSERT INTO t SELECT range FROM range(1000) RETURNING i",
+	                 "WITH ins AS (INSERT INTO t SELECT range FROM range(1000) RETURNING i) SELECT * FROM ins"}) {
+		for (bool autocommit : {true, false}) {
+			INFO(sql << (autocommit ? ", autocommit" : ", manual commit"));
+			ADBCTestDatabase db;
+			REQUIRE(!db.Query("CREATE TABLE t (i BIGINT)")->HasError());
+			if (!autocommit) {
+				REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+				                                        ADBC_OPTION_VALUE_DISABLED, &db.adbc_error)));
+			}
+			AdbcStatement statement;
+			REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+			REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&statement, sql, &db.adbc_error)));
+			int64_t rows_affected = 0;
+			REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, nullptr, &rows_affected, &db.adbc_error)));
+			REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+			if (!autocommit) {
+				REQUIRE(SUCCESS(AdbcConnectionCommit(&db.adbc_connection, &db.adbc_error)));
+			}
+			auto count = db.Query("SELECT count(*) FROM t");
+			REQUIRE(count->Collection().GetValue(0, 0).GetValue<int64_t>() == 1000);
+		}
+	}
+}
+
+TEST_CASE("ADBC - A read-only query executed without an output stream is not run to its end", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	// With a buffer this small, a statement run to its end reaches the failing row and a streamed one does not
+	REQUIRE(!db.Query("SET max_streaming_buffer_size='16KB'")->HasError());
+	AdbcStatement statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(
+	    &statement, "SELECT CASE WHEN i = 5000000 THEN error('boom') ELSE i END AS r FROM range(10000000) t(i)",
+	    &db.adbc_error)));
+	// Nothing reads the result, but dropping it undoes nothing, so it still streams
+	int64_t rows_affected = 0;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, nullptr, &rows_affected, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - A query over one bound parameter row streams its result", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	// With a buffer this small, a statement run to its end reaches the failing row and a streamed one does not
+	REQUIRE(!db.Query("SET max_streaming_buffer_size='16KB'")->HasError());
+	ArrowArrayStream input;
+	MakeParameterRows(db, {5000000}, input);
+	AdbcStatement statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(
+	    &statement, "SELECT CASE WHEN i = ? THEN error('boom') ELSE i END AS r FROM range(10000000) t(i)",
+	    &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&statement, &input, &db.adbc_error)));
+	ArrowArrayStream stream;
+	int64_t rows_affected = 0;
+	// A retained result would run to the failing row inside ExecuteQuery; a streamed one fails while it is read
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, &stream, &rows_affected, &db.adbc_error)));
+	vector<int64_t> values;
+	REQUIRE(DrainBigintColumn(stream, values) != 0);
+	REQUIRE(!values.empty());
+	stream.release(&stream);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+	if (input.release) {
+		input.release(&input);
+	}
+}
+
+TEST_CASE("ADBC - A write over several bound parameter rows keeps every row", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	for (auto sql : {"INSERT INTO bound VALUES (?) RETURNING i",
+	                 "WITH ins AS (INSERT INTO bound VALUES (?) RETURNING i) SELECT i FROM ins"}) {
+		for (bool autocommit : {true, false}) {
+			INFO(sql << (autocommit ? ", autocommit" : ", manual commit"));
+			ADBCTestDatabase db;
+			REQUIRE(!db.Query("CREATE TABLE bound (i BIGINT)")->HasError());
+			if (!autocommit) {
+				REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+				                                        ADBC_OPTION_VALUE_DISABLED, &db.adbc_error)));
+			}
+			ArrowArrayStream input;
+			MakeParameterRows(db, {1, 2, 3}, input);
+			AdbcStatement statement;
+			REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+			REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&statement, sql, &db.adbc_error)));
+			REQUIRE(SUCCESS(AdbcStatementBindStream(&statement, &input, &db.adbc_error)));
+			ArrowArrayStream stream;
+			int64_t rows_affected = 0;
+			REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, &stream, &rows_affected, &db.adbc_error)));
+			// Only the last row's result is handed out, and releasing it unread cancels a statement that streams,
+			// so no run of a write may stream
+			stream.release(&stream);
+			REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+			if (input.release) {
+				input.release(&input);
+			}
+			if (!autocommit) {
+				REQUIRE(SUCCESS(AdbcConnectionCommit(&db.adbc_connection, &db.adbc_error)));
+			}
+			auto inserted = db.Query("SELECT list(i ORDER BY i) FROM bound");
+			REQUIRE(inserted->Collection().GetValue(0, 0).ToString() == "[1, 2, 3]");
+		}
+	}
+}
+
+TEST_CASE("ADBC - A write whose parameter type is unresolved at prepare keeps its rows", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	// Binding stops at the unresolved parameter, before the CTE registers its write, so the prepared statement's own
+	// properties report no modification and only the running statement's do
+	for (auto sql : {"WITH ins AS (INSERT INTO t VALUES (42) RETURNING i) SELECT ? AS tag",
+	                 "WITH ins AS (INSERT INTO t VALUES (42) RETURNING i) SELECT * FROM range(?)"}) {
+		for (bool autocommit : {true, false}) {
+			INFO(sql << (autocommit ? ", autocommit" : ", manual commit"));
+			ADBCTestDatabase db;
+			REQUIRE(!db.Query("CREATE TABLE t (i BIGINT)")->HasError());
+			if (!autocommit) {
+				REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+				                                        ADBC_OPTION_VALUE_DISABLED, &db.adbc_error)));
+			}
+			ArrowArrayStream input;
+			MakeParameterRows(db, {1}, input);
+			AdbcStatement statement;
+			REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+			REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&statement, sql, &db.adbc_error)));
+			REQUIRE(SUCCESS(AdbcStatementBindStream(&statement, &input, &db.adbc_error)));
+			// The caller wants no result set, so the statement must run to its end
+			int64_t rows_affected = 0;
+			REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, nullptr, &rows_affected, &db.adbc_error)));
+			REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+			if (input.release) {
+				input.release(&input);
+			}
+			if (!autocommit) {
+				REQUIRE(SUCCESS(AdbcConnectionCommit(&db.adbc_connection, &db.adbc_error)));
+			}
+			auto count = db.Query("SELECT count(*) FROM t");
+			REQUIRE(count->Collection().GetValue(0, 0).GetValue<int64_t>() == 1);
+		}
 	}
 }
 
@@ -5983,7 +6136,7 @@ TEST_CASE("ADBC - A timeout is reported as an error, not a cancellation", "[adbc
 		REQUIRE(ErrorTypeDetail(*stream_error) == "Interrupt");
 		stream.release(&stream);
 	}
-	SECTION("while a statement completes at submission") {
+	SECTION("while the driver completes a statement before handing it out") {
 		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(
 		    &statement, "CREATE TABLE counted AS SELECT count(*) AS c FROM range(100000000) t1, range(1000) t2",
 		    &db.adbc_error)));
