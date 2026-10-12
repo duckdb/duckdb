@@ -39,7 +39,7 @@ TimestampComponents ICUHelpers::GetComponents(timestamp_tz_t ts, Calendar *calen
 TimestampComponents ICUHelpers::GetComponents(timestamp_tz_ns_t tsns, Calendar *calendar) {
 	// Get the parts in the given time zone
 	auto ts_data = GetComponents(timestamp_tz_t(tsns.value / Interval::NANOS_PER_MICRO), calendar);
-	ts_data.nanosecond = tsns.value % Interval::NANOS_PER_MICRO;
+	ts_data.nanosecond = UnsafeNumericCast<int16_t>(tsns.value % Interval::NANOS_PER_MICRO);
 	return ts_data;
 }
 
@@ -422,10 +422,13 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &cache = parameters.local_state->Cast<CalendarCacheState>();
 		CalendarPtr cal(info.calendar->Copy());
 
+		bool all_converted = true;
 		UnaryExecutor::Execute<string_t, timestamp_tz_t>(source, result, count, [&](string_t input) {
-			return VarcharToTimestampTZUS(cal, cache, input, parameters);
+			auto converted = VarcharToTimestampTZUS(cal, cache, input, parameters);
+			all_converted = all_converted && converted;
+			return converted;
 		});
-		return true;
+		return all_converted;
 	}
 
 	static bool VarcharToTimestampTZNS(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -434,11 +437,13 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &cache = parameters.local_state->Cast<CalendarCacheState>();
 		CalendarPtr cal(info.calendar->Copy());
 
+		bool all_converted = true;
 		UnaryExecutor::Execute<string_t, timestamp_tz_ns_t>(
 		    source, result, count, [&](string_t input) -> optional<timestamp_tz_ns_t> {
 			    int32_t nanos = 0;
 			    auto ts_us = VarcharToTimestampTZUS(cal, cache, input, parameters, &nanos);
 			    if (!ts_us) {
+				    all_converted = false;
 				    return nullopt;
 			    }
 
@@ -446,12 +451,13 @@ struct ICUStrptime : public ICUDateFunc {
 			    timestamp_ns_t result;
 			    if (!Timestamp::TryFromTimestampNanos(us, nanos, result)) {
 				    HandleCastError::AssignError(Timestamp::RangeError(input), parameters);
+				    all_converted = false;
 				    return nullopt;
 			    }
 
 			    return timestamp_tz_ns_t(result);
 		    });
-		return true;
+		return all_converted;
 	}
 
 	static bool VarcharToTimeTZ(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -459,6 +465,7 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr cal(info.calendar->Copy());
 
+		bool all_converted = true;
 		UnaryExecutor::Execute<string_t, dtime_tz_t>(
 		    source, result, count, [&](string_t input) -> optional<dtime_tz_t> {
 			    dtime_tz_t result;
@@ -469,15 +476,19 @@ struct ICUStrptime : public ICUDateFunc {
 			    if (!Time::TryConvertTimeTZ(str, len, pos, result, has_offset, false)) {
 				    auto msg = Time::ConversionError(string(str, len));
 				    HandleCastError::AssignError(msg, parameters);
+				    all_converted = false;
 				    return nullopt;
 			    } else if (!has_offset) {
 				    // Convert parts to a TZ (default or parsed) if no offset was provided
 				    auto calendar = cal.get();
 
 				    // Extract the offset from the calendar
-				    auto offset = ExtractField(calendar, CAL_ZONE_OFFSET);
-				    offset += ExtractField(calendar, CAL_DST_OFFSET);
-				    offset /= Interval::MSECS_PER_SEC;
+				    int32_t offset;
+				    if (!TryGetTimeTZOffset(calendar, offset)) {
+					    HandleCastError::AssignError(TimeTZOffsetError(offset), parameters);
+					    all_converted = false;
+					    return nullopt;
+				    }
 
 				    // Apply it to the offset +00 time we parsed.
 				    result = dtime_tz_t(result.time(), offset);
@@ -485,7 +496,7 @@ struct ICUStrptime : public ICUDateFunc {
 
 			    return result;
 		    });
-		return true;
+		return all_converted;
 	}
 
 	static BoundCastInfo BindCastFromVarchar(BindCastInput &input, const LogicalType &source,

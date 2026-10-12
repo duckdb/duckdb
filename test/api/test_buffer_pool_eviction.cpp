@@ -393,3 +393,37 @@ TEST_CASE("Test eviction queue: dead_nodes invariants hold under destroyable blo
 		REQUIRE(q.dead_nodes <= q.total_insertions);
 	}
 }
+
+TEST_CASE("Test buffer pool eviction: SetLimit evicts object cache", "[storage][buffer_pool]") {
+	DuckDB db;
+	Connection con(db);
+	auto &context = *con.context;
+	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
+	auto &cache = ObjectCache::GetObjectCache(context);
+	const idx_t initial_memory = buffer_pool.GetUsedMemory();
+
+	constexpr idx_t obj_size = 1024 * 1024; // 1 MiB
+	constexpr idx_t num_objects = 5;
+
+	for (idx_t idx = 0; idx < num_objects; ++idx) {
+		cache.Put(StringUtil::Format("obj%llu", idx), make_shared_ptr<EvictableTestObject>(idx, obj_size));
+	}
+	REQUIRE(cache.GetEntryCount() == num_objects);
+	REQUIRE(buffer_pool.GetUsedMemory() == initial_memory + num_objects * obj_size);
+
+	// Shrink limit to only accommodate 3 objects plus initial memory overhead
+	const idx_t target_limit = initial_memory + 3 * obj_size;
+	buffer_pool.SetLimit(target_limit, EXCEPTION_POSTSCRIPT);
+
+	REQUIRE(cache.GetEntryCount() == 3);
+	REQUIRE(buffer_pool.GetUsedMemory() <= target_limit);
+
+	vector<idx_t> evicted_entries;
+	for (idx_t idx = 0; idx < num_objects; ++idx) {
+		auto obj = cache.GetObject(StringUtil::Format("obj%llu", idx));
+		if (!obj) {
+			evicted_entries.emplace_back(idx);
+		}
+	}
+	REQUIRE(evicted_entries == vector<idx_t> {0, 1});
+}

@@ -134,14 +134,18 @@ static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_li
 	return std::move(statement);
 }
 
-unique_ptr<LogicalOperator> Binder::UnionOperators(vector<unique_ptr<LogicalOperator>> nodes) {
+unique_ptr<LogicalOperator> Binder::UnionOperators(vector<unique_ptr<LogicalOperator>> nodes, idx_t column_count,
+                                                   TableIndex table_index) {
 	if (nodes.empty()) {
 		return nullptr;
 	}
 	if (nodes.size() == 1) {
 		return std::move(nodes[0]);
 	}
-	return make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(nodes),
+	if (!table_index.IsValid()) {
+		table_index = GenerateTableIndex();
+	}
+	return make_uniq<LogicalSetOperation>(table_index, column_count, std::move(nodes),
 	                                      LogicalOperatorType::LOGICAL_UNION, true, false);
 }
 
@@ -151,13 +155,14 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
 
-	// bind copy options
-	BindCopyOptions(*stmt.info);
+	BindCopyFormat(*stmt.info);
 
 	// lookup the format in the catalog
 	auto &copy_function = Catalog::GetEntry<CopyFunctionCatalogEntry>(
 	    context,
 	    QualifiedName(Identifier::InvalidCatalog(), Identifier::DefaultSchema(), Identifier(stmt.info->format)));
+	// bind copy options
+	BindCopyOptions(*stmt.info, copy_function.function);
 	if (!copy_function.function.copy_to_bind && !copy_function.function.plan) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
@@ -320,7 +325,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	result.plan = std::move(export_node);
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

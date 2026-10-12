@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -228,33 +229,35 @@ static void ParseDirpathFunction(DataChunk &args, ExpressionState &state, Vector
 
 static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1 || args.ColumnCount() == 2);
-	UnifiedVectorFormat input_data;
-	args.data[0].ToUnifiedFormat(input_data);
-	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
-
-	// set the separator
-	string input_sep = "default";
-	if (args.ColumnCount() == 2) {
-		UnifiedVectorFormat sep_data;
-		args.data[1].ToUnifiedFormat(sep_data);
-		if (sep_data.validity.RowIsValid(0)) {
-			input_sep = UnifiedVectorFormat::GetData<string_t>(sep_data)->GetString();
-		}
+	auto inputs = args.data[0].Values<string_t>();
+	Vector default_separator(string_t("default"), count_t(args.size()));
+	const auto &separator = args.ColumnCount() == 2 ? args.data[1] : default_separator;
+	auto separator_values = separator.Values<string_t>();
+	const auto constant_separator = separator.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	auto read_separator = [&](idx_t row_idx) {
+		auto entry = separator_values[row_idx];
+		return GetSeparator(entry.IsValid() ? entry.GetValue() : string_t("default"));
+	};
+	string sep;
+	if (constant_separator) {
+		sep = read_separator(0);
 	}
-	const string sep = GetSeparator(input_sep);
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	auto list_writer = FlatVector::Writer<VectorListType<string_t>>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
-		auto input_idx = input_data.sel->get_index(i);
-		if (!input_data.validity.RowIsValid(input_idx)) {
+		auto input = inputs[i];
+		if (!input.IsValid()) {
 			list_writer.WriteNull();
 			continue;
 		}
+		if (!constant_separator) {
+			sep = read_separator(i);
+		}
 		auto list = list_writer.WriteDynamicList();
-		SplitPath(inputs[input_idx], sep, [&](const char *split_data, idx_t split_size) {
+		SplitPath(input.GetValue(), sep, [&](const char *split_data, idx_t split_size) {
 			list.WriteElement().WriteValue(string_t(split_data, UnsafeNumericCast<uint32_t>(split_size)));
 		});
 	}

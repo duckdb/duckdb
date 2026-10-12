@@ -36,6 +36,10 @@ public:
 		return *this;
 	}
 
+	bool Contains(DatabaseModificationType other) const {
+		return (value & other.value) == other.value;
+	}
+
 	bool InsertData() const {
 		return value & INSERT_DATA;
 	}

@@ -186,6 +186,8 @@ AggregateFunction VariantGroupObjectFun::GetFunction() {
 	                      AggregateFunction::StateSize<VariantObjAggState>,
 	                      AggregateFunction::StateInitialize<VariantObjAggState, VariantObjFun>, VariantObjUpdate,
 	                      ListCombineFunction<VariantObjFun>, VariantObjFinalize, VariantObjClusterUpdate);
+	function.GetSignature().GetParameter(0).SetName("key");
+	function.GetSignature().GetParameter(1).SetName("value");
 	function.SetStructStateExport(VariantObjStateLayout);
 	return function;
 }

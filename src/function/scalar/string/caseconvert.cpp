@@ -144,16 +144,13 @@ static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &conte
 	if (!StringStats::HasMinMax(child_stats[0])) {
 		return result.ToUnique();
 	}
-	// When min == max, all values share the stored string (exact) or the stored prefix (truncated).
-	// Case conversion is codepoint-local, so the converted string/prefix bounds the result.
+	// All values share the common prefix of min and max; case conversion preserves this property.
 	auto min = StringStats::Min(child_stats[0]);
 	auto max = StringStats::Max(child_stats[0]);
-	if (min != max) {
-		return result.ToUnique();
-	}
-	const bool is_exact = StringStats::GetMinType(child_stats[0]) == StringStatsType::EXACT_STATS &&
+	const bool is_exact = min == max && StringStats::GetMinType(child_stats[0]) == StringStatsType::EXACT_STATS &&
 	                      StringStats::GetMaxType(child_stats[0]) == StringStatsType::EXACT_STATS;
 	if (!is_exact) {
+		min.resize(StringUtil::GetCommonPrefixSize(min, max));
 		// truncated stats can end in the middle of a character - only complete ones can be converted
 		size_t invalid_pos = 0;
 		if (Utf8Proc::Analyze(min.c_str(), min.size(), nullptr, &invalid_pos) == UnicodeType::INVALID) {

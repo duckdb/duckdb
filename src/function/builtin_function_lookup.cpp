@@ -56,12 +56,27 @@ shared_ptr<const WindowFunction> GetBuiltinWindowFunction(ClientContext &context
 
 unique_ptr<BoundFunctionExpression> BindBuiltinScalarFunction(ClientContext &context, const Identifier &name,
                                                               vector<unique_ptr<Expression>> children) {
-	vector<LogicalType> arguments;
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, BuiltinName(catalog, name));
+
+	// Bind the children as the arguments of a call, so that functions that capture the aliases of their arguments
+	// (e.g. struct_pack) receive them as named arguments
+	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
 	arguments.reserve(children.size());
 	for (auto &child : children) {
-		arguments.push_back(child->GetReturnType());
+		arguments.emplace_back(Identifier(), std::move(child));
 	}
-	return GetBuiltinScalarFunction(context, name, arguments)->Bind(context, std::move(children));
+
+	ErrorData error;
+	FunctionBinder function_binder(context);
+	auto expr = function_binder.BindScalarFunction(entry, std::move(arguments), error);
+	if (!expr) {
+		error.Throw();
+	}
+	if (expr->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		throw InvalidInputException("BindBuiltinScalarFunction did not return a BoundFunctionExpression");
+	}
+	return unique_ptr_cast<Expression, BoundFunctionExpression>(std::move(expr));
 }
 
 } // namespace duckdb

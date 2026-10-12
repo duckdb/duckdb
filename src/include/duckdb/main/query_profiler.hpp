@@ -181,6 +181,14 @@ private:
 	//! disabled case. Only used on the terminal-print paths.
 	void PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
 
+public:
+	//! Provides access to the root of the query tree, but ensures there are no concurrent modifications
+	//! This can be useful when implementing continuous profiling or making customizations
+	DUCKDB_API void GetRootUnderLock(const std::function<void(optional_ptr<ProfilingNode>)> &callback) {
+		lock_guard<std::mutex> guard(lock);
+		callback(root.get());
+	}
+
 private:
 	ClientContext &context;
 

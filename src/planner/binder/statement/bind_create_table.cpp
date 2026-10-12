@@ -447,7 +447,7 @@ static void FindForeignKeyIndexes(const ColumnList &columns, const vector<Identi
 		}
 		auto &column = columns.GetColumn(name);
 		if (column.Generated()) {
-			throw BinderException("Failed to create foreign key: referenced column \"%s\" is a generated column",
+			throw BinderException("Failed to create foreign key: referenced column %s is a generated column",
 			                      column.Name());
 		}
 		indexes.push_back(column.Physical());
@@ -615,6 +615,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	auto &base = result->Base();
 	base.dependencies = LogicalDependencyList();
 	auto &dependencies = base.dependencies;
+	dependencies.AddDependency(schema);
 	auto &catalog = schema.ParentCatalog();
 	optional_ptr<StorageManager> storage_manager;
 	if (catalog.IsDuckCatalog() && !catalog.InMemory()) {
@@ -727,7 +728,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 #endif
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	return result;
 }
 

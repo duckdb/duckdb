@@ -123,6 +123,21 @@ const char *EnumUtil::ToChars<ParquetPrefetchStrategyOption>(ParquetPrefetchStra
 template <>
 ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption>(const char *value);
 
+//! How INT96 (deprecated Impala timestamp) columns are exposed by the Parquet reader
+enum class ParquetInt96AsOption : uint8_t {
+	TIMESTAMP,    //! Read as TIMESTAMP (microsecond precision) - the default
+	TIMESTAMP_NS, //! Read as TIMESTAMP_NS, preserving the nanosecond part (out-of-range values saturate)
+	STRUCT        //! Read as STRUCT(date DATE, time TIME_NS), preserving the full range and precision
+};
+
+ParquetInt96AsOption ParquetInt96AsOptionFromString(const string &value);
+
+template <>
+const char *EnumUtil::ToChars<ParquetInt96AsOption>(ParquetInt96AsOption value);
+
+template <>
+ParquetInt96AsOption EnumUtil::FromString<ParquetInt96AsOption>(const char *value);
+
 template <>
 const char *EnumUtil::ToChars<StringColumnReader::Utf8ValidationOption>(StringColumnReader::Utf8ValidationOption value);
 
@@ -247,9 +262,10 @@ public:
 	PrefetchCostModelState cost_model_state;
 };
 
+//! A column of the "schema" option, as plans serialized before that became an option of every multi-file reader
+//! store it - see ParquetOptionsSerialization::legacy_schema
 struct ParquetColumnDefinition {
 public:
-	static vector<ParquetColumnDefinition> FromSchemaMap(ClientContext &context, const Value &schema_value);
 	MultiFileColumnDefinition ToMultiFileColumnDefinition() const;
 	bool operator==(const ParquetColumnDefinition &other) const {
 		return field_id == other.field_id && name == other.name && type == other.type &&
@@ -277,15 +293,14 @@ struct ParquetOptions {
 
 	bool binary_as_string = false;
 	bool variant_legacy_encoding = false;
-	bool file_row_number = false;
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
 
-	vector<ParquetColumnDefinition> schema;
 	idx_t explicit_cardinality = 0;
-	bool can_have_nan = false; // if floats or doubles can contain NaN values
+	bool can_have_nan = false; // if floats or doubles can contain NaN values (ignored if nan_count is present)
 	ParquetPrefetchStrategyOption prefetch_strategy = ParquetPrefetchStrategyOption::AUTO;
 	StringColumnReader::Utf8ValidationOption utf8_validation_option =
 	    StringColumnReader::Utf8ValidationOption::STRICT_UTF8;
+	ParquetInt96AsOption int96_as = ParquetInt96AsOption::TIMESTAMP;
 };
 
 struct ParquetOptionsSerialization {
@@ -296,6 +311,10 @@ struct ParquetOptionsSerialization {
 
 	ParquetOptions parquet_options;
 	MultiFileOptions file_options;
+	//! Only read from plans serialized before "file_row_number" and "schema" became options of every multi-file
+	//! reader - they are then moved into the file options
+	bool legacy_file_row_number = false;
+	vector<ParquetColumnDefinition> legacy_schema;
 
 public:
 	void Serialize(Serializer &serializer) const;
@@ -352,7 +371,7 @@ public:
 	shared_ptr<EncryptionUtil> encryption_util;
 	bool can_use_metadata_statistics = false;
 	//! How many rows have been read from this file
-	atomic<idx_t> rows_read;
+	atomic<idx_t> rows_read {0};
 	ParquetIntervalBloomFilterVersion interval_bloom_filter_version {};
 	//! Storage indices of columns where expressions like strlen/octet_length are pushed down
 	unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions;
@@ -411,6 +430,12 @@ public:
 	                                                 const Identifier &name);
 	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, const ParquetUnionData &union_data,
 	                                                 const Identifier &name);
+	//! The statistics of a virtual column of a file, read from its metadata
+	static unique_ptr<BaseStatistics> ReadVirtualColumnStatistics(ClientContext &context,
+	                                                              const ParquetOptions &parquet_options,
+	                                                              const shared_ptr<ParquetFileMetadataCache> &metadata,
+	                                                              column_t virtual_column_id);
+	unique_ptr<BaseStatistics> GetVirtualColumnStatistics(ClientContext &context, column_t virtual_column_id) override;
 
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const;
 	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, const ParquetOptions &options,
@@ -419,6 +444,10 @@ public:
 	void AddVirtualColumn(column_t virtual_column_id) override;
 
 	void GetPartitionStats(vector<PartitionStatistics> &result);
+	//! Construct a reader over the metadata of a file without opening the file - it can describe the schema and the
+	//! statistics of the file, but not read it
+	static shared_ptr<ParquetReader> CreateMetadataReader(ClientContext &context, ParquetOptions parquet_options,
+	                                                      shared_ptr<ParquetFileMetadataCache> metadata);
 	static void GetPartitionStats(const duckdb_parquet::FileMetaData &metadata, vector<PartitionStatistics> &result,
 	                              optional_ptr<ParquetColumnSchema> root_schema = nullptr,
 	                              optional_ptr<ParquetOptions> parquet_options = nullptr);

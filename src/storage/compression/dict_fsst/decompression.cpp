@@ -206,7 +206,7 @@ void CompressedStringScanState::Select(Vector &result, idx_t start, const Select
 		for (; decompress_position < string_number; decompress_position++) {
 			decompress_offset += string_lengths[decompress_position];
 		}
-		result_data.WriteValue(FetchStringFromDict(result, decompress_offset, string_number));
+		result_data.WriteStringRef(FetchStringFromDict(result, decompress_offset, string_number));
 	}
 }
 

@@ -432,6 +432,14 @@ TEST_CASE("Test path utilities", "[string_util]") {
 		REQUIRE("/tmp" == StringUtil::GetFilePath("/tmp//test.txt"));
 		REQUIRE("\\tmp" == StringUtil::GetFilePath("\\tmp\\\\test.txt"));
 	}
+
+	SECTION("Replace file name") {
+		REQUIRE("/usr/local/bin/other.cpp" == StringUtil::ReplaceFileName("/usr/local/bin/test.cpp", "other.cpp"));
+		REQUIRE("tmp\\other.txt" == StringUtil::ReplaceFileName("tmp\\test.txt", "other.txt"));
+		REQUIRE("other.txt" == StringUtil::ReplaceFileName("test.txt", "other.txt"));
+		REQUIRE("s3://bucket/other.csv" == StringUtil::ReplaceFileName("s3://bucket/test.csv", "other.csv"));
+		REQUIRE("opfs://other.csv" == StringUtil::ReplaceFileName("opfs://test.csv", "other.csv"));
+	}
 }
 
 TEST_CASE("Test JSON Parsing", "[string_util]") {

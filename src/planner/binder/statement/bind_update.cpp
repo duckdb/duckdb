@@ -50,10 +50,10 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 		}
 		auto &column = table.GetColumn(colname);
 		if (column.Generated()) {
-			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
+			throw BinderException("Cant update column %s because it is a generated column!", column.Name());
 		}
 		if (std::find(columns.begin(), columns.end(), column.Physical()) != columns.end()) {
-			throw BinderException("Multiple assignments to same column \"%s\"", colname);
+			throw BinderException("Multiple assignments to same column %s", colname);
 		}
 		columns.push_back(column.Physical());
 		if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
@@ -190,11 +190,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 		get = &root->Cast<LogicalGet>();
 	}
 
-	if (!table.temporary) {
-		// update of persistent table: not read only!
-		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::UPDATE_DATA);
-	}
+	GetStatementProperties().RegisterDBModify(table.catalog, context, DatabaseModificationType::UPDATE_DATA);
 	auto update = make_uniq<LogicalUpdate>(table);
 
 	// Trigger expansion flags its generated base UPDATE for OLD capture via scoped binder state (keyed by node
@@ -285,7 +281,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	result.plan = std::move(update);
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

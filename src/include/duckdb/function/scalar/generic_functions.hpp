@@ -57,7 +57,7 @@ struct BarrierFun {
 
 struct CreateSortKeyFun {
 	static constexpr const char *Name = "create_sort_key";
-	static constexpr const char *Parameters = "parameters...";
+	static constexpr const char *Parameters = "key1,...";
 	static constexpr const char *Description = "Constructs a binary-comparable sort key based on a set of input parameters and sort qualifiers";
 	static constexpr const char *Example = "create_sort_key('A', 'DESC')";
 	static constexpr const char *Categories = "";
@@ -67,7 +67,7 @@ struct CreateSortKeyFun {
 
 struct InvokeFun {
 	static constexpr const char *Name = "invoke";
-	static constexpr const char *Parameters = "lambda,arg1,arg2,...";
+	static constexpr const char *Parameters = "lambda,arg1,...";
 	static constexpr const char *Description = "Invokes a lambda function with the given arguments";
 	static constexpr const char *Example = "invoke(x -> x + 1, 5)";
 	static constexpr const char *Categories = "";

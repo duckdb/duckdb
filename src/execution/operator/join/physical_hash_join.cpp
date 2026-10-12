@@ -51,6 +51,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(conds), join_type,
                              estimated_cardinality),
       delim_types(std::move(delim_types)) {
+	D_ASSERT(join_type != JoinType::MARK || !predicate);
 	filter_pushdown = std::move(pushdown_info_p);
 
 	children.push_back(left);
@@ -297,12 +298,24 @@ unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientC
 	return result;
 }
 
-//! True iff the build subtree funnels multiple producer pipelines into one sink (UNION ALL, recursive CTE),
-//! breaking the "decide layout once on the first chunk" contract. Conservative: may over-exclude, never misses one.
+//! Check for producers that can change a build column's dictionary between chunks.
 static bool BuildSideHasMultipleSources(const PhysicalOperator &op) {
-	if (op.type == PhysicalOperatorType::UNION || op.type == PhysicalOperatorType::RECURSIVE_CTE ||
-	    op.type == PhysicalOperatorType::RECURSIVE_KEY_CTE) {
+	switch (op.type) {
+	case PhysicalOperatorType::UNION:
+	case PhysicalOperatorType::RECURSIVE_CTE:
+	case PhysicalOperatorType::RECURSIVE_KEY_CTE:
 		return true;
+	case PhysicalOperatorType::CTE_SCAN:
+	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
+	case PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN:
+		// CTE producers are not children of their scans and may forward different dictionaries.
+		return true;
+	default:
+		break;
+	}
+	if (op.IsSink() && op.children.size() == 1) {
+		// Single-input sinks materialize their input and become the source of a new pipeline.
+		return false;
 	}
 	for (const auto &child : op.children) {
 		if (BuildSideHasMultipleSources(child.get())) {
@@ -340,8 +353,7 @@ public:
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
 		auto use_perfect_hash = CanUsePerfectHashJoin(op, *perfect_join_executor);
 		can_use_perfect_hash = use_perfect_hash;
-		// A multi-source build side (UNION ALL / recursive CTE) feeds the sink from several producers,
-		// disqualifying dict-surviving. Computed once from the static plan; cannot change at runtime.
+		// Multiple build producers can change dictionaries after the layout has been published.
 		build_side_multi_source = BuildSideHasMultipleSources(op.children[1].get());
 		// For external hash join
 		external = Settings::Get<DebugForceExternalSetting>(context);
@@ -1299,8 +1311,9 @@ bool JoinFilterPushdownInfo::CanUseInFilter(const ClientContext &context, option
 	return ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold && cmp == ExpressionType::COMPARE_EQUAL;
 }
 
-bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, const PhysicalComparisonJoin &op,
-                                               const ExpressionType &cmp, optional_ptr<JoinHashTable> ht) const {
+bool JoinFilterPushdownInfo::CanUseBloomFilter(const JoinFilterPushdownFilter &info, const ClientContext &context,
+                                               const PhysicalComparisonJoin &op, const ExpressionType &cmp,
+                                               optional_ptr<JoinHashTable> ht) const {
 	if (!ht) {
 		return false;
 	}
@@ -1330,8 +1343,11 @@ bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, con
 	if (build_count == 0) {
 		build_count = ht->GetSinkCollection().Count();
 	}
-	const double build_to_probe_ratio =
-	    static_cast<double>(build_count) / static_cast<double>(op.children[0].get().estimated_cardinality);
+	auto probe_cardinality = op.children[0].get().estimated_cardinality;
+	if (build_side_has_filter) {
+		probe_cardinality = MaxValue(info.estimated_scan_cardinality, probe_cardinality);
+	}
+	const double build_to_probe_ratio = static_cast<double>(build_count) / static_cast<double>(probe_cardinality);
 	if (build_to_probe_ratio > BUILD_TO_PROBE_RATIO_THRESHOLD) {
 		return false;
 	}
@@ -1347,9 +1363,10 @@ bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, con
 	return true;
 }
 
-bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(const ClientContext &context, const PhysicalComparisonJoin &op,
-                                                     optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const {
-	if (!CanUseBloomFilter(context, op, cmp, ht)) {
+bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(const JoinFilterPushdownFilter &info, const ClientContext &context,
+                                                     const PhysicalComparisonJoin &op, optional_ptr<JoinHashTable> ht,
+                                                     const ExpressionType &cmp) const {
+	if (!CanUseBloomFilter(info, context, op, cmp, ht)) {
 		return false;
 	}
 	if (cmp != ExpressionType::COMPARE_EQUAL) {
@@ -1773,7 +1790,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				const auto can_compute_span =
 				    PrefixRangeFilter::TryComputeSpan(min_val_before_cast, max_val_before_cast, span);
 				const auto can_emit_prf = allow_prefix_range_filters && can_emit_runtime_filters && gstate &&
-				                          CanUsePrefixRangeFilter(context, op, ht, cmp) && can_compute_span;
+				                          CanUsePrefixRangeFilter(info, context, op, ht, cmp) && can_compute_span;
 
 				bool pushed_in_filter = false;
 				if (CanUseInFilter(context, ht, cmp)) {
@@ -1808,7 +1825,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					                           max_val, condition_type, reconstruct_filter_expression, false);
 				}
 				if (allow_bloom_filters && can_emit_runtime_filters && ht && gstate &&
-				    CanUseBloomFilter(context, op, cmp, ht)) {
+				    CanUseBloomFilter(info, context, op, cmp, ht)) {
 					ht->SetBuildBloomFilter(true);
 					DeferRuntimeFilter(DeferredRuntimeFilterType::BLOOM_FILTER, op, info, pushdown_column,
 					                   filter_col_idx, *gstate);
@@ -2202,6 +2219,8 @@ public:
 	//! For probe synchronization
 	atomic<idx_t> probe_chunk_count;
 	atomic<idx_t> probe_chunk_done;
+	//! Last reported progress, also used while partition masks are being updated
+	MonotonicProgress external_progress;
 
 	//! To determine the number of threads
 	idx_t probe_count;
@@ -2211,6 +2230,8 @@ public:
 	idx_t full_outer_chunk_idx = DConstants::INVALID_INDEX;
 	atomic<idx_t> full_outer_chunk_count;
 	atomic<idx_t> full_outer_chunk_done;
+	//! Chunks of the full/outer scan that have been scanned, updated while scanning (for progress)
+	atomic<idx_t> full_outer_chunk_progress;
 	idx_t full_outer_chunks_per_thread = DConstants::INVALID_INDEX;
 
 	vector<InterruptState> blocked_tasks;
@@ -2224,11 +2245,13 @@ private:
 		build_chunks_per_thread = DConstants::INVALID_INDEX;
 		probe_chunk_count = 0;
 		probe_chunk_done = 0;
+		external_progress.Reset();
 		probe_count = op.children[0].get().estimated_cardinality;
 		parallel_scan_chunk_count = context.config.verify_parallelism ? 1 : 120;
 		full_outer_chunk_idx = DConstants::INVALID_INDEX;
 		full_outer_chunk_count = 0;
 		full_outer_chunk_done = 0;
+		full_outer_chunk_progress = 0;
 		full_outer_chunks_per_thread = DConstants::INVALID_INDEX;
 		blocked_tasks.clear();
 		GlobalSourceState::Reset(context);
@@ -2284,6 +2307,8 @@ public:
 	idx_t full_outer_chunk_idx_from = DConstants::INVALID_INDEX;
 	idx_t full_outer_chunk_idx_to = DConstants::INVALID_INDEX;
 	unique_ptr<JoinHTScanState> full_outer_scan_state;
+	//! Chunks of the current full/outer scan that were added to the global progress
+	idx_t full_outer_chunks_reported = 0;
 
 private:
 	void ResetState() {
@@ -2304,6 +2329,7 @@ private:
 		full_outer_chunk_idx_from = DConstants::INVALID_INDEX;
 		full_outer_chunk_idx_to = DConstants::INVALID_INDEX;
 		full_outer_scan_state.reset();
+		full_outer_chunks_reported = 0;
 	}
 
 public:
@@ -2444,6 +2470,7 @@ void HashJoinGlobalSourceState::PrepareScanHT(HashJoinGlobalSinkState &sink) {
 	full_outer_chunk_idx = 0;
 	full_outer_chunk_count = data_collection.ChunkCount();
 	full_outer_chunk_done = 0;
+	full_outer_chunk_progress = 0;
 
 	full_outer_chunks_per_thread =
 	    MaxValue<idx_t>((full_outer_chunk_count + sink.num_threads - 1) / sink.num_threads, 1);
@@ -2609,9 +2636,17 @@ void HashJoinLocalSourceState::ExternalScanHT(HashJoinGlobalSinkState &sink, Has
 	if (!full_outer_scan_state) {
 		full_outer_scan_state = make_uniq<JoinHTScanState>(sink.hash_table->GetDataCollection(),
 		                                                   full_outer_chunk_idx_from, full_outer_chunk_idx_to);
+		full_outer_chunks_reported = 0;
 	}
 	sink.hash_table->ScanFullOuter(*full_outer_scan_state, addresses, chunk);
 
+	auto chunks_scanned =
+	    chunk.size() == 0 ? full_outer_chunk_idx_to - full_outer_chunk_idx_from : full_outer_scan_state->chunks_done;
+	if (chunks_scanned > full_outer_chunks_reported) {
+		gstate.full_outer_chunk_progress.fetch_add(chunks_scanned - full_outer_chunks_reported,
+		                                           std::memory_order_relaxed);
+		full_outer_chunks_reported = chunks_scanned;
+	}
 	if (chunk.size() == 0) {
 		full_outer_scan_state = nullptr;
 		annotated_lock_guard<annotated_mutex> guard(gstate.lock);
@@ -2670,20 +2705,25 @@ ProgressData PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceS
 
 	if (!sink.external) {
 		if (PropagatesBuildSide(join_type)) {
-			res.done = static_cast<double>(gstate.full_outer_chunk_done);
+			res.done = static_cast<double>(gstate.full_outer_chunk_progress.load(std::memory_order_relaxed));
 			res.total = static_cast<double>(gstate.full_outer_chunk_count);
 			return res;
 		}
-		res.done = 0.0;
+		res.done = gstate.global_stage == HashJoinSourceStage::DONE ? 1.0 : 0.0;
 		res.total = 1.0;
 		return res;
 	}
 
 	const auto &ht = *sink.hash_table;
-	const auto num_partitions = static_cast<double>(RadixPartitioning::NumberOfPartitions(ht.GetRadixBits()));
+	res.total = static_cast<double>(RadixPartitioning::NumberOfPartitions(ht.GetRadixBits()));
+
+	// Progress holds the executor lock, which workers may acquire while holding this lock.
+	if (!gstate.lock.try_lock()) {
+		return gstate.external_progress.Update(res);
+	}
+	annotated_lock_guard<annotated_mutex> guard(gstate.lock, std::adopt_lock);
 
 	res.done = static_cast<double>(ht.FinishedPartitionCount());
-	res.total = num_partitions;
 
 	const auto probe_chunk_done = static_cast<double>(gstate.probe_chunk_done);
 	const auto probe_chunk_count = static_cast<double>(gstate.probe_chunk_count);
@@ -2696,7 +2736,7 @@ ProgressData PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceS
 		res.done += probe_progress;
 	}
 
-	return res;
+	return gstate.external_progress.Update(res);
 }
 
 InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {

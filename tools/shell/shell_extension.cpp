@@ -61,6 +61,9 @@ unique_ptr<TableRef> ShellScanLastResult(ClientContext &context, ReplacementScan
 // would have fired)
 void ShellPostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 	auto &state = duckdb_shell::ShellState::Get();
+	if (!state.conn || !RefersToSameObject(*state.conn->context, input.context)) {
+		return;
+	}
 	if (state.last_result_referenced) {
 		return;
 	}

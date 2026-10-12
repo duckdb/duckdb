@@ -149,8 +149,15 @@ public:
 
 	WindowValueStreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
 	    : wexpr(wexpr), vec(GetFirstValue(client, input, wexpr), count_t(STANDARD_VECTOR_SIZE)),
-	      sel(STANDARD_VECTOR_SIZE), eval(client), arg(wexpr.GetChildren()[0]->GetReturnType()) {
+	      sel(STANDARD_VECTOR_SIZE), eval(client) {
 		eval.AddExpression(*wexpr.GetChildren()[0]);
+		arg_chunk.Initialize(client, {wexpr.GetChildren()[0]->GetReturnType()});
+	}
+
+	Vector &EvalArg(DataChunk &input) {
+		arg_chunk.Reset();
+		eval.Execute(input, arg_chunk);
+		return arg_chunk.data[0];
 	}
 
 	const BoundWindowExpression &wexpr;
@@ -160,8 +167,8 @@ public:
 	SelectionVector sel;
 	//! An executor for computing the argument
 	ExpressionExecutor eval;
-	//! A reusable argument vector
-	Vector arg;
+	//! A reusable argument chunk
+	DataChunk arg_chunk;
 };
 
 //===--------------------------------------------------------------------===//
@@ -179,6 +186,9 @@ struct WindowValueExecutor {
 	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
 
 	//! Streaming APIs
+	static bool ArgumentIsStreamable(const BoundWindowExpression &wexpr) {
+		return !wexpr.IsVolatile();
+	}
 	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
 	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowValueStreamingState>(client, input, wexpr);
@@ -361,6 +371,9 @@ public:
 				return false;
 			}
 			offset = bigint_value->GetValue<int64_t>();
+			if (offset == NumericLimits<int64_t>::Minimum()) {
+				return false;
+			}
 		}
 
 		//	We can only support LEAD and LAG values within one standard vector
@@ -526,6 +539,9 @@ public:
 			}
 			int64_t offset;
 			if (!WindowLeadLagStreamingState::ComputeOffset(client, wexpr, offset)) {
+				return false;
+			}
+			if (offset < 0 && !ArgumentIsStreamable(wexpr)) {
 				return false;
 			}
 
@@ -783,6 +799,9 @@ struct WindowFirstValueExecutor : public WindowValueExecutor {
 
 	//! Streaming APIs
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		if (!ArgumentIsStreamable(wexpr)) {
+			return false;
+		}
 		if (wexpr.IgnoreNulls()) {
 			// We can stream first values ignoring NULLs if they are "running totals"
 			return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
@@ -809,9 +828,7 @@ void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &
 	// then look for a non-NULL value and update it
 	if (wexpr.IgnoreNulls() && ConstantVector::IsNull(sstate.vec)) {
 		//	Find the first non-NULL value
-		auto &executor = sstate.eval;
-		auto &arg = sstate.arg;
-		executor.ExecuteExpression(input, arg);
+		auto &arg = sstate.EvalArg(input);
 		UnifiedVectorFormat unified;
 		arg.ToUnifiedFormat(unified);
 		const auto &validity = unified.validity;
@@ -914,6 +931,9 @@ struct WindowLastValueExecutor : public WindowValueExecutor {
 
 	//! Streaming APIs
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		if (!ArgumentIsStreamable(wexpr)) {
+			return false;
+		}
 		// We can stream last values if they are "running totals"
 		return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
 		       wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
@@ -931,8 +951,7 @@ void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &i
 	auto &executor = sstate.eval;
 	if (wexpr.IgnoreNulls()) {
 		auto &prev = sstate.vec;
-		auto &arg = sstate.arg;
-		executor.ExecuteExpression(input, arg);
+		auto &arg = sstate.EvalArg(input);
 		UnifiedVectorFormat unified;
 		arg.ToUnifiedFormat(unified);
 		const auto &validity = unified.validity;
@@ -943,7 +962,7 @@ void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &i
 			Vector copy(wexpr.GetChildren()[0]->GetReturnType());
 			VectorOperations::Copy(arg, copy, count, 0, 0);
 			//	Overwrite the previous non-NULL value if the first one is NULL
-			if (!validity.RowIsValidUnsafe(0)) {
+			if (!validity.RowIsValidUnsafe(unified.sel->get_index(0))) {
 				VectorOperations::Copy(prev, copy, 1, 0, 0);
 			}
 			//	Select appropriate the non-NULL values to copy over
@@ -1078,6 +1097,9 @@ struct WindowNthValueExecutor : public WindowValueExecutor {
 
 	//! Streaming APIs
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		if (!ArgumentIsStreamable(wexpr)) {
+			return false;
+		}
 		// We can only stream Nth Value if N is positive constant.
 		idx_t nth_index;
 		if (!WindowNthValueStreamingState::ComputeNthIndex(client, wexpr, nth_index)) {
@@ -1112,7 +1134,7 @@ void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChu
 		return;
 	}
 
-	eval.ExecuteExpression(input, arg);
+	auto &arg = EvalArg(input);
 
 	UnifiedVectorFormat unified;
 	arg.ToUnifiedFormat(unified);
@@ -1312,7 +1334,10 @@ struct TryExtrapolateOperator {
 	template <typename T>
 	static bool Operation(const T &lo, const double d, const T &hi, T &result) {
 		if (lo > hi) {
-			return Operation<T>(hi, -d, lo, result);
+			//	Swap the endpoints to keep the offset positive.
+			//	The slope in the exchanged frame is (1 - d), not (-d):
+			//	lo + d*(hi - lo) == hi + (1 - d)*(lo - hi)
+			return Operation<T>(hi, 1 - d, lo, result);
 		}
 		const auto delta = LossyNumericCast<double>(hi) - LossyNumericCast<double>(lo);
 		T offset;

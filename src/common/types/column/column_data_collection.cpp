@@ -81,13 +81,11 @@ ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> alloc
 ColumnDataCollection::ColumnDataCollection(ClientContext &context, vector<LogicalType> types_p,
                                            ColumnDataAllocatorType type, ColumnDataCollectionLifetime lifetime)
     : ColumnDataCollection(make_shared_ptr<ColumnDataAllocator>(context, type, lifetime), std::move(types_p)) {
-	D_ASSERT(!types.empty());
 }
 
 ColumnDataCollection::ColumnDataCollection(ColumnDataCollection &other)
     : ColumnDataCollection(other.allocator, other.types) {
 	other.finished_append = true;
-	D_ASSERT(!types.empty());
 }
 
 ColumnDataCollection::~ColumnDataCollection() {
@@ -97,7 +95,6 @@ void ColumnDataCollection::Initialize(vector<LogicalType> types_p) {
 	this->types = std::move(types_p);
 	this->count = 0;
 	this->finished_append = false;
-	D_ASSERT(!types.empty());
 	copy_functions.reserve(types.size());
 	for (auto &type : types) {
 		copy_functions.push_back(GetCopyFunction(type));
@@ -1092,6 +1089,14 @@ void ColumnDataCollection::Append(DataChunk &input) {
 	Append(state, input);
 }
 
+void ColumnDataCollection::Append(const ColumnDataCollection &other) {
+	ColumnDataAppendState state;
+	InitializeAppend(state);
+	for (auto &chunk : other.Chunks()) {
+		Append(state, chunk);
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
@@ -1153,7 +1158,6 @@ void ColumnDataCollection::InitializeScanChunk(Allocator &allocator, DataChunk &
 }
 
 void ColumnDataCollection::InitializeScanChunk(ColumnDataScanState &state, DataChunk &chunk) const {
-	D_ASSERT(!state.column_ids.empty());
 	vector<LogicalType> chunk_types;
 	chunk_types.reserve(state.column_ids.size());
 	for (idx_t i = 0; i < state.column_ids.size(); i++) {
@@ -1281,6 +1285,10 @@ bool ColumnDataCollection::Seek(idx_t seek_idx, ColumnDataScanState &state, Data
 
 ColumnDataRowCollection ColumnDataCollection::GetRows() const {
 	return ColumnDataRowCollection(*this);
+}
+
+Value ColumnDataCollection::GetValue(idx_t column, idx_t index) const {
+	return GetRows().GetValue(column, index);
 }
 
 //===--------------------------------------------------------------------===//

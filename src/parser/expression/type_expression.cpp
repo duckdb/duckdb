@@ -7,7 +7,29 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/unordered_set.hpp"
 namespace duckdb {
+
+bool TypeExpression::IsSQLType(LogicalTypeId id) {
+	static const auto admitted_ids = [] {
+		// TYPE has SQL syntax but is not included in AllTypes.
+		unordered_set<LogicalTypeId> ids {LogicalTypeId::SQLNULL, LogicalTypeId::TYPE};
+		for (auto &type : LogicalType::AllTypes()) {
+			ids.insert(type.id());
+		}
+		return ids;
+	}();
+	return admitted_ids.count(id) != 0;
+}
+
+bool TypeExpression::CanRepresent(const LogicalType &type) {
+	return type.IsComplete() && !TypeVisitor::Contains(type, [](const LogicalType &child) {
+		       const bool empty_tuple = child.id() == LogicalTypeId::TUPLE && StructType::GetChildCount(child) == 0;
+		       const bool empty_enum = child.id() == LogicalTypeId::ENUM && EnumType::GetSize(child) == 0;
+		       return !IsSQLType(child.id()) || empty_tuple || empty_enum;
+	       });
+}
 
 TypeExpression::TypeExpression(QualifiedName qualified_name_p, vector<unique_ptr<ParsedExpression>> children_p)
     : ParsedExpression(ExpressionType::TYPE, ExpressionClass::TYPE), qualified_name(std::move(qualified_name_p)),

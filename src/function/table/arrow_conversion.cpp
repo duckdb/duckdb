@@ -65,9 +65,10 @@ static void GetValidityMask(ValidityMask &mask, ArrowArray &array, idx_t chunk_o
 			//! just memcpy nullmask
 			memcpy((void *)mask.GetData(), ArrowBufferData<uint8_t>(array, 0) + bit_offset / 8, n_bitmask_bytes);
 		} else {
-			//! need to re-align nullmask
-			vector<uint8_t> temp_nullmask(n_bitmask_bytes + 1);
-			memcpy(temp_nullmask.data(), ArrowBufferData<uint8_t>(array, 0) + bit_offset / 8, n_bitmask_bytes + 1);
+			//! need to re-align nullmask - only the bytes that hold the bits of the rows are guaranteed to exist
+			vector<uint8_t> temp_nullmask(n_bitmask_bytes + 1, 0);
+			auto n_source_bytes = (bit_offset % 8 + size + 8 - 1) / 8;
+			memcpy(temp_nullmask.data(), ArrowBufferData<uint8_t>(array, 0) + bit_offset / 8, n_source_bytes);
 			ShiftRight(temp_nullmask.data(), NumericCast<int>(n_bitmask_bytes + 1),
 			           NumericCast<int>(bit_offset % 8ull)); //! why this has to be a right shift is a mystery to me
 			memcpy((void *)mask.GetData(), data_ptr_cast(temp_nullmask.data()), n_bitmask_bytes);
@@ -842,7 +843,15 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 	if (!ignore_extensions && arrow_type.HasExtension()) {
 		if (arrow_type.extension_data->arrow_to_duckdb) {
 			// Convert the storage and then call the cast function
-			Vector input_data(arrow_type.extension_data->GetInternalType());
+			// `size` is the child's own count, which for a nested child is not bounded by
+			// STANDARD_VECTOR_SIZE -- size the storage vector for it (as ArrowAppendData::AppendChild does).
+			Vector input_data(arrow_type.extension_data->GetInternalType(),
+			                  MaxValue<idx_t>(size, STANDARD_VECTOR_SIZE));
+			// Every caller has already established this column's top-level validity on `vector` — transfer
+			// it onto the storage vector, since the cast function is responsible for carrying it through to
+			// its result (a conversion that rebuilds the result does not preserve the pre-set validity, and
+			// a spec-clean writer need not mirror a parent NULL in the storage children's own validity).
+			FlatVector::CopyValidity(input_data, vector, size);
 			ColumnArrowToDuckDB(input_data, array, chunk_offset, array_state, size, arrow_type, nested_offset,
 			                    parent_mask, parent_offset, /*ignore_extensions*/ true);
 			arrow_type.extension_data->arrow_to_duckdb(array_state.context, input_data, vector, size);
@@ -1418,7 +1427,8 @@ static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, const
 }
 
 static bool CanContainNull(const ArrowArray &array, const ValidityMask *parent_mask) {
-	if (array.null_count > 0) {
+	// a null count of -1 means that the number of nulls is unknown
+	if (array.null_count != 0) {
 		return true;
 	}
 	if (!parent_mask) {

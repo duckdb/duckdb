@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/helper/physical_limit.hpp"
 
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -159,11 +160,17 @@ public:
 	LimitSourceState() {
 		initialized = false;
 		current_offset = 0;
+		scanned_rows = 0;
+		total_rows = 0;
 	}
 
 	bool initialized;
 	idx_t current_offset;
 	BatchedChunkScanState scan_state;
+	//! The number of rows scanned from the collection (including rows skipped by the offset)
+	atomic<idx_t> scanned_rows;
+	//! The number of rows that will be scanned - set when the scan is initialized
+	atomic<idx_t> total_rows;
 };
 
 unique_ptr<GlobalSourceState> PhysicalLimit::GetGlobalSourceState(ClientContext &context) const {
@@ -177,9 +184,15 @@ SourceResultType PhysicalLimit::GetDataInternal(ExecutionContext &context, DataC
 	while (state.current_offset < gstate.limit + gstate.offset) {
 		if (!state.initialized) {
 			gstate.data.InitializeScan(state.scan_state);
+			idx_t total_rows = gstate.data.Count();
+			if (gstate.limit != DConstants::INVALID_INDEX) {
+				total_rows = MinValue<idx_t>(total_rows, gstate.limit + gstate.offset);
+			}
+			state.total_rows = total_rows;
 			state.initialized = true;
 		}
 		gstate.data.Scan(state.scan_state, chunk);
+		state.scanned_rows.fetch_add(chunk.size(), std::memory_order_relaxed);
 		if (chunk.size() == 0) {
 			return SourceResultType::FINISHED;
 		}
@@ -189,6 +202,15 @@ SourceResultType PhysicalLimit::GetDataInternal(ExecutionContext &context, DataC
 	}
 
 	return chunk.size() > 0 ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
+}
+
+ProgressData PhysicalLimit::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+	auto &state = gstate_p.Cast<LimitSourceState>();
+	idx_t total = state.total_rows;
+	ProgressData progress;
+	progress.total = static_cast<double>(MaxValue<idx_t>(total, 1));
+	progress.done = static_cast<double>(MinValue<idx_t>(state.scanned_rows, total));
+	return progress;
 }
 
 bool PhysicalLimit::HandleOffset(DataChunk &input, idx_t &current_offset, idx_t offset, idx_t limit) {

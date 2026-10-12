@@ -106,22 +106,22 @@ void BlockMemory::ResizeBuffer(BlockLock &l, idx_t block_size, idx_t block_heade
 	D_ASSERT(memory_usage == buffer->AllocSize());
 }
 
-bool BlockMemory::CanUnload() const {
+CanUnloadResult BlockMemory::CanUnload() const {
 	if (GetState() == BlockState::BLOCK_UNLOADED) {
 		// The block has already been unloaded.
-		return false;
+		return CanUnloadResult::ALREADY_UNLOADED;
 	}
 	if (GetReaders() > 0) {
 		// There are active readers.
-		return false;
+		return CanUnloadResult::PINNED;
 	}
 	if (BlockId() >= MAXIMUM_BLOCK && MustWriteToTemporaryFile() && !GetBufferManager().HasTemporaryDirectory()) {
 		// The block memory cannot be destroyed upon eviction/unpinning.
 		// In order to unload this block we need to write it to a temporary buffer.
 		// However, no temporary directory is specified, hence, we cannot unload.
-		return false;
+		return CanUnloadResult::NO_TEMP_DIRECTORY;
 	}
-	return true;
+	return CanUnloadResult::CAN_UNLOAD;
 }
 
 unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l, QueryContext context) {
@@ -132,7 +132,7 @@ unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l, QueryContex
 		return nullptr;
 	}
 	D_ASSERT(IsSwizzled());
-	D_ASSERT(CanUnload());
+	D_ASSERT(CanUnload() == CanUnloadResult::CAN_UNLOAD);
 
 	if (BlockId() >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
 		// This is a temporary block that cannot be destroyed upon evict/unpin.
@@ -224,15 +224,17 @@ BufferHandle BlockHandle::Load(QueryContext context, unique_ptr<FileBuffer> reus
 		return BufferHandle(shared_from_this(), memory.GetBuffer());
 	}
 
+	if (!memory.CanReload()) {
+		// the buffer was destroyed upon unpin/evict, or the handle was replaced and its disk block
+		// may be rewritten in place - the caller must re-resolve the block id
+		return BufferHandle();
+	}
+
 	if (BlockId() < MAXIMUM_BLOCK) {
 		auto block = AllocateBlock(block_manager, std::move(reusable_buffer), block_id);
 		block_manager.Read(context, *block);
 		memory.GetBuffer() = std::move(block);
 	} else {
-		if (!memory.MustWriteToTemporaryFile()) {
-			// The buffer was destroyed upon unpin/evict, so there is no temporary buffer to read.
-			return BufferHandle();
-		}
 		auto &buffer_manager = memory.GetBufferManager();
 		auto &buffer = memory.GetBuffer();
 		buffer = buffer_manager.ReadTemporaryBuffer(context, memory.GetMemoryTag(), *this, std::move(reusable_buffer));
