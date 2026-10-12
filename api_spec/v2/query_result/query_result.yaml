@@ -22,10 +22,11 @@ module: query_result
 # a caller can choose between consuming rows and draining without inspecting
 # the SQL.
 #
-# A connection runs one result at a time. While a live result exists — one
-# that is not finished, cancelled, errored, or destroyed — statement_execute
-# refuses with ERROR_RESOURCE_IN_USE. For concurrent queries, open another
-# connection.
+# A connection runs one statement at a time. While a result's statement is
+# still running, statement_execute refuses with ERROR_RESOURCE_IN_USE. A
+# statement runs at most until its result is finished, cancelled, errored, or
+# destroyed; a statement that expands into a group runs exactly that long. For
+# concurrent queries, open another connection.
 #
 # The result handle carries the schema (column names and types), the statement
 # type, and the result type from prepare time. "Prepare-time metadata" in the
@@ -134,9 +135,10 @@ functions:
       row-producing statement cannot be streamed as a single result and reports
       ERROR_QUERY_NOT_IMPLEMENTED; no known expansion produces one.
 
-      One live result per connection: this refuses with ERROR_RESOURCE_IN_USE
-      while the connection already has a live result. Drain, destroy, or
-      interrupt that one first, or open another connection.
+      One running statement per connection: this refuses with
+      ERROR_RESOURCE_IN_USE while a statement on the connection is still
+      running. Drain, destroy, or interrupt that result first, or open another
+      connection.
 
       Schema metadata — result type, statement type, column count, names,
       logical types — is available on the returned handle immediately, before
@@ -185,10 +187,12 @@ functions:
 
       Null-safe: passing nullptr or a slot already set to nullptr is a no-op.
       Frees the memory the result owns and releases the connection for its next
-      query. Safe at any point in the stream's life, though destroying a
-      partially consumed result abandons the remaining execution, including
-      side effects not yet applied. Chunks already fetched are caller-owned and
-      stay valid. On success the slot is set to nullptr.
+      query. Safe at any point in the stream's life. Destroying a result before
+      its statement ended (drained, or stepped to FINISHED) aborts the
+      statement. On autocommit, its writes are rolled back. Inside a
+      transaction, a statement that may write invalidates the transaction, and
+      a read-only statement just stops. Chunks already fetched are
+      caller-owned and stay valid. On success the slot is set to nullptr.
     role: destructor
     belongs_to: result
     parameters:

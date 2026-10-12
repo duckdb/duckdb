@@ -405,6 +405,10 @@ struct QuantileListFallback : QuantileOperation {
 //===--------------------------------------------------------------------===//
 template <class OP>
 AggregateFunction GetDiscreteQuantileTemplated(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::TIME_TZ) {
+		// TIMETZ is ordered by its normalized time, not by its raw bits
+		return OP::template GetFunction<dtime_tz_t>(type);
+	}
 	switch (type.InternalType()) {
 #if !DUCKDB_SMALLER_BINARY(quantile_types)
 	case PhysicalType::INT8:
@@ -550,8 +554,10 @@ AggregateFunction GetContinuousQuantileTemplated(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 		return OP::template GetFunction<timestamp_t, timestamp_t>(type, type);
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		return OP::template GetFunction<dtime_t, dtime_t>(type, type);
+	case LogicalTypeId::TIME_TZ:
+		// TIMETZ is ordered and interpolated by its normalized time, not by its raw bits
+		return OP::template GetFunction<dtime_tz_t, dtime_tz_t>(type, type);
 	case LogicalTypeId::INTERVAL:
 		return OP::template GetFunction<interval_t, interval_t>(type, type);
 	default:

@@ -15,6 +15,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/enums/query_result_state.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
+#include "duckdb/common/enums/connection_type.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -44,6 +45,7 @@ class LogicalOperator;
 class PreparedStatement;
 class PreparedStatementData;
 class StatementIterator;
+class StatementPreprocessor;
 class Relation;
 class BufferedFileWriter;
 class QueryProfiler;
@@ -90,6 +92,11 @@ class ClientContext : public enable_shared_from_this<ClientContext> {
 	friend class ConnectionManager;
 	friend class Connection;
 	friend class PhysicalTransaction;
+
+public:
+	//! The error of a statement submitted while a result that no call ended holds the connection
+	static constexpr const char *OPEN_RESULT_ERROR =
+	    "connection has an open result; drain or destroy it before starting a new query";
 
 public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
@@ -219,6 +226,8 @@ public:
 	//! Bind a statement and return its signature, without building a PreparedStatement, optimizing, or
 	//! executing. Read-only: binding touches no in-flight query state, so a live result survives. Throws on error.
 	DUCKDB_API StatementSignature BindStatement(unique_ptr<SQLStatement> statement);
+	//! Throws the error a new statement gets while a result that no call ended holds the connection
+	DUCKDB_API void VerifyNoOpenResult();
 
 	//! Gets current percentage of the query's progress, returns 0 in case the progress bar is disabled.
 	DUCKDB_API QueryProgress GetQueryProgress();
@@ -233,9 +242,11 @@ public:
 	//! Preprocess a peel of parse-facing statements into engine-facing ones (PRAGMA reparse,
 	//! MULTI_STATEMENT unpack, transaction wrapping), replacing `buffer` in place. Acquires the
 	//! context lock internally when `lock` is null (callers that do not already hold it, e.g. the
-	//! shell). Drives StatementIterator's preprocessing.
+	//! shell). Drives StatementIterator's preprocessing. Pass a `preprocessor` to carry state, such as
+	//! an explicit BEGIN, across multiple calls for the same query.
 	DUCKDB_API void PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffer,
-	                                     optional_ptr<ClientContextLock> lock = nullptr);
+	                                     optional_ptr<ClientContextLock> lock = nullptr,
+	                                     optional_ptr<StatementPreprocessor> preprocessor = nullptr);
 
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
@@ -277,6 +288,10 @@ public:
 
 	connection_t GetConnectionId() const;
 
+	ConnectionType GetConnectionType() const {
+		return connection_type;
+	}
+
 	//! Fetch the set of tables names of the query.
 	//! Returns the fully qualified, escaped table names, if qualified is set to true,
 	//! else returns the not qualified, not escaped table names.
@@ -316,10 +331,19 @@ private:
 	void StatementVerification(ClientContextLock &lock, unique_ptr<SQLStatement> &statement,
 	                           QueryParameters query_parameters);
 
-	void InitialCleanup(ClientContextLock &lock);
+	//! Whether a result that no call ended holds the connection, so that a new statement is refused
+	bool OpenResultHoldsConnection(ClientContextLock &lock);
+	//! The refusal of a statement submitted while a result holds the connection; otherwise null, after abandoning
+	//! what is left of the previous query
+	template <class T>
+	[[nodiscard]] unique_ptr<T> InitialCleanup(ClientContextLock &lock);
+	//! Abandons the query of an open result that no call ended, as Close would, and resets the interrupted flag
+	void AbandonActiveQuery(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
 	void CleanupInternal(ClientContextLock &lock, BaseQueryResult *result = nullptr,
 	                     bool invalidate_transaction = false);
+	//! Ends the active query as abandoned: nothing it did is committed
+	void AbortInternal(ClientContextLock &lock);
 	unique_ptr<QueryResult> SubmitStatement(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                        const QueryParameters &parameters);
 	unique_ptr<QueryResult> SubmitPreparedStatementInternal(ClientContextLock &lock,
@@ -375,6 +399,8 @@ private:
 	QueryProgress query_progress;
 	//! The connection corresponding to this client context
 	connection_t connection_id;
+	//! Type of connection (USER or INTERNAL)
+	ConnectionType connection_type = ConnectionType::USER;
 	//! Routing target for SQL execution while CONNECT-ed (CONNECT/DISCONNECT). When is_connected is
 	//! true and connected_to_database can be locked, the chokepoint dispatches non-control SQL via
 	//! `Catalog::RemoteExecute(string)` and wraps the returned TableRef into a SelectStatement.

@@ -116,6 +116,8 @@ struct FunctionLocalState {
 struct FunctionParameters {
 	vector<Value> values;
 	named_argument_map_t named_parameters;
+	//! The pragma function the parameters were bound for
+	optional_ptr<const PragmaFunction> function;
 };
 
 //! How a parameter receives its arguments, mirroring Python's parameter kinds, in the order a signature declares them
@@ -653,6 +655,10 @@ public:
 	DUCKDB_API auto GetVarArgsCount(const FunctionSignature &signature) const -> idx_t;
 	DUCKDB_API auto GetKeywordOnlyArgumentCount(const FunctionSignature &signature) const -> idx_t;
 	DUCKDB_API auto GetKwargsCount(const FunctionSignature &signature) const -> idx_t;
+
+	//! Records the arguments of a call with constant arguments, as the function binder placed them for `signature`
+	DUCKDB_API void SetCallArguments(const FunctionSignature &signature, const vector<Value> &parameters,
+	                                 const named_argument_map_t &named_parameters);
 
 protected:
 	DUCKDB_API auto GetArgumentParameterKind(const FunctionSignature &signature, idx_t argument_index) const
