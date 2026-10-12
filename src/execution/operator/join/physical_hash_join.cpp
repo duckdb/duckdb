@@ -333,6 +333,8 @@ struct LayoutGate {
 	vector<uint8_t> dict_index_width;
 };
 
+static idx_t GetBuildSpaceRequirement(ClientContext &context, const JoinHashTable &ht, idx_t num_threads);
+
 class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op_p, ClientContext &context_p)
@@ -341,6 +343,12 @@ public:
 	      initial_radix_bits(num_threads < 100 ? 4 : 5), finalized(false), active_local_states(0), total_size(0),
 	      max_partition_size(0), max_partition_count(0), probe_side_requirement(0), scanned_data(false) {
 		hash_table = op.InitializeHashTable(context, initial_radix_bits);
+		// Reserve the initial partition buffers before upstream hash tables are finalized.
+		auto minimum_reservation = MinValue(temporary_memory_state->GetMinimumReservation(),
+		                                    GetBuildSpaceRequirement(context, *hash_table, num_threads));
+		temporary_memory_state->SetMinimumReservation(minimum_reservation);
+		temporary_memory_state->SetRemainingSize(minimum_reservation);
+		temporary_memory_state->UpdateReservation(context);
 
 		// For perfect hash join
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
@@ -897,6 +905,11 @@ static idx_t GetPartitioningSpaceRequirement(ClientContext &context, const vecto
 	auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 
 	return num_threads * num_partitions * size_per_partition;
+}
+
+static idx_t GetBuildSpaceRequirement(ClientContext &context, const JoinHashTable &ht, idx_t num_threads) {
+	auto layout = BuildJoinLayout(ht.condition_types, ht.build_types, ht.join_type, {});
+	return GetPartitioningSpaceRequirement(context, layout->GetTypes(), ht.GetRadixBits(), num_threads);
 }
 
 void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &global_state) const {
