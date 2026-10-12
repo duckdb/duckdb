@@ -42,11 +42,14 @@ public:
 	}
 
 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) override {
-		return LocalFileSystem::OpenFile(MapPath(path), flags, opener);
+		// the backing file is local, so a direct read of a remote file becomes a plain one
+		FileOpenFlags local_flags(flags.GetFlagsInternal() & ~FileOpenFlags::FILE_FLAGS_DIRECT_IO, flags.Lock(),
+		                          flags.Compression());
+		return LocalFileSystem::OpenFile(MapPath(path), local_flags, opener);
 	}
 
 	timestamp_t GetLastModifiedTime(FileHandle &handle) override {
-		throw NotImplementedException("%s: GetLastModifiedTime is not implemented!", GetName());
+		return FileSystem::GetLastModifiedTime(handle);
 	}
 
 	//! The local getters go through Stats, so they read the local metadata directly
@@ -62,7 +65,6 @@ public:
 		return LocalFileSystem::Stats(handle).version_tag;
 	}
 
-	//! The generic implementations, as used by file systems that do not override them
 	FileMetadata Stats(FileHandle &handle) override {
 		return FileSystem::Stats(handle);
 	}
@@ -95,7 +97,7 @@ TEST_CASE("read_blob returns NULL as the modification time of a file system that
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
 
-	result = con.Query(StringUtil::Format("SELECT filename, last_modified IS NULL FROM read_blob('%s')", file));
-	REQUIRE(CHECK_COLUMN(result, 0, {file}));
+	result = con.Query(StringUtil::Format("SELECT content, last_modified IS NULL FROM read_blob('%s')", file));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("hello\n")}));
 	REQUIRE(CHECK_COLUMN(result, 1, {true}));
 }
