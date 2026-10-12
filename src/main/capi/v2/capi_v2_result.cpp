@@ -50,9 +50,14 @@ void ReadChangedRows(const ArrowArrayWrapper &unit, idx_t &rows_changed) {
 // ResultWrapperV2 state machine
 // ---------------------------------------------------------------------------
 
-void ResultWrapperV2::BeginPending(unique_ptr<QueryResult> next_handle, bool is_principal) {
+void ResultWrapperV2::BeginPending(unique_ptr<QueryResult> next_handle, bool is_principal, StatementType written_type) {
 	next_handle->ThrowIfError();
 	principal_active = is_principal;
+	stream_when_ready = StreamsByDefault(written_type, next_handle->GetStatementProperties());
+	if (!stream_when_ready) {
+		// Settled before the caller steps it, so every step stays one bounded unit of work
+		next_handle->Materialize();
+	}
 	if (is_principal) {
 		types = next_handle->GetTypes();
 		names = next_handle->GetNames();
@@ -80,6 +85,7 @@ void ResultWrapperV2::StartNextFragment() {
 	}
 	idx_t this_index = fragment_index;
 	auto stmt = std::move(fragments[fragment_index++]);
+	auto written_type = stmt->type;
 	bool is_last = fragment_index == fragments.size();
 	// Parameters bind only to the first fragment (statement_execute rejects them on
 	// a statement that expands, so that fragment is the user's statement). Later
@@ -106,7 +112,7 @@ void ResultWrapperV2::StartNextFragment() {
 	if (has_result) {
 		principal_seen = true;
 	}
-	BeginPending(std::move(next_handle), is_principal);
+	BeginPending(std::move(next_handle), is_principal, written_type);
 }
 
 void ResultWrapperV2::RequireMetadata() const {
@@ -178,9 +184,7 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::Step(unique_ptr<typename FORMAT::T
 			// transition keeps the contract simple: one unit of work per
 			// step; the next step hits the stream.
 			try {
-				if (handle->GetStatementProperties().result_eagerness == ResultEagerness::FORCED) {
-					// The statement completes before its result is returned:
-					// its chunks come from the retained handle instead.
+				if (!stream_when_ready) {
 					handle->Complete();
 					if (handle->HasError()) {
 						return HandleExecutionError(handle->GetErrorObject());
@@ -224,9 +228,7 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::Step(unique_ptr<typename FORMAT::T
 				break;
 			}
 		}
-		// Fetch the next unit. For a statement that completes before its
-		// result is returned the data is fully available and every step
-		// lands here directly.
+		// A retained statement has all its data, so every step lands here directly
 		unique_ptr<typename FORMAT::T> unit;
 		try {
 			unit =
@@ -415,7 +417,7 @@ auto ExecutePreparedStatementV2(const shared_ptr<ClientContext> &context, Prepar
 	// machinery and is always principal. fragment_count is 1 for metadata symmetry only.
 	wrapper->fragment_count = 1;
 	// The engine refuses the submission while another statement on the connection is running
-	wrapper->BeginPending(prepared.Submit(values, QueryParameters(wrapper->format)), true);
+	wrapper->BeginPending(prepared.Submit(values, QueryParameters(wrapper->format)), true, prepared.GetStatementType());
 	// The engine runs a prepared statement through an internal EXECUTE, whose statement type
 	// would otherwise be what the result reports. Report the type of the statement that was
 	// prepared instead, so a prepared result is indistinguishable from a stateless one.

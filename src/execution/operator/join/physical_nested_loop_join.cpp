@@ -134,6 +134,7 @@ bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions
 	if (join_type == JoinType::MARK) {
 		return true;
 	}
+	idx_t comparison_count = 0;
 	for (auto &cond : conditions) {
 		if (!cond.IsComparison()) {
 			continue;
@@ -143,18 +144,17 @@ bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions
 		    cond.GetLHS().GetReturnType().InternalType() == PhysicalType::ARRAY) {
 			return false;
 		}
+		comparison_count++;
+	}
+	if (comparison_count == 0) {
+		// the other conditions are only evaluated on the pairs that match a comparison
+		return false;
 	}
 
 	// To avoid situations like https://github.com/duckdb/duckdb/issues/10046
 	// If there is an equality in the conditions, a hash join is planned
 	// with one condition, we can use mark join logic, otherwise we should use physical blockwise nl join
 	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
-		idx_t comparison_count = 0;
-		for (auto &cond : conditions) {
-			if (cond.IsComparison()) {
-				comparison_count++;
-			}
-		}
 		return comparison_count == 1;
 	}
 	return true;

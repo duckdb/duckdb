@@ -62,6 +62,7 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	result->sample = std::move(sample);
 	result->query_location = query_location;
 	result->query_location.length = query_location_length;
+	result->VerifyDeserialized();
 	return result;
 }
 

@@ -75,6 +75,8 @@ blacklist = [
     "ParquetGroupKind",
     "VariantBasicType",
     "VariantPrimitiveType",
+    # ClientContext::Retention, nested and private to the client context
+    "Retention",
 ]
 
 enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")

@@ -2168,6 +2168,24 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_copy(duckdb_v2_factory_handle 
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_destroy(duckdb_v2_data_chunk_handle *chunk);
 
 /*!
+ * Empties a data chunk so it can be filled again.
+ *
+ * The chunk's size becomes 0, and each of its vectors becomes a writable FLAT vector of its type again, as on creation,
+ * so a chunk can be reused for one batch after another instead of being created for each. Data, views and pointers
+ * taken from the chunk or its vectors beforehand do not survive this. Must not be called on a chunk DuckDB lends to a
+ * callback for reading.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param chunk The chunk to clear.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_clear(duckdb_v2_data_chunk_handle chunk,
+                                                        duckdb_v2_error_info_handle *err);
+
+/*!
  * Returns the row count of a data chunk.
  *
  * history:
@@ -2637,6 +2655,16 @@ typedef struct _duckdb_v2_file {
 
 /* --- Function pointer typedefs for file system --- */
 
+/*!
+ * Receives one path matched by `duckdb_v2_file_system_path_glob()`.
+ *
+ * The view is borrowed for the duration of the call only, and is not guaranteed to be null-terminated. Report an error
+ * through `err`, a live slot that must not be destroyed, to stop the glob: `duckdb_v2_file_system_path_glob()` then
+ * fails with that error. The callback must not throw or unwind across the boundary.
+ */
+typedef void (*duckdb_v2_file_system_path_glob_callback_fn)(const duckdb_v2_str *path, void *user_data,
+                                                            duckdb_v2_error_info_handle *err);
+
 /* --- Functions for file system --- */
 
 /*!
@@ -2879,6 +2907,72 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_path_is_remote(duckdb_v2_file
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_path_expand(duckdb_v2_file_system_handle file_system,
                                                                const duckdb_v2_str *path, duckdb_v2_text_sink_fn sink,
                                                                void *user_data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Finds the files matching a glob pattern, e.g. `*.csv` or `data_?.json` in a directory, handing each matched path to
+ * `callback`.
+ *
+ * The pattern is routed the way `duckdb_v2_file_system_open()` routes a path, so globbing a remote path may reach out
+ * to the file system handling it, and is only supported where that file system supports it. A pattern without glob
+ * characters matches the file it names, if there is one. Matching nothing is not an error. In which order the paths are
+ * handed over is up to the file system.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param file_system The file system to glob in.
+ * @param pattern The glob pattern. Borrowed for the call only.
+ * @param callback Invoked once per matched path.
+ * @param user_data Opaque pointer passed through to `callback` untouched. May be NULL.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_path_glob(duckdb_v2_file_system_handle file_system,
+                                                             const duckdb_v2_str *pattern,
+                                                             duckdb_v2_file_system_path_glob_callback_fn callback,
+                                                             void *user_data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Moves, or renames, a file from one path to another.
+ *
+ * The move is handled by the file system `source` routes to, the way `duckdb_v2_file_system_open()` routes a path;
+ * moving a file between two file systems is not supported. Whether an existing file at `target` is replaced, and
+ * whether the move is atomic, is up to that file system.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param file_system The file system to move the file in.
+ * @param source The path of the file to move. Borrowed for the call only.
+ * @param target The path to move the file to. Borrowed for the call only.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_path_move(duckdb_v2_file_system_handle file_system,
+                                                             const duckdb_v2_str *source, const duckdb_v2_str *target,
+                                                             duckdb_v2_error_info_handle *err);
+
+/*!
+ * Removes the file at a path, if there is one.
+ *
+ * The path is routed the way `duckdb_v2_file_system_open()` routes it. A path with no file is not an error:
+ * `out_removed` then receives false. A file that exists but cannot be removed is.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param file_system The file system to remove the file from.
+ * @param path The path of the file to remove. Borrowed for the call only.
+ * @param out_removed Optional. Receives whether a file was removed.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_path_remove(duckdb_v2_file_system_handle file_system,
+                                                               const duckdb_v2_str *path, bool *out_removed,
+                                                               duckdb_v2_error_info_handle *err);
 
 /*!
  * Reads from the file into a caller-supplied buffer.
@@ -5622,6 +5716,27 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_function_create(duckdb_v2_factory_ha
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_function_set_name(duckdb_v2_copy_function_handle function,
                                                               const duckdb_v2_identifier_t *name,
                                                               duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the file extension of the files the copy function writes, without the leading dot, e.g. `parquet`.
+ *
+ * DuckDB uses it when it names files itself, e.g. the files of `COPY ... TO 'dir' (PARTITION_BY ...)` or
+ * `(PER_THREAD_OUTPUT)`. A statement can override it with the `FILE_EXTENSION` option. An extension starting with a dot
+ * is rejected. The extension is borrowed and copied. Calling this again replaces the previous extension. Optional, but
+ * without it the names DuckDB gives files end in a bare dot, e.g. `data_0.`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the file extension of.
+ * @param extension The extension to set, without the leading dot. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_function_set_file_extension(duckdb_v2_copy_function_handle function,
+                                                                        const duckdb_v2_str *extension,
+                                                                        duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets arbitrary user data on the copy function.
@@ -9946,6 +10061,45 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_bind(duckdb_v2_connection_handl
                                                       duckdb_v2_error_info_handle *err);
 
 /*!
+ * Binds a column data collection to the statement under a name.
+ *
+ * Makes the collection visible to the statement as a table named `name`, by adding a common table expression to the
+ * parsed statement. The statement can then be bound, prepared or executed as usual; each execution reads the
+ * collection's contents at that moment, so a prepared statement can be executed again after the collection was cleared
+ * and refilled. Supported statement types are SELECT, INSERT, UPDATE, DELETE and MERGE INTO; any other type is rejected
+ * with `ERROR_INPUT_INVALID`.
+ *
+ * A name the statement already defines as a common table expression, in its SQL text or by a prior call, is rejected
+ * with `ERROR_INPUT_INVALID`. The binding shadows any catalog table named `name`, as a common table expression does.
+ *
+ * By default the collection's columns are named col1..colN. Pass `column_names` to name them instead; when supplied,
+ * `column_count` must equal the collection's column count. Pass NULL and 0 for the default names.
+ *
+ * The collection is borrowed: the caller keeps ownership and must keep it alive, and must not clear, reset or destroy
+ * it, for as long as the statement, any statement copied or prepared from it, or any result executing it is live. An
+ * empty collection is a valid binding. Several collections can be bound under distinct names.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param statement The statement to bind the collection to. Modified in place.
+ * @param name The non-empty name the statement refers to the collection by. Borrowed and copied.
+ * @param collection The collection to bind. Borrowed; the caller keeps ownership and must keep it alive.
+ * @param column_names Optional. An array of `column_count` names for the collection's columns, in order. Pass NULL for
+ * col1..colN.
+ * @param column_count The number of names in `column_names`. 0 for the default names; otherwise the collection's column
+ * count.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_add_collection(duckdb_v2_sql_statement_handle statement,
+                                                                const duckdb_v2_identifier_t *name,
+                                                                duckdb_v2_column_data_collection_handle collection,
+                                                                const duckdb_v2_identifier_t *column_names,
+                                                                idx_t column_count, duckdb_v2_error_info_handle *err);
+
+/*!
  * Returns the statement's type as classified by the parser.
  *
  * This gives the type before the statement-level rewrites that `duckdb_v2_statement_execute()` applies, if any. So a
@@ -10130,7 +10284,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_get_vector_type(duckdb_v2_vector_h
  * - stable: v2.0.0
  *
  * @param vector The vector.
- * @param out_type Receives the caller-owned logical type handle.
+ * @param out_type Receives the caller-owned logical type handle. Destroy via logical_type_destroy.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
@@ -10300,8 +10454,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_flatten(duckdb_v2_vector_handle ve
  * and views taken from it beforehand do not survive the call, and nothing it held before carries over. In
  * CAST_MODE_NORMAL a row that does not convert fails the call with the engine's conversion error, and the contents of
  * `target` are unspecified. In CAST_MODE_TRY such rows are NULL in `target` instead and the call succeeds; compare the
- * validity of `source` and `target` to find them, and cast a failing row's value with `duckdb_v2_value_cast()` for its
- * error message.
+ * validity of `source` and `target` to find them. `cast_err` then receives the conversion error of one of them, e.g. to
+ * report why the cast did not convert every row.
  *
  * A connection's or callback's factory casts with that client's cast functions and settings (e.g. TimeZone). An
  * instance's factory supports only the built-in casts, with default settings. `source` and `target` must be different
@@ -10316,12 +10470,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_flatten(duckdb_v2_vector_handle ve
  * @param mode Whether a row that does not convert fails the call, or becomes NULL.
  * @param out_converted Optional. Receives whether every row converted. Always true when a CAST_MODE_NORMAL cast
  * succeeds.
+ * @param cast_err Optional. When a CAST_MODE_TRY cast succeeds without converting every row, receives an opaque info
+ * handle with the conversion error of one row that did not convert, which the caller must destroy via
+ * error_info_destroy. Otherwise receives NULL.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_cast(duckdb_v2_factory_handle factory, duckdb_v2_vector_handle source,
                                                    duckdb_v2_vector_handle target, DUCKDB_V2_CAST_MODE mode,
-                                                   bool *out_converted, duckdb_v2_error_info_handle *err);
+                                                   bool *out_converted, duckdb_v2_error_info_handle *cast_err,
+                                                   duckdb_v2_error_info_handle *err);
 
 /*!
  * Repoints a vector at another vector's data, without copying.
