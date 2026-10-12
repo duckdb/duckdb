@@ -8,6 +8,7 @@ add_library_unity(
   autocomplete_core.cpp
   keyword_map.cpp
   matcher.cpp
+  matcher_first_set.cpp
   operator_matcher.cpp
   dialect_extension.cpp
   matcher_process.cpp

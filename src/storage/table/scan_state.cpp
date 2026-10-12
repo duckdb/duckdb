@@ -190,6 +190,16 @@ void ColumnScanState::Next(idx_t count) {
 	}
 }
 
+void ColumnScanState::ReleasePins() {
+	current = nullptr;
+	initialized = false;
+	scan_state.reset();
+	previous_states.clear();
+	for (auto &child_state : child_states) {
+		child_state.ReleasePins();
+	}
+}
+
 const vector<StorageIndex> &CollectionScanState::GetColumnIds() {
 	return parent.GetColumnIds();
 }
@@ -367,6 +377,20 @@ void CollectionScanState::InitializeColumnScans() {
 void TableScanState::InitializeColumnScans() {
 	table_state.InitializeColumnScans();
 	local_state.InitializeColumnScans();
+}
+
+void CollectionScanState::ReleasePins() {
+	SetRowGroup(nullptr);
+	prepared_vector.Reset();
+	column_scans_pending = false;
+	for (auto &column_scan : column_scans) {
+		column_scan.ReleasePins();
+	}
+}
+
+void TableScanState::ReleasePins() {
+	table_state.ReleasePins();
+	local_state.ReleasePins();
 }
 
 idx_t CollectionScanState::RemainingAssignmentRows() const {
