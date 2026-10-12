@@ -104,3 +104,42 @@ query I
 SELECT fdiv(3, 2.1)
 ----
 1
+
+# fmod numerical stability tests
+query R
+SELECT fmod(1e16, 3.0)
+----
+1.0
+
+query R
+SELECT fmod(-1e16, -3.0)
+----
+-1.0
+
+query R
+SELECT fmod(9007199254740993::BIGINT, 3::BIGINT)
+----
+0.0
+
+# Infinite dividends match the previous fmod expression.
+query I
+SELECT bool_and(isnan(fmod(x, y)) IS TRUE AND fmod(x, y) IS NOT DISTINCT FROM (x - y * floor(x / y)))
+FROM (VALUES ('Infinity'::DOUBLE, 3.0), ('-Infinity'::DOUBLE, 3.0)) AS t(x, y)
+----
+1
+
+# Infinite divisors match the previous fmod expression for both signs.
+query I
+SELECT bool_and(isnan(fmod(x, y)) IS TRUE AND fmod(x, y) IS NOT DISTINCT FROM (x - y * floor(x / y)))
+FROM (VALUES (5.0, 'Infinity'::DOUBLE), (-5.0, 'Infinity'::DOUBLE),
+             (5.0, '-Infinity'::DOUBLE), (-5.0, '-Infinity'::DOUBLE)) AS t(x, y)
+----
+1
+
+# NaN in either argument matches the previous fmod expression.
+query I
+SELECT bool_and(isnan(fmod(x, y)) IS TRUE AND fmod(x, y) IS NOT DISTINCT FROM (x - y * floor(x / y)))
+FROM (VALUES ('NaN'::DOUBLE, 3.0), (5.0, 'NaN'::DOUBLE)) AS t(x, y)
+----
+1
+
