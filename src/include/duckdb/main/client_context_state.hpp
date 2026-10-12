@@ -135,8 +135,8 @@ public:
 	}
 
 	//! Invokes callbacks outside the registry lock, retaining snapshot ownership throughout dispatch.
-	template <class CALLBACK>
-	void ForEachState(CALLBACK &&callback) {
+	template <class STATE_CALLBACK>
+	void ForEachState(STATE_CALLBACK &&callback) {
 		auto states = StatesSnapshot();
 		if (!states) {
 			return;
