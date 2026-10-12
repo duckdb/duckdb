@@ -1631,17 +1631,6 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		root_info.column_index = column_index;
 		root->info[vector_index] = handle.GetBufferPointer();
 	}
-	bool is_string = statistics_update_function == UpdateStringStatistics;
-	if (is_string) {
-		if (root->string_heaps.size() <= vector_index) {
-			root->string_heaps.resize(vector_index + 1);
-		}
-		if (!root->string_heaps[vector_index]) {
-			root->string_heaps[vector_index] =
-			    make_shared_ptr<UpdateStringHeap>(BufferAllocator::Get(column_data.GetDatabase()));
-		}
-	}
-
 	// make room in the root before modifying anything
 	{
 		auto root_pin = root->info[vector_index].Pin();
@@ -1653,7 +1642,7 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 	// for strings - copy the new strings into the string heap of the vector before modifying anything
 	unique_ptr<Vector> heap_strings;
 	idx_t new_size = 0;
-	if (is_string) {
+	if (statistics_update_function == UpdateStringStatistics) {
 		auto update_data = UnifiedVectorFormat::GetData<string_t>(update_format);
 		for (idx_t i = 0; i < count; i++) {
 			auto &str = update_data[update_format.sel->get_index(sel.get_index(i))];
@@ -1661,11 +1650,22 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 				new_size += str.GetSize();
 			}
 		}
-		CompactStringHeapIfNeeded(root_info, vector_index, new_size);
 	}
 	if (new_size > 0) {
+		if (root->string_heaps.size() <= vector_index) {
+			root->string_heaps.resize(vector_index + 1);
+		}
+		auto &heap_entry = root->string_heaps[vector_index];
+		if (!heap_entry) {
+			// the first block of the arena is twice its initial capacity: it fits exactly these strings
+			heap_entry =
+			    make_shared_ptr<UpdateStringHeap>(BufferAllocator::Get(column_data.GetDatabase()), (new_size + 1) / 2);
+			heap_entry->compacted_size = new_size;
+		} else {
+			CompactStringHeapIfNeeded(root_info, vector_index, new_size);
+		}
 		auto update_data = UnifiedVectorFormat::GetData<string_t>(update_format);
-		auto &string_heap = *root->string_heaps[vector_index];
+		auto &string_heap = *heap_entry;
 		heap_strings = make_uniq<Vector>(update_p.GetType(), input_count);
 		auto heap_data = FlatVector::GetDataMutable<string_t>(*heap_strings);
 		for (idx_t i = 0; i < count; i++) {

@@ -109,7 +109,7 @@ struct UpdateStringHeap {
 	ArenaAllocator allocator;
 	//! The total size of the strings added to the heap
 	idx_t size = 0;
-	//! The size of the strings in the heap after it was last compacted
+	//! The size of the strings in the heap when it was created, or last compacted
 	idx_t compacted_size = 0;
 
 public:
