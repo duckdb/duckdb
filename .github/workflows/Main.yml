@@ -68,6 +68,7 @@ jobs:
       linux_release_matrix: ${{ steps.config.outputs.linux_release_matrix }}
       linux_musl_matrix: ${{ steps.config.outputs.linux_musl_matrix }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
+      extension_opt_in_archs: ${{ steps.config.outputs.extension_opt_in_archs }}
       changed_tests_files: ${{ steps.changed.outputs.tests_all_changed_files }}
       changed_slow_tests_files: ${{ steps.changed.outputs.tests_slow_all_changed_files }}
       run_slow_tests: ${{ steps.config.outputs.run_slow_tests }}
@@ -191,13 +192,10 @@ jobs:
             --runners '${{ steps.runners.outputs.runners }}' \
             --runner-provider '${{ steps.runners.outputs.runner_provider }}'
 
-          # clang-cl Windows extension builds are not yet stable, skip them on pull requests
-          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+          if [[ "${{ github.event_name }}" != "pull_request" || "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
             extra_exclude_archs=
-          elif [[ "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
-            extra_exclude_archs=windows_amd64
           else
-            extra_exclude_archs=windows_amd64\;wasm_eh
+            extra_exclude_archs=wasm_eh
           fi
 
           echo "extra_exclude_archs=$extra_exclude_archs" >> "$GITHUB_OUTPUT"
@@ -429,22 +427,22 @@ jobs:
         core:
           config: duckdb/.github/config/core.cmake
           extra_toolchains: unixodbc;parser_tools
-          opt_in_archs: '${{ github.event_name == 'workflow_dispatch' && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'windows_arm64;linux_arm64_musl') || '' }}'
+          opt_in_archs: '${{ needs.prepare.outputs.extension_opt_in_archs }}'
           toolchain: main
         cloud:
           config: duckdb/.github/config/cloud.cmake
           extra_toolchains: unixodbc;parser_tools
-          opt_in_archs: '${{ github.event_name == 'workflow_dispatch' && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'windows_arm64;linux_arm64_musl') || '' }}'
+          opt_in_archs: '${{ needs.prepare.outputs.extension_opt_in_archs }}'
           toolchain: main
         search:
           config: duckdb/.github/config/search.cmake
           extra_toolchains: unixodbc;parser_tools
-          opt_in_archs: '${{ github.event_name == 'workflow_dispatch' && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'windows_arm64;linux_arm64_musl') || '' }}'
+          opt_in_archs: '${{ needs.prepare.outputs.extension_opt_in_archs }}'
           toolchain: main
         scanner:
           config: duckdb/.github/config/scanner.cmake
           extra_toolchains: unixodbc;parser_tools
-          opt_in_archs: '${{ github.event_name == 'workflow_dispatch' && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'windows_arm64;linux_arm64_musl') || '' }}'
+          opt_in_archs: '${{ needs.prepare.outputs.extension_opt_in_archs }}'
           toolchain: main
         rust:
           config: duckdb/.github/config/rust_based_extensions.cmake
