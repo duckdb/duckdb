@@ -2459,7 +2459,7 @@ void HashJoinGlobalSourceState::PrepareScanHT(HashJoinGlobalSinkState &sink) {
 bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJoinLocalSourceState &lstate) {
 	D_ASSERT(lstate.TaskFinished());
 
-	annotated_lock_guard<annotated_mutex> guard(lock);
+	annotated_unique_lock<annotated_mutex> guard(lock);
 	switch (global_stage.load()) {
 	case HashJoinSourceStage::BUILD:
 		if (build_chunk_idx != build_chunk_count) {
@@ -2476,7 +2476,10 @@ bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJo
 			lstate.empty_ht_probe_in_progress = false;
 			return true;
 		}
-		break;
+		guard.unlock();
+		// Only touch local handles after unlocking: another thread may replace the consumer.
+		lstate.probe_local_scan.current_chunk_state.handles.clear();
+		return false;
 	case HashJoinSourceStage::SCAN_HT:
 		if (full_outer_chunk_idx != full_outer_chunk_count) {
 			lstate.local_stage = global_stage;
