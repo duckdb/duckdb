@@ -276,7 +276,16 @@ static bool ReadSingleParquetFileClaimBatch(ClientContext &context, TableFunctio
 	auto &lstate = input.local_state->Cast<ReadSingleParquetFileLocalState>();
 	// our caller hands out the row groups, so we must not claim the next one ourselves
 	lstate.claimed_externally = true;
-	return ClaimNextRowGroup(context, gstate, lstate);
+	// our caller holds the lock of its scan here - the claimed row group is prepared in the prepare_batch callback
+	lock_guard<mutex> guard(gstate.lock);
+	return gstate.reader->TryInitializeScan(context, gstate.state, lstate.state);
+}
+
+static void ReadSingleParquetFilePrepareBatch(ClientContext &context, TableFunctionInput &input) {
+	auto &gstate = input.global_state->Cast<ReadSingleParquetFileGlobalState>();
+	auto &lstate = input.local_state->Cast<ReadSingleParquetFileLocalState>();
+	gstate.reader->PrepareScan(context, gstate.state, lstate.state);
+	lstate.has_row_group = true;
 }
 
 //! Pre-open the handle the scan reads the file through, so that claiming a row group does not have to open the file
@@ -532,6 +541,7 @@ TableFunctionMultiFileSettings ParquetScanFunction::GetMultiFileSettings() {
 	settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "parquet");
 	settings.reader_type = "Parquet";
 	settings.claim_batch = ReadSingleParquetFileClaimBatch;
+	settings.prepare_batch = ReadSingleParquetFilePrepareBatch;
 	settings.finish_batch = ReadSingleParquetFileFinishBatch;
 	settings.supports_read_ahead = ReadSingleParquetFileSupportsReadAhead;
 	settings.schedule_io = ReadSingleParquetFileScheduleIO;
