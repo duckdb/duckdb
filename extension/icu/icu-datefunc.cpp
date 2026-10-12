@@ -117,7 +117,13 @@ timestamp_tz_t ICUDateFunc::GetTimeUnsafe(Calendar *calendar, uint64_t micros) {
 	if (calendar->HasFailed()) {
 		throw InternalException("Unable to get calendar time.");
 	}
-	return timestamp_tz_t(millis * Interval::MICROS_PER_MSEC + int64_t(micros));
+	// The time is a whole number of milliseconds, so converting it back to microseconds can overflow.
+	int64_t result;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(millis, Interval::MICROS_PER_MSEC, result) ||
+	    !TryAddOperator::Operation<int64_t, int64_t, int64_t>(result, int64_t(micros), result)) {
+		throw OutOfRangeException("Unable to get calendar time: timestamp out of range");
+	}
+	return timestamp_tz_t(result);
 }
 
 bool ICUDateFunc::TryGetTime(Calendar *calendar, uint64_t micros, timestamp_tz_t &result) {

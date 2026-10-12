@@ -1820,11 +1820,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	}
 
 	// not all segments have stayed the same - we need to make a new segment tree with the new set of segments
+	// initialize new empty stats - before locking the new segment tree, as this takes the stats lock
+	global_stats.InitializeEmpty(stats);
+
 	auto new_row_groups = make_shared_ptr<RowGroupSegmentTree>(*this, row_groups->GetBaseRowId());
 	auto l = new_row_groups->Lock();
-
-	// initialize new empty stats
-	global_stats.InitializeEmpty(stats);
 
 	idx_t new_total_rows = 0;
 	idx_t new_next_row_id = 0;
