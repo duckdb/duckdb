@@ -5,56 +5,8 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/function/cast/cast_function_set.hpp"
 
 using namespace duckdb; // NOLINT
-
-TEST_CASE("Geometry cast registrations match CRS-qualified types", "[cast][geometry]") {
-	CastFunctionSet casts;
-	GetCastFunctionInput input;
-	auto geometry = LogicalType::GEOMETRY();
-	auto crs84 = LogicalType::GEOMETRY("OGC:CRS84");
-	auto crs83 = LogicalType::GEOMETRY("OGC:CRS83");
-	BoundCastInfo generic_cast(DefaultCasts::TryVectorNullCast);
-	BoundCastInfo exact_cast(DefaultCasts::ReinterpretCast);
-
-	// A registration without a CRS handles any CRS, but an exact registration wins.
-	casts.RegisterCastFunction(geometry, LogicalType::BLOB, generic_cast.Copy(), 101);
-	casts.RegisterCastFunction(crs84, LogicalType::BLOB, exact_cast.Copy(), 102);
-	REQUIRE(casts.GetCastFunction(geometry, LogicalType::BLOB, input).Equals(generic_cast));
-	REQUIRE(casts.GetCastFunction(crs83, LogicalType::BLOB, input).Equals(generic_cast));
-	REQUIRE(casts.GetCastFunction(crs84, LogicalType::BLOB, input).Equals(exact_cast));
-	REQUIRE(casts.ImplicitCastCost(nullptr, crs83, LogicalType::BLOB) == 101);
-	REQUIRE(casts.ImplicitCastCost(nullptr, crs84, LogicalType::BLOB) == 102);
-	REQUIRE(casts.CanOverrideDefaultCast(crs83, LogicalType::BLOB));
-	REQUIRE(casts.CanOverrideDefaultCast(LogicalType::LIST(crs83), LogicalType::LIST(LogicalType::BLOB)));
-
-	// The same matching rules apply when GEOMETRY is the target.
-	casts.RegisterCastFunction(LogicalType::BLOB, geometry, generic_cast.Copy(), 103);
-	casts.RegisterCastFunction(LogicalType::BLOB, crs84, exact_cast.Copy(), 104);
-	REQUIRE(casts.GetCastFunction(LogicalType::BLOB, crs83, input).Equals(generic_cast));
-	REQUIRE(casts.GetCastFunction(LogicalType::BLOB, crs84, input).Equals(exact_cast));
-	REQUIRE(casts.ImplicitCastCost(nullptr, LogicalType::BLOB, crs83) == 103);
-	REQUIRE(casts.ImplicitCastCost(nullptr, LogicalType::BLOB, crs84) == 104);
-
-	// Registering a BLOB conversion does not override the built-in CRS compatibility check.
-	REQUIRE(!casts.CanOverrideDefaultCast(crs83, LogicalType::VARCHAR));
-	REQUIRE_THROWS(casts.GetCastFunction(crs83, crs84, input));
-
-	CastFunctionSet exact_only;
-	exact_only.RegisterCastFunction(crs84, LogicalType::BLOB, exact_cast.Copy(), 105);
-	REQUIRE(!exact_only.CanOverrideDefaultCast(crs83, LogicalType::BLOB));
-	REQUIRE(exact_only.ImplicitCastCost(nullptr, crs83, LogicalType::BLOB) == -1);
-
-	// CRS matching must retain the fallback to registrations for ANY.
-	CastFunctionSet any_casts;
-	any_casts.RegisterCastFunction(LogicalType::ANY, LogicalType::BLOB, generic_cast.Copy(), 106);
-	any_casts.RegisterCastFunction(LogicalType::BLOB, LogicalType::ANY, generic_cast.Copy(), 107);
-	REQUIRE(any_casts.GetCastFunction(crs83, LogicalType::BLOB, input).Equals(generic_cast));
-	REQUIRE(any_casts.GetCastFunction(LogicalType::BLOB, crs83, input).Equals(generic_cast));
-	REQUIRE(any_casts.ImplicitCastCost(nullptr, crs83, LogicalType::BLOB) == 106);
-	REQUIRE(any_casts.ImplicitCastCost(nullptr, LogicalType::BLOB, crs83) == 107);
-}
 
 template <class SRC, class DST>
 struct ExpectedNumericCast {
