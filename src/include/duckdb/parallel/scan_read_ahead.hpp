@@ -216,6 +216,7 @@ private:
 	void SignalProgress(bool wake_all);
 	//! SignalProgress for a caller that holds the lock
 	void NotifyProgress(bool wake_all);
+	//! Wake one waiting thread, or all of them
 	void WakeWaiters(bool wake_all);
 	//! Wait until the read-ahead made progress since the given epoch, or the timeout passed
 	void WaitForProgress(ClientContext &context, idx_t epoch);
