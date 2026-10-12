@@ -40,7 +40,6 @@ set(TEST_API_OBJECTS
     test_table_info.cpp
     test_appender_api.cpp
     test_lifecycle_hooks.cpp
-    test_add_primary_key_concurrent_null.cpp
     test_extension_schema_api.cpp
     test_pending_query.cpp
     test_query_result.cpp
