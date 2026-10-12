@@ -12,17 +12,17 @@ INSERT INTO dml_target VALUES (1,'p'),(2,'q'),(3,'r');
 query TT
 EXPLAIN (SQL) INSERT INTO dml_target(a) VALUES (10);
 ----
-sql	<REGEX>:(?s)INSERT\s+INTO\s+memory\.main\.dml_target\(a,\s+b\)\s+SELECT\s+r0\.c0\s+AS\s+c0,\s+CAST\('x'\s+AS\s+VARCHAR\)\s+AS\s+c1\s+FROM\s+\(\s+VALUES\s+\(CAST\(10\s+AS\s+INTEGER\)\)\s+\)\s+AS\s+r0\(c0\)
+sql	<REGEX>:(?s)INSERT\s+INTO\s+\w+\.main\.dml_target\(\s*a,\s*\s+b\s*\)\s+SELECT\s+r\d+\.c0\s+AS\s+c0,\s*\s+CAST\(\s*'x'\s+AS\s+VARCHAR\s*\)\s+AS\s+c1\s+FROM\s+\(\s*\s+VALUES\s+\(\s*CAST\(\s*10\s+AS\s+INTEGER\s*\)\s*\)\s+\s*\)\s+AS\s+r\d+\(\s*c0\s*\)
 
 query TT
 EXPLAIN (SQL) UPDATE dml_target SET b = 'z' WHERE a = 2;
 ----
-sql	<REGEX>:(?s)UPDATE\s+memory\.main\.dml_target\s+SET\s+b\s+=\s+r2\.c0\s+FROM\s+\(\s+SELECT\s+CAST\('z'\s+AS\s+VARCHAR\)\s+AS\s+c0,\s+r0\.rowid\s+AS\s+c1\s+FROM\s+memory\.main\.dml_target\s+AS\s+r0\(column0,\s+column1\)\s+WHERE\s+\(r0\.column0\s+=\s+CAST\(2\s+AS\s+INTEGER\)\)\s+\)\s+AS\s+r2\(c0,\s+c1\)\s+WHERE\s+\(dml_target\.rowid\s+=\s+r2\.c1\)
+sql	<REGEX>:(?s)UPDATE\s+\w+\.main\.dml_target\s+SET\s+b\s+=\s+r\d+\.c0\s+FROM\s+\(\s*\s+SELECT\s+CAST\(\s*'z'\s+AS\s+VARCHAR\s*\)\s+AS\s+c0,\s*\s+r\d+\.rowid\s+AS\s+c1\s+FROM\s+\w+\.main\.dml_target\s+AS\s+r\d+\(\s*column0,\s*\s+column1\s*\)\s+WHERE\s+\(\s*r\d+\.column0\s+=\s+CAST\(\s*2\s+AS\s+INTEGER\s*\)\s*\)\s+\s*\)\s+AS\s+r\d+\(\s*c0,\s*\s+c1\s*\)\s+WHERE\s+\(\s*dml_target\.rowid\s+=\s+r\d+\.c1\s*\)
 
 query TT
 EXPLAIN (SQL) DELETE FROM dml_target WHERE a = 3;
 ----
-sql	<REGEX>:(?s)DELETE\s+FROM\s+memory\.main\.dml_target\s+WHERE\s+\(rowid\s+=\s+ANY\s+\(\s+SELECT\s+r0\.rowid\s+AS\s+c1\s+FROM\s+memory\.main\.dml_target\s+AS\s+r0\(column0,\s+column1\)\s+WHERE\s+\(r0\.column0\s+=\s+CAST\(3\s+AS\s+INTEGER\)\)\s+\)\)
+sql	<REGEX>:(?s)DELETE\s+FROM\s+\w+\.main\.dml_target\s+WHERE\s+\(\s*rowid\s+=\s+ANY\s+\(\s*\s+SELECT\s+r\d+\.rowid\s+AS\s+c1\s+FROM\s+\w+\.main\.dml_target\s+AS\s+r\d+\(\s*column0,\s*\s+column1\s*\)\s+WHERE\s+\(\s*r\d+\.column0\s+=\s+CAST\(\s*3\s+AS\s+INTEGER\s*\)\s*\)\s+\s*\)\s*\)
 
 # explaining does not execute the statement
 query II
@@ -32,27 +32,27 @@ SELECT count(*), sum(a) FROM dml_target;
 
 # the generated statements execute with the original statements' effects
 statement ok
-INSERT INTO memory.main.dml_target(a, b)
+INSERT INTO main.dml_target(a, b)
 SELECT r0.c0 AS c0, CAST('x' AS VARCHAR) AS c1
 FROM (
         VALUES (CAST(10 AS INTEGER))
     ) AS r0(c0)
 
 statement ok
-UPDATE memory.main.dml_target
+UPDATE main.dml_target
 SET b = r2.c0
 FROM (
         SELECT CAST('z' AS VARCHAR) AS c0, r0.rowid AS c1
-        FROM memory.main.dml_target AS r0(column0, column1)
+        FROM main.dml_target AS r0(column0, column1)
         WHERE (r0.column0 = CAST(2 AS INTEGER))
     ) AS r2(c0, c1)
 WHERE (dml_target.rowid = r2.c1)
 
 statement ok
-DELETE FROM memory.main.dml_target
+DELETE FROM main.dml_target
 WHERE (rowid = ANY (
                 SELECT r0.rowid AS c1
-                FROM memory.main.dml_target AS r0(column0, column1)
+                FROM main.dml_target AS r0(column0, column1)
                 WHERE (r0.column0 = CAST(3 AS INTEGER))
             ))
 
@@ -67,10 +67,10 @@ SELECT a, b FROM dml_target;
 query TT
 EXPLAIN (SQL) INSERT INTO dml_target(a) VALUES (20) RETURNING a + 1 AS next_a, b;
 ----
-sql	<REGEX>:(?s)INSERT\s+INTO\s+memory\.main\.dml_target\(a,\s+b\)\s+SELECT\s+r0\.c0\s+AS\s+c0,\s+CAST\('x'\s+AS\s+VARCHAR\)\s+AS\s+c1\s+FROM\s+\(\s+VALUES\s+\(CAST\(20\s+AS\s+INTEGER\)\)\s+\)\s+AS\s+r0\(c0\)\s+RETURNING\s+"system"\.main\."\+"\(a,\s+CAST\(1\s+AS\s+INTEGER\)\)\s+AS\s+next_a,\s+b\s+AS\s+b
+sql	<REGEX>:(?s)INSERT\s+INTO\s+\w+\.main\.dml_target\(\s*a,\s*\s+b\s*\)\s+SELECT\s+r\d+\.c0\s+AS\s+c0,\s*\s+CAST\(\s*'x'\s+AS\s+VARCHAR\s*\)\s+AS\s+c1\s+FROM\s+\(\s*\s+VALUES\s+\(\s*CAST\(\s*20\s+AS\s+INTEGER\s*\)\s*\)\s+\s*\)\s+AS\s+r\d+\(\s*c0\s*\)\s+RETURNING\s+"system"\.main\."\+"\(\s*a,\s*\s+CAST\(\s*1\s+AS\s+INTEGER\s*\)\s*\)\s+AS\s+next_a,\s*\s+b\s+AS\s+b
 
 query IT
-INSERT INTO memory.main.dml_target(a, b)
+INSERT INTO main.dml_target(a, b)
 SELECT r0.c0 AS c0, CAST('x' AS VARCHAR) AS c1
 FROM (
         VALUES (CAST(20 AS INTEGER))
@@ -83,13 +83,13 @@ RETURNING "system".main."+"(a, CAST(1 AS INTEGER)) AS next_a, b AS b
 query TT
 EXPLAIN (SQL) DELETE FROM dml_target WHERE a = 20 RETURNING *, rowid >= 0 AS has_row;
 ----
-sql	<REGEX>:(?s)DELETE\s+FROM\s+memory\.main\.dml_target\s+WHERE\s+\(rowid\s+=\s+ANY\s+\(\s+SELECT\s+r0\.rowid\s+AS\s+c1\s+FROM\s+memory\.main\.dml_target\s+AS\s+r0\(column0,\s+column1\)\s+WHERE\s+\(r0\.column0\s+=\s+CAST\(20\s+AS\s+INTEGER\)\)\s+\)\)\s+RETURNING\s+a\s+AS\s+a,\s+b\s+AS\s+b,\s+\(rowid\s+>=\s+CAST\(0\s+AS\s+BIGINT\)\)\s+AS\s+has_row
+sql	<REGEX>:(?s)DELETE\s+FROM\s+\w+\.main\.dml_target\s+WHERE\s+\(\s*rowid\s+=\s+ANY\s+\(\s*\s+SELECT\s+r\d+\.rowid\s+AS\s+c1\s+FROM\s+\w+\.main\.dml_target\s+AS\s+r\d+\(\s*column0,\s*\s+column1\s*\)\s+WHERE\s+\(\s*r\d+\.column0\s+=\s+CAST\(\s*20\s+AS\s+INTEGER\s*\)\s*\)\s+\s*\)\s*\)\s+RETURNING\s+a\s+AS\s+a,\s*\s+b\s+AS\s+b,\s*\s+\(\s*rowid\s+>=\s+CAST\(\s*0\s+AS\s+BIGINT\s*\)\s*\)\s+AS\s+has_row
 
 query ITT
-DELETE FROM memory.main.dml_target
+DELETE FROM main.dml_target
 WHERE (rowid = ANY (
                 SELECT r0.rowid AS c1
-                FROM memory.main.dml_target AS r0(column0, column1)
+                FROM main.dml_target AS r0(column0, column1)
                 WHERE (r0.column0 = CAST(20 AS INTEGER))
             ))
 RETURNING a AS a, b AS b, (rowid >= CAST(0 AS BIGINT)) AS has_row
@@ -111,22 +111,22 @@ INSERT INTO dml_source VALUES (10,'aa'),(11,'bb');
 query TT
 EXPLAIN (SQL) UPDATE dml_target SET b = s.b FROM dml_source s WHERE dml_target.a = s.a;
 ----
-sql	<REGEX>:(?s)UPDATE\s*memory\.main\.dml_target\s*SET\s*b\s*=\s*.*\s*FROM\s*.*JOIN.*\s*WHERE\s*\(dml_target\.rowid\s*=\s*.*\)
+sql	<REGEX>:(?s)UPDATE\s*\w+\.main\.dml_target\s*SET\s*b\s*=\s*.*\s*FROM\s*.*JOIN.*\s*WHERE\s*\(\s*dml_target\.rowid\s*=\s*.*\s*\)
 
 query TT
 EXPLAIN (SQL) DELETE FROM dml_target USING dml_source u WHERE dml_target.a = u.a;
 ----
-sql	<REGEX>:(?s)DELETE\s*FROM\s*memory\.main\.dml_target\s*WHERE\s*\(rowid\s*=\s*ANY\s*\(.*JOIN.*\)\)
+sql	<REGEX>:(?s)DELETE\s*FROM\s*\w+\.main\.dml_target\s*WHERE\s*\(\s*rowid\s*=\s*ANY\s*\(\s*.*JOIN.*\s*\)\s*\)
 
 query TT
 EXPLAIN (SQL) DELETE FROM dml_target WHERE a = (SELECT min(a) FROM dml_target);
 ----
-sql	<REGEX>:(?s)DELETE\s*FROM\s*memory\.main\.dml_target\s*WHERE\s*\(rowid\s*=\s*ANY\s*\(.*\)\)
+sql	<REGEX>:(?s)DELETE\s*FROM\s*\w+\.main\.dml_target\s*WHERE\s*\(\s*rowid\s*=\s*ANY\s*\(\s*.*\s*\)\s*\)
 
 query TT
 EXPLAIN (SQL) UPDATE dml_target SET a = (SELECT count(*) FROM dml_source) WHERE b = 'z';
 ----
-sql	<REGEX>:(?s)UPDATE\s*memory\.main\.dml_target\s*SET\s*a\s*=\s*.*
+sql	<REGEX>:(?s)UPDATE\s*\w+\.main\.dml_target\s*SET\s*a\s*=\s*.*
 
 # a table with generated columns inserts through its physical columns only
 statement ok
@@ -135,12 +135,12 @@ CREATE TABLE dml_generated(a INTEGER, d AS (a * 2), b TEXT DEFAULT 'z');
 query TT
 EXPLAIN (SQL) INSERT INTO dml_generated(a) VALUES (5);
 ----
-sql	<REGEX>:(?s)INSERT\s*INTO\s*memory\.main\.dml_generated\s*\(a,\s*b\)\s*SELECT\s*.*
+sql	<REGEX>:(?s)INSERT\s*INTO\s*\w+\.main\.dml_generated\s*\(\s*a,\s*\s*b\s*\)\s*SELECT\s*.*
 
 query TT
 EXPLAIN (SQL) INSERT INTO dml_generated(a) VALUES (5) RETURNING d;
 ----
-sql	<REGEX>:(?s)INSERT\s*INTO\s*memory\.main\.dml_generated\s*\(a,\s*b\)\s*SELECT\s*.*\s*RETURNING\s*.*\s*AS\s*d
+sql	<REGEX>:(?s)INSERT\s*INTO\s*\w+\.main\.dml_generated\s*\(\s*a,\s*\s*b\s*\)\s*SELECT\s*.*\s*RETURNING\s*.*\s*AS\s*d
 
 # MERGE INTO exports with the matched rows keyed by the target's row id
 statement ok
@@ -158,13 +158,13 @@ INSERT INTO dml_merge_source VALUES (2,'B'),(3,'C');
 query TT
 EXPLAIN (SQL) MERGE INTO dml_merge_target USING dml_merge_source ON dml_merge_target.k = dml_merge_source.k WHEN MATCHED THEN UPDATE SET v = dml_merge_source.v WHEN NOT MATCHED THEN INSERT VALUES (dml_merge_source.k, dml_merge_source.v);
 ----
-sql	<REGEX>:(?s)MERGE\s+INTO\s+memory\.main\.dml_merge_target\s+USING\s+\(\s+SELECT\s+r2\.column0\s+AS\s+c0,\s+r2\.column1\s+AS\s+c1,\s+r2\.column1\s+AS\s+c2,\s+r0\.rowid\s+AS\s+c3\s+FROM\s+\(memory\.main\.dml_merge_target\s+AS\s+r0\(column0,\s+column1\)\s+RIGHT\s+JOIN\s+memory\.main\.dml_merge_source\s+AS\s+r2\(\s+column0,\s+column1\)\s+ON\s+\(\(r0\.column0\s+=\s+r2\.column0\)\)\s+\)\s+\)\s+AS\s+r5\(c0,\s+c1,\s+c2,\s+c3\)\s+ON\s+\(dml_merge_target\.rowid\s+=\s+r5\.c3\)\s+WHEN\s+MATCHED\s+THEN\s+UPDATE\s+SET\s+v\s+=\s+r5\.c2\s+WHEN\s+NOT\s+MATCHED\s+THEN\s+INSERT\s+\(k,\s+v\)\s+VALUES\s+\(r5\.c0,\s+r5\.c1\)
+sql	<REGEX>:(?s)MERGE\s+INTO\s+\w+\.main\.dml_merge_target\s+USING\s+\(\s*\s+SELECT\s+r\d+\.column0\s+AS\s+c0,\s*\s+r\d+\.column1\s+AS\s+c1,\s*\s+r\d+\.column1\s+AS\s+c2,\s*\s+r\d+\.rowid\s+AS\s+c3\s+FROM\s+\(\s*\w+\.main\.dml_merge_target\s+AS\s+r\d+\(\s*column0,\s*\s+column1\s*\)\s+RIGHT\s+JOIN\s+\w+\.main\.dml_merge_source\s+AS\s+r\d+\(\s*\s+column0,\s*\s+column1\s*\)\s+ON\s+\(\s*\(\s*r\d+\.column0\s+=\s+r\d+\.column0\s*\)\s*\)\s+\s*\)\s+\s*\)\s+AS\s+r\d+\(\s*c0,\s*\s+c1,\s*\s+c2,\s*\s+c3\s*\)\s+ON\s+\(\s*dml_merge_target\.rowid\s+=\s+r\d+\.c3\s*\)\s+WHEN\s+MATCHED\s+THEN\s+UPDATE\s+SET\s+v\s+=\s+r\d+\.c2\s+WHEN\s+NOT\s+MATCHED\s+THEN\s+INSERT\s+\(\s*k,\s*\s+v\s*\)\s+VALUES\s+\(\s*r\d+\.c0,\s*\s+r\d+\.c1\s*\)
 
 statement ok
-MERGE INTO memory.main.dml_merge_target USING (
+MERGE INTO main.dml_merge_target USING (
         SELECT r2.column0 AS c0, r2.column1 AS c1, r2.column1 AS c2, r0.rowid AS c3
-        FROM (memory.main.dml_merge_target AS r0(column0, column1)
-                RIGHT JOIN memory.main.dml_merge_source AS r2(
+        FROM (main.dml_merge_target AS r0(column0, column1)
+                RIGHT JOIN main.dml_merge_source AS r2(
                     column0,
                     column1) ON ((r0.column0 = r2.column0))
             )
@@ -185,17 +185,17 @@ SELECT * FROM dml_merge_target;
 query TT
 EXPLAIN (SQL) MERGE INTO dml_merge_target USING dml_merge_source ON dml_merge_target.k = dml_merge_source.k WHEN MATCHED THEN DELETE RETURNING merge_action, k;
 ----
-sql	<REGEX>:(?s)MERGE\s+INTO\s+memory\.main\.dml_merge_target\s+USING\s+\(\s+SELECT\s+r2\.column0\s+AS\s+c0,\s+r1\.c1\s+AS\s+c1,\s+r1\.c2\s+AS\s+c2\s+FROM\s+\(\(\s+SELECT\s+r0\.column0\s+AS\s+c0,\s+r0\.column1\s+AS\s+c1,\s+r0\.rowid\s+AS\s+c2\s+FROM\s+memory\.main\.dml_merge_target\s+AS\s+r0\(column0,\s+column1\)\s+WHERE\s+\(r0\.column0\s+>=\s+CAST\(2\s+AS\s+INTEGER\)\)\s+\)\s+AS\s+r1\(c0,\s+c1,\s+c2\)\s+INNER\s+JOIN\s+memory\.main\.dml_merge_source\s+AS\s+r2\(\s+column0,\s+column1\)\s+ON\s+\(\(r1\.c0\s+=\s+r2\.column0\)\)\s+\)\s+\)\s+AS\s+r5\(c0,\s+c1,\s+c2\)\s+ON\s+\(dml_merge_target\.rowid\s+=\s+r5\.c2\)\s+WHEN\s+MATCHED\s+THEN\s+DELETE\s+RETURNING\s+merge_action\s+AS\s+merge_action,\s+k\s+AS\s+k
+sql	<REGEX>:(?s)MERGE\s+INTO\s+\w+\.main\.dml_merge_target\s+USING\s+\(\s*\s+SELECT\s+r\d+\.column0\s+AS\s+c0,\s*\s+r\d+\.c1\s+AS\s+c1,\s*\s+r\d+\.c2\s+AS\s+c2\s+FROM\s+\(\s*\(\s*\s+SELECT\s+r\d+\.column0\s+AS\s+c0,\s*\s+r\d+\.column1\s+AS\s+c1,\s*\s+r\d+\.rowid\s+AS\s+c2\s+FROM\s+\w+\.main\.dml_merge_target\s+AS\s+r\d+\(\s*column0,\s*\s+column1\s*\)\s+WHERE\s+\(\s*r\d+\.column0\s+>=\s+CAST\(\s*2\s+AS\s+INTEGER\s*\)\s*\)\s+\s*\)\s+AS\s+r\d+\(\s*c0,\s*\s+c1,\s*\s+c2\s*\)\s+INNER\s+JOIN\s+\w+\.main\.dml_merge_source\s+AS\s+r\d+\(\s*\s+column0,\s*\s+column1\s*\)\s+ON\s+\(\s*\(\s*r\d+\.c0\s+=\s+r\d+\.column0\s*\)\s*\)\s+\s*\)\s+\s*\)\s+AS\s+r\d+\(\s*c0,\s*\s+c1,\s*\s+c2\s*\)\s+ON\s+\(\s*dml_merge_target\.rowid\s+=\s+r\d+\.c2\s*\)\s+WHEN\s+MATCHED\s+THEN\s+DELETE\s+RETURNING\s+merge_action\s+AS\s+merge_action,\s*\s+k\s+AS\s+k
 
 query TI rowsort
-MERGE INTO memory.main.dml_merge_target USING (
+MERGE INTO main.dml_merge_target USING (
         SELECT r2.column0 AS c0, r1.c1 AS c1, r1.c2 AS c2
         FROM ((
                         SELECT r0.column0 AS c0, r0.column1 AS c1, r0.rowid AS c2
-                        FROM memory.main.dml_merge_target AS r0(column0, column1)
+                        FROM main.dml_merge_target AS r0(column0, column1)
                         WHERE (r0.column0 >= CAST(2 AS INTEGER))
                     ) AS r1(c0, c1, c2)
-                INNER JOIN memory.main.dml_merge_source AS r2(
+                INNER JOIN main.dml_merge_source AS r2(
                     column0,
                     column1) ON ((r1.c0 = r2.column0))
             )
@@ -222,12 +222,12 @@ INSERT INTO dml_keyed VALUES (1,'p'),(2,'q');
 query TT
 EXPLAIN (SQL) INSERT INTO dml_keyed VALUES (2,'x'),(9,'y') ON CONFLICT DO UPDATE SET b = excluded.b;
 ----
-sql	<REGEX>:(?s)MERGE\s*INTO\s*memory\.main\.dml_keyed\s*USING\s*.*\s*WHEN\s*MATCHED\s*THEN\s*UPDATE\s*SET\s*b\s*=\s*.*\s*WHEN\s*NOT\s*MATCHED\s*THEN\s*INSERT\s*\(a,\s*b\)\s*VALUES\s*.*
+sql	<REGEX>:(?s)MERGE\s*INTO\s*\w+\.main\.dml_keyed\s*USING\s*.*\s*WHEN\s*MATCHED\s*THEN\s*UPDATE\s*SET\s*b\s*=\s*.*\s*WHEN\s*NOT\s*MATCHED\s*THEN\s*INSERT\s*\(\s*a,\s*\s*b\s*\)\s*VALUES\s*.*
 
 query TT
 EXPLAIN (SQL) INSERT OR REPLACE INTO dml_keyed VALUES (1,'z');
 ----
-sql	<REGEX>:(?s)MERGE\s*INTO\s*memory\.main\.dml_keyed\s*USING\s*.*\s*WHEN\s*MATCHED\s*THEN\s*UPDATE\s*.*\s*WHEN\s*NOT\s*MATCHED\s*THEN\s*INSERT\s*.*
+sql	<REGEX>:(?s)MERGE\s*INTO\s*\w+\.main\.dml_keyed\s*USING\s*.*\s*WHEN\s*MATCHED\s*THEN\s*UPDATE\s*.*\s*WHEN\s*NOT\s*MATCHED\s*THEN\s*INSERT\s*.*
 
 # the EXPLAINed statements did not execute
 query IT rowsort
@@ -254,7 +254,7 @@ The modified table does not expose a single named row-id column
 query TT
 EXPLAIN (SQL) INSERT INTO dml_shadowed VALUES (1, 'a');
 ----
-sql	<REGEX>:(?s)INSERT\s*INTO\s*memory\.main\.dml_shadowed\s*\(rowid,\s*v\)\s*SELECT\s*.*
+sql	<REGEX>:(?s)INSERT\s*INTO\s*\w+\.main\.dml_shadowed\s*\(\s*rowid,\s*\s*v\s*\)\s*SELECT\s*.*
 
 # a data-modifying CTE exports as a materialized CTE whose body is the statement
 statement ok
@@ -266,14 +266,14 @@ INSERT INTO dml_cte_target VALUES (1),(2),(3);
 query TT
 EXPLAIN (SQL) WITH d AS (DELETE FROM dml_cte_target WHERE a < 3 RETURNING a) SELECT sum(a) AS deleted_sum FROM d;
 ----
-sql	<REGEX>:(?s)WITH\s+d\(c0\)\s+AS\s+MATERIALIZED\s+\(\s+DELETE\s+FROM\s+memory\.main\.dml_cte_target\s+WHERE\s+\(rowid\s+=\s+ANY\s+\(\s+SELECT\s+r0\.rowid\s+AS\s+c1\s+FROM\s+memory\.main\.dml_cte_target\s+AS\s+r0\(column0\)\s+WHERE\s+\(r0\.column0\s+<\s+CAST\(3\s+AS\s+INTEGER\)\)\s+\)\)\s+RETURNING\s+a\s+AS\s+a\s+\)\s+SELECT\s+r6\.c0\s+AS\s+deleted_sum\s+FROM\s+\(\s+SELECT\s+"system"\.main\.sum\(r3\.c0\)\s+AS\s+c0\s+FROM\s+d\s+AS\s+r3\(c0\)\s+\)\s+AS\s+r6\(c0\)
+sql	<REGEX>:(?s)WITH\s+d\(\s*c0\s*\)\s+AS\s+MATERIALIZED\s+\(\s*\s+DELETE\s+FROM\s+\w+\.main\.dml_cte_target\s+WHERE\s+\(\s*rowid\s+=\s+ANY\s+\(\s*\s+SELECT\s+r\d+\.rowid\s+AS\s+c1\s+FROM\s+\w+\.main\.dml_cte_target\s+AS\s+r\d+\(\s*column0\s*\)\s+WHERE\s+\(\s*r\d+\.column0\s+<\s+CAST\(\s*3\s+AS\s+INTEGER\s*\)\s*\)\s+\s*\)\s*\)\s+RETURNING\s+a\s+AS\s+a\s+\s*\)\s+SELECT\s+.*deleted_sum.*
 
 query I
 WITH d(c0) AS MATERIALIZED (
-        DELETE FROM memory.main.dml_cte_target
+        DELETE FROM main.dml_cte_target
         WHERE (rowid = ANY (
                         SELECT r0.rowid AS c1
-                        FROM memory.main.dml_cte_target AS r0(column0)
+                        FROM main.dml_cte_target AS r0(column0)
                         WHERE (r0.column0 < CAST(3 AS INTEGER))
                     ))
         RETURNING a AS a
@@ -290,18 +290,18 @@ FROM (
 query TT
 EXPLAIN (SQL) WITH x AS MATERIALIZED (SELECT 3 AS v) DELETE FROM dml_cte_target WHERE a IN (SELECT v FROM x);
 ----
-sql	<REGEX>:(?s)WITH\s+x\(c0\)\s+AS\s+MATERIALIZED\s+\(\s+SELECT\s+CAST\(3\s+AS\s+INTEGER\)\s+AS\s+c0\s+\)\s+DELETE\s+FROM\s+memory\.main\.dml_cte_target\s+WHERE\s+\(rowid\s+=\s+ANY\s+\(\s+SELECT\s+r3\.c1\s+AS\s+c1\s+FROM\s+\(\(\s+SELECT\s+r2\.column0\s+AS\s+c0,\s+r2\.rowid\s+AS\s+c1\s+FROM\s+memory\.main\.dml_cte_target\s+AS\s+r2\(column0\)\s+WHERE\s+\(r2\.column0\s+>=\s+CAST\(3\s+AS\s+INTEGER\)\)\s+\)\s+AS\s+r3\(c0,\s+c1\)\s+SEMI\s+JOIN\s+x\s+AS\s+r4\(c0\)\s+ON\s+\(\(r3\.c0\s+=\s+r4\.c0\)\)\s+\)\s+\)\)
+sql	<REGEX>:(?s)WITH\s+x\(\s*c0\s*\)\s+AS\s+MATERIALIZED\s+\(\s*\s+SELECT\s+CAST\(\s*3\s+AS\s+INTEGER\s*\)\s+AS\s+c0\s+\s*\)\s+DELETE\s+FROM\s+\w+\.main\.dml_cte_target\s+WHERE\s+\(\s*rowid\s+=\s+ANY\s+\(\s*\s+SELECT\s+r\d+\.c1\s+AS\s+c1\s+FROM\s+\(\s*\(\s*\s+SELECT\s+r\d+\.column0\s+AS\s+c0,\s*\s+r\d+\.rowid\s+AS\s+c1\s+FROM\s+\w+\.main\.dml_cte_target\s+AS\s+r\d+\(\s*column0\s*\)\s+WHERE\s+\(\s*r\d+\.column0\s+>=\s+CAST\(\s*3\s+AS\s+INTEGER\s*\)\s*\)\s+\s*\)\s+AS\s+r\d+\(\s*c0,\s*\s+c1\s*\)\s+SEMI\s+JOIN\s+x\s+AS\s+r\d+\(\s*c0\s*\)\s+ON\s+\(\s*\(\s*r\d+\.c0\s+=\s+r\d+\.c0\s*\)\s*\)\s+\s*\)\s+\s*\)\s*\)
 
 statement ok
 WITH x(c0) AS MATERIALIZED (
         SELECT CAST(3 AS INTEGER) AS c0
     )
-DELETE FROM memory.main.dml_cte_target
+DELETE FROM main.dml_cte_target
 WHERE (rowid = ANY (
                 SELECT r3.c1 AS c1
                 FROM ((
                                 SELECT r2.column0 AS c0, r2.rowid AS c1
-                                FROM memory.main.dml_cte_target AS r2(column0)
+                                FROM main.dml_cte_target AS r2(column0)
                                 WHERE (r2.column0 >= CAST(3 AS INTEGER))
                             ) AS r3(c0, c1) SEMI
                         JOIN x AS r4(c0) ON ((r3.c0 = r4.c0))
