@@ -56,7 +56,7 @@ SELECT * FROM range(x INT := 3);
 cannot have a type
 
 statement ok
-CREATE MACRO m(a INT := 1) AS a + 1;
+CREATE TEMP MACRO m(a INT := 1) AS a + 1;
 
 query II
 SELECT m(), m(a := 5);
