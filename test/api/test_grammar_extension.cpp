@@ -1517,7 +1517,7 @@ TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extensi
 	REQUIRE_NOTHROW(parser.ParseQuery("ANSWER"));
 	REQUIRE(parser.statements.size() == 1);
 
-	// Without the shell extension, a bare ANSWER is not a statement.
+	// Without the extension, a bare ANSWER is not a statement.
 	auto base_parser = Parser::GetBuiltinParser();
 	REQUIRE_THROWS(base_parser.ParseQuery("ANSWER"));
 }
