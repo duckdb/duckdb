@@ -944,7 +944,10 @@ static bool MappedCastIsInvertible(const MultiFileIndexMapping &mapping, const L
 	if (!source_type.IsNested()) {
 		return true;
 	}
-	if (source_type.id() != target_type.id()) {
+	// the reader only maps the children of STRUCT, LIST and MAP one by one
+	auto type_id = source_type.id();
+	if (type_id != target_type.id() ||
+	    (type_id != LogicalTypeId::STRUCT && type_id != LogicalTypeId::LIST && type_id != LogicalTypeId::MAP)) {
 		return false;
 	}
 	auto source_children = LogicalType::GetNamedChildTypes(source_type);
