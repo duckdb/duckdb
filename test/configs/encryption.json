@@ -145,6 +145,12 @@
       "paths": [
         "test/sql/alter/alter_schema_set_schema_options.test"
       ]
+    },
+    {
+      "reason": "Persisting loses the sign of zero for FLOAT/DOUBLE, unrelated bug, see issue #25580",
+      "paths": [
+        "test/sql/order/order_by_negative_zero.test"
+      ]
     }
   ]
 }
