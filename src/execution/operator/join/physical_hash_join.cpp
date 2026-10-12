@@ -336,13 +336,14 @@ struct LayoutGate {
 	mutex publish_mutex;
 	atomic<bool> published {false};
 	shared_ptr<TupleDataLayout> layout_ptr;
-	//! Per build column: slot width, owned dictionary (+ NULL slot) and upstream dictionary id; shared by all threads
-	DictSurvivingInfo dict_info;
+	//! Per narrowed build column: slot width, owned dictionary (+ NULL slot) and upstream dictionary id; shared by all
+	//! threads, nullptr when no column is narrowed
+	shared_ptr<const DictSurvivingInfo> dict_info;
 
 	void Reset() {
 		published.store(false, std::memory_order_release);
 		layout_ptr.reset();
-		dict_info = DictSurvivingInfo();
+		dict_info.reset();
 	}
 };
 
@@ -421,8 +422,10 @@ public:
 			}
 			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
 		}
-		// Keep the published layout (and the dictionaries its narrowed slots index into) across CTE iterations
-		// (same upstream operator, same arrival types). ResetForNewIterationSinglePartition cleared the row data.
+		// The next iteration's first chunk publishes the layout afresh: the rerun build may deliver a different
+		// dictionary (or none), so neither a narrowed slot nor the dictionary it indexes into can be carried over.
+		// ResetForNewIterationSinglePartition returned the global JHT to the unpublished state accordingly.
+		layout_gate.Reset();
 		GlobalSinkState::Reset(context);
 	}
 
@@ -539,9 +542,10 @@ public:
 		join_keys.Reset();
 		payload_chunk.Reset();
 		if (hash_table && append_state_initialised) {
-			// the layout survives the iteration; only the row data is dropped
+			// Drop the row data and the layout: the next iteration's first chunk republishes it, and Sink then
+			// reruns the lazy per-thread setup (FinishInitWithLayout + InitializeAppendState) against it.
 			hash_table->ResetForNewIterationSinglePartition();
-			hash_table->GetSinkCollection().ResetAppendState(append_state);
+			append_state_initialised = false;
 		} else {
 			// HT was moved into gstate during Combine, or never had a layout published. Rebuild against the global
 			// radix_bits so partition counts stay consistent in PrepareFinalize.
@@ -558,27 +562,16 @@ public:
 	}
 };
 
-//! Map a dict-index byte width to its row-store slot type (the width is decided by GetDictSurvivingIndexWidth)
-static LogicalType DictIndexType(uint8_t index_width) {
-	switch (index_width) {
-	case sizeof(uint8_t):
-		return LogicalType::UTINYINT;
-	case sizeof(uint16_t):
-		return LogicalType::USMALLINT;
-	default:
-		return LogicalType::UINTEGER;
-	}
-}
-
 //! Build the row layout [conditions, build payload, (found flag), hash], narrowing a payload column to its
-//! dict-index slot when dict_index_width[col] != 0. Shared by publisher and empty-input fallback to avoid drift.
+//! dict-index slot when dict_info narrows it. Shared by publisher and empty-input fallback to avoid drift.
 static shared_ptr<TupleDataLayout> BuildJoinLayout(const vector<LogicalType> &cond_types,
                                                    const vector<LogicalType> &build_types, JoinType join_type,
-                                                   const vector<uint8_t> &dict_index_width) {
+                                                   optional_ptr<const DictSurvivingInfo> dict_info) {
 	vector<LogicalType> layout_types(cond_types);
 	for (idx_t col = 0; col < build_types.size(); col++) {
-		if (col < dict_index_width.size() && dict_index_width[col] != 0) {
-			layout_types.emplace_back(DictIndexType(dict_index_width[col]));
+		auto dict_column = dict_info ? dict_info->Get(col) : nullptr;
+		if (dict_column) {
+			layout_types.emplace_back(DictSurvivingInfo::IndexType(dict_column->index_width));
 		} else {
 			layout_types.emplace_back(build_types[col]);
 		}
@@ -630,15 +623,7 @@ static bool CanUseDictSurvivingJoin(const PhysicalHashJoin &op, const JoinHashTa
 }
 
 bool HashJoinGlobalSinkState::DictSurvivingActive() const {
-	if (!hash_table) {
-		return false;
-	}
-	for (const auto &entry : hash_table->dict_registry) {
-		if (entry) {
-			return true;
-		}
-	}
-	return false;
+	return hash_table && hash_table->HasDictSurvivingColumns();
 }
 
 void HashJoinGlobalSinkState::PublishLayoutIfFirst(HashJoinLocalSinkState &lstate, DataChunk &payload_chunk) {
@@ -652,31 +637,28 @@ void HashJoinGlobalSinkState::PublishLayoutIfFirst(HashJoinLocalSinkState &lstat
 
 	const auto &cond_types = lstate.hash_table->condition_types;
 	const auto &build_types = lstate.hash_table->build_types;
-	auto &dict_info = layout_gate.dict_info;
-	dict_info.index_width.assign(build_types.size(), 0);
-	dict_info.entries.assign(build_types.size(), nullptr);
-	dict_info.upstream_ids.assign(build_types.size(), string());
 
+	shared_ptr<const DictSurvivingInfo> dict_info;
 	if (CanUseDictSurvivingJoin(op, *lstate.hash_table, can_use_perfect_hash, build_side_multi_source)) {
 		// Per-column width decision lives on the JHT (GetDictSurvivingIndexWidth); feed it each arriving vector.
 		// The dictionary a narrowed slot indexes into is created here, once, and handed to every thread with the
 		// layout: a later chunk may carry no dictionary at all (NULL-only), so no thread can pin it lazily.
-		for (idx_t col = 0; col < build_types.size(); col++) {
-			if (col >= payload_chunk.ColumnCount()) {
-				continue;
-			}
+		DictSurvivingInfo info;
+		info.columns.resize(build_types.size());
+		for (idx_t col = 0; col < MinValue(build_types.size(), payload_chunk.ColumnCount()); col++) {
 			auto &incoming = payload_chunk.data[col];
 			const auto index_width = lstate.hash_table->GetDictSurvivingIndexWidth(col, incoming);
-			if (index_width == 0) {
-				continue;
+			if (index_width != 0) {
+				info.columns[col] = JoinHashTable::CreateDictSurvivingColumn(incoming, index_width);
 			}
-			dict_info.index_width[col] = index_width;
-			dict_info.entries[col] = JoinHashTable::CreateDictSurvivingEntry(incoming);
-			dict_info.upstream_ids[col] = DictionaryVector::DictionaryId(incoming);
+		}
+		if (info.Any()) {
+			dict_info = make_shared_ptr<DictSurvivingInfo>(std::move(info));
 		}
 	}
+	layout_gate.dict_info = dict_info;
 
-	auto layout = BuildJoinLayout(cond_types, build_types, lstate.hash_table->join_type, dict_info.index_width);
+	auto layout = BuildJoinLayout(cond_types, build_types, lstate.hash_table->join_type, dict_info.get());
 	layout_gate.layout_ptr = layout;
 
 	// global HT receives the same layout so Merge/Combine and finalize-time scans operate against it
@@ -943,10 +925,9 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 		if (!gstate.layout_gate.published.load(std::memory_order_relaxed)) {
 			const auto &cond_types = gstate.hash_table->condition_types;
 			const auto &build_types = gstate.hash_table->build_types;
-			// empty dict_info => BuildJoinLayout keeps every build column at its native width
-			gstate.layout_gate.dict_info = DictSurvivingInfo();
-			auto layout = BuildJoinLayout(cond_types, build_types, gstate.hash_table->join_type,
-			                              gstate.layout_gate.dict_info.index_width);
+			// no dict_info => BuildJoinLayout keeps every build column at its native width
+			gstate.layout_gate.dict_info.reset();
+			auto layout = BuildJoinLayout(cond_types, build_types, gstate.hash_table->join_type, nullptr);
 			gstate.layout_gate.layout_ptr = layout;
 			if (!gstate.hash_table->IsLayoutFinalized()) {
 				gstate.hash_table->FinishInitWithLayout(layout);

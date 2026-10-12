@@ -109,12 +109,13 @@ FROM dates d RIGHT JOIN (
 ----
 2500	1600	4
 
-# a 256-entry dictionary needs a 2-byte index once the NULL slot is reserved
+# a 256-entry dictionary needs a 2-byte index once the NULL slot is reserved: the unmatched returns rows are stored
+# under the reserved index 256
 statement ok
 CREATE TABLE dim256 AS SELECT i AS dk256, 'DIM_' || i AS d256_name FROM range(256) t(i)
 
 statement ok
-CREATE TABLE fact256 AS SELECT i * 1000 AS ck, i % 256 AS dk256 FROM range(4000) t(i)
+CREATE TABLE fact256 AS SELECT i * 1000 AS ck, i % 256 AS dk256 FROM range(1000) t(i)
 
 query IIII
 SELECT count(*), count(d256_name), count(DISTINCT d256_name), count(DISTINCT d_name)
@@ -124,4 +125,55 @@ FROM dates d RIGHT JOIN (
     FULL OUTER JOIN returns r ON f.ck = r.ck
 ) b ON d.dk = b.dk
 ----
-4000	4000	256	7
+2000	1000	256	7
+
+query III
+SELECT d256_name IS NULL AS unmatched_returns, d_name IS NULL AS unmatched_fact, count(*)
+FROM dates d RIGHT JOIN (
+    SELECT f.ck, n.d256_name, r.dk
+    FROM fact256 f JOIN dim256 n ON f.dk256 = n.dk256
+    FULL OUTER JOIN returns r ON f.ck = r.ck
+) b ON d.dk = b.dk
+GROUP BY ALL ORDER BY ALL
+----
+false	false	500
+false	true	500
+true	false	1000
+
+# A recursive CTE reruns the build side every iteration. The upstream join then mints a new dictionary (here with
+# different values, because of nextval), so the hash join must publish its layout and dictionary afresh.
+statement ok
+SET threads = 1
+
+statement ok
+SET enable_caching_operators = true
+
+statement ok
+CREATE TABLE nation2 AS SELECT i AS nk FROM range(2) t(i)
+
+statement ok
+CREATE TABLE customer2 AS SELECT i * 1000000 AS ck, i % 2 AS nk FROM range(3) t(i)
+
+statement ok
+CREATE SEQUENCE dict_epoch
+
+query III
+WITH RECURSIVE r(iter, k, x) AS (
+    SELECT 0, 0::BIGINT, NULL::BIGINT
+    UNION ALL
+    SELECT r.iter + 1, b.ck, b.x
+    FROM r JOIN (
+        SELECT c.ck, n.x
+        FROM customer2 c
+        JOIN (
+            SELECT nk, nextval('dict_epoch') AS x FROM nation2
+        ) n ON c.nk = n.nk
+    ) b ON r.k = b.ck
+    WHERE r.iter < 3
+)
+SELECT iter, k, x FROM r ORDER BY iter
+----
+0	0	NULL
+1	0	1
+2	0	3
+3	0	5

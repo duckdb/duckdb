@@ -65,24 +65,53 @@ private:
 
    Two-phase lifecycle: the constructor populates only layout-INDEPENDENT state; all layout-DEPENDENT state
    (layout_ptr, row matchers, tuple_size/pointer_offset/entry_size, data_collection, sink_collection, dead_end,
-   dict_registry) is published by FinishInitWithLayout on the first build chunk, so slot widths (and the dictionary
+   dict_info) is published by FinishInitWithLayout on the first build chunk, so slot widths (and the dictionary
    a narrowed slot indexes into) can be chosen from the data's actual runtime encoding. Until then the JHT is
    unusable except for the null-safe Count() / SizeInBytes() accessors; the layout-dependent accessors assert
-   IsLayoutFinalized().
+   IsLayoutFinalized(). ResetForNewIterationSinglePartition returns the JHT to the unpublished state so a recursive
+   CTE iteration publishes afresh.
 */
-//! Per-build-column state of the dict-surviving optimisation. Chosen by the layout publisher from the first build
-//! chunk and shared (read-only) by every per-thread JHT; all vectors are parallel to build_types.
-struct DictSurvivingInfo {
-	//! Byte width of the narrowed dict-index slot (0 = native, else 1/2/4)
-	vector<uint8_t> index_width;
-	//! Self-owned copy of the upstream dictionary plus one trailing NULL slot; set iff the column is narrowed
-	vector<buffer_ptr<DictionaryEntry>> entries;
-	//! Id of the upstream dictionary each narrowed column was pinned against; later chunks must carry the same id
-	vector<string> upstream_ids;
+//! One build payload column of the dict-surviving optimisation: the row store carries a narrow index into `entry`
+//! instead of the native value.
+struct DictSurvivingColumn {
+	//! Byte width of the narrowed dict-index slot (1/2/4), 0 when the column is stored at native width
+	uint8_t index_width = 0;
+	//! Self-owned copy of the upstream dictionary plus one trailing NULL slot; set iff narrowed
+	buffer_ptr<DictionaryEntry> entry;
+	//! Id of the upstream dictionary the column was narrowed against; later chunks must carry the same id
+	string upstream_id;
 
-	bool Empty() const {
-		return index_width.empty();
+	//! The reserved trailing slot that encodes a NULL-only chunk
+	idx_t NullIndex() const {
+		return entry->data.size() - 1;
 	}
+};
+
+//! Descriptor of the dict-surviving optimisation for one hash join. Chosen by the layout publisher from the first
+//! build chunk together with the layout and shared read-only by every per-thread JHT. Re-chosen whenever the layout
+//! is (e.g. per recursive CTE iteration), since a rerun build may deliver a different dictionary or none at all.
+struct DictSurvivingInfo {
+	//! One record per build payload column (parallel to build_types); index_width 0 = stored at native width
+	vector<DictSurvivingColumn> columns;
+
+	//! True iff any column is narrowed
+	bool Any() const {
+		for (const auto &column : columns) {
+			if (column.index_width != 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+	//! The record of build payload column build_col_idx, or nullptr when it is stored at native width
+	optional_ptr<const DictSurvivingColumn> Get(idx_t build_col_idx) const {
+		if (build_col_idx >= columns.size() || columns[build_col_idx].index_width == 0) {
+			return nullptr;
+		}
+		return &columns[build_col_idx];
+	}
+	//! Row-store slot type of a narrowed column of the given index width
+	static LogicalType IndexType(uint8_t index_width);
 };
 
 class JoinHashTable {
@@ -256,8 +285,10 @@ public:
 	              optional_ptr<Expression> predicate_ptr = nullptr, const vector<idx_t> &output_in_probe = {});
 	~JoinHashTable();
 
-	//! Initialize layout-dependent state from a layout shared across all per-thread JHTs (deferred ctor body)
-	void FinishInitWithLayout(shared_ptr<TupleDataLayout> published_layout, DictSurvivingInfo dict_info = {});
+	//! Initialize layout-dependent state from a layout (and dict-surviving descriptor, nullptr = no narrowed column)
+	//! shared across all per-thread JHTs (deferred ctor body)
+	void FinishInitWithLayout(shared_ptr<TupleDataLayout> published_layout,
+	                          shared_ptr<const DictSurvivingInfo> dict_info_p = nullptr);
 	//! True iff FinishInitWithLayout has populated layout-dependent state
 	bool IsLayoutFinalized() const {
 		return layout_ptr.get() != nullptr;
@@ -267,9 +298,18 @@ public:
 	//! the first build chunk. Returns the narrowed index byte width (1/2/4), or 0 to keep native width. The width
 	//! leaves room for one extra slot: the reserved NULL index that encodes NULL-only chunks.
 	uint8_t GetDictSurvivingIndexWidth(idx_t build_col_idx, const Vector &incoming) const;
-	//! Create the dictionary a narrowed column is stored against: a self-owned, global copy of the incoming
-	//! global dictionary with one trailing NULL slot (index = upstream size) and a fresh id.
-	static buffer_ptr<DictionaryEntry> CreateDictSurvivingEntry(const Vector &incoming);
+	//! Create the record of a narrowed column: a self-owned, global copy of the incoming global dictionary with one
+	//! trailing NULL slot (index = upstream size) and a fresh id, plus the width and the upstream id to check later
+	//! chunks against.
+	static DictSurvivingColumn CreateDictSurvivingColumn(const Vector &incoming, uint8_t index_width);
+	//! True iff any build payload column is stored as a narrow dictionary index
+	bool HasDictSurvivingColumns() const {
+		return dict_info && dict_info->Any();
+	}
+	//! The dict-surviving record of build payload column build_col_idx, or nullptr when it is stored natively
+	optional_ptr<const DictSurvivingColumn> GetDictSurvivingColumn(idx_t build_col_idx) const {
+		return dict_info ? dict_info->Get(build_col_idx) : nullptr;
+	}
 
 	//! Add the given data to the HT
 	void Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &input);
@@ -430,15 +470,9 @@ public:
 	bool use_dict_emission = false;
 	//! Pre-materialized columnar data, one entry per RHS output column
 	vector<buffer_ptr<DictionaryEntry>> dict_arrays;
-	//! Per build payload column: the owned dictionary (upstream values + trailing NULL slot) the row store indexes
-	//! into. Non-null means the row store carries a narrow dict index for this column instead of the native value.
-	//! Shared with every other per-thread JHT of the same join; set by FinishInitWithLayout.
-	vector<buffer_ptr<DictionaryEntry>> dict_registry;
-	//! Per build payload column: byte width of the narrowed dict-index slot (0 = native, else 1/2/4). Parallel to
-	//! build_types; set by FinishInitWithLayout.
-	vector<uint8_t> dict_index_width;
-	//! Per build payload column: id of the upstream dictionary the column was narrowed against
-	vector<string> dict_upstream_ids;
+	//! Dict-surviving descriptor shared with every other per-thread JHT of the same join; set by
+	//! FinishInitWithLayout, nullptr when no build payload column is narrowed
+	shared_ptr<const DictSurvivingInfo> dict_info;
 	//! Saved NEXT_PTR values, indexed by dict index; only allocated when chains_longer_than_one
 	AllocatedData aux_next_ptrs;
 	//! Typed pointer into aux_next_ptrs; set by BuildDictionaryArrays alongside the allocation
@@ -677,8 +711,8 @@ private:
 	//! Materialise the narrow index vector for a narrowed column: the dictionary indices of a chunk that wraps the
 	//! pinned upstream dictionary, or the reserved NULL index for a NULL-only chunk (e.g. the unmatched-build scan of
 	//! a FULL/RIGHT join upstream). Any other shape means the build pipeline is not single-source and throws.
-	void EncodeDictSurvivingColumn(idx_t build_col_idx, const Vector &incoming, idx_t count,
-	                               vector<AllocatedData> &buffers, vector<Vector> &vectors);
+	void EncodeDictSurvivingColumn(const DictSurvivingColumn &column, idx_t build_col_idx, const Vector &incoming,
+	                               idx_t count, vector<AllocatedData> &buffers, vector<Vector> &vectors);
 
 private:
 	//! The current number of radix bits used to partition
