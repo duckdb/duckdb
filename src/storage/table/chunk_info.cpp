@@ -535,12 +535,13 @@ void ChunkVectorInfo::Update(TransactionData transaction, const row_t ids[], idx
 		if (entry.writer == transaction_id || moved_rows.none()) {
 			continue;
 		}
-		// the transaction sees this writer, but others might not: it becomes the previous writer of the rows
-		entry.rows &= ~moved_rows;
+		// others might not see this writer: it becomes the previous writer of the rows, added before any row moves
+		auto &previous_rows = GetWriterRows(previous, entry.writer).rows;
 		for (auto &previous_entry : previous) {
 			previous_entry.rows &= ~moved_rows;
 		}
-		GetWriterRows(previous, entry.writer).rows |= moved_rows;
+		previous_rows |= moved_rows;
+		entry.rows &= ~moved_rows;
 	}
 	own_rows |= updated_rows;
 	RemoveWriters(last, lowest_visibility_bound);
