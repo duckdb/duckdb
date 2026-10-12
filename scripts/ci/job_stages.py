@@ -83,6 +83,7 @@ class JobSelection:
     enabled_jobs: list[str]
     save_cache: bool
     reduced_ci_mode: str
+    extension_opt_in_archs: str = ""
     optimized_release: bool = False
     runners: dict[str, str] = field(default_factory=dict)
     linux_release_matrix: list[dict[str, object]] = field(default_factory=list)
@@ -104,6 +105,14 @@ class JobSelectionInput:
 
 def should_save_cache(selection_input: JobSelectionInput) -> bool:
     return selection_input.repository != "duckdb/duckdb" or selection_input.event_name == "workflow_dispatch"
+
+
+def extension_opt_in_archs(selection_input: JobSelectionInput) -> str:
+    if selection_input.event_name == "workflow_dispatch":
+        return "windows_arm64;linux_amd64_musl;linux_arm64_musl"
+    if selection_input.event_name == "pull_request" and "extensions" in selection_input.changed_keys:
+        return "linux_arm64_musl"
+    return ""
 
 
 def enabled_jobs(selection_input: JobSelectionInput, reduced_ci_mode: str) -> list[str]:
@@ -294,6 +303,7 @@ def compute_job_selection(selection_input: JobSelectionInput) -> JobSelection:
         enabled_jobs=selected_jobs,
         save_cache=should_save_cache(selection_input),
         reduced_ci_mode=reduced_ci_mode,
+        extension_opt_in_archs=extension_opt_in_archs(selection_input),
         optimized_release=optimized_release,
         runners=runners,
         linux_release_matrix=linux_release_matrix(configured_input, optimized_release, full_extension_matrix),
@@ -306,6 +316,7 @@ def write_outputs(selection: JobSelection, out: TextIO, *, include_matrices: boo
     out.write(f"save_cache={'true' if selection.save_cache else 'false'}\n")
     out.write(f"optimized_release={'true' if selection.optimized_release else 'false'}\n")
     out.write(f"reduced_ci_mode={selection.reduced_ci_mode}\n")
+    out.write(f"extension_opt_in_archs={selection.extension_opt_in_archs}\n")
     out.write(f"runners={json.dumps(selection.runners, separators=(',', ':'))}\n")
     if include_matrices:
         out.write(f"linux_release_matrix={json.dumps(selection.linux_release_matrix, separators=(',', ':'))}\n")
