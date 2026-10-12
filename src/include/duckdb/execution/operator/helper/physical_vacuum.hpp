@@ -48,7 +48,7 @@ public:
 	                          OperatorSinkFinalizeInput &input) const override;
 
 	bool IsSink() const override {
-		return info->has_table;
+		return table && table->IsDuckTable();
 	}
 
 	bool ParallelSink() const override {
