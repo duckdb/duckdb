@@ -49,6 +49,7 @@ static void SwapJSONStructureNode(JSONStructureNode &a, JSONStructureNode &b) no
 	std::swap(a.descriptions, b.descriptions);
 	std::swap(a.count, b.count);
 	std::swap(a.null_count, b.null_count);
+	std::swap(a.case_insensitive_keys, b.case_insensitive_keys);
 }
 
 JSONStructureNode::JSONStructureNode(JSONStructureNode &&other) noexcept {
@@ -63,7 +64,7 @@ JSONStructureNode &JSONStructureNode::operator=(JSONStructureNode &&other) noexc
 JSONStructureDescription &JSONStructureNode::GetOrCreateDescription(const LogicalTypeId type) {
 	if (descriptions.empty()) {
 		// Empty, just put this type in there
-		descriptions.emplace_back(type);
+		descriptions.emplace_back(type, case_insensitive_keys);
 		return descriptions.back();
 	}
 
@@ -90,7 +91,7 @@ JSONStructureDescription &JSONStructureNode::GetOrCreateDescription(const Logica
 		}
 	}
 	// Type was not there, create a new description
-	descriptions.emplace_back(type);
+	descriptions.emplace_back(type, case_insensitive_keys);
 	return descriptions.back();
 }
 
@@ -471,7 +472,9 @@ bool JSONStructureNode::EliminateCandidateFormats(const idx_t vec_count, Vector 
 	return false;
 }
 
-JSONStructureDescription::JSONStructureDescription(const LogicalTypeId type_p) : type(type_p) {
+JSONStructureDescription::JSONStructureDescription(const LogicalTypeId type_p, const bool case_insensitive_keys)
+    : type(type_p),
+      key_map(0, JSONKeyOptionalCaseHash {case_insensitive_keys}, JSONKeyOptionalCaseEquality {case_insensitive_keys}) {
 }
 
 static void SwapJSONStructureDescription(JSONStructureDescription &a, JSONStructureDescription &b) noexcept {
@@ -496,6 +499,7 @@ JSONStructureNode &JSONStructureDescription::GetOrCreateChild() {
 	D_ASSERT(type == LogicalTypeId::LIST);
 	if (children.empty()) {
 		children.emplace_back();
+		children.back().case_insensitive_keys = key_map.hash_function().case_insensitive;
 	}
 	D_ASSERT(children.size() == 1);
 	return children.back();
@@ -509,8 +513,9 @@ JSONStructureNode &JSONStructureDescription::GetOrCreateChild(const char *key_pt
 		return children[it->second]; // Found it
 	}
 
-	// Didn't find, create a new child
+	// Didn't find, create a new child (the first spelling of a key names it when keys are case-insensitive)
 	children.emplace_back(key_ptr, key_size);
+	children.back().case_insensitive_keys = key_map.hash_function().case_insensitive;
 	const auto &persistent_key_string = *children.back().key;
 	JSONKey new_key {persistent_key_string.c_str(), persistent_key_string.length()};
 	key_map.emplace(new_key, children.size() - 1);

@@ -65,6 +65,27 @@ struct JSONKeyCaseInsensitiveEquality {
 template <typename T>
 using json_key_ci_map_t = unordered_map<JSONKey, T, JSONKeyCaseInsensitiveHash, JSONKeyCaseInsensitiveEquality>;
 
+//! JSONKeyHash / JSONKeyEquality, or their case-insensitive counterparts if case_insensitive is set: for maps that
+//! are only used while detecting the schema, where a runtime choice is cheap enough
+struct JSONKeyOptionalCaseHash {
+	bool case_insensitive = false;
+
+	inline std::size_t operator()(const JSONKey &k) const {
+		return case_insensitive ? JSONKeyCaseInsensitiveHash()(k) : JSONKeyHash()(k);
+	}
+};
+
+struct JSONKeyOptionalCaseEquality {
+	bool case_insensitive = false;
+
+	inline bool operator()(const JSONKey &a, const JSONKey &b) const {
+		return case_insensitive ? JSONKeyCaseInsensitiveEquality()(a, b) : JSONKeyEquality()(a, b);
+	}
+};
+
+template <typename T>
+using json_key_optional_case_map_t = unordered_map<JSONKey, T, JSONKeyOptionalCaseHash, JSONKeyOptionalCaseEquality>;
+
 //! The type of a single element of a JSON path
 enum class JSONPathElementType : uint8_t {
 	//! Object key ($.key)
