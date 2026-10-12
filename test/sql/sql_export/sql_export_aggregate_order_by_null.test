@@ -1,0 +1,39 @@
+# name: test/sql/sql_export/sql_export_aggregate_order_by_null.test
+# description: SQL export of aggregate ORDER BY keys that fold to an untyped NULL
+# group: [sql_export]
+
+statement ok
+CREATE TABLE t(s VARCHAR, i INT);
+
+statement ok
+INSERT INTO t VALUES ('b', 1), ('a', 2);
+
+statement ok
+SET debug_verify_statement='explain_sql_strict';
+
+query I
+SELECT list(s ORDER BY NULL || s, s) FROM t;
+----
+[a, b]
+
+query I
+SELECT string_agg(s, ',' ORDER BY NULL || s, s DESC) FROM t;
+----
+b,a
+
+query I
+SELECT list(i ORDER BY i, NULL || s) FROM t;
+----
+[1, 2]
+
+query II
+SELECT s, row_number() OVER (ORDER BY NULL || s, s) FROM t ORDER BY s;
+----
+a	1
+b	2
+
+query I
+SELECT s FROM t ORDER BY NULL || s, s;
+----
+a
+b

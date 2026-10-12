@@ -69,6 +69,10 @@ struct SQLExportHelpers {
 
 	static unique_ptr<ParsedExpression> OrderExpression(const LogicalType &type,
 	                                                    unique_ptr<ParsedExpression> expression) {
+		if (type.id() == LogicalTypeId::SQLNULL && expression->GetExpressionClass() == ExpressionClass::CONSTANT) {
+			// a bare NULL literal is rejected as an ORDER BY key
+			return make_uniq<CastExpression>(LogicalType::INTEGER, std::move(expression));
+		}
 		if (type.id() == LogicalTypeId::VARCHAR) {
 			if (type.HasAlias()) {
 				expression = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(expression));
