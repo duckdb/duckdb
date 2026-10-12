@@ -214,15 +214,13 @@ void VariantColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool 
 	}
 }
 
-uint64_t VariantColumnReader::TotalCompressedSize() {
-	uint64_t size = 0;
+void VariantColumnReader::GatherColumnChunks(unordered_set<idx_t> &column_chunks) {
 	for (auto &child : child_readers) {
 		if (!child) {
 			continue;
 		}
-		size += child->TotalCompressedSize();
+		child->GatherColumnChunks(column_chunks);
 	}
-	return size;
 }
 
 idx_t VariantColumnReader::GroupRowsAvailable() {

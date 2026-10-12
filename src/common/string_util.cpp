@@ -942,6 +942,14 @@ string StringUtil::GetFilePath(const string &file_path) {
 	return file_path.substr(0, pos + 1);
 }
 
+string StringUtil::ReplaceFileName(const string &file_path, const string &file_name) {
+	auto pos = file_path.find_last_of("/\\");
+	if (pos == string::npos) {
+		return file_name;
+	}
+	return file_path.substr(0, pos + 1) + file_name;
+}
+
 struct URLEncodeLength {
 	using RESULT_TYPE = idx_t;
 

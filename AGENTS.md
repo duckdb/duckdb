@@ -33,6 +33,10 @@ build/reldebug/test/unittest "*"
 
 It is recommended to use `make reldebug` and `build/reldebug/test/unittest` unless a good reason exists to use the debug build - the debug build is much slower than the reldebug build.
 
+### Debugging with LLDB
+
+Before using LLDB to investigate DuckDB code or a failing sqllogictest, or modifying the LLDB helpers, read [scripts/lldb/AGENTS.md](scripts/lldb/AGENTS.md). It covers SQL-aware breakpoints, smart-pointer and array printing, and stepping past wrapper checks.
+
 ### Time-Limiting Queries
 
 Use the `max_execution_time` setting (milliseconds, `0` = no limit) to abort a query that runs too long:
