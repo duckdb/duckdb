@@ -195,6 +195,9 @@ LogicalPlanSQLExportResult LogicalRecursiveCTE::ExportSQLDefinition(LogicalPlanS
 LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
 LogicalPlanSQLExportContext::ExportNamedProducer(LogicalOperator &op, const LogicalPlanVerificationPath &path,
                                                  const Identifier &name) {
+	if (FindSource(op)) {
+		return ExportChild(op, path);
+	}
 	if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		D_ASSERT(op.children.size() == 1);
 		auto fields = LogicalPlanSQLExportHelpers::CreateFields(op, path);

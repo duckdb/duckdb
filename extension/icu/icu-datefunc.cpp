@@ -160,7 +160,7 @@ bool ICUDateFunc::TryGetTimeNS(Calendar *calendar, uint64_t nanos, timestamp_tz_
 	nanos %= Interval::NANOS_PER_MICRO;
 	timestamp_t us(tstz_micros);
 	timestamp_ns_t ns;
-	if (!Timestamp::TryFromTimestampNanos(us, nanos, ns)) {
+	if (!Timestamp::TryFromTimestampNanos(us, int32_t(nanos), ns)) {
 		return false;
 	}
 	result.value = ns.value;
