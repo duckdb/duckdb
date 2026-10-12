@@ -166,12 +166,11 @@ void ColumnReader::ValidateColumnMetadata(idx_t row_group_num_rows, const Column
 	                                Reader().GetFileName().c_str());
 }
 
-uint64_t ColumnReader::TotalCompressedSize() {
+void ColumnReader::GatherColumnChunks(unordered_set<idx_t> &column_chunks) {
 	if (IsSkipped()) {
-		return 0;
+		return;
 	}
-
-	return chunk->meta_data.total_compressed_size;
+	column_chunks.insert(ColumnIndex());
 }
 
 // Note: It's not trivial to determine where all Column data is stored. Chunk->file_offset
@@ -1084,6 +1083,14 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(const ParquetReader &reader,
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		switch (schema.type_info) {
+		case ParquetExtraTypeInfo::IMPALA_TIMESTAMP:
+			return make_uniq<CallbackColumnReader<Int96, timestamp_ns_t, ImpalaTimestampToTimestampNS>>(reader, schema);
+		case ParquetExtraTypeInfo::UNIT_MS:
+			return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampMsToTimestampNs>>(reader,
+			                                                                                                 schema);
+		case ParquetExtraTypeInfo::UNIT_MICROS:
+			return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampUsToTimestampNs>>(reader,
+			                                                                                                 schema);
 		case ParquetExtraTypeInfo::UNIT_NS:
 			return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampNsToTimestampNs>>(reader,
 			                                                                                                 schema);

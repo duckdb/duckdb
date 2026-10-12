@@ -156,6 +156,8 @@ enum class CompressionValidity : uint8_t;
 
 enum class ConflictManagerMode : uint8_t;
 
+enum class ConnectionType : uint8_t;
+
 enum class ConstraintCheckMode : uint8_t;
 
 enum class ConstraintType : uint8_t;
@@ -224,6 +226,8 @@ enum class ExponentType : uint8_t;
 
 enum class ExpressionClass : uint8_t;
 
+enum class ExpressionDepthKind : uint8_t;
+
 enum class ExpressionTailType : uint8_t;
 
 enum class ExpressionType : uint8_t;
@@ -239,6 +243,8 @@ enum class ExtensionRepositoryAccess : uint8_t;
 enum class ExtensionRepositoryType : uint8_t;
 
 enum class ExtensionUpdateResultTag : uint8_t;
+
+enum class ExternalFileCacheRequestSizing : uint8_t;
 
 enum class ExternalResourceOperation : uint8_t;
 
@@ -868,6 +874,9 @@ template<>
 const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value);
 
 template<>
+const char* EnumUtil::ToChars<ConnectionType>(ConnectionType value);
+
+template<>
 const char* EnumUtil::ToChars<ConstraintCheckMode>(ConstraintCheckMode value);
 
 template<>
@@ -970,6 +979,9 @@ template<>
 const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value);
 
 template<>
+const char* EnumUtil::ToChars<ExpressionDepthKind>(ExpressionDepthKind value);
+
+template<>
 const char* EnumUtil::ToChars<ExpressionTailType>(ExpressionTailType value);
 
 template<>
@@ -992,6 +1004,9 @@ const char* EnumUtil::ToChars<ExtensionRepositoryType>(ExtensionRepositoryType v
 
 template<>
 const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value);
+
+template<>
+const char* EnumUtil::ToChars<ExternalFileCacheRequestSizing>(ExternalFileCacheRequestSizing value);
 
 template<>
 const char* EnumUtil::ToChars<ExternalResourceOperation>(ExternalResourceOperation value);
@@ -1841,6 +1856,9 @@ template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value);
 
 template<>
+ConnectionType EnumUtil::FromString<ConnectionType>(const char *value);
+
+template<>
 ConstraintCheckMode EnumUtil::FromString<ConstraintCheckMode>(const char *value);
 
 template<>
@@ -1943,6 +1961,9 @@ template<>
 ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value);
 
 template<>
+ExpressionDepthKind EnumUtil::FromString<ExpressionDepthKind>(const char *value);
+
+template<>
 ExpressionTailType EnumUtil::FromString<ExpressionTailType>(const char *value);
 
 template<>
@@ -1965,6 +1986,9 @@ ExtensionRepositoryType EnumUtil::FromString<ExtensionRepositoryType>(const char
 
 template<>
 ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value);
+
+template<>
+ExternalFileCacheRequestSizing EnumUtil::FromString<ExternalFileCacheRequestSizing>(const char *value);
 
 template<>
 ExternalResourceOperation EnumUtil::FromString<ExternalResourceOperation>(const char *value);

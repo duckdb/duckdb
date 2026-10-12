@@ -1033,6 +1033,9 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 */
 void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
 	auto &explain = statement.Cast<duckdb::ExplainStatement>();
+	if (explain.explain_type == duckdb::ExplainType::EXPLAIN_SQL) {
+		return;
+	}
 	if (explain.format != duckdb::ProfilerPrintFormat::Default()) {
 		// the user explicitly requested an output format (e.g. EXPLAIN (FORMAT json))
 		return;
@@ -3008,7 +3011,7 @@ bool ShellState::SQLIsComplete(const char *zSql) {
 			next_state = SQLParseState::WHITESPACE;
 			break;
 		}
-			//		case '`': /* Grave-accent quoted symbols used by MySQL */
+		case '`': /* backtick-quoted identifiers */
 		case '"': /* single- and double-quoted strings */
 		case '\'': {
 			int c = *zSql;

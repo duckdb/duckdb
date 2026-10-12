@@ -49,7 +49,7 @@ ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> con
 	if (!context) {
 		return;
 	}
-	checkpoint_connection = make_uniq<Connection>(db.GetDatabase());
+	checkpoint_connection = make_uniq<Connection>(Connection::CreateInternal(db.GetDatabase()));
 	checkpoint_context = checkpoint_connection->context.get();
 }
 

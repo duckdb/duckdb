@@ -375,8 +375,8 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	if (!state.stats_state) {
 		return;
 	}
-	auto null_count = MaxRepeat() == 0 ? state.null_count : state.null_count + state.parent_null_count;
-	column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(null_count);
+	// a NULL ancestor counts as a NULL of this column, the children count it once as a parent NULL
+	column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(state.null_count + state.parent_null_count);
 	column_chunk.meta_data.statistics.__isset.null_count = true;
 	column_chunk.meta_data.__isset.statistics = true;
 	if (column_chunk.meta_data.type == duckdb_parquet::Type::FLOAT ||

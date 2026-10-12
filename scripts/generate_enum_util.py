@@ -28,6 +28,7 @@ blacklist = [
     "AccountedWriteAdoption",
     "FileWritePublicationState",
     "IdleFilter",
+    "IdentifierConversionPolicy",
     "CreateDirectoryMode",
     "MatchRecognizeScope",
     "RemoveDirectoryMode",

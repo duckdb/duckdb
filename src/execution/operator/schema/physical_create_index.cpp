@@ -171,13 +171,6 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		index.initial_index_size = bound_index->GetInMemorySize();
 		index_oid = index.oid;
 	} else {
-		// Ensure that there are no other indexes with that name on this table.
-		const auto &indexes = storage.GetDataTableInfo()->GetIndexes();
-		if (indexes.Contains(info->GetIndexName())) {
-			throw CatalogException("an index with that name already exists for this table: %s",
-			                       SQLIdentifier(info->GetIndexName()));
-		}
-
 		// PRIMARY KEY columns cannot be NULL.
 		if (info->constraint_type == IndexConstraintType::PRIMARY) {
 			for (const auto &column_id : storage_ids) {
