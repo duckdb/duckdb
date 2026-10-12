@@ -186,14 +186,6 @@ public:
 		VerifyMutex(l);
 		memory_charge.Merge(std::move(reservation));
 	}
-	//! Returns true, if there is a swizzled memory pointer, else false.
-	bool IsSwizzled() const {
-		return !unswizzled;
-	}
-	//! Sets the swizzled memory pointer.
-	void SetSwizzling(const char *unswizzler) {
-		unswizzled = unswizzler;
-	}
 	//! Sets the eviction queue index.
 	void SetEvictionQueueIndex(const idx_t index) {
 		// The index can only be set once.
@@ -251,8 +243,6 @@ private:
 	atomic<idx_t> memory_usage;
 	//! The current memory reservation/usage.
 	BufferPoolReservation memory_charge;
-	//! Swizzled memory pointers.
-	const char *unswizzled;
 	//! The eviction queue index, currently only FileBufferType::MANAGED_BUFFER.
 	atomic<idx_t> eviction_queue_idx;
 };
