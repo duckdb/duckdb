@@ -549,6 +549,24 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 	return type_id;
 }
 
+ExtensionOptionInfo::~ExtensionOptionInfo() {
+}
+
+SetScope ExtensionOption::ResolveScope(const Identifier &name, SetScope scope) const {
+	if (scope == SetScope::AUTOMATIC) {
+		scope = default_scope;
+	}
+	if (scope == SetScope::GLOBAL && !supports_global) {
+		throw InvalidInputException(
+		    "Setting \"%s\" cannot be set as a global variable - it can only be set per session", name);
+	}
+	if (scope == SetScope::SESSION && !supports_session) {
+		throw InvalidInputException("Setting \"%s\" cannot be set as a session variable - it can only be set globally",
+		                            name);
+	}
+	return scope;
+}
+
 bool DBConfig::HasExtensionOption(const Identifier &name) const {
 	return user_settings.HasExtensionOption(name);
 }
@@ -560,8 +578,12 @@ bool DBConfig::TryGetExtensionOption(const Identifier &name, ExtensionOption &re
 void DBConfig::AddExtensionOption(const Identifier &name, string description, LogicalType parameter,
                                   const Value &default_value, set_option_callback_t function, SetScope default_scope,
                                   bool is_debug, bool is_deprecated) {
-	ExtensionOption extension_option(std::move(description), std::move(parameter), function, default_value,
-	                                 default_scope, is_debug, is_deprecated);
+	AddExtensionOption(name, ExtensionOption(std::move(description), std::move(parameter), function, default_value,
+	                                         default_scope, is_debug, is_deprecated));
+}
+
+void DBConfig::AddExtensionOption(const Identifier &name, ExtensionOption extension_option) {
+	auto default_value = extension_option.default_value;
 	auto setting_index = user_settings.AddExtensionOption(name, std::move(extension_option));
 	// copy over unrecognized options, if they match the new extension option
 	auto iter = options.unrecognized_options.find(name);
