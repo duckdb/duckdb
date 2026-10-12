@@ -2,7 +2,6 @@
 # description: BIGNUM and FLOAT have no implicit cast between them and combine to DOUBLE
 # group: [bignum]
 
-
 # arithmetic
 query II
 SELECT typeof(10::BIGNUM * 1.5::FLOAT), 10::BIGNUM * 1.5::FLOAT
