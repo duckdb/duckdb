@@ -132,15 +132,13 @@ void StructColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool a
 	}
 }
 
-uint64_t StructColumnReader::TotalCompressedSize() {
-	uint64_t size = 0;
+void StructColumnReader::GatherColumnChunks(unordered_set<idx_t> &column_chunks) {
 	for (auto &child : child_readers) {
 		if (!child) {
 			continue;
 		}
-		size += child->TotalCompressedSize();
+		child->GatherColumnChunks(column_chunks);
 	}
-	return size;
 }
 
 static bool TypeHasExactRowCount(const LogicalType &type) {
