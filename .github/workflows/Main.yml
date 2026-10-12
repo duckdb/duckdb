@@ -144,6 +144,7 @@ jobs:
         uses: tj-actions/changed-files@v47
         with:
           separator: "\n"
+          safe_output: false
           files_yaml: |
             github:
               - .github/**
@@ -178,6 +179,8 @@ jobs:
       - name: Configure CI
         id: config
         shell: bash
+        env:
+          CHANGED_KEYS: ${{ steps.changed.outputs.changed_keys }}
         run: |
           skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
           python3 scripts/ci/job_stages.py \
@@ -186,7 +189,7 @@ jobs:
             --default_branch "${{ github.event.repository.default_branch }}" \
             --repository "${{ github.repository }}" \
             --skip-tests "$skip_tests" \
-            --changed-keys "${{ steps.changed.outputs.changed_keys }}" \
+            --changed-keys "$CHANGED_KEYS" \
             --reduced-ci-mode "${{ (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.run_all)) && 'enabled' || 'disabled' }}" \
             --runners '${{ steps.runners.outputs.runners }}' \
             --runner-provider '${{ steps.runners.outputs.runner_provider }}'
@@ -284,7 +287,9 @@ jobs:
 
     - name: Write changed tests file
       shell: bash
-      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "$RUNNER_TEMP/changed_tests.txt"
+      env:
+        CHANGED_TESTS_FILES: ${{ needs.prepare.outputs.changed_tests_files }}
+      run: printf '%s\n' "$CHANGED_TESTS_FILES" | sed '/^$/d' > "$RUNNER_TEMP/changed_tests.txt"
 
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
@@ -701,7 +706,9 @@ jobs:
 
     - name: Write changed tests file
       shell: bash
-      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "$RUNNER_TEMP/changed_tests.txt"
+      env:
+        CHANGED_TESTS_FILES: ${{ needs.prepare.outputs.changed_tests_files }}
+      run: printf '%s\n' "$CHANGED_TESTS_FILES" | sed '/^$/d' > "$RUNNER_TEMP/changed_tests.txt"
 
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
