@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/profiling_coverage.hpp"
 #include "duckdb/common/deque.hpp"
@@ -192,8 +193,8 @@ public:
 private:
 	ClientContext &context;
 
-	//! Whether or not the query profiler is running
-	bool running;
+	//! Atomic so inactive flushes can skip acquiring the profiler lock.
+	atomic<bool> running;
 	//! The lock used for accessing the global query profiler or flushing information to it from a thread
 	mutable std::mutex lock;
 
