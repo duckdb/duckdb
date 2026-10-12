@@ -162,12 +162,14 @@ public:
 	ValidityMask partition_mask;
 	//! The order boundary mask (maps sort column END to mask)
 	OrderMasks order_masks;
+	std::once_flag masks_initialized;
 	//! The fully materialised data collection
 	unique_ptr<WindowCollection> collection;
 	//! The processing stage for this group
 	atomic<WindowGroupStage> stage;
 	//! The function global states for this hash group
 	ExecutorGlobalStates gestates;
+	std::once_flag gestates_initialized;
 	//! Executor local states, one per thread
 	ThreadLocalStates thread_states;
 
@@ -661,28 +663,23 @@ void WindowHashGroup::UpdateScanner(ScannerPtr &scanner, idx_t begin_idx) const 
 }
 
 void WindowHashGroup::AllocateMasks() {
-	//	Single-threaded building as this is mostly memory allocation
-	lock_guard<mutex> gestate_guard(lock);
-	if (partition_mask.IsMaskSet()) {
-		return;
-	}
+	std::call_once(masks_initialized, [&] {
+		ValidityMask new_partition_mask;
+		new_partition_mask.Initialize(count);
+		OrderMasks new_order_masks;
 
-	//	Allocate masks inside the lock
-	partition_mask.Initialize(count);
-
-	// All masks refer to the shared sort's partition columns, including duplicate expressions.
-	const auto &sort_expr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
-	const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : sort_expr.Partitions().size();
-	const auto &executors = gsink.executors;
-	for (auto &wexec : executors) {
-		auto &wexpr = wexec->wexpr;
-
-		auto &order_mask = order_masks[order_begin + wexpr.OrderBy().size()];
-		if (order_mask.IsMaskSet()) {
-			continue;
+		// All masks refer to the shared sort's partition columns, including duplicate expressions.
+		const auto &sort_expr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
+		const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : sort_expr.Partitions().size();
+		for (auto &wexec : gsink.executors) {
+			auto &order_mask = new_order_masks[order_begin + wexec->wexpr.OrderBy().size()];
+			if (!order_mask.IsMaskSet()) {
+				order_mask.Initialize(count);
+			}
 		}
-		order_mask.Initialize(count);
-	}
+		partition_mask = std::move(new_partition_mask);
+		order_masks = std::move(new_order_masks);
+	});
 }
 
 void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_end) {
@@ -903,22 +900,17 @@ void WindowLocalSourceState::Mask(ExecutionContext &context, InterruptState &int
 }
 
 WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::GetGlobalStates(ClientContext &client) {
-	//	Single-threaded building as this is mostly memory allocation
-	lock_guard<mutex> gestate_guard(lock);
-	const auto &executors = gsink.executors;
-	if (gestates.size() == executors.size()) {
-		return gestates;
-	}
-
-	// These can be large so we defer building them until we are ready.
-	const auto &sort_expr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
-	const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : sort_expr.Partitions().size();
-	for (auto &wexec : executors) {
-		auto &wexpr = wexec->wexpr;
-		auto &order_mask = order_masks[order_begin + wexpr.OrderBy().size()];
-		gestates.emplace_back(wexec->GetGlobalState(client, count, partition_mask, order_mask));
-	}
-
+	std::call_once(gestates_initialized, [&] {
+		// These can be large so we defer building them until we are ready.
+		ExecutorGlobalStates new_gestates;
+		const auto &sort_expr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
+		const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : sort_expr.Partitions().size();
+		for (auto &wexec : gsink.executors) {
+			auto &order_mask = order_masks.at(order_begin + wexec->wexpr.OrderBy().size());
+			new_gestates.emplace_back(wexec->GetGlobalState(client, count, partition_mask, order_mask));
+		}
+		gestates = std::move(new_gestates);
+	});
 	return gestates;
 }
 

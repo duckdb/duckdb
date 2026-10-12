@@ -328,16 +328,9 @@ static bool BuildSideHasMultipleSources(const PhysicalOperator &op) {
 //! Synchronisation state for the first-chunk publication of the TupleDataLayout: the canonical layout
 //! shared by all per-thread JHTs, plus the per-column decision on whether to narrow the row-store slot.
 struct LayoutGate {
-	mutex publish_mutex;
-	atomic<bool> published {false};
+	std::once_flag publish_once;
 	shared_ptr<TupleDataLayout> layout_ptr;
 	vector<uint8_t> dict_index_width;
-
-	void Reset() {
-		published.store(false, std::memory_order_release);
-		layout_ptr.reset();
-		dict_index_width.clear();
-	}
 };
 
 class HashJoinGlobalSinkState : public GlobalSinkState {
@@ -634,38 +627,29 @@ bool HashJoinGlobalSinkState::DictSurvivingActive() const {
 }
 
 void HashJoinGlobalSinkState::PublishLayoutIfFirst(HashJoinLocalSinkState &lstate, DataChunk &payload_chunk) {
-	if (layout_gate.published.load(std::memory_order_acquire)) {
-		return;
-	}
-	unique_lock<mutex> guard(layout_gate.publish_mutex);
-	if (layout_gate.published.load(std::memory_order_relaxed)) {
-		return;
-	}
+	std::call_once(layout_gate.publish_once, [&] {
+		const auto &cond_types = lstate.hash_table->condition_types;
+		const auto &build_types = lstate.hash_table->build_types;
+		vector<uint8_t> dict_index_width(build_types.size(), 0);
 
-	const auto &cond_types = lstate.hash_table->condition_types;
-	const auto &build_types = lstate.hash_table->build_types;
-	layout_gate.dict_index_width.assign(build_types.size(), 0);
-
-	if (CanUseDictSurvivingJoin(op, *lstate.hash_table, can_use_perfect_hash, build_side_multi_source)) {
-		// Per-column width decision lives on the JHT (GetDictSurvivingIndexWidth); feed it each arriving vector.
-		for (idx_t col = 0; col < build_types.size(); col++) {
-			if (col >= payload_chunk.ColumnCount()) {
-				continue;
+		if (CanUseDictSurvivingJoin(op, *lstate.hash_table, can_use_perfect_hash, build_side_multi_source)) {
+			// Per-column width decision lives on the JHT (GetDictSurvivingIndexWidth); feed it each arriving vector.
+			for (idx_t col = 0; col < build_types.size(); col++) {
+				if (col >= payload_chunk.ColumnCount()) {
+					continue;
+				}
+				dict_index_width[col] = lstate.hash_table->GetDictSurvivingIndexWidth(col, payload_chunk.data[col]);
 			}
-			layout_gate.dict_index_width[col] =
-			    lstate.hash_table->GetDictSurvivingIndexWidth(col, payload_chunk.data[col]);
 		}
-	}
 
-	auto layout = BuildJoinLayout(cond_types, build_types, lstate.hash_table->join_type, layout_gate.dict_index_width);
-	layout_gate.layout_ptr = layout;
-
-	// global HT receives the same layout so Merge/Combine and finalize-time scans operate against it
-	if (hash_table && !hash_table->IsLayoutFinalized()) {
-		hash_table->FinishInitWithLayout(layout, layout_gate.dict_index_width);
-	}
-
-	layout_gate.published.store(true, std::memory_order_release);
+		auto layout = BuildJoinLayout(cond_types, build_types, lstate.hash_table->join_type, dict_index_width);
+		// global HT receives the same layout so Merge/Combine and finalize-time scans operate against it
+		if (hash_table && !hash_table->IsLayoutFinalized()) {
+			hash_table->FinishInitWithLayout(layout, dict_index_width);
+		}
+		layout_gate.layout_ptr = std::move(layout);
+		layout_gate.dict_index_width = std::move(dict_index_width);
+	});
 }
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context,
@@ -919,22 +903,18 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 	auto &gstate = global_state.Cast<HashJoinGlobalSinkState>();
 	// If no Sink chunk ever arrived, the layout was never published. Fall back to a default layout
 	// (all columns at their native width) so finalize-time scans can dereference data_collection.
-	if (!gstate.layout_gate.published.load(std::memory_order_acquire)) {
-		unique_lock<mutex> guard(gstate.layout_gate.publish_mutex);
-		if (!gstate.layout_gate.published.load(std::memory_order_relaxed)) {
-			const auto &cond_types = gstate.hash_table->condition_types;
-			const auto &build_types = gstate.hash_table->build_types;
-			gstate.layout_gate.dict_index_width.assign(build_types.size(), 0);
-			// all-zero dict_index_width => BuildJoinLayout keeps every build column at its native width
-			auto layout = BuildJoinLayout(cond_types, build_types, gstate.hash_table->join_type,
-			                              gstate.layout_gate.dict_index_width);
-			gstate.layout_gate.layout_ptr = layout;
-			if (!gstate.hash_table->IsLayoutFinalized()) {
-				gstate.hash_table->FinishInitWithLayout(layout);
-			}
-			gstate.layout_gate.published.store(true, std::memory_order_release);
+	std::call_once(gstate.layout_gate.publish_once, [&] {
+		const auto &cond_types = gstate.hash_table->condition_types;
+		const auto &build_types = gstate.hash_table->build_types;
+		vector<uint8_t> dict_index_width(build_types.size(), 0);
+		// all-zero dict_index_width => BuildJoinLayout keeps every build column at its native width
+		auto layout = BuildJoinLayout(cond_types, build_types, gstate.hash_table->join_type, dict_index_width);
+		if (!gstate.hash_table->IsLayoutFinalized()) {
+			gstate.hash_table->FinishInitWithLayout(layout);
 		}
-	}
+		gstate.layout_gate.layout_ptr = std::move(layout);
+		gstate.layout_gate.dict_index_width = std::move(dict_index_width);
+	});
 	const auto &ht = *gstate.hash_table;
 
 	gstate.total_size =

@@ -49,17 +49,16 @@ struct ReadSingleParquetFileData : public TableFunctionData {
 	//! A reader over the metadata of the file, created on first use. The row groups it describes refer to the schema
 	//! it holds, so it is kept for as long as this bind data is
 	ParquetReader &GetMetadataReader(ClientContext &context) const {
-		lock_guard<mutex> guard(bind_reader_lock);
-		if (!metadata_reader) {
-			metadata_reader = ParquetReader::CreateMetadataReader(context, options, metadata);
-		}
+		std::call_once(metadata_reader_initialized,
+		               [&] { metadata_reader = ParquetReader::CreateMetadataReader(context, options, metadata); });
 		return *metadata_reader;
 	}
 
 private:
-	//! Guards the readers below
+	//! Guards the transfer of the bind reader
 	mutable mutex bind_reader_lock;
 	mutable shared_ptr<ParquetReader> bind_reader;
+	mutable std::once_flag metadata_reader_initialized;
 	mutable shared_ptr<ParquetReader> metadata_reader;
 };
 
