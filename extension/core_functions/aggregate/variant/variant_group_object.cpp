@@ -81,7 +81,10 @@ public:
 			return true;
 		}
 
-		Vector packed(GetInternalBufferType(), logical_count);
+		// a group can be the whole input, so the flattened pairs are allocated through the (tracked) base allocator
+		DataChunk packed_chunk;
+		packed_chunk.Initialize(allocator.GetUnderlyingAllocator(), {GetInternalBufferType()}, logical_count);
+		auto &packed = packed_chunk.data[0];
 		functions.BuildListVector(state.linked_list, packed, 0);
 		FlatVector::SetSize(packed, logical_count);
 

@@ -80,6 +80,11 @@ public:
 	Allocator &GetAllocator() {
 		return arena_allocator;
 	}
+	//! Returns the allocator the arena itself allocates its blocks from - for memory that must be freeable
+	//! individually but should share the arena's memory accounting
+	Allocator &GetUnderlyingAllocator() {
+		return allocator;
+	}
 
 	template <class T, class... ARGS>
 	T *Make(ARGS &&... args) {
