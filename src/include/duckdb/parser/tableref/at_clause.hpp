@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
@@ -24,6 +25,16 @@ public:
 	unique_ptr<ParsedExpression> &ExpressionMutable() {
 		return expr;
 	}
+	optional_idx GetPreBindIndex() const {
+		return prebind_index;
+	}
+	void SetPreBindIndex(idx_t index) {
+		prebind_index = index;
+	}
+	void ResolvePreBindExpression(unique_ptr<ParsedExpression> expression) {
+		expr = std::move(expression);
+		prebind_index.SetInvalid();
+	}
 
 	string ToString() const;
 	bool Equals(const AtClause &other_p) const;
@@ -38,6 +49,8 @@ private:
 	Identifier unit;
 	//! The expression that determines which value of the unit we want to read
 	unique_ptr<ParsedExpression> expr;
+	//! Index of the scalar selector that must run before this expression can be bound
+	optional_idx prebind_index;
 };
 
 } // namespace duckdb
