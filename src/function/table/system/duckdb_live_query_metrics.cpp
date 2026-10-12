@@ -12,7 +12,7 @@ struct DuckDBLiveQueryMetricsData : public GlobalTableFunctionState {
 	struct Entry {
 		connection_t connection_id;
 		string metric_name;
-		string metric_value;
+		Value metric_value;
 	};
 	vector<Entry> entries;
 	idx_t offset;
@@ -28,7 +28,7 @@ static unique_ptr<FunctionData> DuckDBLiveQueryMetricsBind(ClientContext &contex
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("metric_value");
-	return_types.emplace_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARIANT());
 
 	return nullptr;
 }
@@ -41,7 +41,8 @@ static unique_ptr<GlobalTableFunctionState> DuckDBLiveQueryMetricsInit(ClientCon
 		auto metrics = connection->GetLiveQueryMetrics();
 		map<string, Value> sorted(metrics.begin(), metrics.end());
 		for (auto &metric : sorted) {
-			result->entries.push_back({connection->GetConnectionId(), metric.first, metric.second.ToString()});
+			result->entries.push_back(
+			    {connection->GetConnectionId(), metric.first, metric.second.CastAs(context, LogicalType::VARIANT())});
 		}
 	}
 	return std::move(result);
@@ -54,7 +55,7 @@ static void DuckDBLiveQueryMetricsFunction(ClientContext &context, TableFunction
 		auto &entry = data.entries[data.offset++];
 		output.data[0].Append(Value::UBIGINT(entry.connection_id));
 		output.data[1].Append(Value(entry.metric_name));
-		output.data[2].Append(Value(entry.metric_value));
+		output.data[2].Append(entry.metric_value);
 		count++;
 	}
 }

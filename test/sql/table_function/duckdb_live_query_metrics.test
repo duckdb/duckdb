@@ -7,14 +7,16 @@ SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM duckdb_live_query_m
 ----
 connection_id	UBIGINT
 metric_name	VARCHAR
-metric_value	VARCHAR
+metric_value	VARIANT
 
-# the connection reports the same metric names as the final profile
-query I
-SELECT bool_or(metric_name = 'io.total_bytes_read') FROM duckdb_live_query_metrics()
-WHERE connection_id = current_connection_id();
+# the metrics marked "live" in metrics.json, with the same names and types as in the final profile
+query II
+SELECT metric_name, variant_typeof(metric_value) FROM duckdb_live_query_metrics()
+WHERE connection_id = current_connection_id() ORDER BY metric_name;
 ----
-true
+io.total_bytes_read	UINT64
+io.total_bytes_written	UINT64
+system.total_memory_allocated	UINT64
 
 # without profiling, the counters still start from zero for every query
 statement ok
@@ -23,5 +25,51 @@ SELECT count(*) FROM (SELECT DISTINCT range FROM range(3000000));
 query I
 SELECT metric_value::UBIGINT < 10000000 FROM duckdb_live_query_metrics()
 WHERE connection_id = current_connection_id() AND metric_name = 'system.total_memory_allocated';
+----
+true
+
+# an idle connection shows the counters of its most recent query
+load {TEST_DIR}/live_query_metrics.db
+
+statement ok
+CREATE TABLE t1 AS SELECT range AS i FROM range(10000000);
+
+statement ok
+CREATE TABLE t2 AS SELECT range AS i FROM range(10000000);
+
+# reopen the database, so the tables are read from disk
+restart
+
+statement ok con1
+CREATE TABLE monitored AS SELECT current_connection_id() AS id;
+
+statement ok con1
+SELECT sum(i) FROM t1;
+
+query I con2
+SELECT metric_value::UBIGINT > 0 FROM duckdb_live_query_metrics()
+WHERE connection_id = (SELECT id FROM monitored) AND metric_name = 'io.total_bytes_read';
+----
+true
+
+# the next query starts its counters from zero
+statement ok con1
+SELECT 42;
+
+query I con2
+SELECT metric_value::UBIGINT FROM duckdb_live_query_metrics()
+WHERE connection_id = (SELECT id FROM monitored) AND metric_name = 'io.total_bytes_read';
+----
+0
+
+# a query that fails keeps the counters of the work it did
+statement error con1
+SELECT sum(CASE WHEN i = 9000000 THEN error('boom') ELSE i END) FROM t2;
+----
+boom
+
+query I con2
+SELECT metric_value::UBIGINT > 0 FROM duckdb_live_query_metrics()
+WHERE connection_id = (SELECT id FROM monitored) AND metric_name = 'io.total_bytes_read';
 ----
 true
