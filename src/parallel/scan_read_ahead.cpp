@@ -64,8 +64,9 @@ void ReadAheadJobCompletion::WaitForIO() {
 class ReadAheadIOTask : public BaseExecutorTask {
 public:
 	ReadAheadIOTask(TaskExecutor &executor, unique_ptr<AsyncTask> task_p,
-	                shared_ptr<ReadAheadJobCompletion> completion_p)
-	    : BaseExecutorTask(executor), task(std::move(task_p)), completion(std::move(completion_p)) {
+	                shared_ptr<ReadAheadJobCompletion> completion_p, ScanReadAhead &read_ahead_p)
+	    : BaseExecutorTask(executor), task(std::move(task_p)), completion(std::move(completion_p)),
+	      read_ahead(read_ahead_p) {
 		completion->AddIOTask();
 	}
 	~ReadAheadIOTask() override {
@@ -74,13 +75,20 @@ public:
 	}
 
 	void ExecuteTask() override {
-		// Does the actual IO
-		task->Execute();
+		try {
+			// Does the actual IO
+			task->Execute();
+		} catch (std::exception &ex) {
+			// recording the error through the read-ahead also wakes the threads waiting for progress
+			read_ahead.PushError(ErrorData(ex));
+		}
 	}
 
 private:
 	unique_ptr<AsyncTask> task;
 	shared_ptr<ReadAheadJobCompletion> completion;
+	//! Outlives the task, the read-ahead drains its executor before it is destroyed
+	ScanReadAhead &read_ahead;
 };
 
 //! Async task that opens one file ahead of decoding and releases the pending-open count when destroyed
@@ -292,7 +300,7 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 	read_tasks.reserve(io_tasks.size());
 	for (auto &task : io_tasks) {
 		job->io_bytes += task->GetIOSize();
-		read_tasks.push_back(make_uniq<ReadAheadIOTask>(*executor, std::move(task), completion));
+		read_tasks.push_back(make_uniq<ReadAheadIOTask>(*executor, std::move(task), completion, *this));
 	}
 	job->io_bytes = MaxValue<idx_t>(job->io_bytes, MINIMUM_JOB_IO_CHARGE);
 	// the minimum charge was taken by TryReserveSlot, charge the remainder
