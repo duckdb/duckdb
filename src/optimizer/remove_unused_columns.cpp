@@ -1200,7 +1200,8 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 	proj.expressions = std::move(expressions);
 }
 
-static bool OnlyStructFieldPaths(const vector<ColumnIndex> &paths) {
+template <class T>
+static bool OnlyStructFieldPaths(const T &paths) {
 	for (auto &path : paths) {
 		if (!path.HasPrimaryIndex() || !OnlyStructFieldPaths(path.GetChildIndexes())) {
 			return false;
@@ -1276,7 +1277,7 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 				//! Extract pull up only supported for STRUCT currently
 				continue;
 			}
-			if (!OnlyStructFieldPaths(child_columns)) {
+			if (!OnlyStructFieldPaths(col.unique_paths)) {
 				//! A VARIANT field step cannot be rebuilt as a struct extract above the projection
 				continue;
 			}

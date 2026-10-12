@@ -1,25 +1,20 @@
 # name: test/sql/types/variant/variant_struct_field_subquery_cast_parent.test
-# description: Unsupported mixed extracts must report a recoverable binder error
+# description: Cast parents and VARIANT child paths through projections in a transaction
 # group: [variant]
 
 statement ok
 CREATE TABLE cast_parent AS SELECT {'x': {'a': 1}::VARIANT} AS n;
 
-# The cast parent hides the VARIANT suffix from the projection's pushdown check.
-statement error
+# Both the cast parent and uncast child must survive projection pruning.
+query II
 SELECT n.x::STRUCT(a BIGINT), n.x.a FROM (SELECT * FROM cast_parent);
 ----
-Binder Error: Extracting VARIANT field "a" through this projection is not supported
+{'a': 1}	1
 
-# The database and connection remain usable after the error.
 query II
 SELECT n.x::STRUCT(a BIGINT), n.x.a FROM cast_parent;
 ----
 {'a': 1}	1
-
-# Binder errors also preserve the transaction when its policy permits that.
-statement ok
-SET default_transaction_invalidation_policy = 'SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';
 
 statement ok
 BEGIN;
@@ -27,17 +22,18 @@ BEGIN;
 statement ok
 INSERT INTO cast_parent VALUES ({'x': {'a': 2}::VARIANT});
 
-statement error
-SELECT n.x::STRUCT(a BIGINT), n.x.a FROM (SELECT * FROM cast_parent);
-----
-Binder Error: Extracting VARIANT field "a" through this projection is not supported
-
-# The same transaction remains usable and retains its uncommitted insert.
 query II rowsort
-SELECT n.x::STRUCT(a BIGINT), n.x.a FROM cast_parent;
+SELECT n.x::STRUCT(a BIGINT), n.x.a FROM (SELECT * FROM cast_parent);
 ----
 {'a': 1}	1
 {'a': 2}	2
+
+# Read the uncommitted insert with the opposite select-list order as well.
+query II rowsort
+SELECT n.x.a, n.x::STRUCT(a BIGINT) FROM (SELECT * FROM cast_parent);
+----
+1	{'a': 1}
+2	{'a': 2}
 
 statement ok
 COMMIT;
