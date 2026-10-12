@@ -838,8 +838,11 @@ static bool FoldsToNull(ClientContext &context, const Expression &child) {
 	if (!child.IsFoldable()) {
 		return false;
 	}
+	// a nested result with many elements is not NULL and is not worth materializing as a Value to find that out
 	Value result;
-	return ExpressionExecutor::TryEvaluateScalar(context, child, result) && result.IsNull();
+	return ExpressionExecutor::TryEvaluateScalar(context, child, result,
+	                                             ExpressionExecutor::MAX_FOLDED_NESTED_ELEMENTS) &&
+	       result.IsNull();
 }
 
 //! Returns true if any argument is a constant expression that evaluates to NULL
