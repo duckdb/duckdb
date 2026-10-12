@@ -1,0 +1,84 @@
+# name: test/sql/types/bignum/test_bignum_float_combine.test
+# description: BIGNUM and FLOAT have no implicit cast between them and combine to DOUBLE
+# group: [bignum]
+
+
+# arithmetic
+query II
+SELECT typeof(10::BIGNUM * 1.5::FLOAT), 10::BIGNUM * 1.5::FLOAT
+----
+DOUBLE	15.0
+
+# COALESCE / CASE / IF
+query II
+SELECT typeof(COALESCE(1::BIGNUM, 1.5::FLOAT)), COALESCE(NULL::BIGNUM, 1.5::FLOAT)
+----
+DOUBLE	1.5
+
+query II
+SELECT typeof(CASE WHEN true THEN 1::BIGNUM ELSE 1.5::FLOAT END), CASE WHEN false THEN 1::BIGNUM ELSE 1.5::FLOAT END
+----
+DOUBLE	1.5
+
+query I
+SELECT IF(false, 1.5::FLOAT, 1::BIGNUM)
+----
+1.0
+
+# set operations keep the fraction instead of truncating the FLOAT side
+query I
+SELECT 1::BIGNUM UNION ALL SELECT 1.5::FLOAT ORDER BY 1
+----
+1.0
+1.5
+
+query I
+SELECT typeof(x) FROM (SELECT 1::BIGNUM AS x UNION ALL SELECT 1.5::FLOAT) LIMIT 1
+----
+DOUBLE
+
+query I
+SELECT 1.5::FLOAT UNION SELECT 1::BIGNUM ORDER BY 1
+----
+1.0
+1.5
+
+# comparisons
+query IIII
+SELECT 1::BIGNUM < 2::FLOAT, 2::BIGNUM >= 1.5::FLOAT, 1::BIGNUM = 1.5::FLOAT, 1.5::FLOAT > 1::BIGNUM
+----
+true	true	false	true
+
+query I
+SELECT 2::BIGNUM BETWEEN 1.5::FLOAT AND 2.5::FLOAT
+----
+true
+
+# greatest / least and lists
+query III
+SELECT typeof(greatest(1::BIGNUM, 2::FLOAT)), greatest(1::BIGNUM, 2.5::FLOAT), least(1::BIGNUM, 2.5::FLOAT)
+----
+DOUBLE	2.5	1.0
+
+query II
+SELECT typeof([1::BIGNUM, 1.5::FLOAT]), [1::BIGNUM, 1.5::FLOAT]
+----
+DOUBLE[]	[1.0, 1.5]
+
+# a large BIGNUM meets FLOAT in DOUBLE as well
+query II
+SELECT typeof(COALESCE(170141183460469231731687303715884105727::BIGNUM, 1.5::FLOAT)), 170141183460469231731687303715884105727::BIGNUM > 1.5::FLOAT
+----
+DOUBLE	true
+
+# DOUBLE and integers combine as before
+query II
+SELECT typeof(COALESCE(1::BIGNUM, 1.5::DOUBLE)), typeof(COALESCE(1::BIGNUM, 1::INTEGER))
+----
+DOUBLE	BIGNUM
+
+# an explicit cast still truncates
+query I
+SELECT 2.7::FLOAT::BIGNUM
+----
+2

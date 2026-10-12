@@ -314,6 +314,12 @@ static bool CombineStringLiteral(LogicalTypeResolver &, const LogicalType &left,
 	return true;
 }
 
+// BIGNUM and FLOAT have no implicit cast between them; like their arithmetic, they meet in DOUBLE
+static bool CombineBignumFloat(LogicalTypeResolver &, const LogicalType &, const LogicalType &, LogicalType &result) {
+	result = LogicalType::DOUBLE;
+	return true;
+}
+
 static bool UnequalMatchesVariant(const LogicalType &left, const LogicalType &right) {
 	if (left.id() == right.id()) {
 		// rule only applies to unequal types
@@ -341,6 +347,13 @@ static bool UnequalMatchesEnum(const LogicalType &left, const LogicalType &right
 	return left.id() == LogicalTypeId::ENUM || right.id() == LogicalTypeId::ENUM;
 }
 
+static bool UnequalMatchesBignumFloat(const LogicalType &left, const LogicalType &right) {
+	auto is_pair = [](const LogicalType &a, const LogicalType &b) {
+		return a.id() == LogicalTypeId::BIGNUM && b.id() == LogicalTypeId::FLOAT;
+	};
+	return is_pair(left, right) || is_pair(right, left);
+}
+
 static bool UnequalMatchesStringLiteral(const LogicalType &left, const LogicalType &right) {
 	if (left.id() == right.id()) {
 		// rule only applies to unequal types
@@ -358,6 +371,7 @@ const vector<CombineTypesRule> &DefaultCombineTypesRules() {
 	    {UnequalMatchesEnum, CombineEnum},
 	    {UnequalMatchesStruct, CombineStructTypes},
 	    {UnequalMatchesStringLiteral, CombineStringLiteral},
+	    {UnequalMatchesBignumFloat, CombineBignumFloat},
 	    {EqualMatchesStringLiteral, CombineEqualStringLiteral},
 	    {EqualMatchesIntegerLiteral, CombineEqualIntegerLiteral},
 	    {EqualMatchesEnum, CombineEqualEnum},
