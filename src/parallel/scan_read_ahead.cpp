@@ -127,7 +127,7 @@ static idx_t GetOpenWindow(ClientContext &context, idx_t read_ahead_depth, bool 
 		file_descriptor_limit = system_limit.GetIndex();
 	}
 	// files opened ahead hold descriptors until they are scanned, so only use a share of the limit
-	return MinValue<idx_t>(window, MaxValue<idx_t>(file_descriptor_limit / 8, 1));
+	return MinValue<idx_t>(window, FileSystem::GetFileDescriptorShare(file_descriptor_limit));
 }
 
 ScanReadAhead::ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,

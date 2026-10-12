@@ -223,7 +223,7 @@ idx_t HTTPTransportManager::CalculateCapacity(idx_t system_concurrency, optional
 	if (!file_descriptor_limit.IsValid()) {
 		return cpu_target;
 	}
-	auto fd_target = MaxValue<idx_t>(file_descriptor_limit.GetIndex() / 8, 1);
+	auto fd_target = FileSystem::GetFileDescriptorShare(file_descriptor_limit.GetIndex());
 	return MinValue<idx_t>(cpu_target, fd_target);
 }
 

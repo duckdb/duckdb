@@ -302,6 +302,10 @@ optional_idx FileSystem::GetFileDescriptorLimit() {
 #endif
 }
 
+idx_t FileSystem::GetFileDescriptorShare(idx_t file_descriptor_limit) {
+	return MaxValue<idx_t>(file_descriptor_limit / 8, 1);
+}
+
 string FileSystem::JoinPath(const string &a, const string &b) {
 	// A remote URL may carry a "?query" suffix (object version, requester-pays, an SSE-C key, ...).
 	// Appending a path segment after it would bury the query mid-path and corrupt both the query and
