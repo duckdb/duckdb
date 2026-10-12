@@ -538,6 +538,13 @@ void ApproxTopKImportState(AggregateImportInputData &input) {
 				throw InvalidInputException("Invalid approx_top_k state - the state values must be unique");
 			}
 			val.count = count_data[idx];
+			if (val.count == 0) {
+				throw InvalidInputException("Invalid approx_top_k state - the state values must have a count > 0");
+			}
+			if (value_idx > 0 && val.count > target.values[value_idx - 1].get().count) {
+				throw InvalidInputException(
+				    "Invalid approx_top_k state - the state values must be ordered by descending count");
+			}
 		}
 		for (idx_t filter_idx = 0; filter_idx < filter_entries[i].length; filter_idx++) {
 			target.filter[filter_idx] = filter_data[filter_entries[i].offset + filter_idx];

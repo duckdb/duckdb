@@ -160,7 +160,7 @@ bool ICUDateFunc::TryGetTimeNS(Calendar *calendar, uint64_t nanos, timestamp_tz_
 	nanos %= Interval::NANOS_PER_MICRO;
 	timestamp_t us(tstz_micros);
 	timestamp_ns_t ns;
-	if (!Timestamp::TryFromTimestampNanos(us, nanos, ns)) {
+	if (!Timestamp::TryFromTimestampNanos(us, int32_t(nanos), ns)) {
 		return false;
 	}
 	result.value = ns.value;
@@ -206,6 +206,27 @@ int32_t ICUDateFunc::ExtractField(Calendar *calendar, CalendarField field) {
 		throw ConversionException("Unable to extract calendar part");
 	}
 	return result;
+}
+
+bool ICUDateFunc::TryGetTimeTZOffset(Calendar *calendar, int32_t &offset) {
+	offset = ExtractField(calendar, CAL_ZONE_OFFSET);
+	offset += ExtractField(calendar, CAL_DST_OFFSET);
+	offset /= Interval::MSECS_PER_SEC;
+	return offset >= dtime_tz_t::MIN_OFFSET && offset <= dtime_tz_t::MAX_OFFSET;
+}
+
+int32_t ICUDateFunc::GetTimeTZOffset(Calendar *calendar) {
+	int32_t offset;
+	if (!TryGetTimeTZOffset(calendar, offset)) {
+		throw OutOfRangeException(TimeTZOffsetError(offset));
+	}
+	return offset;
+}
+
+string ICUDateFunc::TimeTZOffsetError(int32_t offset) {
+	interval_t interval {0, 0, offset * Interval::MICROS_PER_SEC};
+	return StringUtil::Format("Time zone offset %s is out of range, expected a value between -15:59:59 and +15:59:59",
+	                          Interval::ToString(interval));
 }
 
 int32_t ICUDateFunc::SubtractField(Calendar *calendar, CalendarField field, timestamp_tz_t end_date) {
