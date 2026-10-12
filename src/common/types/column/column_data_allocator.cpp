@@ -255,10 +255,13 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
                                             SwizzleMetaData &swizzle_segment, const VectorMetaData &string_heap_segment,
                                             const idx_t &v_offset, const bool &copied) {
 	D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
-	lock_guard<mutex> guard(lock);
-	const auto old_base_ptr = char_ptr_cast(swizzle_segment.ptr);
 	const auto new_base_ptr =
 	    char_ptr_cast(GetDataPointer(state, string_heap_segment.block_id, string_heap_segment.offset));
+	if (!copied && swizzle_segment.ptr.load(std::memory_order_acquire) == data_ptr_cast(new_base_ptr)) {
+		return;
+	}
+	lock_guard<mutex> guard(lock);
+	const auto old_base_ptr = char_ptr_cast(swizzle_segment.ptr.load(std::memory_order_relaxed));
 	if (old_base_ptr == new_base_ptr) {
 		return; // pointers are still valid
 	}
@@ -286,7 +289,7 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 
 	if (!copied) {
 		// if the data was not copied, we modified data on the blocks. store the new base ptr
-		swizzle_segment.ptr = data_ptr_cast(new_base_ptr);
+		swizzle_segment.ptr.store(data_ptr_cast(new_base_ptr), std::memory_order_release);
 	}
 }
 
