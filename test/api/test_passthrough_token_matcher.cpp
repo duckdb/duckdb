@@ -27,7 +27,8 @@ MatchOutcome MatchTokenAt(const string &query, idx_t position) {
 
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_results;
-	ParserPackratCache packrat;
+	ArenaAllocator packrat_allocator(Allocator::DefaultAllocator());
+	ParserPackratCache packrat(packrat_allocator);
 	idx_t max_position = 0;
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
 	MatchContext context(suggestions, parse_results, process_allocator, max_position, MatchMode::BUILD_PARSE_RESULT,

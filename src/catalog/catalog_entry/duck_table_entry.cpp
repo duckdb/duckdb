@@ -1415,6 +1415,18 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 			auto existing_name = existing_pk->ToString();
 			throw CatalogException("table %s can have only one primary key: %s", name, existing_name);
 		}
+
+		// Constraint index names are not unique, detect a duplicate constraint by its kind and columns.
+		for (const auto &constraint : GetConstraints()) {
+			if (constraint->type != ConstraintType::UNIQUE) {
+				continue;
+			}
+			auto &existing = constraint->Cast<UniqueConstraint>();
+			if (existing.is_primary_key == unique.is_primary_key &&
+			    existing.GetLogicalIndexes(columns) == unique.GetLogicalIndexes(columns)) {
+				throw CatalogException("table %s already has the constraint %s", name, existing.ToString());
+			}
+		}
 		table_info.constraints.push_back(info.constraint->Copy());
 
 	} else {
@@ -1451,12 +1463,9 @@ void DuckTableEntry::SetAsRoot() {
 void DuckTableEntry::CommitAlter(string &column_name, CommitDropState &drop_state) {
 	D_ASSERT(!column_name.empty());
 	optional_idx logical_column_idx;
-	auto column_path = StringUtil::Split(column_name, '.');
-	D_ASSERT(!column_path.empty());
-	auto &root_column_name = column_path[0];
 	idx_t column_position = 0;
 	for (auto &col : columns.Logical()) {
-		if (col.Name() == root_column_name) {
+		if (col.Name() == column_name) {
 			// No need to alter storage, removed column is generated column
 			if (col.Generated()) {
 				return;
