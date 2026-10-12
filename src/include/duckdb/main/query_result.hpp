@@ -117,7 +117,8 @@ public:
 	DUCKDB_API QueryResultState Poll();
 	//! Executes a single task of the query on the calling thread. Decides nothing: READY means the engine is
 	//! waiting for the retention decision, and every further call returns READY, running nothing, until a
-	//! stream is opened or a retained-side call (Materialize, Complete, Collection, ...) is made.
+	//! stream is opened or a retained-side call (Materialize, Complete, Collection, ...) is made. Unless a
+	//! stream drains the result, the call that reports FINISHED ends the query and collects the rows.
 	DUCKDB_API QueryResultState ExecuteTask();
 	//! Blocks until a task is runnable or the engine is waiting on the caller. Runs no task.
 	DUCKDB_API void WaitForTask();
@@ -147,7 +148,8 @@ public:
 	}
 	//! Get the rowcount of the result. Will materialize the full result if it hadn't yet.
 	DUCKDB_API idx_t RowCount();
-	//! Ends the query if it is still open. Idempotent.
+	//! Aborts the query unless a call already ended it: autocommit rolls it back, and inside a transaction a
+	//! statement that may write invalidates the transaction. Idempotent.
 	DUCKDB_API void Close();
 	//! Whether this result is still the connection's open result.
 	DUCKDB_API bool IsOpen();
@@ -213,6 +215,8 @@ private:
 	//! recorded, and reports it as an error state
 	QueryResultState Cancelled();
 	void CompleteInternal(ClientContextLock &lock);
+	//! Ends a query whose retained execution finished and collects its rows
+	QueryResultState EndFinishedInternal(ClientContextLock &lock);
 	void HandleFetchFailure(ClientContextLock &lock, ErrorData error);
 	//! Ends the query and records a commit failure on this result without throwing
 	void EndQuery(ClientContextLock &lock, bool invalidate_transaction = false);
