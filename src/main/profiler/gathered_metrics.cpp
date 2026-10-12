@@ -105,12 +105,15 @@ void GatheredMetrics::SetMetric(const string &key, const string &value) {
 	metrics[key] = Value(value);
 }
 
-void GatheredMetrics::WriteMetricsToLog(ClientContext &context) const {
+void GatheredMetrics::WriteMetricsToLog(ClientContext &context,
+                                        const unordered_map<string, MetricTimingBounds> &timing_bounds) const {
 	auto &logger = Logger::Get(context);
 	if (logger.ShouldLog(MetricsLogType::NAME, MetricsLogType::LEVEL)) {
 		for (const auto &entry : metrics) {
+			auto timing = timing_bounds.find(entry.first);
 			logger.WriteLog(MetricsLogType::NAME, MetricsLogType::LEVEL,
-			                MetricsLogType::ConstructLogMessage(entry.first, entry.second));
+			                MetricsLogType::ConstructLogMessage(
+			                    entry.first, entry.second, timing == timing_bounds.end() ? nullptr : &timing->second));
 		}
 	}
 }

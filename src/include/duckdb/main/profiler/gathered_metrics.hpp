@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/metric_type.hpp"
@@ -27,6 +28,12 @@ namespace duckdb {
 
 struct QueryProfileResult;
 enum class ProfilingParameterNames : uint8_t { FORMAT, COVERAGE, SAVE_LOCATION, MODE, METRICS };
+
+struct MetricTimingBounds {
+	timestamp_t start_time = timestamp_t::epoch();
+	timestamp_t end_time = timestamp_t::epoch();
+	bool is_set = false;
+};
 
 class GatheredMetrics {
 public:
@@ -72,7 +79,8 @@ public:
 	}
 
 public:
-	void WriteMetricsToLog(ClientContext &context) const;
+	void WriteMetricsToLog(ClientContext &context,
+	                       const unordered_map<string, MetricTimingBounds> &timing_bounds) const;
 	//! Copy all enabled metrics into a QueryProfileResult node using lowercase string keys
 	void MetricsToProfileResult(QueryProfileResult &result) const;
 

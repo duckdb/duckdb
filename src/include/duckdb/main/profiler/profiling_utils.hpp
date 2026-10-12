@@ -13,6 +13,7 @@
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/common/profiler.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb_yyjson {
 struct yyjson_mut_doc;
@@ -45,6 +46,18 @@ public:
 public:
 	void UpdateMetric(const string &key, idx_t addition) {
 		string_timings[key] += addition;
+	}
+
+	void UpdateTimingBounds(const string &key, timestamp_t start_time, timestamp_t end_time) {
+		auto &bounds = timing_bounds[key];
+		if (!bounds.is_set) {
+			bounds.start_time = start_time;
+			bounds.end_time = end_time;
+			bounds.is_set = true;
+			return;
+		}
+		bounds.start_time = MinValue(bounds.start_time, start_time);
+		bounds.end_time = MaxValue(bounds.end_time, end_time);
 	}
 
 	void UpdateMetricCounter(const string &key, idx_t addition) {
@@ -99,10 +112,15 @@ public:
 		return string_counters;
 	}
 
+	const unordered_map<string, MetricTimingBounds> &GetTimingBounds() const {
+		return timing_bounds;
+	}
+
 	void Reset() {
 		latency_timer.reset();
 		string_timings.clear();
 		string_counters.clear();
+		timing_bounds.clear();
 		bytes_read = 0;
 		bytes_written = 0;
 		total_memory_allocated = 0;
@@ -132,6 +150,8 @@ public:
 private:
 	// String-keyed timings for optimizer, storage and phase timing metrics
 	unordered_map<string, idx_t> string_timings;
+	// Wall-clock bounds for timing metrics, used by timeline-oriented log consumers.
+	unordered_map<string, MetricTimingBounds> timing_bounds;
 	// String-keyed counters for storage counter metrics (e.g. "storage.wal_replay_entry_count")
 	unordered_map<string, idx_t> string_counters;
 
@@ -149,6 +169,7 @@ public:
 		if (!is_active) {
 			return;
 		}
+		start_time = Timestamp::GetCurrentTimestamp();
 		profiler.Start();
 	}
 	~MetricsTimer() {
@@ -164,12 +185,14 @@ public:
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric_name, other.metric_name);
 		std::swap(profiler, other.profiler);
+		std::swap(start_time, other.start_time);
 		std::swap(is_active, other.is_active);
 	}
 	MetricsTimer &operator=(MetricsTimer &&other) noexcept {
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric_name, other.metric_name);
 		std::swap(profiler, other.profiler);
+		std::swap(start_time, other.start_time);
 		std::swap(is_active, other.is_active);
 		return *this;
 	}
@@ -182,6 +205,7 @@ public:
 		is_active = false;
 		profiler.End();
 		query_metrics->UpdateMetric(metric_name, profiler.ElapsedNanos());
+		query_metrics->UpdateTimingBounds(metric_name, start_time, Timestamp::GetCurrentTimestamp());
 	}
 
 	void Reset() {
@@ -196,6 +220,7 @@ private:
 	optional_ptr<QueryMetrics> query_metrics;
 	string metric_name;
 	Profiler profiler;
+	timestamp_t start_time = timestamp_t::epoch();
 	bool is_active;
 };
 
