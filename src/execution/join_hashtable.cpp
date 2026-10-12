@@ -837,6 +837,7 @@ static inline void InsertMatchesAndIncrementMisses(unsafe_optional_ptr<atomic<ht
 		if (key_match_count != 0) {
 			ht.chains_longer_than_one.store(true, std::memory_order_relaxed);
 		}
+		const auto pointer_offset = ht.pointer_offset;
 		for (idx_t i = 0; i < key_match_count; i++) {
 			const auto need_compare_idx = state.key_match_sel.get_index(i);
 			const auto entry_index = state.keys_to_compare_sel.get_index(need_compare_idx);
@@ -846,7 +847,7 @@ static inline void InsertMatchesAndIncrementMisses(unsafe_optional_ptr<atomic<ht
 			const auto row_ptr_to_insert = lhs_row_locations[entry_index];
 
 			const auto salt = hash_salts[entry_index];
-			InsertRowToEntry<PARALLEL, false>(entry, row_ptr_to_insert, salt, ht.pointer_offset);
+			InsertRowToEntry<PARALLEL, false>(entry, row_ptr_to_insert, salt, pointer_offset);
 		}
 	}
 
@@ -919,6 +920,7 @@ static void InsertHashesLoop(unsafe_optional_ptr<atomic<ht_entry_t>> entries, Ve
 
 	// use the ht bitmask to make the modulo operation faster but keep the salt bits intact
 	idx_t capacity_mask = ht.bitmask | ht_entry_t::SALT_MASK;
+	const auto pointer_offset = ht.pointer_offset;
 	while (remaining_count > 0) {
 		idx_t salt_match_count = 0;
 
@@ -951,7 +953,7 @@ static void InsertHashesLoop(unsafe_optional_ptr<atomic<ht_entry_t>> entries, Ve
 				auto &atomic_entry = entries.get()[ht_offset];
 				const auto row_ptr_to_insert = lhs_row_locations[row_index];
 				const auto potential_collided_ptr =
-				    InsertRowToEntry<PARALLEL, true>(atomic_entry, row_ptr_to_insert, salt, ht.pointer_offset);
+				    InsertRowToEntry<PARALLEL, true>(atomic_entry, row_ptr_to_insert, salt, pointer_offset);
 
 				if (PARALLEL) {
 					// if the insertion was not successful, the entry was occupied in the meantime, so we have to
