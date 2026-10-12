@@ -1,0 +1,109 @@
+# name: test/sql/explain/explain_default_format.test
+# description: Configure the default EXPLAIN format independently of explicit FORMAT options
+# group: [explain]
+
+query T
+SELECT current_setting('explain_format')
+----
+default
+
+query TT
+EXPLAIN SELECT 42
+----
+physical_plan	<REGEX>:.*Projection.*
+
+statement ok
+SET explain_format = 'JsOn'
+
+query T
+SELECT current_setting('explain_format')
+----
+json
+
+query TT
+EXPLAIN SELECT 42
+----
+physical_plan	<REGEX>:(?s).*"name": "PROJECTION".*
+
+query TT
+EXPLAIN (FORMAT DEFAULT) SELECT 42
+----
+physical_plan	<REGEX>:(?s).*"name": "PROJECTION".*
+
+query TT
+EXPLAIN (FORMAT TEXT) SELECT 42
+----
+physical_plan	<REGEX>:.*Projection.*
+
+query TT
+EXPLAIN ANALYZE SELECT 42
+----
+analyzed_plan	<REGEX>:(?s).*"operator":.*"type": "RESULT_COLLECTOR".*
+
+query TT
+EXPLAIN ANALYZE (FORMAT TEXT) SELECT 42
+----
+analyzed_plan	<REGEX>:.*Summary.*Projection.*
+
+statement ok
+SET explain_output = 'all'
+
+query TT
+EXPLAIN SELECT 42
+----
+logical_plan	<REGEX>:(?s).*"name": "PROJECTION".*
+logical_opt	<REGEX>:(?s).*"name": "PROJECTION".*
+physical_plan	<REGEX>:(?s).*"name": "PROJECTION".*
+
+statement ok
+RESET explain_output
+
+# A local setting does not affect other connections.
+query T con1
+SELECT current_setting('explain_format')
+----
+default
+
+statement error
+SET explain_format = 'bogus'
+----
+"bogus" is not a valid FORMAT argument
+
+statement error
+SET explain_format = NULL
+----
+explain_format setting cannot be NULL
+
+query T
+SELECT current_setting('explain_format')
+----
+json
+
+statement ok
+RESET explain_format
+
+query T
+SELECT current_setting('explain_format')
+----
+default
+
+query TT
+EXPLAIN SELECT 42
+----
+physical_plan	<REGEX>:.*Projection.*
+
+query TT
+EXPLAIN (FORMAT JSON) SELECT 42
+----
+physical_plan	<REGEX>:(?s).*"name": "PROJECTION".*
+
+statement ok
+SET GLOBAL explain_format = 'json'
+
+query TT con1
+EXPLAIN SELECT 42
+----
+physical_plan	<REGEX>:(?s).*"name": "PROJECTION".*
+
+statement ok
+RESET GLOBAL explain_format
