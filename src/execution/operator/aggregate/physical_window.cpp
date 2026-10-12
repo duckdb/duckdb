@@ -553,8 +553,8 @@ public:
 protected:
 	//! Build task list
 	void CreateTaskList();
-	//! Finish a task
-	void FinishTask(TaskPtr task);
+	//! Finish a task and return any completed group for destruction outside the source lock.
+	WindowHashGroupPtr FinishTask(TaskPtr task);
 };
 
 WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &client, WindowGlobalSinkState &gsink_p)
@@ -1028,8 +1028,10 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 }
 
 bool WindowGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
+	// Destroy completed groups after releasing the source lock.
+	WindowHashGroupPtr finished_group;
 	annotated_lock_guard<annotated_mutex> guard(lock);
-	FinishTask(task);
+	finished_group = FinishTask(task);
 
 	if (!HasMoreTasks()) {
 		task = nullptr;
@@ -1073,17 +1075,18 @@ bool WindowGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 	return false;
 }
 
-void WindowGlobalSourceState::FinishTask(TaskPtr task) {
+WindowGlobalSourceState::WindowHashGroupPtr WindowGlobalSourceState::FinishTask(TaskPtr task) {
 	if (!task) {
-		return;
+		return nullptr;
 	}
 
 	const auto group_idx = task->group_idx;
 	auto &finished_hash_group = window_hash_groups[group_idx];
 	D_ASSERT(finished_hash_group);
 
+	WindowHashGroupPtr finished_group;
 	if (++finished_hash_group->completed >= finished_hash_group->GetTaskCount()) {
-		finished_hash_group.reset();
+		finished_group = std::move(finished_hash_group);
 		//	Remove it from the active groups
 		auto &v = active_groups;
 		v.erase(std::remove(v.begin(), v.end(), group_idx), v.end());
@@ -1091,6 +1094,7 @@ void WindowGlobalSourceState::FinishTask(TaskPtr task) {
 
 	//	Count the global tasks completed.
 	++completed;
+	return finished_group;
 }
 
 bool WindowLocalSourceState::TryAssignTask() {
