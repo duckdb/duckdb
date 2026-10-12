@@ -378,6 +378,7 @@ void ClientContext::InitialCleanup(ClientContextLock &lock) {
 	//! Cleanup any open results and reset the interrupted flag
 	CleanupInternal(lock);
 	interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
+	client_data->profiler->ResetQueryStart();
 }
 
 unique_ptr<QueryResult> ClientContext::CompleteInternal(ClientContextLock &lock, unique_ptr<QueryResult> result) {

@@ -99,13 +99,17 @@ public:
 		return string_counters;
 	}
 
+	//! Reset the counters that are tracked without profiling; Reset keeps them, so they outlive their query.
+	void ResetLiveMetrics() {
+		bytes_read = 0;
+		bytes_written = 0;
+		total_memory_allocated = 0;
+	}
+
 	void Reset() {
 		latency_timer.reset();
 		string_timings.clear();
 		string_counters.clear();
-		bytes_read = 0;
-		bytes_written = 0;
-		total_memory_allocated = 0;
 
 		query_sql = "";
 		system_peak_buffer_memory = 0;
