@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
@@ -21,7 +22,8 @@ class MetadataWriter;
 
 struct PartialBlockForIndex : public PartialBlock {
 public:
-	PartialBlockForIndex(PartialBlockState state, BlockManager &block_manager, BufferHandle buffer_handle);
+	PartialBlockForIndex(PartialBlockState state, BlockManager &block_manager,
+	                     const shared_ptr<BlockHandle> &block_handle);
 	~PartialBlockForIndex() override {};
 
 public:

@@ -1,6 +1,7 @@
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
@@ -11,8 +12,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 PartialBlockForIndex::PartialBlockForIndex(PartialBlockState state, BlockManager &block_manager,
-                                           BufferHandle buffer_handle)
-    : PartialBlock(state, block_manager, buffer_handle.GetBlockHandle()) {
+                                           const shared_ptr<BlockHandle> &block_handle)
+    : PartialBlock(state, block_manager, block_handle) {
 }
 
 void PartialBlockForIndex::Flush(QueryContext context, const idx_t free_space_left) {
@@ -112,7 +113,7 @@ shared_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partia
 		auto new_block_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, &block_manager, false);
 		memcpy(new_block_handle.GetDataMutable(), buffer_handle.Ptr(), new_allocation_size);
 		auto p_block_for_index =
-		    make_uniq<PartialBlockForIndex>(allocation.state, block_manager, std::move(new_block_handle));
+		    make_uniq<PartialBlockForIndex>(allocation.state, block_manager, new_block_handle.GetBlockHandle());
 		allocation.partial_block = std::move(p_block_for_index);
 	}
 
