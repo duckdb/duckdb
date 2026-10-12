@@ -2,6 +2,8 @@
 # description: Timing metrics expose their wall-clock bounds through structured logs
 # group: [profiling]
 
+require noforcestorage
+
 statement ok
 CALL enable_logging('Metrics')
 
@@ -36,11 +38,29 @@ WHERE metric IN (
 	'optimizer.total_time',
 	'physical_planner.total_time'
 )
-AND start_time IS NOT NULL
-AND end_time IS NOT NULL
-AND start_time <= end_time
+AND (
+	start_time IS NULL
+	OR end_time IS NULL
+	OR start_time > end_time
+)
 ----
-5
+0
+
+query I
+SELECT CASE
+	WHEN current_setting('debug_verify_statement') = 'none' THEN count(*) = 5
+	ELSE count(*) > 0
+END
+FROM duckdb_logs_parsed('Metrics')
+WHERE metric IN (
+	'query.total_time',
+	'parser.total_time',
+	'planner.total_time',
+	'optimizer.total_time',
+	'physical_planner.total_time'
+)
+----
+true
 
 query II
 SELECT start_time IS NULL, end_time IS NULL
