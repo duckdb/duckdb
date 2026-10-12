@@ -1,0 +1,41 @@
+# name: test/sql/catalog/txid_current_remote_catalog.test
+# description: txid_current() while the default database is not a DuckDB database
+# group: [catalog]
+
+require quack
+
+require httpfs
+
+statement ok
+CALL quack_serve(token='test_token');
+
+statement ok
+ATTACH 'quack:localhost' AS qk (TOKEN 'test_token');
+
+statement ok
+USE qk;
+
+query I
+SELECT txid_current() IS NOT NULL;
+----
+true
+
+# the id stays the same within a transaction
+statement ok
+BEGIN
+
+statement ok
+SET VARIABLE txid = txid_current();
+
+query I
+SELECT txid_current() = getvariable('txid');
+----
+true
+
+statement ok
+COMMIT
+
+query I
+SELECT txid_current() <> getvariable('txid');
+----
+true
