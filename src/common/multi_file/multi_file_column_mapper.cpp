@@ -935,13 +935,17 @@ static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expressio
 }
 
 static bool TryCastConstant(Value &constant, const LogicalType &target_type) {
-	// this filter replaces the global one in the reader, so a constant that does not survive the cast
-	// exactly would silently change which rows match
-	if (!BoundCastExpression::CastIsInvertible(constant.type(), target_type)) {
+	// this filter replaces the global one in the reader, so it is only equivalent if the cast of the column from the
+	// local (file) type to the global type is invertible, and if the constant survives the cast to the local type
+	if (!BoundCastExpression::CastIsInvertible(target_type, constant.type())) {
 		return false;
 	}
 	auto cast = constant.DefaultTryCastAs(target_type);
 	if (!cast) {
+		return false;
+	}
+	auto roundtrip = cast->DefaultTryCastAs(constant.type());
+	if (!roundtrip || *roundtrip != constant) {
 		return false;
 	}
 	constant = std::move(*cast);
