@@ -312,7 +312,9 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
 
 	auto &profiler = QueryProfiler::Get(*this);
-	profiler.StartQuery(statement->query, IsExplainAnalyze(*this, statement.get()));
+	const bool redact_query = statement->log_query && !Settings::Get<AllowUnredactedSecretsSetting>(*this);
+	const auto &profile_query = redact_query ? *statement->log_query : statement->query;
+	profiler.StartQuery(profile_query, IsExplainAnalyze(*this, statement.get()));
 	Planner logical_planner(*this);
 	if (parameters.statement_args) {
 		auto &parameter_values = *parameters.statement_args;
