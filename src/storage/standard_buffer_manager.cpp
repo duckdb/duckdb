@@ -509,17 +509,16 @@ string StandardBufferManager::GetTemporaryPath(block_id_t id) {
 }
 
 void StandardBufferManager::RequireTemporaryDirectory() {
-	if (temporary_directory.path.empty()) {
-		throw InvalidInputException(
-		    "Out-of-memory: cannot write buffer because no temporary directory is specified!\nTo enable "
-		    "temporary buffer eviction set a temporary directory using PRAGMA temp_directory='/path/to/tmp.tmp'");
-	}
-	lock_guard<mutex> guard(temporary_directory.lock);
-	if (!temporary_directory.handle) {
-		// temp directory has not been created yet: initialize it
+	std::call_once(temporary_directory.initialize_once, [&] {
+		lock_guard<mutex> guard(temporary_directory.lock);
+		if (temporary_directory.path.empty()) {
+			throw InvalidInputException(
+			    "Out-of-memory: cannot write buffer because no temporary directory is specified!\nTo enable "
+			    "temporary buffer eviction set a temporary directory using PRAGMA temp_directory='/path/to/tmp.tmp'");
+		}
 		temporary_directory.handle = make_uniq<TemporaryDirectoryHandle>(
 		    db, temporary_directory.path, temporary_directory.size_on_disk, temporary_directory.maximum_swap_space);
-	}
+	});
 }
 
 bool StandardBufferManager::EncryptTemporaryFiles() {
