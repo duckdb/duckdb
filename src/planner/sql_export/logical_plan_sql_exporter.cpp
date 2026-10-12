@@ -333,6 +333,10 @@ LogicalPlanSQLExporter::Export(ClientContext &context, LogicalOperator &root,
 		return LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>::Failure(verification);
 	}
 	LogicalPlanSQLExportContext state(context);
+	if (auto returning = SQLExportDMLHelpers::MatchReturningRoot(root)) {
+		// output names become the RETURNING aliases, so they are not reapplied below
+		return SQLExportDMLHelpers::ExportReturning(state, *returning, options.output_names);
+	}
 	auto result = state.Export(root, LogicalPlanVerificationPath());
 	if (!options.output_names) {
 		return result;

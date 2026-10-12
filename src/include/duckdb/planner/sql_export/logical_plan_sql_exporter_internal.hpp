@@ -106,4 +106,13 @@ struct LogicalPlanSQLExportHelpers {
 	static bool IsIdentityProjection(const LogicalProjection &projection,
 	                                 const vector<LogicalPlanSQLExportField> &fields);
 };
+
+//! Export of data-modifying plan roots (sql_export_dml.cpp)
+struct SQLExportDMLHelpers {
+	//! The RETURNING projection over a data-modifying operator, when the root has that shape.
+	static optional_ptr<LogicalProjection> MatchReturningRoot(LogicalOperator &root);
+	//! Export a RETURNING root; output names become the RETURNING aliases.
+	static LogicalPlanSQLExportResult ExportReturning(LogicalPlanSQLExportContext &context, LogicalProjection &root,
+	                                                  const optional<vector<Identifier>> &output_names);
+};
 } // namespace duckdb
