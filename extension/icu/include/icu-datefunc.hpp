@@ -62,6 +62,8 @@ struct ICUDateFunc {
 
 		//! Returns a calendar for the time zone. Throws for unknown zones.
 		Calendar *GetCalendar(const string_t &tz_id);
+		//! Returns a calendar for the time zone, or nullptr for unknown zones (filling error_message if provided).
+		Calendar *TryGetCalendar(const string_t &tz_id, string *error_message = nullptr);
 		//! Sets the time zone for the calendar.
 		//! For unknown zones, fills error_message if provided and throws otherwise.
 		void SetTimeZone(Calendar *calendar, const string_t &tz_id, string *error_message = nullptr);
