@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/cte_join_filter_collector.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/expression_barrier.hpp"
@@ -165,7 +166,7 @@ void CTEJoinFilterCollector::PushFilter(LogicalOperator &op, const LogicalCTERef
 			auto child_bindings = child->GetColumnBindings();
 			auto child_keys = target_keys;
 			for (auto &key : child_keys) {
-				auto position = std::find(bindings.begin(), bindings.end(), key) - bindings.begin();
+				auto position = NumericCast<idx_t>(std::find(bindings.begin(), bindings.end(), key) - bindings.begin());
 				key = child_bindings[position];
 			}
 			PushFilter(*child, source, source_keys, std::move(child_keys), comparisons);

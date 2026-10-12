@@ -32,9 +32,10 @@ Value CV2ExpressionBindInfo::GetArgValue(idx_t index) const {
 	return input.GetConstant(index);
 }
 
-CV2ConstantBindInfo::CV2ConstantBindInfo(const BoundTableFunction &function, void *user_data,
-                                         const vector<Value> &positional, const named_argument_map_t &named)
-    : CV2FunctionBindInfo(function, user_data), positional(positional), named(named) {
+CV2ConstantBindInfo::CV2ConstantBindInfo(const BoundSimpleFunction &function, const FunctionSignature &signature,
+                                         void *user_data, const vector<Value> &positional,
+                                         const named_argument_map_t &named)
+    : CV2FunctionBindInfo(function, signature, user_data), positional(positional), named(named) {
 	D_ASSERT(function.GetPositionalArgumentCount() == positional.size());
 }
 
@@ -45,7 +46,7 @@ const Value &CV2ConstantBindInfo::GetArg(idx_t index) const {
 	const auto &name = function.GetNamedArguments()[index - positional.size()];
 	auto entry = named.find(name);
 	if (entry == named.end()) {
-		throw InternalException("Named argument \"%s\" of a table function call has no value", name);
+		throw InternalException("Named argument \"%s\" of a function call has no value", name);
 	}
 	return entry->second;
 }
@@ -84,9 +85,9 @@ DUCKDB_V2_ERROR duckdb_v2_function_bind_set_bind_data(duckdb_v2_function_bind_in
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() {
-		if (!Convert(info)->can_set_bind_data) {
-			throw duckdb::InvalidInputException(
-			    "Scalar functions set the bind data through duckdb_v2_scalar_function_bind_set_bind_data");
+		auto &bind_data_error = Convert(info)->bind_data_error;
+		if (!bind_data_error.empty()) {
+			throw duckdb::InvalidInputException(bind_data_error);
 		}
 		Convert(info)->out_bind_data =
 		    data->ptr ? duckdb::make_shared_ptr<CV2UserData>(data->ptr, data->destroy, data->equals) : nullptr;

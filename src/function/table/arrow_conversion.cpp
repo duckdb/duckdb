@@ -65,9 +65,10 @@ static void GetValidityMask(ValidityMask &mask, ArrowArray &array, idx_t chunk_o
 			//! just memcpy nullmask
 			memcpy((void *)mask.GetData(), ArrowBufferData<uint8_t>(array, 0) + bit_offset / 8, n_bitmask_bytes);
 		} else {
-			//! need to re-align nullmask
-			vector<uint8_t> temp_nullmask(n_bitmask_bytes + 1);
-			memcpy(temp_nullmask.data(), ArrowBufferData<uint8_t>(array, 0) + bit_offset / 8, n_bitmask_bytes + 1);
+			//! need to re-align nullmask - only the bytes that hold the bits of the rows are guaranteed to exist
+			vector<uint8_t> temp_nullmask(n_bitmask_bytes + 1, 0);
+			auto n_source_bytes = (bit_offset % 8 + size + 8 - 1) / 8;
+			memcpy(temp_nullmask.data(), ArrowBufferData<uint8_t>(array, 0) + bit_offset / 8, n_source_bytes);
 			ShiftRight(temp_nullmask.data(), NumericCast<int>(n_bitmask_bytes + 1),
 			           NumericCast<int>(bit_offset % 8ull)); //! why this has to be a right shift is a mystery to me
 			memcpy((void *)mask.GetData(), data_ptr_cast(temp_nullmask.data()), n_bitmask_bytes);
@@ -731,12 +732,12 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(Vector &vector, c
 		run_end_encoding.run_ends = make_uniq<Vector>(run_ends_type.GetDuckType(), compressed_size);
 		run_end_encoding.values = make_uniq<Vector>(values_type.GetDuckType(), compressed_size);
 
-		ArrowToDuckDBConversion::ColumnArrowToDuckDB(*run_end_encoding.run_ends, run_ends_array, chunk_offset,
-		                                             array_state, compressed_size, run_ends_type);
+		// the run ends and values are scanned in full - the offsets of the scan apply to the logical (decoded) rows
+		ArrowToDuckDBConversion::ColumnArrowToDuckDB(*run_end_encoding.run_ends, run_ends_array, 0, array_state,
+		                                             compressed_size, run_ends_type);
 		auto &values = *run_end_encoding.values;
-		ArrowToDuckDBConversion::SetValidityMask(values, values_array, chunk_offset, compressed_size,
-		                                         NumericCast<int64_t>(parent_offset), nested_offset);
-		ArrowToDuckDBConversion::ColumnArrowToDuckDB(values, values_array, chunk_offset, array_state, compressed_size,
+		ArrowToDuckDBConversion::SetValidityMask(values, values_array, 0, compressed_size, 0, -1);
+		ArrowToDuckDBConversion::ColumnArrowToDuckDB(values, values_array, 0, array_state, compressed_size,
 		                                             values_type);
 	}
 
@@ -1250,6 +1251,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 
 		auto &validity_mask = FlatVector::ValidityMutable(vector);
 		auto &union_info = arrow_type.GetTypeInfo<ArrowStructInfo>();
+		const auto member_offset = parent_offset + NumericCast<uint64_t>(array.offset);
 		duckdb::vector<Vector> children;
 		for (idx_t child_idx = 0; child_idx < NumericCast<idx_t>(array.n_children); child_idx++) {
 			Vector child(members[child_idx].second, size);
@@ -1257,22 +1259,25 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			auto &child_state = array_state.GetChild(child_idx);
 			auto &child_type = union_info.GetChild(child_idx);
 
+			// the members of a sparse union have the same length as the union - they are scanned at the same offset
 			ArrowToDuckDBConversion::SetValidityMask(child, child_array, chunk_offset, size,
-			                                         NumericCast<int64_t>(parent_offset), nested_offset);
+			                                         NumericCast<int64_t>(member_offset), nested_offset);
 			auto array_physical_type = child_type.GetPhysicalType();
 
 			switch (array_physical_type) {
 			case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
 				ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(child, child_array, chunk_offset, child_state,
-				                                                       size, child_type);
+				                                                       size, child_type, nested_offset, &validity_mask,
+				                                                       member_offset);
 				break;
 			case ArrowArrayPhysicalType::RUN_END_ENCODED:
 				ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(child, child_array, chunk_offset, child_state,
-				                                                          size, child_type);
+				                                                          size, child_type, nested_offset,
+				                                                          &validity_mask, member_offset);
 				break;
 			case ArrowArrayPhysicalType::DEFAULT:
 				ArrowToDuckDBConversion::ColumnArrowToDuckDB(child, child_array, chunk_offset, child_state, size,
-				                                             child_type, nested_offset, &validity_mask, false);
+				                                             child_type, nested_offset, &validity_mask, member_offset);
 				break;
 			default:
 				throw NotImplementedException("ArrowArrayPhysicalType not recognized");
@@ -1426,7 +1431,8 @@ static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, const
 }
 
 static bool CanContainNull(const ArrowArray &array, const ValidityMask *parent_mask) {
-	if (array.null_count > 0) {
+	// a null count of -1 means that the number of nulls is unknown
+	if (array.null_count != 0) {
 		return true;
 	}
 	if (!parent_mask) {
