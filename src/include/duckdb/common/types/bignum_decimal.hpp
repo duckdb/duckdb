@@ -17,11 +17,11 @@ namespace duckdb {
 struct BignumIntermediate;
 class StringHeap;
 
-//! Helpers for wide decimals: DECIMAL values wider than Decimal::MAX_WIDTH_DECIMAL whose unscaled value is stored as
+//! Helpers for wide decimals: DECIMAL values wider than Decimal::MAX_WIDTH_INT128 whose unscaled value is stored as
 //! a BIGNUM blob (PhysicalType::VARCHAR). All blobs are in the BIGNUM encoding, so they compare and hash like BIGNUMs.
 class BignumDecimal {
 public:
-	//! 10^exponent as a BIGNUM blob, for exponent in [0, Decimal::MAX_WIDTH_BIGNUM]
+	//! 10^exponent as a BIGNUM blob, for exponent in [0, Decimal::MAX_WIDTH_DECIMAL]
 	DUCKDB_API static const string &PowerOfTen(idx_t exponent);
 	//! Whether |value| < 10^width, i.e. the unscaled value fits a DECIMAL of the given width
 	DUCKDB_API static bool FitsWidth(const string_t &value, uint8_t width);
@@ -51,6 +51,11 @@ public:
 	//! Converts a double to the unscaled value of a DECIMAL(width, scale), returns false if it is not finite or does
 	//! not fit
 	DUCKDB_API static bool TryFromDouble(double value, uint8_t width, uint8_t scale, string &result);
+
+	//! Converts a two's complement integer of "size" bytes (big- or little-endian) into the BIGNUM blob of its value
+	DUCKDB_API static string FromTwosComplement(const_data_ptr_t data, idx_t size, bool big_endian);
+	//! Writes the unscaled value as a two's complement integer of "size" bytes, throws if it does not fit
+	DUCKDB_API static void ToTwosComplement(const string_t &value, data_ptr_t result, idx_t size, bool big_endian);
 
 	//! Whether the unscaled value is zero
 	DUCKDB_API static bool IsZero(const string_t &value);

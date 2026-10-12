@@ -9,7 +9,7 @@
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 
 //===--------------------------------------------------------------------===//
-// Casts to and from wide decimals: DECIMALs wider than Decimal::MAX_WIDTH_DECIMAL whose unscaled value is stored as
+// Casts to and from wide decimals: DECIMALs wider than Decimal::MAX_WIDTH_INT128 whose unscaled value is stored as
 // a BIGNUM blob (PhysicalType::VARCHAR). A BIGNUM is treated as a wide decimal with scale 0 in these casts.
 //===--------------------------------------------------------------------===//
 namespace duckdb {
@@ -188,7 +188,7 @@ struct WideDecimalToInteger {
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, WideDecimalCastInput &data) {
 		string blob;
 		RESULT_TYPE result;
-		if (!BignumDecimal::TryRescale(input, data.source_scale, Decimal::MAX_WIDTH_BIGNUM, 0, blob) ||
+		if (!BignumDecimal::TryRescale(input, data.source_scale, Decimal::MAX_WIDTH_DECIMAL, 0, blob) ||
 		    !BlobToInteger<RESULT_TYPE>(string_t(blob), result)) {
 			return data.Fail<RESULT_TYPE>(data.OutOfRange(BignumDecimal::ToString(input, data.source_scale)), mask,
 			                              idx);
@@ -201,7 +201,7 @@ struct WideDecimalToBignum {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, WideDecimalCastInput &data) {
 		string blob;
-		if (!BignumDecimal::TryRescale(input, data.source_scale, Decimal::MAX_WIDTH_BIGNUM, 0, blob)) {
+		if (!BignumDecimal::TryRescale(input, data.source_scale, Decimal::MAX_WIDTH_DECIMAL, 0, blob)) {
 			return data.Fail<RESULT_TYPE>(data.OutOfRange(BignumDecimal::ToString(input, data.source_scale)), mask,
 			                              idx);
 		}
@@ -288,7 +288,7 @@ struct FixedDecimalToBignum {
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, WideDecimalCastInput &data) {
 		auto unscaled = UnscaledBlob(hugeint_t(input));
 		string blob;
-		if (!BignumDecimal::TryRescale(string_t(unscaled), data.source_scale, Decimal::MAX_WIDTH_BIGNUM, 0, blob)) {
+		if (!BignumDecimal::TryRescale(string_t(unscaled), data.source_scale, Decimal::MAX_WIDTH_DECIMAL, 0, blob)) {
 			throw InternalException("Rounding a fixed-size decimal to an integer cannot exceed the BIGNUM range");
 		}
 		return data.StoreBlob(blob);

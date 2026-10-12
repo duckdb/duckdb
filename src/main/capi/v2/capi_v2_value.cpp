@@ -106,9 +106,9 @@ const LogicalType &RequireValueType(duckdb_v2_logical_type_handle type) {
 // int64 form. Width and scale are gated here: an out-of-range pair would build
 // a broken type rather than a bad value.
 Value BuildDecimal(duckdb_v2_hugeint_t in_value, uint8_t width, uint8_t scale) {
-	if (width < 1 || width > Decimal::MAX_WIDTH_DECIMAL) {
+	if (width < 1 || width > Decimal::MAX_WIDTH_INT128) {
 		throw InvalidInputException(": DECIMAL width must be between 1 and " +
-		                            std::to_string(Decimal::MAX_WIDTH_DECIMAL));
+		                            std::to_string(Decimal::MAX_WIDTH_INT128));
 	}
 	if (scale > width) {
 		throw InvalidInputException(": DECIMAL scale cannot exceed the width");

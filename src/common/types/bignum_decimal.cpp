@@ -59,14 +59,14 @@ bool FitsWidthInternal(const BignumIntermediate &value, uint8_t width) {
 const string &BignumDecimal::PowerOfTen(idx_t exponent) {
 	static const vector<string> POWERS = []() {
 		vector<string> result;
-		result.reserve(idx_t(Decimal::MAX_WIDTH_BIGNUM) + 1);
-		for (idx_t i = 0; i <= Decimal::MAX_WIDTH_BIGNUM; i++) {
+		result.reserve(idx_t(Decimal::MAX_WIDTH_DECIMAL) + 1);
+		for (idx_t i = 0; i <= Decimal::MAX_WIDTH_DECIMAL; i++) {
 			string digits = "1" + string(i, '0');
 			result.push_back(Bignum::VarcharToBignum(string_t(digits)));
 		}
 		return result;
 	}();
-	D_ASSERT(exponent <= Decimal::MAX_WIDTH_BIGNUM);
+	D_ASSERT(exponent <= Decimal::MAX_WIDTH_DECIMAL);
 	return POWERS[exponent];
 }
 
@@ -342,6 +342,73 @@ double BignumDecimal::ToDouble(const string_t &value, uint8_t scale) {
 		throw InternalException("Could not convert wide decimal '%s' to DOUBLE", text);
 	}
 	return result;
+}
+
+string BignumDecimal::FromTwosComplement(const_data_ptr_t data, idx_t size, bool big_endian) {
+	if (size == 0) {
+		return Bignum::InitializeBignumZero();
+	}
+	// normalize to big-endian magnitude bytes
+	vector<uint8_t> magnitude(size);
+	for (idx_t i = 0; i < size; i++) {
+		magnitude[i] = big_endian ? data[i] : data[size - 1 - i];
+	}
+	const bool negative = (magnitude[0] & 0x80) != 0;
+	if (negative) {
+		// the magnitude of a two's complement number: complement every byte and add one
+		for (idx_t i = 0; i < size; i++) {
+			magnitude[i] = static_cast<uint8_t>(~magnitude[i]);
+		}
+		for (idx_t i = size; i > 0; i--) {
+			if (++magnitude[i - 1] != 0) {
+				break;
+			}
+		}
+	}
+	// strip leading zero bytes
+	idx_t start = 0;
+	while (start + 1 < size && magnitude[start] == 0) {
+		start++;
+	}
+	if (size - start == 1 && magnitude[start] == 0) {
+		return Bignum::InitializeBignumZero();
+	}
+	return Bignum::FromByteArray(magnitude.data() + start, size - start, negative);
+}
+
+void BignumDecimal::ToTwosComplement(const string_t &value, data_ptr_t result, idx_t size, bool big_endian) {
+	BorrowedBignum borrowed(value);
+	auto &intermediate = borrowed.intermediate;
+	const idx_t start = intermediate.GetStartDataPos();
+	const idx_t magnitude_bytes = intermediate.size - start;
+	if (magnitude_bytes > size) {
+		throw OutOfRangeException("Decimal value does not fit in %d bytes", size);
+	}
+	// big-endian magnitude, right-aligned
+	vector<uint8_t> bytes(size, 0);
+	for (idx_t i = 0; i < magnitude_bytes; i++) {
+		bytes[size - magnitude_bytes + i] = intermediate.GetAbsoluteByte(static_cast<int64_t>(start + i));
+	}
+	if (intermediate.is_negative) {
+		// two's complement: complement every byte and add one
+		for (idx_t i = 0; i < size; i++) {
+			bytes[i] = static_cast<uint8_t>(~bytes[i]);
+		}
+		for (idx_t i = size; i > 0; i--) {
+			if (++bytes[i - 1] != 0) {
+				break;
+			}
+		}
+		// the only negative number whose magnitude has the top bit set is -2^(8 * size - 1)
+		if (magnitude_bytes == size && (bytes[0] & 0x80) == 0) {
+			throw OutOfRangeException("Decimal value does not fit in %d bytes", size);
+		}
+	} else if (magnitude_bytes == size && (bytes[0] & 0x80) != 0) {
+		throw OutOfRangeException("Decimal value does not fit in %d bytes", size);
+	}
+	for (idx_t i = 0; i < size; i++) {
+		result[i] = big_endian ? bytes[i] : bytes[size - 1 - i];
+	}
 }
 
 bool BignumDecimal::TryFromDouble(double value, uint8_t width, uint8_t scale, string &result) {

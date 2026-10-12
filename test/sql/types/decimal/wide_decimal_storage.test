@@ -2,7 +2,7 @@
 # description: Decimals wider than 38 digits in tables: storage, filters, aggregates, joins and persistence
 # group: [decimal]
 
-load __TEST_DIR__/wide_decimal.db
+load {TEST_DIR}/wide_decimal.db
 
 statement ok
 CREATE TABLE t AS
@@ -189,24 +189,53 @@ Duplicate key "d: -1.50"
 
 # CSV round trip
 statement ok
-COPY (SELECT d FROM t WHERE i < 3) TO '__TEST_DIR__/wide_decimal.csv'
+COPY (SELECT d FROM t WHERE i < 3) TO '{TEST_DIR}/wide_decimal.csv'
 
 query I
-SELECT d FROM read_csv('__TEST_DIR__/wide_decimal.csv', types={'d': 'DECIMAL(60,2)'}) ORDER BY d
+SELECT d FROM read_csv('{TEST_DIR}/wide_decimal.csv', types={'d': 'DECIMAL(60,2)'}) ORDER BY d
 ----
 12345678901234567890123456789012345678901234567891.00
 112345678901234567890123456789012345678901234567890.10
 212345678901234567890123456789012345678901234567890.20
 
 query I
-SELECT typeof(d) FROM read_csv('__TEST_DIR__/wide_decimal.csv', types={'d': 'DECIMAL(60,2)'}) LIMIT 1
+SELECT typeof(d) FROM read_csv('{TEST_DIR}/wide_decimal.csv', types={'d': 'DECIMAL(60,2)'}) LIMIT 1
 ----
 DECIMAL(60,2)
 
-# Parquet is not supported yet
+# Parquet round trip: FIXED_LEN_BYTE_ARRAY two's complement with statistics
 require parquet
 
-statement error
-COPY (SELECT d FROM t) TO '__TEST_DIR__/wide_decimal.parquet'
+statement ok
+COPY t TO '{TEST_DIR}/wide_decimal.parquet'
+
+query I
+SELECT typeof(d) FROM '{TEST_DIR}/wide_decimal.parquet' LIMIT 1
 ----
-not supported yet
+DECIMAL(60,2)
+
+query IIII
+SELECT count(*), count(d), min(d), max(d) FROM '{TEST_DIR}/wide_decimal.parquet'
+----
+10002	10001	0.00	999912345678901234567890123456789012345678901234567890.99
+
+query I
+SELECT count(*) FROM t a JOIN '{TEST_DIR}/wide_decimal.parquet' p USING (i) WHERE a.d IS DISTINCT FROM p.d
+----
+0
+
+query II
+SELECT type, precision FROM parquet_schema('{TEST_DIR}/wide_decimal.parquet') WHERE name = 'd'
+----
+FIXED_LEN_BYTE_ARRAY	60
+
+query II
+SELECT stats_min_value, stats_max_value FROM parquet_metadata('{TEST_DIR}/wide_decimal.parquet') WHERE path_in_schema = 'd' AND row_group_id = 0
+----
+0.00	999912345678901234567890123456789012345678901234567890.99
+
+# a BigQuery BIGDECIMAL(77,38) column reads exactly
+query I
+SELECT max(bigdec) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
+----
+578960446186580977117854925043439539266.34992332820282019728792003956564819967

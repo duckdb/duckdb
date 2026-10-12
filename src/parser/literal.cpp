@@ -142,14 +142,14 @@ static Value NumberToValue(const string &val) {
 	}
 	idx_t decimal_offset = val[0] == '-' ? 3 : 2;
 	if (try_cast_as_decimal && decimal_position.IsValid() &&
-	    str_val.GetSize() - num_underscores < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
+	    str_val.GetSize() - num_underscores < Decimal::MAX_WIDTH_INT128 + decimal_offset) {
 		// figure out the width/scale based on the decimal position
 		auto width = NumericCast<uint8_t>(str_val.GetSize() - 1 - num_underscores);
 		auto scale = NumericCast<uint8_t>(width - decimal_position.GetIndex() + num_integer_underscores);
 		if (val[0] == '-') {
 			width--;
 		}
-		if (width <= Decimal::MAX_WIDTH_DECIMAL) {
+		if (width <= Decimal::MAX_WIDTH_INT128) {
 			return Value(str_val).DefaultCastAs(LogicalType::DECIMAL(width, scale));
 		}
 	}

@@ -12,6 +12,7 @@
 
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/planner/collation_binding.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -103,7 +104,10 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 			max_width_over_scale = MaxValue<uint8_t>(width - scale, max_width_over_scale);
 		}
 		idx_t required_width = MaxValue<idx_t>(idx_t(max_scale) + max_width_over_scale, max_width);
-		auto width_limit = Decimal::MaxCombinedWidth(widths[0], widths[1]);
+		// fixed-size decimals only grow past 38 digits when the wide_decimal_arithmetic setting is enabled
+		auto width_limit = Settings::Get<WideDecimalArithmeticSetting>(context)
+		                       ? Decimal::MAX_WIDTH_DECIMAL
+		                       : Decimal::MaxCombinedWidth(widths[0], widths[1]);
 		if (required_width > width_limit) {
 			// target width does not fit in decimal: truncate the scale (if possible) to try and make it fit
 			required_width = width_limit;

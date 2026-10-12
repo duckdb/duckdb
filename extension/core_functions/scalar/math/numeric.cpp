@@ -554,7 +554,7 @@ static unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(BindScalarFuncti
 			break;
 		case PhysicalType::VARCHAR:
 			throw NotImplementedException("Rounding DECIMAL types wider than %d digits is not supported yet",
-			                              Decimal::MAX_WIDTH_DECIMAL);
+			                              Decimal::MAX_WIDTH_INT128);
 		default:
 			bound_function.SetFunctionCallback(GenericRoundFunctionDecimal<hugeint_t, Hugeint, OP>);
 			break;
@@ -718,7 +718,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 	if (round_value < 0) {
 		target_scale = 0;
 		if (CAN_CARRY && scale == 0 && round_value >= -int32_t(width)) {
-			if (result_width < Decimal::MAX_WIDTH_DECIMAL) {
+			if (result_width < Decimal::MAX_WIDTH_INT128) {
 				result_width++;
 			} else {
 				check_overflow = true;
@@ -737,7 +737,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 			break;
 		case PhysicalType::VARCHAR:
 			throw NotImplementedException("Rounding DECIMAL types wider than %d digits is not supported yet",
-			                              Decimal::MAX_WIDTH_DECIMAL);
+			                              Decimal::MAX_WIDTH_INT128);
 		default:
 			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<hugeint_t, Hugeint, NEGOP>);
 			break;
@@ -764,7 +764,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 				break;
 			case PhysicalType::VARCHAR:
 				throw NotImplementedException("Rounding DECIMAL types wider than %d digits is not supported yet",
-				                              Decimal::MAX_WIDTH_DECIMAL);
+				                              Decimal::MAX_WIDTH_INT128);
 			default:
 				bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<hugeint_t, Hugeint, POSOP>);
 				break;
@@ -1124,8 +1124,8 @@ struct DecimalRoundNegativePrecisionOperator {
 			    UnsafeNumericCast<T>(RoundDivide<T, ROUND_POLICY>(input, divide_power_of_ten) * multiply_power_of_ten);
 			if (check_overflow) {
 				if constexpr (std::is_same_v<T, hugeint_t>) {
-					if (rounded <= -Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL] ||
-					    rounded >= Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL]) {
+					if (rounded <= -Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_INT128] ||
+					    rounded >= Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_INT128]) {
 						throw OutOfRangeException("Overflow in %s of DECIMAL(38)", ROUND_POLICY::Name);
 					}
 				}

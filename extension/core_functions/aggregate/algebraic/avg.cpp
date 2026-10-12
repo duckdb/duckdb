@@ -293,7 +293,7 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 	}
 	case PhysicalType::VARCHAR:
 		throw NotImplementedException("AVG over DECIMAL types wider than %d digits is not supported yet",
-		                              Decimal::MAX_WIDTH_DECIMAL);
+		                              Decimal::MAX_WIDTH_INT128);
 	default:
 		throw InternalException("Unimplemented average aggregate");
 	}

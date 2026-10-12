@@ -428,14 +428,14 @@ unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 		function.ReplaceImplementation(GetWideDecimalSumAggregate());
 		function.SetName("sum");
 		function.GetArguments()[0] = decimal_type;
-		function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_BIGNUM, DecimalType::GetScale(decimal_type)));
+		function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return nullptr;
 	}
 	function.ReplaceImplementation(GetSumAggregate(decimal_type.InternalType()));
 	function.SetName("sum");
 	function.GetArguments()[0] = decimal_type;
-	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
+	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT128, DecimalType::GetScale(decimal_type)));
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return nullptr;
 }

@@ -113,7 +113,7 @@ static Value NumericStatsValue(const LogicalType &type, hugeint_t value) {
 //===--------------------------------------------------------------------===//
 // Wide decimal arithmetic
 //===--------------------------------------------------------------------===//
-// Decimals wider than Decimal::MAX_WIDTH_DECIMAL store their unscaled value as a BIGNUM blob, so their arithmetic runs
+// Decimals wider than Decimal::MAX_WIDTH_INT128 store their unscaled value as a BIGNUM blob, so their arithmetic runs
 // on BignumIntermediate. The binder adds one digit of headroom to the result width of additions, so the width only has
 // to be checked when the result width was clamped to the maximum (check_overflow).
 [[noreturn]] static void ThrowWideDecimalOverflow(const char *operation, const LogicalType &result_type) {
@@ -431,8 +431,10 @@ unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(BindScalarFunctionIn
 		// for addition/subtraction, we add 1 to the width to ensure we don't overflow
 		required_width++;
 	}
-	// results only become wide (BIGNUM-backed) decimals when one of the inputs already is one
-	const uint8_t width_limit = any_wide ? Decimal::MAX_WIDTH_BIGNUM : Decimal::MAX_WIDTH_DECIMAL;
+	// results only become wide (BIGNUM-backed) decimals when one of the inputs already is one, unless the
+	// wide_decimal_arithmetic setting lets fixed-size decimals grow past 38 digits
+	const bool allow_wide = any_wide || Settings::Get<WideDecimalArithmeticSetting>(input.GetClientContext());
+	const uint8_t width_limit = allow_wide ? Decimal::MAX_WIDTH_DECIMAL : Decimal::MAX_WIDTH_INT128;
 	if (required_width > width_limit) {
 		// target width does not fit in decimal at all: truncate the scale and perform overflow detection
 		bind_data->check_overflow = true;
@@ -1148,8 +1150,10 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 		any_wide = any_wide || Decimal::IsWide(width);
 	}
 	D_ASSERT(max_width > 0);
-	// results only become wide (BIGNUM-backed) decimals when one of the inputs already is one
-	const uint8_t width_limit = any_wide ? Decimal::MAX_WIDTH_BIGNUM : Decimal::MAX_WIDTH_DECIMAL;
+	// results only become wide (BIGNUM-backed) decimals when one of the inputs already is one, unless the
+	// wide_decimal_arithmetic setting lets fixed-size decimals grow past 38 digits
+	const bool allow_wide = any_wide || Settings::Get<WideDecimalArithmeticSetting>(input.GetClientContext());
+	const uint8_t width_limit = allow_wide ? Decimal::MAX_WIDTH_DECIMAL : Decimal::MAX_WIDTH_INT128;
 	if (result_scale > width_limit) {
 		throw OutOfRangeException(
 		    "Needed scale %d to accurately represent the multiplication result, but this is out of range of the "

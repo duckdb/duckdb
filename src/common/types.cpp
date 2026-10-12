@@ -1419,7 +1419,7 @@ uint8_t DecimalType::GetScale(const LogicalType &type) {
 }
 
 uint8_t DecimalType::MaxWidth() {
-	return DecimalWidth<hugeint_t>::max;
+	return Decimal::MAX_WIDTH_DECIMAL;
 }
 
 LogicalType LogicalType::DECIMAL(uint8_t width, uint8_t scale) {

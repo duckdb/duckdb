@@ -184,9 +184,9 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 			parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
 			break;
 		case PhysicalType::VARCHAR:
-			throw NotImplementedException("Writing %s to Parquet is not supported yet: DECIMAL types wider than %d "
-			                              "digits cannot be written",
-			                              duckdb_type.ToString(), Decimal::MAX_WIDTH_DECIMAL);
+			// wide decimal: big-endian two's complement bytes
+			parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
+			break;
 		default:
 			throw InternalException("Unsupported internal decimal type");
 		}
@@ -348,6 +348,11 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.__isset.scale = true;
 		if (duckdb_type.InternalType() == PhysicalType::INT128) {
 			schema_ele.type_length = 16;
+			schema_ele.__isset.type_length = true;
+		} else if (duckdb_type.InternalType() == PhysicalType::VARCHAR) {
+			// wide decimal
+			schema_ele.type_length =
+			    NumericCast<int32_t>(ParquetDecimalUtils::WideDecimalByteLength(DecimalType::GetWidth(duckdb_type)));
 			schema_ele.__isset.type_length = true;
 		}
 		schema_ele.__isset.logicalType = true;

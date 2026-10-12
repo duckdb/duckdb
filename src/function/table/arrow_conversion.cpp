@@ -10,6 +10,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/types/arrow_string_view_type.hpp"
 #include "duckdb/function/table/arrow.hpp"
 
@@ -833,6 +834,58 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 	}
 }
 
+//! Arrow decimal256 values are 32-byte little-endian two's complement integers; they become wide (BIGNUM-backed)
+//! decimals, or fixed-size decimals when the Arrow precision is at most 38 digits
+static void ConvertDecimal256(const_data_ptr_t src_ptr, Vector &vector, idx_t size, ValidityMask &val_mask) {
+	constexpr idx_t DECIMAL256_BYTES = 32;
+	switch (vector.GetType().InternalType()) {
+	case PhysicalType::VARCHAR: {
+		auto tgt_ptr = FlatVector::GetDataMutable<string_t>(vector);
+		for (idx_t row = 0; row < size; row++) {
+			if (val_mask.RowIsValid(row)) {
+				auto blob =
+				    BignumDecimal::FromTwosComplement(src_ptr + row * DECIMAL256_BYTES, DECIMAL256_BYTES, false);
+				tgt_ptr[row] = StringVector::AddStringOrBlob(vector, blob.data(), blob.size());
+			}
+		}
+		break;
+	}
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128: {
+		for (idx_t row = 0; row < size; row++) {
+			if (!val_mask.RowIsValid(row)) {
+				continue;
+			}
+			auto blob = BignumDecimal::FromTwosComplement(src_ptr + row * DECIMAL256_BYTES, DECIMAL256_BYTES, false);
+			hugeint_t value;
+			if (!BignumDecimal::TryToHugeint(string_t(blob), value)) {
+				throw ConversionException("Arrow decimal256 value does not fit in %s", vector.GetType().ToString());
+			}
+			switch (vector.GetType().InternalType()) {
+			case PhysicalType::INT16:
+				FlatVector::GetDataMutable<int16_t>(vector)[row] = Cast::Operation<hugeint_t, int16_t>(value);
+				break;
+			case PhysicalType::INT32:
+				FlatVector::GetDataMutable<int32_t>(vector)[row] = Cast::Operation<hugeint_t, int32_t>(value);
+				break;
+			case PhysicalType::INT64:
+				FlatVector::GetDataMutable<int64_t>(vector)[row] = Cast::Operation<hugeint_t, int64_t>(value);
+				break;
+			default:
+				FlatVector::GetDataMutable<hugeint_t>(vector)[row] = value;
+				break;
+			}
+		}
+		break;
+	}
+	default:
+		throw NotImplementedException("Unsupported physical type for Decimal: %s",
+		                              TypeIdToString(vector.GetType().InternalType()));
+	}
+}
+
 void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, idx_t chunk_offset,
                                                   ArrowArrayScanState &array_state, idx_t size,
                                                   const ArrowType &arrow_type, int64_t nested_offset,
@@ -1164,6 +1217,13 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
 			ConvertDecimal(src_ptr, vector, array, size, nested_offset, parent_offset, chunk_offset, val_mask,
 			               bit_width);
+			break;
+		}
+		case DecimalBitWidth::DECIMAL_256: {
+			auto src_ptr =
+			    ArrowBufferData<data_t>(array, 1) +
+			    32 * GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
+			ConvertDecimal256(src_ptr, vector, size, val_mask);
 			break;
 		}
 		default:
