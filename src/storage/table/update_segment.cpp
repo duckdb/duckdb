@@ -22,8 +22,7 @@ static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(P
 static UpdateSegment::fetch_rows_function_t GetFetchRowsFunction(PhysicalType type);
 static UpdateSegment::get_effective_updates_t GetEffectiveUpdatesFunction(PhysicalType type);
 
-UpdateSegment::UpdateSegment(ColumnData &column_data)
-    : column_data(column_data), stats(column_data.type), heap(BufferAllocator::Get(column_data.GetDatabase())) {
+UpdateSegment::UpdateSegment(ColumnData &column_data) : column_data(column_data), stats(column_data.type) {
 	auto physical_type = column_data.type.InternalType();
 
 	this->type_size = GetTypeIdSize(physical_type);
@@ -376,12 +375,108 @@ void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pin = node.Pin();
 	fetch_update_function(transaction.view, UpdateInfo::Get(pin), result);
+	AddStringHeapReference(*lock_handle, vector_index, result);
 }
 
 UpdateNode::UpdateNode(BufferManager &manager) : allocator(manager) {
 }
 
 UpdateNode::~UpdateNode() {
+}
+
+//===--------------------------------------------------------------------===//
+// String Heap
+//===--------------------------------------------------------------------===//
+UpdateStringHeap::UpdateStringHeap(Allocator &allocator, idx_t initial_capacity)
+    : allocator(allocator, initial_capacity) {
+}
+
+string_t UpdateStringHeap::AddString(const string_t &str) {
+	if (str.IsInlined()) {
+		return str;
+	}
+	auto length = str.GetSize();
+	auto data = allocator.Allocate(length);
+	memcpy(data, str.GetData(), length);
+	size += length;
+	return string_t(char_ptr_cast(data), UnsafeNumericCast<uint32_t>(length));
+}
+
+//! Keeps the string heap of a vector alive while the strings are referenced by a scanned vector
+struct UpdateStringHeapHolder : public AuxiliaryDataHolder {
+	explicit UpdateStringHeapHolder(shared_ptr<UpdateStringHeap> heap_p) : heap(std::move(heap_p)) {
+	}
+
+	shared_ptr<UpdateStringHeap> heap;
+};
+
+//! Strings are only compacted once the heap has grown by at least this amount since the last compaction
+static constexpr idx_t MINIMUM_STRING_HEAP_COMPACTION_SIZE = 16384;
+
+void UpdateSegment::AddStringHeapReference(const StorageLockKey &, idx_t vector_index, Vector &result) const {
+	if (vector_index >= root->string_heaps.size()) {
+		return;
+	}
+	auto &string_heap = root->string_heaps[vector_index];
+	if (!string_heap || string_heap->size == 0) {
+		return;
+	}
+	result.AddAuxiliaryData(make_uniq<UpdateStringHeapHolder>(string_heap));
+}
+
+//! Call the callback for every string stored in the root, and in the (pinned) update infos of its chain
+template <class FUNC>
+static void ForEachUpdateString(UpdateInfo &root_info, vector<UndoBufferReference> &chain, FUNC &&callback) {
+	auto root_data = root_info.GetData<string_t>();
+	for (idx_t i = 0; i < root_info.N; i++) {
+		callback(root_data[i]);
+	}
+	for (auto &pin : chain) {
+		auto &info = UpdateInfo::Get(pin);
+		auto info_data = info.GetData<string_t>();
+		auto value_count = info.GetValueMask().CountValid(info.N);
+		for (idx_t i = 0; i < value_count; i++) {
+			callback(info_data[i]);
+		}
+	}
+}
+
+void UpdateSegment::CompactStringHeapIfNeeded(UpdateInfo &root_info, idx_t vector_index, idx_t new_size) {
+	auto &string_heap = root->string_heaps[vector_index];
+	if (string_heap->size + new_size < 2 * string_heap->compacted_size + MINIMUM_STRING_HEAP_COMPACTION_SIZE) {
+		return;
+	}
+	// the strings in the heap are referenced by the root and by the update infos in its chain
+	vector<UndoBufferReference> chain;
+	auto next = root_info.next;
+	while (next.IsSet()) {
+		chain.push_back(next.Pin());
+		next = UpdateInfo::Get(chain.back()).next;
+	}
+	idx_t live_size = 0;
+	ForEachUpdateString(root_info, chain, [&](string_t &str) {
+		if (!str.IsInlined()) {
+			live_size += str.GetSize();
+		}
+	});
+	// allocate everything up front, so nothing is modified if this fails
+	// the first block of the arena is twice its initial capacity: it fits all strings until the next compaction
+	auto capacity = MaxValue<idx_t>(2 * live_size + MINIMUM_STRING_HEAP_COMPACTION_SIZE, live_size + new_size);
+	auto new_heap = make_shared_ptr<UpdateStringHeap>(BufferAllocator::Get(column_data.GetDatabase()), capacity / 2);
+	auto target = live_size == 0 ? nullptr : new_heap->allocator.Allocate(live_size);
+	ForEachUpdateString(root_info, chain, [&](string_t &str) {
+		if (str.IsInlined()) {
+			return;
+		}
+		auto length = str.GetSize();
+		memcpy(target, str.GetData(), length);
+		str = string_t(char_ptr_cast(target), UnsafeNumericCast<uint32_t>(length));
+		target += length;
+	});
+	new_heap->size = live_size;
+	new_heap->compacted_size = live_size;
+	// scans that still reference strings in the old heap keep it alive
+	string_heap = std::move(new_heap);
 }
 
 //===--------------------------------------------------------------------===//
@@ -446,6 +541,7 @@ void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pin = node.Pin();
 	fetch_committed_function(UpdateInfo::Get(pin), result);
+	AddStringHeapReference(*lock_handle, vector_index, result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -561,6 +657,7 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 		D_ASSERT(end_in_vector > 0 && end_in_vector <= STANDARD_VECTOR_SIZE);
 		idx_t result_offset = ((vector_idx * STANDARD_VECTOR_SIZE) + start_in_vector) - start_row;
 		fetch_committed_range(UpdateInfo::Get(pin), start_in_vector, end_in_vector, result_offset, result);
+		AddStringHeapReference(*lock_handle, vector_idx, result);
 	}
 }
 
@@ -705,6 +802,7 @@ void UpdateSegment::FetchRows(TransactionData transaction, const idx_t *offsets,
 			auto pin = entry.Pin();
 			fetch_rows_function(transaction.view, UpdateInfo::Get(pin), offsets, sel, idx, vector_count, vector_offset,
 			                    result, result_offset);
+			AddStringHeapReference(*lock_handle, vector_index, result);
 		}
 		idx += vector_count;
 	}
@@ -1483,6 +1581,7 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 
 	UnifiedVectorFormat update_format;
 	update_p.ToUnifiedFormat(update_format);
+	const idx_t input_count = count;
 
 	// update statistics
 	SelectionVector sel;
@@ -1493,17 +1592,6 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 	if (count == 0) {
 		return;
 	}
-	if (statistics_update_function == UpdateStringStatistics) {
-		// for strings - we need to push all strings we are going to place here into the string heap of the segment
-		update_p.Flatten();
-		auto update_data = FlatVector::GetDataMutable<string_t>(update_p);
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i);
-			update_data[idx] = GetStringHeap().AddBlob(update_data[idx]);
-		}
-		update_p.ToUnifiedFormat(update_format);
-	}
-
 	// subsequent algorithms used by the update require row ids to be (1) sorted, and (2) unique
 	// this is usually the case for "standard" queries (e.g. UPDATE tbl SET x=bla WHERE cond)
 	// however, for more exotic queries involving e.g. cross products/joins this might not be the case
@@ -1543,6 +1631,16 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		root_info.column_index = column_index;
 		root->info[vector_index] = handle.GetBufferPointer();
 	}
+	bool is_string = statistics_update_function == UpdateStringStatistics;
+	if (is_string) {
+		if (root->string_heaps.size() <= vector_index) {
+			root->string_heaps.resize(vector_index + 1);
+		}
+		if (!root->string_heaps[vector_index]) {
+			root->string_heaps[vector_index] =
+			    make_shared_ptr<UpdateStringHeap>(BufferAllocator::Get(column_data.GetDatabase()));
+		}
+	}
 
 	// make room in the root before modifying anything
 	{
@@ -1552,6 +1650,31 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 	auto root_pointer = root->info[vector_index];
 	auto root_pin = root_pointer.Pin();
 	auto &root_info = UpdateInfo::Get(root_pin);
+	// for strings - copy the new strings into the string heap of the vector before modifying anything
+	unique_ptr<Vector> heap_strings;
+	idx_t new_size = 0;
+	if (is_string) {
+		auto update_data = UnifiedVectorFormat::GetData<string_t>(update_format);
+		for (idx_t i = 0; i < count; i++) {
+			auto &str = update_data[update_format.sel->get_index(sel.get_index(i))];
+			if (!str.IsInlined()) {
+				new_size += str.GetSize();
+			}
+		}
+		CompactStringHeapIfNeeded(root_info, vector_index, new_size);
+	}
+	if (new_size > 0) {
+		auto update_data = UnifiedVectorFormat::GetData<string_t>(update_format);
+		auto &string_heap = *root->string_heaps[vector_index];
+		heap_strings = make_uniq<Vector>(update_p.GetType(), input_count);
+		auto heap_data = FlatVector::GetDataMutable<string_t>(*heap_strings);
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+			heap_data[idx] = string_heap.AddString(update_data[update_format.sel->get_index(idx)]);
+		}
+		FlatVector::SetSize(*heap_strings, input_count);
+		heap_strings->ToUnifiedFormat(update_format);
+	}
 	if (transaction.transaction) {
 		// check if there are any conflicts and search for the update info that belongs to this transaction
 		UndoBufferReference node_ref;
