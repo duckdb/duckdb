@@ -341,7 +341,6 @@ bool RowGroupCollection::InitializeScanInRowGroup(ClientContext &context, Collec
                                                   RowGroupCollection &collection, SegmentNode<RowGroup> &row_group,
                                                   idx_t vector_index, idx_t max_row, bool initialize_columns) {
 	state.max_row = max_row;
-	state.row_groups = collection.GetRowGroups();
 	if (state.column_scans.empty()) {
 		// initialize the scan state
 		state.Initialize(context, collection.GetTypes());
