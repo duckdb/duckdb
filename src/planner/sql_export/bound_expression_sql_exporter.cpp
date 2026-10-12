@@ -146,7 +146,9 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::Export(const Expre
 	auto result = ExportInternal(expression, path);
 	const bool preserves_collation = expression.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT ||
 	                                 (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
-	                                  expression.GetReturnType().id() != LogicalTypeId::VARCHAR);
+	                                  expression.GetReturnType().id() != LogicalTypeId::VARCHAR) ||
+	                                 (expression.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE &&
+	                                  expression.GetReturnType().IsAggregateState());
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF || preserves_collation) {
 		return result;
 	}
@@ -402,9 +404,11 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const B
 			    path, "aggregate_state_try_cast",
 			    "Aggregate state TRY_CAST or custom casts require a SQL representation")});
 		}
-		auto result = ExportAggregateFunction::StateToSQL(
-		    expression.GetReturnType(),
-		    BoundExpressionSQLExportState::SQLCast(storage_type, std::move(child.GetValue())));
+		auto storage = RestoreResultType(storage_type, std::move(child.GetValue()), path);
+		if (storage.HasError()) {
+			return storage;
+		}
+		auto result = ExportAggregateFunction::StateToSQL(expression.GetReturnType(), std::move(storage.GetValue()));
 		if (!result) {
 			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
 			    path, "aggregate_state_parameters", "Aggregate state SQL parameters are not representable")});
