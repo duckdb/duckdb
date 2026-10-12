@@ -453,13 +453,8 @@ bool ParquetScanFunction::ProjectionExpressionPushdown(ClientContext &context,
 		return false;
 	}
 	const idx_t idx = column_id.GetPrimaryIndex();
-	// Don't do pushdown of strlen to hive and filename columns
-	for (const auto &partition : bind_data.reader_bind.hive_partitioning_indexes) {
-		if (partition.index == idx) {
-			return false;
-		}
-	}
-	if (bind_data.reader_bind.filename_idx.IsValid() && bind_data.reader_bind.filename_idx.GetIndex() == idx) {
+	// Generated values do not come from the physical column, even when its name and type match.
+	if (bind_data.IsGeneratedColumn(idx)) {
 		return false;
 	}
 	// We run scalar function pushdown after filter pushdown - a filter pushed into the scan needs the column itself
@@ -474,6 +469,12 @@ bool ParquetScanFunction::ProjectionExpressionPushdown(ClientContext &context,
 	auto &metadata_reader = parquet_data.GetMetadataReader(context);
 	auto &children = metadata_reader.root_schema->children;
 	if (idx >= children.size() || idx >= bind_data.types.size() || idx >= reader.types.size()) {
+		return false;
+	}
+	if (!bind_data.file_options.bound_schema.empty() &&
+	    (idx >= reader.columns.size() ||
+	     !bind_data.MatchesPhysicalColumn(idx, reader.columns[idx].name, reader.types[idx]))) {
+		// The pushed expression addresses a physical column, before name mapping and conversion.
 		return false;
 	}
 	const idx_t column_flat_idx = children[idx].column_index;
