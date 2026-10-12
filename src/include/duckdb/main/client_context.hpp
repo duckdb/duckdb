@@ -16,6 +16,7 @@
 #include "duckdb/common/enums/query_result_state.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/enums/connection_type.hpp"
+#include "duckdb/common/enums/result_lifetime.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -93,6 +94,7 @@ class ClientContext : public enable_shared_from_this<ClientContext> {
 	friend class BufferedData;        // ExecuteTaskInternal, PollInternal
 	friend class SimpleBufferedData;  // ExecuteTaskInternal, PollInternal
 	friend class BatchedBufferedData; // ExecuteTaskInternal, PollInternal
+	friend class ResultStreamBase;    // ExecuteTaskInternal, PollInternal, before the stream's buffer exists
 	friend class ConnectionManager;
 	friend class Connection;
 	friend class PhysicalTransaction;
@@ -406,8 +408,9 @@ private:
 	//! The result of the finished query. For a statement that expands into several and returns no rows, that is an
 	//! empty result in the query's format, the way a statement that returns nothing reports
 	unique_ptr<QueryResult> TakeFinishedResultInternal(ClientContextLock &lock);
-	//! Records that the result is retained, for a result statement that has not started
-	void RetainResultInternal(ClientContextLock &lock);
+	//! Records the consumer's retention decision for a result statement that has not started. The first decision
+	//! stands; returns it
+	ResultLifetime DecideResultLifetimeInternal(ClientContextLock &lock, ResultLifetime decision);
 
 	//! Wait until a task is available to execute
 	void WaitForTask(ClientContextLock &lock, BaseQueryResult &result);

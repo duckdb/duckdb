@@ -572,11 +572,12 @@ unique_ptr<QueryResult> ClientContext::TakeFinishedResultInternal(ClientContextL
 	                              std::move(client_properties));
 }
 
-void ClientContext::RetainResultInternal(ClientContextLock &lock) {
+ResultLifetime ClientContext::DecideResultLifetimeInternal(ClientContextLock &lock, ResultLifetime decision) {
 	D_ASSERT(active_query && !active_query->result_statement_started);
 	if (active_query->retention == ResultLifetime::UNDECIDED) {
-		active_query->retention = ResultLifetime::RETAINED;
+		active_query->retention = decision;
 	}
+	return active_query->retention;
 }
 
 } // namespace duckdb

@@ -390,7 +390,7 @@ void QueryResult::SettleRetainedInternal(ClientContextLock &lock) {
 		return;
 	}
 	// The statement that produces the result has not started: its buffer takes the decision when it is created
-	context->RetainResultInternal(lock);
+	context->DecideResultLifetimeInternal(lock, ResultLifetime::RETAINED);
 }
 
 void QueryResult::Complete() {

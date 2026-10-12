@@ -1039,8 +1039,7 @@ TEST_CASE("Query on a statement that expands matches the reference", "[api][expa
 //===--------------------------------------------------------------------===//
 // Streams
 //===--------------------------------------------------------------------===//
-TEST_CASE("A stream opened on a group drains the rows of its result statement",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A stream opened on a group drains the rows of its result statement", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
@@ -1059,8 +1058,7 @@ TEST_CASE("A stream opened on a group drains the rows of its result statement",
 	REQUIRE(!stream.IsOpen());
 }
 
-TEST_CASE("Closing a stream on a group before its result statement started ends it",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("Closing a stream on a group before its result statement started ends it", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
@@ -1073,6 +1071,70 @@ TEST_CASE("Closing a stream on a group before its result statement started ends 
 		REQUIRE(!stream.IsOpen());
 	}
 	REQUIRE(PivotEnumCount(con) == before);
+	REQUIRE(Count(con, "SELECT 42") == 42);
+}
+
+TEST_CASE("A stream on a group without rows ends empty and keeps its effect", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection observer(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	CreateNumbers(con, 10);
+
+	QueryResultStream<> stream(SubmitGroup(con, VOLATILE_DEFAULT));
+	SECTION("through Fetch") {
+		REQUIRE(!stream.Fetch());
+	}
+	SECTION("through TryFetch") {
+		Deadline deadline;
+		unique_ptr<DataChunk> chunk;
+		QueryResultState state;
+		while (!IsTerminal(state = stream.TryFetch(chunk))) {
+			REQUIRE(!chunk);
+			REQUIRE(!deadline.Passed());
+			stream.ExecuteTask();
+		}
+		REQUIRE(state == QueryResultState::FINISHED);
+	}
+	REQUIRE(!stream.HasError());
+	REQUIRE(!stream.IsOpen());
+	REQUIRE(stream.MetadataAvailable());
+	REQUIRE(stream.GetStatementProperties().return_type == StatementReturnType::NOTHING);
+	REQUIRE(Count(observer, "SELECT count(*) FROM t WHERE c IS NULL") == 0);
+}
+
+TEST_CASE("TryFetch on a group reaches the rows of its result statement", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=2"));
+	CreateSales(con);
+
+	QueryResultStream<> stream(SubmitGroup(con, SALES_PIVOT));
+	Deadline deadline;
+	idx_t rows = 0;
+	unique_ptr<DataChunk> chunk;
+	QueryResultState state;
+	while (!IsTerminal(state = stream.TryFetch(chunk))) {
+		if (chunk) {
+			rows += chunk->size();
+		}
+		REQUIRE(!deadline.Passed());
+		std::this_thread::sleep_for(std::chrono::microseconds(100));
+	}
+	REQUIRE(state == QueryResultState::FINISHED);
+	REQUIRE(rows == 2);
+	REQUIRE(stream.GetNames()[0].GetIdentifierName() == "city");
+}
+
+TEST_CASE("A stream does not open on a group that is retained", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	CreateSales(con);
+
+	auto handle = SubmitGroup(con, SALES_PIVOT);
+	handle->Materialize();
+	REQUIRE_THROWS_WITH(QueryResultStream<>(std::move(handle)), Catch::Contains("being retained"));
 	REQUIRE(Count(con, "SELECT 42") == 42);
 }
 
@@ -1119,8 +1181,7 @@ TEST_CASE("A handle on a group that outlives its connection ends safely", "[api]
 	REQUIRE(Count(after, "SELECT 42") == 42);
 }
 
-TEST_CASE("A stream on a group that outlives its connection drains safely",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A stream on a group that outlives its connection drains safely", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	auto con = make_uniq<Connection>(db);
 	REQUIRE_NO_FAIL(con->Query("SET threads=1"));
