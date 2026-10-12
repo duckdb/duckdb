@@ -144,6 +144,8 @@ protected:
 	             idx_t count, SelectionVector *true_sel, SelectionVector *false_sel);
 	idx_t Select(const BoundFunctionExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             SelectionVector *true_sel, SelectionVector *false_sel);
+	idx_t Select(const BoundOperatorExpression &expr, ExpressionState &state, optional_ptr<const SelectionVector> sel,
+	             idx_t count, optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel);
 
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(const Expression &expr, Vector &result, idx_t count);

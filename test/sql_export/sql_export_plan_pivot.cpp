@@ -2,6 +2,7 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
@@ -23,6 +24,8 @@ static void RequirePivotStreamingEffects(Connection &connection) {
 		CAPTURE(route);
 		auto sequence = "pivot_stream_" + to_string(route);
 		REQUIRE_NO_FAIL(connection.Query("CREATE SEQUENCE " + sequence));
+		auto &sequence_entry =
+		    Catalog::GetEntry<SequenceCatalogEntry>(*connection.context, QualifiedName::Parse(sequence));
 		auto sql = "SELECT g,a_s FROM (SELECT i g, CASE WHEN i%2=0 THEN 'a' ELSE 'b' END k, i v, "
 		           "nextval('" +
 		           sequence +
@@ -56,7 +59,11 @@ static void RequirePivotStreamingEffects(Connection &connection) {
 		auto first = stream.Fetch();
 		REQUIRE(first);
 		REQUIRE(first->size() > 0);
-		stream.Close();
+		// The barrier evaluated every nextval before the first row reached the consumer
+		REQUIRE(sequence_entry.CurrentValue() == 5000);
+		// Draining ends the statement: closing it early would abort it, and invalidate the transaction
+		while (stream.Fetch()) {
+		}
 		REQUIRE_FALSE(stream.HasError());
 		auto effect = connection.Query("SELECT currval('" + sequence + "')");
 		REQUIRE_NO_FAIL(*effect);
