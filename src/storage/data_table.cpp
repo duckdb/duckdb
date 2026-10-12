@@ -1,4 +1,6 @@
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
+#include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/transaction/commit_state.hpp"
@@ -174,6 +176,12 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 
 	if (constraint.type != ConstraintType::UNIQUE) {
 		VerifyNewConstraint(local_storage, parent, constraint);
+	} else if (constraint.Cast<BoundUniqueConstraint>().is_primary_key) {
+		// the key columns become NOT NULL: verify them under the append lock, including rows committed concurrently
+		for (auto &key : constraint.Cast<BoundUniqueConstraint>().keys) {
+			BoundNotNullConstraint not_null(key);
+			VerifyNewConstraint(local_storage, parent, not_null);
+		}
 	}
 	local_storage.MoveStorage(parent, *this);
 	parent.version = DataTableVersion::ALTERED;
