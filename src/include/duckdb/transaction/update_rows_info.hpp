@@ -14,7 +14,7 @@ namespace duckdb {
 class RowVersionManager;
 
 //! The undo entry of a transaction that updates rows of a row group (see RowVersionManager::UpdateRows): a commit
-//! replaces its writer id with the commit id, a rollback with 0
+//! replaces the transaction id of the rows' writer with the commit id, a rollback removes the writer
 struct UpdateRowsInfo {
 	RowVersionManager *version_info;
 	//! The commit id of the writer, to revert the commit

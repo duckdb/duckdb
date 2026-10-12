@@ -61,7 +61,6 @@ idx_t ChunkVectorInfo::GetRowCount(ScanOptions options, idx_t max_count) {
 
 ChunkVectorInfo::~ChunkVectorInfo() {
 	FreeDeleteData();
-	ClearUpdates();
 	if (!HasConstantInsertionId()) {
 		allocator.Free(inserted_data);
 	}
@@ -304,12 +303,8 @@ bool ChunkVectorInfo::HasConflictingDelete(transaction_t transaction_id, const r
 	}
 }
 
-static transaction_t WriterId(const vector<transaction_t> &writers, uint32_t writer) {
-	return writer == 0 ? 0 : writers[writer];
-}
-
 //! The writer of the row in the list (0 for none)
-static uint32_t FindWriter(const vector<WriterRows> &writer_rows, idx_t row) {
+static transaction_t FindWriter(const vector<WriterRows> &writer_rows, idx_t row) {
 	for (auto &entry : writer_rows) {
 		if (entry.rows[row]) {
 			return entry.writer;
@@ -319,7 +314,7 @@ static uint32_t FindWriter(const vector<WriterRows> &writer_rows, idx_t row) {
 }
 
 //! The rows of the writer in the list (added if missing)
-static WriterRows &GetWriterRows(vector<WriterRows> &writer_rows, uint32_t writer) {
+static WriterRows &GetWriterRows(vector<WriterRows> &writer_rows, transaction_t writer) {
 	for (auto &entry : writer_rows) {
 		if (entry.writer == writer) {
 			return entry;
@@ -329,21 +324,24 @@ static WriterRows &GetWriterRows(vector<WriterRows> &writer_rows, uint32_t write
 	return writer_rows.back();
 }
 
-static void RemoveWritersWithoutRows(vector<WriterRows> &writer_rows) {
+//! Removes the writers without rows, and those that all transactions see (below lowest_visibility_bound)
+static void RemoveWriters(vector<WriterRows> &writer_rows, VisibilityBound lowest_visibility_bound) {
 	writer_rows.erase(std::remove_if(writer_rows.begin(), writer_rows.end(),
-	                                 [](const WriterRows &entry) { return entry.writer == 0 || entry.rows.none(); }),
+	                                 [&](const WriterRows &entry) {
+		                                 return entry.rows.none() || entry.writer < lowest_visibility_bound;
+	                                 }),
 	                  writer_rows.end());
 }
 
-bool ChunkVectorInfo::HasConflictingUpdate(const SnapshotView &view, const vector<transaction_t> &writers,
-                                           const row_t ids[], idx_t count, row_t offset) const {
+bool ChunkVectorInfo::HasConflictingUpdate(const SnapshotView &view, const row_t ids[], idx_t count,
+                                           row_t offset) const {
 	if (!row_writers) {
 		return false;
 	}
 	bool sees_all_writers = true;
 	for (auto writer_rows : {&row_writers->last, &row_writers->previous}) {
 		for (auto &entry : *writer_rows) {
-			sees_all_writers = sees_all_writers && view.Sees(WriterId(writers, entry.writer));
+			sees_all_writers = sees_all_writers && view.Sees(entry.writer);
 		}
 	}
 	if (sees_all_writers) {
@@ -351,12 +349,12 @@ bool ChunkVectorInfo::HasConflictingUpdate(const SnapshotView &view, const vecto
 	}
 	for (idx_t i = 0; i < count; i++) {
 		auto row = NumericCast<idx_t>(ids[i] - offset);
-		// without a last writer (or once it rolled back), the previous one counts
-		auto writer_id = WriterId(writers, FindWriter(row_writers->last, row));
-		if (writer_id == 0) {
-			writer_id = WriterId(writers, FindWriter(row_writers->previous, row));
+		// without a last writer (e.g. once it rolled back), the previous one counts
+		auto writer = FindWriter(row_writers->last, row);
+		if (writer == 0) {
+			writer = FindWriter(row_writers->previous, row);
 		}
-		if (!view.Sees(writer_id)) {
+		if (!view.Sees(writer)) {
 			return true;
 		}
 	}
@@ -411,10 +409,6 @@ IndexPointer ChunkVectorInfo::GetInitializedDeletedPointer() {
 		delete_state = DeleteIdState::ARRAY;
 	}
 	return deleted_data;
-}
-
-void ChunkVectorInfo::ClearUpdates() {
-	row_writers.reset();
 }
 
 void ChunkVectorInfo::FreeDeleteData() {
@@ -474,11 +468,10 @@ static bool CoversFirstRows(const row_t rows[], idx_t count, row_t offset) {
 	return true;
 }
 
-idx_t ChunkVectorInfo::Delete(TransactionData transaction, const vector<transaction_t> &writers, row_t rows[],
-                              idx_t count) {
+idx_t ChunkVectorInfo::Delete(TransactionData transaction, row_t rows[], idx_t count) {
 	auto transaction_id = transaction.GetTransactionId();
 	if (HasConflictingDelete(transaction_id, rows, count, 0) ||
-	    HasConflictingUpdate(transaction.view, writers, rows, count, 0)) {
+	    HasConflictingUpdate(transaction.view, rows, count, 0)) {
 		throw TransactionException("Conflict on tuple deletion!");
 	}
 	if (HasConstantDeleteId() && ConstantDeleteId() != NOT_DELETED_ID) {
@@ -509,10 +502,11 @@ idx_t ChunkVectorInfo::Delete(TransactionData transaction, const vector<transact
 	return deleted_tuples;
 }
 
-void ChunkVectorInfo::Update(TransactionData transaction, const vector<transaction_t> &writers, uint32_t writer,
-                             const row_t ids[], idx_t count, row_t offset, VisibilityBound lowest_visibility_bound) {
-	if (HasConflictingDelete(transaction.GetTransactionId(), ids, count, offset) ||
-	    HasConflictingUpdate(transaction.view, writers, ids, count, offset)) {
+void ChunkVectorInfo::Update(TransactionData transaction, const row_t ids[], idx_t count, row_t offset,
+                             VisibilityBound lowest_visibility_bound) {
+	auto transaction_id = transaction.GetTransactionId();
+	if (HasConflictingDelete(transaction_id, ids, count, offset) ||
+	    HasConflictingUpdate(transaction.view, ids, count, offset)) {
 		throw TransactionException("Conflict on update!");
 	}
 	if (!row_writers) {
@@ -522,7 +516,9 @@ void ChunkVectorInfo::Update(TransactionData transaction, const vector<transacti
 	recheck_compression = true;
 	auto &last = row_writers->last;
 	auto &previous = row_writers->previous;
-	auto &own_rows = GetWriterRows(last, writer).rows;
+	RemoveWriters(last, lowest_visibility_bound);
+	RemoveWriters(previous, lowest_visibility_bound);
+	auto &own_rows = GetWriterRows(last, transaction_id).rows;
 	bitset<STANDARD_VECTOR_SIZE> updated_rows;
 	if (CoversFirstRows(ids, count, offset)) {
 		updated_rows.set();
@@ -535,37 +531,36 @@ void ChunkVectorInfo::Update(TransactionData transaction, const vector<transacti
 	updated_rows &= ~own_rows;
 	for (auto &entry : last) {
 		auto moved_rows = entry.rows & updated_rows;
-		if (entry.writer == writer || moved_rows.none()) {
+		if (entry.writer == transaction_id || moved_rows.none()) {
 			continue;
 		}
+		// the transaction sees this writer (otherwise it conflicts), but another transaction might not: it becomes the
+		// previous writer of the rows
 		entry.rows &= ~moved_rows;
-		// the transaction sees this writer (otherwise it conflicts): it becomes the previous writer of the rows, unless
-		// all transactions see it or it rolled back
-		auto writer_id = WriterId(writers, entry.writer);
-		if (writer_id != 0 && writer_id >= lowest_visibility_bound) {
-			for (auto &previous_entry : previous) {
-				previous_entry.rows &= ~moved_rows;
-			}
-			GetWriterRows(previous, entry.writer).rows |= moved_rows;
+		for (auto &previous_entry : previous) {
+			previous_entry.rows &= ~moved_rows;
 		}
+		GetWriterRows(previous, entry.writer).rows |= moved_rows;
 	}
 	own_rows |= updated_rows;
-	RemoveWritersWithoutRows(last);
-	RemoveWritersWithoutRows(previous);
+	RemoveWriters(last, lowest_visibility_bound);
+	RemoveWriters(previous, lowest_visibility_bound);
 }
 
-void ChunkVectorInfo::RemapUpdateWriters(const vector<uint32_t> &mapping) {
+void ChunkVectorInfo::ReplaceUpdateWriter(transaction_t old_id, transaction_t new_id) {
 	if (!row_writers) {
 		return;
 	}
 	recheck_compression = true;
-	for (auto writer_rows : {&row_writers->last, &row_writers->previous}) {
-		for (auto &entry : *writer_rows) {
-			entry.writer = mapping[entry.writer];
+	auto &last = row_writers->last;
+	for (auto &entry : last) {
+		if (entry.writer == old_id) {
+			entry.writer = new_id;
 		}
-		// the rows of forgotten writers have none
-		RemoveWritersWithoutRows(*writer_rows);
 	}
+	// a rolled back writer has no rows
+	last.erase(std::remove_if(last.begin(), last.end(), [](const WriterRows &entry) { return entry.writer == 0; }),
+	           last.end());
 }
 
 void ChunkVectorInfo::CommitDelete(transaction_t commit_id, const DeleteInfo &info) {
@@ -727,8 +722,15 @@ VersionCompressionResult ChunkVectorInfo::CompressVersionIds(VisibilityBound low
 		}
 	}
 	if (row_writers) {
-		// the row group forgets the update writers once all transactions see them
-		pending = true;
+		RemoveWriters(row_writers->last, lowest_visibility_bound);
+		RemoveWriters(row_writers->previous, lowest_visibility_bound);
+		if (row_writers->last.empty() && row_writers->previous.empty()) {
+			// no write of a row can conflict with the updates anymore
+			row_writers.reset();
+		} else {
+			// the remaining writers become visible to all transactions (or roll back) eventually
+			pending = true;
+		}
 	}
 	recheck_compression = pending;
 	if (HasConstantDeleteId() && HasConstantInsertionId() && !row_writers) {

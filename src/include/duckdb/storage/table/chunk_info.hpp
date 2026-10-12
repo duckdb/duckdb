@@ -52,10 +52,9 @@ enum class VersionCompressionResult : uint8_t {
 //! ARRAY    - per-row delete ids materialized in deleted_data
 enum class DeleteIdState : uint8_t { CONSTANT, MASKED, ARRAY };
 
-//! The rows of a vector that an update writer (an index into the update writers of the row group, see
-//! RowVersionManager) wrote
+//! The rows of a vector that a transaction updated: writer is its transaction id, or its commit id once committed
 struct WriterRows {
-	uint32_t writer;
+	transaction_t writer;
 	bitset<STANDARD_VECTOR_SIZE> rows;
 };
 
@@ -84,10 +83,8 @@ public:
 	bool Fetch(TransactionData transaction, row_t row);
 	//! Whether any of the rows (ids[i] - offset) was deleted by another transaction
 	bool HasConflictingDelete(transaction_t transaction_id, const row_t ids[], idx_t count, row_t offset) const;
-	//! Whether any of the rows (ids[i] - offset) was updated by a transaction that the view does not see (writers are
-	//! the update writers of the row group)
-	bool HasConflictingUpdate(const SnapshotView &view, const vector<transaction_t> &writers, const row_t ids[],
-	                          idx_t count, row_t offset) const;
+	//! Whether any of the rows (ids[i] - offset) was updated by a transaction that the view does not see
+	bool HasConflictingUpdate(const SnapshotView &view, const row_t ids[], idx_t count, row_t offset) const;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end);
 	bool Cleanup(VisibilityBound lowest_visibility_bound) const;
 	string ToString(idx_t max_count) const;
@@ -100,17 +97,16 @@ public:
 	//! Note that "rows" is written to to reflect the row ids that were actually deleted
 	//! i.e. after calling this function, rows will hold [0..actual_delete_count] row ids of the actually deleted tuples
 	//! Throws if one of the rows was deleted by another transaction or updated by one that the transaction does not see
-	idx_t Delete(TransactionData transaction, const vector<transaction_t> &writers, row_t rows[], idx_t count);
+	idx_t Delete(TransactionData transaction, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, const DeleteInfo &info);
-	//! Makes writer (an index into the update writers of the row group) the last writer of the rows (ids[i] - offset).
-	//! Throws if one of the rows was deleted by another transaction or updated by one that the transaction does not
-	//! see. Writers that all transactions see (below lowest_visibility_bound) are forgotten
-	void Update(TransactionData transaction, const vector<transaction_t> &writers, uint32_t writer, const row_t ids[],
-	            idx_t count, row_t offset, VisibilityBound lowest_visibility_bound);
-	//! Forgets the writers of the rows
-	void ClearUpdates();
-	//! Replaces each writer of the rows by mapping[writer]
-	void RemapUpdateWriters(const vector<uint32_t> &mapping);
+	//! Makes the transaction the last writer of the rows (ids[i] - offset). Throws if one of the rows was deleted by
+	//! another transaction or updated by one that the transaction does not see. Writers that all transactions see
+	//! (below lowest_visibility_bound) are forgotten
+	void Update(TransactionData transaction, const row_t ids[], idx_t count, row_t offset,
+	            VisibilityBound lowest_visibility_bound);
+	//! Replaces the last writer old_id of the rows by new_id: a commit (transaction id to commit id), the revert of a
+	//! commit, or a rollback (to 0, which leaves the rows with their previous writers)
+	void ReplaceUpdateWriter(transaction_t old_id, transaction_t new_id);
 
 	//! Attempts to compress the per-row insert/delete ids into constants. Ids that precede
 	//! lowest_visibility_bound look the same to every active and future transaction, so they can collapse
