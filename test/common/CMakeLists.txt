@@ -15,6 +15,7 @@ add_library_unity(
   test_external_file_cache.cpp
   test_hyperlog.cpp
   test_http_transport_manager.cpp
+  test_httplib_sigpipe.cpp
   test_literal.cpp
   test_lru_cache.cpp
   test_numeric_utils.cpp
