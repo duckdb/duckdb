@@ -32,7 +32,7 @@ struct BoundFunctionInfo {
 };
 
 unique_ptr<LogicalOperator> OptimizeIdentityQuery(Connection &con, const string &query) {
-	Parser parser(con.context->GetParserOptions());
+	Parser parser(*con.context);
 	parser.ParseQuery(query);
 	REQUIRE(parser.statements.size() == 1);
 	Planner planner(*con.context);
@@ -203,7 +203,7 @@ TEST_CASE("Aggregate rewrites keep the definition of the aggregates they introdu
 	con.BeginTransaction();
 	// avg(x) is rewritten into sum(x) / count(x)
 	{
-		auto functions = PlanIdentityFunctions(con, "SELECT g, avg(i) FROM integers GROUP BY g");
+		auto functions = PlanIdentityFunctions(con, "SELECT avg(i) FROM integers");
 		auto &count = RequireIdentityFunction(functions, "count");
 		REQUIRE(count.is_aggregate);
 		REQUIRE(count.return_type == LogicalType::BIGINT);
@@ -214,7 +214,7 @@ TEST_CASE("Aggregate rewrites keep the definition of the aggregates they introdu
 	}
 	// over a column without NULLs, statistics propagation turns the introduced count into a count_star
 	{
-		auto functions = PlanIdentityFunctions(con, "SELECT g, avg(g) FROM integers GROUP BY g");
+		auto functions = PlanIdentityFunctions(con, "SELECT avg(g) FROM integers");
 		REQUIRE(FindIdentityFunction(functions, "count_star").IsValid());
 	}
 	// ROLLUP is cascaded through exported aggregate states combined by combine_aggr()

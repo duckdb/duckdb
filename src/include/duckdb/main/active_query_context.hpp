@@ -26,6 +26,8 @@ public:
 	unique_ptr<Executor> executor;
 	//! The progress bar
 	unique_ptr<ProgressBar> progress_bar;
+	//! Whether a collector built the open result, which has no way to end the query
+	bool collector_built_result = false;
 
 public:
 	void SetOpenResult(BaseQueryResult &result) {

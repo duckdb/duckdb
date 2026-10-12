@@ -422,7 +422,6 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &cache = parameters.local_state->Cast<CalendarCacheState>();
 		CalendarPtr cal(info.calendar->Copy());
 
-		// Every nullopt below is a conversion failure: report it to try-cast callers such as the CSV reader
 		bool all_converted = true;
 		UnaryExecutor::Execute<string_t, timestamp_tz_t>(source, result, count, [&](string_t input) {
 			auto converted = VarcharToTimestampTZUS(cal, cache, input, parameters);
@@ -484,9 +483,12 @@ struct ICUStrptime : public ICUDateFunc {
 				    auto calendar = cal.get();
 
 				    // Extract the offset from the calendar
-				    auto offset = ExtractField(calendar, CAL_ZONE_OFFSET);
-				    offset += ExtractField(calendar, CAL_DST_OFFSET);
-				    offset /= Interval::MSECS_PER_SEC;
+				    int32_t offset;
+				    if (!TryGetTimeTZOffset(calendar, offset)) {
+					    HandleCastError::AssignError(TimeTZOffsetError(offset), parameters);
+					    all_converted = false;
+					    return nullopt;
+				    }
 
 				    // Apply it to the offset +00 time we parsed.
 				    result = dtime_tz_t(result.time(), offset);

@@ -31,18 +31,24 @@ static void EnableLogging(ClientContext &context, TableFunctionInput &data, Data
 
 	auto &log_manager = context.db->GetLogManager();
 
-	// Apply the config generated from the input
-	log_manager.SetConfig(*context.db, bind_data.config);
+	// Apply the config generated from the input - restoring the previous config if that fails part-way
+	auto previous_config = log_manager.GetConfig();
+	try {
+		log_manager.SetConfig(*context.db, bind_data.config);
 
-	if (bind_data.log_types_to_set.empty()) {
-		log_manager.SetEnableLogging(true);
-		log_manager.SetLogMode(LogMode::LEVEL_ONLY);
-	} else {
-		log_manager.SetEnableStructuredLoggers(bind_data.log_types_to_set);
-	}
+		if (bind_data.log_types_to_set.empty()) {
+			log_manager.SetEnableLogging(true);
+			log_manager.SetLogMode(LogMode::LEVEL_ONLY);
+		} else {
+			log_manager.SetEnableStructuredLoggers(bind_data.log_types_to_set);
+		}
 
-	if (!bind_data.storage_config.empty()) {
-		log_manager.UpdateLogStorageConfig(*context.db, bind_data.storage_config);
+		if (!bind_data.storage_config.empty()) {
+			log_manager.UpdateLogStorageConfig(*context.db, bind_data.storage_config);
+		}
+	} catch (...) {
+		log_manager.SetConfig(*context.db, previous_config);
+		throw;
 	}
 }
 
@@ -140,6 +146,10 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 
 	for (const auto &log_type : result->log_types_to_set) {
 		TryAutoloadLogTypeExtension(context, log_type);
+		// verify the log types before changing any of the logging settings
+		if (!context.db->GetLogManager().LookupLogType(log_type)) {
+			throw InvalidInputException("Unknown log type: '%s'", log_type);
+		}
 	}
 
 	return_types.emplace_back(LogicalType::BOOLEAN);

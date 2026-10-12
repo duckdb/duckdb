@@ -62,6 +62,7 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	result->sample = std::move(sample);
 	result->query_location = query_location;
 	result->query_location.length = query_location_length;
+	result->VerifyDeserialized();
 	return result;
 }
 
@@ -114,6 +115,9 @@ unique_ptr<TableRef> ColumnDataRef::Deserialize(Deserializer &deserializer) {
 	auto expected_names = deserializer.ReadPropertyWithDefault<vector<Identifier>>(200, "expected_names");
 	auto collection = deserializer.ReadPropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection");
 	auto result = duckdb::unique_ptr<ColumnDataRef>(new ColumnDataRef(std::move(collection), std::move(expected_names)));
+	if (!result->collection) {
+		throw SerializationException("ColumnDataRef is missing its collection");
+	}
 	return std::move(result);
 }
 

@@ -29,6 +29,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/assert.hpp"
@@ -167,7 +168,8 @@ public:
 	}
 
 	virtual idx_t FileOffset() const;
-	virtual uint64_t TotalCompressedSize();
+	//! Adds the indexes of the row group's column chunks this reader reads
+	virtual void GatherColumnChunks(unordered_set<idx_t> &column_chunks);
 	virtual idx_t GroupRowsAvailable();
 
 	// register the range this reader will touch for prefetching

@@ -575,6 +575,7 @@ struct ICUDatePart : public ICUDateFunc {
 	                                      ArgProperties unary_arg0_props = {}) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetUnaryPartCodeFunction<timestamp_tz_t, RESULT_TYPE>(LogicalType::TIMESTAMP_TZ, result_type));
+		set.SetFallible();
 		set.SetUnaryArgProperties(unary_arg0_props);
 		loader.RegisterFunction(set);
 	}
@@ -624,6 +625,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static void AddLastDayFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetLastDayFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 
@@ -644,6 +646,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static void AddMonthNameFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetMonthNameFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 
@@ -664,6 +667,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static void AddDayNameFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetDayNameFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 };

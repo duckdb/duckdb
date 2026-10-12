@@ -3,6 +3,7 @@
 #include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/operator/logical_merge_into.hpp"
@@ -231,30 +232,26 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		throw NotImplementedException("MERGE INTO is not supported on tables with triggers");
 	}
 
-	if (!table.temporary) {
-		// update of persistent table: not read only!
-		auto &properties = GetStatementProperties();
-		// modification type depends on actions
-		DatabaseModificationType modification;
-		for (auto &action_condition : node.actions) {
-			for (auto &action : action_condition.second) {
-				switch (action->action_type) {
-				case MergeActionType::MERGE_UPDATE:
-					modification |= DatabaseModificationType::UPDATE_DATA;
-					break;
-				case MergeActionType::MERGE_DELETE:
-					modification |= DatabaseModificationType::DELETE_DATA;
-					break;
-				case MergeActionType::MERGE_INSERT:
-					modification |= DatabaseModificationType::INSERT_DATA;
-					break;
-				default:
-					break;
-				}
+	// modification type depends on actions
+	DatabaseModificationType modification;
+	for (auto &action_condition : node.actions) {
+		for (auto &action : action_condition.second) {
+			switch (action->action_type) {
+			case MergeActionType::MERGE_UPDATE:
+				modification |= DatabaseModificationType::UPDATE_DATA;
+				break;
+			case MergeActionType::MERGE_DELETE:
+				modification |= DatabaseModificationType::DELETE_DATA;
+				break;
+			case MergeActionType::MERGE_INSERT:
+				modification |= DatabaseModificationType::INSERT_DATA;
+				break;
+			default:
+				break;
 			}
 		}
-		properties.RegisterDBModify(table.catalog, context, modification);
 	}
+	GetStatementProperties().RegisterDBModify(table.catalog, context, modification);
 
 	// bind the source
 	auto source_binder = Binder::CreateBinder(context, this);
@@ -274,6 +271,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	// bind the WHEN NOT MATCHED BY SOURCE / TARGET merge actions
 	auto &get = bound_table.plan->Cast<LogicalGet>();
 	auto merge_into = make_uniq<LogicalMergeInto>(table);
+	merge_into->return_chunk = !node.returning_list.empty();
 	merge_into->table_index = GenerateTableIndex();
 	auto proj_index = GenerateTableIndex();
 	vector<unique_ptr<Expression>> projection_expressions;
@@ -337,13 +335,9 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		throw NotImplementedException("Expected a join after binding a join operator - but got a %s",
 		                              join_ref.get().type);
 	}
-	// kind of hacky, CreatePlan turns a RIGHT join into a LEFT join so the children get reversed from what we need
-	bool inverted = join.type == JoinType::RIGHT;
+	// CreatePlan can turn a RIGHT join into a LEFT join - in that case the children are reversed
+	bool inverted = join.type == JoinType::RIGHT && join_ref.get().Cast<LogicalJoin>().join_type == JoinType::LEFT;
 	auto &source = join_ref.get().children[inverted ? 1 : 0];
-
-	if (!node.returning_list.empty()) {
-		merge_into->return_chunk = true;
-	}
 
 	// bind WHEN_MATCHED merge actions (can contain references to both source and target)
 	for (auto &entry : node.actions) {

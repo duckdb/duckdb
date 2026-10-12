@@ -1,5 +1,6 @@
 #include "duckdb/function/window/window_segment_tree.hpp"
 
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/function/window/window_aggregate_states.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -15,12 +16,13 @@ bool WindowSegmentTree::CanAggregate(const BoundWindowExpression &wexpr) {
 		return false;
 	}
 
-	if (!wexpr.AggregateFunction()->CanAggregate()) {
+	auto &aggr = *wexpr.AggregateFunction();
+	if (!aggr.CanAggregate()) {
 		return false;
 	}
 
-	//	Don't use segment trees for custom windowing
-	if (wexpr.AggregateFunction()->CanWindow()) {
+	//	Don't use segment trees for custom windowing or holistic aggregates
+	if (aggr.CanWindow() || aggr.IsHolistic()) {
 		return false;
 	}
 
@@ -51,6 +53,11 @@ public:
 	unique_ptr<AtomicCounters> build_started;
 	//! The number of entries completed so far at each level
 	unique_ptr<AtomicCounters> build_completed;
+	//! Whether building an entry failed - the level being built will then never be completed
+	std::atomic<bool> build_failed;
+	//! The error that made building an entry fail
+	mutex build_lock;
+	ErrorData build_error;
 	//! The tree allocators.
 	//! We need to hold onto them for the tree lifetime,
 	//! not the lifetime of the local state that constructed part of the tree
@@ -81,6 +88,8 @@ public:
 	                        data_ptr_t current_state);
 	//! Writes result and calls destructors
 	void Finalize(Vector &result, idx_t count);
+	//! Calls the destructors of the accumulation states (statef) without finalizing
+	void Destroy(idx_t count);
 
 	void Combine(WindowSegmentTreePart &other, idx_t count);
 
@@ -296,6 +305,14 @@ void WindowSegmentTreePart::Finalize(Vector &result, idx_t count) {
 	}
 }
 
+void WindowSegmentTreePart::Destroy(idx_t count) {
+	if (!aggr.function.HasStateDestructorCallback()) {
+		return;
+	}
+	AggregateFinalizeInputData aggr_input_data(aggr, allocator);
+	aggr.function.GetStateDestructorCallback()(statef, aggr_input_data, count);
+}
+
 WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(ClientContext &client, const WindowSegmentTree &aggregator,
                                                            idx_t group_count, const ValidityMask &partition_mask)
     : WindowAggregatorGlobalState(client, aggregator, group_count), tree(aggregator), levels_flat_native(client, aggr) {
@@ -331,6 +348,7 @@ WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(ClientContext &client
 
 	// Start by building from the bottom level
 	build_level = 0;
+	build_failed = false;
 
 	build_started = make_uniq<AtomicCounters>(levels_flat_start.size());
 	for (auto &counter : *build_started) {
@@ -386,8 +404,13 @@ void WindowSegmentTreeLocalState::Finalize(ExecutionContext &context, WindowAggr
 		if (build_idx >= build_count) {
 			//	Nothing left at this level, so wait until other threads are done.
 			//	Since we are only building TREE_FANOUT values at a time, this will be quick.
-			while (level_current == gstate.build_level.load()) {
+			while (level_current == gstate.build_level.load() && !gstate.build_failed) {
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			}
+			if (gstate.build_failed) {
+				// another thread failed to build its part of the level, so the tree will never be complete
+				const lock_guard<mutex> guard(gstate.build_lock);
+				gstate.build_error.Throw();
 			}
 			continue;
 		}
@@ -413,9 +436,19 @@ void WindowSegmentTreeLocalState::Finalize(ExecutionContext &context, WindowAggr
 			const idx_t pos = build_idx * gstate.TREE_FANOUT;
 			const idx_t levels_flat_offset = levels_flat_start[level_current] + build_idx;
 			auto state_ptr = levels_flat_native.GetStatePtr(levels_flat_offset);
-			gtstate.WindowSegmentValue(gstate, level_current, pos, MinValue(level_size, pos + gstate.TREE_FANOUT),
-			                           state_ptr);
-			gtstate.FlushStates(level_current > 0);
+			try {
+				gtstate.WindowSegmentValue(gstate, level_current, pos, MinValue(level_size, pos + gstate.TREE_FANOUT),
+				                           state_ptr);
+				gtstate.FlushStates(level_current > 0);
+			} catch (std::exception &ex) {
+				// wake up the threads waiting for this level to be completed
+				{
+					const lock_guard<mutex> guard(gstate.build_lock);
+					gstate.build_error = ErrorData(ex);
+				}
+				gstate.build_failed = true;
+				throw;
+			}
 		}
 
 		//	If that was the last one, mark the level as complete.
@@ -465,6 +498,10 @@ void WindowSegmentTreeLocalState::Evaluate(ExecutionContext &context, const Wind
 
 		// 4. combine the buffer state into the Segment Tree State
 		part->Combine(*right_part, count);
+
+		// right_part's states are re-initialized on every chunk, so destroy them after combining to avoid leaking
+		// aggregate states that own heap memory (e.g. histogram, reservoir_quantile)
+		right_part->Destroy(count);
 	} else {
 		part->Evaluate(gtstate, window_begin, window_end, nullptr, result, count, row_idx, WindowSegmentTreePart::FULL);
 	}

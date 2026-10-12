@@ -223,7 +223,9 @@ string_t SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64
 		// we first need to count the number of characters in the string
 		idx_t num_characters = Utf8Proc::GraphemeCount(input_data, input_size);
 		// now call substring start and end again, but with the number of unicode characters this time
-		SubstringASCIIBounds(UnsafeNumericCast<int64_t>(num_characters), offset, length, start, end);
+		if (!SubstringASCIIBounds(UnsafeNumericCast<int64_t>(num_characters), offset, length, start, end)) {
+			return SubstringEmptyString(result);
+		}
 	}
 
 	// now scan the graphemes of the string to find the positions of the start and end characters

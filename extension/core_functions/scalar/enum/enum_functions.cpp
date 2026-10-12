@@ -36,29 +36,25 @@ static void EnumRangeFunction(DataChunk &input, ExpressionState &state, Vector &
 static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto types = input.GetTypes();
 	D_ASSERT(types.size() == 2);
-	idx_t start, end;
-	auto first_param = input.GetValue(0, 0);
-	auto second_param = input.GetValue(1, 0);
 
-	auto &enum_vector =
-	    first_param.IsNull() ? EnumType::GetValuesInsertOrder(types[1]) : EnumType::GetValuesInsertOrder(types[0]);
+	// the binder guarantees that at least one of the parameters is an ENUM
+	auto &enum_type = types[0].id() == LogicalTypeId::ENUM ? types[0] : types[1];
+	auto &enum_vector = EnumType::GetValuesInsertOrder(enum_type);
+	auto enum_strings = enum_vector.Values<string_t>();
 
-	if (first_param.IsNull()) {
-		start = 0;
-	} else {
-		start = first_param.GetValue<uint32_t>();
+	const auto count = input.size();
+	auto writer = FlatVector::Writer<VectorListType<string_t>>(result, count);
+	for (idx_t row = 0; row < count; row++) {
+		// a NULL boundary means that the range starts at the first / ends at the last value of the enum
+		auto first_param = input.GetValue(0, row);
+		auto second_param = input.GetValue(1, row);
+		idx_t start = first_param.IsNull() ? 0 : first_param.GetValue<uint32_t>();
+		idx_t end = second_param.IsNull() ? EnumType::GetSize(enum_type) : second_param.GetValue<uint32_t>() + 1;
+		idx_t enum_idx = start;
+		for (auto &child_writer : writer.WriteList(end > start ? end - start : 0)) {
+			child_writer.WriteValue(enum_strings[enum_idx++].GetValue());
+		}
 	}
-	if (second_param.IsNull()) {
-		end = EnumType::GetSize(types[0]);
-	} else {
-		end = second_param.GetValue<uint32_t>() + 1;
-	}
-	vector<Value> enum_values;
-	for (idx_t i = start; i < end; i++) {
-		enum_values.emplace_back(enum_vector.GetValue(i));
-	}
-	auto val = Value::LIST(LogicalType::VARCHAR, enum_values);
-	result.Reference(val, count_t(input.size()));
 }
 
 static void EnumCodeFunction(DataChunk &input, ExpressionState &state, Vector &result) {

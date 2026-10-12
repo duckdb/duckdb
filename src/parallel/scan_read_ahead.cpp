@@ -251,10 +251,13 @@ void ScanReadAhead::SetDone() {
 }
 
 bool ScanReadAhead::TryReserveSlot() {
-	const bool over_budget = pending_io_bytes.load() >= backlog_budget.load();
+	// take the minimum job charge up front so concurrent producers cannot all pass the budget check together
+	const bool over_budget = pending_io_bytes.fetch_add(MINIMUM_JOB_IO_CHARGE) >= backlog_budget.load();
+	// over budget one job stays queued, claimed jobs hold the budget until their task resumes
 	const idx_t depth = over_budget ? 1 : read_ahead_depth;
 	if (active_jobs.fetch_add(1) >= depth) {
 		--active_jobs;
+		pending_io_bytes -= MINIMUM_JOB_IO_CHARGE;
 		return false;
 	}
 	++active_producers;
@@ -262,8 +265,6 @@ bool ScanReadAhead::TryReserveSlot() {
 }
 
 void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<AsyncTask>> io_tasks) {
-	// beyond its scheduled I/O a job carries scan-state overhead (row-group sized decode buffers)
-	static constexpr idx_t MINIMUM_JOB_IO_CHARGE = 16ULL * 1024 * 1024;
 	auto completion = make_shared_ptr<ReadAheadJobCompletion>(executor);
 	job->io_completion = completion;
 	// wrap all reads before scheduling any, a wrapped task settles the completion even when scheduling throws
@@ -274,7 +275,8 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 		read_tasks.push_back(make_uniq<ReadAheadIOTask>(*executor, std::move(task), completion));
 	}
 	job->io_bytes = MaxValue<idx_t>(job->io_bytes, MINIMUM_JOB_IO_CHARGE);
-	pending_io_bytes += job->io_bytes;
+	// the minimum charge was taken by TryReserveSlot, charge the remainder
+	pending_io_bytes += job->io_bytes - MINIMUM_JOB_IO_CHARGE;
 	// schedule the reads detached on the async pool right away, logged under their own label
 	if (!read_tasks.empty()) {
 		DUCKDB_LOG(context, AsyncTaskScheduleLogType, "READ_AHEAD", read_tasks.size());
