@@ -2600,6 +2600,9 @@ public:
 	                                                    GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeIsOtherOperatorTailTrampoline(PEGTransformer &transformer,
 	                                                                              GeneratedTransformProcess &process);
+	static void InitializeIsCastTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeIsCastTailTrampoline(PEGTransformer &transformer,
+	                                                                     GeneratedTransformProcess &process);
 	static void InitializeIsTestTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeIsTestTrampoline(PEGTransformer &transformer,
 	                                                                 GeneratedTransformProcess &process);
@@ -5072,6 +5075,8 @@ public:
 	                                                  ComparisonExpressionTail comparison_expression_tail);
 	static IsExpressionTail TransformIsOtherOperatorTail(PEGTransformer &transformer,
 	                                                     OtherOperatorTail other_operator_tail);
+	static IsExpressionTail TransformIsCastTail(PEGTransformer &transformer,
+	                                            unique_ptr<ParsedExpression> cast_operator);
 	static unique_ptr<ParsedExpression> TransformIsLiteral(PEGTransformer &transformer, const bool &has_result,
 	                                                       const Value &is_literal_value);
 	static Value TransformUnknownLiteral(PEGTransformer &transformer);
@@ -5104,7 +5109,8 @@ public:
 	    PEGTransformer &transformer, unique_ptr<ParsedExpression> other_operator_expression,
 	    optional<vector<BetweenInLikeOperator>> in_predicate, optional<BetweenInLikeOperator> between_like_op);
 	static BetweenInLikeOperator TransformInPredicate(PEGTransformer &transformer, const bool &has_result,
-	                                                  unique_ptr<ParsedExpression> in_clause);
+	                                                  unique_ptr<ParsedExpression> in_clause,
+	                                                  optional<vector<unique_ptr<ParsedExpression>>> cast_operator);
 	static BetweenInLikeOperator TransformBetweenLikeOp(PEGTransformer &transformer, const bool &has_result,
 	                                                    unique_ptr<ParsedExpression> between_like_op_expression);
 	static unique_ptr<ParsedExpression> TransformLikeClause(PEGTransformer &transformer, const string &like_variations,

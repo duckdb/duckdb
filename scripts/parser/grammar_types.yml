@@ -1660,6 +1660,9 @@ overrides:
   IsOtherOperatorTail:
     type: "IsExpressionTail"
     by_value: true
+  IsCastTail:
+    type: "IsExpressionTail"
+    by_value: true
   BetweenLikeOp:
     type: "BetweenInLikeOperator"
     by_value: true
