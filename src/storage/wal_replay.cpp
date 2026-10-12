@@ -629,7 +629,8 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	// If there are no committed transactions in the WAL, rollback and truncate.
 	if (last_wal_flush_end == 0) {
 		con.Rollback();
-		return make_uniq<WriteAheadLog>(storage_manager, wal_path, 0, WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE);
+		return make_uniq<WriteAheadLog>(storage_manager, wal_path, idx_t(0),
+		                                WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE);
 	}
 
 	// we need to recover from the WAL: actually set up the replay state
