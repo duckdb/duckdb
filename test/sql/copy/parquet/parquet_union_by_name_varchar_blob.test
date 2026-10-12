@@ -1,0 +1,55 @@
+# name: test/sql/copy/parquet/parquet_union_by_name_varchar_blob.test
+# description: Issue #26040: Test union_by_name with VARCHAR and BLOB columns
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (
+	SELECT *
+	FROM (VALUES ('café'), ('你好')) t(p)
+) TO '{TEST_DIR}/varchar.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (
+	SELECT *
+	FROM (VALUES (encode('café')), ('\x00\xFF'::BLOB)) t(p)
+) TO '{TEST_DIR}/blob.parquet' (FORMAT PARQUET)
+
+# VARCHAR values use their UTF-8 bytes when the unified type is BLOB
+query TT rowsort
+SELECT typeof(p), hex(p)
+FROM read_parquet([
+	'{TEST_DIR}/varchar.parquet',
+	'{TEST_DIR}/blob.parquet'
+], union_by_name = true)
+----
+BLOB	00FF
+BLOB	636166C3A9
+BLOB	636166C3A9
+BLOB	E4BDA0E5A5BD
+
+# File order does not change the unified type or conversion
+query TT rowsort
+SELECT typeof(p), hex(p)
+FROM read_parquet([
+	'{TEST_DIR}/blob.parquet',
+	'{TEST_DIR}/varchar.parquet'
+], union_by_name = true)
+----
+BLOB	00FF
+BLOB	636166C3A9
+BLOB	636166C3A9
+BLOB	E4BDA0E5A5BD
+
+# Filters are evaluated after the byte-preserving conversion when necessary
+query T rowsort
+SELECT hex(p)
+FROM read_parquet([
+	'{TEST_DIR}/varchar.parquet',
+	'{TEST_DIR}/blob.parquet'
+], union_by_name = true)
+WHERE p = encode('café')
+----
+636166C3A9
+636166C3A9
