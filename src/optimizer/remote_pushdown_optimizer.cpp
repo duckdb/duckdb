@@ -1187,7 +1187,13 @@ RemotePushdownOptimizer::TryConstantFold(unique_ptr<ParsedExpression> &expr) {
 		// evaluating the expression raises an error (e.g. an out-of-range error)
 		return ConstantFoldResult::FOLD_ERROR;
 	}
-	auto folded = ConstantExpression::FromValue(fold_result);
+	unique_ptr<ParsedExpression> folded;
+	try {
+		folded = ConstantExpression::FromValue(fold_result);
+	} catch (std::exception &) {
+		// the value has no SQL literal (e.g. a VARIANT object with an empty key), so it cannot be sent to the remote
+		return ConstantFoldResult::FOLD_ERROR;
+	}
 	// preserve the name DuckDB would generate for the original expression
 	folded->SetAlias(expr->GetAlias().empty() ? Identifier(expr->ToString()) : expr->GetAlias());
 	folded->SetQueryLocation(expr->GetQueryLocation());
