@@ -472,14 +472,16 @@ static void BignumAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 
 static void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
+	// negate a copy of the right operand - the input must not be modified, it can e.g. also be the left operand
+	vector<uint8_t> negated_rhs;
 	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
 	    args.data[0], args.data[1], result, [&](bignum_t a, bignum_t b) {
 		    const BignumIntermediate lhs(a);
-		    BignumIntermediate rhs(b);
+		    negated_rhs.resize(b.data.GetSize());
+		    memcpy(negated_rhs.data(), b.data.GetData(), b.data.GetSize());
+		    BignumIntermediate rhs(negated_rhs.data(), negated_rhs.size());
 		    rhs.NegateInPlace();
-		    auto result_value = BignumIntermediate::Add(heap, lhs, rhs);
-		    rhs.NegateInPlace();
-		    return result_value;
+		    return BignumIntermediate::Add(heap, lhs, rhs);
 	    });
 }
 
