@@ -388,6 +388,35 @@ struct SortedAggregateFunction {
 		AggregateStateInput state_input(aggr, bind_info);
 		data_ptr_t agg_state_ptr = agg_state.data();
 
+		//	The inner aggregate (or the sort) can throw while its state is initialized - destroy it in that case
+		struct InnerStateGuard {
+			~InnerStateGuard() {
+				if (live && destructor) {
+					try {
+						destructor(state_vec, input, 1);
+					} catch (...) { // NOLINT
+					}
+				}
+			}
+			aggregate_destructor_t destructor;
+			Vector &state_vec;
+			AggregateInputData &input;
+			bool live;
+		};
+		InnerStateGuard inner_state_guard {destructor, agg_state_vec, aggr_bind_info, false};
+		auto initialize_inner_state = [&]() {
+			initialize(state_input, &agg_state_ptr, 1);
+			inner_state_guard.live = true;
+		};
+		auto finalize_inner_state = [&](idx_t result_idx) {
+			agg_state_vec.SetVectorType(states.GetVectorType());
+			finalize(agg_state_vec, aggr_bind_info, result, 1, result_idx);
+			if (destructor) {
+				destructor(agg_state_vec, aggr_bind_info, 1);
+			}
+			inner_state_guard.live = false;
+		};
+
 		auto sdata = states.Values<SortedAggregateState *>();
 
 		vector<idx_t> state_unprocessed(count, 0);
@@ -438,7 +467,7 @@ struct SortedAggregateFunction {
 			auto global_source = sort->GetGlobalSourceState(client, *global_sink);
 			auto local_source = sort->GetLocalSourceState(context, *global_source);
 
-			initialize(state_input, &agg_state_ptr, 1);
+			initialize_inner_state();
 			for (;;) {
 				OperatorSourceInput source {*global_source, *local_source, interrupt};
 				scanned.Reset();
@@ -452,13 +481,8 @@ struct SortedAggregateFunction {
 					//	Find the next aggregate that needs data
 					for (; !state_unprocessed[sorted]; ++sorted) {
 						// Finalize a single value at the next offset
-						agg_state_vec.SetVectorType(states.GetVectorType());
-						finalize(agg_state_vec, aggr_bind_info, result, 1, sorted + offset);
-						if (destructor) {
-							destructor(agg_state_vec, aggr_bind_info, 1);
-						}
-
-						initialize(state_input, &agg_state_ptr, 1);
+						finalize_inner_state(sorted + offset);
+						initialize_inner_state();
 					}
 					const auto input_count = MinValue(state_unprocessed[sorted], scanned.size() - consumed);
 					for (column_t col_idx = 0; col_idx < scanned.ColumnCount(); ++col_idx) {
@@ -484,11 +508,7 @@ struct SortedAggregateFunction {
 			}
 
 			//	Finalize the last state for this sort
-			agg_state_vec.SetVectorType(states.GetVectorType());
-			finalize(agg_state_vec, aggr_bind_info, result, 1, sorted + offset);
-			if (destructor) {
-				destructor(agg_state_vec, aggr_bind_info, 1);
-			}
+			finalize_inner_state(sorted + offset);
 			++sorted;
 
 			//	Stop if we are done
@@ -503,15 +523,9 @@ struct SortedAggregateFunction {
 		}
 
 		for (; sorted < count; ++sorted) {
-			initialize(state_input, &agg_state_ptr, 1);
-
+			initialize_inner_state();
 			// Finalize a single value at the next offset
-			agg_state_vec.SetVectorType(states.GetVectorType());
-			finalize(agg_state_vec, aggr_bind_info, result, 1, sorted + offset);
-
-			if (destructor) {
-				destructor(agg_state_vec, aggr_bind_info, 1);
-			}
+			finalize_inner_state(sorted + offset);
 		}
 
 		result.Verify();
@@ -555,6 +569,21 @@ pair<AggregateFunction, unique_ptr<FunctionData>>
 FunctionBinder::BindSortedAggregateState(ClientContext &context, const BoundAggregateFunction &inner_function,
                                          unique_ptr<FunctionData> inner_bind_info, const LogicalType &buffer_struct,
                                          const vector<SortedAggregateStateOrder> &orders, idx_t argument_count) {
+	// the leading buffered columns are passed to the inner aggregate as-is - they must have its argument types
+	auto &buffer_columns = StructType::GetChildTypes(buffer_struct);
+	auto &inner_arguments = inner_function.GetArguments();
+	if (argument_count != inner_arguments.size() || argument_count > buffer_columns.size()) {
+		throw BinderException("Aggregate state for \"%s\" has %llu state columns, expected at least %llu",
+		                      inner_function.GetName(), (uint64_t)buffer_columns.size(),
+		                      (uint64_t)inner_arguments.size());
+	}
+	for (idx_t i = 0; i < argument_count; i++) {
+		if (inner_arguments[i].IsComplete() && buffer_columns[i].second != inner_arguments[i]) {
+			throw BinderException("Aggregate state for \"%s\" has state column %llu of type %s, expected %s",
+			                      inner_function.GetName(), (uint64_t)i, buffer_columns[i].second.ToString(),
+			                      inner_arguments[i].ToString());
+		}
+	}
 	const auto null_handling = inner_function.GetProperties().GetNullHandling();
 	auto bind_data = make_uniq<SortedAggregateBindData>(context, inner_function, std::move(inner_bind_info),
 	                                                    buffer_struct, orders, argument_count);

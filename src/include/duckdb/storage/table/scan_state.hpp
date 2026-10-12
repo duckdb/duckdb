@@ -148,6 +148,8 @@ public:
 	void NextInternal(idx_t count);
 	//! Returns the current row position in the segment
 	idx_t GetPositionInSegment() const;
+	//! Releases the segment scan states (and the blocks they pin), including those of the child states
+	void ReleasePins();
 };
 
 enum class FetchType {
@@ -324,6 +326,8 @@ public:
 	void InitializeColumnScans();
 	//! Processes the vector prepared by PrepareScanIO
 	void ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result);
+	//! Releases the row group and the blocks the column scans pin, the next assignment initializes them again
+	void ReleasePins();
 
 private:
 	//! Registers the remaining assignment's scan I/O, returning the async tasks that execute it
@@ -395,6 +399,8 @@ public:
 	void InitializeColumnScans();
 	//! Rows scanned from persistent and transaction-local storage
 	idx_t RowsScanned() const;
+	//! Releases what the scans of both storages pin, for a state that is kept around between assignments
+	void ReleasePins();
 
 private:
 	//! The column identifiers of the scan
