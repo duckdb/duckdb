@@ -6,6 +6,7 @@
 #include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
+#include "duckdb/common/sorting/buffered_merge.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/parallel/parallel_destroy_task.hpp"
@@ -655,8 +656,17 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 	static const auto fallback = [](SORT_KEY *begin, SORT_KEY *end) {
 		duckdb_pdqsort::pdqsort_branchless(begin, end);
 	};
+	// the run merges need a scratch buffer of up to half the keys - take it from the buffer allocator so that it is
+	// counted against the memory limit instead of coming from operator new inside std::inplace_merge
+	const idx_t merge_buffer_count = merged_partition_count / 2 + 1;
+	auto merge_buffer = BufferAllocator::Get(gstate.context).Allocate(merge_buffer_count * sizeof(SORT_KEY));
+	auto buffer_ptr = reinterpret_cast<SORT_KEY *>(merge_buffer.get());
+	const auto merge = [buffer_ptr, merge_buffer_count](SORT_KEY *first, SORT_KEY *middle, SORT_KEY *last,
+	                                                    const std::less<SORT_KEY> &cmp) {
+		BufferedMerge<SORT_KEY>(first, middle, last, cmp, buffer_ptr, merge_buffer_count);
+	};
 	duckdb_vergesort::vergesort(merged_partition_keys, merged_partition_keys + merged_partition_count,
-	                            std::less<SORT_KEY>(), fallback);
+	                            std::less<SORT_KEY>(), fallback, merge);
 }
 
 void SortedRunMergerLocalState::ScanPartition(SortedRunMergerGlobalState &gstate, DataChunk &chunk) {
