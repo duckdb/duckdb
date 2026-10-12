@@ -70,6 +70,7 @@ void PreparedStatementVerification::ConvertConstants(unique_ptr<ParsedExpression
 //! issued - the rewrite is an internal detail, so errors and logging must keep reporting the original query
 static void ReplaceStatement(unique_ptr<SQLStatement> &statement, unique_ptr<SQLStatement> replacement) {
 	replacement->query = statement->query;
+	replacement->log_query = std::move(statement->log_query);
 	statement = std::move(replacement);
 }
 

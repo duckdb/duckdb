@@ -42,9 +42,10 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStateme
 	}
 
 	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
-	auto &query = statement.query;
-	LogQueryInternal(lock, query);
-	active_query->query = query;
+	const bool redact_query = statement.log_query && !Settings::Get<AllowUnredactedSecretsSetting>(*this);
+	const auto &log_query = redact_query ? *statement.log_query : statement.query;
+	LogQueryInternal(lock, log_query);
+	active_query->query = statement.query;
 
 	query_progress.Initialize();
 	// Set query deadline if max_execution_time is configured
@@ -70,7 +71,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStateme
 	logging_context.transaction_id = transaction.ActiveTransaction().global_transaction_id;
 	logging_context.query_id = transaction.GetActiveQuery();
 	logger = db->GetLogManager().CreateLogger(logging_context, true);
-	DUCKDB_LOG(*this, QueryLogType, query);
+	DUCKDB_LOG(*this, QueryLogType, log_query);
 }
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
