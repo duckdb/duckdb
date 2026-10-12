@@ -261,10 +261,11 @@ ScanReadAheadAcquire ScanReadAhead::AcquireJob(ClientContext &context, TableFunc
 			continue;
 		}
 		// park until the job's scheduled I/O completes, the last I/O task to finish wakes the scan task
-		if (job->io_completion->TryPark(data_p)) {
+		// a parked task frees its thread for one that opens another file, so not while the open file budget is full
+		if (CanScheduleOpen(0) && job->io_completion->TryPark(data_p)) {
 			return ScanReadAheadAcquire::PARKED;
 		}
-		// parking is not available to this caller or the I/O has already completed
+		// parking is not available to this caller, the open file budget is full or the I/O has already completed
 		WaitForJob(*job);
 		return ScanReadAheadAcquire::ACQUIRED;
 	}
