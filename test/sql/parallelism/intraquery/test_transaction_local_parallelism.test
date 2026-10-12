@@ -96,3 +96,36 @@ statement ok
 DROP TABLE committed
 
 endloop
+
+# with prefetching, finished read-ahead scan states are recycled for the rest of the scan
+# they must not keep the blocks of transaction-local rows pinned while the insert writes them
+statement ok
+PRAGMA disable_verify_parallelism
+
+statement ok
+SET storage_block_prefetch='always_prefetch'
+
+statement ok
+BEGIN
+
+statement ok
+CREATE TABLE t AS SELECT range AS i FROM range(1000000)
+
+statement ok
+INSERT INTO t SELECT * FROM t
+
+statement ok
+INSERT INTO t SELECT * FROM t LIMIT 300000
+
+query I
+SELECT count(*) FROM t
+----
+2300000
+
+statement ok
+COMMIT
+
+query I
+SELECT count(*) FROM t
+----
+2300000
