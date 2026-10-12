@@ -1003,6 +1003,10 @@ static void InsertHashesLoop(unsafe_optional_ptr<atomic<ht_entry_t>> entries, Ve
 
 void JoinHashTable::InsertHashes(Vector &hashes_v, TupleDataChunkState &chunk_state, InsertState &insert_state,
                                  bool parallel) {
+	// a sealed filter was accumulated during Sink and is already complete; only a finalize-built one fills here
+	if (bloom_filter && !bloom_filter->IsSealed()) {
+		bloom_filter->InsertHashes(hashes_v);
+	}
 	auto atomic_entries = GetAtomicEntries();
 	auto &row_locations = chunk_state.row_locations;
 	if (parallel) {
@@ -1066,6 +1070,12 @@ void JoinHashTable::AllocatePointerTable() {
 	constexpr uint64_t MAX_HASHTABLE_CAPACITY = (1ULL << 48) - 1;
 	if (capacity >= MAX_HASHTABLE_CAPACITY) {
 		throw InternalException("Hashtable capacity exceeds 48-bit limit (2^48 - 1)");
+	}
+
+	if (should_build_bloom_filter && (!bloom_filter || bloom_filter->IsSealed())) {
+		// (re)create the finalize-built filter now that the actual build count is known
+		bloom_filter = make_shared_ptr<BloomFilter>();
+		bloom_filter->Initialize(context, MaxValue<idx_t>(Count(), 1));
 	}
 
 	if (hash_map.get()) {
@@ -2569,6 +2579,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	total_probe_matches = 0;
 	load_factor = DEFAULT_LOAD_FACTOR;
 	bloom_filter.reset();
+	should_build_bloom_filter = false;
 	prefix_range_filter.reset();
 	should_build_prefix_range_filter = false;
 	ResetMarkJoinInfo(*this);

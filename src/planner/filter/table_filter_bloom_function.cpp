@@ -35,10 +35,18 @@ static constexpr idx_t BITS_PER_SECTOR = 1ULL << LOG_SECTOR_SIZE;
 //! A sector is one entry of the bit array, so the two have to agree on how wide it is
 static_assert(BITS_PER_SECTOR == sizeof(uint64_t) * 8, "a bloom filter sector must be exactly one array entry");
 
+//! A filter is sized from a cardinality estimate, so never let it claim more than this share of the memory budget
+static constexpr idx_t MAX_MEMORY_FRACTION = 64;
+
 void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 	BufferManager &buffer_manager = BufferManager::GetBufferManager(context_p);
 
-	num_sectors = GetNumberOfSectors(number_of_rows);
+	// a capped filter stays complete - fewer sectors only raise the false positive rate, and Seal drops a
+	// filter that ended up too dense to reject anything
+	const idx_t min_sectors = MIN_NUM_BITS >> LOG_SECTOR_SIZE;
+	const idx_t budget_bytes = buffer_manager.GetMaxMemory() / MAX_MEMORY_FRACTION;
+	const idx_t budget_sectors = MaxValue(PreviousPowerOfTwo(budget_bytes / sizeof(uint64_t)), min_sectors);
+	num_sectors = MinValue(GetNumberOfSectors(number_of_rows), budget_sectors);
 	bitmask = num_sectors - 1;
 
 	buf_ = buffer_manager.GetBufferAllocator().Allocate(64 + num_sectors * sizeof(uint64_t));
@@ -159,6 +167,12 @@ void BloomFilter::InsertHashes(const Vector &hashes_v, const SelectionVector &se
 	}
 }
 
+void BloomFilter::InsertHashes(const Vector &hashes_v) {
+	for (auto hash : hashes_v.Values<uint64_t>()) {
+		InsertOne(hash.GetValue());
+	}
+}
+
 idx_t BloomFilter::LookupHashes(const Vector &hashes_v, SelectionVector &result_sel, const idx_t count) const {
 	D_ASSERT(hashes_v.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
@@ -193,7 +207,11 @@ inline void BloomFilter::InsertOne(const hash_t hash) {
 	const uint64_t mask = GetMask(hash);
 	atomic<uint64_t> &slot = *reinterpret_cast<atomic<uint64_t> *>(&bf[bf_offset]);
 
-	slot.fetch_or(mask, std::memory_order_relaxed);
+	// duplicate keys find their bits already set - checking first keeps the shared sector read-only then,
+	// instead of a contended read-modify-write
+	if ((slot.load(std::memory_order_relaxed) & mask) != mask) {
+		slot.fetch_or(mask, std::memory_order_relaxed);
+	}
 }
 
 bool BloomFilter::LookupOne(const uint64_t hash) const {

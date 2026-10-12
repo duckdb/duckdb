@@ -554,9 +554,12 @@ private:
 	//! An empty tuple that's a "dead end", can be used to stop chains early
 	unsafe_unique_array<data_t> dead_end;
 
-	//! Bloom filter over the join keys, filled during Sink. Shared by every thread-local hash table of this
-	//! operator, and shared again with any scan it gets published to, so it outlives a reset of this table
+	//! Bloom filter over the join keys. An external join fills it during Sink, an in-memory join during
+	//! finalize. Shared by every thread-local hash table of this operator, and shared again with any scan it
+	//! gets published to, so it outlives a reset of this table
 	shared_ptr<BloomFilter> bloom_filter;
+	//! Whether finalize should build the bloom filter from the materialized build side
+	bool should_build_bloom_filter = false;
 
 	unique_ptr<PrefixRangeFilter> prefix_range_filter;
 	bool should_build_prefix_range_filter = false;
@@ -640,6 +643,10 @@ public:
 
 	void SetBloomFilter(shared_ptr<BloomFilter> filter) {
 		bloom_filter = std::move(filter);
+	}
+	//! Requests a filter built during finalize, from the materialized build side (in-memory joins only)
+	void SetBuildBloomFilter(const bool should_build) {
+		this->should_build_bloom_filter = should_build;
 	}
 
 	shared_ptr<BloomFilter> GetBloomFilter() {

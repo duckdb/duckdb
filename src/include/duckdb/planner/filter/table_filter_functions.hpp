@@ -97,6 +97,8 @@ public:
 	//! VectorOperations::Hash writes at the source row positions, so the hashes to insert are the ones sel
 	//! points at rather than the first count entries
 	void InsertHashes(const Vector &hashes_v, const SelectionVector &sel, idx_t count);
+	//! Inserts every hash the vector carries
+	void InsertHashes(const Vector &hashes_v);
 	idx_t LookupHashes(const Vector &hashes_v, SelectionVector &result_sel, idx_t count) const;
 	//! result_sel contains local positions into sel rather than source row ids.
 	idx_t LookupHashes(const Vector &hashes_v, const SelectionVector &sel, SelectionVector &result_sel,

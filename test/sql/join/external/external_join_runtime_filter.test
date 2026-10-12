@@ -1,5 +1,5 @@
 # name: test/sql/join/external/external_join_runtime_filter.test
-# description: A runtime filter pushed into the probe-side scan must not drop matching rows, whether the build side spills or is underestimated
+# description: A runtime filter pushed into the probe-side scan must not drop matching rows, whether the build side spills or is misestimated
 # group: [external]
 
 # Both counts below are load-bearing: enough rows that the join spills to disk, few enough distinct keys
@@ -28,12 +28,12 @@ SELECT count(*) FROM p WHERE k IN (SELECT k FROM b)
 ----
 1000000
 
-statement ok
-PRAGMA debug_force_external=false
+# An external join sizes its filter from the build estimate before any row arrives, so a misestimate in
+# either direction must stay safe. Both cases below keep debug_force_external on.
 
-# A build side that the planner underestimates reaches the same filter by another route. Each predicate
-# below passes every row, but the planner reads it as selective, and the join multiplies the two
-# underestimates. The build side then arrives with about 30 times more distinct keys than planned for.
+# Underestimated: each predicate below passes every row, but the planner reads it as selective, and the
+# join multiplies the two underestimates. The build side then arrives with about 30 times more distinct
+# keys than planned for, saturating the undersized filter - Seal must drop it rather than publish it.
 
 statement ok
 CREATE TABLE u1 AS SELECT range AS k, range::VARCHAR AS s FROM range(200000)
@@ -51,3 +51,18 @@ SELECT count(*) FROM u3 JOIN (
 ) d USING (k)
 ----
 400000
+
+# Overestimated: the build estimate comes from a filtered two-million-row range, the actual build side is
+# a thousand keys, and Seal folds the oversized filter down. Every probe row matches a build key, so a
+# single key lost in the fold changes the count.
+
+statement ok
+CREATE TABLE fold_probe AS SELECT (range % 1000) * 2000 AS k FROM range(1000000)
+
+query I
+SELECT count(*) FROM fold_probe WHERE k IN (SELECT range FROM range(2000000) WHERE range % 2000 = 0)
+----
+1000000
+
+statement ok
+PRAGMA debug_force_external=false
