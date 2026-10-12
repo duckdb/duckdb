@@ -87,7 +87,6 @@ DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 	create_api_v1 = nullptr;
 	invoke_capi_v2 = nullptr;
 	parser_cache = make_uniq<ParserCache>();
-	os_util = make_uniq<OSUtil>(*this, unordered_set<string>());
 }
 
 ParserCache &DatabaseInstance::GetParserCache() {
@@ -711,6 +710,7 @@ LogManager &DatabaseInstance::GetLogManager() const {
 }
 
 OSUtil &DatabaseInstance::GetOSUtil() {
+	D_ASSERT(os_util);
 	return *os_util;
 }
 

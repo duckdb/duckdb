@@ -322,9 +322,7 @@ public:
 	//! Extract the name of a file (e.g if the input is lib/example.dll the name is 'example.dll')
 	DUCKDB_API string ExtractName(const string &path);
 
-	//! Deprecated: reads the process environment directly, outside of enable_external_access. Code that has a
-	//! database reads through OSUtil::Get(db).GetEnv; the engine's own configuration variables through
-	//! OSUtil::GetConfigurationEnv. Kept for out-of-tree extensions that still call it.
+	//! Deprecated, ignores enable_external_access: use OSUtil::Get(db).GetEnv or OSUtil::GetConfigurationEnv
 	DUCKDB_API static string GetEnvVariable(const string &name);
 
 	//! Whether there is a glob in the string

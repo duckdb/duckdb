@@ -154,8 +154,7 @@ struct DBConfigOptions {
 	bool abort_on_wal_failure = false;
 	//! Paths that are explicitly allowed, even if enable_external_access is false
 	unordered_set<string> allowed_paths;
-	//! Environment variables the embedding application configures itself from, readable through
-	//! OSUtil::GetEnvUnrestricted regardless of enable_external_access. Fixed once the database is initialized.
+	//! Environment variables the embedder configures itself from, readable with OSUtil::GetEnvUnrestricted
 	unordered_set<string> configuration_env;
 	//! Directories that are explicitly allowed, even if enable_external_access is false
 	set<string> allowed_directories;

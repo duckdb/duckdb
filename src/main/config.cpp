@@ -696,15 +696,15 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 	// Check SLURM environment variables first
 	string slurm_mem_per_node;
 	string slurm_mem_per_cpu;
-	OSUtil::GetConfigurationEnv("SLURM_MEM_PER_NODE", slurm_mem_per_node);
-	OSUtil::GetConfigurationEnv("SLURM_MEM_PER_CPU", slurm_mem_per_cpu);
+	auto has_mem_per_node = OSUtil::GetConfigurationEnv("SLURM_MEM_PER_NODE", slurm_mem_per_node);
+	auto has_mem_per_cpu = OSUtil::GetConfigurationEnv("SLURM_MEM_PER_CPU", slurm_mem_per_cpu);
 
-	if (!slurm_mem_per_node.empty()) {
+	if (has_mem_per_node) {
 		auto limit = ParseMemoryLimitSlurm(slurm_mem_per_node);
 		if (limit.IsValid()) {
 			return limit.GetIndex();
 		}
-	} else if (!slurm_mem_per_cpu.empty()) {
+	} else if (has_mem_per_cpu) {
 		auto mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
 		if (mem_per_cpu.IsValid()) {
 			idx_t num_threads = GetSystemMaxThreads(fs);

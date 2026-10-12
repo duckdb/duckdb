@@ -35,8 +35,6 @@ public:
 	static vector<string> GetEquivalentIds(const string &id);
 	//! The zone configured through TZ, or else the zone of the host; nullptr if neither can be determined
 	static unique_ptr<TimeZone> TryCreateDefault();
-	//! The time zone of the host, or nullptr if it cannot be determined
-	static unique_ptr<TimeZone> TryCreateHost();
 
 	const string &GetId() const {
 		return id;

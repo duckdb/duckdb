@@ -54,6 +54,7 @@
 #include "duckdb/common/time_point.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/client_context_file_opener.hpp"
 #include "duckdb/main/os_util.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -1456,10 +1457,11 @@ string ShellState::GetEnv(const string &name) {
 }
 
 string ShellState::GetHomeDirectory() {
-	if (!db) {
+	if (!conn) {
 		return string();
 	}
-	return duckdb::FileSystem::GetHomeDirectory(*db->instance);
+	duckdb::ClientContextFileOpener opener(*conn->context);
+	return duckdb::FileSystem::GetHomeDirectory(&opener);
 }
 
 string ShellState::GetSystemPager() {
