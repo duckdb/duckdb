@@ -60,6 +60,7 @@ void TupleDataAllocator::Reset() {
 	SetDestroyBufferUponUnpin();
 	row_blocks.clear();
 	heap_blocks.clear();
+	block_allocation_size = 0;
 }
 
 void TupleDataAllocator::DestroyRowBlocks(const idx_t row_block_begin, const idx_t row_block_end) {
@@ -117,6 +118,10 @@ idx_t TupleDataAllocator::RowBlockCount() const {
 
 idx_t TupleDataAllocator::HeapBlockCount() const {
 	return heap_blocks.size();
+}
+
+idx_t TupleDataAllocator::GetBlockAllocationSize() const {
+	return block_allocation_size;
 }
 
 void TupleDataAllocator::SetPartitionIndex(const idx_t index) {
@@ -769,6 +774,7 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment
 				// Prevent it from being added to the eviction queue
 				blocks[block_id].handle->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 				// Destroy
+				block_allocation_size -= blocks[block_id].handle->GetMemory().GetMemoryUsage();
 				blocks[block_id].handle.reset();
 				break;
 			default:
@@ -791,6 +797,7 @@ void TupleDataAllocator::CreateRowBlock(TupleDataSegment &segment, TupleDataPinS
 	}
 	auto block_index = NumericCast<uint32_t>(row_blocks.size());
 	row_blocks.emplace_back(std::move(block_handle), block_size);
+	block_allocation_size += row_blocks.back().handle->GetMemory().GetMemoryUsage();
 	segment.pinned_row_handles.resize(row_blocks.size());
 	pin_state.row_handles.emplace(block_index, std::move(buffer_handle));
 }
@@ -803,6 +810,7 @@ void TupleDataAllocator::CreateHeapBlock(TupleDataSegment &segment, TupleDataPin
 	}
 	auto block_index = NumericCast<uint32_t>(heap_blocks.size());
 	heap_blocks.emplace_back(std::move(block_handle), size);
+	block_allocation_size += heap_blocks.back().handle->GetMemory().GetMemoryUsage();
 	segment.pinned_heap_handles.resize(heap_blocks.size());
 	pin_state.heap_handles.emplace(block_index, std::move(buffer_handle));
 }
