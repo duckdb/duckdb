@@ -458,7 +458,6 @@ struct ColumnStatsUnifier {
 	idx_t null_count = 0;
 	idx_t num_values = 0;
 	bool all_min_max_set = true;
-	bool all_nulls_set = true;
 	bool min_is_set = false;
 	bool max_is_set = false;
 	bool min_is_exact = true;
@@ -1239,7 +1238,7 @@ void ParquetWriter::FlushNestedColumnStats(idx_t schema_idx, idx_t null_count, i
 }
 
 void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk &column,
-                                     optional_ptr<ColumnWriterStatistics> writer_stats) {
+                                     optional_ptr<ColumnWriterStatistics> writer_stats, idx_t null_count) {
 	if (!written_stats) {
 		return;
 	}
@@ -1254,6 +1253,10 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 		stats_unifier->has_nan = stats_unifier->has_nan || has_nan;
 		stats_unifier->nan_count += writer_stats->GetNaNCount();
 	}
+	// a column chunk without statistics still has its values and NULLs
+	stats_unifier->column_size_bytes += column.meta_data.total_compressed_size;
+	stats_unifier->num_values += column.meta_data.num_values;
+	stats_unifier->null_count += null_count;
 	if (column.meta_data.__isset.statistics) {
 		if (has_nan && writer_stats->HasStats()) {
 			// if we have NaN values we have not written the min/max to the Parquet file
@@ -1272,16 +1275,9 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 		} else {
 			stats_unifier->all_min_max_set = false;
 		}
-		if (column.meta_data.statistics.__isset.null_count) {
-			stats_unifier->null_count += column.meta_data.statistics.null_count;
-		} else {
-			stats_unifier->all_nulls_set = false;
-		}
 		if (writer_stats && writer_stats->HasGeoStats()) {
 			stats_unifier->UnifyGeoStats(*writer_stats->GetGeoStats());
 		}
-		stats_unifier->column_size_bytes += column.meta_data.total_compressed_size;
-		stats_unifier->num_values += column.meta_data.num_values;
 	}
 }
 
@@ -1317,9 +1313,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 		if (!stats_unifier->variant_type.empty()) {
 			column_stats["variant_type"] = Value(stats_unifier->variant_type);
 		}
-		if (stats_unifier->all_nulls_set) {
-			column_stats["null_count"] = Value::UBIGINT(stats_unifier->null_count);
-		}
+		column_stats["null_count"] = Value::UBIGINT(stats_unifier->null_count);
 		if (stats_unifier->can_have_nan) {
 			column_stats["has_nan"] = Value::BOOLEAN(stats_unifier->has_nan);
 			column_stats["nan_count"] = Value::UBIGINT(stats_unifier->nan_count);

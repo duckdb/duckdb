@@ -282,7 +282,7 @@ public:
 	void BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter);
 	void SetWrittenStatistics(CopyFunctionFileStatistics &written_stats);
 	void FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk &chunk,
-	                      optional_ptr<ColumnWriterStatistics> writer_stats);
+	                      optional_ptr<ColumnWriterStatistics> writer_stats, idx_t null_count);
 	void FlushNestedColumnStats(idx_t schema_idx, idx_t null_count, idx_t num_values);
 	void InitializePreprocessing(unique_ptr<ParquetWriteTransformData> &transform_data);
 	void InitializeSchemaElements();

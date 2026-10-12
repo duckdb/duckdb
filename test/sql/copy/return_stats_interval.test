@@ -1,0 +1,34 @@
+# name: test/sql/copy/return_stats_interval.test
+# description: RETURN_STATS counts the values and NULLs of INTERVAL columns, which get no Parquet statistics
+# group: [copy]
+
+require parquet
+
+statement ok
+CREATE TABLE intervals AS SELECT
+	CASE WHEN i % 10 = 0 THEN NULL ELSE INTERVAL (i) MINUTE END AS iv,
+	{'a': CASE WHEN i % 4 = 0 THEN NULL ELSE INTERVAL (i) DAY END} AS s,
+	CASE WHEN i % 5 = 0 THEN NULL ELSE [INTERVAL (i) SECOND, NULL] END AS l
+FROM range(2500) t(i)
+
+foreach PRESERVE_INSERTION_ORDER true false
+
+statement ok
+SET preserve_insertion_order={PRESERVE_INSERTION_ORDER};
+
+query IIIIIII
+COPY (SELECT iv FROM intervals) TO '{TEST_DIR}/return_stats_interval.parquet' (RETURN_STATS, ROW_GROUP_SIZE 1000);
+----
+<REGEX>:.*return_stats_interval.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"iv"'={column_size_bytes=[1-9]\d*, null_count=250, num_values=2500}}	NULL	{row_group_count=2}
+
+query IIIIIII
+COPY (SELECT s FROM intervals) TO '{TEST_DIR}/return_stats_interval.parquet' (RETURN_STATS);
+----
+<REGEX>:.*return_stats_interval.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"s"'={null_count=0, num_values=2500}, '"s"."a"'={column_size_bytes=[1-9]\d*, null_count=625, num_values=2500}}	NULL	{row_group_count=1}
+
+query IIIIIII
+COPY (SELECT l FROM intervals) TO '{TEST_DIR}/return_stats_interval.parquet' (RETURN_STATS);
+----
+<REGEX>:.*return_stats_interval.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"l"'={null_count=500, num_values=2500}, '"l"."element"'={column_size_bytes=[1-9]\d*, null_count=2500, num_values=4500}}	NULL	{row_group_count=1}
+
+endloop
