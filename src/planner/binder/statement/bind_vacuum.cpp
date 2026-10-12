@@ -66,7 +66,7 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 	}
 	info.columns = non_generated_column_names;
 	if (!table.IsDuckTable()) {
-		// only DuckDB tables keep the statistics computed here, so there is nothing to scan, as without a table
+		// only DuckDB tables store the statistics computed here
 		return;
 	}
 

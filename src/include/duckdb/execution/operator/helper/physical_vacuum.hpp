@@ -48,7 +48,6 @@ public:
 	                          OperatorSinkFinalizeInput &input) const override;
 
 	bool IsSink() const override {
-		// only a DuckDB table is scanned, for other tables and without a table there is nothing to do
 		return table && table->IsDuckTable();
 	}
 
