@@ -230,6 +230,7 @@ public:
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,
 	                                   SetScope default_scope = SetScope::SESSION, bool is_debug = false,
 	                                   bool is_deprecated = false);
+	DUCKDB_API void AddExtensionOption(const Identifier &name, ExtensionOption extension_option);
 	DUCKDB_API bool HasExtensionOption(const Identifier &name) const;
 	DUCKDB_API identifier_map_t<ExtensionOption> GetExtensionSettings() const;
 	DUCKDB_API bool TryGetExtensionOption(const Identifier &name, ExtensionOption &result) const;

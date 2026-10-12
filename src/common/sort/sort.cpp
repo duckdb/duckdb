@@ -16,13 +16,6 @@
 
 namespace duckdb {
 
-//! FLOAT/DOUBLE sort keys lose the sign of zero and the NaN payload, so these cannot be decoded from the key
-static bool CanDecodeFromSortKey(const LogicalType &type) {
-	return !TypeVisitor::Contains(type, [](const LogicalType &child) {
-		return child.id() == LogicalTypeId::FLOAT || child.id() == LogicalTypeId::DOUBLE;
-	});
-}
-
 Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orders,
            const vector<LogicalType> &input_types, vector<idx_t> projection_map, bool is_index_sort_p)
     : client_context(client_context_p), key_layout(make_shared_ptr<TupleDataLayout>()),
@@ -72,8 +65,7 @@ Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orde
 	unordered_map<idx_t, idx_t> input_column_to_key;
 	for (idx_t key_idx = 0; key_idx < orders.size(); key_idx++) {
 		const auto &key_order_expr = *orders[key_idx].expression;
-		if (key_order_expr.GetExpressionClass() == ExpressionClass::BOUND_REF &&
-		    CanDecodeFromSortKey(key_order_expr.GetReturnType())) {
+		if (key_order_expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
 			input_column_to_key.emplace(key_order_expr.Cast<BoundReferenceExpression>().Index(), key_idx);
 		}
 	}
@@ -82,14 +74,20 @@ Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orde
 	vector<LogicalType> payload_types;
 	for (idx_t output_col_idx = 0; output_col_idx < projection_map.size(); output_col_idx++) {
 		const auto &input_col_idx = projection_map[output_col_idx];
+		const auto &input_col_type = input_types[input_col_idx];
 		const auto it = input_column_to_key.find(input_col_idx);
-		if (it != input_column_to_key.end()) {
+		//! The sort key encoding for FLOAT/DOUBLE is not injective around zero (-0.0 and 0.0 encode
+		//! identically, since they must compare equal), so re-decoding the key would turn -0.0 into 0.0.
+		//! Route such columns through the payload instead, where the original bits are preserved.
+		const bool key_encoding_is_lossy = TypeVisitor::Contains(input_col_type, LogicalTypeId::FLOAT) ||
+		                                   TypeVisitor::Contains(input_col_type, LogicalTypeId::DOUBLE);
+		if (it != input_column_to_key.end() && !key_encoding_is_lossy) {
 			// Projected column also appears as a key, just reference it
 			output_projection_columns.push_back({false, it->second, output_col_idx});
 		} else {
 			// Projected column does not appear as a key, add to payload layout
 			output_projection_columns.push_back({true, payload_types.size(), output_col_idx});
-			payload_types.push_back(input_types[input_col_idx]);
+			payload_types.push_back(input_col_type);
 			input_projection_map.push_back(input_col_idx);
 		}
 	}

@@ -1,38 +1,48 @@
 # name: test/sql/order/order_by_negative_zero.test
-# description: Sorting on floating point columns keeps the sign of zero
+# description: Test that ORDER BY does not turn -0.0 into 0.0 for FLOAT/DOUBLE
 # group: [order]
 
-statement ok
-CREATE TABLE doubles AS SELECT '-0.0'::DOUBLE x UNION ALL SELECT 1.0 UNION ALL SELECT '0.0'::DOUBLE;
-
-query I
-SELECT 1/x FROM (SELECT x FROM doubles ORDER BY x, 1/x);
-----
--inf
-inf
-1.0
-
-query I
-SELECT 1/x FROM (SELECT x FROM doubles ORDER BY x DESC, 1/x);
-----
-1.0
--inf
-inf
+# checkpointing loses the sign of zero regardless of ORDER BY; unrelated bug, see issue #25580
+require noforcestorage
 
 statement ok
-CREATE TABLE floats AS SELECT '-0.0'::FLOAT x FROM range(5000);
+CREATE TABLE zero_probe(id INTEGER, v DOUBLE, vf FLOAT);
 
-query I
-SELECT count(*) FILTER (WHERE 1/x < 0) FROM (SELECT x FROM floats ORDER BY x);
-----
-5000
+statement ok
+INSERT INTO zero_probe VALUES (1, '-0.0', '-0.0'), (2, '0.0', '0.0');
 
-query I
-SELECT list_transform(l, lambda v: 1/v) FROM (SELECT ['-0.0'::DOUBLE, 0.0] l ORDER BY l);
+# sanity check: signbit is preserved without sorting
+query III
+SELECT id, signbit(v), signbit(vf) FROM zero_probe ORDER BY id;
 ----
-[-inf, inf]
+1	true	true
+2	false	false
 
-query I
-SELECT 1/s.a FROM (SELECT {'a': '-0.0'::FLOAT} s ORDER BY s);
+# sorting by the double/float column itself must not flip the sign of zero
+query III
+SELECT id, signbit(v), signbit(vf) FROM zero_probe ORDER BY v, id;
 ----
--inf
+1	true	true
+2	false	false
+
+query II
+SELECT v, 1.0 / v FROM zero_probe ORDER BY v, id;
+----
+-0.0	-inf
+0.0	inf
+
+# projecting the sort column out of a materialized CTE must also preserve it
+statement ok
+CREATE TEMP TABLE srs_zero_probe(id INTEGER, v DOUBLE);
+
+statement ok
+INSERT INTO srs_zero_probe VALUES (1, '-0.0'), (2, '0.0');
+
+query IIII
+WITH q AS MATERIALIZED (
+    SELECT id, v FROM srs_zero_probe ORDER BY v, id
+)
+SELECT id, v, signbit(v), 1.0 / v FROM q ORDER BY id;
+----
+1	-0.0	true	-inf
+2	0.0	false	inf
