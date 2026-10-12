@@ -136,9 +136,13 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 	auto &layout = local_state.layout;
 
 	auto count = input.size();
+	// initialize the states - fields that are NULL in the input are not written by the deserialization
+	AggregateStateInput state_input(bind_data.aggr, bind_data.bind_data.get());
 	auto state_vec_writer = FlatVector::Writer<data_ptr_t>(local_state.addresses, count);
 	for (idx_t i = 0; i < count; i++) {
-		state_vec_writer.WriteValue(local_state.state_buffer.get() + i * layout.total_state_size);
+		data_ptr_t state_ptr = local_state.state_buffer.get() + i * layout.total_state_size;
+		bind_data.aggr.GetStateInitCallback()(state_input, &state_ptr, 1);
+		state_vec_writer.WriteValue(state_ptr);
 	}
 
 	AggregateStateSerialization::DeserializeStates(bind_data.aggr, layout, input.data[0], count,
@@ -247,9 +251,25 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 	FunctionBinder function_binder(context);
 	auto best_function = function_binder.BindFunction(aggr_entry.name, aggr_entry.functions, argument_types, error);
 	if (!best_function.IsValid()) {
-		throw InternalException("Could not re-bind exported aggregate %s: %s", function_name, error.Message());
+		throw BinderException("Could not re-bind exported aggregate %s: %s", function_name, error.Message());
 	}
 	const auto &aggr = aggr_entry.functions.GetFunctionByOffset(best_function.GetIndex());
+	const auto &signature = aggr->GetSignature();
+	for (idx_t arg_idx = 0; arg_idx < argument_types.size(); arg_idx++) {
+		if (argument_types[arg_idx].id() != LogicalTypeId::ANY) {
+			continue;
+		}
+		auto parameter = arg_idx < signature.GetPositionalParameterCount()
+		                     ? optional_ptr<const FunctionParameter>(signature.GetParameter(arg_idx))
+		                     : signature.GetArgs();
+		// ANY must describe a state-capable implementation, not a placeholder for type specialization.
+		const bool canonical_any = parameter && parameter->GetType().id() == LogicalTypeId::ANY &&
+		                           AnyType::GetTargetType(parameter->GetType()) == LogicalType::ANY;
+		if (!canonical_any || !aggr->HasGetStateTypeCallback()) {
+			throw BinderException("Aggregate %s requires a concrete type for signature argument %llu", function_name,
+			                      arg_idx + 1);
+		}
+	}
 
 	// FIXME: this is really hacky
 	// but the aggregate state export needs a rework around how it handles more complex aggregates anyway
@@ -275,10 +295,17 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 		}
 	}
 	if (!signature_matches) {
-		throw InternalException("Type mismatch for exported aggregate %s: bound=[%s] requested=[%s]", function_name,
-		                        StringUtil::ToString(bound_args, ", "), StringUtil::ToString(argument_types, ", "));
+		throw BinderException("Type mismatch for exported aggregate %s: bound=[%s] requested=[%s]", function_name,
+		                      StringUtil::ToString(bound_args, ", "), StringUtil::ToString(argument_types, ", "));
 	}
 
+	// The signature can retain ANY, but materialized result and state values must have complete types.
+	if (!bound_aggr.GetReturnType().IsComplete()) {
+		throw BinderException("Aggregate %s signature does not resolve a complete result type", function_name);
+	}
+	if (bound_aggr.HasGetStateTypeCallback() && !bound_aggr.GetStateType(bind_info.get()).type.IsComplete()) {
+		throw BinderException("Aggregate %s signature does not resolve a complete state type", function_name);
+	}
 	const auto state_size = bound_aggr.GetStateSize(bind_info.get());
 	return make_uniq<ExportAggregateBindData>(bound_aggr, std::move(bind_info), state_size);
 }
@@ -623,7 +650,12 @@ LogicalType ParseSignatureType(ClientContext &context, const Value &arg) {
 		return TypeValue::GetType(arg);
 	}
 	if (arg.type().id() == LogicalTypeId::VARCHAR) {
-		return TransformStringToLogicalType(StringValue::Get(arg), context);
+		auto &name = StringValue::Get(arg);
+		// ANY describes a canonical aggregate argument, not an ordinary SQL value type.
+		if (StringUtil::CIEquals(name, "ANY")) {
+			return LogicalType::ANY;
+		}
+		return TransformStringToLogicalType(name, context);
 	}
 	throw BinderException("to_aggregate_state: the signature must be a list of types");
 }
@@ -702,7 +734,9 @@ void ParseOrderBys(const Value &order_value, idx_t column_count, vector<SortedAg
 	}
 }
 
-unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
+//! Binds the exported aggregate from the constant arguments, and resolves the state / return types from it
+template <class INPUT>
+unique_ptr<FunctionData> BindToAggregateState(INPUT &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto &context = input.GetClientContext();
@@ -767,6 +801,9 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 			}
 		}
 		const auto buffer_struct = LogicalType::STRUCT(std::move(buffer_columns));
+		if (!buffer_struct.IsComplete()) {
+			throw BinderException("to_aggregate_state: the ordered state buffer must have a complete type");
+		}
 		vector<SortedAggregateStateOrder> orders;
 		auto order_value = input.GetConstant(4);
 		ParseOrderBys(order_value, column_count, orders);
@@ -783,6 +820,14 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 	bound_function.GetArguments()[0] = state_layout;
 	bound_function.SetReturnType(CreateAggregateStateType(aggr, bind_data->bind_data.get()));
 	return std::move(bind_data);
+}
+
+void ToAggregateStateResolveTypes(ResolveScalarFunctionTypesInput &input) {
+	BindToAggregateState(input);
+}
+
+unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
+	return BindToAggregateState(input);
 }
 
 void ToAggregateStateFunction(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -813,7 +858,8 @@ unique_ptr<ParsedExpression> ExportAggregateFunction::StateToSQL(const LogicalTy
 	vector<Value> signature;
 	vector<unique_ptr<ParsedExpression>> constant_arguments;
 	for (idx_t i = 0; i < types.size(); i++) {
-		if (!TypeExpression::CanRepresent(types[i]) || TypeVisitor::Contains(types[i], [](const LogicalType &child) {
+		if ((types[i] != LogicalType::ANY && !TypeExpression::CanRepresent(types[i])) ||
+		    TypeVisitor::Contains(types[i], [](const LogicalType &child) {
 			    return child.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(child).empty();
 		    })) {
 			return nullptr;
@@ -936,6 +982,7 @@ ScalarFunctionSet ToAggregateStateFun::GetFunctions() {
 		}
 		ScalarFunction function("to_aggregate_state", arguments, LogicalTypeId::ANY, ToAggregateStateFunction,
 		                        ToAggregateStateBind);
+		function.SetResolveTypesCallback(ToAggregateStateResolveTypes);
 		auto &sig = function.GetSignature();
 		sig.GetParameter(0).SetName("data");
 		sig.GetParameter(1).SetName("name");
