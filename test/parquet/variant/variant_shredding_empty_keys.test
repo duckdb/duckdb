@@ -46,3 +46,17 @@ query I
 SELECT v::JSON FROM '{TEST_DIR}/variant_only_empty_key.parquet'
 ----
 {"":"t"}
+
+# an empty key in a nested object keeps the other keys of that object shredded
+statement ok
+COPY (SELECT '{"x": {"": 1, "y": 2}}'::JSON::VARIANT AS v FROM range(3)) TO '{TEST_DIR}/variant_nested_empty_key.parquet'
+
+query I
+SELECT DISTINCT v::JSON FROM '{TEST_DIR}/variant_nested_empty_key.parquet'
+----
+{"x":{"":1,"y":2}}
+
+query I
+SELECT count(*) > 0 FROM parquet_schema('{TEST_DIR}/variant_nested_empty_key.parquet') WHERE name = 'y'
+----
+true
