@@ -787,7 +787,7 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 	}
 
 	// build the HT
-	lstate.hash_table->Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
+	lstate.hash_table->Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk, *gstate.hash_table);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }

@@ -548,7 +548,8 @@ uint8_t JoinHashTable::GetDictSurvivingIndexWidth(idx_t build_col_idx, const Vec
 	return index_width;
 }
 
-void JoinHashTable::PinDictSurvivingColumn(idx_t build_col_idx, const Vector &incoming, uint8_t index_width) {
+void JoinHashTable::PinDictSurvivingColumn(idx_t build_col_idx, const Vector &incoming, uint8_t index_width,
+                                           JoinHashTable &global_ht) {
 	// Slot was narrowed on the first chunk; there is no fallback for a non-dict later chunk. Throw, not D_ASSERT:
 	// the Cast<DictionaryBuffer> below is UB in release on a non-dict vector, scattering foreign bytes as indices.
 	if (incoming.GetVectorType() != VectorType::DICTIONARY_VECTOR || DictionaryVector::DictionaryId(incoming).empty() ||
@@ -563,19 +564,23 @@ void JoinHashTable::PinDictSurvivingColumn(idx_t build_col_idx, const Vector &in
 		D_ASSERT(dict_registry[build_col_idx]->id == entry.id);
 		return;
 	}
-	// The upstream child is a zero-copy gather: its long strings point into the producer's row-store heap, recycled
-	// before we gather on probe. Deep-copy into a self-owned entry so it outlives them.
-	const auto &upstream_child = entry.data;
-	const auto child_count = upstream_child.size();
-	// child_count fits index_width by construction (publisher sized the width to this dict). Assert so a producer
-	// that grows the child past it fails loudly instead of truncating in the UnsafeNumericCast.
-	D_ASSERT(child_count <= (idx_t(1) << (8 * index_width)));
-	auto owned_entry = DictionaryVector::CreateReusableGlobalDictionary(upstream_child.GetType(), child_count);
-	if (child_count > 0) {
-		VectorOperations::Copy(upstream_child, owned_entry->data, child_count, 0, 0);
+	// Share one owned copy across local tables; each local table only takes this lock on its first chunk.
+	lock_guard<mutex> guard(global_ht.data_lock);
+	auto &shared_entry = global_ht.dict_registry[build_col_idx];
+	if (!shared_entry) {
+		// The upstream strings borrow the producer's row-store heap, which is recycled before our probe.
+		const auto &upstream_child = entry.data;
+		const auto child_count = upstream_child.size();
+		D_ASSERT(child_count <= (idx_t(1) << (8 * index_width)));
+		auto owned_entry = DictionaryVector::CreateReusableGlobalDictionary(upstream_child.GetType(), child_count);
+		if (child_count > 0) {
+			VectorOperations::Copy(upstream_child, owned_entry->data, child_count, 0, 0);
+		}
+		owned_entry->id = entry.id;
+		shared_entry = std::move(owned_entry);
 	}
-	owned_entry->id = entry.id;
-	dict_registry[build_col_idx] = std::move(owned_entry);
+	D_ASSERT(shared_entry->id == entry.id);
+	dict_registry[build_col_idx] = shared_entry;
 }
 
 static bool MarkJoinNullRows(const UnifiedVectorFormat &format, idx_t count,
@@ -614,7 +619,8 @@ static bool MarkJoinKeysHaveNull(DataChunk &keys, optional_ptr<bool> rows_with_n
 	return has_null;
 }
 
-void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &payload) {
+void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &payload,
+                          JoinHashTable &global_ht) {
 	D_ASSERT(!finalized);
 	D_ASSERT(keys.size() == payload.size());
 	if (keys.size() == 0) {
@@ -667,7 +673,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 			continue;
 		}
 		// Narrowed column: pin the dictionary, then scatter its sel indices at the chosen width in place of the value.
-		PinDictSurvivingColumn(i, incoming, index_width);
+		PinDictSurvivingColumn(i, incoming, index_width, global_ht);
 		ScatterDictIndices(index_width, DictionaryVector::SelVector(incoming), payload.size(),
 		                   buffer_manager.GetBufferAllocator(), dict_idx_buffers, dict_idx_vectors);
 		source_chunk.data[col_offset + i].Reference(dict_idx_vectors.back());
