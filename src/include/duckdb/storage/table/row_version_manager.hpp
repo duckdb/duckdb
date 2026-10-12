@@ -10,6 +10,7 @@
 
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 #include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
@@ -67,7 +68,7 @@ private:
 	FixedSizeAllocator allocator;
 	vector<unique_ptr<ChunkVectorInfo>> vector_info;
 	//! The transactions with an undo entry for updating rows of this row group, until they commit or roll back
-	vector<transaction_t> updating_transactions;
+	unordered_set<transaction_t> updating_transactions;
 	//! The newest and the oldest delete commit that has not been written by a checkpoint yet
 	optional_idx newest_uncheckpointed_delete_commit;
 	optional_idx oldest_uncheckpointed_delete_commit;

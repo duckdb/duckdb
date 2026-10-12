@@ -203,27 +203,21 @@ idx_t RowVersionManager::DeleteRows(idx_t vector_idx, TransactionData transactio
 
 bool RowVersionManager::HasUpdatedRows(transaction_t transaction_id) {
 	lock_guard<mutex> lock(version_lock);
-	return std::find(updating_transactions.begin(), updating_transactions.end(), transaction_id) !=
-	       updating_transactions.end();
+	return updating_transactions.find(transaction_id) != updating_transactions.end();
 }
 
 void RowVersionManager::UpdateRows(idx_t vector_idx, TransactionData transaction, const row_t ids[], idx_t count,
                                    row_t offset, VisibilityBound lowest_visibility_bound) {
 	lock_guard<mutex> lock(version_lock);
 	needs_compression_check = true;
-	auto transaction_id = transaction.GetTransactionId();
-	if (std::find(updating_transactions.begin(), updating_transactions.end(), transaction_id) ==
-	    updating_transactions.end()) {
-		updating_transactions.push_back(transaction_id);
-	}
+	updating_transactions.insert(transaction.GetTransactionId());
 	GetVectorInfo(vector_idx).Update(transaction, ids, count, offset, lowest_visibility_bound);
 }
 
 void RowVersionManager::ReplaceUpdateWriter(transaction_t old_id, transaction_t new_id) {
 	lock_guard<mutex> lock(version_lock);
 	needs_compression_check = true;
-	updating_transactions.erase(std::remove(updating_transactions.begin(), updating_transactions.end(), old_id),
-	                            updating_transactions.end());
+	updating_transactions.erase(old_id);
 	for (auto &info : vector_info) {
 		if (info) {
 			info->ReplaceUpdateWriter(old_id, new_id);
