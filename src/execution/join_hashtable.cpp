@@ -250,12 +250,13 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
                                       unsafe_optional_ptr<ht_entry_t> entries, Vector &pointers_result_v,
                                       optional_ptr<const SelectionVector> row_sel, idx_t &count) {
 	auto hashes_dense = FlatVector::GetDataMutable<hash_t>(state.hashes_dense_v);
+	const auto bitmask = ht.bitmask;
 
 	idx_t keys_to_compare_count = 0;
 
 	for (idx_t i = 0; i < count; i++) {
 		auto row_hash = hashes_dense[i]; // hashes have been flattened before -> always access dense
-		auto row_ht_offset = row_hash & ht.bitmask;
+		auto row_ht_offset = row_hash & bitmask;
 
 		if (USE_SALTS) {
 			// increment the ht_offset of the entry as long as the next entry is occupied and salt does not match
@@ -279,7 +280,7 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 				}
 
 				// full and salt do not match -> continue probing
-				IncrementAndWrap(row_ht_offset, ht.bitmask);
+				IncrementAndWrap(row_ht_offset, bitmask);
 			}
 		} else {
 			const ht_entry_t entry = entries.get()[row_ht_offset];
