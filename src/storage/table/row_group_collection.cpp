@@ -356,7 +356,6 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 	state.vector_index = 0;
 	state.max_row = state.row_groups->GetBaseRowId() + next_row_id.load();
 	state.batch_index = 0;
-	state.processed_rows = 0;
 	state.skipped_rows = 0;
 	if (state.reorderer) {
 		// row groups pruned by the reorderer are never scanned
@@ -410,7 +409,6 @@ optional_idx RowGroupCollection::NextParallelScan(ClientContext &context, Parall
 			max_row = MinValue<idx_t>(max_row, state.max_row);
 			const idx_t assignment_start = row_start + vector_index * STANDARD_VECTOR_SIZE;
 			assignment_rows = max_row > assignment_start ? max_row - assignment_start : 0;
-			state.processed_rows += assignment_rows;
 			scan_state.batch_index = ++state.batch_index;
 			if (!state.row_number_base.IsValid() && scan_state.row_number_base.IsValid()) {
 				state.row_number_base = scan_state.row_number_base.GetIndex();
