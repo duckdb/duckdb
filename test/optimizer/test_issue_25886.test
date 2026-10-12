@@ -1,0 +1,28 @@
+# name: test/optimizer/test_issue_25886.test
+# description: Test for issue #25886 - null pointer in CompressedMaterialization for zero-row queries
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t (ts TIMESTAMP, k BIGINT);
+
+# Test the original crash case: empty table with ORDER BY LIMIT should not crash
+statement ok
+SELECT * FROM t ORDER BY ts, k LIMIT 10001;
+
+# Test with filter that eliminates all rows
+statement ok
+SELECT * FROM t WHERE k > 100 ORDER BY ts, k LIMIT 10;
+
+# Test with data to verify correctness
+statement ok
+INSERT INTO t VALUES ('2023-01-01 00:00:00', 1), ('2023-01-02 00:00:00', 2), ('2023-01-03 00:00:00', 3);
+
+query I
+SELECT COUNT(*) FROM t;
+----
+3
+
+query I
+SELECT COUNT(*) FROM t WHERE k > 100;
+----
+0
