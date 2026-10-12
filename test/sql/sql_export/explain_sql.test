@@ -49,7 +49,7 @@ CREATE TABLE explain_target(i INTEGER);
 query TT
 EXPLAIN (SQL) INSERT INTO explain_target VALUES (1);
 ----
-sql	<REGEX>:INSERT INTO .*explain_target.*
+sql	<REGEX>:(?s)INSERT\s*INTO\s*.*explain_target.*
 
 statement error
 EXPLAIN (SQL) CREATE TABLE unexpected(i INTEGER);
