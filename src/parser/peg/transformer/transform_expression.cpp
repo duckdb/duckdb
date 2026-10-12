@@ -1200,6 +1200,12 @@ BetweenInLikeOperator PEGTransformerFactory::TransformInPredicate(PEGTransformer
 BetweenInLikeOperator
 PEGTransformerFactory::TransformBetweenLikeOp(PEGTransformer &transformer, const bool &has_result,
                                               unique_ptr<ParsedExpression> between_like_op_expression) {
+	if (has_result && between_like_op_expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &function_name = between_like_op_expression->Cast<FunctionExpression>().FunctionName();
+		if (StringUtil::StartsWith(function_name.GetIdentifierName(), "!")) {
+			throw ParserException("NOT cannot precede an operator that is already negated (!~~, !~~*, !~ or !~*)");
+		}
+	}
 	return {has_result, std::move(between_like_op_expression)};
 }
 
@@ -2017,6 +2023,12 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSliceBound(
 		slice_bounds.push_back(OperatorExpression::EmptySliceBound());
 	}
 	if (end_slice_bound && *end_slice_bound) {
+		if ((*end_slice_bound)->GetAlias() == Identifier("-")) {
+			if (!step_slice_bound) {
+				throw ParserException("The \"-\" slice bound is only valid in combination with a step, as in [:-:step]");
+			}
+			(*end_slice_bound)->ClearAlias();
+		}
 		slice_bounds.push_back(std::move(*end_slice_bound));
 	} else {
 		slice_bounds.push_back(OperatorExpression::EmptySliceBound());
@@ -2039,7 +2051,10 @@ PEGTransformerFactory::TransformEndSliceBound(PEGTransformer &transformer,
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformEndSliceMinus(PEGTransformer &transformer) {
-	return OperatorExpression::EmptySliceBound();
+	// marked so SliceBound can check that a step follows: the '-' placeholder is only valid in [:-:step]
+	auto result = OperatorExpression::EmptySliceBound();
+	result->SetAlias(Identifier("-"));
+	return result;
 }
 
 unique_ptr<ParsedExpression>
