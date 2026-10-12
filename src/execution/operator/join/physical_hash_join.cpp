@@ -1888,8 +1888,10 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		    (max_partition_ht_size + sink.probe_side_requirement) > sink.temporary_memory_state->GetReservation()) {
 			// We have to repartition
 			const auto radix_bits_before = ht.GetRadixBits();
-			ht.SetRepartitionRadixBits(sink.temporary_memory_state->GetReservation(), sink.max_partition_size,
-			                           sink.max_partition_count);
+			const auto reservation = sink.temporary_memory_state->GetReservation();
+			const auto max_ht_size =
+			    reservation > sink.probe_side_requirement ? reservation - sink.probe_side_requirement : 0;
+			ht.SetRepartitionRadixBits(max_ht_size, sink.max_partition_size, sink.max_partition_count);
 			DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalHashJoin", "Repartition",
 			           {{"partitions_before", to_string(RadixPartitioning::NumberOfPartitions(radix_bits_before))},
 			            {"partitions_after", to_string(RadixPartitioning::NumberOfPartitions(ht.GetRadixBits()))}});
