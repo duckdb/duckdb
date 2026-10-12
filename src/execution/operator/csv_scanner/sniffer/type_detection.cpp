@@ -6,6 +6,7 @@
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 
@@ -249,6 +250,16 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 	case LogicalTypeId::DECIMAL: {
 		uint8_t width, scale;
 		type.GetDecimalProperties(width, scale);
+		if (type.InternalType() == PhysicalType::VARCHAR) {
+			// wide decimal
+			string dummy_value;
+			if (decimal_separator == ',') {
+				string value(value_ptr, value_size);
+				std::replace(value.begin(), value.end(), ',', '.');
+				return BignumDecimal::TryParse(value.c_str(), value.size(), width, scale, dummy_value);
+			}
+			return BignumDecimal::TryParse(value_ptr, value_size, width, scale, dummy_value);
+		}
 		if (decimal_separator == ',') {
 			switch (type.InternalType()) {
 			case PhysicalType::INT16: {

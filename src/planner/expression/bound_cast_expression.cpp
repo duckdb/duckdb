@@ -4,6 +4,7 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 namespace duckdb {
 
@@ -296,6 +297,10 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	// BIGNUM has arbitrary precision, so its values do not necessarily fit in any other type, e.g. BIGNUM -> DOUBLE
 	// overflows for large values, even though BIGNUM implicitly casts to DOUBLE
 	if (source_type.id() == LogicalTypeId::BIGNUM) {
+		return true;
+	}
+	// Wide decimals hold up to 255 digits, which do not fit in FLOAT or the fixed-size types
+	if (source_type.id() == LogicalTypeId::DECIMAL && Decimal::IsWide(DecimalType::GetWidth(source_type))) {
 		return true;
 	}
 	// Casts of nested types are executed on the child types - recurse into them

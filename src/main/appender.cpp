@@ -173,6 +173,9 @@ void BaseAppender::AppendValueInternal(T input) {
 		case PhysicalType::INT128:
 			AppendDecimalValueInternal<T, hugeint_t>(col, input);
 			break;
+		case PhysicalType::VARCHAR:
+			throw NotImplementedException("Appending to DECIMAL types wider than %d digits is not supported yet",
+			                              Decimal::MAX_WIDTH_DECIMAL);
 		default:
 			throw InternalException("Internal type not recognized for Decimal");
 		}

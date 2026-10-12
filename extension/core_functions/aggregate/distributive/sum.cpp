@@ -2,6 +2,7 @@
 #include "core_functions/aggregate/sum_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/bignum.hpp"
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -416,10 +417,21 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 	}
 }
 
+AggregateFunction GetWideDecimalSumAggregate();
+
 unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto decimal_type = arguments[0]->GetReturnType();
+	if (decimal_type.InternalType() == PhysicalType::VARCHAR) {
+		// wide decimal: sum the BIGNUM blobs, the result is the widest decimal of the same scale
+		function.ReplaceImplementation(GetWideDecimalSumAggregate());
+		function.SetName("sum");
+		function.GetArguments()[0] = decimal_type;
+		function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_BIGNUM, DecimalType::GetScale(decimal_type)));
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		return nullptr;
+	}
 	function.ReplaceImplementation(GetSumAggregate(decimal_type.InternalType()));
 	function.SetName("sum");
 	function.GetArguments()[0] = decimal_type;
@@ -477,6 +489,30 @@ struct BignumOperation {
 		return true;
 	}
 };
+
+//! Sum of wide decimals: a BIGNUM sum whose result must still fit the width of the result decimal
+struct WideDecimalSumOperation : public BignumOperation {
+	template <class TARGET_TYPE, class STATE>
+	static void Finalize(STATE &state, TARGET_TYPE &target, AggregateFinalizeData &finalize_data) {
+		if (!state.is_set) {
+			finalize_data.ReturnNull();
+			return;
+		}
+		auto width = DecimalType::GetWidth(finalize_data.result.GetType());
+		if (!BignumDecimal::FitsWidth(state.value, width)) {
+			throw OutOfRangeException("Overflow in SUM: the result does not fit %s",
+			                          finalize_data.result.GetType().ToString());
+		}
+		target = state.value.ToBignum(finalize_data.input.allocator);
+	}
+};
+
+AggregateFunction GetWideDecimalSumAggregate() {
+	auto function = AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, WideDecimalSumOperation>(
+	    LogicalTypeId::DECIMAL, LogicalTypeId::DECIMAL);
+	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	return function;
+}
 
 } // namespace
 

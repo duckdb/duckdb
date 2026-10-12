@@ -151,6 +151,9 @@ static unique_ptr<FunctionData> BindDecimalAverage(BindAggregateFunctionInput &i
 		function.ReplaceImplementation(
 		    MakeDecimalAvgFunction<hugeint_t>(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, scale), return_type));
 		break;
+	case PhysicalType::VARCHAR:
+		throw NotImplementedException("decimal_average over DECIMAL types wider than %d digits is not supported yet",
+		                              Decimal::MAX_WIDTH_DECIMAL);
 	default:
 		throw InternalException("decimal_average: unexpected physical type");
 	}

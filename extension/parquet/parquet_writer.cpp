@@ -1,4 +1,5 @@
 #include "parquet_writer.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 #include <functional>
 #include <limits>
@@ -182,6 +183,10 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 		case PhysicalType::INT128:
 			parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
 			break;
+		case PhysicalType::VARCHAR:
+			throw NotImplementedException("Writing %s to Parquet is not supported yet: DECIMAL types wider than %d "
+			                              "digits cannot be written",
+			                              duckdb_type.ToString(), Decimal::MAX_WIDTH_DECIMAL);
 		default:
 			throw InternalException("Unsupported internal decimal type");
 		}

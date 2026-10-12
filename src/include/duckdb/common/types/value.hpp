@@ -167,6 +167,8 @@ public:
 	DUCKDB_API static Value DECIMAL(int32_t value, uint8_t width, uint8_t scale);
 	DUCKDB_API static Value DECIMAL(int64_t value, uint8_t width, uint8_t scale);
 	DUCKDB_API static Value DECIMAL(hugeint_t value, uint8_t width, uint8_t scale);
+	//! Create a wide decimal (width > Decimal::MAX_WIDTH_DECIMAL) from the BIGNUM blob of its unscaled value
+	DUCKDB_API static Value DECIMAL(const string &unscaled_bignum, uint8_t width, uint8_t scale);
 	//! Create a float Value from a specified value
 	DUCKDB_API static Value FLOAT(float value);
 	//! Create a double Value from a specified value

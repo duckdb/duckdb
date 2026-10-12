@@ -1,3 +1,5 @@
+#include "duckdb/common/bignum.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -222,6 +224,18 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 	return stats.ToUnique();
 }
 
+//! abs() of a wide decimal: negate the BIGNUM blob of negative values
+static void WideDecimalAbs(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &heap = StringVector::GetStringHeap(result);
+	UnaryExecutor::Execute<bignum_t, string_t>(args.data[0], result, [&](bignum_t a) {
+		const BignumIntermediate value(a);
+		if (value.is_negative) {
+			return value.Negate(heap);
+		}
+		return StringVector::AddStringOrBlob(result, a.data);
+	});
+}
+
 template <class OP>
 static unique_ptr<FunctionData> DecimalUnaryOpBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
@@ -236,6 +250,10 @@ static unique_ptr<FunctionData> DecimalUnaryOpBind(BindScalarFunctionInput &inpu
 		break;
 	case PhysicalType::INT64:
 		bound_function.SetFunctionCallback(ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::BIGINT));
+		break;
+	case PhysicalType::VARCHAR:
+		// wide decimal: the unscaled value is a BIGNUM blob
+		bound_function.SetFunctionCallback(WideDecimalAbs);
 		break;
 	default:
 		bound_function.SetFunctionCallback(ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::HUGEINT));
@@ -534,6 +552,9 @@ static unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(BindScalarFuncti
 		case PhysicalType::INT64:
 			bound_function.SetFunctionCallback(GenericRoundFunctionDecimal<int64_t, NumericHelper, OP>);
 			break;
+		case PhysicalType::VARCHAR:
+			throw NotImplementedException("Rounding DECIMAL types wider than %d digits is not supported yet",
+			                              Decimal::MAX_WIDTH_DECIMAL);
 		default:
 			bound_function.SetFunctionCallback(GenericRoundFunctionDecimal<hugeint_t, Hugeint, OP>);
 			break;
@@ -714,6 +735,9 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 		case PhysicalType::INT64:
 			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<int64_t, NumericHelper, NEGOP>);
 			break;
+		case PhysicalType::VARCHAR:
+			throw NotImplementedException("Rounding DECIMAL types wider than %d digits is not supported yet",
+			                              Decimal::MAX_WIDTH_DECIMAL);
 		default:
 			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<hugeint_t, Hugeint, NEGOP>);
 			break;
@@ -738,6 +762,9 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 			case PhysicalType::INT64:
 				bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<int64_t, NumericHelper, POSOP>);
 				break;
+			case PhysicalType::VARCHAR:
+				throw NotImplementedException("Rounding DECIMAL types wider than %d digits is not supported yet",
+				                              Decimal::MAX_WIDTH_DECIMAL);
 			default:
 				bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<hugeint_t, Hugeint, POSOP>);
 				break;

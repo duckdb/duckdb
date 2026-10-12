@@ -171,6 +171,8 @@ struct VectorCastHelpers {
 		case PhysicalType::INT128:
 			return TemplatedDecimalCast<T, hugeint_t, TryCastToDecimal>(source, result, count, parameters, width,
 			                                                            scale);
+		case PhysicalType::VARCHAR:
+			return DefaultCasts::ToWideDecimalCast(source, result, count, parameters);
 		default:
 			throw InternalException("Unimplemented internal type for decimal");
 		}

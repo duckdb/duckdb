@@ -310,6 +310,9 @@ Value Value::MinimumValue(const LogicalType &type) {
 			return Value::DECIMAL(int64_t(-NumericHelper::POWERS_OF_TEN[width] + 1), width, scale);
 		case PhysicalType::INT128:
 			return Value::DECIMAL(-Hugeint::POWERS_OF_TEN[width] + 1, width, scale);
+		case PhysicalType::VARCHAR:
+			// wide decimal: -(10^width - 1)
+			return Value::DECIMAL(Bignum::VarcharToBignum(string_t("-" + string(width, '9'))), width, scale);
 		default:
 			throw InternalException("Unknown decimal type");
 		}
@@ -408,6 +411,9 @@ Value Value::MaximumValue(const LogicalType &type) {
 			return Value::DECIMAL(int64_t(NumericHelper::POWERS_OF_TEN[width] - 1), width, scale);
 		case PhysicalType::INT128:
 			return Value::DECIMAL(Hugeint::POWERS_OF_TEN[width] - 1, width, scale);
+		case PhysicalType::VARCHAR:
+			// wide decimal: 10^width - 1
+			return Value::DECIMAL(Bignum::VarcharToBignum(string_t(string(width, '9'))), width, scale);
 		default:
 			throw InternalException("Unknown decimal type");
 		}
@@ -660,6 +666,14 @@ Value Value::DECIMAL(hugeint_t value, uint8_t width, uint8_t scale) {
 	Value result(LogicalType::DECIMAL(width, scale));
 	result.value_.hugeint = value;
 	result.is_null = false;
+	return result;
+}
+
+Value Value::DECIMAL(const string &unscaled_bignum, uint8_t width, uint8_t scale) {
+	D_ASSERT(Decimal::IsWide(width));
+	Value result(LogicalType::DECIMAL(width, scale));
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(unscaled_bignum);
 	return result;
 }
 

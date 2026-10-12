@@ -1,4 +1,5 @@
 #include "column_writer.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 #include <cmath>
 #include <limits>
@@ -520,6 +521,10 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 			return make_uniq<StandardColumnWriter<int32_t, int32_t>>(writer, std::move(schema), path_in_schema);
 		case PhysicalType::INT64:
 			return make_uniq<StandardColumnWriter<int64_t, int64_t>>(writer, std::move(schema), path_in_schema);
+		case PhysicalType::VARCHAR:
+			throw NotImplementedException("Writing %s to Parquet is not supported yet: DECIMAL types wider than %d "
+			                              "digits cannot be written",
+			                              type.ToString(), Decimal::MAX_WIDTH_DECIMAL);
 		default:
 			return make_uniq<FixedDecimalColumnWriter>(writer, std::move(schema), path_in_schema);
 		}

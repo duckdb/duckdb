@@ -89,6 +89,7 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 		// result is a decimal: we need the maximum width and the maximum scale over width
 		vector<LogicalType> argument_types = {left_type, right_type};
 		uint8_t max_width = 0, max_scale = 0, max_width_over_scale = 0;
+		uint8_t widths[2];
 		for (idx_t i = 0; i < argument_types.size(); i++) {
 			uint8_t width, scale;
 			auto can_convert = argument_types[i].GetDecimalProperties(width, scale);
@@ -96,16 +97,18 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 				result_type = res;
 				return true;
 			}
+			widths[i] = width;
 			max_width = MaxValue<uint8_t>(width, max_width);
 			max_scale = MaxValue<uint8_t>(scale, max_scale);
 			max_width_over_scale = MaxValue<uint8_t>(width - scale, max_width_over_scale);
 		}
-		max_width = MaxValue<uint8_t>(max_scale + max_width_over_scale, max_width);
-		if (max_width > Decimal::MAX_WIDTH_DECIMAL) {
+		idx_t required_width = MaxValue<idx_t>(idx_t(max_scale) + max_width_over_scale, max_width);
+		auto width_limit = Decimal::MaxCombinedWidth(widths[0], widths[1]);
+		if (required_width > width_limit) {
 			// target width does not fit in decimal: truncate the scale (if possible) to try and make it fit
-			max_width = Decimal::MAX_WIDTH_DECIMAL;
+			required_width = width_limit;
 		}
-		res = LogicalType::DECIMAL(max_width, max_scale);
+		res = LogicalType::DECIMAL(NumericCast<uint8_t>(required_width), max_scale);
 		break;
 	}
 	case LogicalTypeId::VARCHAR:
