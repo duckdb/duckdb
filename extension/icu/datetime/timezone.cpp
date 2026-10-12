@@ -555,6 +555,5 @@ unique_ptr<TimeZone> TimeZone::TryCreateDefault() {
 	return TryCreateHostTimeZone();
 }
 
-
 } // namespace datetime
 } // namespace duckdb
