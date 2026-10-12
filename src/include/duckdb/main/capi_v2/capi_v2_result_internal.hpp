@@ -10,6 +10,7 @@
 
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+#include "duckdb/main/valid_checker.hpp"
 #include "duckdb/main/query_result_stream.hpp"
 #include "duckdb/main/result_format.hpp"
 
@@ -72,9 +73,11 @@ struct ResultWrapperV2 {
 	//! fragment execution path.
 	bool owns_wrapping_transaction = false;
 
-	//! The owning connection's busy slot; released on terminal transition
-	//! or destroy, whichever comes first.
+	//! The connection's busy slot, kept for the result's lifetime for its cancel count. A group claims the slot
+	//! until a terminal transition or destroy, whichever comes first.
 	shared_ptr<ConnectionBusySlotV2> busy_slot;
+	//! The slot's cancel count when this result's statement started
+	idx_t cancel_requests_at_start = 0;
 
 	//! Principal fragment's metadata, valid once metadata_available.
 	vector<LogicalType> types;
@@ -88,44 +91,50 @@ struct ResultWrapperV2 {
 	ErrorData error;
 
 	//! Mirrors ClientContext::Query's error handling for expanded groups
-	//! (client_context.cpp, chain-append loop): when the group cannot
-	//! complete, roll back the transaction statement_execute injected to wrap
-	//! it. A no-op for non-expanded statements, for groups that ran inside a
-	//! user-managed transaction (which the bridge never wraps), and when the
-	//! transaction is already gone.
-	void RollbackIncompleteGroup() {
-		if (!owns_wrapping_transaction || !context) {
+	//! (client_context.cpp, chain-append loop): a group that cannot complete
+	//! is undone as a whole. The transaction statement_execute injected to wrap
+	//! it is rolled back; a user-managed transaction it ran inside (which the
+	//! bridge never wraps) is invalidated, since part of the group may already
+	//! have applied. Only a group still in progress is undone: once its result
+	//! has ended, the active transaction may be a later one.
+	void AbandonIncompleteGroup() {
+		if (fragment_count < 2 || !context || (state != State::PENDING && state != State::STREAMING)) {
 			return;
 		}
-		if (context->transaction.HasActiveTransaction()) {
-			// Mirrors Connection::Rollback (Query("ROLLBACK") + throw on error),
-			// driven through the retained context so it works after disconnect.
-			auto result = context->Query("ROLLBACK", QueryParameters());
-			result->ThrowIfError();
+		if (!context->transaction.HasActiveTransaction()) {
+			return;
 		}
+		if (!owns_wrapping_transaction) {
+			ValidChecker::Invalidate(context->ActiveTransaction(),
+			                         "a statement that expands into several was abandoned before it completed");
+			return;
+		}
+		// Mirrors Connection::Rollback (Query("ROLLBACK") + throw on error),
+		// driven through the retained context so it works after disconnect.
+		auto result = context->Query("ROLLBACK", QueryParameters());
+		result->ThrowIfError();
 	}
 
 	//! Close() the live engine result so an abandoned active query is cleaned
 	//! up (freeing the executor, which breaks the ClientContext ref cycle),
-	//! then roll back an injected group transaction. May throw; the terminal
-	//! states leave pending/result null, so this is then a no-op.
+	//! then undo a group that is still in progress. May throw; the terminal
+	//! states leave pending/result null and the group settled, so this is then a no-op.
 	void Finalize() {
 		if (stream) {
 			stream->Close();
 		} else if (handle) {
 			handle->Close();
 		}
-		RollbackIncompleteGroup();
+		AbandonIncompleteGroup();
 	}
 
-	//! Frees the connection for its next query. Only the current owner can
+	//! Releases a group's claim on the connection. Only the current owner can
 	//! release the slot, so a release after the connection moved on is a
 	//! no-op.
 	void ReleaseBusySlot() {
 		if (busy_slot) {
 			void *expected = this;
 			busy_slot->owner.compare_exchange_strong(expected, nullptr);
-			busy_slot.reset();
 		}
 	}
 
@@ -173,15 +182,14 @@ auto Convert(duckdb_v2_result_handle handle) -> ResultWrapperV2 *;
 auto ConvertArrowResult(ResultWrapperV2 *wrapper) -> duckdb_v2_arrow_result_handle;
 auto Convert(duckdb_v2_arrow_result_handle handle) -> ResultWrapperV2 *;
 
-//! Preprocesses and submits a borrowed statement in `format`, claiming the connection's live-result slot first.
-//! Throws ResourceInUseException when the connection already has a live result.
+//! Preprocesses and submits a borrowed statement in `format`; a statement that expands into a group claims the
+//! connection's busy slot. Throws ResourceInUseException while a statement on the connection is still running.
 auto ExecuteStatementV2(const shared_ptr<ClientContext> &context, const SQLStatement &statement,
                         const duckdb_v2_identifier_t *parameter_names, const duckdb_v2_value_handle *parameter_values,
                         idx_t parameter_count, const char *function_name, shared_ptr<ResultFormat> format)
     -> unique_ptr<ResultWrapperV2>;
-//! Runs a prepared statement as a single-statement result, claiming the connection's
-//! live-result slot first. `context` is the session the result holds on to, so it survives
-//! disconnect. Throws ResourceInUseException when the connection already has a live result.
+//! Runs a prepared statement as a single-statement result. `context` is the session the result holds on to, so it
+//! survives disconnect. Throws ResourceInUseException while a statement on the connection is still running.
 auto ExecutePreparedStatementV2(const shared_ptr<ClientContext> &context, PreparedStatement &prepared,
                                 identifier_map_t<BoundParameterData> &values, shared_ptr<ResultFormat> format)
     -> unique_ptr<ResultWrapperV2>;

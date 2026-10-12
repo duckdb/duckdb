@@ -12,6 +12,8 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -170,9 +172,23 @@ static void ToParquetVariantFunction(DataChunk &input, ExpressionState &state, V
 	ParquetVariantConversion::ToParquetVariant(input.data[0], input.size(), result);
 }
 
-ScalarFunction VariantColumnWriter::GetTransformFunction() {
-	ScalarFunction transform("variant_to_parquet_variant", {}, LogicalType::ANY, ToParquetVariantFunction,
-	                         BindTransform);
+static void ToParquetVariantWriteFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	ToParquetVariantFunction(input, state, result);
+	// Preserve SQL NULL at the VARIANT group.
+	auto validity = input.data[0].Validity();
+	if (validity.CannotHaveNull()) {
+		return;
+	}
+	for (idx_t i = 0; i < input.size(); i++) {
+		if (!validity.IsValid(i)) {
+			FlatVector::SetNull(result, i, true);
+		}
+	}
+}
+
+ScalarFunction VariantColumnWriter::GetTransformFunction(bool preserve_nulls) {
+	auto function = preserve_nulls ? ToParquetVariantWriteFunction : ToParquetVariantFunction;
+	ScalarFunction transform("variant_to_parquet_variant", {}, LogicalType::ANY, function, BindTransform);
 	transform.GetSignature().AddParameter("variant", LogicalType::VARIANT());
 	transform.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	// throws for values that are out of range for the parquet variant encoding
