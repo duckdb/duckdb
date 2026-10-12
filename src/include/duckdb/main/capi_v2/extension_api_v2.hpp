@@ -1320,7 +1320,24 @@ typedef struct {
 	(duckdb_v2_macro_function_handle function, const duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vector_cast)
 	(duckdb_v2_factory_handle factory, duckdb_v2_vector_handle source, duckdb_v2_vector_handle target,
-	 DUCKDB_V2_CAST_MODE mode, bool *out_converted, duckdb_v2_error_info_handle *err);
+	 DUCKDB_V2_CAST_MODE mode, bool *out_converted, duckdb_v2_error_info_handle *cast_err,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_set_file_extension)
+	(duckdb_v2_copy_function_handle function, const duckdb_v2_str *extension, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_data_chunk_clear)(duckdb_v2_data_chunk_handle chunk, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_path_glob)
+	(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *pattern,
+	 duckdb_v2_file_system_path_glob_callback_fn callback, void *user_data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_path_move)
+	(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *source, const duckdb_v2_str *target,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_path_remove)
+	(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *path, bool *out_removed,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_statement_add_collection)
+	(duckdb_v2_sql_statement_handle statement, const duckdb_v2_identifier_t *name,
+	 duckdb_v2_column_data_collection_handle collection, const duckdb_v2_identifier_t *column_names, idx_t column_count,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_multi_file_function)
 	(duckdb_v2_connection_handle conn, duckdb_v2_multi_file_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_set_statistics_callback)
@@ -1995,6 +2012,12 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_macro_function_set_body = duckdb_v2_macro_function_set_body;
 	result.duckdb_v2_macro_function_set_name = duckdb_v2_macro_function_set_name;
 	result.duckdb_v2_vector_cast = duckdb_v2_vector_cast;
+	result.duckdb_v2_copy_function_set_file_extension = duckdb_v2_copy_function_set_file_extension;
+	result.duckdb_v2_data_chunk_clear = duckdb_v2_data_chunk_clear;
+	result.duckdb_v2_file_system_path_glob = duckdb_v2_file_system_path_glob;
+	result.duckdb_v2_file_system_path_move = duckdb_v2_file_system_path_move;
+	result.duckdb_v2_file_system_path_remove = duckdb_v2_file_system_path_remove;
+	result.duckdb_v2_statement_add_collection = duckdb_v2_statement_add_collection;
 	result.duckdb_v2_connection_register_multi_file_function = duckdb_v2_connection_register_multi_file_function;
 	result.duckdb_v2_copy_to_set_statistics_callback = duckdb_v2_copy_to_set_statistics_callback;
 	result.duckdb_v2_copy_to_statistics_get_bind_data = duckdb_v2_copy_to_statistics_get_bind_data;
