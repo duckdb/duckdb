@@ -28,6 +28,7 @@ add_library_unity(
   test_scalar_executor.cpp
   test_logical_type_is_complete.cpp
   test_logical_type_immutable.cpp
+  test_type_visitor.cpp
   test_utf.cpp
   test_allocator_debug_info.cpp
   test_buffer_pool_reservation.cpp

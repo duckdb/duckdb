@@ -9,6 +9,8 @@
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/main/extension_entries.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 #include "utf8proc.hpp"
 
@@ -49,6 +51,11 @@ unique_ptr<FunctionData> ParseLogMessageBind(BindScalarFunctionInput &input) {
 	auto type = StringValue::Get(type_val);
 
 	auto lookup = LogManager::Get(context).LookupLogType(type);
+	if (!lookup) {
+		// the log type may belong to an extension that is not loaded yet
+		ExtensionHelper::TryAutoloadFromEntry(*context.db, Identifier(type), EXTENSION_LOG_TYPES);
+		lookup = LogManager::Get(context).LookupLogType(type);
+	}
 
 	if (!lookup) {
 		throw InvalidInputException("structured_log_schema: '%s' not found", type);
