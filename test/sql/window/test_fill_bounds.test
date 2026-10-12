@@ -120,24 +120,25 @@ FROM data ORDER BY g, x;
 1	3	0	0
 1	4	0	0
 
-# Negative fractional BIGINT values round down in either interpolation direction.
-query III
+# Negative fractional values round down for both BIGINT and INTEGER, in either interpolation direction.
+query IIII
 WITH endpoints(g, a, b) AS (VALUES (0, -3::BIGINT, 0::BIGINT), (1, 0::BIGINT, -3::BIGINT)),
 data AS (
 	SELECT g, x, CASE WHEN x = 0 THEN a WHEN x = 4 THEN b ELSE NULL END AS y
 	FROM endpoints, (VALUES (0), (1), (3), (4)) positions(x)
 )
-SELECT g, x, fill(y ORDER BY x) OVER (PARTITION BY g)
+SELECT g, x, fill(y ORDER BY x) OVER (PARTITION BY g),
+	fill(y::INTEGER ORDER BY x) OVER (PARTITION BY g)
 FROM data ORDER BY g, x;
 ----
-0	0	-3
-0	1	-3
-0	3	-1
-0	4	0
-1	0	0
-1	1	-1
-1	3	-3
-1	4	-3
+0	0	-3	-3
+0	1	-3	-3
+0	3	-1	-1
+0	4	0	0
+1	0	0	0
+1	1	-1	-1
+1	3	-3	-3
+1	4	-3	-3
 
 # Fractional timestamps round to the earlier microsecond on either side of the epoch.
 query III

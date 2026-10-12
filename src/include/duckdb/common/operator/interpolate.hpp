@@ -36,6 +36,11 @@ struct InterpolateOperator {
 		if (result <= static_cast<double>(NumericLimits<TARGET_TYPE>::Minimum())) {
 			return NumericLimits<TARGET_TYPE>::Minimum();
 		}
+		// integer targets round toward the lower endpoint, matching the exact int64 paths -
+		// a plain cast truncates toward zero, which rounds negative values up
+		if constexpr (std::is_integral_v<TARGET_TYPE>) {
+			return LossyNumericCast<TARGET_TYPE>(std::floor(result));
+		}
 		return LossyNumericCast<TARGET_TYPE>(result);
 	}
 };
