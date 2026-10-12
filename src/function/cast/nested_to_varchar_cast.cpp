@@ -20,7 +20,7 @@ const bool NestedToVarcharCast::LOOKUP_TABLE[256] = {
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
     false, false, false, false, false, false, false, false, false, false, false, false, false, false,
     true, // [
-    false,
+    true, // backslash
     true, // ]
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
     false, false, false, false, false, false, false, false, false, false, false, false, false, false,

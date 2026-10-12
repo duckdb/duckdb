@@ -187,6 +187,9 @@ template <class T>
 void ConstantFillFunction(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
 	const auto &nstats = segment.GetStats();
 
+	if (!NumericStats::HasMin(nstats)) {
+		throw DataCorruptionException("Constant segment is missing its constant value");
+	}
 	auto data = FlatVector::GetDataMutable<T>(result);
 	auto constant_value = NumericStats::GetMin<T>(nstats);
 	for (idx_t i = 0; i < count; i++) {
