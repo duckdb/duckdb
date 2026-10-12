@@ -200,6 +200,8 @@ private:
 		lock_guard<mutex> guard(lock);
 		return !pending_jobs.empty();
 	}
+	//! The number of jobs that may be in flight under the current budget
+	idx_t ReservationDepth() const;
 	//! Reserve an in-flight job slot for producing a job
 	bool TryReserveSlot();
 	//! Schedule the job's I/O and admit the job to the queue
@@ -242,8 +244,10 @@ private:
 	atomic<bool> done {false};
 	//! Threads that reserved a slot but have not pushed their job yet
 	atomic<idx_t> active_producers {0};
-	//! Incremented whenever a waiting thread could make progress, guarded by lock
-	idx_t progress_epoch = 0;
+	//! Incremented whenever a waiting thread could make progress
+	atomic<idx_t> progress_epoch {0};
+	//! Threads waiting for progress, only these need a notification
+	atomic<idx_t> waiting_threads {0};
 	condition_variable progress;
 	//! File-opens scheduled on the async pool that have not completed yet, shared with the open tasks
 	shared_ptr<atomic<idx_t>> pending_opens;

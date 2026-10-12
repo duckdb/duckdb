@@ -247,13 +247,18 @@ void ScanReadAhead::SetDone() {
 	done = true;
 }
 
-bool ScanReadAhead::TryReserveSlot() {
-	// reserving under the lock keeps a failed attempt from holding a slot that another thread then waits on
-	lock_guard<mutex> guard(lock);
-	const bool over_budget = pending_io_bytes.load() >= backlog_budget.load();
+idx_t ScanReadAhead::ReservationDepth() const {
 	// over budget one job stays queued, claimed jobs hold the budget until their task resumes
-	const idx_t depth = over_budget ? 1 : read_ahead_depth;
-	if (active_jobs.load() >= depth) {
+	return pending_io_bytes.load() >= backlog_budget.load() ? 1 : read_ahead_depth;
+}
+
+bool ScanReadAhead::TryReserveSlot() {
+	if (active_jobs.load() >= ReservationDepth()) {
+		return false;
+	}
+	// reserve the slot and the minimum charge together
+	lock_guard<mutex> guard(lock);
+	if (active_jobs.load() >= ReservationDepth()) {
 		return false;
 	}
 	++active_jobs;
@@ -334,28 +339,38 @@ void ScanReadAhead::ReleaseSlot() {
 }
 
 void ScanReadAhead::NotifyProgress() {
-	progress_epoch++;
-	progress.notify_all();
+	++progress_epoch;
+	if (waiting_threads.load() > 0) {
+		progress.notify_all();
+	}
 }
 
 void ScanReadAhead::SignalProgress() {
-	lock_guard<mutex> guard(lock);
-	NotifyProgress();
+	++progress_epoch;
+	if (waiting_threads.load() == 0) {
+		return;
+	}
+	{
+		// a waiter that saw the old epoch is blocked in the wait once the lock is free
+		lock_guard<mutex> guard(lock);
+	}
+	progress.notify_all();
 }
 
 void ScanReadAhead::WaitForProgress(ClientContext &context, idx_t epoch) {
 	context.BlockingInterruptCheck();
 	{
 		unique_lock<mutex> guard(lock);
+		++waiting_threads;
 		// the timeout bounds the interrupt latency
-		progress.wait_for(guard, std::chrono::milliseconds(10), [&]() { return progress_epoch != epoch; });
+		progress.wait_for(guard, std::chrono::milliseconds(10), [&]() { return progress_epoch.load() != epoch; });
+		--waiting_threads;
 	}
 	context.BlockingInterruptCheck();
 }
 
 idx_t ScanReadAhead::ProgressEpoch() const {
-	lock_guard<mutex> guard(lock);
-	return progress_epoch;
+	return progress_epoch.load();
 }
 
 } // namespace duckdb

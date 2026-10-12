@@ -1042,7 +1042,7 @@ void ClientContext::InterruptCheck() const {
 }
 
 void ClientContext::BlockingInterruptCheck() const {
-	if (interrupt_state.load(std::memory_order_relaxed) == ClientInterruptState::INTERRUPTED) {
+	if (IsInterrupted()) {
 		throw InterruptException();
 	}
 	if (!query_deadline.IsValid()) {
