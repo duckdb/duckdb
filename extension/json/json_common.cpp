@@ -127,6 +127,10 @@ static inline idx_t ReadInteger(const char *ptr, const char *const end, idx_t &i
 		}
 		ptr++;
 	}
+	if (ptr == end || *ptr != ']') {
+		// No closing ']', or too many digits
+		return 0;
+	}
 	// Invalid if overflow
 	return idx >= (idx_t)IDX_T_MAX ? 0 : ptr - before;
 }
