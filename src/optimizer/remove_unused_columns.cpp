@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -1115,6 +1116,11 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 	reference<const LogicalType> type_iter(struct_type);
 	reference<const ColumnIndex> path_iter(path);
 	while (true) {
+		if (!path_iter.get().HasPrimaryIndex()) {
+			// TODO: Reconstruct named field steps with variant_extract to support mixed STRUCT/VARIANT paths.
+			throw BinderException("Extracting VARIANT field \"%s\" through this projection is not supported",
+			                      path_iter.get().GetFieldName());
+		}
 		auto child_index = path_iter.get().GetPrimaryIndex();
 		auto &child_types = StructType::GetChildTypes(type_iter.get());
 		D_ASSERT(child_index < child_types.size());
