@@ -631,6 +631,9 @@ BufferPool::MemoryUsage::MemoryUsage() {
 }
 
 void BufferPool::MemoryUsage::UpdateUsedMemory(MemoryTag tag, int64_t size) {
+	if (size == 0) {
+		return;
+	}
 	auto tag_idx = (idx_t)tag;
 	if ((idx_t)AbsValue(size) < MEMORY_USAGE_CACHE_THRESHOLD) {
 		// update cache and update global counter when cache exceeds threshold
