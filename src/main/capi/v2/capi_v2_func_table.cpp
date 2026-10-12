@@ -389,8 +389,9 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 	const auto &info = input.info->Cast<CV2TableFunctionInfo>();
 
 	// the binder places every argument in its signature slot, defaults included, so the call reads them as-is
-	CV2ConstantBindInfo bind_info(input.table_function, info.user_data ? info.user_data->GetData() : nullptr,
-	                              input.inputs, input.named_parameters);
+	CV2ConstantBindInfo bind_info(input.table_function, input.table_function.GetSignature(),
+	                              info.user_data ? info.user_data->GetData() : nullptr, input.inputs,
+	                              input.named_parameters);
 	CV2TableBindInfo args = {};
 
 	CV2ErrorInfo err = {};

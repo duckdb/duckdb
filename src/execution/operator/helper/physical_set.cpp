@@ -14,14 +14,21 @@ void PhysicalSet::SetGenericVariable(ClientContext &context, idx_t setting_index
 
 void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, SetScope scope,
                                        const Value &value) {
+	SetExtensionVariable(context, Identifier(), extension_option, scope, value);
+}
+
+void PhysicalSet::SetExtensionVariable(ClientContext &context, const Identifier &name,
+                                       ExtensionOption &extension_option, SetScope scope, const Value &value) {
 	auto &target_type = extension_option.type;
 	Value target_value = value.CastAs(context, target_type);
+	auto resolved_scope = extension_option.ResolveScope(name, scope);
 	if (extension_option.set_function) {
 		extension_option.set_function(context, scope, target_value);
 	}
-	if (scope == SetScope::AUTOMATIC) {
-		scope = extension_option.default_scope;
+	if (extension_option.info) {
+		extension_option.info->OnSet(context, resolved_scope, target_value, false);
 	}
+	scope = resolved_scope;
 	auto setting_index = extension_option.setting_index.GetIndex();
 	SetGenericVariable(context, setting_index, scope, std::move(target_value));
 }
@@ -71,7 +78,7 @@ void PhysicalSet::SetVariable(ClientContext &context, const Identifier &name, Se
 				throw InvalidInputException("Extension parameter %s was not found after autoloading", name);
 			}
 		}
-		SetExtensionVariable(context, extension_option, scope, value);
+		SetExtensionVariable(context, name, extension_option, scope, value);
 		return;
 	}
 	SetScope variable_scope = GetSettingScope(*option, scope);

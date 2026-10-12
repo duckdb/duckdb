@@ -439,4 +439,58 @@ TEST_CASE("V2 file system: open options null arguments", "[capi_v2][file_system]
 	duckdb_v2_file_open_options_destroy(&options);
 }
 
+TEST_CASE("V2 file system: path queries", "[capi_v2][file_system]") {
+	EnvFixture fx;
+	auto fs = FsOf(fx.conn);
+
+	auto exists = [&](const std::string &path) {
+		auto path_str = Convert(path);
+		bool result = false;
+		REQUIRE(duckdb_v2_file_system_path_exists(fs, &path_str, &result, nullptr) == DUCKDB_V2_ERROR_NONE);
+		return result;
+	};
+	auto is_remote = [&](const std::string &path) {
+		auto path_str = Convert(path);
+		bool result = false;
+		REQUIRE(duckdb_v2_file_system_path_is_remote(fs, &path_str, &result, nullptr) == DUCKDB_V2_ERROR_NONE);
+		return result;
+	};
+	auto expand = [&](const std::string &path) {
+		auto path_str = Convert(path);
+		TextSinkTarget result;
+		REQUIRE(duckdb_v2_file_system_path_expand(fs, &path_str, AppendToString, &result, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(result.calls == 1);
+		return result.text;
+	};
+
+	auto path = duckdb::TestCreatePath("v2_fs_path_exists.bin");
+	REQUIRE_FALSE(exists(path));
+	auto handle = FsOpen(fs, path, {DUCKDB_V2_FILE_FLAG_WRITE, DUCKDB_V2_FILE_FLAG_CREATE_NEW});
+	duckdb_v2_file_destroy(&handle);
+	REQUIRE(exists(path));
+	// A directory is not a file.
+	REQUIRE_FALSE(exists(duckdb::TestDirectoryPath()));
+
+	REQUIRE(is_remote("s3://bucket/key.xlsx"));
+	REQUIRE(is_remote("https://example.com/file.xlsx"));
+	REQUIRE_FALSE(is_remote(path));
+	REQUIRE_FALSE(is_remote("relative/file.xlsx"));
+
+	// A leading ~ becomes the configured home directory; anything else is handed back as it is.
+	duckdb_v2_result_handle result = nullptr;
+	REQUIRE(Query(fx.conn, "SET home_directory = '/v2_home'", &result) == DUCKDB_V2_ERROR_NONE);
+	DrainRowCount(result);
+	duckdb_v2_result_destroy(&result);
+	REQUIRE(expand("~/book.xlsx") == "/v2_home/book.xlsx");
+	REQUIRE(expand("/abs/book.xlsx") == "/abs/book.xlsx");
+
+	auto path_str = Convert(path);
+	bool out = false;
+	REQUIRE(duckdb_v2_file_system_path_exists(nullptr, &path_str, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_file_system_path_is_remote(fs, &path_str, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_file_system_path_expand(fs, &path_str, nullptr, nullptr, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+}
+
 } // namespace test_capi_v2

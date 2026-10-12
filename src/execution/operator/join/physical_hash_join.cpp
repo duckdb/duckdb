@@ -1311,8 +1311,9 @@ bool JoinFilterPushdownInfo::CanUseInFilter(const ClientContext &context, option
 	return ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold && cmp == ExpressionType::COMPARE_EQUAL;
 }
 
-bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, const PhysicalComparisonJoin &op,
-                                               const ExpressionType &cmp, optional_ptr<JoinHashTable> ht) const {
+bool JoinFilterPushdownInfo::CanUseBloomFilter(const JoinFilterPushdownFilter &info, const ClientContext &context,
+                                               const PhysicalComparisonJoin &op, const ExpressionType &cmp,
+                                               optional_ptr<JoinHashTable> ht) const {
 	if (!ht) {
 		return false;
 	}
@@ -1342,8 +1343,11 @@ bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, con
 	if (build_count == 0) {
 		build_count = ht->GetSinkCollection().Count();
 	}
-	const double build_to_probe_ratio =
-	    static_cast<double>(build_count) / static_cast<double>(op.children[0].get().estimated_cardinality);
+	auto probe_cardinality = op.children[0].get().estimated_cardinality;
+	if (build_side_has_filter) {
+		probe_cardinality = MaxValue(info.estimated_scan_cardinality, probe_cardinality);
+	}
+	const double build_to_probe_ratio = static_cast<double>(build_count) / static_cast<double>(probe_cardinality);
 	if (build_to_probe_ratio > BUILD_TO_PROBE_RATIO_THRESHOLD) {
 		return false;
 	}
@@ -1359,9 +1363,10 @@ bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, con
 	return true;
 }
 
-bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(const ClientContext &context, const PhysicalComparisonJoin &op,
-                                                     optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const {
-	if (!CanUseBloomFilter(context, op, cmp, ht)) {
+bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(const JoinFilterPushdownFilter &info, const ClientContext &context,
+                                                     const PhysicalComparisonJoin &op, optional_ptr<JoinHashTable> ht,
+                                                     const ExpressionType &cmp) const {
+	if (!CanUseBloomFilter(info, context, op, cmp, ht)) {
 		return false;
 	}
 	if (cmp != ExpressionType::COMPARE_EQUAL) {
@@ -1785,7 +1790,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				const auto can_compute_span =
 				    PrefixRangeFilter::TryComputeSpan(min_val_before_cast, max_val_before_cast, span);
 				const auto can_emit_prf = allow_prefix_range_filters && can_emit_runtime_filters && gstate &&
-				                          CanUsePrefixRangeFilter(context, op, ht, cmp) && can_compute_span;
+				                          CanUsePrefixRangeFilter(info, context, op, ht, cmp) && can_compute_span;
 
 				bool pushed_in_filter = false;
 				if (CanUseInFilter(context, ht, cmp)) {
@@ -1820,7 +1825,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					                           max_val, condition_type, reconstruct_filter_expression, false);
 				}
 				if (allow_bloom_filters && can_emit_runtime_filters && ht && gstate &&
-				    CanUseBloomFilter(context, op, cmp, ht)) {
+				    CanUseBloomFilter(info, context, op, cmp, ht)) {
 					ht->SetBuildBloomFilter(true);
 					DeferRuntimeFilter(DeferredRuntimeFilterType::BLOOM_FILTER, op, info, pushdown_column,
 					                   filter_col_idx, *gstate);

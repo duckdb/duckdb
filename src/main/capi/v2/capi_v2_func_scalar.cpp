@@ -28,6 +28,9 @@ public:
 	CV2UserData handle;
 };
 
+static constexpr const char *SCALAR_BIND_DATA_ERROR =
+    "Scalar functions set the bind data through duckdb_v2_scalar_function_bind_set_bind_data";
+
 //! The arguments of a scalar call before they are cast to the parameter types - the bind data cannot be set
 class CV2ResolveTypesBindInfo final : public CV2FunctionBindInfo {
 public:
@@ -35,7 +38,7 @@ public:
 	                        const ResolveScalarFunctionTypesInput &input)
 	    : CV2FunctionBindInfo(function, user_data), input(input) {
 		D_ASSERT(GetArgCount() == input.GetArgumentCount());
-		can_set_bind_data = false;
+		bind_data_error = SCALAR_BIND_DATA_ERROR;
 	}
 
 	LogicalType GetArgType(idx_t index) const override {
@@ -142,7 +145,7 @@ static auto CV2ScalarBind(BindScalarFunctionInput &input) -> unique_ptr<Function
 
 	auto &bound_function = input.GetBoundFunction();
 	CV2ExpressionBindInfo bind_info(bound_function, info.user_data ? info.user_data->GetData() : nullptr, input);
-	bind_info.can_set_bind_data = false;
+	bind_info.bind_data_error = SCALAR_BIND_DATA_ERROR;
 	CV2BindInfo result_info;
 
 	CV2ErrorInfo err = {};

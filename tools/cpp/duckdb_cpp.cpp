@@ -52,6 +52,10 @@ struct HandleTraits<Factory> {
 	using handle = duckdb_v2_factory_handle;
 };
 template <>
+struct HandleTraits<CustomOption> {
+	using handle = duckdb_v2_custom_option_handle;
+};
+template <>
 struct HandleTraits<Config> {
 	using handle = duckdb_v2_config_handle;
 };
@@ -78,6 +82,10 @@ struct HandleTraits<PreparedStatement> {
 template <>
 struct HandleTraits<Schema> {
 	using handle = duckdb_v2_schema_handle;
+};
+template <>
+struct HandleTraits<Environment> {
+	using handle = duckdb_v2_environment_handle;
 };
 template <>
 struct HandleTraits<Instance> {
@@ -170,6 +178,18 @@ struct HandleTraits<MultiFileFunction> {
 template <>
 struct HandleTraits<CustomType> {
 	using handle = duckdb_v2_custom_type_handle;
+};
+template <>
+struct HandleTraits<MacroFunction> {
+	using handle = duckdb_v2_macro_function_handle;
+};
+template <>
+struct HandleTraits<LogSink> {
+	using handle = duckdb_v2_log_sink_handle;
+};
+template <>
+struct HandleTraits<PragmaFunction> {
+	using handle = duckdb_v2_pragma_function_handle;
 };
 template <>
 struct HandleTraits<CastFunction> {
@@ -453,20 +473,33 @@ auto RenderQuotedIdentifier(std::string_view name) -> std::string {
 // Environment
 //---------------------------------------------------------------------------
 
-namespace {
-
-//! The process-wide environment every instance is created in. Created on first use and deliberately never destroyed,
-//! so it outlives every instance, including ones destroyed during static destruction.
-auto GetEnvironment() -> duckdb_v2_environment_handle {
-	static const auto env = []() {
-		duckdb_v2_environment_handle result = nullptr;
-		CheckedAPICall(duckdb_v2_environment_create, &result);
-		return result;
-	}();
-	return env;
+Environment::Environment() {
+	duckdb_v2_environment_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_environment_create, &_h);
+	impl = _h;
 }
 
-auto CreateInstanceHandle(const std::vector<std::pair<std::string, std::string>> &options) -> void * {
+Environment::~Environment() {
+	auto _h = handle();
+	// Refused while instances are alive, which leaves the environment leaked rather than throwing from a destructor.
+	duckdb_v2_environment_destroy(&_h);
+}
+
+auto Environment::Default() -> Environment & {
+	// Deliberately never destroyed, so it outlives every instance.
+	static auto *env = new Environment();
+	return *env;
+}
+
+auto Environment::GetInstanceCount() const -> size_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_environment_get_instance_count, handle(), &count);
+	return static_cast<size_t>(count);
+}
+
+namespace {
+
+auto CreateInstanceHandle(Environment &env, const std::vector<std::pair<std::string, std::string>> &options) -> void * {
 	std::vector<duckdb_v2_str> names;
 	std::vector<duckdb_v2_str> values;
 	names.reserve(options.size());
@@ -476,7 +509,7 @@ auto CreateInstanceHandle(const std::vector<std::pair<std::string, std::string>>
 		values.push_back(ToStr(value));
 	}
 	duckdb_v2_instance_handle instance = nullptr;
-	CheckedAPICall(duckdb_v2_instance_create_with_options, GetEnvironment(), names.data(), values.data(),
+	CheckedAPICall(duckdb_v2_instance_create_with_options, env.handle(), names.data(), values.data(),
 	               static_cast<idx_t>(options.size()), &instance);
 	return instance;
 }
@@ -487,13 +520,7 @@ auto BoolText(bool value) -> std::string {
 
 } // namespace
 
-auto Instance::GetInstanceCount() -> size_t {
-	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_environment_get_instance_count, GetEnvironment(), &count);
-	return static_cast<size_t>(count);
-}
-
-Instance::Instance() : Instance(CreateInstanceHandle({})) {
+Instance::Instance() : Instance(Environment::Default()) {
 }
 
 auto Instance::StartupOptionPairs(const StartupOptions &options) -> std::vector<std::pair<std::string, std::string>> {
@@ -516,12 +543,168 @@ auto Instance::StartupOptionPairs(const StartupOptions &options) -> std::vector<
 	return result;
 }
 
-Instance::Instance(const StartupOptions &options) : Instance(CreateInstanceHandle(StartupOptionPairs(options))) {
+Instance::Instance(const StartupOptions &options) : Instance(Environment::Default(), options) {
 }
 
 Instance::Instance(const std::string &path, const StartupOptions &options)
-    : Instance(CreateInstanceHandle(StartupOptionPairs(options))) {
+    : Instance(Environment::Default(), path, options) {
+}
+
+Instance::Instance(Environment &env, const StartupOptions &options)
+    : Instance(CreateInstanceHandle(env, StartupOptionPairs(options))) {
+}
+
+Instance::Instance(Environment &env, const std::string &path, const StartupOptions &options) : Instance(env, options) {
 	Attach(path, true);
+}
+
+//---------------------------------------------------------------------------
+// Custom Option
+//---------------------------------------------------------------------------
+
+namespace {
+
+// The callback table for one registered option: rides the C user_data slot so
+// the trampoline can find it; the user's own slot (SetUserData) rides inside
+// it. Owned by the registered option, freed at database teardown.
+struct CustomOptionInfo {
+	CustomOption::UpdateCallback update_callback = nullptr;
+	detail::UserData user_data;
+
+	CustomOptionInfo(CustomOption::UpdateCallback update_callback, detail::UserData user_data)
+	    : update_callback(update_callback), user_data(std::move(user_data)) {
+	}
+};
+
+auto UpdateInfo(void *args) -> duckdb_v2_custom_option_update_info_handle {
+	return static_cast<duckdb_v2_custom_option_update_info_handle>(args);
+}
+
+auto GetCustomOptionInfo(duckdb_v2_custom_option_update_info_handle info) -> const CustomOptionInfo & {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_custom_option_update_get_user_data, info, &user_data);
+	return *static_cast<const CustomOptionInfo *>(user_data);
+}
+
+} // namespace
+
+CustomOption::CustomOption(void *impl) : detail::Handle<CustomOption>(impl) {
+}
+
+CustomOption::~CustomOption() {
+	auto _h = handle();
+	duckdb_v2_custom_option_destroy(&_h);
+}
+
+auto CustomOption::Create(Factory &factory) -> CustomOption {
+	duckdb_v2_custom_option_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_custom_option_create, factory.handle(), &_h);
+	return detail::HandleFactory::Make<CustomOption>(_h);
+}
+
+auto CustomOption::SetName(const std::string &name) & -> CustomOption & {
+	auto view = ToStr(name);
+	CheckedAPICall(duckdb_v2_custom_option_set_name, handle(), &view);
+	return *this;
+}
+
+auto CustomOption::SetType(const LogicalType &type) & -> CustomOption & {
+	CheckedAPICall(duckdb_v2_custom_option_set_type, handle(), type.handle());
+	return *this;
+}
+
+auto CustomOption::SetDefaultValue(const Value &value) & -> CustomOption & {
+	CheckedAPICall(duckdb_v2_custom_option_set_default_value, handle(), value.handle());
+	return *this;
+}
+
+auto CustomOption::SetDescription(std::string_view description) & -> CustomOption & {
+	auto view = ToStr(description);
+	CheckedAPICall(duckdb_v2_custom_option_set_description, handle(), &view);
+	return *this;
+}
+
+auto CustomOption::SetDefaultScope(SettingScope scope) & -> CustomOption & {
+	CheckedAPICall(duckdb_v2_custom_option_set_default_scope, handle(), static_cast<DUCKDB_V2_SETTING_SCOPE>(scope));
+	return *this;
+}
+
+auto CustomOption::SetSupportsScope(SettingScope scope, bool supported) & -> CustomOption & {
+	CheckedAPICall(duckdb_v2_custom_option_set_supports_scope, handle(), static_cast<DUCKDB_V2_SETTING_SCOPE>(scope),
+	               supported);
+	return *this;
+}
+
+auto CustomOption::SetUserDataInternal(void *data, void (*destructor)(void *)) -> void {
+	user_data = detail::UserData(data, destructor);
+}
+
+auto CustomOption::SetUpdateCallback(UpdateCallback callback) & -> CustomOption & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_custom_option_set_update_callback, handle(), nullptr);
+		update_callback = nullptr;
+		return *this;
+	}
+
+	// The C-side callback is one shared trampoline; the user's callback is looked
+	// up through the info table riding the user_data slot (set by Register).
+	static auto trampoline = [](duckdb_v2_custom_option_update_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			const auto &option = GetCustomOptionInfo(info);
+			auto input =
+			    detail::HandleFactory::Make<UpdateInput>(static_cast<void *>(info), static_cast<void *>(context));
+			option.update_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_custom_option_set_update_callback, handle(), trampoline);
+	update_callback = callback;
+	return *this;
+}
+
+auto CustomOption::PrepareRegistration() -> void {
+	// The callback table rides the C user_data slot so the trampoline can find
+	// it; the user's own data (SetUserData, moved out here) rides inside it.
+	auto info = std::unique_ptr<CustomOptionInfo>(new CustomOptionInfo(update_callback, std::move(user_data)));
+	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<CustomOptionInfo>, nullptr};
+	CheckedAPICall(duckdb_v2_custom_option_set_user_data, handle(), &opaque);
+	// The option owns the table now.
+	info.release(); // NOLINT(bugprone-unused-return-value)
+}
+
+void *CustomOption::UpdateInput::GetUserDataInternal() const {
+	auto ptr = GetCustomOptionInfo(UpdateInfo(args)).user_data.get();
+	if (!ptr) {
+		throw InvalidInputException("no user data was set; call CustomOption::SetUserData before Register");
+	}
+	return ptr;
+}
+
+auto CustomOption::UpdateInput::GetValue() const -> Value {
+	duckdb_v2_value_handle value = nullptr;
+	CheckedAPICall(duckdb_v2_custom_option_update_get_value, UpdateInfo(args), &value);
+	return detail::HandleFactory::Make<Value>(value);
+}
+
+auto CustomOption::UpdateInput::SetValue(const Value &value) -> void {
+	CheckedAPICall(duckdb_v2_custom_option_update_set_value, UpdateInfo(args), value.handle());
+}
+
+auto CustomOption::UpdateInput::GetScope() const -> SettingScope {
+	auto scope = DUCKDB_V2_SETTING_SCOPE_DEFAULT;
+	CheckedAPICall(duckdb_v2_custom_option_update_get_scope, UpdateInfo(args), &scope);
+	return static_cast<SettingScope>(scope);
+}
+
+auto CustomOption::UpdateInput::IsReset() const -> bool {
+	bool is_reset = false;
+	CheckedAPICall(duckdb_v2_custom_option_update_is_reset, UpdateInfo(args), &is_reset);
+	return is_reset;
+}
+
+auto CustomOption::UpdateInput::GetContext() -> Context & {
+	return context;
 }
 
 //---------------------------------------------------------------------------
@@ -710,7 +893,7 @@ auto Config::operator[](std::string_view name) const -> OptionValue {
 
 auto Config::SetOption(std::string_view name, const Value &value, SettingScope scope) -> void {
 	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
-	CheckedAPICall(duckdb_v2_config_set_option, handle(), &name_str, value.handle(),
+	CheckedAPICall(duckdb_v2_config_set_option_value, handle(), &name_str, value.handle(),
 	               static_cast<DUCKDB_V2_SETTING_SCOPE>(scope));
 }
 
@@ -1054,6 +1237,30 @@ auto Extension::Register(CastFunction &cast_function) -> void {
 	CheckedAPICall(duckdb_v2_extension_register_cast_function, handle(), cast_function.handle());
 }
 
+auto Connection::Register(PragmaFunction &pragma_function) -> void {
+	pragma_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_connection_register_pragma_function, handle(), pragma_function.handle());
+}
+
+auto Extension::Register(PragmaFunction &pragma_function) -> void {
+	pragma_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_extension_register_pragma_function, handle(), pragma_function.handle());
+}
+
+auto Extension::Register(MacroFunction &macro_function) -> void {
+	CheckedAPICall(duckdb_v2_extension_register_macro_function, handle(), macro_function.handle());
+}
+
+auto Connection::Register(CustomOption &custom_option) -> void {
+	custom_option.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_connection_register_custom_option, handle(), custom_option.handle());
+}
+
+auto Extension::Register(CustomOption &custom_option) -> void {
+	custom_option.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_extension_register_custom_option, handle(), custom_option.handle());
+}
+
 auto Connection::Register(ReplacementScan &replacement_scan) -> void {
 	replacement_scan.PrepareRegistration();
 	CheckedAPICall(duckdb_v2_connection_register_replacement_scan, handle(), replacement_scan.handle());
@@ -1067,6 +1274,16 @@ auto Extension::Register(ReplacementScan &replacement_scan) -> void {
 auto Instance::Register(ReplacementScan &replacement_scan) -> void {
 	replacement_scan.PrepareRegistration();
 	CheckedAPICall(duckdb_v2_instance_register_replacement_scan, handle(), replacement_scan.handle());
+}
+
+auto Instance::Register(LogSink &log_sink) -> void {
+	log_sink.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_instance_register_log_sink, handle(), log_sink.handle());
+}
+
+auto Extension::Register(LogSink &log_sink) -> void {
+	log_sink.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_extension_register_log_sink, handle(), log_sink.handle());
 }
 
 Extension::~Extension() {
@@ -2077,6 +2294,18 @@ auto Vector::Flatten() const -> void {
 
 auto Vector::Reference(const Vector &source) -> void {
 	CheckedAPICall(duckdb_v2_vector_reference, handle(), source.handle());
+}
+
+auto Vector::Cast(Factory &factory, Vector &target) const -> void {
+	CheckedAPICall(duckdb_v2_vector_cast, factory.handle(), handle(), target.handle(), DUCKDB_V2_CAST_MODE_NORMAL,
+	               nullptr);
+}
+
+auto Vector::TryCast(Factory &factory, Vector &target) const -> bool {
+	bool converted = false;
+	CheckedAPICall(duckdb_v2_vector_cast, factory.handle(), handle(), target.handle(), DUCKDB_V2_CAST_MODE_TRY,
+	               &converted);
+	return converted;
 }
 
 auto Vector::GetSize() const -> idx_t {
@@ -5787,6 +6016,377 @@ auto CastFunction::ExecInput::GetContext() -> Context & {
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// Pragma Function
+//----------------------------------------------------------------------------------------------------------------------
+
+namespace {
+
+// The callback table for one registered pragma: rides the C user_data slot so
+// the trampolines can find it; the user's own slot (SetUserData) rides inside
+// it. Owned by the registered pragma, freed at engine teardown.
+struct PragmaFunctionInfo {
+	PragmaFunction::QueryCallback query_callback = nullptr;
+	PragmaFunction::ExecCallback exec_callback = nullptr;
+	detail::UserData user_data;
+
+	PragmaFunctionInfo(PragmaFunction::QueryCallback query_callback, PragmaFunction::ExecCallback exec_callback,
+	                   detail::UserData user_data)
+	    : query_callback(query_callback), exec_callback(exec_callback), user_data(std::move(user_data)) {
+	}
+
+	bool operator==(const PragmaFunctionInfo &other) const {
+		return query_callback == other.query_callback && exec_callback == other.exec_callback &&
+		       user_data.get() == other.user_data.get();
+	}
+};
+
+// Guard for the inputs' GetUserData: a clear error instead of a null deref.
+void *RequirePragmaUserData(const detail::UserData &user_data) {
+	auto ptr = user_data.get();
+	if (!ptr) {
+		throw InvalidInputException("no user data was set; call PragmaFunction::SetUserData before Register");
+	}
+	return ptr;
+}
+
+auto GetPragmaFunctionInfo(duckdb_v2_function_bind_info_handle info) -> const PragmaFunctionInfo & {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_function_bind_get_user_data, info, &user_data);
+	return *static_cast<const PragmaFunctionInfo *>(user_data);
+}
+
+} // namespace
+
+PragmaFunction::PragmaFunction(void *impl) : detail::Handle<PragmaFunction>(impl) {
+}
+
+PragmaFunction::~PragmaFunction() {
+	auto _h = handle();
+	duckdb_v2_pragma_function_destroy(&_h);
+}
+
+auto PragmaFunction::Create(Factory &factory) -> PragmaFunction {
+	duckdb_v2_pragma_function_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_pragma_function_create, factory.handle(), &_h);
+	return detail::HandleFactory::Make<PragmaFunction>(_h);
+}
+
+auto PragmaFunction::SetName(const std::string &name) & -> PragmaFunction & {
+	auto view = ToStr(name);
+	CheckedAPICall(duckdb_v2_pragma_function_set_name, handle(), &view);
+	return *this;
+}
+
+auto PragmaFunction::GetDocs() -> FunctionDocs {
+	duckdb_v2_function_docs_handle docs = nullptr;
+	CheckedAPICall(duckdb_v2_pragma_function_get_docs, handle(), &docs);
+	return detail::HandleFactory::Make<FunctionDocs>(docs);
+}
+
+auto PragmaFunction::GetSignature() -> FunctionSignature {
+	duckdb_v2_function_signature_handle sig = nullptr;
+	CheckedAPICall(duckdb_v2_pragma_function_get_signature, handle(), &sig);
+	return detail::HandleFactory::Make<FunctionSignature>(sig);
+}
+
+auto PragmaFunction::SetUserDataInternal(void *data, void (*destructor)(void *)) -> void {
+	user_data = detail::UserData(data, destructor);
+}
+
+auto PragmaFunction::SetQueryCallback(QueryCallback callback) & -> PragmaFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_pragma_function_set_query_callback, handle(), nullptr);
+		query_callback = nullptr;
+		return *this;
+	}
+
+	// The C-side callback is one shared trampoline; the user's callback is looked
+	// up through the info table riding the user_data slot (set by Register).
+	static auto trampoline = [](duckdb_v2_function_bind_info_handle info,
+	                            duckdb_v2_pragma_function_query_info_handle result, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			const auto &function = GetPragmaFunctionInfo(info);
+			auto input =
+			    detail::HandleFactory::Make<QueryInput>(static_cast<void *>(info), static_cast<void *>(context));
+			auto query = function.query_callback(input);
+			auto query_str = ToStr(query);
+			CheckedAPICall(duckdb_v2_pragma_function_query_set_query, result, &query_str);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_pragma_function_set_query_callback, handle(), trampoline);
+	query_callback = callback;
+	return *this;
+}
+
+auto PragmaFunction::SetExecCallback(ExecCallback callback) & -> PragmaFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_pragma_function_set_exec_callback, handle(), nullptr);
+		exec_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_function_bind_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			const auto &function = GetPragmaFunctionInfo(info);
+			auto input =
+			    detail::HandleFactory::Make<ExecInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.exec_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_pragma_function_set_exec_callback, handle(), trampoline);
+	exec_callback = callback;
+	return *this;
+}
+
+auto PragmaFunction::PrepareRegistration() -> void {
+	// The callback table rides the C user_data slot so the trampolines can find
+	// it; the user's own data (SetUserData, moved out here) rides inside it.
+	auto info = std::unique_ptr<PragmaFunctionInfo>(
+	    new PragmaFunctionInfo(query_callback, exec_callback, std::move(user_data)));
+	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<PragmaFunctionInfo>,
+	                         detail::TypedEquals<PragmaFunctionInfo>};
+	CheckedAPICall(duckdb_v2_pragma_function_set_user_data, handle(), &opaque);
+	// The pragma owns the table now.
+	info.release(); // NOLINT(bugprone-unused-return-value)
+}
+
+void *PragmaFunction::QueryInput::GetUserDataInternal() const {
+	const auto &function = *static_cast<const PragmaFunctionInfo *>(GetFunctionInfo());
+	return RequirePragmaUserData(function.user_data);
+}
+
+void *PragmaFunction::ExecInput::GetUserDataInternal() const {
+	const auto &function = *static_cast<const PragmaFunctionInfo *>(GetFunctionInfo());
+	return RequirePragmaUserData(function.user_data);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Macro Function
+//----------------------------------------------------------------------------------------------------------------------
+
+MacroFunction::MacroFunction(void *impl) : detail::Handle<MacroFunction>(impl) {
+}
+
+MacroFunction::~MacroFunction() {
+	auto _h = handle();
+	duckdb_v2_macro_function_destroy(&_h);
+}
+
+static auto CreateMacroFunction(Factory &factory, DUCKDB_V2_MACRO_FUNCTION_TYPE type) -> void * {
+	duckdb_v2_macro_function_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_macro_function_create, factory.handle(), type, &_h);
+	return _h;
+}
+
+auto MacroFunction::CreateScalar(Factory &factory) -> MacroFunction {
+	return MacroFunction(CreateMacroFunction(factory, DUCKDB_V2_MACRO_FUNCTION_TYPE_SCALAR));
+}
+
+auto MacroFunction::CreateTable(Factory &factory) -> MacroFunction {
+	return MacroFunction(CreateMacroFunction(factory, DUCKDB_V2_MACRO_FUNCTION_TYPE_TABLE));
+}
+
+auto MacroFunction::SetName(const std::string &name) & -> MacroFunction & {
+	auto view = ToStr(name);
+	CheckedAPICall(duckdb_v2_macro_function_set_name, handle(), &view);
+	return *this;
+}
+
+auto MacroFunction::SetBody(std::string_view body) & -> MacroFunction & {
+	auto view = ToStr(body);
+	CheckedAPICall(duckdb_v2_macro_function_set_body, handle(), &view);
+	return *this;
+}
+
+auto MacroFunction::GetDocs() -> FunctionDocs {
+	duckdb_v2_function_docs_handle docs = nullptr;
+	CheckedAPICall(duckdb_v2_macro_function_get_docs, handle(), &docs);
+	return detail::HandleFactory::Make<FunctionDocs>(docs);
+}
+
+auto MacroFunction::GetSignature() -> FunctionSignature {
+	duckdb_v2_function_signature_handle sig = nullptr;
+	CheckedAPICall(duckdb_v2_macro_function_get_signature, handle(), &sig);
+	return detail::HandleFactory::Make<FunctionSignature>(sig);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Log Sink
+//----------------------------------------------------------------------------------------------------------------------
+
+namespace {
+
+// The callback table for one registered log sink: rides the C user_data
+// slot so the trampolines can find it; the user's own slot (SetUserData) rides
+// inside it. Owned by the registered storage, freed at engine teardown.
+struct LogSinkInfo {
+	LogSink::WriteCallback write_callback = nullptr;
+	LogSink::FlushCallback flush_callback = nullptr;
+	detail::UserData user_data;
+
+	LogSinkInfo(LogSink::WriteCallback write_callback, LogSink::FlushCallback flush_callback,
+	            detail::UserData user_data)
+	    : write_callback(write_callback), flush_callback(flush_callback), user_data(std::move(user_data)) {
+	}
+};
+
+auto WriteInfo(void *info) -> duckdb_v2_log_sink_write_info_handle {
+	return static_cast<duckdb_v2_log_sink_write_info_handle>(info);
+}
+
+void *RequireLogSinkUserData(const LogSinkInfo &info) {
+	auto ptr = info.user_data.get();
+	if (!ptr) {
+		throw InvalidInputException("no user data was set; call LogSink::SetUserData before Register");
+	}
+	return ptr;
+}
+
+template <class GETTER>
+auto ReadLogEntryId(void *info, GETTER getter) -> std::optional<idx_t> {
+	idx_t id = 0;
+	bool present = false;
+	CheckedAPICall(getter, WriteInfo(info), &id, &present);
+	if (!present) {
+		return std::nullopt;
+	}
+	return id;
+}
+
+} // namespace
+
+LogSink::LogSink(void *impl) : detail::Handle<LogSink>(impl) {
+}
+
+LogSink::~LogSink() {
+	auto _h = handle();
+	duckdb_v2_log_sink_destroy(&_h);
+}
+
+auto LogSink::Create(Factory &factory) -> LogSink {
+	duckdb_v2_log_sink_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_log_sink_create, factory.handle(), &_h);
+	return detail::HandleFactory::Make<LogSink>(_h);
+}
+
+auto LogSink::SetName(const std::string &name) & -> LogSink & {
+	auto view = ToStr(name);
+	CheckedAPICall(duckdb_v2_log_sink_set_name, handle(), &view);
+	return *this;
+}
+
+auto LogSink::SetUserDataInternal(void *data, void (*destructor)(void *)) -> void {
+	user_data = detail::UserData(data, destructor);
+}
+
+auto LogSink::SetWriteCallback(WriteCallback callback) & -> LogSink & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_log_sink_set_write_callback, handle(), nullptr);
+		write_callback = nullptr;
+		return *this;
+	}
+
+	// The C-side callback is one shared trampoline; the user's callback is looked
+	// up through the info table riding the user_data slot (set by Register).
+	static auto trampoline = [](duckdb_v2_log_sink_write_info_handle info, void *user_data, int64_t timestamp,
+	                            DUCKDB_V2_LOG_LEVEL level, DUCKDB_V2_LOG_SCOPE scope, const duckdb_v2_str *type,
+	                            const duckdb_v2_str *message, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			const auto &sink = *static_cast<const LogSinkInfo *>(user_data);
+			auto entry = detail::HandleFactory::Make<Entry>(static_cast<void *>(info), user_data, timestamp,
+			                                                static_cast<LogLevel>(level), static_cast<LogScope>(scope),
+			                                                FromStr(*type), FromStr(*message));
+			sink.write_callback(entry);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_log_sink_set_write_callback, handle(), trampoline);
+	write_callback = callback;
+	return *this;
+}
+
+auto LogSink::SetFlushCallback(FlushCallback callback) & -> LogSink & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_log_sink_set_flush_callback, handle(), nullptr);
+		flush_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_log_sink_flush_info_handle, void *user_data,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			const auto &info = *static_cast<const LogSinkInfo *>(user_data);
+			auto input = detail::HandleFactory::Make<FlushInput>(user_data);
+			info.flush_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_log_sink_set_flush_callback, handle(), trampoline);
+	flush_callback = callback;
+	return *this;
+}
+
+auto LogSink::PrepareRegistration() -> void {
+	// The callback table rides the C user_data slot so the trampolines can find
+	// it; the user's own data (SetUserData, moved out here) rides inside it.
+	auto info = std::unique_ptr<LogSinkInfo>(new LogSinkInfo(write_callback, flush_callback, std::move(user_data)));
+	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<LogSinkInfo>, nullptr};
+	CheckedAPICall(duckdb_v2_log_sink_set_user_data, handle(), &opaque);
+	// The storage owns the table now.
+	info.release(); // NOLINT(bugprone-unused-return-value)
+}
+
+void *LogSink::Entry::GetUserDataInternal() const {
+	return RequireLogSinkUserData(*static_cast<const LogSinkInfo *>(user_data));
+}
+
+auto LogSink::Entry::GetTimestamp() const -> timestamp_tz_t {
+	timestamp_tz_t result;
+	result.micros = timestamp;
+	return result;
+}
+
+auto LogSink::Entry::GetLevel() const -> LogLevel {
+	return level;
+}
+
+auto LogSink::Entry::GetLogType() const -> std::string_view {
+	return type;
+}
+
+auto LogSink::Entry::GetLogMessage() const -> std::string_view {
+	return message;
+}
+
+auto LogSink::Entry::GetScope() const -> LogScope {
+	return scope;
+}
+
+auto LogSink::Entry::GetConnectionId() const -> std::optional<idx_t> {
+	return ReadLogEntryId(info, duckdb_v2_log_sink_write_info_get_connection_id);
+}
+
+auto LogSink::Entry::GetTransactionId() const -> std::optional<idx_t> {
+	return ReadLogEntryId(info, duckdb_v2_log_sink_write_info_get_transaction_id);
+}
+
+auto LogSink::Entry::GetQueryId() const -> std::optional<idx_t> {
+	return ReadLogEntryId(info, duckdb_v2_log_sink_write_info_get_query_id);
+}
+
+auto LogSink::Entry::GetThreadId() const -> std::optional<idx_t> {
+	return ReadLogEntryId(info, duckdb_v2_log_sink_write_info_get_thread_id);
+}
+
+void *LogSink::FlushInput::GetUserDataInternal() const {
+	return RequireLogSinkUserData(*static_cast<const LogSinkInfo *>(user_data));
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // File System
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -5799,6 +6399,34 @@ FileSystem::~FileSystem() {
 
 auto FileSystem::CreateOpenOptions() const -> FileOpenOptions {
 	return FileOpenOptions::Create(*this);
+}
+
+auto FileSystem::PathExists(const std::string &path) const -> bool {
+	auto path_str = ToStr(path);
+	bool exists = false;
+	CheckedAPICall(duckdb_v2_file_system_path_exists, handle(), &path_str, &exists);
+	return exists;
+}
+
+auto FileSystem::PathIsRemote(const std::string &path) const -> bool {
+	auto path_str = ToStr(path);
+	bool is_remote = false;
+	CheckedAPICall(duckdb_v2_file_system_path_is_remote, handle(), &path_str, &is_remote);
+	return is_remote;
+}
+
+auto FileSystem::PathExpand(const std::string &path) const -> std::string {
+	auto sink = [](const duckdb_v2_str *text, void *user_data, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&] {
+			if (text->ptr && text->len) {
+				static_cast<std::string *>(user_data)->assign(text->ptr, text->len);
+			}
+		});
+	};
+	auto path_str = ToStr(path);
+	std::string out;
+	CheckedAPICall(duckdb_v2_file_system_path_expand, handle(), &path_str, sink, &out);
+	return out;
 }
 
 auto FileSystem::OpenFile(const std::string &path, std::initializer_list<FileFlags> flags) const -> FileHandle {
