@@ -43,6 +43,8 @@ public:
 
 	static void SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, SetScope scope,
 	                                 const Value &value);
+	static void SetExtensionVariable(ClientContext &context, const Identifier &name, ExtensionOption &extension_option,
+	                                 SetScope scope, const Value &value);
 
 	static void SetVariable(ClientContext &context, const Identifier &name, SetScope scope, const Value &value);
 	static void SetGenericVariable(ClientContext &context, idx_t setting_index, SetScope scope, Value target_value);

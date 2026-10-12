@@ -2148,9 +2148,10 @@ optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextBatchTask() {
 		if (batch_size_bytes.IsValid()) {
 			const auto partition_end = batch_row_idx;
 			batch_row_idx = row_before;
-			do {
+			// the next partition can start right here, then this batch has no rows to count
+			while (batch_row_idx < partition_end && current_batch_size_bytes < batch_size_bytes.GetIndex()) {
 				current_batch_size_bytes += row_sizes[batch_row_idx++];
-			} while (batch_row_idx < partition_end && current_batch_size_bytes < batch_size_bytes.GetIndex());
+			}
 			found_next_partition = found_next_partition && batch_row_idx == partition_end;
 		} else {
 			auto &segment = segments[batch_scan_state.segment_index];
