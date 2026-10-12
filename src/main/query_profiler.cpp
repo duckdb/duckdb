@@ -276,6 +276,8 @@ void QueryProfiler::FinalizeMetrics() {
 }
 
 profiler_metrics_t QueryProfiler::GetLiveMetrics() const {
+	// StartQuery resets the counters under the lock, so a snapshot never mixes two queries
+	lock_guard<std::mutex> guard(lock);
 	return query_metrics.GetLiveMetrics();
 }
 
