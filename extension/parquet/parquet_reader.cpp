@@ -389,6 +389,21 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		throw InvalidInputException("Failed to read Parquet file \"%s\": has negative number of rows",
 		                            file_handle.GetPath());
 	}
+	for (auto &row_group : metadata->row_groups) {
+		if (row_group.num_rows < 0) {
+			throw InvalidInputException("Failed to read Parquet file \"%s\": row group has negative number of rows",
+			                            file_handle.GetPath());
+		}
+		for (auto &column : row_group.columns) {
+			auto &column_meta = column.meta_data;
+			if (column_meta.data_page_offset < 0 || column_meta.dictionary_page_offset < 0 ||
+			    column_meta.index_page_offset < 0 || column_meta.total_compressed_size < 0) {
+				throw InvalidInputException(
+				    "Failed to read Parquet file \"%s\": column chunk has a negative offset or size",
+				    file_handle.GetPath());
+			}
+		}
+	}
 
 	// Try to read the GeoParquet metadata (if present)
 	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
