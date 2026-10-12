@@ -9,6 +9,7 @@ namespace duckdb {
 class ClientContext;
 class DialectExtension;
 class GrammarExtension;
+class PassthroughDialect;
 
 using compiled_rules_map_t = case_insensitive_map_t<unique_ptr<CompiledGrammarRule>>;
 
@@ -36,6 +37,8 @@ public:
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);
+	//! Get the shared, lazily compiled base DuckDB grammar.
+	static shared_ptr<CompiledGrammar> DefaultGrammar();
 	//! Compile the base DuckDB grammar.
 	static shared_ptr<CompiledGrammar> Create();
 	//! Compile a grammar for the selected extensions without changing the client configuration.
@@ -53,11 +56,18 @@ private:
 //! Per-database holder for the compiled base grammar.
 struct ParserCache {
 public:
+	ParserCache();
+	~ParserCache();
+
 	shared_ptr<CompiledGrammar> GetMatcher();
+	//! The grammar that forwards statements instead of interpreting them, used while CONNECT-ed
+	shared_ptr<CompiledGrammar> GetPassthroughMatcher(const ClientContext &context);
 
 private:
 	std::mutex mutex;
 	shared_ptr<CompiledGrammar> matcher;
+	std::mutex passthrough_mutex;
+	unique_ptr<PassthroughDialect> passthrough_dialect;
 };
 
 } // namespace duckdb

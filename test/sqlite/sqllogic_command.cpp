@@ -5,6 +5,7 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/result_format.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
@@ -206,7 +207,7 @@ static unique_ptr<QueryResult> DrainStream(unique_ptr<QueryResult> handle) {
 	auto properties = handle->GetStatementProperties();
 	auto names = handle->GetNames();
 	auto client_properties = handle->client_properties;
-	QueryResultStream stream(std::move(handle));
+	QueryResultStream<> stream(std::move(handle));
 	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), stream.GetTypes());
 	ColumnDataAppendState append_state;
 	collection->InitializeAppend(append_state);
@@ -240,7 +241,7 @@ unique_ptr<QueryResult> Command::ExecuteQuery(ExecuteContext &context, reference
 	}
 
 	QueryParameters parameters;
-	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
+	parameters.format = ChunkFormat::BufferManaged();
 
 	try {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY

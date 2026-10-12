@@ -150,13 +150,15 @@ public:
 private:
 	void ExecuteInternal(SQLLogicParser &parser, const string &script);
 	RequireResult CheckRequire(SQLLogicParser &parser, const vector<string> &params);
-	void ConfigureDefaultInMemoryTemporaryDirectory(const string &script);
+	void ConfigureDefaultInMemoryTemporaryDirectory(DuckDB &database, const string &db_path);
 	static void AddSkipReason(const string &reason);
 
 private:
 	//! The TEMP_DIR the harness assigned this test, snapshotted by EmitBegin. Both events report it, so
 	//! a body that rewrites TEMP_DIR via test-env cannot make them name different invocations.
 	string emit_temp_dir;
+	//! Explicit mode-skip reasons encountered while processing this test.
+	unordered_set<string> partial_skip_reasons;
 
 	//! This test's temp dir, snapshotted at construction for the destructor's loaded-database
 	//! ownership check. Resolving it there instead would call a MATERIALIZING accessor after

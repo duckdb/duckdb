@@ -553,6 +553,9 @@ static string Base64Decode(const string &key) {
 }
 
 void ParquetCrypto::AddKey(ClientContext &context, const FunctionParameters &parameters) {
+	if (parameters.values[0].IsNull() || parameters.values[1].IsNull()) {
+		throw InvalidInputException("add_parquet_key: key name and key cannot be NULL");
+	}
 	const auto &key_name = StringValue::Get(parameters.values[0]);
 	const auto &key = StringValue::Get(parameters.values[1]);
 

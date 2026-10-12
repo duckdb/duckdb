@@ -99,6 +99,9 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 
 	// Extensions linked into this binary are built in, whether or not the default list knows them
 	for (auto &linked : DBConfig::GetConfig(db).linked_extensions) {
+		if (!linked.load) {
+			continue;
+		}
 		auto &info = installed_extensions[linked.name];
 		info.name = linked.name;
 		info.installed = true;

@@ -26,17 +26,14 @@ static unique_ptr<FunctionData> RepeatRowBind(ClientContext &context, TableFunct
 		return_types.push_back(inputs[input_idx].type());
 		names.emplace_back("column" + std::to_string(input_idx));
 	}
-	auto entry = input.named_parameters.find("num_rows");
-	if (entry == input.named_parameters.end()) {
-		throw BinderException("repeat_rows requires num_rows to be specified");
-	}
+	auto &num_rows = input.named_parameters.at("num_rows");
 	if (inputs.empty()) {
 		throw BinderException("repeat_rows requires at least one column to be specified");
 	}
-	if (entry->second.IsNull()) {
+	if (num_rows.IsNull()) {
 		throw BinderException("num_rows should be an integer value >= 0");
 	}
-	auto repeat_rows = entry->second.GetValue<int64_t>();
+	auto repeat_rows = num_rows.GetValue<int64_t>();
 	if (repeat_rows < 0) {
 		throw BinderException("num_rows cannot be less than zero");
 	}
@@ -77,8 +74,9 @@ static unique_ptr<NodeStatistics> RepeatRowCardinality(ClientContext &context, c
 
 void RepeatRowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction repeat_row("repeat_row", {}, RepeatRowFunction, RepeatRowBind, RepeatRowInit);
-	repeat_row.SetVarArgs(LogicalType::ANY);
-	repeat_row.named_parameters["num_rows"] = LogicalType::BIGINT;
+	// a positional list, so it declares "*args" and no "**kwargs" - an argument named after no parameter is an error
+	repeat_row.GetSignature().AddArgs("args", LogicalType::ANY);
+	repeat_row.GetSignature().AddKeywordOnly("num_rows", LogicalType::BIGINT);
 	repeat_row.cardinality = RepeatRowCardinality;
 	repeat_row.table_scan_progress = RepeatRowProgress;
 	set.AddFunction(repeat_row);

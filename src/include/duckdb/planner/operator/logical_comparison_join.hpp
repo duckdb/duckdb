@@ -69,6 +69,7 @@ public:
 
 	bool HasEquality(idx_t &range_count) const;
 	bool HasArbitraryConditions() const;
+	bool TryGetMarkJoinGroupTypes(vector<LogicalType> &group_types) const;
 };
 
 } // namespace duckdb

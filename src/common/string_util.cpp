@@ -223,6 +223,26 @@ inline string TakePossiblyQuotedItem(const string &str, idx_t &index, char delim
 
 } // namespace string_util_internal
 
+bool StringUtil::TryParseQuotedString(const string &str, idx_t &pos, string &result, char quote) {
+	if (pos >= str.size() || str[pos] != quote) {
+		return false;
+	}
+	string value;
+	for (idx_t i = pos + 1; i < str.size(); i++) {
+		if (str[i] != quote) {
+			value += str[i];
+		} else if (i + 1 < str.size() && str[i + 1] == quote) {
+			value += quote;
+			i++;
+		} else {
+			pos = i + 1;
+			result = std::move(value);
+			return true;
+		}
+	}
+	return false;
+}
+
 vector<string> StringUtil::SplitWithQuote(const string &str, char delimiter, char quote) {
 	vector<string> entries;
 	idx_t i = 0;
@@ -920,6 +940,14 @@ string StringUtil::GetFilePath(const string &file_path) {
 	}
 
 	return file_path.substr(0, pos + 1);
+}
+
+string StringUtil::ReplaceFileName(const string &file_path, const string &file_name) {
+	auto pos = file_path.find_last_of("/\\");
+	if (pos == string::npos) {
+		return file_name;
+	}
+	return file_path.substr(0, pos + 1) + file_name;
 }
 
 struct URLEncodeLength {

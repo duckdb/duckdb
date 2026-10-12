@@ -105,7 +105,8 @@ PreparedStatement::CreateExecuteStatement(const identifier_map_t<BoundParameterD
 	return std::move(execute);
 }
 
-unique_ptr<QueryResult> PreparedStatement::Execute(identifier_map_t<BoundParameterData> &named_values) {
+unique_ptr<QueryResult> PreparedStatement::Execute(identifier_map_t<BoundParameterData> &named_values,
+                                                   const QueryParameters &query_parameters) {
 	if (!success) {
 		return make_uniq<QueryResult>(
 		    ErrorData(InvalidInputException("Attempting to execute an unsuccessfully prepared statement!")));
@@ -115,16 +116,15 @@ unique_ptr<QueryResult> PreparedStatement::Execute(identifier_map_t<BoundParamet
 		return make_uniq<QueryResult>(ErrorData(
 		    InvalidInputException("Attempting to execute a prepared statement after its connection was closed!")));
 	}
-	QueryParameters parameters;
-	return client_context->RunInternalStatement(CreateExecuteStatement(named_values), parameters);
+	return client_context->RunInternalStatement(CreateExecuteStatement(named_values), query_parameters);
 }
 
-unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values) {
+unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, const QueryParameters &query_parameters) {
 	identifier_map_t<BoundParameterData> named_values;
 	for (idx_t i = 0; i < values.size(); i++) {
 		named_values[Identifier(std::to_string(i + 1))] = BoundParameterData(values[i]);
 	}
-	return Execute(named_values);
+	return Execute(named_values, query_parameters);
 }
 
 unique_ptr<QueryResult> PreparedStatement::Submit(vector<Value> &values, const QueryParameters &query_parameters) {

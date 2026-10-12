@@ -119,7 +119,9 @@ struct ApproxQuantileOperation {
 			return;
 		}
 		if (!state.h) {
-			state.h = new duckdb_tdigest::TDigest(unary_input.input.allocator, 100);
+			// the digest and its buffers live in the aggregate's arena, so an aborted query does not leak them
+			auto &allocator = unary_input.input.allocator;
+			state.h = allocator.Make<duckdb_tdigest::TDigest>(allocator, 100);
 		}
 		state.h->add(val);
 		state.pos++;
@@ -132,17 +134,11 @@ struct ApproxQuantileOperation {
 		}
 		D_ASSERT(source.h);
 		if (!target.h) {
-			target.h = new duckdb_tdigest::TDigest(aggr_input_data.allocator, 100);
+			auto &allocator = aggr_input_data.allocator;
+			target.h = allocator.Make<duckdb_tdigest::TDigest>(allocator, 100);
 		}
 		target.h->merge(source.h);
 		target.pos += source.pos;
-	}
-
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		if (state.h) {
-			delete state.h;
-		}
 	}
 
 	static bool IgnoreNull() {
@@ -274,19 +270,36 @@ void ApproxQuantileImportState(AggregateImportInputData &input) {
 		}
 		arena_vector<duckdb_tdigest::Centroid> centroids(input.allocator);
 		centroids.reserve(centroid_list.GetListLength());
+		double total_weight = 0;
 		for (const auto centroid_entry : centroid_list.GetChildValues()) {
 			const auto mean_entry = centroid_entry.template GetChildValue<0>();
 			const auto weight_entry = centroid_entry.template GetChildValue<1>();
 			if (!centroid_entry.IsValid() || !mean_entry.IsValid() || !weight_entry.IsValid()) {
 				throw InvalidInputException("Invalid approx_quantile state - the centroids cannot be NULL");
 			}
-			centroids.emplace_back(mean_entry.GetValue(), weight_entry.GetValue());
+			const auto mean = mean_entry.GetValue();
+			const auto weight = weight_entry.GetValue();
+			if (Value::IsNan(mean) || !Value::IsFinite(weight) || weight <= 0) {
+				throw InvalidInputException(
+				    "Invalid approx_quantile state - centroids must have a mean and a positive finite weight");
+			}
+			if (!centroids.empty() && mean < centroids.back().mean()) {
+				throw InvalidInputException("Invalid approx_quantile state - centroids must be sorted by their mean");
+			}
+			total_weight += weight;
+			centroids.emplace_back(mean, weight);
 		}
-		auto digest = make_uniq<duckdb_tdigest::TDigest>(
+		if (!Value::IsFinite(total_weight)) {
+			throw InvalidInputException("Invalid approx_quantile state - the total centroid weight must be finite");
+		}
+		if (Value::IsNan(min_entry.GetValue()) || Value::IsNan(max_entry.GetValue())) {
+			throw InvalidInputException("Invalid approx_quantile state - min and max cannot be NaN");
+		}
+		auto digest = input.allocator.Make<duckdb_tdigest::TDigest>(
 		    std::move(centroids), duckdb::arena_vector<duckdb_tdigest::Centroid>(input.allocator), 100, 0, 0);
 		digest->setMinMax(min_entry.GetValue(), max_entry.GetValue());
 		state.pos = count_entry.GetValue();
-		state.h = digest.release();
+		state.h = digest;
 	}
 }
 
@@ -345,6 +358,9 @@ float CheckApproxQuantile(const Value &quantile_val) {
 		throw BinderException("APPROXIMATE QUANTILE parameter cannot be NULL");
 	}
 	auto quantile = quantile_val.GetValue<float>();
+	if (Value::IsNan(quantile)) {
+		throw BinderException("APPROXIMATE QUANTILE parameter cannot be NaN");
+	}
 	if (quantile < 0 || quantile > 1) {
 		throw BinderException("APPROXIMATE QUANTILE can only take parameters in range [0, 1]");
 	}
@@ -459,7 +475,7 @@ AggregateFunction ApproxQuantileListAggregate(const LogicalType &input_type, con
 	    {input_type}, result_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	    AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>, AggregateFunction::StateCombine<STATE, OP>,
 	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	    AggregateFunction::NoClusterUpdate(), AggregateFunction::NoBind(), AggregateFunction::StateDestroy<STATE, OP>);
+	    AggregateFunction::NoClusterUpdate(), AggregateFunction::NoBind());
 }
 
 template <typename INPUT_TYPE, typename SAVE_TYPE>

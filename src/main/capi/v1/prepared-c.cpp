@@ -15,7 +15,6 @@ using duckdb::hugeint_t;
 using duckdb::LogicalType;
 using duckdb::optional_ptr;
 using duckdb::PreparedStatementWrapper;
-using duckdb::QueryResultType;
 using duckdb::StringUtil;
 using duckdb::timestamp_t;
 using duckdb::uhugeint_t;
@@ -453,7 +452,8 @@ duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepare
 			result->Complete();
 			return DuckDBTranslateResult(std::move(result), out_result);
 		}
-		return DuckDBTranslateStreamResult(duckdb::make_uniq<duckdb::QueryResultStream>(std::move(result)), out_result);
+		return DuckDBTranslateStreamResult(duckdb::make_uniq<duckdb::QueryResultStream<>>(std::move(result)),
+		                                   out_result);
 	} catch (...) {
 		return DuckDBError;
 	}

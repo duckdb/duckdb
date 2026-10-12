@@ -3,6 +3,7 @@
 #include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
+#include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -105,6 +106,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(CurrentTransactionInvalidationPolicySetting),
     DUCKDB_SETTING(CustomExtensionRepositorySetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
+    DUCKDB_GLOBAL(DebugAbortOnWalFailureSetting),
     DUCKDB_SETTING(DebugAsofIejoinSetting),
     DUCKDB_SETTING_CALLBACK(DebugCheckpointAbortSetting),
     DUCKDB_SETTING(DebugCheckpointScanSleepMsSetting),
@@ -175,8 +177,10 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ExtensionDirectoriesSetting),
     DUCKDB_SETTING_CALLBACK(ExtensionDirectorySetting),
     DUCKDB_SETTING_CALLBACK(ExtensionRepositoryDirectorySetting),
-    DUCKDB_SETTING_CALLBACK(ExternalFileCacheLocalBlockSizeSetting),
-    DUCKDB_SETTING_CALLBACK(ExternalFileCacheRemoteBlockSizeSetting),
+    DUCKDB_SETTING_CALLBACK(ExternalFileCacheLocalMaxBlockSizeSetting),
+    DUCKDB_SETTING_CALLBACK(ExternalFileCacheRemoteMaxBlockSizeSetting),
+    DUCKDB_SETTING_CALLBACK(ExternalFileCacheRemoteMinBlockSizeSetting),
+    DUCKDB_SETTING_CALLBACK(ExternalFileCacheRequestSizingSetting),
     DUCKDB_SETTING(ExternalFileCacheSpillSetting),
     DUCKDB_SETTING_CALLBACK(ExternalThreadsSetting),
     DUCKDB_SETTING(FileSearchPathSetting),
@@ -234,6 +238,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ProfilingRendererSettingsSetting),
     DUCKDB_LOCAL(ProgressBarTimeSetting),
     DUCKDB_SETTING_CALLBACK(ReadAheadDepthSetting),
+    DUCKDB_SETTING(RedactHttpLogsSetting),
     DUCKDB_SETTING_CALLBACK(RegexMatchOperatorSemanticsSetting),
     DUCKDB_SETTING(ScalarSubqueryErrorOnMultipleRowsSetting),
     DUCKDB_SETTING(SchedulerProcessPartialSetting),
@@ -544,6 +549,24 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 	return type_id;
 }
 
+ExtensionOptionInfo::~ExtensionOptionInfo() {
+}
+
+SetScope ExtensionOption::ResolveScope(const Identifier &name, SetScope scope) const {
+	if (scope == SetScope::AUTOMATIC) {
+		scope = default_scope;
+	}
+	if (scope == SetScope::GLOBAL && !supports_global) {
+		throw InvalidInputException(
+		    "Setting \"%s\" cannot be set as a global variable - it can only be set per session", name);
+	}
+	if (scope == SetScope::SESSION && !supports_session) {
+		throw InvalidInputException("Setting \"%s\" cannot be set as a session variable - it can only be set globally",
+		                            name);
+	}
+	return scope;
+}
+
 bool DBConfig::HasExtensionOption(const Identifier &name) const {
 	return user_settings.HasExtensionOption(name);
 }
@@ -555,8 +578,12 @@ bool DBConfig::TryGetExtensionOption(const Identifier &name, ExtensionOption &re
 void DBConfig::AddExtensionOption(const Identifier &name, string description, LogicalType parameter,
                                   const Value &default_value, set_option_callback_t function, SetScope default_scope,
                                   bool is_debug, bool is_deprecated) {
-	ExtensionOption extension_option(std::move(description), std::move(parameter), function, default_value,
-	                                 default_scope, is_debug, is_deprecated);
+	AddExtensionOption(name, ExtensionOption(std::move(description), std::move(parameter), function, default_value,
+	                                         default_scope, is_debug, is_deprecated));
+}
+
+void DBConfig::AddExtensionOption(const Identifier &name, ExtensionOption extension_option) {
+	auto default_value = extension_option.default_value;
 	auto setting_index = user_settings.AddExtensionOption(name, std::move(extension_option));
 	// copy over unrecognized options, if they match the new extension option
 	auto iter = options.unrecognized_options.find(name);
@@ -591,6 +618,11 @@ bool DBConfig::IsInMemoryDatabase(const char *database_path) {
 
 CastFunctionSet &DBConfig::GetCastFunctions() {
 	return type_manager->GetCastFunctions();
+}
+
+const CastFunctionSet &DBConfig::GetCastFunctions() const {
+	const auto &manager = *type_manager;
+	return manager.GetCastFunctions();
 }
 
 TypeManager &DBConfig::GetTypeManager() {
@@ -1007,6 +1039,17 @@ SerializationOptions::SerializationOptions(AttachedDatabase &db) {
 
 void DBConfig::SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util) {
 	http_transport_manager->SetHTTPUtil(new_http_util);
+}
+
+void DBConfig::SetExternalExtensionProvider(const shared_ptr<ExternalExtensionProvider> &new_provider) {
+	if (!new_provider) {
+		throw InvalidInputException("External extension provider cannot be null");
+	}
+	external_extension_provider = new_provider;
+}
+
+ExternalExtensionProvider &DBConfig::GetExternalExtensionProvider() const {
+	return *external_extension_provider;
 }
 
 HTTPUtil &DBConfig::GetHTTPUtil() const {

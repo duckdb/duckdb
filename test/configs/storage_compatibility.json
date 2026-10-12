@@ -92,7 +92,8 @@
         "test/sql/subquery/exists/test_exists_union_by_name.test",
         "test/sql/types/nested/array/array_fuzzer_failures.test",
         "test/parquet/timens_parquet.test",
-        "test/sql/types/time/test_time_ns.test"
+        "test/sql/types/time/test_time_ns.test",
+        "test/sql/copy/parquet/int96_as.test"
       ]
     },
     {
@@ -172,7 +173,10 @@
         "test/sql/aggregate/aggregates/test_combine_aggr.test",
         "test/sql/aggregate/aggregate_state_export/test_covar_export_state.test",
         "test/sql/aggregate/aggregate_state_export/test_state_export_opaque.test",
-        "test/sql/types/struct/empty_struct.test"
+        "test/sql/types/struct/empty_struct.test",
+        "test/optimizer/pushdown/cte_domain_join_filter.test",
+        "test/sql/subquery/lateral/lateral_domain_join_filter_semantics.test",
+        "test/sql/subquery/lateral/lateral_nested_domain_filter.test"
       ]
     },
     {
@@ -198,7 +202,8 @@
       "paths": [
         "test/sql/table_function/duckdb_columns.test",
         "test/sql/catalog/view/test_view_schema_change.test",
-        "test/sql/catalog/dependencies/add_column_to_table_referenced_by_view.test"
+        "test/sql/catalog/dependencies/add_column_to_table_referenced_by_view.test",
+        "test/sql/function/generic/null_constant_return_type.test"
       ]
     },
     {

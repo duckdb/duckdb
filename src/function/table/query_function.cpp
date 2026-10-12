@@ -8,8 +8,8 @@
 
 namespace duckdb {
 
-static unique_ptr<SubqueryRef> ParseSubquery(const string &query, const ParserOptions &options, const string &err_msg) {
-	Parser parser(options);
+static unique_ptr<SubqueryRef> ParseSubquery(const string &query, ClientContext &context, const string &err_msg) {
+	Parser parser(context);
 	parser.ParseQuery(query);
 	if (parser.statements.size() != 1) {
 		throw ParserException(err_msg);
@@ -84,31 +84,37 @@ static string UnionTablesQuery(TableFunctionBindInput &input) {
 
 static unique_ptr<TableRef> QueryBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	auto query = input.inputs[0].ToString();
-	auto subquery_ref = ParseSubquery(query, context.GetParserOptions(), "Expected a single SELECT statement");
+	auto subquery_ref = ParseSubquery(query, context, "Expected a single SELECT statement");
 	return std::move(subquery_ref);
 }
 
 static unique_ptr<TableRef> TableBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	auto query = UnionTablesQuery(input);
-	auto subquery_ref =
-	    ParseSubquery(query, context.GetParserOptions(), "Expected a table or a list with tables as input");
+	auto subquery_ref = ParseSubquery(query, context, "Expected a table or a list with tables as input");
 	return std::move(subquery_ref);
 }
 
 void QueryTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction query("query", {LogicalType::VARCHAR}, nullptr, nullptr);
+	TableFunction query("query", FunctionSignature().AddPositionalOnly("query", LogicalType::VARCHAR), nullptr,
+	                    nullptr);
 	query.bind_replace = QueryBindReplace;
 	set.AddFunction(query);
 
 	TableFunctionSet query_table("query_table");
-	TableFunction query_table_function({LogicalType::VARCHAR}, nullptr, nullptr);
+	TableFunction query_table_function(FunctionSignature().AddPositionalOnly("table_name", LogicalType::VARCHAR),
+	                                   nullptr, nullptr);
 	query_table_function.bind_replace = TableBindReplace;
 	query_table.AddFunction(query_table_function);
 
-	query_table_function.GetArguments() = {LogicalType::LIST(LogicalType::VARCHAR)};
+	query_table_function.GetSignature() =
+	    FunctionSignature().AddPositionalOnly("table_names", LogicalType::LIST(LogicalType::VARCHAR));
 	query_table.AddFunction(query_table_function);
-	// add by_name option
-	query_table_function.GetArguments().emplace_back(LogicalType::BOOLEAN);
+	// add by_name option, for a single table name as well as for a list of them
+	query_table_function.GetSignature().AddPositionalOnly("by_name", LogicalType::BOOLEAN);
+	query_table.AddFunction(query_table_function);
+	query_table_function.GetSignature() = FunctionSignature()
+	                                          .AddPositionalOnly("table_name", LogicalType::VARCHAR)
+	                                          .AddPositionalOnly("by_name", LogicalType::BOOLEAN);
 	query_table.AddFunction(query_table_function);
 	set.AddFunction(query_table);
 }

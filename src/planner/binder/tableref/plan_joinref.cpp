@@ -365,6 +365,29 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 	                                         std::move(conditions));
 }
 
+static void PlanMarkJoin(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		if (join.TryGetMarkJoinGroupTypes(join.mark_types)) {
+			return;
+		}
+		bool all_equal = !join.conditions.empty();
+		bool all_null_safe = all_equal;
+		for (auto &condition : join.conditions) {
+			if (!condition.IsComparison()) {
+				all_equal = all_null_safe = false;
+				break;
+			}
+			all_equal &= condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL;
+			all_null_safe &= condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+		}
+		if (all_equal || all_null_safe || (join.conditions.size() == 1 && join.conditions[0].IsComparison())) {
+			return;
+		}
+	}
+	throw NotImplementedException("Unsupported explicit MARK join conditions");
+}
+
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	auto old_is_outside_flattened = is_outside_flattened;
 	// Plan laterals from outermost to innermost
@@ -384,6 +407,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 
 	if (ref.lateral) {
+		if (ref.type == JoinType::MARK) {
+			throw NotImplementedException("Unsupported explicit MARK join conditions");
+		}
 		auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
 		                                std::move(ref.condition));
 		return new_plan;
@@ -420,6 +446,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		return std::move(filter);
 	}
 	if (has_dependent_condition) {
+		if (ref.type == JoinType::MARK) {
+			throw NotImplementedException("Unsupported explicit MARK join conditions");
+		}
 		auto join = make_uniq<LogicalAnyJoin>(ref.type);
 		join->children.push_back(std::move(left));
 		join->children.push_back(std::move(right));
@@ -439,6 +468,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 
 	if (ref.type == JoinType::MARK) {
 		join->Cast<LogicalJoin>().mark_index = ref.mark_index;
+		PlanMarkJoin(*join);
 	}
 	if (!ref.duplicate_eliminated_columns.empty()) {
 		D_ASSERT(join->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);

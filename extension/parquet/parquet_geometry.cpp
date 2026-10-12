@@ -355,15 +355,9 @@ bool GeoParquetFileMetadata::IsGeometryColumn(const string &column_name) const {
 }
 
 bool GeoParquetFileMetadata::IsGeoParquetConversionEnabled(const ClientContext &context) {
-	Value geoparquet_enabled;
-	if (!context.TryGetCurrentSetting("enable_geoparquet_conversion", geoparquet_enabled)) {
-		return false;
-	}
-	if (!geoparquet_enabled.GetValue<bool>()) {
-		// Disabled by setting
-		return false;
-	}
-	return true;
+	bool geoparquet_enabled = false;
+	context.TryGetCurrentSetting("enable_geoparquet_conversion", geoparquet_enabled);
+	return geoparquet_enabled;
 }
 
 const unordered_map<string, GeoParquetColumnMetadata> &GeoParquetFileMetadata::GetColumnMeta() const {

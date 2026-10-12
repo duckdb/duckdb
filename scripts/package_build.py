@@ -7,6 +7,13 @@ import re
 import tempfile
 
 excluded_objects = ['utf8proc_data.cpp']
+# the built-in httplib client, registered like a static extension when it is packaged
+httplib_source = os.path.join('src', 'main', 'http', 'http_client_httplib.cpp')
+# installing and loading external extensions, registered like a static extension when it is packaged
+loadable_extensions_sources = [
+    os.path.join('src', 'main', 'extension', 'extension_install_dynamic.cpp'),
+    os.path.join('src', 'main', 'extension', 'extension_load_dynamic.cpp'),
+]
 
 
 def third_party_includes():
@@ -238,6 +245,8 @@ def build_package(
     folder_name='duckdb',
     short_paths=False,
     default_linked_extensions=None,
+    builtin_httplib=True,
+    extension_load=True,
 ):
     if not os.path.isdir(target_dir):
         os.mkdir(target_dir)
@@ -267,6 +276,11 @@ def build_package(
 
     # obtain the list of source files from the amalgamation
     source_list = amalgamation.list_sources()
+    builtin_httplib = builtin_httplib and extension_load
+    excluded_sources = [] if extension_load else list(loadable_extensions_sources)
+    if not builtin_httplib:
+        excluded_sources.append(httplib_source)
+    source_list = [x for x in source_list if x not in excluded_sources]
     include_list = amalgamation.list_include_dirs()
     include_files = amalgamation.list_includes()
 
@@ -291,6 +305,17 @@ def build_package(
     ext_loader_defines = ''
     ext_describers = ''
     ext_registrations = ''
+    # the httplib client and the loadable extensions support are not extensions, but register the same way, first
+    registered_first = (['httplib'] if builtin_httplib else []) + (['loadable_extensions'] if extension_load else [])
+    for name in registered_first:
+        ext_describers += (
+            f'extern "C" int32_t duckdb_extension_{name}_describe(duckdb_extension_descriptor *descriptor);\n\n'
+        )
+        ext_registrations += (
+            f"\tif (duckdb_register_static_extension(duckdb_extension_{name}_describe) != 0) {{\n"
+            "\t\tresult = 1;\n"
+            "\t}\n"
+        )
     with open(
         os.path.join(scripts_dir, '..', 'extension', 'loader', 'extension_describe.c.in')
     ) as describe_template_file:

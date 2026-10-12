@@ -214,15 +214,13 @@ void VariantColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool 
 	}
 }
 
-uint64_t VariantColumnReader::TotalCompressedSize() {
-	uint64_t size = 0;
+void VariantColumnReader::GatherColumnChunks(unordered_set<idx_t> &column_chunks) {
 	for (auto &child : child_readers) {
 		if (!child) {
 			continue;
 		}
-		size += child->TotalCompressedSize();
+		child->GatherColumnChunks(column_chunks);
 	}
-	return size;
 }
 
 idx_t VariantColumnReader::GroupRowsAvailable() {
@@ -241,13 +239,17 @@ bool VariantColumnReader::TypedValueLayoutToType(const LogicalType &typed_value,
 		return true;
 	}
 	auto type_id = typed_value.id();
-	if (type_id == LogicalTypeId::STRUCT) {
+	if (StructType::IsStruct(type_id)) {
 		//! OBJECT (...)
 		auto &object_fields = StructType::GetChildTypes(typed_value);
 		child_list_t<LogicalType> children;
 		for (auto &object_field : object_fields) {
 			auto &name = object_field.first;
 			auto &field = object_field.second;
+			if (name.empty()) {
+				//! An empty key can't be a STRUCT member name
+				return false;
+			}
 			//! <name>: {
 			//! 	value: BLOB,
 			//! 	typed_value: <type>

@@ -27,6 +27,7 @@
 #include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
+#include "duckdb/optimizer/remove_redundant_order_keys.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/row_group_pruner.hpp"
 #include "duckdb/optimizer/rule/distinct_aggregate_optimizer.hpp"
@@ -378,6 +379,11 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = join_elimination.Optimize(std::move(plan));
 	});
 
+	RunOptimizer(OptimizerType::REDUNDANT_ORDER_KEYS, [&]() {
+		RemoveRedundantOrderKeys remove_redundant_order_keys;
+		remove_redundant_order_keys.Optimize(*plan);
+	});
+
 	// rewrites UNNESTs in DelimJoins by moving them to the projection
 	RunOptimizer(OptimizerType::UNNEST_REWRITER, [&]() {
 		UnnestRewriter unnest_rewriter;
@@ -461,7 +467,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	bool removed_expressions = false;
 	if (!CTEContainsDML(*plan)) {
 		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
-			StatisticsPropagator propagator(*this, *plan);
+			StatisticsPropagator propagator(*this, plan);
 			propagator.PropagateStatistics(plan);
 			statistics_map = propagator.GetStatisticsMap();
 			propagated_statistics = true;
@@ -472,7 +478,7 @@ void Optimizer::RunBuiltInOptimizers() {
 		MultiStageAggregateRewriter costed_rewriter(*this, AggregateRewritePolicy::COST_BASED, false, statistics_map);
 		costed_rewriter.VisitOperator(plan);
 		if (costed_rewriter.WasChanged()) {
-			StatisticsPropagator propagator(*this, *plan);
+			StatisticsPropagator propagator(*this, plan);
 			propagator.PropagateStatistics(plan);
 			statistics_map = propagator.GetStatisticsMap();
 			removed_expressions |= propagator.HasRemovedExpressions();

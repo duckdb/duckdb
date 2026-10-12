@@ -41,31 +41,20 @@ optional_ptr<LogicalOperator> ProjectionPullup::FindParent(LogicalOperator &targ
 void ProjectionPullup::InsertProjectionBelowOp(unique_ptr<LogicalOperator> &op, unique_ptr<LogicalOperator> &child,
                                                bool stop_at_op) {
 	if (child->type != LogicalOperatorType::LOGICAL_PROJECTION) {
-		child->ResolveOperatorTypes();
 		auto proj_index = optimizer.binder.GenerateTableIndex();
 		auto child_bindings = child->GetColumnBindings();
-		const auto child_types = child->types;
-		const auto column_count = child_bindings.size();
-
-		vector<unique_ptr<Expression>> expressions;
-		expressions.reserve(column_count);
-		for (idx_t i = 0; i < column_count; i++) {
-			expressions.push_back(make_uniq<BoundColumnRefExpression>(child_types[i], child_bindings[i]));
-		}
 
 		ColumnBindingReplacer replacer;
-		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		for (idx_t col_idx = 0; col_idx < child_bindings.size(); col_idx++) {
 			const auto &old_binding = child_bindings[col_idx];
 			replacer.replacement_bindings.emplace_back(old_binding,
 			                                           ColumnBinding(proj_index, ProjectionIndex(col_idx)));
 		}
 
-		auto new_projection = make_uniq<LogicalProjection>(proj_index, std::move(expressions));
-		if (child->has_estimated_cardinality) {
-			new_projection->SetEstimatedCardinality(child->estimated_cardinality);
+		auto new_projection = LogicalProjection::CreateIdentity(proj_index, std::move(child));
+		if (new_projection->children[0]->has_estimated_cardinality) {
+			new_projection->SetEstimatedCardinality(new_projection->children[0]->estimated_cardinality);
 		}
-
-		new_projection->children.emplace_back(std::move(child));
 		child = std::move(new_projection);
 
 		if (stop_at_op) {

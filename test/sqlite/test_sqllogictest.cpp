@@ -158,9 +158,7 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 				runner.Reconnect();
 			}
 			auto res = runner.con->Query(on_cleanup);
-			if (res->HasError()) {
-				res->GetErrorObject().Throw();
-			}
+			res->ThrowIfError();
 		} catch (std::exception &ex) {
 			string cleanup_failure = "Error while running clean-up routine:\n";
 			ErrorData cleanup_error(ex);

@@ -161,7 +161,7 @@ duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb
 	                           result->GetStatementProperties().result_eagerness != duckdb::ResultEagerness::FORCED;
 	try {
 		if (stream_result) {
-			return DuckDBTranslateStreamResult(duckdb::make_uniq<duckdb::QueryResultStream>(std::move(result)),
+			return DuckDBTranslateStreamResult(duckdb::make_uniq<duckdb::QueryResultStream<>>(std::move(result)),
 			                                   out_result);
 		}
 		result->Complete();

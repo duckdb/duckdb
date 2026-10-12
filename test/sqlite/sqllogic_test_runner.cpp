@@ -1,6 +1,7 @@
 
 #include "sqllogic_test_runner.hpp"
 
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/json_document.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
@@ -168,6 +169,13 @@ void SQLLogicTestRunner::EmitEnd(const string &test_name, const string &status, 
 	obj.Add("passes", writer.CreateUnsignedInteger(test_stat_passes.load()));
 	obj.Add("fails", writer.CreateUnsignedInteger(test_stat_fails.load()));
 	obj.Add("skip-mode", writer.CreateUnsignedInteger(test_stat_skip_mode.load()));
+	if (!partial_skip_reasons.empty()) {
+		auto reasons = writer.CreateArray();
+		for (auto &reason : partial_skip_reasons) {
+			reasons.AppendString(reason);
+		}
+		obj.Add("partial-skip-reasons", reasons);
+	}
 	if (!data.empty()) {
 		obj.AddString("data", data);
 	}
@@ -228,9 +236,21 @@ ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::str
 	auto &test_config = TestConfiguration::Get();
 	Connection con(db);
 	if (test_config.GetExtensionAutoLoadingMode() == TestConfiguration::ExtensionAutoLoadingMode::NONE) {
-		// try INSTALL extension
-		auto repo = test_config.GetLocalExtensionRepository();
-		con.Query("INSTALL " + extension + " FROM '" + repo + "'");
+		auto extension_path = extension;
+		if (!ExtensionHelper::IsFullPath(extension)) {
+			auto &fs = FileSystem::GetFileSystem(*con.context);
+			auto extension_name = ExtensionHelper::ApplyExtensionAlias(extension);
+			extension_path =
+			    fs.JoinPath(test_config.GetLocalExtensionRepository(), ExtensionHelper::GetVersionDirectoryName());
+			extension_path = fs.JoinPath(extension_path, DuckDB::Platform());
+			extension_path = fs.JoinPath(extension_path, extension_name + ".duckdb_extension");
+		}
+		try {
+			ExtensionHelper::LoadExternalExtension(*con.context, ExtensionLoadOptions(extension_path));
+			return ExtensionLoadResult::LOADED_EXTENSION;
+		} catch (std::exception &) {
+			return linked_result;
+		}
 	}
 
 	// try LOAD extension
@@ -247,6 +267,7 @@ NewDatabaseConnection SQLLogicTestRunner::CreateDatabase(const string &db_path, 
 	try {
 		result.db = make_uniq<DuckDB>(db_path, config.get());
 		LoadStaticExtensions(*result.db);
+		ConfigureDefaultInMemoryTemporaryDirectory(*result.db, db_path);
 
 		// always load core functions
 		auto &test_config = TestConfiguration::Get();
@@ -753,14 +774,16 @@ void add_env_tag(vector<string> &tags, const string &name, const string *value =
 	}
 }
 
-void SQLLogicTestRunner::ConfigureDefaultInMemoryTemporaryDirectory(const string &script) {
-	if (!dbpath.empty() || !config->options.use_temporary_directory || config->options.temporary_directory != ".tmp") {
+void SQLLogicTestRunner::ConfigureDefaultInMemoryTemporaryDirectory(DuckDB &database, const string &db_path) {
+	auto &db_config = DBConfig::GetConfig(*database.instance);
+	if (!db_path.empty() || !db_config.options.use_temporary_directory ||
+	    db_config.options.temporary_directory != ".tmp" || !Settings::Get<EnableExternalAccessSetting>(db_config)) {
 		return;
 	}
-	auto normalized_script = StringUtil::Replace(script, "\\", "/");
+	auto normalized_script = StringUtil::Replace(file_name, "\\", "/");
 	auto temp_directory_name = StringUtil::Replace(normalized_script, "/", "_");
-	auto temp_directory = TestJoinPath(TestJoinPath(TestDirectoryPath(), "sqllogic_temp"), temp_directory_name);
-	config->SetOptionByName("temp_directory", temp_directory);
+	auto temp_directory = TestJoinPath(TestDirectoryPath(), "sqllogic_temp_" + temp_directory_name);
+	db_config.SetOption(database.instance.get(), *DBConfig::GetOptionByName("temp_directory"), temp_directory);
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
@@ -807,10 +830,6 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 	for (auto ignore : test_config.ErrorMessagesToBeSkipped()) {
 		ignore_error_messages.insert(ignore);
 	}
-
-	// In-memory sqllogictests otherwise share ".tmp" across unittest processes.
-	// Give each script its own spill directory under the per-process TEST_DIR.
-	ConfigureDefaultInMemoryTemporaryDirectory(script);
 
 	// initialize the database with the default dbpath
 	LoadDatabase(dbpath, true);
@@ -1046,7 +1065,9 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 						reason += " " + token.parameters[i];
 					}
 				}
-				AddSkipReason("mode skip " + reason);
+				auto skip_reason = "mode skip " + reason;
+				AddSkipReason(skip_reason);
+				partial_skip_reasons.insert(std::move(skip_reason));
 				skip_level++;
 			} else if (parameter == "unskip") {
 				skip_level--;

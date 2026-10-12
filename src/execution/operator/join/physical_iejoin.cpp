@@ -903,7 +903,7 @@ void IEJoinLocalSourceState::SplitPayloads(DataChunk &chunk) {
 		if (col_idx < left_cols) {
 			lpayload.data[col_idx].Reference(chunk.data[col_idx]);
 		} else {
-			rpayload.data[col_idx - left_cols].Reference(chunk.data[col_idx - left_cols]);
+			rpayload.data[col_idx - left_cols].Reference(chunk.data[col_idx]);
 		}
 	}
 }

@@ -55,6 +55,7 @@ enum class StatementType : uint8_t {
 	CONNECT_STATEMENT,
 	DISCONNECT_STATEMENT,
 	EXTERNAL_RESOURCE_STATEMENT,
+	PASSTHROUGH_STATEMENT,
 	ENUM_SIZE // This has to stay the last entry of the type!
 };
 

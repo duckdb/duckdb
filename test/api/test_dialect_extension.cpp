@@ -73,12 +73,12 @@ TEST_CASE("Register and select a dialect extension", "[api][dialect_extension]")
 	auto dialects = con.Query("SELECT dialect_name FROM duckdb_dialects() ORDER BY dialect_name");
 	REQUIRE_NO_FAIL(*dialects);
 	REQUIRE(dialects->RowCount() == 1);
-	REQUIRE(dialects->GetValue(0, 0) == Value("test"));
+	REQUIRE(dialects->Collection().GetValue(0, 0) == Value("test"));
 
 	REQUIRE_NO_FAIL(con.Query("SET current_dialect = 'test'"));
 	auto current_dialect = con.Query("SELECT current_setting('current_dialect')");
 	REQUIRE_NO_FAIL(*current_dialect);
-	REQUIRE(current_dialect->GetValue(0, 0) == Value("test"));
+	REQUIRE(current_dialect->Collection().GetValue(0, 0) == Value("test"));
 }
 
 TEST_CASE("Dialect tokenizer hooks are opt-in", "[api][dialect_extension]") {
@@ -86,12 +86,18 @@ TEST_CASE("Dialect tokenizer hooks are opt-in", "[api][dialect_extension]") {
 	Tokenizer default_tokenizer(helper);
 	HookTokenizer hook_tokenizer(helper, true, true, true);
 
+	// backticks are accepted as identifier delimiters by default, a dialect can opt out of them
+	HookTokenizer no_backtick_tokenizer(helper, false, false, false);
 	auto default_backtick = Tokenize(default_tokenizer, "`a b`");
 	auto hooked_backtick = Tokenize(hook_tokenizer, "`a b`");
-	REQUIRE(default_backtick.size() > 2);
+	auto no_backtick = Tokenize(no_backtick_tokenizer, "`a b`");
+	REQUIRE(default_backtick.size() >= 1);
+	REQUIRE(default_backtick[0].type == TokenType::IDENTIFIER);
+	REQUIRE(default_backtick[0].text == "`a b`");
 	REQUIRE(hooked_backtick.size() >= 1);
 	REQUIRE(hooked_backtick[0].type == TokenType::IDENTIFIER);
 	REQUIRE(hooked_backtick[0].text == "`a b`");
+	REQUIRE(no_backtick.size() > 2);
 
 	auto default_operator = Tokenize(default_tokenizer, ">>=");
 	auto hooked_operator = Tokenize(hook_tokenizer, ">>=");

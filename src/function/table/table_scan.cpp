@@ -40,6 +40,7 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
 
@@ -539,6 +540,8 @@ public:
 			l_state.job_rows_scanned += job_scan.RowsScanned();
 			job_scan.table_state.rows_scanned = 0;
 			job_scan.local_state.rows_scanned = 0;
+			// a pooled state outlives the pipeline, it must not keep blocks pinned that a sink may still convert
+			job_scan.ReleasePins();
 			state_pool.Push(std::move(l_state.job->scan_state));
 			l_state.job.reset();
 			if (TryYieldControl(data_p)) {
@@ -804,21 +807,10 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
-			if (!func.BindInfo()) {
-				return true;
-			}
-			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
-			return !data.child_filter_expr ||
-			       CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
-		}
-		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
-			if (!func.BindInfo()) {
-				return true;
-			}
-			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-			return !data.child_filter_expr ||
-			       CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
+		if (ExpressionFilter::IsRootOptionalExpression(func)) {
+			auto optional_child = ExpressionFilter::GetOptionalFilterChild(func);
+			return !optional_child ||
+			       CollectValuesAndComparisonsFromExpression(*optional_child, in_values, comparisons);
 		}
 		if (TableFilterFunctions::IsTableFilterFunction(func.Function())) {
 			return true;
@@ -1117,9 +1109,9 @@ vector<PartitionStatistics> TableScanGetPartitionStats(ClientContext &context, G
 	return storage.GetPartitionStats(context);
 }
 
-BindInfo TableScanGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
+optional_ptr<TableCatalogEntry> TableScanGetTableEntry(optional_ptr<const FunctionData> bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	return BindInfo(bind_data.table);
+	return &bind_data.table;
 }
 
 void TableScanDependency(LogicalDependencyList &entries, const FunctionData *bind_data_p) {
@@ -1155,7 +1147,7 @@ InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput
 }
 
 static void TableScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                               const TableFunction &function) {
+                               const BoundTableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	// the catalog/schema/name are only the innermost qualification - "qualified_name" carries the full (possibly
 	// nested) schema path
@@ -1169,7 +1161,7 @@ static void TableScanSerialize(Serializer &serializer, const optional_ptr<Functi
 	    106, "qualified_name", bind_data.table.schema.GetQualifiedName(bind_data.table.name), QualifiedName());
 }
 
-static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer, TableFunction &function) {
+static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer, BoundTableFunction &function) {
 	auto catalog = deserializer.ReadProperty<Identifier>(100, "catalog");
 	auto schema = deserializer.ReadProperty<Identifier>(101, "schema");
 	auto table = deserializer.ReadProperty<Identifier>(102, "table");
@@ -1227,6 +1219,53 @@ void SetPartitionsToScan(vector<idx_t> partition_indices, optional_ptr<FunctionD
 	bind_data.partitions_to_scan = make_uniq<unordered_set<idx_t>>(partition_indices.begin(), partition_indices.end());
 }
 
+static string TableScanToSQLGuard(const LogicalGet &get, bool has_input) {
+	auto &data = get.bind_data->Cast<TableScanBindData>();
+	if (has_input) {
+		return "input_child";
+	}
+	if (get.ordinality_idx.IsValid()) {
+		return "ordinality";
+	}
+	if (!get.scan_partition_indices.empty()) {
+		return "scan_partitions";
+	}
+	if (data.is_create_index) {
+		return "create_index";
+	}
+	if (data.partitions_to_scan) {
+		return "bound_scan_partitions";
+	}
+	const bool has_filters =
+	    get.table_filters.HasFilters() || get.table_filters.HasMultiColumnFilters() || get.dynamic_filters;
+	for (auto &index : get.GetColumnIds()) {
+		if (index.IsRowNumberColumn() && has_filters) {
+			return "row_number_with_filters";
+		}
+		if (index.IsVirtualColumn() && !index.IsRowIdColumn() && !index.IsRowNumberColumn()) {
+			return "virtual_column";
+		}
+		if (!index.IsVirtualColumn()) {
+			auto &definition = data.table.GetColumn(index.ToLogical());
+			if (!index.IsPushdownExtract() && definition.Type() != get.GetColumnType(index)) {
+				return "column_type";
+			}
+		}
+	}
+	return string();
+}
+
+static TableFunctionToSQLResult TableScanToSQL(ClientContext &, const LogicalGet &get) {
+	auto guard = TableScanToSQLGuard(get, !get.children.empty());
+	if (!guard.empty()) {
+		return {nullptr, std::move(guard)};
+	}
+	auto table = make_uniq<BaseTableRef>();
+	auto entry = get.GetTable();
+	table->SetQualifiedName(entry->schema.GetQualifiedName(entry->name));
+	return {std::move(table), {}};
+}
+
 TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, TableScanFunc);
 	scan_function.init_local = TableScanInitLocal;
@@ -1237,10 +1276,11 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.get_metrics = TableScanGetMetrics;
 	scan_function.pushdown_complex_filter = nullptr;
 	scan_function.to_string = TableScanToString;
+	scan_function.to_sql = TableScanToSQL;
 	scan_function.table_scan_progress = TableScanProgress;
 	scan_function.get_partition_data = TableScanGetPartitionData;
 	scan_function.get_partition_stats = TableScanGetPartitionStats;
-	scan_function.get_bind_info = TableScanGetBindInfo;
+	scan_function.get_table_entry = TableScanGetTableEntry;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;

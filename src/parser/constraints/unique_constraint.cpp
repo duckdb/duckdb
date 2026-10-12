@@ -33,12 +33,7 @@ string UniqueConstraint::ToString() const {
 }
 
 unique_ptr<Constraint> UniqueConstraint::Copy() const {
-	if (!HasIndex()) {
-		return make_uniq<UniqueConstraint>(columns, is_primary_key);
-	}
-
-	auto result = make_uniq<UniqueConstraint>(index, columns.empty() ? Identifier() : columns[0], is_primary_key);
-	return std::move(result);
+	return make_uniq<UniqueConstraint>(*this);
 }
 
 bool UniqueConstraint::IsPrimaryKey() const {

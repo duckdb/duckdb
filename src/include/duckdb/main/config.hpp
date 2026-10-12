@@ -40,6 +40,7 @@
 #include "duckdb/common/enums/debug_order_verification.hpp"
 
 namespace duckdb {
+class ExternalExtensionProvider;
 class ArrowTypeExtension;
 struct ArrowExtensionMetadata;
 struct ArrowTypeExtensionSet;
@@ -89,6 +90,10 @@ struct DBConfigOptions {
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
+	//! Where automatic installs go when neither autoinstall_extension_repository nor custom_extension_repository is
+	//! set; empty means the core repository. The local_extension_repository capability sets it to its build's
+	//! repository
+	string default_autoinstall_repository;
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = DConstants::INVALID_INDEX;
 	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default: 90% of available disk space.
@@ -225,6 +230,7 @@ public:
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,
 	                                   SetScope default_scope = SetScope::SESSION, bool is_debug = false,
 	                                   bool is_deprecated = false);
+	DUCKDB_API void AddExtensionOption(const Identifier &name, ExtensionOption extension_option);
 	DUCKDB_API bool HasExtensionOption(const Identifier &name) const;
 	DUCKDB_API identifier_map_t<ExtensionOption> GetExtensionSettings() const;
 	DUCKDB_API bool TryGetExtensionOption(const Identifier &name, ExtensionOption &result) const;
@@ -289,6 +295,7 @@ public:
 	bool operator!=(const DBConfig &other);
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
+	DUCKDB_API const CastFunctionSet &GetCastFunctions() const;
 	DUCKDB_API TypeManager &GetTypeManager();
 	DUCKDB_API CollationBinding &GetCollationBinding();
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
@@ -325,6 +332,9 @@ public:
 
 	void SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util);
 	HTTPUtil &GetHTTPUtil() const;
+	//! Replace how external extensions are installed and loaded, before the database runs queries
+	DUCKDB_API void SetExternalExtensionProvider(const shared_ptr<ExternalExtensionProvider> &new_provider);
+	DUCKDB_API ExternalExtensionProvider &GetExternalExtensionProvider() const;
 	DUCKDB_API HTTPTransportManager &GetHTTPTransportManager();
 	DUCKDB_API const HTTPTransportManager &GetHTTPTransportManager() const;
 
@@ -342,6 +352,8 @@ private:
 	bool is_user_config = true;
 	//! HTTP provider publication and bounded client ownership
 	unique_ptr<HTTPTransportManager> http_transport_manager;
+	//! Installs and loads external extensions; "none" unless a loader library is linked
+	shared_ptr<ExternalExtensionProvider> external_extension_provider;
 };
 
 } // namespace duckdb

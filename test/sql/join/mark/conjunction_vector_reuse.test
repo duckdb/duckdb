@@ -1,5 +1,5 @@
 # name: test/sql/join/mark/conjunction_vector_reuse.test
-# description: Reused nested-loop comparison vectors preserve nested NULLs and validity
+# description: SEMI and ANTI conjunctions preserve nested NULLs across vector encodings
 # group: [mark]
 
 statement ok
@@ -18,10 +18,14 @@ CREATE OR REPLACE TABLE reuse_probe AS SELECT i id, (CASE WHEN i%4=0 THEN NULL W
 statement ok
 CREATE OR REPLACE TABLE reuse_build AS SELECT (CASE WHEN i%3=0 THEN NULL WHEN i%3=1 THEN [1,NULL] ELSE [0,1] END)::{type} v FROM range(5) t(i);
 
+foreach join SEMI ANTI
+
 query I
-WITH actual AS (SELECT p.id,__mark_join_marker m FROM reuse_probe p JOIN BY(TYPE MARK) reuse_build b ON p.v<b.v AND p.v<>b.v), expected AS (SELECT p.id,CASE WHEN bool_or(p.v<b.v AND p.v<>b.v) THEN true WHEN bool_or((p.v<b.v AND p.v<>b.v) IS NULL) THEN NULL ELSE false END m FROM reuse_probe p CROSS JOIN reuse_build b GROUP BY p.id) SELECT count(*) FROM actual a JOIN expected e USING(id) WHERE a.m IS DISTINCT FROM e.m;
+WITH actual AS (SELECT p.id FROM reuse_probe p JOIN BY(TYPE {join}) reuse_build b ON p.v<b.v AND p.v<>b.v), expected AS (SELECT p.id FROM reuse_probe p WHERE EXISTS(SELECT 1 FROM reuse_build b WHERE p.v<b.v AND p.v<>b.v) = ('{join}'='SEMI')) SELECT count(*) FROM ((SELECT * FROM actual EXCEPT ALL SELECT * FROM expected) UNION ALL (SELECT * FROM expected EXCEPT ALL SELECT * FROM actual));
 ----
 0
+
+endloop
 
 endloop
 

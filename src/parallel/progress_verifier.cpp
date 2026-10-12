@@ -36,7 +36,7 @@ ProgressVerifier::ProgressVerifier(ClientContext &context, DebugProgressVerifica
 string ProgressVerifier::OperatorName(const PhysicalOperator &op) {
 	if (op.type == PhysicalOperatorType::TABLE_SCAN) {
 		// table functions implement progress individually - attribute to the function
-		return StringUtil::Upper(op.Cast<PhysicalTableScan>().function.name.GetIdentifierName());
+		return StringUtil::Upper(op.Cast<PhysicalTableScan>().function.GetName().GetIdentifierName());
 	}
 	return PhysicalOperatorToString(op.type);
 }
