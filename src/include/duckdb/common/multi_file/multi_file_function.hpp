@@ -443,7 +443,7 @@ public:
 		unique_lock<mutex> parallel_lock(gstate.lock, std::defer_lock);
 		try {
 			if (OpenMarkedFile(context, bind_data, gstate, reader_data, file_index, parallel_lock)) {
-				// jobs keep the reader alive after the scan moves past the file, so it keeps the file counted
+				// keep the file counted while jobs retain the reader
 				reader_data.reader->read_ahead_open_file = open_file;
 			}
 		} catch (std::exception &ex) {
