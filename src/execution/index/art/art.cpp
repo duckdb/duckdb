@@ -171,7 +171,7 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
 
 ART::ART(const ART &src, shared_ptr<AllocatorArray> allocators_ptr)
     : BoundIndex(src.name, ART::TYPE_NAME, src.index_constraint_type, src.column_ids, src.table_io_manager,
-	             src.unbound_expressions, src.db),
+                 src.unbound_expressions, src.db),
       root_ptr(src.root_ptr), allocators(std::move(allocators_ptr)), owns_data(true),
       storage_version(src.storage_version), prefix_count(src.prefix_count) {
 	D_ASSERT(allocators);
@@ -833,7 +833,7 @@ ARTSearchResult ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &u
 	// Continue the scan until we reach the upper bound.
 	return it.Scan(upper_bound, row_ids, right_equal) == ARTScanProgress::COMPLETED
 	           ? ARTSearchResult::COMPLETED
-			   : ARTSearchResult::CAPACITY_EXCEEDED;
+	           : ARTSearchResult::CAPACITY_EXCEEDED;
 }
 
 ARTSearchResult ART::ScanBatch(DataChunk &input, RowIdVectorOutput &row_ids) const {
