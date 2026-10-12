@@ -36,6 +36,7 @@ class Serializer;
 class StorageManager;
 class TableCatalogEntry;
 class TableIOManager;
+class TableStorageInfo;
 class Vector;
 class Transaction;
 class WriteAheadLog;

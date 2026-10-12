@@ -40,11 +40,8 @@ static bool GlobMatchesBracket(char s, const char *pattern, idx_t plen, idx_t &p
 			break;
 		}
 		bool matches;
-		if (pattern[pidx + 1] == '-') {
+		if (pattern[pidx + 1] == '-' && pidx + 2 < plen && pattern[pidx + 2] != ']') {
 			// range! find the next character in the range
-			if (pidx + 2 == plen) {
-				break;
-			}
 			auto next_char = pattern[pidx + 2];
 			// check if the current character is within the range
 			matches = s >= p && s <= next_char;
