@@ -1,33 +1,35 @@
-diff --git a/src/functions/ducklake_set_option.cpp b/src/functions/ducklake_set_option.cpp
-index c130d5e0..5c7926a4 100644
---- a/src/functions/ducklake_set_option.cpp
-+++ b/src/functions/ducklake_set_option.cpp
-@@ -123,13 +123,13 @@ static unique_ptr<FunctionData> DuckLakeSetOptionBind(ClientContext &context, Ta
- 		}
- 		value = to_string(row_group_size);
- 	} else if (option == "parquet_row_group_size_bytes") {
--		auto row_group_size_bytes = DBConfig::ParseMemoryLimit(val.ToString());
-+		auto row_group_size_bytes = DBConfig::ParseMemoryLimitOrMaximum(val.ToString());
- 		if (row_group_size_bytes == 0) {
- 			throw NotImplementedException("Row group size bytes cannot be 0");
- 		}
- 		value = to_string(row_group_size_bytes);
- 	} else if (option == "target_file_size") {
--		auto target_file_size_bytes = DBConfig::ParseMemoryLimit(val.ToString());
-+		auto target_file_size_bytes = DBConfig::ParseMemoryLimitOrMaximum(val.ToString());
- 		value = to_string(target_file_size_bytes);
- 	} else if (option == "data_inlining_row_limit") {
- 		auto data_inlining_row_limit = val.DefaultCastAs(LogicalType::UBIGINT).GetValue<idx_t>();
+diff --git a/src/common/ducklake_util.cpp b/src/common/ducklake_util.cpp
+index a5397f8..5e6fb66 100644
+--- a/src/common/ducklake_util.cpp
++++ b/src/common/ducklake_util.cpp
+@@ -607,7 +607,7 @@ static string ParseRowGroupSize(ClientContext &, const string &, const Value &va
+ }
+ 
+ static string ParseRowGroupSizeBytes(ClientContext &, const string &, const Value &val) {
+-	auto row_group_size_bytes = DBConfig::ParseMemoryLimit(val.ToString());
++	auto row_group_size_bytes = DBConfig::ParseMemoryLimitOrMaximum(val.ToString());
+ 	if (row_group_size_bytes == 0) {
+ 		throw NotImplementedException("Row group size bytes cannot be 0");
+ 	}
+@@ -615,7 +615,7 @@ static string ParseRowGroupSizeBytes(ClientContext &, const string &, const Valu
+ }
+ 
+ static string ParseMemorySize(ClientContext &, const string &, const Value &val) {
+-	return to_string(DBConfig::ParseMemoryLimit(val.ToString()));
++	return to_string(DBConfig::ParseMemoryLimitOrMaximum(val.ToString()));
+ }
+ 
+ static string ParseBooleanLiteral(ClientContext &, const string &, const Value &val) {
 diff --git a/src/storage/ducklake_catalog.cpp b/src/storage/ducklake_catalog.cpp
-index 58cd94c7..bf5f112b 100644
+index 2725b3d..871fe80 100644
 --- a/src/storage/ducklake_catalog.cpp
 +++ b/src/storage/ducklake_catalog.cpp
-@@ -1044,7 +1044,7 @@ idx_t DuckLakeCatalog::GetTargetFileSize(ClientContext &context, SchemaIndex sch
+@@ -1248,7 +1248,7 @@ idx_t DuckLakeCatalog::GetTargetFileSize(ClientContext &context, SchemaIndex sch
  	Value setting_val;
  	if (context.TryGetCurrentSetting("ducklake_target_file_size", setting_val) && !setting_val.IsNull() &&
  	    !setting_val.ToString().empty()) {
 -		return DBConfig::ParseMemoryLimit(setting_val.ToString());
 +		return DBConfig::ParseMemoryLimitOrMaximum(setting_val.ToString());
  	}
- 	return GetConfigOption<idx_t>("target_file_size", schema_id, table_id, DEFAULT_TARGET_FILE_SIZE);
+ 	return GetConfigOption<idx_t>("target_file_size", schema_id, table_id, DEFAULT_TARGET_FILE_SIZE, table_options);
  }
