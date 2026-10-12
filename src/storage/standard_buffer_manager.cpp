@@ -662,7 +662,8 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 }
 
 void StandardBufferManager::DeleteTemporaryFile(BlockMemory &memory) {
-	if (!memory.IsUnloaded()) {
+	// Without spill storage, there are no temporary buffers to delete.
+	if (!memory.IsUnloaded() || GetUsedSwap() == 0) {
 		return;
 	}
 	auto id = memory.BlockId();
