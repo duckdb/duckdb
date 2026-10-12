@@ -558,10 +558,10 @@ SetScope ExtensionOption::ResolveScope(const Identifier &name, SetScope scope) c
 	}
 	if (scope == SetScope::GLOBAL && !supports_global) {
 		throw InvalidInputException(
-		    "Setting \"%s\" cannot be set as a global variable - it can only be set per session", name);
+		    "Setting %s cannot be set as a global variable - it can only be set per session", name);
 	}
 	if (scope == SetScope::SESSION && !supports_session) {
-		throw InvalidInputException("Setting \"%s\" cannot be set as a session variable - it can only be set globally",
+		throw InvalidInputException("Setting %s cannot be set as a session variable - it can only be set globally",
 		                            name);
 	}
 	return scope;
