@@ -375,7 +375,7 @@ BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<
 		// check if the block is already loaded
 		if (block_memory.GetState() == BlockState::BLOCK_LOADED) {
 			// the block is loaded, increment the reader count and set the BufferHandle
-			buf = handle->Load(context);
+			buf = handle->Load(lock, context);
 		}
 		required_memory = block_memory.GetMemoryUsage();
 	}
@@ -396,11 +396,11 @@ BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<
 	if (block_memory.GetState() == BlockState::BLOCK_LOADED) {
 		// the block is loaded, increment the reader count and return a pointer to the handle
 		reservation.Resize(0);
-		buf = handle->Load(context);
+		buf = handle->Load(lock, context);
 	} else {
 		// now we can actually load the current block
 		D_ASSERT(block_memory.GetReaders() == 0);
-		buf = handle->Load(context, std::move(reusable_buffer));
+		buf = handle->Load(lock, context, std::move(reusable_buffer));
 		if (!buf.IsValid()) {
 			reservation.Resize(0);
 			return buf; // Buffer was destroyed (e.g., due to DestroyBufferUpon::Eviction)
@@ -460,7 +460,7 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 			return;
 		}
 		D_ASSERT(block_memory.GetReaders() > 0);
-		auto new_readers = block_memory.DecrementReaders();
+		auto new_readers = block_memory.DecrementReaders(lock);
 		if (new_readers == 0) {
 			VerifyZeroReaders(lock, handle);
 			if (block_memory.MustAddToEvictionQueue()) {

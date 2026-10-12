@@ -287,7 +287,7 @@ bool BufferPool::AddToEvictionQueue(BlockLock &lock, shared_ptr<BlockHandle> &ha
 		queue.IncrementDeadNodes();
 	}
 
-	auto ts = memory.NextEvictionSequenceNumber();
+	auto ts = memory.NextEvictionSequenceNumber(lock);
 	if (track_eviction_timestamps) {
 		memory.SetLRUTimestamp(std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
 		                           .time_since_epoch()
