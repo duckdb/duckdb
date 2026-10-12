@@ -19,7 +19,7 @@ statement ok
 SET temp_directory='{TEST_DIR}/temporary_directory_regular_file.csv';
 
 statement ok
-CREATE TABLE t AS SELECT i, repeat('y', 80000) AS s FROM range(400) r(i);
+CREATE TEMP TABLE t AS SELECT i, repeat('y', 80000) AS s FROM range(400) r(i);
 
 # The configured path is a file, so creating the temporary directory fails.
 statement error
