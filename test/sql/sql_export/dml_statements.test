@@ -324,3 +324,50 @@ statement error
 EXPLAIN (SQL) CREATE TABLE dml_unexpected(i INTEGER);
 ----
 EXPLAIN (SQL) supports SELECT, VALUES, WITH, INSERT, UPDATE, DELETE and MERGE INTO statements only
+
+# data-modifying CTE definitions stay in the top-level WITH clause of the generated SQL,
+# including chains with plain definitions between them (strict verification executes the export)
+statement ok
+CREATE TABLE dml_cte_multi(a INTEGER);
+
+statement ok
+CREATE TABLE dml_cte_aux(a INTEGER);
+
+statement ok
+SET debug_verify_statement='explain_sql_strict';
+
+query I rowsort
+WITH i1 AS (INSERT INTO dml_cte_multi VALUES (1) RETURNING a),
+     i2 AS (INSERT INTO dml_cte_aux VALUES (2) RETURNING a)
+SELECT * FROM i1 UNION ALL SELECT * FROM i2;
+----
+1
+2
+
+query I
+WITH d1 AS (DELETE FROM dml_cte_multi RETURNING a),
+     s AS (SELECT a + 10 AS b FROM d1),
+     d2 AS (DELETE FROM dml_cte_aux WHERE a IN (SELECT b - 9 FROM s) RETURNING a)
+SELECT * FROM d2;
+----
+2
+
+query II
+SELECT (SELECT count(*) FROM dml_cte_multi), (SELECT count(*) FROM dml_cte_aux);
+----
+0	0
+
+query I
+WITH d AS (INSERT INTO dml_cte_multi VALUES (5), (6), (7) RETURNING a)
+SELECT a FROM d ORDER BY a LIMIT 1;
+----
+5
+
+statement ok
+RESET debug_verify_statement;
+
+# an ON CONFLICT insert binds to MERGE INTO, which SQL does not accept as a CTE body
+statement error
+EXPLAIN (SQL) WITH ups AS (INSERT INTO dml_keyed VALUES (1,'x') ON CONFLICT DO NOTHING RETURNING a) SELECT * FROM ups;
+----
+MERGE INTO cannot be exported as a CTE body

@@ -90,8 +90,23 @@ LogicalPlanSQLExportResult LogicalMaterializedCTE::ToSQL(LogicalPlanSQLExportCon
 		return LogicalPlanSQLExportResult::Success(std::move(relation));
 	}
 	auto select = export_context.ForwardFields(consumer.GetValue(), fields.GetValue());
-	select->from_table = LogicalPlanSQLExportHelpers::CreateSubquery(std::move(consumer.GetValue()));
 	select->cte_map.map.insert(name, std::move(info));
+	// A data-modifying CTE definition must stay in the top-level WITH clause. If the consumer
+	// collected one, hoist its entire WITH clause above the subquery boundary, behind this CTE's
+	// own definition: a definition may reference those before it, so they move together.
+	auto &consumer_query = *consumer.GetValue().relation.query;
+	bool hoist = false;
+	for (auto &entry : consumer_query.cte_map.map) {
+		hoist |= SQLExportDMLHelpers::IsDMLNode(*entry.second->query_node);
+	}
+	if (hoist) {
+		auto collected = std::move(consumer_query.cte_map);
+		consumer_query.cte_map = CommonTableExpressionMap();
+		for (auto &entry : collected.map) {
+			select->cte_map.map.insert(entry.first, std::move(entry.second));
+		}
+	}
+	select->from_table = LogicalPlanSQLExportHelpers::CreateSubquery(std::move(consumer.GetValue()));
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 }
 
@@ -238,6 +253,12 @@ LogicalPlanSQLExportContext::ExportNamedProducer(LogicalOperator &op, const Logi
 		auto exported = SQLExportDMLHelpers::ExportBody(*this, op, path);
 		if (exported.HasError()) {
 			return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Failure(exported);
+		}
+		if (exported.GetValue().query->type == QueryNodeType::MERGE_QUERY_NODE) {
+			// ON CONFLICT inserts bind to MERGE INTO, which SQL does not accept as a CTE body
+			return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Failure(
+			    {LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(path, "cte_merge_body",
+			                                                         "MERGE INTO cannot be exported as a CTE body")});
 		}
 		return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Success(
 		    {std::move(exported.GetValue()), NextRelationAlias()});
