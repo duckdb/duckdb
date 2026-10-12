@@ -154,8 +154,8 @@ private:
 		NOT_FOLDABLE,
 		//! The expression was replaced with its locally-evaluated constant result
 		FOLDED,
-		//! The expression is constant but evaluating it raises an error - the query must be
-		//! executed locally so the user sees DuckDB's error message
+		//! The expression is constant but evaluating it raises an error, or its value has no SQL literal, so the query
+		//! is executed locally
 		FOLD_ERROR
 	};
 	//! Rewrite an expression, constant-folding maximal foldable subtrees

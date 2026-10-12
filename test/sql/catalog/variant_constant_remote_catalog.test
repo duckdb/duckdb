@@ -1,0 +1,31 @@
+# name: test/sql/catalog/variant_constant_remote_catalog.test
+# description: A constant without a SQL literal, such as a VARIANT object with an empty key, while a remote catalog is attached
+# group: [catalog]
+
+require quack
+
+require httpfs
+
+require json
+
+statement ok
+CALL quack_serve(token='test_token');
+
+statement ok
+ATTACH 'quack:localhost' AS qk (TOKEN 'test_token');
+
+statement ok
+CREATE TABLE tbl (v VARIANT);
+
+statement ok
+INSERT INTO tbl SELECT '{"": 1, "x": 2}'::JSON::VARIANT;
+
+query I
+SELECT v::JSON FROM tbl;
+----
+{"":1,"x":2}
+
+query I
+SELECT ('{"": 1}'::JSON::VARIANT)::JSON;
+----
+{"":1}

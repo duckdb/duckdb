@@ -1187,7 +1187,13 @@ RemotePushdownOptimizer::TryConstantFold(unique_ptr<ParsedExpression> &expr) {
 		// evaluating the expression raises an error (e.g. an out-of-range error)
 		return ConstantFoldResult::FOLD_ERROR;
 	}
-	auto folded = ConstantExpression::FromValue(fold_result);
+	unique_ptr<ParsedExpression> folded;
+	try {
+		folded = ConstantExpression::FromValue(fold_result);
+	} catch (const NotImplementedException &) {
+		// the value has no SQL literal, so it cannot be sent to the remote
+		return ConstantFoldResult::FOLD_ERROR;
+	}
 	// preserve the name DuckDB would generate for the original expression
 	folded->SetAlias(expr->GetAlias().empty() ? Identifier(expr->ToString()) : expr->GetAlias());
 	folded->SetQueryLocation(expr->GetQueryLocation());
@@ -1274,7 +1280,7 @@ CatalogPushdownResult RemotePushdownOptimizer::FoldExpression(unique_ptr<ParsedE
 		// replace the expression with its locally-evaluated result
 		switch (TryConstantFold(expr)) {
 		case ConstantFoldResult::FOLD_ERROR:
-			// evaluating is guaranteed to fail - keep the query local so the user sees DuckDB's error
+			// evaluating fails or the value has no SQL literal, so keep the query local
 			return CatalogPushdownResult::Unknown();
 		case ConstantFoldResult::NOT_FOLDABLE:
 			// binding did not succeed after all - process the expression without re-attempting the fold
