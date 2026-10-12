@@ -1,0 +1,76 @@
+# name: test/sql/catalog/function/test_macro_lambda_capture.test
+# description: Lambda parameters in a macro body do not capture names used in the macro arguments
+# group: [function]
+
+statement ok
+CREATE MACRO add_each(v) AS list_transform([1, 2], lambda y: v + y);
+
+query I
+SELECT list_transform([10, 20], lambda y: add_each(y));
+----
+[[11, 12], [21, 22]]
+
+query I
+SELECT list_transform([10, 20], lambda z: add_each(z));
+----
+[[11, 12], [21, 22]]
+
+query I
+SELECT add_each(y) FROM (SELECT 100 y);
+----
+[101, 102]
+
+# list comprehensions
+statement ok
+CREATE MACRO keep(v) AS [v FOR x IN [1]];
+
+query I
+SELECT [keep(x) FOR x IN [10, 20]];
+----
+[[10], [20]]
+
+# list_reduce and lambdas with an index parameter
+statement ok
+CREATE MACRO reduce_add(v) AS list_reduce([1, 2, 3], lambda x, y: x + y + v);
+
+query I
+SELECT list_transform([10, 20], lambda x: reduce_add(x));
+----
+[26, 46]
+
+query I
+SELECT list_transform([10, 20], lambda y: reduce_add(y));
+----
+[26, 46]
+
+statement ok
+CREATE MACRO with_index(v) AS list_transform([1, 2], lambda x, i: x + i + v);
+
+query I
+SELECT list_transform([10, 20], lambda i: with_index(i));
+----
+[[12, 14], [22, 24]]
+
+# nested lambdas in the macro body that shadow the renamed parameter
+statement ok
+CREATE MACRO nested(v) AS list_transform([1, 2], lambda y: list_transform([y], lambda y: y * 10) || [v]);
+
+query I
+SELECT list_transform([7], lambda y: nested(y));
+----
+[[[10, 7], [20, 7]]]
+
+# struct fields of a lambda parameter
+statement ok
+CREATE MACRO field_sum(v) AS list_transform([{'a': 1}, {'a': 2}], lambda s: s.a + v);
+
+query I
+SELECT list_transform([100], lambda s: field_sum(s));
+----
+[[101, 102]]
+
+# lambda parameters that do not collide are not renamed
+query I
+SELECT add_each(5);
+----
+[6, 7]

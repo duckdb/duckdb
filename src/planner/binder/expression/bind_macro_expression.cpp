@@ -18,6 +18,71 @@
 
 namespace duckdb {
 
+//! Collects the names that the column references in an expression start with
+static void CollectColumnRefNames(ParsedExpression &expr, identifier_set_t &names) {
+	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		names.insert(expr.Cast<ColumnRefExpression>().ColumnNames()[0]);
+		return;
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		auto &sq = expr.Cast<SubqueryExpression>().Subquery();
+		ParsedExpressionIterator::EnumerateQueryNodeChildren(
+		    *sq->node, [&](unique_ptr<ParsedExpression> &child) { CollectColumnRefNames(*child, names); });
+	}
+	ParsedExpressionIterator::EnumerateChildren(expr,
+	                                            [&](ParsedExpression &child) { CollectColumnRefNames(child, names); });
+}
+
+//! Renames the references to a lambda parameter in (the RHS of) a lambda, unless they are shadowed by a nested lambda
+static void RenameLambdaParameter(ParsedExpression &expr, const Identifier &old_name, const Identifier &new_name) {
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::COLUMN_REF: {
+		auto &names = expr.Cast<ColumnRefExpression>().ColumnNamesMutable();
+		if (names[0] == old_name) {
+			names[0] = new_name;
+		}
+		return;
+	}
+	case ExpressionClass::FUNCTION: {
+		auto &function = expr.Cast<FunctionExpression>();
+		if (!function.IsLambdaFunction()) {
+			break;
+		}
+		for (auto &child : function.GetArgumentsMutable()) {
+			auto &child_expr = *child.GetExpressionMutable();
+			if (child_expr.GetExpressionClass() != ExpressionClass::LAMBDA) {
+				RenameLambdaParameter(child_expr, old_name, new_name);
+				continue;
+			}
+			auto &lambda_expr = child_expr.Cast<LambdaExpression>();
+			string error_message;
+			auto column_refs = lambda_expr.ExtractColumnRefExpressions(error_message);
+			bool shadowed = false;
+			for (auto &column_ref : column_refs) {
+				shadowed = shadowed || column_ref.get().Cast<ColumnRefExpression>().GetName() == old_name;
+			}
+			if (!error_message.empty()) {
+				RenameLambdaParameter(*lambda_expr.LeftMutable(), old_name, new_name);
+			}
+			if (!shadowed) {
+				RenameLambdaParameter(*lambda_expr.RightMutable(), old_name, new_name);
+			}
+		}
+		return;
+	}
+	case ExpressionClass::SUBQUERY: {
+		auto &sq = expr.Cast<SubqueryExpression>().Subquery();
+		ParsedExpressionIterator::EnumerateQueryNodeChildren(
+		    *sq->node, [&](unique_ptr<ParsedExpression> &child) { RenameLambdaParameter(*child, old_name, new_name); });
+		break;
+	}
+	default:
+		break;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](ParsedExpression &child) { RenameLambdaParameter(child, old_name, new_name); });
+}
+
 void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &function,
                                                       vector<identifier_set_t> &lambda_params) {
 	for (auto &child : function.GetArgumentsMutable()) {
@@ -39,11 +104,27 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &functi
 			continue;
 		}
 
+		// The macro arguments are substituted into the RHS, so lambda parameters with the same names as the columns
+		// that the arguments reference would capture them - rename these lambda parameters
+		identifier_set_t argument_names;
+		if (macro_binding && macro_binding->arguments) {
+			for (auto &argument : *macro_binding->arguments) {
+				CollectColumnRefNames(*argument, argument_names);
+			}
+		}
+
 		// Push the lambda parameter names of this level.
 		lambda_params.emplace_back();
 		for (const auto &column_ref_expr : column_ref_expressions) {
-			const auto &column_ref = column_ref_expr.get().Cast<ColumnRefExpression>();
-			lambda_params.back().emplace(column_ref.GetName());
+			auto name = column_ref_expr.get().Cast<ColumnRefExpression>().GetName();
+			if (argument_names.find(name) != argument_names.end()) {
+				Identifier new_name("0_macro_lambda_" + to_string(macro_lambda_param_count++) + "_" +
+				                    name.GetIdentifierName());
+				RenameLambdaParameter(*lambda_expr.LeftMutable(), name, new_name);
+				RenameLambdaParameter(*lambda_expr.RightMutable(), name, new_name);
+				name = new_name;
+			}
+			lambda_params.back().emplace(name);
 		}
 
 		// Only replace in the RHS of the expression.
