@@ -160,6 +160,7 @@ TEST_CASE("Logical plan SQL export applies requested output names", "[sql_export
 	REQUIRE(first->RowCount() == 1);
 	REQUIRE(first->Collection().GetValue(0, 0) == Value("sql"));
 	auto sql = first->Collection().GetValue(1, 0).GetValue<string>();
+	REQUIRE(StringUtil::Contains(sql, "\nFROM"));
 	auto explained = connection.Query(sql);
 	REQUIRE_NO_FAIL(*explained);
 	REQUIRE(explained->GetNames() == vector<Identifier> {"same name", "same name"});

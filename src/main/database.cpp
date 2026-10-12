@@ -287,7 +287,7 @@ void DatabaseInstance::LoadExtensionSettings() {
 			// if the extension provided the option, it should no longer be unrecognized.
 			D_ASSERT(config.options.unrecognized_options.find(name) == config.options.unrecognized_options.end());
 			auto &context = *con.context;
-			PhysicalSet::SetExtensionVariable(context, extension_option, SetScope::GLOBAL, value);
+			PhysicalSet::SetExtensionVariable(context, name, extension_option, SetScope::GLOBAL, value);
 		}
 
 		con.Commit();

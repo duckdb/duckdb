@@ -175,6 +175,8 @@ ScalarFunctionSet WriteLogFun::GetFunctions() {
 	fun.GetSignature().AddKwargs("kwargs", LogicalType::ANY);
 	fun.SetResolveTypesCallback(WriteLogResolveTypes);
 	fun.GetProperties().SetRequiresExpressionNames(true);
+	// an unknown scope is only detected while writing
+	fun.SetFallible();
 	fun.SetUnbindCallback(WriteLogUnbind);
 	set.AddFunction(std::move(fun));
 

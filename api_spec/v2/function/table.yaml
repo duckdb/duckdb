@@ -27,11 +27,11 @@ enums:
 handles:
   table_function:
     description: |
-      An owned opaque handle to a custom table function being built. Created with
-      `[[table_function_create_with_connection]]` or `[[table_function_create_with_extension]]`, configured with the
-      setter functions (e.g. `[[table_function_set_name]]`, `[[table_function_set_exec_callback]]`, etc.) and the
-      signature obtained via `[[table_function_get_signature]]`, made available with `[[table_function_register]]`, and
-      destroyed with `[[table_function_destroy]]`.
+      An owned opaque handle to a custom table function being built. Created with `[[table_function_create]]`,
+      configured with the setter functions (e.g. `[[table_function_set_name]]`, `[[table_function_set_exec_callback]]`,
+      etc.) and the signature obtained via `[[table_function_get_signature]]`, made available with
+      `[[connection_register_table_function]]` or `[[extension_register_table_function]]`, and destroyed with
+      `[[table_function_destroy]]`.
 
   table_function_bind_info:
     description: |
@@ -99,12 +99,12 @@ handles:
   multi_file_function:
     description: |
       An owned opaque handle to a multi-file table function being built. A multi-file function wraps an already
-      registered table function that reads a single file, and adds everything that is needed to read many files
-      at once on top of it: globbing, lists of files, hive partitioning, the `filename` column, `union_by_name`
-      and the like. Created with `[[multi_file_function_create_with_connection]]` or
-      `[[multi_file_function_create_with_extension]]`, configured with the setter functions (e.g.
+      registered table function that reads a single file, and adds everything that is needed to read many files at once
+      on top of it: globbing, lists of files, hive partitioning, the `filename` column, `union_by_name` and the like.
+      Created with `[[multi_file_function_create]]`, configured with the setter functions (e.g.
       `[[multi_file_function_set_name]]`, `[[multi_file_function_set_single_file_function]]`), made available with
-      `[[multi_file_function_register]]`, and destroyed with `[[multi_file_function_destroy]]`.
+      `[[connection_register_multi_file_function]]` or `[[extension_register_multi_file_function]]`, and destroyed with
+      `[[multi_file_function_destroy]]`.
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Callbacks
@@ -262,48 +262,25 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Constructors
   #---------------------------------------------------------------------------------------------------------------------
-  table_function_create_with_connection:
+  table_function_create:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-01" ]
     description: |
-      Creates a new table function that will be registered on the connection's database.
+      Creates a new table function through a factory.
 
       The function starts out empty: configure it with the setter functions (e.g. `[[table_function_set_name]]`,
-      `[[table_function_set_exec_callback]]`, etc.) and the signature obtained via
-      `[[table_function_get_signature]]`, then make it available with `[[table_function_register]]`.
+      `[[table_function_set_exec_callback]]`, etc.) and the signature obtained via `[[table_function_get_signature]]`,
+      then make it available with `[[connection_register_table_function]]` or `[[extension_register_table_function]]`.
       The caller owns the returned handle and must destroy it with `[[table_function_destroy]]`, also after
       registration.
-    parameters:
-      connection:
-        type: connection
-        description: The connection to create the function in.
-      function:
-        type: table_function
-        indirection: 1
-        kind: OUT
-        description: On success, receives the newly created table function. Owned by the caller.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
 
-  table_function_create_with_extension:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-01" ]
-    description: |
-      Creates a new table function that will be registered on the loading extension's database.
-
-      Use this from an extension load callback, where an extension handle is available. The function starts out
-      empty: configure it with the setter functions (e.g. `[[table_function_set_name]]`,
-      `[[table_function_set_exec_callback]]`, etc.) and the signature obtained via
-      `[[table_function_get_signature]]`, then make it available with `[[table_function_register]]`.
-      The caller owns the returned handle and must destroy it with `[[table_function_destroy]]`, also after
-      registration.
+      The table function can only be registered on the database the factory belongs to.
+    role: constructor
+    belongs_to: table_function
     parameters:
-      extension:
-        type: extension
-        description: The extension to create the function in.
+      factory:
+        type: factory
+        description: The factory to create the table function through.
       function:
         type: table_function
         indirection: 1
@@ -339,6 +316,33 @@ functions:
       err:
         type: error_info
         indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+
+  table_function_get_docs:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-09" ]
+    description: |
+      Returns the documentation of the function so it can be filled in.
+
+      Set a description with `[[function_docs_set_description]]`, and add examples and categories with
+      `[[function_docs_add_example]]` and `[[function_docs_add_category]]`. The documentation is modified in place,
+      describes this overload only, and is registered with the function. Optional.
+    parameters:
+      function:
+        type: table_function
+        kind: IN
+        description: The function to get the documentation of.
+      docs:
+        type: function_docs
+        indirection: 1
+        kind: OUT
+        description: The returned documentation. Borrowed and valid for the lifetime of the function handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
@@ -1743,25 +1747,59 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Register
   #---------------------------------------------------------------------------------------------------------------------
-  table_function_register:
+  connection_register_table_function:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-01" ]
     description: |
       Registers the table function, making it available for use in SQL queries.
 
-      The function is registered on the target given at creation: the connection's database or the loading
-      extension. Registration requires a name, a bind callback and an exec callback, and rejects a signature
-      that declares a return type, since a table function declares the columns it returns from its bind
-      callback. The caller still owns the handle after registration and must destroy it with
-      `[[table_function_destroy]]`, which does not affect the registered function.
+      The function is registered on the connection's database, visible to every connection, in the connection's
+      transaction: inside an explicit transaction, it is invisible to other connections until the transaction commits,
+      and a rollback undoes it. Registration requires a name, a bind callback and an exec callback, and rejects a
+      signature that declares a return type, since a table function declares the columns it returns from its bind
+      callback. The table function must have been created through a factory of the same database. The caller still owns
+      the handle after registration and must destroy it with `[[table_function_destroy]]`, which does not affect the
+      registered function.
+    role: method
+    belongs_to: connection
     parameters:
+      conn:
+        type: connection
+        description: The connection to register on.
       function:
         type: table_function
-        description: The function to register.
+        description: The table function to register.
       err:
         type: error_info
         indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+
+  extension_register_table_function:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-01" ]
+    description: |
+      Registers the table function, making it available for use in SQL queries.
+
+      The function is registered on the loading extension's database and attributed to the extension. Use this from the
+      extension's load callback. Registration requires a name, a bind callback and an exec callback, and rejects a
+      signature that declares a return type, since a table function declares the columns it returns from its bind
+      callback. The table function must have been created through a factory of the same database. The caller still owns
+      the handle after registration and must destroy it with `[[table_function_destroy]]`, which does not affect the
+      registered function.
+    role: method
+    belongs_to: extension
+    parameters:
+      extension:
+        type: extension
+        description: The loading extension.
+      function:
+        type: table_function
+        description: The table function to register.
+      err:
+        type: error_info
+        indirection: 1
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -1799,10 +1837,10 @@ functions:
       and again whenever the exec callback leaves the output chunk empty; the scan ends for a thread once the claim
       batch callback does not claim a batch.
 
-      Telling the batches apart lets a caller that scans several batches in parallel put their rows back in the
-      order of the batches, e.g. a multi-file function registered with `[[multi_file_function_register]]` claims
-      the batches of the function itself, so that the rows of a file keep their order also when several threads
-      scan it.
+      Telling the batches apart lets a caller that scans several batches in parallel put their rows back in the order of
+      the batches, e.g. a multi-file function registered with `[[connection_register_multi_file_function]]` or
+      `[[extension_register_multi_file_function]]` claims the batches of the function itself, so that the rows of a file
+      keep their order also when several threads scan it.
 
       The callback runs while the work of the scan is handed out to the threads, possibly while every other
       scanning thread waits for it. It should therefore only claim the work - e.g. reserve the number of the next
@@ -1928,12 +1966,12 @@ functions:
     description: |
       Sets the optional "get bind info" callback of the table function.
 
-      The engine invokes the callback with the bind data of a bound call when it needs to know more about the call
-      than its columns. E.g. a multi-file function registered with `[[multi_file_function_register]]` asks the
-      function it wraps for every file it binds: it maps the columns of the files onto the columns of its scan by the
-      identifiers the callback reports, and exposes the options it reports as the metadata of the reader of the file.
-      The callback may be invoked more than once for the same bind data, so it should only report what the bind
-      already determined.
+      The engine invokes the callback with the bind data of a bound call when it needs to know more about the call than
+      its columns. E.g. a multi-file function registered with `[[connection_register_multi_file_function]]` or
+      `[[extension_register_multi_file_function]]` asks the function it wraps for every file it binds: it maps the
+      columns of the files onto the columns of its scan by the identifiers the callback reports, and exposes the options
+      it reports as the metadata of the reader of the file. The callback may be invoked more than once for the same bind
+      data, so it should only report what the bind already determined.
     parameters:
       function:
         type: table_function
@@ -2031,8 +2069,9 @@ functions:
       Sets an option describing the bound call: a key-value fact about what the call reads, e.g. a property of the
       file it reads. Setting a key again replaces its value.
 
-      A multi-file function registered with `[[multi_file_function_register]]` exposes the options of the function it
-      wraps as the metadata of the reader of each file, e.g. to a custom multi-file reader of another extension.
+      A multi-file function registered with `[[connection_register_multi_file_function]]` or
+      `[[extension_register_multi_file_function]]` exposes the options of the function it wraps as the metadata of the
+      reader of each file, e.g. to a custom multi-file reader of another extension.
     parameters:
       info:
         type: table_function_get_bind_info_info
@@ -2053,46 +2092,24 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Multi-file functions
   #---------------------------------------------------------------------------------------------------------------------
-  multi_file_function_create_with_connection:
+  multi_file_function_create:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-18" ]
     description: |
-      Creates a new multi-file function that will be registered on the connection's database.
+      Creates a new multi-file function through a factory.
 
-      The function starts out empty: give it a name with `[[multi_file_function_set_name]]` and the single-file
-      function it wraps with `[[multi_file_function_set_single_file_function]]`, then make it available with
-      `[[multi_file_function_register]]`. The caller owns the returned handle and must destroy it with
-      `[[multi_file_function_destroy]]`, also after registration.
+      The function starts out empty: give it a name with `[[multi_file_function_set_name]]` and the single-file function
+      it wraps with `[[multi_file_function_set_single_file_function]]`, then make it available with
+      `[[connection_register_multi_file_function]]` or `[[extension_register_multi_file_function]]`. The caller owns the
+      returned handle and must destroy it with `[[multi_file_function_destroy]]`, also after registration.
+
+      The multi-file function can only be registered on the database the factory belongs to.
+    role: constructor
+    belongs_to: multi_file_function
     parameters:
-      connection:
-        type: connection
-        description: The connection to create the function in.
-      function:
-        type: multi_file_function
-        indirection: 1
-        kind: OUT
-        description: On success, receives the newly created multi-file function. Owned by the caller.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  multi_file_function_create_with_extension:
-    lifecycle:
-      - [ "unstable", "v2.0.0", "2026-09-18" ]
-    description: |
-      Creates a new multi-file function that will be registered on the loading extension's database.
-
-      Use this from an extension load callback, where an extension handle is available. The function starts out
-      empty: give it a name with `[[multi_file_function_set_name]]` and the single-file function it wraps with
-      `[[multi_file_function_set_single_file_function]]`, then make it available with
-      `[[multi_file_function_register]]`. The caller owns the returned handle and must destroy it with
-      `[[multi_file_function_destroy]]`, also after registration.
-    parameters:
-      extension:
-        type: extension
-        description: The extension to create the function in.
+      factory:
+        type: factory
+        description: The factory to create the multi-file function through.
       function:
         type: multi_file_function
         indirection: 1
@@ -2132,18 +2149,19 @@ functions:
     description: |
       Sets the name of the table function that reads a single file, which the multi-file function wraps.
 
-      The single-file function must be registered before the multi-file function is, and must take the file to read
-      as its only positional parameter, of type ANY. It is bound once for every file that is read, and receives the
-      file the way a multi-file function takes one: as the VARCHAR path of the file when there is nothing more to
-      know about it, and otherwise as a STRUCT holding the path in its `filename` field and the options to open the
-      file with in its other fields - e.g. the size of the file, as a file system reported it while globbing, or the
-      options a caller passed along with the file (`read_x([{'filename': 'f.x', 'file_size': 42}])`). Opening the file
-      with those options, set with `[[file_open_options_set_value]]`, lets the file system skip work it would
-      otherwise repeat, such as asking a remote store for the size of the file. A single-file function that takes a
-      VARCHAR parameter instead is still accepted, and only receives the path. Every named parameter the
-      single-file function declares is also a named parameter of the multi-file function, forwarded to it as given. Everything that involves several files - globbing, lists of files, hive partitioning, the `filename`
-      column, `union_by_name` and the like - is provided by the multi-file function on top of it. The name is
-      borrowed and copied. A single-file function must be set before registration.
+      The single-file function must be registered before the multi-file function is, and must take the file to read as
+      its only positional parameter, of type ANY. It is bound once for every file that is read, and receives the file
+      the way a multi-file function takes one: as the VARCHAR path of the file when there is nothing more to know about
+      it, and otherwise as a STRUCT holding the path in its `filename` field and the options to open the file with in
+      its other fields - e.g. the size of the file, as a file system reported it while globbing, or the options a caller
+      passed along with the file (`read_x([{'filename': 'f.x', 'file_size': 42}])`). Opening the file with those
+      options, set with `[[file_open_options_set_value]]`, lets the file system skip work it would otherwise repeat,
+      such as asking a remote store for the size of the file. A single-file function that takes a VARCHAR parameter
+      instead is still accepted, and only receives the path. Every named parameter the single-file function declares is
+      also a named parameter of the multi-file function, forwarded to it as given. Everything that involves several
+      files - globbing, lists of files, hive partitioning, the `filename` column, `union_by_name` and the like - is
+      provided by the multi-file function on top of it. The name is borrowed and copied. A single-file function must be
+      set before registration.
     parameters:
       function:
         type: multi_file_function
@@ -2203,27 +2221,65 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  multi_file_function_register:
+  connection_register_multi_file_function:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-18" ]
     description: |
       Registers the multi-file function, making it available for use in SQL queries.
 
-      The function is registered on the target given at creation: the connection's database or the loading
-      extension. It can then be called with the path of a single file, a glob pattern, or a list of either, and
-      accepts the options every multi-file function accepts (e.g. `filename`, `hive_partitioning`,
-      `union_by_name`) next to the named parameters of the single-file function. Registration requires a name and
-      a single-file function, and fails when no table function by that name is registered or it does not take the
-      file to read as its only positional parameter (see `[[multi_file_function_set_single_file_function]]`). The caller still owns the handle after registration
-      and must destroy it with `[[multi_file_function_destroy]]`, which does not affect the registered function.
+      The function is registered on the connection's database, visible to every connection, in the connection's
+      transaction: inside an explicit transaction, it is invisible to other connections until the transaction commits,
+      and a rollback undoes it. It can then be called with the path of a single file, a glob pattern, or a list of
+      either, and accepts the options every multi-file function accepts (e.g. `filename`, `hive_partitioning`,
+      `union_by_name`) next to the named parameters of the single-file function. Registration requires a name and a
+      single-file function, and fails when no table function by that name is registered or it does not take the path of
+      the file to read as its only positional parameter (see `[[multi_file_function_set_single_file_function]]`). The
+      multi-file function must have been created through a factory of the same database. The caller still owns the
+      handle after registration and must destroy it with `[[multi_file_function_destroy]]`, which does not affect the
+      registered function.
+    role: method
+    belongs_to: connection
     parameters:
+      conn:
+        type: connection
+        description: The connection to register on.
       function:
         type: multi_file_function
-        description: The function to register.
+        description: The multi-file function to register.
       err:
         type: error_info
         indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+
+  extension_register_multi_file_function:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: |
+      Registers the multi-file function, making it available for use in SQL queries.
+
+      The function is registered on the loading extension's database and attributed to the extension. Use this from the
+      extension's load callback. It can then be called with the path of a single file, a glob pattern, or a list of
+      either, and accepts the options every multi-file function accepts (e.g. `filename`, `hive_partitioning`,
+      `union_by_name`) next to the named parameters of the single-file function. Registration requires a name and a
+      single-file function, and fails when no table function by that name is registered or it does not take the path of
+      the file to read as its only positional parameter (see `[[multi_file_function_set_single_file_function]]`). The
+      multi-file function must have been created through a factory of the same database. The caller still owns the
+      handle after registration and must destroy it with `[[multi_file_function_destroy]]`, which does not affect the
+      registered function.
+    role: method
+    belongs_to: extension
+    parameters:
+      extension:
+        type: extension
+        description: The loading extension.
+      function:
+        type: multi_file_function
+        description: The multi-file function to register.
+      err:
+        type: error_info
+        indirection: 1
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   multi_file_function_destroy:
