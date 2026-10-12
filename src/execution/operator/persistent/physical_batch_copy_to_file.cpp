@@ -98,7 +98,7 @@ public:
 	BatchTaskManager<BatchCopyTask> task_manager;
 	mutex lock;
 	mutex flush_lock;
-	std::once_flag initialize_once;
+	atomic<bool> initialized {false};
 	//! The total number of rows copied to the file
 	atomic<idx_t> rows_copied;
 	//! Global copy state
@@ -121,22 +121,28 @@ public:
 	unique_ptr<CopyToFileInfo> written_file_info;
 
 	void Initialize(ClientContext &context, const PhysicalBatchCopyToFile &op) {
-		std::call_once(initialize_once, [&] {
-			output_lifecycle.RegisterFile(op.file_path);
-			auto new_global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
-			if (op.function.initialize_operator) {
-				op.function.initialize_operator(*new_global_state, op);
-			}
-			unique_ptr<CopyToFileInfo> new_written_file_info;
-			if (op.return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
-				new_written_file_info = make_uniq<CopyToFileInfo>(op.file_path);
-				new_written_file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
-				op.function.copy_to_get_written_statistics(context, *op.bind_data, *new_global_state,
-				                                           *new_written_file_info->file_stats);
-			}
-			global_state = std::move(new_global_state);
-			written_file_info = std::move(new_written_file_info);
-		});
+		if (initialized.load(std::memory_order_acquire)) {
+			return;
+		}
+		lock_guard<mutex> guard(lock);
+		if (initialized.load(std::memory_order_relaxed)) {
+			return;
+		}
+		output_lifecycle.RegisterFile(op.file_path);
+		auto new_global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
+		if (op.function.initialize_operator) {
+			op.function.initialize_operator(*new_global_state, op);
+		}
+		unique_ptr<CopyToFileInfo> new_written_file_info;
+		if (op.return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
+			new_written_file_info = make_uniq<CopyToFileInfo>(op.file_path);
+			new_written_file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
+			op.function.copy_to_get_written_statistics(context, *op.bind_data, *new_global_state,
+			                                           *new_written_file_info->file_stats);
+		}
+		global_state = std::move(new_global_state);
+		written_file_info = std::move(new_written_file_info);
+		initialized.store(true, std::memory_order_release);
 	}
 
 	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch, idx_t memory_usage,
