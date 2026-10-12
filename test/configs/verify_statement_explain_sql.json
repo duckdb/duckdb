@@ -31,6 +31,7 @@
     {
       "reason": "Native join reordering or implied filters change whether casts on excluded rows are evaluated",
       "paths": [
+        "test/optimizer/pullup_join_expression_errors.test",
         "test/sql/join/natural/natural_join.test",
         "test/sql/function/generic/test_barrier.test",
         "test/sql/optimizer/secure_view_pushdown.test"

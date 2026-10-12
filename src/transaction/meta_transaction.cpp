@@ -256,7 +256,8 @@ AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &dat
 }
 
 void MetaTransaction::ModifyDatabase(AttachedDatabase &db, DatabaseModificationType modification) {
-	if (IsReadOnly()) {
+	// Temporary objects are private to the connection, so a read-only transaction may still write them
+	if (IsReadOnly() && !db.IsTemporary()) {
 		throw TransactionException("Cannot write to database \"%s\" - transaction is launched in read-only mode",
 		                           db.GetName());
 	}
