@@ -269,6 +269,11 @@ class JobStagesTest(unittest.TestCase):
                 event_name, "feature/my-branch", "duckdb/duckdb", changed_keys={"extensions"}
             )
             self.assertIn("osx", selection.enabled_jobs)
+            self.assertEqual(selection.reduced_ci_mode, "disabled")
+        self.assertEqual(
+            [config["name"] for config in selection.linux_release_matrix],
+            ["amd64 compatibility", "arm64 compatibility"],
+        )
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_workflow_dispatch_with_skipped_tests_includes_optimized_release(self):
@@ -369,6 +374,16 @@ class JobStagesTest(unittest.TestCase):
     def test_reduced_ci_mode_override(self):
         self.assertEqual(job_stages.resolve_reduced_ci_mode("enabled", "disabled"), "disabled")
         self.assertEqual(job_stages.resolve_reduced_ci_mode("disabled", "enabled"), "enabled")
+        self.assertEqual(
+            job_stages.resolve_reduced_ci_mode("enabled", event_name="pull_request", changed_keys={"extensions"}),
+            "disabled",
+        )
+        self.assertEqual(
+            job_stages.resolve_reduced_ci_mode(
+                "enabled", "enabled", event_name="pull_request", changed_keys={"extensions"}
+            ),
+            "enabled",
+        )
         with self.assertRaisesRegex(ValueError, "must be enabled or disabled"):
             job_stages.resolve_reduced_ci_mode("enabled", "auto")
 
