@@ -239,10 +239,16 @@ void ExtensionLoader::RegisterFunction(PragmaFunction function) {
 
 void ExtensionLoader::RegisterFunction(PragmaFunctionSet function) {
 	D_ASSERT(!function.name.empty());
-	CreatePragmaFunctionInfo info(std::move(function));
+	RegisterFunction(CreatePragmaFunctionInfo(std::move(function)));
+}
+
+void ExtensionLoader::RegisterFunction(CreatePragmaFunctionInfo info) {
+	D_ASSERT(!info.functions.name.empty());
 	info.extension_name = GetRegisteredExtensionName();
-	info.SetQualifiedName(
-	    QualifiedName(info.GetQualifiedName().Catalog(), loader_info.extension_schema, info.GetQualifiedName().Name()));
+	if (info.GetQualifiedName().Schema() == DEFAULT_SCHEMA) {
+		info.SetQualifiedName(QualifiedName(info.GetQualifiedName().Catalog(), loader_info.extension_schema,
+		                                    info.GetQualifiedName().Name()));
+	}
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreatePragmaFunction(data, info);

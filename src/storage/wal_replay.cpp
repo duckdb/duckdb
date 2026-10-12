@@ -629,7 +629,8 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	// If there are no committed transactions in the WAL, rollback and truncate.
 	if (last_wal_flush_end == 0) {
 		con.Rollback();
-		return make_uniq<WriteAheadLog>(storage_manager, wal_path, 0, WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE);
+		return make_uniq<WriteAheadLog>(storage_manager, wal_path, idx_t(0),
+		                                WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE);
 	}
 
 	// we need to recover from the WAL: actually set up the replay state
@@ -1390,8 +1391,15 @@ void WriteAheadLogDeserializer::ReplayUpdate() {
 		throw DataCorruptionException("Corrupt WAL: update without table");
 	}
 
-	if (column_path[0] >= state.current_table->GetColumns().PhysicalColumnCount()) {
+	if (column_path.empty() || column_path[0] >= state.current_table->GetColumns().PhysicalColumnCount()) {
 		throw DataCorruptionException("Corrupt WAL: column index for update out of bounds");
+	}
+	if (chunk.ColumnCount() != 2 || chunk.data[1].GetType() != LogicalType::ROW_TYPE) {
+		throw DataCorruptionException("Corrupt WAL: update must contain the updated values and the row ids");
+	}
+	auto &column_type = state.current_table->GetColumns().GetColumn(PhysicalIndex(column_path[0])).Type();
+	if (column_path.size() == 1 && chunk.data[0].GetType() != column_type) {
+		throw DataCorruptionException("Corrupt WAL: update type does not match the column type");
 	}
 
 	// remove the row id vector from the chunk

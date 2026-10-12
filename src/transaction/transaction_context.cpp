@@ -114,9 +114,15 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	} catch (std::exception &ex) {
 		rollback_error = ErrorData(ex);
 	}
-	// Notify any registered state of transaction rollback
+	// Notify any registered state of transaction rollback - all of them, also when one of them fails
 	for (auto const &s : context.registered_state->States()) {
-		s->TransactionRollback(*transaction, context, error);
+		try {
+			s->TransactionRollback(*transaction, context, error);
+		} catch (std::exception &ex) {
+			if (!rollback_error.HasError()) {
+				rollback_error = ErrorData(ex);
+			}
+		}
 	}
 	if (rollback_error.HasError()) {
 		rollback_error.Throw();
