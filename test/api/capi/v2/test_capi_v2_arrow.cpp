@@ -1541,9 +1541,8 @@ TEST_CASE("V2 arrow result: an INSERT reports its changed rows, DDL reports noth
 	REQUIRE(DrainRowCount(count) == 1);
 }
 
-TEST_CASE("V2 arrow result: a statement that completes before its result is returned", "[capi_v2][arrow]") {
+TEST_CASE("V2 arrow result: a CALL statement returns its rows", "[capi_v2][arrow]") {
 	EnvFixture fx;
-	// CALL completes before its result is returned.
 	ArrowResult r;
 	REQUIRE(QueryArrow(fx.conn, "CALL range(5000)", 1000, &r) == DUCKDB_V2_ERROR_NONE);
 	auto statement_type = DUCKDB_V2_STATEMENT_TYPE_INVALID;

@@ -55,10 +55,6 @@ TEST_CASE("The stream constructor refuses a handle it cannot drain", "[api][quer
 		handle->Materialize();
 		REQUIRE_THROWS_AS(QueryResultStream<>(std::move(handle)), InvalidInputException);
 	}
-	SECTION("a statement that completes on return") {
-		auto handle = con.Submit("CREATE TABLE refused AS SELECT 42 AS i");
-		REQUIRE_THROWS_AS(QueryResultStream<>(std::move(handle)), InvalidInputException);
-	}
 	// A refused stream released the query it consumed
 	auto next = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
@@ -292,6 +288,79 @@ TEST_CASE("Closing a stream of a writing SELECT before its end invalidates the o
 	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 	auto after = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(after, 0, {42}));
+}
+
+TEST_CASE("Abandoning a streamed RETURNING insert discards its writes", "[api][query_result_stream]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection observer(db);
+	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='16KB'"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i BIGINT)"));
+
+	auto stream = OpenStream(con, "INSERT INTO t SELECT i FROM range(1000000) t(i) RETURNING i");
+	DrainWatchdog watchdog(con);
+	REQUIRE(stream->Fetch());
+	stream->Close();
+	REQUIRE(!stream->HasError());
+
+	auto count = observer.Query("SELECT count(*) FROM t");
+	REQUIRE(CHECK_COLUMN(count, 0, {0}));
+}
+
+TEST_CASE("Abandoning a streamed RETURNING insert invalidates the open transaction", "[api][query_result_stream]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='16KB'"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i BIGINT)"));
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+
+	auto stream = OpenStream(con, "INSERT INTO t SELECT i FROM range(1000000) t(i) RETURNING i");
+	DrainWatchdog watchdog(con);
+	REQUIRE(stream->Fetch());
+	stream->Close();
+
+	auto next = con.Query("SELECT 42");
+	REQUIRE(next->HasError());
+	REQUIRE(StringUtil::Contains(next->GetError(), "aborted"));
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+	auto count = con.Query("SELECT count(*) FROM t");
+	REQUIRE(CHECK_COLUMN(count, 0, {0}));
+}
+
+TEST_CASE("A fully drained RETURNING insert keeps its rows", "[api][query_result_stream]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection observer(db);
+	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='16KB'"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i BIGINT)"));
+
+	auto stream = OpenStream(con, "INSERT INTO t SELECT i FROM range(1000000) t(i) RETURNING i");
+	DrainWatchdog watchdog(con);
+	idx_t rows = 0;
+	while (auto chunk = stream->Fetch()) {
+		rows += chunk->size();
+	}
+	REQUIRE(!stream->HasError());
+	REQUIRE(rows == 1000000);
+	stream->Close();
+
+	auto count = observer.Query("SELECT count(*) FROM t");
+	REQUIRE(CHECK_COLUMN(count, 0, {1000000}));
+}
+
+TEST_CASE("A CALL statement streams its rows", "[api][query_result_stream]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='16KB'"));
+
+	auto stream = OpenStream(con, "CALL range(5000)");
+	DrainWatchdog watchdog(con);
+	idx_t rows = 0;
+	while (auto chunk = stream->Fetch()) {
+		rows += chunk->size();
+	}
+	REQUIRE(!stream->HasError());
+	REQUIRE(rows == 5000);
 }
 
 #endif

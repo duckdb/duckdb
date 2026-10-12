@@ -847,7 +847,45 @@ TEST_CASE("Stable C++API: vector cast and try cast", "[cpp_api]") {
 	REQUIRE_FALSE(view.IsValid(1));
 	REQUIRE(view.Data<int32_t>()[view.SelAt(2)] == 3);
 
+	// The error of the failed row is kept on request.
+	std::string error;
+	REQUIRE_FALSE(source.TryCast(factory, target, &error));
+	REQUIRE_THAT(error, Catch::Matchers::Contains("x"));
+
 	source.AssignString(1, pad + "2");
 	source.Cast(factory, target);
 	REQUIRE(target.GetView().Data<int32_t>()[1] == 2);
+	error.clear();
+	REQUIRE(source.TryCast(factory, target, &error));
+	REQUIRE(error.empty());
+}
+
+TEST_CASE("Stable C++API: vector logical type and chunk clear", "[cpp_api]") {
+	using namespace duckdb::cxx;
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto &factory = conn.GetFactory();
+
+	std::vector<LogicalType> types;
+	types.push_back(factory.ParseType("INTEGER"));
+	types.push_back(factory.ParseType("STRUCT(a VARCHAR)"));
+	DataChunk chunk(factory, types);
+	REQUIRE(chunk.GetVector(0).GetLogicalType().GetTypeId() == LogicalTypeId::INTEGER);
+	REQUIRE(chunk.GetVector(1).GetLogicalType().ToText() == "STRUCT(a VARCHAR)");
+
+	// A cleared chunk is empty and writable again, also after its vector was made CONSTANT.
+	auto vec = chunk.GetVector(0);
+	vec.SetSize(3);
+	vec.GetDataMutable<int32_t>()[0] = 7;
+	chunk.GetVector(1).SetSize(3);
+	REQUIRE(chunk.GetRowCount() == 3);
+	vec.MakeConstant(Value::Create(factory, int32_t {5}), 3);
+	REQUIRE(vec.GetVectorType() == VectorType::CONSTANT);
+	chunk.Clear();
+	REQUIRE(chunk.GetRowCount() == 0);
+	REQUIRE(vec.GetVectorType() == VectorType::FLAT);
+	REQUIRE(vec.GetLogicalType().GetTypeId() == LogicalTypeId::INTEGER);
+	vec.SetSize(1);
+	vec.GetDataMutable<int32_t>()[0] = 9;
+	REQUIRE(vec.GetView().Data<int32_t>()[0] == 9);
 }
