@@ -208,9 +208,10 @@ private:
 	void ReleaseSlot();
 	//! Wake the threads waiting for another thread to push a job, release a slot or finish producing
 	void SignalProgress();
+	//! SignalProgress for a caller that holds the lock
+	void NotifyProgress();
 	//! Wait until the read-ahead made progress since the given epoch, or the timeout passed
 	void WaitForProgress(ClientContext &context, idx_t epoch);
-	//! The current progress epoch
 	idx_t ProgressEpoch() const;
 
 private:
@@ -243,7 +244,6 @@ private:
 	atomic<idx_t> active_producers {0};
 	//! Incremented whenever a waiting thread could make progress, guarded by lock
 	idx_t progress_epoch = 0;
-	//! Signalled together with progress_epoch
 	condition_variable progress;
 	//! File-opens scheduled on the async pool that have not completed yet, shared with the open tasks
 	shared_ptr<atomic<idx_t>> pending_opens;

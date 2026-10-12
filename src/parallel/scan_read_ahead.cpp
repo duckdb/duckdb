@@ -193,8 +193,7 @@ unique_ptr<ScanReadAheadJob> ScanReadAhead::ClaimJob() {
 	auto job = std::move(ready_queue.front());
 	ready_queue.pop_front();
 	ReleaseSlot();
-	progress_epoch++;
-	progress.notify_all();
+	NotifyProgress();
 	return job;
 }
 
@@ -203,7 +202,6 @@ void ScanReadAhead::WaitForJob(ScanReadAheadJob &job) {
 	// the job's I/O has completed, release its budget charge
 	pending_io_bytes -= job.io_bytes;
 	job.io_bytes = 0;
-	// the released budget can let a waiting thread produce
 	SignalProgress();
 	ThrowIfError();
 }
@@ -250,15 +248,16 @@ void ScanReadAhead::SetDone() {
 }
 
 bool ScanReadAhead::TryReserveSlot() {
-	// take the minimum job charge up front so concurrent producers cannot all pass the budget check together
-	const bool over_budget = pending_io_bytes.fetch_add(MINIMUM_JOB_IO_CHARGE) >= backlog_budget.load();
+	// reserving under the lock keeps a failed attempt from holding a slot that another thread then waits on
+	lock_guard<mutex> guard(lock);
+	const bool over_budget = pending_io_bytes.load() >= backlog_budget.load();
 	// over budget one job stays queued, claimed jobs hold the budget until their task resumes
 	const idx_t depth = over_budget ? 1 : read_ahead_depth;
-	if (active_jobs.fetch_add(1) >= depth) {
-		--active_jobs;
-		pending_io_bytes -= MINIMUM_JOB_IO_CHARGE;
+	if (active_jobs.load() >= depth) {
 		return false;
 	}
+	++active_jobs;
+	pending_io_bytes += MINIMUM_JOB_IO_CHARGE;
 	++active_producers;
 	return true;
 }
@@ -297,12 +296,12 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 		pending_jobs.erase(pending_jobs.begin());
 		next_batch_index++;
 	}
-	progress_epoch++;
-	progress.notify_all();
+	NotifyProgress();
 }
 
 void ScanReadAhead::PushError(ErrorData error) {
 	executor->PushError(std::move(error));
+	SignalProgress();
 }
 
 void ScanReadAhead::ScheduleFileOpen(std::function<void()> open_fn, std::function<void()> cancel_fn) {
@@ -334,17 +333,24 @@ void ScanReadAhead::ReleaseSlot() {
 	active_jobs--;
 }
 
-void ScanReadAhead::SignalProgress() {
-	lock_guard<mutex> guard(lock);
+void ScanReadAhead::NotifyProgress() {
 	progress_epoch++;
 	progress.notify_all();
 }
 
+void ScanReadAhead::SignalProgress() {
+	lock_guard<mutex> guard(lock);
+	NotifyProgress();
+}
+
 void ScanReadAhead::WaitForProgress(ClientContext &context, idx_t epoch) {
 	context.BlockingInterruptCheck();
-	unique_lock<mutex> guard(lock);
-	// the timeout bounds the interrupt latency
-	progress.wait_for(guard, std::chrono::milliseconds(10), [&]() { return progress_epoch != epoch; });
+	{
+		unique_lock<mutex> guard(lock);
+		// the timeout bounds the interrupt latency
+		progress.wait_for(guard, std::chrono::milliseconds(10), [&]() { return progress_epoch != epoch; });
+	}
+	context.BlockingInterruptCheck();
 }
 
 idx_t ScanReadAhead::ProgressEpoch() const {
