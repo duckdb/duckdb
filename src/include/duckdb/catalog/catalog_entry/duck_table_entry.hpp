@@ -69,6 +69,9 @@ public:
 	bool IsDuckTable() const override {
 		return true;
 	}
+	optional_ptr<DuckTableEntry> TryGetDuckTableEntry() override {
+		return this;
+	}
 
 	//! Returns the virtual columns for this table
 	virtual_column_map_t GetVirtualColumns() const override;

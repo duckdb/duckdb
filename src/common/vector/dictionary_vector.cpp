@@ -241,6 +241,13 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::Deserialize(Deserializer &deserialize
 	SelectionVector sel(count);
 	deserializer.ReadProperty(91, "sel_vector", reinterpret_cast<data_ptr_t>(sel.data()), sizeof(sel_t) * count);
 	const auto dict_count = deserializer.ReadProperty<idx_t>(92, "dict_count");
+	for (idx_t i = 0; i < count; i++) {
+		if (sel.get_index(i) >= dict_count) {
+			throw SerializationException("Failed to deserialize dictionary vector: selection index %llu is out of "
+			                             "range of the dictionary of size %llu",
+			                             sel.get_index(i), dict_count);
+		}
+	}
 	Vector dict(type, MaxValue<idx_t>(dict_count, STANDARD_VECTOR_SIZE));
 	dict.Deserialize(deserializer, dict_count);
 	FlatVector::SetSize(dict, dict_count);
