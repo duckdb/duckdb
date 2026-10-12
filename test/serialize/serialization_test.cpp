@@ -3,6 +3,7 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 
 namespace duckdb {
@@ -295,6 +296,25 @@ TEST_CASE("Test DataPointer byte size storage version compatibility", "[serializ
 	stream.Rewind();
 	auto legacy = DeserializeDataPointer(stream, type);
 	REQUIRE(!legacy.byte_size);
+}
+
+TEST_CASE("Test window expression type survives serialization", "[serialization]") {
+	auto parser = Parser::GetBuiltinParser();
+	auto expressions = parser.ParseExpressionList(
+	    "row_number() OVER (), lag(x, 1) OVER (ORDER BY x), sum(x) OVER (PARTITION BY y), first_value(x) OVER ()");
+	for (auto version : {StorageVersion::V1_5_0, StorageVersion::V2_0_0}) {
+		for (auto &expr : expressions) {
+			INFO(expr->ToString());
+			Allocator allocator;
+			MemoryStream stream(allocator);
+			SerializationOptions options;
+			options.storage_compatibility.storage_version = version;
+			BinarySerializer::Serialize(*expr, stream, options);
+			stream.Rewind();
+			auto copy = BinaryDeserializer::Deserialize<ParsedExpression>(stream);
+			REQUIRE(copy->GetExpressionType() == expr->GetExpressionType());
+		}
+	}
 }
 
 } // namespace duckdb

@@ -18,9 +18,9 @@ module: prepared_statement
 # turns that into a prepare-time failure for a caller that only wants the handle if it is
 # the fast path.
 #
-# One live result per connection, as everywhere else in this API: both
+# One running statement per connection, as everywhere else in this API: both
 # `prepared_statement_create` and `prepared_statement_execute` refuse with
-# `ERROR_RESOURCE_IN_USE` while the connection has a live result. Open another connection
+# `ERROR_RESOURCE_IN_USE` while a statement on the connection is still running. Open another connection
 # for concurrency; a prepared statement belongs to the connection it was prepared on.
 #
 # The handle is opaque and exposes no signature of its own: `statement_bind` already
@@ -64,8 +64,8 @@ functions:
       `ERROR_INPUT_INVALID` when the plan would not be reused, so a caller who wants the handle only for the speedup
       finds out here rather than after silently taking the slow path.
 
-      Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result. Drain, destroy, or interrupt that
-      result first, or prepare on another connection. `*out_prepared` is set to NULL on failure.
+      Refuses with `ERROR_RESOURCE_IN_USE` while a statement on the connection is still running. Drain, destroy, or
+      interrupt that result first, or prepare on another connection. `*out_prepared` is set to NULL on failure.
     role: constructor
     belongs_to: prepared_statement
     parameters:
@@ -118,8 +118,8 @@ functions:
       prepared, or a parameter type that differs from the one the cached plan assumed, triggers a re-bind that is
       invisible apart from its cost.
 
-      Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result; drain, destroy, or interrupt it
-      first, or execute on another connection. A failed execution, at any stage, leaves the prepared statement usable.
+      Refuses with `ERROR_RESOURCE_IN_USE` while a statement on the connection is still running; drain, destroy, or
+      interrupt that result first, or execute on another connection. A failed execution, at any stage, leaves the prepared statement usable.
       `*out_result` is set to NULL on failure.
     role: method
     belongs_to: prepared_statement
