@@ -24,14 +24,12 @@ class TableIndexWriter;
 class PartialBlockManager;
 struct IndexCheckpointResult;
 
-//! Describes how an index participates in a checkpoint.
+//! Describes how an index participates in a checkpoint when persisting data to the filesystem.
 //!
-//! Indexes which persist their representation to storage can support either of the two modes. When
-//! an index supports DEFERRED mode, we are able to colocate buffers of distinct indexes. This mode is
-//! only supported if the index supports parallel mutations while checkpointing, as well as
-//! the creation of a shadow index which represents the index at the start of the checkpoint, but with
-//! a different physical backing. The default mode is IMMEDIATE, and writes each index into separate buffers.
-//! Bound indexes using DEFERRED mode must support checkpoint delta indexes.
+//! IMMEDIATE (default): flush buffers under the index lock.
+//! DEFERRED: share blocks across indexes and finish flushing after releasing the lock. Return a logically equivalent
+//! shadow with independent backing for modified buffers; keep the live index usable until installation after flushing.
+//! Concurrent changes use deltas, requiring SupportsDeltaIndexes(), CreateEmptyCopy(), and MergeCheckpointDelta().
 enum class IndexCheckpointMode : uint8_t { IMMEDIATE, DEFERRED };
 
 //! The index is an abstract base class that serves as the basis for indexes
