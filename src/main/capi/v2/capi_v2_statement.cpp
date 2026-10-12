@@ -217,7 +217,7 @@ DUCKDB_V2_ERROR duckdb_v2_statement_bind(duckdb_v2_connection_handle conn, duckd
 			    "statement expands into multiple engine statements; bind is not supported, execute it instead");
 		}
 		// BindStatement, not Prepare: bind phase only (read-only, no optimize / physical
-		// plan) and must not cancel a live result (Prepare's InitialCleanup would). It
+		// plan) and allowed while a result is live (Prepare is refused). It
 		// throws on a bind error, routed through WithErrorHandler.
 		auto signature = connection->context->BindStatement(std::move(fragments[0]));
 		// Assemble into locals, publish to the out-params only at the end once nothing
