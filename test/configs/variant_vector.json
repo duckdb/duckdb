@@ -14,6 +14,7 @@
 		{
 			"reason": "DECIMAL values wider than 38 digits are not supported in VARIANT",
 			"paths": [
+				"test/sql/copy/parquet/bigdecimal.test",
 				"test/sql/types/decimal/wide_decimal_arithmetic.test",
 				"test/sql/types/decimal/wide_decimal_casts.test",
 				"test/sql/types/decimal/wide_decimal_storage.test"
