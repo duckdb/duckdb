@@ -158,10 +158,13 @@ public:
 	idx_t count = 0;
 	//! The number of blocks in the group
 	idx_t blocks = 0;
-	//! The partition boundary mask
+	//! The partition boundary mask. The masks are O(rows): their storage comes from the buffer allocator and the
+	//! masks point into it
 	ValidityMask partition_mask;
+	AllocatedData partition_mask_data;
 	//! The order boundary mask (maps sort column END to mask)
 	OrderMasks order_masks;
+	unordered_map<idx_t, AllocatedData> order_mask_data;
 	//! The fully materialised data collection
 	unique_ptr<WindowCollection> collection;
 	//! The processing stage for this group
@@ -660,6 +663,13 @@ void WindowHashGroup::UpdateScanner(ScannerPtr &scanner, idx_t begin_idx) const 
 	}
 }
 
+//! Backs a mask of `count` rows (all valid) with a block from the allocator, so that it counts against the memory limit
+static void AllocateMask(Allocator &allocator, idx_t count, ValidityMask &mask, AllocatedData &storage) {
+	storage = allocator.Allocate(ValidityMask::EntryCount(count) * sizeof(validity_t));
+	memset(storage.get(), 0xFF, storage.GetSize());
+	mask.Initialize(reinterpret_cast<validity_t *>(storage.get()), count);
+}
+
 void WindowHashGroup::AllocateMasks() {
 	//	Single-threaded building as this is mostly memory allocation
 	lock_guard<mutex> gestate_guard(lock);
@@ -668,7 +678,8 @@ void WindowHashGroup::AllocateMasks() {
 	}
 
 	//	Allocate masks inside the lock
-	partition_mask.Initialize(count);
+	auto &allocator = BufferAllocator::Get(gsink.client);
+	AllocateMask(allocator, count, partition_mask, partition_mask_data);
 
 	// All masks refer to the shared sort's partition columns, including duplicate expressions.
 	const auto &sort_expr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
@@ -677,11 +688,12 @@ void WindowHashGroup::AllocateMasks() {
 	for (auto &wexec : executors) {
 		auto &wexpr = wexec->wexpr;
 
-		auto &order_mask = order_masks[order_begin + wexpr.OrderBy().size()];
+		const auto order_idx = order_begin + wexpr.OrderBy().size();
+		auto &order_mask = order_masks[order_idx];
 		if (order_mask.IsMaskSet()) {
 			continue;
 		}
-		order_mask.Initialize(count);
+		AllocateMask(allocator, count, order_mask, order_mask_data[order_idx]);
 	}
 }
 
