@@ -18,6 +18,10 @@ namespace duckdb {
 HTTPParams::~HTTPParams() {
 }
 
+bool HTTPParams::ShouldRedactLogs() const {
+	return !db || Settings::Get<RedactHttpLogsSetting>(*db);
+}
+
 idx_t HTTPParams::GetTransportReuseDomain() const {
 	return transport_reuse_domain;
 }
@@ -147,6 +151,15 @@ unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request) {
 }
 
 unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request, unique_ptr<HTTPClient> &client) {
+	if (request.params.db && !request.params.skip_external_access_check) {
+		// HTTP requests access an external resource - check this is allowed by the file access settings. This is the
+		// central check for requests that do not go through the file system (e.g. the REST catalog calls of iceberg).
+		auto &config = request.params.db->config;
+		if (!config.CanAccessFile(request.url, FileType::FILE_TYPE_REGULAR)) {
+			throw PermissionException("Cannot access \"%s\" - file system operations are disabled by configuration",
+			                          request.url);
+		}
+	}
 	auto response = SendRequest(request, client);
 	if (!response) {
 		auto method = EnumUtil::ToString(request.type);
@@ -250,7 +263,7 @@ void HTTPUtil::LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> respo
 	if (!request.params.logger || !request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL)) {
 		return;
 	}
-	auto log_string = HTTPLogType::ConstructLogMessage(request, response);
+	auto log_string = HTTPLogType::ConstructLogMessage(request, response, request.params.ShouldRedactLogs());
 	request.params.logger->WriteLog(HTTPLogType::NAME, HTTPLogType::LEVEL, log_string);
 }
 
@@ -448,7 +461,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 }
 
 void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
-	auto db = FileOpener::TryGetDatabase(opener);
+	db = FileOpener::TryGetDatabase(opener);
 	if (db) {
 		auto &http_proxy_setting = db->config.options.http_proxy;
 		if (!http_proxy_setting.empty()) {
