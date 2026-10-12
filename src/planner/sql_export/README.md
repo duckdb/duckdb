@@ -22,7 +22,9 @@ Optimization can also fold observations made while planning into the generated S
 
 ## Supported statements and errors
 
-SQL mode accepts supported SELECT, VALUES, and WITH queries. It does not combine with ANALYZE or FORMAT, and it does not support DDL/DML, CALL, or EXPLAIN EXECUTE. Existing restrictions on SQL PREPARE also apply. Some logical operators and expressions cannot yet be exported; their errors describe the unsupported query or source. The C++ export result retains structured issue codes, phases, and plan locations. Unsupported export never returns the original query as a fallback.
+SQL mode accepts supported SELECT, VALUES, and WITH queries, and INSERT, UPDATE, and DELETE statements. It does not combine with ANALYZE or FORMAT, and it does not support DDL, MERGE, CALL, or EXPLAIN EXECUTE. Existing restrictions on SQL PREPARE also apply. Some logical operators and expressions cannot yet be exported; their errors describe the unsupported query or source. The C++ export result retains structured issue codes, phases, and plan locations. Unsupported export never returns the original query as a fallback.
+
+An exported data-modifying statement reconstructs its bound source as a query: an INSERT becomes `INSERT INTO` the table's physical columns from a generated query, and UPDATE and DELETE statements key the modified rows by the table's `rowid` column computed in a generated subquery. `RETURNING`, `ON CONFLICT`, triggers on the modified table, and tables without a single named row-id column are rejected.
 
 PIVOT with values discovered from data is rejected because column discovery requires executing auxiliary statements. Specify the values with an explicit IN list to export supported PIVOT queries. Unresolved parameters and explicit optimizer opt-outs may also leave unsupported plan nodes.
 
