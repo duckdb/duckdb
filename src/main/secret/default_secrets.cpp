@@ -3,9 +3,8 @@
 
 namespace duckdb {
 
-const identifier_set_t &CreateHTTPSecretFunctions::GetRedactedKeys() {
-	static const identifier_set_t keys = {"http_proxy_password", "bearer_token", "extra_http_headers"};
-	return keys;
+identifier_set_t CreateHTTPSecretFunctions::GetRedactedKeys() {
+	return {"http_proxy_password", "bearer_token", "extra_http_headers"};
 }
 
 vector<SecretType> CreateHTTPSecretFunctions::GetDefaultSecretTypes() {

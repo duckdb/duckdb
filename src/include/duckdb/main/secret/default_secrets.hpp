@@ -27,7 +27,7 @@ public:
 	//! Get the default secret functions
 	static vector<CreateSecretFunction> GetDefaultSecretFunctions();
 	//! Current sensitive keys for both new and persisted HTTP secrets.
-	static const identifier_set_t &GetRedactedKeys();
+	static identifier_set_t GetRedactedKeys();
 
 protected:
 	//! HTTP secret CONFIG provider
