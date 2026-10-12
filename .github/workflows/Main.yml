@@ -120,10 +120,6 @@ jobs:
             alpha_args=(--alpha-run-number "${{ github.run_number }}")
             extension_allow_failure_archs="windows_amd64_mingw;linux_amd64_musl;linux_arm64_musl"
           fi
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # clang-cl Windows extension builds are not yet stable, do not block PRs on them
-            extension_allow_failure_archs="windows_amd64"
-          fi
           version_output="$(python3 scripts/ci/version.py \
             --duckdb-commit "$RESOLVED_COMMIT" \
             --duckdb-version "$INPUT_VERSION" \
@@ -190,8 +186,11 @@ jobs:
         run: |
           make test_ci
 
-          if [[ "${{ github.event_name }}" != "pull_request" || "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
+          # clang-cl Windows extension builds are not yet stable, skip them on pull requests
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             extra_exclude_archs=
+          elif [[ "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
+            extra_exclude_archs=windows_amd64
           else
             extra_exclude_archs=windows_amd64\;wasm_eh
           fi
