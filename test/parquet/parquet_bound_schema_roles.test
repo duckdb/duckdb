@@ -97,3 +97,39 @@ statement error
 SELECT count(*) FROM read_parquet('{TEST_DIR}/bound_path/k=7/*.parquet', bound_schema={'id':42}, hive_partitioning=false)
 ----
 types must be non-NULL VARCHAR
+
+# Mixed-case custom filename and generated/Hive shadows bind in declared order.
+statement ok
+COPY (SELECT 40+i::INTEGER id, 'physical' source, (99+i)::BIGINT FILE_ROW_NUMBER, 999::BIGINT k FROM range(2) t(i)) TO '{TEST_DIR}/bound_path/k=7/custom_roles.parquet' (FORMAT parquet)
+
+statement ok
+PREPARE custom_roles AS SELECT path <> 'physical', identity, row_no, part_key
+FROM read_parquet('{TEST_DIR}/bound_path/k=7/custom_roles.parquet', bound_schema={'SOURCE':'VARCHAR','id':'INTEGER','FILE_ROW_NUMBER':'BIGINT','K':'BIGINT'}, filename='SoUrCe', file_row_number=true, hive_partitioning=true, hive_types={'k':'BIGINT'}, hive_types_autocast=false) t(path,identity,row_no,part_key)
+WHERE row_no=1 AND part_key=7
+
+query IIII
+EXECUTE custom_roles
+----
+true	41	1	7
+
+query IIII
+EXECUTE custom_roles
+----
+true	41	1	7
+
+statement ok
+DEALLOCATE custom_roles
+
+query IIII
+SELECT path <> 'physical', identity, row_no, part_key
+FROM read_parquet('{TEST_DIR}/bound_path/k=7/custom_roles.parquet', bound_schema={'K':'BIGINT','FILE_ROW_NUMBER':'BIGINT','SOURCE':'VARCHAR','id':'INTEGER'}, filename='source', file_row_number=true, hive_partitioning=true, hive_types={'k':'BIGINT'}, hive_types_autocast=false) t(part_key,row_no,path,identity)
+WHERE row_no=1 AND part_key=7
+----
+true	41	1	7
+
+# Physical row-number bounds 99/100 do not describe the generated 0/1 values.
+query II
+SELECT min(file_row_number), max(file_row_number)
+FROM read_parquet('{TEST_DIR}/bound_path/k=7/custom_roles.parquet', bound_schema={'K':'BIGINT','FILE_ROW_NUMBER':'BIGINT','SOURCE':'VARCHAR','id':'INTEGER'}, filename='source', file_row_number=true, hive_partitioning=true, hive_types={'k':'BIGINT'}, hive_types_autocast=false)
+----
+0	1
