@@ -83,3 +83,14 @@ SELECT k FROM read_parquet('{TEMP_DIR}/renamed_struct.parquet', schema = map {
 	'k': {name: 'k', type: 'INTEGER', default_value: NULL}}) WHERE c = {'x': 5, 'y': 6}
 ----
 1
+
+# a file column that is not a STRUCT
+statement ok
+COPY (SELECT NULL::INTEGER AS c, 1 AS k) TO '{TEMP_DIR}/integer_as_struct.parquet'
+
+query I
+SELECT count(*) FROM read_parquet('{TEMP_DIR}/integer_as_struct.parquet', schema = map {
+	'c': {name: 'c', type: 'STRUCT(x INTEGER)', default_value: NULL},
+	'k': {name: 'k', type: 'INTEGER', default_value: NULL}}) WHERE c = {'x': 5}
+----
+0

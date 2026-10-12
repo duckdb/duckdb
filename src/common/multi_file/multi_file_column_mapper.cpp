@@ -934,10 +934,12 @@ static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expressio
 	                                          StructExtractAtFun::GetBindData(child_idx));
 }
 
-//! A cast matches the fields of a STRUCT by name, so it only converts a nested constant like the reader does when
-//! the reader maps every field to the field of the same name at the same position
+//! A cast matches STRUCT fields by name, so the mapping has to keep the names and positions of nested fields
 static bool CastMatchesMapping(const MultiFileIndexMapping &mapping, const LogicalType &source_type,
                                const LogicalType &target_type) {
+	if (source_type.IsNested() && source_type.id() != target_type.id()) {
+		return false;
+	}
 	switch (source_type.id()) {
 	case LogicalTypeId::STRUCT: {
 		auto &source_children = StructType::GetChildTypes(source_type);
