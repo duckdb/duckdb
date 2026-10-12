@@ -510,6 +510,8 @@ enum class RowGroupAppendMode : uint8_t;
 
 enum class RowIdHandling : uint8_t;
 
+enum class SQLRenderMode : uint8_t;
+
 enum class SampleMethod : uint8_t;
 
 enum class SampleType : uint8_t;
@@ -1387,6 +1389,9 @@ const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value);
 
 template<>
 const char* EnumUtil::ToChars<RowIdHandling>(RowIdHandling value);
+
+template<>
+const char* EnumUtil::ToChars<SQLRenderMode>(SQLRenderMode value);
 
 template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
@@ -2345,6 +2350,9 @@ RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value);
 
 template<>
 RowIdHandling EnumUtil::FromString<RowIdHandling>(const char *value);
+
+template<>
+SQLRenderMode EnumUtil::FromString<SQLRenderMode>(const char *value);
 
 template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);
