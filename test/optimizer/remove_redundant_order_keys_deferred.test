@@ -1,0 +1,147 @@
+# name: test/optimizer/remove_redundant_order_keys_deferred.test
+# description: A deferred unique key is not a functional dependency of the visible rows
+# group: [optimizer]
+
+# Duplicate keys are visible until COMMIT, so a later ORDER BY or window key is not redundant.
+
+statement ok
+CREATE TABLE pk(a INTEGER PRIMARY KEY DEFERRED, b INTEGER);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO pk VALUES (1, 10), (1, 20);
+
+query I
+SELECT b FROM pk ORDER BY a, b DESC;
+----
+20
+10
+
+query II
+EXPLAIN SELECT b FROM pk ORDER BY a, b DESC;
+----
+physical_plan	<REGEX>:.*Order By:.*DESC.*
+
+query II
+SELECT b, rank() OVER (ORDER BY a, b DESC) FROM pk ORDER BY b;
+----
+10	2
+20	1
+
+query II
+SELECT b, row_number() OVER (PARTITION BY a, b) FROM pk ORDER BY b;
+----
+10	1
+20	1
+
+statement ok
+ROLLBACK;
+
+# NOT NULL UNIQUE DEFERRED has the same visible duplicates.
+statement ok
+CREATE TABLE uq(a INTEGER NOT NULL UNIQUE DEFERRED, b INTEGER);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO uq VALUES (1, 10), (1, NULL);
+
+query I
+SELECT b FROM uq ORDER BY a, b NULLS FIRST;
+----
+NULL
+10
+
+statement ok
+ROLLBACK;
+
+# Every column of a composite deferred key is required.
+statement ok
+CREATE TABLE comp(a INTEGER, c INTEGER, b INTEGER, PRIMARY KEY(a, c) DEFERRED);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO comp VALUES (1, 1, 10), (1, 1, 20);
+
+query I
+SELECT b FROM comp ORDER BY a, c, b DESC;
+----
+20
+10
+
+statement ok
+ROLLBACK;
+
+# The plan is fixed at PREPARE time from the constraint, not from the current rows.
+statement ok
+CREATE TABLE prep(a INTEGER PRIMARY KEY DEFERRED, b INTEGER);
+
+statement ok
+PREPARE ordered AS SELECT b FROM prep ORDER BY a, b DESC;
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO prep VALUES (1, 10), (1, 20);
+
+query I
+EXECUTE ordered;
+----
+20
+10
+
+statement ok
+ROLLBACK;
+
+# An immediate primary key is still unique, so the extra key does not change the order.
+statement ok
+CREATE TABLE imm(a INTEGER PRIMARY KEY, b INTEGER);
+
+statement ok
+INSERT INTO imm VALUES (1, 20), (2, 10);
+
+query I
+SELECT b FROM imm ORDER BY a, b DESC;
+----
+20
+10
+
+# Distinct deferred keys that have already committed keep that order too.
+statement ok
+CREATE TABLE committed(a INTEGER PRIMARY KEY DEFERRED, b INTEGER);
+
+statement ok
+INSERT INTO committed VALUES (1, 20), (2, 10);
+
+query I
+SELECT b FROM committed ORDER BY a, b DESC;
+----
+20
+10
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO pk VALUES (1, 10), (1, 20);
+
+statement ok
+PRAGMA disable_optimizer;
+
+query I
+SELECT b FROM pk ORDER BY a, b DESC;
+----
+20
+10
+
+query II
+SELECT b, row_number() OVER (PARTITION BY a, b) FROM pk ORDER BY b;
+----
+10	1
+20	1
