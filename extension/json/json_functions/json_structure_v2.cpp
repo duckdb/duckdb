@@ -3,7 +3,6 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
@@ -247,7 +246,11 @@ yyjson_mut_val *ExtractStructure(yyjson_val *val, yyjson_mut_doc *doc) {
 // SQL function
 //===--------------------------------------------------------------------===//
 optional<string_t> JSONStructureFunction(yyjson_val *val, yyjson_alc *alc, Vector &) {
-	return JSONCommon::WriteVal<yyjson_mut_val>(ExtractStructure(val, yyjson_mut_doc_new(alc)), alc);
+	optional_ptr<yyjson_mut_doc> doc = yyjson_mut_doc_new(alc);
+	if (!doc) {
+		throw OutOfMemoryException("Failed to allocate JSON structure document");
+	}
+	return JSONCommon::WriteVal<yyjson_mut_val>(ExtractStructure(val, doc.get()), alc);
 }
 
 void StructureFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -255,7 +258,7 @@ void StructureFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 }
 
 ScalarFunction GetStructureFunctionInternal(const LogicalType &input_type) {
-	ScalarFunction fun({}, LogicalType::JSON(), nullptr, nullptr, nullptr);
+	ScalarFunction fun({}, LogicalType::JSON(), StructureFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
 	fun.GetSignature().AddParameter("json", input_type);
 	return fun;
 }
@@ -265,8 +268,9 @@ ScalarFunction GetStructureFunctionInternal(const LogicalType &input_type) {
 ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 	ScalarFunctionSet fun_set("json_structure");
 
-	fun_set.AddFunction(GetStructureFunctionInternal(LogicalType::JSON()));
 	fun_set.AddFunction(GetStructureFunctionInternal(LogicalType::VARCHAR));
+	fun_set.SetFallible();
+	fun_set.AddFunction(GetStructureFunctionInternal(LogicalType::JSON()));
 
 	return fun_set;
 }

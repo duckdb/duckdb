@@ -1,0 +1,34 @@
+# name: test/sql/json/scalar/test_json_structure_iterative.test
+# description: Iterative json_structure extraction
+# group: [scalar]
+
+require json
+
+query I
+SELECT json_structure(repeat('[', 10000) || '1' || repeat(']', 10000)) =
+       repeat('[', 10000) || '"UBIGINT"' || repeat(']', 10000);
+----
+true
+
+query I
+SELECT json_structure(repeat('{"q":', 10000) || 'null' || repeat('}', 10000)) =
+       repeat('{"q":', 10000) || '"NULL"' || repeat('}', 10000);
+----
+true
+
+query T
+SELECT json_structure('[{"a":[1],"b":{"q":2}},{"a":true,"b":3,"c":null}]');
+----
+[{"a":"JSON","b":"JSON","c":"NULL"}]
+
+query T
+SELECT json_structure('{"a\u0000b":1,"":null,"q":1,"q":2.5,"Q":true}');
+----
+{"a\u0000b":"UBIGINT","":"NULL","q":"DOUBLE","Q":"BOOLEAN"}
+
+query I
+SELECT json_group_structure(v::JSON) = repeat('{"q":', 256) || '"UBIGINT"' || repeat('}', 256)
+FROM (VALUES (repeat('{"q":', 256) || '1' || repeat('}', 256)),
+             (repeat('{"q":', 256) || 'null' || repeat('}', 256))) AS t(v);
+----
+true

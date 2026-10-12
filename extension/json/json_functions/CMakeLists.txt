@@ -12,6 +12,7 @@ add_library_unity(
   json_merge_patch.cpp
   json_pretty.cpp
   json_structure.cpp
+  json_structure_v2.cpp
   json_table_in_out.cpp
   json_transform.cpp
   json_type.cpp
