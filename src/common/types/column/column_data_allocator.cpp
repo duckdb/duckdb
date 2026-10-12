@@ -80,13 +80,14 @@ ColumnDataAllocator::~ColumnDataAllocator() {
 
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR || type == ColumnDataAllocatorType::HYBRID);
+	if (!shared) {
+		return blocks[block_id].Pin(*alloc.buffer_manager);
+	}
 	shared_ptr<BlockHandle> handle;
-	if (shared) {
+	{
 		// we only need to grab the lock when accessing the vector, because vector access is not thread-safe:
 		// the vector can be resized by another thread while we try to access it
 		lock_guard<mutex> guard(lock);
-		handle = blocks[block_id].GetHandle();
-	} else {
 		handle = blocks[block_id].GetHandle();
 	}
 	return alloc.buffer_manager->Pin(handle);
@@ -152,8 +153,7 @@ void ColumnDataAllocator::AllocateBuffer(idx_t size, uint32_t &block_id, uint32_
 	block_id = NumericCast<uint32_t>(blocks.size() - 1);
 	if (chunk_state && chunk_state->handles.find(block_id) == chunk_state->handles.end()) {
 		// not guaranteed to be pinned already by this thread (if shared allocator)
-		auto handle = blocks[block_id].GetHandle();
-		chunk_state->handles[block_id] = alloc.buffer_manager->Pin(handle);
+		chunk_state->handles[block_id] = block.Pin(*alloc.buffer_manager);
 	}
 	offset = block.size;
 	block.size += size;
@@ -358,6 +358,14 @@ shared_ptr<BlockHandle> BlockMetaData::GetHandle() const {
 		throw ConnectionException("Trying to access a query result after the database instance has been closed");
 	}
 	return res;
+}
+
+BufferHandle BlockMetaData::Pin(BufferManager &buffer_manager) {
+	if (handle) {
+		return buffer_manager.Pin(handle);
+	}
+	auto owned_handle = GetHandle();
+	return buffer_manager.Pin(owned_handle);
 }
 
 void BlockMetaData::SetHandle(ManagedResultSet &managed_result_set, shared_ptr<BlockHandle> handle_p) {
