@@ -255,6 +255,7 @@ static unique_ptr<FunctionData> ReadSingleJSONFileCombineSchema(ClientContext &c
 			// the schema of this file was not auto-detected - fall back to combining the types
 			return nullptr;
 		}
+		merged.case_insensitive_keys = json_data.options.case_insensitive_keys;
 		JSONStructure::MergeNodes(merged, *json_data.structure);
 		if (!first_file) {
 			first_file = json_data;
