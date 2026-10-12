@@ -1100,7 +1100,8 @@ TEST_CASE("V2: a statement that expands into a group is refused while another st
 //! Executes through the Arrow entry point, destroying any result
 DUCKDB_V2_ERROR ExecuteArrow(duckdb_v2_connection_handle conn, const char *sql) {
 	duckdb_v2_statement_iterator_handle iter = nullptr;
-	REQUIRE(duckdb_v2_parse_sql(conn, sql, &iter, nullptr) == DUCKDB_V2_ERROR_NONE);
+	auto sql_str = Convert(sql);
+	REQUIRE(duckdb_v2_parse_sql(conn, &sql_str, &iter, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_sql_statement_handle stmt = nullptr;
 	REQUIRE(duckdb_v2_statement_iterator_next(iter, &stmt, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_arrow_result_handle result = nullptr;

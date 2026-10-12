@@ -110,7 +110,8 @@ DUCKDB_V2_ERROR duckdb_v2_tokenize_sql_from_context(duckdb_v2_context_handle con
 	*out_iterator = nullptr;
 	DUCKDB_CHECK_ARG(context);
 	DUCKDB_CHECK_ARG(sql);
-	return WithErrorHandler(err, [&]() { *out_iterator = Convert(Tokenize(*Convert(context), *sql).release()); });
+	return WithErrorHandler(err,
+	                        [&]() { *out_iterator = Convert(Tokenize(Convert(context)->context, *sql).release()); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_token_iterator_next(duckdb_v2_token_iterator_handle iterator, DUCKDB_V2_TOKEN_TYPE *out_type,
