@@ -206,6 +206,10 @@ bool QueryResult::IsOpen() {
 	return IsOpenInternal(*lock);
 }
 
+bool QueryResult::MetadataAvailable() const {
+	return true;
+}
+
 QueryResultState QueryResult::Cancelled() {
 	if (!HasError()) {
 		SetError(

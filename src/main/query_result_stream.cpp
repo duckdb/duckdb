@@ -48,6 +48,10 @@ bool ResultStreamBase::IsOpen() {
 	return handle->IsOpen();
 }
 
+bool ResultStreamBase::MetadataAvailable() const {
+	return handle->MetadataAvailable();
+}
+
 QueryResultState
 ResultStreamBase::GuardedInternal(const char *name,
                                   const std::function<QueryResultState(ClientContextLock &lock)> &call) {

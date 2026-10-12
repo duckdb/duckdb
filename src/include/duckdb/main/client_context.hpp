@@ -77,6 +77,9 @@ struct StatementSignature {
 	vector<LogicalType> types;
 	vector<StatementParameter> parameters;
 	StatementProperties properties;
+	//! The statement expands into several; its result is known only once execution binds the statement that
+	//! produces it
+	bool metadata_deferred = false;
 };
 
 //! Interrupt state for the client context

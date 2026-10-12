@@ -153,6 +153,9 @@ public:
 	DUCKDB_API void Close();
 	//! Whether this result is still the connection's open result.
 	DUCKDB_API bool IsOpen();
+	//! Whether the result's schema and properties are known. False for a statement that expands into several until
+	//! the one producing the result is bound. Runs nothing
+	DUCKDB_API bool MetadataAvailable() const;
 
 	//! Returns the name of the column for the given index
 	DUCKDB_API const Identifier &ColumnName(idx_t index) const;

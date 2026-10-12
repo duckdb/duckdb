@@ -49,6 +49,8 @@ public:
 	DUCKDB_API void Close();
 	//! Whether this stream is still the connection's open result
 	DUCKDB_API bool IsOpen();
+	//! Whether the result's schema and properties are known. Runs nothing
+	DUCKDB_API bool MetadataAvailable() const;
 
 	DUCKDB_API void SetError(ErrorData error);
 	DUCKDB_API bool HasError() const;
