@@ -13,10 +13,11 @@ BoundStatement Binder::Bind(ExplainStatement &stmt) {
 		case StatementType::INSERT_STATEMENT:
 		case StatementType::UPDATE_STATEMENT:
 		case StatementType::DELETE_STATEMENT:
+		case StatementType::MERGE_INTO_STATEMENT:
 			break;
 		default:
 			throw NotImplementedException(
-			    "EXPLAIN (SQL) supports SELECT, VALUES, WITH, INSERT, UPDATE and DELETE statements only");
+			    "EXPLAIN (SQL) supports SELECT, VALUES, WITH, INSERT, UPDATE, DELETE and MERGE INTO statements only");
 		}
 	}
 

@@ -115,19 +115,75 @@ EXPLAIN (SQL) INSERT INTO dml_generated(a) VALUES (5) RETURNING d;
 ----
 sql	<REGEX>:INSERT INTO memory\.main\.dml_generated \(a, b\) SELECT .* RETURNING .* AS d
 
-# ON CONFLICT binds to MERGE INTO, which has no SQL export
+# MERGE INTO exports with the matched rows keyed by the target's row id
+statement ok
+CREATE TABLE dml_merge_target(k INTEGER, v TEXT);
+
+statement ok
+INSERT INTO dml_merge_target VALUES (1,'a'),(2,'b');
+
+statement ok
+CREATE TABLE dml_merge_source(k INTEGER, v TEXT);
+
+statement ok
+INSERT INTO dml_merge_source VALUES (2,'B'),(3,'C');
+
+query TT
+EXPLAIN (SQL) MERGE INTO dml_merge_target USING dml_merge_source ON dml_merge_target.k = dml_merge_source.k WHEN MATCHED THEN UPDATE SET v = dml_merge_source.v WHEN NOT MATCHED THEN INSERT VALUES (dml_merge_source.k, dml_merge_source.v);
+----
+sql	MERGE INTO memory.main.dml_merge_target USING (SELECT r2.column0 AS c0, r2.column1 AS c1, r2.column1 AS c2, r0.rowid AS c3 FROM (memory.main.dml_merge_target AS r0(column0, column1) RIGHT JOIN memory.main.dml_merge_source AS r2(column0, column1) ON ((r0.column0 = r2.column0)))) AS r5(c0, c1, c2, c3) ON (dml_merge_target.rowid = r5.c3) WHEN MATCHED THEN UPDATE SET v = r5.c2 WHEN NOT MATCHED THEN INSERT (k, v) VALUES (r5.c0, r5.c1)
+
+statement ok
+MERGE INTO memory.main.dml_merge_target USING (SELECT r2.column0 AS c0, r2.column1 AS c1, r2.column1 AS c2, r0.rowid AS c3 FROM (memory.main.dml_merge_target AS r0(column0, column1) RIGHT JOIN memory.main.dml_merge_source AS r2(column0, column1) ON ((r0.column0 = r2.column0)))) AS r5(c0, c1, c2, c3) ON (dml_merge_target.rowid = r5.c3) WHEN MATCHED THEN UPDATE SET v = r5.c2 WHEN NOT MATCHED THEN INSERT (k, v) VALUES (r5.c0, r5.c1)
+
+query IT rowsort
+SELECT * FROM dml_merge_target;
+----
+1	a
+2	B
+3	C
+
+# MERGE RETURNING binds the statement-provided merge_action column
+query TT
+EXPLAIN (SQL) MERGE INTO dml_merge_target USING dml_merge_source ON dml_merge_target.k = dml_merge_source.k WHEN MATCHED THEN DELETE RETURNING merge_action, k;
+----
+sql	MERGE INTO memory.main.dml_merge_target USING (SELECT r2.column0 AS c0, r1.c1 AS c1, r1.c2 AS c2 FROM ((SELECT r0.column0 AS c0, r0.column1 AS c1, r0.rowid AS c2 FROM memory.main.dml_merge_target AS r0(column0, column1) WHERE (r0.column0 >= CAST(2 AS INTEGER))) AS r1(c0, c1, c2) INNER JOIN memory.main.dml_merge_source AS r2(column0, column1) ON ((r1.c0 = r2.column0)))) AS r5(c0, c1, c2) ON (dml_merge_target.rowid = r5.c2) WHEN MATCHED THEN DELETE RETURNING merge_action AS merge_action, k AS k
+
+query TI rowsort
+MERGE INTO memory.main.dml_merge_target USING (SELECT r2.column0 AS c0, r1.c1 AS c1, r1.c2 AS c2 FROM ((SELECT r0.column0 AS c0, r0.column1 AS c1, r0.rowid AS c2 FROM memory.main.dml_merge_target AS r0(column0, column1) WHERE (r0.column0 >= CAST(2 AS INTEGER))) AS r1(c0, c1, c2) INNER JOIN memory.main.dml_merge_source AS r2(column0, column1) ON ((r1.c0 = r2.column0)))) AS r5(c0, c1, c2) ON (dml_merge_target.rowid = r5.c2) WHEN MATCHED THEN DELETE RETURNING merge_action AS merge_action, k AS k
+----
+DELETE	2
+DELETE	3
+
+# WHEN NOT MATCHED BY SOURCE rows cannot be keyed by the exported row id
+statement error
+EXPLAIN (SQL) MERGE INTO dml_merge_target USING dml_merge_source ON dml_merge_target.k = dml_merge_source.k WHEN NOT MATCHED BY SOURCE THEN DELETE;
+----
+WHEN NOT MATCHED BY SOURCE actions cannot be keyed by the exported row id
+
+# ON CONFLICT binds to MERGE INTO and exports as such
 statement ok
 CREATE TABLE dml_keyed(a INTEGER PRIMARY KEY, b TEXT);
 
-statement error
-EXPLAIN (SQL) INSERT INTO dml_keyed VALUES (1,'p') ON CONFLICT DO NOTHING;
-----
-EXPLAIN (SQL) cannot render this query
+statement ok
+INSERT INTO dml_keyed VALUES (1,'p'),(2,'q');
 
-statement error
-EXPLAIN (SQL) INSERT OR REPLACE INTO dml_keyed VALUES (1,'p');
+query TT
+EXPLAIN (SQL) INSERT INTO dml_keyed VALUES (2,'x'),(9,'y') ON CONFLICT DO UPDATE SET b = excluded.b;
 ----
-EXPLAIN (SQL) cannot render this query
+sql	<REGEX>:MERGE INTO memory\.main\.dml_keyed USING .* WHEN MATCHED THEN UPDATE SET b = .* WHEN NOT MATCHED THEN INSERT \(a, b\) VALUES .*
+
+query TT
+EXPLAIN (SQL) INSERT OR REPLACE INTO dml_keyed VALUES (1,'z');
+----
+sql	<REGEX>:MERGE INTO memory\.main\.dml_keyed USING .* WHEN MATCHED THEN UPDATE .* WHEN NOT MATCHED THEN INSERT .*
+
+# the EXPLAINed statements did not execute
+query IT rowsort
+SELECT * FROM dml_keyed;
+----
+1	p
+2	q
 
 # a physical column shadowing the row-id name would capture the generated references
 statement ok
@@ -190,4 +246,4 @@ SQL would discard the unreferenced CTE producer
 statement error
 EXPLAIN (SQL) CREATE TABLE dml_unexpected(i INTEGER);
 ----
-EXPLAIN (SQL) supports SELECT, VALUES, WITH, INSERT, UPDATE and DELETE statements only
+EXPLAIN (SQL) supports SELECT, VALUES, WITH, INSERT, UPDATE, DELETE and MERGE INTO statements only

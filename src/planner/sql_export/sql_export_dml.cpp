@@ -4,8 +4,10 @@
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -13,6 +15,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_delete.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/planner/operator/logical_merge_into.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/planner/sql_export/logical_plan_sql_exporter_internal.hpp"
@@ -194,15 +197,154 @@ static LogicalPlanSQLExportResult ExportUpdateNode(LogicalUpdate &op, LogicalPla
 	return LogicalPlanSQLExportResult::Success({std::move(node), std::move(fields.GetValue())});
 }
 
+//! The merged rows are keyed back to the target by its row id: a MATCHED source row carries the
+//! matched row id, a NOT MATCHED (by target) row carries NULL and never rejoins. A target row the
+//! source never matched does not appear as unmatched under this key, so WHEN NOT MATCHED BY SOURCE
+//! actions cannot be reconstructed.
+static LogicalPlanSQLExportResult ExportMergeNode(LogicalMergeInto &op, LogicalPlanSQLExportContext &context,
+                                                  const LogicalPlanVerificationPath &path) {
+	if (op.children.size() != 1) {
+		return LogicalPlanSQLExportResult::Failure(
+		    {UnsupportedDML(path, "dml_source", "MERGE INTO without a source relation cannot be exported")});
+	}
+	if (op.actions.count(MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE)) {
+		return LogicalPlanSQLExportResult::Failure(
+		    {UnsupportedDML(path, "merge_not_matched_by_source",
+		                    "WHEN NOT MATCHED BY SOURCE actions cannot be keyed by the exported row id")});
+	}
+	auto row_id_name = ExportedRowIdName(op.table, path);
+	if (row_id_name.HasError()) {
+		return LogicalPlanSQLExportResult::Failure(row_id_name);
+	}
+	auto fields = LogicalPlanSQLExportHelpers::CreateFields(op, path);
+	if (fields.HasError()) {
+		return LogicalPlanSQLExportResult::Failure(fields);
+	}
+	// Keep the table's own name reserved so the generated source alias cannot capture it.
+	context.NextRelationAlias(op.table.name);
+	auto child = context.ExportChild(*op.children[0], LogicalPlanSQLExportHelpers::PlanChildPath(path, 0));
+	if (child.HasError()) {
+		return LogicalPlanSQLExportResult::Failure(child);
+	}
+	// The bound source keeps the row id as its final column, after every action input.
+	if (op.row_id_start + 1 != child.GetValue().relation.fields.size()) {
+		return LogicalPlanSQLExportResult::Failure(
+		    {UnsupportedDML(path, "dml_row_id", "The merged row-id column was not found in the exported source")});
+	}
+	auto expression_context =
+	    LogicalPlanSQLExportHelpers::CreateBindingContext(context.GetClientContext(), {child.GetValue()});
+	// The action inputs are exported in a stable order: per action its condition, then its expressions.
+	vector<reference<const Expression>> action_inputs;
+	for (auto &entry : op.actions) {
+		for (auto &action : entry.second) {
+			if (action->condition) {
+				action_inputs.push_back(*action->condition);
+			}
+			for (auto &expression : action->expressions) {
+				action_inputs.push_back(*expression);
+			}
+		}
+	}
+	auto node = make_uniq<MergeQueryNode>();
+	node->target = ModifiedTableRef(op.table);
+	node->join_condition = make_uniq<ComparisonExpression>(
+	    ExpressionType::COMPARE_EQUAL, make_uniq<ColumnRefExpression>(row_id_name.GetValue(), op.table.name),
+	    LogicalPlanSQLExportHelpers::ChildColumn(child.GetValue(), op.row_id_start));
+	idx_t input_ordinal = 0;
+	auto export_input = [&]() {
+		return context.ExportExpression(op, action_inputs, input_ordinal++, expression_context, path);
+	};
+	for (auto &entry : op.actions) {
+		vector<unique_ptr<MergeIntoAction>> actions;
+		for (auto &bound_action : entry.second) {
+			auto action = make_uniq<MergeIntoAction>();
+			action->action_type = bound_action->action_type;
+			if (bound_action->condition) {
+				auto condition = export_input();
+				if (condition.HasError()) {
+					return LogicalPlanSQLExportResult::Failure(condition);
+				}
+				action->condition = std::move(condition.GetValue());
+			}
+			switch (bound_action->action_type) {
+			case MergeActionType::MERGE_UPDATE: {
+				if (bound_action->columns.size() != bound_action->expressions.size()) {
+					return LogicalPlanSQLExportResult::Failure({UnsupportedDML(
+					    path, "merge_update", "The MERGE update action does not pair its columns and expressions")});
+				}
+				auto set_info = make_uniq<UpdateSetInfo>();
+				for (idx_t i = 0; i < bound_action->columns.size(); i++) {
+					auto value = export_input();
+					if (value.HasError()) {
+						return LogicalPlanSQLExportResult::Failure(value);
+					}
+					set_info->columns.push_back(op.table.GetColumns().GetColumn(bound_action->columns[i]).Name());
+					set_info->expressions.push_back(std::move(value.GetValue()));
+				}
+				action->update_info = std::move(set_info);
+				break;
+			}
+			case MergeActionType::MERGE_INSERT: {
+				// the bound action provides every physical column in declaration order, with defaults filled in
+				for (auto &column : op.table.GetColumns().Physical()) {
+					action->insert_columns.push_back(column.Name());
+				}
+				if (bound_action->expressions.size() != action->insert_columns.size()) {
+					return LogicalPlanSQLExportResult::Failure({UnsupportedDML(
+					    path, "merge_insert", "The MERGE insert action does not cover the table's physical columns")});
+				}
+				for (idx_t i = 0; i < bound_action->expressions.size(); i++) {
+					auto value = export_input();
+					if (value.HasError()) {
+						return LogicalPlanSQLExportResult::Failure(value);
+					}
+					action->expressions.push_back(std::move(value.GetValue()));
+				}
+				break;
+			}
+			case MergeActionType::MERGE_ERROR: {
+				for (idx_t i = 0; i < bound_action->expressions.size(); i++) {
+					auto message = export_input();
+					if (message.HasError()) {
+						return LogicalPlanSQLExportResult::Failure(message);
+					}
+					action->expressions.push_back(std::move(message.GetValue()));
+				}
+				break;
+			}
+			default:
+				// DELETE and DO NOTHING carry no inputs
+				break;
+			}
+			actions.push_back(std::move(action));
+		}
+		node->actions.emplace(entry.first, std::move(actions));
+	}
+	node->source = LogicalPlanSQLExportHelpers::CreateSubquery(std::move(child.GetValue()));
+	return LogicalPlanSQLExportResult::Success({std::move(node), std::move(fields.GetValue())});
+}
+
 static optional<LogicalPlanVerificationIssue> DMLStatementIssue(const LogicalOperator &op,
                                                                 const LogicalPlanVerificationPath &path) {
 	if (op.type == LogicalOperatorType::LOGICAL_UPDATE && op.Cast<LogicalUpdate>().capture_old_rows) {
 		return UnsupportedDML(path, "dml_old_rows", "UPDATE with OLD row capture cannot be exported");
 	}
 	// A bare operator never returns modified rows; that shape only exists under a RETURNING projection.
-	bool return_chunk = op.type == LogicalOperatorType::LOGICAL_INSERT   ? op.Cast<LogicalInsert>().return_chunk
-	                    : op.type == LogicalOperatorType::LOGICAL_UPDATE ? op.Cast<LogicalUpdate>().return_chunk
-	                                                                     : op.Cast<LogicalDelete>().return_chunk;
+	bool return_chunk;
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_INSERT:
+		return_chunk = op.Cast<LogicalInsert>().return_chunk;
+		break;
+	case LogicalOperatorType::LOGICAL_UPDATE:
+		return_chunk = op.Cast<LogicalUpdate>().return_chunk;
+		break;
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
+		return_chunk = op.Cast<LogicalMergeInto>().return_chunk;
+		break;
+	default:
+		return_chunk = op.Cast<LogicalDelete>().return_chunk;
+		break;
+	}
 	if (return_chunk) {
 		return UnsupportedDML(path, "dml_returning", "A data-modifying operator returning rows cannot be exported");
 	}
@@ -242,6 +384,14 @@ LogicalPlanSQLExportResult LogicalUpdate::ToSQL(LogicalPlanSQLExportContext &con
 	return ExportUpdateNode(*this, context, path);
 }
 
+LogicalPlanSQLExportResult LogicalMergeInto::ToSQL(LogicalPlanSQLExportContext &context,
+                                                   const LogicalPlanVerificationPath &path) {
+	if (auto issue = DMLBoundaryIssue(context, *this, path)) {
+		return LogicalPlanSQLExportResult::Failure({std::move(*issue)});
+	}
+	return ExportMergeNode(*this, context, path);
+}
+
 //! An identity projection over a data-modifying body only forwards its columns under new bindings.
 static bool IsIdentityProjectionOverDML(LogicalOperator &op) {
 	if (op.type != LogicalOperatorType::LOGICAL_PROJECTION || op.children.size() != 1 ||
@@ -258,6 +408,7 @@ bool SQLExportDMLHelpers::MatchDMLBody(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_INSERT:
 	case LogicalOperatorType::LOGICAL_UPDATE:
 	case LogicalOperatorType::LOGICAL_DELETE:
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
 		return true;
 	default:
 		return MatchReturningRoot(op) || IsIdentityProjectionOverDML(op);
@@ -269,6 +420,7 @@ bool SQLExportDMLHelpers::IsDMLNode(const QueryNode &query) {
 	case QueryNodeType::INSERT_QUERY_NODE:
 	case QueryNodeType::UPDATE_QUERY_NODE:
 	case QueryNodeType::DELETE_QUERY_NODE:
+	case QueryNodeType::MERGE_QUERY_NODE:
 		return true;
 	default:
 		return false;
@@ -304,6 +456,8 @@ LogicalPlanSQLExportResult SQLExportDMLHelpers::ExportBody(LogicalPlanSQLExportC
 		return ExportInsertNode(op.Cast<LogicalInsert>(), context, path);
 	case LogicalOperatorType::LOGICAL_UPDATE:
 		return ExportUpdateNode(op.Cast<LogicalUpdate>(), context, path);
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
+		return ExportMergeNode(op.Cast<LogicalMergeInto>(), context, path);
 	default:
 		return ExportDeleteNode(op.Cast<LogicalDelete>(), context, path);
 	}
@@ -330,6 +484,11 @@ optional_ptr<LogicalProjection> SQLExportDMLHelpers::MatchReturningRoot(LogicalO
 			return nullptr;
 		}
 		break;
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
+		if (!child.Cast<LogicalMergeInto>().return_chunk) {
+			return nullptr;
+		}
+		break;
 	default:
 		return nullptr;
 	}
@@ -341,33 +500,36 @@ optional_ptr<LogicalProjection> SQLExportDMLHelpers::MatchReturningRoot(LogicalO
 //! carrying the column name it was bound from.
 static LogicalPlanVerificationResult<BoundExpressionSQLExportContext>
 ReturningBindingContext(ClientContext &client, const LogicalProjection &projection, const TableCatalogEntry &table,
-                        TableIndex table_index, const LogicalPlanVerificationPath &path) {
+                        TableIndex table_index, const LogicalPlanVerificationPath &path,
+                        vector<TableColumn> statement_columns = {}) {
 	column_binding_map_t<ResolvedSQLColumnReference> entries;
 	idx_t physical_count = 0;
 	for (auto &column : table.GetColumns().Physical()) {
 		entries.emplace(ColumnBinding(table_index, ProjectionIndex(physical_count++)),
 		                ResolvedSQLColumnReference {{column.Name()}, column.Type()});
 	}
-	auto virtual_columns = table.GetVirtualColumns();
+	for (auto &entry : table.GetVirtualColumns()) {
+		statement_columns.push_back(entry.second);
+	}
 	optional<LogicalPlanVerificationIssue> unsupported;
 	for (auto &expression : projection.expressions) {
-		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(*expression, [&](const BoundColumnRefExpression
-		                                                                                   &column) {
-			if (unsupported || column.Binding().table_index != table_index ||
-			    column.Binding().column_index < physical_count) {
-				return;
-			}
-			for (auto &entry : virtual_columns) {
-				if (entry.second.name != column.GetAlias() || table.ColumnExists(entry.second.name) ||
-				    !entry.second.type.EqualsIncludingCollation(column.GetReturnType())) {
-					continue;
-				}
-				entries.emplace(column.Binding(), ResolvedSQLColumnReference {{entry.second.name}, entry.second.type});
-				return;
-			}
-			unsupported = UnsupportedDML(path, "dml_returning_reference",
-			                             "RETURNING references a column SQL cannot name on the modified table");
-		});
+		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+		    *expression, [&](const BoundColumnRefExpression &column) {
+			    if (unsupported || column.Binding().table_index != table_index ||
+			        column.Binding().column_index < physical_count) {
+				    return;
+			    }
+			    for (auto &entry : statement_columns) {
+				    if (entry.name != column.GetAlias() || table.ColumnExists(entry.name) ||
+				        !entry.type.EqualsIncludingCollation(column.GetReturnType())) {
+					    continue;
+				    }
+				    entries.emplace(column.Binding(), ResolvedSQLColumnReference {{entry.name}, entry.type});
+				    return;
+			    }
+			    unsupported = UnsupportedDML(path, "dml_returning_reference",
+			                                 "RETURNING references a column SQL cannot name on the modified table");
+		    });
 	}
 	if (unsupported) {
 		return LogicalPlanVerificationResult<BoundExpressionSQLExportContext>::Failure({std::move(*unsupported)});
@@ -400,6 +562,7 @@ LogicalPlanSQLExportResult SQLExportDMLHelpers::ExportReturning(LogicalPlanSQLEx
 	LogicalPlanSQLExportContext::AncestorScope op_scope(context, op);
 	optional_ptr<const TableCatalogEntry> table;
 	TableIndex table_index;
+	vector<TableColumn> statement_columns;
 	auto exported = [&]() -> LogicalPlanSQLExportResult {
 		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_INSERT: {
@@ -418,6 +581,14 @@ LogicalPlanSQLExportResult SQLExportDMLHelpers::ExportReturning(LogicalPlanSQLEx
 			table_index = update.table_index;
 			return ExportUpdateNode(update, context, child_path);
 		}
+		case LogicalOperatorType::LOGICAL_MERGE_INTO: {
+			auto &merge = op.Cast<LogicalMergeInto>();
+			table = &merge.table;
+			table_index = merge.table_index;
+			// MERGE RETURNING binds the statement-provided merge_action column instead of the table's virtuals
+			statement_columns.emplace_back(Identifier("merge_action"), LogicalType::VARCHAR);
+			return ExportMergeNode(merge, context, child_path);
+		}
 		default: {
 			auto &del = op.Cast<LogicalDelete>();
 			table = &del.table;
@@ -429,7 +600,8 @@ LogicalPlanSQLExportResult SQLExportDMLHelpers::ExportReturning(LogicalPlanSQLEx
 	if (exported.HasError()) {
 		return exported;
 	}
-	auto expression_context = ReturningBindingContext(context.GetClientContext(), root, *table, table_index, path);
+	auto expression_context = ReturningBindingContext(context.GetClientContext(), root, *table, table_index, path,
+	                                                  std::move(statement_columns));
 	if (expression_context.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(expression_context);
 	}
@@ -454,6 +626,9 @@ LogicalPlanSQLExportResult SQLExportDMLHelpers::ExportReturning(LogicalPlanSQLEx
 		break;
 	case QueryNodeType::UPDATE_QUERY_NODE:
 		query.Cast<UpdateQueryNode>().returning_list = std::move(returning_list);
+		break;
+	case QueryNodeType::MERGE_QUERY_NODE:
+		query.Cast<MergeQueryNode>().returning_list = std::move(returning_list);
 		break;
 	default:
 		query.Cast<DeleteQueryNode>().returning_list = std::move(returning_list);
