@@ -1,0 +1,16 @@
+# name: test/sql/types/variant/variant_cast_parent_path_order.test
+# description: Registering a cast parent must preserve its uncast child path
+# group: [variant]
+
+statement ok
+CREATE TABLE cast_parent AS SELECT {'x': {'a': 1}::VARIANT} AS n;
+
+query II
+SELECT n.x.a, n.x::STRUCT(a BIGINT) FROM cast_parent;
+----
+1	{'a': 1}
+
+query II
+SELECT n.x.a, n.x::STRUCT(a BIGINT) FROM (SELECT * FROM cast_parent);
+----
+1	{'a': 1}
