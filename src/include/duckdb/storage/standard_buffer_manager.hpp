@@ -187,8 +187,8 @@ protected:
 	struct TemporaryFileData {
 		//! The directory name where temporary files are stored
 		string path;
-		//! Synchronizes temporary-directory creation
-		std::once_flag initialize_once;
+		//! Publishes successful temporary-directory initialization
+		atomic<bool> initialized {false};
 		//! Protects configuration and handle creation (mutable so 'GetMaxSwap' can be const)
 		mutable mutex lock;
 		//! Size of temp file on disk
