@@ -77,7 +77,9 @@
         "test/optimizer/partitioned_execution_coverage.test",
         "test/optimizer/projection_placement.test",
         "test/optimizer/statistics/statistics_count_not_null_pruning.test",
-        "test/sql/sql_export/aggregate_topn_rewrites.test"
+        "test/sql/sql_export/aggregate_topn_rewrites.test",
+        "test/sql/aggregate/aggregate_state_export/approx_count_distinct_export_state.test",
+        "test/optimizer/pushdown/cte_domain_join_filter.test"
       ]
     },
     {

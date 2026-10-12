@@ -63,7 +63,7 @@ timestamp_t ImpalaTimestampToTimestamp(const Int96 &raw_ts) {
 }
 
 date_t ImpalaTimestampToDate(const Int96 &raw_ts) {
-	return date_t(ImpalaTimestampToDays(raw_ts));
+	return date_t(NumericCast<int32_t>(ImpalaTimestampToDays(raw_ts)));
 }
 
 dtime_ns_t ImpalaTimestampToTimeNs(const Int96 &raw_ts) {
