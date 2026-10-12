@@ -47,6 +47,9 @@ public:
 	void UpdateReservation(ClientContext &context);
 	//! Get the reservation of this state
 	idx_t GetReservation() const;
+	//! Get a conservative reservation for memory limit decisions. This can be lower than GetReservation()
+	//! when minimum reservations are overcommitted, and should not be used for manager accounting.
+	idx_t GetReservationForMemoryLimit() const;
 	//! Set the materialization penalty for this state
 	void SetMaterializationPenalty(idx_t new_materialization_penalty);
 	//! Get the materialization penalty for this state
@@ -116,6 +119,8 @@ private:
 	void SetRemainingSize(TemporaryMemoryState &temporary_memory_state, idx_t new_remaining_size) DUCKDB_REQUIRES(lock);
 	//! Set the reservation of a TemporaryMemoryState (must hold the lock)
 	void SetReservation(TemporaryMemoryState &temporary_memory_state, idx_t new_reservation) DUCKDB_REQUIRES(lock);
+	//! Get the memory-limit-aware reservation of a TemporaryMemoryState (must hold the lock)
+	idx_t GetReservationForMemoryLimit(const TemporaryMemoryState &temporary_memory_state) const DUCKDB_REQUIRES(lock);
 	//! Computes optimal reservation of a TemporaryMemoryState based on a cost function
 	idx_t ComputeReservation(const TemporaryMemoryState &temporary_memory_state) const DUCKDB_REQUIRES(lock);
 	//! Compute initial reservation for use in ComputeReservation
