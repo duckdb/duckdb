@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
@@ -95,8 +96,13 @@ void InSearchPathFunction(DataChunk &input, ExpressionState &state, Vector &resu
 void TransactionIdCurrent(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &context = state.GetContext();
 	auto &catalog = Catalog::GetCatalog(context, DatabaseManager::GetDefaultDatabase(context));
-	auto &transaction = DuckTransaction::Get(context, catalog);
-	auto val = Value::UBIGINT(transaction.start_time);
+	Value val;
+	if (catalog.IsDuckCatalog()) {
+		val = Value::UBIGINT(DuckTransaction::Get(context, catalog).start_time);
+	} else {
+		// other default databases have no DuckTransaction, so use the global id of the transaction
+		val = Value::UBIGINT(MetaTransaction::Get(context).global_transaction_id);
+	}
 	result.Reference(val, count_t(input.size()));
 }
 
