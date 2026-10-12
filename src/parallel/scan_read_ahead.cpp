@@ -1,6 +1,7 @@
 
 #include "duckdb/parallel/scan_read_ahead.hpp"
 
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
@@ -89,18 +90,11 @@ private:
 	shared_ptr<ReadAheadJobCompletion> completion;
 };
 
-//! Async task that opens one file ahead of decoding and releases the pending-open count when destroyed
+//! Async task that opens one file ahead of decoding
 class FileOpenTask : public BaseExecutorTask {
 public:
-	FileOpenTask(TaskExecutor &executor, shared_ptr<atomic<idx_t>> pending_opens_p, std::function<void()> open_fn_p,
-	             std::function<void()> cancel_fn_p)
-	    : BaseExecutorTask(executor), pending_opens(std::move(pending_opens_p)), open_fn(std::move(open_fn_p)),
-	      cancel_fn(std::move(cancel_fn_p)) {
-		++*pending_opens;
-	}
-	~FileOpenTask() override {
-		// the executor counts the task as finished before it is destroyed, the read-ahead may be gone by now
-		--*pending_opens;
+	FileOpenTask(TaskExecutor &executor, std::function<void()> open_fn_p, std::function<void()> cancel_fn_p)
+	    : BaseExecutorTask(executor), open_fn(std::move(open_fn_p)), cancel_fn(std::move(cancel_fn_p)) {
 	}
 
 	void ExecuteTask() override {
@@ -113,21 +107,33 @@ public:
 	}
 
 private:
-	shared_ptr<atomic<idx_t>> pending_opens;
 	std::function<void()> open_fn;
 	std::function<void()> cancel_fn;
 };
 
 ScanReadAheadJob::~ScanReadAheadJob() = default;
 
+static idx_t GetOpenWindow(ClientContext &context, idx_t read_ahead_depth, bool has_memory_governor) {
+	auto window = MaxValue<idx_t>(TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() * 2,
+	                              has_memory_governor ? 0 : read_ahead_depth);
+	idx_t file_descriptor_limit = Settings::Get<DebugFileDescriptorLimitSetting>(context);
+	if (file_descriptor_limit == 0) {
+		auto system_limit = FileSystem::GetFileDescriptorLimit();
+		if (!system_limit.IsValid()) {
+			return window;
+		}
+		file_descriptor_limit = system_limit.GetIndex();
+	}
+	// files opened ahead hold descriptors until they are scanned, so only use a share of the limit
+	return MinValue<idx_t>(window, MaxValue<idx_t>(file_descriptor_limit / 8, 1));
+}
+
 ScanReadAhead::ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
                              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p)
     : context(context), read_ahead_depth(read_ahead_depth_p), memory_governor(std::move(memory_governor_p)),
-      open_window(MaxValue<idx_t>(TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() * 2,
-                                  memory_governor ? 0 : read_ahead_depth)) {
+      open_window(GetOpenWindow(context, read_ahead_depth, memory_governor != nullptr)) {
 	D_ASSERT(read_ahead_depth_p > 0);
 	backlog_budget = memory_governor ? memory_governor->BackpressureBudget() : NumericLimits<idx_t>::Maximum();
-	pending_opens = make_shared_ptr<atomic<idx_t>>(0);
 	executor = make_shared_ptr<TaskExecutor>(context, TaskSchedulerType::ASYNC);
 }
 
@@ -305,12 +311,11 @@ void ScanReadAhead::PushError(ErrorData error) {
 }
 
 void ScanReadAhead::ScheduleFileOpen(std::function<void()> open_fn, std::function<void()> cancel_fn) {
-	// the task holds the count from construction to destruction, so it stays balanced even if scheduling throws
-	executor->ScheduleTask(make_uniq<FileOpenTask>(*executor, pending_opens, std::move(open_fn), std::move(cancel_fn)));
+	executor->ScheduleTask(make_uniq<FileOpenTask>(*executor, std::move(open_fn), std::move(cancel_fn)));
 }
 
-bool ScanReadAhead::CanScheduleOpen() const {
-	return pending_opens->load() < open_window;
+bool ScanReadAhead::CanScheduleOpen(idx_t files_ahead) const {
+	return files_ahead < open_window;
 }
 
 bool ScanReadAhead::TryRunPendingTask() {

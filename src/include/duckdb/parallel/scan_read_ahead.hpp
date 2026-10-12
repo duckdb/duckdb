@@ -156,8 +156,8 @@ public:
 	//! Schedule a file-open closure on the async pool, opening files ahead of decoding
 	//! cancel_fn runs instead when the open is retired without running, and must settle whatever a scan waits on
 	void ScheduleFileOpen(std::function<void()> open_fn, std::function<void()> cancel_fn);
-	//! Whether another file-open may be scheduled without exceeding the open-ahead window
-	bool CanScheduleOpen() const;
+	//! Whether another file may be opened when files_ahead files are already opening or open ahead of the scan
+	bool CanScheduleOpen(idx_t files_ahead) const;
 	//! Run one queued async task inline, returns false when none is queued
 	bool TryRunPendingTask();
 	//! Throw the first error recorded on the async executor, if there is one
@@ -215,7 +215,7 @@ private:
 	const idx_t read_ahead_depth;
 	//! Async memory governor
 	unique_ptr<ManagedAsyncMemoryGovernor> memory_governor;
-	//! Maximum file-opens scheduled ahead of decoding on the async pool
+	//! Maximum files opening or open ahead of decoding
 	const idx_t open_window;
 	//! Backlog budget granted by the reservation, refreshed whenever a job is pushed
 	atomic<idx_t> backlog_budget {0};
@@ -233,8 +233,6 @@ private:
 	atomic<bool> done {false};
 	//! Threads that reserved a slot but have not pushed their job yet
 	atomic<idx_t> active_producers {0};
-	//! File-opens scheduled on the async pool that have not completed yet, shared with the open tasks
-	shared_ptr<atomic<idx_t>> pending_opens;
 	//! Async I/O executor (async pool)
 	shared_ptr<TaskExecutor> executor;
 };
