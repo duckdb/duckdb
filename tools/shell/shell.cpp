@@ -1035,6 +1035,9 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 */
 void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
 	auto &explain = statement.Cast<duckdb::ExplainStatement>();
+	if (explain.explain_type == duckdb::ExplainType::EXPLAIN_SQL) {
+		return;
+	}
 	if (explain.format != duckdb::ProfilerPrintFormat::Default()) {
 		// the user explicitly requested an output format (e.g. EXPLAIN (FORMAT json))
 		return;

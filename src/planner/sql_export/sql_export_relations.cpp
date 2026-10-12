@@ -502,7 +502,8 @@ LogicalPlanSQLExportResult LogicalWindow::ToSQL(LogicalPlanSQLExportContext &con
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields);
 	}
-	if (op.children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+	// A replaced input exports as a named source, so its ordinality fusion does not apply.
+	if (op.children[0]->type == LogicalOperatorType::LOGICAL_GET && !context.FindSource(*op.children[0])) {
 		auto &get = op.children[0]->Cast<LogicalGet>();
 		if (get.source_ordinality == OrdinalityType::WITH_ORDINALITY && !get.ordinality_idx.IsValid()) {
 			bool supported =
