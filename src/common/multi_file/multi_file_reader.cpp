@@ -74,6 +74,37 @@ unique_ptr<FunctionData> MultiFileBindData::Copy() const {
 	return std::move(result);
 }
 
+bool MultiFileBindData::IsGeneratedColumn(idx_t column_idx) const {
+	if ((reader_bind.filename_idx.IsValid() && reader_bind.filename_idx.GetIndex() == column_idx) ||
+	    (reader_bind.file_row_number_idx.IsValid() && reader_bind.file_row_number_idx.GetIndex() == column_idx)) {
+		return true;
+	}
+	for (const auto &partition : reader_bind.hive_partitioning_indexes) {
+		if (partition.index == column_idx) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool MultiFileBindData::MatchesPhysicalColumn(idx_t column_idx, const Identifier &physical_name,
+                                              const LogicalType &physical_type) const {
+	return column_idx < names.size() && column_idx < types.size() && !IsGeneratedColumn(column_idx) &&
+	       names[column_idx] == physical_name && types[column_idx].EqualsIncludingCollation(physical_type);
+}
+
+bool MultiFileBindData::HasIdentityMapping(const vector<MultiFileColumnDefinition> &physical_columns) const {
+	if (physical_columns.size() != names.size() || physical_columns.size() != types.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < physical_columns.size(); i++) {
+		if (!MatchesPhysicalColumn(i, physical_columns[i].name, physical_columns[i].type)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 unique_ptr<MultiFileReader> MultiFileReader::CreateDefault(const string &function_name) {
 	auto res = make_uniq<MultiFileReader>();
 	res->function_name = Identifier(function_name);

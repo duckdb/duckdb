@@ -53,6 +53,20 @@ EXPLAIN SELECT min(v), max(v) FROM read_parquet('{TEST_DIR}/bound_plan_identity.
 ----
 physical_plan	<!REGEX>:.*READ_PARQUET.*
 
+# Same types and names but different physical positions cannot use partition accessors.
+statement ok
+COPY (SELECT 1000::BIGINT b, 7::BIGINT a UNION ALL SELECT 2000, 8) TO '{TEST_DIR}/bound_plan_reordered.parquet' (FORMAT parquet)
+
+query II
+EXPLAIN SELECT min(a) FROM read_parquet('{TEST_DIR}/bound_plan_reordered.parquet', bound_schema={'a':'BIGINT','b':'BIGINT'}, hive_partitioning=false)
+----
+physical_plan	<REGEX>:.*READ_PARQUET.*
+
+query II
+EXPLAIN SELECT min(a) FROM read_parquet('{TEST_DIR}/bound_plan_reordered.parquet', bound_schema={'b':'BIGINT','a':'BIGINT'}, hive_partitioning=false)
+----
+physical_plan	<!REGEX>:.*READ_PARQUET.*
+
 statement ok
 SET debug_verify_aggregate_state_export = getvariable('bound_schema_saved_state_export')
 
@@ -94,3 +108,40 @@ query I
 SELECT filename <> 'stored' FROM read_parquet('{TEST_DIR}/bound_plan_filename.parquet', bound_schema={'filename':'VARCHAR'}, filename=true, hive_partitioning=false)
 ----
 true
+
+# Collation is part of physical/output compatibility even when names and type IDs match.
+statement ok
+COPY (SELECT 'Z' v UNION ALL SELECT 'a') TO '{TEST_DIR}/bound_plan_collation.parquet' (FORMAT parquet)
+
+query TT
+SELECT min(v), max(v) FROM read_parquet('{TEST_DIR}/bound_plan_collation.parquet', bound_schema={'v':'VARCHAR COLLATE nocase'}, hive_partitioning=false)
+----
+a	Z
+
+query T
+SELECT v FROM read_parquet('{TEST_DIR}/bound_plan_collation.parquet', bound_schema={'v':'VARCHAR COLLATE nocase'}, hive_partitioning=false) WHERE v='z'
+----
+Z
+
+# A collated target must not delegate its expression to the uncollated physical column.
+query II
+EXPLAIN SELECT strlen(v) FROM read_parquet('{TEST_DIR}/bound_plan_collation.parquet', bound_schema={'v':'VARCHAR COLLATE nocase'}, hive_partitioning=false)
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+query I rowsort
+SELECT strlen(v) FROM read_parquet('{TEST_DIR}/bound_plan_collation.parquet', bound_schema={'v':'VARCHAR COLLATE nocase'}, hive_partitioning=false)
+----
+1
+1
+
+# The same physical column is still eligible when the complete type matches.
+query II
+EXPLAIN SELECT strlen(v) FROM read_parquet('{TEST_DIR}/bound_plan_collation.parquet', bound_schema={'v':'VARCHAR'}, hive_partitioning=false)
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query II
+SELECT min(a), max(b) FROM read_parquet('{TEST_DIR}/bound_plan_reordered.parquet', bound_schema={'a':'BIGINT','b':'BIGINT'}, hive_partitioning=false)
+----
+7	2000

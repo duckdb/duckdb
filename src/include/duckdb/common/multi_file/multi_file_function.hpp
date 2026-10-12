@@ -1162,8 +1162,7 @@ public:
 			}
 		}
 
-		if (!bind_data.file_options.bound_schema.empty() && bind_data.file_options.filename &&
-		    bind_data.reader_bind.filename_idx == primary_index) {
+		if (!bind_data.file_options.bound_schema.empty() && bind_data.IsGeneratedColumn(primary_index)) {
 			// A physical shadow's bounds do not describe the generated path. Explicit scan statistics above still do.
 			return nullptr;
 		}
@@ -1175,7 +1174,7 @@ public:
 		}
 		auto result = bind_data.initial_reader->GetStatistics(context, col_name);
 		if (result && !bind_data.file_options.bound_schema.empty() &&
-		    !result->GetType().EqualsIncludingCollation(bind_data.types[primary_index])) {
+		    !bind_data.MatchesPhysicalColumn(primary_index, col_name, result->GetType())) {
 			// Check the whole root before interpreting an extracted child's positional statistics.
 			return nullptr;
 		}

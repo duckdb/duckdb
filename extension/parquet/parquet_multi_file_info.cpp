@@ -226,17 +226,8 @@ static vector<PartitionStatistics> ParquetMultiFileGetPartitionStats(ClientConte
 		auto result = TableFunctionMultiFileWrapper::GetPartitionStats(context, input);
 		if (!bind_data.file_options.bound_schema.empty()) {
 			// Column accessors address physical ordinals and types, not the mapped output or generated roles.
-			bool identity = bind_data.initial_reader && !bind_data.file_options.filename &&
-			                !bind_data.file_options.file_row_number &&
-			                bind_data.reader_bind.hive_partitioning_indexes.empty();
-			if (identity) {
-				auto &columns = bind_data.initial_reader->GetColumns();
-				identity = columns.size() == bind_data.types.size();
-				for (idx_t i = 0; identity && i < columns.size(); i++) {
-					identity = columns[i].name == bind_data.names[i] &&
-					           columns[i].type.EqualsIncludingCollation(bind_data.types[i]);
-				}
-			}
+			const bool identity =
+			    bind_data.initial_reader && bind_data.HasIdentityMapping(bind_data.initial_reader->GetColumns());
 			if (!identity) {
 				for (auto &partition : result) {
 					partition.partition_row_group.reset();
