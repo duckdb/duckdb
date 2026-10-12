@@ -1,4 +1,5 @@
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/operator/add.hpp"
 
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/error_data.hpp"
@@ -50,9 +51,14 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStateme
 	// Set query deadline if max_execution_time is configured
 	auto max_execution_time = Settings::Get<MaxExecutionTimeSetting>(*this);
 	if (max_execution_time > 0) {
-		auto now = steady_clock::now();
-		auto deadline_tp = now + milliseconds(max_execution_time);
-		query_deadline = NumericCast<idx_t>(duration_cast<milliseconds>(deadline_tp.time_since_epoch()).count());
+		auto now_ms = NumericCast<idx_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
+		idx_t deadline;
+		if (TryAddOperator::Operation<idx_t, idx_t, idx_t>(now_ms, NumericCast<idx_t>(max_execution_time), deadline)) {
+			query_deadline = deadline;
+		} else {
+			// the deadline is too far in the future to be represented - there is effectively no deadline
+			query_deadline.SetInvalid();
+		}
 	} else {
 		query_deadline.SetInvalid();
 	}

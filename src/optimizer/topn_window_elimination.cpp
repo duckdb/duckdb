@@ -275,6 +275,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	child = *filter.children[0];
 
 	// Get bindings and types from filter to use in top-most operator later
+	// the types are not necessarily resolved at this point (e.g., after previous optimizers changed the plan)
+	filter.ResolveOperatorTypes();
 	const auto topmost_bindings = filter.GetColumnBindings();
 	const auto topmost_types = filter.types;
 	vector<ColumnBinding> new_bindings;
