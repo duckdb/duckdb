@@ -139,6 +139,10 @@ static auto RelaxedTypeMatch(MAP &map, const LogicalType &type) -> decltype(map.
 		return map.find(LogicalTypeId::DECIMAL);
 	case LogicalTypeId::ENUM:
 		return map.find(LogicalTypeId::ENUM);
+	case LogicalTypeId::GEOMETRY: {
+		auto entry = map.find(LogicalType::GEOMETRY());
+		return entry == map.end() ? map.find(LogicalType::ANY) : entry;
+	}
 	default:
 		return map.find(LogicalType::ANY);
 	}
