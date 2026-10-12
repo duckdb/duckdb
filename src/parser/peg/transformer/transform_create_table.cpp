@@ -33,6 +33,9 @@ PEGTransformerFactory::TransformCreateStatement(PEGTransformer &transformer, con
 		}
 		conflict_policy = OnCreateConflict::REPLACE_ON_CONFLICT;
 	}
+	if (temporary && *temporary == SecretPersistType::PERSISTENT && result->info->type != CatalogType::SECRET_ENTRY) {
+		throw ParserException("PERSISTENT is only supported for CREATE SECRET");
+	}
 	if (result->info->type == CatalogType::SECRET_ENTRY) {
 		auto &secret_info = result->info->Cast<CreateSecretInfo>();
 		secret_info.persist_type = temporary ? *temporary : SecretPersistType::DEFAULT;
@@ -227,6 +230,10 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
     optional<GeneratedColumnDefinition> generated_column, const bool &has_result,
     optional<vector<ColumnConstraintEntry>> column_constraint) {
 	auto qualified_name = QualifiedName(identifier);
+	if (has_result && (!column_constraint || column_constraint->empty())) {
+		throw ParserException("Constraint name of column %s must be followed by a constraint",
+		                      qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA));
+	}
 	bool has_type = type.has_value();
 	bool has_generated = generated_column && generated_column->expr != nullptr;
 	if (!has_type && !has_generated) {

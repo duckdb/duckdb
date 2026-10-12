@@ -85,6 +85,10 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizePivotStatementTrampoline(PEGTransformer &transformer,
                                                         GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	if (!list_pr.Child<OptionalParseResult>(2).HasResult() && !list_pr.Child<OptionalParseResult>(3).HasResult() &&
+	    !list_pr.Child<OptionalParseResult>(4).HasResult()) {
+		throw ParserException("PIVOT requires an ON, USING or GROUP BY clause");
+	}
 	if (!process.child_results[4]) {
 		bool has_parameters = transformer.ParamCount() > process.manual_state;
 		process.SetChildResult(4, transformer.MakeResult<bool>(has_parameters));

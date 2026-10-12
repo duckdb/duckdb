@@ -350,6 +350,7 @@ SampleOptions:
   by_value: true
   rules:
     - SampleClause
+    - SelectSampleClause
     - SampleEntry
     - SampleEntryFunction
     - SampleEntryCount

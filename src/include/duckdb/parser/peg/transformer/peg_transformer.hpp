@@ -3798,6 +3798,9 @@ public:
 	static void InitializeSampleClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeSampleClauseTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
+	static void InitializeSelectSampleClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeSelectSampleClauseTrampoline(PEGTransformer &transformer,
+	                                                                            GeneratedTransformProcess &process);
 	static void InitializeWindowClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeWindowClauseTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
@@ -5556,11 +5559,10 @@ public:
 	                                          optional<vector<unique_ptr<ParsedExpression>>> distinct_on_targets);
 	static vector<unique_ptr<ParsedExpression>>
 	TransformDistinctOnTargets(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> expression);
-	static unique_ptr<TableRef> TransformTableSubquery(PEGTransformer &transformer,
-	                                                   const optional<Identifier> &table_alias_colon,
-	                                                   const optional<bool> &lateral,
-	                                                   unique_ptr<TableRef> subquery_reference,
-	                                                   const optional<TableAlias> &table_alias);
+	static unique_ptr<TableRef>
+	TransformTableSubquery(PEGTransformer &transformer, const optional<Identifier> &table_alias_colon,
+	                       const optional<bool> &lateral, unique_ptr<TableRef> subquery_reference,
+	                       const optional<TableAlias> &table_alias, optional<unique_ptr<SampleOptions>> sample_clause);
 	static unique_ptr<TableRef>
 	TransformBaseTableRef(PEGTransformer &transformer, const optional<Identifier> &table_alias_colon,
 	                      unique_ptr<BaseTableRef> base_table_name, const optional<TableAlias> &table_alias,
@@ -5614,12 +5616,10 @@ public:
 	TransformCatalogReservedSchemaTable(PEGTransformer &transformer, const Identifier &catalog_qualification,
 	                                    const vector<Identifier> &reserved_schema_qualification,
 	                                    const Identifier &reserved_table_name);
-	static unique_ptr<TableRef> TransformTableFunctionLateralOpt(PEGTransformer &transformer,
-	                                                             const optional<bool> &lateral,
-	                                                             const QualifiedName &qualified_table_function,
-	                                                             vector<FunctionArgument> table_function_arguments,
-	                                                             const optional<bool> &with_ordinality,
-	                                                             const optional<TableAlias> &table_alias);
+	static unique_ptr<TableRef> TransformTableFunctionLateralOpt(
+	    PEGTransformer &transformer, const optional<bool> &lateral, const QualifiedName &qualified_table_function,
+	    vector<FunctionArgument> table_function_arguments, const optional<bool> &with_ordinality,
+	    const optional<TableAlias> &table_alias, optional<unique_ptr<SampleOptions>> sample_clause);
 	static unique_ptr<TableRef> TransformTableFunctionAliasColon(PEGTransformer &transformer,
 	                                                             const Identifier &table_alias_colon,
 	                                                             const QualifiedName &qualified_table_function,
@@ -5711,6 +5711,8 @@ public:
 	                                                           unique_ptr<ParsedExpression> expression);
 	static unique_ptr<SampleOptions> TransformSampleClause(PEGTransformer &transformer,
 	                                                       unique_ptr<SampleOptions> sample_entry);
+	static unique_ptr<SampleOptions> TransformSelectSampleClause(PEGTransformer &transformer,
+	                                                             unique_ptr<SampleOptions> sample_entry);
 	static vector<unique_ptr<ParsedExpression>>
 	TransformWindowClause(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> window_definition);
 	static unique_ptr<SampleOptions>
