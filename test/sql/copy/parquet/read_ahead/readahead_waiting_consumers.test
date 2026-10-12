@@ -4,6 +4,9 @@
 
 require parquet
 
+# the file system delay is not available on Windows
+require notwindows
+
 statement ok
 SET threads=16
 

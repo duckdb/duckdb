@@ -193,16 +193,20 @@ unique_ptr<ScanReadAheadJob> ScanReadAhead::ClaimJob() {
 	auto job = std::move(ready_queue.front());
 	ready_queue.pop_front();
 	ReleaseSlot();
-	NotifyProgress();
+	NotifyProgress(false);
 	return job;
 }
 
 void ScanReadAhead::WaitForJob(ScanReadAheadJob &job) {
 	job.SettleIO();
 	// the job's I/O has completed, release its budget charge
-	pending_io_bytes -= job.io_bytes;
+	const auto budget = backlog_budget.load();
+	const auto previous = pending_io_bytes.fetch_sub(job.io_bytes);
+	if (previous >= budget && previous - job.io_bytes < budget) {
+		// the scan is no longer over budget, a waiting thread can produce
+		SignalProgress(false);
+	}
 	job.io_bytes = 0;
-	SignalProgress();
 	ThrowIfError();
 }
 
@@ -210,7 +214,7 @@ ScanReadAheadAcquire ScanReadAhead::AcquireJob(ClientContext &context, TableFunc
                                                const ProduceJobCallback &claim_and_schedule,
                                                unique_ptr<ScanReadAheadJob> &job) {
 	D_ASSERT(!job);
-	idx_t yields = 0;
+	optional<std::chrono::steady_clock::time_point> yield_deadline;
 	while (true) {
 		const auto epoch = ProgressEpoch();
 		// keep the queue full before claiming
@@ -232,8 +236,11 @@ ScanReadAheadAcquire ScanReadAhead::AcquireJob(ClientContext &context, TableFunc
 		if (!job) {
 			// another thread is between claiming an assignment and pushing its job, a short claim is caught by
 			// yielding and a long one is waited for
-			if (yields < MAXIMUM_PRODUCER_YIELDS) {
-				yields++;
+			const auto now = std::chrono::steady_clock::now();
+			if (!yield_deadline) {
+				yield_deadline = now + std::chrono::microseconds(PRODUCER_YIELD_MICROS);
+			}
+			if (now < *yield_deadline) {
 				context.InterruptCheck();
 				TaskScheduler::YieldThread();
 			} else {
@@ -261,17 +268,16 @@ idx_t ScanReadAhead::ReservationDepth() const {
 }
 
 bool ScanReadAhead::TryReserveSlot() {
-	if (active_jobs.load() >= ReservationDepth()) {
-		return false;
-	}
 	// take the minimum job charge up front so concurrent producers cannot all pass the budget check together
 	const bool over_budget = pending_io_bytes.fetch_add(MINIMUM_JOB_IO_CHARGE) >= backlog_budget.load();
 	const idx_t depth = over_budget ? 1 : read_ahead_depth;
 	if (active_jobs.fetch_add(1) >= depth) {
 		--active_jobs;
 		pending_io_bytes -= MINIMUM_JOB_IO_CHARGE;
-		// a concurrent attempt may have failed on this charge, let it retry
-		SignalProgress();
+		if (active_jobs.load() < ReservationDepth()) {
+			// a concurrent attempt failed on this attempt's charge or slot, let it retry
+			SignalProgress(false);
+		}
 		return false;
 	}
 	++active_producers;
@@ -307,17 +313,19 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 	if (job->batch_index < next_batch_index || !pending_jobs.emplace(job->batch_index, std::move(job)).second) {
 		throw InternalException("Read-ahead jobs must have unique batch indexes, assigned densely from 0");
 	}
+	idx_t admitted = 0;
 	while (!pending_jobs.empty() && pending_jobs.begin()->first == next_batch_index) {
 		ready_queue.push_back(std::move(pending_jobs.begin()->second));
 		pending_jobs.erase(pending_jobs.begin());
 		next_batch_index++;
+		admitted++;
 	}
-	NotifyProgress();
+	NotifyProgress(admitted > 1);
 }
 
 void ScanReadAhead::PushError(ErrorData error) {
 	executor->PushError(std::move(error));
-	SignalProgress();
+	SignalProgress(true);
 }
 
 void ScanReadAhead::ScheduleFileOpen(std::function<void()> open_fn, std::function<void()> cancel_fn) {
@@ -349,14 +357,22 @@ void ScanReadAhead::ReleaseSlot() {
 	active_jobs--;
 }
 
-void ScanReadAhead::NotifyProgress() {
-	++progress_epoch;
-	if (waiting_threads.load() > 0) {
+void ScanReadAhead::WakeWaiters(bool wake_all) {
+	if (wake_all) {
 		progress.notify_all();
+	} else {
+		progress.notify_one();
 	}
 }
 
-void ScanReadAhead::SignalProgress() {
+void ScanReadAhead::NotifyProgress(bool wake_all) {
+	++progress_epoch;
+	if (waiting_threads.load() > 0) {
+		WakeWaiters(wake_all);
+	}
+}
+
+void ScanReadAhead::SignalProgress(bool wake_all) {
 	++progress_epoch;
 	if (waiting_threads.load() == 0) {
 		return;
@@ -365,7 +381,7 @@ void ScanReadAhead::SignalProgress() {
 		// a waiter that saw the old epoch is blocked in the wait once the lock is free
 		lock_guard<mutex> guard(lock);
 	}
-	progress.notify_all();
+	WakeWaiters(wake_all);
 }
 
 void ScanReadAhead::WaitForProgress(ClientContext &context, idx_t epoch) {
