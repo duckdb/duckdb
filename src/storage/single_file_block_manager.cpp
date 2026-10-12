@@ -951,7 +951,9 @@ void SingleFileBlockManager::MarkBlockAsCommitted(block_id_t block_id, transacti
 	lock_guard<mutex> lock(single_file_block_lock);
 	auto entry = newly_used_blocks.find(block_id);
 	// optimistic writes keep their blocks newly used until their commit
-	D_ASSERT(entry != newly_used_blocks.end());
+	if (entry == newly_used_blocks.end()) {
+		throw InternalException("MarkBlockAsCommitted called with block id %d that is not newly used", block_id);
+	}
 	D_ASSERT(entry->second == MAX_TRANSACTION_ID || entry->second == commit_id);
 	entry->second = commit_id;
 }
