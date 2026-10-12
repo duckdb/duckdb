@@ -24,6 +24,22 @@ TEST_CASE("HTTP retry back-off uses full jitter with a cap", "[http]") {
 	REQUIRE(HTTPRetryBudget::BackoffMs(0, 4, 5, 0, 12345) == 0);
 }
 
+TEST_CASE("Throttled HTTP retries keep at least half the back-off window", "[http]") {
+	// Retry 1 against a throttling server sleeps in [wait / 2, wait]
+	REQUIRE(HTTPRetryBudget::BackoffMs(100, 4, 1, 0, 0, true) == 50);
+	REQUIRE(HTTPRetryBudget::BackoffMs(100, 4, 1, 0, 50, true) == 100);
+	REQUIRE(HTTPRetryBudget::BackoffMs(100, 4, 1, 0, 51, true) == 50);
+	// Retry 3 keeps the proportion
+	REQUIRE(HTTPRetryBudget::BackoffMs(100, 4, 3, 0, 0, true) == 800);
+	REQUIRE(HTTPRetryBudget::BackoffMs(100, 4, 3, 0, 800, true) == 1600);
+	// The cap applies to the whole window
+	REQUIRE(HTTPRetryBudget::BackoffMs(1000, 2, 40, 0, 0, true) == HTTPRetryBudget::MAX_BACKOFF_MS / 2);
+	// Retry-After still raises the floor
+	REQUIRE(HTTPRetryBudget::BackoffMs(100, 4, 1, 3000, 0, true) == 3000);
+	// A zero wait never sleeps, throttled or not
+	REQUIRE(HTTPRetryBudget::BackoffMs(0, 4, 5, 0, 12345, true) == 0);
+}
+
 TEST_CASE("Retry-After header values parse as seconds or HTTP-dates", "[http]") {
 	uint64_t ms = 0;
 	REQUIRE(HTTPRetryBudget::TryParseRetryAfterMs("3", ms));
@@ -43,6 +59,25 @@ TEST_CASE("Retry-After header values parse as seconds or HTTP-dates", "[http]") 
 	REQUIRE(ms > 0);
 }
 
+TEST_CASE("Retryable HTTP statuses are the transient ones", "[http]") {
+	REQUIRE(HTTPUtil::IsRetryableStatus(HTTPStatusCode::RequestTimeout_408));
+	REQUIRE(HTTPUtil::IsRetryableStatus(HTTPStatusCode::TooManyRequests_429));
+	REQUIRE(HTTPUtil::IsRetryableStatus(HTTPStatusCode::InternalServerError_500));
+	REQUIRE(HTTPUtil::IsRetryableStatus(HTTPStatusCode::BadGateway_502));
+	REQUIRE(HTTPUtil::IsRetryableStatus(HTTPStatusCode::ServiceUnavailable_503));
+	REQUIRE(HTTPUtil::IsRetryableStatus(HTTPStatusCode::GatewayTimeout_504));
+	REQUIRE(HTTPUtil::IsRetryableStatus(HTTPStatusCode::InsufficientStorage_507));
+	// Server errors about the request or the server's abilities never clear up on their own
+	REQUIRE_FALSE(HTTPUtil::IsRetryableStatus(HTTPStatusCode::NotImplemented_501));
+	REQUIRE_FALSE(HTTPUtil::IsRetryableStatus(HTTPStatusCode::HttpVersionNotSupported_505));
+	REQUIRE_FALSE(HTTPUtil::IsRetryableStatus(HTTPStatusCode::NetworkAuthenticationRequired_511));
+	// Client errors other than the timeouts and throttles are final
+	REQUIRE_FALSE(HTTPUtil::IsRetryableStatus(HTTPStatusCode::Forbidden_403));
+	REQUIRE_FALSE(HTTPUtil::IsRetryableStatus(HTTPStatusCode::NotFound_404));
+	REQUIRE_FALSE(HTTPUtil::IsRetryableStatus(HTTPStatusCode::OK_200));
+	REQUIRE_FALSE(HTTPUtil::IsRetryableStatus(HTTPStatusCode::INVALID));
+}
+
 TEST_CASE("HTTP retry quota charges retries and refunds successes", "[http]") {
 	HTTPRetryQuota quota;
 	REQUIRE(quota.Available() == HTTPRetryQuota::INITIAL_CAPACITY);
@@ -58,14 +93,27 @@ TEST_CASE("HTTP retry quota charges retries and refunds successes", "[http]") {
 	REQUIRE_FALSE(quota.TryAcquire(1));
 }
 
+TEST_CASE("HTTP retry quota is full again after the host was left alone", "[http]") {
+	HTTPRetryQuota quota;
+	const auto now_ms = TimePoint::GetTickMs();
+	REQUIRE(quota.TryAcquire(HTTPRetryQuota::INITIAL_CAPACITY, now_ms));
+	REQUIRE(quota.Available() == 0);
+	// Use shortly after keeps the quota empty
+	REQUIRE_FALSE(quota.TryAcquire(1, now_ms + HTTPRetryQuota::IDLE_RESET_MS - 1));
+	REQUIRE(quota.IdleMs(now_ms + HTTPRetryQuota::IDLE_RESET_MS - 1) == 0);
+	// Once nothing has touched it for the idle period, the quota starts over
+	REQUIRE(quota.TryAcquire(HTTPRetryQuota::RETRY_COST, now_ms + 2 * HTTPRetryQuota::IDLE_RESET_MS));
+	REQUIRE(quota.Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
+}
+
 TEST_CASE("HTTP retry budget stops when the host quota is exhausted", "[http]") {
 	HTTPUtil http_util;
 	HTTPParams params(http_util);
 	params.retries = 100;
 	params.retry_wait_ms = 0;
-	HTTPRetryQuota quota;
+	auto quota = make_shared_ptr<HTTPRetryQuota>();
 	// Leave room for exactly two server-error retries
-	REQUIRE(quota.TryAcquire(HTTPRetryQuota::INITIAL_CAPACITY - 2 * HTTPRetryQuota::RETRY_COST));
+	REQUIRE(quota->TryAcquire(HTTPRetryQuota::INITIAL_CAPACITY - 2 * HTTPRetryQuota::RETRY_COST));
 
 	HTTPRetryBudget budget(params);
 	budget.BindQuota(quota);
@@ -77,13 +125,38 @@ TEST_CASE("HTTP retry budget stops when the host quota is exhausted", "[http]") 
 	REQUIRE(attempts == 3);
 	REQUIRE(budget.RetriesUsed() == 2);
 	REQUIRE(budget.QuotaExhausted());
-	REQUIRE(quota.Available() == 0);
+	REQUIRE(quota->Available() == 0);
 
-	// A success refunds the cost of the last admitted retry
+	// The refused retry means the earlier ones did not get the request through: a later success in the same
+	// budget refunds only the single token of a request that never retried
 	budget.RecordSuccess();
-	REQUIRE(quota.Available() == HTTPRetryQuota::RETRY_COST);
+	REQUIRE(quota->Available() == HTTPRetryQuota::NO_RETRY_REFUND);
+	quota->Release(HTTPRetryQuota::RETRY_COST - HTTPRetryQuota::NO_RETRY_REFUND);
+
+	// A success right after an admitted retry refunds that retry's cost
+	HTTPRetryBudget refunded_budget(params);
+	refunded_budget.BindQuota(quota);
+	attempts = 0;
+	refunded_budget.Run([&]() {
+		attempts++;
+		return attempts == 1 ? HTTPRetryDecision::Retry() : HTTPRetryDecision::Finish();
+	});
+	REQUIRE(attempts == 2);
+	REQUIRE(quota->Available() == 0);
+	refunded_budget.RecordSuccess();
+	REQUIRE(quota->Available() == HTTPRetryQuota::RETRY_COST);
+
+	// A run that starts afresh is not marked by an earlier refusal
+	HTTPRetryBudget reused_budget(params);
+	reused_budget.BindQuota(quota);
+	reused_budget.Run([&]() { return HTTPRetryDecision::Retry(); });
+	REQUIRE(reused_budget.QuotaExhausted());
+	reused_budget.Run([&]() { return HTTPRetryDecision::Finish(); });
+	REQUIRE_FALSE(reused_budget.QuotaExhausted());
+	REQUIRE(quota->Available() == 0);
 
 	// Transport failures cost more than server errors
+	quota->Release(HTTPRetryQuota::RETRY_COST);
 	HTTPRetryBudget transient_budget(params);
 	transient_budget.BindQuota(quota);
 	attempts = 0;
@@ -93,7 +166,7 @@ TEST_CASE("HTTP retry budget stops when the host quota is exhausted", "[http]") 
 	});
 	REQUIRE(attempts == 1);
 	REQUIRE(transient_budget.QuotaExhausted());
-	quota.Release(HTTPRetryQuota::TRANSIENT_RETRY_COST);
+	quota->Release(HTTPRetryQuota::TRANSIENT_RETRY_COST);
 	HTTPRetryBudget transient_budget_with_room(params);
 	transient_budget_with_room.BindQuota(quota);
 	attempts = 0;
@@ -102,13 +175,13 @@ TEST_CASE("HTTP retry budget stops when the host quota is exhausted", "[http]") 
 		return HTTPRetryDecision::Transient();
 	});
 	REQUIRE(attempts == 2);
-	REQUIRE(quota.Available() == HTTPRetryQuota::RETRY_COST);
+	REQUIRE(quota->Available() == HTTPRetryQuota::RETRY_COST);
 
 	// A request that succeeded without retrying refunds a single token
 	HTTPRetryBudget clean_budget(params);
 	clean_budget.BindQuota(quota);
 	clean_budget.RecordSuccess();
-	REQUIRE(quota.Available() == HTTPRetryQuota::RETRY_COST + HTTPRetryQuota::NO_RETRY_REFUND);
+	REQUIRE(quota->Available() == HTTPRetryQuota::RETRY_COST + HTTPRetryQuota::NO_RETRY_REFUND);
 
 	// Throttled retries beyond http_retries are still charged
 	params.retries = 1;
@@ -121,7 +194,42 @@ TEST_CASE("HTTP retry budget stops when the host quota is exhausted", "[http]") 
 	});
 	REQUIRE(attempts == 2);
 	REQUIRE(throttled_budget.ThrottledRetries() == 1);
-	REQUIRE(quota.Available() == HTTPRetryQuota::NO_RETRY_REFUND);
+	REQUIRE(quota->Available() == HTTPRetryQuota::NO_RETRY_REFUND);
+}
+
+TEST_CASE("HTTP retry budget charges the host of the request being retried", "[http]") {
+	HTTPUtil http_util;
+	HTTPParams params(http_util);
+	params.retries = 10;
+	params.retry_wait_ms = 0;
+	auto first_host = make_shared_ptr<HTTPRetryQuota>();
+	auto second_host = make_shared_ptr<HTTPRetryQuota>();
+
+	// One operation: a request to the first host is retried once, then a redirect sends it to the second host,
+	// where it is retried once more and succeeds
+	HTTPRetryBudget budget(params);
+	budget.BindQuota(first_host);
+	idx_t attempts = 0;
+	budget.Run([&]() {
+		attempts++;
+		return attempts == 1 ? HTTPRetryDecision::Retry() : HTTPRetryDecision::Finish();
+	});
+	REQUIRE(first_host->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
+	REQUIRE(second_host->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
+
+	budget.BindQuota(second_host);
+	attempts = 0;
+	budget.Run([&]() {
+		attempts++;
+		return attempts == 1 ? HTTPRetryDecision::Retry() : HTTPRetryDecision::Finish();
+	});
+	REQUIRE(first_host->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
+	REQUIRE(second_host->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
+
+	// The success refunds the host that was charged for the last retry
+	budget.RecordSuccess();
+	REQUIRE(first_host->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
+	REQUIRE(second_host->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
 }
 
 TEST_CASE("HTTP retry budget grants extra throttled retries unless retries are off", "[http]") {
@@ -138,6 +246,8 @@ TEST_CASE("HTTP retry budget grants extra throttled retries unless retries are o
 	});
 	REQUIRE(attempts == 1 + 1 + HTTPRetryBudget::THROTTLE_EXTRA_RETRIES);
 	REQUIRE(budget.ThrottledRetries() == 1 + HTTPRetryBudget::THROTTLE_EXTRA_RETRIES);
+	// Every attempt stayed within what the budget announces as its maximum
+	REQUIRE(attempts == budget.MaxAttempts());
 
 	params.retries = 0;
 	HTTPRetryBudget no_retries(params);
@@ -147,12 +257,44 @@ TEST_CASE("HTTP retry budget grants extra throttled retries unless retries are o
 		return HTTPRetryDecision::Throttled();
 	});
 	REQUIRE(attempts == 1);
+	REQUIRE(no_retries.MaxAttempts() == 1);
 }
 
-TEST_CASE("HTTPUtil hands out one retry quota per host", "[http]") {
+TEST_CASE("HTTP retry budget numbers every send of the operation", "[http]") {
 	HTTPUtil http_util;
-	auto &first = http_util.GetRetryQuota("https://a.example.com");
-	auto &second = http_util.GetRetryQuota("https://b.example.com");
-	REQUIRE(&first != &second);
-	REQUIRE(&first == &http_util.GetRetryQuota("https://a.example.com"));
+	HTTPParams params(http_util);
+	params.retries = 3;
+	params.retry_wait_ms = 0;
+	HTTPRetryBudget budget(params);
+	REQUIRE(budget.MaxAttempts() == 1 + 3 + HTTPRetryBudget::THROTTLE_EXTRA_RETRIES);
+	// Two sends in one inner loop, a corrected re-send without a retry in between, then one more
+	REQUIRE(budget.BeginAttempt() == 1);
+	REQUIRE(budget.BeginAttempt() == 2);
+	REQUIRE(budget.BeginAttempt() == 3);
+	REQUIRE(budget.RetriesUsed() == 0);
+	budget.Run([&]() { return HTTPRetryDecision::Finish(); });
+	REQUIRE(budget.BeginAttempt() == 4);
+}
+
+TEST_CASE("HTTPUtil hands out one retry quota per host and forgets the quietest", "[http]") {
+	HTTPUtil http_util;
+	auto first = http_util.GetRetryQuota("https://a.example.com");
+	auto second = http_util.GetRetryQuota("https://b.example.com");
+	REQUIRE(first != second);
+	REQUIRE(first == http_util.GetRetryQuota("https://a.example.com"));
+
+	// Make the first host the one that was used least recently
+	REQUIRE(first->TryAcquire(HTTPRetryQuota::RETRY_COST, TimePoint::GetTickMs() - 1000));
+	for (idx_t i = 0; i < HTTPUtil::MAX_RETRY_QUOTAS - 2; i++) {
+		http_util.GetRetryQuota(StringUtil::Format("https://host%llu.example.com", i));
+	}
+	// The map is full: the next new host replaces the first one, which gets a fresh quota on its return
+	auto newcomer = http_util.GetRetryQuota("https://c.example.com");
+	REQUIRE(newcomer != first);
+	REQUIRE(second == http_util.GetRetryQuota("https://b.example.com"));
+	auto returned = http_util.GetRetryQuota("https://a.example.com");
+	REQUIRE(returned != first);
+	REQUIRE(returned->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
+	// The budget that still held the evicted quota keeps a valid object
+	REQUIRE(first->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
 }

@@ -407,7 +407,11 @@ public:
 	//! Runs before every attempt with the 1-based attempt number and the configured maximum, e.g. to tag headers.
 	DUCKDB_API virtual void PrepareAttempt(BaseRequest &request, idx_t attempt, idx_t max_attempts);
 	//! Retry quota shared by all requests of this provider against one host.
-	DUCKDB_API HTTPRetryQuota &GetRetryQuota(const string &proto_host_port);
+	DUCKDB_API shared_ptr<HTTPRetryQuota> GetRetryQuota(const string &proto_host_port);
+	//! Whether a received status is worth retrying: 408, 418, 429 and the server errors that can clear up.
+	DUCKDB_API static bool IsRetryableStatus(HTTPStatusCode status);
+	//! Hosts remembered for retry quotas; past this the host unused for longest makes room.
+	static constexpr idx_t MAX_RETRY_QUOTAS = 1024;
 
 	//! Whether replaying this request is safe. POST is the only method we cannot assume is idempotent.
 	DUCKDB_API static bool IsIdempotent(RequestType type);
@@ -429,8 +433,8 @@ private:
 private:
 	//! Protects retry_quotas.
 	mutex retry_quota_lock;
-	//! Per-host retry quotas, created on first use.
-	unordered_map<string, unique_ptr<HTTPRetryQuota>> retry_quotas;
+	//! Per-host retry quotas, created on first use; budgets keep theirs alive across an eviction.
+	unordered_map<string, shared_ptr<HTTPRetryQuota>> retry_quotas;
 
 public:
 	static duckdb::unique_ptr<HTTPResponse>

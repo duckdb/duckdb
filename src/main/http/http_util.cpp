@@ -123,13 +123,22 @@ bool HTTPResponse::ShouldRetry() const {
 		// request errors are eligible for retry
 		return true;
 	}
+	return HTTPUtil::IsRetryableStatus(status);
+}
+
+bool HTTPUtil::IsRetryableStatus(HTTPStatusCode status) {
 	switch (status) {
 	case HTTPStatusCode::RequestTimeout_408:
 	case HTTPStatusCode::ImATeapot_418:
 	case HTTPStatusCode::TooManyRequests_429:
 		return true;
+	// Server errors that describe the request or the server's abilities, not a passing condition.
+	case HTTPStatusCode::NotImplemented_501:
+	case HTTPStatusCode::HttpVersionNotSupported_505:
+	case HTTPStatusCode::NetworkAuthenticationRequired_511:
+		return false;
 	default: {
-		// Any server error is eligible, as in the AWS SDKs.
+		// Any other server error is eligible, as in the AWS SDKs.
 		const auto code = static_cast<uint16_t>(status);
 		return code >= 500 && code < 600;
 	}
@@ -148,13 +157,26 @@ void HTTPUtil::PrepareAttempt(BaseRequest &request, idx_t attempt, idx_t max_att
 	// default: requests are sent as-is
 }
 
-HTTPRetryQuota &HTTPUtil::GetRetryQuota(const string &proto_host_port) {
+shared_ptr<HTTPRetryQuota> HTTPUtil::GetRetryQuota(const string &proto_host_port) {
 	lock_guard<mutex> guard(retry_quota_lock);
-	auto &entry = retry_quotas[proto_host_port];
-	if (!entry) {
-		entry = make_uniq<HTTPRetryQuota>();
+	auto entry = retry_quotas.find(proto_host_port);
+	if (entry != retry_quotas.end()) {
+		return entry->second;
 	}
-	return *entry;
+	if (retry_quotas.size() >= MAX_RETRY_QUOTAS) {
+		// Forget the host that has been quiet for longest; an idle quota would have been reset anyway.
+		const auto now_ms = TimePoint::GetTickMs();
+		auto victim = retry_quotas.begin();
+		for (auto it = retry_quotas.begin(); it != retry_quotas.end(); ++it) {
+			if (it->second->IdleMs(now_ms) > victim->second->IdleMs(now_ms)) {
+				victim = it;
+			}
+		}
+		retry_quotas.erase(victim);
+	}
+	auto quota = make_shared_ptr<HTTPRetryQuota>();
+	retry_quotas.emplace(proto_host_port, quota);
+	return quota;
 }
 
 unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request) {
@@ -380,6 +402,28 @@ void HTTPUtil::DecomposeURL(const string &input, string &path_out, string &proto
 	}
 }
 
+// Handlers turn error statuses into exceptions; rebuild the response they saw so it can be judged like a received one.
+static unique_ptr<HTTPResponse> ResponseFromError(const ErrorData &error) {
+	auto &extra_info = error.ExtraInfo();
+	auto status_entry = extra_info.find("status_code");
+	int32_t status_code = 0;
+	if (status_entry == extra_info.end() ||
+	    !TryCast::Operation<string_t, int32_t>(string_t(status_entry->second), status_code)) {
+		return nullptr;
+	}
+	auto response = make_uniq<HTTPResponse>(HTTPUtil::ToStatusCode(status_code));
+	for (auto &entry : extra_info) {
+		if (entry.first == "response_body") {
+			response->body = entry.second;
+		} else if (entry.first == "reason") {
+			response->reason = entry.second;
+		} else if (StringUtil::StartsWith(entry.first, "header_")) {
+			response->headers.Insert(entry.first.substr(7), entry.second);
+		}
+	}
+	return response;
+}
+
 // Retry eligible requests using an operation-local budget, the host's retry quota and the transport retry hook.
 duckdb::unique_ptr<HTTPResponse>
 HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request, BaseRequest &request,
@@ -390,21 +434,24 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 	if (!retry_budget) {
 		retry_budget = local_retry_budget;
 	}
+	// Charge this request's host, even when a shared budget was bound to another host before.
 	retry_budget->BindQuota(params.http_util.GetRetryQuota(request.proto_host_port));
-	const idx_t max_attempts = params.retries + 1;
+	const idx_t max_attempts = retry_budget->MaxAttempts();
 
 	unique_ptr<HTTPResponse> response;
 	std::exception_ptr caught_e;
+	ErrorData caught_error;
 	string exception_error;
 	bool should_retry = false;
 	retry_budget->Run(
 	    [&]() {
 		    response.reset();
 		    caught_e = nullptr;
+		    caught_error = ErrorData();
 		    exception_error.clear();
-		    string caught_status;
-		    string caught_retry_after;
-		    params.http_util.PrepareAttempt(request, retry_budget->RetriesUsed() + 1, max_attempts);
+		    unique_ptr<HTTPResponse> caught_response;
+		    // Attempts are numbered per operation, so a re-send after a correction counts as the retry it is.
+		    params.http_util.PrepareAttempt(request, retry_budget->BeginAttempt(), max_attempts);
 		    try {
 			    response = on_request();
 			    if (response) {
@@ -413,53 +460,61 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		    } catch (IOException &e) {
 			    exception_error = e.what();
 			    caught_e = std::current_exception();
+			    caught_error = ErrorData(e);
 		    } catch (HTTPException &e) {
 			    exception_error = e.what();
 			    caught_e = std::current_exception();
-			    // Handlers turn error statuses into exceptions; recover the throttle information.
-			    ErrorData error_data(e);
-			    auto entry = error_data.ExtraInfo().find("status_code");
-			    if (entry != error_data.ExtraInfo().end()) {
-				    caught_status = entry->second;
-			    }
-			    auto retry_entry = error_data.ExtraInfo().find("header_Retry-After");
-			    if (retry_entry != error_data.ExtraInfo().end()) {
-				    caught_retry_after = retry_entry->second;
-			    }
+			    caught_error = ErrorData(e);
+			    caught_response = ResponseFromError(caught_error);
 		    }
 
-		    // Request errors and caught exceptions are eligible without a response status.
-		    should_retry = !response || params.http_util.ShouldRetry(request, *response);
+		    if (response) {
+			    should_retry = params.http_util.ShouldRetry(request, *response);
+		    } else if (caught_response) {
+			    // A thrown status is judged like a received one, provider rules included.
+			    should_retry = params.http_util.ShouldRetry(request, *caught_response);
+		    } else {
+			    // Without a status the transport failed and nothing is known about the server.
+			    should_retry = true;
+		    }
 		    if (!should_retry) {
-			    auto response_code = static_cast<uint16_t>(response->status);
-			    response->success = (response_code >= 200 && response_code < 300) ||
-			                        response->status == HTTPStatusCode::NotModified_304;
+			    if (response) {
+				    auto response_code = static_cast<uint16_t>(response->status);
+				    response->success = (response_code >= 200 && response_code < 300) ||
+				                        response->status == HTTPStatusCode::NotModified_304;
+			    }
 			    return HTTPRetryDecision::Finish();
 		    }
 		    if (!HTTPUtil::IsIdempotent(request.type)) {
 			    return HTTPRetryDecision::Finish();
 		    }
-		    const bool throttled = (response && (response->status == HTTPStatusCode::TooManyRequests_429 ||
-		                                         response->status == HTTPStatusCode::ServiceUnavailable_503)) ||
-		                           caught_status == "429" || caught_status == "503";
-		    if (throttled) {
-			    if (response && response->headers.HasHeader("Retry-After")) {
-				    caught_retry_after = response->headers.GetHeaderValue("Retry-After");
-			    }
-			    return HTTPRetryDecision::Throttled(caught_retry_after);
+		    if (!response && !caught_response) {
+			    // The transport failed before any status arrived: nothing is known about the server.
+			    return HTTPRetryDecision::Transient();
 		    }
-		    // Without a status the transport failed and nothing is known about the server.
-		    const bool received_status = (response && !response->HasRequestError()) || !caught_status.empty();
-		    return received_status ? HTTPRetryDecision::Retry() : HTTPRetryDecision::Transient();
+		    auto &judged = response ? *response : *caught_response;
+		    if (judged.HasRequestError()) {
+			    return HTTPRetryDecision::Transient();
+		    }
+		    if (judged.status == HTTPStatusCode::TooManyRequests_429 ||
+		        judged.status == HTTPStatusCode::ServiceUnavailable_503) {
+			    return HTTPRetryDecision::Throttled(
+			        judged.headers.HasHeader("Retry-After") ? judged.headers.GetHeaderValue("Retry-After") : string());
+		    }
+		    return HTTPRetryDecision::Retry();
 	    },
 	    retry_cb);
 
-	if (!should_retry) {
+	if (!should_retry && response) {
 		if (response->success) {
 			retry_budget->RecordSuccess();
+		} else {
+			retry_budget->RecordFailure();
 		}
 		return response;
 	}
+	// The request failed: it threw, could not be retried any further, or is not replay-safe.
+	retry_budget->RecordFailure();
 	string quota_note;
 	if (retry_budget->QuotaExhausted()) {
 		quota_note = StringUtil::Format(" (retry quota for '%s' exhausted: requests to this host keep failing)",
@@ -470,13 +525,23 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 			response = make_uniq<HTTPResponse>(HTTPStatusCode::INVALID);
 			response->request_error =
 			    (exception_error.empty() ? "Unknown error" : std::move(exception_error)) + quota_note;
+		} else if (!quota_note.empty()) {
+			// A received error keeps its status; the reason carries why it was not retried.
+			response->reason += quota_note;
 		}
 		response->success = false;
 		return response;
 	}
 	auto method = EnumUtil::ToString(request.type);
 	if (caught_e) {
-		std::rethrow_exception(caught_e);
+		if (quota_note.empty()) {
+			std::rethrow_exception(caught_e);
+		}
+		// Same type and extra info as the caught exception, with the quota note appended.
+		if (caught_error.Type() == ExceptionType::HTTP) {
+			throw HTTPException(caught_error.ExtraInfo(), caught_error.RawMessage() + quota_note);
+		}
+		throw IOException(caught_error.ExtraInfo(), caught_error.RawMessage() + quota_note);
 	}
 	if (response && !response->HasRequestError()) {
 		throw HTTPException(*response, "Request returned HTTP %d for HTTP %s to '%s'%s",
