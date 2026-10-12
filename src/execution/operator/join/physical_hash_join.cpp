@@ -1904,11 +1904,9 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			sink.owned_local_hash_tables.clear();
 			if (filter_pushdown && !sink.skip_filter_pushdown && ht.GetSinkCollection().Count() > 0) {
 				auto filter_min_max = filter_pushdown->FinalizeMinMax(*sink.global_filter_state);
-				filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht, true, false,
+				filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht, false, false,
 				                                 sink.global_filter_state.get());
 			}
-			// Build the Bloom filter from all build rounds before it is published to the probe side.
-			ht.BuildBloomFilterFromSinkCollection();
 			ht.PrepareBloomFilterForFinalize();
 			D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
 			sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
