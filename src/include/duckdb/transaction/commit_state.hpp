@@ -90,8 +90,6 @@ public:
 	                     ActiveTransactionState transaction_state, CommitMode commit_mode);
 
 public:
-	//! Throws if another transaction has altered or dropped a table that an entry modifies
-	void CheckWriteConflict(UndoFlags type, data_ptr_t data);
 	void CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info);
 	void RevertCommit(UndoFlags type, data_ptr_t data);
 	void Flush();

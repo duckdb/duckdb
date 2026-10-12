@@ -108,6 +108,11 @@ public:
 	}
 
 private:
+	void AddModifiedTable(DuckTableEntry &table_entry);
+	//! Throws if another transaction has altered or dropped a table that this transaction modified
+	void CheckModifiedTables();
+
+private:
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted
 	UndoBuffer undo_buffer;
@@ -121,6 +126,10 @@ private:
 	mutex sequence_lock;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	reference_map_t<SequenceCatalogEntry, reference<SequenceValue>> sequence_usage;
+	//! Lock for accessing modified_tables
+	mutex modified_tables_lock;
+	//! The tables that the appends, deletes and updates of this transaction modify
+	reference_set_t<DuckTableEntry> modified_tables;
 	//! Lock for the active_locks map
 	mutex active_locks_lock;
 	struct ActiveTableLock {

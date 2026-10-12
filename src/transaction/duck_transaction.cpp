@@ -114,6 +114,7 @@ void DuckTransaction::PushDelete(DuckTableEntry &table_entry, RowVersionManager 
 		alloc_size += sizeof(uint16_t) * count;
 	}
 
+	AddModifiedTable(table_entry);
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, alloc_size);
 	auto delete_info = reinterpret_cast<DeleteInfo *>(undo_entry.GetDataMutable());
 	delete_info->version_info = &info;
@@ -132,6 +133,7 @@ void DuckTransaction::PushDelete(DuckTableEntry &table_entry, RowVersionManager 
 }
 
 void DuckTransaction::PushAppend(DuckTableEntry &table_entry, idx_t start_row, idx_t row_count) {
+	AddModifiedTable(table_entry);
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo));
 	auto append_info = reinterpret_cast<AppendInfo *>(undo_entry.GetDataMutable());
 	append_info->table = &table_entry;
@@ -141,11 +143,29 @@ void DuckTransaction::PushAppend(DuckTableEntry &table_entry, idx_t start_row, i
 
 UndoBufferReference DuckTransaction::CreateUpdateInfo(DuckTableEntry &table_entry, idx_t type_size, idx_t entries,
                                                       idx_t row_group_start) {
+	AddModifiedTable(table_entry);
 	idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::UPDATE_TUPLE, alloc_size);
 	auto &update_info = UpdateInfo::Get(undo_entry);
 	UpdateInfo::Initialize(update_info, table_entry, GetTransactionId(), row_group_start);
 	return undo_entry;
+}
+
+void DuckTransaction::AddModifiedTable(DuckTableEntry &table_entry) {
+	lock_guard<mutex> l(modified_tables_lock);
+	modified_tables.insert(table_entry);
+}
+
+void DuckTransaction::CheckModifiedTables() {
+	lock_guard<mutex> l(modified_tables_lock);
+	for (auto &entry : modified_tables) {
+		auto &table = entry.get();
+		if (table.HasParent() && table.Parent().timestamp != GetTransactionId()) {
+			auto &table_storage = table.GetStorage();
+			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
+			                           table_storage.GetTableName(), table_storage.TableModification());
+		}
+	}
 }
 
 void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const SequenceData &data) {
@@ -284,8 +304,12 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 	commit_info.drop_state = &drop_state;
 
 	ErrorData error_data;
+	bool committing_entries = false;
 	try {
 		storage->Commit(commit_state.get());
+		// check for conflicts before committing any entry, so that a conflict never leaves a partial commit
+		CheckModifiedTables();
+		committing_entries = true;
 		undo_buffer.Commit(iterator_state, commit_info);
 		if (!db.IsSystem() && !db.IsTemporary() && Settings::Get<DebugForceCommitFailureSetting>(db.GetDatabase())) {
 			throw InvalidInputException("Forced commit failure (debug_force_commit_failure)");
@@ -304,10 +328,12 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 	}
 
 	try {
-		undo_buffer.RevertCommit(iterator_state, GetTransactionId());
-		if (!db.IsSystem() && !db.IsTemporary() &&
-		    Settings::Get<DebugForceCommitRevertFailureSetting>(db.GetDatabase())) {
-			throw IOException("Forced RevertCommit failure (debug_force_commit_revert_failure)");
+		if (committing_entries) {
+			undo_buffer.RevertCommit(iterator_state, GetTransactionId());
+			if (!db.IsSystem() && !db.IsTemporary() &&
+			    Settings::Get<DebugForceCommitRevertFailureSetting>(db.GetDatabase())) {
+				throw IOException("Forced RevertCommit failure (debug_force_commit_revert_failure)");
+			}
 		}
 		if (commit_state) {
 			// if we have written to the WAL - truncate the WAL on failure

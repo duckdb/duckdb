@@ -1,0 +1,69 @@
+# name: test/sql/transactions/commit_conflict_before_commit.test
+# description: A commit that conflicts with an ALTER of another transaction fails before committing any of its changes
+# group: [transactions]
+
+require no_alternative_verify
+
+require skip_reload
+
+statement ok
+CREATE TABLE t1(id INTEGER PRIMARY KEY);
+
+statement ok
+CREATE TABLE t2(id INTEGER);
+
+statement ok
+INSERT INTO t1 SELECT range FROM range(10);
+
+statement ok
+INSERT INTO t2 SELECT range FROM range(10);
+
+# a failed revert invalidates the database - the conflict must be detected before anything needs to be reverted
+statement ok
+SET debug_force_commit_revert_failure=true;
+
+statement ok con1
+BEGIN
+
+# the first undo entries modify t1, which is not altered
+statement ok con1
+DELETE FROM t1 WHERE id < 5
+
+statement ok con1
+UPDATE t2 SET id = id + 100
+
+statement ok con2
+BEGIN
+
+statement ok con2
+ALTER TABLE t2 ADD COLUMN j INTEGER
+
+statement error con1
+COMMIT
+----
+another transaction has altered this table
+
+statement ok con2
+COMMIT
+
+statement ok
+SET debug_force_commit_revert_failure=false;
+
+# none of the changes of the conflicting transaction were committed
+query I
+SELECT count(*) FROM t1
+----
+10
+
+query II
+SELECT min(id), max(id) FROM t2
+----
+0	9
+
+statement ok
+DELETE FROM t1 WHERE id < 5
+
+query I
+SELECT count(*) FROM t1
+----
+5

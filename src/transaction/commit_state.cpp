@@ -270,32 +270,6 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr, Commi
 	}
 }
 
-static void CheckTableConflict(DuckTransaction &transaction, DuckTableEntry &table) {
-	if (table.HasParent() && table.Parent().timestamp != transaction.GetTransactionId()) {
-		auto &storage = table.GetStorage();
-		auto table_name = storage.GetTableName();
-		auto table_modification = storage.TableModification();
-		throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
-		                           table_name, table_modification);
-	}
-}
-
-void CommitState::CheckWriteConflict(UndoFlags type, data_ptr_t data) {
-	switch (type) {
-	case UndoFlags::INSERT_TUPLE:
-		CheckTableConflict(transaction, *reinterpret_cast<AppendInfo *>(data)->table);
-		break;
-	case UndoFlags::DELETE_TUPLE:
-		CheckTableConflict(transaction, *reinterpret_cast<DeleteInfo *>(data)->table);
-		break;
-	case UndoFlags::UPDATE_TUPLE:
-		CheckTableConflict(transaction, *reinterpret_cast<UpdateInfo *>(data)->table);
-		break;
-	default:
-		break;
-	}
-}
-
 void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
