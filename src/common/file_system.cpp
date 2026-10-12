@@ -413,7 +413,9 @@ string FileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> opene
 	if (path[0] == '~') {
 		auto home_directory = GetHomeDirectory(opener);
 		if (home_directory.empty()) {
-			return path;
+			throw IOException("Cannot expand \"~\" in path \"%s\": the home directory is unknown\nSpecify a home "
+			                  "directory using the SET home_directory='/path/to/dir' option.",
+			                  path);
 		}
 		return home_directory + path.substr(1);
 	}

@@ -68,4 +68,21 @@ TEST_CASE("Environment variables are read through OSUtil", "[api]") {
 	unsetenv("DUCKDB_TEST_OS_UTIL");
 	unsetenv("http_proxy_username");
 }
+
+TEST_CASE("A path starting with ~ errors when the home directory is unknown", "[api]") {
+	auto home = OSUtil::GetConfigurationEnv("HOME");
+	unsetenv("HOME");
+	{
+		DuckDB db(nullptr);
+		Connection con(db);
+		auto result = con.Query("SELECT * FROM glob('~/duckdb_test_os_util_*')");
+		REQUIRE_FAIL(result);
+		REQUIRE(StringUtil::Contains(result->GetError(), "home directory is unknown"));
+		REQUIRE_FAIL(con.Query("SELECT * FROM read_csv('~/duckdb_test_os_util.csv')"));
+
+		REQUIRE_NO_FAIL(con.Query("SET home_directory='" + TestDirectoryPath() + "'"));
+		REQUIRE_NO_FAIL(con.Query("SELECT * FROM glob('~/duckdb_test_os_util_*')"));
+	}
+	setenv("HOME", home.c_str(), 1);
+}
 #endif
