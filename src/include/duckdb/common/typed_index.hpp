@@ -15,11 +15,14 @@ namespace duckdb {
 //! CRTP base for strongly typed index wrappers
 template <class T>
 struct TypedIndex {
+private:
+	friend T;
 	TypedIndex() : index(DConstants::INVALID_INDEX) {
 	}
 	explicit TypedIndex(idx_t index) : index(index) {
 	}
 
+public:
 	idx_t index;
 
 	bool IsValid() const {

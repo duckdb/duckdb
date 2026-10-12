@@ -14,7 +14,9 @@
 namespace duckdb {
 
 struct TableIndex : public TypedIndex<TableIndex> {
-	using TypedIndex::TypedIndex;
+	TableIndex() = default;
+	explicit TableIndex(idx_t index) : TypedIndex(index) {
+	}
 };
 
 } // namespace duckdb

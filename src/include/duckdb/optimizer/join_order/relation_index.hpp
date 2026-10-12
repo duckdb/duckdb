@@ -13,7 +13,9 @@
 
 namespace duckdb {
 struct RelationIndex : public TypedIndex<RelationIndex> {
-	using TypedIndex::TypedIndex;
+	RelationIndex() = default;
+	explicit RelationIndex(idx_t index) : TypedIndex(index) {
+	}
 };
 } // namespace duckdb
 
