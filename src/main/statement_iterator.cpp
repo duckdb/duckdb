@@ -61,7 +61,7 @@ bool StatementIterator::HasMore() {
 }
 
 unique_ptr<SQLStatement> StatementIterator::GetStatementInternal(optional_ptr<ClientContextLock> lock,
-                                                                 bool profile_statement) {
+                                                                 bool profile_statement, bool preprocess) {
 	// Drain the current peel's expansion first.
 	if (buffer_cursor < buffer.size()) {
 		auto statement = std::move(buffer[buffer_cursor++]);
@@ -83,7 +83,9 @@ unique_ptr<SQLStatement> StatementIterator::GetStatementInternal(optional_ptr<Cl
 	buffer.push_back(std::move(stmt));
 	// Preprocess the peel into one-or-more engine-facing statements. This runs in Get (not Peek) so it
 	// sees the transaction state left by the previously executed statement.
-	context.PreprocessStatements(buffer, lock, preprocessor.get());
+	if (preprocess) {
+		context.PreprocessStatements(buffer, lock, preprocessor.get());
+	}
 	if (buffer.empty()) {
 		parser_timer.Reset();
 		// Preprocessing swallowed the peel — caller skips with `continue`; the next Get pulls on.
@@ -114,6 +116,10 @@ unique_ptr<SQLStatement> StatementIterator::GetStatementForExecution() {
 
 unique_ptr<SQLStatement> StatementIterator::GetStatementForExecutionWithLock(ClientContextLock &lock) {
 	return GetStatementInternal(&lock, true);
+}
+
+unique_ptr<SQLStatement> StatementIterator::GetStatementForSubmission() {
+	return GetStatementInternal(nullptr, true, false);
 }
 
 } // namespace duckdb

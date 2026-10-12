@@ -64,11 +64,15 @@ public:
 	DUCKDB_API unique_ptr<SQLStatement> GetStatementForExecution();
 	//! Same, for callers that already hold the context lock.
 	DUCKDB_API unique_ptr<SQLStatement> GetStatementForExecutionWithLock(ClientContextLock &lock);
+	//! Pull the next statement as parsed, without preprocessing it, and attach its parser timing to the query
+	//! profiler. For a caller that submits it, since the submission preprocesses
+	DUCKDB_API unique_ptr<SQLStatement> GetStatementForSubmission();
 
 private:
 	//! Shared body for both Get variants. `lock` is null for the self-locking path (preprocessing
 	//! then acquires the lock itself) or the held lock for callers that already have it.
-	unique_ptr<SQLStatement> GetStatementInternal(optional_ptr<ClientContextLock> lock, bool profile_statement);
+	unique_ptr<SQLStatement> GetStatementInternal(optional_ptr<ClientContextLock> lock, bool profile_statement,
+	                                              bool preprocess = true);
 
 private:
 	//! The single parse-facing source this iterator preprocesses. Always constructed — the

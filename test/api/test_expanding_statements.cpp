@@ -18,6 +18,8 @@
 #include "result_wait_helpers.hpp"
 
 #include <chrono>
+#include <fstream>
+#include <sstream>
 #include <thread>
 
 using namespace duckdb;
@@ -31,6 +33,9 @@ constexpr const char *NOT_NULL_COLUMN = "ALTER TABLE t ADD COLUMN n INTEGER NOT 
 constexpr const char *FAILING_DEFAULT = "ALTER TABLE t ADD COLUMN c INTEGER DEFAULT nonexistent_function()";
 //! Its CREATE TYPE runs, then its SELECT fails to bind
 constexpr const char *FAILING_PIVOT = "PIVOT sales ON year USING sum(amount) ORDER BY missing_column";
+//! Binder and catalog errors leave a transaction usable, so what invalidates it is the rule for a group alone
+constexpr const char *SYNTACTIC_ERRORS_POLICY =
+    "SET default_transaction_invalidation_policy = 'SYNTACTIC_ERRORS_DO_NOT_INVALIDATE'";
 
 void CreateSales(Connection &con) {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE sales(city VARCHAR, year INTEGER, amount INTEGER)"));
@@ -219,7 +224,7 @@ public:
 //===--------------------------------------------------------------------===//
 // One submission
 //===--------------------------------------------------------------------===//
-TEST_CASE("A dynamic PIVOT is one submitted query", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A dynamic PIVOT is one submitted query", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	CreateSales(con);
@@ -239,7 +244,7 @@ TEST_CASE("A dynamic PIVOT is one submitted query", "[api][expanding_statements]
 	REQUIRE(CHECK_COLUMN(handle, 2, {20, 40}));
 }
 
-TEST_CASE("An ALTER that expands is one submitted query", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("An ALTER that expands is one submitted query", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	Connection observer(db);
@@ -262,7 +267,7 @@ TEST_CASE("An ALTER that expands is one submitted query", "[api][expanding_state
 	}
 }
 
-TEST_CASE("IMPORT DATABASE is one submitted query", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("IMPORT DATABASE is one submitted query", "[api][expanding_statements]") {
 	auto path = TestCreatePath("expanding_statements_import");
 	{
 		DuckDB source(nullptr);
@@ -280,7 +285,7 @@ TEST_CASE("IMPORT DATABASE is one submitted query", "[api][expanding_statements]
 	REQUIRE(Count(con, "SELECT count(*) FROM t") == 10);
 }
 
-TEST_CASE("Submitting a parsed statement that expands runs it", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("Submitting a parsed statement that expands runs it", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	CreateSales(con);
@@ -294,7 +299,7 @@ TEST_CASE("Submitting a parsed statement that expands runs it", "[api][expanding
 	REQUIRE(CHECK_COLUMN(handle, 0, {"ams", "rtm"}));
 }
 
-TEST_CASE("A statement that preprocesses into nothing finishes empty", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A statement that preprocesses into nothing finishes empty", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto handle = con.Submit(make_uniq<MultiStatement>());
@@ -310,7 +315,7 @@ TEST_CASE("A statement that preprocesses into nothing finishes empty", "[api][ex
 //===--------------------------------------------------------------------===//
 // The group's transaction
 //===--------------------------------------------------------------------===//
-TEST_CASE("Polling a group to FINISHED does not commit it", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("Polling a group to FINISHED does not commit it", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	Connection observer(db);
@@ -329,7 +334,7 @@ TEST_CASE("Polling a group to FINISHED does not commit it", "[api][expanding_sta
 	REQUIRE(!ColumnExists(observer, "c"));
 }
 
-TEST_CASE("Stepping a group to FINISHED commits it", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("Stepping a group to FINISHED commits it", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	Connection observer(db);
@@ -346,7 +351,7 @@ TEST_CASE("Stepping a group to FINISHED commits it", "[api][expanding_statements
 //===--------------------------------------------------------------------===//
 // Driving a group
 //===--------------------------------------------------------------------===//
-TEST_CASE("A poll-only consumer reaches the result statement of a group", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A poll-only consumer reaches the result statement of a group", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=2"));
@@ -368,7 +373,7 @@ TEST_CASE("A poll-only consumer reaches the result statement of a group", "[api]
 	REQUIRE(CHECK_COLUMN(handle, 0, {"ams", "rtm"}));
 }
 
-TEST_CASE("A single-threaded consumer drives a group itself", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A single-threaded consumer drives a group itself", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
@@ -382,8 +387,7 @@ TEST_CASE("A single-threaded consumer drives a group itself", "[api][expanding_s
 	REQUIRE(CHECK_COLUMN(handle, 0, {"ams", "rtm"}));
 }
 
-TEST_CASE("A single-threaded consumer sees a later statement's bind failure",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A single-threaded consumer sees a later statement's bind failure", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
@@ -397,8 +401,7 @@ TEST_CASE("A single-threaded consumer sees a later statement's bind failure",
 	REQUIRE(!ColumnExists(con, "c"));
 }
 
-TEST_CASE("ExecutionIsFinished stays false between the statements of a group",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("ExecutionIsFinished stays false between the statements of a group", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
@@ -424,7 +427,7 @@ TEST_CASE("ExecutionIsFinished stays false between the statements of a group",
 //===--------------------------------------------------------------------===//
 // The result statement
 //===--------------------------------------------------------------------===//
-TEST_CASE("EXPLAIN of a dynamic PIVOT returns the plan rows", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("EXPLAIN of a dynamic PIVOT returns the plan rows", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	CreateSales(con);
@@ -437,8 +440,7 @@ TEST_CASE("EXPLAIN of a dynamic PIVOT returns the plan rows", "[api][expanding_s
 	REQUIRE(handle->RowCount() == 1);
 }
 
-TEST_CASE("A row-returning statement followed by another is refused before any row",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A row-returning statement followed by another is refused before any row", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i INTEGER)"));
@@ -459,8 +461,7 @@ TEST_CASE("A row-returning statement followed by another is refused before any r
 	REQUIRE(Count(con, "SELECT count(*) FROM duckdb_tables() WHERE table_name IN ('u', 'w')") == 0);
 }
 
-TEST_CASE("Query refuses a statement that expands into two row-returning statements",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("Query refuses a statement that expands into two row-returning statements", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto result = con.Query(MultiOf(con, {"SELECT 1", "SELECT 2"}));
@@ -472,8 +473,7 @@ TEST_CASE("Query refuses a statement that expands into two row-returning stateme
 //===--------------------------------------------------------------------===//
 // Metadata
 //===--------------------------------------------------------------------===//
-TEST_CASE("A group's metadata is deferred until its result statement is bound",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A group's metadata is deferred until its result statement is bound", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
@@ -494,7 +494,7 @@ TEST_CASE("A group's metadata is deferred until its result statement is bound",
 	REQUIRE(CHECK_COLUMN(handle, 0, {"ams", "rtm"}));
 }
 
-TEST_CASE("A group without rows reports NOTHING when it ends", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A group without rows reports NOTHING when it ends", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
@@ -519,8 +519,7 @@ TEST_CASE("A group without rows reports NOTHING when it ends", "[api][expanding_
 	REQUIRE(handle->Collection().ColumnCount() == 1);
 }
 
-TEST_CASE("A group's properties include the databases its earlier statements modified",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A group's properties include the databases its earlier statements modified", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	CreateSales(con);
@@ -534,8 +533,7 @@ TEST_CASE("A group's properties include the databases its earlier statements mod
 	REQUIRE(!properties.IsReadOnly());
 }
 
-TEST_CASE("An Arrow result of a group without rows has the Success schema",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("An Arrow result of a group without rows has the Success schema", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	CreateNumbers(con, 10);
@@ -551,7 +549,7 @@ TEST_CASE("An Arrow result of a group without rows has the Success schema",
 	REQUIRE(!handle->Fetch<ArrowFormat>());
 }
 
-TEST_CASE("The v1 C API reports MULTI for a dynamic PIVOT", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("The v1 C API reports MULTI for a dynamic PIVOT", "[api][expanding_statements]") {
 	duckdb_database db;
 	duckdb_connection con;
 	REQUIRE(duckdb_open(nullptr, &db) == DuckDBSuccess);
@@ -576,8 +574,7 @@ TEST_CASE("The v1 C API reports MULTI for a dynamic PIVOT", "[api][expanding_sta
 //===--------------------------------------------------------------------===//
 // Ending a group early
 //===--------------------------------------------------------------------===//
-TEST_CASE("An expanded statement abandoned at any step applies all or nothing",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("An expanded statement abandoned at any step applies all or nothing", "[api][expanding_statements]") {
 	bool user_transaction = false;
 	SECTION("autocommit") {
 	}
@@ -612,8 +609,7 @@ TEST_CASE("An expanded statement abandoned at any step applies all or nothing",
 	}
 }
 
-TEST_CASE("A PIVOT that does not finish in autocommit leaves no enum type",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A PIVOT that does not finish in autocommit leaves no enum type", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
@@ -638,8 +634,7 @@ TEST_CASE("A PIVOT that does not finish in autocommit leaves no enum type",
 	REQUIRE(Count(con, "SELECT 42") == 42);
 }
 
-TEST_CASE("A PIVOT abandoned during its SELECT keeps the user's transaction",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A PIVOT abandoned during its SELECT keeps the user's transaction", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	Connection observer(db);
@@ -656,7 +651,7 @@ TEST_CASE("A PIVOT abandoned during its SELECT keeps the user's transaction",
 }
 
 TEST_CASE("A PIVOT abandoned before its SELECT is bound invalidates the user's transaction",
-          "[api][expanding_statements][!shouldfail]") {
+          "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	Connection observer(db);
@@ -671,7 +666,7 @@ TEST_CASE("A PIVOT abandoned before its SELECT is bound invalidates the user's t
 	REQUIRE(Count(observer, "SELECT count(*) FROM sales") == 4);
 }
 
-TEST_CASE("An error inside a group rolls it back", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("An error inside a group rolls it back", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	Connection observer(db);
@@ -685,6 +680,7 @@ TEST_CASE("An error inside a group rolls it back", "[api][expanding_statements][
 		REQUIRE(Count(con, "SELECT 42") == 42);
 	}
 	SECTION("inside a user transaction") {
+		REQUIRE_NO_FAIL(con.Query(SYNTACTIC_ERRORS_POLICY));
 		REQUIRE_NO_FAIL(con.Query("BEGIN"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t VALUES (10)"));
 		auto handle = SubmitGroup(con, FAILING_DEFAULT);
@@ -702,6 +698,7 @@ TEST_CASE("A group whose first statement fails to bind keeps the user's transact
 	Connection con(db);
 	Connection observer(db);
 	CreateNumbers(con, 10);
+	REQUIRE_NO_FAIL(con.Query(SYNTACTIC_ERRORS_POLICY));
 	REQUIRE_NO_FAIL(con.Query("BEGIN"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO t VALUES (10)"));
 
@@ -712,11 +709,28 @@ TEST_CASE("A group whose first statement fails to bind keeps the user's transact
 	REQUIRE(Count(observer, "SELECT count(*) FROM t") == 11);
 }
 
+TEST_CASE("Under the default policy a group whose first statement fails to bind invalidates the user's transaction",
+          "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection observer(db);
+	CreateNumbers(con, 10);
+	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t VALUES (10)"));
+
+	auto handle = con.Submit("ALTER TABLE missing ADD COLUMN c DOUBLE DEFAULT random()");
+	REQUIRE(handle->HasError());
+	REQUIRE(handle->GetErrorType() == ExceptionType::CATALOG);
+	RequireAborted(con);
+	REQUIRE(Count(observer, "SELECT count(*) FROM t") == 10);
+}
+
 TEST_CASE("A PIVOT whose SELECT fails invalidates the user's transaction", "[api][expanding_statements][!shouldfail]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	Connection observer(db);
 	CreateSales(con);
+	REQUIRE_NO_FAIL(con.Query(SYNTACTIC_ERRORS_POLICY));
 	REQUIRE_NO_FAIL(con.Query("BEGIN"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO sales VALUES ('utr', 2023, 50)"));
 
@@ -730,7 +744,7 @@ TEST_CASE("A PIVOT whose SELECT fails invalidates the user's transaction", "[api
 //===--------------------------------------------------------------------===//
 // Interrupts
 //===--------------------------------------------------------------------===//
-TEST_CASE("An interrupt during a group cancels it and rolls it back", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("An interrupt during a group cancels it and rolls it back", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
@@ -744,7 +758,7 @@ TEST_CASE("An interrupt during a group cancels it and rolls it back", "[api][exp
 	REQUIRE(!ColumnExists(con, "c"));
 }
 
-TEST_CASE("An interrupt on a statement boundary cancels the query", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("An interrupt on a statement boundary cancels the query", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=2"));
@@ -767,7 +781,7 @@ TEST_CASE("An interrupt on a statement boundary cancels the query", "[api][expan
 //===--------------------------------------------------------------------===//
 // Refusals at submission
 //===--------------------------------------------------------------------===//
-TEST_CASE("Parameters on a statement that expands are refused", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("Parameters on a statement that expands are refused", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	CreateSales(con);
@@ -787,7 +801,66 @@ TEST_CASE("Parameters on a statement that expands are refused", "[api][expanding
 	REQUIRE(!ColumnExists(con, "c"));
 }
 
-TEST_CASE("A collector hook sees only the result statement of a group", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A statement that expands into a transaction statement is refused before anything runs",
+          "[api][expanding_statements]") {
+	auto path = TestCreatePath("expanding_statements_import_with_begin");
+	{
+		DuckDB source(nullptr);
+		Connection con(source);
+		CreateSales(con);
+		REQUIRE_NO_FAIL(con.Query("EXPORT DATABASE '" + path + "'"));
+	}
+	auto schema_path = path + "/schema.sql";
+	std::stringstream schema;
+	schema << std::ifstream(schema_path).rdbuf();
+	std::ofstream(schema_path) << "BEGIN TRANSACTION;\n" << schema.str();
+
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto handle = con.Submit("IMPORT DATABASE '" + path + "'");
+	REQUIRE(handle->HasError());
+	REQUIRE(StringUtil::Contains(handle->GetError(), "cannot contain a transaction statement"));
+	REQUIRE(Count(con, "SELECT count(*) FROM duckdb_tables() WHERE table_name = 'sales'") == 0);
+}
+
+TEST_CASE("A group that fails before its metadata is known reports like any failed result",
+          "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	CreateSales(con);
+
+	auto handle = SubmitGroup(con, FAILING_PIVOT);
+	handle->Complete();
+	REQUIRE(handle->HasError());
+	REQUIRE(handle->MetadataAvailable());
+	REQUIRE(handle->ColumnCount() == 0);
+	REQUIRE(handle->GetNames().empty());
+
+	auto result = con.Query(FAILING_PIVOT);
+	REQUIRE(result->HasError());
+	REQUIRE(result->ColumnCount() == 0);
+}
+
+TEST_CASE("The v1 C API reports no columns for a dynamic PIVOT that failed", "[api][expanding_statements]") {
+	duckdb_database db;
+	duckdb_connection con;
+	REQUIRE(duckdb_open(nullptr, &db) == DuckDBSuccess);
+	REQUIRE(duckdb_connect(db, &con) == DuckDBSuccess);
+	REQUIRE(duckdb_query(con, "CREATE TABLE sales(city VARCHAR, year INTEGER, amount INTEGER)", nullptr) ==
+	        DuckDBSuccess);
+	REQUIRE(duckdb_query(con, "INSERT INTO sales VALUES ('ams', 2023, 10)", nullptr) == DuckDBSuccess);
+
+	duckdb_result result;
+	auto state = duckdb_query(con, FAILING_PIVOT, &result);
+	auto column_count = duckdb_column_count(&result);
+	duckdb_destroy_result(&result);
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
+	REQUIRE(state == DuckDBError);
+	REQUIRE(column_count == 0);
+}
+
+TEST_CASE("A collector hook sees only the result statement of a group", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
@@ -822,7 +895,7 @@ TEST_CASE("A collector hook sees only the result statement of a group", "[api][e
 }
 
 TEST_CASE("A collector that builds its own result completes a group inside the submission",
-          "[api][expanding_statements][!shouldfail]") {
+          "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
@@ -847,8 +920,7 @@ TEST_CASE("A collector that builds its own result completes a group inside the s
 //===--------------------------------------------------------------------===//
 // Per query and per statement
 //===--------------------------------------------------------------------===//
-TEST_CASE("Profiling a statement that expands records one profile per statement",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("Profiling a statement that expands records one profile per statement", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	CreateSales(con);
@@ -869,7 +941,7 @@ TEST_CASE("Profiling a statement that expands records one profile per statement"
 	REQUIRE(StringUtil::StartsWith(profiler.GetQuerySQL(), "ALTER"));
 }
 
-TEST_CASE("The query log records each statement of a group", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("The query log records each statement of a group", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	CreateSales(con);
@@ -883,7 +955,7 @@ TEST_CASE("The query log records each statement of a group", "[api][expanding_st
 	        2);
 }
 
-TEST_CASE("max_execution_time bounds the whole group", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("max_execution_time bounds the whole group", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
@@ -897,7 +969,7 @@ TEST_CASE("max_execution_time bounds the whole group", "[api][expanding_statemen
 	REQUIRE(!ColumnExists(con, "c"));
 }
 
-TEST_CASE("Registered states see one QueryBegin and QueryEnd per group", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("Registered states see one QueryBegin and QueryEnd per group", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	CreateSales(con);
@@ -913,7 +985,7 @@ TEST_CASE("Registered states see one QueryBegin and QueryEnd per group", "[api][
 //===--------------------------------------------------------------------===//
 // The connection and Query
 //===--------------------------------------------------------------------===//
-TEST_CASE("A group holds the connection between its statements", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A group holds the connection between its statements", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
@@ -937,7 +1009,7 @@ TEST_CASE("A group holds the connection between its statements", "[api][expandin
 	REQUIRE(Count(con, "SELECT count(*) FROM t WHERE c IS NULL") == 0);
 }
 
-TEST_CASE("Query on a statement that expands matches the reference", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("Query on a statement that expands matches the reference", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	CreateSales(con);
@@ -1007,7 +1079,7 @@ TEST_CASE("Closing a stream on a group before its result statement started ends 
 //===--------------------------------------------------------------------===//
 // Outliving the connection
 //===--------------------------------------------------------------------===//
-TEST_CASE("A handle on a group that outlives its connection ends safely", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A handle on a group that outlives its connection ends safely", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	auto con = make_uniq<Connection>(db);
 	REQUIRE_NO_FAIL(con->Query("SET threads=2"));
@@ -1037,7 +1109,8 @@ TEST_CASE("A handle on a group that outlives its connection ends safely", "[api]
 		handle->Close();
 	}
 	SECTION("a call after the query ended") {
-		REQUIRE(StepToEnd(*handle) == QueryResultState::FINISHED);
+		handle->Complete();
+		REQUIRE_NO_FAIL(*handle);
 		handle->Materialize();
 		handle->Close();
 	}

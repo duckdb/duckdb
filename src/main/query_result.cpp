@@ -28,6 +28,32 @@ BaseQueryResult::BaseQueryResult(ErrorData error) : success(false), error(std::m
 	D_ASSERT(this->error.HasError());
 }
 
+BaseQueryResult::BaseQueryResult(StatementType statement_type)
+    : statement_type(statement_type), metadata_available(false), success(true) {
+}
+
+void BaseQueryResult::SetMetadata(StatementProperties properties_p, vector<LogicalType> types_p,
+                                  vector<Identifier> names_p) {
+	D_ASSERT(!metadata_available);
+	D_ASSERT(types_p.size() == names_p.size());
+	properties = std::move(properties_p);
+	types = std::move(types_p);
+	names = std::move(names_p);
+	metadata_available = true;
+}
+
+void BaseQueryResult::RequireMetadata() const {
+	// A result that failed reports the empty metadata of every failed result
+	if (!MetadataAvailable()) {
+		throw InvalidInputException("The metadata of this result is not available yet: the statement expands into "
+		                            "several, and the one that produces the result has not been bound");
+	}
+}
+
+bool BaseQueryResult::MetadataAvailable() const {
+	return metadata_available || !success;
+}
+
 BaseQueryResult::~BaseQueryResult() {
 }
 
@@ -70,6 +96,7 @@ const ErrorData &BaseQueryResult::GetErrorObject() const {
 }
 
 idx_t BaseQueryResult::ColumnCount() const {
+	RequireMetadata();
 	return types.size();
 }
 
@@ -78,14 +105,17 @@ StatementType BaseQueryResult::GetStatementType() const {
 }
 
 const StatementProperties &BaseQueryResult::GetStatementProperties() const {
+	RequireMetadata();
 	return properties;
 }
 
 const vector<LogicalType> &BaseQueryResult::GetTypes() const {
+	RequireMetadata();
 	return types;
 }
 
 const vector<Identifier> &BaseQueryResult::GetNames() const {
+	RequireMetadata();
 	return names;
 }
 
@@ -104,6 +134,27 @@ QueryResult::QueryResult(shared_ptr<ClientContext> context_p, PreparedStatementD
 		format = ChunkFormat::InMemory();
 		InitializeChunkFormatState();
 	}
+}
+
+QueryResult::QueryResult(shared_ptr<ClientContext> context_p, StatementType statement_type,
+                         shared_ptr<ResultFormat> format_p, ClientProperties client_properties_p)
+    : BaseQueryResult(statement_type), client_properties(std::move(client_properties_p)), context(std::move(context_p)),
+      format(format_p ? std::move(format_p) : ChunkFormat::InMemory()) {
+}
+
+void QueryResult::AdoptResultStatement(StatementProperties properties, PreparedStatementData &statement,
+                                       shared_ptr<BufferedData> buffer_p) {
+	D_ASSERT(!buffer && buffer_p);
+	SetMetadata(std::move(properties), statement.types, statement.names);
+	buffer = std::move(buffer_p);
+	format = buffer->SharedFormat();
+	format_state = buffer->SharedFormatState();
+}
+
+void QueryResult::AdoptRowlessResult(QueryResult &produced) {
+	SetMetadata(produced.GetStatementProperties(), produced.GetTypes(), produced.GetNames());
+	format_state = produced.format_state;
+	AdoptCollected(produced);
 }
 
 QueryResult::QueryResult(StatementType statement_type, StatementProperties properties, vector<Identifier> names_p,
@@ -206,10 +257,6 @@ bool QueryResult::IsOpen() {
 	return IsOpenInternal(*lock);
 }
 
-bool QueryResult::MetadataAvailable() const {
-	return true;
-}
-
 QueryResultState QueryResult::Cancelled() {
 	if (!HasError()) {
 		SetError(
@@ -243,8 +290,9 @@ QueryResultState QueryResult::ExecuteTask() {
 	auto lock = LockContext();
 	CheckExecutableInternal(*lock);
 	auto state = context->ExecuteTaskInternal(*lock, *this);
-	// Only a statement that sank no row finishes undecided, since producers park until the decision
-	if (state == QueryResultState::FINISHED && buffer && buffer->Lifetime() != ResultLifetime::DRAINING) {
+	// Only a statement that sank no row finishes undecided, since producers park until the decision. A statement
+	// that expands into several without returning rows never has a buffer
+	if (state == QueryResultState::FINISHED && (!buffer || buffer->Lifetime() != ResultLifetime::DRAINING)) {
 		return EndFinishedInternal(*lock);
 	}
 	return state;
@@ -301,6 +349,7 @@ const ResultFormatGlobalState &QueryResult::CheckedFormatState(const char *expec
 	if (!StringUtil::Equals(Format().Name(), expected)) {
 		ThrowFormatMismatch(expected);
 	}
+	RequireMetadata();
 	D_ASSERT(format_state);
 	return *format_state;
 }
@@ -332,8 +381,16 @@ void QueryResult::Materialize() {
 		context.reset();
 		return;
 	}
-	D_ASSERT(buffer);
-	buffer->Decide(ResultLifetime::RETAINED);
+	SettleRetainedInternal(*lock);
+}
+
+void QueryResult::SettleRetainedInternal(ClientContextLock &lock) {
+	if (buffer) {
+		buffer->Decide(ResultLifetime::RETAINED);
+		return;
+	}
+	// The statement that produces the result has not started: its buffer takes the decision when it is created
+	context->RetainResultInternal(lock);
 }
 
 void QueryResult::Complete() {
@@ -355,8 +412,7 @@ void QueryResult::CompleteInternal(ClientContextLock &lock) {
 		context.reset();
 		return;
 	}
-	D_ASSERT(buffer);
-	buffer->Decide(ResultLifetime::RETAINED);
+	SettleRetainedInternal(lock);
 	try {
 		QueryResultState state;
 		while (!IsTerminal(state = context->ExecuteTaskInternal(lock, *this))) {
@@ -382,11 +438,15 @@ void QueryResult::CompleteInternal(ClientContextLock &lock) {
 }
 
 QueryResultState QueryResult::EndFinishedInternal(ClientContextLock &lock) {
-	auto produced = context->GetExecutor().GetResult();
+	auto produced = context->TakeFinishedResultInternal(lock);
 	// Cleanup can fail on an autocommit commit; it records the error on this result
 	context->CleanupInternal(lock, this, false);
 	if (!HasError()) {
-		AdoptCollected(*produced);
+		if (MetadataAvailable()) {
+			AdoptCollected(*produced);
+		} else {
+			AdoptRowlessResult(*produced);
+		}
 	}
 	context.reset();
 	return HasError() ? QueryResultState::EXECUTION_ERROR : QueryResultState::FINISHED;
@@ -448,6 +508,8 @@ unique_ptr<DataChunk> QueryResult::FetchRaw() {
 // Rendering
 //===--------------------------------------------------------------------===//
 string QueryResult::ToString() {
+	// The metadata of a statement that expands into several is known once it runs
+	Complete();
 	if (HasError()) {
 		return GetError() + "\n";
 	}
@@ -472,6 +534,7 @@ string QueryResult::ToString() {
 }
 
 string QueryResult::ToBox(BoxRendererContext &context_p, const BoxRendererConfig &config) {
+	Complete();
 	if (HasError()) {
 		return GetError() + "\n";
 	}
@@ -484,6 +547,8 @@ string QueryResult::ToBox(BoxRendererContext &context_p, const BoxRendererConfig
 }
 
 bool QueryResult::Equals(QueryResult &other, bool compare_names) { // LCOV_EXCL_START
+	Complete();
+	other.Complete();
 	// first compare the success state of the results
 	if (HasError() != other.HasError()) {
 		return false;

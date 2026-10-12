@@ -456,6 +456,8 @@ enum class PreparedParamType : uint8_t;
 
 enum class PreparedStatementMode : uint8_t;
 
+enum class PreprocessingTransactionHandling : uint8_t;
+
 enum class PreserveOrderType : uint8_t;
 
 enum class ProfilingCoverage : uint8_t;
@@ -1304,6 +1306,9 @@ const char* EnumUtil::ToChars<PreparedParamType>(PreparedParamType value);
 
 template<>
 const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value);
+
+template<>
+const char* EnumUtil::ToChars<PreprocessingTransactionHandling>(PreprocessingTransactionHandling value);
 
 template<>
 const char* EnumUtil::ToChars<PreserveOrderType>(PreserveOrderType value);
@@ -2259,6 +2264,9 @@ PreparedParamType EnumUtil::FromString<PreparedParamType>(const char *value);
 
 template<>
 PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *value);
+
+template<>
+PreprocessingTransactionHandling EnumUtil::FromString<PreprocessingTransactionHandling>(const char *value);
 
 template<>
 PreserveOrderType EnumUtil::FromString<PreserveOrderType>(const char *value);

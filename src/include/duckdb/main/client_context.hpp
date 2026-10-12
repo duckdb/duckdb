@@ -46,6 +46,7 @@ class PreparedStatement;
 class PreparedStatementData;
 class StatementIterator;
 class StatementPreprocessor;
+struct PreprocessedStatement;
 class Relation;
 class BufferedFileWriter;
 class QueryProfiler;
@@ -100,6 +101,8 @@ public:
 	//! The error of a statement submitted while a result that no call ended holds the connection
 	static constexpr const char *OPEN_RESULT_ERROR =
 	    "connection has an open result; drain or destroy it before starting a new query";
+	//! The error of a query that ran past max_execution_time
+	static constexpr const char *QUERY_DEADLINE_ERROR = "Query exceeded maximum execution time";
 
 public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
@@ -336,9 +339,12 @@ private:
 	unique_ptr<QueryResult> CompleteDelegatedInternal(ClientContextLock &lock, QueryResult &result);
 
 	//! Parse statements from a query
-	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);
+	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query,
+	                                                         bool preprocess = true);
+	//! A verification that runs a statement of its own, like a prepared or an explained copy, is skipped when
+	//! allow_nested_statements is false
 	void StatementVerification(ClientContextLock &lock, unique_ptr<SQLStatement> &statement,
-	                           QueryParameters query_parameters);
+	                           QueryParameters query_parameters, bool allow_nested_statements = true);
 
 	//! Whether a result that no call ended holds the connection, so that a new statement is refused
 	bool OpenResultHoldsConnection(ClientContextLock &lock);
@@ -354,10 +360,12 @@ private:
 	//! Ends the active query as abandoned: nothing it did is committed
 	void AbortInternal(ClientContextLock &lock);
 	unique_ptr<QueryResult> SubmitStatement(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
-	                                        const QueryParameters &parameters, Retention retention);
+	                                        const QueryParameters &parameters, bool verify, Retention retention);
+	//! Starts a bound statement of the active query. Returns its handle; for a statement of a query that expands
+	//! into several, null, unless a result collector built its own result object
 	unique_ptr<QueryResult> SubmitPreparedStatementInternal(ClientContextLock &lock,
 	                                                        shared_ptr<PreparedStatementData> statement_data_p,
-	                                                        const QueryParameters &parameters, Retention retention);
+	                                                        const QueryParameters &parameters);
 	void CheckIfPreparedStatementIsExecutable(PreparedStatementData &statement);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
@@ -365,7 +373,12 @@ private:
 	                                                          unique_ptr<SQLStatement> statement,
 	                                                          const QueryParameters &parameters);
 	unique_ptr<QueryResult> SubmitStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
-	                                                const QueryParameters &parameters, Retention retention);
+	                                                const QueryParameters &parameters);
+	//! Expands a user statement into the statements it runs as, without the statements of its transaction handling
+	PreprocessedStatement PreprocessStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
+	//! Runs the statements of a query that expands up to the one producing its result, inside the submission, so
+	//! that a result collector building its own result object serves that statement. Returns that object, if any
+	unique_ptr<QueryResult> RunToResultStatementInternal(ClientContextLock &lock, QueryResult &handle);
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                             const QueryParameters &parameters, bool verify = true);
 	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
@@ -373,9 +386,28 @@ private:
 
 	unique_ptr<ClientContextLock> LockContext();
 
-	void BeginQueryInternal(ClientContextLock &lock, const SQLStatement &statement);
+	//! Begins the query of a user statement, whose first statement runs next
+	void BeginQueryInternal(ClientContextLock &lock, PreprocessedStatement statements,
+	                        const QueryParameters &parameters, Retention retention);
+	//! Begins one statement of the active query: its query number, its text and its query log line
+	void BeginStatementInternal(ClientContextLock &lock, const string &query);
+	//! Refreshes the logger for the statement that begins
+	void RefreshLoggerInternal();
+	//! Ends the statement of a query that expands into several once it finished, and starts the next one
+	QueryResultState StartNextStatementInternal(ClientContextLock &lock);
+	//! Ends the statement that finished and starts the next one. Returns the result object a collector built for it,
+	//! which only a statement started inside the submission may have
+	unique_ptr<QueryResult> AdvanceStatementInternal(ClientContextLock &lock);
+	bool QueryDeadlinePassed() const;
+	//! Ends the statement of the active query that finished, when another one follows
+	void EndStatementInternal(ClientContextLock &lock);
 	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
 	                           optional_ptr<ErrorData> previous_error);
+	//! The result of the finished query. For a statement that expands into several and returns no rows, that is an
+	//! empty result in the query's format, the way a statement that returns nothing reports
+	unique_ptr<QueryResult> TakeFinishedResultInternal(ClientContextLock &lock);
+	//! Records that the result is retained, for a result statement that has not started
+	void RetainResultInternal(ClientContextLock &lock);
 
 	//! Wait until a task is available to execute
 	void WaitForTask(ClientContextLock &lock, BaseQueryResult &result);

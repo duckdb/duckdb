@@ -20,15 +20,6 @@
 
 namespace duckdb {
 
-enum class PreprocessingTransactionHandling : uint8_t {
-	// Not in a transaction and should wrap in an implicit BEGIN/COMMIT
-	WRAP_IN_TRANSACTION,
-	// Already in an active transaction — set invalidation policy for multi-statement bodies
-	SET_INVALIDATION_POLICY,
-	// No transaction handling needed (single statement, or no transaction context applies)
-	NONE
-};
-
 void AddStatements(vector<unique_ptr<SQLStatement>> &body_statements,
                    const PreprocessingTransactionHandling transaction_handling,
                    vector<unique_ptr<SQLStatement>> &result_statements) {
@@ -85,8 +76,8 @@ PreprocessingTransactionHandling GetTransactionHandling(vector<unique_ptr<SQLSta
 	return PreprocessingTransactionHandling::NONE;
 }
 
-void UnpackMultiStatement(MultiStatement &multi_statement, const CurrentTransactionState current_transaction_state,
-                          vector<unique_ptr<SQLStatement>> &new_statements) {
+PreprocessedStatement UnpackMultiStatement(MultiStatement &multi_statement,
+                                           const CurrentTransactionState current_transaction_state) {
 #ifdef DEBUG // MultiStatement should not contain transaction statements
 	for (auto &sub_statement : multi_statement.statements) {
 		D_ASSERT(sub_statement->type != StatementType::TRANSACTION_STATEMENT);
@@ -99,8 +90,11 @@ void UnpackMultiStatement(MultiStatement &multi_statement, const CurrentTransact
 			has_select = true;
 		}
 	}
-	auto handling = GetTransactionHandling(multi_statement.statements, current_transaction_state, has_select);
-	AddStatements(multi_statement.statements, handling, new_statements);
+	PreprocessedStatement result;
+	result.transaction_handling =
+	    GetTransactionHandling(multi_statement.statements, current_transaction_state, has_select);
+	result.statements = std::move(multi_statement.statements);
+	return result;
 }
 
 vector<unique_ptr<SQLStatement>> StatementPreprocessor::TryReparsePragma(unique_ptr<SQLStatement> statement) const {
@@ -162,15 +156,10 @@ void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<u
 		        : NOT_IN_ACTIVE_TRANSACTION;
 
 		switch (statements[i]->type) {
-		case StatementType::PRAGMA_STATEMENT: {
-			auto reparsed_statements = TryReparsePragma(std::move(statements[i]));
-			const auto handling = GetTransactionHandling(reparsed_statements, full_transaction_state);
-			AddStatements(reparsed_statements, handling, new_statements);
-			break;
-		}
+		case StatementType::PRAGMA_STATEMENT:
 		case StatementType::MULTI_STATEMENT: {
-			auto &multi_statement = statements[i]->Cast<MultiStatement>();
-			UnpackMultiStatement(multi_statement, full_transaction_state, new_statements);
+			auto expanded = ExpandStatement(std::move(statements[i]), full_transaction_state);
+			AddStatements(expanded.statements, expanded.transaction_handling, new_statements);
 			break;
 		}
 		case StatementType::TRANSACTION_STATEMENT: {
@@ -195,5 +184,42 @@ void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<u
 	}
 
 	statements = std::move(new_statements);
+}
+
+PreprocessedStatement StatementPreprocessor::ExpandStatement(unique_ptr<SQLStatement> statement,
+                                                             CurrentTransactionState transaction_state) const {
+	if (statement->type == StatementType::MULTI_STATEMENT) {
+		return UnpackMultiStatement(statement->Cast<MultiStatement>(), transaction_state);
+	}
+	D_ASSERT(statement->type == StatementType::PRAGMA_STATEMENT);
+	PreprocessedStatement result;
+	result.statements = TryReparsePragma(std::move(statement));
+	result.transaction_handling = GetTransactionHandling(result.statements, transaction_state);
+	return result;
+}
+
+PreprocessedStatement StatementPreprocessor::PreprocessStatement(ClientContextLock &lock,
+                                                                 unique_ptr<SQLStatement> statement,
+                                                                 CurrentTransactionState transaction_context_state) {
+	if (statement->type != StatementType::PRAGMA_STATEMENT && statement->type != StatementType::MULTI_STATEMENT) {
+		PreprocessedStatement result;
+		result.statements.push_back(std::move(statement));
+		return result;
+	}
+	// Only PRAGMA and multi-statements touch the catalog and need a transaction
+	PreprocessedStatement result;
+	context.RunFunctionInTransactionInternal(
+	    lock, [&] { result = ExpandStatement(std::move(statement), transaction_context_state); });
+	if (result.statements.size() > 1) {
+		for (auto &expanded : result.statements) {
+			// The statements run as one query in one transaction, which a transaction statement would end or take over
+			if (expanded->type == StatementType::TRANSACTION_STATEMENT) {
+				throw InvalidInputException(
+				    "A statement that expands into several cannot contain a transaction statement: %s",
+				    expanded->query);
+			}
+		}
+	}
+	return result;
 }
 } // namespace duckdb
