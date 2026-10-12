@@ -28,7 +28,7 @@ WITH events AS (
 SELECT max(open_handles) AS peak
 FROM (SELECT sum(delta) OVER (ORDER BY timestamp, delta DESC ROWS UNBOUNDED PRECEDING) AS open_handles FROM events)
 
-# many threads: files held by claimed and queued jobs count too
+# with many threads the files held by claimed and queued jobs count too
 statement ok
 SET threads=32
 

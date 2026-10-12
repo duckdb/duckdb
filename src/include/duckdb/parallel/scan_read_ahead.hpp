@@ -118,7 +118,7 @@ private:
 	vector<unique_ptr<STATE>> states DUCKDB_GUARDED_BY(lock);
 };
 
-//! Counts one file against the open file budget shared by all scans, from scheduling its open until destroyed
+//! Counts one file against the open file budget of all scans until destroyed
 class ReadAheadOpenFile {
 public:
 	ReadAheadOpenFile();
