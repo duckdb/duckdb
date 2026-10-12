@@ -885,8 +885,8 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
 	auto [regular_args, keyword_args] = SplitArguments(std::move(arguments));
 
 	// If any of the parameters are NULL, the function will just be replaced with a NULL constant.
-	// Untyped NULLs never go through type resolution. For typed NULL constants, the types of the function are resolved
-	// if that is the only way to determine the return type - the bind callback is not invoked for these.
+	// Untyped NULLs never go through type resolution. For typed NULL constants, resolve the function's types only
+	// when needed to determine the return type. Preserve result collation without invoking bind callbacks.
 	if (bound_function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		const auto &return_type = bound_function.GetReturnType();
 		if (HasUntypedNullArgument(regular_args, keyword_args)) {
@@ -894,7 +894,12 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
 		}
 		if (HasNullConstantArgument(context, regular_args, keyword_args)) {
 			if (return_type.IsComplete()) {
-				return make_uniq<BoundConstantExpression>(Value(return_type));
+				BoundScalarFunction null_function(std::move(selected_function));
+				for (auto &child : keyword_args) {
+					regular_args.push_back(std::move(child.second));
+				}
+				PropagateReturnCollation(null_function, null_function.GetProperties(), regular_args, string());
+				return make_uniq<BoundConstantExpression>(Value(null_function.GetReturnType()));
 			}
 			auto resolved = ResolveScalarFunctionTypes(std::move(selected_function), regular_args, keyword_args);
 			PropagateReturnCollation(resolved.bound_function, resolved.bound_function.GetProperties(), regular_args,

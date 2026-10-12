@@ -133,4 +133,4 @@ SET debug_verify_statement='none';
 query TT
 EXPLAIN (SQL) SELECT count(*) FROM (DESCRIBE SELECT 1 AS a, 2 AS b);
 ----
-sql	<REGEX>:.*VALUES [(]NULL[)], [(]NULL[)].*
+sql	<REGEX>:.*VALUES[[:space:]]+[(]NULL[)],[[:space:]]+[(]NULL[)].*

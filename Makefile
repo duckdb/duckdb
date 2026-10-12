@@ -5,11 +5,6 @@ opt: release
 unit: unittest
 
 EXTENSION_CONFIG_STEP ?=
-ifndef DUCKDB_NEW_EXTENSION_BUILD
-ifdef USE_MERGED_VCPKG_MANIFEST
-	EXTENSION_CONFIG_STEP = build/extension_configuration/vcpkg.json
-endif
-endif
 
 GENERATOR ?=
 FORCE_COLOR ?=
@@ -208,6 +203,24 @@ else ifeq (${BUILD_ALL_IT_EXT}, 1)
 else ifeq (${BUILD_ALL_OOT_EXT}, 1)
 	EXTENSION_CONFIGS:=.github/config/out_of_tree_extensions.cmake
 endif
+
+# Extension-selecting Make builds use the synchronized extension source tree by default.
+# DUCKDB_NEW_EXTENSION_BUILD=0 remains available as a temporary legacy escape hatch.
+ifneq ($(strip $(BUILD_EXTENSIONS)$(EXTENSION_CONFIGS)),)
+ifeq ($(origin DUCKDB_NEW_EXTENSION_BUILD), undefined)
+	DUCKDB_NEW_EXTENSION_BUILD:=1
+endif
+endif
+ifneq ($(filter-out 0,$(strip $(DUCKDB_NEW_EXTENSION_BUILD))),)
+	DUCKDB_NEW_EXTENSION_BUILD_ENABLED:=1
+	export DUCKDB_NEW_EXTENSION_BUILD
+endif
+ifndef DUCKDB_NEW_EXTENSION_BUILD_ENABLED
+ifdef USE_MERGED_VCPKG_MANIFEST
+	EXTENSION_CONFIG_STEP = build/extension_configuration/vcpkg.json
+endif
+endif
+
 ifeq (${STATIC_OPENSSL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOPENSSL_USE_STATIC_LIBS=1
 endif
@@ -401,14 +414,14 @@ endif
 ifneq ("${VCPKG_TARGET_TRIPLET}", "")
 	CMAKE_VARS_BUILD:=${CMAKE_VARS_BUILD} -DVCPKG_TARGET_TRIPLET='${VCPKG_TARGET_TRIPLET}'
 endif
-ifndef DUCKDB_NEW_EXTENSION_BUILD
+ifndef DUCKDB_NEW_EXTENSION_BUILD_ENABLED
 ifeq (${USE_MERGED_VCPKG_MANIFEST}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build/extension_configuration'
 endif
 endif
 sync_extensions_into =
 vcpkg_cmake_flag =
-ifdef DUCKDB_NEW_EXTENSION_BUILD
+ifdef DUCKDB_NEW_EXTENSION_BUILD_ENABLED
 sync_extensions_into = $(PYTHON) scripts/sync_out_of_tree_extensions.py $(if $(BUILD_EXTENSIONS),--build-extensions "$(BUILD_EXTENSIONS)") $(if $(EXTENSION_CONFIGS),--extension-configs "$(EXTENSION_CONFIGS)") $(if $(EXTENSION_CONFIG_BASE_DIR),--extension-config-base-dir "$(EXTENSION_CONFIG_BASE_DIR)") --output-dir '$(1)' &&
 ifneq ("${VCPKG_TOOLCHAIN_PATH}", "")
 vcpkg_cmake_flag = -DVCPKG_MANIFEST_DIR='$(1)'
