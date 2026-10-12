@@ -118,7 +118,7 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 		    KeyValueSecret::Deserialize<KeyValueSecret>(deserializer, BaseSecret(scope, type, provider, name));
 		if (type == "http") {
 			// Preserve stored keys and apply current HTTP redaction rules to older secrets.
-			auto &keys = CreateHTTPSecretFunctions::GetRedactedKeys();
+			const auto keys = CreateHTTPSecretFunctions::GetRedactedKeys();
 			auto &secret = result->Cast<KeyValueSecret>();
 			secret.redact_keys.insert(keys.begin(), keys.end());
 		}
