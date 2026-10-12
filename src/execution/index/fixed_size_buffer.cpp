@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 
+#include "duckdb/common/assert.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
@@ -80,16 +81,12 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 	}
 }
 
-unique_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partial_block_manager,
+shared_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partial_block_manager,
                                                      const idx_t available_segments, const idx_t segment_size,
                                                      const idx_t bitmask_offset) {
 	D_ASSERT(readers == 0);
+	D_ASSERT(RequiresPersist());
 
-	// Early-out, if the buffer is already on disk and not dirty.
-	if (!dirty && OnDisk()) {
-		block_manager.IncreaseBlockReferenceCount(block_pointer.block_id);
-		return make_uniq<FixedSizeBuffer>(block_manager, segment_count, allocation_size, block_pointer);
-	}
 	// We cannot persist a buffer which is not in memory.
 	if (!InMemory()) {
 		throw InternalException("invalid or missing buffer in FixedSizeAllocator");
@@ -99,7 +96,8 @@ unique_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partia
 	auto allocation = partial_block_manager.GetBlockAllocation(NumericCast<uint32_t>(new_allocation_size));
 
 	BlockPointer new_block_pointer(allocation.state.block_id, allocation.state.offset);
-	auto result = make_uniq<FixedSizeBuffer>(block_manager, segment_count, new_allocation_size, new_block_pointer);
+	auto result =
+	    make_shared_ptr<FixedSizeBuffer>(block_manager, segment_count, new_allocation_size, new_block_pointer);
 	auto &buffer_manager = block_manager.buffer_manager;
 
 	if (allocation.partial_block) {

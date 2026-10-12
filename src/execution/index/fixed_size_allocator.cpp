@@ -305,11 +305,11 @@ unsafe_unique_ptr<FixedSizeAllocator> FixedSizeAllocator::Persist(PartialBlockMa
 		}
 
 		D_ASSERT(buffer->readers == 0);
-		if (!buffer->dirty && buffer->OnDisk()) {
-			result->buffers[buffer_id] = buffer;
-		} else {
+		if (buffer->RequiresPersist()) {
 			result->buffers[buffer_id] =
 			    buffer->Persist(partial_block_manager, available_segments_per_buffer, segment_size, bitmask_offset);
+		} else {
+			result->buffers[buffer_id] = buffer;
 		}
 
 		if (buffers_with_free_space.find(buffer_id) != buffers_with_free_space.end()) {

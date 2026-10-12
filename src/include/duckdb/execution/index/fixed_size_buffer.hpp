@@ -81,9 +81,14 @@ private:
 		return block_pointer.IsValid();
 	}
 
+	//! Returns true, if the block is modified or does not exist on-disk
+	bool RequiresPersist() const {
+		return dirty || !OnDisk();
+	}
+
 	//! Constructs a new FixedSizeBuffer based on the live FixedSizeBuffer, which is prepared for
 	//! serialization without affecting the in-memory buffer.
-	unique_ptr<FixedSizeBuffer> Persist(PartialBlockManager &partial_block_manager, const idx_t available_segments,
+	shared_ptr<FixedSizeBuffer> Persist(PartialBlockManager &partial_block_manager, const idx_t available_segments,
 	                                    const idx_t segment_size, const idx_t bitmask_offset);
 
 	//! Load a buffer from disk, if not in memory.
