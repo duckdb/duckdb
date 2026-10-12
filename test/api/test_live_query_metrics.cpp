@@ -1,5 +1,4 @@
 #include "catch.hpp"
-#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/profiler/metrics.hpp"
@@ -8,40 +7,13 @@
 
 using namespace duckdb;
 
+// the rest is in duckdb_live_query_metrics.test: SQL cannot pause a running query or hook into its start
+
 static idx_t LiveMetric(Connection &con, const char *name) {
 	auto metrics = con.context->GetLiveQueryMetrics();
 	auto entry = metrics.find(name);
 	REQUIRE(entry != metrics.end());
 	return entry->second.GetValue<idx_t>();
-}
-
-TEST_CASE("Test live query metrics are readable while a query runs", "[api]") {
-	auto path = TestCreatePath("live_query_metrics.db");
-	DeleteDatabase(path);
-
-	// persist a table to disk, then reopen the database so the buffer cache is cold
-	{
-		DuckDB db(path);
-		Connection con(db);
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range AS i FROM range(10000000)"));
-		REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
-	}
-	{
-		DuckDB db(path);
-		Connection con(db);
-
-		// pause a streaming scan after its first chunk: it has read from storage but is still running
-		auto streaming = OpenStream(con, "SELECT i FROM t");
-		REQUIRE(streaming->Fetch());
-		REQUIRE(LiveMetric(con, MetricIOTotalBytesRead::Name) > 0);
-
-		// the live snapshot uses the same names as the final profile
-		auto metrics = con.context->GetLiveQueryMetrics();
-		REQUIRE(metrics.count(MetricSystemTotalMemoryAllocated::Name) == 1);
-		REQUIRE(metrics.count(MetricIOTotalBytesWritten::Name) == 1);
-	}
-
-	DeleteDatabase(path);
 }
 
 TEST_CASE("Test live query metrics of a running query are readable from another connection", "[api]") {
@@ -95,32 +67,4 @@ TEST_CASE("Test live query metrics keep the memory a statement allocates before 
 	}
 	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
 	REQUIRE(LiveMetric(con, MetricSystemTotalMemoryAllocated::Name) >= AllocateAtQueryBeginState::ALLOCATION_SIZE);
-}
-
-TEST_CASE("Test live query metrics of an idle connection show its most recent query", "[api]") {
-	auto path = TestCreatePath("live_query_metrics_idle.db");
-	DeleteDatabase(path);
-	{
-		DuckDB db(path);
-		Connection con(db);
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range AS i FROM range(10000000)"));
-		REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
-	}
-	{
-		DuckDB db(path);
-		Connection con(db);
-
-		SECTION("profiling is disabled while the query runs") {
-			REQUIRE_NO_FAIL(con.Query("PRAGMA enable_profiling = 'no_output'"));
-			auto streaming = OpenStream(con, "SELECT i FROM t");
-			REQUIRE(streaming->Fetch());
-			ClientConfig::GetConfig(*con.context).enable_profiler = false;
-			streaming->Close();
-		}
-		SECTION("the query fails") {
-			REQUIRE_FAIL(con.Query("SELECT sum(CASE WHEN i = 9000000 THEN error('boom') ELSE i END) FROM t"));
-		}
-		REQUIRE(LiveMetric(con, MetricIOTotalBytesRead::Name) > 0);
-	}
-	DeleteDatabase(path);
 }
