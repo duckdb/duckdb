@@ -950,10 +950,8 @@ void SingleFileBlockManager::MarkBlockAsCheckpointed(block_id_t block_id) {
 void SingleFileBlockManager::MarkBlockAsCommitted(block_id_t block_id, transaction_t commit_id) {
 	lock_guard<mutex> lock(single_file_block_lock);
 	auto entry = newly_used_blocks.find(block_id);
-	if (entry == newly_used_blocks.end()) {
-		// already included, such as a segment an optimistic write kept when it rewrote its row group
-		return;
-	}
+	// optimistic writes keep their blocks newly used until their commit
+	D_ASSERT(entry != newly_used_blocks.end());
 	D_ASSERT(entry->second == MAX_TRANSACTION_ID || entry->second == commit_id);
 	entry->second = commit_id;
 }
