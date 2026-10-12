@@ -104,6 +104,29 @@ functions:
         description: The chunk to destroy.
     return_type: ERROR
 
+  data_chunk_clear:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-12" ]
+    description: |
+      Empties a data chunk so it can be filled again.
+
+      The chunk's size becomes 0, and each of its vectors becomes a writable FLAT vector of its type again, as on
+      creation, so a chunk can be reused for one batch after another instead of being created for each. Data, views
+      and pointers taken from the chunk or its vectors beforehand do not survive this. Must not be called on a chunk
+      DuckDB lends to a callback for reading.
+    role: method
+    belongs_to: data_chunk
+    parameters:
+      chunk:
+        type: data_chunk
+        description: The chunk to clear.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
   data_chunk_get_size:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
