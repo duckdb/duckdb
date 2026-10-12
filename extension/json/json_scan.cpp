@@ -377,11 +377,6 @@ void JSONScan::BindSchema(ClientContext &context, JSONScanData &json_data, Multi
 	if (!return_types.empty()) {
 		options.auto_detect = false;
 	}
-	// a detected schema has a column per spelling of a key, which would then match each other's keys
-	if (options.case_insensitive_keys && return_types.empty()) {
-		throw BinderException("read_json \"case_insensitive_keys\" requires the columns to be specified through the "
-		                      "\"columns\" parameter.");
-	}
 
 	if (!options.auto_detect) {
 		// Need to specify columns if RECORDS and not auto-detecting

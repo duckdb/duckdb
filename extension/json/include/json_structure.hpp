@@ -61,11 +61,14 @@ public:
 	vector<JSONStructureDescription> descriptions;
 	idx_t count;
 	idx_t null_count;
+	//! Merge object keys that differ only in case (read_json case_insensitive_keys); set on the root, children
+	//! inherit it
+	bool case_insensitive_keys = false;
 };
 
 struct JSONStructureDescription {
 public:
-	explicit JSONStructureDescription(LogicalTypeId type_p);
+	explicit JSONStructureDescription(LogicalTypeId type_p, bool case_insensitive_keys = false);
 	//! Disable copy constructors
 	JSONStructureDescription(const JSONStructureDescription &other) = delete;
 	JSONStructureDescription &operator=(const JSONStructureDescription &) = delete;
@@ -83,7 +86,7 @@ public:
 	LogicalTypeId type = LogicalTypeId::INVALID;
 
 	//! Map to children and children
-	json_key_map_t<idx_t> key_map;
+	json_key_optional_case_map_t<idx_t> key_map;
 	vector<JSONStructureNode> children;
 
 	//! Candidate types (if auto-detecting and type == LogicalTypeId::VARCHAR)
