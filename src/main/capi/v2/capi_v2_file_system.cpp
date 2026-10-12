@@ -207,6 +207,37 @@ DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_sys
 	});
 }
 
+DUCKDB_V2_ERROR duckdb_v2_file_system_path_exists(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *path,
+                                                  bool *out_exists, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file_system);
+	DUCKDB_CHECK_ARG(path);
+	DUCKDB_CHECK_ARG(out_exists);
+	return WithErrorHandler(
+	    err, [&]() { *out_exists = Convert(file_system)->fs.FileExists(duckdb::string(Convert(path))); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_system_path_is_remote(duckdb_v2_file_system_handle file_system,
+                                                     const duckdb_v2_str *path, bool *out_is_remote,
+                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file_system);
+	DUCKDB_CHECK_ARG(path);
+	DUCKDB_CHECK_ARG(out_is_remote);
+	return WithErrorHandler(
+	    err, [&]() { *out_is_remote = duckdb::FileSystem::IsRemoteFile(duckdb::string(Convert(path))); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_system_path_expand(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *path,
+                                                  duckdb_v2_text_sink_fn sink, void *user_data,
+                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file_system);
+	DUCKDB_CHECK_ARG(path);
+	DUCKDB_CHECK_ARG(sink);
+	return WithErrorHandler(err, [&]() {
+		auto expanded = Convert(file_system)->fs.ExpandPath(duckdb::string(Convert(path)));
+		InvokeTextSink(sink, duckdb_v2_str {expanded.data(), expanded.size()}, user_data);
+	});
+}
+
 DUCKDB_V2_ERROR duckdb_v2_file_read(duckdb_v2_file_handle file, void *buffer, idx_t buffer_size, idx_t *bytes_read,
                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file);

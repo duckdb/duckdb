@@ -337,6 +337,30 @@ inline DUCKDB_V2_ERROR Query(duckdb_v2_connection_handle conn, const char *sql, 
 	return rc;
 }
 
+// Runs a single statement to exhaustion, returning the code it failed with. Execution is lazy, so a failure may only
+// show up while stepping; nothing is asserted, so it also suits statements that are expected to fail.
+inline DUCKDB_V2_ERROR RunSql(duckdb_v2_connection_handle conn, const char *sql) {
+	duckdb_v2_result_handle result = nullptr;
+	auto rc = Query(conn, sql, &result);
+	auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
+	while (rc == DUCKDB_V2_ERROR_NONE) {
+		duckdb_v2_data_chunk_handle chunk = nullptr;
+		rc = duckdb_v2_result_step(result, &chunk, &status, nullptr);
+		if (chunk) {
+			duckdb_v2_data_chunk_destroy(&chunk);
+		}
+		if (rc != DUCKDB_V2_ERROR_NONE || status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED ||
+		    status == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED) {
+			break;
+		}
+		if (status == DUCKDB_V2_RESULT_STEP_STATUS_WAITING) {
+			rc = duckdb_v2_result_wait(result, nullptr);
+		}
+	}
+	duckdb_v2_result_destroy(&result);
+	return rc;
+}
+
 // Drains the next chunk out of a streaming result, returning a caller-owned chunk, or nullptr at end-of-stream.
 //
 // The WAITING poll runs a timing-dependent number of rounds, so it asserts
