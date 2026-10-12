@@ -97,8 +97,7 @@ bool WriteAheadLog::Initialized() const {
 //===--------------------------------------------------------------------===//
 class ChecksumWriter : public WriteStream {
 public:
-	explicit ChecksumWriter(WriteAheadLog &wal)
-	    : wal(wal), memory_stream(BufferAllocator::Get(wal.GetDatabase())) {
+	explicit ChecksumWriter(WriteAheadLog &wal) : wal(wal), memory_stream(BufferAllocator::Get(wal.GetDatabase())) {
 	}
 
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override {
