@@ -253,6 +253,11 @@
     "class": "ColumnDataRef",
     "base": "TableRef",
     "enum": "COLUMN_DATA",
+    "finalize_deserialization": [
+      "if (!result->collection) {",
+      "\tthrow SerializationException(\"ColumnDataRef is missing its collection\");",
+      "}"
+    ],
     "members": [
       {
         "id": 200,

@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &input) {
+static void ArrayGenericBinaryResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
@@ -17,7 +17,7 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &
 		bound_function.GetArguments()[0] = rhs_type;
 		bound_function.GetArguments()[1] = lhs_type;
 		bound_function.SetReturnType(LogicalType::UNKNOWN);
-		return nullptr;
+		return;
 	}
 
 	bound_function.GetArguments()[0] = lhs_type.IsUnknown() ? rhs_type : lhs_type;
@@ -56,8 +56,6 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &
 	// The important part is just that we resolve the size of the input arrays
 	bound_function.GetArguments()[0] = LogicalType::ARRAY(common_type, lhs_size);
 	bound_function.GetArguments()[1] = LogicalType::ARRAY(common_type, rhs_size);
-
-	return nullptr;
 }
 
 //------------------------------------------------------------------------------
@@ -255,7 +253,8 @@ static scalar_function_t GetArrayFoldFunction(const LogicalType &type) {
 
 template <class OP>
 static void AddArrayFoldFunction(ScalarFunctionSet &set, const LogicalType &type) {
-	ScalarFunction func({}, type, GetArrayFoldFunction<OP>(type), ArrayGenericBinaryBind, ArrayGenericFoldStats);
+	ScalarFunction func({}, type, GetArrayFoldFunction<OP>(type), nullptr, ArrayGenericFoldStats);
+	func.SetResolveTypesCallback(ArrayGenericBinaryResolveTypes);
 	auto array = LogicalType::ARRAY(type, optional_idx());
 
 	func.SetFallible();

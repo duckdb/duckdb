@@ -737,6 +737,10 @@ public:
 	template <class STATE>
 	static void WireStructStateType(AggregateFunction &result);
 
+	//! The state layout of a STATE with a STATE_TYPE - defined out-of-line (after BoundAggregateFunction is complete)
+	template <class STATE>
+	static AggregateStateLayout StructStateLayout(AggregateLayoutInput &input);
+
 	template <class STATE>
 	static idx_t StateSize(AggregateStateInput &) {
 		return sizeof(STATE);
@@ -949,27 +953,30 @@ private:
 template <class STATE>
 inline void AggregateFunction::WireStructStateType(AggregateFunction &result) {
 	if constexpr (HasStructStateType<STATE>::value) {
-		using ST = typename STATE::STATE_TYPE;
-		result.SetStructStateExport([](AggregateLayoutInput &input) {
-			auto &bound = input.function;
-			AggregateStateLayout layout;
-			if (bound.GetReturnType().IsAggregateState()) {
-				// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
-				// its return type IS the state type already
-				layout.type = bound.GetReturnType();
-			} else {
-				layout.type = AggregateFunction::BuildStateLogical<ST, STATE>(bound);
-			}
-			layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
-			layout.field = BuildStateField<ST>();
-			AggregateStateField::PopulateListFunctions(layout.type, layout.field);
-			return layout;
-		});
+		result.SetStructStateExport(StructStateLayout<STATE>);
 	} else if constexpr (HasPrimitiveLogicalType<STATE>::value) {
 		result.SetStructStateExport([](AggregateLayoutInput &) {
 			return AggregateStateLayout(PrimitiveToLogicalType<STATE>(), AlignValue<idx_t>(sizeof(STATE)));
 		});
 	}
+}
+
+template <class STATE>
+inline AggregateStateLayout AggregateFunction::StructStateLayout(AggregateLayoutInput &input) {
+	using ST = typename STATE::STATE_TYPE;
+	auto &bound = input.function;
+	AggregateStateLayout layout;
+	if (bound.GetReturnType().IsAggregateState()) {
+		// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
+		// its return type IS the state type already
+		layout.type = bound.GetReturnType();
+	} else {
+		layout.type = AggregateFunction::BuildStateLogical<ST, STATE>(bound);
+	}
+	layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
+	layout.field = BuildStateField<ST>();
+	AggregateStateField::PopulateListFunctions(layout.type, layout.field);
+	return layout;
 }
 
 // Defined here (after BoundAggregateFunction is complete) so the body can access the bound function's types.
