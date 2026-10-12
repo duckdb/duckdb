@@ -132,3 +132,105 @@ query I
 select (-2147483647)::bignum
 ----
 -2147483647
+
+# Check BIGNUM boundary values around 2^56, where the byte size calc used to round down
+query I
+select 0::bignum
+----
+0
+
+query I
+select 1::bignum
+----
+1
+
+query I
+select 255::bignum
+----
+255
+
+query I
+select 256::bignum
+----
+256
+
+query I
+select (72057594037927936 - 1)::bignum
+----
+72057594037927935
+
+query I
+select 72057594037927936::bignum
+----
+72057594037927936
+
+query I
+select 72057594037927937::bignum
+----
+72057594037927937
+
+query I
+select (72057594037927936 + 182)::bignum
+----
+72057594037928118
+
+query I
+select (72057594037927936 + 183)::bignum
+----
+72057594037928119
+
+query I
+select 4611686018427387904::bignum
+----
+4611686018427387904
+
+query I
+select (9223372036854775807)::bignum
+----
+9223372036854775807
+
+query I
+select (-9223372036854775807 - 1)::bignum
+----
+-9223372036854775808
+
+query I
+select (-72057594037927936)::bignum
+----
+-72057594037927936
+
+query I
+select (-72057594037927936 - 182)::bignum
+----
+-72057594037928118
+
+query I
+select (-72057594037927936 - 183)::bignum
+----
+-72057594037928119
+
+query I
+select 72057594037927936::ubigint::bignum
+----
+72057594037927936
+
+query I
+select (72057594037927936 + 182)::ubigint::bignum
+----
+72057594037928118
+
+query I
+select (72057594037927936 + 183)::ubigint::bignum
+----
+72057594037928119
+
+query I
+select 18446744073709551615::ubigint::bignum
+----
+18446744073709551615
+
+# Regression test for issue #25939, no BIGINT -> BIGNUM -> VARCHAR round-trip mismatches
+query I
+select count(*) from range(72057594037927930, 72057594037928236) t(i) where (i::bigint::bignum)::varchar <> i::varchar
+----
+0
