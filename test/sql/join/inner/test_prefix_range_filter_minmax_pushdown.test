@@ -1,0 +1,195 @@
+# name: test/sql/join/inner/test_prefix_range_filter_minmax_pushdown.test
+# description: Dynamic min/max filters must be emitted alongside a registered PrefixRangeFilter
+# group: [inner]
+
+require parquet
+
+statement ok
+SET disabled_optimizers = 'join_order,build_side_probe_side,compressed_materialization';
+
+# Multi-file probe side: five parquet files with disjoint k ranges (one row group each).
+statement ok
+COPY (SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g FROM range(0, 10000) t(i)) TO '{TEST_DIR}/prf_minmax_f0.parquet' (FORMAT parquet);
+
+statement ok
+COPY (SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g FROM range(10000, 20000) t(i)) TO '{TEST_DIR}/prf_minmax_f1.parquet' (FORMAT parquet);
+
+statement ok
+COPY (SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g FROM range(20000, 30000) t(i)) TO '{TEST_DIR}/prf_minmax_f2.parquet' (FORMAT parquet);
+
+statement ok
+COPY (SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g FROM range(30000, 40000) t(i)) TO '{TEST_DIR}/prf_minmax_f3.parquet' (FORMAT parquet);
+
+statement ok
+COPY (SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g FROM range(40000, 50000) t(i)) TO '{TEST_DIR}/prf_minmax_f4.parquet' (FORMAT parquet);
+
+# Dense, consecutive build-side range: registers an exact PRF (span 1000 < 2^26).
+statement ok
+CREATE OR REPLACE TABLE build_dense AS
+SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(15000, 16000) t(i);
+
+# The dense-range join must emit BOTH the min/max dynamic filters and the PRF:
+# bounds-based file/zone pruning only understands plain comparison filters.
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM '{TEST_DIR}/prf_minmax_f*.parquet' p
+JOIN build_dense b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:(?s).*Dynamic Filters:.*\(k >= 15000\).*\(k <= 15999\).*IN PRF\(k\).*
+
+# The min/max bounds must prune the four row groups whose k range cannot match.
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM '{TEST_DIR}/prf_minmax_f*.parquet' p
+JOIN build_dense b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/prf_minmax_f*.parquet' p
+JOIN build_dense b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+1000
+
+# Correctness control: identical result with join filter pushdown disabled entirely.
+statement ok
+SET disabled_optimizers = 'join_order,build_side_probe_side,compressed_materialization,join_filter_pushdown';
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/prf_minmax_f*.parquet' p
+JOIN build_dense b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+1000
+
+statement ok
+SET disabled_optimizers = 'join_order,build_side_probe_side,compressed_materialization';
+
+statement ok
+CREATE OR REPLACE TABLE probe AS
+SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(0, 100000) t(i);
+
+# Guard preservation: a sparse build side small enough to push an exact IN filter.
+# The IN list implies bounds at least as tight as [min, max], so min/max must stay
+# suppressed on the PRF path, exactly as on the fall-through path.
+statement ok
+CREATE OR REPLACE TABLE build_sparse AS
+SELECT (i * 2)::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(0, 5) t(i);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe p
+JOIN build_sparse b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:(?s).*\(k IN \(0, 2, 4, 6, 8\)\).*IN PRF\(k\).*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe p
+JOIN build_sparse b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*\(k >= 0\).*
+
+query I
+SELECT count(*)
+FROM probe p
+JOIN build_sparse b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+4
+
+# Single-value build side: min = max takes the one-sided comparison filter path;
+# no PRF is involved and behavior is unchanged.
+statement ok
+CREATE OR REPLACE TABLE build_one AS
+SELECT 42::BIGINT AS k, 0::INTEGER AS g
+FROM range(0, 5) t(i);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe p
+JOIN build_one b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:(?s).*Dynamic Filters: k = 42.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe p
+JOIN build_one b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*PRF.*
+
+query I
+SELECT count(*)
+FROM probe p
+JOIN build_one b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+5
+
+# All-NULL build-side key via RIGHT join: the min/max of k is NULL, so no filter of
+# any kind may be emitted on k (and nothing may crash).
+statement ok
+CREATE OR REPLACE TABLE build_null AS
+SELECT NULL::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(0, 100) t(i);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe p
+RIGHT JOIN build_null b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*PRF.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe p
+RIGHT JOIN build_null b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*\(k >=.*
+
+query I
+SELECT count(*)
+FROM probe p
+RIGHT JOIN build_null b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+100
+
+statement ok
+SET disabled_optimizers = '';

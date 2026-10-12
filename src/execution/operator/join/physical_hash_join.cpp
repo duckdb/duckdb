@@ -1803,6 +1803,10 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				    TryRegisterPrefixRangeFilter(info, context, *ht, op, pushdown_column, filter_col_idx,
 				                                 min_val_before_cast, max_val_before_cast, SMALL_EXACT_PRF_BITS,
 				                                 *gstate)) {
+					if (!pushed_in_filter) {
+						CreateDynamicMinMaxFilters(op, info, context, pushdown_column, filter_col_idx, cmp, min_val,
+						                           max_val, condition_type, reconstruct_filter_expression, false);
+					}
 					continue;
 				}
 
@@ -1816,6 +1820,10 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					    TryRegisterPrefixRangeFilter(info, context, *ht, op, pushdown_column, filter_col_idx,
 					                                 min_val_before_cast, max_val_before_cast, bloom_filter_bits,
 					                                 *gstate)) {
+						if (!pushed_in_filter) {
+							CreateDynamicMinMaxFilters(op, info, context, pushdown_column, filter_col_idx, cmp, min_val,
+							                           max_val, condition_type, reconstruct_filter_expression, false);
+						}
 						continue;
 					}
 				}

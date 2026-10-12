@@ -55,12 +55,26 @@ JOIN build b
 ----
 analyzed_plan	<REGEX>:(?s).*IN.*PRF.*\(k\).*
 
-statement ok
+# A registered PRF must not suppress the dynamic min/max filters: bounds-based
+# file/zone pruning in multi-file sources only understands plain comparison filters.
+query II
+EXPLAIN ANALYZE
 SELECT count(*)
 FROM probe p
 JOIN build b
   ON p.k = b.k
  AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:(?s).*Dynamic Filters:.*\(k >= 0\).*\(k <= 59998\).*IN.*PRF.*\(k\).*
+
+query I
+SELECT count(*)
+FROM probe p
+JOIN build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+17144
 
 statement ok
 CREATE OR REPLACE TABLE probe_with_null AS
