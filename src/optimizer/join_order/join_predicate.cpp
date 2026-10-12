@@ -164,11 +164,59 @@ optional_idx JoinPredicate::GetEqualityClassIndex() const {
 	return equality_class_index;
 }
 
+void JoinPredicate::SetCompositeJoinPair(JoinRelationSet &pair) {
+	composite_join_pair = pair;
+}
+
+optional_ptr<JoinRelationSet> JoinPredicate::GetCompositeJoinPair() const {
+	return composite_join_pair;
+}
+
 JoinEqualityPredicateEdge::JoinEqualityPredicateEdge(JoinPredicate &predicate, RelationIndex left_relation,
                                                      RelationIndex right_relation, ColumnBinding left_binding,
                                                      ColumnBinding right_binding)
     : predicate(predicate), left_relation(left_relation), right_relation(right_relation), left_binding(left_binding),
       right_binding(right_binding) {
+}
+
+idx_t JoinEqualityGroups::GetOrCreateGroup(const ColumnBinding &binding) {
+	auto entry = binding_to_group.emplace(binding, parents.size());
+	if (entry.second) {
+		parents.push_back(entry.first->second);
+	}
+	return entry.first->second;
+}
+
+idx_t JoinEqualityGroups::FindRoot(idx_t group) {
+	while (parents[group] != group) {
+		parents[group] = parents[parents[group]];
+		group = parents[group];
+	}
+	return group;
+}
+
+void JoinEqualityGroups::AddEquality(const ColumnBinding &left, const ColumnBinding &right) {
+	auto left_root = FindRoot(GetOrCreateGroup(left));
+	auto right_root = FindRoot(GetOrCreateGroup(right));
+	if (left_root != right_root) {
+		parents[MaxValue(left_root, right_root)] = MinValue(left_root, right_root);
+	}
+}
+
+idx_t JoinEqualityGroups::GetGroup(const ColumnBinding &binding) {
+	auto entry = binding_to_group.find(binding);
+	D_ASSERT(entry != binding_to_group.end());
+	return FindRoot(entry->second);
+}
+
+void RelationPairEqualitySummary::AddEquality(idx_t equality_class_index, ColumnBinding first_binding,
+                                              ColumnBinding second_binding) {
+	if (std::find(direct_equality_class_indices.begin(), direct_equality_class_indices.end(), equality_class_index) ==
+	    direct_equality_class_indices.end()) {
+		direct_equality_class_indices.push_back(equality_class_index);
+	}
+	first_relation_bindings.insert(first_binding);
+	second_relation_bindings.insert(second_binding);
 }
 
 bool RelationPairEqualitySummary::HasDirectCompositeEquality() const {
@@ -215,18 +263,9 @@ void JoinPredicateModel::AddEqualityClass(JoinEqualityClass equality_class) {
 	equality_classes.push_back(std::move(equality_class));
 }
 
-bool JoinPredicateModel::ContainsClassIndex(const vector<idx_t> &class_indices, idx_t equality_class_index) {
-	return std::find(class_indices.begin(), class_indices.end(), equality_class_index) != class_indices.end();
-}
-
 void JoinPredicateModel::AddDirectEqualityPairClass(JoinRelationSet &pair, idx_t equality_class_index,
                                                     ColumnBinding first_binding, ColumnBinding second_binding) {
-	auto &summary = equality_pairs[pair];
-	if (!ContainsClassIndex(summary.direct_equality_class_indices, equality_class_index)) {
-		summary.direct_equality_class_indices.push_back(equality_class_index);
-	}
-	summary.first_relation_bindings.insert(first_binding);
-	summary.second_relation_bindings.insert(second_binding);
+	equality_pairs[pair].AddEquality(equality_class_index, first_binding, second_binding);
 }
 
 const vector<reference<JoinPredicate>> &JoinPredicateModel::GetPredicates() const {
