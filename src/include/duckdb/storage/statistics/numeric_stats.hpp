@@ -10,6 +10,7 @@
 
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/numeric_stats_union.hpp"
@@ -85,8 +86,8 @@ struct NumericStats {
 
 	template <class T>
 	static inline void UpdateValue(T new_value, T &min, T &max) {
-		min = LessThan::Operation(new_value, min) ? new_value : min;
-		max = GreaterThan::Operation(new_value, max) ? new_value : max;
+		min = Min::Operation(new_value, min);
+		max = Max::Operation(new_value, max);
 	}
 	template <class T>
 	static inline void Update(NumericStatsData &nstats, T new_value) {
