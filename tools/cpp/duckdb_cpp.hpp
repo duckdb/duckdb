@@ -731,6 +731,18 @@ public:
 	/// @return Views borrowed from this statement, valid until it is destroyed.
 	auto GetParameterNames() const -> std::vector<std::string_view>;
 
+	/// Makes a collection visible to the statement as a table named `name`, as a common table expression. Each
+	/// execution reads the collection's contents at that moment, so a prepared statement can run again after the
+	/// collection was cleared and refilled. Only SELECT, INSERT, UPDATE, DELETE and MERGE INTO statements accept one.
+	/// @param name The name the statement refers to the collection by; it shadows a catalog table of that name.
+	/// @param collection Borrowed: it must outlive this statement, every statement copied or prepared from it, and
+	/// every result executing it, and must not be cleared or reset while such a result is live.
+	/// @param column_names Names for the collection's columns, one per column; empty names them col1..colN.
+	/// @throws InvalidInputException For another statement type, a name the statement already defines, or a
+	/// mismatched number of column names.
+	auto AddCollection(std::string_view name, const ColumnDataCollection &collection,
+	                   const std::vector<std::string> &column_names = {}) -> void;
+
 private:
 	explicit SqlStatement(void *impl);
 };
@@ -2896,15 +2908,13 @@ private:
 /// touching the database, and `Flush` runs the statement over everything buffered so far and empties the buffer.
 /// Many small inserts thereby become one bulk insert.
 ///
-/// The appender is built on the public API alone: a connection-scoped `ReplacementScan` exposes the buffer to the
-/// statement under a name. The same can be done by hand when a different shape is needed.
+/// The appender is built on the public API alone: `SqlStatement::AddCollection` exposes the buffer to the statement
+/// under a name. The same can be done by hand when a different shape is needed.
 ///
 /// An appender is bound to the connection it was created on and can only be flushed there. It is not thread-safe:
 /// append from one thread at a time, or give each thread its own appender. It must not outlive its `Connection`.
 ///
-/// Destroying an appender does not flush: rows buffered but not flushed are dropped. Since replacement scans cannot
-/// be unregistered, every appender leaves an inert scan registered on its connection; create appenders once and
-/// reuse them rather than creating one per batch.
+/// Destroying an appender does not flush: rows buffered but not flushed are dropped.
 class Appender {
 public:
 	/// Creates an appender that inserts into `table`.
@@ -2921,12 +2931,14 @@ public:
 	/// Use this when a plain INSERT of every column is not what is needed: a subset of columns, an UPDATE or MERGE
 	/// driven by the buffer, or an INSERT with an ON CONFLICT clause.
 	/// @param conn The connection to buffer against and flush on.
-	/// @param query Exactly one statement, referring to the buffer by `buffer_name`.
+	/// @param query Exactly one SELECT, INSERT, UPDATE, DELETE or MERGE INTO statement, referring to the buffer by
+	/// `buffer_name`.
 	/// @param column_types One type per buffer column, at least one.
-	/// @param buffer_name The name `query` reads the buffer under. Must be unique among the appenders on this
-	/// connection: the first one registered claims the name.
+	/// @param buffer_name The name `query` reads the buffer under. It shadows a table of that name, and must not be
+	/// the name of a common table expression `query` defines itself.
 	/// @param column_names Names for the buffer's columns; empty names them col1..colN.
-	/// @throws InvalidInputException When `column_types` is empty, or `query` is not exactly one statement.
+	/// @throws InvalidInputException When `column_types` is empty, `query` is not exactly one statement of a
+	/// supported type, or it already defines `buffer_name`.
 	Appender(Connection &conn, std::string_view query, std::vector<LogicalType> column_types,
 	         std::string_view buffer_name, const std::vector<std::string> &column_names = {});
 
@@ -2959,23 +2971,16 @@ public:
 	void Clear();
 
 private:
-	// Shared with the replacement scan that exposes the buffer. The scan outlives the appender, since scans cannot be
-	// unregistered, so it holds this by shared_ptr; the appender's destructor nulls the collection to make it decline.
-	struct Buffer {
-		std::string name;
-		std::vector<std::string> column_names;
-		std::unique_ptr<ColumnDataCollection> collection;
-	};
-
 	// The shared body of both constructors.
 	void Initialize(Connection &conn, const std::string &query, std::vector<LogicalType> column_types,
 	                const std::string &buffer_name, const std::vector<std::string> &column_names);
 	void ResetBuffer();
 
-	// The connection the buffer's replacement scan is registered on, and the only one a flush can run on.
+	// The connection the statement runs on.
 	Connection *connection = nullptr;
 	std::vector<LogicalType> types;
-	std::shared_ptr<Buffer> buffer;
+	// The buffer, declared before the statement that borrows it so it is destroyed after it.
+	std::unique_ptr<ColumnDataCollection> collection;
 	// The statement, parsed once and re-executed per flush, and the append state, recreated after every reset.
 	std::unique_ptr<SqlStatement> statement;
 	std::unique_ptr<ColumnDataCollection::AppendState> append_state;

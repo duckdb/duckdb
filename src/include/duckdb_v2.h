@@ -9946,6 +9946,45 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_bind(duckdb_v2_connection_handl
                                                       duckdb_v2_error_info_handle *err);
 
 /*!
+ * Binds a column data collection to the statement under a name.
+ *
+ * Makes the collection visible to the statement as a table named `name`, by adding a common table expression to the
+ * parsed statement. The statement can then be bound, prepared or executed as usual; each execution reads the
+ * collection's contents at that moment, so a prepared statement can be executed again after the collection was cleared
+ * and refilled. Supported statement types are SELECT, INSERT, UPDATE, DELETE and MERGE INTO; any other type is rejected
+ * with `ERROR_INPUT_INVALID`.
+ *
+ * A name the statement already defines as a common table expression, in its SQL text or by a prior call, is rejected
+ * with `ERROR_INPUT_INVALID`. The binding shadows any catalog table named `name`, as a common table expression does.
+ *
+ * By default the collection's columns are named col1..colN. Pass `column_names` to name them instead; when supplied,
+ * `column_count` must equal the collection's column count. Pass NULL and 0 for the default names.
+ *
+ * The collection is borrowed: the caller keeps ownership and must keep it alive, and must not clear, reset or destroy
+ * it, for as long as the statement, any statement copied or prepared from it, or any result executing it is live. An
+ * empty collection is a valid binding. Several collections can be bound under distinct names.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param statement The statement to bind the collection to. Modified in place.
+ * @param name The non-empty name the statement refers to the collection by. Borrowed and copied.
+ * @param collection The collection to bind. Borrowed; the caller keeps ownership and must keep it alive.
+ * @param column_names Optional. An array of `column_count` names for the collection's columns, in order. Pass NULL for
+ * col1..colN.
+ * @param column_count The number of names in `column_names`. 0 for the default names; otherwise the collection's column
+ * count.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_add_collection(duckdb_v2_sql_statement_handle statement,
+                                                                const duckdb_v2_identifier_t *name,
+                                                                duckdb_v2_column_data_collection_handle collection,
+                                                                const duckdb_v2_identifier_t *column_names,
+                                                                idx_t column_count, duckdb_v2_error_info_handle *err);
+
+/*!
  * Returns the statement's type as classified by the parser.
  *
  * This gives the type before the statement-level rewrites that `duckdb_v2_statement_execute()` applies, if any. So a
