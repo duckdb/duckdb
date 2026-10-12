@@ -47,14 +47,18 @@ TEST_CASE("Test Submitted Query API", "[api][.]") {
 	}
 	SECTION("Submit a query while another submitted query exists") {
 		auto handle = con.Submit("SELECT SUM(i) FROM range(1000000) tbl(i)");
+
+		// the connection has an open result, so the second submission is refused
 		auto handle2 = con.Submit("SELECT SUM(i) FROM range(1000000) tbl(i)");
+		REQUIRE(handle2->HasError());
+		REQUIRE(handle2->GetErrorType() == ExceptionType::RESOURCE_IN_USE);
 
-		// the first handle is now closed
-		REQUIRE_THROWS(handle->ExecuteTask());
+		// the first handle is untouched
 		handle->Complete();
-		REQUIRE(handle->HasError());
+		REQUIRE(CHECK_COLUMN(handle, 0, {Value::BIGINT(499999500000)}));
 
-		// we can execute the second one
+		// once it has ended, the connection takes the next one
+		handle2 = con.Submit("SELECT SUM(i) FROM range(1000000) tbl(i)");
 		handle2->Complete();
 		REQUIRE(CHECK_COLUMN(handle2, 0, {Value::BIGINT(499999500000)}));
 
@@ -417,22 +421,23 @@ TEST_CASE("Test Submit Prepared Statements API", "[api][.]") {
 		handle->Complete();
 		REQUIRE(CHECK_COLUMN(handle, 0, {Value::BIGINT(125000250000)}));
 
-		// we can overwrite submitted queries all day long
+		// a result that has ended does not hold the connection, so submission after submission works
 		for (idx_t i = 0; i < 10; i++) {
 			handle = prepare1->Submit(500000);
+			handle->Complete();
 			handle = prepare2->Submit(500000);
+			handle->Complete();
 		}
-
-		handle->Complete();
 		REQUIRE(CHECK_COLUMN(handle, 0, {Value::BIGINT(125000250000)}));
 
-		// however, we can't mix and match...
+		// a result that is still open does hold it
 		handle = prepare1->Submit(500000);
 		auto handle2 = prepare2->Submit(500000);
+		REQUIRE(handle2->HasError());
+		REQUIRE(handle2->GetErrorType() == ExceptionType::RESOURCE_IN_USE);
 
-		// this result is no longer open
 		handle->Complete();
-		REQUIRE(handle->HasError());
+		REQUIRE(CHECK_COLUMN(handle, 0, {Value::BIGINT(374999750000)}));
 	}
 }
 
