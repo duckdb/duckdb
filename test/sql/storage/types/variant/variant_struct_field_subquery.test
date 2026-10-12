@@ -30,6 +30,23 @@ FROM nested_variant_view WHERE id IN (3, 17) ORDER BY id;
 3	3	value_3
 17	17	value_17
 
+# Distinct cast-parent and child paths must also survive persistent scans.
+foreach source nested_variant nested_variant_view
+
+query II
+SELECT n.payload.obj.a::BIGINT, n.payload.obj::STRUCT(b VARCHAR, a BIGINT)
+FROM {source} WHERE id = 3;
+----
+3	{'b': value_3, 'a': 3}
+
+query II
+SELECT n.payload.obj::STRUCT(b VARCHAR, a BIGINT), n.payload.obj.a::BIGINT
+FROM {source} WHERE id = 3;
+----
+{'b': value_3, 'a': 3}	3
+
+endloop
+
 # A filter on one path and a projection of its sibling.
 query II
 SELECT n.tag, n.payload.obj.b::VARCHAR
