@@ -1,0 +1,25 @@
+# name: test/sql/copy/parquet/geoparquet_varchar_column.test
+# description: A VARCHAR column listed in the GeoParquet metadata is read as a VARCHAR
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (SELECT 'x' AS s) TO '__TEST_DIR__/geo_varchar.parquet' (KV_METADATA {geo: '{"version":"1.0.0","columns":{"s":{"encoding":"WKB","geometry_types":[]}}}'})
+
+query II
+SELECT s, typeof(s) FROM '__TEST_DIR__/geo_varchar.parquet'
+----
+x	VARCHAR
+
+# BLOB columns listed in the metadata are still read as geometries
+statement ok
+COPY (SELECT ST_AsWKB('POINT (1 2)'::GEOMETRY) AS g) TO '__TEST_DIR__/geo_blob.parquet' (KV_METADATA {geo: '{"version":"1.0.0","primary_column":"g","columns":{"g":{"encoding":"WKB","geometry_types":[]}}}'})
+
+query II
+SELECT ST_AsText(g), typeof(g) LIKE 'GEOMETRY%' FROM '__TEST_DIR__/geo_blob.parquet'
+----
+POINT (1 2)	true
+
+statement ok
+SELECT 42

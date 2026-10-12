@@ -996,7 +996,9 @@ static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadata
 	const auto is_in_gpq_metadata = metadata.geo_metadata && metadata.geo_metadata->IsGeometryColumn(s_ele.name);
 	// A leaf node has a type set (as per Parquet spec)
 	const auto is_leaf = s_ele.__isset.type;
-	const auto is_geoparquet_geom = is_at_root && is_in_gpq_metadata && is_leaf;
+	// GeoParquet stores WKB in plain binary columns - columns annotated as e.g. strings are not geometries
+	const auto is_plain_binary = !s_ele.__isset.logicalType && !s_ele.__isset.converted_type;
+	const auto is_geoparquet_geom = is_at_root && is_in_gpq_metadata && is_leaf && is_plain_binary;
 
 	if (is_geoparquet_geom) {
 		auto meta_ptr = metadata.geo_metadata->GetColumnMeta(s_ele.name);
