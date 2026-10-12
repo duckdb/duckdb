@@ -118,6 +118,18 @@ private:
 	vector<unique_ptr<STATE>> states DUCKDB_GUARDED_BY(lock);
 };
 
+//! Counts one file against the open file budget shared by all scans, from scheduling its open until destroyed
+class ReadAheadOpenFile {
+public:
+	ReadAheadOpenFile();
+	~ReadAheadOpenFile();
+	ReadAheadOpenFile(const ReadAheadOpenFile &) = delete;
+	ReadAheadOpenFile &operator=(const ReadAheadOpenFile &) = delete;
+
+	//! Files counted by all scans of the process
+	static idx_t Count();
+};
+
 //! Outcome of ScanReadAhead::AcquireJob
 enum class ScanReadAheadAcquire : uint8_t {
 	ACQUIRED,  //! a job with settled I/O is now held
@@ -157,6 +169,7 @@ public:
 	//! cancel_fn runs instead when the open is retired without running, and must settle whatever a scan waits on
 	void ScheduleFileOpen(std::function<void()> open_fn, std::function<void()> cancel_fn);
 	//! Whether another file may be opened when files_ahead files are already opening or open ahead of the scan
+	//! and the files held open by all scans are within the open file budget
 	bool CanScheduleOpen(idx_t files_ahead) const;
 	//! Run one queued async task inline, returns false when none is queued
 	bool TryRunPendingTask();
@@ -217,6 +230,8 @@ private:
 	unique_ptr<ManagedAsyncMemoryGovernor> memory_governor;
 	//! Maximum files opening or open ahead of decoding
 	const idx_t open_window;
+	//! Maximum files held open by all scans, a share of the file descriptor limit
+	const idx_t open_file_budget;
 	//! Backlog budget granted by the reservation, refreshed whenever a job is pushed
 	atomic<idx_t> backlog_budget {0};
 
