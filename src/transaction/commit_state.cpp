@@ -270,6 +270,32 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr, Commi
 	}
 }
 
+static void CheckTableConflict(DuckTransaction &transaction, DuckTableEntry &table) {
+	if (table.HasParent() && table.Parent().timestamp != transaction.GetTransactionId()) {
+		auto &storage = table.GetStorage();
+		auto table_name = storage.GetTableName();
+		auto table_modification = storage.TableModification();
+		throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
+		                           table_name, table_modification);
+	}
+}
+
+void CommitState::CheckWriteConflict(UndoFlags type, data_ptr_t data) {
+	switch (type) {
+	case UndoFlags::INSERT_TUPLE:
+		CheckTableConflict(transaction, *reinterpret_cast<AppendInfo *>(data)->table);
+		break;
+	case UndoFlags::DELETE_TUPLE:
+		CheckTableConflict(transaction, *reinterpret_cast<DeleteInfo *>(data)->table);
+		break;
+	case UndoFlags::UPDATE_TUPLE:
+		CheckTableConflict(transaction, *reinterpret_cast<UpdateInfo *>(data)->table);
+		break;
+	default:
+		break;
+	}
+}
+
 void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
@@ -356,13 +382,6 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 	case UndoFlags::INSERT_TUPLE: {
 		// append:
 		auto info = reinterpret_cast<AppendInfo *>(data);
-		if (info->table->HasParent() && info->table->Parent().timestamp != transaction.GetTransactionId()) {
-			auto &storage = info->table->GetStorage();
-			auto table_name = storage.GetTableName();
-			auto table_modification = storage.TableModification();
-			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
-			                           table_name, table_modification);
-		}
 		// mark the tuples as committed
 		info->table->GetStorage().CommitAppend(commit_id, info->start_row, info->count);
 		break;
@@ -370,26 +389,12 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 	case UndoFlags::DELETE_TUPLE: {
 		// deletion:
 		auto info = reinterpret_cast<DeleteInfo *>(data);
-		if (info->table->HasParent() && info->table->Parent().timestamp != transaction.GetTransactionId()) {
-			auto &storage = info->table->GetStorage();
-			auto table_name = storage.GetTableName();
-			auto table_modification = storage.TableModification();
-			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
-			                           table_name, table_modification);
-		}
 		CommitDelete(*info);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = reinterpret_cast<UpdateInfo *>(data);
-		if (info->table->HasParent() && info->table->Parent().timestamp != transaction.GetTransactionId()) {
-			auto &storage = info->table->GetStorage();
-			auto table_name = storage.GetTableName();
-			auto table_modification = storage.TableModification();
-			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
-			                           table_name, table_modification);
-		}
 		info->version_number = commit_id;
 		break;
 	}
