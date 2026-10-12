@@ -14,6 +14,7 @@
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 
 namespace duckdb {
+class BaseStatistics;
 struct BindInfo;
 class MultiFileList;
 
@@ -40,6 +41,18 @@ struct MultiFileOptions {
 	//! Whether to add a "file_row_number" column with the row number of each row within its file - it is read from the
 	//! row number virtual column of the reader
 	bool file_row_number = false;
+	//! (Optional) Column statistics given by the "column_statistics" option: a MAP of column key to a MAP of statistic
+	//! name to its value as text - "min", "max", "count", "null_count" and "distinct_count" - the shape
+	//! COPY ... (RETURN_STATS) reports them in, keys included: a quoted column path, "s"."x" for a struct field,
+	//! "l"."element" for list elements, "m"."key" / "m"."value" for a map (an unquoted key is a plain column name).
+	//! The keys name the columns OF THE SCAN - what it produces after union_by_name, schema mapping or renames
+	//! across its files - not the columns of any one file. They stand in for the statistics the files would be
+	//! opened for, which lets a caller that knows the data (a catalog, a query coordinator) hand them to the
+	//! optimizer without any file being read for them - and lets a scan of many files have statistics at all.
+	//! NULL when not given.
+	//! They never set the scan's cardinality: that is the reader's estimate or, when given, explicit_cardinality.
+	//! A column's "count" only tells, against its "null_count", whether the column has any non-NULL values.
+	Value column_statistics;
 
 	case_insensitive_map_t<LogicalType> hive_types_schema;
 
@@ -59,6 +72,15 @@ struct MultiFileOptions {
 	DUCKDB_API LogicalType GetHiveLogicalType(const string &hive_partition_column) const;
 	DUCKDB_API Value GetHivePartitionValue(const string &base, const string &entry, ClientContext &context) const;
 	DUCKDB_API bool AnySet() const;
+	//! Set "column_statistics" from an option value - see column_statistics for its shape
+	DUCKDB_API void SetColumnStatistics(const Identifier &key, const Value &val);
+	//! Check "column_statistics" against the scan's columns once they are bound: every key must name a column, or a
+	//! part of one, and every value must parse for it. Errors here, at bind, rather than when the optimizer asks.
+	DUCKDB_API void VerifyColumnStatistics(const vector<Identifier> &names, const vector<LogicalType> &types) const;
+	//! The statistics the "column_statistics" option gives for a column of the given type, or nullptr when it says
+	//! nothing about it. The bounds are cast to the column's type; a value that does not cast is an error.
+	DUCKDB_API unique_ptr<BaseStatistics> GetColumnStatistics(const Identifier &column_name,
+	                                                          const LogicalType &type) const;
 	//! Set "maximum_sample_files" from an option value - a positive count, or -1 for all files
 	DUCKDB_API void SetMaximumSampleFiles(const Identifier &key, const Value &val);
 	//! Set "maximum_sample_files" from an option value, returning false if it is not a valid count
