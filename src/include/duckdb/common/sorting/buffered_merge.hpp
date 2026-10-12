@@ -19,7 +19,7 @@ namespace duckdb {
 //! forward when it is the left side and backward when it is the right side, which keeps equal keys in order.
 template <class SORT_KEY, class ITERATOR, class COMPARE>
 void BufferedMerge(ITERATOR first, ITERATOR middle, ITERATOR last, const COMPARE &compare, SORT_KEY *buffer,
-                          const idx_t buffer_count) {
+                   const idx_t buffer_count) {
 	const auto left_count = static_cast<idx_t>(middle - first);
 	const auto right_count = static_cast<idx_t>(last - middle);
 	if (left_count == 0 || right_count == 0) {
