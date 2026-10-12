@@ -2,6 +2,7 @@
 
 #include "duckdb/planner/logical_plan_sql_exporter.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
 class Expression;
@@ -33,6 +34,12 @@ public:
 	}
 
 	Identifier NextRelationAlias(const Identifier &preferred = Identifier());
+	//! Reserve parsed relation names before introducing generated CTEs around a query.
+	void ReserveRelationNames(QueryNode &query);
+	//! An unqualified relation reference a generated source name would rebind; empty when there is none.
+	optional<Identifier> FindCapturedSourceReference(QueryNode &query, const identifier_set_t &source_names) const;
+	//! The effective source boundary, including enclosing export scopes.
+	optional_ptr<const LogicalPlanSQLExportSource> FindSource(const LogicalOperator &op) const;
 	LogicalPlanVerificationResult<LogicalPlanSQLExportedChild> ExportChild(LogicalOperator &child,
 	                                                                       const LogicalPlanVerificationPath &path);
 	LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
@@ -78,6 +85,8 @@ private:
 	ClientContext &context;
 	idx_t next_relation_ordinal = 0;
 	identifier_set_t relation_aliases;
+	//! The named-source reads this export created; any other reference to a source name is a capture.
+	reference_set_t<const TableRef> source_reads;
 	vector<reference<LogicalOperator>> ancestors;
 	vector<NamedRelation> named_relations;
 };
