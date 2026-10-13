@@ -46,9 +46,11 @@ enum AbsoluteNumberComparison : uint8_t {
 	SMALLER = 2,
 };
 
-//! State shared by the rows of one BIGNUM multiplication or division operation: the scratch buffers hold the operands
-//! as base 2^32 digits and are reused across rows so that a vector of small values does not allocate per row, and the
-//! client context (if any) is polled for interrupts and timeouts while a long multiplication or division runs.
+//! A bignum magnitude is handled as base 2^32 digits
+using digit_t = uint32_t;
+using twodigit_t = uint64_t;
+
+//! Per-vector scratch digit buffers and interrupt-check state for BIGNUM multiplication and division
 struct BignumArithmeticState {
 	explicit BignumArithmeticState(optional_ptr<ClientContext> context = nullptr) : context(context) {
 	}
@@ -56,12 +58,12 @@ struct BignumArithmeticState {
 	optional_ptr<ClientContext> context;
 	//! Digit operations performed since the last interrupt check
 	idx_t work_since_interrupt_check = 0;
-	unsafe_vector<uint32_t> lhs_digits;
-	unsafe_vector<uint32_t> rhs_digits;
-	unsafe_vector<uint32_t> result_digits;
-	unsafe_vector<uint32_t> remainder_digits;
-	unsafe_vector<uint32_t> normalized_dividend;
-	unsafe_vector<uint32_t> normalized_divisor;
+	unsafe_vector<digit_t> lhs_digits;
+	unsafe_vector<digit_t> rhs_digits;
+	unsafe_vector<digit_t> result_digits;
+	unsafe_vector<digit_t> remainder_digits;
+	unsafe_vector<digit_t> normalized_dividend;
+	unsafe_vector<digit_t> normalized_divisor;
 };
 
 struct BignumIntermediate {
@@ -97,9 +99,8 @@ struct BignumIntermediate {
 	//! Multiplies two BignumIntermediates and returns a string_t result, equivalent of a *
 	static string_t Multiply(StringHeap &heap, BignumArithmeticState &state, const BignumIntermediate &lhs,
 	                         const BignumIntermediate &rhs);
-	//! Divides lhs by rhs: the result is the quotient truncated towards zero (equivalent of a //) or, when
-	//! want_remainder is set, the remainder with the sign of the dividend (equivalent of a %).
-	//! Returns false without writing a result when the divisor is zero.
+	//! Truncating division (a // b) or, with want_remainder, the remainder with the sign of the dividend (a % b)
+	//! Returns false without writing a result when the divisor is zero
 	static bool TryDivMod(StringHeap &heap, BignumArithmeticState &state, const BignumIntermediate &lhs,
 	                      const BignumIntermediate &rhs, bool want_remainder, string_t &result);
 	//! Negates a value, e.g., -x

@@ -81,3 +81,21 @@ query I
 SELECT 2.7::FLOAT::BIGNUM
 ----
 2
+
+# a function with a BIGNUM overload but none for floating point no longer rounds a FLOAT argument
+statement error
+SELECT hex(1.5::FLOAT)
+----
+No function matches
+
+# an explicit cast makes the truncation visible
+query I
+SELECT hex(1.5::FLOAT::BIGNUM) = hex(1::BIGNUM)
+----
+true
+
+# integers still reach the BIGNUM overload through their implicit casts
+query I
+SELECT hex(255::INTEGER) = hex(255::BIGINT)
+----
+true
