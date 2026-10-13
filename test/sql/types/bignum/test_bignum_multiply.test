@@ -149,3 +149,29 @@ query I
 SELECT count(*) FROM T t1, T t2 WHERE t1.a * (t1.b + t2.b) <> t1.a * t1.b + t1.a * t2.b
 ----
 0
+
+# overflow: the largest BIGNUM times two trips the bit-length bound before any multiplication
+statement ok
+CREATE TABLE big AS SELECT bignum AS m FROM test_all_types(use_large_bignum = true) LIMIT 2;
+
+statement error
+SELECT m * 2::BIGNUM FROM big WHERE m > 0
+----
+Overflow in Bignum Operation
+
+statement error
+SELECT m * 2::BIGNUM FROM big WHERE m < 0
+----
+Underflow in Bignum Operation
+
+# a product that lands one bit above the limit passes the bound and overflows when it is written
+statement error
+SELECT (m // 2::BIGNUM) * 3::BIGNUM FROM big WHERE m > 0
+----
+Overflow in Bignum Operation
+
+# a product that exactly fills the limit still works
+query I
+SELECT (m // 2::BIGNUM) * 2::BIGNUM + 1 = m FROM big WHERE m > 0
+----
+true
