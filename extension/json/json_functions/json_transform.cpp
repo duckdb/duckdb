@@ -7,8 +7,6 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "json_transform.hpp"
 
-#include "duckdb/common/case_insensitive_map.hpp"
-
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -47,7 +45,7 @@ static LogicalType StructureStringToTypeArray(yyjson_val *arr, ClientContext &co
 
 static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context) {
 	// STRUCT field names are case-insensitive
-	case_insensitive_set_t names;
+	identifier_set_t names;
 	child_list_t<LogicalType> child_types;
 	size_t idx, max;
 	yyjson_val *key, *val;
@@ -57,10 +55,9 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 		if (key_str.empty()) {
 			throw BinderException("Empty key in object in JSON structure");
 		}
-		if (names.find(key_str) != names.end()) {
+		if (!names.insert(Identifier(key_str)).second) {
 			JSONCommon::ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
 		}
-		names.insert(key_str);
 		child_types.emplace_back(key_str, StructureStringToType(val, context));
 	}
 	D_ASSERT(yyjson_obj_size(obj) == names.size());
