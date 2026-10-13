@@ -18,8 +18,14 @@ SELECT * FROM main._1099_vendors;
 ----
 1	12.50
 
+statement ok
+ATTACH ':memory:' AS _0_db;
+
+statement ok
+CREATE TABLE _0_db.main._1099_vendors AS SELECT * FROM _1099_vendors;
+
 query II
-SELECT * FROM memory.main._1099_vendors;
+SELECT * FROM _0_db.main._1099_vendors;
 ----
 1	12.50
 
@@ -35,13 +41,16 @@ SELECT s._1, {'_2': 42}._2 FROM (SELECT {'_1': 7} AS s);
 7	42
 
 statement ok
-CREATE SCHEMA _2_schema;
+CREATE SCHEMA _0_db._2_schema;
 
 statement ok
-CREATE TABLE _2_schema._3_table (_4_col INTEGER);
+CREATE TABLE _0_db._2_schema._3_table (_4_col INTEGER);
 
 statement ok
-INSERT INTO _2_schema._3_table VALUES (5);
+INSERT INTO _0_db._2_schema._3_table VALUES (5);
+
+statement ok
+USE _0_db;
 
 query I
 SELECT t._4_col FROM _2_schema._3_table t WHERE t._4_col = 5;
@@ -49,7 +58,7 @@ SELECT t._4_col FROM _2_schema._3_table t WHERE t._4_col = 5;
 5
 
 query I
-SELECT memory._2_schema._3_table._4_col FROM memory._2_schema._3_table;
+SELECT _0_db._2_schema._3_table._4_col FROM _0_db._2_schema._3_table;
 ----
 5
 
