@@ -80,6 +80,7 @@ public:
 		mutable annotated_mutex meta_lock;
 		//! Metadata for validating the cached blocks against the current file.
 		CacheValidationInfo validation_info DUCKDB_GUARDED_BY(meta_lock);
+		bool metadata_initialized DUCKDB_GUARDED_BY(meta_lock) = false;
 		bool can_seek DUCKDB_GUARDED_BY(meta_lock) = false;
 		bool on_disk_file DUCKDB_GUARDED_BY(meta_lock) = false;
 	};

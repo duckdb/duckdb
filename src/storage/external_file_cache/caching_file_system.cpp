@@ -345,7 +345,7 @@ void CachingFileHandle::InitializeFileMetadata(const shared_ptr<FileHandle> &han
 	file_metadata_initialized = true;
 	{
 		annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
-		const bool first_access = (cached_file->validation_info.file_size == 0);
+		const bool first_access = !cached_file->metadata_initialized;
 		const bool refresh_expired_cache = !Validate() && cached_file->validation_info.IsExpired();
 		if (first_access || Validate() || refresh_expired_cache) {
 			const bool cache_is_valid =
@@ -364,6 +364,7 @@ void CachingFileHandle::InitializeFileMetadata(const shared_ptr<FileHandle> &han
 			cached_file->can_seek = handle->CanSeek();
 			cached_file->on_disk_file = handle->OnDiskFile();
 		}
+		cached_file->metadata_initialized = true;
 	}
 }
 
@@ -622,6 +623,15 @@ string CachingFileHandle::GetPath() const {
 }
 
 idx_t CachingFileHandle::GetFileSize() {
+	if (!Validate()) {
+		auto current_cached_file = EnsureCachedFileCurrent();
+		{
+			annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
+			if (current_cached_file->metadata_initialized) {
+				return current_cached_file->validation_info.file_size;
+			}
+		}
+	}
 	EnsureFileMetadata();
 	if (!Validate()) {
 		auto current_cached_file = EnsureCachedFileCurrent();
@@ -634,6 +644,15 @@ idx_t CachingFileHandle::GetFileSize() {
 }
 
 timestamp_t CachingFileHandle::GetLastModifiedTime() {
+	if (!Validate()) {
+		auto current_cached_file = EnsureCachedFileCurrent();
+		{
+			annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
+			if (current_cached_file->metadata_initialized) {
+				return current_cached_file->validation_info.last_modified;
+			}
+		}
+	}
 	EnsureFileMetadata();
 	if (!Validate()) {
 		auto current_cached_file = EnsureCachedFileCurrent();
@@ -646,6 +665,15 @@ timestamp_t CachingFileHandle::GetLastModifiedTime() {
 }
 
 string CachingFileHandle::GetVersionTag() {
+	if (!Validate()) {
+		auto current_cached_file = EnsureCachedFileCurrent();
+		{
+			annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
+			if (current_cached_file->metadata_initialized) {
+				return current_cached_file->validation_info.version_tag;
+			}
+		}
+	}
 	EnsureFileMetadata();
 	if (!Validate()) {
 		auto current_cached_file = EnsureCachedFileCurrent();
@@ -675,19 +703,14 @@ bool CachingFileHandle::Validate() const {
 }
 
 bool CachingFileHandle::CanSeek() {
-	auto handle = GetFileHandle();
-	{
-		annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
-		if (!file_metadata_initialized) {
-			return handle->CanSeek();
-		}
-	}
 	if (!Validate()) {
 		auto current_cached_file = EnsureCachedFileCurrent();
 		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
-		return current_cached_file->can_seek;
+		if (current_cached_file->metadata_initialized) {
+			return current_cached_file->can_seek;
+		}
 	}
-	return handle->CanSeek();
+	return GetFileHandle()->CanSeek();
 }
 
 bool CachingFileHandle::IsRemoteFile() const {
@@ -695,19 +718,14 @@ bool CachingFileHandle::IsRemoteFile() const {
 }
 
 bool CachingFileHandle::OnDiskFile() {
-	auto handle = GetFileHandle();
-	{
-		annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
-		if (!file_metadata_initialized) {
-			return handle->OnDiskFile();
-		}
-	}
 	if (!Validate()) {
 		auto current_cached_file = EnsureCachedFileCurrent();
 		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
-		return current_cached_file->on_disk_file;
+		if (current_cached_file->metadata_initialized) {
+			return current_cached_file->on_disk_file;
+		}
 	}
-	return handle->OnDiskFile();
+	return GetFileHandle()->OnDiskFile();
 }
 
 void ReadThroughputEstimator::AddSample(double seconds, idx_t bytes) {
