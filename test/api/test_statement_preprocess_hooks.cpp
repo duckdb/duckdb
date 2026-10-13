@@ -212,7 +212,8 @@ TEST_CASE("Statement preprocessing unwinds when transaction callbacks throw", "[
 	state->on_transaction_commit = nullptr;
 	state->on_transaction_rollback = nullptr;
 	if (con.context->transaction.HasActiveTransaction()) {
-		con.Rollback();
+		// A failing begin callback can leave the preprocessing transaction open in autocommit mode.
+		con.context->transaction.Rollback(nullptr);
 	}
 	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
 }
