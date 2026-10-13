@@ -85,15 +85,6 @@ bool Tokenizer::CharacterIsInitialNumber(char c) {
 	return c == '.';
 }
 
-static bool NumberHasDotOrExponent(const string &sql, idx_t start, idx_t end) {
-	for (idx_t i = start; i < end; i++) {
-		if (sql[i] == '.' || sql[i] == 'e' || sql[i] == 'E') {
-			return true;
-		}
-	}
-	return false;
-}
-
 bool Tokenizer::CharacterIsSpecialStringCharacter(char c) {
 	if (c == 'N' || c == 'n') {
 		return true;
@@ -447,8 +438,8 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 			last_pos = i;
 			break;
 		case TokenizeState::NUMERIC:
-			// Check for "always allowed" numeric characters - a number has at most one dot, and none in its exponent
-			if (CharacterIsInitialNumber(c) && (c != '.' || !NumberHasDotOrExponent(sql, last_pos, i))) {
+			// Check for "always allowed" numeric characters
+			if (CharacterIsInitialNumber(c)) {
 				break; // Continue tokenizing
 			}
 			// Allow underscore only when immediately followed by a digit (no consecutive underscores)
