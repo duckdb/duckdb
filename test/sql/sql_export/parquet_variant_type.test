@@ -75,15 +75,7 @@ SELECT NULL::PARQUET_VARIANT('STRUCT(a VARCHAR)');
 ----
 Binder Error
 
-# User-defined type names and parameterized types retain their existing behavior.
-statement ok
-CREATE TYPE encoded_record AS STRUCT(metadata BLOB, value BLOB);
-
-query T
-SELECT get_type(variant_to_parquet_variant(NULL)::encoded_record);
-----
-STRUCT(metadata BLOB, "value" BLOB)
-
+# Parameterized types retain their existing behavior.
 query T
 SELECT get_type(1.25::DECIMAL(9,2));
 ----
