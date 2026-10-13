@@ -461,7 +461,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	auto &lambda_expr = args[lambda_expr_idx].GetExpressionMutable()->Cast<LambdaExpression>();
 
 	unique_ptr<ParsedExpression> lambda_expr_copy;
-	const bool is_list_reduce = func.name == "list_reduce";
+	// the aliases of list_reduce (e.g. reduce) are separate catalog entries
+	const bool is_list_reduce = func.name == "list_reduce" || func.alias_of == "list_reduce";
 	if (is_list_reduce) {
 		// We have to make this copy before binding in case we have to double-bind
 		lambda_expr_copy = lambda_expr.Copy();
