@@ -1,0 +1,23 @@
+--- a/vcpkg_ports/libmariadb/portfile.cmake	2026-10-13 12:12:01.555528582 +0000
++++ b/vcpkg_ports/libmariadb/portfile.cmake	2026-10-13 12:12:01.556386911 +0000
+@@ -33,6 +33,12 @@
+ 
+ string(TOUPPER "${VCPKG_LIBRARY_LINKAGE}" plugin_type)
+ 
++set(rc_flag_options "")
++if(VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_IS_MINGW)
++    # the default "-c65001" RC flag is forwarded to clang-cl by cmake_llvm_rc and rejected
++    list(APPEND rc_flag_options "-DCMAKE_RC_FLAGS=/DWIN32")
++endif()
++
+ set(zstd_plugin_type OFF)
+ if("zstd" IN_LIST FEATURES)
+     set(zstd_plugin_type ${plugin_type})
+@@ -48,6 +54,7 @@
+     SOURCE_PATH "${SOURCE_PATH}"
+     OPTIONS
+         ${FEATURE_OPTIONS}
++        ${rc_flag_options}
+         -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF
+         -DINSTALL_INCLUDEDIR=include/mysql # legacy port decision
+         -DINSTALL_LIBDIR=lib
