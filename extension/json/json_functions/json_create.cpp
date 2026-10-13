@@ -1516,6 +1516,8 @@ ScalarFunction JSONFunctions::GetJSONCopyToJSONFunction() {
 	fun.GetSignature().GetParameter(1).SetName("date_format");
 	fun.GetSignature().GetParameter(2).SetName("timestamp_format");
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	// formatting dates and timestamps can fail
+	fun.SetFallible();
 	fun.SetSerializeCallback(JSONCopyToJSONSerialize);
 	fun.SetDeserializeCallback(JSONCopyToJSONDeserialize);
 	return fun;
@@ -1534,6 +1536,7 @@ ScalarFunction JSONFunctions::GetJSONCopyToGeoJSONFunction() {
 	fun.GetSignature().GetParameter(4).SetName("id_column");
 	fun.GetSignature().GetParameter(5).SetName("write_bbox");
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetFallible();
 	return fun;
 }
 
