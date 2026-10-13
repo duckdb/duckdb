@@ -3,8 +3,7 @@
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(postgres_scanner
             GIT_URL https://github.com/duckdb/duckdb-postgres
-            GIT_TAG f9db66ec5a5c35a30ce868d2b7233ffc0a21a08e
+            GIT_TAG 57f857eb8a24697cd44c224716c0d26c851a89e7
             SUBMODULES database-connector
-            APPLY_PATCHES
             )
  endif()
