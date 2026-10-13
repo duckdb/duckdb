@@ -100,6 +100,10 @@ static LogicalPlanSQLExportResult ApplyOutputNames(LogicalPlanSQLExportResult re
 	if (result.HasError()) {
 		return result;
 	}
+	if (SQLExportDMLHelpers::IsDMLNode(*result.GetValue().query)) {
+		// a data-modifying statement's result shape is inherent; its names are not a projection
+		return result;
+	}
 	if (output_names.size() != result.GetValue().fields.size()) {
 		return LogicalPlanSQLExportResult::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
 		    LogicalPlanVerificationPath(), "output_names", "Output name count does not match the exported plan")});
@@ -333,6 +337,11 @@ LogicalPlanSQLExporter::Export(ClientContext &context, LogicalOperator &root,
 		return LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>::Failure(verification);
 	}
 	LogicalPlanSQLExportContext state(context);
+	if (auto returning = SQLExportDMLHelpers::MatchReturningRoot(root)) {
+		// output names become the RETURNING aliases, so they are not reapplied below
+		return SQLExportDMLHelpers::ExportReturning(state, *returning, options.output_names,
+		                                            LogicalPlanVerificationPath());
+	}
 	auto result = state.Export(root, LogicalPlanVerificationPath());
 	if (!options.output_names) {
 		return result;
