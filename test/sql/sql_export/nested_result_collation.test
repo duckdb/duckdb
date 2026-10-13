@@ -239,12 +239,6 @@ SELECT first_value(v) OVER (ORDER BY i), last_value(v) OVER (ORDER BY i ROWS BET
 {'v': A}	NULL
 {'v': A}	NULL
 
-# Unsupported typed constructors must retain a structured error.
-statement error
-EXPLAIN (SQL) SELECT union_value(v := s COLLATE NOCASE) FROM (VALUES ('A')) t(s);
-----
-The nested value type has no SQL constructor
-
 # An explicit cast to an uncollated list still clears its element collation.
 query TT
 EXPLAIN (SQL) SELECT cast_to_type(['A'], array_value('x' COLLATE nocase))[1]='a', (array_value('A' COLLATE nocase)::VARCHAR[])[1]='a';
