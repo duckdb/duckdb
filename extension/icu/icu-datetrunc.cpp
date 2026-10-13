@@ -138,23 +138,6 @@ struct ICUDateTrunc : public ICUDateFunc {
 		calendar->Set(CAL_ERA, era);
 	}
 
-	template <typename SRC, typename DST>
-	static inline DST TruncCast(const SRC &src) {
-		DST dst;
-		if (SRC::PRECISION == DST::PRECISION) {
-			dst.value = src.value;
-		} else {
-			//	Truncate away from the epoch
-			//	Scale first so we don't overflow.
-			const int64_t scaling = SRC::PRECISION / DST::PRECISION;
-			dst.value = src.value / scaling; // NOLINT
-			if (dst.value < 0) {
-				--dst.value;
-			}
-		}
-		return dst;
-	}
-
 	template <typename T>
 	static void ICUDateTruncFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
