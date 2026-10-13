@@ -21,9 +21,18 @@ namespace duckdb {
 //! be worth having).
 class SortMergeBuffer {
 public:
+	//! Number of keys the buffer holds at most: the smaller side of a merge is at most half the keys
+	static idx_t MaximumKeyCount(idx_t key_count) {
+		return key_count / 2 + 1;
+	}
+	//! Memory the buffer takes at most, so that it can be budgeted along with the keys it merges
+	static idx_t MaximumSize(idx_t key_count, idx_t key_size) {
+		return MaximumKeyCount(key_count) * key_size;
+	}
+
 	SortMergeBuffer(Allocator &allocator, idx_t key_count, idx_t key_size) : count(0) {
 		static constexpr idx_t MINIMUM_KEYS = 1024;
-		for (idx_t keys = key_count / 2 + 1; keys >= MINIMUM_KEYS; keys /= 2) {
+		for (idx_t keys = MaximumKeyCount(key_count); keys >= MINIMUM_KEYS; keys /= 2) {
 			try {
 				data = allocator.Allocate(keys * key_size);
 				count = keys;

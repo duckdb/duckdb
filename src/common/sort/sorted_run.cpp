@@ -457,4 +457,9 @@ idx_t SortedRun::SizeInBytes() const {
 	return size;
 }
 
+idx_t SortedRun::SizeInBytesForSorting() const {
+	// the fixed-size sort keys are the rows of the key layout, so the row width is the key size the merge buffer uses
+	return SizeInBytes() + SortMergeBuffer::MaximumSize(key_data->Count(), key_data->GetLayout().GetRowWidth());
+}
+
 } // namespace duckdb
