@@ -431,7 +431,7 @@ void TopNHeap::Reduce() {
 		return;
 	}
 	// we have too many values in the heap - reduce them
-	StringHeap new_sort_heap;
+	StringHeap new_sort_heap(allocator);
 	DataChunk new_heap_data;
 	new_heap_data.Initialize(allocator, payload_types, heap.size());
 

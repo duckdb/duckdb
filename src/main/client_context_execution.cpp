@@ -1,4 +1,5 @@
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/operator/add.hpp"
 
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/error_data.hpp"
@@ -50,9 +51,14 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStateme
 	// Set query deadline if max_execution_time is configured
 	auto max_execution_time = Settings::Get<MaxExecutionTimeSetting>(*this);
 	if (max_execution_time > 0) {
-		auto now = steady_clock::now();
-		auto deadline_tp = now + milliseconds(max_execution_time);
-		query_deadline = NumericCast<idx_t>(duration_cast<milliseconds>(deadline_tp.time_since_epoch()).count());
+		auto now_ms = NumericCast<idx_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
+		idx_t deadline;
+		if (TryAddOperator::Operation<idx_t, idx_t, idx_t>(now_ms, NumericCast<idx_t>(max_execution_time), deadline)) {
+			query_deadline = deadline;
+		} else {
+			// the deadline is too far in the future to be represented - there is effectively no deadline
+			query_deadline.SetInvalid();
+		}
 	} else {
 		query_deadline.SetInvalid();
 	}
@@ -193,8 +199,10 @@ void BindPreparedStatementParameters(ClientContext &context, PreparedStatementDa
 	statement.Bind(context, owned_values);
 }
 
-unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
-    ClientContextLock &lock, shared_ptr<PreparedStatementData> statement_data_p, const QueryParameters &parameters) {
+unique_ptr<QueryResult>
+ClientContext::SubmitPreparedStatementInternal(ClientContextLock &lock,
+                                               shared_ptr<PreparedStatementData> statement_data_p,
+                                               const QueryParameters &parameters, Retention retention) {
 	D_ASSERT(active_query);
 	auto &statement_data = *statement_data_p;
 	BindPreparedStatementParameters(*this, statement_data, parameters);
@@ -259,8 +267,7 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 			buffer = make_shared_ptr<SimpleBufferedData>(*this, ResultLifetime::UNDECIDED, std::move(format_context),
 			                                             parameters.format);
 		}
-		if (parameters.result_eagerness == ResultEagerness::FORCED ||
-		    statement_data.properties.result_eagerness == ResultEagerness::FORCED) {
+		if (retention == Retention::RETAINED_AT_SUBMISSION) {
 			// Settled before execution starts, so no producer ever parks for the decision
 			buffer->Decide(ResultLifetime::RETAINED);
 		}
@@ -303,6 +310,7 @@ unique_ptr<QueryResult> ClientContext::CompleteDelegatedInternal(ClientContextLo
 	auto produced = executor.GetResult();
 	if (executor.HasStreamingResultCollector()) {
 		active_query->SetOpenResult(*produced);
+		active_query->collector_built_result = true;
 	} else {
 		CleanupInternal(lock, produced.get(), false);
 	}
@@ -383,8 +391,7 @@ QueryResultState ClientContext::FailQueryInternal(ClientContextLock &lock, BaseQ
 	return QueryResultState::EXECUTION_ERROR;
 }
 
-void ClientContext::InitialCleanup(ClientContextLock &lock) {
-	//! Abandon the query of an open result that no call ended, as Close would, and reset the interrupted flag
+void ClientContext::AbandonActiveQuery(ClientContextLock &lock) {
 	if (active_query) {
 		AbortInternal(lock);
 	}

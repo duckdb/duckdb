@@ -55,8 +55,10 @@
         "test/sql/settings/deprecated_settings.test",
         "test/sql/copy/copy_column_identifier_conversion.test",
         "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
+        "test/sql/copy/parquet/parquet_prefetch_first_group_cost.test",
         "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
         "test/sql/copy/parquet/parquet_prefetch_projection.test",
+        "test/sql/copy/parquet/parquet_prefetch_shared_column_chunks.test",
         "test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test",
         "test/sql/copy/parquet/parquet_prefetch_strategy_option.test",
         "test/sql/copy/parquet/parquet_prefetch_cost_model.test",
@@ -69,6 +71,12 @@
         "test/sql/storage/prefetch/async_native_scan_read_ahead.test",
         "test/sql/storage/prefetch/prefetch_run_size_cap.test",
         "test/sql/progress/test_verify_progress.test"
+      ]
+    },
+    {
+      "reason": "disabled_compression_methods doesn't survive database restarts",
+      "paths": [
+        "test/sql/settings/setting_validation_and_reset.test"
       ]
     },
     {

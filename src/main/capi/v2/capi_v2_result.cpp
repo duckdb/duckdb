@@ -50,9 +50,14 @@ void ReadChangedRows(const ArrowArrayWrapper &unit, idx_t &rows_changed) {
 // ResultWrapperV2 state machine
 // ---------------------------------------------------------------------------
 
-void ResultWrapperV2::BeginPending(unique_ptr<QueryResult> next_handle, bool is_principal) {
+void ResultWrapperV2::BeginPending(unique_ptr<QueryResult> next_handle, bool is_principal, StatementType written_type) {
 	next_handle->ThrowIfError();
 	principal_active = is_principal;
+	stream_when_ready = StreamsByDefault(written_type, next_handle->GetStatementProperties());
+	if (!stream_when_ready) {
+		// Settled before the caller steps it, so every step stays one bounded unit of work
+		next_handle->Materialize();
+	}
 	if (is_principal) {
 		types = next_handle->GetTypes();
 		names = next_handle->GetNames();
@@ -80,6 +85,7 @@ void ResultWrapperV2::StartNextFragment() {
 	}
 	idx_t this_index = fragment_index;
 	auto stmt = std::move(fragments[fragment_index++]);
+	auto written_type = stmt->type;
 	bool is_last = fragment_index == fragments.size();
 	// Parameters bind only to the first fragment (statement_execute rejects them on
 	// a statement that expands, so that fragment is the user's statement). Later
@@ -106,7 +112,7 @@ void ResultWrapperV2::StartNextFragment() {
 	if (has_result) {
 		principal_seen = true;
 	}
-	BeginPending(std::move(next_handle), is_principal);
+	BeginPending(std::move(next_handle), is_principal, written_type);
 }
 
 void ResultWrapperV2::RequireMetadata() const {
@@ -122,12 +128,12 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::HandleExecutionError(ErrorData err
 	// (e.g. a max_execution_time timeout) must surface as an error carrying the
 	// engine's message, mirroring the eager ClientContext::Query path.
 	bool user_cancelled = error_data.Type() == ExceptionType::INTERRUPT && busy_slot &&
-	                      busy_slot->cancel_requested.load(std::memory_order_relaxed);
+	                      busy_slot->cancel_requests.load() != cancel_requests_at_start;
 	stream.reset();
 	handle.reset();
 	fragments.clear();
 	try {
-		RollbackIncompleteGroup();
+		AbandonIncompleteGroup();
 	} catch (...) {
 		// Best effort; never mask the original error.
 	}
@@ -178,9 +184,7 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::Step(unique_ptr<typename FORMAT::T
 			// transition keeps the contract simple: one unit of work per
 			// step; the next step hits the stream.
 			try {
-				if (handle->GetStatementProperties().result_eagerness == ResultEagerness::FORCED) {
-					// The statement completes before its result is returned:
-					// its chunks come from the retained handle instead.
+				if (!stream_when_ready) {
 					handle->Complete();
 					if (handle->HasError()) {
 						return HandleExecutionError(handle->GetErrorObject());
@@ -224,9 +228,7 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::Step(unique_ptr<typename FORMAT::T
 				break;
 			}
 		}
-		// Fetch the next unit. For a statement that completes before its
-		// result is returned the data is fully available and every step
-		// lands here directly.
+		// A retained statement has all its data, so every step lands here directly
 		unique_ptr<typename FORMAT::T> unit;
 		try {
 			unit =
@@ -405,24 +407,17 @@ auto ExecutePreparedStatementV2(const shared_ptr<ClientContext> &context, Prepar
                                 identifier_map_t<BoundParameterData> &values, shared_ptr<ResultFormat> format)
     -> unique_ptr<ResultWrapperV2> {
 	auto wrapper = make_uniq<ResultWrapperV2>();
-	// One live result per connection, claimed the way statement_execute claims it and
-	// before the submission runs, which would otherwise cancel the live stream.
-	auto busy_slot = GetBusySlot(*context);
-	void *expected = nullptr;
-	if (!busy_slot->owner.compare_exchange_strong(expected, wrapper.get())) {
-		throw ResourceInUseException("connection has a live result; drain, destroy, or interrupt it before starting "
-		                             "a new query (or open another connection)");
-	}
-	// On any failure below, the wrapper's destructor releases the slot.
-	wrapper->busy_slot = std::move(busy_slot);
-	wrapper->busy_slot->cancel_requested.store(false, std::memory_order_relaxed);
+	wrapper->busy_slot = GetBusySlot(*context);
+	wrapper->cancel_requests_at_start = wrapper->busy_slot->cancel_requests.load();
+	ThrowIfGroupRunning(*wrapper->busy_slot);
 	wrapper->context = context;
 	wrapper->format = std::move(format);
 	// A prepared statement is always one engine statement: preprocessing, expansion and
 	// the wrapping transaction all happened at prepare time, so this bypasses the fragment
 	// machinery and is always principal. fragment_count is 1 for metadata symmetry only.
 	wrapper->fragment_count = 1;
-	wrapper->BeginPending(prepared.Submit(values, QueryParameters(wrapper->format)), true);
+	// The engine refuses the submission while another statement on the connection is running
+	wrapper->BeginPending(prepared.Submit(values, QueryParameters(wrapper->format)), true, prepared.GetStatementType());
 	// The engine runs a prepared statement through an internal EXECUTE, whose statement type
 	// would otherwise be what the result reports. Report the type of the statement that was
 	// prepared instead, so a prepared result is indistinguishable from a stateless one.
@@ -435,24 +430,12 @@ auto ExecuteStatementV2(const shared_ptr<ClientContext> &context, const SQLState
                         idx_t parameter_count, const char *function_name, shared_ptr<ResultFormat> format)
     -> unique_ptr<ResultWrapperV2> {
 	auto wrapper = make_uniq<ResultWrapperV2>();
-	// One live result per connection. The busy slot lives in the context's
-	// registered-state map (so the connection handle stays a bare Connection *),
-	// shared with this result. The busy check is a manual return path: no
-	// ExceptionType maps to RESOURCE_IN_USE, so routing it through
-	// WithErrorHandler would degrade the code. It must run before PendingQuery,
-	// which would otherwise silently cancel the live stream.
-	auto busy_slot = GetBusySlot(*context);
-	void *expected = nullptr;
-	if (!busy_slot->owner.compare_exchange_strong(expected, wrapper.get())) {
-		throw ResourceInUseException("connection has a live result; drain, destroy, or interrupt it before starting "
-		                             "a new query (or open another connection)");
-	}
-	// On any failure below, the wrapper's destructor releases the slot.
-	wrapper->busy_slot = std::move(busy_slot);
-	// A fresh query starts uncancelled: clear any consumer-cancellation request
-	// left over from before this result claimed the slot (mirrors the engine
-	// clearing interrupt_state at query begin).
-	wrapper->busy_slot->cancel_requested.store(false, std::memory_order_relaxed);
+	// The busy slot lives in the context's registered-state map, so the connection handle stays a bare Connection *
+	wrapper->busy_slot = GetBusySlot(*context);
+	wrapper->cancel_requests_at_start = wrapper->busy_slot->cancel_requests.load();
+	ThrowIfGroupRunning(*wrapper->busy_slot);
+	// Refused before preprocessing, which decides from the active transaction whether to wrap a group in its own
+	context->VerifyNoOpenResult();
 
 	// Borrowed, not consumed: execute a copy so the caller keeps the original.
 	auto stmt = statement.Copy();
@@ -492,9 +475,17 @@ auto ExecuteStatementV2(const shared_ptr<ClientContext> &context, const SQLState
 	}
 	wrapper->context = context;
 	wrapper->format = std::move(format);
+	if (wrapper->fragments.size() > 1) {
+		// On any failure below, the wrapper's destructor releases the claim
+		void *expected = nullptr;
+		if (!wrapper->busy_slot->owner.compare_exchange_strong(expected, wrapper.get())) {
+			ThrowConnectionInUse();
+		}
+	}
 	// Prepare the first fragment. Lazy streaming execution: nothing
 	// executes until the result is stepped; for non-expanding statements
-	// (the common case) this also captures the metadata immediately.
+	// (the common case) this also captures the metadata immediately. The engine refuses the
+	// submission while another statement on the connection is running.
 	wrapper->StartNextFragment();
 	return wrapper;
 }

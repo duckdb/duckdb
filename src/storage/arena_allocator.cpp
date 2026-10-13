@@ -133,6 +133,33 @@ data_ptr_t ArenaAllocator::ReallocateAligned(data_ptr_t pointer, idx_t old_size,
 	return Reallocate(pointer, old_size, AlignValue<idx_t>(size));
 }
 
+ArenaAllocator::Position ArenaAllocator::GetPosition() const {
+	Position result;
+	if (head) {
+		result.chunk = head.get();
+		result.current_position = head->current_position;
+	}
+	return result;
+}
+
+void ArenaAllocator::Rewind(const Position &position) {
+	if (!position.chunk) {
+		// nothing was allocated when the position was taken
+		FreeAll();
+		return;
+	}
+	// destroy the chunks that were allocated after the position was taken, newest first
+	while (head.get() != position.chunk) {
+		D_ASSERT(head && head->next);
+		allocated_size -= head->maximum_size;
+		auto older = std::move(head->next);
+		head = std::move(older);
+		head->prev = nullptr;
+	}
+	D_ASSERT(position.current_position <= head->current_position);
+	head->current_position = position.current_position;
+}
+
 void ArenaAllocator::FreeAll() {
 	Reset();
 	if (head) {

@@ -189,7 +189,12 @@ Input list is empty
 statement error
 FROM query_table(['']);
 ----
-Parser Error: syntax error 
+Parser Error: Zero-length identifier in qualified name!
+
+statement error
+FROM query_table('main..tbl_int');
+----
+Parser Error: Zero-length identifier in qualified name!
 
 statement error
 FROM query_table('tbl_int', 'tbl_varchar', tbl2_varchar);

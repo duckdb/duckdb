@@ -103,6 +103,14 @@ struct MultiFileBindData : public TableFunctionData {
 	}
 
 	unique_ptr<FunctionData> Copy() const override;
+
+	//! Whether an output column is supplied by a filename, row-number or Hive partition role.
+	DUCKDB_API bool IsGeneratedColumn(idx_t column_idx) const;
+	//! Match a physical column to an output column without a generated override or conversion (including collations).
+	DUCKDB_API bool MatchesPhysicalColumn(idx_t column_idx, const Identifier &physical_name,
+	                                      const LogicalType &physical_type) const;
+	//! Whether all physical roots have the output names and types at the same positions, without generated roles.
+	DUCKDB_API bool HasIdentityMapping(const vector<MultiFileColumnDefinition> &physical_columns) const;
 };
 
 //! Per-file data for the multi file reader
