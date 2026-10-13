@@ -1145,6 +1145,19 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		if (!is_variant && parquet_options.variant_legacy_encoding && IsVariantType(s_ele, child_schemas)) {
 			is_variant = true;
 		}
+		if (is_variant) {
+			// the VARIANT reader reads the 'metadata' and 'value' columns as binary
+			for (auto &child_schema : child_schemas) {
+				if (child_schema.name != "metadata" && child_schema.name != "value") {
+					continue;
+				}
+				if (!child_schema.children.empty() || child_schema.parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
+					throw IOException("Failed to read Parquet file \"%s\": the '%s' column of VARIANT column \"%s\" "
+					                  "must be a BYTE_ARRAY",
+					                  file.path, child_schema.name, s_ele.name);
+				}
+			}
+		}
 
 		if (!is_map_kv && this_idx > 0) {
 			// check if the parent node of this is a map
