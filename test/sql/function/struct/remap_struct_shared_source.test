@@ -1,0 +1,18 @@
+# name: test/sql/function/struct/remap_struct_shared_source.test
+# description: remap_struct with one source field mapped to several targets
+# group: [struct]
+
+query I
+SELECT remap_struct({a: 1}, NULL::STRUCT(x INT, y INT), {x:'a', y:'a'}, NULL);
+----
+{'x': 1, 'y': 1}
+
+statement error
+SELECT remap_struct({a: 1}, NULL::STRUCT(x INT, y BIGINT), {x:'a', y:'a'}, NULL);
+----
+<REGEX>:Binder Error.*different types.*
+
+statement error
+SELECT remap_struct({a: 1.5::DECIMAL(4,1)}, NULL::STRUCT(x DECIMAL(38,2), y DECIMAL(4,1)), {x:'a', y:'a'}, NULL);
+----
+<REGEX>:Binder Error.*different types.*
