@@ -932,7 +932,7 @@ TEST_CASE("V2: statement_type numeric round-trip for higher-numbered values", "[
 	} cases[] = {
 	    {"EXPLAIN SELECT 1", DUCKDB_V2_STATEMENT_TYPE_EXPLAIN},          // 14
 	    {"DROP TABLE t", DUCKDB_V2_STATEMENT_TYPE_DROP},                 // 15
-	    {"PRAGMA enable_progress_bar", DUCKDB_V2_STATEMENT_TYPE_PRAGMA}, // 17
+	    {"PRAGMA disable_profiling", DUCKDB_V2_STATEMENT_TYPE_PRAGMA},   // 17
 	    {"SET memory_limit='1GB'", DUCKDB_V2_STATEMENT_TYPE_SET},        // 20
 	    {"ATTACH ':memory:' AS other", DUCKDB_V2_STATEMENT_TYPE_ATTACH}, // 25
 	};
