@@ -1,5 +1,5 @@
 # name: test/sql/types/bignum/test_bignum_float_combine.test
-# description: BIGNUM and FLOAT have no implicit cast between them and combine to DOUBLE
+# description: BIGNUM has no implicit cast to or from FLOAT and DECIMAL; the pairs combine to DOUBLE
 # group: [bignum]
 
 # arithmetic
@@ -99,3 +99,86 @@ query I
 SELECT hex(255::INTEGER) = hex(255::BIGINT)
 ----
 true
+
+# BIGNUM with DECIMAL has no implicit cast either and meets in DOUBLE like the arithmetic does
+query II
+SELECT typeof(COALESCE(1::BIGNUM, 1.5::DECIMAL(4,1))), COALESCE(NULL::BIGNUM, 1.5::DECIMAL(4,1))
+----
+DOUBLE	1.5
+
+query I
+SELECT 1::BIGNUM UNION ALL SELECT 1.5::DECIMAL(4,1) ORDER BY 1
+----
+1.0
+1.5
+
+query IIII
+SELECT 1::BIGNUM < 2::DECIMAL(4,1), 2::BIGNUM >= 1.5::DECIMAL(4,1), 1::BIGNUM = 1.5::DECIMAL(4,1), 1.5::DECIMAL(4,1) > 1::BIGNUM
+----
+true	true	false	true
+
+query II
+SELECT typeof(greatest(1::BIGNUM, 2::DECIMAL(4,1))), [1::BIGNUM, 1.5::DECIMAL(18,3)]
+----
+DOUBLE	[1.0, 1.5]
+
+# a BIGNUM arithmetic result compared with a DECIMAL literal
+statement ok
+CREATE TABLE t AS SELECT 5::BIGNUM AS x;
+
+query I
+SELECT count(*) FROM t WHERE x * 3 > 1.5
+----
+1
+
+query I
+SELECT (10::BIGNUM % 3) = 1.0
+----
+true
+
+query I
+SELECT (10::BIGNUM // 3) >= 2.5
+----
+true
+
+query I
+SELECT (10::BIGNUM + 3) < 13.5
+----
+true
+
+# each operator with a DECIMAL, DOUBLE or INTEGER operand: fractional operands go to DOUBLE, integers to BIGNUM
+query III
+SELECT typeof(10::BIGNUM * 1.5::DECIMAL(2,1)), typeof(10::BIGNUM * 1.5::DOUBLE), typeof(10::BIGNUM * 3::INTEGER)
+----
+DOUBLE	DOUBLE	BIGNUM
+
+query III
+SELECT 10::BIGNUM * 1.5::DECIMAL(2,1), 10::BIGNUM * 1.5::DOUBLE, 10::BIGNUM * 3::INTEGER
+----
+15.0	15.0	30
+
+query III
+SELECT typeof(10::BIGNUM // 1.5::DECIMAL(2,1)), typeof(10::BIGNUM // 1.5::DOUBLE), typeof(10::BIGNUM // 3::INTEGER)
+----
+DOUBLE	DOUBLE	BIGNUM
+
+# the DOUBLE overload of // divides without truncating, as it does for DOUBLE operands
+query III
+SELECT 9::BIGNUM // 1.5::DECIMAL(2,1), 9::BIGNUM // 1.5::DOUBLE, 10::BIGNUM // 3::INTEGER
+----
+6.0	6.0	3
+
+query III
+SELECT typeof(10::BIGNUM % 3.0::DECIMAL(2,1)), typeof(10::BIGNUM % 3.0::DOUBLE), typeof(10::BIGNUM % 3::INTEGER)
+----
+DOUBLE	DOUBLE	BIGNUM
+
+query III
+SELECT 10::BIGNUM % 3.0::DECIMAL(2,1), 10::BIGNUM % 3.0::DOUBLE, 10::BIGNUM % 3::INTEGER
+----
+1.0	1.0	1
+
+query III
+SELECT typeof(10::BIGNUM + 1.5::DECIMAL(2,1)), typeof(10::BIGNUM - 1.5::DOUBLE), typeof(10::BIGNUM - 3::INTEGER)
+----
+DOUBLE	DOUBLE	BIGNUM
