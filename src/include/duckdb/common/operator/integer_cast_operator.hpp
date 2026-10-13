@@ -168,7 +168,10 @@ struct IntegerDecimalCastOperation : IntegerCastOperation {
 	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
 	static bool HandleDecimal(T &state, uint8_t digit) {
 		using store_t = typename T::StoreType;
-		if (DUCKDB_UNLIKELY(state.decimal > (NumericLimits<store_t>::Maximum() - digit) / 10)) {
+		// digits past this position cannot affect the result for any int16_t exponent
+		static constexpr uint16_t MAX_DECIMAL_DIGITS = -NumericLimits<int16_t>::Minimum();
+		if (DUCKDB_UNLIKELY(state.decimal_digits == MAX_DECIMAL_DIGITS ||
+		                    state.decimal > (NumericLimits<store_t>::Maximum() - digit) / 10)) {
 			// Simply ignore any more decimals
 			return true;
 		}
