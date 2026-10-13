@@ -2187,9 +2187,9 @@ struct HugeIntCastData {
 	idx_t digits;
 
 	ResultType decimal;
-	uint16_t decimal_total_digits;
+	idx_t decimal_total_digits;
 	ResultType decimal_intermediate;
-	uint16_t decimal_intermediate_digits;
+	idx_t decimal_intermediate_digits;
 
 	bool Flush() {
 		if (digits == 0 && intermediate == 0) {
@@ -2319,7 +2319,7 @@ struct HugeIntegerCastOperation {
 				remainder = negate_result;
 			}
 			state.decimal = remainder;
-			state.decimal_total_digits = static_cast<uint16_t>(-e);
+			state.decimal_total_digits = static_cast<idx_t>(-e);
 			state.decimal_intermediate = 0;
 			state.decimal_intermediate_digits = 0;
 			return Finalize<T, NEGATIVE>(state);
@@ -2338,16 +2338,16 @@ struct HugeIntegerCastOperation {
 			return Finalize<T, NEGATIVE>(state);
 		}
 
-		e = exponent - state.decimal_total_digits;
-		if (e < 0) {
-			if (e < -38) {
+		const auto shift = static_cast<int64_t>(exponent) - static_cast<int64_t>(state.decimal_total_digits);
+		if (shift < 0) {
+			if (shift < -38) {
 				return false;
 			}
-			state.decimal = T::Operation::DivMod(state.decimal, T::Operation::POWERS_OF_TEN[-e], remainder);
-			state.decimal_total_digits -= (exponent);
+			state.decimal = T::Operation::DivMod(state.decimal, T::Operation::POWERS_OF_TEN[-shift], remainder);
+			state.decimal_total_digits -= static_cast<idx_t>(exponent);
 		} else {
-			if (e > 38 ||
-			    !TryMultiplyOperator::Operation(state.decimal, T::Operation::POWERS_OF_TEN[e], state.decimal)) {
+			if (shift > 38 ||
+			    !TryMultiplyOperator::Operation(state.decimal, T::Operation::POWERS_OF_TEN[shift], state.decimal)) {
 				return false;
 			}
 		}
@@ -2395,7 +2395,7 @@ struct HugeIntegerCastOperation {
 			state.decimal /= T::Operation::POWERS_OF_TEN[MAX_DIGITS];
 			state.decimal_total_digits -= MAX_DIGITS;
 		}
-		D_ASSERT((state.decimal_total_digits - 1) >= 0 && (state.decimal_total_digits - 1) <= MAX_DIGITS);
+		D_ASSERT(state.decimal_total_digits >= 1 && state.decimal_total_digits - 1 <= MAX_DIGITS);
 		state.decimal /= T::Operation::POWERS_OF_TEN[state.decimal_total_digits - 1];
 
 		if (state.decimal >= 5) {
