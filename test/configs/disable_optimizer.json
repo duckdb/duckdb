@@ -96,6 +96,13 @@
       ]
     },
     {
+      "reason": "Parquet prefetch strategies and I/O metrics require optimizer filter pushdown.",
+      "paths": [
+        "test/sql/copy/parquet/parquet_prefetch_first_group_cost.test",
+        "test/sql/copy/parquet/parquet_prefetch_overlapping_ranges.test"
+      ]
+    },
+    {
       "reason": "Recursive CTE relies on short-circuiting optimization.",
       "paths": [
         "test/sql/cte/recursive_cte_limit.test",
