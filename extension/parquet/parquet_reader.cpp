@@ -1908,7 +1908,7 @@ void ParquetReader::PrepareReadAhead(ClientContext &context, GlobalTableFunction
 }
 
 void ParquetReader::InitializeScanHandle(ClientContext &context) const {
-	std::call_once(scan_handle_initialized, [&] { shared_scan_handle = OpenScanHandle(context); });
+	CallOnce(scan_handle_initialized, [&] { shared_scan_handle = OpenScanHandle(context); });
 }
 
 void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const {
