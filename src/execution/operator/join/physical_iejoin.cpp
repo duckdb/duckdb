@@ -1502,8 +1502,7 @@ void IEJoinLocalSourceState::ExecuteLeftTask(ExecutionContext &context, DataChun
 		if (col_idx < left_cols) {
 			chunk.data[col_idx].Reference(lpayload.data[col_idx]);
 		} else {
-			// the vector can still reference a payload of a previous chunk - replace it by a NULL constant
-			chunk.data[col_idx].Reference(Value(chunk.data[col_idx].GetType()), count_t(count));
+			ConstantVector::SetNull(chunk.data[col_idx], count_t(count));
 		}
 	}
 
@@ -1533,8 +1532,7 @@ void IEJoinLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChu
 	chunk.Reset();
 	for (column_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
 		if (col_idx < left_cols) {
-			// the vector can still reference a payload of a previous chunk - replace it by a NULL constant
-			chunk.data[col_idx].Reference(Value(chunk.data[col_idx].GetType()), count_t(count));
+			ConstantVector::SetNull(chunk.data[col_idx], count_t(count));
 		} else {
 			chunk.data[col_idx].Reference(rpayload.data[col_idx - left_cols]);
 		}
