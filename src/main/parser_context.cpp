@@ -40,15 +40,7 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Get(ClientContext &context) {
 
 shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context,
                                                     const vector<string> &active_extensions) {
-	vector<reference<GrammarExtension>> selected_extensions;
-	auto &callback_manager = ExtensionCallbackManager::Get(context);
-	for (auto &name : active_extensions) {
-		auto grammar_extension = callback_manager.FindGrammarExtension(name);
-		if (grammar_extension) {
-			selected_extensions.emplace_back(*grammar_extension);
-		}
-	}
-	return Create(selected_extensions);
+	return context.db->GetParserCache().GetMatcher(context, active_extensions);
 }
 
 ParserCache::ParserCache() {
@@ -85,18 +77,23 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(const ClientContext &context
 			extension_names.push_back(grammar_extension->Name());
 		}
 	}
-	{
-		lock_guard<std::mutex> lock(extension_mutex);
-		auto entry = extension_matchers.find(extension_names);
-		if (entry != extension_matchers.end()) {
-			return entry->second;
+	// compile while holding the lock, so concurrent first uses of the same extensions only compile once
+	lock_guard<std::mutex> lock(extension_mutex);
+	for (idx_t i = 0; i < extension_matchers.size(); i++) {
+		if (extension_matchers[i].first == extension_names) {
+			// move the entry to the back, which holds the most recently used grammar
+			auto entry = std::move(extension_matchers[i]);
+			extension_matchers.erase(extension_matchers.begin() + NumericCast<int64_t>(i));
+			extension_matchers.push_back(std::move(entry));
+			return extension_matchers.back().second;
 		}
 	}
-	auto new_matcher = CompiledGrammar::Create(selected_extensions);
-
-	lock_guard<std::mutex> lock(extension_mutex);
-	auto entry = extension_matchers.emplace(std::move(extension_names), std::move(new_matcher));
-	return entry.first->second;
+	if (extension_matchers.size() >= MAX_CACHED_EXTENSION_MATCHERS) {
+		// connections that still use the evicted grammar keep their own reference to it
+		extension_matchers.erase(extension_matchers.begin());
+	}
+	extension_matchers.emplace_back(std::move(extension_names), CompiledGrammar::Create(selected_extensions));
+	return extension_matchers.back().second;
 }
 
 shared_ptr<CompiledGrammar> ParserCache::GetPassthroughMatcher(const ClientContext &context) {
