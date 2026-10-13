@@ -1,0 +1,19 @@
+# name: test/sql/join/asof/test_asof_join_list_key_offset.test
+# description: ASOF JOIN with a LIST equality key that is not the first equality key
+# group: [asof]
+
+statement ok
+CREATE TABLE l AS SELECT range id, range t, range % 3 a, [range % 5] b FROM range(1000);
+
+statement ok
+CREATE TABLE r AS SELECT range id, range t, range % 3 a, CASE WHEN range % 7 = 0 THEN NULL ELSE [range % 5] END b FROM range(1000);
+
+query II
+SELECT count(r.id), sum(r.id) FROM l ASOF LEFT JOIN r ON l.a = r.a AND l.b = r.b AND l.t > r.t;
+----
+982	482529
+
+query II
+SELECT count(r.id), sum(r.id) FROM l ASOF LEFT JOIN r ON l.b = r.b AND l.a = r.a AND l.t > r.t;
+----
+982	482529

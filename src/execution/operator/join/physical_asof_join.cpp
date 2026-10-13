@@ -933,8 +933,15 @@ struct SortKeyPrefixComparison {
 				break;
 			case SortKeyPrefixComparisonType::NESTED:
 				decoded.Reset();
-				lhs_width = CreateSortKeyHelpers::DecodeSortKey(lhs_key, vec, 0, modifiers);
-				rhs_width = CreateSortKeyHelpers::DecodeSortKey(rhs_key, vec, 1, modifiers);
+				// decode the key of this column, which starts after the keys of the previous columns
+				const auto lhs_remaining =
+				    UnsafeNumericCast<uint32_t>(lhs_key.GetSize() - (lhs_ptr - lhs_key.GetData()));
+				const auto rhs_remaining =
+				    UnsafeNumericCast<uint32_t>(rhs_key.GetSize() - (rhs_ptr - rhs_key.GetData()));
+				const string_t lhs_column_key(lhs_ptr, lhs_remaining);
+				const string_t rhs_column_key(rhs_ptr, rhs_remaining);
+				lhs_width = CreateSortKeyHelpers::DecodeSortKey(lhs_column_key, vec, 0, modifiers);
+				rhs_width = CreateSortKeyHelpers::DecodeSortKey(rhs_column_key, vec, 1, modifiers);
 				cmp = memcmp(lhs_ptr, rhs_ptr, MinValue<idx_t>(lhs_width, rhs_width));
 				if (!cmp) {
 					cmp = (rhs_width < lhs_width) - (lhs_width < rhs_width);
