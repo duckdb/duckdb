@@ -23,7 +23,7 @@ namespace duckdb {
 
 static unique_ptr<Expression> BindStructExtract(ClientContext &context, vector<unique_ptr<Expression>> arguments,
                                                 const LogicalType &child_type) {
-	auto result = BindBuiltinScalarExpression(context, StructExtractFun::Name, std::move(arguments));
+	auto result = BindBuiltinScalarFunction(context, StructExtractFun::Name, std::move(arguments));
 	if (result->GetReturnType() != child_type) {
 		// a NULL input is folded into an untyped NULL constant
 		result = BoundCastExpression::AddCastToType(context, std::move(result), child_type);
