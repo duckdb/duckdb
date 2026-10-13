@@ -167,3 +167,46 @@ query I
 SELECT count(*) FROM ets WHERE year(t) = 2005;
 ----
 8760
+
+# ---------------------------------------------------------------------------
+# a bound that lands at the bottom of the TIMESTAMP domain must be a real timestamp: the preimage of
+# epoch(t) > INT64_MIN + 1 is the whole finite domain, whose lower end is the first midnight of year
+# -290308 (290309 BC).  The values between INT64_MIN and that midnight are neither the -infinity sentinel nor
+# convertible to a date, and a bound placed on one of them cannot be rendered (EXPLAIN and EXPLAIN
+# ANALYZE failed with "Date out of range in timestamp conversion").
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT count(*) FROM ets WHERE epoch(t) > -9223372036854775807;
+----
+logical_opt	<REGEX>:.*t >= '290309-12-22 \(BC\) 00:00:00'.*
+
+statement ok
+EXPLAIN ANALYZE SELECT count(*) FROM ets WHERE epoch(t) > -9223372036854775807;
+
+# an upper bound keeps the lower end too (it is what excludes -infinity), and so does any other
+# monotone function
+statement ok
+EXPLAIN SELECT count(*) FROM ets WHERE epoch(t) < 9223372036854775807;
+
+statement ok
+EXPLAIN SELECT count(*) FROM ets WHERE epoch_ms(t) > -9223372036854775807;
+
+statement ok
+EXPLAIN SELECT count(*) FROM ets WHERE year(t) > -1000000000;
+
+# the rewrite stays exact: every finite row passes, ±infinity (epoch = NULL) and NULL do not
+query I
+SELECT count(*) FROM ets WHERE epoch(t) > -9223372036854775807;
+----
+200000
+
+query I
+SELECT count(*) FROM ets WHERE epoch(t) < 9223372036854775807;
+----
+200000
+
+# the lowest timestamp itself is still inside the domain
+query I
+SELECT count(*) FROM (SELECT '290309-12-22 (BC) 00:00:00'::TIMESTAMP AS t UNION ALL SELECT '-infinity'::TIMESTAMP UNION ALL SELECT NULL::TIMESTAMP) WHERE epoch(t) >= -9223372036854775807;
+----
+1

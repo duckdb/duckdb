@@ -50,13 +50,22 @@ static bool GetFiniteDomain(const LogicalType &type, int64_t &lo, int64_t &hi, b
 		has_infinity = true;
 		return true;
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
-		// the ±infinity sentinels keep the finite domain bounded away from INT64_MIN/MAX, so the
-		// never-true sentinels (hi+1 / lo-1) in the bisection can't overflow
-		lo = timestamp_t::ninfinity().value + 1;
+	case LogicalTypeId::TIMESTAMP_TZ: {
+		// the finite domain is the range of timestamps that convert to a date and a time: the values
+		// between INT64_MIN and the first midnight of Timestamp::MIN_YEAR are neither a sentinel nor
+		// convertible, and a bound placed on one of them cannot be rendered (EXPLAIN fails with "Date
+		// out of range in timestamp conversion").  INT64_MAX - 1 converts, so the top only steps over
+		// the +infinity sentinel; both ends stay away from INT64_MIN/MAX, so the never-true sentinels
+		// (hi+1 / lo-1) in the bisection can't overflow.
+		static const int64_t min_finite =
+		    Timestamp::FromDatetime(Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY),
+		                            dtime_t(0))
+		        .value;
+		lo = min_finite;
 		hi = timestamp_t::infinity().value - 1;
 		has_infinity = true;
 		return true;
+	}
 	default:
 		// BIGINT's full int64 domain would overflow the never-true bisection sentinels, other timestamp
 		// resolutions and HUGEINT need a wider midpoint, and floating types are only monotone up to
