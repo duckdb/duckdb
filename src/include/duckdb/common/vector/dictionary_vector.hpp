@@ -8,9 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/once_flag.hpp"
 #include "duckdb/common/types/vector.hpp"
-
-#include <mutex>
 
 namespace duckdb {
 
@@ -28,7 +27,7 @@ public:
 	//! fall-through), making it a global dictionary. Set only via CreateReusableGlobalDictionary.
 	bool global_dictionary = false;
 	//! For caching the hashes of a child buffer (mutable: cache is logically const)
-	mutable std::once_flag cached_hashes_once;
+	mutable OnceFlag cached_hashes_once;
 	mutable unique_ptr<Vector> cached_hashes;
 };
 

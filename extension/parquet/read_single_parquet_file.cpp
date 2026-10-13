@@ -4,6 +4,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "parquet_reader.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/once_flag.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
@@ -49,8 +50,8 @@ struct ReadSingleParquetFileData : public TableFunctionData {
 	//! A reader over the metadata of the file, created on first use. The row groups it describes refer to the schema
 	//! it holds, so it is kept for as long as this bind data is
 	ParquetReader &GetMetadataReader(ClientContext &context) const {
-		std::call_once(metadata_reader_initialized,
-		               [&] { metadata_reader = ParquetReader::CreateMetadataReader(context, options, metadata); });
+		CallOnce(metadata_reader_initialized,
+		         [&] { metadata_reader = ParquetReader::CreateMetadataReader(context, options, metadata); });
 		return *metadata_reader;
 	}
 
@@ -58,7 +59,7 @@ private:
 	//! Guards the transfer of the bind reader
 	mutable mutex bind_reader_lock;
 	mutable shared_ptr<ParquetReader> bind_reader;
-	mutable std::once_flag metadata_reader_initialized;
+	mutable OnceFlag metadata_reader_initialized;
 	mutable shared_ptr<ParquetReader> metadata_reader;
 };
 
