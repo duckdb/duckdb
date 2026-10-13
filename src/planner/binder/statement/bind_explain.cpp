@@ -7,8 +7,18 @@ namespace duckdb {
 
 BoundStatement Binder::Bind(ExplainStatement &stmt) {
 	BoundStatement result;
-	if (stmt.explain_type == ExplainType::EXPLAIN_SQL && stmt.stmt->type != StatementType::SELECT_STATEMENT) {
-		throw NotImplementedException("EXPLAIN (SQL) supports SELECT, VALUES and WITH queries only");
+	if (stmt.explain_type == ExplainType::EXPLAIN_SQL) {
+		switch (stmt.stmt->type) {
+		case StatementType::SELECT_STATEMENT:
+		case StatementType::INSERT_STATEMENT:
+		case StatementType::UPDATE_STATEMENT:
+		case StatementType::DELETE_STATEMENT:
+		case StatementType::MERGE_INTO_STATEMENT:
+			break;
+		default:
+			throw NotImplementedException(
+			    "EXPLAIN (SQL) supports SELECT, VALUES, WITH, INSERT, UPDATE, DELETE and MERGE INTO statements only");
+		}
 	}
 
 	// bind the underlying statement

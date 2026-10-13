@@ -943,13 +943,6 @@ public:
 	static void InitializeAnalyzeKeywordTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeAnalyzeKeywordTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
-	static void InitializeExpressionStatementTrampoline(PEGTransformer &transformer,
-	                                                    GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue> FinalizeExpressionStatementTrampoline(PEGTransformer &transformer,
-	                                                                             GeneratedTransformProcess &process);
-	static void InitializeExpressionAliasTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue> FinalizeExpressionAliasTrampoline(PEGTransformer &transformer,
-	                                                                         GeneratedTransformProcess &process);
 	static void InitializeIndexNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeIndexNameTrampoline(PEGTransformer &transformer,
 	                                                                   GeneratedTransformProcess &process);
@@ -4274,8 +4267,6 @@ public:
 	static CatalogType TransformCommentColumn(PEGTransformer &transformer);
 	static Value TransformStringLiteralValue(PEGTransformer &transformer, const string &string_literal);
 	static Identifier TransformAnalyzeKeyword(PEGTransformer &transformer);
-	static unique_ptr<SQLStatement> TransformExpressionStatement(PEGTransformer &transformer,
-	                                                             vector<unique_ptr<ParsedExpression>> expression_alias);
 	static Identifier TransformConstraintName(PEGTransformer &transformer, const Identifier &col_id_or_string);
 	static Identifier TransformCollationName(PEGTransformer &transformer, const Identifier &identifier);
 	static unique_ptr<ParsedExpression> TransformNumberLiteral(PEGTransformer &transformer, ParseResult &parse_result);
