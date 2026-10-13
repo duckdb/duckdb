@@ -112,6 +112,8 @@ public:
 
 	optional_ptr<DummyBinding> macro_binding;
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
+	//! The number of (outer) lambda bindings whose parameters can not be referenced, e.g. inside an aggregate
+	idx_t inaccessible_lambda_binding_count = 0;
 
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type = nullptr,

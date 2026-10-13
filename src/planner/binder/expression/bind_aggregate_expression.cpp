@@ -12,7 +12,6 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_lambdaref_expression.hpp"
 #include "duckdb/planner/expression_binder/base_select_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
@@ -114,17 +113,6 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<Express
 	}
 }
 
-static bool ReferencesEnclosingLambda(const Expression &expr, idx_t enclosing_lambda_count) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_LAMBDA_REF) {
-		return expr.Cast<BoundLambdaRefExpression>().LambdaIndex() < enclosing_lambda_count;
-	}
-	bool result = false;
-	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
-		result = result || ReferencesEnclosingLambda(child, enclosing_lambda_count);
-	});
-	return result;
-}
-
 BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry &func, idx_t depth) {
 	auto count_star = binder.TryRewriteQualifiedCountStar(aggr);
 	if (count_star) {
@@ -139,6 +127,21 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	if (inside_aggregate) {
 		throw BinderException(aggr, "aggregate function calls cannot be nested");
 	}
+	// an aggregate is computed over the rows of the query, not over the elements an enclosing lambda is applied to -
+	// so the parameters of the enclosing lambdas can not be referenced in the aggregate
+	struct InaccessibleLambdaBindings {
+		InaccessibleLambdaBindings(ExpressionBinder &binder_p, idx_t count)
+		    : binder(binder_p), previous_count(binder.inaccessible_lambda_binding_count) {
+			binder.inaccessible_lambda_binding_count = count;
+		}
+		~InaccessibleLambdaBindings() {
+			binder.inaccessible_lambda_binding_count = previous_count;
+		}
+		ExpressionBinder &binder;
+		idx_t previous_count;
+	};
+	InaccessibleLambdaBindings inaccessible_lambdas(*this, lambda_bindings ? lambda_bindings->size() : 0);
+
 	// first bind the child of the aggregate expression (if any)
 	this->bound_aggregate = true;
 	unique_ptr<Expression> bound_filter;
@@ -210,18 +213,6 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	if (error.HasError()) {
 		// the arguments decided that this level owns the aggregate, so a child that does not bind here is an error
 		return BindResult(std::move(error));
-	}
-	// an aggregate inside a lambda is computed over the rows of the query, not over the elements of the lambda
-	const idx_t enclosing_lambda_count = lambda_bindings ? lambda_bindings->size() : 0;
-	if (enclosing_lambda_count > 0) {
-		auto references_lambda = [&](const unique_ptr<Expression> &child) {
-			return child && ReferencesEnclosingLambda(*child, enclosing_lambda_count);
-		};
-		if (references_lambda(bound_filter_child) ||
-		    std::any_of(bound_arguments.begin(), bound_arguments.end(), references_lambda) ||
-		    std::any_of(bound_orders.begin(), bound_orders.end(), references_lambda)) {
-			throw BinderException(aggr, "aggregate functions cannot reference lambda parameters");
-		}
 	}
 
 	if (aggr.Filter()) {
