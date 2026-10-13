@@ -2942,14 +2942,18 @@ public:
 	static void InitializeSliceBoundTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeSliceBoundTrampoline(PEGTransformer &transformer,
 	                                                                    GeneratedTransformProcess &process);
+	static void InitializeSliceUpperBoundTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeSliceUpperBoundTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static void InitializeMinusStepSliceBoundTrampoline(PEGTransformer &transformer,
+	                                                    GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeMinusStepSliceBoundTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
+	static void InitializeEndStepSliceBoundTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeEndStepSliceBoundTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
 	static void InitializeEndSliceBoundTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeEndSliceBoundTrampoline(PEGTransformer &transformer,
-	                                                                       GeneratedTransformProcess &process);
-	static void InitializeEndSliceValueTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue> FinalizeEndSliceValueTrampoline(PEGTransformer &transformer,
-	                                                                       GeneratedTransformProcess &process);
-	static void InitializeEndSliceMinusTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue> FinalizeEndSliceMinusTrampoline(PEGTransformer &transformer,
 	                                                                       GeneratedTransformProcess &process);
 	static void InitializeStepSliceBoundTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeStepSliceBoundTrampoline(PEGTransformer &transformer,
@@ -5255,11 +5259,14 @@ public:
 	                                                             vector<unique_ptr<ParsedExpression>> slice_bound);
 	static vector<unique_ptr<ParsedExpression>>
 	TransformSliceBound(PEGTransformer &transformer, optional<unique_ptr<ParsedExpression>> expression,
-	                    optional<unique_ptr<ParsedExpression>> end_slice_bound,
-	                    optional<unique_ptr<ParsedExpression>> step_slice_bound);
+	                    optional<vector<unique_ptr<ParsedExpression>>> slice_upper_bound);
+	static vector<unique_ptr<ParsedExpression>>
+	TransformMinusStepSliceBound(PEGTransformer &transformer, unique_ptr<ParsedExpression> step_slice_bound);
+	static vector<unique_ptr<ParsedExpression>>
+	TransformEndStepSliceBound(PEGTransformer &transformer, unique_ptr<ParsedExpression> end_slice_bound,
+	                           optional<unique_ptr<ParsedExpression>> step_slice_bound);
 	static unique_ptr<ParsedExpression> TransformEndSliceBound(PEGTransformer &transformer,
-	                                                           optional<unique_ptr<ParsedExpression>> end_slice_value);
-	static unique_ptr<ParsedExpression> TransformEndSliceMinus(PEGTransformer &transformer);
+	                                                           optional<unique_ptr<ParsedExpression>> expression);
 	static unique_ptr<ParsedExpression> TransformStepSliceBound(PEGTransformer &transformer,
 	                                                            optional<unique_ptr<ParsedExpression>> expression);
 	static unique_ptr<ParsedExpression> TransformPostfixOperator(PEGTransformer &transformer);

@@ -1977,15 +1977,18 @@ static const TransformFrameOps SLICE_EXPRESSION_OPS = {"SliceExpression",
                                                        &PEGTransformerFactory::FinalizeSliceExpressionTrampoline};
 static const TransformFrameOps SLICE_BOUND_OPS = {"SliceBound", &PEGTransformerFactory::InitializeSliceBoundTrampoline,
                                                   &PEGTransformerFactory::FinalizeSliceBoundTrampoline};
+static const TransformFrameOps SLICE_UPPER_BOUND_OPS = {"SliceUpperBound",
+                                                        &PEGTransformerFactory::InitializeSliceUpperBoundTrampoline,
+                                                        &PEGTransformerFactory::FinalizeSliceUpperBoundTrampoline};
+static const TransformFrameOps MINUS_STEP_SLICE_BOUND_OPS = {
+    "MinusStepSliceBound", &PEGTransformerFactory::InitializeMinusStepSliceBoundTrampoline,
+    &PEGTransformerFactory::FinalizeMinusStepSliceBoundTrampoline};
+static const TransformFrameOps END_STEP_SLICE_BOUND_OPS = {
+    "EndStepSliceBound", &PEGTransformerFactory::InitializeEndStepSliceBoundTrampoline,
+    &PEGTransformerFactory::FinalizeEndStepSliceBoundTrampoline};
 static const TransformFrameOps END_SLICE_BOUND_OPS = {"EndSliceBound",
                                                       &PEGTransformerFactory::InitializeEndSliceBoundTrampoline,
                                                       &PEGTransformerFactory::FinalizeEndSliceBoundTrampoline};
-static const TransformFrameOps END_SLICE_VALUE_OPS = {"EndSliceValue",
-                                                      &PEGTransformerFactory::InitializeEndSliceValueTrampoline,
-                                                      &PEGTransformerFactory::FinalizeEndSliceValueTrampoline};
-static const TransformFrameOps END_SLICE_MINUS_OPS = {"EndSliceMinus",
-                                                      &PEGTransformerFactory::InitializeEndSliceMinusTrampoline,
-                                                      &PEGTransformerFactory::FinalizeEndSliceMinusTrampoline};
 static const TransformFrameOps STEP_SLICE_BOUND_OPS = {"StepSliceBound",
                                                        &PEGTransformerFactory::InitializeStepSliceBoundTrampoline,
                                                        &PEGTransformerFactory::FinalizeStepSliceBoundTrampoline};
@@ -3751,9 +3754,10 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"MethodFunctionArguments", &METHOD_FUNCTION_ARGUMENTS_OPS},
 	    {"SliceExpression", &SLICE_EXPRESSION_OPS},
 	    {"SliceBound", &SLICE_BOUND_OPS},
+	    {"SliceUpperBound", &SLICE_UPPER_BOUND_OPS},
+	    {"MinusStepSliceBound", &MINUS_STEP_SLICE_BOUND_OPS},
+	    {"EndStepSliceBound", &END_STEP_SLICE_BOUND_OPS},
 	    {"EndSliceBound", &END_SLICE_BOUND_OPS},
-	    {"EndSliceValue", &END_SLICE_VALUE_OPS},
-	    {"EndSliceMinus", &END_SLICE_MINUS_OPS},
 	    {"StepSliceBound", &STEP_SLICE_BOUND_OPS},
 	    {"PostfixOperator", &POSTFIX_OPERATOR_OPS},
 	    {"SpecialFunctionExpression", &SPECIAL_FUNCTION_EXPRESSION_OPS},
@@ -17831,14 +17835,10 @@ PEGTransformerFactory::FinalizeSliceExpressionTrampoline(PEGTransformer &transfo
 void PEGTransformerFactory::InitializeSliceBoundTrampoline(PEGTransformer &transformer,
                                                            GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(3);
-	auto &step_slice_bound_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
-	if (step_slice_bound_opt.HasResult()) {
-		process.PushChild({transformer.GetRule("StepSliceBound"), step_slice_bound_opt.GetResult()}, 2);
-	}
-	auto &end_slice_bound_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
-	if (end_slice_bound_opt.HasResult()) {
-		process.PushChild({transformer.GetRule("EndSliceBound"), end_slice_bound_opt.GetResult()}, 1);
+	process.ReserveChildSlots(2);
+	auto &slice_upper_bound_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (slice_upper_bound_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("SliceUpperBound"), slice_upper_bound_opt.GetResult()}, 1);
 	}
 	auto &expression_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
 	if (expression_opt.HasResult()) {
@@ -17852,42 +17852,16 @@ PEGTransformerFactory::FinalizeSliceBoundTrampoline(PEGTransformer &transformer,
 	if (process.child_results[0]) {
 		expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
 	}
-	optional<unique_ptr<ParsedExpression>> end_slice_bound {};
+	optional<vector<unique_ptr<ParsedExpression>>> slice_upper_bound {};
 	if (process.child_results[1]) {
-		end_slice_bound = process.TakeResult<unique_ptr<ParsedExpression>>(1);
+		slice_upper_bound = process.TakeResult<vector<unique_ptr<ParsedExpression>>>(1);
 	}
-	optional<unique_ptr<ParsedExpression>> step_slice_bound {};
-	if (process.child_results[2]) {
-		step_slice_bound = process.TakeResult<unique_ptr<ParsedExpression>>(2);
-	}
-	auto result = TransformSliceBound(transformer, std::move(expression), std::move(end_slice_bound),
-	                                  std::move(step_slice_bound));
+	auto result = TransformSliceBound(transformer, std::move(expression), std::move(slice_upper_bound));
 	return transformer.MakeResult<vector<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
-void PEGTransformerFactory::InitializeEndSliceBoundTrampoline(PEGTransformer &transformer,
-                                                              GeneratedTransformProcess &process) {
-	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(1);
-	auto &end_slice_value_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
-	if (end_slice_value_opt.HasResult()) {
-		process.PushChild({transformer.GetRule("EndSliceValue"), end_slice_value_opt.GetResult()}, 0);
-	}
-}
-
-arena_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeEndSliceBoundTrampoline(PEGTransformer &transformer,
-                                                       GeneratedTransformProcess &process) {
-	optional<unique_ptr<ParsedExpression>> end_slice_value {};
-	if (process.child_results[0]) {
-		end_slice_value = process.TakeResult<unique_ptr<ParsedExpression>>(0);
-	}
-	auto result = TransformEndSliceBound(transformer, std::move(end_slice_value));
-	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
-}
-
-void PEGTransformerFactory::InitializeEndSliceValueTrampoline(PEGTransformer &transformer,
-                                                              GeneratedTransformProcess &process) {
+void PEGTransformerFactory::InitializeSliceUpperBoundTrampoline(PEGTransformer &transformer,
+                                                                GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto &choice_result = choice_pr.GetResult();
@@ -17901,21 +17875,68 @@ void PEGTransformerFactory::InitializeEndSliceValueTrampoline(PEGTransformer &tr
 }
 
 arena_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeEndSliceValueTrampoline(PEGTransformer &transformer,
-                                                       GeneratedTransformProcess &process) {
-	auto result = process.TakeResult<unique_ptr<ParsedExpression>>(0);
-	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
+PEGTransformerFactory::FinalizeSliceUpperBoundTrampoline(PEGTransformer &transformer,
+                                                         GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<vector<unique_ptr<ParsedExpression>>>(0);
+	return transformer.MakeResult<vector<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
-void PEGTransformerFactory::InitializeEndSliceMinusTrampoline(PEGTransformer &transformer,
-                                                              GeneratedTransformProcess &process) {
-	process.ReserveChildSlots(0);
+void PEGTransformerFactory::InitializeMinusStepSliceBoundTrampoline(PEGTransformer &transformer,
+                                                                    GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("StepSliceBound"), list_pr.GetChild(2)}, 0);
 }
 
 arena_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeEndSliceMinusTrampoline(PEGTransformer &transformer,
+PEGTransformerFactory::FinalizeMinusStepSliceBoundTrampoline(PEGTransformer &transformer,
+                                                             GeneratedTransformProcess &process) {
+	auto step_slice_bound = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	auto result = TransformMinusStepSliceBound(transformer, std::move(step_slice_bound));
+	return transformer.MakeResult<vector<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeEndStepSliceBoundTrampoline(PEGTransformer &transformer,
+                                                                  GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(2);
+	auto &step_slice_bound_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (step_slice_bound_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("StepSliceBound"), step_slice_bound_opt.GetResult()}, 1);
+	}
+	process.PushChild({transformer.GetRule("EndSliceBound"), list_pr.GetChild(0)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeEndStepSliceBoundTrampoline(PEGTransformer &transformer,
+                                                           GeneratedTransformProcess &process) {
+	auto end_slice_bound = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	optional<unique_ptr<ParsedExpression>> step_slice_bound {};
+	if (process.child_results[1]) {
+		step_slice_bound = process.TakeResult<unique_ptr<ParsedExpression>>(1);
+	}
+	auto result = TransformEndStepSliceBound(transformer, std::move(end_slice_bound), std::move(step_slice_bound));
+	return transformer.MakeResult<vector<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeEndSliceBoundTrampoline(PEGTransformer &transformer,
+                                                              GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	auto &expression_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (expression_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("Expression"), expression_opt.GetResult()}, 0);
+	}
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeEndSliceBoundTrampoline(PEGTransformer &transformer,
                                                        GeneratedTransformProcess &process) {
-	auto result = TransformEndSliceMinus(transformer);
+	optional<unique_ptr<ParsedExpression>> expression {};
+	if (process.child_results[0]) {
+		expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	}
+	auto result = TransformEndSliceBound(transformer, std::move(expression));
 	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
 }
 

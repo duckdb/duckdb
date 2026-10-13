@@ -451,8 +451,6 @@ Expression:
     - DotColumnOperator
     - SliceExpression
     - EndSliceBound
-    - EndSliceValue
-    - EndSliceMinus
     - StepSliceBound
     - SingleArrowPair
     - StarExpression
@@ -626,6 +624,9 @@ ExpressionList:
     - IndirectionList
     - BoundedListExpression
     - SliceBound
+    - SliceUpperBound
+    - MinusStepSliceBound
+    - EndStepSliceBound
     - TargetList
     - PragmaParameters
     - ReturningClause
