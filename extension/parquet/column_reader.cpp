@@ -250,6 +250,9 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_row
 	chunk = &columns[ColumnIndex()];
 	protocol = &protocol_p;
 	D_ASSERT(chunk);
+	if (chunk->__isset.crypto_metadata && !reader.metadata->crypto_metadata) {
+		throw InvalidInputException("File is encrypted but no file crypto metadata is set");
+	}
 	D_ASSERT(chunk->__isset.meta_data);
 
 	if (chunk->__isset.file_path) {
@@ -516,9 +519,6 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	uint32_t compressed_page_size = page_hdr.compressed_page_size;
 
 	if (chunk->__isset.crypto_metadata) {
-		if (!reader.metadata->crypto_metadata) {
-			throw InvalidInputException("File is encrypted but no file crypto metadata is set");
-		}
 		auto const file_aad = reader.GetUniqueFileIdentifier(reader.metadata->crypto_metadata->encryption_algorithm);
 		if (!file_aad.empty()) {
 			// If there is a file aad (identifier), this means that the Encrypted file is written by Arrow
