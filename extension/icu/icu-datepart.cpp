@@ -3,6 +3,8 @@
 #include "include/icu-datepart.hpp"
 #include "include/icu-datefunc.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -10,6 +12,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -472,7 +475,7 @@ struct ICUDatePart : public ICUDateFunc {
 		auto &context = input.GetClientContext();
 		auto &arguments = input.GetArguments();
 
-		//	If we have a constant first argument, then patch in the unary function.
+		// Bind the equivalent unary function for a constant first argument.
 		do {
 			auto part_constant = input.TryGetConstant(0);
 			if (!part_constant || part_constant->IsNull()) {
@@ -482,18 +485,16 @@ struct ICUDatePart : public ICUDateFunc {
 			const auto part_name = part_constant->ToString();
 			const auto part_code = GetDatePartSpecifier(part_name);
 			arguments.erase(arguments.begin());
-			bound_function.GetArguments().erase(bound_function.GetArguments().begin());
-			bound_function.SetName(Identifier(DatePartUnaryFunctionName(part_code)));
-
-			if (IsBigintDatepart(part_code)) {
-				bound_function.SetReturnType(LogicalType::BIGINT);
-				bound_function.SetFunctionCallback(UnaryTimestampFunction<timestamp_tz_t, int64_t>);
-			} else {
-				bound_function.SetReturnType(LogicalType::DOUBLE);
-				bound_function.SetFunctionCallback(UnaryTimestampFunction<timestamp_tz_t, double>);
-			}
-
-			return BindUnaryDatePart(input);
+			auto unary_name = bound_function.GetDefinition()->GetQualifiedName().WithName(
+			    Identifier(DatePartUnaryFunctionName(part_code)));
+			auto &entry = Catalog::GetEntry<ScalarFunctionCatalogEntry>(context, unary_name);
+			auto unary_function = entry.functions.GetFunctionByArguments(context, {arguments[0]->GetReturnType()});
+			FunctionBinder binder(context);
+			auto unary_expression = binder.BindScalarFunction(std::move(unary_function), std::move(arguments));
+			auto &unary = unary_expression->Cast<BoundFunctionExpression>();
+			bound_function = std::move(unary.FunctionMutable());
+			arguments = std::move(unary.GetChildrenMutable());
+			return std::move(unary.BindInfoMutable());
 		} while (false);
 
 		using data_t = BindAdapterData<double>;
@@ -575,6 +576,7 @@ struct ICUDatePart : public ICUDateFunc {
 	                                      ArgProperties unary_arg0_props = {}) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetUnaryPartCodeFunction<timestamp_tz_t, RESULT_TYPE>(LogicalType::TIMESTAMP_TZ, result_type));
+		set.SetFallible();
 		set.SetUnaryArgProperties(unary_arg0_props);
 		loader.RegisterFunction(set);
 	}
@@ -624,6 +626,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static void AddLastDayFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetLastDayFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 
@@ -644,6 +647,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static void AddMonthNameFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetMonthNameFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 
@@ -664,6 +668,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static void AddDayNameFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetDayNameFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 };

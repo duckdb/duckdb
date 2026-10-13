@@ -121,6 +121,11 @@ struct ValueConverter {
 
 	static Value VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data) {
 		auto object_children = VariantVisitor<ValueConverter>::VisitObjectItems(variant, row, nested_data);
+		if (object_children.size() == 1 && object_children[0].first.empty()) {
+			// an empty key can't be a STRUCT member name (it would become a TUPLE) - use a MAP instead
+			auto &child = object_children[0].second;
+			return Value::MAP(LogicalType::VARCHAR, child.type(), {Value("")}, {child});
+		}
 		return Value::STRUCT(std::move(object_children));
 	}
 

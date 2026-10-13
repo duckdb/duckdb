@@ -962,6 +962,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	unique_ptr<duckdb::QueryResult> result;
 	unique_ptr<duckdb::QueryResultStream<>> stream;
 	const bool render_materialized = renderer->RequireMaterializedResult();
+	const auto written_type = statement->type;
 	if (render_materialized) {
 		// we need to materialize the result prior to rendering
 		result = con.Query(std::move(statement), duckdb::ChunkFormat::BufferManaged());
@@ -974,10 +975,8 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		return SuccessState::FAILURE;
 	}
 	auto &properties = res.GetStatementProperties();
-	// Row-wise rendering drains the result as it is produced; everything else is retained
-	const bool render_streaming = !render_materialized &&
-	                              properties.return_type == duckdb::StatementReturnType::QUERY_RESULT &&
-	                              properties.result_eagerness != duckdb::ResultEagerness::FORCED;
+	// A renderer stops at its row cap and a closed pipe stops the shell outright, so a stream is never read to its end
+	const bool render_streaming = !render_materialized && duckdb::StreamsByDefault(written_type, properties, false);
 	if (!render_materialized && !render_streaming) {
 		// the statement is not rendered row by row, but its side effects must still happen
 		res.Complete();
@@ -1033,6 +1032,9 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 */
 void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
 	auto &explain = statement.Cast<duckdb::ExplainStatement>();
+	if (explain.explain_type == duckdb::ExplainType::EXPLAIN_SQL) {
+		return;
+	}
 	if (explain.format != duckdb::ProfilerPrintFormat::Default()) {
 		// the user explicitly requested an output format (e.g. EXPLAIN (FORMAT json))
 		return;
@@ -1295,6 +1297,8 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif
 		db->LoadStaticExtension<duckdb::ShellExtension>();
+		// bare expressions / table names as statements - only in the CLI, so it is opt-in grammar
+		ExecuteQuery("SET active_grammar_extensions=['shell']");
 		if (safe_mode) {
 			ExecuteQuery("SET enable_external_access=false");
 			ExecuteQuery("SET lock_configuration=true");
@@ -1463,6 +1467,10 @@ string ShellState::GetSystemPager() {
 }
 
 bool ShellState::ShouldUsePager() {
+	if (safe_mode) {
+		// the pager runs an external command, which is not allowed in -safe mode
+		return false;
+	}
 	if (out != stdout || !stdout_is_console || !outfile.empty() || !stdin_is_interactive) {
 		// if we have an outfile specified, or we are in non-interactive/batch mode, don't use the pager
 		return false;
@@ -3013,7 +3021,7 @@ bool ShellState::SQLIsComplete(const char *zSql) {
 			next_state = SQLParseState::WHITESPACE;
 			break;
 		}
-			//		case '`': /* Grave-accent quoted symbols used by MySQL */
+		case '`': /* backtick-quoted identifiers */
 		case '"': /* single- and double-quoted strings */
 		case '\'': {
 			int c = *zSql;
@@ -3538,7 +3546,33 @@ bool ShellState::DetectAgentEnvironment(string &agent_name, string &marker) {
 	return false;
 }
 
+//! DUCKDB_AGENT_MODE=1/0 (on/off, true/false, yes/no) forces agent mode on or off - like -agent / -no-agent, which
+//! take precedence. Unset, empty or "auto" leaves it to the auto-detection
+static OptionType AgentModeFromEnvironment(ShellState &state) {
+	auto value = getenv("DUCKDB_AGENT_MODE");
+	if (!value || !value[0] || StringUtil::CIEquals(value, "auto")) {
+		return OptionType::DEFAULT;
+	}
+	for (auto on : {"1", "on", "true", "yes"}) {
+		if (StringUtil::CIEquals(value, on)) {
+			return OptionType::ON;
+		}
+	}
+	for (auto off : {"0", "off", "false", "no"}) {
+		if (StringUtil::CIEquals(value, off)) {
+			return OptionType::OFF;
+		}
+	}
+	state.PrintF(PrintOutput::STDERR, "warning: ignoring DUCKDB_AGENT_MODE=%s (expected 1, 0 or auto)\n", value);
+	return OptionType::DEFAULT;
+}
+
 void ShellState::DetectAgentMode() {
+	if (agent_mode == OptionType::DEFAULT) {
+		// no -agent / -no-agent on the command line - the environment may decide
+		agent_mode = AgentModeFromEnvironment(*this);
+		agent_mode_from_environment = agent_mode != OptionType::DEFAULT;
+	}
 	switch (agent_mode) {
 	case OptionType::ON:
 		agent_mode_active = true;
@@ -3574,7 +3608,8 @@ void ShellState::PrintAgentHelp(PrintOutput output, bool startup) {
 		// one line, on every run: that the shell switched modes on its own, why, how to undo it, where the rest is.
 		// A model keeps its context between runs, so the explanation is paid for once through .help agent
 		if (agent_marker.empty()) {
-			PrintF(output, "duckdb agent mode on (-agent); .help agent explains the output\n");
+			PrintF(output, "duckdb agent mode on (%s); .help agent explains the output\n",
+			       agent_mode_from_environment ? "DUCKDB_AGENT_MODE is set" : "-agent");
 		} else {
 			PrintF(output,
 			       "duckdb agent mode on: %s is set and stdout is not a terminal; -no-agent turns it off, .help agent "
@@ -3597,8 +3632,10 @@ void ShellState::PrintAgentHelp(PrintOutput output, bool startup) {
 	PrintF(output,
 	       "tips: SET max_execution_time=<ms> bounds a query; DESCRIBE <query> gives the result columns "
 	       "without running it; SUMMARIZE <table>; .tables; duckdb_functions() has descriptions and examples\n");
-	PrintF(output, "switches: -agent / -no-agent force the mode; an output mode flag (-csv, -json, ...) leaves it off; "
-	               ".startup_text none in ~/.duckdbrc hides the startup line\n");
+	PrintF(output,
+	       "switches: -agent / -no-agent force the mode, and so does DUCKDB_AGENT_MODE=1 / 0 in the environment "
+	       "(the flags win); an output mode flag (-csv, -json, ...) leaves it off; .startup_text none in "
+	       "~/.duckdbrc hides the startup line\n");
 }
 
 void ShellState::PrintExitHint(int rc) {

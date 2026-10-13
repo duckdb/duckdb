@@ -325,7 +325,7 @@ bool LogicalTypeIsValid(const LogicalType &type) {
 	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::DECIMAL:
 		// these types are only valid with auxiliary info
-		if (!type.AuxInfo()) {
+		if (!type.HasParameters()) {
 			return false;
 		}
 		break;
@@ -368,7 +368,7 @@ bool LogicalTypeIsValid(const LogicalType &type) {
 
 int64_t ImplicitCastToUnionMember(const LogicalType &from, const LogicalType &to) {
 	// check that the union type is fully resolved.
-	if (to.AuxInfo() == nullptr) {
+	if (!to.HasParameters()) {
 		return -1;
 	}
 	// check if the union contains something castable from the source type
@@ -485,7 +485,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	}
 	if (from.id() == LogicalTypeId::UNION && to.id() == LogicalTypeId::UNION) {
 		// Check that the target union type is fully resolved.
-		if (to.AuxInfo() == nullptr) {
+		if (!to.HasParameters()) {
 			// If not, try anyway and let the actual cast logic handle it.
 			// This is to allow passing unions into functions that take a generic union type (without specifying member
 			// types) as an argument.
@@ -521,7 +521,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		}
 	}
 	if (StructType::IsStruct(from) && StructType::IsStruct(to)) {
-		if (to.AuxInfo() == nullptr) {
+		if (!to.HasParameters()) {
 			// If this struct is not fully resolved, we'll leave it to the actual cast logic to handle it.
 			return 0;
 		}

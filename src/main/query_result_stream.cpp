@@ -7,6 +7,14 @@
 
 namespace duckdb {
 
+bool StreamsByDefault(StatementType written_type, const StatementProperties &properties, bool reads_to_the_end) {
+	if (written_type != StatementType::SELECT_STATEMENT ||
+	    properties.return_type != StatementReturnType::QUERY_RESULT) {
+		return false;
+	}
+	return reads_to_the_end || properties.IsReadOnly();
+}
+
 ResultStreamBase::ResultStreamBase(unique_ptr<QueryResult> result, const char *expected_format)
     : handle(std::move(result)) {
 	if (!handle) {
@@ -15,11 +23,6 @@ ResultStreamBase::ResultStreamBase(unique_ptr<QueryResult> result, const char *e
 	if (handle->HasError()) {
 		throw InvalidInputException("Attempting to open a stream on an unsuccessful query result\nError: %s",
 		                            handle->GetError());
-	}
-	if (handle->GetStatementProperties().result_eagerness == ResultEagerness::FORCED) {
-		throw InvalidInputException(
-		    "Attempting to open a stream on a %s statement, which completes before its result is returned",
-		    StatementTypeToString(handle->GetStatementType()));
 	}
 	if (!handle->HasBufferedData()) {
 		throw InvalidInputException("Attempting to open a stream on a query result that has no streaming buffer");
@@ -101,21 +104,16 @@ QueryResultState ResultStreamBase::TryFetchUnit(unique_ptr<ResultUnit> &out_unit
 		}
 		if (state == QueryResultState::READY) {
 			out_unit = buffer.Scan();
-		}
-		if (out_unit && out_unit->row_count != 0) {
+			// READY is only reported with a unit queued
+			D_ASSERT(out_unit);
 			return QueryResultState::READY;
 		}
-		out_unit.reset();
 		if (state == QueryResultState::FINISHED) {
 			// The buffer is drained and execution is done: this is the end of the stream
 			buffer.AssertNoBlockedSinks();
 			handle->EndQuery(lock);
 			// Cleanup can fail on an autocommit commit. It records the error without throwing
 			return handle->HasError() ? QueryResultState::EXECUTION_ERROR : QueryResultState::FINISHED;
-		}
-		if (state == QueryResultState::READY) {
-			// A unit was announced but the scan came up empty: the stream has not ended yet
-			return QueryResultState::NOT_READY;
 		}
 		return state;
 	});
@@ -133,7 +131,9 @@ unique_ptr<ResultUnit> ResultStreamBase::FetchUnitInternal(ClientContextLock &lo
 			return nullptr;
 		}
 		auto unit = buffer.Scan();
-		if (!unit || unit->row_count == 0) {
+		if (!unit) {
+			// READY is only reported with a unit queued, so an empty scan means execution finished
+			D_ASSERT(state == QueryResultState::FINISHED);
 			handle->EndQuery(lock);
 			return nullptr;
 		}
@@ -158,7 +158,7 @@ unique_ptr<ResultUnit> ResultStreamBase::FetchUnit() {
 		handle->CheckExecutableInternal(*lock);
 		unit = FetchUnitInternal(*lock);
 	}
-	if (!unit || unit->row_count == 0) {
+	if (!unit) {
 		if (!HasError()) {
 			handle->buffer->AssertNoBlockedSinks();
 		}

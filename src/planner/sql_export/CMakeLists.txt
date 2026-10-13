@@ -6,6 +6,7 @@ add_library_unity(
   sql_export_composition.cpp
   sql_export_constants.cpp
   sql_export_cte.cpp
+  sql_export_dml.cpp
   sql_export_functions.cpp
   sql_export_joins.cpp
   sql_export_limit.cpp

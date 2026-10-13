@@ -122,9 +122,9 @@ private:
 class LocalTableManager {
 public:
 	shared_ptr<LocalTableStorage> MoveEntry(DataTable &table);
-	reference_map_t<DataTable, shared_ptr<LocalTableStorage>> MoveEntries();
+	reference_map_t<const DataTable, shared_ptr<LocalTableStorage>> MoveEntries();
 	vector<shared_ptr<LocalTableStorage>> GetEntries() const;
-	optional_ptr<LocalTableStorage> GetStorage(DataTable &table) const;
+	optional_ptr<LocalTableStorage> GetStorage(const DataTable &table) const;
 	LocalTableStorage &GetOrCreateStorage(ClientContext &context, DataTable &table);
 	idx_t EstimatedSize() const;
 	bool IsEmpty() const;
@@ -132,7 +132,7 @@ public:
 
 private:
 	mutable mutex table_storage_lock;
-	reference_map_t<DataTable, shared_ptr<LocalTableStorage>> table_storage;
+	reference_map_t<const DataTable, shared_ptr<LocalTableStorage>> table_storage;
 };
 
 //! The LocalStorage class holds appends that have not been committed yet
@@ -214,7 +214,7 @@ public:
 	//! Returns true, if the local storage contains the row id.
 	bool CanFetch(DataTable &table, const row_t row_id);
 	TableIndexList &GetIndexes(ClientContext &context, DataTable &table);
-	optional_ptr<LocalTableStorage> GetStorage(DataTable &table);
+	optional_ptr<LocalTableStorage> GetStorage(const DataTable &table);
 
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 

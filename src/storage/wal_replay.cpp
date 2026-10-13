@@ -20,6 +20,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
@@ -70,7 +71,7 @@ public:
 	vector<block_id_t> row_group_blocks;
 
 	struct ReplayIndexInfo {
-		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, optional_idx index_oid)
+		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, idx_t index_oid)
 		    : index_list(index_list), index(std::move(index)), table_oid(table_oid), index_oid(index_oid) {
 		}
 
@@ -78,10 +79,8 @@ public:
 		unique_ptr<Index> index;
 		//! The oid of the table, used to uniquely identify the table (even after a rename).
 		idx_t table_oid;
-		//! The oid of the index catalog entry, used to match a DROP INDEX in the same replayed transaction.
-		//! Invalid for constraint-backed indexes (i.e., UNIQUE): they have no separate catalog entry and cannot be
-		//! targeted by DROP INDEX.
-		optional_idx index_oid;
+		//! The oid of the index, used to match a DROP INDEX in the same replayed transaction.
+		idx_t index_oid;
 	};
 	vector<ReplayIndexInfo> replay_index_infos;
 };
@@ -89,15 +88,22 @@ public:
 class WriteAheadLogDeserializer {
 public:
 	WriteAheadLogDeserializer(ReplayState &state_p, BufferedFileReader &stream_p, bool deserialize_only = false)
-	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), data(nullptr),
-	      stream(nullptr, 0), deserializer(stream_p), deserialize_only(deserialize_only) {
+	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), stream(nullptr, 0),
+	      deserializer(stream_p), deserialize_only(deserialize_only) {
 		deserializer.Set<Catalog &>(catalog);
 	}
-	WriteAheadLogDeserializer(ReplayState &state_p, unique_ptr<data_t[]> data_p, idx_t size,
-	                          bool deserialize_only = false)
+	WriteAheadLogDeserializer(ReplayState &state_p, AllocatedData data_p, idx_t size, bool deserialize_only = false)
 	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), data(std::move(data_p)),
 	      stream(data.get(), size), deserializer(stream), deserialize_only(deserialize_only) {
 		deserializer.Set<Catalog &>(catalog);
+	}
+
+	//! WAL entries are read into memory in full, so the buffer is tracked by the buffer manager
+	static AllocatedData AllocateEntryBuffer(ReplayState &state_p, idx_t size) {
+		if (size == 0) {
+			throw SerializationException("Corrupt WAL file: found an empty entry");
+		}
+		return BufferAllocator::Get(state_p.db).Allocate(size);
 	}
 
 	static WriteAheadLogDeserializer GetEntryDeserializer(ReplayState &state_p, BufferedFileReader &stream,
@@ -122,7 +128,7 @@ public:
 			}
 
 			// allocate a buffer and read data into the buffer
-			auto buffer = unique_ptr<data_t[]>(new data_t[size]);
+			auto buffer = AllocateEntryBuffer(state_p, size);
 			stream.ReadData(buffer.get(), size);
 
 			// compute and verify the checksum
@@ -182,8 +188,8 @@ public:
 			}
 
 			//! Allocate a decryption buffer
-			auto buffer = unique_ptr<data_t[]>(new data_t[ciphertext_size]);
-			auto out_buffer = unique_ptr<data_t[]>(new data_t[size]);
+			auto buffer = AllocateEntryBuffer(state_p, ciphertext_size);
+			auto out_buffer = AllocateEntryBuffer(state_p, size);
 
 			stream.ReadData(buffer.get(), ciphertext_size);
 			encryption_state->Process(buffer.get(), ciphertext_size, buffer.get(), ciphertext_size);
@@ -247,7 +253,7 @@ protected:
 	void ReplayEntry(WALType wal_type);
 	bool CanSkipPayload(WALType wal_type) const {
 		// Unframed WAL v1 entries must still be deserialized; Replay* guards suppress their side effects.
-		if (!deserialize_only || !data) {
+		if (!deserialize_only || !data.get()) {
 			return false;
 		}
 		D_ASSERT(state.wal_version == 2 || state.wal_version == 3);
@@ -328,7 +334,7 @@ private:
 	AttachedDatabase &db;
 	ClientContext &context;
 	Catalog &catalog;
-	unique_ptr<data_t[]> data;
+	AllocatedData data;
 	MemoryStream stream;
 	BinaryDeserializer deserializer;
 	bool deserialize_only;
@@ -630,7 +636,8 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	// If there are no committed transactions in the WAL, rollback and truncate.
 	if (last_wal_flush_end == 0) {
 		con.Rollback();
-		return make_uniq<WriteAheadLog>(storage_manager, wal_path, 0, WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE);
+		return make_uniq<WriteAheadLog>(storage_manager, wal_path, idx_t(0),
+		                                WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE);
 	}
 
 	// we need to recover from the WAL: actually set up the replay state
@@ -1004,10 +1011,10 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto index_instance = index_type->create_instance(input);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid,
-	                                      /*index_oid=*/optional_idx());
-
+	auto index_oid = DatabaseManager::Get(context).NextOid();
+	unique_info.SetBackingIndexOid(index_oid);
 	catalog.Alter(context, alter_info);
+	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid, index_oid);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1391,8 +1398,15 @@ void WriteAheadLogDeserializer::ReplayUpdate() {
 		throw DataCorruptionException("Corrupt WAL: update without table");
 	}
 
-	if (column_path[0] >= state.current_table->GetColumns().PhysicalColumnCount()) {
+	if (column_path.empty() || column_path[0] >= state.current_table->GetColumns().PhysicalColumnCount()) {
 		throw DataCorruptionException("Corrupt WAL: column index for update out of bounds");
+	}
+	if (chunk.ColumnCount() != 2 || chunk.data[1].GetType() != LogicalType::ROW_TYPE) {
+		throw DataCorruptionException("Corrupt WAL: update must contain the updated values and the row ids");
+	}
+	auto &column_type = state.current_table->GetColumns().GetColumn(PhysicalIndex(column_path[0])).Type();
+	if (column_path.size() == 1 && chunk.data[0].GetType() != column_type) {
+		throw DataCorruptionException("Corrupt WAL: update type does not match the column type");
 	}
 
 	// remove the row id vector from the chunk

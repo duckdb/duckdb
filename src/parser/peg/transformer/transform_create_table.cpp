@@ -223,10 +223,9 @@ string PEGTransformerFactory::TransformDotColLabel(PEGTransformer &transformer, 
 }
 
 ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
-    PEGTransformer &transformer, const vector<string> &dotted_identifier, const optional<LogicalType> &type,
-    optional<GeneratedColumnDefinition> generated_column, const bool &has_result,
-    optional<vector<ColumnConstraintEntry>> column_constraint) {
-	auto qualified_name = StringToQualifiedName(dotted_identifier);
+    PEGTransformer &transformer, const Identifier &identifier, const optional<LogicalType> &type,
+    optional<GeneratedColumnDefinition> generated_column, optional<vector<ColumnConstraintEntry>> column_constraint) {
+	auto qualified_name = QualifiedName(identifier);
 	bool has_type = type.has_value();
 	bool has_generated = generated_column && generated_column->expr != nullptr;
 	if (!has_type && !has_generated) {
@@ -309,9 +308,12 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
 }
 
 GeneratedColumnDefinition PEGTransformerFactory::TransformGeneratedColumn(PEGTransformer &transformer,
-                                                                          const bool &has_result,
+                                                                          const optional<bool> &generated_always,
                                                                           unique_ptr<ParsedExpression> expression,
                                                                           const optional<bool> &generated_column_type) {
+	if (generated_always && !*generated_always) {
+		throw ParserException("for a generated column, GENERATED ALWAYS must be specified");
+	}
 	GeneratedColumnDefinition generated;
 	generated.expr = std::move(expression);
 	VerifyColumnRefs(*generated.expr);
@@ -466,6 +468,13 @@ ColumnConstraintEntry PEGTransformerFactory::TransformUniqueConstraint(PEGTransf
 	return entry;
 }
 
+// Column constraint names are parsed but not stored
+ColumnConstraintEntry PEGTransformerFactory::TransformNameableColumnConstraint(PEGTransformer &transformer,
+                                                                               const bool &has_result,
+                                                                               ColumnConstraintEntry child) {
+	return child;
+}
+
 bool PEGTransformerFactory::TransformNullConstraint(PEGTransformer &transformer) {
 	return false;
 }
@@ -511,6 +520,14 @@ bool PEGTransformerFactory::TransformPreserveRows(PEGTransformer &transformer) {
 
 bool PEGTransformerFactory::TransformDeleteRows(PEGTransformer &transformer) {
 	throw NotImplementedException("Only ON COMMIT PRESERVE ROWS is supported");
+}
+
+bool PEGTransformerFactory::TransformGeneratedAlways(PEGTransformer &transformer) {
+	return true;
+}
+
+bool PEGTransformerFactory::TransformGeneratedByDefault(PEGTransformer &transformer) {
+	throw ParserException("for a generated column, GENERATED ALWAYS must be specified");
 }
 
 bool PEGTransformerFactory::TransformVirtualGeneratedColumn(PEGTransformer &transformer) {

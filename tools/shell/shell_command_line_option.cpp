@@ -353,7 +353,8 @@ static const CommandLineOption command_line_options[] = {
     {"agent", 0, "", SetAgentMode<OptionType::ON>, nullptr,
      "render output for an AI coding agent (compact markdown tables with a loud row/byte cap and a result hash, "
      "JSON errors, compact plans, cost estimates and progress on stderr). Default: on when an agent's environment "
-     "variable is set, stdout is not a terminal and no output mode is given"},
+     "variable is set, stdout is not a terminal and no output mode is given; DUCKDB_AGENT_MODE=1 / 0 forces it on / "
+     "off"},
     {"ascii", 0, "", MarkOutputModeFlag, ToggleASCIIMode, "set output mode to 'ascii'"},
     {"bail", 0, "", nullptr, EnableBail, "stop after hitting an error"},
     {"batch", 0, "", EnableBatch, EnableBatch, "force batch I/O'"},
