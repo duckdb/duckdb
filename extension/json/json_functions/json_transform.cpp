@@ -11,6 +11,7 @@
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/types/geometry.hpp"
+#include "duckdb/common/types/value_map.hpp"
 #include "json_geojson.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types.hpp"
@@ -923,20 +924,32 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 	}
 
 	// objects can have duplicate keys, and keys that fail to transform in non-strict mode are NULL
-	SelectionVector row_sel(1);
+	auto &map_keys = MapVector::GetKeys(result);
+	auto key_validity = map_keys.Validity();
+	value_set_t unique_keys;
 	for (idx_t i = 0; i < count; i++) {
 		if (!list_validity.RowIsValid(i)) {
 			continue;
 		}
-		row_sel.set_index(0, i);
-		auto reason = MapVector::CheckMapValidity(result, 1, row_sel);
-		if (reason == MapInvalidReason::VALID) {
+		const auto &list_entry = list_entries[i];
+		const char *invalid_reason = nullptr;
+		unique_keys.clear();
+		for (idx_t key_idx = list_entry.offset; key_idx < list_entry.offset + list_entry.length; key_idx++) {
+			if (!key_validity.IsValid(key_idx)) {
+				invalid_reason = "Map keys can not be NULL";
+				break;
+			}
+			if (!unique_keys.insert(map_keys.GetValue(key_idx)).second) {
+				invalid_reason = "Map keys must be unique";
+				break;
+			}
+		}
+		if (!invalid_reason) {
 			continue;
 		}
 		list_validity.SetInvalid(i);
 		if (success && options.strict_cast) {
-			options.error_message =
-			    reason == MapInvalidReason::DUPLICATE_KEY ? "Map keys must be unique" : "Map keys can not be NULL";
+			options.error_message = invalid_reason;
 			options.object_index = i;
 			success = false;
 		}
