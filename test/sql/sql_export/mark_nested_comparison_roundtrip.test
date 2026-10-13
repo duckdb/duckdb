@@ -113,34 +113,36 @@ SELECT list(__mark_join_marker ORDER BY id) AS markers FROM (VALUES (0,NULL::INT
 [NULL, true, false, true, true]
 
 # INTEGER[]: <>, duplicate build rows and nested/top-level NULLs
+# These results follow scalar list comparisons. A preceding NULL probe must not
+# leave the reused constant list reference invalid for the remaining probes.
 query T
 SELECT list(__mark_join_marker ORDER BY id) AS markers FROM (VALUES (0,NULL::INTEGER[]),(1,[1,2]),(2,[2,1]),(3,[1,2]),(4,[1,NULL::INTEGER])) p(id,k) JOIN BY(TYPE MARK) (VALUES ([1,2]),([1,2]),([1,NULL::INTEGER])) b(k) ON p.k <> b.k;
 ----
-[NULL, false, false, false, false]
+[NULL, true, true, true, true]
 
 # INTEGER[]: <, duplicate build rows and nested/top-level NULLs
 query T
 SELECT list(__mark_join_marker ORDER BY id) AS markers FROM (VALUES (0,NULL::INTEGER[]),(1,[1,2]),(2,[2,1]),(3,[1,2]),(4,[1,NULL::INTEGER])) p(id,k) JOIN BY(TYPE MARK) (VALUES ([1,2]),([1,2]),([1,NULL::INTEGER])) b(k) ON p.k < b.k;
 ----
-[NULL, false, false, false, false]
+[NULL, true, false, true, false]
 
 # INTEGER[]: <=, duplicate build rows and nested/top-level NULLs
 query T
 SELECT list(__mark_join_marker ORDER BY id) AS markers FROM (VALUES (0,NULL::INTEGER[]),(1,[1,2]),(2,[2,1]),(3,[1,2]),(4,[1,NULL::INTEGER])) p(id,k) JOIN BY(TYPE MARK) (VALUES ([1,2]),([1,2]),([1,NULL::INTEGER])) b(k) ON p.k <= b.k;
 ----
-[NULL, false, false, false, false]
+[NULL, true, false, true, true]
 
 # INTEGER[]: >, duplicate build rows and nested/top-level NULLs
 query T
 SELECT list(__mark_join_marker ORDER BY id) AS markers FROM (VALUES (0,NULL::INTEGER[]),(1,[1,2]),(2,[2,1]),(3,[1,2]),(4,[1,NULL::INTEGER])) p(id,k) JOIN BY(TYPE MARK) (VALUES ([1,2]),([1,2]),([1,NULL::INTEGER])) b(k) ON p.k > b.k;
 ----
-[NULL, false, false, false, false]
+[NULL, false, true, false, true]
 
 # INTEGER[]: >=, duplicate build rows and nested/top-level NULLs
 query T
 SELECT list(__mark_join_marker ORDER BY id) AS markers FROM (VALUES (0,NULL::INTEGER[]),(1,[1,2]),(2,[2,1]),(3,[1,2]),(4,[1,NULL::INTEGER])) p(id,k) JOIN BY(TYPE MARK) (VALUES ([1,2]),([1,2]),([1,NULL::INTEGER])) b(k) ON p.k >= b.k;
 ----
-[NULL, false, false, false, false]
+[NULL, true, true, true, true]
 
 # INTEGER[]: IS DISTINCT FROM, duplicate build rows and nested/top-level NULLs
 query T
