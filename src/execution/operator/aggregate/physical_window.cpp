@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 
+#include "duckdb/common/once_flag.hpp"
 #include "duckdb/common/sorting/sort_strategy.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
@@ -165,14 +166,14 @@ public:
 	//! The order boundary mask (maps sort column END to mask)
 	OrderMasks order_masks;
 	unordered_map<idx_t, AllocatedData> order_mask_data;
-	std::once_flag masks_initialized;
+	OnceFlag masks_initialized;
 	//! The fully materialised data collection
 	unique_ptr<WindowCollection> collection;
 	//! The processing stage for this group
 	atomic<WindowGroupStage> stage;
 	//! The function global states for this hash group
 	ExecutorGlobalStates gestates;
-	std::once_flag gestates_initialized;
+	OnceFlag gestates_initialized;
 	//! Executor local states, one per thread
 	ThreadLocalStates thread_states;
 
@@ -673,7 +674,7 @@ static void AllocateMask(Allocator &allocator, idx_t count, ValidityMask &mask, 
 }
 
 void WindowHashGroup::AllocateMasks() {
-	std::call_once(masks_initialized, [&] {
+	CallOnce(masks_initialized, [&] {
 		auto &allocator = BufferAllocator::Get(gsink.client);
 		ValidityMask new_partition_mask;
 		AllocatedData new_partition_mask_data;
@@ -916,7 +917,7 @@ void WindowLocalSourceState::Mask(ExecutionContext &context, InterruptState &int
 }
 
 WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::GetGlobalStates(ClientContext &client) {
-	std::call_once(gestates_initialized, [&] {
+	CallOnce(gestates_initialized, [&] {
 		// These can be large so we defer building them until we are ready.
 		ExecutorGlobalStates new_gestates;
 		const auto &sort_expr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
