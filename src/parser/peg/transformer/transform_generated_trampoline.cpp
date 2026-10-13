@@ -35,6 +35,9 @@ static const TransformFrameOps FUNC_NAME_KEYWORD_OPS = {"FuncNameKeyword",
 static const TransformFrameOps TYPE_NAME_KEYWORD_OPS = {"TypeNameKeyword",
                                                         &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
                                                         &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps BARE_LABEL_KEYWORD_OPS = {
+    "BareLabelKeyword", &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+    &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
 static const TransformFrameOps SETTING_NAME_OPS = {"SettingName",
                                                    &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
                                                    &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
@@ -3067,6 +3070,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ColumnNameKeyword", &COLUMN_NAME_KEYWORD_OPS},
 	    {"FuncNameKeyword", &FUNC_NAME_KEYWORD_OPS},
 	    {"TypeNameKeyword", &TYPE_NAME_KEYWORD_OPS},
+	    {"BareLabelKeyword", &BARE_LABEL_KEYWORD_OPS},
 	    {"SettingName", &SETTING_NAME_OPS},
 	    {"AlterStatement", &ALTER_STATEMENT_OPS},
 	    {"AlterOptions", &ALTER_OPTIONS_OPS},
@@ -24296,12 +24300,12 @@ PEGTransformerFactory::FinalizeExpressionOptIdentifierTrampoline(PEGTransformer 
                                                                  GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
-	optional<Identifier> identifier {};
-	auto &identifier_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
-	if (identifier_opt.HasResult()) {
-		identifier = identifier_opt.GetResult().Cast<IdentifierParseResult>().identifier;
+	optional<Identifier> bare_col_label {};
+	auto &bare_col_label_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (bare_col_label_opt.HasResult()) {
+		bare_col_label = bare_col_label_opt.GetResult().Cast<IdentifierParseResult>().identifier;
 	}
-	auto result = TransformExpressionOptIdentifier(transformer, std::move(expression), identifier);
+	auto result = TransformExpressionOptIdentifier(transformer, std::move(expression), bare_col_label);
 	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
 }
 
