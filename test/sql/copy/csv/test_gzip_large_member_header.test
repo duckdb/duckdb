@@ -1,11 +1,11 @@
 # name: test/sql/copy/csv/test_gzip_large_member_header.test
-# description: A gzip member header that exceeds the maximum header size is an IO error
+# description: A gzip member header that exceeds the maximum header size is a data corruption error that does not invalidate the database
 # group: [csv]
 
 statement error
 SELECT * FROM read_csv('data/csv/gzip_large_extra_field.csv.gz');
 ----
-IO Error: Extra field resulting in GZIP header larger than defined maximum
+Data Corruption Error: Extra field resulting in GZIP header larger than defined maximum
 
 query I
 SELECT 42;
