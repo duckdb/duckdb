@@ -60,8 +60,7 @@ void TupleDataCollection::Initialize() {
 	} else {
 		scatter_functions.reserve(layout.ColumnCount());
 		gather_functions.reserve(layout.ColumnCount());
-		for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
-			auto &type = layout.GetTypes()[col_idx];
+		for (auto &type : layout.GetTypes()) {
 			scatter_functions.emplace_back(GetScatterFunction(type));
 			gather_functions.emplace_back(GetGatherFunction(type));
 		}
