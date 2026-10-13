@@ -131,7 +131,7 @@ TEST_CASE("HTTP retry budget stops when the host quota is exhausted", "[http]") 
 
 	// The refused retry means the earlier ones did not get the request through: a later success in the same
 	// budget refunds only the single token of a request that never retried
-	budget.RecordSuccess();
+	budget.ReportSuccess();
 	REQUIRE(quota->Available() == HTTPRetryQuota::NO_RETRY_REFUND);
 	quota->Release(HTTPRetryQuota::RETRY_COST - HTTPRetryQuota::NO_RETRY_REFUND);
 
@@ -145,7 +145,7 @@ TEST_CASE("HTTP retry budget stops when the host quota is exhausted", "[http]") 
 	});
 	REQUIRE(attempts == 2);
 	REQUIRE(quota->Available() == 0);
-	refunded_budget.RecordSuccess();
+	refunded_budget.ReportSuccess();
 	REQUIRE(quota->Available() == HTTPRetryQuota::RETRY_COST);
 
 	// A run that starts afresh is not marked by an earlier refusal
@@ -182,7 +182,7 @@ TEST_CASE("HTTP retry budget stops when the host quota is exhausted", "[http]") 
 	// A request that succeeded without retrying refunds a single token
 	HTTPRetryBudget clean_budget(params);
 	clean_budget.BindQuota(quota);
-	clean_budget.RecordSuccess();
+	clean_budget.ReportSuccess();
 	REQUIRE(quota->Available() == HTTPRetryQuota::RETRY_COST + HTTPRetryQuota::NO_RETRY_REFUND);
 
 	// Throttled retries beyond http_retries are still charged
@@ -229,7 +229,7 @@ TEST_CASE("HTTP retry budget charges the host of the request being retried", "[h
 	REQUIRE(second_host->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
 
 	// The success refunds the host that was charged for the last retry
-	budget.RecordSuccess();
+	budget.ReportSuccess();
 	REQUIRE(first_host->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
 	REQUIRE(second_host->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
 }
@@ -295,6 +295,36 @@ public:
 	vector<std::pair<idx_t, idx_t>> attempts;
 };
 
+//! A provider that reads its service's error documents: a RequestTimeout code makes a final-looking 400 retryable.
+//! The classification is the provider's, in whatever XML form its parser accepts; core never looks at the body.
+class ErrorDocumentHTTPUtil : public HTTPUtil {
+public:
+	bool ShouldRetry(const BaseRequest &request, const HTTPResponse &response) override {
+		if (HTTPUtil::ShouldRetry(request, response)) {
+			return true;
+		}
+		return response.status == HTTPStatusCode::BadRequest_400 && ErrorCode(response.body) == "RequestTimeout";
+	}
+
+	//! Error code of an S3-style error document, with or without a namespace prefix or CDATA section.
+	static string ErrorCode(const string &body) {
+		auto code_begin = body.find("Code>");
+		if (code_begin == string::npos) {
+			return string();
+		}
+		code_begin += 5;
+		auto code_end = body.find("</", code_begin);
+		if (code_end == string::npos) {
+			return string();
+		}
+		auto code = body.substr(code_begin, code_end - code_begin);
+		if (StringUtil::StartsWith(code, "<![CDATA[") && StringUtil::EndsWith(code, "]]>")) {
+			code = code.substr(9, code.size() - 12);
+		}
+		return code;
+	}
+};
+
 unique_ptr<HTTPResponse> MakeResponse(HTTPStatusCode status, const string &body = string()) {
 	auto response = make_uniq<HTTPResponse>(status);
 	response->body = body;
@@ -304,82 +334,66 @@ unique_ptr<HTTPResponse> MakeResponse(HTTPStatusCode status, const string &body 
 const char *S3_REQUEST_TIMEOUT_BODY = "<Error><Code>RequestTimeout</Code><Message>Your socket connection to the "
                                       "server was not read from or written to within the timeout period.</Message>"
                                       "</Error>";
+const char *S3_NAMESPACED_REQUEST_TIMEOUT_BODY =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?><s3:Error xmlns:s3=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
+    "<s3:Code><![CDATA[RequestTimeout]]></s3:Code><s3:Message>timed out</s3:Message></s3:Error>";
+const char *S3_INVALID_PART_BODY = "<Error><Code>InvalidPart</Code><Message>One or more of the specified parts could "
+                                   "not be found.</Message></Error>";
 const char *S3_INTERNAL_ERROR_BODY = "<Error><Code>InternalError</Code><Message>We encountered an internal error. "
                                      "Please try again.</Message></Error>";
 
 } // namespace
 
-TEST_CASE("An S3-style 400 RequestTimeout is retried whether it was received or thrown", "[http]") {
-	HTTPUtil http_util;
-	HTTPParams params(http_util);
-	params.retries = 2;
-	params.retry_wait_ms = 0;
+TEST_CASE("Core retries a final-looking status only when the provider says so", "[http]") {
+	HTTPUtil core_util;
+	ErrorDocumentHTTPUtil provider_util;
 	HTTPHeaders headers;
+	const string url = "http://bucket.s3.amazonaws.com/key";
 
+	// Core alone judges by status: a 400 is final whatever its body says
 	HTTPResponse timeout(HTTPStatusCode::BadRequest_400);
 	timeout.body = S3_REQUEST_TIMEOUT_BODY;
-	REQUIRE(HTTPUtil::IsRequestTimeoutResponse(timeout));
-	REQUIRE(timeout.ShouldRetry());
-	// Other 400s and the same code behind another status are left alone
-	HTTPResponse malformed(HTTPStatusCode::BadRequest_400);
-	malformed.body = "<Error><Code>MalformedXML</Code></Error>";
-	REQUIRE_FALSE(HTTPUtil::IsRequestTimeoutResponse(malformed));
-	REQUIRE_FALSE(malformed.ShouldRetry());
-	HTTPResponse forbidden(HTTPStatusCode::Forbidden_403);
-	forbidden.body = S3_REQUEST_TIMEOUT_BODY;
-	REQUIRE_FALSE(HTTPUtil::IsRequestTimeoutResponse(forbidden));
+	REQUIRE_FALSE(timeout.ShouldRetry());
+	REQUIRE_FALSE(HTTPUtil::IsRetryableStatus(HTTPStatusCode::BadRequest_400));
 
-	// A received RequestTimeout uses the retries of the request
-	GetRequestInfo received(
-	    "http://bucket.s3.amazonaws.com/key", headers, params, [](const HTTPResponse &) { return true; },
-	    [](const_data_ptr_t, idx_t) { return true; });
-	received.try_request = true;
-	idx_t sends = 0;
-	auto response = HTTPUtil::RunRequestWithRetry(
-	    [&]() {
-		    sends++;
-		    return MakeResponse(HTTPStatusCode::BadRequest_400, S3_REQUEST_TIMEOUT_BODY);
-	    },
-	    received, {});
-	REQUIRE(sends == 3);
-	REQUIRE(response->status == HTTPStatusCode::BadRequest_400);
-	REQUIRE_FALSE(response->Success());
+	auto run_sends = [&](HTTPUtil &http_util, const string &body, bool thrown) {
+		HTTPParams params(http_util);
+		params.retries = 2;
+		params.retry_wait_ms = 0;
+		GetRequestInfo request(
+		    url, headers, params, [](const HTTPResponse &) { return true; },
+		    [](const_data_ptr_t, idx_t) { return true; });
+		request.try_request = true;
+		idx_t sends = 0;
+		auto response = HTTPUtil::RunRequestWithRetry(
+		    [&]() -> unique_ptr<HTTPResponse> {
+			    sends++;
+			    auto failed = MakeResponse(HTTPStatusCode::BadRequest_400, body);
+			    if (thrown) {
+				    // Handlers turn error statuses into exceptions before the loop sees the response
+				    throw HTTPException(*failed, "HTTP GET error reading '%s' (HTTP 400 Bad Request)", url);
+			    }
+			    return failed;
+		    },
+		    request, {});
+		REQUIRE_FALSE(response->Success());
+		return sends;
+	};
 
-	// A handler that turns the RequestTimeout into an exception is retried just the same
-	GetRequestInfo thrown(
-	    "http://bucket.s3.amazonaws.com/key", headers, params, [](const HTTPResponse &) { return true; },
-	    [](const_data_ptr_t, idx_t) { return true; });
-	thrown.try_request = true;
-	sends = 0;
-	response = HTTPUtil::RunRequestWithRetry(
-	    [&]() -> unique_ptr<HTTPResponse> {
-		    sends++;
-		    auto failed = MakeResponse(HTTPStatusCode::BadRequest_400, S3_REQUEST_TIMEOUT_BODY);
-		    throw HTTPException(*failed, "HTTP GET error reading '%s' (HTTP 400 Bad Request)", thrown.url);
-	    },
-	    thrown, {});
-	REQUIRE(sends == 3);
-	REQUIRE(response->HasRequestError());
-
-	// A thrown 400 without the timeout code stays final
-	GetRequestInfo final_error(
-	    "http://bucket.s3.amazonaws.com/key", headers, params, [](const HTTPResponse &) { return true; },
-	    [](const_data_ptr_t, idx_t) { return true; });
-	final_error.try_request = true;
-	sends = 0;
-	response = HTTPUtil::RunRequestWithRetry(
-	    [&]() -> unique_ptr<HTTPResponse> {
-		    sends++;
-		    auto failed = MakeResponse(HTTPStatusCode::BadRequest_400, "<Error><Code>MalformedXML</Code></Error>");
-		    throw HTTPException(*failed, "HTTP GET error reading '%s' (HTTP 400 Bad Request)", final_error.url);
-	    },
-	    final_error, {});
-	REQUIRE(sends == 1);
-	REQUIRE(response->HasRequestError());
+	// Without a provider classification the request fails after one send, received or thrown
+	REQUIRE(run_sends(core_util, S3_REQUEST_TIMEOUT_BODY, false) == 1);
+	REQUIRE(run_sends(core_util, S3_REQUEST_TIMEOUT_BODY, true) == 1);
+	// The provider's ShouldRetry reads the error document, in the forms its own parser accepts
+	REQUIRE(run_sends(provider_util, S3_REQUEST_TIMEOUT_BODY, false) == 3);
+	REQUIRE(run_sends(provider_util, S3_REQUEST_TIMEOUT_BODY, true) == 3);
+	REQUIRE(run_sends(provider_util, S3_NAMESPACED_REQUEST_TIMEOUT_BODY, true) == 3);
+	// A different error code behind the same status stays final
+	REQUIRE(run_sends(provider_util, S3_INVALID_PART_BODY, false) == 1);
+	REQUIRE(run_sends(provider_util, S3_INVALID_PART_BODY, true) == 1);
 }
 
-TEST_CASE("Nested retry loops settle the host quota after the outer loop judged the response", "[http]") {
-	HTTPUtil http_util;
+TEST_CASE("The coordinator's explicit outcome settles the host quota", "[http]") {
+	ErrorDocumentHTTPUtil http_util;
 	HTTPParams params(http_util);
 	params.retries = 3;
 	params.retry_wait_ms = 0;
@@ -388,98 +402,197 @@ TEST_CASE("Nested retry loops settle the host quota after the outer loop judged 
 	auto quota = http_util.GetRetryQuota("http://bucket.s3.amazonaws.com");
 	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
 
-	// The provider's loop (as the S3 multipart completion does) rejects an error document behind HTTP 200 and
-	// retries; the inner loop saw a 2xx and must not refund the retry the outer loop consumed for it
-	auto run_operation = [&](idx_t ok_after) {
+	// The provider's loop is the operation's coordinator, as the S3 multipart completion is: core's request loop
+	// shares its budget, judges statuses and returns Finish(); the coordinator inspects the body and decides.
+	// `script` lists the responses of one operation: {status, body}; the last entry repeats.
+	using Script = vector<std::pair<HTTPStatusCode, const char *>>;
+	auto run_operation = [&](const Script &script, bool explicit_protocol) {
 		HTTPRetryBudget budget(params);
 		idx_t sends = 0;
 		unique_ptr<HTTPResponse> last;
 		budget.Run([&]() {
 			PostRequestInfo request(url, headers, params, nullptr, 0);
 			request.retry_budget = budget;
+			request.try_request = true;
 			last = HTTPUtil::RunRequestWithRetry(
 			    [&]() {
+				    auto &scripted = script[MinValue<idx_t>(sends, script.size() - 1)];
 				    sends++;
-				    return MakeResponse(HTTPStatusCode::OK_200,
-				                        sends > ok_after ? "<CompleteMultipartUploadResult/>" : S3_INTERNAL_ERROR_BODY);
+				    return MakeResponse(scripted.first, scripted.second);
 			    },
 			    request, {});
-			REQUIRE(last->Success());
-			return last->body.find("<Code>InternalError</Code>") != string::npos ? HTTPRetryDecision::Retry()
-			                                                                     : HTTPRetryDecision::Finish();
+			if (!explicit_protocol) {
+				// A loop that has not adopted the protocol: stop or retry, never judge
+				return last->Success() ? HTTPRetryDecision::Finish() : HTTPRetryDecision::Retry();
+			}
+			// The coordinator owns the POST's replay safety, which core cannot assume: it retries the server errors
+			// core left alone and the retryable error codes it reads from the body
+			auto code = ErrorDocumentHTTPUtil::ErrorCode(last->body);
+			if ((!last->Success() && HTTPUtil::IsRetryableStatus(last->status)) || code == "InternalError" ||
+			    code == "RequestTimeout") {
+				return HTTPRetryDecision::Retry();
+			}
+			if (!last->Success() || !code.empty()) {
+				// A final status, or an error document behind HTTP 200: the operation failed for good
+				return HTTPRetryDecision::Failure();
+			}
+			return HTTPRetryDecision::Success();
 		});
 		return sends;
 	};
+	const Script server_error_then_invalid_part {{HTTPStatusCode::InternalServerError_500, ""},
+	                                             {HTTPStatusCode::OK_200, S3_INVALID_PART_BODY}};
+	const Script timeout_then_ok {{HTTPStatusCode::BadRequest_400, S3_NAMESPACED_REQUEST_TIMEOUT_BODY},
+	                              {HTTPStatusCode::OK_200, "<CompleteMultipartUploadResult/>"}};
+	const Script ok {{HTTPStatusCode::OK_200, "<CompleteMultipartUploadResult/>"}};
+	const Script internal_errors {{HTTPStatusCode::OK_200, S3_INTERNAL_ERROR_BODY}};
 
-	// Every send fails: the three retries stay charged
-	REQUIRE(run_operation(100) == 4);
-	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY - 3 * HTTPRetryQuota::RETRY_COST);
-
-	// The third send succeeds: only the retry that got the operation through is refunded
-	quota->Release(HTTPRetryQuota::INITIAL_CAPACITY);
-	REQUIRE(run_operation(2) == 3);
+	// HTTP 500, then HTTP 200 with an InvalidPart error document: the coordinator retried the 500, core's loop saw
+	// a 2xx and recorded a success, the coordinator rejects the body. The retry stays charged.
+	REQUIRE(run_operation(server_error_then_invalid_part, true) == 2);
 	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
+	// A host that keeps doing this runs out of quota: 1000 such operations make 100 retries, then one send each
+	for (idx_t i = 1; i < 1000; i++) {
+		run_operation(server_error_then_invalid_part, true);
+	}
+	REQUIRE(quota->Available() == 0);
+	REQUIRE(run_operation(server_error_then_invalid_part, true) == 1);
+
+	// A 400 RequestTimeout (namespaced, CDATA) is the provider's call: its coordinator reads the code and retries
+	// (core's loop would, through the provider's ShouldRetry, for a replay-safe method); the success refunds it
+	quota->Release(HTTPRetryQuota::INITIAL_CAPACITY);
+	REQUIRE(run_operation(timeout_then_ok, true) == 2);
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
+	// A retryable error document behind HTTP 200 (InternalError) is the coordinator's own retry: core's loop saw a
+	// 2xx each time, the coordinator keeps retrying until the budget is spent, and nothing is refunded
+	quota->Release(HTTPRetryQuota::INITIAL_CAPACITY);
+	REQUIRE(run_operation(internal_errors, true) == 1 + 3);
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY - 3 * HTTPRetryQuota::RETRY_COST);
 
 	// A first send that succeeds refunds the single token of a request that never retried
 	quota->Release(HTTPRetryQuota::INITIAL_CAPACITY);
 	REQUIRE(quota->TryAcquire(HTTPRetryQuota::NO_RETRY_REFUND));
-	REQUIRE(run_operation(0) == 1);
+	REQUIRE(run_operation(ok, true) == 1);
 	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
 
-	// A host that keeps answering error documents runs out of quota instead of being retried indefinitely
-	params.retries = 1000;
-	REQUIRE(run_operation(100000) == 1 + HTTPRetryQuota::INITIAL_CAPACITY / HTTPRetryQuota::RETRY_COST);
-	REQUIRE(quota->Available() == 0);
+	// Compatibility: a coordinator that only returns Finish() leaves the judgement to the status core recorded, so
+	// the 2xx that carried the error document refunds the retry. That is the pre-protocol behaviour a provider
+	// keeps until it adopts the explicit decisions.
+	REQUIRE(quota->TryAcquire(HTTPRetryQuota::RETRY_COST));
+	REQUIRE(run_operation(server_error_then_invalid_part, false) == 2);
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
 }
 
-TEST_CASE("Corrected re-sends stay within the advertised attempt bound", "[http]") {
+TEST_CASE("An explicit outcome is settled once", "[http]") {
+	HTTPUtil http_util;
+	HTTPParams params(http_util);
+	params.retries = 3;
+	params.retry_wait_ms = 0;
+	auto quota = make_shared_ptr<HTTPRetryQuota>();
+
+	// A coordinator that validates after its Run reports the outcome itself
+	HTTPRetryBudget budget(params);
+	budget.BindQuota(quota);
+	idx_t attempts = 0;
+	budget.Run([&]() {
+		attempts++;
+		return attempts == 1 ? HTTPRetryDecision::Retry() : HTTPRetryDecision::Finish();
+	});
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
+	budget.ReportSuccess();
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
+	// Reporting again, either way, changes nothing
+	budget.ReportSuccess();
+	budget.ReportFailure();
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
+
+	// A failure reported after the loop keeps the retry charged, and a later success does not refund it
+	HTTPRetryBudget failed(params);
+	failed.BindQuota(quota);
+	attempts = 0;
+	failed.Run([&]() {
+		attempts++;
+		return attempts == 1 ? HTTPRetryDecision::Retry() : HTTPRetryDecision::Finish();
+	});
+	failed.ReportFailure();
+	failed.ReportSuccess();
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
+
+	// A Success decision inside the loop is the same report
+	quota->Release(HTTPRetryQuota::INITIAL_CAPACITY);
+	HTTPRetryBudget decided(params);
+	decided.BindQuota(quota);
+	attempts = 0;
+	decided.Run([&]() {
+		attempts++;
+		return attempts == 1 ? HTTPRetryDecision::Retry() : HTTPRetryDecision::Success();
+	});
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
+	decided.ReportFailure();
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
+}
+
+TEST_CASE("Corrected re-sends are bounded and stay within the advertised attempt bound", "[http]") {
 	AttemptRecordingHTTPUtil http_util;
 	HTTPParams params(http_util);
 	params.retry_wait_ms = 0;
 	HTTPHeaders headers;
 	const string url = "http://bucket.s3.amazonaws.com/key";
+	auto quota = http_util.GetRetryQuota("http://bucket.s3.amazonaws.com");
 
-	// One credential correction (a re-send that consumes no retry) followed by a throttling server
-	auto run_operation = [&]() {
+	// A credential correction (a re-send that consumes no retry) followed by a throttling server
+	auto run_operation = [&](idx_t corrections) {
 		http_util.attempts.clear();
 		HTTPRetryBudget budget(params);
-		bool corrected = false;
+		idx_t corrected = 0;
 		budget.Run([&]() {
-			for (;;) {
-				HeadRequestInfo request(url, headers, params);
-				request.retry_budget = budget;
-				request.try_request = true;
-				auto response = HTTPUtil::RunRequestWithRetry(
-				    [&]() {
-					    return MakeResponse(corrected ? HTTPStatusCode::ServiceUnavailable_503
-					                                  : HTTPStatusCode::Forbidden_403);
-				    },
-				    request, {});
-				if (response->status == HTTPStatusCode::Forbidden_403 && !corrected) {
-					corrected = true;
-					continue;
-				}
-				return HTTPRetryDecision::Finish();
+			HeadRequestInfo request(url, headers, params);
+			request.retry_budget = budget;
+			request.try_request = true;
+			auto response = HTTPUtil::RunRequestWithRetry(
+			    [&]() {
+				    return MakeResponse(corrected < corrections ? HTTPStatusCode::Forbidden_403
+				                                                : HTTPStatusCode::ServiceUnavailable_503);
+			    },
+			    request, {});
+			if (response->status == HTTPStatusCode::Forbidden_403) {
+				corrected++;
+				return HTTPRetryDecision::Correction();
 			}
+			return HTTPRetryDecision::Failure();
 		});
+		return budget.CorrectionsExhausted();
 	};
 
 	params.retries = 3;
-	run_operation();
+	REQUIRE_FALSE(run_operation(1));
 	const auto base_max = 1 + 3 + HTTPRetryBudget::THROTTLE_EXTRA_RETRIES;
+	// The correction, then the first throttled send and every throttled retry: attempt=10; max=10 at the end
 	REQUIRE(http_util.attempts.size() == base_max + 1);
 	REQUIRE(http_util.attempts.front() == std::pair<idx_t, idx_t>(1, base_max));
 	for (auto &entry : http_util.attempts) {
 		REQUIRE(entry.first <= entry.second);
 	}
 	REQUIRE(http_util.attempts.back() == std::pair<idx_t, idx_t>(base_max + 1, base_max + 1));
+	// The throttled retries were charged and the failure refunded nothing
+	REQUIRE(quota->Available() ==
+	        HTTPRetryQuota::INITIAL_CAPACITY - static_cast<int64_t>(base_max - 1) * HTTPRetryQuota::RETRY_COST);
 
 	// With retries switched off the corrected re-send is the second and last attempt
 	params.retries = 0;
-	run_operation();
+	REQUIRE_FALSE(run_operation(1));
 	REQUIRE(http_util.attempts.size() == 2);
 	REQUIRE(http_util.attempts[0] == std::pair<idx_t, idx_t>(1, 1));
 	REQUIRE(http_util.attempts[1] == std::pair<idx_t, idx_t>(2, 2));
+
+	// A coordinator that keeps correcting is stopped after MAX_CORRECTIONS re-sends, with the last response
+	quota->Release(HTTPRetryQuota::INITIAL_CAPACITY);
+	REQUIRE(run_operation(1000));
+	REQUIRE(http_util.attempts.size() == 1 + HTTPRetryBudget::MAX_CORRECTIONS);
+	for (auto &entry : http_util.attempts) {
+		REQUIRE(entry.first <= entry.second);
+	}
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
 }
 
 TEST_CASE("A returned transport error carries the quota exhaustion note where GetError reads it", "[http]") {
