@@ -228,3 +228,44 @@ query I
 SELECT '5.5e-8'::DECIMAL(18,6)
 ----
 0.000000
+
+# decimals that the exponent moves before the point count towards the width
+query IIIII
+SELECT '1.5e3'::DECIMAL(4,0), '-1.5e3'::DECIMAL(4,0), '1.25e3'::DECIMAL(5,1), '1.5e17'::DECIMAL(18,0), '9.9e37'::DECIMAL(38,0)
+----
+1500	-1500	1250.0	150000000000000000	99000000000000000000000000000000000000
+
+statement error
+SELECT '1.5e4'::DECIMAL(4,0)
+----
+<REGEX>:Conversion Error.*Could not convert string.*
+
+statement error
+SELECT '-1.5e4'::DECIMAL(4,0)
+----
+<REGEX>:Conversion Error.*Could not convert string.*
+
+statement error
+SELECT '1.25e4'::DECIMAL(5,1)
+----
+<REGEX>:Conversion Error.*Could not convert string.*
+
+statement error
+SELECT '1.5e9'::DECIMAL(9,0)
+----
+<REGEX>:Conversion Error.*Could not convert string.*
+
+statement error
+SELECT '1.5e18'::DECIMAL(18,0)
+----
+<REGEX>:Conversion Error.*Could not convert string.*
+
+statement error
+SELECT '1.0e38'::DECIMAL(38,0)
+----
+<REGEX>:Conversion Error.*Could not convert string.*
+
+query II
+SELECT TRY_CAST('1.0e38' AS DECIMAL(38,0)), TRY_CAST('-1.7e38' AS DECIMAL(38,0))
+----
+NULL	NULL

@@ -584,7 +584,12 @@ struct DecimalCastOperation {
 					return false;
 				}
 			}
-			return true;
+			// the digit count misses the decimals that the exponent moved before the point
+			if (NEGATIVE) {
+				return state.result > -state.limit;
+			} else {
+				return state.result < state.limit;
+			}
 		}
 	}
 
