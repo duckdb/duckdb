@@ -159,7 +159,6 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 	auto named_params = ConvertParamListToMap(values);
 	QueryParameters parameters;
 	parameters.statement_args = named_params;
-	parameters.result_eagerness = ResultEagerness::FORCED;
 	return context->Query(query, parameters);
 }
 

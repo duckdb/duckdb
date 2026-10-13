@@ -1661,6 +1661,15 @@ bool BaseColumnPruner::HandleExtractRecursive(unique_ptr<Expression> &expr_p,
 	}
 }
 
+//! A cast pushed into the scan of a shredded VARIANT is applied to the shredded value instead of the VARIANT. For a
+//! JSON target the two differ: a VARIANT serializes to JSON, a shredded VARCHAR would be parsed as JSON.
+static bool ExtractCastCanBePushedDown(const BoundColumnRefExpression &colref, const Expression &cast) {
+	if (colref.GetReturnType().id() != LogicalTypeId::VARIANT) {
+		return true;
+	}
+	return !cast.GetReturnType().IsJSONType();
+}
+
 bool BaseColumnPruner::HandleExtractExpression(unique_ptr<Expression> *expression,
                                                optional_ptr<unique_ptr<Expression>> cast_expression) {
 	optional_ptr<BoundColumnRefExpression> colref;
@@ -1670,6 +1679,10 @@ bool BaseColumnPruner::HandleExtractExpression(unique_ptr<Expression> *expressio
 	reference<ColumnIndex> path_ref(path);
 	if (!HandleExtractRecursive(*expression, colref, path_ref, expressions)) {
 		return false;
+	}
+	if (cast_expression && !ExtractCastCanBePushedDown(*colref, **cast_expression)) {
+		// the cast stays on top of the pushed-down extract
+		cast_expression = nullptr;
 	}
 	if (cast_expression) {
 		auto &top_level = expressions.back();
@@ -1810,6 +1823,13 @@ static bool TryGetCastChild(unique_ptr<Expression> &expr, optional_ptr<unique_pt
 	D_ASSERT(BoundCastExpression::IsCast(*expr));
 	auto &cast = expr->Cast<BoundFunctionExpression>();
 	if (BoundCastExpression::IsTryCast(cast)) {
+		return false;
+	}
+	if (cast.GetReturnType().IsJSONType()) {
+		// JSON casts depend on the logical input type, not the underlying storage type.
+		// TODO: Generalize beyond JSON by checking that T -> VARIANT -> U equals T -> U.
+		// Invertibility is insufficient: VARIANT uses stricter string-to-number parsing,
+		// and zoned timestamp serialization can differ between the two paths.
 		return false;
 	}
 
