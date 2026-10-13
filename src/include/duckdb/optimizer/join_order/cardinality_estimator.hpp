@@ -48,6 +48,8 @@ public:
 private:
 	double GetNumerator(JoinRelationSet &set);
 	DenomInfo GetDenominator(JoinRelationSet &set);
+	void BuildEdgeIndex();
+	vector<FilterInfoWithTotalDomains> GetEdges(JoinRelationSet &requested_set);
 	void ProcessDenominatorEdge(FilterInfoWithTotalDomains &edge, JoinRelationSet &requested_set,
 	                            DenominatorState &state);
 	void CreateDenominatorSubgraph(FilterInfoWithTotalDomains &edge, JoinRelationSet &edge_left_set,
@@ -82,9 +84,7 @@ private:
 	bool ApplyJoinPairCap(double &target_denom, JoinRelationSet &join_pair,
 	                      reference_map_t<JoinRelationSet, CompositeJoinPairStats> &inner_join_pair_stats,
 	                      reference_set_t<JoinRelationSet> &capped_join_pairs);
-	bool ApplyCompositeJoinPairCaps(double &target_denom, JoinRelationSet &scope,
-	                                reference_map_t<JoinRelationSet, CompositeJoinPairStats> &inner_join_pair_stats,
-	                                reference_set_t<JoinRelationSet> &capped_join_pairs);
+	bool ApplyCompositeJoinPairCaps(double &target_denom, JoinRelationSet &scope, DenominatorState &state);
 	double GetJoinPairCap(JoinRelationSet &join_pair);
 
 	JoinRelationSet &UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right,
