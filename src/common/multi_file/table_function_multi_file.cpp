@@ -277,13 +277,14 @@ void TableFunctionFileReader::SetScanState(GlobalTableFunctionState &gstate) {
 }
 
 void TableFunctionFileReader::InitializeFunctionState(ClientContext &context) {
-	lock_guard<mutex> guard(lock);
-	if (global_state || !function.init_global) {
-		return;
-	}
-	TableFunctionFileInitInput file_input;
-	auto init_input = GetInitInput(file_input);
-	global_state = function.init_global(context, init_input);
+	std::call_once(initialize_once, [&] {
+		if (!function.init_global) {
+			return;
+		}
+		TableFunctionFileInitInput file_input;
+		auto init_input = GetInitInput(file_input);
+		global_state = function.init_global(context, init_input);
+	});
 }
 
 void TableFunctionFileReader::PrepareReader(ClientContext &context, GlobalTableFunctionState &gstate) {

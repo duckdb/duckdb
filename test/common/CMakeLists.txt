@@ -7,6 +7,7 @@ add_library_unity(
   test_cast.cpp
   test_checked_integer.cpp
   test_checksum.cpp
+  test_dictionary_hash_cache.cpp
   test_column_data_allocator.cpp
   test_file_buffer_handle_group.cpp
   test_file_system.cpp
@@ -25,6 +26,7 @@ add_library_unity(
   test_parse_logical_type.cpp
   test_parser_statement.cpp
   test_parse_memory_limit_slurm.cpp
+  test_pipeline_broadcast_exchange.cpp
   test_recursive_cte_metrics.cpp
   test_scalar_executor.cpp
   test_logical_type_is_complete.cpp
