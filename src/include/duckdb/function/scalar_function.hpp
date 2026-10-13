@@ -136,6 +136,28 @@ struct FunctionToStringInput {
 	}
 };
 
+struct FunctionRebindLambdaInput {
+	FunctionRebindLambdaInput(ClientContext &context_p, const vector<LogicalType> &function_child_types_p,
+	                          unique_ptr<Expression> &bound_lambda_p,
+	                          std::function<void(unique_ptr<BindLambdaContext>)> rebind_p)
+	    : context(context_p), function_child_types(function_child_types_p), bound_lambda(bound_lambda_p),
+	      rebind(std::move(rebind_p)) {
+	}
+
+	ClientContext &context;
+	const vector<LogicalType> &function_child_types;
+	//! The bound lambda expression, replaced by Rebind
+	unique_ptr<Expression> &bound_lambda;
+
+	//! Binds the lambda again, passing the context to the bind_lambda callback
+	void Rebind(unique_ptr<BindLambdaContext> bind_lambda_context) {
+		rebind(std::move(bind_lambda_context));
+	}
+
+private:
+	std::function<void(unique_ptr<BindLambdaContext>)> rebind;
+};
+
 class BindScalarFunctionInput;
 class ResolveScalarFunctionTypesInput;
 
@@ -161,7 +183,10 @@ typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &conte
 typedef LogicalType (*bind_lambda_function_t)(ClientContext &context, const vector<LogicalType> &function_child_types,
                                               idx_t parameter_idx, optional_ptr<BindLambdaContext> bind_lambda_context);
 
-//! The type to bind lambda-specific parameter types
+//! The type to bind the lambda again after its initial bind, e.g., if its parameter types depend on its result type
+typedef void (*rebind_lambda_function_t)(FunctionRebindLambdaInput &input);
+
+//! The type to get the databases modified by a scalar function
 typedef void (*get_modified_databases_t)(ClientContext &context, FunctionModifiedDatabasesInput &input);
 
 typedef void (*function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -202,6 +227,8 @@ public:
 	function_statistics_t statistics = nullptr;
 	//! The lambda bind function (if any)
 	bind_lambda_function_t bind_lambda = nullptr;
+	//! The lambda rebind function (if any)
+	rebind_lambda_function_t rebind_lambda = nullptr;
 	//! Function to bind the result function expression directly (if any)
 	function_bind_expression_t bind_expression = nullptr;
 	//! Gets the modified databases (if any)
@@ -291,6 +318,10 @@ public: // Callbacks
 	auto HasBindLambdaCallback() const -> bool { return callbacks.bind_lambda != nullptr; }
 	auto GetBindLambdaCallback() const -> bind_lambda_function_t { return callbacks.bind_lambda; }
 	auto SetBindLambdaCallback(bind_lambda_function_t callback) -> void { callbacks.bind_lambda = callback; }
+
+	auto HasRebindLambdaCallback() const -> bool { return callbacks.rebind_lambda != nullptr; }
+	auto GetRebindLambdaCallback() const -> rebind_lambda_function_t { return callbacks.rebind_lambda; }
+	auto SetRebindLambdaCallback(rebind_lambda_function_t callback) -> void { callbacks.rebind_lambda = callback; }
 
 	auto HasBindExpressionCallback() const -> bool { return callbacks.bind_expression != nullptr; }
 	auto GetBindExpressionCallback() const -> function_bind_expression_t { return callbacks.bind_expression; }

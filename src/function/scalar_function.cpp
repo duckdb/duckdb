@@ -44,9 +44,10 @@ vector<LogicalType> ResolveScalarFunctionTypesInput::GetArgumentTypes() const {
 
 bool ScalarFunctionCallbacks::operator==(const ScalarFunctionCallbacks &rhs) const {
 	return resolve_types == rhs.resolve_types && bind == rhs.bind && init_local_state == rhs.init_local_state &&
-	       statistics == rhs.statistics && bind_lambda == rhs.bind_lambda && bind_expression == rhs.bind_expression &&
-	       get_modified_databases == rhs.get_modified_databases && serialize == rhs.serialize &&
-	       deserialize == rhs.deserialize && filter_prune == rhs.filter_prune && unbind == rhs.unbind;
+	       statistics == rhs.statistics && bind_lambda == rhs.bind_lambda && rebind_lambda == rhs.rebind_lambda &&
+	       bind_expression == rhs.bind_expression && get_modified_databases == rhs.get_modified_databases &&
+	       serialize == rhs.serialize && deserialize == rhs.deserialize && filter_prune == rhs.filter_prune &&
+	       unbind == rhs.unbind;
 }
 
 bool ScalarFunctionCallbacks::operator!=(const ScalarFunctionCallbacks &rhs) const {

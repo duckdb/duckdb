@@ -266,13 +266,25 @@ unique_ptr<FunctionData> ListReduceBind(BindScalarFunctionInput &input) {
 	                                     has_index, has_initial);
 }
 
-LogicalType BindReduceChildren(ClientContext &context, const vector<LogicalType> &function_child_types,
-                               const idx_t parameter_idx, optional_ptr<BindLambdaContext> bind_lambda_context) {
+class ListReduceBindLambdaContext final : public BindLambdaContext {
+public:
+	explicit ListReduceBindLambdaContext(LogicalType accumulator_type_p)
+	    : accumulator_type(std::move(accumulator_type_p)) {
+	}
+
+	const LogicalType accumulator_type;
+};
+
+LogicalType ListReduceBindLambda(ClientContext &context, const vector<LogicalType> &function_child_types,
+                                 const idx_t parameter_idx, optional_ptr<BindLambdaContext> bind_lambda_context) {
 	auto list_child_type = LambdaFunctions::DetermineListChildType(function_child_types[0]);
 	const bool has_initial = function_child_types.size() == 3;
 
 	switch (parameter_idx) {
 	case 0:
+		if (bind_lambda_context) {
+			return bind_lambda_context->Cast<ListReduceBindLambdaContext>().accumulator_type;
+		}
 		return has_initial ? function_child_types[2] : list_child_type;
 	case 1:
 		return list_child_type;
@@ -283,9 +295,78 @@ LogicalType BindReduceChildren(ClientContext &context, const vector<LogicalType>
 	}
 }
 
-LogicalType ListReduceBindLambda(ClientContext &context, const vector<LogicalType> &function_child_types,
-                                 const idx_t parameter_idx, optional_ptr<BindLambdaContext> bind_lambda_context) {
-	return BindReduceChildren(context, function_child_types, parameter_idx, bind_lambda_context);
+bool TypeContainsDecimal(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::DECIMAL:
+		return true;
+	case LogicalTypeId::LIST:
+		return TypeContainsDecimal(ListType::GetChildType(type));
+	case LogicalTypeId::ARRAY:
+		return TypeContainsDecimal(ArrayType::GetChildType(type));
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
+		for (const auto &child : StructType::GetChildTypes(type)) {
+			if (TypeContainsDecimal(child.second)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	case LogicalTypeId::MAP:
+		return TypeContainsDecimal(MapType::KeyType(type)) || TypeContainsDecimal(MapType::ValueType(type));
+	case LogicalTypeId::UNION: {
+		for (const auto &child : UnionType::CopyMemberTypes(type)) {
+			if (TypeContainsDecimal(child.second)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	default:
+		return false;
+	}
+}
+
+//! The accumulator type depends on the lambda result type: the lambda is bound with acc = initial value (or list
+//! element), and then rebound with acc = the common type of that and the lambda result type
+void ListReduceRebindLambda(FunctionRebindLambdaInput &input) {
+	auto &context = input.context;
+	auto &function_child_types = input.function_child_types;
+	const bool has_initial = function_child_types.size() == 3;
+	auto list_child_type = LambdaFunctions::DetermineListChildType(function_child_types[0]);
+	auto lambda_return_type = input.bound_lambda->Cast<BoundLambdaExpression>().LambdaExpr()->GetReturnType();
+
+	LogicalType accumulator_type;
+	if (has_initial) {
+		accumulator_type = ResolveReduceAccumulatorType(context, function_child_types[2], lambda_return_type);
+	} else {
+		if (!LogicalType::TryGetMaxLogicalType(context, list_child_type, lambda_return_type, accumulator_type)) {
+			throw BinderException("No common super type between list element type %s and lambda return type %s",
+			                      list_child_type.ToString(), lambda_return_type.ToString());
+		}
+		if (accumulator_type == list_child_type) {
+			return;
+		}
+	}
+
+	input.Rebind(make_uniq<ListReduceBindLambdaContext>(accumulator_type));
+	if (!has_initial) {
+		return;
+	}
+	// avoid repeated rebinds for DECIMAL widening by forcing the lambda result to the accumulator type
+	auto &rebound_lambda_expr = input.bound_lambda->Cast<BoundLambdaExpression>();
+	const auto rebound_return_type = rebound_lambda_expr.LambdaExpr()->GetReturnType();
+	if (rebound_return_type == accumulator_type ||
+	    (!TypeContainsDecimal(accumulator_type) && !TypeContainsDecimal(rebound_return_type))) {
+		return;
+	}
+	auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(rebound_lambda_expr.LambdaExprMutable()),
+	                                                    accumulator_type);
+	if (!cast_expr) {
+		throw BinderException("Could not cast lambda return type %s to accumulator type %s",
+		                      rebound_return_type.ToString(), accumulator_type.ToString());
+	}
+	rebound_lambda_expr.LambdaExprMutable() = std::move(cast_expr);
 }
 
 } // namespace
@@ -337,6 +418,7 @@ ScalarFunctionSet ListReduceFun::GetFunctions() {
 	fun.SetSerializeCallback(ListLambdaBindData::Serialize);
 	fun.SetDeserializeCallback(ListLambdaBindData::Deserialize);
 	fun.SetBindLambdaCallback(ListReduceBindLambda);
+	fun.SetRebindLambdaCallback(ListReduceRebindLambda);
 	fun.SetFallible();
 
 	ScalarFunctionSet set;
