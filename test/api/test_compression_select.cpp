@@ -13,7 +13,7 @@ using namespace duckdb;
 
 TEST_CASE("Constant selection preserves the surrounding flat result", "[storage][compression]") {
 	DuckDB db(nullptr);
-	Vector result(LogicalType::INTEGER);
+	Vector result(LogicalType::INTEGER, 8);
 	{
 		auto writer = FlatVector::Writer<int32_t>(result, 8);
 		for (int32_t i = 0; i < 8; i++) {

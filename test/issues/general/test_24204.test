@@ -107,7 +107,7 @@ physical_plan	<REGEX>:.*File Filters:.*path.*Scanning Files:.*1/2.*
 
 # Bound output names can differ in case and position from the configured filename column.
 statement ok
-CREATE VIEW issue_24204_bound AS
+CREATE TEMP VIEW issue_24204_bound AS
 SELECT *
 FROM read_parquet(
 	'{TEST_DIR}/issue_24204_parquet_*.parquet',
