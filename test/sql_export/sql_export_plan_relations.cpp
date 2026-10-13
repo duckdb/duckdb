@@ -464,7 +464,6 @@ TEST_CASE("Logical plan SQL export retains sampling errors and partial consumpti
 					auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
 					REQUIRE(exported.IsSuccess());
 					QueryParameters parameters;
-					parameters.result_eagerness = ResultEagerness::AUTO;
 					unique_ptr<QueryResult> result;
 					if (route == 0) {
 						result = SubmitSQLExportResult(*connection.context, sql, parameters);

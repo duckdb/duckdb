@@ -32,7 +32,11 @@ DUCKDB_V2_ERROR duckdb_v2_qname_parse(const duckdb_v2_str *text, duckdb_v2_qname
 	DUCKDB_CHECK_ARG(out_name);
 	*out_name = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto parsed = duckdb::QualifiedName::Parse(duckdb::string(ConvertIdentifierName(text)));
+		duckdb::QualifiedName parsed;
+		duckdb::string error;
+		if (!duckdb::QualifiedName::TryParse(duckdb::string(ConvertIdentifierName(text)), parsed, error)) {
+			throw duckdb::InvalidInputException("%s in duckdb_v2_qname_parse.", error);
+		}
 		CheckQNameParts(parsed, "duckdb_v2_qname_parse");
 		*out_name = Convert(new duckdb::QualifiedName(std::move(parsed)));
 	});
