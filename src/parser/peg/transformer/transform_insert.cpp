@@ -26,6 +26,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(
 		throw ParserException(
 		    "You can not provide both a column list and DEFAULT VALUES, please remove one of the two");
 	}
+	if (has_overriding_clause && insert_values.default_values) {
+		throw ParserException("OVERRIDING SYSTEM|USER VALUE can not be combined with DEFAULT VALUES, "
+		                      "please remove one of the two");
+	}
 	if (insert_values.default_values) {
 		node.default_values = true;
 	}

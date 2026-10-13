@@ -36,3 +36,13 @@ statement error
 INSERT INTO strings OVERRIDING VALUE SELECT 3;
 ----
 Parser Error
+
+statement error
+INSERT INTO strings OVERRIDING SYSTEM VALUE DEFAULT VALUES;
+----
+OVERRIDING SYSTEM|USER VALUE can not be combined with DEFAULT VALUES
+
+statement error
+INSERT INTO strings OVERRIDING USER VALUE DEFAULT VALUES;
+----
+OVERRIDING SYSTEM|USER VALUE can not be combined with DEFAULT VALUES
