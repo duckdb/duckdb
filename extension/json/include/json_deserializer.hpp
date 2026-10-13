@@ -20,8 +20,8 @@ private:
 		}
 	};
 
-	//! Deserializing recurses once per nesting level of the JSON
-	static constexpr idx_t MAX_NESTING_DEPTH = 10000;
+	//! Deserializing recurses once per nesting level of the JSON - keep it within a 1MB stack
+	static constexpr idx_t MAX_NESTING_DEPTH = 1024;
 
 	yyjson_doc *doc;
 	const char *current_tag = nullptr;

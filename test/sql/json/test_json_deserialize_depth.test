@@ -14,8 +14,13 @@ SELECT * FROM json_execute_serialized_sql('{"error":false,"statements":[{"node":
 ----
 Serialized JSON exceeds the maximum nesting depth
 
-# expressions nested up to the expression depth limit of the parser still round trip
+# moderately nested expressions still round trip
 query I
-SELECT json_deserialize_sql(json_serialize_sql('SELECT ' || repeat('abs(', 900) || '1' || repeat(')', 900))) = 'SELECT ' || repeat('abs(', 900) || '1' || repeat(')', 900);
+SELECT json_deserialize_sql(json_serialize_sql('SELECT ' || repeat('abs(', 300) || '1' || repeat(')', 300))) = 'SELECT ' || repeat('abs(', 300) || '1' || repeat(')', 300);
 ----
 true
+
+statement error
+SELECT json_deserialize_sql(json_serialize_sql('SELECT ' || repeat('abs(', 600) || '1' || repeat(')', 600)));
+----
+Serialized JSON exceeds the maximum nesting depth
