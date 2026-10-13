@@ -2,6 +2,9 @@
 # description: Arrow lambdas stored with a storage version before v2.0.0 keep binding
 # group: [arrow]
 
+# logging does not survive the forced restarts
+require skip_reload
+
 statement ok
 SET lambda_syntax = 'ENABLE_SINGLE_ARROW'
 
