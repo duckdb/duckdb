@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/common/map.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
@@ -53,19 +54,24 @@ private:
 	const Matcher &top_level_statement_matcher;
 };
 
-//! Per-database holder for the compiled base grammar.
+//! Per-database holder for the compiled base grammar and the grammars compiled for active grammar extensions.
 struct ParserCache {
 public:
 	ParserCache();
 	~ParserCache();
 
 	shared_ptr<CompiledGrammar> GetMatcher();
+	//! The grammar compiled for the given grammar extensions, in order - shared by all connections that use them
+	shared_ptr<CompiledGrammar> GetMatcher(const ClientContext &context, const vector<string> &active_extensions);
 	//! The grammar that forwards statements instead of interpreting them, used while CONNECT-ed
 	shared_ptr<CompiledGrammar> GetPassthroughMatcher(const ClientContext &context);
 
 private:
 	std::mutex mutex;
 	shared_ptr<CompiledGrammar> matcher;
+	std::mutex extension_mutex;
+	//! The compiled grammars, keyed by the names of their grammar extensions in order
+	map<vector<string>, shared_ptr<CompiledGrammar>> extension_matchers;
 	std::mutex passthrough_mutex;
 	unique_ptr<PassthroughDialect> passthrough_dialect;
 };

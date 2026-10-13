@@ -5,6 +5,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
+#include "duckdb/parser/grammar_extension.hpp"
 #include "duckdb/parser/peg/passthrough_dialect.hpp"
 
 namespace duckdb {
@@ -70,6 +71,32 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher() {
 		matcher = std::move(new_matcher);
 	}
 	return matcher;
+}
+
+shared_ptr<CompiledGrammar> ParserCache::GetMatcher(const ClientContext &context,
+                                                    const vector<string> &active_extensions) {
+	vector<reference<GrammarExtension>> selected_extensions;
+	vector<string> extension_names;
+	auto &callback_manager = ExtensionCallbackManager::Get(context);
+	for (auto &name : active_extensions) {
+		auto grammar_extension = callback_manager.FindGrammarExtension(name);
+		if (grammar_extension) {
+			selected_extensions.emplace_back(*grammar_extension);
+			extension_names.push_back(grammar_extension->Name());
+		}
+	}
+	{
+		lock_guard<std::mutex> lock(extension_mutex);
+		auto entry = extension_matchers.find(extension_names);
+		if (entry != extension_matchers.end()) {
+			return entry->second;
+		}
+	}
+	auto new_matcher = CompiledGrammar::Create(selected_extensions);
+
+	lock_guard<std::mutex> lock(extension_mutex);
+	auto entry = extension_matchers.emplace(std::move(extension_names), std::move(new_matcher));
+	return entry.first->second;
 }
 
 shared_ptr<CompiledGrammar> ParserCache::GetPassthroughMatcher(const ClientContext &context) {

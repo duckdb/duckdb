@@ -728,6 +728,37 @@ TEST_CASE("Overriding a transform opts its rule out of collapsing", "[api][gramm
 	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(7));
 }
 
+TEST_CASE("Connections share the grammar compiled for the same active grammar extensions", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	GrammarExtension::Register(*db.instance, make_shared_ptr<OverrideAdditiveExpressionTransform>("seven", false));
+	GrammarExtension::Register(*db.instance,
+	                           make_shared_ptr<OverrideAdditiveExpressionTransform>("collapsible_seven", true));
+	Connection con(db);
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['seven', 'collapsible_seven']"));
+	auto grammar = CompiledGrammar::Get(*con.context);
+
+	// the names of grammar extensions are case insensitive
+	Connection same_con(db);
+	REQUIRE_NO_FAIL(*same_con.Query("SET active_grammar_extensions = ['SEVEN', 'collapsible_seven']"));
+	REQUIRE(CompiledGrammar::Get(*same_con.context) == grammar);
+
+	// the order of the grammar extensions determines the grammar: the last transform override wins
+	Connection reversed_con(db);
+	REQUIRE_NO_FAIL(*reversed_con.Query("SET active_grammar_extensions = ['collapsible_seven', 'seven']"));
+	REQUIRE(CompiledGrammar::Get(*reversed_con.context) != grammar);
+	auto result = con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(1));
+	result = reversed_con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(7));
+
+	Connection subset_con(db);
+	REQUIRE_NO_FAIL(*subset_con.Query("SET active_grammar_extensions = ['seven']"));
+	REQUIRE(CompiledGrammar::Get(*subset_con.context) != grammar);
+	REQUIRE(CompiledGrammar::Get(*subset_con.context) != CompiledGrammar::Get(*reversed_con.context));
+}
+
 struct MatchProcessLifetimeState {
 	idx_t active = 0;
 	idx_t started = 0;
