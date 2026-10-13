@@ -1156,9 +1156,10 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 				    child_schema.type.id() == LogicalTypeId::BLOB || child_schema.type.id() == LogicalTypeId::VARCHAR;
 				if (!child_schema.children.empty() || child_schema.parquet_type != duckdb_parquet::Type::BYTE_ARRAY ||
 				    !is_binary || child_schema.schema_type != ParquetColumnSchemaType::COLUMN) {
-					throw IOException("Failed to read Parquet file \"%s\": the '%s' column of VARIANT column \"%s\" "
-					                  "must be a binary BYTE_ARRAY column",
-					                  file.path, child_schema.name, s_ele.name);
+					throw DataCorruptionException(
+					    "Failed to read Parquet file \"%s\": the '%s' column of VARIANT column \"%s\" "
+					    "must be a binary BYTE_ARRAY column",
+					    file.path, child_schema.name, s_ele.name);
 				}
 			}
 		}
