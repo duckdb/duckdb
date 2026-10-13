@@ -25,6 +25,11 @@ public:
 		return cache_id;
 	}
 
+	//! Literal ids are 1 up to and including the literal count
+	idx_t LiteralCount() const {
+		return literals.size();
+	}
+
 	LiteralInfo Lookup(const string &text) const {
 		auto entry = literals.find(text);
 		return entry == literals.end() ? LiteralInfo() : entry->second;

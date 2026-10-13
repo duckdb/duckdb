@@ -1018,7 +1018,7 @@ TEST_CASE("FIRST sets do not assume built-in semantics for derived matchers", "[
 	ListMatcher list;
 	list.SetStructural();
 	list.matchers.push_back(derived);
-	ComputeFirstSets(list, grammar->GetKeywordHelper().GetLiteralTable());
+	auto first_set_storage = ComputeFirstSets(list, grammar->GetKeywordHelper().GetLiteralTable());
 
 	vector<MatcherToken> tokens {MatcherToken("answer", 0, TokenType::IDENTIFIER)};
 	TokenIterator iterator(tokens);
@@ -1150,7 +1150,7 @@ TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][gr
 	                                                sequence, custom_list, root}) {
 		matcher.get().SetStructural();
 	}
-	ComputeFirstSets(root, helper.GetLiteralTable());
+	auto first_set_storage = ComputeFirstSets(root, helper.GetLiteralTable());
 
 	SECTION("Atomic matchers") {
 		CheckFirstSet(*grammar, identifier, "some_column", true);

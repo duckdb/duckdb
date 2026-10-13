@@ -1,13 +1,24 @@
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/matcher/identifier_matcher.hpp"
 #include "duckdb/parser/peg/matcher/list.hpp"
-#include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // FIRST sets
 //===--------------------------------------------------------------------===//
+//! Merge the bitset other into target, returns whether anything changed
+static bool MergeLiterals(uint64_t *target, const uint64_t *other, idx_t words) {
+	uint64_t added = 0;
+	for (idx_t i = 0; i < words; i++) {
+		added |= other[i] & ~target[i];
+		target[i] |= other[i];
+	}
+	return added != 0;
+}
+
 bool MatcherFirstSet::Merge(const MatcherFirstSet &other) {
+	D_ASSERT(literal_words == other.literal_words);
 	bool changed = false;
 	if (other.any && !any) {
 		any = changed = true;
@@ -20,24 +31,13 @@ bool MatcherFirstSet::Merge(const MatcherFirstSet &other) {
 		exact_class_mask |= other.exact_class_mask;
 		changed = true;
 	}
-	if (other.literals.size() > literals.size()) {
-		literals.resize(other.literals.size(), 0);
-	}
-	for (idx_t i = 0; i < other.literals.size(); i++) {
-		auto merged = literals[i] | other.literals[i];
-		if (merged != literals[i]) {
-			literals[i] = merged;
-			changed = true;
-		}
-	}
+	changed |= MergeLiterals(literals, other.literals, literal_words);
 	return changed;
 }
 
 void MatcherFirstSet::AddLiteral(idx_t literal_id) {
 	auto word = literal_id / 64;
-	if (word >= literals.size()) {
-		literals.resize(word + 1, 0);
-	}
+	D_ASSERT(word < literal_words);
 	literals[word] |= uint64_t(1) << (literal_id % 64);
 }
 
@@ -133,8 +133,8 @@ struct FirstSetTraversalEntry {
 //===--------------------------------------------------------------------===//
 // Second-token sets
 //===--------------------------------------------------------------------===//
-static bool MergeTokenSet(bool &any, uint8_t &mask, vector<uint64_t> &literals, bool other_any, uint8_t other_mask,
-                          const vector<uint64_t> &other_literals) {
+static bool MergeTokenSet(bool &any, uint8_t &mask, uint64_t *literals, bool other_any, uint8_t other_mask,
+                          const uint64_t *other_literals, idx_t words) {
 	bool changed = false;
 	if (other_any && !any) {
 		any = changed = true;
@@ -143,75 +143,33 @@ static bool MergeTokenSet(bool &any, uint8_t &mask, vector<uint64_t> &literals, 
 		mask |= other_mask;
 		changed = true;
 	}
-	if (other_literals.size() > literals.size()) {
-		literals.resize(other_literals.size(), 0);
-	}
-	for (idx_t i = 0; i < other_literals.size(); i++) {
-		auto merged = literals[i] | other_literals[i];
-		if (merged != literals[i]) {
-			literals[i] = merged;
-			changed = true;
-		}
-	}
+	changed |= MergeLiterals(literals, other_literals, words);
 	return changed;
 }
 
 //! Merge a FIRST set into the identifier-start second-token set
 static bool MergeIntoIdentSecond(MatcherFirstSet &target, const MatcherFirstSet &first) {
 	return MergeTokenSet(target.ident_second_any, target.ident_second_class_mask, target.ident_second_literals,
-	                     first.any, first.class_mask, first.literals);
+	                     first.any, first.class_mask, first.literals, target.literal_words);
 }
 
 //! Merge another matcher's identifier-start second-token set into target
 static bool MergeIdentSecond(MatcherFirstSet &target, const MatcherFirstSet &other) {
 	return MergeTokenSet(target.ident_second_any, target.ident_second_class_mask, target.ident_second_literals,
-	                     other.ident_second_any, other.ident_second_class_mask, other.ident_second_literals);
+	                     other.ident_second_any, other.ident_second_class_mask, other.ident_second_literals,
+	                     target.literal_words);
 }
 
 //! Merge a FIRST set into a second-token set, returns whether anything changed
 static bool MergeIntoSecond(MatcherFirstSet &target, const MatcherFirstSet &first) {
-	bool changed = false;
-	if (first.any && !target.second_any) {
-		target.second_any = changed = true;
-	}
-	if ((target.second_class_mask | first.class_mask) != target.second_class_mask) {
-		target.second_class_mask |= first.class_mask;
-		changed = true;
-	}
-	if (first.literals.size() > target.second_literals.size()) {
-		target.second_literals.resize(first.literals.size(), 0);
-	}
-	for (idx_t i = 0; i < first.literals.size(); i++) {
-		auto merged = target.second_literals[i] | first.literals[i];
-		if (merged != target.second_literals[i]) {
-			target.second_literals[i] = merged;
-			changed = true;
-		}
-	}
-	return changed;
+	return MergeTokenSet(target.second_any, target.second_class_mask, target.second_literals, first.any,
+	                     first.class_mask, first.literals, target.literal_words);
 }
 
 //! Merge another matcher's second-token set into target, returns whether anything changed
 static bool MergeSecond(MatcherFirstSet &target, const MatcherFirstSet &other) {
-	bool changed = false;
-	if (other.second_any && !target.second_any) {
-		target.second_any = changed = true;
-	}
-	if ((target.second_class_mask | other.second_class_mask) != target.second_class_mask) {
-		target.second_class_mask |= other.second_class_mask;
-		changed = true;
-	}
-	if (other.second_literals.size() > target.second_literals.size()) {
-		target.second_literals.resize(other.second_literals.size(), 0);
-	}
-	for (idx_t i = 0; i < other.second_literals.size(); i++) {
-		auto merged = target.second_literals[i] | other.second_literals[i];
-		if (merged != target.second_literals[i]) {
-			target.second_literals[i] = merged;
-			changed = true;
-		}
-	}
-	return changed;
+	return MergeTokenSet(target.second_any, target.second_class_mask, target.second_literals, other.second_any,
+	                     other.second_class_mask, other.second_literals, target.literal_words);
 }
 
 static bool SetFlag(bool &flag, bool value) {
@@ -222,8 +180,125 @@ static bool SetFlag(bool &flag, bool value) {
 	return false;
 }
 
+//! Recomputes the second-token sets of a composite matcher from its children, returns whether anything changed
+static bool UpdateSecondSet(Matcher &matcher) {
+	bool changed = false;
+	auto &target = matcher.first_set;
+	switch (matcher.Type()) {
+	case MatcherType::LIST: {
+		bool nullable = true;
+		bool one = false;
+		bool multi = false;
+		bool ident_one = false;
+		bool ident_multi = false;
+		for (auto &child_ref : matcher.Cast<ListMatcher>().matchers) {
+			auto &child = child_ref.get().first_set;
+			// after a one-token prefix, the first token of the next element is the second token
+			if (one) {
+				changed |= MergeIntoSecond(target, child);
+			}
+			if (ident_one) {
+				changed |= MergeIntoIdentSecond(target, child);
+			}
+			if (nullable) {
+				changed |= MergeSecond(target, child);
+				changed |= MergeIdentSecond(target, child);
+			}
+			bool new_one = (one && child.nullable) || (nullable && child.can_one);
+			bool new_multi = multi || (one && (child.can_one || child.can_multi)) || (nullable && child.can_multi);
+			bool new_ident_one = (ident_one && child.nullable) || (nullable && child.ident_can_one);
+			bool new_ident_multi =
+			    ident_multi || (ident_one && (child.can_one || child.can_multi)) || (nullable && child.ident_can_multi);
+			nullable = nullable && child.nullable;
+			one = new_one;
+			multi = new_multi;
+			ident_one = new_ident_one;
+			ident_multi = new_ident_multi;
+			if (!nullable && !one && !ident_one) {
+				// every match consumed two tokens before the next element: it cannot contribute anything
+				break;
+			}
+		}
+		changed |= SetFlag(target.can_one, one);
+		changed |= SetFlag(target.can_multi, multi);
+		changed |= SetFlag(target.ident_can_one, ident_one);
+		changed |= SetFlag(target.ident_can_multi, ident_multi);
+		break;
+	}
+	case MatcherType::CHOICE:
+		for (auto &child_ref : matcher.Cast<ChoiceMatcher>().matchers) {
+			auto &child = child_ref.get().first_set;
+			changed |= MergeSecond(target, child);
+			changed |= SetFlag(target.can_one, child.can_one);
+			changed |= SetFlag(target.can_multi, child.can_multi);
+			changed |= MergeIdentSecond(target, child);
+			changed |= SetFlag(target.ident_can_one, child.ident_can_one);
+			changed |= SetFlag(target.ident_can_multi, child.ident_can_multi);
+		}
+		break;
+	case MatcherType::OPTIONAL: {
+		auto &child = matcher.Cast<OptionalMatcher>().GetChildMatcher().first_set;
+		changed |= MergeSecond(target, child);
+		changed |= SetFlag(target.can_one, child.can_one);
+		changed |= SetFlag(target.can_multi, child.can_multi);
+		changed |= MergeIdentSecond(target, child);
+		changed |= SetFlag(target.ident_can_one, child.ident_can_one);
+		changed |= SetFlag(target.ident_can_multi, child.ident_can_multi);
+		break;
+	}
+	case MatcherType::REPEAT: {
+		auto &child = matcher.Cast<RepeatMatcher>().GetChildMatcher().first_set;
+		changed |= MergeSecond(target, child);
+		if (child.can_one) {
+			// a one-token repetition followed by another repetition
+			changed |= MergeIntoSecond(target, child);
+		}
+		changed |= SetFlag(target.can_one, child.can_one);
+		changed |= SetFlag(target.can_multi, child.can_multi || child.can_one);
+		changed |= MergeIdentSecond(target, child);
+		if (child.ident_can_one) {
+			changed |= MergeIntoIdentSecond(target, child);
+		}
+		changed |= SetFlag(target.ident_can_one, child.ident_can_one);
+		changed |= SetFlag(target.ident_can_multi, child.ident_can_multi || child.ident_can_one);
+		break;
+	}
+	default:
+		break;
+	}
+	return changed;
+}
+
+//! Least fixed point of update over the composite matchers, given children before their parents: a matcher is only
+//! revisited when one of its children changed, which happens through recursive references
+template <class FUN>
+static void ComputeFixedPoint(const vector<reference<Matcher>> &composites, const vector<idx_t> &parent_offsets,
+                              const vector<idx_t> &parents, FUN &&update) {
+	vector<bool> queued(composites.size(), true);
+	vector<idx_t> queue;
+	queue.reserve(composites.size());
+	for (idx_t i = 0; i < composites.size(); i++) {
+		queue.push_back(i);
+	}
+	for (idx_t head = 0; head < queue.size(); head++) {
+		auto index = queue[head];
+		queued[index] = false;
+		if (!update(composites[index].get())) {
+			continue;
+		}
+		for (auto p = parent_offsets[index]; p < parent_offsets[index + 1]; p++) {
+			auto parent = parents[p];
+			if (!queued[parent]) {
+				queued[parent] = true;
+				queue.push_back(parent);
+			}
+		}
+	}
+}
+
 //! Least fixed point over the grammar; a superset of the tokens any atomic matcher can consume second on any path
-static void ComputeSecondSets(vector<reference<Matcher>> &matchers) {
+static void ComputeSecondSets(vector<reference<Matcher>> &matchers, const vector<reference<Matcher>> &composites,
+                              const vector<idx_t> &parent_offsets, const vector<idx_t> &parents) {
 	for (auto &entry : matchers) {
 		auto &matcher = entry.get();
 		auto &first = matcher.first_set;
@@ -256,96 +331,7 @@ static void ComputeSecondSets(vector<reference<Matcher>> &matchers) {
 			break;
 		}
 	}
-	bool changed = true;
-	while (changed) {
-		changed = false;
-		for (auto &entry : matchers) {
-			auto &matcher = entry.get();
-			if (!IsComposite(matcher)) {
-				continue;
-			}
-			auto &target = matcher.first_set;
-			switch (matcher.Type()) {
-			case MatcherType::LIST: {
-				bool nullable = true;
-				bool one = false;
-				bool multi = false;
-				bool ident_one = false;
-				bool ident_multi = false;
-				for (auto &child_ref : matcher.Cast<ListMatcher>().matchers) {
-					auto &child = child_ref.get().first_set;
-					// after a one-token prefix, the first token of the next element is the second token
-					if (one) {
-						changed |= MergeIntoSecond(target, child);
-					}
-					if (ident_one) {
-						changed |= MergeIntoIdentSecond(target, child);
-					}
-					if (nullable) {
-						changed |= MergeSecond(target, child);
-						changed |= MergeIdentSecond(target, child);
-					}
-					bool new_one = (one && child.nullable) || (nullable && child.can_one);
-					bool new_multi =
-					    multi || (one && (child.can_one || child.can_multi)) || (nullable && child.can_multi);
-					bool new_ident_one = (ident_one && child.nullable) || (nullable && child.ident_can_one);
-					bool new_ident_multi = ident_multi || (ident_one && (child.can_one || child.can_multi)) ||
-					                       (nullable && child.ident_can_multi);
-					nullable = nullable && child.nullable;
-					one = new_one;
-					multi = new_multi;
-					ident_one = new_ident_one;
-					ident_multi = new_ident_multi;
-				}
-				changed |= SetFlag(target.can_one, one);
-				changed |= SetFlag(target.can_multi, multi);
-				changed |= SetFlag(target.ident_can_one, ident_one);
-				changed |= SetFlag(target.ident_can_multi, ident_multi);
-				break;
-			}
-			case MatcherType::CHOICE:
-				for (auto &child_ref : matcher.Cast<ChoiceMatcher>().matchers) {
-					auto &child = child_ref.get().first_set;
-					changed |= MergeSecond(target, child);
-					changed |= SetFlag(target.can_one, child.can_one);
-					changed |= SetFlag(target.can_multi, child.can_multi);
-					changed |= MergeIdentSecond(target, child);
-					changed |= SetFlag(target.ident_can_one, child.ident_can_one);
-					changed |= SetFlag(target.ident_can_multi, child.ident_can_multi);
-				}
-				break;
-			case MatcherType::OPTIONAL: {
-				auto &child = matcher.Cast<OptionalMatcher>().GetChildMatcher().first_set;
-				changed |= MergeSecond(target, child);
-				changed |= SetFlag(target.can_one, child.can_one);
-				changed |= SetFlag(target.can_multi, child.can_multi);
-				changed |= MergeIdentSecond(target, child);
-				changed |= SetFlag(target.ident_can_one, child.ident_can_one);
-				changed |= SetFlag(target.ident_can_multi, child.ident_can_multi);
-				break;
-			}
-			case MatcherType::REPEAT: {
-				auto &child = matcher.Cast<RepeatMatcher>().GetChildMatcher().first_set;
-				changed |= MergeSecond(target, child);
-				if (child.can_one) {
-					// a one-token repetition followed by another repetition
-					changed |= MergeIntoSecond(target, child);
-				}
-				changed |= SetFlag(target.can_one, child.can_one);
-				changed |= SetFlag(target.can_multi, child.can_multi || child.can_one);
-				changed |= MergeIdentSecond(target, child);
-				if (child.ident_can_one) {
-					changed |= MergeIntoIdentSecond(target, child);
-				}
-				changed |= SetFlag(target.ident_can_one, child.ident_can_one);
-				changed |= SetFlag(target.ident_can_multi, child.ident_can_multi || child.ident_can_one);
-				break;
-			}
-			default:
-				break;
-			}
-		}
-	}
+	ComputeFixedPoint(composites, parent_offsets, parents, UpdateSecondSet);
 	for (auto &entry : matchers) {
 		auto &first = entry.get().first_set;
 		first.use_second = !first.nullable && !first.any && !first.can_one && !first.second_any;
@@ -353,14 +339,15 @@ static void ComputeSecondSets(vector<reference<Matcher>> &matchers) {
 	}
 }
 
-void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table) {
+unsafe_unique_array<uint64_t> ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table) {
 	// collect the reachable matchers, children before their parents (except for recursive references)
+	// compute_index marks the matchers that were already seen
+	static constexpr idx_t SEEN = DConstants::INVALID_INDEX - 1;
 	vector<reference<Matcher>> matchers;
 	vector<reference<Matcher>> composites;
-	reference_set_t<Matcher> seen;
 	vector<FirstSetTraversalEntry> pending;
 	pending.emplace_back(root);
-	seen.insert(root);
+	root.first_set.compute_index = SEEN;
 	while (!pending.empty()) {
 		auto &entry = pending.back();
 		auto &matcher = entry.matcher.get();
@@ -372,16 +359,31 @@ void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table) {
 		entry.expanded = true;
 		// entry is invalidated by the pushes below
 		ForEachChild(matcher, [&](Matcher &child) {
-			if (seen.insert(child).second) {
+			if (child.first_set.compute_index == DConstants::INVALID_INDEX) {
+				child.first_set.compute_index = SEEN;
 				pending.emplace_back(child);
 			}
 		});
 	}
-	for (auto &entry : matchers) {
-		auto &matcher = entry.get();
+	// one literal bitset per matcher, and the second-token bitsets of the matchers that keep them
+	auto words = table.LiteralCount() / 64 + 1;
+	idx_t lookahead_count = 0;
+	for (auto &matcher : matchers) {
+		lookahead_count += matcher.get().HasSecondTokenLookahead();
+	}
+	auto storage = make_unsafe_uniq_array<uint64_t>((matchers.size() + 2 * lookahead_count) * words);
+	// the second-token bitsets of every matcher, while the sets are computed
+	auto second_storage = make_unsafe_uniq_array<uint64_t>(2 * matchers.size() * words);
+	for (idx_t i = 0; i < matchers.size(); i++) {
+		auto &matcher = matchers[i].get();
 		auto &first = matcher.first_set;
 		first = MatcherFirstSet();
 		first.table = &table;
+		first.compute_index = i;
+		first.literal_words = words;
+		first.literals = storage.get() + i * words;
+		first.second_literals = second_storage.get() + 2 * i * words;
+		first.ident_second_literals = first.second_literals + words;
 		if (IsComposite(matcher)) {
 			composites.push_back(matcher);
 		} else if (matcher.IsAtomic()) {
@@ -391,19 +393,55 @@ void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table) {
 			first.any = true;
 		}
 	}
+	// the composite parents of every composite matcher, to revisit them when it changes: the parents of composite i
+	// are parents[parent_offsets[i]] up to parents[parent_offsets[i + 1]]
+	vector<idx_t> composite_of(matchers.size(), DConstants::INVALID_INDEX);
+	for (idx_t i = 0; i < composites.size(); i++) {
+		composite_of[composites[i].get().first_set.compute_index] = i;
+	}
+	vector<idx_t> parent_offsets(composites.size() + 1, 0);
+	for (idx_t i = 0; i < composites.size(); i++) {
+		ForEachChild(composites[i].get(), [&](Matcher &child) {
+			auto child_index = composite_of[child.first_set.compute_index];
+			if (child_index != DConstants::INVALID_INDEX) {
+				parent_offsets[child_index + 1]++;
+			}
+		});
+	}
+	for (idx_t i = 0; i < composites.size(); i++) {
+		parent_offsets[i + 1] += parent_offsets[i];
+	}
+	vector<idx_t> parents(parent_offsets.back());
+	vector<idx_t> parent_fill(parent_offsets.begin(), parent_offsets.end() - 1);
+	for (idx_t i = 0; i < composites.size(); i++) {
+		ForEachChild(composites[i].get(), [&](Matcher &child) {
+			auto child_index = composite_of[child.first_set.compute_index];
+			if (child_index != DConstants::INVALID_INDEX) {
+				parents[parent_fill[child_index]++] = i;
+			}
+		});
+	}
 	// composite matchers: least fixed point, the grammar is recursive
-	// children are visited before their parents, so only recursive references need another pass
-	bool changed = true;
-	while (changed) {
-		changed = false;
-		for (auto &matcher : composites) {
-			changed |= UpdateFirstSet(matcher.get());
-		}
-	}
-	ComputeSecondSets(matchers);
+	ComputeFixedPoint(composites, parent_offsets, parents, UpdateFirstSet);
+	ComputeSecondSets(matchers, composites, parent_offsets, parents);
+	auto lookahead_literals = storage.get() + matchers.size() * words;
 	for (auto &entry : matchers) {
-		entry.get().first_set.computed = true;
+		auto &matcher = entry.get();
+		auto &first = matcher.first_set;
+		first.computed = true;
+		first.compute_index = DConstants::INVALID_INDEX;
+		if (!matcher.HasSecondTokenLookahead()) {
+			first.second_literals = nullptr;
+			first.ident_second_literals = nullptr;
+			first.use_second = first.use_ident_second = false;
+			continue;
+		}
+		memcpy(lookahead_literals, first.second_literals, 2 * words * sizeof(uint64_t));
+		first.second_literals = lookahead_literals;
+		first.ident_second_literals = lookahead_literals + words;
+		lookahead_literals += 2 * words;
 	}
+	return storage;
 }
 
 bool MatcherFirstSet::MightMatch(MatchState &state) const {
@@ -421,27 +459,15 @@ bool MatcherFirstSet::MightMatch(MatchState &state) const {
 	return literal_id && HasLiteral(literal_id);
 }
 
-//! A word or a double-quoted identifier, consumed by every identifier matcher when it is not a keyword
-static bool IsPlainIdentifierToken(const string &text) {
-	if (text.empty()) {
-		return false;
-	}
-	auto c = static_cast<unsigned char>(text[0]);
-	if (c == '"') {
-		return text.size() > 1 && text.back() == '"';
-	}
-	return isalpha(c) || c == '_';
-}
-
 //! Whether a token is in a token set given by its class mask and literal bitset
-static bool InTokenSet(const MatcherToken &token, LiteralInfo literal, uint8_t class_mask,
-                       const vector<uint64_t> &literals) {
+static bool InTokenSet(const MatcherToken &token, LiteralInfo literal, uint8_t class_mask, const uint64_t *literals,
+                       idx_t words) {
 	if (token.token_class & class_mask) {
 		return true;
 	}
 	auto literal_id = literal.LiteralId();
 	auto word = literal_id / 64;
-	return literal_id && word < literals.size() && (literals[word] >> (literal_id % 64)) & 1;
+	return literal_id && word < words && (literals[word] >> (literal_id % 64)) & 1;
 }
 
 bool MatcherFirstSet::MightMatchSecond(MatchState &state) const {
@@ -461,7 +487,8 @@ bool MatcherFirstSet::MightMatchSecond(MatchState &state) const {
 		// consumed by a keyword matcher for exactly this literal
 	} else if (token->token_class & exact_class_mask) {
 		// consumed by an operator matcher that accepts its whole class
-	} else if (!literal_id && (class_mask & MatcherTokenClass::WORD) && IsPlainIdentifierToken(token->text)) {
+	} else if (!literal_id && (class_mask & MatcherTokenClass::WORD) &&
+	           IdentifierMatcher::IsIdentifierToken(token->text)) {
 		identifier = true;
 	} else {
 		return true;
@@ -472,8 +499,9 @@ bool MatcherFirstSet::MightMatchSecond(MatchState &state) const {
 	auto next = state.token_iterator.Next();
 	if (next) {
 		auto next_literal = state.token_iterator.NextLiteralInfo(*table);
-		bool fits = identifier ? InTokenSet(*next, next_literal, ident_second_class_mask, ident_second_literals)
-		                       : InTokenSet(*next, next_literal, second_class_mask, second_literals);
+		bool fits = identifier
+		                ? InTokenSet(*next, next_literal, ident_second_class_mask, ident_second_literals, literal_words)
+		                : InTokenSet(*next, next_literal, second_class_mask, second_literals, literal_words);
 		if (fits) {
 			return true;
 		}

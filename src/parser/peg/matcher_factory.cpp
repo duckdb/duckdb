@@ -244,7 +244,6 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	AddSecondTokenLookaheadRule("TableFunction");
 	AddSecondTokenLookaheadRule("AnyAllParsedOperator");
 	AddSecondTokenLookaheadRule("NamedOtherOperator");
-	AddSecondTokenLookaheadRule("OperatorLiteral");
 	AddSecondTokenLookaheadRule("ColIdExpression");
 	AddSecondTokenLookaheadRule("NamedFunctionArgument");
 	AddSecondTokenLookaheadRule("CatalogReservedSchemaTypeName");

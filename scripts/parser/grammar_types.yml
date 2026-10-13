@@ -1909,7 +1909,6 @@ second_token_lookahead_rules:
   - TableFunction
   - AnyAllParsedOperator
   - NamedOtherOperator
-  - OperatorLiteral
   - ColIdExpression
   - NamedFunctionArgument
   - CatalogReservedSchemaTypeName

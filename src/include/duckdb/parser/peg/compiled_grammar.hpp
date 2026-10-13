@@ -56,6 +56,8 @@ private:
 	const Matcher &top_level_statement_matcher;
 	//! Rules pushed by generated code, resolved once (see PEGTransformerFactory::TrampolineRuleNames)
 	vector<optional_ptr<const CompiledGrammarRule>> trampoline_rules;
+	//! The literal bitsets of the matchers' first sets
+	unsafe_unique_array<uint64_t> first_set_storage;
 };
 
 //! Per-database holder for the compiled base grammar.

@@ -277,13 +277,17 @@ struct MatcherFirstSet {
 	uint8_t class_mask = 0;
 	//! classes whose every token is consumed by a matcher this one can start with
 	uint8_t exact_class_mask = 0;
-	//! bitset over grammar literal ids (keywords and symbols)
-	vector<uint64_t> literals;
+	//! bitset over grammar literal ids (keywords and symbols), literal_words words in the storage returned by
+	//! ComputeFirstSets
+	uint64_t *literals = nullptr;
+	idx_t literal_words = 0;
 	optional_ptr<const GrammarLiteralTable> table;
+	//! The position of the matcher among the reachable matchers, while the sets are computed
+	idx_t compute_index = DConstants::INVALID_INDEX;
 
 	bool HasLiteral(idx_t literal_id) const {
 		auto word = literal_id / 64;
-		return word < literals.size() && (literals[word] >> (literal_id % 64)) & 1;
+		return word < literal_words && (literals[word] >> (literal_id % 64)) & 1;
 	}
 	DUCKDB_API void AddLiteral(idx_t literal_id);
 	//! Merge other into this set, returns whether anything changed
@@ -297,9 +301,10 @@ struct MatcherFirstSet {
 	bool can_multi = false;
 	//! no information about the second token
 	bool second_any = false;
-	//! MatcherTokenClass bits and grammar literal ids that can be the second token consumed
+	//! MatcherTokenClass bits and grammar literal ids that can be the second token consumed; the literals are only
+	//! kept for matchers with Matcher::HasSecondTokenLookahead
 	uint8_t second_class_mask = 0;
-	vector<uint64_t> second_literals;
+	uint64_t *second_literals = nullptr;
 	//! the matcher always consumes at least two tokens and its second-token set is informative
 	bool use_second = false;
 	//! the same, restricted to matches whose first token is consumed by an identifier matcher
@@ -307,13 +312,9 @@ struct MatcherFirstSet {
 	bool ident_can_multi = false;
 	bool ident_second_any = false;
 	uint8_t ident_second_class_mask = 0;
-	vector<uint64_t> ident_second_literals;
+	uint64_t *ident_second_literals = nullptr;
 	bool use_ident_second = false;
 
-	bool HasSecondLiteral(idx_t literal_id) const {
-		auto word = literal_id / 64;
-		return word < second_literals.size() && (second_literals[word] >> (literal_id % 64)) & 1;
-	}
 	//! False only if a match certainly fails at the next token; the skipped attempt's furthest position is kept
 	DUCKDB_API bool MightMatchSecond(MatchState &state) const;
 };
@@ -421,8 +422,8 @@ protected:
 	optional_ptr<const CompiledGrammarRule> rule;
 };
 
-//! Compute the FIRST sets of all matchers reachable from root
-DUCKDB_API void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table);
+//! Compute the FIRST sets of all matchers reachable from root; the returned storage holds their literal bitsets
+DUCKDB_API unsafe_unique_array<uint64_t> ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table);
 
 class AtomicMatcher : public Matcher {
 public:
