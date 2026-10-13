@@ -1,0 +1,33 @@
+# name: test/sql/aggregate/group/group_by_operator_memory_limit_no_temp_directory.test
+# description: A small GROUP BY over an operator memory limit that the hash table cannot meet, with nowhere to spill
+# group: [group]
+
+statement ok
+PRAGMA memory_limit='100MB'
+
+statement ok
+PRAGMA temp_directory=''
+
+statement ok
+SET operator_memory_limit='1MB'
+
+foreach threads 1 2 3 4 8
+
+statement ok
+SET threads={threads}
+
+query II
+SELECT i % 10 AS g, count(*) FROM range(1000000) t(i) GROUP BY 1 ORDER BY 1
+----
+0	100000
+1	100000
+2	100000
+3	100000
+4	100000
+5	100000
+6	100000
+7	100000
+8	100000
+9	100000
+
+endloop

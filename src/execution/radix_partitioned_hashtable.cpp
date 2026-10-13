@@ -204,6 +204,10 @@ void RadixHTConfig::SetRadixBits(const idx_t &radix_bits_p) {
 }
 
 bool RadixHTConfig::SetRadixBitsToExternal() {
+	// without a temporary directory the spilled data cannot leave memory, so spilling would only add to it
+	if (!BufferManager::GetBufferManager(sink.context).HasTemporaryDirectory()) {
+		return sink.external;
+	}
 	SetRadixBitsInternal(ExternalRadixBits(true), true);
 	return sink.external;
 }
