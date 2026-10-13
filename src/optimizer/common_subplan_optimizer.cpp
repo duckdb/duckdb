@@ -841,6 +841,13 @@ public:
 			bool bail = false;
 
 			for (auto &subplan : subplan_info.subplans) {
+				unordered_map<TableIndex, TableIndex> canonical_to_original;
+				if (HasRepeatedCanonicalTableIndex(*subplan.op.get(), canonical_to_original)) {
+					// Subplan reads the same canonical table more than once (e.g., a self-join): the canonical
+					// bindings cannot tell those reads apart, so they cannot be mapped between duplicate subplans
+					bail = true;
+					break;
+				}
 				column_binding_set_t subplan_bindings;
 				for (auto &cb : subplan.canonical_bindings) {
 					if (subplan_bindings.find(cb) != subplan_bindings.end()) {
@@ -1167,6 +1174,26 @@ private:
 
 	arena_vector<ColumnBinding> GetExpandedCanonicalBindings(LogicalOperator &op) {
 		return GetCanonicalBindings(GetExpandedColumnBindings(op));
+	}
+
+	bool HasRepeatedCanonicalTableIndex(LogicalOperator &op,
+	                                    unordered_map<TableIndex, TableIndex> &canonical_to_original) const {
+		for (auto &table_index : op.GetTableIndex()) {
+			auto entry = to_canonical_table_index.find(table_index);
+			if (entry == to_canonical_table_index.end()) {
+				continue;
+			}
+			auto inserted = canonical_to_original.emplace(entry->second, table_index);
+			if (!inserted.second && inserted.first->second != table_index) {
+				return true;
+			}
+		}
+		for (auto &child : op.children) {
+			if (HasRepeatedCanonicalTableIndex(*child, canonical_to_original)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	//! Moves a subplan that can expose every binding required by the duplicate occurrences to the front

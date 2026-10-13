@@ -1,0 +1,33 @@
+# name: test/sql/optimizer/test_common_subplan_self_join.test
+# description: Common subplans that read the same table more than once are not merged
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO t VALUES (0, 0), (1, 1), (2, 0);
+
+statement ok
+CREATE TABLE u(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO u VALUES (0, 1), (1, 0);
+
+query II
+SELECT count(*), sum(x11.a) FROM u x0, u x1, t x2, t x3, u x4, u x5, t x6, u x7, u x8, t x9, u x10, t x11 WHERE x1.a = x0.b AND x2.b = x0.b AND x3.b = x0.b AND x4.a = x0.b AND x5.a = x0.b AND x6.a = x0.b AND x7.b = x0.b AND x8.a = x0.b AND x9.b = x0.b AND x10.b = x0.b AND x11.a = x0.a;
+----
+9	8
+
+statement ok
+SET approximate_join_order_threshold=2
+
+query II
+SELECT count(*), sum(x8.a) FROM u x0, t x1, u x2, t x3, u x4, t x5, u x6, t x7, u x8 WHERE x1.b = x0.b AND x2.b = x0.a AND x3.b = x0.b AND x4.a = x0.b AND x5.b = x0.a AND x6.b = x0.b AND x7.a = x0.a AND x8.a = x0.b;
+----
+6	2
+
+query II
+SELECT count(*), sum(x9.a) FROM u x0, u x1, t x2, t x3, t x4, u x5, t x6, u x7, u x8, u x9 WHERE x1.b = x0.a AND x2.a = x0.a AND x3.a = x0.b AND x4.b = x0.b AND x5.a = x0.b AND x6.b = x0.b AND x7.b = x0.b AND x8.b = x0.a AND x9.a = x0.a;
+----
+5	4
