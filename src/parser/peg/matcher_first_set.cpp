@@ -180,85 +180,73 @@ static bool SetFlag(bool &flag, bool value) {
 	return false;
 }
 
-//! Recomputes the second-token sets of a composite matcher from its children, returns whether anything changed
-static bool UpdateSecondSet(Matcher &matcher) {
+//! Tracks, along a sequence, whether the elements so far can match nothing, exactly one token, or two or more tokens
+//! (also restricted to matches whose first token is consumed by an identifier matcher)
+struct SequencePrefix {
+	bool nullable = true;
+	bool one = false;
+	bool multi = false;
+	bool ident_one = false;
+	bool ident_multi = false;
+
+	void Append(const MatcherFirstSet &child) {
+		bool new_one = (one && child.nullable) || (nullable && child.can_one);
+		bool new_multi = multi || (one && (child.can_one || child.can_multi)) || (nullable && child.can_multi);
+		bool new_ident_one = (ident_one && child.nullable) || (nullable && child.ident_can_one);
+		bool new_ident_multi =
+		    ident_multi || (ident_one && (child.can_one || child.can_multi)) || (nullable && child.ident_can_multi);
+		nullable = nullable && child.nullable;
+		one = new_one;
+		multi = new_multi;
+		ident_one = new_ident_one;
+		ident_multi = new_ident_multi;
+	}
+	//! every match consumed two tokens before the next element: later elements cannot contribute anything
+	bool Done() const {
+		return !nullable && !one && !ident_one;
+	}
+};
+
+//! Recomputes how many tokens a composite matcher can consume from its children, returns whether anything changed
+static bool UpdateTokenCountFlags(Matcher &matcher) {
 	bool changed = false;
 	auto &target = matcher.first_set;
 	switch (matcher.Type()) {
 	case MatcherType::LIST: {
-		bool nullable = true;
-		bool one = false;
-		bool multi = false;
-		bool ident_one = false;
-		bool ident_multi = false;
+		SequencePrefix prefix;
 		for (auto &child_ref : matcher.Cast<ListMatcher>().matchers) {
-			auto &child = child_ref.get().first_set;
-			// after a one-token prefix, the first token of the next element is the second token
-			if (one) {
-				changed |= MergeIntoSecond(target, child);
-			}
-			if (ident_one) {
-				changed |= MergeIntoIdentSecond(target, child);
-			}
-			if (nullable) {
-				changed |= MergeSecond(target, child);
-				changed |= MergeIdentSecond(target, child);
-			}
-			bool new_one = (one && child.nullable) || (nullable && child.can_one);
-			bool new_multi = multi || (one && (child.can_one || child.can_multi)) || (nullable && child.can_multi);
-			bool new_ident_one = (ident_one && child.nullable) || (nullable && child.ident_can_one);
-			bool new_ident_multi =
-			    ident_multi || (ident_one && (child.can_one || child.can_multi)) || (nullable && child.ident_can_multi);
-			nullable = nullable && child.nullable;
-			one = new_one;
-			multi = new_multi;
-			ident_one = new_ident_one;
-			ident_multi = new_ident_multi;
-			if (!nullable && !one && !ident_one) {
-				// every match consumed two tokens before the next element: it cannot contribute anything
+			prefix.Append(child_ref.get().first_set);
+			if (prefix.Done()) {
 				break;
 			}
 		}
-		changed |= SetFlag(target.can_one, one);
-		changed |= SetFlag(target.can_multi, multi);
-		changed |= SetFlag(target.ident_can_one, ident_one);
-		changed |= SetFlag(target.ident_can_multi, ident_multi);
+		changed |= SetFlag(target.can_one, prefix.one);
+		changed |= SetFlag(target.can_multi, prefix.multi);
+		changed |= SetFlag(target.ident_can_one, prefix.ident_one);
+		changed |= SetFlag(target.ident_can_multi, prefix.ident_multi);
 		break;
 	}
 	case MatcherType::CHOICE:
 		for (auto &child_ref : matcher.Cast<ChoiceMatcher>().matchers) {
 			auto &child = child_ref.get().first_set;
-			changed |= MergeSecond(target, child);
 			changed |= SetFlag(target.can_one, child.can_one);
 			changed |= SetFlag(target.can_multi, child.can_multi);
-			changed |= MergeIdentSecond(target, child);
 			changed |= SetFlag(target.ident_can_one, child.ident_can_one);
 			changed |= SetFlag(target.ident_can_multi, child.ident_can_multi);
 		}
 		break;
 	case MatcherType::OPTIONAL: {
 		auto &child = matcher.Cast<OptionalMatcher>().GetChildMatcher().first_set;
-		changed |= MergeSecond(target, child);
 		changed |= SetFlag(target.can_one, child.can_one);
 		changed |= SetFlag(target.can_multi, child.can_multi);
-		changed |= MergeIdentSecond(target, child);
 		changed |= SetFlag(target.ident_can_one, child.ident_can_one);
 		changed |= SetFlag(target.ident_can_multi, child.ident_can_multi);
 		break;
 	}
 	case MatcherType::REPEAT: {
 		auto &child = matcher.Cast<RepeatMatcher>().GetChildMatcher().first_set;
-		changed |= MergeSecond(target, child);
-		if (child.can_one) {
-			// a one-token repetition followed by another repetition
-			changed |= MergeIntoSecond(target, child);
-		}
 		changed |= SetFlag(target.can_one, child.can_one);
 		changed |= SetFlag(target.can_multi, child.can_multi || child.can_one);
-		changed |= MergeIdentSecond(target, child);
-		if (child.ident_can_one) {
-			changed |= MergeIntoIdentSecond(target, child);
-		}
 		changed |= SetFlag(target.ident_can_one, child.ident_can_one);
 		changed |= SetFlag(target.ident_can_multi, child.ident_can_multi || child.ident_can_one);
 		break;
@@ -269,16 +257,95 @@ static bool UpdateSecondSet(Matcher &matcher) {
 	return changed;
 }
 
-//! Least fixed point of update over the composite matchers, given children before their parents: a matcher is only
-//! revisited when one of its children changed, which happens through recursive references
+//! Calls fun(child) for every child whose second-token set the second-token set of a composite matcher reads: the
+//! elements of a sequence up to the first one that cannot match nothing (later ones only contribute FIRST sets)
+template <class FUN>
+static void ForEachSecondSetChild(Matcher &matcher, FUN &&fun) {
+	if (matcher.Type() != MatcherType::LIST) {
+		ForEachChild(matcher, fun);
+		return;
+	}
+	for (auto &child : matcher.Cast<ListMatcher>().matchers) {
+		fun(child.get());
+		if (!child.get().first_set.nullable) {
+			break;
+		}
+	}
+}
+
+//! Recomputes the second-token sets of a composite matcher from its children, given the final token count flags;
+//! returns whether anything changed
+static bool UpdateSecondSet(Matcher &matcher) {
+	bool changed = false;
+	auto &target = matcher.first_set;
+	switch (matcher.Type()) {
+	case MatcherType::LIST: {
+		SequencePrefix prefix;
+		for (auto &child_ref : matcher.Cast<ListMatcher>().matchers) {
+			auto &child = child_ref.get().first_set;
+			// after a one-token prefix, the first token of the next element is the second token
+			if (prefix.one) {
+				changed |= MergeIntoSecond(target, child);
+			}
+			if (prefix.ident_one) {
+				changed |= MergeIntoIdentSecond(target, child);
+			}
+			if (prefix.nullable) {
+				changed |= MergeSecond(target, child);
+				changed |= MergeIdentSecond(target, child);
+			}
+			prefix.Append(child);
+			if (prefix.Done()) {
+				break;
+			}
+		}
+		break;
+	}
+	case MatcherType::CHOICE:
+		for (auto &child_ref : matcher.Cast<ChoiceMatcher>().matchers) {
+			auto &child = child_ref.get().first_set;
+			changed |= MergeSecond(target, child);
+			changed |= MergeIdentSecond(target, child);
+		}
+		break;
+	case MatcherType::OPTIONAL: {
+		auto &child = matcher.Cast<OptionalMatcher>().GetChildMatcher().first_set;
+		changed |= MergeSecond(target, child);
+		changed |= MergeIdentSecond(target, child);
+		break;
+	}
+	case MatcherType::REPEAT: {
+		auto &child = matcher.Cast<RepeatMatcher>().GetChildMatcher().first_set;
+		changed |= MergeSecond(target, child);
+		if (child.can_one) {
+			// a one-token repetition followed by another repetition
+			changed |= MergeIntoSecond(target, child);
+		}
+		changed |= MergeIdentSecond(target, child);
+		if (child.ident_can_one) {
+			changed |= MergeIntoIdentSecond(target, child);
+		}
+		break;
+	}
+	default:
+		break;
+	}
+	return changed;
+}
+
+//! Least fixed point of update over the active composite matchers, given children before their parents: a matcher is
+//! only revisited when one of its children changed, which happens through recursive references
 template <class FUN>
 static void ComputeFixedPoint(const vector<reference<Matcher>> &composites, const vector<idx_t> &parent_offsets,
-                              const vector<idx_t> &parents, FUN &&update) {
+                              const vector<idx_t> &parents, const vector<bool> &active, FUN &&update) {
+	// inactive matchers are never queued
 	vector<bool> queued(composites.size(), true);
 	vector<idx_t> queue;
 	queue.reserve(composites.size());
 	for (idx_t i = 0; i < composites.size(); i++) {
-		queue.push_back(i);
+		if (active[i]) {
+			queue.push_back(i);
+		}
 	}
 	for (idx_t head = 0; head < queue.size(); head++) {
 		auto index = queue[head];
@@ -288,7 +355,7 @@ static void ComputeFixedPoint(const vector<reference<Matcher>> &composites, cons
 		}
 		for (auto p = parent_offsets[index]; p < parent_offsets[index + 1]; p++) {
 			auto parent = parents[p];
-			if (!queued[parent]) {
+			if (active[parent] && !queued[parent]) {
 				queued[parent] = true;
 				queue.push_back(parent);
 			}
@@ -296,7 +363,9 @@ static void ComputeFixedPoint(const vector<reference<Matcher>> &composites, cons
 	}
 }
 
-//! Least fixed point over the grammar; a superset of the tokens any atomic matcher can consume second on any path
+//! Least fixed point over the grammar; a superset of the tokens any atomic matcher can consume second on any path.
+//! The token count flags are computed for every matcher, the second-token sets only for the matchers whose sets the
+//! matchers with lookahead read.
 static void ComputeSecondSets(vector<reference<Matcher>> &matchers, const vector<reference<Matcher>> &composites,
                               const vector<idx_t> &parent_offsets, const vector<idx_t> &parents) {
 	for (auto &entry : matchers) {
@@ -331,7 +400,34 @@ static void ComputeSecondSets(vector<reference<Matcher>> &matchers, const vector
 			break;
 		}
 	}
-	ComputeFixedPoint(composites, parent_offsets, parents, UpdateSecondSet);
+	ComputeFixedPoint(composites, parent_offsets, parents, vector<bool>(composites.size(), true),
+	                  UpdateTokenCountFlags);
+
+	// the matchers whose second-token sets are read, starting from the matchers with lookahead
+	vector<bool> needed(matchers.size(), false);
+	vector<reference<Matcher>> pending;
+	for (idx_t i = 0; i < matchers.size(); i++) {
+		if (matchers[i].get().HasSecondTokenLookahead()) {
+			needed[i] = true;
+			pending.push_back(matchers[i]);
+		}
+	}
+	while (!pending.empty()) {
+		auto &matcher = pending.back().get();
+		pending.pop_back();
+		ForEachSecondSetChild(matcher, [&](Matcher &child) {
+			auto child_index = child.first_set.compute_index;
+			if (!needed[child_index]) {
+				needed[child_index] = true;
+				pending.push_back(child);
+			}
+		});
+	}
+	vector<bool> active(composites.size());
+	for (idx_t i = 0; i < composites.size(); i++) {
+		active[i] = needed[composites[i].get().first_set.compute_index];
+	}
+	ComputeFixedPoint(composites, parent_offsets, parents, active, UpdateSecondSet);
 	for (auto &entry : matchers) {
 		auto &first = entry.get().first_set;
 		first.use_second = !first.nullable && !first.any && !first.can_one && !first.second_any;
@@ -422,7 +518,7 @@ unsafe_unique_array<uint64_t> ComputeFirstSets(Matcher &root, const GrammarLiter
 		});
 	}
 	// composite matchers: least fixed point, the grammar is recursive
-	ComputeFixedPoint(composites, parent_offsets, parents, UpdateFirstSet);
+	ComputeFixedPoint(composites, parent_offsets, parents, vector<bool>(composites.size(), true), UpdateFirstSet);
 	ComputeSecondSets(matchers, composites, parent_offsets, parents);
 	auto lookahead_literals = storage.get() + matchers.size() * words;
 	for (auto &entry : matchers) {
