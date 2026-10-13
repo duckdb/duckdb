@@ -536,10 +536,13 @@ TEST_CASE("An explicit outcome is settled once", "[http]") {
 	// Deciding or reporting an outcome is the coordinator's: a status-owned budget refuses it
 	HTTPRetryBudget status_owned(params);
 	status_owned.BindQuota(quota);
+#ifndef DUCKDB_CRASH_ON_ASSERT
+	// an InternalException aborts the process when DUCKDB_CRASH_ON_ASSERT is set
 	REQUIRE_THROWS_AS(status_owned.ReportSuccess(), InternalException);
 	REQUIRE_THROWS_AS(status_owned.ReportFailure(), InternalException);
 	REQUIRE_THROWS_AS(status_owned.Run([&]() { return HTTPRetryDecision::Success(); }), InternalException);
 	REQUIRE_THROWS_AS(status_owned.Run([&]() { return HTTPRetryDecision::Failure(); }), InternalException);
+#endif
 	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
 }
 
@@ -627,7 +630,10 @@ TEST_CASE("A coordinator that validates after its loop owns the settlement", "[h
 	HTTPRetryBudget status_owned(params);
 	REQUIRE(run_loop(status_owned, server_error_then_invalid_part) == 2);
 	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
+#ifndef DUCKDB_CRASH_ON_ASSERT
+	// an InternalException aborts the process when DUCKDB_CRASH_ON_ASSERT is set
 	REQUIRE_THROWS_AS(status_owned.ReportFailure(), InternalException);
+#endif
 }
 
 TEST_CASE("Corrected re-sends are bounded and stay within the advertised attempt bound", "[http]") {
