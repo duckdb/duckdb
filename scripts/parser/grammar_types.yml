@@ -1255,6 +1255,8 @@ ColumnConstraintEntry:
   by_value: true
   rules:
     - ColumnConstraint
+    - NameableColumnConstraint
+    - ColumnConstraintElement
     - NotNullConstraint
     - UniqueConstraint
     - PrimaryKeyConstraint
