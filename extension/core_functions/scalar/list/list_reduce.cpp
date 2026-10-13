@@ -339,6 +339,15 @@ void ListReduceRebindLambda(FunctionRebindLambdaInput &input) {
 	LogicalType accumulator_type;
 	if (has_initial) {
 		accumulator_type = ResolveReduceAccumulatorType(context, function_child_types[2], lambda_return_type);
+		if (accumulator_type == function_child_types[2]) {
+			// the lambda was already bound with the accumulator type - only its result can be narrower
+			auto &bound_lambda_expr = input.bound_lambda->Cast<BoundLambdaExpression>();
+			if (lambda_return_type != accumulator_type) {
+				bound_lambda_expr.LambdaExprMutable() = BoundCastExpression::AddCastToType(
+				    context, std::move(bound_lambda_expr.LambdaExprMutable()), accumulator_type);
+			}
+			return;
+		}
 	} else {
 		if (!LogicalType::TryGetMaxLogicalType(context, list_child_type, lambda_return_type, accumulator_type)) {
 			throw BinderException("No common super type between list element type %s and lambda return type %s",

@@ -24,3 +24,19 @@ SELECT reduce(l, lambda x, y: x + y, 100) FROM (VALUES ([1.5, 2.5]), ([0.5]), (N
 100.5
 104.0
 NULL
+
+# the lambda result is narrower than the initial value: no rebind, the result is cast to the accumulator type
+query II
+SELECT reduce([1, 2, 3], lambda x, y: y, 100::BIGINT), typeof(reduce([1, 2, 3], lambda x, y: y, 100::BIGINT));
+----
+3	BIGINT
+
+query II
+SELECT reduce([1, 2, 3], lambda x, y: x + y, 100::BIGINT), typeof(reduce([1, 2, 3], lambda x, y: x + y, 100::BIGINT));
+----
+106	BIGINT
+
+query I
+SELECT list_reduce([1, 2], lambda x, y: x || [y], []);
+----
+[1, 2]
