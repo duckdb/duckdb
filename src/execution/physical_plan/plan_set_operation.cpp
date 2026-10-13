@@ -63,7 +63,20 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 		}
 		auto &left = children[0];
 		auto &right = children[1];
-		auto &types = left.get().GetTypes();
+		// a collation of either side applies to the comparison (as it does for UNION). The types only differ in their
+		// collations here, but a collation can be missing from a child (e.g. when the projection applying a COLLATE
+		// was removed) or from the operator (it takes the types of the left child) - so combine all of them
+		auto &left_types = left.get().GetTypes();
+		auto &right_types = right.get().GetTypes();
+		vector<LogicalType> types;
+		for (idx_t i = 0; i < left_types.size(); i++) {
+			auto type = LogicalType::ForceMaxLogicalType(context, left_types[i], right_types[i]);
+			// the operator types can be outdated (e.g. compressed children), only take a collation from them
+			if (i < op.types.size() && op.types[i].id() == type.id()) {
+				type = LogicalType::ForceMaxLogicalType(context, op.types[i], type);
+			}
+			types.push_back(std::move(type));
+		}
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns
 		for (idx_t i = 0; i < types.size(); i++) {
