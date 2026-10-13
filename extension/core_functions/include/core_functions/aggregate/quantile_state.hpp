@@ -42,7 +42,8 @@ struct FlattenedQuantileValues : FunctionLocalState {
 			// (re-)allocate the cached chunk
 			values.capacity = NextPowerOfTwo(required_capacity);
 			values.chunk.Destroy();
-			values.chunk.Initialize(Allocator::DefaultAllocator(), {type}, values.capacity);
+			// the flattened group can be the whole input, so it is allocated through the (tracked) base allocator
+			values.chunk.Initialize(finalize_data.input.allocator.GetUnderlyingAllocator(), {type}, values.capacity);
 		} else {
 			// re-use the allocated chunk - resetting clears the string heap of the previously flattened state
 			values.chunk.Reset();

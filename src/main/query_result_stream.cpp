@@ -7,6 +7,14 @@
 
 namespace duckdb {
 
+bool StreamsByDefault(StatementType written_type, const StatementProperties &properties, bool reads_to_the_end) {
+	if (written_type != StatementType::SELECT_STATEMENT ||
+	    properties.return_type != StatementReturnType::QUERY_RESULT) {
+		return false;
+	}
+	return reads_to_the_end || properties.IsReadOnly();
+}
+
 ResultStreamBase::ResultStreamBase(unique_ptr<QueryResult> result, const char *expected_format)
     : handle(std::move(result)) {
 	if (!handle) {
@@ -15,11 +23,6 @@ ResultStreamBase::ResultStreamBase(unique_ptr<QueryResult> result, const char *e
 	if (handle->HasError()) {
 		throw InvalidInputException("Attempting to open a stream on an unsuccessful query result\nError: %s",
 		                            handle->GetError());
-	}
-	if (handle->GetStatementProperties().result_eagerness == ResultEagerness::FORCED) {
-		throw InvalidInputException(
-		    "Attempting to open a stream on a %s statement, which completes before its result is returned",
-		    StatementTypeToString(handle->GetStatementType()));
 	}
 	if (!handle->HasBufferedData()) {
 		throw InvalidInputException("Attempting to open a stream on a query result that has no streaming buffer");

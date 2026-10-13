@@ -49,7 +49,12 @@ static string TableReference(const string &input) {
 	if (IsFilePath(input)) {
 		return SQLString::ToString(input);
 	}
-	return QualifiedName::Parse(input).ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	QualifiedName qname;
+	string error;
+	if (!QualifiedName::TryParse(input, qname, error)) {
+		throw ParserException(error);
+	}
+	return qname.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 }
 
 static string UnionTablesQuery(TableFunctionBindInput &input) {
