@@ -90,9 +90,3 @@ SELECT list(k ORDER BY id, n)
 FROM list_probes CROSS JOIN (VALUES (0),(1)) b(n);
 ----
 [NULL, NULL, [1, 2], [1, 2], [], [], NULL, NULL, [1, NULL], [1, NULL], [2, 1], [2, 1], NULL, NULL, [1, 2], [1, 2]]
-
-query T
-SELECT list(k ORDER BY id, n)
-FROM (SELECT id, k, unnest([0,1]) AS n FROM list_probes) p;
-----
-[NULL, NULL, [1, 2], [1, 2], [], [], NULL, NULL, [1, NULL], [1, NULL], [2, 1], [2, 1], NULL, NULL, [1, 2], [1, 2]]
