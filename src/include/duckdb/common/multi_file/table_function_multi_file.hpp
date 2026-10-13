@@ -11,6 +11,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/once_flag.hpp"
 
 namespace duckdb {
 
@@ -319,8 +320,8 @@ private:
 	named_argument_map_t named_parameters;
 	//! How the wrapped function takes part in the scan
 	TableFunctionMultiFileSettings settings;
-	//! Guards the initialization of the global state below
-	mutex lock;
+	//! Initializes the global state once per file reader
+	OnceFlag initialize_once;
 	//! The global state of the wrapped function - shared by all threads scanning this file
 	unique_ptr<GlobalTableFunctionState> global_state;
 	//! The number of row groups to scan of this file that has been collected into the state of the scan
