@@ -277,13 +277,14 @@ void TableFunctionFileReader::SetScanState(GlobalTableFunctionState &gstate) {
 }
 
 void TableFunctionFileReader::InitializeFunctionState(ClientContext &context) {
-	lock_guard<mutex> guard(lock);
-	if (global_state || !function.init_global) {
-		return;
-	}
-	TableFunctionFileInitInput file_input;
-	auto init_input = GetInitInput(file_input);
-	global_state = function.init_global(context, init_input);
+	CallOnce(initialize_once, [&] {
+		if (!function.init_global) {
+			return;
+		}
+		TableFunctionFileInitInput file_input;
+		auto init_input = GetInitInput(file_input);
+		global_state = function.init_global(context, init_input);
+	});
 }
 
 void TableFunctionFileReader::PrepareReader(ClientContext &context, GlobalTableFunctionState &gstate) {
@@ -335,6 +336,16 @@ bool TableFunctionFileReader::TryInitializeScan(ClientContext &context, GlobalTa
 		return settings.claim_batch(context, input);
 	}
 	return true;
+}
+
+void TableFunctionFileReader::PrepareScan(ClientContext &context, GlobalTableFunctionState &,
+                                          LocalTableFunctionState &lstate_p) {
+	if (!settings.prepare_batch) {
+		return;
+	}
+	auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();
+	TableFunctionInput input(bind_data.get(), lstate.local_state.get(), global_state.get());
+	settings.prepare_batch(context, input);
 }
 
 AsyncResult TableFunctionFileReader::ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,

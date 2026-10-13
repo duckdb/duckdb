@@ -38,6 +38,9 @@ struct ResultWrapperV2 {
 	unique_ptr<QueryResult> handle;
 	//! Live while state == STREAMING, for a statement whose result can be streamed. A QueryResultStream in `format`.
 	unique_ptr<ResultStreamBase> stream;
+	//! Decided when the handle is adopted, since a prepared execution's handle reports the EXECUTE that runs it
+	//! rather than the statement as written
+	bool stream_when_ready = false;
 	//! Every fragment is submitted in this format; null is the chunk format.
 	shared_ptr<ResultFormat> format;
 
@@ -144,8 +147,9 @@ struct ResultWrapperV2 {
 
 	//! Adopts an already-submitted query into the state machine: the single seam both the
 	//! stateless (fragment) and prepared paths reach. When is_principal, captures its metadata and
-	//! surfaces its chunks. Throws on a submission error.
-	void BeginPending(unique_ptr<QueryResult> handle, bool is_principal);
+	//! surfaces its chunks. written_type is the type of the statement as written, since a prepared execution's
+	//! handle reports the EXECUTE that runs it. Throws on a submission error.
+	void BeginPending(unique_ptr<QueryResult> handle, bool is_principal, StatementType written_type);
 	//! Starts the pending query for the next fragment, selecting it as
 	//! principal per the engine-mirrored rule and adopting it via BeginPending.
 	//! Throws on prepare errors.
