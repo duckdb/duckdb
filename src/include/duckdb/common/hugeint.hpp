@@ -131,7 +131,7 @@ constexpr bool HugeintLessThanEquals(hugeint_t lhs, hugeint_t rhs) {
 //! Two's-complement negation, written out because the operators below cannot call
 //! operator-() on themselves without the fold failing
 constexpr hugeint_t HugeintNegate(hugeint_t n) {
-	return hugeint_t(-1 - n.upper + (n.lower == 0), 0 - n.lower);
+	return hugeint_t(static_cast<int64_t>(~static_cast<uint64_t>(n.upper) + (n.lower == 0)), 0 - n.lower);
 }
 
 constexpr int HugeintSign(hugeint_t n) {
@@ -145,13 +145,13 @@ constexpr hugeint_t HugeintAbs(hugeint_t n) {
 
 constexpr hugeint_t HugeintAddOne(hugeint_t n) {
 	const int carry = (n.lower == UINT64_MAX) ? 1 : 0;
-	return hugeint_t(n.upper + carry, n.lower + 1);
+	return hugeint_t(static_cast<int64_t>(static_cast<uint64_t>(n.upper) + carry), n.lower + 1);
 }
 
 constexpr hugeint_t HugeintSubtractOne(hugeint_t n) {
 	// lower wraps to UINT64_MAX, so a borrow is taken out of upper
 	const int borrow = (n.lower == 0) ? 1 : 0;
-	return hugeint_t(n.upper - borrow, n.lower - 1);
+	return hugeint_t(static_cast<int64_t>(static_cast<uint64_t>(n.upper) - borrow), n.lower - 1);
 }
 
 //! Helpers for the bit-at-a-time division, from the same uint128_t reference the
@@ -194,13 +194,13 @@ constexpr hugeint_t HugeintLeftShift(hugeint_t lhs, uint32_t amount) {
 }
 
 constexpr hugeint_t HugeintMultiplyUnchecked(hugeint_t lhs, hugeint_t rhs) {
-	bool negative = (lhs.upper < 0) != (rhs.upper < 0);
-	if (lhs.upper < 0) {
-		lhs = HugeintNegate(lhs);
-	}
-	if (rhs.upper < 0) {
-		rhs = HugeintNegate(rhs);
-	}
+	// Unchecked multiplication uses the low 128 bits, including for negative operands.
+#if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__)
+	const auto left = (static_cast<__uint128_t>(static_cast<uint64_t>(lhs.upper)) << 64) | lhs.lower;
+	const auto right = (static_cast<__uint128_t>(static_cast<uint64_t>(rhs.upper)) << 64) | rhs.lower;
+	const auto result = left * right;
+	return hugeint_t(static_cast<int64_t>(result >> 64), static_cast<uint64_t>(result));
+#else
 	// Multiply code adapted from:
 	// https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
 
@@ -247,8 +247,8 @@ constexpr hugeint_t HugeintMultiplyUnchecked(hugeint_t lhs, hugeint_t rhs) {
 	second32 &= 0xffffffff;
 	first32 &= 0xffffffff;
 
-	hugeint_t out {static_cast<int64_t>((first32 << 32) + second32), (third32 << 32) + fourth32};
-	return negative ? HugeintNegate(out) : out;
+	return hugeint_t(static_cast<int64_t>((first32 << 32) + second32), (third32 << 32) + fourth32);
+#endif
 }
 
 //! Result of a 128-bit division. Hugeint::DivMod's out-parameter form is declared in
@@ -373,11 +373,15 @@ constexpr bool hugeint_t::operator>=(const hugeint_t &rhs) const {
 }
 
 constexpr hugeint_t hugeint_t::operator+(const hugeint_t &rhs) const {
-	return hugeint_t(upper + rhs.upper + ((lower + rhs.lower) < lower), lower + rhs.lower);
+	return hugeint_t(static_cast<int64_t>(static_cast<uint64_t>(upper) + static_cast<uint64_t>(rhs.upper) +
+	                                      ((lower + rhs.lower) < lower)),
+	                 lower + rhs.lower);
 }
 
 constexpr hugeint_t hugeint_t::operator-(const hugeint_t &rhs) const {
-	return hugeint_t(upper - rhs.upper - ((lower - rhs.lower) > lower), lower - rhs.lower);
+	return hugeint_t(static_cast<int64_t>(static_cast<uint64_t>(upper) - static_cast<uint64_t>(rhs.upper) -
+	                                      ((lower - rhs.lower) > lower)),
+	                 lower - rhs.lower);
 }
 
 constexpr hugeint_t hugeint_t::operator*(const hugeint_t &rhs) const {

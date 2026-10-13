@@ -15,6 +15,7 @@ add_library_unity(
   test_caching_file_system_wrapper.cpp
   test_external_file_cache.cpp
   test_hyperlog.cpp
+  test_hugeint_constexpr.cpp
   test_http_transport_manager.cpp
   test_literal.cpp
   test_lru_cache.cpp
