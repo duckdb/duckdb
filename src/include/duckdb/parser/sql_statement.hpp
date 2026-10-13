@@ -38,8 +38,6 @@ public:
 	bool has_anonymous_parameters = false;
 	//! The query text that corresponds to this SQL statement
 	string query;
-	//! Redaction requirement retained through statement rewrites and API execution.
-	bool requires_redaction = false;
 
 protected:
 	SQLStatement(const SQLStatement &other) = default;
@@ -48,7 +46,7 @@ public:
 	virtual string ToString() const = 0;
 	//! Whether the statement contains sensitive SQL that should not be displayed.
 	virtual bool RequiresRedaction() const {
-		return requires_redaction;
+		return false;
 	}
 	//! Create a copy of this SelectStatement
 	DUCKDB_API virtual unique_ptr<SQLStatement> Copy() const = 0;

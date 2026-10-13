@@ -99,7 +99,6 @@ PreparedStatement::CreateExecuteStatement(const identifier_map_t<BoundParameterD
 	execute->name = Identifier(name);
 	// report the query that was prepared - not the generated EXECUTE - in errors and profiling output
 	execute->query = query;
-	execute->requires_redaction = info.requires_redaction;
 	execute->stmt_location = QueryLocation(0, query.size());
 	// the values are already typed - pass them in pre-bound instead of as SQL literals
 	execute->bound_values = named_values;
@@ -117,7 +116,9 @@ unique_ptr<QueryResult> PreparedStatement::Execute(identifier_map_t<BoundParamet
 		return make_uniq<QueryResult>(ErrorData(
 		    InvalidInputException("Attempting to execute a prepared statement after its connection was closed!")));
 	}
-	return client_context->RunInternalStatement(CreateExecuteStatement(named_values), query_parameters);
+	auto parameters = query_parameters;
+	parameters.requires_redaction = parameters.requires_redaction || info.requires_redaction;
+	return client_context->RunInternalStatement(CreateExecuteStatement(named_values), parameters);
 }
 
 unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, const QueryParameters &query_parameters) {
@@ -149,7 +150,9 @@ unique_ptr<QueryResult> PreparedStatement::Submit(identifier_map_t<BoundParamete
 		    InvalidInputException("Attempting to execute a prepared statement after its connection was closed!");
 		return make_uniq<QueryResult>(ErrorData(exception));
 	}
-	return client_context->SubmitInternalStatement(CreateExecuteStatement(named_values), query_parameters);
+	auto parameters = query_parameters;
+	parameters.requires_redaction = parameters.requires_redaction || info.requires_redaction;
+	return client_context->SubmitInternalStatement(CreateExecuteStatement(named_values), parameters);
 }
 
 } // namespace duckdb

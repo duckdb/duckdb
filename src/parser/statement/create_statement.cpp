@@ -17,7 +17,7 @@ string CreateStatement::ToString() const {
 }
 
 bool CreateStatement::RequiresRedaction() const {
-	return requires_redaction || info->type == CatalogType::SECRET_ENTRY;
+	return info->type == CatalogType::SECRET_ENTRY;
 }
 
 } // namespace duckdb

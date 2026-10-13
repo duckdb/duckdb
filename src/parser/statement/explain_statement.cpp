@@ -42,7 +42,7 @@ string ExplainStatement::OptionsToString() const {
 }
 
 bool ExplainStatement::RequiresRedaction() const {
-	return requires_redaction || stmt->RequiresRedaction();
+	return stmt->RequiresRedaction();
 }
 
 string ExplainStatement::ToString() const {

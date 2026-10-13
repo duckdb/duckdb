@@ -319,7 +319,7 @@ private:
 
 	//! Submits a query to the database and returns its handle
 	unique_ptr<QueryResult> SubmitInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
-	                                       const QueryParameters &parameters, bool verify = true);
+	                                       QueryParameters parameters, bool verify = true);
 	//! Drives a submitted query to completion and retains its result
 	unique_ptr<QueryResult> CompleteInternal(ClientContextLock &lock, unique_ptr<QueryResult> result);
 	//! Drives a query whose collector builds its own result object, and hands that object out. Null
@@ -364,7 +364,7 @@ private:
 
 	unique_ptr<ClientContextLock> LockContext();
 
-	void BeginQueryInternal(ClientContextLock &lock, const SQLStatement &statement);
+	void BeginQueryInternal(ClientContextLock &lock, const SQLStatement &statement, const QueryParameters &parameters);
 	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
 	                           optional_ptr<ErrorData> previous_error);
 

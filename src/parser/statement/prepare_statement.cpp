@@ -16,7 +16,7 @@ unique_ptr<SQLStatement> PrepareStatement::Copy() const {
 }
 
 bool PrepareStatement::RequiresRedaction() const {
-	return requires_redaction || statement->RequiresRedaction();
+	return statement->RequiresRedaction();
 }
 
 string PrepareStatement::ToString() const {

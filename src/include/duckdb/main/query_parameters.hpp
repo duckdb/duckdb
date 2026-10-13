@@ -30,6 +30,8 @@ struct QueryParameters {
 	//! FORCED is still settled at submission
 	ResultEagerness result_eagerness = ResultEagerness::AUTO;
 	shared_ptr<ResultFormat> format;
+	//! Whether the original statement contains sensitive SQL, preserved across rewrites.
+	bool requires_redaction = false;
 };
 
 } // namespace duckdb

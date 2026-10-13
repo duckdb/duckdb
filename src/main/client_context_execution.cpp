@@ -30,7 +30,8 @@
 
 namespace duckdb {
 
-void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStatement &statement) {
+void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStatement &statement,
+                                       const QueryParameters &parameters) {
 	// check if we are on AutoCommit. In this case we should start a transaction
 	D_ASSERT(!active_query);
 	auto &db_inst = DatabaseInstance::GetDatabase(*this);
@@ -44,7 +45,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStateme
 
 	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
 	static const string redacted_query = "redacted";
-	const bool redact_query = statement.RequiresRedaction() && !Settings::Get<AllowUnredactedSecretsSetting>(*this);
+	const bool redact_query = parameters.requires_redaction && !Settings::Get<AllowUnredactedSecretsSetting>(*this);
 	const auto &log_query = redact_query ? redacted_query : statement.query;
 	LogQueryInternal(lock, log_query);
 	active_query->query = statement.query;
