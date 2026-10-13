@@ -124,10 +124,8 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		return false;
 	}
 	if (source_type.id() == LogicalTypeId::DECIMAL || target_type.id() == LogicalTypeId::DECIMAL) {
-		uint8_t source_width, target_width;
-		uint8_t source_scale, target_scale;
-		// cast to or from decimal
-		// cast is only invertible if the cast is strictly widening
+		uint8_t source_width, source_scale, target_width, target_scale;
+		// cast is only invertible if the target can hold every value of the source
 		if (!source_type.GetDecimalProperties(source_width, source_scale)) {
 			return false;
 		}
@@ -135,6 +133,9 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 			return false;
 		}
 		if (target_scale < source_scale) {
+			return false;
+		}
+		if (target_width - target_scale < source_width - source_scale) {
 			return false;
 		}
 		return true;
