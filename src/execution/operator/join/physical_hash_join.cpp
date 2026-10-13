@@ -328,17 +328,12 @@ static bool BuildSideHasMultipleSources(const PhysicalOperator &op) {
 //! Synchronisation state for the first-chunk publication of the TupleDataLayout: the canonical layout
 //! shared by all per-thread JHTs, plus the per-column decision on whether to narrow the row-store slot.
 struct LayoutGate {
-	mutex publish_mutex;
-	atomic<bool> published {false};
+	std::once_flag publish_once;
 	shared_ptr<TupleDataLayout> layout_ptr;
 	vector<uint8_t> dict_index_width;
-
-	void Reset() {
-		published.store(false, std::memory_order_release);
-		layout_ptr.reset();
-		dict_index_width.clear();
-	}
 };
+
+static idx_t GetBuildSpaceRequirement(ClientContext &context, const JoinHashTable &ht, idx_t num_threads);
 
 class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
@@ -348,6 +343,12 @@ public:
 	      initial_radix_bits(num_threads < 100 ? 4 : 5), finalized(false), active_local_states(0), total_size(0),
 	      max_partition_size(0), max_partition_count(0), probe_side_requirement(0), scanned_data(false) {
 		hash_table = op.InitializeHashTable(context, initial_radix_bits);
+		// Reserve the initial partition buffers before upstream hash tables are finalized.
+		auto minimum_reservation = MinValue(temporary_memory_state->GetMinimumReservation(),
+		                                    GetBuildSpaceRequirement(context, *hash_table, num_threads));
+		temporary_memory_state->SetMinimumReservation(minimum_reservation);
+		temporary_memory_state->SetRemainingSize(minimum_reservation);
+		temporary_memory_state->UpdateReservation(context);
 
 		// For perfect hash join
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
@@ -634,38 +635,29 @@ bool HashJoinGlobalSinkState::DictSurvivingActive() const {
 }
 
 void HashJoinGlobalSinkState::PublishLayoutIfFirst(HashJoinLocalSinkState &lstate, DataChunk &payload_chunk) {
-	if (layout_gate.published.load(std::memory_order_acquire)) {
-		return;
-	}
-	unique_lock<mutex> guard(layout_gate.publish_mutex);
-	if (layout_gate.published.load(std::memory_order_relaxed)) {
-		return;
-	}
+	std::call_once(layout_gate.publish_once, [&] {
+		const auto &cond_types = lstate.hash_table->condition_types;
+		const auto &build_types = lstate.hash_table->build_types;
+		vector<uint8_t> dict_index_width(build_types.size(), 0);
 
-	const auto &cond_types = lstate.hash_table->condition_types;
-	const auto &build_types = lstate.hash_table->build_types;
-	layout_gate.dict_index_width.assign(build_types.size(), 0);
-
-	if (CanUseDictSurvivingJoin(op, *lstate.hash_table, can_use_perfect_hash, build_side_multi_source)) {
-		// Per-column width decision lives on the JHT (GetDictSurvivingIndexWidth); feed it each arriving vector.
-		for (idx_t col = 0; col < build_types.size(); col++) {
-			if (col >= payload_chunk.ColumnCount()) {
-				continue;
+		if (CanUseDictSurvivingJoin(op, *lstate.hash_table, can_use_perfect_hash, build_side_multi_source)) {
+			// Per-column width decision lives on the JHT (GetDictSurvivingIndexWidth); feed it each arriving vector.
+			for (idx_t col = 0; col < build_types.size(); col++) {
+				if (col >= payload_chunk.ColumnCount()) {
+					continue;
+				}
+				dict_index_width[col] = lstate.hash_table->GetDictSurvivingIndexWidth(col, payload_chunk.data[col]);
 			}
-			layout_gate.dict_index_width[col] =
-			    lstate.hash_table->GetDictSurvivingIndexWidth(col, payload_chunk.data[col]);
 		}
-	}
 
-	auto layout = BuildJoinLayout(cond_types, build_types, lstate.hash_table->join_type, layout_gate.dict_index_width);
-	layout_gate.layout_ptr = layout;
-
-	// global HT receives the same layout so Merge/Combine and finalize-time scans operate against it
-	if (hash_table && !hash_table->IsLayoutFinalized()) {
-		hash_table->FinishInitWithLayout(layout, layout_gate.dict_index_width);
-	}
-
-	layout_gate.published.store(true, std::memory_order_release);
+		auto layout = BuildJoinLayout(cond_types, build_types, lstate.hash_table->join_type, dict_index_width);
+		// global HT receives the same layout so Merge/Combine and finalize-time scans operate against it
+		if (hash_table && !hash_table->IsLayoutFinalized()) {
+			hash_table->FinishInitWithLayout(layout, dict_index_width);
+		}
+		layout_gate.layout_ptr = std::move(layout);
+		layout_gate.dict_index_width = std::move(dict_index_width);
+	});
 }
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context,
@@ -803,7 +795,7 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 	}
 
 	// build the HT
-	lstate.hash_table->Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
+	lstate.hash_table->Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk, *gstate.hash_table);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -915,26 +907,27 @@ static idx_t GetPartitioningSpaceRequirement(ClientContext &context, const vecto
 	return num_threads * num_partitions * size_per_partition;
 }
 
+static idx_t GetBuildSpaceRequirement(ClientContext &context, const JoinHashTable &ht, idx_t num_threads) {
+	auto layout = BuildJoinLayout(ht.condition_types, ht.build_types, ht.join_type, {});
+	return GetPartitioningSpaceRequirement(context, layout->GetTypes(), ht.GetRadixBits(), num_threads);
+}
+
 void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &global_state) const {
 	auto &gstate = global_state.Cast<HashJoinGlobalSinkState>();
 	// If no Sink chunk ever arrived, the layout was never published. Fall back to a default layout
 	// (all columns at their native width) so finalize-time scans can dereference data_collection.
-	if (!gstate.layout_gate.published.load(std::memory_order_acquire)) {
-		unique_lock<mutex> guard(gstate.layout_gate.publish_mutex);
-		if (!gstate.layout_gate.published.load(std::memory_order_relaxed)) {
-			const auto &cond_types = gstate.hash_table->condition_types;
-			const auto &build_types = gstate.hash_table->build_types;
-			gstate.layout_gate.dict_index_width.assign(build_types.size(), 0);
-			// all-zero dict_index_width => BuildJoinLayout keeps every build column at its native width
-			auto layout = BuildJoinLayout(cond_types, build_types, gstate.hash_table->join_type,
-			                              gstate.layout_gate.dict_index_width);
-			gstate.layout_gate.layout_ptr = layout;
-			if (!gstate.hash_table->IsLayoutFinalized()) {
-				gstate.hash_table->FinishInitWithLayout(layout);
-			}
-			gstate.layout_gate.published.store(true, std::memory_order_release);
+	std::call_once(gstate.layout_gate.publish_once, [&] {
+		const auto &cond_types = gstate.hash_table->condition_types;
+		const auto &build_types = gstate.hash_table->build_types;
+		vector<uint8_t> dict_index_width(build_types.size(), 0);
+		// all-zero dict_index_width => BuildJoinLayout keeps every build column at its native width
+		auto layout = BuildJoinLayout(cond_types, build_types, gstate.hash_table->join_type, dict_index_width);
+		if (!gstate.hash_table->IsLayoutFinalized()) {
+			gstate.hash_table->FinishInitWithLayout(layout);
 		}
-	}
+		gstate.layout_gate.layout_ptr = std::move(layout);
+		gstate.layout_gate.dict_index_width = std::move(dict_index_width);
+	});
 	const auto &ht = *gstate.hash_table;
 
 	gstate.total_size =
@@ -962,26 +955,17 @@ struct PrefixRangeBuildLane {
 	idx_t task_count = 0;
 };
 
-static void ExecuteHashJoinFinalizeTask(HashJoinGlobalSinkState &sink, optional_idx partition_idx,
-                                        optional_ptr<PrefixRangeBuildLane> prefix_range_lane) {
-	const auto &data_collection = sink.hash_table->GetDataCollection();
+static void ExecuteHashJoinFinalizeTask(HashJoinGlobalSinkState &sink, const vector<pair<idx_t, idx_t>> &chunk_ranges,
+                                        bool parallel, optional_ptr<PrefixRangeBuildLane> prefix_range_lane) {
 	optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state;
 	bool prefix_range_parallel = false;
 	if (prefix_range_lane) {
 		prefix_range_state = *prefix_range_lane->state;
 		prefix_range_parallel = prefix_range_lane->task_count > 1;
 	}
-	if (!partition_idx.IsValid() || sink.hash_table->GetRadixBits() == 0) {
-		// Unpartitioned builds still finalize over the full chunk range even if the scheduler created a
-		// single "partition 0" task, because tuple-data segments are not tagged with partition ids there.
-		sink.hash_table->Finalize(0U, data_collection.ChunkCount(), false, prefix_range_state, prefix_range_parallel);
-	} else {
-		// Parallel finalize - each thread processes one partition
-		const auto chunk_ranges = data_collection.GetChunkRangesForPartition(partition_idx.GetIndex());
-		for (auto &chunk_range : chunk_ranges) {
-			sink.hash_table->Finalize(chunk_range.first, chunk_range.second, true, prefix_range_state,
-			                          prefix_range_parallel);
-		}
+	for (auto &chunk_range : chunk_ranges) {
+		sink.hash_table->Finalize(chunk_range.first, chunk_range.second, parallel, prefix_range_state,
+		                          prefix_range_parallel);
 	}
 }
 
@@ -1055,14 +1039,15 @@ public:
 
 class HashJoinFinalizeTask : public ExecutorTask {
 public:
-	HashJoinFinalizeTask(HashJoinGlobalSinkState &sink_p, shared_ptr<Event> event, optional_idx partition_idx_p,
+	HashJoinFinalizeTask(HashJoinGlobalSinkState &sink_p, shared_ptr<Event> event,
+	                     vector<pair<idx_t, idx_t>> chunk_ranges_p, bool parallel_p,
 	                     optional_ptr<PrefixRangeBuildLane> prefix_range_lane_p = nullptr)
-	    : ExecutorTask(sink_p.context, std::move(event), sink_p.op), sink(sink_p), partition_idx(partition_idx_p),
-	      prefix_range_lane(prefix_range_lane_p) {
+	    : ExecutorTask(sink_p.context, std::move(event), sink_p.op), sink(sink_p),
+	      chunk_ranges(std::move(chunk_ranges_p)), parallel(parallel_p), prefix_range_lane(prefix_range_lane_p) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		ExecuteHashJoinFinalizeTask(sink, partition_idx, prefix_range_lane);
+		ExecuteHashJoinFinalizeTask(sink, chunk_ranges, parallel, prefix_range_lane);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -1072,7 +1057,8 @@ public:
 
 private:
 	HashJoinGlobalSinkState &sink;
-	optional_idx partition_idx;
+	vector<pair<idx_t, idx_t>> chunk_ranges;
+	bool parallel;
 	optional_ptr<PrefixRangeBuildLane> prefix_range_lane;
 };
 
@@ -1087,31 +1073,35 @@ public:
 public:
 	vector<shared_ptr<Task>> GetTasks() {
 		auto &ht = *sink.hash_table;
-		vector<optional_idx> finalize_partitions;
-		if (FinalizeSingleThreaded(sink, false)) {
-			finalize_partitions.emplace_back();
+		auto &data_collection = ht.GetDataCollection();
+		const bool parallel = !FinalizeSingleThreaded(sink, false) && ht.GetRadixBits() != 0;
+		vector<vector<pair<idx_t, idx_t>>> task_ranges;
+		if (!parallel) {
+			task_ranges.push_back({{0, data_collection.ChunkCount()}});
 		} else {
 			const auto num_partitions = RadixPartitioning::NumberOfPartitions(ht.GetRadixBits());
 			const auto &current_partitions = ht.GetCurrentPartitions();
+			const auto max_tasks_per_partition = MaxValue<idx_t>(sink.num_threads / num_partitions, 1);
 			for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
 				if (sink.external && !current_partitions.RowIsValidUnsafe(partition_idx)) {
-					continue; // Partition is not being built on
+					continue;
 				}
-				finalize_partitions.emplace_back(partition_idx);
+				SplitPartitionRanges(data_collection.GetChunkRangesForPartition(partition_idx), max_tasks_per_partition,
+				                     task_ranges);
 			}
 		}
 
-		InitializePrefixRangeLanes(ht, finalize_partitions.size());
+		InitializePrefixRangeLanes(ht, task_ranges.size());
 		vector<shared_ptr<Task>> finalize_tasks;
-		finalize_tasks.reserve(finalize_partitions.size());
-		for (idx_t task_idx = 0; task_idx < finalize_partitions.size(); task_idx++) {
+		finalize_tasks.reserve(task_ranges.size());
+		for (idx_t task_idx = 0; task_idx < task_ranges.size(); task_idx++) {
 			optional_ptr<PrefixRangeBuildLane> lane;
 			if (!prefix_range_lanes.empty()) {
 				lane = *prefix_range_lanes[task_idx % prefix_range_lanes.size()];
 				lane->task_count++;
 			}
-			finalize_tasks.push_back(
-			    make_uniq<HashJoinFinalizeTask>(sink, shared_from_this(), finalize_partitions[task_idx], lane));
+			finalize_tasks.push_back(make_uniq<HashJoinFinalizeTask>(sink, shared_from_this(),
+			                                                         std::move(task_ranges[task_idx]), parallel, lane));
 		}
 		return finalize_tasks;
 	}
@@ -1124,7 +1114,7 @@ public:
 			lane = *prefix_range_lanes[0];
 			lane->task_count = 1;
 		}
-		ExecuteHashJoinFinalizeTask(sink, optional_idx(), lane);
+		ExecuteHashJoinFinalizeTask(sink, {{0, ht.GetDataCollection().ChunkCount()}}, false, lane);
 		FinishTasks();
 	}
 
@@ -1139,6 +1129,33 @@ public:
 	static constexpr idx_t CHUNKS_PER_TASK = 64;
 
 private:
+	static void SplitPartitionRanges(vector<pair<idx_t, idx_t>> ranges, idx_t max_tasks,
+	                                 vector<vector<pair<idx_t, idx_t>>> &task_ranges) {
+		if (max_tasks == 1) {
+			task_ranges.push_back(std::move(ranges));
+			return;
+		}
+		idx_t partition_chunks = 0;
+		for (const auto &range : ranges) {
+			partition_chunks += range.second - range.first;
+		}
+		const auto chunks_per_task = MaxValue<idx_t>(CHUNKS_PER_TASK, (partition_chunks + max_tasks - 1) / max_tasks);
+		// A task can span disjoint ranges within the partition.
+		idx_t remaining = 0;
+		for (auto range : ranges) {
+			while (range.first < range.second) {
+				if (remaining == 0) {
+					task_ranges.emplace_back();
+					remaining = chunks_per_task;
+				}
+				const auto count = MinValue(range.second - range.first, remaining);
+				task_ranges.back().emplace_back(range.first, range.first + count);
+				range.first += count;
+				remaining -= count;
+			}
+		}
+	}
+
 	void FinishTasks() {
 		for (auto &lane : prefix_range_lanes) {
 			sink.hash_table->MergePrefixRangeBuildState(*lane->state);
@@ -2479,7 +2496,7 @@ void HashJoinGlobalSourceState::PrepareScanHT(HashJoinGlobalSinkState &sink) {
 bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJoinLocalSourceState &lstate) {
 	D_ASSERT(lstate.TaskFinished());
 
-	annotated_lock_guard<annotated_mutex> guard(lock);
+	annotated_unique_lock<annotated_mutex> guard(lock);
 	switch (global_stage.load()) {
 	case HashJoinSourceStage::BUILD:
 		if (build_chunk_idx != build_chunk_count) {
@@ -2496,7 +2513,10 @@ bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJo
 			lstate.empty_ht_probe_in_progress = false;
 			return true;
 		}
-		break;
+		guard.unlock();
+		// Only touch local handles after unlocking: another thread may replace the consumer.
+		lstate.probe_local_scan.current_chunk_state.handles.clear();
+		return false;
 	case HashJoinSourceStage::SCAN_HT:
 		if (full_outer_chunk_idx != full_outer_chunk_count) {
 			lstate.local_stage = global_stage;
