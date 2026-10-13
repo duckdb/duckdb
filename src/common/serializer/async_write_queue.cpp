@@ -84,6 +84,10 @@ public:
 		queue.DrainRequests();
 	}
 
+	string TaskType() const override {
+		return "AsyncWriteQueueTask";
+	}
+
 private:
 	AsyncWriteQueue &queue;
 	bool started = false;
