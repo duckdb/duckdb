@@ -475,9 +475,25 @@ static LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, 
 	return LogicalTypeComparisonResult::DIFFERENT_TYPES;
 }
 
+//! Resolve any ANY in the target type by substituting the matching part of the source, so we never cast a value to a
+//! type that still contains ANY - ANY has no physical representation, so building such a vector throws. This happens
+//! e.g. when an ARRAY argument fills a LIST(ANY) parameter (the file list of the multi-file readers).
+static LogicalType ResolveAnyInParameterType(const LogicalType &target, const LogicalType &source) {
+	if (target.id() == LogicalTypeId::ANY) {
+		return source;
+	}
+	if (target.id() == LogicalTypeId::LIST &&
+	    (source.id() == LogicalTypeId::LIST || source.id() == LogicalTypeId::ARRAY)) {
+		auto &source_child =
+		    source.id() == LogicalTypeId::LIST ? ListType::GetChildType(source) : ArrayType::GetChildType(source);
+		return LogicalType::LIST(ResolveAnyInParameterType(ListType::GetChildType(target), source_child));
+	}
+	return target;
+}
+
 Value FunctionBinder::CastToParameterType(ClientContext &context, Value value, const LogicalType &parameter_type) {
 	if (RequiresCast(value.type(), parameter_type) == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
-		return value.CastAs(context, parameter_type);
+		return value.CastAs(context, ResolveAnyInParameterType(parameter_type, value.type()));
 	}
 	return value;
 }
@@ -818,6 +834,73 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
 	return BindScalarFunction(func, std::move(arguments), error, is_operator, binder);
 }
 
+//! Returns true if any argument is an untyped NULL, i.e. has type SQLNULL
+static bool HasUntypedNullArgument(const vector<unique_ptr<Expression>> &regular_args,
+                                   const vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args) {
+	for (auto &child : regular_args) {
+		if (child->GetReturnType() == LogicalTypeId::SQLNULL) {
+			return true;
+		}
+	}
+	for (auto &child : keyword_args) {
+		if (child.second->GetReturnType() == LogicalTypeId::SQLNULL) {
+			return true;
+		}
+	}
+	return false;
+}
+
+//! Evaluates a constant argument and returns true if it is NULL. A non-NULL result replaces the argument with a
+//! constant: the argument has been evaluated anyway, and keeping the result means that it is not evaluated again by
+//! every enclosing function call - which made binding nested constant expressions quadratic in their depth.
+static bool FoldConstantArgument(ClientContext &context, unique_ptr<Expression> &child) {
+	if (child->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		return child->Cast<BoundConstantExpression>().GetValue().IsNull();
+	}
+	// a lambda has no value of its own, the function it is passed to executes its body
+	if (child->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA || !child->IsFoldable()) {
+		return false;
+	}
+	Value result;
+	if (!ExpressionExecutor::TryEvaluateScalar(context, *child, result)) {
+		// the argument cannot be evaluated: leave it in place so that the error surfaces at execution
+		return false;
+	}
+	if (result.IsNull()) {
+		return true;
+	}
+	auto constant = make_uniq<BoundConstantExpression>(std::move(result));
+	constant->SetAlias(child->GetAlias());
+	constant->SetQueryLocation(child->GetQueryLocation());
+	child = std::move(constant);
+	return false;
+}
+
+//! Returns true if any argument is a constant expression that evaluates to NULL. Arguments that evaluate to a non-NULL
+//! value are folded to constants along the way.
+static bool HasNullConstantArgument(ClientContext &context, vector<unique_ptr<Expression>> &regular_args,
+                                    vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args) {
+	for (auto &child : regular_args) {
+		if (FoldConstantArgument(context, child)) {
+			return true;
+		}
+	}
+	for (auto &child : keyword_args) {
+		if (FoldConstantArgument(context, child.second)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static void PropagateReturnCollation(BoundSimpleFunction &bound_function, const FunctionProperties &props,
+                                     const vector<unique_ptr<Expression>> &children, const string &pushed_collation);
+
+//! The type of the NULL constant a function call is folded to - SQLNULL if the return type could not be determined
+static LogicalType NullReturnType(const LogicalType &return_type) {
+	return return_type.IsComplete() ? return_type : LogicalType::SQLNULL;
+}
+
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCatalogEntry &func,
                                                           vector<pair<Identifier, unique_ptr<Expression>>> arguments,
                                                           ErrorData &error, bool is_operator,
@@ -837,42 +920,26 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
 	auto [regular_args, keyword_args] = SplitArguments(std::move(arguments));
 
 	// If any of the parameters are NULL, the function will just be replaced with a NULL constant.
-	// We try to give the NULL constant the correct type, but we have to do this without binding the function,
-	// because functions with DEFAULT_NULL_HANDLING should not have to deal with NULL inputs in their bind code.
-	// Some functions may have an invalid default return type, as they must be bound to infer the return type.
-	// In those cases, we default to SQLNULL.
-	const auto return_type_if_null =
-	    bound_function.GetReturnType().IsComplete() ? bound_function.GetReturnType() : LogicalType::SQLNULL;
+	// Untyped NULLs never go through type resolution. For typed NULL constants, resolve the function's types only
+	// when needed to determine the return type. Preserve result collation without invoking bind callbacks.
 	if (bound_function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
-		for (auto &child : regular_args) {
-			if (child->GetReturnType() == LogicalTypeId::SQLNULL) {
-				return make_uniq<BoundConstantExpression>(Value(return_type_if_null));
-			}
-			if (!child->IsFoldable()) {
-				continue;
-			}
-			Value result;
-			if (!ExpressionExecutor::TryEvaluateScalar(context, *child, result)) {
-				continue;
-			}
-			if (result.IsNull()) {
-				return make_uniq<BoundConstantExpression>(Value(return_type_if_null));
-			}
+		const auto &return_type = bound_function.GetReturnType();
+		if (HasUntypedNullArgument(regular_args, keyword_args)) {
+			return make_uniq<BoundConstantExpression>(Value(NullReturnType(return_type)));
 		}
-		for (auto &child : keyword_args) {
-			if (child.second->GetReturnType() == LogicalTypeId::SQLNULL) {
-				return make_uniq<BoundConstantExpression>(Value(return_type_if_null));
+		if (HasNullConstantArgument(context, regular_args, keyword_args)) {
+			if (return_type.IsComplete()) {
+				BoundScalarFunction null_function(std::move(selected_function));
+				for (auto &child : keyword_args) {
+					regular_args.push_back(std::move(child.second));
+				}
+				PropagateReturnCollation(null_function, null_function.GetProperties(), regular_args, string());
+				return make_uniq<BoundConstantExpression>(Value(null_function.GetReturnType()));
 			}
-			if (!child.second->IsFoldable()) {
-				continue;
-			}
-			Value result;
-			if (!ExpressionExecutor::TryEvaluateScalar(context, *child.second, result)) {
-				continue;
-			}
-			if (result.IsNull()) {
-				return make_uniq<BoundConstantExpression>(Value(return_type_if_null));
-			}
+			auto resolved = ResolveScalarFunctionTypes(std::move(selected_function), regular_args, keyword_args);
+			PropagateReturnCollation(resolved.bound_function, resolved.bound_function.GetProperties(), regular_args,
+			                         resolved.pushed_collation);
+			return make_uniq<BoundConstantExpression>(Value(NullReturnType(resolved.bound_function.GetReturnType())));
 		}
 	}
 	return BindScalarFunction(std::move(selected_function), std::move(regular_args), std::move(keyword_args),
@@ -1462,15 +1529,17 @@ static vector<LogicalType> CaptureLogicalArguments(const BoundSimpleFunction &fu
 	return result;
 }
 
-pair<BoundScalarFunction, unique_ptr<FunctionData>>
-FunctionBinder::ResolveFunction(shared_ptr<const ScalarFunction> function_p, vector<unique_ptr<Expression>> &arguments,
-                                vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
+ResolvedScalarFunctionTypes
+FunctionBinder::ResolveScalarFunctionTypes(shared_ptr<const ScalarFunction> function_p,
+                                           vector<unique_ptr<Expression>> &arguments,
+                                           vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
 	auto &function = *function_p;
 	// Make a BoundScalarFunction out of the ScalarFunction, so we can store bind info and other properties in it.
-	BoundScalarFunction bound_function(std::move(function_p));
+	ResolvedScalarFunctionTypes result {BoundScalarFunction(std::move(function_p)), {}, {}};
+	auto &bound_function = result.bound_function;
 
 	// Reorder named args and expand the variadic arguments
-	auto argument_names = ResolveArguments(function, bound_function, arguments, named_arguments);
+	result.argument_names = ResolveArguments(function, bound_function, arguments, named_arguments);
 
 	// Attempt to resolve template types, before we call the "resolve_types" callback.
 	ResolveTemplateTypes(bound_function, arguments);
@@ -1478,17 +1547,27 @@ FunctionBinder::ResolveFunction(shared_ptr<const ScalarFunction> function_p, vec
 	ResolveIncompleteArgumentTypes(bound_function, arguments);
 
 	if (bound_function.HasResolveTypesCallback()) {
-		ResolveScalarFunctionTypesInput input(context, bound_function, arguments, argument_names);
+		ResolveScalarFunctionTypesInput input(context, bound_function, arguments, result.argument_names);
 		bound_function.GetResolveTypesCallback()(input);
-		VerifyArgumentCount(bound_function, argument_names.size(), arguments.size());
+		VerifyArgumentCount(bound_function, result.argument_names.size(), arguments.size());
 	}
 
 	// The argument types are final - all templates must be resolved before we add casts
 	for (auto &argument_type : bound_function.GetArguments()) {
 		VerifyTemplateType(argument_type, bound_function.GetName());
 	}
-	auto pushed_collation = PushArgumentCollations(context, bound_function, bound_function.GetProperties(), arguments);
+	result.pushed_collation =
+	    PushArgumentCollations(context, bound_function, bound_function.GetProperties(), arguments);
 	CastToFunctionArguments(bound_function, arguments);
+	return result;
+}
+
+pair<BoundScalarFunction, unique_ptr<FunctionData>>
+FunctionBinder::ResolveFunction(shared_ptr<const ScalarFunction> function_p, vector<unique_ptr<Expression>> &arguments,
+                                vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
+	auto resolved = ResolveScalarFunctionTypes(std::move(function_p), arguments, named_arguments);
+	auto &bound_function = resolved.bound_function;
+	auto &argument_names = resolved.argument_names;
 
 	// The bind callback is called with arguments that are cast to the argument types of the bound function
 	unique_ptr<FunctionData> bind_info;
@@ -1506,7 +1585,7 @@ FunctionBinder::ResolveFunction(shared_ptr<const ScalarFunction> function_p, vec
 		bound_function.GetModifiedDatabasesCallback()(context, input);
 	}
 
-	PropagateReturnCollation(bound_function, bound_function.GetProperties(), arguments, pushed_collation);
+	PropagateReturnCollation(bound_function, bound_function.GetProperties(), arguments, resolved.pushed_collation);
 	bound_function.SetLogicalReturnType(bound_function.GetReturnType());
 
 	return {std::move(bound_function), std::move(bind_info)};

@@ -2148,9 +2148,10 @@ optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextBatchTask() {
 		if (batch_size_bytes.IsValid()) {
 			const auto partition_end = batch_row_idx;
 			batch_row_idx = row_before;
-			do {
+			// the next partition can start right here, then this batch has no rows to count
+			while (batch_row_idx < partition_end && current_batch_size_bytes < batch_size_bytes.GetIndex()) {
 				current_batch_size_bytes += row_sizes[batch_row_idx++];
-			} while (batch_row_idx < partition_end && current_batch_size_bytes < batch_size_bytes.GetIndex());
+			}
 			found_next_partition = found_next_partition && batch_row_idx == partition_end;
 		} else {
 			auto &segment = segments[batch_scan_state.segment_index];
@@ -3911,6 +3912,11 @@ bool PhysicalCopyToFile::Rotate() const {
 
 static bool PhysicalCopyRotateNow(const PhysicalCopyToFile &op, GlobalFileState &global_state)
     DUCKDB_REQUIRES(global_state.lock) {
+	if (global_state.num_batches == 0) {
+		// never rotate a file that holds no data yet - e.g. a CSV header or a Parquet header can exceed the
+		// file size limit by itself, and rotating would then create new empty files forever
+		return false;
+	}
 	if (op.file_size_bytes.IsValid()) {
 		return op.function.file_size_bytes(*global_state.data) >= op.file_size_bytes.GetIndex();
 	}

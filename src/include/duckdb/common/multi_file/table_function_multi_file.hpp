@@ -11,6 +11,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/once_flag.hpp"
 
 namespace duckdb {
 
@@ -18,11 +19,8 @@ namespace duckdb {
 // How a single-file table function takes part in a multi-file scan
 //===--------------------------------------------------------------------===//
 //! What the multi-file scan tells the bind of the single-file function that reads one of its files - see
-//! TableFunctionBindInput::multi_file_input
+//! TableFunctionBindInput::multi_file_input. The file itself is the input of the bind: see GetFile
 struct TableFunctionFileBindInput {
-	//! The file to read, with the options it is opened with (e.g. its size or encryption key) - the path the bind
-	//! receives as its input does not carry those
-	optional_ptr<const OpenFileInfo> file;
 	//! (Optional) The schema this bind is expected to produce, when the schema of the scan was already determined -
 	//! the bind should read the file using this schema instead of determining a schema of its own
 	optional_ptr<const vector<Identifier>> expected_names;
@@ -53,14 +51,17 @@ struct TableFunctionFileBindInput {
 		static const TableFunctionFileBindInput EMPTY;
 		return input.multi_file_input ? *input.multi_file_input : EMPTY;
 	}
-	//! The file a single-file function reads - the file of the multi-file scan when it is part of one, the path it
-	//! was given otherwise
+	//! The file a single-file function reads: its first input, which is the path of the file or a file struct
+	//! that also holds the options to open the file with (e.g. its size or encryption key) - see
+	//! OpenFileInfo::FromValue. A multi-file scan passes every file it reads this way
 	static OpenFileInfo GetFile(const TableFunctionBindInput &input) {
-		auto &file_input = Get(input);
-		if (file_input.file) {
-			return *file_input.file;
+		auto &file = input.inputs[0];
+		auto type = file.type().id();
+		if (type != LogicalTypeId::VARCHAR && type != LogicalTypeId::STRUCT && type != LogicalTypeId::VARIANT) {
+			throw BinderException("%s reads a single file - given as a VARCHAR path or as a file struct, not as %s",
+			                      input.table_function.GetName(), file.type().ToString());
 		}
-		return OpenFileInfo(StringValue::Get(input.inputs[0]));
+		return OpenFileInfo::FromValue(file, input.table_function.GetName());
 	}
 };
 
@@ -115,6 +116,9 @@ struct TableFunctionCombineSchemaInput {
 //! A function that implements this is scanned one batch at a time, rather than being run until it returns an empty
 //! chunk. This lets the scan tell the batches apart, so that batches scanned in parallel can be put back in order
 typedef bool (*table_function_claim_batch_t)(ClientContext &context, TableFunctionInput &input);
+//! Prepares the batch a local state has just claimed - called without the lock of the scan held, so that preparing
+//! batches is done in parallel. Only meaningful together with table_function_claim_batch_t
+typedef void (*table_function_prepare_batch_t)(ClientContext &context, TableFunctionInput &input);
 //! Called when a local state will not scan any more batches - lets the function release the resources of the batch
 //! it scanned last. The counterpart of table_function_claim_batch_t
 typedef void (*table_function_finish_batch_t)(ClientContext &context, TableFunctionInput &input);
@@ -153,15 +157,6 @@ public:
 	bool multi_file_scan = false;
 };
 
-//! What the bind of a wrapped single-file table function reports about the file it binds, beyond its names and types
-struct TableFunctionFileBindInfo {
-	//! The columns of the file, one per bound column, e.g. to attach the field ids of the columns and their nested
-	//! fields. Left empty, the columns are derived from the bound names and types
-	vector<MultiFileColumnDefinition> columns;
-	//! The key-value metadata of the file, exposed as the metadata of the reader of the file
-	InsertionOrderPreservingMap<Value> metadata;
-};
-
 //! Bind data of a multi-file function that wraps a single-file table function
 struct TableFunctionMultiFileData : public TableFunctionData {
 	TableFunctionFileReaderOptions options;
@@ -198,6 +193,7 @@ struct TableFunctionMultiFileSettings {
 
 	//! How the wrapped function takes part in the scan - all optional, see the typedefs above
 	table_function_claim_batch_t claim_batch = nullptr;
+	table_function_prepare_batch_t prepare_batch = nullptr;
 	table_function_finish_batch_t finish_batch = nullptr;
 	table_function_supports_read_ahead_t supports_read_ahead = nullptr;
 	table_function_schedule_io_t schedule_io = nullptr;
@@ -262,6 +258,8 @@ public:
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) override;
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
+	void PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate,
+	                 LocalTableFunctionState &lstate) override;
 	AsyncResult ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
 	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate,
@@ -328,8 +326,8 @@ private:
 	named_argument_map_t named_parameters;
 	//! How the wrapped function takes part in the scan
 	TableFunctionMultiFileSettings settings;
-	//! Guards the initialization of the global state below
-	mutex lock;
+	//! Initializes the global state once per file reader
+	OnceFlag initialize_once;
 	//! The global state of the wrapped function - shared by all threads scanning this file
 	unique_ptr<GlobalTableFunctionState> global_state;
 	//! The number of row groups to scan of this file that has been collected into the state of the scan
@@ -341,7 +339,8 @@ private:
 };
 
 //! A MultiFileReaderInterface that turns a table function reading a single file into a multi-file table function.
-//! The wrapped function must accept a single VARCHAR file path as its only positional parameter - all of its named
+//! The wrapped function must accept the file as its only positional parameter: as ANY, to receive the file together
+//! with the options to open it with (see TableFunctionFileBindInput::GetFile), or as a VARCHAR path - all of its named
 //! parameters are forwarded to it, and all multi-file options (union_by_name, hive partitioning, filename, ...) are
 //! provided by the multi-file framework on top of it.
 class TableFunctionMultiFileWrapper : public MultiFileReaderInterface {

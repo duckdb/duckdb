@@ -55,7 +55,7 @@ public:
 public:
 	//! Initialize the scan of the ColumnDataCollection
 	void InitializeScan();
-	//! Assign a chunk to the scan state
+	//! Assign a chunk to the scan state; the caller must release its handles if no chunk is assigned.
 	bool AssignChunk(ColumnDataConsumerScanState &state);
 	//! Scan the assigned chunk
 	void ScanChunk(ColumnDataConsumerScanState &state, DataChunk &chunk) const;

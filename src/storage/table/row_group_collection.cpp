@@ -341,7 +341,6 @@ bool RowGroupCollection::InitializeScanInRowGroup(ClientContext &context, Collec
                                                   RowGroupCollection &collection, SegmentNode<RowGroup> &row_group,
                                                   idx_t vector_index, idx_t max_row, bool initialize_columns) {
 	state.max_row = max_row;
-	state.row_groups = collection.GetRowGroups();
 	if (state.column_scans.empty()) {
 		// initialize the scan state
 		state.Initialize(context, collection.GetTypes());
@@ -356,7 +355,6 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 	state.vector_index = 0;
 	state.max_row = state.row_groups->GetBaseRowId() + next_row_id.load();
 	state.batch_index = 0;
-	state.processed_rows = 0;
 	state.skipped_rows = 0;
 	if (state.reorderer) {
 		// row groups pruned by the reorderer are never scanned
@@ -410,7 +408,6 @@ optional_idx RowGroupCollection::NextParallelScan(ClientContext &context, Parall
 			max_row = MinValue<idx_t>(max_row, state.max_row);
 			const idx_t assignment_start = row_start + vector_index * STANDARD_VECTOR_SIZE;
 			assignment_rows = max_row > assignment_start ? max_row - assignment_start : 0;
-			state.processed_rows += assignment_rows;
 			scan_state.batch_index = ++state.batch_index;
 			if (!state.row_number_base.IsValid() && scan_state.row_number_base.IsValid()) {
 				state.row_number_base = scan_state.row_number_base.GetIndex();
@@ -724,7 +721,7 @@ optional_idx RowGroupCollection::Append(DataChunk &chunk, TableAppendState &stat
 		AppendRowGroup(l, next_start);
 		// set up the append state for this row_group
 		auto last_row_group = state.row_groups->GetLastSegment(l);
-		RowGroup::InitializeAppend(*last_row_group, state.row_group_append_state);
+		RowGroup::InitializeNextAppend(*last_row_group, state.row_group_append_state);
 		state.row_group_start = next_start;
 	}
 	state.current_row += row_t(total_append_count);
@@ -1423,8 +1420,8 @@ public:
 
 						// move to the next row group
 						current_append_idx++;
-						RowGroup::InitializeAppend(*new_row_groups[current_append_idx],
-						                           append_state.row_group_append_state);
+						RowGroup::InitializeNextAppend(*new_row_groups[current_append_idx],
+						                               append_state.row_group_append_state);
 						// slice chunk for the next append
 						append_chunk.Slice(append_count, remaining);
 					}
@@ -1728,7 +1725,7 @@ unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheck
 	return make_uniq<CheckpointTask>(checkpoint_state, segment_idx);
 }
 
-void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
+bool RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
 	auto row_groups = GetRowGroups();
 
 	CollectionCheckpointState checkpoint_state(*this, writer, global_stats, *row_groups);
@@ -1813,18 +1810,16 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				row_group.CheckpointDeletes(*row_group_writer);
 			}
 			writer.WriteUnchangedTable(metadata_pointer, metadata_pointers, total_rows.load(), next_row_id.load());
-			// copy over existing stats into the global stats
-			CopyStats(global_stats);
-			return;
+			return false;
 		}
 	}
 
 	// not all segments have stayed the same - we need to make a new segment tree with the new set of segments
+	// initialize new empty stats - before locking the new segment tree, as this takes the stats lock
+	global_stats.InitializeEmpty(stats);
+
 	auto new_row_groups = make_shared_ptr<RowGroupSegmentTree>(*this, row_groups->GetBaseRowId());
 	auto l = new_row_groups->Lock();
-
-	// initialize new empty stats
-	global_stats.InitializeEmpty(stats);
 
 	idx_t new_total_rows = 0;
 	idx_t new_next_row_id = 0;
@@ -2084,6 +2079,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	if (vacuum_state.index_strategy == VacuumIndexStrategy::REBUILD && writer.RowIdsChanged()) {
 		writer.SetRebuildIndexes();
 	}
+	return true;
 }
 
 //===--------------------------------------------------------------------===//

@@ -194,6 +194,10 @@ void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector,
 		auto begin = begin_is_empty ? 0 : UnifiedVectorFormat::GetData<INDEX_TYPE>(begin_data)[begin_idx];
 		auto end = end_is_empty ? OP::ValueLength(sliced) : UnifiedVectorFormat::GetData<INDEX_TYPE>(end_data)[end_idx];
 		auto step = step_vector ? UnifiedVectorFormat::GetData<INDEX_TYPE>(step_data)[step_idx] : 1;
+		if (step == NumericLimits<INDEX_TYPE>::Minimum()) {
+			// the minimum cannot be negated - any step that is at least as large as the list selects the same entry
+			step = -NumericLimits<INDEX_TYPE>::Maximum();
+		}
 
 		if (step < 0) {
 			swap(begin, end);

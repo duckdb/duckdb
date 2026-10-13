@@ -77,10 +77,10 @@ LogicalGet::LogicalGet(TableIndex table_index, BoundTableFunction function, uniq
 }
 
 optional_ptr<TableCatalogEntry> LogicalGet::GetTable() const {
-	if (!function.get_bind_info) {
+	if (!function.get_table_entry) {
 		return nullptr;
 	}
-	return function.get_bind_info(bind_data.get()).table;
+	return function.get_table_entry(bind_data.get());
 }
 
 InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {

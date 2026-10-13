@@ -60,7 +60,7 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 		}
 	}
 
-	if (accept_sql_value_functions) {
+	if (identifier_conversion_policy != IdentifierConversionPolicy::ALLOW) {
 		auto value_function = ExpressionBinder::GetSQLValueFunction(column_names.back());
 		if (value_function) {
 			return BindExpression(value_function, depth, root_expression);

@@ -153,7 +153,7 @@ functions:
       Folds the argument at the given index to a constant value.
 
       Fails if the argument is not constant, e.g. a column reference, or if the index is out of bounds. The
-      arguments of a table function are always constant. The resulting value may be NULL. The returned value is
+      arguments of a table or pragma function are always constant. The resulting value may be NULL. The returned value is
       owned by the caller and must be destroyed via `[[value_destroy]]`.
     parameters:
       info:
