@@ -37,11 +37,13 @@ struct JoinHTScanState {
 public:
 	JoinHTScanState(TupleDataCollection &collection, idx_t chunk_idx_from, idx_t chunk_idx_to,
 	                TupleDataPinProperties properties = TupleDataPinProperties::ALREADY_PINNED)
-	    : iterator(collection, properties, chunk_idx_from, chunk_idx_to, false), offset_in_chunk(0) {
+	    : iterator(collection, properties, chunk_idx_from, chunk_idx_to, false), offset_in_chunk(0), chunks_done(0) {
 	}
 
 	TupleDataChunkIterator iterator;
 	idx_t offset_in_chunk;
+	//! The number of chunks that have been scanned entirely
+	idx_t chunks_done;
 
 private:
 	//! Implicit copying is not allowed
@@ -250,7 +252,8 @@ public:
 	uint8_t GetDictSurvivingIndexWidth(idx_t build_col_idx, const Vector &incoming) const;
 
 	//! Add the given data to the HT
-	void Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &input);
+	void Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &input,
+	           JoinHashTable &global_ht);
 	//! Merge another HT into this one
 	void Merge(JoinHashTable &other);
 	//! Combines the partitions in sink_collection into data_collection, as if it were not partitioned
@@ -649,9 +652,9 @@ public:
 private:
 	//! True iff the residual predicate (if any) reads build payload column build_col_idx from its row slot
 	bool ColumnReferencedByResidual(idx_t build_col_idx) const;
-	//! Validate the incoming dict chunk and pin a self-owned copy of its dictionary into dict_registry on the first
-	//! chunk; on later chunks assert id continuity. Called per narrowed column from Build.
-	void PinDictSurvivingColumn(idx_t build_col_idx, const Vector &incoming, uint8_t index_width);
+	//! Pin the global HT's self-owned dictionary copy on the first chunk; later chunks only check id continuity.
+	void PinDictSurvivingColumn(idx_t build_col_idx, const Vector &incoming, uint8_t index_width,
+	                            JoinHashTable &global_ht);
 
 private:
 	//! The current number of radix bits used to partition

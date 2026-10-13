@@ -77,8 +77,12 @@ static void ReplaceFunction(DataChunk &args, ExpressionState &state, Vector &res
 }
 
 ScalarFunction ReplaceFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                      ReplaceFunction);
+	ScalarFunction fun({}, LogicalType::VARCHAR, ReplaceFunction);
+	fun.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("source", LogicalType::VARCHAR)
+	    .AddParameter("target", LogicalType::VARCHAR);
+	return fun;
 }
 
 } // namespace duckdb

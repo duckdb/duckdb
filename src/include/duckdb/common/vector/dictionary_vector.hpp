@@ -10,6 +10,8 @@
 
 #include "duckdb/common/types/vector.hpp"
 
+#include <mutex>
+
 namespace duckdb {
 
 //! The DictionaryEntry holds a child Vector for dictionary-encoded vectors
@@ -26,7 +28,7 @@ public:
 	//! fall-through), making it a global dictionary. Set only via CreateReusableGlobalDictionary.
 	bool global_dictionary = false;
 	//! For caching the hashes of a child buffer (mutable: cache is logically const)
-	mutable mutex cached_hashes_lock;
+	mutable std::once_flag cached_hashes_once;
 	mutable unique_ptr<Vector> cached_hashes;
 };
 
@@ -87,6 +89,8 @@ public:
 	Value GetValue(const LogicalType &type, idx_t index) const override;
 	buffer_ptr<VectorBuffer> SliceWithCache(SelCache &cache, const LogicalType &type, const SelectionVector &sel,
 	                                        idx_t count) override;
+	bool TrySerialize(Serializer &serializer, const LogicalType &type, bool compressed_serialization) const override;
+	static buffer_ptr<VectorBuffer> Deserialize(Deserializer &deserializer, const LogicalType &type, idx_t count);
 
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;

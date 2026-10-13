@@ -87,8 +87,10 @@ struct SkewnessOperation {
 } // namespace
 
 AggregateFunction SkewnessFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<SkewState, double, double, SkewnessOperation>(LogicalType::DOUBLE,
-	                                                                                       LogicalType::DOUBLE);
+	auto fun = AggregateFunction::UnaryAggregate<SkewState, double, double, SkewnessOperation>(LogicalType::DOUBLE,
+	                                                                                           LogicalType::DOUBLE);
+	fun.GetSignature().GetParameter(0).SetName("x");
+	return fun;
 }
 
 } // namespace duckdb

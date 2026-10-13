@@ -503,6 +503,14 @@ FileMetadata FileSystem::Stats(FileHandle &handle) {
 	return metadata;
 }
 
+optional<FileMetadata> FileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+	auto handle = OpenFile(file, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS, opener);
+	if (!handle) {
+		return nullopt;
+	}
+	return Stats(*handle);
+}
+
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	throw NotImplementedException("%s: Truncate is not implemented!", GetName());
 }

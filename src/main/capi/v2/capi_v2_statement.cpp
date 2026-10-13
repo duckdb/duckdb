@@ -1,6 +1,21 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/tableref/column_data_ref.hpp"
+
+#include <algorithm>
+#include <utility>
 
 namespace duckdb::capiv2 {
 namespace {
@@ -20,6 +35,38 @@ struct StatementIteratorWrapperV2 {
 	//! iterator yields nothing further: next() returns a NULL statement idempotently.
 	bool finished = false;
 };
+
+//! Binding-index order, as statement_bind's parameter schema; positional indices may be gapped ($1, $3).
+auto ParameterNamesInBindingOrder(const duckdb::SQLStatement &statement)
+    -> vector<std::pair<idx_t, duckdb_v2_identifier_t>> {
+	vector<std::pair<idx_t, duckdb_v2_identifier_t>> names;
+	names.reserve(statement.named_param_map.size());
+	for (auto &entry : statement.named_param_map) {
+		names.emplace_back(entry.second, Convert(entry.first));
+	}
+	std::sort(names.begin(), names.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
+	return names;
+}
+
+//! The common table expressions of a statement a collection can be bound to
+auto GetCollectionCTEMap(duckdb::SQLStatement &statement) -> CommonTableExpressionMap & {
+	switch (statement.type) {
+	case StatementType::SELECT_STATEMENT:
+		return statement.Cast<SelectStatement>().node->cte_map;
+	case StatementType::INSERT_STATEMENT:
+		return statement.Cast<InsertStatement>().node->cte_map;
+	case StatementType::DELETE_STATEMENT:
+		return statement.Cast<DeleteStatement>().node->cte_map;
+	case StatementType::UPDATE_STATEMENT:
+		return statement.Cast<UpdateStatement>().node->cte_map;
+	case StatementType::MERGE_INTO_STATEMENT:
+		return statement.Cast<MergeIntoStatement>().node->cte_map;
+	default:
+		throw InvalidInputException("A collection can only be bound to a SELECT, INSERT, UPDATE, DELETE or MERGE INTO "
+		                            "statement, not to a %s statement.",
+		                            StatementTypeToString(statement.type));
+	}
+}
 
 } // namespace
 
@@ -103,6 +150,106 @@ DUCKDB_V2_ERROR duckdb_v2_statement_iterator_next(duckdb_v2_statement_iterator_h
 	});
 }
 
+DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_type(duckdb_v2_sql_statement_handle statement,
+                                                 DUCKDB_V2_STATEMENT_TYPE *out_type, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(statement);
+	DUCKDB_CHECK_ARG(out_type);
+	*out_type = DUCKDB_V2_STATEMENT_TYPE_INVALID;
+	return WithErrorHandler(err, [&]() { *out_type = Convert(Convert(statement)->type); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_text(duckdb_v2_sql_statement_handle statement, duckdb_v2_str *out_text,
+                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(statement);
+	DUCKDB_CHECK_ARG(out_text);
+	*out_text = duckdb_v2_str {nullptr, 0};
+	return WithErrorHandler(err, [&]() {
+		// The parse paths already store the statement's own slice in `query`; `stmt_location` covers all of it.
+		auto &query = Convert(statement)->query;
+		if (!query.empty()) {
+			*out_text = Convert(query);
+		}
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_parameter_count(duckdb_v2_sql_statement_handle statement, idx_t *out_count,
+                                                            duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(statement);
+	DUCKDB_CHECK_ARG(out_count);
+	*out_count = 0;
+	return WithErrorHandler(err, [&]() { *out_count = Convert(statement)->named_param_map.size(); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_parameter_name(duckdb_v2_sql_statement_handle statement, idx_t index,
+                                                           duckdb_v2_identifier_t *out_name,
+                                                           duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(statement);
+	DUCKDB_CHECK_ARG(out_name);
+	*out_name = duckdb_v2_identifier_t {nullptr, 0};
+	return WithErrorHandler(err, [&]() {
+		auto names = ParameterNamesInBindingOrder(*Convert(statement));
+		if (index >= names.size()) {
+			throw duckdb::Exception(duckdb::ExceptionType::OUT_OF_RANGE,
+			                        duckdb::StringUtil::Format("Parameter index %llu is out of range for a statement "
+			                                                   "with %llu parameters in "
+			                                                   "duckdb_v2_sql_statement_get_parameter_name.",
+			                                                   static_cast<uint64_t>(index),
+			                                                   static_cast<uint64_t>(names.size())));
+		}
+		*out_name = names[index].second;
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_statement_add_collection(duckdb_v2_sql_statement_handle statement,
+                                                   const duckdb_v2_identifier_t *name,
+                                                   duckdb_v2_column_data_collection_handle collection,
+                                                   const duckdb_v2_identifier_t *column_names, idx_t column_count,
+                                                   duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(statement);
+	DUCKDB_CHECK_ARG(name);
+	DUCKDB_CHECK_ARG(collection);
+	return WithErrorHandler(err, [&]() {
+		auto &stmt = *Convert(statement);
+		auto &cdc = *Convert(collection);
+		duckdb::Identifier alias(ConvertIdentifierName(name));
+		if (alias.empty()) {
+			throw duckdb::InvalidInputException("The name to bind a collection under cannot be empty.");
+		}
+		if (column_count > 0 && !column_names) {
+			throw duckdb::InvalidInputException("column_names cannot be null when column_count is not 0.");
+		}
+		if (column_count > 0 && column_count != cdc.ColumnCount()) {
+			throw duckdb::InvalidInputException(
+			    "column_count (%llu) does not match the collection's column count (%llu).",
+			    static_cast<uint64_t>(column_count), static_cast<uint64_t>(cdc.ColumnCount()));
+		}
+		duckdb::vector<duckdb::Identifier> expected_names;
+		for (idx_t i = 0; i < column_count; i++) {
+			expected_names.emplace_back(ConvertIdentifierName(column_names[i]));
+			if (expected_names.back().empty()) {
+				throw duckdb::InvalidInputException("Column name %llu of the collection cannot be empty.",
+				                                    static_cast<uint64_t>(i));
+			}
+		}
+
+		auto &cte_map = GetCollectionCTEMap(stmt);
+		if (cte_map.map.find(alias) != cte_map.map.end()) {
+			throw duckdb::InvalidInputException("The statement already has a common table expression named %s.",
+			                                    duckdb::SQLIdentifier(alias));
+		}
+		// SELECT * over a borrowed reference to the collection, never materialized
+		auto ref = duckdb::make_uniq<duckdb::ColumnDataRef>(cdc, std::move(expected_names));
+		ref->alias = alias;
+		auto select = duckdb::make_uniq<duckdb::SelectNode>();
+		select->select_list.push_back(duckdb::make_uniq<duckdb::StarExpression>());
+		select->from_table = std::move(ref);
+		auto cte_info = duckdb::make_uniq<duckdb::CommonTableExpressionInfo>();
+		cte_info->query_node = std::move(select);
+		cte_info->materialized = duckdb::CTEMaterialize::CTE_MATERIALIZE_NEVER;
+		cte_map.map.insert(alias, std::move(cte_info));
+	});
+}
+
 DUCKDB_V2_ERROR duckdb_v2_sql_statement_destroy(duckdb_v2_sql_statement_handle *statement) {
 	return WithErrorHandler(nullptr, [&]() {
 		if (!statement) {
@@ -152,7 +299,7 @@ DUCKDB_V2_ERROR duckdb_v2_statement_bind(duckdb_v2_connection_handle conn, duckd
 			    "statement expands into multiple engine statements; bind is not supported, execute it instead");
 		}
 		// BindStatement, not Prepare: bind phase only (read-only, no optimize / physical
-		// plan) and must not cancel a live result (Prepare's InitialCleanup would). It
+		// plan) and allowed while a result is live (Prepare is refused). It
 		// throws on a bind error, routed through WithErrorHandler.
 		auto signature = connection->context->BindStatement(std::move(fragments[0]));
 		// Assemble into locals, publish to the out-params only at the end once nothing

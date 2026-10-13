@@ -167,7 +167,8 @@ bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const i
 				// we make an exception if the first over-value is null
 				bool is_value_null = false;
 				for (idx_t i = 0; i < null_str_count; i++) {
-					is_value_null = is_value_null || IsValueNull(null_str_ptr[i], value_ptr, size);
+					is_value_null =
+					    is_value_null || (size == null_str_size[i] && IsValueNull(null_str_ptr[i], value_ptr, size));
 				}
 				error = !is_value_null;
 			}
@@ -248,7 +249,8 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 			// we make an exception if the first over-value is null
 			bool is_value_null = false;
 			for (idx_t i = 0; i < null_str_count; i++) {
-				is_value_null = is_value_null || IsValueNull(null_str_ptr[i], value_ptr, size);
+				is_value_null =
+				    is_value_null || (size == null_str_size[i] && IsValueNull(null_str_ptr[i], value_ptr, size));
 			}
 			error = !is_value_null;
 		}
@@ -596,7 +598,7 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const idx_t buffer_pos,
                                                 const char *value_ptr, const idx_t length, const bool empty) {
 	if (result.escaped) {
-		if (result.projecting_columns) {
+		if (result.projecting_columns && result.cur_col_id < result.number_of_columns) {
 			if (!result.projected_columns[result.cur_col_id]) {
 				result.cur_col_id++;
 				result.escaped = false;
@@ -747,7 +749,10 @@ bool LineError::HandleErrors(StringValueResult &result) {
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
 				    line_pos.GetGlobalPosition(result.requested_size), result.path);
 			}
-			if (!StringValueScanner::CanDirectlyCast(result.csv_file_scan->file_types[col_idx], result.icu_loaded)) {
+			// the file types are those of the projected columns
+			auto &file_types = result.csv_file_scan->file_types;
+			if (cur_error.chunk_idx < file_types.size() &&
+			    !StringValueScanner::CanDirectlyCast(file_types[cur_error.chunk_idx], result.icu_loaded)) {
 				result.number_of_rows--;
 			}
 			break;

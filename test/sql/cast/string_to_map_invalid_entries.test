@@ -1,0 +1,36 @@
+# name: test/sql/cast/string_to_map_invalid_entries.test
+# description: TRY_CAST of VARCHAR to MAP with null keys or missing values
+# group: [cast]
+
+query I
+SELECT TRY_CAST('{null=1,k=2}' AS MAP(VARCHAR, INTEGER));
+----
+NULL
+
+query I
+SELECT TRY_CAST('{a=1,null=2,c=3}' AS MAP(VARCHAR, INTEGER));
+----
+NULL
+
+query I
+SELECT TRY_CAST('{a=' AS MAP(VARCHAR, INTEGER));
+----
+NULL
+
+query I
+SELECT TRY_CAST('{a=1,b=' AS MAP(VARCHAR, INTEGER));
+----
+NULL
+
+query I
+SELECT TRY_CAST(s AS MAP(VARCHAR, INTEGER)) FROM (VALUES ('{a=1}'), ('{null=1,k=2}'), ('{a=1,b='), ('{x=5, y=6}')) t(s);
+----
+{a=1}
+NULL
+NULL
+{x=5, y=6}
+
+statement error
+SELECT CAST('{null=1,k=2}' AS MAP(VARCHAR, INTEGER));
+----
+can't be cast to the destination type
