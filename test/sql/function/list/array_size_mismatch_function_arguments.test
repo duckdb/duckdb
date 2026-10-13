@@ -1,0 +1,28 @@
+# name: test/sql/function/list/array_size_mismatch_function_arguments.test
+# description: Function arguments that are arrays of different sizes are cast to the parameter type
+# group: [list]
+
+statement error
+SELECT list_concat([[1,2,3]::INT[3]], [[5]::INT[1]]);
+----
+<REGEX>:Conversion Error.*Cannot cast array of size 1 to array of size 3.*
+
+statement error
+SELECT list_append([[1]::INT[1]], [9,8]::INT[2]);
+----
+<REGEX>:Conversion Error.*
+
+statement error
+SELECT lag(a, 1, [9]::BIGINT[1]) OVER (ORDER BY a) FROM (SELECT range(10)::BIGINT[10] a);
+----
+<REGEX>:Conversion Error.*
+
+query I
+SELECT list_concat([[1,2,3]::INT[3]], [[5,6,7]::INT[3]]);
+----
+[[1, 2, 3], [5, 6, 7]]
+
+query I
+SELECT list_append([[1, 2]::INT[2]], [9,8]::INT[2]);
+----
+[[1, 2], [9, 8]]

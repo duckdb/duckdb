@@ -470,6 +470,11 @@ static LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, 
 		return RequiresCast(ListType::GetChildType(source_type), ListType::GetChildType(target_type));
 	}
 	if (source_type.id() == LogicalTypeId::ARRAY && target_type.id() == LogicalTypeId::ARRAY) {
+		if (!ArrayType::IsAnySize(source_type) && !ArrayType::IsAnySize(target_type) &&
+		    ArrayType::GetSize(source_type) != ArrayType::GetSize(target_type)) {
+			// arrays of different sizes have a different layout
+			return LogicalTypeComparisonResult::DIFFERENT_TYPES;
+		}
 		return RequiresCast(ArrayType::GetChildType(source_type), ArrayType::GetChildType(target_type));
 	}
 	return LogicalTypeComparisonResult::DIFFERENT_TYPES;
