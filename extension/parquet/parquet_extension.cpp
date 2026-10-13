@@ -1087,6 +1087,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(MultiFileReader::CreateFunctionSet(full_meta_fun));
 
 	// variant_to_parquet_variant
+	loader.RegisterType("PARQUET_VARIANT", VariantColumnWriter::GetParquetVariantType());
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
 
 	// bytes_to_variant
