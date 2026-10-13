@@ -40,6 +40,8 @@ enum class ARTScanProgress : uint8_t;
 
 enum class ARTSearchResult : uint8_t;
 
+enum class ARTSerializationFormat : uint8_t;
+
 enum class AccessMode : uint8_t;
 
 enum class AdaptiveFilterSource : uint8_t;
@@ -152,7 +154,7 @@ enum class CompressionValidity : uint8_t;
 
 enum class ConflictManagerMode : uint8_t;
 
-enum class ConstraintTiming : uint8_t;
+enum class ConstraintCheckMode : uint8_t;
 
 enum class ConstraintType : uint8_t;
 
@@ -289,6 +291,8 @@ enum class IdentifierCaseMode : uint8_t;
 enum class IndexAppendMode : uint8_t;
 
 enum class IndexBindState : uint8_t;
+
+enum class IndexCheckpointMode : uint8_t;
 
 enum class IndexConstraintType : uint8_t;
 
@@ -676,6 +680,9 @@ template<>
 const char* EnumUtil::ToChars<ARTSearchResult>(ARTSearchResult value);
 
 template<>
+const char* EnumUtil::ToChars<ARTSerializationFormat>(ARTSerializationFormat value);
+
+template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
 
 template<>
@@ -844,7 +851,7 @@ template<>
 const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value);
 
 template<>
-const char* EnumUtil::ToChars<ConstraintTiming>(ConstraintTiming value);
+const char* EnumUtil::ToChars<ConstraintCheckMode>(ConstraintCheckMode value);
 
 template<>
 const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
@@ -1049,6 +1056,9 @@ const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value);
 
 template<>
 const char* EnumUtil::ToChars<IndexBindState>(IndexBindState value);
+
+template<>
+const char* EnumUtil::ToChars<IndexCheckpointMode>(IndexCheckpointMode value);
 
 template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
@@ -1622,6 +1632,9 @@ template<>
 ARTSearchResult EnumUtil::FromString<ARTSearchResult>(const char *value);
 
 template<>
+ARTSerializationFormat EnumUtil::FromString<ARTSerializationFormat>(const char *value);
+
+template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
 
 template<>
@@ -1790,7 +1803,7 @@ template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value);
 
 template<>
-ConstraintTiming EnumUtil::FromString<ConstraintTiming>(const char *value);
+ConstraintCheckMode EnumUtil::FromString<ConstraintCheckMode>(const char *value);
 
 template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);
@@ -1995,6 +2008,9 @@ IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value);
 
 template<>
 IndexBindState EnumUtil::FromString<IndexBindState>(const char *value);
+
+template<>
+IndexCheckpointMode EnumUtil::FromString<IndexCheckpointMode>(const char *value);
 
 template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);

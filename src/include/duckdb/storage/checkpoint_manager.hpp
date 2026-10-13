@@ -10,6 +10,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
 namespace duckdb {
 
@@ -52,10 +53,9 @@ public:
 
 	~ActiveCheckpointWrapper();
 
-	//! Begin the transaction within the newly created connection.
-	void GetCheckpointTransaction(CheckpointOptions &options);
+	//! Registers the checkpoint (id, bound, active checkpoint), through a checkpoint transaction if there is a context
+	void Begin(CheckpointOptions &options);
 	void Commit();
-	bool HasCheckpointContext() const;
 
 private:
 	AttachedDatabase &db;
@@ -63,6 +63,8 @@ private:
 	unique_ptr<Connection> checkpoint_connection;
 	optional_ptr<ClientContext> checkpoint_context;
 	optional_ptr<DuckTransaction> checkpoint_transaction;
+	//! Whether Begin registered an active checkpoint that Commit has not reset yet
+	bool active = false;
 };
 
 class CheckpointWriter {
@@ -134,6 +136,7 @@ public:
 };
 
 class SingleFileCheckpointWriter final : public CheckpointWriter {
+	friend class SingleFileTableIndexWriter;
 	friend class SingleFileRowGroupWriter;
 	friend class SingleFileTableDataWriter;
 
@@ -148,6 +151,8 @@ public:
 	unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) override;
 
 	BlockManager &GetBlockManager();
+	//! Make a partial block scope for an index that persists immediately.
+	PartialBlockManager CreatePerIndexPartialBlockManager();
 	CheckpointOptions GetCheckpointOptions() const {
 		return options;
 	}
@@ -167,6 +172,8 @@ private:
 	//! Because this is single-file storage, we can share partial blocks across
 	//! an entire checkpoint.
 	PartialBlockManager partial_block_manager;
+	//! Need to have a separate partial block manager for indexes due to different block shapes.
+	PartialBlockManager index_partial_block_manager;
 	//! Checkpoint type
 	CheckpointOptions options;
 	//! Block usage count for verification purposes

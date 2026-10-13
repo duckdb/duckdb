@@ -39,15 +39,15 @@
 namespace duckdb {
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t count)
-    : SegmentBase<RowGroup>(count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
+    : SegmentBase<RowGroup>(count), collection(collection_p), version_info(make_shared_ptr<RowGroupVersionInfo>()),
       allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), has_changes(false) {
 	Verify();
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
-    : SegmentBase<RowGroup>(pointer.tuple_count), collection(collection_p), version_info(nullptr),
-      deletes_is_loaded(false), allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false),
-      has_changes(false) {
+    : SegmentBase<RowGroup>(pointer.tuple_count), collection(collection_p),
+      version_info(make_shared_ptr<RowGroupVersionInfo>(std::move(pointer.deletes_pointers))), allocation_size(0),
+      row_id_is_loaded(false), row_number_is_loaded(false), has_changes(false) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
 		throw DataCorruptionException("Row group column count is unaligned with table column count. Corrupt file?");
@@ -58,7 +58,6 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 	for (idx_t c = 0; c < columns.size(); c++) {
 		this->is_loaded[c] = false;
 	}
-	this->deletes_pointers = std::move(pointer.deletes_pointers);
 	this->has_metadata_blocks = pointer.has_metadata_blocks;
 	this->extra_metadata_blocks = std::move(pointer.extra_metadata_blocks);
 	this->has_per_column_metadata_blocks = pointer.has_per_column_metadata_blocks;
@@ -68,7 +67,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &data)
-    : SegmentBase<RowGroup>(data.count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
+    : SegmentBase<RowGroup>(data.count), collection(collection_p), version_info(make_shared_ptr<RowGroupVersionInfo>()),
       allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), has_changes(false) {
 	auto &block_manager = GetBlockManager();
 	auto &info = GetTableInfo();
@@ -444,10 +443,7 @@ bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> 
 
 unique_ptr<RowGroup> RowGroup::CreateNewRowGroupCopy(RowGroupCollection &new_collection, idx_t new_column_count) {
 	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
-	row_group->deletes_pointers = deletes_pointers;
-	row_group->deletes_is_loaded = deletes_is_loaded.load();
-	row_group->owned_version_info = owned_version_info;
-	row_group->version_info = version_info.load();
+	row_group->version_info = version_info;
 	row_group->columns.resize(new_column_count);
 	if (is_loaded) {
 		row_group->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[new_column_count]);
@@ -1138,64 +1134,65 @@ void RowGroup::Scan(CollectionScanState &state, DataChunk &result, TableScanType
 	Scan(options, state, result);
 }
 
-optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
+//===--------------------------------------------------------------------===//
+// RowGroupVersionInfo
+//===--------------------------------------------------------------------===//
+RowGroupVersionInfo::RowGroupVersionInfo(vector<MetaBlockPointer> deletes_pointers_p)
+    : deletes_pointers(std::move(deletes_pointers_p)), deletes_is_loaded(false), version_info(nullptr) {
+}
+
+bool RowGroupVersionInfo::HasUnloadedDeletes() const {
+	if (deletes_pointers.empty()) {
+		// no stored deletes at all
+		return false;
+	}
+	// return whether or not the deletes have been loaded
+	return !deletes_is_loaded;
+}
+
+optional_ptr<RowVersionManager> RowGroupVersionInfo::Get(BlockManager &block_manager) {
 	if (!HasUnloadedDeletes()) {
 		// deletes are loaded - return the version info
-		return version_info;
+		return version_info.load();
 	}
-	lock_guard<mutex> lock(row_group_lock);
+	lock_guard<mutex> guard(lock);
 	// double-check after obtaining the lock whether or not deletes are still not loaded to avoid double load
 	if (!HasUnloadedDeletes()) {
-		return version_info;
+		return version_info.load();
 	}
 	D_ASSERT(!deletes_pointers.empty());
 	auto root_delete = deletes_pointers[0];
-	auto loaded_info = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager());
-	SetVersionInfo(std::move(loaded_info));
-	deletes_is_loaded = true;
-	return version_info;
-}
-
-void RowGroup::SetVersionInfo(shared_ptr<RowVersionManager> version) {
-	owned_version_info = std::move(version);
+	owned_version_info = RowVersionManager::Deserialize(root_delete, block_manager.GetMetadataManager());
 	version_info = owned_version_info.get();
+	deletes_is_loaded = true;
+	return version_info.load();
 }
 
-shared_ptr<RowVersionManager> RowGroup::GetOrCreateVersionInfoInternal() {
-	// version info does not exist - need to create it
-	lock_guard<mutex> lock(row_group_lock);
+shared_ptr<RowVersionManager> RowGroupVersionInfo::GetOrCreate(BlockManager &block_manager) {
+	// load the persisted deletes first, so that a new manager does not shadow them
+	Get(block_manager);
+	lock_guard<mutex> guard(lock);
 	if (!owned_version_info) {
-		auto &buffer_manager = GetBlockManager().GetBufferManager();
-		auto new_info = make_shared_ptr<RowVersionManager>(buffer_manager);
-		SetVersionInfo(std::move(new_info));
+		owned_version_info = make_shared_ptr<RowVersionManager>(block_manager.GetBufferManager());
+		version_info = owned_version_info.get();
 	}
 	return owned_version_info;
 }
 
+optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
+	return version_info->Get(GetBlockManager());
+}
+
 shared_ptr<RowVersionManager> RowGroup::GetOrCreateVersionInfoPtr() {
-	auto vinfo = GetVersionInfo();
-	if (vinfo) {
-		// version info exists - return it directly
-		return owned_version_info;
-	}
-	return GetOrCreateVersionInfoInternal();
+	return version_info->GetOrCreate(GetBlockManager());
 }
 
 RowVersionManager &RowGroup::GetOrCreateVersionInfo() {
-	auto vinfo = GetVersionInfo();
-	if (vinfo) {
-		// version info exists - return it directly
-		return *vinfo;
-	}
-	return *GetOrCreateVersionInfoInternal();
+	return *GetOrCreateVersionInfoPtr();
 }
 
 optional_ptr<RowVersionManager> RowGroup::GetVersionInfoIfLoaded() const {
-	if (!HasUnloadedDeletes()) {
-		// deletes are loaded - return the version info
-		return version_info;
-	}
-	return nullptr;
+	return version_info->GetIfLoaded();
 }
 
 idx_t RowGroup::GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count) {
@@ -1508,8 +1505,7 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		auto &row_group = row_groups[row_group_idx].get();
 		auto result_row_group = make_shared_ptr<RowGroup>(row_group.GetCollection(), row_group.count);
 		result_row_group->columns = std::move(result_columns[row_group_idx]);
-		result_row_group->version_info = row_group.version_info.load();
-		result_row_group->owned_version_info = row_group.owned_version_info;
+		result_row_group->version_info = row_group.version_info;
 
 		row_group_write_data.result_row_group = std::move(result_row_group);
 	}
@@ -1550,12 +1546,7 @@ idx_t RowGroup::GetVisibleRowCount(TransactionData transaction, idx_t start_vect
 }
 
 bool RowGroup::HasUnloadedDeletes() const {
-	if (deletes_pointers.empty()) {
-		// no stored deletes at all
-		return false;
-	}
-	// return whether or not the deletes have been loaded
-	return !deletes_is_loaded;
+	return version_info->HasUnloadedDeletes();
 }
 
 PerColumnMetadataBlocks RowGroup::ComputePerColumnMetadataBlocks() const {
@@ -1633,7 +1624,7 @@ bool RowGroup::HasUnchangedColumns() const {
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	bool can_reuse_metadata = CanReuseMetadata(writer);
-	if (can_reuse_metadata && !HasChanges()) {
+	if (can_reuse_metadata && !HasChanges(writer.GetCheckpointOptions().visibility_bound)) {
 		RowGroupWriteData result;
 		result.write_action = RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA;
 		if (GetCollection().SupportsPerColumnWrites()) {
@@ -1679,10 +1670,8 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	auto result_row_group = make_shared_ptr<RowGroup>(GetCollection(), this->count);
 	result_row_group->columns.resize(GetColumnCount());
 	result_row_group->column_pointers.resize(GetColumnCount());
-	result_row_group->deletes_pointers = deletes_pointers;
-	result_row_group->deletes_is_loaded = deletes_is_loaded.load();
-	result_row_group->owned_version_info = owned_version_info;
-	result_row_group->version_info = version_info.load();
+	// the rewritten row group shares the version info: deletes stay visible through both
+	result_row_group->version_info = version_info;
 	if (is_loaded) {
 		result_row_group->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[GetColumnCount()]);
 		for (idx_t c = 0; c < GetColumnCount(); c++) {
@@ -1921,12 +1910,12 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	return row_group_pointer;
 }
 
-bool RowGroup::HasChanges() const {
+bool RowGroup::HasChanges(VisibilityBound bound) const {
 	if (has_changes) {
 		return true;
 	}
-	auto version_info_loaded = version_info.load();
-	if (version_info_loaded && version_info_loaded->HasUnserializedChanges()) {
+	auto version_info_loaded = version_info->GetIfLoaded();
+	if (version_info_loaded && version_info_loaded->HasUnserializedChanges(bound)) {
 		// we have deletes
 		return true;
 	}
@@ -1981,6 +1970,7 @@ vector<MetaBlockPointer> RowGroup::CheckpointDeletes(RowGroupWriter &writer) {
 		// deletes were not loaded so they cannot be changed
 		// re-use them as-is
 		auto &manager = *writer.GetMetadataManager();
+		auto &deletes_pointers = version_info->GetDeletesPointers();
 		manager.ClearModifiedBlocks(deletes_pointers);
 		return deletes_pointers;
 	}
@@ -2054,7 +2044,7 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	}
 
 	bool HasPendingWrites() override {
-		return row_group->HasChanges();
+		return row_group->HasChanges(VisibilityBound::AllCommitted());
 	}
 };
 

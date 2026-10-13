@@ -1131,8 +1131,8 @@ String:
     - DoubleType
     - UpdateSetColumnTarget
 
-ConstraintTiming:
-  type: "ConstraintTiming"
+ConstraintCheckMode:
+  type: "ConstraintCheckMode"
   by_value: false
   rules:
     - ConstraintTiming
