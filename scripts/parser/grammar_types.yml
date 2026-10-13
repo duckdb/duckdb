@@ -303,9 +303,10 @@ UpdateSetInfo:
   type: "unique_ptr<UpdateSetInfo>"
   by_value: true
   rules:
+    - UpdateSetClauseList
     - UpdateSetClause
     - UpdateSetTuple
-    - UpdateSetElementList
+    - UpdateSetElement
     - UpdateMatchSetClause
     - UpdateMatchSetInfo
 
@@ -929,6 +930,7 @@ GenericCopyOption:
     - PartitionedByCopyOption
     - SpecializedOption
     - SpecializedOptionTail
+    - CopyLegacyOption
     - SingleOption
     - EncodingOption
     - ForceQuoteOption
@@ -1169,6 +1171,9 @@ Bool:
     - Materialized
     - SampleUnit
     - DropBehavior
+    - TruncateOptions
+    - TruncateAliasOptions
+    - TruncateDropBehavior
     - CascadeDropBehavior
     - RestrictDropBehavior
     - AnyOrAll
@@ -1719,10 +1724,6 @@ overrides:
   NullsFirstOrLast:
     type: "OrderByNullType"
     default_initializer: "ORDER_DEFAULT"
-  # update.gram
-  UpdateSetElement:
-    type: "pair<string, unique_ptr<ParsedExpression>>"
-    by_value: true
 
 # ---------------------------------------------------------------------------
 # matcher.cpp rule overrides
@@ -1926,6 +1927,8 @@ packrat_memoized_rules:
 excluded_rules:
   # Syntax only: the 'EXTERNAL' 'RESOURCE' keyword pair, shared by every singular form.
   - ExternalResourceKeyword
+  # Syntax only: OVERRIDING {USER|SYSTEM} VALUE is accepted and ignored.
+  - OverridingClause
   # Suggestion-only: exists so autocomplete offers the special SHOW forms as keywords; parsing of e.g.
   # "SHOW databases" resolves through ShowSettingName (the identifier), which the transformer special-cases.
   - ShowSpecialForm
