@@ -867,8 +867,6 @@ void LoggingStorage::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const V
 }
 
 void LoggingStorage::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
-	auto &db = GetDB<LoggingStorage>(db_p);
-	DUCKDB_LOG_WARNING(db, "the logging_storage setting is deprecated: use logging_sink instead");
 	LoggingSink::ResetGlobal(db_p, config);
 }
 

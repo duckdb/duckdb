@@ -61,6 +61,21 @@ SELECT current_setting('logging_sink');
 ----
 memory
 
+# Setting the deprecated name warns, resetting it does not
+statement ok
+SET warnings_as_errors = true;
+
+statement error
+SET logging_storage = 'stdout';
+----
+the logging_storage setting is deprecated: use logging_sink instead
+
+statement ok
+RESET logging_storage;
+
+statement ok
+SET warnings_as_errors = false;
+
 # Errors are the same as for logging_sink
 statement error
 SET logging_storage = 'quack';
