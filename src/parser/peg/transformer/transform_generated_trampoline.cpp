@@ -25147,29 +25147,91 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeUseTargetTrampoli
 
 void PEGTransformerFactory::InitializeSchemaNameAsUseTargetTrampoline(PEGTransformer &transformer,
                                                                       GeneratedTransformProcess &process) {
-	process.ReserveChildSlots(0);
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process &&
+	    (choice_result.type == ParseResultType::IDENTIFIER || choice_result.type == ParseResultType::KEYWORD ||
+	     choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR ||
+	     choice_result.type == ParseResultType::CHOICE || choice_result.type == ParseResultType::LIST)) {
+		return;
+	}
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.Name());
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
 }
 
 arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeSchemaNameAsUseTargetTrampoline(PEGTransformer &transformer,
                                                                GeneratedTransformProcess &process) {
-	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto schema_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
-	auto result = TransformSchemaNameAsUseTarget(transformer, schema_name);
+	string child;
+	if (process.child_results[0]) {
+		child = process.TakeResult<string>(0);
+	} else {
+		auto &list_pr = process.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			child = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			child = choice_result.Cast<KeywordParseResult>().keyword;
+		} else if (choice_result.type == ParseResultType::STRING) {
+			child = choice_result.Cast<StringLiteralParseResult>().result;
+		} else if (choice_result.type == ParseResultType::OPERATOR) {
+			child = choice_result.Cast<OperatorParseResult>().operator_token;
+		} else {
+			child = TransformIdentifierOrKeyword(transformer, choice_result);
+		}
+	}
+	auto result = TransformSchemaNameAsUseTarget(transformer, child);
 	return transformer.MakeResult<QualifiedName>(result);
 }
 
 void PEGTransformerFactory::InitializeCatalogNameAsUseTargetTrampoline(PEGTransformer &transformer,
                                                                        GeneratedTransformProcess &process) {
-	process.ReserveChildSlots(0);
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process &&
+	    (choice_result.type == ParseResultType::IDENTIFIER || choice_result.type == ParseResultType::KEYWORD ||
+	     choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR ||
+	     choice_result.type == ParseResultType::CHOICE || choice_result.type == ParseResultType::LIST)) {
+		return;
+	}
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.Name());
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
 }
 
 arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeCatalogNameAsUseTargetTrampoline(PEGTransformer &transformer,
                                                                 GeneratedTransformProcess &process) {
-	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto catalog_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
-	auto result = TransformCatalogNameAsUseTarget(transformer, catalog_name);
+	string child;
+	if (process.child_results[0]) {
+		child = process.TakeResult<string>(0);
+	} else {
+		auto &list_pr = process.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			child = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			child = choice_result.Cast<KeywordParseResult>().keyword;
+		} else if (choice_result.type == ParseResultType::STRING) {
+			child = choice_result.Cast<StringLiteralParseResult>().result;
+		} else if (choice_result.type == ParseResultType::OPERATOR) {
+			child = choice_result.Cast<OperatorParseResult>().operator_token;
+		} else {
+			child = TransformIdentifierOrKeyword(transformer, choice_result);
+		}
+	}
+	auto result = TransformCatalogNameAsUseTarget(transformer, child);
 	return transformer.MakeResult<QualifiedName>(result);
 }
 

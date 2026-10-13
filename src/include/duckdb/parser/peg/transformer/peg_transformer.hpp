@@ -5858,8 +5858,8 @@ public:
 	static string TransformUpdateSetColumnTarget(PEGTransformer &transformer, const Identifier &column_name,
 	                                             const optional<vector<Identifier>> &dot_identifier);
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer, const QualifiedName &use_target);
-	static QualifiedName TransformSchemaNameAsUseTarget(PEGTransformer &transformer, const Identifier &schema_name);
-	static QualifiedName TransformCatalogNameAsUseTarget(PEGTransformer &transformer, const Identifier &catalog_name);
+	static QualifiedName TransformSchemaNameAsUseTarget(PEGTransformer &transformer, const string &schema_name);
+	static QualifiedName TransformCatalogNameAsUseTarget(PEGTransformer &transformer, const string &catalog_name);
 	static QualifiedName TransformUseTargetCatalogSchema(PEGTransformer &transformer, const Identifier &catalog_name,
 	                                                     const Identifier &reserved_schema_name,
 	                                                     const optional<vector<Identifier>> &dot_identifier);
