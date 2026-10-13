@@ -138,6 +138,23 @@ struct ICUDateTrunc : public ICUDateFunc {
 		calendar->Set(CAL_ERA, era);
 	}
 
+	template <typename SRC, typename DST>
+	static inline DST TruncCast(const SRC &src) {
+		DST dst;
+		if (SRC::PRECISION == DST::PRECISION) {
+			dst.value = src.value;
+		} else {
+			//	Truncate away from the epoch
+			//	Scale first so we don't overflow.
+			const int64_t scaling = SRC::PRECISION / DST::PRECISION;
+			dst.value = src.value / scaling; // NOLINT
+			if (dst.value < 0) {
+				--dst.value;
+			}
+		}
+		return dst;
+	}
+
 	template <typename T>
 	static void ICUDateTruncFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
@@ -155,26 +172,27 @@ struct ICUDateTrunc : public ICUDateFunc {
 			}
 			const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
 			auto truncator = TruncationFactory(GetDatePartSpecifier(specifier));
-			UnaryExecutor::Execute<T, T>(date_arg, result, [&](T input) {
+			UnaryExecutor::Execute<T, timestamp_tz_t>(date_arg, result, [&](T input) {
 				if (input.IsFinite()) {
-					auto micros = SetTime(calendar.get(), input);
+					auto micros = SetTime(calendar.get(), TruncCast<T, timestamp_tz_t>(input));
 					truncator(calendar.get(), micros);
 					return GetTimeUnsafe(calendar.get(), micros);
 				} else {
-					return input;
+					return timestamp_tz_t(input.value);
 				}
 			});
 		} else {
-			BinaryExecutor::Execute<string_t, T, T>(part_arg, date_arg, result, [&](string_t specifier, T input) {
-				if (input.IsFinite()) {
-					auto truncator = TruncationFactory(GetDatePartSpecifier(specifier.GetString()));
-					auto micros = SetTime(calendar.get(), input);
-					truncator(calendar.get(), micros);
-					return GetTimeUnsafe(calendar.get(), micros);
-				} else {
-					return input;
-				}
-			});
+			BinaryExecutor::Execute<string_t, T, timestamp_tz_t>(
+			    part_arg, date_arg, result, [&](string_t specifier, T input) {
+				    if (input.IsFinite()) {
+					    auto truncator = TruncationFactory(GetDatePartSpecifier(specifier.GetString()));
+					    auto micros = SetTime(calendar.get(), TruncCast<T, timestamp_tz_t>(input));
+					    truncator(calendar.get(), micros);
+					    return GetTimeUnsafe(calendar.get(), micros);
+				    } else {
+					    return timestamp_tz_t(input.value);
+				    }
+			    });
 		}
 	}
 
@@ -188,6 +206,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 	static void AddBinaryTimestampFunction(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetDateTruncFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetDateTruncFunction<timestamp_tz_ns_t>(LogicalType::TIMESTAMP_TZ_NS));
 		// throws for unrecognized part specifiers and for dates that overflow the timestamp range
 		set.SetFallible();
 		set.SetArgProperties(1, ArgProperties().NonDecreasing());
