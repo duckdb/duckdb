@@ -164,9 +164,9 @@ DOUBLE	DOUBLE	BIGNUM
 
 # the DOUBLE overload of // divides without truncating, as it does for DOUBLE operands
 query III
-SELECT 9::BIGNUM // 1.5::DECIMAL(2,1), 9::BIGNUM // 1.5::DOUBLE, 10::BIGNUM // 3::INTEGER
+SELECT 5::BIGNUM // 2.0::DECIMAL(2,1), 5::BIGNUM // 2.0::DOUBLE, 10::BIGNUM // 3::INTEGER
 ----
-6.0	6.0	3
+2.5	2.5	3
 
 query III
 SELECT typeof(10::BIGNUM % 3.0::DECIMAL(2,1)), typeof(10::BIGNUM % 3.0::DOUBLE), typeof(10::BIGNUM % 3::INTEGER)
