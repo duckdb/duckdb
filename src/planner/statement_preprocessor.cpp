@@ -9,12 +9,47 @@
 #include "duckdb/function/function.hpp"
 
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_context_state.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
+
+namespace {
+
+class StatementPreprocessScope {
+public:
+	explicit StatementPreprocessScope(ClientContext &context)
+	    : context(context), states(context.registered_state->States()) {
+		try {
+			for (auto &state : states) {
+				state->OnStatementPreprocessBegin(context);
+				started++;
+			}
+		} catch (...) {
+			End();
+			throw;
+		}
+	}
+	~StatementPreprocessScope() {
+		End();
+	}
+
+private:
+	void End() noexcept {
+		while (started > 0) {
+			states[--started]->OnStatementPreprocessEnd(context);
+		}
+	}
+
+	ClientContext &context;
+	vector<shared_ptr<ClientContextState>> states;
+	idx_t started = 0;
+};
+
+} // namespace
 
 StatementPreprocessor::StatementPreprocessor(ClientContext &context) : context(context) {
 }
@@ -71,6 +106,7 @@ PreprocessedStatement StatementPreprocessor::PreprocessStatement(ClientContextLo
 	if (statement->type != StatementType::PRAGMA_STATEMENT && statement->type != StatementType::MULTI_STATEMENT) {
 		return ExpandStatement(std::move(statement));
 	}
+	StatementPreprocessScope scope(context);
 	// Only PRAGMA and multi-statements touch the catalog and need a transaction
 	PreprocessedStatement result;
 	context.RunFunctionInTransactionInternal(lock, [&] { result = ExpandStatement(std::move(statement)); });

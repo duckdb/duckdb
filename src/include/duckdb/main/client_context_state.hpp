@@ -36,6 +36,15 @@ struct BindPreparedStatementCallbackInfo {
 class ClientContextState {
 public:
 	virtual ~ClientContextState() = default;
+	//! Encloses statement preprocessing, including its transaction work and PRAGMA reparsing.
+	//! Called only for statements that need preprocessing, before any preprocessing transaction begins.
+	//! Callbacks can nest. A throwing begin must undo its own changes and will not receive an end.
+	virtual void OnStatementPreprocessBegin(ClientContext &context) {
+	}
+	//! Paired with each successful begin, in reverse order on the same retained state snapshot.
+	//! Runs on success and error, including after registry removal. Must not throw.
+	virtual void OnStatementPreprocessEnd(ClientContext &context) noexcept {
+	}
 	virtual void QueryBegin(ClientContext &context) {
 	}
 	virtual void QueryEnd() {
