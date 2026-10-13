@@ -151,8 +151,10 @@ SELECT count(*) FROM T t1, T t2 WHERE t1.a * (t1.b + t2.b) <> t1.a * t1.b + t1.a
 0
 
 # overflow: the largest BIGNUM times two trips the bit-length bound before any multiplication
+# (temporary: an 8 MiB BIGNUM must not land in the storage compatibility database, where the
+# old CLIs stringify every persisted table and BIGNUM -> VARCHAR is quadratic)
 statement ok
-CREATE TABLE big AS SELECT bignum AS m FROM test_all_types(use_large_bignum = true) LIMIT 2;
+CREATE TEMPORARY TABLE big AS SELECT bignum AS m FROM test_all_types(use_large_bignum = true) LIMIT 2;
 
 statement error
 SELECT m * 2::BIGNUM FROM big WHERE m > 0
