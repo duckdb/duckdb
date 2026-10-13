@@ -38,7 +38,7 @@ GetKnownColumnValues(const string &filename, const HivePartitioningFilterInfo &f
 	if (filter_info.hive_enabled) {
 		auto partitions = HivePartitioning::Parse(filename);
 		for (auto &partition : partitions) {
-			auto lookup_column_id = column_map.find(partition.first);
+			auto lookup_column_id = column_map.find(Identifier(partition.first));
 			if (lookup_column_id != column_map.end()) {
 				result.insert(
 				    make_pair(lookup_column_id->second, PartitioningColumnValue(partition.first, partition.second)));
