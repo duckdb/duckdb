@@ -35,6 +35,14 @@ ExpressionExecutor::ExpressionExecutor(ClientContext &context, const vector<uniq
 	}
 }
 
+ExpressionExecutor::ExpressionExecutor(optional_ptr<ClientContext> context_p, const Expression &expression)
+    : context(context_p) {
+	if (context) {
+		debug_vector_verification = Settings::Get<DebugVerifyVectorSetting>(*context);
+	}
+	AddExpression(expression);
+}
+
 ExpressionExecutor::ExpressionExecutor(const vector<unique_ptr<Expression>> &exprs) : context(nullptr) {
 	D_ASSERT(exprs.size() > 0);
 	for (auto &expr : exprs) {

@@ -20,7 +20,7 @@ namespace duckdb {
 //! LambdaExecuteInfo holds information for executing the lambda expression on an input chunk and
 //! a resulting lambda chunk.
 struct LambdaExecuteInfo {
-	LambdaExecuteInfo(ClientContext &context, const Expression &lambda_expr, const DataChunk &args,
+	LambdaExecuteInfo(optional_ptr<ClientContext> context, const Expression &lambda_expr, const DataChunk &args,
 	                  const bool has_index, const Vector &child_vector)
 	    : has_index(has_index) {
 		expr_executor = make_uniq<ExpressionExecutor>(context, lambda_expr);
@@ -46,7 +46,7 @@ struct LambdaExecuteInfo {
 		input_chunk.InitializeEmpty(input_types);
 		lambda_chunk.Initialize(Allocator::DefaultAllocator(), result_types);
 		// Spark Compatibility Mode: zero-based index for lambdas
-		if (Settings::Get<DialectCompatibilityModeSetting>(context) == DialectCompatibilityMode::SPARK) {
+		if (context && Settings::Get<DialectCompatibilityModeSetting>(*context) == DialectCompatibilityMode::SPARK) {
 			// Spark's lambda index parameter is 0-based; default SQL is 1-based
 			index_offset = 0;
 		}
@@ -288,7 +288,9 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 	info.child_vector->ToUnifiedFormat(child_info.format);
 
 	// get the expression executor
-	LambdaExecuteInfo execute_info(state.GetContext(), *info.lambda_expr, args, info.has_index, *info.child_vector);
+	// lambdas can be evaluated without a client context, e.g. when maintaining an index
+	auto context = state.HasContext() ? &state.GetContext() : nullptr;
+	LambdaExecuteInfo execute_info(context, *info.lambda_expr, args, info.has_index, *info.child_vector);
 
 	// get list_filter specific info
 	ListFilterInfo list_filter_info;
@@ -322,7 +324,9 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
 			// reached STANDARD_VECTOR_SIZE elements
 			if (elem_cnt == STANDARD_VECTOR_SIZE) {
-				state.GetContext().InterruptCheck();
+				if (context) {
+					context->InterruptCheck();
+				}
 				execute_info.lambda_chunk.Reset();
 				ExecuteExpression(elem_cnt, child_info, info.column_infos, index_vector, execute_info);
 				auto &lambda_vector = execute_info.lambda_chunk.data[0];

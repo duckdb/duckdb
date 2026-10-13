@@ -10,7 +10,7 @@ namespace duckdb {
 namespace {
 
 struct ReduceExecuteInfo {
-	ReduceExecuteInfo(LambdaFunctions::LambdaInfo &info, ClientContext &context)
+	ReduceExecuteInfo(LambdaFunctions::LambdaInfo &info, optional_ptr<ClientContext> context)
 	    : context(context), left_slice(make_uniq<Vector>(Vector::Ref(*info.child_vector))) {
 		if (info.has_initial) {
 			initial_value_offset = 0;
@@ -62,7 +62,7 @@ struct ReduceExecuteInfo {
 	};
 
 	ValidityMask active_rows;
-	ClientContext &context;
+	optional_ptr<ClientContext> context;
 	unique_ptr<Vector> left_slice;
 	unique_ptr<Vector> accumulator_cast;
 	unique_ptr<ExpressionExecutor> expr_executor;
@@ -82,7 +82,11 @@ void ReferenceAccumulator(ReduceExecuteInfo &execute_info, Vector &target, Vecto
 		}
 		execute_info.accumulator_cast->SetVectorType(VectorType::FLAT_VECTOR);
 		FlatVector::ValidityMutable(*execute_info.accumulator_cast).SetAllValid(count);
-		VectorOperations::Cast(execute_info.context, source, *execute_info.accumulator_cast, count, true);
+		if (execute_info.context) {
+			VectorOperations::Cast(*execute_info.context, source, *execute_info.accumulator_cast, count, true);
+		} else {
+			VectorOperations::DefaultCast(source, *execute_info.accumulator_cast, count, true);
+		}
 		target.Reference(*execute_info.accumulator_cast);
 	} else {
 		target.Reference(source);
@@ -298,7 +302,9 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 		return;
 	}
 
-	ReduceExecuteInfo execute_info(info, state.GetContext());
+	// lambdas can be evaluated without a client context, e.g. when maintaining an index
+	auto context = state.HasContext() ? &state.GetContext() : nullptr;
+	ReduceExecuteInfo execute_info(info, context);
 
 	// Since the left slice references the result chunk, we need to create two result chunks.
 	// This means there is always an empty result chunk for the next iteration,
@@ -313,7 +319,9 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 	idx_t loops = 0;
 	bool end = false;
 	while (!end) {
-		state.GetContext().InterruptCheck();
+		if (context) {
+			context->InterruptCheck();
+		}
 		auto &result_chunk = loops % 2 ? odd_result_chunk : even_result_chunk;
 		auto &spare_result_chunk = loops % 2 ? even_result_chunk : odd_result_chunk;
 

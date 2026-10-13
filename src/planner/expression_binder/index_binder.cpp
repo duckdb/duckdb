@@ -1,6 +1,4 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
-
-#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
@@ -114,16 +112,6 @@ BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 		return BindResult(BinderException::Unsupported(expr, "window functions are not allowed in index expressions"));
 	case ExpressionClass::SUBQUERY:
 		return BindResult(BinderException::Unsupported(expr, "cannot use subquery in index expressions"));
-	case ExpressionClass::FUNCTION: {
-		// lambda functions require a client context, which the index maintenance on commit does not have
-		for (auto &argument : expr.Cast<FunctionExpression>().GetArguments()) {
-			if (argument.GetExpression().GetExpressionClass() == ExpressionClass::LAMBDA) {
-				return BindResult(
-				    BinderException::Unsupported(expr, "lambda functions are not allowed in index expressions"));
-			}
-		}
-		return ExpressionBinder::BindExpression(expr_ptr, depth);
-	}
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}

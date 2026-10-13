@@ -1,43 +1,63 @@
 # name: test/sql/index/art/create_drop/test_art_lambda_expression.test
-# description: Index expressions can not contain lambda functions
+# description: Index expressions with lambda functions are evaluated without a client context when the index is maintained
 # group: [create_drop]
 
 statement ok
 CREATE TABLE g(l INT[]);
 
-statement error
-CREATE INDEX idx ON g (list_reduce(l, lambda a, x: a + x, 0));
-----
-lambda functions are not allowed in index expressions
+statement ok
+CREATE INDEX idx_reduce ON g (list_reduce(l, lambda a, x: a + x, 0));
 
-statement error
-CREATE INDEX idx ON g (list_transform(l, lambda x: x + 1));
-----
-lambda functions are not allowed in index expressions
-
-statement error
-CREATE UNIQUE INDEX idx ON g (list_reduce(l, lambda a, x: a + x, 0));
-----
-lambda functions are not allowed in index expressions
+statement ok
+CREATE INDEX idx_transform ON g ((list_transform(l, lambda x: x + 1))[2]);
 
 statement ok
 CREATE MACRO filtered_len(l) AS len(list_filter(l, lambda x: x > 1));
 
-statement error
-CREATE INDEX idx ON g (filtered_len(l));
-----
-lambda functions are not allowed in index expressions
+statement ok
+CREATE INDEX idx_macro ON g (filtered_len(l));
 
 statement ok
-INSERT INTO g VALUES ([1, 2]);
-
-statement ok
-CREATE INDEX idx ON g (len(l));
-
-statement ok
-INSERT INTO g VALUES ([1, 2, 3]);
+INSERT INTO g VALUES ([1, 2]), ([1, 2, 3]), ([5]), (NULL), ([]);
 
 query I
-SELECT count(*) FROM g WHERE len(l) = 3;
+SELECT count(*) FROM g WHERE list_reduce(l, lambda a, x: a + x, 0) = 6;
 ----
 1
+
+query I
+SELECT l FROM g WHERE (list_transform(l, lambda x: x + 1))[2] = 3 ORDER BY l;
+----
+[1, 2]
+[1, 2, 3]
+
+query I
+SELECT count(*) FROM g WHERE filtered_len(l) = 1;
+----
+2
+
+statement ok
+DELETE FROM g WHERE len(l) = 3;
+
+statement ok
+UPDATE g SET l = [10, 20] WHERE l = [5];
+
+query I
+SELECT l FROM g WHERE list_reduce(l, lambda a, x: a + x, 0) = 30;
+----
+[10, 20]
+
+# unique indexes are maintained as well
+statement ok
+CREATE TABLE u(l INT[]);
+
+statement ok
+CREATE UNIQUE INDEX idx_unique ON u (list_reduce(l, lambda a, x: a + x, 0));
+
+statement ok
+INSERT INTO u VALUES ([1, 2]);
+
+statement error
+INSERT INTO u VALUES ([3]);
+----
+<REGEX>:Constraint Error:.*violates unique constraint.*

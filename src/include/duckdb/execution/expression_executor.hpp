@@ -28,6 +28,8 @@ public:
 	DUCKDB_API ExpressionExecutor(ClientContext &context, const Expression *expression);
 	DUCKDB_API ExpressionExecutor(ClientContext &context, const Expression &expression);
 	DUCKDB_API ExpressionExecutor(ClientContext &context, const vector<unique_ptr<Expression>> &expressions);
+	//! Creates an executor for an expression nested in another one, using the (optional) context of the outer executor
+	DUCKDB_API ExpressionExecutor(optional_ptr<ClientContext> context, const Expression &expression);
 	ExpressionExecutor(ExpressionExecutor &&) = delete;
 
 	//! The expressions of the executor
