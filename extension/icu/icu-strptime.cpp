@@ -411,7 +411,13 @@ struct ICUStrptime : public ICUDateFunc {
 			}
 
 			// Now get the parts in the given time zone
-			return FromNaive(calendar, us);
+			timestamp_tz_t result;
+			string error_msg;
+			if (!TryFromNaive(calendar, us, result, error_msg)) {
+				HandleCastError::AssignError(error_msg, parameters);
+				return nullopt;
+			}
+			return result;
 		}
 
 		return timestamp_tz_t(us);

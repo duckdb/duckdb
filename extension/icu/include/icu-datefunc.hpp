@@ -124,6 +124,8 @@ struct ICUDateFunc {
 	//! constructs an ICU timestamp, and then converts that back to a DuckDB instant
 	//! Adding offset doesn't really work around DST because the bin values are ambiguous
 	static timestamp_tz_t FromNaive(Calendar *calendar, timestamp_t naive);
+	//! Non-throwing form of FromNaive - sets the error and returns false if the result is out of range
+	static bool TryFromNaive(Calendar *calendar, timestamp_t naive, timestamp_tz_t &result, string &error);
 
 	//! Truncates the calendar time to the given part precision
 	typedef void (*part_trunc_t)(Calendar *calendar, uint64_t &micros);
