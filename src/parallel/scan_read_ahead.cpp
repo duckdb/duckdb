@@ -281,9 +281,7 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 	if (!read_tasks.empty()) {
 		DUCKDB_LOG(context, AsyncTaskScheduleLogType, "READ_AHEAD", read_tasks.size());
 	}
-	for (auto &task : read_tasks) {
-		executor->ScheduleTask(std::move(task));
-	}
+	executor->ScheduleTasks(std::move(read_tasks));
 	lock_guard<mutex> guard(lock);
 	if (memory_governor) {
 		memory_governor->UpdateReservation(pending_io_bytes.load());
