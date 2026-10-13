@@ -680,6 +680,13 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 				// Set the value to NULL and mark as failed
 				FlatVector::SetNull(result, offset + i, true);
 				all_valid = false;
+			} catch (const ConversionException &ex) {
+				// strict casts of the converted value (e.g. VARCHAR to an ARRAY of a different size) can throw
+				if (error.empty()) {
+					error = ErrorData(ex).RawMessage();
+				}
+				FlatVector::SetNull(result, offset + i, true);
+				all_valid = false;
 			}
 		}
 		if (target_type.id() == LogicalTypeId::MAP) {
