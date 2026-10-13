@@ -428,6 +428,58 @@ TEST_CASE("Corrected re-sends stay within the advertised attempt bound", "[http]
 	REQUIRE(http_util.attempts[1] == std::pair<idx_t, idx_t>(2, 2));
 }
 
+TEST_CASE("A returned transport error carries the quota exhaustion note where GetError reads it", "[http]") {
+	HTTPUtil http_util;
+	HTTPParams params(http_util);
+	params.retries = 10;
+	params.retry_wait_ms = 0;
+	HTTPHeaders headers;
+	HeadRequestInfo request("http://flaky.example.com/file", headers, params);
+	request.try_request = true;
+	auto quota = http_util.GetRetryQuota("http://flaky.example.com");
+	// Room for exactly one transport-failure retry
+	REQUIRE(quota->TryAcquire(HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::TRANSIENT_RETRY_COST));
+
+	idx_t sends = 0;
+	auto response = HTTPUtil::RunRequestWithRetry(
+	    [&]() {
+		    sends++;
+		    auto failed = make_uniq<HTTPResponse>(HTTPStatusCode::INVALID);
+		    failed->request_error = "Connection reset by peer";
+		    return failed;
+	    },
+	    request, {});
+	REQUIRE(sends == 2);
+	REQUIRE_FALSE(response->Success());
+	REQUIRE(response->HasRequestError());
+	REQUIRE(StringUtil::Contains(response->GetError(), "Connection reset by peer"));
+	REQUIRE(StringUtil::Contains(response->GetError(), "retry quota for 'http://flaky.example.com' exhausted"));
+	REQUIRE(quota->Available() == 0);
+}
+
+TEST_CASE("HTTPUtil hands out one retry quota per host and forgets the quietest", "[http]") {
+	HTTPUtil http_util;
+	auto first = http_util.GetRetryQuota("https://a.example.com");
+	auto second = http_util.GetRetryQuota("https://b.example.com");
+	REQUIRE(first != second);
+	REQUIRE(first == http_util.GetRetryQuota("https://a.example.com"));
+
+	// Make the first host the one that was used least recently
+	REQUIRE(first->TryAcquire(HTTPRetryQuota::RETRY_COST, TimePoint::GetTickMs() - 1000));
+	for (idx_t i = 0; i < HTTPUtil::MAX_RETRY_QUOTAS - 2; i++) {
+		http_util.GetRetryQuota(StringUtil::Format("https://host%llu.example.com", i));
+	}
+	// The map is full: the next new host replaces the first one, which gets a fresh quota on its return
+	auto newcomer = http_util.GetRetryQuota("https://c.example.com");
+	REQUIRE(newcomer != first);
+	REQUIRE(second == http_util.GetRetryQuota("https://b.example.com"));
+	auto returned = http_util.GetRetryQuota("https://a.example.com");
+	REQUIRE(returned != first);
+	REQUIRE(returned->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
+	// The budget that still held the evicted quota keeps a valid object
+	REQUIRE(first->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
+}
+
 TEST_CASE("HTTPUtil hands out one retry quota per host and forgets the quietest", "[http]") {
 	HTTPUtil http_util;
 	auto first = http_util.GetRetryQuota("https://a.example.com");

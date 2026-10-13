@@ -534,8 +534,12 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 			response->request_error =
 			    (exception_error.empty() ? "Unknown error" : std::move(exception_error)) + quota_note;
 		} else if (!quota_note.empty()) {
-			// A received error keeps its status; the reason carries why it was not retried.
-			response->reason += quota_note;
+			// A received error keeps its status; the note goes to the field GetError() reports.
+			if (response->HasRequestError()) {
+				response->request_error += quota_note;
+			} else {
+				response->reason += quota_note;
+			}
 		}
 		response->success = false;
 		return response;
