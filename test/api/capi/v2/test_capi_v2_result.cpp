@@ -442,7 +442,7 @@ TEST_CASE("V2: statement_execute failure tolerates err == nullptr", "[capi_v2][q
 	EnvFixture fx;
 
 	duckdb_v2_result_handle r = nullptr;
-	REQUIRE(Query(fx.conn, "BADSQL", &r, nullptr) == DUCKDB_V2_ERROR_DATABASE_CATALOG);
+	REQUIRE(Query(fx.conn, "FROM BADSQL", &r, nullptr) == DUCKDB_V2_ERROR_DATABASE_CATALOG);
 	REQUIRE(r == nullptr);
 }
 
@@ -900,7 +900,7 @@ TEST_CASE("V2: statement_execute leaves pre-existing err untouched on success", 
 
 	duckdb_v2_result_handle r = nullptr;
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(Query(fx.conn, "BADSQL", &r, &err) == DUCKDB_V2_ERROR_DATABASE_CATALOG);
+	REQUIRE(Query(fx.conn, "FROM BADSQL", &r, &err) == DUCKDB_V2_ERROR_DATABASE_CATALOG);
 	REQUIRE(err != nullptr);
 
 	REQUIRE(Query(fx.conn, "SELECT 1", &r, &err) == DUCKDB_V2_ERROR_NONE);
