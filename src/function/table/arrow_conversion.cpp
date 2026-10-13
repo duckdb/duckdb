@@ -416,7 +416,7 @@ static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array, i
 			//  | Bytes 0-3  | Bytes 4-15                            |
 			//  |------------|---------------------------------------|
 			//  | length     | data (padded with 0)                  |
-			strings.WriteStringRef(string_t(arrow_string[row_idx].GetInlineData(), length));
+			strings.WriteValue(string_t(arrow_string[row_idx].GetInlineData(), length));
 		} else {
 			//  This string is not inlined, we have to check a different buffer and offsets
 			//  | Bytes 0-3  | Bytes 4-7  | Bytes 8-11 | Bytes 12-15 |
@@ -802,9 +802,15 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(Vector &vector, c
 	}
 }
 template <class SRC>
-void ConvertDecimal(const SRC &src_ptr, Vector &vector, ArrowArray &array, idx_t size, int64_t nested_offset,
-                    uint64_t parent_offset, idx_t chunk_offset, ValidityMask &val_mask,
-                    DecimalBitWidth arrow_bit_width) {
+static void ConvertDecimal(Vector &vector, ArrowArray &array, idx_t size, idx_t offset) {
+	if (sizeof(SRC) == GetTypeIdSize(vector.GetType().InternalType())) {
+		auto data = ArrowBufferData<data_t>(array, 1) + offset * sizeof(SRC);
+		SetVectorData(vector, data, size);
+		return;
+	}
+
+	ArrowAlignedBufferData<SRC> src_ptr(array, 1, offset, size);
+	auto &val_mask = FlatVector::Validity(vector);
 	switch (vector.GetType().InternalType()) {
 	case PhysicalType::INT16: {
 		auto tgt_ptr = FlatVector::GetDataMutable<int16_t>(vector);
@@ -818,58 +824,36 @@ void ConvertDecimal(const SRC &src_ptr, Vector &vector, ArrowArray &array, idx_t
 		break;
 	}
 	case PhysicalType::INT32: {
-		if (arrow_bit_width == DecimalBitWidth::DECIMAL_32) {
-			auto data = ArrowBufferData<data_t>(array, 1) +
-			            GetTypeIdSize(vector.GetType().InternalType()) *
-			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-			SetVectorData(vector, data, size);
-		} else {
-			auto tgt_ptr = FlatVector::GetDataMutable<int32_t>(vector);
-			for (idx_t row = 0; row < size; row++) {
-				if (val_mask.RowIsValid(row)) {
-					auto result = TryCast::Operation(src_ptr[row], tgt_ptr[row]);
-					D_ASSERT(result);
-					(void)result;
-				}
+		auto tgt_ptr = FlatVector::GetDataMutable<int32_t>(vector);
+		for (idx_t row = 0; row < size; row++) {
+			if (val_mask.RowIsValid(row)) {
+				auto result = TryCast::Operation(src_ptr[row], tgt_ptr[row]);
+				D_ASSERT(result);
+				(void)result;
 			}
 		}
 		break;
 	}
 	case PhysicalType::INT64: {
-		if (arrow_bit_width == DecimalBitWidth::DECIMAL_64) {
-			auto data = ArrowBufferData<data_t>(array, 1) +
-			            GetTypeIdSize(vector.GetType().InternalType()) *
-			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-			SetVectorData(vector, data, size);
-		} else {
-			auto tgt_ptr = FlatVector::GetDataMutable<int64_t>(vector);
-			for (idx_t row = 0; row < size; row++) {
-				if (val_mask.RowIsValid(row)) {
-					auto result = TryCast::Operation(src_ptr[row], tgt_ptr[row]);
-					D_ASSERT(result);
-					(void)result;
-				}
+		auto tgt_ptr = FlatVector::GetDataMutable<int64_t>(vector);
+		for (idx_t row = 0; row < size; row++) {
+			if (val_mask.RowIsValid(row)) {
+				auto result = TryCast::Operation(src_ptr[row], tgt_ptr[row]);
+				D_ASSERT(result);
+				(void)result;
 			}
 		}
 		break;
 	}
 	case PhysicalType::INT128: {
-		if (arrow_bit_width == DecimalBitWidth::DECIMAL_128) {
-			auto data = ArrowBufferData<data_t>(array, 1) +
-			            GetTypeIdSize(vector.GetType().InternalType()) *
-			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-			SetVectorData(vector, data, size);
-		} else {
-			auto tgt_ptr = FlatVector::GetDataMutable<hugeint_t>(vector);
-			for (idx_t row = 0; row < size; row++) {
-				if (val_mask.RowIsValid(row)) {
-					auto result = TryCast::Operation(src_ptr[row], tgt_ptr[row]);
-					D_ASSERT(result);
-					(void)result;
-				}
+		auto tgt_ptr = FlatVector::GetDataMutable<hugeint_t>(vector);
+		for (idx_t row = 0; row < size; row++) {
+			if (val_mask.RowIsValid(row)) {
+				auto result = TryCast::Operation(src_ptr[row], tgt_ptr[row]);
+				D_ASSERT(result);
+				(void)result;
 			}
 		}
-
 		break;
 	}
 	default:
@@ -1197,37 +1181,18 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		break;
 	}
 	case LogicalTypeId::DECIMAL: {
-		auto &val_mask = FlatVector::ValidityMutable(vector);
 		auto &datetime_info = arrow_type.GetTypeInfo<ArrowDecimalInfo>();
-		auto bit_width = datetime_info.GetBitWidth();
-
-		switch (bit_width) {
-		case DecimalBitWidth::DECIMAL_32: {
-			ArrowAlignedBufferData<int32_t> src_ptr(
-			    array, 1, GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset),
-			    size);
-			ConvertDecimal(src_ptr, vector, array, size, nested_offset, parent_offset, chunk_offset, val_mask,
-			               bit_width);
+		auto offset = GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
+		switch (datetime_info.GetBitWidth()) {
+		case DecimalBitWidth::DECIMAL_32:
+			ConvertDecimal<int32_t>(vector, array, size, offset);
 			break;
-		}
-
-		case DecimalBitWidth::DECIMAL_64: {
-			ArrowAlignedBufferData<int64_t> src_ptr(
-			    array, 1, GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset),
-			    size);
-			ConvertDecimal(src_ptr, vector, array, size, nested_offset, parent_offset, chunk_offset, val_mask,
-			               bit_width);
+		case DecimalBitWidth::DECIMAL_64:
+			ConvertDecimal<int64_t>(vector, array, size, offset);
 			break;
-		}
-
-		case DecimalBitWidth::DECIMAL_128: {
-			ArrowAlignedBufferData<hugeint_t> src_ptr(
-			    array, 1, GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset),
-			    size);
-			ConvertDecimal(src_ptr, vector, array, size, nested_offset, parent_offset, chunk_offset, val_mask,
-			               bit_width);
+		case DecimalBitWidth::DECIMAL_128:
+			ConvertDecimal<hugeint_t>(vector, array, size, offset);
 			break;
-		}
 		default:
 			throw NotImplementedException("Unsupported precision for Arrow Decimal Type.");
 		}

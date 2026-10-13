@@ -2,6 +2,7 @@
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/common/types/arrow_string_view_type.hpp"
 
 using namespace duckdb;
 
@@ -504,7 +505,7 @@ TEST_CASE("Test C-API Arrow conversion of unaligned buffers", "[capi][arrow]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	constexpr idx_t ROWS = 3;
-	constexpr idx_t COLUMNS = 8;
+	constexpr idx_t COLUMNS = 11;
 	const int32_t int32_values[ROWS] = {1, -2, 3};
 	const int64_t int64_values[ROWS] = {10000000000, -2, 3};
 	const double double_values[ROWS] = {1.5, -2.25, 3.125};
@@ -513,6 +514,8 @@ TEST_CASE("Test C-API Arrow conversion of unaligned buffers", "[capi][arrow]") {
 	const char *utf8_data = "abbccc";
 	const int32_t time32_values[ROWS] = {1000, 61000, 3661000};
 	const hugeint_t decimal_values[ROWS] = {hugeint_t(1500), hugeint_t(-2250), hugeint_t(3125)};
+	const int32_t decimal32_values[ROWS] = {1500, -2250, 3125};
+	const int64_t decimal64_values[ROWS] = {1500, -2250, 3125};
 	const int32_t dictionary_indices[ROWS] = {2, 0, 1};
 
 	// Each buffer starts one byte past an 8-byte boundary
@@ -531,9 +534,12 @@ TEST_CASE("Test C-API Arrow conversion of unaligned buffers", "[capi][arrow]") {
 	    {nullptr, unaligned(5, time32_values, sizeof(time32_values))},
 	    {nullptr, unaligned(6, decimal_values, sizeof(decimal_values))},
 	    {nullptr, unaligned(7, dictionary_indices, sizeof(dictionary_indices))},
+	    {nullptr, unaligned(8, decimal32_values, sizeof(decimal32_values))},
+	    {nullptr, unaligned(9, decimal64_values, sizeof(decimal64_values))},
+	    {nullptr, unaligned(10, decimal_values, sizeof(decimal_values))},
 	};
-	const char *formats[COLUMNS] = {"i", "l", "g", "u", "U", "ttm", "d:18,3", "i"};
-	const char *names[COLUMNS] = {"i", "l", "g", "u", "large_u", "t", "d", "dict"};
+	const char *formats[COLUMNS] = {"i", "l", "g", "u", "U", "ttm", "d:18,3", "i", "d:9,3,32", "d:18,3,64", "d:38,3"};
+	const char *names[COLUMNS] = {"i", "l", "g", "u", "large_u", "t", "d", "dict", "d32", "d64", "d128"};
 
 	// The dictionary column has int32 indices into the utf8 column, with its offsets unaligned too
 	ArrowSchema dictionary_schema = ArrowSchema();
@@ -594,7 +600,8 @@ TEST_CASE("Test C-API Arrow conversion of unaligned buffers", "[capi][arrow]") {
 	REQUIRE(duckdb_data_chunk_get_size(chunk) == ROWS);
 
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE unaligned(i INTEGER, l BIGINT, g DOUBLE, u VARCHAR, large_u VARCHAR, "
-	                             "t TIME, d DECIMAL(18,3), dict VARCHAR)"));
+	                             "t TIME, d DECIMAL(18,3), dict VARCHAR, d32 DECIMAL(9,3), "
+	                             "d64 DECIMAL(18,3), d128 DECIMAL(38,3))"));
 	duckdb_appender appender;
 	REQUIRE(duckdb_appender_create(tester.connection, nullptr, "unaligned", &appender) == DuckDBSuccess);
 	REQUIRE(duckdb_append_data_chunk(appender, chunk) == DuckDBSuccess);
@@ -603,9 +610,9 @@ TEST_CASE("Test C-API Arrow conversion of unaligned buffers", "[capi][arrow]") {
 	auto result = tester.Query("SELECT * FROM unaligned");
 	REQUIRE_NO_FAIL(*result);
 	const vector<vector<string>> expected = {
-	    {"1", "10000000000", "1.5", "a", "abb", "00:00:01", "1.500", "ccc"},
-	    {"-2", "-2", "-2.25", "bb", "cc", "00:01:01", "-2.250", "a"},
-	    {"3", "3", "3.125", "ccc", "c", "01:01:01", "3.125", "bb"},
+	    {"1", "10000000000", "1.5", "a", "abb", "00:00:01", "1.500", "ccc", "1.500", "1.500", "1.500"},
+	    {"-2", "-2", "-2.25", "bb", "cc", "00:01:01", "-2.250", "a", "-2.250", "-2.250", "-2.250"},
+	    {"3", "3", "3.125", "ccc", "c", "01:01:01", "3.125", "bb", "3.125", "3.125", "3.125"},
 	};
 	for (idx_t row = 0; row < ROWS; row++) {
 		for (idx_t col = 0; col < COLUMNS; col++) {
@@ -630,4 +637,75 @@ TEST_CASE("Test C-API Arrow conversion of unaligned buffers", "[capi][arrow]") {
 	duckdb_destroy_arrow_options(&arrow_options);
 	duckdb_destroy_data_chunk(&chunk);
 	duckdb_destroy_arrow_converted_schema(&converted_schema);
+}
+
+TEST_CASE("Test C-API Arrow string views retain data after aligned scratch is released", "[capi][arrow]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	constexpr idx_t ROWS = 5;
+	const string external = "external string view data";
+	const vector<string> expected = {"", "a", "abcdefghijkl", external};
+	const arrow_string_view_t views[ROWS] = {
+	    arrow_string_view_t(0, ""), arrow_string_view_t(1, "a"), arrow_string_view_t(12, "abcdefghijkl"),
+	    arrow_string_view_t(NumericCast<int32_t>(external.size()), external.data(), 0, 0), arrow_string_view_t(0, "")};
+	const uint8_t validity = 0x0F;
+	const int64_t external_size = NumericCast<int64_t>(external.size());
+
+	for (auto format : {"vu", "vz"}) {
+		for (idx_t misalignment : {0, 1}) {
+			for (idx_t offset : {0, 1}) {
+				CAPTURE(format, misalignment, offset);
+				uint64_t storage[(sizeof(views) + 1 + sizeof(uint64_t) - 1) / sizeof(uint64_t)];
+				auto view_data = reinterpret_cast<uint8_t *>(storage) + misalignment;
+				memcpy(view_data, views, sizeof(views));
+				const void *buffers[] = {&validity, view_data, external.data(), &external_size};
+				ArrowSchema child_schema = {};
+				child_schema.format = format;
+				child_schema.name = "v";
+				child_schema.flags = ARROW_FLAG_NULLABLE;
+				child_schema.release = ReleaseUnalignedSchema;
+				ArrowSchema *children[] = {&child_schema};
+				ArrowSchema schema = {};
+				schema.format = "+s";
+				schema.n_children = 1;
+				schema.children = children;
+				schema.release = ReleaseUnalignedSchema;
+
+				ArrowArray child_array = {};
+				child_array.length = ROWS - offset;
+				child_array.offset = offset;
+				child_array.null_count = 1;
+				child_array.n_buffers = 4;
+				child_array.buffers = buffers;
+				child_array.release = ReleaseUnalignedArray;
+				ArrowArray *arrays[] = {&child_array};
+				const void *struct_buffers[] = {nullptr};
+				ArrowArray array = {};
+				array.length = ROWS - offset;
+				array.n_buffers = 1;
+				array.buffers = struct_buffers;
+				array.n_children = 1;
+				array.children = arrays;
+				array.release = ReleaseUnalignedArray;
+
+				duckdb_arrow_converted_schema converted = nullptr;
+				REQUIRE(duckdb_schema_from_arrow(tester.connection, &schema, &converted) == nullptr);
+				duckdb_data_chunk chunk = nullptr;
+				REQUIRE(duckdb_data_chunk_from_arrow(tester.connection, &array, converted, &chunk) == nullptr);
+				REQUIRE(duckdb_data_chunk_get_size(chunk) == ROWS - offset);
+
+				auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+				auto strings = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+				for (idx_t row = 0; row < ROWS - offset - 1; row++) {
+					auto data = duckdb_string_t_data(&strings[row]);
+					auto size = duckdb_string_t_length(strings[row]);
+					REQUIRE(string(data, size) == expected[row + offset]);
+				}
+				REQUIRE(!duckdb_validity_row_is_valid(duckdb_vector_get_validity(vector), ROWS - offset - 1));
+				duckdb_destroy_data_chunk(&chunk);
+				duckdb_destroy_arrow_converted_schema(&converted);
+			}
+		}
+	}
 }
