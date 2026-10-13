@@ -371,6 +371,12 @@ static bool IsInvalidMapKeyDefault(const ColumnMapResult &mapping) {
 	return constant_expr.GetValue().IsNull();
 }
 
+//! The definition whose children are the key and the value of a MAP, either the column or its "key_value" child
+template <class T>
+static T &GetMapEntries(T &map_column) {
+	return map_column.children.size() == 1 ? map_column.children[0] : map_column;
+}
+
 static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefinition &global_column,
                                     const ColumnIndex &global_index, const MultiFileColumnDefinition &local_column,
                                     const MultiFileLocalIndex &local_id, const ColumnMapper &mapper,
@@ -382,9 +388,11 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 		    global_column.children.size());
 	}
 
-	D_ASSERT(local_column.children.size() == 1);
-	D_ASSERT(local_column.children[0].name == "key_value");
-	auto &local_key_value = local_column.children[0];
+	if (local_column.children.size() != 1 && local_column.children.size() != expected_map_children) {
+		throw InvalidInputException("Mismatch between the children of the MAP column \"%s\" (%d) and its key and value",
+		                            local_column.name, local_column.children.size());
+	}
+	auto &local_key_value = GetMapEntries(local_column);
 
 	auto nested_mapper = mapper.Create(local_key_value.children);
 	child_list_t<Value> column_mapping;
@@ -668,8 +676,44 @@ static unique_ptr<Expression> ConstructMapExpression(ClientContext &context, Mul
 	return BindBuiltinScalarFunction(context, RemapStructFun::Name, std::move(children));
 }
 
+//! Gives a local column the nested fields that its reader only gives by type, as the global column addresses them
+static void DescribeNestedFields(const MultiFileColumnDefinition &global_column,
+                                 MultiFileColumnDefinition &local_column, const ColumnMapper &mapper,
+                                 bool synthesized) {
+	if (global_column.children.empty() || !local_column.type.IsNested()) {
+		return;
+	}
+	if (local_column.children.empty()) {
+		local_column.children = MultiFileColumnDefinition::CreateNested(local_column.name, local_column.type).children;
+		synthesized = true;
+	}
+	auto type_id = local_column.type.id();
+	auto &local_children = type_id == LogicalTypeId::MAP ? GetMapEntries(local_column).children : local_column.children;
+	if (type_id == LogicalTypeId::LIST && synthesized && global_column.children.size() == 1 &&
+	    local_children.size() == 1) {
+		// a list has one child, which the global column can address under any name
+		auto &global_child = global_column.children[0];
+		if (global_child.identifier.IsNull() || global_child.identifier.type().id() == LogicalTypeId::VARCHAR) {
+			local_children[0].name = Identifier(global_child.GetIdentifierName());
+		}
+	}
+	auto nested_mapper = mapper.Create(local_children);
+	for (auto &global_child : global_column.children) {
+		auto local_idx = nested_mapper->Find(global_child);
+		if (local_idx.IsValid() && local_idx.GetIndex() < local_children.size()) {
+			DescribeNestedFields(global_child, local_children[local_idx.GetIndex()], *nested_mapper, synthesized);
+		}
+	}
+}
+
 ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const ColumnMapper &mapper) {
 	auto &reader = *reader_data.reader;
+	for (auto &global_column : global_columns) {
+		auto local_idx = mapper.Find(global_column);
+		if (local_idx.IsValid()) {
+			DescribeNestedFields(global_column, reader.columns[local_idx.GetIndex()], mapper, false);
+		}
+	}
 	auto &local_columns = reader.GetColumns();
 
 	ResultColumnMapping result;

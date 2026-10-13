@@ -1,0 +1,68 @@
+# name: test/sql/json/table/read_json_schema_nested_children.test
+# description: The schema option maps nested columns of readers that do not describe their nested fields
+# group: [table]
+
+require json
+
+statement ok
+COPY (SELECT [1, 2] AS l, MAP {'a': 1} AS m, {'x': 3} AS s) TO '{TEMP_DIR}/schema_nested_children.json'
+
+query III
+SELECT l, m, s FROM read_json('{TEMP_DIR}/schema_nested_children.json',
+	columns = {'l': 'INTEGER[]', 'm': 'MAP(VARCHAR, INTEGER)', 's': 'STRUCT(x INTEGER)'},
+	schema = MAP {
+		'l': {'name': 'l', 'type': 'INTEGER[]', 'default_value': NULL,
+			'children': MAP {'element': {'name': 'element', 'type': 'INTEGER', 'default_value': NULL}}},
+		'm': {'name': 'm', 'type': 'MAP(VARCHAR, INTEGER)', 'default_value': NULL,
+			'children': MAP {'key': {'name': 'key', 'type': 'VARCHAR', 'default_value': NULL},
+			                 'value': {'name': 'value', 'type': 'INTEGER', 'default_value': NULL}}},
+		's': {'name': 's', 'type': 'STRUCT(x INTEGER)', 'default_value': NULL,
+			'children': MAP {'x': {'name': 'x', 'type': 'INTEGER', 'default_value': NULL}}}
+	})
+----
+[1, 2]	{a=1}	{'x': 3}
+
+# the global type can differ from the type the reader reads
+query I
+SELECT l FROM read_json('{TEMP_DIR}/schema_nested_children.json', columns = {'l': 'INTEGER[]'},
+	schema = MAP {'l': {'name': 'l', 'type': 'BIGINT[]', 'default_value': NULL,
+		'children': MAP {'element': {'name': 'element', 'type': 'BIGINT', 'default_value': NULL}}}})
+----
+[1, 2]
+
+# renames and defaults of the fields inside a list
+statement ok
+COPY (SELECT [{'old': 3, 'keep': 4}] AS l) TO '{TEMP_DIR}/schema_nested_renames.json'
+
+query I
+SELECT l FROM read_json('{TEMP_DIR}/schema_nested_renames.json', columns = {'l': 'STRUCT(old INTEGER, keep INTEGER)[]'},
+	schema = MAP {'l': {'name': 'l', 'type': 'STRUCT(renamed INTEGER, keep INTEGER, added INTEGER)[]', 'default_value': NULL,
+		'children': MAP {'element': {'name': 'element', 'type': 'STRUCT(renamed INTEGER, keep INTEGER, added INTEGER)', 'default_value': NULL,
+			'children': MAP {
+				'old': {'name': 'renamed', 'type': 'INTEGER', 'default_value': NULL},
+				'keep': {'name': 'keep', 'type': 'INTEGER', 'default_value': NULL},
+				'missing': {'name': 'added', 'type': 'INTEGER', 'default_value': 42}}}}}})
+----
+[{'renamed': 3, 'keep': 4, 'added': 42}]
+
+# nested lists, a list inside a map and a field that differs in case
+statement ok
+COPY (SELECT [[1, 2], [3]] AS ll, MAP {'k': [4, 5]} AS ml, {'Items': [6]} AS s) TO '{TEMP_DIR}/schema_nested_lists.json'
+
+query III
+SELECT ll, ml, s FROM read_json('{TEMP_DIR}/schema_nested_lists.json',
+	columns = {'ll': 'INTEGER[][]', 'ml': 'MAP(VARCHAR, INTEGER[])', 's': 'STRUCT(Items INTEGER[])'},
+	schema = MAP {
+		'll': {'name': 'll', 'type': 'INTEGER[][]', 'default_value': NULL,
+			'children': MAP {'element': {'name': 'element', 'type': 'INTEGER[]', 'default_value': NULL,
+				'children': MAP {'element': {'name': 'element', 'type': 'INTEGER', 'default_value': NULL}}}}},
+		'ml': {'name': 'ml', 'type': 'MAP(VARCHAR, INTEGER[])', 'default_value': NULL,
+			'children': MAP {'key': {'name': 'key', 'type': 'VARCHAR', 'default_value': NULL},
+			                 'value': {'name': 'value', 'type': 'INTEGER[]', 'default_value': NULL,
+				'children': MAP {'element': {'name': 'element', 'type': 'INTEGER', 'default_value': NULL}}}}},
+		's': {'name': 's', 'type': 'STRUCT(items INTEGER[])', 'default_value': NULL,
+			'children': MAP {'items': {'name': 'items', 'type': 'INTEGER[]', 'default_value': NULL,
+				'children': MAP {'element': {'name': 'element', 'type': 'INTEGER', 'default_value': NULL}}}}}
+	})
+----
+[[1, 2], [3]]	{k=[4, 5]}	{'items': [6]}

@@ -84,6 +84,26 @@ TEST_CASE("Field-id mapping requires a match or an explicit default", "[multifil
 		    mapper.CreateMapping(MultiFileColumnMappingMode::BY_FIELD_ID),
 		    Catch::Contains("(field id 42) is missing from the file schema and has no default expression"));
 	}
+	SECTION("MAP keys and values map with and without a key_value child") {
+		auto map_type = LogicalType::MAP(LogicalType::INTEGER, LogicalType::INTEGER);
+		columns[0] = Field("m", map_type, 1);
+		columns[0].children.push_back(Field("key", LogicalType::INTEGER, 42));
+		columns[0].children.push_back(Field("value", LogicalType::INTEGER, 43));
+		auto with_key_value = GENERATE(true, false);
+		auto local_map = Field("m", map_type, 1);
+		if (with_key_value) {
+			local_map.children.emplace_back("key_value", ListType::GetChildType(map_type));
+		}
+		auto &local_entries = with_key_value ? local_map.children[0] : local_map;
+		local_entries.children.push_back(Field("key", LogicalType::INTEGER, 42));
+		local_entries.children.push_back(Field("value", LogicalType::INTEGER, 43));
+		reader->columns.push_back(local_map);
+		REQUIRE(mapper.CreateMapping(MultiFileColumnMappingMode::BY_FIELD_ID) == ReaderInitializeType::INITIALIZED);
+		REQUIRE(reader->column_indexes.size() == 1);
+		auto &map_entries = reader->column_indexes[0].GetChildIndexes();
+		REQUIRE(map_entries.size() == 1);
+		REQUIRE(map_entries[0].GetChildIndexes().size() == 2);
+	}
 	con.Rollback();
 	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
 }
