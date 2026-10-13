@@ -197,10 +197,10 @@ public:
 private:
 	ClientContext &context;
 
-	//! Whether StartQuery was called for the current query; only the first call resets the live counters
-	bool query_started;
 	//! Atomic so inactive flushes can skip acquiring the profiler lock.
 	atomic<bool> running;
+	//! Whether StartQuery was called for the current query; only the first call resets the live counters
+	bool query_started;
 	//! The lock used for accessing the global query profiler or flushing information to it from a thread
 	mutable std::mutex lock;
 
