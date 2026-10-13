@@ -11,6 +11,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
+#include <exception>
+
 namespace duckdb {
 
 //	Global sink state
@@ -170,6 +172,7 @@ public:
 	//! The function global states for this hash group
 	ExecutorGlobalStates gestates;
 	std::once_flag gestates_initialized;
+	std::exception_ptr gestates_error;
 	//! Executor local states, one per thread
 	ThreadLocalStates thread_states;
 
@@ -903,16 +906,25 @@ void WindowLocalSourceState::Mask(ExecutionContext &context, InterruptState &int
 
 WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::GetGlobalStates(ClientContext &client) {
 	std::call_once(gestates_initialized, [&] {
-		// These can be large so we defer building them until we are ready.
-		ExecutorGlobalStates new_gestates;
-		const auto &sort_expr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
-		const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : sort_expr.Partitions().size();
-		for (auto &wexec : gsink.executors) {
-			auto &order_mask = order_masks.at(order_begin + wexec->wexpr.OrderBy().size());
-			new_gestates.emplace_back(wexec->GetGlobalState(client, count, partition_mask, order_mask));
+		try {
+			// These can be large so we defer building them until we are ready.
+			ExecutorGlobalStates new_gestates;
+			const auto &sort_expr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
+			const auto order_begin =
+			    gsink.op.partition_info.RequiresPartitionColumns() ? 0 : sort_expr.Partitions().size();
+			for (auto &wexec : gsink.executors) {
+				auto &order_mask = order_masks.at(order_begin + wexec->wexpr.OrderBy().size());
+				new_gestates.emplace_back(wexec->GetGlobalState(client, count, partition_mask, order_mask));
+			}
+			gestates = std::move(new_gestates);
+		} catch (...) {
+			// Publish the failure once so every worker fails without retrying initialization.
+			gestates_error = std::current_exception();
 		}
-		gestates = std::move(new_gestates);
 	});
+	if (gestates_error) {
+		std::rethrow_exception(gestates_error);
+	}
 	return gestates;
 }
 
