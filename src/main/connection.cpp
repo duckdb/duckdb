@@ -20,14 +20,22 @@
 
 namespace duckdb {
 
-Connection::Connection(DatabaseInstance &database)
+Connection::Connection(DatabaseInstance &database) : Connection(database, ConnectionType::USER) {
+}
+
+Connection::Connection(DatabaseInstance &database, ConnectionType connection_type)
     : context(make_shared_ptr<ClientContext>(database.shared_from_this())) {
+	context->connection_type = connection_type;
 	auto &connection_manager = ConnectionManager::Get(database);
 	connection_manager.AssignConnectionId(*this);
 	connection_manager.AddConnection(*context);
 }
 
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
+}
+
+Connection Connection::CreateInternal(DatabaseInstance &database) {
+	return Connection(database, ConnectionType::INTERNAL);
 }
 
 Connection::Connection(Connection &&other) noexcept {
@@ -151,7 +159,6 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 	auto named_params = ConvertParamListToMap(values);
 	QueryParameters parameters;
 	parameters.statement_args = named_params;
-	parameters.result_eagerness = ResultEagerness::FORCED;
 	return context->Query(query, parameters);
 }
 
@@ -172,12 +179,18 @@ vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &que
 	// Eager convenience over the lazy ClientContext::ExtractStatements iterator: drain the
 	// engine-facing statements into a vector.
 	auto &client_context = *context;
-	auto iterator = client_context.IterateStatements(query);
 	vector<unique_ptr<SQLStatement>> result;
-	while (iterator.Peek()) {
-		if (auto statement = iterator.GetStatement()) {
-			result.push_back(std::move(statement));
+	try {
+		auto iterator = client_context.IterateStatements(query);
+		while (iterator.Peek()) {
+			if (auto statement = iterator.GetStatement()) {
+				result.push_back(std::move(statement));
+			}
 		}
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		client_context.ProcessError(error, query);
+		error.Throw();
 	}
 	return result;
 }
@@ -299,7 +312,7 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 	named_parameter_map_t options;
 	child_list_t<Value> column_list;
 	for (auto &column : columns) {
-		auto col_list = Parser::ParseColumnList(column, context->GetParserOptions());
+		auto col_list = Parser(*context).ParseColumnList(column);
 		if (col_list.LogicalColumnCount() != 1) {
 			throw ParserException("Expected a single column definition");
 		}

@@ -27,7 +27,9 @@ set(TEST_API_OBJECTS
     test_external_extension_provider.cpp
     test_extension_setting_autoload.cpp
     test_instance_cache.cpp
+    test_metadata_pin_race.cpp
     test_storage_extension_alias.cpp
+    test_storage_extension_remote_path.cpp
     test_static_database_callback.cpp
     test_result_unit.cpp
     test_results.cpp
@@ -40,6 +42,7 @@ set(TEST_API_OBJECTS
     test_extension_schema_api.cpp
     test_pending_query.cpp
     test_query_result.cpp
+    test_query_result_arrow.cpp
     test_query_result_format.cpp
     test_query_result_format_buffer.cpp
     test_query_result_stream.cpp
@@ -57,6 +60,7 @@ set(TEST_API_OBJECTS
     test_pending_with_parameters.cpp
     test_parse_statement_iterator.cpp
     test_dialect_extension.cpp
+    test_query_node_copy.cpp
     test_grammar_extension.cpp
     test_passthrough_dialect.cpp
     test_passthrough_token_matcher.cpp
@@ -70,6 +74,7 @@ set(TEST_API_OBJECTS
     test_windows_unicode_path.cpp
     test_object_cache.cpp
     test_partial_executor.cpp
+    test_scheduler_fairness.cpp
     test_buffer_pool_eviction.cpp
     test_block_allocator_tls.cpp
     test_data_table_scan_without_row_groups.cpp)

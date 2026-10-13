@@ -35,10 +35,11 @@ duckdb_v2_function_signature_add_parameter(duckdb_v2_function_signature_handle s
 		if (value) {
 			default_value = *Convert(value);
 		}
+		auto param_type = Convert(type);
 		// parameters of different kinds can be added in any order, the signature orders them by kind
 		duckdb::CAPIFunctionSignature::AddParameter(
 		    signature,
-		    duckdb::FunctionParameter(std::move(param_name), *Convert(type), std::move(default_value), param_kind));
+		    duckdb::FunctionParameter(std::move(param_name), *param_type, std::move(default_value), param_kind));
 	});
 }
 
@@ -50,6 +51,7 @@ DUCKDB_V2_ERROR duckdb_v2_function_signature_set_return_type(duckdb_v2_function_
 
 	return WithErrorHandler(err, [&]() {
 		auto &signature = *Convert(sig);
-		signature.SetReturnType(*Convert(type));
+		auto return_type = Convert(type);
+		signature.SetReturnType(*return_type);
 	});
 }

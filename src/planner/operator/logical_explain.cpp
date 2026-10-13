@@ -3,6 +3,7 @@
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/parser/peg/sql_formatter.hpp"
 
 namespace duckdb {
 
@@ -16,18 +17,29 @@ unique_ptr<LogicalOperator> LogicalExplain::CreateSQLResult(ClientContext &conte
 	D_ASSERT(explain_type == ExplainType::EXPLAIN_SQL);
 	D_ASSERT(children.size() == 1);
 	LogicalPlanSQLExportOptions options;
-	options.output_names = sql_output_names;
+	switch (children[0]->type) {
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE:
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
+		// a data-modifying statement reports a change count; that is not a projection of the generated SQL
+		break;
+	default:
+		options.output_names = sql_output_names;
+		break;
+	}
 	auto exported = LogicalPlanSQLExporter::Export(context, *children[0], options);
 	if (exported.HasError()) {
 		auto &issue = exported.GetIssues()[0];
 		auto message = "EXPLAIN (SQL) cannot render this query: " + issue.message;
-		const bool is_source_function =
-		    issue.construct && issue.construct->type == LogicalPlanVerificationConstructType::SOURCE_FUNCTION;
-		const bool has_source_name =
-		    is_source_function && issue.construct->function && issue.construct->function->name != "logical_source";
-		if (has_source_name) {
-			message = StringUtil::Format("EXPLAIN (SQL) cannot render table function \"%s\".",
-			                             issue.construct->function->name);
+		if (issue.construct && issue.construct->type == LogicalPlanVerificationConstructType::SOURCE_FUNCTION) {
+			auto &construct = *issue.construct;
+			if (construct.function) {
+				auto &function = *construct.function;
+				if (function.name != "logical_source") {
+					message = StringUtil::Format("EXPLAIN (SQL) cannot render table function \"%s\".", function.name);
+				}
+			}
 		}
 		for (auto &entry : exported.GetIssues()) {
 			switch (entry.code) {
@@ -50,10 +62,11 @@ unique_ptr<LogicalOperator> LogicalExplain::CreateSQLResult(ClientContext &conte
 	auto collection =
 	    make_uniq<ColumnDataCollection>(context, result_types, ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
 	if (exported.IsSuccess()) {
+		auto sql = FormatSQL(exported.GetValue().query->ToString());
 		DataChunk chunk;
 		chunk.Initialize(Allocator::Get(context), result_types);
 		chunk.data[0].Append(Value("sql"));
-		chunk.data[1].Append(Value(exported.GetValue().query->ToString()));
+		chunk.data[1].Append(Value(sql));
 		collection->Append(chunk);
 	}
 	return make_uniq<LogicalColumnDataGet>(table_index, std::move(result_types), std::move(collection));

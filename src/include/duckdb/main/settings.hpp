@@ -573,6 +573,19 @@ struct CustomUserAgentSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DebugAbortOnWalFailureSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_abort_on_wal_failure";
+	static constexpr const char *Description =
+	    "Whether or not to abort if a serialization exception is thrown during WAL playback.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct DebugAsofIejoinSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_asof_iejoin";
@@ -1486,7 +1499,7 @@ struct ExternalFileCacheLocalMaxBlockSizeSetting {
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
 	static constexpr const char *DefaultValue = "16384";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
@@ -1501,7 +1514,7 @@ struct ExternalFileCacheRemoteMaxBlockSizeSetting {
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
 	static constexpr const char *DefaultValue = "2097152";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
@@ -1515,7 +1528,23 @@ struct ExternalFileCacheRemoteMinBlockSizeSetting {
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
 	static constexpr const char *DefaultValue = "4096";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct ExternalFileCacheRequestSizingSetting {
+	using RETURN_TYPE = ExternalFileCacheRequestSizing;
+	static constexpr const char *Name = "external_file_cache_request_sizing";
+	static constexpr const char *Description =
+	    "How reads of cached files are sized: AUTO lets each reader choose, GRID reads the aligned blocks of the cache "
+	    "block size around each read, EXACT reads exactly the requested bytes. Reads of files that are not cached are "
+	    "always exact.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "AUTO";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
@@ -1935,7 +1964,8 @@ struct MaxStreamingBufferSizeSetting {
 	static constexpr const char *Name = "max_streaming_buffer_size";
 	static constexpr const char *Description =
 	    "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Queued output stays under this cap, "
-	    "and each engine thread may hold one more unit, in construction or finished and waiting.";
+	    "and each engine thread may hold, beyond the queue, the units it is still building or handing over from its "
+	    "current chunk.";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
@@ -2269,6 +2299,19 @@ struct ReadAheadDepthSetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct RedactHttpLogsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "redact_http_logs";
+	static constexpr const char *Description =
+	    "Redact HTTP header values in logs unless their names are explicitly allowed.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct RegexMatchOperatorSemanticsSetting {

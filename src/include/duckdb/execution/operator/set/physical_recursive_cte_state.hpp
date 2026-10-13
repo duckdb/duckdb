@@ -397,7 +397,6 @@ private:
 	ColumnDataCollection intermediate_table;
 	ColumnDataAppendState intermediate_append_state;
 	ColumnDataAppendState working_append_state;
-	ColumnDataAppendState recurring_append_state;
 	ColumnDataScanState scan_state;
 	vector<unique_ptr<GroupedAggregateHashTable>> local_preaggregates;
 	idx_t local_preaggregate_candidate_count = 0;
@@ -405,8 +404,7 @@ private:
 	bool output_is_working = false;
 	//! Cached chunk for distinct key extraction in the using_key Sink path
 	DataChunk distinct_rows;
-	//! Cached chunks for source-side hash table scans and recurring table copy paths
-	DataChunk source_result;
+	//! Cached chunks for source-side hash table scans
 	DataChunk update_rows;
 	DataChunk source_aggregate_rows;
 	DataChunk source_distinct_rows;

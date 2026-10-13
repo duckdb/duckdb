@@ -316,12 +316,12 @@ def check_undefined_rules(all_rules):
 
 
 def get_grammar_bytes(contents):
-    grammar = "".join(line + "\n" for line in contents.split('\n') if len(line) > 0)
-    data = bytearray(grammar.encode('utf-8'))
-    data.append(0)  # null terminator so the array can be used directly as a C string
+    # one array row per grammar line, so a grammar change only touches the rows of the lines it changes
     lines = []
-    for i in range(0, len(data), 20):
-        lines.append("    " + ", ".join(str(b) for b in data[i : i + 20]) + ",")
+    for line in contents.split('\n'):
+        if len(line) > 0:
+            lines.append("    " + ", ".join(str(b) for b in (line + "\n").encode('utf-8')) + ",")
+    lines.append("    0,")  # null terminator so the array can be used directly as a C string
     return "\n".join(lines)
 
 
@@ -425,11 +425,13 @@ def main():
 
 namespace duckdb {
 
+// clang-format off
 const unsigned char INLINED_PEG_GRAMMAR[] = {
 '''
             + get_grammar_bytes(contents)
             + '''
 };
+// clang-format on
 
 } // namespace duckdb
 '''

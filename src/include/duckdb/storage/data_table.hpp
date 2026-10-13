@@ -251,10 +251,6 @@ public:
 
 	//! Scans the next chunk for the CREATE INDEX operator
 	bool CreateIndexScan(TableScanState &state, DataChunk &result);
-	//! Returns true, if the index name is unique (i.e., no PK, UNIQUE, FK constraint has the same name)
-	//! FIXME: This is only necessary until we treat all indexes as catalog entries, allowing to alter constraints
-	bool IndexNameIsUnique(const string &name);
-
 	//! Initialize constraint verification state
 	unique_ptr<ConstraintState> InitializeConstraintState(TableCatalogEntry &table,
 	                                                      const vector<unique_ptr<BoundConstraint>> &bound_constraints);
@@ -290,11 +286,9 @@ public:
 	//! AddIndex initializes an index and adds it to the table's index list.
 	//! It is either empty, or initialized via its index storage information.
 	void AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes, const IndexConstraintType type,
-	              IndexStorageInfo index_info);
-	//! AddIndex moves a catalog index to this table's index list.
+	              IndexStorageInfo index_info, idx_t index_oid);
+	//! AddIndex moves an index to this table's index list.
 	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
-	//! AddConstraintIndex moves a constraint-backed index to this table's index list.
-	void AddConstraintIndex(unique_ptr<Index> index);
 
 	//! Returns a list of the partition stats
 	vector<PartitionStatistics> GetPartitionStats(ClientContext &context);

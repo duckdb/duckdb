@@ -32,6 +32,8 @@ public:
 	vector<Identifier> ParentSchemas() const;
 	//! Whether this is a nested schema (i.e. it has at least one parent schema)
 	bool IsNested() const;
+	//! On an existing schema, throw for ERROR, return false for IGNORE, or true for REPLACE.
+	DUCKDB_API bool ShouldReplaceOnConflict() const;
 
 public:
 	DUCKDB_API void Serialize(Serializer &serializer) const override;

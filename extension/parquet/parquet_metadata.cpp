@@ -53,9 +53,6 @@
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift_tools.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -891,11 +888,8 @@ void ParquetBloomProbeProcessor::InitializeInternal(ClientContext &context, Parq
 	protocol = make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 	allocator = &BufferAllocator::Get(context);
 	auto column_type = reader.GetColumns()[probe_column_idx.GetIndex()].type;
-	auto comparison = BoundComparisonExpression::Create(
-	    ExpressionType::COMPARE_EQUAL,
-	    make_uniq<BoundReferenceExpression>(Identifier(probe_column_name), column_type, 0),
-	    make_uniq<BoundConstantExpression>(probe_constant.CastAs(context, column_type)));
-	filter = make_uniq<ExpressionFilter>(std::move(comparison));
+	filter = ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_EQUAL,
+	                                                  probe_constant.CastAs(context, column_type));
 	auto &column_schema = reader.root_schema->children[probe_column_idx.GetIndex()];
 	hash_strategy =
 	    ParquetStatisticsUtils::GetBloomFilterHashStrategy(column_schema, reader.GetIntervalBloomFilterVersion());

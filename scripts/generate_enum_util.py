@@ -28,6 +28,7 @@ blacklist = [
     "AccountedWriteAdoption",
     "FileWritePublicationState",
     "IdleFilter",
+    "IdentifierConversionPolicy",
     "CreateDirectoryMode",
     "RemoveDirectoryMode",
     "CopyOutputOwnership",
@@ -74,6 +75,8 @@ blacklist = [
     "ParquetGroupKind",
     "VariantBasicType",
     "VariantPrimitiveType",
+    # ClientContext::Retention, nested and private to the client context
+    "Retention",
 ]
 
 enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")
@@ -114,6 +117,7 @@ overrides = {
         "DEBUG_ABORT_BEFORE_DELETING_CHECKPOINT_WAL": "BEFORE_DELETING_CHECKPOINT_WAL",
         "DEBUG_ABORT_BEFORE_HEADER_NON_FATAL": "BEFORE_HEADER_NON_FATAL",
         "DEBUG_ABORT_IN_MEMORY_CHECKPOINT": "IN_MEMORY_CHECKPOINT",
+        "DEBUG_ABORT_BEFORE_WAL_FLUSH": "BEFORE_WAL_FLUSH",
     },
     "SampleMethod": {"SYSTEM_SAMPLE": "System", "BERNOULLI_SAMPLE": "Bernoulli", "RESERVOIR_SAMPLE": "Reservoir"},
     "TableReferenceType": {"EMPTY_FROM": "EMPTY"},

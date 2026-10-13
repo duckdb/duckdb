@@ -5,6 +5,8 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_schema_info.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
@@ -93,6 +95,11 @@ static void BindAlterTypes(Binder &binder, AlterStatement &stmt) {
 		case AlterTableType::ALTER_COLUMN_TYPE: {
 			auto &alter_column_info = table_info.Cast<ChangeColumnTypeInfo>();
 			binder.BindLogicalType(alter_column_info.target_type);
+			if (!alter_column_info.expression) {
+				// without USING, the column is cast to the target type
+				alter_column_info.expression = make_uniq<CastExpression>(
+				    alter_column_info.target_type, make_uniq<ColumnRefExpression>(alter_column_info.column_path));
+			}
 		} break;
 		default:
 			break;
@@ -167,10 +174,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	if (catalog.IsSystemCatalog()) {
 		throw BinderException("Can not comment on System Catalog entries");
 	}
-	if (!entry->temporary) {
-		// We can only alter temporary tables and views in read-only mode.
-		properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
-	}
+	properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
 	stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
 
 	if (!stmt.info->IsAddUniqueConstraint()) {

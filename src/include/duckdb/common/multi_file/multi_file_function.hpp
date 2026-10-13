@@ -118,6 +118,7 @@ public:
 	                                                      MultiFileOptions file_options_p,
 	                                                      unique_ptr<BaseFileReaderOptions> options_p,
 	                                                      unique_ptr<MultiFileReaderInterface> interface_p) {
+		file_options_p.ValidateBoundSchema();
 		auto &interface = *interface_p;
 
 		auto result = make_uniq<MultiFileBindData>();
@@ -220,6 +221,7 @@ public:
 			result->table_columns = IdentifiersToStrings(names);
 		}
 		result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
+		result->file_options.VerifyColumnStatistics(result->names, result->types);
 		return std::move(result);
 	}
 
@@ -1147,29 +1149,45 @@ public:
 			}
 		}
 
+		// statistics the caller gave for the column (the "column_statistics" option) stand in for the files' -
+		// they describe the scan as a whole, which is what the optimizer asks about, where a file's describe one file
+		if (!bind_data.file_options.column_statistics.IsNull()) {
+			auto explicit_stats = bind_data.file_options.GetColumnStatistics(col_name, bind_data.types[primary_index]);
+			if (explicit_stats) {
+				if (!column_index.IsPushdownExtract()) {
+					return explicit_stats;
+				}
+				auto storage_index = StorageIndex::FromColumnIndex(column_index);
+				return explicit_stats->PushdownExtract(storage_index.GetChildIndexes()[0]);
+			}
+		}
+
+		if (!bind_data.file_options.bound_schema.empty() && bind_data.IsGeneratedColumn(primary_index)) {
+			// A physical shadow's bounds do not describe the generated path. Explicit scan statistics above still do.
+			return nullptr;
+		}
 		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
-		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
-			if (!bind_data.file_options.union_by_name) {
-				// multiple files, but no union_by_name: no luck!
-				return nullptr;
-			}
-
-			auto merged_stats = bind_data.initial_reader->GetStatistics(context, col_name);
-			if (!merged_stats) {
-				return nullptr;
-			}
-
+		const bool multiple_files = bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
+		if (multiple_files && !bind_data.file_options.union_by_name) {
+			// multiple files, but no union_by_name: no luck!
+			return nullptr;
+		}
+		auto result = bind_data.initial_reader->GetStatistics(context, col_name);
+		if (result && !bind_data.file_options.bound_schema.empty() &&
+		    !bind_data.MatchesPhysicalColumn(primary_index, col_name, result->GetType())) {
+			// Check the whole root before interpreting an extracted child's positional statistics.
+			return nullptr;
+		}
+		if (result && multiple_files) {
 			for (idx_t i = 1; i < bind_data.union_readers.size(); i++) {
 				auto &union_reader = *bind_data.union_readers[i];
 				auto stats = union_reader.GetStatistics(context, col_name);
-				if (!stats || merged_stats->GetType() != stats->GetType()) {
+				if (!stats || result->GetType() != stats->GetType()) {
 					return nullptr;
 				}
-				merged_stats->Merge(*stats);
+				result->Merge(*stats);
 			}
-			return merged_stats;
 		}
-		auto result = bind_data.initial_reader->GetStatistics(context, col_name);
 		if (!result || !column_index.IsPushdownExtract()) {
 			return result;
 		}
@@ -1288,9 +1306,9 @@ public:
 		}
 	}
 
-	static BindInfo MultiFileGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
+	static BindInfo MultiFileGetBindInfo(TableFunctionGetBindInfoInput &input) {
 		BindInfo bind_info(ScanType::EXTERNAL);
-		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
+		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 
 		vector<Value> file_path;
 		for (const auto &file : bind_data.file_list->GetDisplayFileList()) {

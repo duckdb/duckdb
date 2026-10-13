@@ -60,6 +60,16 @@ public:
 		head->current_position -= shrink_size;
 	}
 
+	//! A position in the arena - everything allocated after it was taken can be released again with Rewind
+	struct Position {
+		ArenaChunk *chunk = nullptr;
+		idx_t current_position = 0;
+	};
+	//! Returns the current position of the arena
+	DUCKDB_API Position GetPosition() const;
+	//! Releases everything that was allocated after the position was taken - those allocations may no longer be used
+	DUCKDB_API void Rewind(const Position &position);
+
 	//! Resets the current head and destroys all previous arena chunks
 	DUCKDB_API void Reset();
 	//! Like Reset, but also destroys the current chunk, so no memory stays allocated
@@ -79,6 +89,11 @@ public:
 	//! Returns an "Allocator" wrapper for this arena allocator
 	Allocator &GetAllocator() {
 		return arena_allocator;
+	}
+	//! Returns the allocator the arena itself allocates its blocks from - for memory that must be freeable
+	//! individually but should share the arena's memory accounting
+	Allocator &GetUnderlyingAllocator() {
+		return allocator;
 	}
 
 	template <class T, class... ARGS>

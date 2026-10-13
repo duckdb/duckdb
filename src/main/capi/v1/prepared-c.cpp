@@ -15,7 +15,6 @@ using duckdb::hugeint_t;
 using duckdb::LogicalType;
 using duckdb::optional_ptr;
 using duckdb::PreparedStatementWrapper;
-using duckdb::QueryResultType;
 using duckdb::StringUtil;
 using duckdb::timestamp_t;
 using duckdb::uhugeint_t;
@@ -447,9 +446,9 @@ duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepare
 
 	try {
 		auto result = wrapper->statement->Submit(wrapper->values);
-		if (result->HasError() ||
-		    result->GetStatementProperties().result_eagerness == duckdb::ResultEagerness::FORCED) {
-			// The statement cannot be streamed: it completes before its result is returned
+		// Without an out_result the stream is dropped unread, which rolls back what the statement wrote
+		if (result->HasError() || !duckdb::StreamsByDefault(wrapper->statement->GetStatementType(),
+		                                                    result->GetStatementProperties(), out_result != nullptr)) {
 			result->Complete();
 			return DuckDBTranslateResult(std::move(result), out_result);
 		}

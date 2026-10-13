@@ -154,6 +154,8 @@ enum class CompressionValidity : uint8_t;
 
 enum class ConflictManagerMode : uint8_t;
 
+enum class ConnectionType : uint8_t;
+
 enum class ConstraintType : uint8_t;
 
 enum class CoordinateReferenceSystemType : uint8_t;
@@ -220,6 +222,8 @@ enum class ExponentType : uint8_t;
 
 enum class ExpressionClass : uint8_t;
 
+enum class ExpressionDepthKind : uint8_t;
+
 enum class ExpressionTailType : uint8_t;
 
 enum class ExpressionType : uint8_t;
@@ -236,13 +240,13 @@ enum class ExtensionRepositoryType : uint8_t;
 
 enum class ExtensionUpdateResultTag : uint8_t;
 
+enum class ExternalFileCacheRequestSizing : uint8_t;
+
 enum class ExternalResourceOperation : uint8_t;
 
 enum class ExtraDropInfoType : uint8_t;
 
 enum class ExtraPersistentColumnDataType : uint8_t;
-
-enum class ExtraTypeInfoType : uint8_t;
 
 enum class FileBufferType : uint8_t;
 
@@ -349,6 +353,8 @@ enum class LogicalPlanVerificationPathComponentType : int32_t;
 enum class LogicalPlanVerificationPhase : int32_t;
 
 enum class LogicalTypeId : uint8_t;
+
+enum class LogicalTypeInfoType : uint8_t;
 
 enum class LookupResultType : uint8_t;
 
@@ -470,8 +476,6 @@ enum class QueryResultMemoryType : uint8_t;
 
 enum class QueryResultState : uint8_t;
 
-enum class QueryResultType : uint8_t;
-
 enum class RecoveryMode : uint8_t;
 
 enum class RecursiveCTEPipelineMetricType : uint8_t;
@@ -493,8 +497,6 @@ enum class RenderMode : uint8_t;
 enum class RequestSizing : uint8_t;
 
 enum class RequestType : uint8_t;
-
-enum class ResultEagerness : uint8_t;
 
 enum class ResultLifetime : uint8_t;
 
@@ -851,6 +853,9 @@ template<>
 const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value);
 
 template<>
+const char* EnumUtil::ToChars<ConnectionType>(ConnectionType value);
+
+template<>
 const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
 
 template<>
@@ -950,6 +955,9 @@ template<>
 const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value);
 
 template<>
+const char* EnumUtil::ToChars<ExpressionDepthKind>(ExpressionDepthKind value);
+
+template<>
 const char* EnumUtil::ToChars<ExpressionTailType>(ExpressionTailType value);
 
 template<>
@@ -974,6 +982,9 @@ template<>
 const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value);
 
 template<>
+const char* EnumUtil::ToChars<ExternalFileCacheRequestSizing>(ExternalFileCacheRequestSizing value);
+
+template<>
 const char* EnumUtil::ToChars<ExternalResourceOperation>(ExternalResourceOperation value);
 
 template<>
@@ -981,9 +992,6 @@ const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<ExtraPersistentColumnDataType>(ExtraPersistentColumnDataType value);
-
-template<>
-const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<FileBufferType>(FileBufferType value);
@@ -1143,6 +1151,9 @@ const char* EnumUtil::ToChars<LogicalPlanVerificationPhase>(LogicalPlanVerificat
 
 template<>
 const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value);
+
+template<>
+const char* EnumUtil::ToChars<LogicalTypeInfoType>(LogicalTypeInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<LookupResultType>(LookupResultType value);
@@ -1325,9 +1336,6 @@ template<>
 const char* EnumUtil::ToChars<QueryResultState>(QueryResultState value);
 
 template<>
-const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
-
-template<>
 const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
 
 template<>
@@ -1359,9 +1367,6 @@ const char* EnumUtil::ToChars<RequestSizing>(RequestSizing value);
 
 template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
-
-template<>
-const char* EnumUtil::ToChars<ResultEagerness>(ResultEagerness value);
 
 template<>
 const char* EnumUtil::ToChars<ResultLifetime>(ResultLifetime value);
@@ -1803,6 +1808,9 @@ template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value);
 
 template<>
+ConnectionType EnumUtil::FromString<ConnectionType>(const char *value);
+
+template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);
 
 template<>
@@ -1902,6 +1910,9 @@ template<>
 ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value);
 
 template<>
+ExpressionDepthKind EnumUtil::FromString<ExpressionDepthKind>(const char *value);
+
+template<>
 ExpressionTailType EnumUtil::FromString<ExpressionTailType>(const char *value);
 
 template<>
@@ -1926,6 +1937,9 @@ template<>
 ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value);
 
 template<>
+ExternalFileCacheRequestSizing EnumUtil::FromString<ExternalFileCacheRequestSizing>(const char *value);
+
+template<>
 ExternalResourceOperation EnumUtil::FromString<ExternalResourceOperation>(const char *value);
 
 template<>
@@ -1933,9 +1947,6 @@ ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);
 
 template<>
 ExtraPersistentColumnDataType EnumUtil::FromString<ExtraPersistentColumnDataType>(const char *value);
-
-template<>
-ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value);
 
 template<>
 FileBufferType EnumUtil::FromString<FileBufferType>(const char *value);
@@ -2095,6 +2106,9 @@ LogicalPlanVerificationPhase EnumUtil::FromString<LogicalPlanVerificationPhase>(
 
 template<>
 LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value);
+
+template<>
+LogicalTypeInfoType EnumUtil::FromString<LogicalTypeInfoType>(const char *value);
 
 template<>
 LookupResultType EnumUtil::FromString<LookupResultType>(const char *value);
@@ -2277,9 +2291,6 @@ template<>
 QueryResultState EnumUtil::FromString<QueryResultState>(const char *value);
 
 template<>
-QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
-
-template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
 
 template<>
@@ -2311,9 +2322,6 @@ RequestSizing EnumUtil::FromString<RequestSizing>(const char *value);
 
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);
-
-template<>
-ResultEagerness EnumUtil::FromString<ResultEagerness>(const char *value);
 
 template<>
 ResultLifetime EnumUtil::FromString<ResultLifetime>(const char *value);

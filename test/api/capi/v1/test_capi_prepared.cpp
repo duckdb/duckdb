@@ -659,6 +659,37 @@ TEST_CASE("Prepared streaming result", "[capi]") {
 		duckdb_destroy_prepare(&stmt);
 	}
 
+	SECTION("an open stream holds the connection until it ends") {
+		duckdb_prepared_statement stmt;
+		REQUIRE(duckdb_prepare(tester.connection, "FROM range(100000)", &stmt) == DuckDBSuccess);
+		duckdb_result res;
+		REQUIRE(duckdb_execute_prepared_streaming(stmt, &res) == DuckDBSuccess);
+		REQUIRE(duckdb_result_is_streaming(res));
+		auto chunk = duckdb_stream_fetch_chunk(res);
+		REQUIRE(chunk);
+		duckdb_destroy_data_chunk(&chunk);
+
+		auto refused = tester.Query("SELECT 84");
+		REQUIRE(refused->HasError());
+		REQUIRE(refused->ErrorType() == DUCKDB_ERROR_RESOURCE_IN_USE);
+		REQUIRE(string(refused->ErrorMessage()).find("connection has an open result") != string::npos);
+
+		// fetched to its end, the stream releases the connection
+		while ((chunk = duckdb_stream_fetch_chunk(res))) {
+			duckdb_destroy_data_chunk(&chunk);
+		}
+		REQUIRE(duckdb_result_error(&res) == nullptr);
+		REQUIRE_NO_FAIL(tester.Query("SELECT 84"));
+		duckdb_destroy_result(&res);
+
+		// and so does destroying it unread
+		REQUIRE(duckdb_execute_prepared_streaming(stmt, &res) == DuckDBSuccess);
+		REQUIRE(tester.Query("SELECT 84")->HasError());
+		duckdb_destroy_result(&res);
+		REQUIRE_NO_FAIL(tester.Query("SELECT 84"));
+		duckdb_destroy_prepare(&stmt);
+	}
+
 	SECTION("streaming extracted statements") {
 		duckdb_extracted_statements stmts;
 		auto n_statements = duckdb_extract_statements(tester.connection, "Select 1; Select 2;", &stmts);
@@ -695,6 +726,130 @@ TEST_CASE("Prepared streaming result", "[capi]") {
 
 		duckdb_destroy_extracted(&stmts);
 	}
+}
+
+TEST_CASE("Only a SELECT streams through the streaming entry points", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE t(i INTEGER)"));
+	REQUIRE_NO_FAIL(tester.Query("PREPARE select_42 AS SELECT 42"));
+	REQUIRE_NO_FAIL(tester.Query("CREATE SEQUENCE seq"));
+
+	struct Case {
+		const char *sql;
+		bool streams;
+		int64_t rows;
+	};
+	// rows is checked on a retained result only, -1 skips the check
+	const Case cases[] = {
+	    {"SELECT 42", true, -1},
+	    {"FROM range(3)", true, -1},
+	    {"SHOW TABLES", true, -1},
+	    {"DESCRIBE t", true, -1},
+	    {"PRAGMA version", true, -1},
+	    {"EXPLAIN SELECT 42", false, -1},
+	    {"EXPLAIN ANALYZE SELECT 42", false, -1},
+	    {"WITH ins AS (INSERT INTO t VALUES (4) RETURNING i) SELECT i FROM ins", true, -1},
+	    {"SELECT nextval('seq')", true, -1},
+	    {"EXECUTE select_42", false, 1},
+	    {"INSERT INTO t VALUES (1), (2) RETURNING i", false, 2},
+	    {"CALL pragma_version()", false, 1},
+	    {"CHECKPOINT", false, -1},
+	    {"INSERT INTO t VALUES (3)", false, -1},
+	    {"CREATE OR REPLACE TABLE c AS SELECT 1 AS i", false, -1},
+	};
+	for (bool pending : {false, true}) {
+		for (auto &entry : cases) {
+			INFO((pending ? "duckdb_execute_pending: " : "duckdb_execute_prepared_streaming: ") << entry.sql);
+			duckdb_prepared_statement stmt;
+			REQUIRE(duckdb_prepare(tester.connection, entry.sql, &stmt) == DuckDBSuccess);
+			duckdb_result res;
+			if (pending) {
+				duckdb_pending_result pending_res;
+				REQUIRE(duckdb_pending_prepared_streaming(stmt, &pending_res) == DuckDBSuccess);
+				REQUIRE(duckdb_execute_pending(pending_res, &res) == DuckDBSuccess);
+				duckdb_destroy_pending(&pending_res);
+			} else {
+				REQUIRE(duckdb_execute_prepared_streaming(stmt, &res) == DuckDBSuccess);
+			}
+			REQUIRE(duckdb_result_is_streaming(res) == entry.streams);
+			if (!entry.streams && entry.rows >= 0) {
+				REQUIRE(duckdb_row_count(&res) == idx_t(entry.rows));
+			}
+			// Destroyed unread: a streamed statement is abandoned, any other one has applied its effects already
+			duckdb_destroy_result(&res);
+			duckdb_destroy_prepare(&stmt);
+		}
+	}
+	auto rows = tester.Query("SELECT count(*) FROM t");
+	REQUIRE(rows->Fetch<int64_t>(0, 0) == 6);
+}
+
+TEST_CASE("A statement that is not streamed still returns its rows through the stream reader", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE_NO_FAIL(tester.Query("PREPARE select_5000 AS SELECT range AS i FROM range(5000)"));
+
+	struct Case {
+		const char *sql;
+		idx_t rows;
+	};
+	const Case cases[] = {
+	    {"SELECT range FROM range(5000)", 5000},
+	    {"EXECUTE select_5000", 5000},
+	    {"EXPLAIN SELECT 42", 1},
+	    {"CALL range(3000)", 3000},
+	};
+	for (bool pending : {false, true}) {
+		for (auto &entry : cases) {
+			INFO((pending ? "duckdb_execute_pending: " : "duckdb_execute_prepared_streaming: ") << entry.sql);
+			duckdb_prepared_statement stmt;
+			REQUIRE(duckdb_prepare(tester.connection, entry.sql, &stmt) == DuckDBSuccess);
+			duckdb_result res;
+			if (pending) {
+				duckdb_pending_result pending_res;
+				REQUIRE(duckdb_pending_prepared_streaming(stmt, &pending_res) == DuckDBSuccess);
+				REQUIRE(duckdb_execute_pending(pending_res, &res) == DuckDBSuccess);
+				duckdb_destroy_pending(&pending_res);
+			} else {
+				REQUIRE(duckdb_execute_prepared_streaming(stmt, &res) == DuckDBSuccess);
+			}
+			idx_t rows = 0;
+			while (auto chunk = duckdb_stream_fetch_chunk(res)) {
+				rows += duckdb_data_chunk_get_size(chunk);
+				duckdb_destroy_data_chunk(&chunk);
+			}
+			REQUIRE(duckdb_result_error(&res) == nullptr);
+			REQUIRE(rows == entry.rows);
+			duckdb_destroy_result(&res);
+			duckdb_destroy_prepare(&stmt);
+		}
+	}
+}
+
+TEST_CASE("A streaming execution without an out_result keeps what the statement wrote", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE t(i BIGINT)"));
+	const char *sql = "WITH ins AS (INSERT INTO t SELECT range FROM range(100000) RETURNING i) SELECT i FROM ins";
+
+	bool in_transaction = false;
+	SECTION("autocommit") {
+	}
+	SECTION("in a transaction") {
+		in_transaction = true;
+		REQUIRE_NO_FAIL(tester.Query("BEGIN TRANSACTION"));
+	}
+	duckdb_prepared_statement stmt;
+	REQUIRE(duckdb_prepare(tester.connection, sql, &stmt) == DuckDBSuccess);
+	// No result reaches the caller, so the statement is completed instead of streamed and dropped unread
+	REQUIRE(duckdb_execute_prepared_streaming(stmt, nullptr) == DuckDBSuccess);
+	duckdb_destroy_prepare(&stmt);
+	if (in_transaction) {
+		REQUIRE_NO_FAIL(tester.Query("COMMIT"));
+	}
+	auto count = tester.Query("SELECT count(*) FROM t");
+	REQUIRE(count->Fetch<int64_t>(0, 0) == 100000);
 }
 
 TEST_CASE("Test STRING LITERAL parameter type", "[capi]") {

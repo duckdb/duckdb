@@ -31,6 +31,9 @@ int wmain(int argc, wchar_t **wargv) {
 		ErrorData error(ex);
 		fprintf(stderr, "Exited due to error: %s", error.Message().c_str());
 	}
+	if (shell_state) {
+		shell_state->PrintExitHint(rc);
+	}
 	try {
 		// destroy shell state prior to program clean-up
 		if (shell_state) {

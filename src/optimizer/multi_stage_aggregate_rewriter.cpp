@@ -346,7 +346,7 @@ static BranchResult CreateRewriteBranch(Optimizer &optimizer, LogicalAggregate &
 	optional_idx input_cte_index;
 	if (input_consumers > 1) {
 		input_cte_index = optimizer.binder.GenerateTableIndex().index;
-		input = AggregateRewriteHelper::PinColumnOrder(optimizer, std::move(input), input_types, input_bindings);
+		input = LogicalProjection::CreateIdentity(optimizer.binder.GenerateTableIndex(), std::move(input));
 	}
 
 	struct StageOutput {
@@ -720,7 +720,7 @@ bool MultiStageAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 		input_bindings = op->children[0]->GetColumnBindings();
 		cte_index = optimizer.binder.GenerateTableIndex();
 		op->children[0] =
-		    AggregateRewriteHelper::PinColumnOrder(optimizer, std::move(op->children[0]), input_types, input_bindings);
+		    LogicalProjection::CreateIdentity(optimizer.binder.GenerateTableIndex(), std::move(op->children[0]));
 	}
 
 	vector<BranchResult> branches;

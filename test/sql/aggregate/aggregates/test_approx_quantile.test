@@ -201,6 +201,11 @@ SELECT approx_quantile(42, CAST(NULL AS INT[]));
 ----
 must not be NULL
 
+statement error
+SELECT approx_quantile(r, 'nan'::FLOAT) FROM quantile
+----
+cannot be NaN
+
 statement ok
 pragma threads=4
 
@@ -284,6 +289,16 @@ SELECT reservoir_quantile(r, r)  from quantile
 statement error
 SELECT reservoir_quantile(r, NULL)  from quantile
 ----
+
+statement error
+SELECT reservoir_quantile(r, 'nan'::DOUBLE)  from quantile
+----
+cannot be NaN
+
+statement error
+SELECT reservoir_quantile(r, [0.5, 'nan'::DOUBLE])  from quantile
+----
+cannot be NaN
 
 statement error
 SELECT reservoir_quantile(r, r, r)  from quantile

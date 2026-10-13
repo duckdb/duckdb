@@ -1,4 +1,5 @@
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -243,7 +244,7 @@ static unique_ptr<ParsedExpression> NestedValueExpression(const LogicalType &typ
 	switch (type.id()) {
 	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::STRUCT:
-		function = type.id() == LogicalTypeId::TUPLE || StructType::IsUnnamed(type) ? "row" : "struct_pack";
+		function = type.id() == LogicalTypeId::TUPLE ? "row" : "struct_pack";
 		child_types = StructType::GetChildTypes(type);
 		if (value) {
 			children = StructValue::GetChildren(*value);

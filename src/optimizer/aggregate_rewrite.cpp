@@ -85,13 +85,7 @@ static unique_ptr<Expression> CreateAggregateSortKey(ClientContext &context, con
 		sort_children.push_back(make_uniq<BoundConstantExpression>(Value(order.GetOrderModifier())));
 	}
 	FunctionBinder function_binder(context);
-	ErrorData error;
-	auto sort_key = function_binder.BindScalarFunction(Identifier::DefaultSchema(), "create_sort_key",
-	                                                   std::move(sort_children), error);
-	if (!sort_key) {
-		error.Throw();
-	}
-	return sort_key;
+	return function_binder.BindScalarFunction(Identifier::DefaultSchema(), "create_sort_key", std::move(sort_children));
 }
 
 unique_ptr<AggregateRewritePlan> FrequencyAggregateRewrite::Create(AggregateRewriteInput &input, bool ignore_nulls,

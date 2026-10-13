@@ -319,7 +319,7 @@ void RegisterUnionConstructors(TypeConstructorSet &set) {
 // VARIANT Type
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindVariantType(BindLogicalTypeInput &input) {
-	// We need this function to make sure we always create a VARIANT type with ExtraTypeInfo
+	// We need this function to make sure we always create a VARIANT type with LogicalTypeInfo
 	return LogicalType::VARIANT();
 }
 
