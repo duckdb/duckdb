@@ -183,7 +183,7 @@ const Vector &DictionaryVector::GetCachedHashes(const Vector &input) {
 	D_ASSERT(CanCacheHashes(input));
 
 	const auto &entry = input.Buffer().Cast<DictionaryBuffer>().GetEntry();
-	std::call_once(entry.cached_hashes_once, [&] {
+	CallOnce(entry.cached_hashes_once, [&] {
 		const auto dictionary_size = DictionarySize(input).GetIndex();
 		auto hashes = make_uniq<Vector>(LogicalType::HASH, dictionary_size);
 		VectorOperations::Hash(entry.data, *hashes);

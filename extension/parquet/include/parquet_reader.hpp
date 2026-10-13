@@ -18,6 +18,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/once_flag.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_functions.hpp"
@@ -99,6 +100,8 @@ struct ParquetReaderPrefetchConfig {
 	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.95;
 	//! How many row groups need to produce at least one surviving row (from filtering)
 	static constexpr double PREFETCH_FILTER_MINIMUM_MATCH_RATIO = 0.9;
+	//! Before observing matches, only speculate on filter columns that are cheap to read
+	static constexpr double FIRST_GROUP_PREFETCH_MAXIMUM_FILTER_SCAN = 0.05;
 };
 
 enum class ParquetPrefetchStrategy : uint8_t {
@@ -517,7 +520,7 @@ private:
 
 private:
 	unique_ptr<CachingFileHandle> file_handle;
-	mutable std::once_flag scan_handle_initialized;
+	mutable OnceFlag scan_handle_initialized;
 	//! Scan handle shared by all scan states of this reader
 	mutable shared_ptr<CachingFileHandle> shared_scan_handle;
 	mutable annotated_mutex variant_stats_lock;
