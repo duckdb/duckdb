@@ -320,7 +320,8 @@ public:
 	//! Returns the default value of an option
 	static SettingLookupResult TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result);
 
-	bool CanAccessFile(const string &path, FileType type);
+	//! The opener (if any) is used to expand "~" using the connection-specific home_directory
+	bool CanAccessFile(const string &path, FileType type, optional_ptr<FileOpener> opener = nullptr);
 	void AddAllowedConfig(const Identifier &config_name);
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
@@ -329,7 +330,7 @@ public:
 	void AddAllowedDatabasePath(const string &database_path);
 	vector<string> GetAllowedDirectories() const;
 	vector<string> GetAllowedPaths() const;
-	string SanitizeAllowedPath(const string &path) const;
+	string SanitizeAllowedPath(const string &path, optional_ptr<FileOpener> opener = nullptr) const;
 	ExtensionCallbackManager &GetCallbackManager();
 	const ExtensionCallbackManager &GetCallbackManager() const;
 

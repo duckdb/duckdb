@@ -922,8 +922,8 @@ const ExtensionCallbackManager &DBConfig::GetCallbackManager() const {
 	return *callback_manager;
 }
 
-string DBConfig::SanitizeAllowedPath(const string &path_p) const {
-	auto result = file_system->CanonicalizePath(path_p);
+string DBConfig::SanitizeAllowedPath(const string &path_p, optional_ptr<FileOpener> opener) const {
+	auto result = file_system->CanonicalizePath(FileSystem::ExpandPath(path_p, opener));
 	// allowed_directories/allowed_path always uses forward slashes regardless of the OS
 	auto path_sep = file_system->PathSeparator(path_p);
 	if (path_sep != "/") {
@@ -999,12 +999,12 @@ vector<string> DBConfig::GetAllowedPaths() const {
 	return vector<string>(options.allowed_paths.begin(), options.allowed_paths.end());
 }
 
-bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
+bool DBConfig::CanAccessFile(const string &input_path, FileType type, optional_ptr<FileOpener> opener) {
 	if (Settings::Get<EnableExternalAccessSetting>(*this)) {
 		// all external access is allowed
 		return true;
 	}
-	string path = SanitizeAllowedPath(input_path);
+	string path = SanitizeAllowedPath(input_path, opener);
 
 	lock_guard<mutex> guard(allowed_paths_lock);
 	if (options.allowed_paths.count(path) > 0) {
