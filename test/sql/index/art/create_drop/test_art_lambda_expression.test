@@ -1,0 +1,43 @@
+# name: test/sql/index/art/create_drop/test_art_lambda_expression.test
+# description: Index expressions can not contain lambda functions
+# group: [create_drop]
+
+statement ok
+CREATE TABLE g(l INT[]);
+
+statement error
+CREATE INDEX idx ON g (list_reduce(l, lambda a, x: a + x, 0));
+----
+lambda functions are not allowed in index expressions
+
+statement error
+CREATE INDEX idx ON g (list_transform(l, lambda x: x + 1));
+----
+lambda functions are not allowed in index expressions
+
+statement error
+CREATE UNIQUE INDEX idx ON g (list_reduce(l, lambda a, x: a + x, 0));
+----
+lambda functions are not allowed in index expressions
+
+statement ok
+CREATE MACRO filtered_len(l) AS len(list_filter(l, lambda x: x > 1));
+
+statement error
+CREATE INDEX idx ON g (filtered_len(l));
+----
+lambda functions are not allowed in index expressions
+
+statement ok
+INSERT INTO g VALUES ([1, 2]);
+
+statement ok
+CREATE INDEX idx ON g (len(l));
+
+statement ok
+INSERT INTO g VALUES ([1, 2, 3]);
+
+query I
+SELECT count(*) FROM g WHERE len(l) = 3;
+----
+1
