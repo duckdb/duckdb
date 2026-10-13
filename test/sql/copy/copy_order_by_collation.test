@@ -28,6 +28,23 @@ SELECT list(s ORDER BY file_row_number) FROM read_parquet('{TEST_DIR}/copy_order
 ----
 [B, C, a]
 
+# TIMETZ sorts by instant and reads back as UTC
+statement ok
+COPY (SELECT * FROM (VALUES (TIMETZ '20:00:00+00'), (TIMETZ '23:00:00+05'), (TIMETZ '12:00:00-09'), (TIMETZ '21:00:00+02')) v(c)) TO '{TEST_DIR}/copy_order_by_collation.parquet' (FORMAT parquet, ORDER_BY (c), OVERWRITE)
+
+query I
+SELECT list(c ORDER BY file_row_number) FROM read_parquet('{TEST_DIR}/copy_order_by_collation.parquet', file_row_number = true)
+----
+['18:00:00+00', '19:00:00+00', '20:00:00+00', '21:00:00+00']
+
+statement ok
+COPY (SELECT * FROM (VALUES (INTERVAL '31 days'), (INTERVAL '1 month'), (INTERVAL '29 days')) v(c)) TO '{TEST_DIR}/copy_order_by_collation.parquet' (FORMAT parquet, ORDER_BY (c), OVERWRITE)
+
+query I
+SELECT list(c ORDER BY file_row_number) FROM read_parquet('{TEST_DIR}/copy_order_by_collation.parquet', file_row_number = true)
+----
+[29 days, 1 month, 31 days]
+
 statement ok
 SET default_collation = 'nocase'
 
