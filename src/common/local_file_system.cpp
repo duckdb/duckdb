@@ -1289,10 +1289,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		if (flags.ReturnNullIfNotExists() && last_error == ERROR_FILE_NOT_FOUND) {
 			return nullptr;
 		}
-		// Mirrors the EEXIST case in the POSIX branch: FILE_FLAGS_NULL_IF_EXISTS may only be set together
-		// with EXCLUSIVE_CREATE, so this reports a lost race as a null handle rather than a throw.
-		// ERROR_ALREADY_EXISTS is accepted alongside ERROR_FILE_EXISTS because CreateFileW reports that
-		// one for some existing entries.
+		// Match POSIX EEXIST handling for exclusive creation.
 		if (flags.ReturnNullIfExists() && (last_error == ERROR_FILE_EXISTS || last_error == ERROR_ALREADY_EXISTS)) {
 			return nullptr;
 		}

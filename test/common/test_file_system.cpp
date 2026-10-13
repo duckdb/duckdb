@@ -767,47 +767,50 @@ TEST_CASE("Moving over an open file preserves existing handles", "[file_system]"
 
 TEST_CASE("exclusive create fails when the file exists", "[file_system]") {
 	auto fs = FileSystem::CreateLocal();
-
 	auto fname = TestCreatePath("exclusive_create_test_file");
-	fs->TryRemoveFile(fname);
+	for (auto create_flag : {FileFlags::FILE_FLAGS_FILE_CREATE, FileFlags::FILE_FLAGS_FILE_CREATE_NEW}) {
+		for (auto null_if_exists : {false, true}) {
+			CAPTURE(create_flag.GetFlagsInternal(), null_if_exists);
+			fs->TryRemoveFile(fname);
+			auto flags = FileFlags::FILE_FLAGS_WRITE | create_flag | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
+			if (null_if_exists) {
+				flags |= FileFlags::FILE_FLAGS_NULL_IF_EXISTS;
+			}
 
-	string payload = "EXCLUSIVE_CREATE_ORIGINAL_CONTENT";
-	auto exclusive_flags =
-	    FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
+			// Both creation modes must succeed on a new path, including with NULL_IF_EXISTS.
+			string payload = "EXCLUSIVE_CREATE_ORIGINAL_CONTENT";
+			auto handle = fs->OpenFile(fname, flags);
+			REQUIRE(handle != nullptr);
+			handle->Write(QueryContext(), payload.data(), payload.size(), 0);
+			handle->Sync();
+			handle.reset();
+			REQUIRE(fs->FileExists(fname));
 
-	// On a path that does not exist yet the exclusive create succeeds, and hands back an ordinary
-	// writable handle.
-	auto handle = fs->OpenFile(fname, exclusive_flags);
-	REQUIRE(handle != nullptr);
-	handle->Write(QueryContext(), payload.data(), payload.size(), 0);
-	handle->Sync();
-	handle.reset();
-	REQUIRE(fs->FileExists(fname));
+			if (null_if_exists) {
+				REQUIRE(fs->OpenFile(fname, flags) == nullptr);
+			} else {
+				REQUIRE_THROWS_AS(fs->OpenFile(fname, flags), IOException);
+			}
 
-	// The file exists now, so the identical open must FAIL rather than hand out a handle to it. That is the
-	// whole point of the flag: it lets a caller create a file only if nobody else got there first.
-	REQUIRE_THROWS(fs->OpenFile(fname, exclusive_flags));
+			// A collision must not truncate or alter the existing file.
+			string read_back(payload.size(), '\0');
+			auto read_handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ);
+			REQUIRE(read_handle->GetFileSize() == payload.size());
+			read_handle->Read(QueryContext(), read_back.data(), read_back.size(), 0);
+			REQUIRE(read_back == payload);
+			read_handle.reset();
 
-	// ... and with NULL_IF_EXISTS the same collision is reported as a null handle instead of a throw.
-	auto null_handle = fs->OpenFile(fname, exclusive_flags | FileFlags::FILE_FLAGS_NULL_IF_EXISTS);
-	REQUIRE(null_handle == nullptr);
+			// A regular file cannot be a parent directory; NULL_IF_EXISTS must not hide this error.
+			REQUIRE_THROWS_AS(fs->OpenFile(fs->JoinPath(fname, "child"), flags), IOException);
 
-	// A rejected exclusive create must leave the existing file completely alone; in particular it must not
-	// have truncated it on the way to failing.
-	string read_back(payload.size(), '\0');
-	auto read_handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ);
-	read_handle->Read(QueryContext(), read_back.data(), payload.size(), 0);
-	REQUIRE(read_back == payload);
-	read_handle.reset();
+			auto reopen = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+			REQUIRE(reopen != nullptr);
+			reopen.reset();
 
-	// Control: without the exclusive flag the very same path opens fine. Without this the two failures above
-	// would pass equally if the file had simply become unopenable.
-	auto reopen = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-	REQUIRE(reopen != nullptr);
-	reopen.reset();
-
-	fs->RemoveFile(fname);
-	REQUIRE(!fs->FileExists(fname));
+			fs->RemoveFile(fname);
+			REQUIRE(!fs->FileExists(fname));
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
