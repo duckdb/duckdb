@@ -34,9 +34,44 @@ void ConstantVector::Reference(Vector &vector, const Value &value, count_t count
 	vector.SetBuffer(CreateConstantBuffer(value, count));
 }
 
+//! Whether the buffer of the vector can be turned into a NULL constant in place: it must not be shared with other
+//! vectors (e.g. a referenced payload), and the children that are nulled as well must be flat or constant
+static bool CanSetNullInPlace(const Vector &vector) {
+	auto &buffer_ref = vector.GetBufferRef();
+	if (!buffer_ref || buffer_ref.use_count() > 1) {
+		return false;
+	}
+	switch (buffer_ref->GetBufferType()) {
+	case VectorBufferType::STANDARD_BUFFER:
+	case VectorBufferType::LIST_BUFFER:
+	case VectorBufferType::STRING_BUFFER:
+		return true;
+	case VectorBufferType::STRUCT_BUFFER:
+		for (auto &entry : StructVector::GetEntries(vector)) {
+			if (!CanSetNullInPlace(entry)) {
+				return false;
+			}
+		}
+		return true;
+	case VectorBufferType::ARRAY_BUFFER: {
+		auto child_type = ArrayVector::GetChild(vector).GetVectorType();
+		return child_type == VectorType::FLAT_VECTOR || child_type == VectorType::CONSTANT_VECTOR;
+	}
+	default:
+		return false;
+	}
+}
+
 void ConstantVector::SetNull(Vector &vector, count_t count) {
-	// the buffer can be shared with (or its children can reference) other vectors - replace it by a NULL constant
-	Reference(vector, Value(vector.GetType()), count);
+	if (!CanSetNullInPlace(vector)) {
+		// the buffer can be shared with (or its children can reference) other vectors - replace it by a NULL constant
+		Reference(vector, Value(vector.GetType()), count);
+		return;
+	}
+	// re-use the buffer, so that e.g. the reserved capacity of a list child is kept
+	vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+	FlatVector::SetSize(vector, count);
+	SetNull(vector, true);
 }
 
 void ConstantVector::SetNull(Vector &vector, bool is_null) {
