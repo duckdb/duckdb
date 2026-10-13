@@ -11,7 +11,6 @@ struct IsDistinctFromTail {
 
 struct ComparisonExpressionTail {
 	ExpressionType comparison_type;
-	vector<bool> not_keywords;
 	unique_ptr<ParsedExpression> expression;
 };
 

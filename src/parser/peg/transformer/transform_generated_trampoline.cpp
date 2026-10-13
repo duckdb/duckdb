@@ -1743,6 +1743,12 @@ static const TransformFrameOps COMPARISON_EXPRESSION_OPS = {
 static const TransformFrameOps COMPARISON_EXPRESSION_TAIL_OPS = {
     "ComparisonExpressionTail", &PEGTransformerFactory::InitializeComparisonExpressionTailTrampoline,
     &PEGTransformerFactory::FinalizeComparisonExpressionTailTrampoline};
+static const TransformFrameOps COMPARISON_OPERAND_OPS = {"ComparisonOperand",
+                                                         &PEGTransformerFactory::InitializeComparisonOperandTrampoline,
+                                                         &PEGTransformerFactory::FinalizeComparisonOperandTrampoline};
+static const TransformFrameOps NOT_COMPARISON_OPERAND_OPS = {
+    "NotComparisonOperand", &PEGTransformerFactory::InitializeNotComparisonOperandTrampoline,
+    &PEGTransformerFactory::FinalizeNotComparisonOperandTrampoline};
 static const TransformFrameOps COMPARISON_OPERATOR_OPS = {
     "ComparisonOperator", &PEGTransformerFactory::InitializeComparisonOperatorTrampoline,
     &PEGTransformerFactory::FinalizeComparisonOperatorTrampoline};
@@ -3664,6 +3670,8 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"IsDistinctFromOp", &IS_DISTINCT_FROM_OP_OPS},
 	    {"ComparisonExpression", &COMPARISON_EXPRESSION_OPS},
 	    {"ComparisonExpressionTail", &COMPARISON_EXPRESSION_TAIL_OPS},
+	    {"ComparisonOperand", &COMPARISON_OPERAND_OPS},
+	    {"NotComparisonOperand", &NOT_COMPARISON_OPERAND_OPS},
 	    {"ComparisonOperator", &COMPARISON_OPERATOR_OPS},
 	    {"OperatorEqual", &OPERATOR_EQUAL_OPS},
 	    {"OperatorNotEqual", &OPERATOR_NOT_EQUAL_OPS},
@@ -16102,12 +16110,8 @@ PEGTransformerFactory::FinalizeComparisonExpressionTrampoline(PEGTransformer &tr
 void PEGTransformerFactory::InitializeComparisonExpressionTailTrampoline(PEGTransformer &transformer,
                                                                          GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(3);
-	process.PushChild({transformer.GetRule("BetweenInLikeExpression"), list_pr.GetChild(2)}, 2);
-	auto &not_expression_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
-	if (not_expression_opt.HasResult()) {
-		process.PushChild({transformer.GetRule("NotExpression"), not_expression_opt.GetResult()}, 1);
-	}
+	process.ReserveChildSlots(2);
+	process.PushChild({transformer.GetRule("ComparisonOperand"), list_pr.GetChild(1)}, 1);
 	process.PushChild({transformer.GetRule("ComparisonOperator"), list_pr.GetChild(0)}, 0);
 }
 
@@ -16115,14 +16119,47 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeComparisonExpressionTailTrampoline(PEGTransformer &transformer,
                                                                   GeneratedTransformProcess &process) {
 	auto comparison_operator = process.TakeResult<ExpressionType>(0);
-	optional<vector<bool>> not_expression {};
-	if (process.child_results[1]) {
-		not_expression = process.TakeResult<vector<bool>>(1);
-	}
-	auto between_in_like_expression = process.TakeResult<unique_ptr<ParsedExpression>>(2);
-	auto result = TransformComparisonExpressionTail(transformer, comparison_operator, std::move(not_expression),
-	                                                std::move(between_in_like_expression));
+	auto comparison_operand = process.TakeResult<unique_ptr<ParsedExpression>>(1);
+	auto result = TransformComparisonExpressionTail(transformer, comparison_operator, std::move(comparison_operand));
 	return transformer.MakeResult<ComparisonExpressionTail>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeComparisonOperandTrampoline(PEGTransformer &transformer,
+                                                                  GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.Name());
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeComparisonOperandTrampoline(PEGTransformer &transformer,
+                                                           GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeNotComparisonOperandTrampoline(PEGTransformer &transformer,
+                                                                     GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(2);
+	process.PushChild({transformer.GetRule("IsExpression"), list_pr.GetChild(1)}, 1);
+	process.PushChild({transformer.GetRule("NotExpression"), list_pr.GetChild(0)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeNotComparisonOperandTrampoline(PEGTransformer &transformer,
+                                                              GeneratedTransformProcess &process) {
+	auto not_expression = process.TakeResult<vector<bool>>(0);
+	auto is_expression = process.TakeResult<unique_ptr<ParsedExpression>>(1);
+	auto result = TransformNotComparisonOperand(transformer, std::move(not_expression), std::move(is_expression));
+	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeComparisonOperatorTrampoline(PEGTransformer &transformer,
