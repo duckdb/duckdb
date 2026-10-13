@@ -62,17 +62,19 @@ static bool CombineStructTypes(LogicalTypeResolver &logical_type_resolver, const
 
 	// Create a super-set of the STRUCT fields.
 	// First, create a name->index map of the right children.
-	InsertionOrderPreservingMap<idx_t, Identifier, identifier_map_t<idx_t>> right_children_map;
+	identifier_map_t<idx_t> right_children_map;
 	for (idx_t i = 0; i < right_children.size(); i++) {
 		auto &name = right_children[i].first;
 		right_children_map[name] = i;
 	}
+	// right children that matched a left child, the others are added after the left children
+	vector<bool> right_child_matched(right_children.size(), false);
 
 	for (idx_t i = 0; i < left_children.size(); i++) {
 		auto &left_child = left_children[i];
 		auto right_child_it = right_children_map.find(left_child.first);
 
-		if (right_child_it == right_children_map.end()) {
+		if (right_child_it == right_children_map.end() || right_child_matched[right_child_it->second]) {
 			// We can directly put the left child.
 			child_types.emplace_back(left_child.first, left_child.second);
 			continue;
@@ -85,13 +87,16 @@ static bool CombineStructTypes(LogicalTypeResolver &logical_type_resolver, const
 			return false;
 		}
 		child_types.emplace_back(left_child.first, std::move(child_type));
-		right_children_map.erase(right_child_it);
+		right_child_matched[right_child_it->second] = true;
 	}
 
 	// Add all remaining right children.
-	for (const auto &right_child_it : right_children_map) {
-		auto &right_child = right_children[right_child_it.second];
-		child_types.emplace_back(right_child.first, right_child.second);
+	for (idx_t i = 0; i < right_children.size(); i++) {
+		auto right_child_it = right_children_map.find(right_children[i].first);
+		if (right_child_matched[i] || right_child_it->second != i) {
+			continue;
+		}
+		child_types.emplace_back(right_children[i].first, right_children[i].second);
 	}
 
 	result = LogicalType::STRUCT(child_types);
