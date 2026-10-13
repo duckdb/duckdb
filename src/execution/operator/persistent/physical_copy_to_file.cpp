@@ -766,8 +766,21 @@ struct PartitionedCopyFlushAction {
 
 struct PartitionedCopyBatchState {
 private:
+	//! Partition values can be NULL, so they are compared with IS NOT DISTINCT FROM semantics
+	static bool PartitionValuesEqual(const vector<Value> &left, const vector<Value> &right) {
+		if (left.size() != right.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < left.size(); i++) {
+			if (!Value::NotDistinctFrom(left[i], right[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	void SetValues(vector<Value> values_p) {
-		D_ASSERT(!values || *values == values_p);
+		D_ASSERT(!values || PartitionValuesEqual(*values, values_p));
 		if (!values) {
 			values = std::move(values_p);
 		}
