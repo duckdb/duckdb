@@ -410,6 +410,9 @@ public:
 	DUCKDB_API shared_ptr<HTTPRetryQuota> GetRetryQuota(const string &proto_host_port);
 	//! Whether a received status is worth retrying: 408, 418, 429 and the server errors that can clear up.
 	DUCKDB_API static bool IsRetryableStatus(HTTPStatusCode status);
+	//! Whether an HTTP 400 response is an S3-style RequestTimeout error document: the status is final, the condition
+	//! behind it is not, so such a response is retried like a 408.
+	DUCKDB_API static bool IsRequestTimeoutResponse(const HTTPResponse &response);
 	//! Hosts remembered for retry quotas; past this the host unused for longest makes room.
 	static constexpr idx_t MAX_RETRY_QUOTAS = 1024;
 

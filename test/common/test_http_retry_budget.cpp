@@ -2,6 +2,8 @@
 
 #include "duckdb/main/http/http_retry_budget.hpp"
 #include "duckdb/main/http/http_util.hpp"
+#include "duckdb/common/exception/http_exception.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 
@@ -274,6 +276,91 @@ TEST_CASE("HTTP retry budget numbers every send of the operation", "[http]") {
 	REQUIRE(budget.RetriesUsed() == 0);
 	budget.Run([&]() { return HTTPRetryDecision::Finish(); });
 	REQUIRE(budget.BeginAttempt() == 4);
+}
+
+namespace {
+
+unique_ptr<HTTPResponse> MakeResponse(HTTPStatusCode status, const string &body = string()) {
+	auto response = make_uniq<HTTPResponse>(status);
+	response->body = body;
+	return response;
+}
+
+const char *S3_REQUEST_TIMEOUT_BODY = "<Error><Code>RequestTimeout</Code><Message>Your socket connection to the "
+                                      "server was not read from or written to within the timeout period.</Message>"
+                                      "</Error>";
+const char *S3_INTERNAL_ERROR_BODY = "<Error><Code>InternalError</Code><Message>We encountered an internal error. "
+                                     "Please try again.</Message></Error>";
+
+} // namespace
+
+TEST_CASE("An S3-style 400 RequestTimeout is retried whether it was received or thrown", "[http]") {
+	HTTPUtil http_util;
+	HTTPParams params(http_util);
+	params.retries = 2;
+	params.retry_wait_ms = 0;
+	HTTPHeaders headers;
+
+	HTTPResponse timeout(HTTPStatusCode::BadRequest_400);
+	timeout.body = S3_REQUEST_TIMEOUT_BODY;
+	REQUIRE(HTTPUtil::IsRequestTimeoutResponse(timeout));
+	REQUIRE(timeout.ShouldRetry());
+	// Other 400s and the same code behind another status are left alone
+	HTTPResponse malformed(HTTPStatusCode::BadRequest_400);
+	malformed.body = "<Error><Code>MalformedXML</Code></Error>";
+	REQUIRE_FALSE(HTTPUtil::IsRequestTimeoutResponse(malformed));
+	REQUIRE_FALSE(malformed.ShouldRetry());
+	HTTPResponse forbidden(HTTPStatusCode::Forbidden_403);
+	forbidden.body = S3_REQUEST_TIMEOUT_BODY;
+	REQUIRE_FALSE(HTTPUtil::IsRequestTimeoutResponse(forbidden));
+
+	// A received RequestTimeout uses the retries of the request
+	GetRequestInfo received(
+	    "http://bucket.s3.amazonaws.com/key", headers, params, [](const HTTPResponse &) { return true; },
+	    [](const_data_ptr_t, idx_t) { return true; });
+	received.try_request = true;
+	idx_t sends = 0;
+	auto response = HTTPUtil::RunRequestWithRetry(
+	    [&]() {
+		    sends++;
+		    return MakeResponse(HTTPStatusCode::BadRequest_400, S3_REQUEST_TIMEOUT_BODY);
+	    },
+	    received, {});
+	REQUIRE(sends == 3);
+	REQUIRE(response->status == HTTPStatusCode::BadRequest_400);
+	REQUIRE_FALSE(response->Success());
+
+	// A handler that turns the RequestTimeout into an exception is retried just the same
+	GetRequestInfo thrown(
+	    "http://bucket.s3.amazonaws.com/key", headers, params, [](const HTTPResponse &) { return true; },
+	    [](const_data_ptr_t, idx_t) { return true; });
+	thrown.try_request = true;
+	sends = 0;
+	response = HTTPUtil::RunRequestWithRetry(
+	    [&]() -> unique_ptr<HTTPResponse> {
+		    sends++;
+		    auto failed = MakeResponse(HTTPStatusCode::BadRequest_400, S3_REQUEST_TIMEOUT_BODY);
+		    throw HTTPException(*failed, "HTTP GET error reading '%s' (HTTP 400 Bad Request)", thrown.url);
+	    },
+	    thrown, {});
+	REQUIRE(sends == 3);
+	REQUIRE(response->HasRequestError());
+
+	// A thrown 400 without the timeout code stays final
+	GetRequestInfo final_error(
+	    "http://bucket.s3.amazonaws.com/key", headers, params, [](const HTTPResponse &) { return true; },
+	    [](const_data_ptr_t, idx_t) { return true; });
+	final_error.try_request = true;
+	sends = 0;
+	response = HTTPUtil::RunRequestWithRetry(
+	    [&]() -> unique_ptr<HTTPResponse> {
+		    sends++;
+		    auto failed = MakeResponse(HTTPStatusCode::BadRequest_400, "<Error><Code>MalformedXML</Code></Error>");
+		    throw HTTPException(*failed, "HTTP GET error reading '%s' (HTTP 400 Bad Request)", final_error.url);
+	    },
+	    final_error, {});
+	REQUIRE(sends == 1);
+	REQUIRE(response->HasRequestError());
 }
 
 TEST_CASE("HTTPUtil hands out one retry quota per host and forgets the quietest", "[http]") {

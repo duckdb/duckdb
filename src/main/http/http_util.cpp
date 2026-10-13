@@ -123,7 +123,14 @@ bool HTTPResponse::ShouldRetry() const {
 		// request errors are eligible for retry
 		return true;
 	}
-	return HTTPUtil::IsRetryableStatus(status);
+	return HTTPUtil::IsRetryableStatus(status) || HTTPUtil::IsRequestTimeoutResponse(*this);
+}
+
+bool HTTPUtil::IsRequestTimeoutResponse(const HTTPResponse &response) {
+	// S3-compatible stores report a timed-out request as "400 Bad Request" with an XML error document; only the
+	// error code tells it apart from a malformed request.
+	return response.status == HTTPStatusCode::BadRequest_400 &&
+	       response.body.find("<Code>RequestTimeout</Code>") != string::npos;
 }
 
 bool HTTPUtil::IsRetryableStatus(HTTPStatusCode status) {
