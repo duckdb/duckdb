@@ -490,7 +490,9 @@ void DivModMagnitudes(BignumArithmeticState &state, const bignum_magnitude_t &di
 	const idx_t n = divisor.size();
 	if (m < n) {
 		quotient.clear();
-		remainder = dividend;
+		if (want_remainder) {
+			remainder = dividend;
+		}
 		return;
 	}
 	constexpr twodigit_t BASE = static_cast<twodigit_t>(1) << Bignum::DIGIT_BITS;
