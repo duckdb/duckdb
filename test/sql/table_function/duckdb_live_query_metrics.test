@@ -2,6 +2,9 @@
 # description: duckdb_live_query_metrics() lists each connection's live query counters by metric name
 # group: [table_function]
 
+# the idle checks below follow one connection across statements, which a restart would replace
+require skip_reload
+
 query II
 SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM duckdb_live_query_metrics());
 ----
@@ -28,23 +31,25 @@ WHERE connection_id = current_connection_id() AND metric_name = 'system.total_me
 ----
 true
 
-# an idle connection shows the counters of its most recent query
-load {TEST_DIR}/live_query_metrics.db
-
-statement ok
-CREATE TABLE t1 AS SELECT range AS i FROM range(10000000);
-
-statement ok
-CREATE TABLE t2 AS SELECT range AS i FROM range(10000000);
-
-# reopen the database, so the tables are read from disk
-restart
-
+# an idle connection shows the counters of its most recent query; the files are read through the file system
+# in every storage configuration
 statement ok con1
 CREATE TABLE monitored AS SELECT current_connection_id() AS id;
 
 statement ok con1
-SELECT sum(i) FROM t1;
+COPY (SELECT range AS i FROM range(1000000)) TO '{TEST_DIR}/live_query_metrics_1.csv';
+
+query I con2
+SELECT metric_value::UBIGINT > 0 FROM duckdb_live_query_metrics()
+WHERE connection_id = (SELECT id FROM monitored) AND metric_name = 'io.total_bytes_written';
+----
+true
+
+statement ok con1
+COPY (SELECT range AS i FROM range(1000000)) TO '{TEST_DIR}/live_query_metrics_2.csv';
+
+statement ok con1
+SELECT sum(i) FROM read_csv('{TEST_DIR}/live_query_metrics_1.csv');
 
 query I con2
 SELECT metric_value::UBIGINT > 0 FROM duckdb_live_query_metrics()
@@ -64,7 +69,7 @@ WHERE connection_id = (SELECT id FROM monitored) AND metric_name = 'io.total_byt
 
 # a query that fails keeps the counters of the work it did
 statement error con1
-SELECT sum(CASE WHEN i = 9000000 THEN error('boom') ELSE i END) FROM t2;
+SELECT sum(CASE WHEN i = 900000 THEN error('boom') ELSE i END) FROM read_csv('{TEST_DIR}/live_query_metrics_2.csv');
 ----
 boom
 
