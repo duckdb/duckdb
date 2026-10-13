@@ -34,6 +34,19 @@ struct IndexKeyPath {
 	vector<Identifier> columns;
 };
 
+IndexConstraintType ParseConstraintType(const string &value) {
+	if (StringUtil::CIEquals(value, "primary")) {
+		return IndexConstraintType::PRIMARY;
+	}
+	if (StringUtil::CIEquals(value, "unique")) {
+		return IndexConstraintType::UNIQUE;
+	}
+	if (StringUtil::CIEquals(value, "foreign")) {
+		return IndexConstraintType::FOREIGN;
+	}
+	throw BinderException("index_key: constraint must be one of 'primary', 'unique' or 'foreign'");
+}
+
 IndexKeyPath EvaluateIndexKeyPath(const Value &input_struct) {
 	if (input_struct.IsNull()) {
 		throw BinderException("index_key: path parameter cannot be NULL");
@@ -99,10 +112,7 @@ IndexKeyPath EvaluateIndexKeyPath(const Value &input_struct) {
 		return path;
 	}
 
-	path.constraint_type = EnumUtil::FromString<IndexConstraintType>(fields["constraint"]);
-	if (path.constraint_type == IndexConstraintType::NONE) {
-		throw BinderException("index_key: constraint must be one of 'primary', 'unique' or 'foreign'");
-	}
+	path.constraint_type = ParseConstraintType(fields["constraint"]);
 	if (path.constraint_type != IndexConstraintType::PRIMARY && path.columns.empty()) {
 		throw BinderException("index_key: %s constraints require a 'columns' field in path",
 		                      EnumUtil::ToString(path.constraint_type));

@@ -444,7 +444,17 @@ Binder Error: index_key: path must contain exactly one of the 'index' or 'constr
 statement error
 SELECT index_key({'table': 'tbl1', 'constraint': 'check'}, 1);
 ----
-check
+Binder Error: index_key: constraint must be one of 'primary', 'unique' or 'foreign'
+
+statement error
+SELECT index_key({'table': 'tbl1', 'constraint': 'none'}, 1);
+----
+Binder Error: index_key: constraint must be one of 'primary', 'unique' or 'foreign'
+
+query I
+SELECT index_key({'table': 'tbl1', 'constraint': 'PRIMARY'}, 1);
+----
+\x80\x00\x00\x01
 
 statement error
 SELECT index_key({'table': 'tbl1', 'constraint': 'unique'}, 1);
