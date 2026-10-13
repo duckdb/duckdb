@@ -11,6 +11,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 
 namespace duckdb {
 
@@ -588,12 +589,17 @@ struct DecimalCastOperation {
 			return true;
 		} else {
 			// positive exponent: append 0's
-			for (idx_t i = 0; i < idx_t(exponent); i++) {
-				if (!HandleDigit<T, NEGATIVE>(state, 0)) {
+			if (state.result != 0) {
+				using store_t = typename T::StoreType;
+				if (exponent > state.width) {
+					return false;
+				}
+				auto power = UnsafeNumericCast<store_t>(
+				    DecimalCastTraits<store_t>::POWERS_OF_TEN_CLASS::POWERS_OF_TEN[exponent]);
+				if (!TryMultiplyOperator::Operation(state.result, power, state.result)) {
 					return false;
 				}
 			}
-			// the digit count misses the decimals that the exponent moved before the point
 			return FitsWidth<T, NEGATIVE>(state);
 		}
 	}
