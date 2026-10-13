@@ -275,7 +275,9 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 			}
 		}
 		auto &constraint_info = alter_table_info->Cast<AddConstraintInfo>();
-		check_mode = constraint_info.constraint->Cast<UniqueConstraint>().check_mode;
+		if (constraint_info.constraint->type == ConstraintType::UNIQUE) {
+			check_mode = constraint_info.constraint->Cast<UniqueConstraint>().check_mode;
+		}
 
 		auto &catalog = Catalog::GetCatalog(context, info->GetQualifiedName().Catalog());
 		catalog.Alter(context, *alter_table_info);

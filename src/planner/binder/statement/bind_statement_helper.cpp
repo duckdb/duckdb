@@ -9,10 +9,17 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
+
+static void ThrowDeferredReferencedKey() {
+	throw BinderException(
+	    "Failed to create foreign key: the referenced PRIMARY KEY or UNIQUE constraint cannot be DEFERRED");
+}
+
 void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints,
                                    ForeignKeyConstraint &fk) {
 	// find the matching primary key constraint
 	bool found_constraint = false;
+	bool found_deferred = false;
 	// if no columns are defined, we will automatically try to bind to the primary key
 	bool find_primary_key = fk.pk_columns.empty();
 	for (auto &constr : constraints) {
@@ -40,6 +47,9 @@ void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<uniqu
 				    "Failed to create foreign key: number of referencing (%s) and referenced columns (%s) differ",
 				    fk_name_str, pk_name_str);
 			}
+			if (unique.IsDeferred()) {
+				ThrowDeferredReferencedKey();
+			}
 			fk.pk_columns = pk_names;
 			return;
 		}
@@ -57,8 +67,16 @@ void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<uniqu
 		if (!equals) {
 			continue;
 		}
+		if (unique.IsDeferred()) {
+			// keep looking for a matching constraint that is not deferred
+			found_deferred = true;
+			continue;
+		}
 		// found match
 		return;
+	}
+	if (found_deferred) {
+		ThrowDeferredReferencedKey();
 	}
 	// no match found! examine why
 	if (!found_constraint) {
