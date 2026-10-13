@@ -534,6 +534,15 @@ struct DecimalCastOperation {
 	}
 
 	template <class T, bool NEGATIVE>
+	static bool FitsWidth(const T &state) {
+		if (NEGATIVE) {
+			return state.result > -state.limit;
+		} else {
+			return state.result < state.limit;
+		}
+	}
+
+	template <class T, bool NEGATIVE>
 	static void RoundUpResult(T &state) {
 		if (NEGATIVE) {
 			state.result -= 1;
@@ -585,11 +594,7 @@ struct DecimalCastOperation {
 				}
 			}
 			// the digit count misses the decimals that the exponent moved before the point
-			if (NEGATIVE) {
-				return state.result > -state.limit;
-			} else {
-				return state.result < state.limit;
-			}
+			return FitsWidth<T, NEGATIVE>(state);
 		}
 	}
 
@@ -656,11 +661,7 @@ struct DecimalCastOperation {
 		for (uint8_t i = state.decimal_count; i < state.scale; i++) {
 			state.result *= 10;
 		}
-		if (NEGATIVE) {
-			return state.result > -state.limit;
-		} else {
-			return state.result < state.limit;
-		}
+		return FitsWidth<T, NEGATIVE>(state);
 	}
 };
 
