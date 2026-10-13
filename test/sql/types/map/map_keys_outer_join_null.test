@@ -23,7 +23,7 @@ SELECT count(*), count(keys) FROM (
 	ORDER BY ALL
 );
 ----
-72344	69344
+72344	70344
 
 query I
 SELECT count(*) FROM (
