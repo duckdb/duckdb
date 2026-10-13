@@ -1,0 +1,25 @@
+# name: test/sql/json/scalar/json_path_many_recursive_descents.test
+# description: JSON paths with many recursive descent components are bounded
+# group: [scalar]
+
+require json
+
+statement error
+SELECT json_exists(repeat('{"a":', 60) || '1' || repeat('}', 60), '$..a..a..a..a..a..a..a..a..b');
+----
+JSON path evaluation exceeds the maximum
+
+query I
+SELECT json_extract('{"a":{"a":{"a":1}}}', '$..a..a');
+----
+[{"a":1}, 1, 1]
+
+query I
+SELECT len(json_exists(repeat('{"a":', 60) || '1' || repeat('}', 60), '$..a..a')) > 0;
+----
+true
+
+query I
+SELECT json_extract('[{"b":1},{"c":{"b":2}}]', '$..b');
+----
+[1, 2]
