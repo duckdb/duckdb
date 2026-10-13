@@ -512,12 +512,12 @@ private:
 	optional_ptr<const BaseStatistics> GetVariantStats(const ParquetColumnSchema &schema) const;
 	//! Open a file handle for scanning, resolving the open flags from the prefetch mode
 	unique_ptr<CachingFileHandle> OpenScanHandle(ClientContext &context) const;
+	//! Initialize the shared scan handle, including when pre-opening it for read-ahead
+	void InitializeScanHandle(ClientContext &context) const;
 
 private:
 	unique_ptr<CachingFileHandle> file_handle;
-	//! Scan handle pre-opened by PrepareReadAhead while the file was opened, adopted by the first InitializeScan
-	mutable mutex prewarm_lock;
-	mutable unique_ptr<CachingFileHandle> prewarmed_scan_handle;
+	mutable std::once_flag scan_handle_initialized;
 	//! Scan handle shared by all scan states of this reader
 	mutable shared_ptr<CachingFileHandle> shared_scan_handle;
 	mutable annotated_mutex variant_stats_lock;

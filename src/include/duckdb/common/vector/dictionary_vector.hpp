@@ -10,6 +10,8 @@
 
 #include "duckdb/common/types/vector.hpp"
 
+#include <mutex>
+
 namespace duckdb {
 
 //! The DictionaryEntry holds a child Vector for dictionary-encoded vectors
@@ -26,7 +28,7 @@ public:
 	//! fall-through), making it a global dictionary. Set only via CreateReusableGlobalDictionary.
 	bool global_dictionary = false;
 	//! For caching the hashes of a child buffer (mutable: cache is logically const)
-	mutable mutex cached_hashes_lock;
+	mutable std::once_flag cached_hashes_once;
 	mutable unique_ptr<Vector> cached_hashes;
 };
 
