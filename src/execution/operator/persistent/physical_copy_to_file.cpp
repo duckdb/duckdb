@@ -634,7 +634,7 @@ public:
 
 	PartitionWriteInfo &Get() const {
 		D_ASSERT(write_info);
-		return *write_info.get_mutable();
+		return *write_info;
 	}
 
 	PartitionWriteInfo &operator*() const {
@@ -649,7 +649,7 @@ public:
 
 private:
 	optional_ptr<PartitionWriteManager> manager;
-	optional_ptr<PartitionWriteInfo> write_info;
+	mutable optional_ptr<PartitionWriteInfo> write_info;
 };
 
 class PartitionWriteManager {
