@@ -1758,12 +1758,16 @@ bool StringValueScanner::FirstValueEndsOnQuote(CSVIterator iterator) const {
 	CSVStates current_state;
 	current_state.Initialize(CSVState::STANDARD);
 	const idx_t to_pos = iterator.GetEndPos();
+	const auto quote = state_machine->dialect_options.state_machine_options.quote.GetValue();
+	const auto start_pos = iterator.pos.buffer_pos;
 	while (iterator.pos.buffer_pos < to_pos) {
 		state_machine->Transition(current_state, buffer_handle_ptr[iterator.pos.buffer_pos++]);
 		if (current_state.IsState(CSVState::DELIMITER) || current_state.IsState(CSVState::CARRIAGE_RETURN) ||
 		    current_state.IsState(CSVState::RECORD_SEPARATOR)) {
-			return buffer_handle_ptr[iterator.pos.buffer_pos - 2] ==
-			       state_machine->dialect_options.state_machine_options.quote.GetValue();
+			// a value that also starts with a quote is a regular quoted value
+			const auto value_end = iterator.pos.buffer_pos - 2;
+			return value_end > start_pos && buffer_handle_ptr[value_end] == quote &&
+			       buffer_handle_ptr[start_pos] != quote;
 		}
 	}
 	return false;
