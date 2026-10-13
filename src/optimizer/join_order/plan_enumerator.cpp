@@ -191,6 +191,8 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 
 optional_ptr<DPJoinNode> PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right,
                                                   const vector<reference<NeighborInfo>> &info) {
+	// joining many relations can take a long time, allow the query to be interrupted
+	query_graph_manager.context.InterruptCheck();
 	// get the left and right join plans
 	auto left_plan = plans.find(left);
 	auto right_plan = plans.find(right);
