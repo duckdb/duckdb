@@ -79,7 +79,12 @@
         "test/optimizer/statistics/statistics_count_not_null_pruning.test",
         "test/sql/sql_export/aggregate_topn_rewrites.test",
         "test/sql/aggregate/aggregate_state_export/approx_count_distinct_export_state.test",
-        "test/optimizer/pushdown/cte_domain_join_filter.test"
+        "test/optimizer/pushdown/cte_domain_join_filter.test",
+        "test/sql/sql_export/aggregate_literals.test",
+        "test/sql/sql_export/empty_aggregate_state.test",
+        "test/sql/storage/distinct_statistics_sample.test",
+        "test/optimizer/statistics/statistics_early_join_range.test",
+        "test/optimizer/joins/left_join_reordering/left_join_composite_domain.test"
       ]
     },
     {
