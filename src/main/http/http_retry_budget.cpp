@@ -106,6 +106,10 @@ uint64_t HTTPRetryBudget::MaxAttempts() const {
 	return 1 + retries + ThrottleExtraRetries() + Corrections();
 }
 
+bool HTTPRetryBudget::InRun() const {
+	return run_depth > 0;
+}
+
 bool HTTPRetryBudget::QuotaExhausted() const {
 	return quota_exhausted;
 }
@@ -115,15 +119,32 @@ void HTTPRetryBudget::BindQuota(shared_ptr<HTTPRetryQuota> quota_p) {
 }
 
 void HTTPRetryBudget::RecordSuccess() {
-	if (last_retry_quota) {
-		last_retry_quota->Release(last_retry_cost);
-	} else if (quota) {
-		quota->Release(HTTPRetryQuota::NO_RETRY_REFUND);
+	pending_outcome = RecordedOutcome::SUCCESS;
+	if (!InRun()) {
+		SettleOutcome();
 	}
-	RecordFailure();
 }
 
 void HTTPRetryBudget::RecordFailure() {
+	pending_outcome = RecordedOutcome::FAILURE;
+	if (!InRun()) {
+		SettleOutcome();
+	}
+}
+
+void HTTPRetryBudget::SettleOutcome() {
+	if (pending_outcome == RecordedOutcome::SUCCESS) {
+		if (last_retry_quota) {
+			last_retry_quota->Release(last_retry_cost);
+		} else if (quota) {
+			quota->Release(HTTPRetryQuota::NO_RETRY_REFUND);
+		}
+	}
+	pending_outcome = RecordedOutcome::NONE;
+	ForgetLastRetry();
+}
+
+void HTTPRetryBudget::ForgetLastRetry() {
 	last_retry_quota.reset();
 	last_retry_cost = 0;
 }
@@ -187,9 +208,30 @@ void HTTPRetryBudget::Run(const std::function<HTTPRetryDecision()> &attempt,
 	}
 	// A refusal belongs to the run that hit it, not to later requests sharing the budget.
 	quota_exhausted = false;
+	const bool outermost = !InRun();
+	if (outermost) {
+		pending_outcome = RecordedOutcome::NONE;
+	}
+	struct RunDepthGuard {
+		explicit RunDepthGuard(uint64_t &depth_p) : depth(depth_p) {
+			depth++;
+		}
+		~RunDepthGuard() {
+			depth--;
+		}
+		uint64_t &depth;
+	} depth_guard(run_depth);
 	for (;;) {
 		auto decision = attempt();
-		if (decision.type == HTTPRetryDecision::Type::FINISH || !ConsumeAndWait(decision)) {
+		if (decision.type == HTTPRetryDecision::Type::FINISH) {
+			if (outermost && pending_outcome != RecordedOutcome::NONE) {
+				// The operation is over and nobody will retry it: the outcome a nested loop recorded is settled now.
+				// Without one the caller records the outcome itself after the run.
+				SettleOutcome();
+			}
+			return;
+		}
+		if (!ConsumeAndWait(decision)) {
 			return;
 		}
 		if (before_retry) {
@@ -202,16 +244,18 @@ bool HTTPRetryBudget::ConsumeAndWait(const HTTPRetryDecision &decision) {
 	D_ASSERT(decision.type != HTTPRetryDecision::Type::FINISH);
 	const bool throttled = decision.type == HTTPRetryDecision::Type::THROTTLED;
 	const auto extra_retries = throttled ? ThrottleExtraRetries() : 0;
+	// Asking for a retry means the last attempt did not get the operation through, whatever a nested loop recorded.
+	pending_outcome = RecordedOutcome::NONE;
 	if (retries_used >= retries && retries_used - retries >= extra_retries) {
 		// Nothing left to refund: the retries already spent did not get this request through.
-		RecordFailure();
+		ForgetLastRetry();
 		return false;
 	}
 	const auto cost = decision.type == HTTPRetryDecision::Type::TRANSIENT ? HTTPRetryQuota::TRANSIENT_RETRY_COST
 	                                                                      : HTTPRetryQuota::RETRY_COST;
 	if (quota && !quota->TryAcquire(cost)) {
 		quota_exhausted = true;
-		RecordFailure();
+		ForgetLastRetry();
 		return false;
 	}
 	last_retry_quota = quota;

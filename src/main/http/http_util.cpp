@@ -513,6 +513,8 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 	    },
 	    retry_cb);
 
+	// With a shared budget the outcome is settled by the loop that owns it, once the provider has judged the
+	// response: an error document behind HTTP 200 is retried there and must not refund the retry it consumed.
 	if (!should_retry && response) {
 		if (response->success) {
 			retry_budget->RecordSuccess();

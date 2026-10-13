@@ -79,7 +79,9 @@ private:
 
 //! Operation-local budget shared by synchronous nested retry loops, never concurrent loops. One budget is one
 //! logical operation (one `amz-sdk-invocation-id`): every send it makes, including corrected re-sends, is one of
-//! its attempts, as in the AWS SDK's attempt loop.
+//! its attempts, as in the AWS SDK's attempt loop. The host quota is settled once the operation's outcome is known:
+//! an outcome recorded inside an outer Run waits for that loop's decision, since the provider may still reject the
+//! response (e.g. an error document behind HTTP 200) and retry.
 class HTTPRetryBudget {
 	friend class HTTPUtil;
 
@@ -114,10 +116,14 @@ public:
 	DUCKDB_API bool QuotaExhausted() const;
 	//! Charge the next admitted retries to this host's quota; a request to another host rebinds.
 	DUCKDB_API void BindQuota(shared_ptr<HTTPRetryQuota> quota);
-	//! Refund the last admitted retry to the quota it was charged to, or NO_RETRY_REFUND to the bound quota.
+	//! The request got through: refund the last admitted retry to the quota it was charged to, or NO_RETRY_REFUND to
+	//! the bound quota. Inside an outer Run the refund waits until that loop finishes without retrying.
 	DUCKDB_API void RecordSuccess();
-	//! Forget the last admitted retry: the request it was spent on failed, so a later success does not refund it.
+	//! The request failed: the last admitted retry did not get it through, so a later success does not refund it.
+	//! Inside an outer Run the loop may still correct and re-send, so the retry stays refundable until it decides.
 	DUCKDB_API void RecordFailure();
+	//! Whether a Run of this budget is in progress, i.e. a nested loop is running inside an outer one.
+	DUCKDB_API bool InRun() const;
 
 	//! Back-off window for `retry` is [0, min(wait * backoff^(retry - 1), MAX_BACKOFF_MS)]: full jitter, or its upper
 	//! half for throttled retries so they always keep some distance. The result is raised to `floor_ms`.
@@ -131,6 +137,10 @@ private:
 	void Run(const std::function<HTTPRetryDecision()> &attempt, const std::function<void()> &before_retry);
 	bool ConsumeAndWait(const HTTPRetryDecision &decision);
 	uint64_t ThrottleExtraRetries() const;
+	//! Apply the recorded outcome to the quota: refund on success, then forget the last admitted retry.
+	void SettleOutcome();
+	//! Forget the last admitted retry, so that nothing is refunded for it.
+	void ForgetLastRetry();
 
 private:
 	//! Retry settings captured for the operation.
@@ -143,6 +153,11 @@ private:
 	uint64_t throttled_retries = 0;
 	//! Sends numbered so far.
 	uint64_t attempts = 0;
+	//! Nesting depth of Run; outcomes recorded while this is positive wait for the outermost loop's decision.
+	uint64_t run_depth = 0;
+	//! Outcome recorded by a nested loop, settled when the outermost Run finishes without retrying.
+	enum class RecordedOutcome : uint8_t { NONE, SUCCESS, FAILURE };
+	RecordedOutcome pending_outcome = RecordedOutcome::NONE;
 	//! Quota of the host the current request goes to, if any.
 	shared_ptr<HTTPRetryQuota> quota;
 	//! Quota and tokens of the most recent admitted retry, refunded on success.
