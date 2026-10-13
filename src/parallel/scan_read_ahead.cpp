@@ -284,7 +284,8 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 	executor->ScheduleTasks(std::move(read_tasks));
 	lock_guard<mutex> guard(lock);
 	if (memory_governor) {
-		memory_governor->UpdateReservation(pending_io_bytes.load());
+		// Reserve room for the next job before admission checks the budget.
+		memory_governor->UpdateReservation(pending_io_bytes.load() + MINIMUM_JOB_IO_CHARGE);
 		backlog_budget = memory_governor->BackpressureBudget();
 	}
 	// producers push concurrently, so admit jobs to the queue in batch-index order
