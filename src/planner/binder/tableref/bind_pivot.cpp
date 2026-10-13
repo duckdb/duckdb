@@ -447,8 +447,9 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 		}
 
 		if (unique_names.size() != aggregates.size()) {
-			throw InternalException("Pivot aggregate mismatch: %llu unique names, %llu aggregates", unique_names.size(),
-			                        aggregates.size());
+			// identical aggregates with different names are bound to a single aggregate
+			throw BinderException("PIVOT: identical aggregates must have the same name - use a single aggregate, or "
+			                      "make the aggregates differ");
 		}
 
 		identifier_map_t<idx_t> name_to_position;
