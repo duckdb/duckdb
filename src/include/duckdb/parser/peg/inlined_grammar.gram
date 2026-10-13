@@ -37,13 +37,9 @@ Statement <-
 	AnalyzeStatement /
 	MergeIntoStatement /
 	ConnectStatement /
-	DisconnectStatement /
-	ExpressionStatement
+	DisconnectStatement
 
 AnalyzeKeyword <- 'ANALYZE' / 'ANALYSE'
-
-ExpressionStatement <- List(ExpressionAlias)
-ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
 
 CatalogName <- Identifier
 SchemaName <- Identifier

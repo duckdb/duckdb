@@ -233,12 +233,6 @@ static const TransformFrameOps STRING_LITERAL_VALUE_OPS = {
 static const TransformFrameOps ANALYZE_KEYWORD_OPS = {"AnalyzeKeyword",
                                                       &PEGTransformerFactory::InitializeAnalyzeKeywordTrampoline,
                                                       &PEGTransformerFactory::FinalizeAnalyzeKeywordTrampoline};
-static const TransformFrameOps EXPRESSION_STATEMENT_OPS = {
-    "ExpressionStatement", &PEGTransformerFactory::InitializeExpressionStatementTrampoline,
-    &PEGTransformerFactory::FinalizeExpressionStatementTrampoline};
-static const TransformFrameOps EXPRESSION_ALIAS_OPS = {"ExpressionAlias",
-                                                       &PEGTransformerFactory::InitializeExpressionAliasTrampoline,
-                                                       &PEGTransformerFactory::FinalizeExpressionAliasTrampoline};
 static const TransformFrameOps INDEX_NAME_OPS = {"IndexName", &PEGTransformerFactory::InitializeIndexNameTrampoline,
                                                  &PEGTransformerFactory::FinalizeIndexNameTrampoline};
 static const TransformFrameOps CONSTRAINT_NAME_OPS = {"ConstraintName",
@@ -3133,8 +3127,6 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"CommentValue", &COMMENT_VALUE_OPS},
 	    {"StringLiteralValue", &STRING_LITERAL_VALUE_OPS},
 	    {"AnalyzeKeyword", &ANALYZE_KEYWORD_OPS},
-	    {"ExpressionStatement", &EXPRESSION_STATEMENT_OPS},
-	    {"ExpressionAlias", &EXPRESSION_ALIAS_OPS},
 	    {"IndexName", &INDEX_NAME_OPS},
 	    {"ConstraintName", &CONSTRAINT_NAME_OPS},
 	    {"SequenceName", &SEQUENCE_NAME_OPS},
@@ -5513,53 +5505,6 @@ PEGTransformerFactory::FinalizeAnalyzeKeywordTrampoline(PEGTransformer &transfor
                                                         GeneratedTransformProcess &process) {
 	auto result = TransformAnalyzeKeyword(transformer);
 	return transformer.MakeResult<Identifier>(result);
-}
-
-void PEGTransformerFactory::InitializeExpressionStatementTrampoline(PEGTransformer &transformer,
-                                                                    GeneratedTransformProcess &process) {
-	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
-	auto dynamic_child_count = list_items.size();
-	process.ReserveChildSlots(1 + dynamic_child_count - 1);
-	for (idx_t i = list_items.size(); i > 0; i--) {
-		auto child_idx = i - 1;
-		process.PushChild({transformer.GetRule("ExpressionAlias"), list_items[child_idx].get()}, 0 + child_idx);
-	}
-}
-
-arena_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeExpressionStatementTrampoline(PEGTransformer &transformer,
-                                                             GeneratedTransformProcess &process) {
-	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
-	auto dynamic_child_count = dynamic_list_items.size();
-	vector<unique_ptr<ParsedExpression>> expression_alias;
-	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
-		expression_alias.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
-	}
-	auto result = TransformExpressionStatement(transformer, std::move(expression_alias));
-	return transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(result));
-}
-
-void PEGTransformerFactory::InitializeExpressionAliasTrampoline(PEGTransformer &transformer,
-                                                                GeneratedTransformProcess &process) {
-	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto &choice_result = choice_pr.GetResult();
-	process.ReserveChildSlots(1);
-	auto child_rule = choice_result.GetRule();
-	auto has_transform_process = child_rule && child_rule->transform_process;
-	if (!has_transform_process) {
-		throw InternalException("No transform process registered for rule '%s'", choice_result.Name());
-	}
-	process.PushChild({*child_rule, choice_result}, 0);
-}
-
-arena_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeExpressionAliasTrampoline(PEGTransformer &transformer,
-                                                         GeneratedTransformProcess &process) {
-	auto result = process.TakeResult<unique_ptr<ParsedExpression>>(0);
-	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeIndexNameTrampoline(PEGTransformer &transformer,
