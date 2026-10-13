@@ -30,7 +30,8 @@
       "paths": [
         "test/sql/sql_export/compression_fallbacks_plan.test",
         "test/sql/sql_export/scope_reuse_plan.test",
-        "test/sql/sql_export/composition_q1_plan.test"
+        "test/sql/sql_export/composition_q1_plan.test",
+        "test/sql/sql_export/dml_statements.test"
       ]
     }
   ]
