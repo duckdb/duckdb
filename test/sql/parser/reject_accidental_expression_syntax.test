@@ -88,12 +88,12 @@ SELECT 1.5, .5, 1., 1e5, 1.5e-3, 1_000.5;
 statement error
 SELECT 'abc' x'41';
 ----
-syntax error
+Parser Error: syntax error at or near "x'41'"
 
 statement error
 SELECT 1 e'ab';
 ----
-syntax error
+Parser Error: syntax error at or near "e'ab'"
 
 statement ok
 CREATE TABLE t (a INTEGER);
@@ -101,7 +101,7 @@ CREATE TABLE t (a INTEGER);
 statement error
 SELECT * FROM t x'41';
 ----
-syntax error
+Parser Error: syntax error at or near "x'41'"
 
 query IIII
 SELECT x'41', e'ab', b'101', n'abc';
