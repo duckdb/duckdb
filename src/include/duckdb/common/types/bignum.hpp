@@ -17,8 +17,6 @@
 #include "duckdb/common/bignum.hpp"
 
 namespace duckdb {
-using digit_t = uint32_t;
-using twodigit_t = uint64_t;
 
 struct BoundCastInfo;
 struct CastParameters;

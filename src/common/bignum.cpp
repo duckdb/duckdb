@@ -263,7 +263,6 @@ string_t BignumIntermediate::Negate(StringHeap &heap) const {
 			ptr[i + Bignum::BIGNUM_HEADER_SIZE] = static_cast<char>(~data[i]);
 		}
 	}
-	// the prefix of the string_t is used by comparisons, so the result must be finalized after writing the bytes
 	target.Finalize();
 	return target;
 }
@@ -379,13 +378,10 @@ void BignumIntermediate::AddInPlace(ArenaAllocator &allocator, const BignumInter
 //===--------------------------------------------------------------------===//
 namespace {
 
-//! The absolute value of a bignum as little-endian base 2^32 digits without leading (i.e. trailing) zero digits.
-//! Zero is represented by an empty vector.
+//! Little-endian base 2^32 digits of an absolute value without leading zero digits; zero is the empty vector
 using bignum_magnitude_t = unsafe_vector<digit_t>;
 
-//! Digit operations between two interrupt checks: a check every 2^20 operations is roughly one per millisecond, so
-//! values of a few digits never pay for a check while a multi-megabyte multiplication stays responsive to Ctrl-C and
-//! to max_execution_time
+//! Digit operations between two interrupt checks, roughly a millisecond of work
 constexpr idx_t INTERRUPT_CHECK_INTERVAL = idx_t(1) << 20;
 
 void AccountWork(BignumArithmeticState &state, idx_t work) {
@@ -489,10 +485,10 @@ void MultiplyMagnitudes(BignumArithmeticState &state, const bignum_magnitude_t &
 	TrimMagnitude(result);
 }
 
-//! Long division of magnitudes following Knuth (TAOCP, Volume 2, section 4.3.1, Algorithm D):
-//! quotient = dividend / divisor, remainder = dividend % divisor. The divisor must not be zero.
+//! Long division following Knuth's Algorithm D (TAOCP 4.3.1); the remainder is only produced on request
 void DivModMagnitudes(BignumArithmeticState &state, const bignum_magnitude_t &dividend,
-                      const bignum_magnitude_t &divisor, bignum_magnitude_t &quotient, bignum_magnitude_t &remainder) {
+                      const bignum_magnitude_t &divisor, bignum_magnitude_t &quotient, bignum_magnitude_t &remainder,
+                      bool want_remainder) {
 	D_ASSERT(!divisor.empty());
 	const idx_t m = dividend.size();
 	const idx_t n = divisor.size();
@@ -505,6 +501,7 @@ void DivModMagnitudes(BignumArithmeticState &state, const bignum_magnitude_t &di
 	constexpr twodigit_t DIGIT_MASK = BASE - 1;
 	if (n == 1) {
 		// single digit divisor: simple short division
+		AccountWork(state, m);
 		const twodigit_t d = divisor[0];
 		twodigit_t rem = 0;
 		quotient.assign(m, 0);
@@ -515,7 +512,7 @@ void DivModMagnitudes(BignumArithmeticState &state, const bignum_magnitude_t &di
 		}
 		TrimMagnitude(quotient);
 		remainder.clear();
-		if (rem != 0) {
+		if (want_remainder && rem != 0) {
 			remainder.push_back(static_cast<digit_t>(rem));
 		}
 		return;
@@ -592,6 +589,10 @@ void DivModMagnitudes(BignumArithmeticState &state, const bignum_magnitude_t &di
 		}
 	}
 	TrimMagnitude(quotient);
+	if (!want_remainder) {
+		remainder.clear();
+		return;
+	}
 
 	// D8: denormalize the remainder
 	remainder.assign(n, 0);
@@ -619,9 +620,7 @@ string_t BignumIntermediate::Multiply(StringHeap &heap, BignumArithmeticState &s
 		product.clear();
 		return WriteMagnitude(heap, product, false);
 	}
-	// a product of an a-bit and a b-bit number has either a + b - 1 or a + b bits, so if the lower bound already
-	// overflows we can bail out before doing the work: only a product landing exactly on the limit still needs
-	// the full multiplication before WriteMagnitude can decide
+	// the product has a + b - 1 or a + b bits: bail out early when even the lower bound overflows
 	const idx_t min_result_bytes = BitsToBytes(MagnitudeBitCount(lhs_digits) + MagnitudeBitCount(rhs_digits) - 1);
 	if (min_result_bytes > Bignum::MAX_DATA_SIZE) {
 		throw OutOfRangeException(ProduceOverUnderFlowError(is_result_negative, 0, min_result_bytes));
@@ -641,7 +640,7 @@ bool BignumIntermediate::TryDivMod(StringHeap &heap, BignumArithmeticState &stat
 	if (rhs_digits.empty()) {
 		return false;
 	}
-	DivModMagnitudes(state, lhs_digits, rhs_digits, quotient, remainder);
+	DivModMagnitudes(state, lhs_digits, rhs_digits, quotient, remainder, want_remainder);
 	if (want_remainder) {
 		// the remainder takes the sign of the dividend
 		result = WriteMagnitude(heap, remainder, lhs.is_negative);
