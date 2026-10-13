@@ -324,7 +324,7 @@ private:
 
 	//! Submits a query to the database and returns its handle
 	unique_ptr<QueryResult> SubmitInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
-	                                       QueryParameters parameters, bool verify = true,
+	                                       const QueryParameters &parameters, bool verify = true,
 	                                       Retention retention = Retention::UNDECIDED);
 	//! Drives a submitted query to completion and retains its result
 	unique_ptr<QueryResult> CompleteInternal(ClientContextLock &lock, unique_ptr<QueryResult> result);

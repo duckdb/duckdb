@@ -1001,7 +1001,9 @@ unique_ptr<QueryResult> ClientContext::SubmitInternalStatement(unique_ptr<SQLSta
 }
 
 unique_ptr<QueryResult> ClientContext::SubmitInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
-                                                      QueryParameters parameters, bool verify, Retention retention) {
+                                                      const QueryParameters &query_parameters, bool verify,
+                                                      Retention retention) {
+	auto parameters = query_parameters;
 	try {
 		// Preserve sensitivity across statement rewrites.
 		parameters.requires_redaction = parameters.requires_redaction || statement->RequiresRedaction();
