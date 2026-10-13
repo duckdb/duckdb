@@ -494,8 +494,16 @@ unique_ptr<BaseStatistics> DateTruncStatistics(vector<BaseStatistics> &child_sta
 	}
 
 	// Infinite values are unmodified
-	auto min_part = DateTrunc::UnaryFunction<TA, TR, OP>(min);
-	auto max_part = DateTrunc::UnaryFunction<TA, TR, OP>(max);
+	TR min_part;
+	TR max_part;
+	try {
+		min_part = DateTrunc::UnaryFunction<TA, TR, OP>(min);
+		max_part = DateTrunc::UnaryFunction<TA, TR, OP>(max);
+	} catch (const ConversionException &) {
+		// the bounds are not in the range of the result type (e.g. a DATE beyond the TIMESTAMP range) - the rows
+		// holding them may not even reach the function, so do not propagate statistics
+		return nullptr;
+	}
 
 	auto min_value = Value::CreateValue(min_part);
 	auto max_value = Value::CreateValue(max_part);
