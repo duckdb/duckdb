@@ -21593,7 +21593,11 @@ PEGTransformerFactory::FinalizeTableAliasColonTrampoline(PEGTransformer &transfo
 void PEGTransformerFactory::InitializeValuesRefTrampoline(PEGTransformer &transformer,
                                                           GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(3);
+	process.ReserveChildSlots(4);
+	auto &sample_clause_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (sample_clause_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("SampleClause"), sample_clause_opt.GetResult()}, 3);
+	}
 	auto &table_alias_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (table_alias_opt.HasResult()) {
 		process.PushChild({transformer.GetRule("TableAlias"), table_alias_opt.GetResult()}, 2);
@@ -21616,7 +21620,12 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeValuesRefTrampoli
 	if (process.child_results[2]) {
 		table_alias = process.TakeResult<TableAlias>(2);
 	}
-	auto result = TransformValuesRef(transformer, table_alias_colon, std::move(values_clause), table_alias);
+	optional<unique_ptr<SampleOptions>> sample_clause {};
+	if (process.child_results[3]) {
+		sample_clause = process.TakeResult<unique_ptr<SampleOptions>>(3);
+	}
+	auto result = TransformValuesRef(transformer, table_alias_colon, std::move(values_clause), table_alias,
+	                                 std::move(sample_clause));
 	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(result));
 }
 
