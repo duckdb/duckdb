@@ -304,6 +304,8 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents
 		auto &view_catalog_entry = table_or_view->Cast<ViewCatalogEntry>();
+		// expanding nested views can take a long time, allow the query to be interrupted
+		context.InterruptCheck();
 		// We need to use a new binder for the view that doesn't reference any CTEs
 		// defined for this binder so there are no collisions between the CTEs defined
 		// for the view and for the current query

@@ -134,9 +134,7 @@ bool Optimizer::OptimizerDisabled(ClientContext &context_p, OptimizerType type) 
 }
 
 void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &callback) {
-	if (context.IsInterrupted()) {
-		throw InterruptException();
-	}
+	context.InterruptCheck();
 
 	if (OptimizerDisabled(type)) {
 		// optimizer is marked as disabled: skip
