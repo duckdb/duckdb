@@ -19,12 +19,27 @@ namespace duckdb {
 struct HTTPParams;
 
 //! An attempt's decision; constructing one does not consume retry budget.
+//!
+//! The loop that runs an operation is its coordinator: after inspecting a response (status, headers and body) it
+//! decides explicitly whether the operation succeeded, failed for good, is retried, or is re-sent corrected. The budget
+//! only admits retries, waits between them and keeps the host quota's books, refunding once after a reported success.
+//! Finish() is the decision of a loop that does not judge the operation itself (core's request loop, or a provider
+//! that has not adopted the explicit protocol): the quota is then settled from the HTTP status core recorded.
 class HTTPRetryDecision {
 	friend class HTTPRetryBudget;
 	friend class HTTPUtil;
 
 public:
+	//! Stop without judging the operation: a nested loop leaves the decision to the coordinator; the outermost loop
+	//! settles the quota from the HTTP status core recorded (the pre-protocol behaviour).
 	DUCKDB_API static HTTPRetryDecision Finish();
+	//! The operation succeeded: the coordinator validated the response, the quota is refunded once.
+	DUCKDB_API static HTTPRetryDecision Success();
+	//! The operation failed for good (e.g. an error document behind HTTP 200): nothing is refunded.
+	DUCKDB_API static HTTPRetryDecision Failure();
+	//! Re-send after correcting the request (credentials, region, endpoint): no retry is consumed and no back-off is
+	//! waited, bounded by HTTPRetryBudget::MAX_CORRECTIONS per operation.
+	DUCKDB_API static HTTPRetryDecision Correction();
 	//! Retry after a received server error (e.g. HTTP 500).
 	DUCKDB_API static HTTPRetryDecision Retry();
 	//! Retry after a transport failure (connection error, timeout, truncated body): no response was received.
@@ -33,7 +48,7 @@ public:
 	DUCKDB_API static HTTPRetryDecision Throttled(const string &retry_after = string());
 
 private:
-	enum class Type : uint8_t { FINISH, RETRY, TRANSIENT, THROTTLED };
+	enum class Type : uint8_t { FINISH, SUCCESS, FAILURE, CORRECTION, RETRY, TRANSIENT, THROTTLED };
 	explicit HTTPRetryDecision(Type type_p, string retry_after_p = {})
 	    : type(type_p), retry_after(std::move(retry_after_p)) {
 	}
@@ -79,9 +94,10 @@ private:
 
 //! Operation-local budget shared by synchronous nested retry loops, never concurrent loops. One budget is one
 //! logical operation (one `amz-sdk-invocation-id`): every send it makes, including corrected re-sends, is one of
-//! its attempts, as in the AWS SDK's attempt loop. The host quota is settled once the operation's outcome is known:
-//! an outcome recorded inside an outer Run waits for that loop's decision, since the provider may still reject the
-//! response (e.g. an error document behind HTTP 200) and retry.
+//! its attempts, as in the AWS SDK's attempt loop. The host quota is settled once per operation, when its outcome is
+//! known: the coordinator reports it (Success/Failure decisions or ReportSuccess/ReportFailure), or, for a loop that
+//! only returns Finish(), it is taken from the HTTP status core recorded (RecordStatusOutcome). An outcome recorded
+//! inside an outer Run waits for that loop's decision, since the coordinator may still reject the response.
 class HTTPRetryBudget {
 	friend class HTTPUtil;
 
@@ -90,6 +106,9 @@ public:
 	static constexpr uint64_t MAX_BACKOFF_MS = 20000;
 	//! Retries granted beyond `http_retries` for throttled responses: the server asked to slow down, not to stop.
 	static constexpr uint64_t THROTTLE_EXTRA_RETRIES = 5;
+	//! Corrected re-sends admitted per operation: a credential refresh and a region redirect, with room for a
+	//! provider that needs both again after the other; past this the operation ends with the last response.
+	static constexpr uint64_t MAX_CORRECTIONS = 4;
 
 public:
 	DUCKDB_API explicit HTTPRetryBudget(const HTTPParams &params);
@@ -106,7 +125,7 @@ public:
 	DUCKDB_API uint64_t RetriesUsed() const;
 	//! Number the next send of the operation: the first call returns 1.
 	DUCKDB_API uint64_t BeginAttempt();
-	//! Sends so far that were neither the first nor an admitted retry: re-sends after the provider corrected the
+	//! Sends so far that were neither the first nor an admitted retry: re-sends after the coordinator corrected the
 	//! request (credentials, region), which do not consume retries.
 	DUCKDB_API uint64_t Corrections() const;
 	//! Most attempts the operation can make: the first one, `http_retries`, the throttle extras and the corrected
@@ -114,14 +133,19 @@ public:
 	DUCKDB_API uint64_t MaxAttempts() const;
 	//! Whether the current Run refused a retry because the host's quota ran out.
 	DUCKDB_API bool QuotaExhausted() const;
+	//! Whether the current Run refused a corrected re-send because MAX_CORRECTIONS were made already.
+	DUCKDB_API bool CorrectionsExhausted() const;
 	//! Charge the next admitted retries to this host's quota; a request to another host rebinds.
 	DUCKDB_API void BindQuota(shared_ptr<HTTPRetryQuota> quota);
-	//! The request got through: refund the last admitted retry to the quota it was charged to, or NO_RETRY_REFUND to
-	//! the bound quota. Inside an outer Run the refund waits until that loop finishes without retrying.
-	DUCKDB_API void RecordSuccess();
-	//! The request failed: the last admitted retry did not get it through, so a later success does not refund it.
-	//! Inside an outer Run the loop may still correct and re-send, so the retry stays refundable until it decides.
-	DUCKDB_API void RecordFailure();
+	//! The coordinator's final word, for a coordinator that validates the response after its Run returned: the
+	//! operation succeeded, refund the last admitted retry to the quota it was charged to, or NO_RETRY_REFUND to the
+	//! bound quota. Settles once; a later report of the same operation changes nothing.
+	DUCKDB_API void ReportSuccess();
+	//! The coordinator's final word: the operation failed, the last admitted retry is not refunded.
+	DUCKDB_API void ReportFailure();
+	//! What the HTTP status of the last response says, recorded by core's request loop. Provisional: inside an outer
+	//! Run the coordinator's decision wins; outside one it settles the quota at once (status-based behaviour).
+	DUCKDB_API void RecordStatusOutcome(bool success);
 	//! Whether a Run of this budget is in progress, i.e. a nested loop is running inside an outer one.
 	DUCKDB_API bool InRun() const;
 
@@ -136,9 +160,11 @@ private:
 	//! Core's hook runs after admission/backoff, outside the attempt's transport-error handling.
 	void Run(const std::function<HTTPRetryDecision()> &attempt, const std::function<void()> &before_retry);
 	bool ConsumeAndWait(const HTTPRetryDecision &decision);
+	//! Admit a corrected re-send within MAX_CORRECTIONS.
+	bool AdmitCorrection();
 	uint64_t ThrottleExtraRetries() const;
-	//! Apply the recorded outcome to the quota: refund on success, then forget the last admitted retry.
-	void SettleOutcome();
+	//! Settle the operation's outcome with the quota once: refund on success, then forget the last admitted retry.
+	void Settle(bool success);
 	//! Forget the last admitted retry, so that nothing is refunded for it.
 	void ForgetLastRetry();
 
@@ -153,17 +179,22 @@ private:
 	uint64_t throttled_retries = 0;
 	//! Sends numbered so far.
 	uint64_t attempts = 0;
-	//! Nesting depth of Run; outcomes recorded while this is positive wait for the outermost loop's decision.
+	//! Corrected re-sends admitted by Correction() decisions.
+	uint64_t corrections_admitted = 0;
+	//! Nesting depth of Run; status outcomes recorded while this is positive wait for the outermost loop's decision.
 	uint64_t run_depth = 0;
-	//! Outcome recorded by a nested loop, settled when the outermost Run finishes without retrying.
+	//! Outcome core recorded from the HTTP status, pending the coordinator's decision.
 	enum class RecordedOutcome : uint8_t { NONE, SUCCESS, FAILURE };
-	RecordedOutcome pending_outcome = RecordedOutcome::NONE;
+	RecordedOutcome status_outcome = RecordedOutcome::NONE;
+	//! Whether the operation's outcome has been settled with the quota; a new admitted retry starts a new settlement.
+	bool outcome_settled = false;
 	//! Quota of the host the current request goes to, if any.
 	shared_ptr<HTTPRetryQuota> quota;
 	//! Quota and tokens of the most recent admitted retry, refunded on success.
 	shared_ptr<HTTPRetryQuota> last_retry_quota;
 	int64_t last_retry_cost = 0;
 	bool quota_exhausted = false;
+	bool corrections_exhausted = false;
 };
 
 } // namespace duckdb

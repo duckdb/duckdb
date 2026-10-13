@@ -20,6 +20,18 @@ HTTPRetryDecision HTTPRetryDecision::Finish() {
 	return HTTPRetryDecision(Type::FINISH);
 }
 
+HTTPRetryDecision HTTPRetryDecision::Success() {
+	return HTTPRetryDecision(Type::SUCCESS);
+}
+
+HTTPRetryDecision HTTPRetryDecision::Failure() {
+	return HTTPRetryDecision(Type::FAILURE);
+}
+
+HTTPRetryDecision HTTPRetryDecision::Correction() {
+	return HTTPRetryDecision(Type::CORRECTION);
+}
+
 HTTPRetryDecision HTTPRetryDecision::Retry() {
 	return HTTPRetryDecision(Type::RETRY);
 }
@@ -114,33 +126,44 @@ bool HTTPRetryBudget::QuotaExhausted() const {
 	return quota_exhausted;
 }
 
+bool HTTPRetryBudget::CorrectionsExhausted() const {
+	return corrections_exhausted;
+}
+
 void HTTPRetryBudget::BindQuota(shared_ptr<HTTPRetryQuota> quota_p) {
 	quota = std::move(quota_p);
 }
 
-void HTTPRetryBudget::RecordSuccess() {
-	pending_outcome = RecordedOutcome::SUCCESS;
+void HTTPRetryBudget::ReportSuccess() {
+	Settle(true);
+}
+
+void HTTPRetryBudget::ReportFailure() {
+	Settle(false);
+}
+
+void HTTPRetryBudget::RecordStatusOutcome(bool success) {
+	status_outcome = success ? RecordedOutcome::SUCCESS : RecordedOutcome::FAILURE;
 	if (!InRun()) {
-		SettleOutcome();
+		// Nobody else is going to judge this response.
+		Settle(success);
 	}
 }
 
-void HTTPRetryBudget::RecordFailure() {
-	pending_outcome = RecordedOutcome::FAILURE;
-	if (!InRun()) {
-		SettleOutcome();
+void HTTPRetryBudget::Settle(bool success) {
+	status_outcome = RecordedOutcome::NONE;
+	if (outcome_settled) {
+		// Refunded or charged already: the operation has one outcome.
+		return;
 	}
-}
-
-void HTTPRetryBudget::SettleOutcome() {
-	if (pending_outcome == RecordedOutcome::SUCCESS) {
+	outcome_settled = true;
+	if (success) {
 		if (last_retry_quota) {
 			last_retry_quota->Release(last_retry_cost);
 		} else if (quota) {
 			quota->Release(HTTPRetryQuota::NO_RETRY_REFUND);
 		}
 	}
-	pending_outcome = RecordedOutcome::NONE;
 	ForgetLastRetry();
 }
 
@@ -208,9 +231,12 @@ void HTTPRetryBudget::Run(const std::function<HTTPRetryDecision()> &attempt,
 	}
 	// A refusal belongs to the run that hit it, not to later requests sharing the budget.
 	quota_exhausted = false;
+	corrections_exhausted = false;
 	const bool outermost = !InRun();
 	if (outermost) {
-		pending_outcome = RecordedOutcome::NONE;
+		// A new operation leg: whatever an earlier leg settled is history.
+		status_outcome = RecordedOutcome::NONE;
+		outcome_settled = false;
 	}
 	struct RunDepthGuard {
 		explicit RunDepthGuard(uint64_t &depth_p) : depth(depth_p) {
@@ -223,21 +249,48 @@ void HTTPRetryBudget::Run(const std::function<HTTPRetryDecision()> &attempt,
 	} depth_guard(run_depth);
 	for (;;) {
 		auto decision = attempt();
-		if (decision.type == HTTPRetryDecision::Type::FINISH) {
-			if (outermost && pending_outcome != RecordedOutcome::NONE) {
-				// The operation is over and nobody will retry it: the outcome a nested loop recorded is settled now.
-				// Without one the caller records the outcome itself after the run.
-				SettleOutcome();
+		switch (decision.type) {
+		case HTTPRetryDecision::Type::SUCCESS:
+			// The coordinator validated the response: the explicit outcome is final wherever it is decided.
+			Settle(true);
+			return;
+		case HTTPRetryDecision::Type::FAILURE:
+			Settle(false);
+			return;
+		case HTTPRetryDecision::Type::FINISH:
+			if (outermost && status_outcome != RecordedOutcome::NONE) {
+				// The operation is over and nobody judges it: the outcome core recorded from the status is settled
+				// now. Without one the caller records the outcome itself after the run.
+				Settle(status_outcome == RecordedOutcome::SUCCESS);
 			}
 			return;
-		}
-		if (!ConsumeAndWait(decision)) {
-			return;
-		}
-		if (before_retry) {
-			before_retry();
+		case HTTPRetryDecision::Type::CORRECTION:
+			if (!AdmitCorrection()) {
+				return;
+			}
+			continue;
+		default:
+			if (!ConsumeAndWait(decision)) {
+				return;
+			}
+			if (before_retry) {
+				before_retry();
+			}
 		}
 	}
+}
+
+bool HTTPRetryBudget::AdmitCorrection() {
+	// The corrected request is a new send of the same operation: the last response does not count.
+	status_outcome = RecordedOutcome::NONE;
+	if (corrections_admitted >= MAX_CORRECTIONS) {
+		// The operation ends with the response it has, and its retries did not get it through.
+		corrections_exhausted = true;
+		ForgetLastRetry();
+		return false;
+	}
+	corrections_admitted++;
+	return true;
 }
 
 bool HTTPRetryBudget::ConsumeAndWait(const HTTPRetryDecision &decision) {
@@ -245,7 +298,7 @@ bool HTTPRetryBudget::ConsumeAndWait(const HTTPRetryDecision &decision) {
 	const bool throttled = decision.type == HTTPRetryDecision::Type::THROTTLED;
 	const auto extra_retries = throttled ? ThrottleExtraRetries() : 0;
 	// Asking for a retry means the last attempt did not get the operation through, whatever a nested loop recorded.
-	pending_outcome = RecordedOutcome::NONE;
+	status_outcome = RecordedOutcome::NONE;
 	if (retries_used >= retries && retries_used - retries >= extra_retries) {
 		// Nothing left to refund: the retries already spent did not get this request through.
 		ForgetLastRetry();
@@ -258,8 +311,10 @@ bool HTTPRetryBudget::ConsumeAndWait(const HTTPRetryDecision &decision) {
 		ForgetLastRetry();
 		return false;
 	}
+	// The admitted retry is the one a later success refunds; its outcome is still open.
 	last_retry_quota = quota;
 	last_retry_cost = cost;
+	outcome_settled = false;
 	retries_used++;
 	if (throttled) {
 		throttled_retries++;
