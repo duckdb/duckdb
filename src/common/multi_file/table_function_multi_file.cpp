@@ -277,7 +277,7 @@ void TableFunctionFileReader::SetScanState(GlobalTableFunctionState &gstate) {
 }
 
 void TableFunctionFileReader::InitializeFunctionState(ClientContext &context) {
-	std::call_once(initialize_once, [&] {
+	CallOnce(initialize_once, [&] {
 		if (!function.init_global) {
 			return;
 		}
