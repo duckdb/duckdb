@@ -676,7 +676,8 @@ void RegisterICUDatePartFunctions(ExtensionLoader &loader) {
 	// register the individual operators
 
 	// year/decade use CAL_YEAR (year-of-era, positive in both BC and AD), which is non-monotonic
-	// across the BC/AD flip; leave them unannotated. era/century/millennium/isoyear are signed.
+	// across the BC/AD flip; leave them unannotated. century/millennium are negated in era 0, which is the only era
+	// of some calendars, and yearweek decreases within negative years, so these are unannotated as well.
 
 	//	BIGINTs
 	ICUDatePart::AddUnaryPartCodeFunctions("era", loader, LogicalType::BIGINT, ArgProperties().NonDecreasing());
@@ -684,8 +685,8 @@ void RegisterICUDatePartFunctions(ExtensionLoader &loader) {
 	ICUDatePart::AddUnaryPartCodeFunctions("month", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("day", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("decade", loader);
-	ICUDatePart::AddUnaryPartCodeFunctions("century", loader, LogicalType::BIGINT, ArgProperties().NonDecreasing());
-	ICUDatePart::AddUnaryPartCodeFunctions("millennium", loader, LogicalType::BIGINT, ArgProperties().NonDecreasing());
+	ICUDatePart::AddUnaryPartCodeFunctions("century", loader);
+	ICUDatePart::AddUnaryPartCodeFunctions("millennium", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("microsecond", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("millisecond", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("second", loader);
@@ -706,8 +707,7 @@ void RegisterICUDatePartFunctions(ExtensionLoader &loader) {
 	ICUDatePart::AddUnaryPartCodeFunctions<double>("julian", loader, LogicalType::DOUBLE);
 
 	//  register combinations
-	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", loader, LogicalType::BIGINT,
-	                                       ArgProperties().NonDecreasing()); //  ISO year and week
+	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", loader); //  ISO year and week
 
 	//  register various aliases
 	ICUDatePart::AddUnaryPartCodeFunctions("dayofmonth", loader);
