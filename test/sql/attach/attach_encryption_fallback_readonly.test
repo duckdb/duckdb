@@ -2,8 +2,6 @@
 # description: Ensure the fallback crypto implementation is read-only
 # group: [attach]
 
-mode skip instable
-
 require vector_size 2048
 
 load {TEST_DIR}/tmp.db
