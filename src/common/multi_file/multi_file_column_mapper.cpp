@@ -936,8 +936,9 @@ static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expressio
 
 static bool TryCastConstant(Value &constant, const LogicalType &target_type) {
 	// this filter replaces the global one in the reader, so a constant that does not survive the cast
-	// exactly would silently change which rows match
-	if (!BoundCastExpression::CastIsInvertible(constant.type(), target_type)) {
+	// exactly, or a file value that the reader casts with a loss, would silently change which rows match
+	if (!BoundCastExpression::CastIsInvertible(constant.type(), target_type) ||
+	    !BoundCastExpression::CastIsInvertible(target_type, constant.type())) {
 		return false;
 	}
 	auto cast = constant.DefaultTryCastAs(target_type);
