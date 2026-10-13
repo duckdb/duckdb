@@ -2751,6 +2751,9 @@ static const TransformFrameOps QUALIFY_CLAUSE_OPS = {"QualifyClause",
 static const TransformFrameOps SAMPLE_CLAUSE_OPS = {"SampleClause",
                                                     &PEGTransformerFactory::InitializeSampleClauseTrampoline,
                                                     &PEGTransformerFactory::FinalizeSampleClauseTrampoline};
+static const TransformFrameOps SELECT_SAMPLE_CLAUSE_OPS = {
+    "SelectSampleClause", &PEGTransformerFactory::InitializeSelectSampleClauseTrampoline,
+    &PEGTransformerFactory::FinalizeSelectSampleClauseTrampoline};
 static const TransformFrameOps WINDOW_CLAUSE_OPS = {"WindowClause",
                                                     &PEGTransformerFactory::InitializeWindowClauseTrampoline,
                                                     &PEGTransformerFactory::FinalizeWindowClauseTrampoline};
@@ -4025,6 +4028,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"HavingClause", &HAVING_CLAUSE_OPS},
 	    {"QualifyClause", &QUALIFY_CLAUSE_OPS},
 	    {"SampleClause", &SAMPLE_CLAUSE_OPS},
+	    {"SelectSampleClause", &SELECT_SAMPLE_CLAUSE_OPS},
 	    {"WindowClause", &WINDOW_CLAUSE_OPS},
 	    {"WindowDefinition", &WINDOW_DEFINITION_OPS},
 	    {"SampleEntry", &SAMPLE_ENTRY_OPS},
@@ -21550,7 +21554,11 @@ PEGTransformerFactory::FinalizeInnerTableRefTrampoline(PEGTransformer &transform
 void PEGTransformerFactory::InitializeTableSubqueryTrampoline(PEGTransformer &transformer,
                                                               GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(4);
+	process.ReserveChildSlots(5);
+	auto &sample_clause_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (sample_clause_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("SampleClause"), sample_clause_opt.GetResult()}, 4);
+	}
 	auto &table_alias_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (table_alias_opt.HasResult()) {
 		process.PushChild({transformer.GetRule("TableAlias"), table_alias_opt.GetResult()}, 3);
@@ -21582,8 +21590,12 @@ PEGTransformerFactory::FinalizeTableSubqueryTrampoline(PEGTransformer &transform
 	if (process.child_results[3]) {
 		table_alias = process.TakeResult<TableAlias>(3);
 	}
-	auto result =
-	    TransformTableSubquery(transformer, table_alias_colon, lateral, std::move(subquery_reference), table_alias);
+	optional<unique_ptr<SampleOptions>> sample_clause {};
+	if (process.child_results[4]) {
+		sample_clause = process.TakeResult<unique_ptr<SampleOptions>>(4);
+	}
+	auto result = TransformTableSubquery(transformer, table_alias_colon, lateral, std::move(subquery_reference),
+	                                     table_alias, std::move(sample_clause));
 	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(result));
 }
 
@@ -22148,7 +22160,11 @@ PEGTransformerFactory::FinalizeTableFunctionTrampoline(PEGTransformer &transform
 void PEGTransformerFactory::InitializeTableFunctionLateralOptTrampoline(PEGTransformer &transformer,
                                                                         GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(5);
+	process.ReserveChildSlots(6);
+	auto &sample_clause_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	if (sample_clause_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("SampleClause"), sample_clause_opt.GetResult()}, 5);
+	}
 	auto &table_alias_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
 	if (table_alias_opt.HasResult()) {
 		process.PushChild({transformer.GetRule("TableAlias"), table_alias_opt.GetResult()}, 4);
@@ -22182,8 +22198,13 @@ PEGTransformerFactory::FinalizeTableFunctionLateralOptTrampoline(PEGTransformer 
 	if (process.child_results[4]) {
 		table_alias = process.TakeResult<TableAlias>(4);
 	}
+	optional<unique_ptr<SampleOptions>> sample_clause {};
+	if (process.child_results[5]) {
+		sample_clause = process.TakeResult<unique_ptr<SampleOptions>>(5);
+	}
 	auto result = TransformTableFunctionLateralOpt(transformer, lateral, qualified_table_function,
-	                                               std::move(table_function_arguments), with_ordinality, table_alias);
+	                                               std::move(table_function_arguments), with_ordinality, table_alias,
+	                                               std::move(sample_clause));
 	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(result));
 }
 
@@ -23366,6 +23387,21 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeSampleClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
 	auto sample_entry = process.TakeResult<unique_ptr<SampleOptions>>(0);
 	auto result = TransformSampleClause(transformer, std::move(sample_entry));
+	return transformer.MakeResult<unique_ptr<SampleOptions>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeSelectSampleClauseTrampoline(PEGTransformer &transformer,
+                                                                   GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("SampleEntry"), list_pr.GetChild(1)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeSelectSampleClauseTrampoline(PEGTransformer &transformer,
+                                                            GeneratedTransformProcess &process) {
+	auto sample_entry = process.TakeResult<unique_ptr<SampleOptions>>(0);
+	auto result = TransformSelectSampleClause(transformer, std::move(sample_entry));
 	return transformer.MakeResult<unique_ptr<SampleOptions>>(std::move(result));
 }
 
