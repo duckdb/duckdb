@@ -21,6 +21,6 @@ SELECT json_deserialize_sql(json_serialize_sql('SELECT ' || repeat('abs(', 300) 
 true
 
 statement error
-SELECT json_deserialize_sql(json_serialize_sql('SELECT ' || repeat('abs(', 400) || '1' || repeat(')', 400)));
+SELECT json_deserialize_sql(json_serialize_sql('SELECT ' || repeat('abs(', 600) || '1' || repeat(')', 600)));
 ----
 Serialized JSON exceeds the maximum nesting depth
