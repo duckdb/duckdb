@@ -228,8 +228,12 @@ void StatisticsPropagator::MultiplyCardinalities(unique_ptr<NodeStatistics> &sta
 		return;
 	}
 	stats->estimated_cardinality = MaxValue<idx_t>(stats->estimated_cardinality, new_stats.estimated_cardinality);
-	auto new_max = Hugeint::Multiply(NumericCast<int64_t>(stats->max_cardinality),
-	                                 NumericCast<int64_t>(new_stats.max_cardinality));
+	hugeint_t new_max;
+	if (!Hugeint::TryMultiply(Hugeint::Convert(stats->max_cardinality), Hugeint::Convert(new_stats.max_cardinality),
+	                          new_max)) {
+		stats = nullptr;
+		return;
+	}
 	if (new_max < NumericLimits<int64_t>::Maximum()) {
 		int64_t result;
 		if (!Hugeint::TryCast<int64_t>(new_max, result)) {
