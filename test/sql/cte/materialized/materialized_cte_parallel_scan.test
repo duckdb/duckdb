@@ -5,7 +5,8 @@
 statement ok
 SET debug_verify_progress='error';
 
-foreach threads 1 4 32 192
+# Bound per-worker hash-join buffers to fit the 32-bit address space.
+foreach threads 1 4 32 64
 
 statement ok
 SET threads={threads};
