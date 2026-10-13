@@ -13,18 +13,19 @@
 namespace duckdb {
 
 static string MarkConditionUnsupportedReason(const LogicalComparisonJoin &join) {
+	if (join.HasNullSafeMarkJoinConditions()) {
+		return string();
+	}
 	bool comparisons_only = !join.conditions.empty();
 	bool all_equal = true;
-	bool all_null_safe = true;
 	for (auto &condition : join.conditions) {
 		if (!condition.IsComparison()) {
 			comparisons_only = false;
 			continue;
 		}
 		all_equal &= condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL;
-		all_null_safe &= condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 	}
-	const bool has_supported_conjunction = join.conditions.size() == 1 || all_equal || all_null_safe;
+	const bool has_supported_conjunction = join.conditions.size() == 1 || all_equal;
 	if (!comparisons_only || !has_supported_conjunction) {
 		return "The MARK condition requires conjunction execution semantics";
 	}

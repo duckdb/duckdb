@@ -74,7 +74,7 @@ PIVOT t GROUP BY a ORDER BY a;
 statement error
 CREATE TABLE y (a INTEGER CONSTRAINT c);
 ----
-must be followed by a constraint
+Parser Error: syntax error at or near ")"
 
 statement ok
 CREATE TABLE y (a INTEGER CONSTRAINT c NOT NULL, b INTEGER CONSTRAINT d CHECK (b > 0));

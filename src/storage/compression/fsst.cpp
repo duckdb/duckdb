@@ -68,7 +68,8 @@ struct FSSTStorage {
 //===--------------------------------------------------------------------===//
 struct FSSTAnalyzeState : public AnalyzeState {
 	explicit FSSTAnalyzeState(BlockManager &block_manager)
-	    : AnalyzeState(block_manager), count(0), fsst_string_total_size(0), empty_strings(0) {
+	    : AnalyzeState(block_manager), count(0), fsst_string_heap(block_manager.buffer_manager.GetBufferAllocator()),
+	      fsst_string_total_size(0), empty_strings(0) {
 	}
 
 	~FSSTAnalyzeState() override {
@@ -155,30 +156,37 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 	size_t output_buffer_size = 7 + 2 * state.fsst_string_total_size; // size as specified in fsst.h
 
-	vector<size_t> fsst_string_sizes;
-	vector<unsigned char *> fsst_string_ptrs;
-	for (auto &str : state.fsst_strings) {
-		fsst_string_sizes.push_back(str.GetSize());
-		fsst_string_ptrs.push_back((unsigned char *)str.GetData()); // NOLINT
+	// the sample can be large, so all scratch buffers are allocated through the buffer allocator
+	auto &allocator = state.info.GetBlockManager().buffer_manager.GetBufferAllocator();
+	auto fsst_string_sizes_data = allocator.Allocate(string_count * sizeof(size_t));
+	auto fsst_string_ptrs_data = allocator.Allocate(string_count * sizeof(unsigned char *));
+	auto fsst_string_sizes = reinterpret_cast<size_t *>(fsst_string_sizes_data.get());
+	auto fsst_string_ptrs = reinterpret_cast<unsigned char **>(fsst_string_ptrs_data.get());
+	for (idx_t i = 0; i < string_count; i++) {
+		auto &str = state.fsst_strings[i];
+		fsst_string_sizes[i] = str.GetSize();
+		fsst_string_ptrs[i] = (unsigned char *)str.GetData(); // NOLINT
 	}
 
-	state.fsst_encoder = duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0);
+	state.fsst_encoder = duckdb_fsst_create(string_count, fsst_string_sizes, fsst_string_ptrs, 0);
 
 	// TODO: do we really need to encode to get a size estimate?
-	auto compressed_ptrs = vector<unsigned char *>(string_count, nullptr);
-	auto compressed_sizes = vector<size_t>(string_count, 0);
-	unique_ptr<unsigned char[]> compressed_buffer(new unsigned char[output_buffer_size]);
+	auto compressed_ptrs_data = allocator.Allocate(string_count * sizeof(unsigned char *));
+	auto compressed_sizes_data = allocator.Allocate(string_count * sizeof(size_t));
+	auto compressed_ptrs = reinterpret_cast<unsigned char **>(compressed_ptrs_data.get());
+	auto compressed_sizes = reinterpret_cast<size_t *>(compressed_sizes_data.get());
+	auto compressed_buffer = allocator.Allocate(output_buffer_size);
 
-	auto res =
-	    duckdb_fsst_compress(state.fsst_encoder, string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0],
-	                         output_buffer_size, compressed_buffer.get(), &compressed_sizes[0], &compressed_ptrs[0]);
+	auto res = duckdb_fsst_compress(state.fsst_encoder, string_count, fsst_string_sizes, fsst_string_ptrs,
+	                                output_buffer_size, compressed_buffer.get(), compressed_sizes, compressed_ptrs);
 
 	if (string_count != res) {
 		throw std::runtime_error("FSST output buffer is too small unexpectedly");
 	}
 
 	// Sum and and Max compressed lengths
-	for (auto &size : compressed_sizes) {
+	for (idx_t i = 0; i < string_count; i++) {
+		const auto size = compressed_sizes[i];
 		compressed_dict_size += size;
 		max_compressed_string_length = MaxValue(max_compressed_string_length, size);
 	}

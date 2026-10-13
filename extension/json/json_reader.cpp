@@ -877,6 +877,14 @@ void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
 	}
 	// store the buffer in the file so it can be re-used by the first reader of the file
 	if (!file_handle->IsPipe()) {
+		// a file that is much smaller than the buffer only keeps what was read - with many files (e.g. union_by_name)
+		// one full-sized buffer per file adds up to far more than the data
+		const idx_t required = read_size + YYJSON_PADDING_SIZE;
+		if (required * 2 <= buffer_capacity) {
+			auto shrunk = allocator.Allocate(required);
+			memcpy(shrunk.get(), read_buffer.get(), required);
+			read_buffer = std::move(shrunk);
+		}
 		auto_detect_data = std::move(read_buffer);
 		auto_detect_data_size = read_size;
 	} else {

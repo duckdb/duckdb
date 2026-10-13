@@ -227,13 +227,8 @@ string PEGTransformerFactory::TransformDotColLabel(PEGTransformer &transformer, 
 
 ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
     PEGTransformer &transformer, const Identifier &identifier, const optional<LogicalType> &type,
-    optional<GeneratedColumnDefinition> generated_column, const bool &has_result,
-    optional<vector<ColumnConstraintEntry>> column_constraint) {
+    optional<GeneratedColumnDefinition> generated_column, optional<vector<ColumnConstraintEntry>> column_constraint) {
 	auto qualified_name = QualifiedName(identifier);
-	if (has_result && (!column_constraint || column_constraint->empty())) {
-		throw ParserException("Constraint name of column %s must be followed by a constraint",
-		                      qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA));
-	}
 	bool has_type = type.has_value();
 	bool has_generated = generated_column && generated_column->expr != nullptr;
 	if (!has_type && !has_generated) {
@@ -474,6 +469,13 @@ ColumnConstraintEntry PEGTransformerFactory::TransformUniqueConstraint(PEGTransf
 	entry.constraint_name = "UniqueConstraint";
 	entry.constraint_type_info = make_pair(false, ConstraintType::UNIQUE);
 	return entry;
+}
+
+// Column constraint names are parsed but not stored
+ColumnConstraintEntry PEGTransformerFactory::TransformNameableColumnConstraint(PEGTransformer &transformer,
+                                                                               const bool &has_result,
+                                                                               ColumnConstraintEntry child) {
+	return child;
 }
 
 bool PEGTransformerFactory::TransformNullConstraint(PEGTransformer &transformer) {
