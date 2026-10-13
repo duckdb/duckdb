@@ -117,7 +117,7 @@ TEST_CASE("HTTP retry budget stops when the host quota is exhausted", "[http]") 
 	// Leave room for exactly two server-error retries
 	REQUIRE(quota->TryAcquire(HTTPRetryQuota::INITIAL_CAPACITY - 2 * HTTPRetryQuota::RETRY_COST));
 
-	HTTPRetryBudget budget(params);
+	HTTPRetryBudget budget(params, HTTPRetryOutcomeOwner::COORDINATOR);
 	budget.BindQuota(quota);
 	idx_t attempts = 0;
 	budget.Run([&]() {
@@ -136,7 +136,7 @@ TEST_CASE("HTTP retry budget stops when the host quota is exhausted", "[http]") 
 	quota->Release(HTTPRetryQuota::RETRY_COST - HTTPRetryQuota::NO_RETRY_REFUND);
 
 	// A success right after an admitted retry refunds that retry's cost
-	HTTPRetryBudget refunded_budget(params);
+	HTTPRetryBudget refunded_budget(params, HTTPRetryOutcomeOwner::COORDINATOR);
 	refunded_budget.BindQuota(quota);
 	attempts = 0;
 	refunded_budget.Run([&]() {
@@ -180,7 +180,7 @@ TEST_CASE("HTTP retry budget stops when the host quota is exhausted", "[http]") 
 	REQUIRE(quota->Available() == HTTPRetryQuota::RETRY_COST);
 
 	// A request that succeeded without retrying refunds a single token
-	HTTPRetryBudget clean_budget(params);
+	HTTPRetryBudget clean_budget(params, HTTPRetryOutcomeOwner::COORDINATOR);
 	clean_budget.BindQuota(quota);
 	clean_budget.ReportSuccess();
 	REQUIRE(quota->Available() == HTTPRetryQuota::RETRY_COST + HTTPRetryQuota::NO_RETRY_REFUND);
@@ -209,7 +209,7 @@ TEST_CASE("HTTP retry budget charges the host of the request being retried", "[h
 
 	// One operation: a request to the first host is retried once, then a redirect sends it to the second host,
 	// where it is retried once more and succeeds
-	HTTPRetryBudget budget(params);
+	HTTPRetryBudget budget(params, HTTPRetryOutcomeOwner::COORDINATOR);
 	budget.BindQuota(first_host);
 	idx_t attempts = 0;
 	budget.Run([&]() {
@@ -407,7 +407,9 @@ TEST_CASE("The coordinator's explicit outcome settles the host quota", "[http]")
 	// `script` lists the responses of one operation: {status, body}; the last entry repeats.
 	using Script = vector<std::pair<HTTPStatusCode, const char *>>;
 	auto run_operation = [&](const Script &script, bool explicit_protocol) {
-		HTTPRetryBudget budget(params);
+		// A coordinator owns the outcome from the start; a loop without the protocol leaves it to the status
+		HTTPRetryBudget budget(params,
+		                       explicit_protocol ? HTTPRetryOutcomeOwner::COORDINATOR : HTTPRetryOutcomeOwner::STATUS);
 		idx_t sends = 0;
 		unique_ptr<HTTPResponse> last;
 		budget.Run([&]() {
@@ -475,9 +477,9 @@ TEST_CASE("The coordinator's explicit outcome settles the host quota", "[http]")
 	REQUIRE(run_operation(ok, true) == 1);
 	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
 
-	// Compatibility: a coordinator that only returns Finish() leaves the judgement to the status core recorded, so
-	// the 2xx that carried the error document refunds the retry. That is the pre-protocol behaviour a provider
-	// keeps until it adopts the explicit decisions.
+	// Compatibility: a status-owned budget whose loop only returns Finish() leaves the judgement to the status core
+	// recorded, so the 2xx that carried the error document refunds the retry. That is the pre-protocol behaviour a
+	// provider keeps until it owns the outcome.
 	REQUIRE(quota->TryAcquire(HTTPRetryQuota::RETRY_COST));
 	REQUIRE(run_operation(server_error_then_invalid_part, false) == 2);
 	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
@@ -491,7 +493,7 @@ TEST_CASE("An explicit outcome is settled once", "[http]") {
 	auto quota = make_shared_ptr<HTTPRetryQuota>();
 
 	// A coordinator that validates after its Run reports the outcome itself
-	HTTPRetryBudget budget(params);
+	HTTPRetryBudget budget(params, HTTPRetryOutcomeOwner::COORDINATOR);
 	budget.BindQuota(quota);
 	idx_t attempts = 0;
 	budget.Run([&]() {
@@ -507,7 +509,7 @@ TEST_CASE("An explicit outcome is settled once", "[http]") {
 	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
 
 	// A failure reported after the loop keeps the retry charged, and a later success does not refund it
-	HTTPRetryBudget failed(params);
+	HTTPRetryBudget failed(params, HTTPRetryOutcomeOwner::COORDINATOR);
 	failed.BindQuota(quota);
 	attempts = 0;
 	failed.Run([&]() {
@@ -520,7 +522,7 @@ TEST_CASE("An explicit outcome is settled once", "[http]") {
 
 	// A Success decision inside the loop is the same report
 	quota->Release(HTTPRetryQuota::INITIAL_CAPACITY);
-	HTTPRetryBudget decided(params);
+	HTTPRetryBudget decided(params, HTTPRetryOutcomeOwner::COORDINATOR);
 	decided.BindQuota(quota);
 	attempts = 0;
 	decided.Run([&]() {
@@ -530,6 +532,102 @@ TEST_CASE("An explicit outcome is settled once", "[http]") {
 	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
 	decided.ReportFailure();
 	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
+
+	// Deciding or reporting an outcome is the coordinator's: a status-owned budget refuses it
+	HTTPRetryBudget status_owned(params);
+	status_owned.BindQuota(quota);
+	REQUIRE_THROWS_AS(status_owned.ReportSuccess(), InternalException);
+	REQUIRE_THROWS_AS(status_owned.ReportFailure(), InternalException);
+	REQUIRE_THROWS_AS(status_owned.Run([&]() { return HTTPRetryDecision::Success(); }), InternalException);
+	REQUIRE_THROWS_AS(status_owned.Run([&]() { return HTTPRetryDecision::Failure(); }), InternalException);
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
+}
+
+TEST_CASE("A coordinator that validates after its loop owns the settlement", "[http]") {
+	HTTPUtil http_util;
+	HTTPParams params(http_util);
+	params.retries = 3;
+	params.retry_wait_ms = 0;
+	HTTPHeaders headers;
+	const string url = "http://bucket.s3.amazonaws.com/key?uploadId=1";
+	auto quota = http_util.GetRetryQuota("http://bucket.s3.amazonaws.com");
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
+
+	// The coordinator retries server errors inside its loop and returns Finish() for everything else: the operation's
+	// handler validates the response after the loop, as the multipart completion parses its document, and reports.
+	// Core's nested request loop records what each status says along the way; that record must not settle anything.
+	using Script = vector<std::pair<HTTPStatusCode, const char *>>;
+	const Script server_error_then_invalid_part {{HTTPStatusCode::InternalServerError_500, ""},
+	                                             {HTTPStatusCode::OK_200, S3_INVALID_PART_BODY}};
+	unique_ptr<HTTPResponse> last;
+	auto run_loop = [&](HTTPRetryBudget &budget, const Script &script) {
+		idx_t sends = 0;
+		budget.Run([&]() {
+			PostRequestInfo request(url, headers, params, nullptr, 0);
+			request.retry_budget = budget;
+			request.try_request = true;
+			last = HTTPUtil::RunRequestWithRetry(
+			    [&]() {
+				    auto &scripted = script[MinValue<idx_t>(sends, script.size() - 1)];
+				    sends++;
+				    return MakeResponse(scripted.first, scripted.second);
+			    },
+			    request, {});
+			if (!last->Success() && HTTPUtil::IsRetryableStatus(last->status)) {
+				return HTTPRetryDecision::Retry();
+			}
+			return HTTPRetryDecision::Finish();
+		});
+		return sends;
+	};
+
+	// HTTP 500, then HTTP 200 carrying InvalidPart: core recorded a success for the 2xx and the loop stopped with
+	// Finish(); the handler rejects the body and reports the failure, so the retry stays charged
+	HTTPRetryBudget rejected(params, HTTPRetryOutcomeOwner::COORDINATOR);
+	REQUIRE(run_loop(rejected, server_error_then_invalid_part) == 2);
+	REQUIRE(last->Success());
+	REQUIRE(ErrorDocumentHTTPUtil::ErrorCode(last->body) == "InvalidPart");
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
+	rejected.ReportFailure();
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
+	// ... and a success reported after that changes nothing
+	rejected.ReportSuccess();
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
+	// A host that keeps doing this runs out of quota: 100 such operations make 100 retries, then one send each
+	for (idx_t i = 1; i < HTTPRetryQuota::INITIAL_CAPACITY / HTTPRetryQuota::RETRY_COST; i++) {
+		HTTPRetryBudget budget(params, HTTPRetryOutcomeOwner::COORDINATOR);
+		REQUIRE(run_loop(budget, server_error_then_invalid_part) == 2);
+		budget.ReportFailure();
+	}
+	REQUIRE(quota->Available() == 0);
+	HTTPRetryBudget refused(params, HTTPRetryOutcomeOwner::COORDINATOR);
+	REQUIRE(run_loop(refused, server_error_then_invalid_part) == 1);
+	REQUIRE(refused.QuotaExhausted());
+	refused.ReportFailure();
+	REQUIRE(quota->Available() == 0);
+
+	// Only the handler's validated success refunds: the same responses, accepted by the handler
+	quota->Release(HTTPRetryQuota::INITIAL_CAPACITY);
+	HTTPRetryBudget accepted(params, HTTPRetryOutcomeOwner::COORDINATOR);
+	REQUIRE(run_loop(accepted, server_error_then_invalid_part) == 2);
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
+	accepted.ReportSuccess();
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
+
+	// An operation whose handler could not read the response (an unknown outcome) never reports: it stays charged
+	{
+		HTTPRetryBudget unknown(params, HTTPRetryOutcomeOwner::COORDINATOR);
+		REQUIRE(run_loop(unknown, server_error_then_invalid_part) == 2);
+	}
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY - HTTPRetryQuota::RETRY_COST);
+
+	// The status-owned budget of the same loop is settled by the 2xx the moment the loop stops, and nobody can
+	// report on it afterwards: that is what a coordinator must not leave to core
+	quota->Release(HTTPRetryQuota::INITIAL_CAPACITY);
+	HTTPRetryBudget status_owned(params);
+	REQUIRE(run_loop(status_owned, server_error_then_invalid_part) == 2);
+	REQUIRE(quota->Available() == HTTPRetryQuota::INITIAL_CAPACITY);
+	REQUIRE_THROWS_AS(status_owned.ReportFailure(), InternalException);
 }
 
 TEST_CASE("Corrected re-sends are bounded and stay within the advertised attempt bound", "[http]") {
@@ -543,7 +641,7 @@ TEST_CASE("Corrected re-sends are bounded and stay within the advertised attempt
 	// A credential correction (a re-send that consumes no retry) followed by a throttling server
 	auto run_operation = [&](idx_t corrections) {
 		http_util.attempts.clear();
-		HTTPRetryBudget budget(params);
+		HTTPRetryBudget budget(params, HTTPRetryOutcomeOwner::COORDINATOR);
 		idx_t corrected = 0;
 		budget.Run([&]() {
 			HeadRequestInfo request(url, headers, params);

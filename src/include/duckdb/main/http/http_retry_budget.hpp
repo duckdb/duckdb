@@ -24,18 +24,22 @@ struct HTTPParams;
 //! decides explicitly whether the operation succeeded, failed for good, is retried, or is re-sent corrected. The budget
 //! only admits retries, waits between them and keeps the host quota's books, refunding once after a reported success.
 //! Finish() is the decision of a loop that does not judge the operation itself (core's request loop, or a provider
-//! that has not adopted the explicit protocol): the quota is then settled from the HTTP status core recorded.
+//! that has not adopted the explicit protocol): with a status-owned budget the quota is then settled from the HTTP
+//! status core recorded; a coordinator-owned budget waits for the coordinator's report.
 class HTTPRetryDecision {
 	friend class HTTPRetryBudget;
 	friend class HTTPUtil;
 
 public:
-	//! Stop without judging the operation: a nested loop leaves the decision to the coordinator; the outermost loop
-	//! settles the quota from the HTTP status core recorded (the pre-protocol behaviour).
+	//! Stop without judging the operation: a nested loop leaves the decision to the coordinator. The outermost loop of
+	//! a status-owned budget settles the quota from the HTTP status core recorded (the pre-protocol behaviour); a
+	//! coordinator-owned budget stays unsettled until ReportSuccess() or ReportFailure().
 	DUCKDB_API static HTTPRetryDecision Finish();
-	//! The operation succeeded: the coordinator validated the response, the quota is refunded once.
+	//! The operation succeeded: the coordinator validated the response, the quota is refunded once. Only the owner
+	//! of a coordinator-owned budget decides this.
 	DUCKDB_API static HTTPRetryDecision Success();
-	//! The operation failed for good (e.g. an error document behind HTTP 200): nothing is refunded.
+	//! The operation failed for good (e.g. an error document behind HTTP 200): nothing is refunded. Only the owner of
+	//! a coordinator-owned budget decides this.
 	DUCKDB_API static HTTPRetryDecision Failure();
 	//! Re-send after correcting the request (credentials, region, endpoint): no retry is consumed and no back-off is
 	//! waited, bounded by HTTPRetryBudget::MAX_CORRECTIONS per operation.
@@ -92,12 +96,24 @@ private:
 	int64_t last_used_ms = TimePoint::GetTickMs();
 };
 
+//! Who settles an operation's outcome with the host quota, fixed when the operation starts.
+enum class HTTPRetryOutcomeOwner : uint8_t {
+	//! Nobody validates beyond the HTTP status: the status core recorded settles the quota once the outermost loop
+	//! stops. Core's own request loop and loops that have not adopted the explicit protocol.
+	STATUS,
+	//! The coordinator that runs the operation validates the response and settles the quota itself, with a
+	//! Success/Failure decision or ReportSuccess/ReportFailure after its loop; core's status is never final for it.
+	//! An operation whose coordinator never reports stays charged, like one whose outcome is unknown.
+	COORDINATOR
+};
+
 //! Operation-local budget shared by synchronous nested retry loops, never concurrent loops. One budget is one
 //! logical operation (one `amz-sdk-invocation-id`): every send it makes, including corrected re-sends, is one of
 //! its attempts, as in the AWS SDK's attempt loop. The host quota is settled once per operation, when its outcome is
-//! known: the coordinator reports it (Success/Failure decisions or ReportSuccess/ReportFailure), or, for a loop that
-//! only returns Finish(), it is taken from the HTTP status core recorded (RecordStatusOutcome). An outcome recorded
-//! inside an outer Run waits for that loop's decision, since the coordinator may still reject the response.
+//! known, by the owner fixed at construction: a coordinator reports it (Success/Failure decisions or
+//! ReportSuccess/ReportFailure, whenever it has validated the response, inside or after its loop); for a status-owned
+//! budget it is taken from the HTTP status core recorded (RecordStatusOutcome). A status recorded inside an outer Run
+//! waits for that loop to stop, since an outer loop may still retry.
 class HTTPRetryBudget {
 	friend class HTTPUtil;
 
@@ -111,7 +127,8 @@ public:
 	static constexpr uint64_t MAX_CORRECTIONS = 4;
 
 public:
-	DUCKDB_API explicit HTTPRetryBudget(const HTTPParams &params);
+	DUCKDB_API explicit HTTPRetryBudget(const HTTPParams &params,
+	                                    HTTPRetryOutcomeOwner owner = HTTPRetryOutcomeOwner::STATUS);
 	HTTPRetryBudget(const HTTPRetryBudget &) = delete;
 	HTTPRetryBudget &operator=(const HTTPRetryBudget &) = delete;
 
@@ -137,14 +154,18 @@ public:
 	DUCKDB_API bool CorrectionsExhausted() const;
 	//! Charge the next admitted retries to this host's quota; a request to another host rebinds.
 	DUCKDB_API void BindQuota(shared_ptr<HTTPRetryQuota> quota);
+	//! Who settles this operation's outcome.
+	DUCKDB_API HTTPRetryOutcomeOwner Owner() const;
 	//! The coordinator's final word, for a coordinator that validates the response after its Run returned: the
 	//! operation succeeded, refund the last admitted retry to the quota it was charged to, or NO_RETRY_REFUND to the
-	//! bound quota. Settles once; a later report of the same operation changes nothing.
+	//! bound quota. Settles once; a later report of the same operation changes nothing. Coordinator-owned budgets only.
 	DUCKDB_API void ReportSuccess();
-	//! The coordinator's final word: the operation failed, the last admitted retry is not refunded.
+	//! The coordinator's final word: the operation failed, the last admitted retry is not refunded. Coordinator-owned
+	//! budgets only.
 	DUCKDB_API void ReportFailure();
-	//! What the HTTP status of the last response says, recorded by core's request loop. Provisional: inside an outer
-	//! Run the coordinator's decision wins; outside one it settles the quota at once (status-based behaviour).
+	//! What the HTTP status of the last response says, recorded by core's request loop. For a status-owned budget it
+	//! settles the quota, at once outside a Run or when the outermost Run stops; a coordinator-owned budget ignores
+	//! it, its coordinator judges the response.
 	DUCKDB_API void RecordStatusOutcome(bool success);
 	//! Whether a Run of this budget is in progress, i.e. a nested loop is running inside an outer one.
 	DUCKDB_API bool InRun() const;
@@ -165,6 +186,8 @@ private:
 	uint64_t ThrottleExtraRetries() const;
 	//! Settle the operation's outcome with the quota once: refund on success, then forget the last admitted retry.
 	void Settle(bool success);
+	//! Explicit decisions and reports belong to a coordinator-owned budget; anything else is a programming error.
+	void RequireCoordinator(const char *what) const;
 	//! Forget the last admitted retry, so that nothing is refunded for it.
 	void ForgetLastRetry();
 
@@ -173,6 +196,8 @@ private:
 	const uint64_t retries;
 	const uint64_t retry_wait_ms;
 	const float retry_backoff;
+	//! Who settles the outcome with the quota.
+	const HTTPRetryOutcomeOwner owner;
 
 	//! Retries admitted across all participating requests.
 	uint64_t retries_used = 0;
@@ -183,7 +208,7 @@ private:
 	uint64_t corrections_admitted = 0;
 	//! Nesting depth of Run; status outcomes recorded while this is positive wait for the outermost loop's decision.
 	uint64_t run_depth = 0;
-	//! Outcome core recorded from the HTTP status, pending the coordinator's decision.
+	//! Outcome core recorded from the HTTP status, pending the outermost loop's stop (status-owned budgets only).
 	enum class RecordedOutcome : uint8_t { NONE, SUCCESS, FAILURE };
 	RecordedOutcome status_outcome = RecordedOutcome::NONE;
 	//! Whether the operation's outcome has been settled with the quota; a new admitted retry starts a new settlement.

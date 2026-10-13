@@ -77,8 +77,9 @@ int64_t HTTPRetryQuota::IdleMs(int64_t now_ms) const {
 	return now_ms - last_used_ms;
 }
 
-HTTPRetryBudget::HTTPRetryBudget(const HTTPParams &params)
-    : retries(params.retries), retry_wait_ms(params.retry_wait_ms), retry_backoff(params.retry_backoff) {
+HTTPRetryBudget::HTTPRetryBudget(const HTTPParams &params, HTTPRetryOutcomeOwner owner_p)
+    : retries(params.retries), retry_wait_ms(params.retry_wait_ms), retry_backoff(params.retry_backoff),
+      owner(owner_p) {
 #ifdef DUCKDB_NO_THREADS
 	// Without threads there is no back-off sleep, so the schedule settings go unused.
 	(void)retry_wait_ms;
@@ -134,15 +135,34 @@ void HTTPRetryBudget::BindQuota(shared_ptr<HTTPRetryQuota> quota_p) {
 	quota = std::move(quota_p);
 }
 
+HTTPRetryOutcomeOwner HTTPRetryBudget::Owner() const {
+	return owner;
+}
+
+void HTTPRetryBudget::RequireCoordinator(const char *what) const {
+	if (owner != HTTPRetryOutcomeOwner::COORDINATOR) {
+		throw InternalException(
+		    "HTTP retry budget: %s is the coordinator's decision, but this operation's outcome is "
+		    "owned by the HTTP status; construct the budget with HTTPRetryOutcomeOwner::COORDINATOR",
+		    what);
+	}
+}
+
 void HTTPRetryBudget::ReportSuccess() {
+	RequireCoordinator("ReportSuccess");
 	Settle(true);
 }
 
 void HTTPRetryBudget::ReportFailure() {
+	RequireCoordinator("ReportFailure");
 	Settle(false);
 }
 
 void HTTPRetryBudget::RecordStatusOutcome(bool success) {
+	if (owner != HTTPRetryOutcomeOwner::STATUS) {
+		// The coordinator validates the response and reports; what the status says is never final here.
+		return;
+	}
 	status_outcome = success ? RecordedOutcome::SUCCESS : RecordedOutcome::FAILURE;
 	if (!InRun()) {
 		// Nobody else is going to judge this response.
@@ -252,15 +272,18 @@ void HTTPRetryBudget::Run(const std::function<HTTPRetryDecision()> &attempt,
 		switch (decision.type) {
 		case HTTPRetryDecision::Type::SUCCESS:
 			// The coordinator validated the response: the explicit outcome is final wherever it is decided.
+			RequireCoordinator("a Success decision");
 			Settle(true);
 			return;
 		case HTTPRetryDecision::Type::FAILURE:
+			RequireCoordinator("a Failure decision");
 			Settle(false);
 			return;
 		case HTTPRetryDecision::Type::FINISH:
 			if (outermost && status_outcome != RecordedOutcome::NONE) {
-				// The operation is over and nobody judges it: the outcome core recorded from the status is settled
-				// now. Without one the caller records the outcome itself after the run.
+				// A status-owned operation is over and nobody judges it: the outcome core recorded from the status
+				// is settled now. Without one the caller records the outcome itself after the run. A
+				// coordinator-owned budget never records a status and waits for the coordinator's report.
 				Settle(status_outcome == RecordedOutcome::SUCCESS);
 			}
 			return;

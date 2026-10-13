@@ -427,8 +427,9 @@ static unique_ptr<HTTPResponse> ResponseFromError(const ErrorData &error) {
 
 // Retry eligible requests using an operation-local budget, the host's retry quota and the transport retry hook.
 // This loop is not the operation's coordinator: it judges statuses (with the provider's ShouldRetry), returns Finish()
-// once it stops and records what the status says. A provider loop sharing the budget (request.retry_budget) decides
-// the operation's outcome explicitly; without one, the recorded status settles the host quota.
+// once it stops and records what the status says. A coordinator-owned budget shared by a provider loop
+// (request.retry_budget) ignores that record and settles the quota from the provider's validated outcome; the local
+// status-owned budget settles it from the status.
 duckdb::unique_ptr<HTTPResponse>
 HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request, BaseRequest &request,
                               const std::function<void(void)> &retry_cb) {
@@ -510,8 +511,8 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 	    },
 	    retry_cb);
 
-	// With a shared budget the outcome is settled by the coordinator once it has judged the response: an error
-	// document behind HTTP 200 is a failure or a retry there and must not refund the retry it consumed.
+	// With a coordinator-owned budget the outcome is settled by the coordinator once it has validated the response:
+	// an error document behind HTTP 200 is a failure or a retry there and must not refund the retry it consumed.
 	if (!should_retry && response) {
 		retry_budget->RecordStatusOutcome(response->success);
 		return response;
