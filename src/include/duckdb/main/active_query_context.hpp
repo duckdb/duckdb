@@ -14,7 +14,6 @@
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/main/query_parameters.hpp"
-#include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/planner/statement_preprocessor.hpp"
 
 namespace duckdb {
@@ -25,8 +24,7 @@ class QueryResult;
 //! several runs them one after another, each with its own executor, as one query
 struct ActiveQueryContext {
 public:
-	explicit ActiveQueryContext(PreprocessedStatement statements_p)
-	    : transaction_handling(statements_p.transaction_handling), statements(std::move(statements_p.statements)) {
+	explicit ActiveQueryContext(PreprocessedStatement statements_p) : statements(std::move(statements_p.statements)) {
 	}
 
 	//! The text of the statement that is running
@@ -39,14 +37,10 @@ public:
 	unique_ptr<ProgressBar> progress_bar;
 	//! Whether a collector built the open result, which has no way to end the query
 	bool collector_built_result = false;
-	//! The transaction handling preprocessing chose for the user's statement
-	PreprocessingTransactionHandling transaction_handling;
 	//! The format every statement of the query is submitted in; null is the chunk format
 	shared_ptr<ResultFormat> format;
 	//! The consumer's retention decision, applied to the result statement's buffer when it is created
 	ResultLifetime retention = ResultLifetime::UNDECIDED;
-	//! The policy to restore when a statement that expands ends inside a transaction it did not open
-	TransactionInvalidationPolicy previous_invalidation_policy = TransactionInvalidationPolicy::STANDARD_POLICY;
 	//! Whether the statement whose rows the result carries has started
 	bool result_statement_started = false;
 	//! The handle of a statement that expands into several, which the statement producing the result fills in
@@ -79,6 +73,10 @@ public:
 	//! Records the databases a statement of the query read and modified
 	void RecordDatabases(const StatementProperties &properties) {
 		MergeDatabases(properties, databases);
+	}
+	//! Whether a statement of the query that started modifies a database
+	bool Wrote() const {
+		return !databases.IsReadOnly();
 	}
 	//! The properties of the statement that produces the result, describing the databases of the whole query
 	StatementProperties QueryProperties(StatementProperties properties) const {

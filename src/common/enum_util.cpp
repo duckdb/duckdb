@@ -226,7 +226,6 @@
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/logical_operator_repeatability.hpp"
 #include "duckdb/planner/logical_plan_verification_result.hpp"
-#include "duckdb/planner/statement_preprocessor.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
@@ -5028,25 +5027,6 @@ const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value
 template<>
 PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *value) {
 	return static_cast<PreparedStatementMode>(StringUtil::StringToEnum(GetPreparedStatementModeValues(), 2, "PreparedStatementMode", value));
-}
-
-const StringUtil::EnumStringLiteral *GetPreprocessingTransactionHandlingValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(PreprocessingTransactionHandling::WRAP_IN_TRANSACTION), "WRAP_IN_TRANSACTION" },
-		{ static_cast<uint32_t>(PreprocessingTransactionHandling::SET_INVALIDATION_POLICY), "SET_INVALIDATION_POLICY" },
-		{ static_cast<uint32_t>(PreprocessingTransactionHandling::NONE), "NONE" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<PreprocessingTransactionHandling>(PreprocessingTransactionHandling value) {
-	return StringUtil::EnumToString(GetPreprocessingTransactionHandlingValues(), 3, "PreprocessingTransactionHandling", static_cast<uint32_t>(value));
-}
-
-template<>
-PreprocessingTransactionHandling EnumUtil::FromString<PreprocessingTransactionHandling>(const char *value) {
-	return static_cast<PreprocessingTransactionHandling>(StringUtil::StringToEnum(GetPreprocessingTransactionHandlingValues(), 3, "PreprocessingTransactionHandling", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPreserveOrderTypeValues() {

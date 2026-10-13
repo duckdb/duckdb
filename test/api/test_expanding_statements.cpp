@@ -55,24 +55,6 @@ unique_ptr<QueryResult> SubmitGroup(Connection &con, const string &query) {
 	return handle;
 }
 
-//! The path that predates groups: each statement the user statement preprocesses into is its own query
-unique_ptr<QueryResult> RunOneByOne(Connection &con, const string &query) {
-	unique_ptr<QueryResult> rows;
-	unique_ptr<QueryResult> last;
-	for (auto &statement : con.ExtractStatements(query)) {
-		auto current = con.Query(std::move(statement));
-		if (current->HasError()) {
-			return current;
-		}
-		if (!rows && current->GetStatementProperties().return_type == StatementReturnType::QUERY_RESULT) {
-			rows = std::move(current);
-		} else {
-			last = std::move(current);
-		}
-	}
-	return rows ? std::move(rows) : std::move(last);
-}
-
 int64_t Count(Connection &con, const string &query) {
 	auto result = con.Query(query);
 	REQUIRE_NO_FAIL(*result);
@@ -88,12 +70,16 @@ bool ColumnExists(Connection &con, const string &column) {
 	                      "'") == 1;
 }
 
-vector<string> Names(const QueryResult &result) {
+vector<string> Names(const vector<Identifier> &identifiers) {
 	vector<string> names;
-	for (auto &name : result.GetNames()) {
+	for (auto &name : identifiers) {
 		names.push_back(name.GetIdentifierName());
 	}
 	return names;
+}
+
+vector<string> Names(const QueryResult &result) {
+	return Names(result.GetNames());
 }
 
 void RequireMetadataDeferred(QueryResult &handle) {
@@ -228,14 +214,10 @@ TEST_CASE("A dynamic PIVOT is one submitted query", "[api][expanding_statements]
 	DuckDB db(nullptr);
 	Connection con(db);
 	CreateSales(con);
-	auto reference = RunOneByOne(con, SALES_PIVOT);
-	REQUIRE_NO_FAIL(*reference);
 
 	auto handle = SubmitGroup(con, SALES_PIVOT);
 	handle->Complete();
 	REQUIRE_NO_FAIL(*handle);
-	REQUIRE(Names(*handle) == Names(*reference));
-	REQUIRE(handle->GetTypes() == reference->GetTypes());
 	REQUIRE(Names(*handle) == vector<string> {"city", "2023", "2024"});
 	REQUIRE(handle->GetTypes() ==
 	        vector<LogicalType> {LogicalType::VARCHAR, LogicalType::HUGEINT, LogicalType::HUGEINT});
@@ -297,6 +279,19 @@ TEST_CASE("Submitting a parsed statement that expands runs it", "[api][expanding
 	handle->Complete();
 	REQUIRE_NO_FAIL(*handle);
 	REQUIRE(CHECK_COLUMN(handle, 0, {"ams", "rtm"}));
+}
+
+TEST_CASE("A PRAGMA reparsed into one statement reports that statement", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	CreateSales(con);
+	auto handle = SubmitGroup(con, "PRAGMA show_tables");
+	REQUIRE(handle->MetadataAvailable());
+	REQUIRE(handle->GetStatementType() == StatementType::SELECT_STATEMENT);
+	// What consumers that stream a SELECT by default rely on
+	REQUIRE(StreamsByDefault(handle->GetStatementType(), *handle));
+	handle->Complete();
+	REQUIRE(CHECK_COLUMN(handle, 0, {"sales"}));
 }
 
 TEST_CASE("A statement that preprocesses into nothing finishes empty", "[api][expanding_statements]") {
@@ -666,6 +661,85 @@ TEST_CASE("A PIVOT abandoned before its SELECT is bound invalidates the user's t
 	REQUIRE(Count(observer, "SELECT count(*) FROM sales") == 4);
 }
 
+TEST_CASE("A group abandoned before a writing statement started invalidates the user's transaction",
+          "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection observer(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i INTEGER)"));
+	auto set_variable = con.Query("SET VARIABLE expanding_marker = 0");
+	REQUIRE_NO_FAIL(*set_variable);
+	REQUIRE(set_variable->GetStatementProperties().IsReadOnly());
+	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t VALUES (1)"));
+
+	auto handle = con.Submit(MultiOf(con, {"SET VARIABLE expanding_marker = 1", "CREATE TABLE u(i INTEGER)"}));
+	REQUIRE_NO_FAIL(*handle);
+	handle->Close();
+	RequireAborted(con);
+	REQUIRE(Count(observer, "SELECT count(*) FROM t") == 0);
+	REQUIRE(Count(observer, "SELECT count(*) FROM duckdb_tables() WHERE table_name = 'u'") == 0);
+}
+
+TEST_CASE("A read-only statement before a failing one keeps the user's transaction", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection observer(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query(SYNTACTIC_ERRORS_POLICY));
+	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t VALUES (1)"));
+
+	auto handle = con.Submit(MultiOf(con, {"SET VARIABLE expanding_marker = 1", "SELECT * FROM missing"}));
+	REQUIRE_NO_FAIL(*handle);
+	handle->Complete();
+	REQUIRE(handle->GetErrorType() == ExceptionType::CATALOG);
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	REQUIRE(Count(observer, "SELECT count(*) FROM t") == 1);
+}
+
+TEST_CASE("A group leaves the user's invalidation policy in place", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection observer(db);
+	CreateNumbers(con, 10);
+	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	REQUIRE_NO_FAIL(con.Query("SET current_transaction_invalidation_policy = 'SYNTACTIC_ERRORS_DO_NOT_INVALIDATE'"));
+
+	REQUIRE_NO_FAIL(con.Query(VOLATILE_DEFAULT));
+	REQUIRE_FAIL(con.Query("SELECT * FROM missing"));
+	REQUIRE(Count(con, "SELECT 42") == 42);
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	REQUIRE(ColumnExists(observer, "c"));
+}
+
+TEST_CASE("A stream on a group inside a user transaction ends it as the handle does", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection observer(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	CreateSales(con);
+	CreateNumbers(con, 10);
+	REQUIRE_NO_FAIL(con.Query(SYNTACTIC_ERRORS_POLICY));
+	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t VALUES (10)"));
+
+	SECTION("closed before its result statement started") {
+		QueryResultStream<> stream(SubmitGroup(con, SALES_PIVOT));
+		stream.Close();
+	}
+	SECTION("an earlier statement fails") {
+		QueryResultStream<> stream(SubmitGroup(con, FAILING_DEFAULT));
+		REQUIRE(!stream.Fetch());
+		REQUIRE(stream.GetErrorType() == ExceptionType::CATALOG);
+	}
+	RequireAborted(con);
+	REQUIRE(Count(observer, "SELECT count(*) FROM t") == 10);
+	REQUIRE(!ColumnExists(observer, "c"));
+}
+
 TEST_CASE("An error inside a group rolls it back", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -692,8 +766,7 @@ TEST_CASE("An error inside a group rolls it back", "[api][expanding_statements]"
 	REQUIRE(!ColumnExists(observer, "c"));
 }
 
-TEST_CASE("A group whose first statement fails to bind keeps the user's transaction",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A group whose first statement fails to bind keeps the user's transaction", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	Connection observer(db);
@@ -725,7 +798,7 @@ TEST_CASE("Under the default policy a group whose first statement fails to bind 
 	REQUIRE(Count(observer, "SELECT count(*) FROM t") == 10);
 }
 
-TEST_CASE("A PIVOT whose SELECT fails invalidates the user's transaction", "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("A PIVOT whose SELECT fails invalidates the user's transaction", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	Connection observer(db);
@@ -817,10 +890,26 @@ TEST_CASE("A statement that expands into a transaction statement is refused befo
 
 	DuckDB db(nullptr);
 	Connection con(db);
+	bool explicit_transaction = false;
+	SECTION("autocommit") {
+	}
+	SECTION("inside a user transaction") {
+		explicit_transaction = true;
+		REQUIRE_NO_FAIL(con.Query("BEGIN"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE kept(i INTEGER)"));
+	}
 	auto handle = con.Submit("IMPORT DATABASE '" + path + "'");
 	REQUIRE(handle->HasError());
 	REQUIRE(StringUtil::Contains(handle->GetError(), "cannot contain a transaction statement"));
-	REQUIRE(Count(con, "SELECT count(*) FROM duckdb_tables() WHERE table_name = 'sales'") == 0);
+	handle.reset();
+	if (explicit_transaction) {
+		// The refusal is invalid input, which aborts the user's transaction like any other
+		REQUIRE_FAIL(con.Query("SELECT 42"));
+		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+	}
+	REQUIRE(Count(con, "SELECT count(*) FROM duckdb_tables() WHERE table_name IN ('sales', 'kept')") == 0);
+	REQUIRE_THROWS_WITH(con.context->BindStatement(ParseOne(con, "IMPORT DATABASE '" + path + "'")),
+	                    Catch::Contains("cannot contain a transaction statement"));
 }
 
 TEST_CASE("A group that fails before its metadata is known reports like any failed result",
@@ -1016,12 +1105,12 @@ TEST_CASE("Query on a statement that expands matches the reference", "[api][expa
 	CreateNumbers(con, 10);
 
 	SECTION("a PIVOT") {
-		auto reference = RunOneByOne(con, SALES_PIVOT);
 		auto result = con.Query(SALES_PIVOT);
 		REQUIRE_NO_FAIL(*result);
 		REQUIRE(result->GetStatementType() == StatementType::MULTI_STATEMENT);
-		REQUIRE(Names(*result) == Names(*reference));
-		REQUIRE(result->GetTypes() == reference->GetTypes());
+		REQUIRE(Names(*result) == vector<string> {"city", "2023", "2024"});
+		REQUIRE(result->GetTypes() ==
+		        vector<LogicalType> {LogicalType::VARCHAR, LogicalType::HUGEINT, LogicalType::HUGEINT});
 		REQUIRE(CHECK_COLUMN(result, 0, {"ams", "rtm"}));
 		REQUIRE(CHECK_COLUMN(result, 1, {10, 30}));
 		REQUIRE(CHECK_COLUMN(result, 2, {20, 40}));
@@ -1067,6 +1156,13 @@ TEST_CASE("Closing a stream on a group before its result statement started ends 
 
 	{
 		QueryResultStream<> stream(SubmitGroup(con, SALES_PIVOT));
+		SECTION("before anything ran") {
+		}
+		SECTION("after an earlier statement ran") {
+			REQUIRE(!stream.MetadataAvailable());
+			REQUIRE(!IsTerminal(stream.ExecuteTask()));
+			REQUIRE(!stream.MetadataAvailable());
+		}
 		stream.Close();
 		REQUIRE(!stream.IsOpen());
 	}
@@ -1115,6 +1211,8 @@ TEST_CASE("TryFetch on a group reaches the rows of its result statement", "[api]
 	unique_ptr<DataChunk> chunk;
 	QueryResultState state;
 	while (!IsTerminal(state = stream.TryFetch(chunk))) {
+		// A unit comes with READY and only with READY
+		REQUIRE((state == QueryResultState::READY) == (chunk != nullptr));
 		if (chunk) {
 			rows += chunk->size();
 		}
@@ -1136,6 +1234,128 @@ TEST_CASE("A stream does not open on a group that is retained", "[api][expanding
 	handle->Materialize();
 	REQUIRE_THROWS_WITH(QueryResultStream<>(std::move(handle)), Catch::Contains("being retained"));
 	REQUIRE(Count(con, "SELECT 42") == 42);
+}
+
+TEST_CASE("An interrupt reaches a stream on a group", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+
+	SECTION("while an earlier statement runs") {
+		CreateNumbers(con, 1000000);
+		QueryResultStream<> stream(SubmitGroup(con, VOLATILE_DEFAULT));
+		for (idx_t step = 0; step < 5; step++) {
+			REQUIRE(!IsTerminal(stream.ExecuteTask()));
+		}
+		con.Interrupt();
+		REQUIRE(!stream.Fetch());
+		REQUIRE(stream.GetErrorType() == ExceptionType::INTERRUPT);
+	}
+	SECTION("after the last statement finished") {
+		CreateNumbers(con, 10);
+		QueryResultStream<> stream(SubmitGroup(con, VOLATILE_DEFAULT));
+		Deadline deadline;
+		while (stream.ExecuteTask() != QueryResultState::FINISHED) {
+			REQUIRE(!deadline.Passed());
+		}
+		con.Interrupt();
+		unique_ptr<DataChunk> chunk;
+		REQUIRE(stream.TryFetch(chunk) == QueryResultState::EXECUTION_ERROR);
+		REQUIRE(stream.GetErrorType() == ExceptionType::INTERRUPT);
+	}
+	REQUIRE(!ColumnExists(con, "c"));
+}
+
+TEST_CASE("An error in an earlier statement reaches a stream on a group", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	CreateSales(con);
+	CreateNumbers(con, 10);
+	auto before = PivotEnumCount(con);
+
+	SECTION("through Fetch") {
+		QueryResultStream<> stream(SubmitGroup(con, FAILING_DEFAULT));
+		REQUIRE(!stream.Fetch());
+		REQUIRE(stream.GetErrorType() == ExceptionType::CATALOG);
+		REQUIRE(!stream.IsOpen());
+		REQUIRE_THROWS(stream.Fetch());
+	}
+	SECTION("through TryFetch") {
+		QueryResultStream<> stream(SubmitGroup(con, FAILING_PIVOT));
+		Deadline deadline;
+		unique_ptr<DataChunk> chunk;
+		QueryResultState state;
+		while (!IsTerminal(state = stream.TryFetch(chunk))) {
+			REQUIRE(!deadline.Passed());
+			stream.ExecuteTask();
+		}
+		REQUIRE(state == QueryResultState::EXECUTION_ERROR);
+		REQUIRE(stream.GetErrorType() == ExceptionType::BINDER);
+		REQUIRE(!stream.IsOpen());
+	}
+	REQUIRE(!ColumnExists(con, "c"));
+	REQUIRE(PivotEnumCount(con) == before);
+}
+
+TEST_CASE("A poll-only consumer of a stream on a group reaches its rows", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=2"));
+	CreateSales(con);
+
+	QueryResultStream<> stream(SubmitGroup(con, SALES_PIVOT));
+	Deadline deadline;
+	QueryResultState state;
+	while ((state = stream.Poll()) != QueryResultState::READY) {
+		REQUIRE(!IsTerminal(state));
+		REQUIRE(!deadline.Passed());
+		std::this_thread::sleep_for(std::chrono::microseconds(100));
+	}
+	unique_ptr<DataChunk> chunk;
+	REQUIRE(stream.TryFetch(chunk) == QueryResultState::READY);
+	REQUIRE(chunk);
+	idx_t rows = chunk->size();
+	while (auto next = stream.Fetch()) {
+		rows += next->size();
+	}
+	REQUIRE(rows == 2);
+}
+
+TEST_CASE("A stream on a group reports its format state once its metadata is known", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	CreateSales(con);
+	CreateNumbers(con, 10);
+
+	SECTION("a group without rows") {
+		QueryResultStream<> stream(SubmitGroup(con, VOLATILE_DEFAULT));
+		REQUIRE_THROWS_WITH(stream.FormatState(), Catch::Contains("not available yet"));
+		REQUIRE(!stream.Fetch());
+		stream.FormatState();
+		REQUIRE(stream.ColumnCount() == 1);
+	}
+	SECTION("a group that failed") {
+		auto handle = SubmitGroup(con, FAILING_PIVOT);
+		handle->Complete();
+		REQUIRE(handle->HasError());
+		handle->FormatState<ChunkFormat>();
+	}
+	SECTION("an Arrow stream") {
+		QueryResultStream<ArrowFormat> stream(con.Submit(SALES_PIVOT, make_shared_ptr<ArrowFormat>(1024)));
+		REQUIRE_THROWS_WITH(stream.FormatState(), Catch::Contains("not available yet"));
+		idx_t rows = 0;
+		while (auto array = stream.Fetch()) {
+			rows += NumericCast<idx_t>(array->arrow_array.length);
+		}
+		REQUIRE(!stream.HasError());
+		REQUIRE(rows == 2);
+		REQUIRE(stream.FormatState().Schema().n_children == 3);
+	}
+	SECTION("a stream in another format is refused") {
+		REQUIRE_THROWS_WITH(QueryResultStream<ArrowFormat>(SubmitGroup(con, SALES_PIVOT)), Catch::Contains("format"));
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -1200,11 +1420,35 @@ TEST_CASE("A stream on a group that outlives its connection drains safely", "[ap
 	REQUIRE(Count(after, "SELECT 42") == 42);
 }
 
+TEST_CASE("A stream on a group without rows that outlives its connection ends safely", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	auto con = make_uniq<Connection>(db);
+	REQUIRE_NO_FAIL(con->Query("SET threads=1"));
+	CreateNumbers(*con, 10);
+	auto stream = make_uniq<QueryResultStream<>>(SubmitGroup(*con, VOLATILE_DEFAULT));
+	con.reset();
+
+	SECTION("through Fetch") {
+		REQUIRE(!stream->Fetch());
+	}
+	SECTION("through TryFetch") {
+		Deadline deadline;
+		unique_ptr<DataChunk> chunk;
+		while (!IsTerminal(stream->TryFetch(chunk))) {
+			REQUIRE(!deadline.Passed());
+			stream->ExecuteTask();
+		}
+	}
+	REQUIRE(!stream->HasError());
+	stream.reset();
+	Connection after(db);
+	REQUIRE(ColumnExists(after, "c"));
+}
+
 //===--------------------------------------------------------------------===//
 // Binding
 //===--------------------------------------------------------------------===//
-TEST_CASE("BindStatement on a reparsed PRAGMA binds the reparsed statement",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("BindStatement on a reparsed PRAGMA binds the reparsed statement", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	CreateSales(con);
@@ -1215,8 +1459,7 @@ TEST_CASE("BindStatement on a reparsed PRAGMA binds the reparsed statement",
 	REQUIRE(signature.names[0].GetIdentifierName() == "cid");
 }
 
-TEST_CASE("BindStatement on a statement that expands reports deferred metadata",
-          "[api][expanding_statements][!shouldfail]") {
+TEST_CASE("BindStatement on a statement that expands reports deferred metadata", "[api][expanding_statements]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	CreateSales(con);
@@ -1225,14 +1468,15 @@ TEST_CASE("BindStatement on a statement that expands reports deferred metadata",
 	SECTION("a PIVOT") {
 		auto signature = con.context->BindStatement(ParseOne(con, SALES_PIVOT));
 		REQUIRE(signature.metadata_deferred);
-		REQUIRE(signature.names.empty());
-		REQUIRE(signature.types.empty());
+		REQUIRE(Names(signature.names) == vector<string> {"unknown"});
+		REQUIRE(signature.types == vector<LogicalType> {LogicalTypeId::UNKNOWN});
 		REQUIRE(signature.parameters.empty());
 	}
 	SECTION("an ALTER") {
 		auto signature = con.context->BindStatement(ParseOne(con, VOLATILE_DEFAULT));
 		REQUIRE(signature.metadata_deferred);
-		REQUIRE(signature.names.empty());
+		REQUIRE(Names(signature.names) == vector<string> {"unknown"});
+		REQUIRE(signature.types == vector<LogicalType> {LogicalTypeId::UNKNOWN});
 	}
 	SECTION("with a parameter") {
 		REQUIRE_THROWS_WITH(con.context->BindStatement(ParseOne(con, "PIVOT sales ON year USING sum(amount + $1)")),
@@ -1240,6 +1484,316 @@ TEST_CASE("BindStatement on a statement that expands reports deferred metadata",
 	}
 	REQUIRE(PivotEnumCount(con) == 0);
 	REQUIRE(!ColumnExists(con, "c"));
+}
+
+TEST_CASE("BindStatement on a statement that expands into nothing reports no columns", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto signature = con.context->BindStatement(make_uniq<MultiStatement>());
+	REQUIRE(!signature.metadata_deferred);
+	REQUIRE(signature.names.empty());
+	REQUIRE(signature.types.empty());
+	REQUIRE(signature.properties.return_type == StatementReturnType::NOTHING);
+}
+
+TEST_CASE("BindStatement on a statement whose expansion fails keeps the user's transaction",
+          "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	CreateSales(con);
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO sales VALUES ('utr', 2025, 50)"));
+	REQUIRE_THROWS_WITH(con.context->BindStatement(ParseOne(con, "PRAGMA no_such_pragma")),
+	                    Catch::Contains("no_such_pragma"));
+	REQUIRE(Count(con, "SELECT count(*) FROM sales") == 5);
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	REQUIRE(Count(con, "SELECT count(*) FROM sales") == 5);
+}
+
+//===--------------------------------------------------------------------===//
+// Preparing
+//===--------------------------------------------------------------------===//
+namespace {
+
+unique_ptr<PreparedStatement> PrepareGroup(Connection &con, const string &query) {
+	auto prepared = con.Prepare(query);
+	if (prepared->HasError()) {
+		FAIL(prepared->GetError());
+	}
+	return prepared;
+}
+
+void RequirePreparedDeferred(PreparedStatement &prepared, StatementType statement_type) {
+	REQUIRE(!prepared.MetadataAvailable());
+	REQUIRE(prepared.GetStatementType() == statement_type);
+	REQUIRE(prepared.ColumnCount() == 1);
+	REQUIRE(prepared.GetNames()[0].GetIdentifierName() == "unknown");
+	REQUIRE(prepared.GetTypes() == vector<LogicalType> {LogicalTypeId::UNKNOWN});
+	REQUIRE(prepared.GetParameterCount() == 0);
+	REQUIRE(prepared.GetStatementProperties().always_require_rebind);
+}
+
+} // namespace
+
+TEST_CASE("Preparing a statement that expands runs nothing and defers its metadata", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	CreateSales(con);
+	CreateNumbers(con, 10);
+
+	SECTION("a PIVOT") {
+		RequirePreparedDeferred(*PrepareGroup(con, SALES_PIVOT), StatementType::MULTI_STATEMENT);
+	}
+	SECTION("an ALTER") {
+		RequirePreparedDeferred(*PrepareGroup(con, VOLATILE_DEFAULT), StatementType::MULTI_STATEMENT);
+	}
+	SECTION("a parsed PIVOT") {
+		auto prepared = con.Prepare(ParseOne(con, SALES_PIVOT));
+		REQUIRE(!prepared->HasError());
+		RequirePreparedDeferred(*prepared, StatementType::MULTI_STATEMENT);
+	}
+	REQUIRE(PivotEnumCount(con) == 0);
+	REQUIRE(!ColumnExists(con, "c"));
+}
+
+TEST_CASE("Executing a prepared statement that expands runs it", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection observer(db);
+	CreateSales(con);
+	CreateNumbers(con, 10);
+
+	SECTION("a PIVOT") {
+		auto result = PrepareGroup(con, SALES_PIVOT)->Execute();
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(result->GetStatementType() == StatementType::MULTI_STATEMENT);
+		REQUIRE(Names(*result) == vector<string> {"city", "2023", "2024"});
+		REQUIRE(CHECK_COLUMN(result, 0, {"ams", "rtm"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {10, 30}));
+		REQUIRE(CHECK_COLUMN(result, 2, {20, 40}));
+	}
+	SECTION("a parsed PIVOT") {
+		auto result = con.Prepare(ParseOne(con, SALES_PIVOT))->Execute();
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(CHECK_COLUMN(result, 0, {"ams", "rtm"}));
+	}
+	SECTION("an ALTER") {
+		auto result = PrepareGroup(con, VOLATILE_DEFAULT)->Execute();
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(result->GetStatementProperties().return_type == StatementReturnType::NOTHING);
+		REQUIRE(ColumnExists(observer, "c"));
+		REQUIRE(Count(observer, "SELECT count(*) FROM t WHERE c IS NULL") == 0);
+	}
+}
+
+TEST_CASE("Preparing a statement that expands into nothing defers it", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto prepared = con.Prepare(make_uniq<MultiStatement>());
+	REQUIRE(!prepared->HasError());
+	REQUIRE(!prepared->MetadataAvailable());
+	auto result = prepared->Execute();
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->ColumnCount() == 0);
+	REQUIRE(result->GetStatementProperties().return_type == StatementReturnType::NOTHING);
+
+	// In the requested format, as any other result
+	vector<Value> no_values;
+	auto arrow = prepared->Submit(no_values, QueryParameters(make_shared_ptr<ArrowFormat>(STANDARD_VECTOR_SIZE)));
+	REQUIRE_NO_FAIL(*arrow);
+	REQUIRE(arrow->FormatState<ArrowFormat>().Schema().n_children == 0);
+	REQUIRE(!arrow->Fetch<ArrowFormat>());
+}
+
+TEST_CASE("A statement that preprocesses into nothing finishes empty in the requested format",
+          "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto handle = con.Submit(make_uniq<MultiStatement>(), make_shared_ptr<ArrowFormat>(STANDARD_VECTOR_SIZE));
+	REQUIRE_NO_FAIL(*handle);
+	REQUIRE(handle->MetadataAvailable());
+	REQUIRE(handle->FormatState<ArrowFormat>().Schema().n_children == 0);
+	REQUIRE(!handle->Fetch<ArrowFormat>());
+	REQUIRE(!handle->IsOpen());
+}
+
+TEST_CASE("Preparing IMPORT DATABASE runs nothing until it is executed", "[api][expanding_statements]") {
+	auto path = TestCreatePath("expanding_statements_prepared_import");
+	{
+		DuckDB source(nullptr);
+		Connection con(source);
+		CreateSales(con);
+		CreateNumbers(con, 10);
+		REQUIRE_NO_FAIL(con.Query("EXPORT DATABASE '" + path + "'"));
+	}
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto prepared = PrepareGroup(con, "IMPORT DATABASE '" + path + "'");
+	RequirePreparedDeferred(*prepared, StatementType::PRAGMA_STATEMENT);
+	REQUIRE(Count(con, "SELECT count(*) FROM duckdb_tables()") == 0);
+
+	REQUIRE_NO_FAIL(prepared->Execute());
+	REQUIRE(Count(con, "SELECT count(*) FROM sales") == 4);
+	REQUIRE(Count(con, "SELECT count(*) FROM t") == 10);
+}
+
+TEST_CASE("A prepared statement that expands expands again at each execution", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	CreateSales(con);
+	auto prepared = PrepareGroup(con, SALES_PIVOT);
+
+	auto first = prepared->Execute();
+	REQUIRE_NO_FAIL(*first);
+	REQUIRE(Names(*first) == vector<string> {"city", "2023", "2024"});
+
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO sales VALUES ('ams', 2025, 50)"));
+	auto second = prepared->Execute();
+	REQUIRE_NO_FAIL(*second);
+	REQUIRE(Names(*second) == vector<string> {"city", "2023", "2024", "2025"});
+	REQUIRE(CHECK_COLUMN(second, 3, {50, Value()}));
+}
+
+TEST_CASE("Submitting a prepared statement that expands defers the result's metadata", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	CreateSales(con);
+	auto prepared = PrepareGroup(con, SALES_PIVOT);
+
+	auto handle = prepared->Submit();
+	REQUIRE_NO_FAIL(*handle);
+	REQUIRE(handle->GetStatementType() == StatementType::MULTI_STATEMENT);
+	RequireMetadataDeferred(*handle);
+	REQUIRE(!IsTerminal(StepToMetadata(*handle)));
+	REQUIRE(Names(*handle) == vector<string> {"city", "2023", "2024"});
+	handle->Complete();
+	REQUIRE(CHECK_COLUMN(handle, 0, {"ams", "rtm"}));
+}
+
+TEST_CASE("A result outlives the prepared statement that expands into it", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	CreateSales(con);
+	auto prepared = PrepareGroup(con, SALES_PIVOT);
+
+	auto handle = prepared->Submit();
+	REQUIRE_NO_FAIL(*handle);
+	prepared.reset();
+	handle->Complete();
+	REQUIRE_NO_FAIL(*handle);
+	REQUIRE(CHECK_COLUMN(handle, 0, {"ams", "rtm"}));
+	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+}
+
+TEST_CASE("Parameters on a prepared statement that expands are refused", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	CreateSales(con);
+	CreateNumbers(con, 10);
+	constexpr const char *PARAMETER_PIVOT = "PIVOT sales ON year USING sum(amount + $1)";
+
+	unique_ptr<PreparedStatement> prepared;
+	SECTION("a PIVOT") {
+		prepared = con.Prepare(PARAMETER_PIVOT);
+	}
+	SECTION("a parsed PIVOT") {
+		prepared = con.Prepare(ParseOne(con, PARAMETER_PIVOT));
+	}
+	SECTION("an ALTER") {
+		prepared = con.Prepare("ALTER TABLE t ADD COLUMN c INTEGER DEFAULT ((random() * 0)::INTEGER + $1)");
+	}
+	REQUIRE(prepared->HasError());
+	REQUIRE(StringUtil::Contains(prepared->GetError(), "parameters are not supported for a statement that expands"));
+	REQUIRE(PivotEnumCount(con) == 0);
+	REQUIRE(!ColumnExists(con, "c"));
+}
+
+TEST_CASE("Values for a prepared statement that expands are refused", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	CreateSales(con);
+	auto prepared = PrepareGroup(con, SALES_PIVOT);
+
+	unique_ptr<QueryResult> result;
+	SECTION("executed") {
+		result = prepared->Execute(42);
+	}
+	SECTION("submitted") {
+		result = prepared->Submit(42);
+	}
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(), "parameters are not supported for a statement that expands"));
+	REQUIRE(PivotEnumCount(con) == 0);
+
+	auto rows = prepared->Execute();
+	REQUIRE_NO_FAIL(*rows);
+	REQUIRE(CHECK_COLUMN(rows, 0, {"ams", "rtm"}));
+}
+
+TEST_CASE("A prepared statement that expands runs in the transaction of its execution", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection observer(db);
+	CreateNumbers(con, 10);
+
+	SECTION("prepared in autocommit, executed inside a user transaction") {
+		auto prepared = PrepareGroup(con, VOLATILE_DEFAULT);
+		REQUIRE_NO_FAIL(con.Query("BEGIN"));
+		REQUIRE_NO_FAIL(prepared->Execute());
+		REQUIRE(ColumnExists(con, "c"));
+		REQUIRE(!ColumnExists(observer, "c"));
+		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+		REQUIRE(!ColumnExists(con, "c"));
+	}
+	SECTION("prepared inside a user transaction, executed in autocommit") {
+		REQUIRE_NO_FAIL(con.Query("BEGIN"));
+		auto prepared = PrepareGroup(con, VOLATILE_DEFAULT);
+		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+		REQUIRE_NO_FAIL(prepared->Execute());
+		REQUIRE(ColumnExists(observer, "c"));
+		REQUIRE(Count(observer, "SELECT count(*) FROM t WHERE c IS NULL") == 0);
+	}
+}
+
+TEST_CASE("A prepared statement reports whether its result schema is known before execution",
+          "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	SECTION("a SELECT") {
+		auto prepared = PrepareGroup(con, "SELECT 42 AS answer");
+		REQUIRE(prepared->MetadataAvailable());
+		REQUIRE(prepared->GetTypes() == vector<LogicalType> {LogicalType::INTEGER});
+	}
+	SECTION("a parameter whose type is not known") {
+		auto prepared = PrepareGroup(con, "SELECT $1");
+		REQUIRE(!prepared->MetadataAvailable());
+		REQUIRE(prepared->GetNames()[0].GetIdentifierName() == "unknown");
+		REQUIRE(prepared->GetTypes() == vector<LogicalType> {LogicalTypeId::UNKNOWN});
+		REQUIRE(prepared->GetParameterCount() == 1);
+	}
+}
+
+TEST_CASE("Preparing a PRAGMA prepares the statement it reparses into", "[api][expanding_statements]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	CreateSales(con);
+
+	unique_ptr<PreparedStatement> prepared;
+	SECTION("as text") {
+		prepared = con.Prepare("PRAGMA show_tables");
+	}
+	SECTION("parsed") {
+		prepared = con.Prepare(ParseOne(con, "PRAGMA show_tables"));
+	}
+	REQUIRE(!prepared->HasError());
+	REQUIRE(prepared->MetadataAvailable());
+	REQUIRE(prepared->GetStatementType() == StatementType::SELECT_STATEMENT);
+	REQUIRE(prepared->GetNames()[0].GetIdentifierName() == "name");
+	auto result = prepared->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {"sales"}));
 }
 
 #endif

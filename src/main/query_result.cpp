@@ -139,7 +139,15 @@ QueryResult::QueryResult(shared_ptr<ClientContext> context_p, PreparedStatementD
 QueryResult::QueryResult(shared_ptr<ClientContext> context_p, StatementType statement_type,
                          shared_ptr<ResultFormat> format_p, ClientProperties client_properties_p)
     : BaseQueryResult(statement_type), client_properties(std::move(client_properties_p)), context(std::move(context_p)),
-      format(format_p ? std::move(format_p) : ChunkFormat::InMemory()) {
+      format(std::move(format_p)) {
+	if (!format) {
+		format = ChunkFormat::InMemory();
+	}
+	// The state of a result without columns, which a failure leaves in place; the statement producing the result
+	// replaces it
+	ResultFormatContext format_context {vector<LogicalType>(), vector<Identifier>(), client_properties,
+	                                    ResultOrdering::UNORDERED};
+	format_state = format->InitGlobal(format_context);
 }
 
 void QueryResult::AdoptResultStatement(StatementProperties properties, PreparedStatementData &statement,
@@ -423,16 +431,27 @@ void QueryResult::CompleteInternal(ClientContextLock &lock) {
 		if (state == QueryResultState::FINISHED) {
 			EndFinishedInternal(lock);
 		}
-	} catch (...) {
-		// the caller holds the context lock - clean up with it here, as closing this result would lock it again
-		try {
-			if (context->IsActiveResult(lock, *this)) {
-				context->CleanupInternal(lock, this, true);
-			}
-		} catch (...) { // NOLINT
-		}
-		context.reset();
+	} catch (std::exception &ex) {
+		AbandonAfterThrowInternal(lock, ErrorData(ex));
 		throw;
+	} catch (...) { // LCOV_EXCL_START
+		AbandonAfterThrowInternal(lock, ErrorData("Unhandled exception while completing the query"));
+		throw;
+	} // LCOV_EXCL_STOP
+	context.reset();
+}
+
+void QueryResult::AbandonAfterThrowInternal(ClientContextLock &lock, ErrorData error) {
+	// the caller holds the context lock - clean up with it here, as closing this result would lock it again
+	try {
+		if (context->IsActiveResult(lock, *this)) {
+			if (!HasError()) {
+				// Ended as failed, so nothing the query ran is committed
+				SetError(std::move(error));
+			}
+			context->CleanupInternal(lock, this, true);
+		}
+	} catch (...) { // NOLINT
 	}
 	context.reset();
 }
@@ -476,8 +495,15 @@ void QueryResult::EndQuery(ClientContextLock &lock, bool invalidate_transaction)
 }
 
 void QueryResult::HandleFetchFailure(ClientContextLock &lock, ErrorData error) {
+	if (!context || !context->IsActiveResult(lock, *this)) {
+		// The query already ended, so the failure is only recorded, unless an earlier one is
+		if (!HasError()) {
+			SetError(std::move(error));
+		}
+		return;
+	}
 	bool invalidate_query = true;
-	if (!context->ErrorInvalidatesTransaction(error.Type())) {
+	if (!context->ErrorInvalidatesQueryTransaction(error.Type())) {
 		// standard exceptions do not invalidate the current transaction
 		invalidate_query = false;
 	} else if (Exception::InvalidatesDatabase(error.Type())) {

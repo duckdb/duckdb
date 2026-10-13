@@ -42,7 +42,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/planner.hpp"
-#include "duckdb/common/enums/current_transaction_state.hpp"
 #include "duckdb/planner/statement_preprocessor.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
@@ -429,6 +428,15 @@ void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &
 	}
 }
 
+bool ClientContext::ErrorInvalidatesQueryTransaction(ExceptionType type) {
+	// A statement that expands into several and fails after one of its statements wrote has applied part of its
+	// effect, which only ending the transaction undoes
+	if (active_query && active_query->ExpandsIntoSeveral() && active_query->Wrote()) {
+		return true;
+	}
+	return ErrorInvalidatesTransaction(type);
+}
+
 bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
 	switch (transaction.GetInvalidationPolicy()) {
 	case TransactionInvalidationPolicy::STANDARD_POLICY:
@@ -440,34 +448,10 @@ bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
 }
 
 StatementIterator ClientContext::IterateStatements(const string &query) {
-	// The iterator yields ready-to-execute (engine-facing) statements: PRAGMA reparse,
-	// MULTI_STATEMENT unpack and transaction wrapping per peel — matches the eager API users expect.
-	// Callers that want raw parse-facing statements and drive their own preprocessing construct a
-	// ParseIterator directly (e.g. Query / ParseStatementsInternal below, which hold the lock).
 	return StatementIterator(ParseIterator(*this, query));
 }
 
-void ClientContext::PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffer, optional_ptr<ClientContextLock> lock,
-                                         optional_ptr<StatementPreprocessor> preprocessor) {
-	// Acquire our own lock if the caller doesn't hold one (e.g. the shell); own_lock keeps it alive
-	// for the duration of the preprocess pass.
-	unique_ptr<ClientContextLock> own_lock;
-	if (!lock) {
-		own_lock = LockContext();
-		lock = own_lock.get();
-	}
-	unique_ptr<StatementPreprocessor> own_preprocessor;
-	if (!preprocessor) {
-		own_preprocessor = make_uniq<StatementPreprocessor>(*this);
-		preprocessor = own_preprocessor.get();
-	}
-	const CurrentTransactionState transaction_state =
-	    transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
-	preprocessor->Preprocess(*lock, buffer, transaction_state);
-}
-
-vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query,
-                                                                        bool preprocess) {
+vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
 	try {
 		QueryProfiler::Get(*this).StartQuery(query);
 
@@ -475,12 +459,7 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 		StatementIterator iterator {ParseIterator(*this, query)};
 		vector<unique_ptr<SQLStatement>> result;
 		while (iterator.Peek()) {
-			auto stmt =
-			    preprocess ? iterator.GetStatementForExecutionWithLock(lock) : iterator.GetStatementForSubmission();
-			if (!stmt) {
-				continue; // a peel that preprocessing swallowed
-			}
-			result.push_back(std::move(stmt));
+			result.push_back(iterator.GetStatementForExecution());
 		}
 		return result;
 	} catch (std::exception &ex) {
@@ -497,6 +476,8 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 	if (statements.size() != 1) {
 		throw InvalidInputException("ExtractPlan can only prepare a single statement");
 	}
+	statements[0] = ExpandSingleStatementInternal(*lock, std::move(statements[0]),
+	                                              "ExtractPlan can only prepare a single statement");
 
 	unique_ptr<LogicalOperator> plan;
 	RunFunctionInTransactionInternal(*lock, [&]() {
@@ -539,6 +520,22 @@ static PreparedStatementInfo GetPreparedStatementInfo(PreparedStatementData &dat
 
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
                                                              unique_ptr<SQLStatement> statement) {
+	// Only a pragma or a multi-statement can expand, and only one that does not expand into exactly one statement
+	// keeps the statement as written, to expand it again at each execution
+	unique_ptr<SQLStatement> written_statement;
+	if (statement->type == StatementType::PRAGMA_STATEMENT || statement->type == StatementType::MULTI_STATEMENT) {
+		written_statement = statement->Copy();
+	}
+	auto expanded = PreprocessStatementInternal(lock, std::move(statement));
+	if (expanded.statements.size() != 1) {
+		D_ASSERT(written_statement);
+		if (!written_statement->named_param_map.empty()) {
+			throw InvalidInputException(EXPANDING_PARAMETERS_ERROR);
+		}
+		return make_uniq<PreparedStatement>(shared_from_this(), std::move(written_statement));
+	}
+	statement = std::move(expanded.statements[0]);
+
 	auto statement_query = statement->query;
 	// prepare the statement under a generated name - the returned PreparedStatement only refers to that name
 	auto name = "duckdb_prepare_internal_" + UUID::ToString(UUID::GenerateRandomUUID());
@@ -582,15 +579,34 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> st
 
 StatementSignature ClientContext::BindStatement(unique_ptr<SQLStatement> statement) {
 	auto lock = LockContext();
-	auto named_param_map = statement->named_param_map;
 	StatementSignature signature;
 	ErrorData bind_error;
 	RunFunctionInTransactionInternal(
 	    *lock,
 	    [&]() {
 		    try {
+			    // Expanded inside this transaction, so an expansion error leaves the caller's transaction as a bind
+			    // error does
+			    const bool has_parameters = !statement->named_param_map.empty();
+			    auto expanded = StatementPreprocessor(*this).ExpandStatement(std::move(statement));
+			    if (expanded.statements.empty()) {
+				    signature.properties.return_type = StatementReturnType::NOTHING;
+				    return;
+			    }
+			    if (expanded.statements.size() > 1) {
+				    if (has_parameters) {
+					    throw InvalidInputException(EXPANDING_PARAMETERS_ERROR);
+				    }
+				    // The placeholder the planner reports for a result known only at execution
+				    signature.names = {"unknown"};
+				    signature.types = {LogicalTypeId::UNKNOWN};
+				    signature.metadata_deferred = true;
+				    return;
+			    }
+			    auto bound = std::move(expanded.statements[0]);
+			    auto named_param_map = bound->named_param_map;
 			    Planner planner(*this);
-			    planner.CreatePlan(std::move(statement));
+			    planner.CreatePlan(std::move(bound));
 			    signature.names = planner.names;
 			    signature.types = planner.types;
 			    signature.properties = std::move(planner.properties);
@@ -667,12 +683,20 @@ unique_ptr<QueryResult> ClientContext::SubmitStatementInternal(ClientContextLock
 	return SubmitPreparedStatementInternal(lock, std::move(prepared), parameters);
 }
 
+unique_ptr<SQLStatement> ClientContext::ExpandSingleStatementInternal(ClientContextLock &lock,
+                                                                      unique_ptr<SQLStatement> statement,
+                                                                      const char *refusal) {
+	auto expanded = PreprocessStatementInternal(lock, std::move(statement));
+	if (expanded.statements.size() != 1) {
+		throw InvalidInputException(refusal);
+	}
+	return std::move(expanded.statements[0]);
+}
+
 PreprocessedStatement ClientContext::PreprocessStatementInternal(ClientContextLock &lock,
                                                                  unique_ptr<SQLStatement> statement) {
-	const CurrentTransactionState transaction_state =
-	    transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
 	StatementPreprocessor preprocessor(*this);
-	return preprocessor.PreprocessStatement(lock, std::move(statement), transaction_state);
+	return preprocessor.PreprocessStatement(lock, std::move(statement));
 }
 
 unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
@@ -738,7 +762,7 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 		preprocessed = PreprocessStatementInternal(lock, std::move(statement));
 		auto &statements = preprocessed.statements;
 		if (statements.size() > 1 && has_parameters) {
-			throw InvalidInputException("parameters are not supported for a statement that expands into several");
+			throw InvalidInputException(EXPANDING_PARAMETERS_ERROR);
 		}
 		if (verify) {
 			// A later statement binds only once the earlier ones ran, so a statement that expands is verified without
@@ -754,9 +778,7 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 	if (preprocessed.statements.empty()) {
 		StatementProperties properties;
 		properties.return_type = StatementReturnType::NOTHING;
-		auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator());
-		return make_uniq<QueryResult>(statement_type, std::move(properties), vector<Identifier>(),
-		                              std::move(collection), GetClientProperties());
+		return EmptyResultInternal(statement_type, std::move(properties), {}, {}, parameters.format);
 	}
 	const bool expands = preprocessed.statements.size() > 1;
 	try {
@@ -790,7 +812,7 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 		}
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
-		if (!ErrorInvalidatesTransaction(error.Type())) {
+		if (!ErrorInvalidatesQueryTransaction(error.Type())) {
 			// standard exceptions do not invalidate the current transaction
 			invalidate_query = false;
 		} else if (Exception::InvalidatesDatabase(error.Type())) {
@@ -908,14 +930,14 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 		// statement left, and runs what it expands into as one query
 		unique_ptr<SQLStatement> statement;
 		try {
-			statement = iterator.GetStatementForSubmission();
+			statement = iterator.GetStatementForExecution();
 		} catch (const std::exception &ex) {
 			return ErrorResult<QueryResult>(ErrorData(ex), query);
 		}
 
 		// Look ahead WITHOUT parsing: HasMore() only walks the token cursor, so it never parses (and
 		// never throws) the next statement here. The next statement is parsed later, in this loop's
-		// next GetStatementForSubmission, after the current statement has executed. This lets a statement
+		// next GetStatementForExecution, after the current statement has executed. This lets a statement
 		// register grammar (e.g. LOAD an extension) that a following statement then uses.
 		bool has_next = iterator.HasMore();
 
@@ -976,7 +998,7 @@ unique_ptr<QueryResult> ClientContext::Submit(const string &query, const QueryPa
 		}
 
 		// The submission preprocesses the statement, which may expand into several that run as one query
-		auto statements = ParseStatementsInternal(*lock, query, false);
+		auto statements = ParseStatementsInternal(*lock, query);
 		if (statements.empty()) {
 			throw InvalidInputException("No statement to prepare!");
 		}
@@ -1326,6 +1348,7 @@ unordered_set<string> ClientContext::GetTableNames(const string &query, const bo
 	if (statements.size() != 1) {
 		throw InvalidInputException("Expected a single statement");
 	}
+	statements[0] = ExpandSingleStatementInternal(*lock, std::move(statements[0]), "Expected a single statement");
 
 	unordered_set<string> result;
 	RunFunctionInTransactionInternal(*lock, [&]() {

@@ -48,11 +48,6 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, PreprocessedStat
 	if (transaction.IsAutoCommit() && !transaction.HasActiveTransaction()) {
 		transaction.BeginTransaction();
 	}
-	if (active_query->transaction_handling == PreprocessingTransactionHandling::SET_INVALIDATION_POLICY) {
-		// Part of the statement may have applied when a later one fails, so any error invalidates the transaction
-		active_query->previous_invalidation_policy = transaction.GetInvalidationPolicy();
-		transaction.SetInvalidationPolicy(TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
-	}
 	BeginStatementInternal(lock, query);
 
 	query_progress.Initialize();
@@ -103,16 +98,9 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	}
 	active_query->progress_bar.reset();
 	D_ASSERT(active_query.get());
-	const bool restore_invalidation_policy =
-	    active_query->transaction_handling == PreprocessingTransactionHandling::SET_INVALIDATION_POLICY;
-	const auto previous_invalidation_policy = active_query->previous_invalidation_policy;
 	active_query.reset();
 	query_deadline.SetInvalid();
 	query_progress.Initialize();
-	if (restore_invalidation_policy) {
-		// The policy belongs to the connection, so it is restored also when the transaction ends here
-		transaction.SetInvalidationPolicy(previous_invalidation_policy);
-	}
 	ErrorData error;
 	try {
 		if (transaction.HasActiveTransaction()) {
@@ -195,8 +183,10 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 void ClientContext::AbortInternal(ClientContextLock &lock) {
 	D_ASSERT(active_query);
 	auto &prepared = active_query->prepared;
-	// No savepoint isolates a single statement, so partial writes can only be dropped with the whole transaction
-	const bool may_write = !prepared || !prepared->properties.IsReadOnly();
+	// No savepoint isolates a single statement, so partial writes can only be dropped with the whole transaction. A
+	// statement that expands into several and is abandoned with statements left would leave them unapplied, and those
+	// are not bound, so they count as writing
+	const bool may_write = !prepared || !prepared->properties.IsReadOnly() || active_query->HasNextStatement();
 	CleanupInternal(lock, nullptr, may_write);
 }
 
@@ -315,11 +305,14 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	}
 	executor.SetResultBuffer(buffer);
 
+	if (expands) {
+		// Recorded before Initialize schedules the statement's tasks, which may write before it returns
+		active_query->RecordDatabases(statement_data.properties);
+	}
 	executor.Initialize(std::move(collector));
 
 	D_ASSERT(executor.GetTypes() == statement_data.types);
 	if (expands) {
-		active_query->RecordDatabases(statement_data.properties);
 		if (!result_statement) {
 			return nullptr;
 		}
@@ -439,9 +432,9 @@ QueryResultState ClientContext::FailQueryInternal(ClientContextLock &lock, BaseQ
 		if (executor && executor->HasError()) {
 			// Interrupted by an exception caused in a worker thread
 			error = executor->GetError();
-			invalidate_transaction = ErrorInvalidatesTransaction(error.Type());
+			invalidate_transaction = ErrorInvalidatesQueryTransaction(error.Type());
 		}
-	} else if (!ErrorInvalidatesTransaction(error.Type())) {
+	} else if (!ErrorInvalidatesQueryTransaction(error.Type())) {
 		invalidate_transaction = false;
 	} else if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
 		// fatal exceptions invalidate the entire database
@@ -559,21 +552,31 @@ unique_ptr<QueryResult> ClientContext::TakeFinishedResultInternal(ClientContextL
 	// No statement returned rows: the result reports nothing, the way a single statement that returns nothing does
 	StatementProperties properties;
 	properties.return_type = StatementReturnType::NOTHING;
-	properties = active_query->QueryProperties(std::move(properties));
-	vector<LogicalType> types {LogicalType::BOOLEAN};
-	vector<Identifier> names {Identifier("Success")};
-	auto format = active_query->format ? active_query->format : ChunkFormat::InMemory();
+	return EmptyResultInternal(active_query->handle->GetStatementType(),
+	                           active_query->QueryProperties(std::move(properties)), {LogicalType::BOOLEAN},
+	                           {Identifier("Success")}, active_query->format);
+}
+
+unique_ptr<QueryResult> ClientContext::EmptyResultInternal(StatementType statement_type, StatementProperties properties,
+                                                           vector<LogicalType> types, vector<Identifier> names,
+                                                           shared_ptr<ResultFormat> format) {
+	if (!format) {
+		format = ChunkFormat::InMemory();
+	}
 	auto client_properties = GetClientProperties();
 	ResultFormatContext format_context {types, names, client_properties, ResultOrdering::UNORDERED};
 	shared_ptr<ResultFormatGlobalState> format_state = format->InitGlobal(format_context);
 	auto collection = format->CreateCollection(*this, *format_state, format_context);
-	return make_uniq<QueryResult>(active_query->handle->GetStatementType(), std::move(properties), std::move(types),
-	                              std::move(names), std::move(collection), std::move(format), std::move(format_state),
+	// A retained collection is read only once finalized
+	collection->Finalize();
+	return make_uniq<QueryResult>(statement_type, std::move(properties), std::move(types), std::move(names),
+	                              std::move(collection), std::move(format), std::move(format_state),
 	                              std::move(client_properties));
 }
 
 ResultLifetime ClientContext::DecideResultLifetimeInternal(ClientContextLock &lock, ResultLifetime decision) {
 	D_ASSERT(active_query && !active_query->result_statement_started);
+	D_ASSERT(decision != ResultLifetime::UNDECIDED);
 	if (active_query->retention == ResultLifetime::UNDECIDED) {
 		active_query->retention = decision;
 	}

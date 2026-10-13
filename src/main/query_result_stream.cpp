@@ -1,15 +1,20 @@
 #include "duckdb/main/query_result_stream.hpp"
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/execution/executor.hpp"
 #include "duckdb/main/buffered_data/buffered_data.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/result_unit.hpp"
 
 namespace duckdb {
 
-bool StreamsByDefault(StatementType written_type, const StatementProperties &properties, bool reads_to_the_end) {
-	if (written_type != StatementType::SELECT_STATEMENT ||
-	    properties.return_type != StatementReturnType::QUERY_RESULT) {
+bool StreamsByDefault(StatementType written_type, const QueryResult &result, bool reads_to_the_end) {
+	// Checked first: a statement that expands into several is no SELECT, and its properties may not be known yet
+	if (written_type != StatementType::SELECT_STATEMENT) {
+		return false;
+	}
+	auto &properties = result.GetStatementProperties();
+	if (properties.return_type != StatementReturnType::QUERY_RESULT) {
 		return false;
 	}
 	return reads_to_the_end || properties.IsReadOnly();
@@ -84,13 +89,27 @@ ResultStreamBase::GuardedInternal(const char *name,
 	return QueryResultState::EXECUTION_ERROR;
 }
 
+QueryResultState ResultStreamBase::DriveWithoutBufferInternal(ClientContextLock &lock, bool execute_task) {
+	D_ASSERT(!handle->buffer);
+	if (!handle->IsOpenInternal(lock)) {
+		return handle->Cancelled();
+	}
+	auto &context = *handle->context;
+	// Checked as the buffer's own Poll checks it, so a cancel is seen before a finished execution can be ended. A
+	// worker error also raises the flag; both loads are seq_cst
+	if (context.interrupt_state.load() == ClientInterruptState::INTERRUPTED && !Executor::Get(context).HasError()) {
+		throw InterruptException();
+	}
+	return execute_task ? context.ExecuteTaskInternal(lock, *handle) : context.PollInternal(lock, *handle);
+}
+
 QueryResultState ResultStreamBase::Poll() {
 	auto state = GuardedInternal("Poll", [&](ClientContextLock &lock) {
 		if (!handle->buffer) {
-			if (!handle->IsOpenInternal(lock)) {
-				return handle->Cancelled();
+			auto state = DriveWithoutBufferInternal(lock, false);
+			if (!handle->buffer) {
+				return state;
 			}
-			return handle->context->PollInternal(lock, *handle);
 		}
 		return handle->buffer->Poll(lock, *handle);
 	});
@@ -103,10 +122,9 @@ QueryResultState ResultStreamBase::Poll() {
 QueryResultState ResultStreamBase::ExecuteTask() {
 	auto state = GuardedInternal("ExecuteTask", [&](ClientContextLock &lock) {
 		if (!handle->buffer) {
-			if (!handle->IsOpenInternal(lock)) {
-				return handle->Cancelled();
-			}
-			return handle->context->ExecuteTaskInternal(lock, *handle);
+			auto state = DriveWithoutBufferInternal(lock, true);
+			// When the statement producing the result started, the buffer reports what is poppable
+			return handle->buffer ? handle->buffer->Poll(lock, *handle) : state;
 		}
 		return handle->buffer->Participate(lock, *handle);
 	});
@@ -131,16 +149,14 @@ QueryResultState ResultStreamBase::TryFetchUnit(unique_ptr<ResultUnit> &out_unit
 	out_unit.reset();
 	auto state = GuardedInternal("TryFetch", [&](ClientContextLock &lock) {
 		if (!handle->buffer) {
-			if (!handle->IsOpenInternal(lock)) {
-				return handle->Cancelled();
+			auto state = DriveWithoutBufferInternal(lock, false);
+			if (!handle->buffer) {
+				if (state == QueryResultState::FINISHED) {
+					// A statement that expands into several and returns no rows ends without a unit
+					return handle->EndFinishedInternal(lock);
+				}
+				return state;
 			}
-			auto state = handle->context->PollInternal(lock, *handle);
-			if (handle->buffer || state != QueryResultState::FINISHED) {
-				// The statement producing the result started, or the statements before it are still running
-				return state == QueryResultState::FINISHED ? QueryResultState::NOT_READY : state;
-			}
-			// A statement that expands into several and returns no rows ends without a unit
-			return handle->EndFinishedInternal(lock);
 		}
 		auto &buffer = *handle->buffer;
 		auto state = buffer.Poll(lock, *handle);
