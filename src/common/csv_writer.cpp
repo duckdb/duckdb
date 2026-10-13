@@ -18,7 +18,7 @@ CSVWriterState::CSVWriterState()
 }
 
 CSVWriterState::CSVWriterState(ClientContext &context, idx_t flush_size_p)
-    : flush_size(flush_size_p), stream(make_uniq<MemoryStream>(Allocator::Get(context), flush_size)) {
+    : flush_size(flush_size_p), stream(make_uniq<MemoryStream>(BufferAllocator::Get(context), flush_size)) {
 }
 
 CSVWriterState::CSVWriterState(DatabaseInstance &db, idx_t flush_size_p)

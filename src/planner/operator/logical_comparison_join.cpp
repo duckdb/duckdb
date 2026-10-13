@@ -96,6 +96,28 @@ static bool MarkJoinTypesMatch(const LogicalType &left, const LogicalType &right
 	return !mismatch && index == collations.size();
 }
 
+bool LogicalComparisonJoin::HasNullSafeMarkJoinConditions() const {
+	if (join_type != JoinType::MARK) {
+		return false;
+	}
+	bool has_hash_key = false;
+	for (auto &condition : conditions) {
+		if (!condition.IsComparison()) {
+			return false;
+		}
+		switch (condition.GetComparisonType()) {
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			has_hash_key = true;
+			break;
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			break;
+		default:
+			return false;
+		}
+	}
+	return has_hash_key;
+}
+
 bool LogicalComparisonJoin::TryGetMarkJoinGroupTypes(vector<LogicalType> &group_types) const {
 	group_types.clear();
 	if (join_type != JoinType::MARK || conditions.size() < 2) {

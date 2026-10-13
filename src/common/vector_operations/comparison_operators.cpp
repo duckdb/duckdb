@@ -199,6 +199,7 @@ static void ComparatorToBoolean(const Vector &left, const Vector &right, Vector 
 	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
 	Vector comparator_result(LogicalType::TINYINT);
 	if (left.GetVectorType() == VectorType::CONSTANT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// the comparison of two constants is a constant
 		const auto count = GetComparisonCount(left, right, "Comparator");
 		VectorOperations::ComparatorFill(left, right, comparator_result, 1, comp);
 		auto cmp_data = comparator_result.Values<int8_t>();

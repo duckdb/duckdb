@@ -1584,7 +1584,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	writer.SetRowGroupCount(info->CheckpointRowGroupCount(writer.GetCheckpointOptions()));
 	// checkpoint each individual row group
 	TableStatistics global_stats;
-	row_groups->Checkpoint(writer, global_stats);
+	const auto has_new_stats = row_groups->Checkpoint(writer, global_stats);
 	row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	if (writer.GetRebuildIndexes()) {
 		MetricsTimer timer;
@@ -1602,7 +1602,9 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	//   table pointer
 	//   index data
 	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
-	row_groups->SetStats(global_stats);
+	if (has_new_stats) {
+		row_groups->SetStats(global_stats);
+	}
 }
 
 void DataTable::CommitDropColumn(const idx_t column_index, CommitDropState &drop_state) {

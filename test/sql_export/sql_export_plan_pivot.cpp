@@ -31,7 +31,6 @@ static void RequirePivotStreamingEffects(Connection &connection) {
 		           sequence +
 		           "') e FROM range(5000)t(i)) t PIVOT (sum(v) AS s, max(e) AS effect FOR k IN ('a','b','z'))";
 		QueryParameters parameters;
-		parameters.result_eagerness = ResultEagerness::AUTO;
 		unique_ptr<QueryResult> result;
 		if (route == 0) {
 			result = SubmitSQLExportResult(*connection.context, sql, parameters);

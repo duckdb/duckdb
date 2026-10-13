@@ -111,7 +111,7 @@ vector<unique_ptr<SQLStatement>> StatementPreprocessor::TryReparsePragma(unique_
 	const auto bound_info = binder->BindPragma(*info, error_context);
 	if (bound_info->function.query) {
 		// Needs reparsing
-		FunctionParameters parameters {bound_info->parameters, bound_info->named_parameters};
+		FunctionParameters parameters {bound_info->parameters, bound_info->named_parameters, &bound_info->function};
 		const auto query_to_reparse = bound_info->function.query(context, parameters);
 		Parser parser(context);
 		parser.ParseQuery(query_to_reparse);
