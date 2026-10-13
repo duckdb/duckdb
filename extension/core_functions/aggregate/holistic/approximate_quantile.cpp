@@ -1,3 +1,4 @@
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
@@ -137,8 +138,10 @@ struct ApproxQuantileOperation {
 			auto &allocator = aggr_input_data.allocator;
 			target.h = allocator.Make<duckdb_tdigest::TDigest>(allocator, 100);
 		}
+		if (!TryAddOperator::Operation(target.pos, source.pos, target.pos)) {
+			throw OutOfRangeException("Overflow in aggregate state combine");
+		}
 		target.h->merge(source.h);
-		target.pos += source.pos;
 	}
 
 	static bool IgnoreNull() {
