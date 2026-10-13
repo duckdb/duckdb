@@ -1041,11 +1041,20 @@ static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnS
 	return true;
 }
 
+//! The maximum nesting depth of a Parquet schema - deeper schemas would overflow the stack while being read
+static constexpr idx_t MAX_PARQUET_SCHEMA_DEPTH = 500;
+
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                         idx_t &next_schema_idx, idx_t &next_file_idx,
                                                         ClientContext &context) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
+	if (depth > MAX_PARQUET_SCHEMA_DEPTH) {
+		throw InvalidInputException(
+		    "Malformed Parquet schema in file \"%s\": the schema is nested more than %llu levels "
+		    "deep",
+		    file.path, MAX_PARQUET_SCHEMA_DEPTH);
+	}
 	if (next_schema_idx >= file_meta_data->schema.size()) {
 		throw InvalidInputException("Malformed Parquet schema in file \"%s\": invalid schema index %d", file.path,
 		                            next_schema_idx);
