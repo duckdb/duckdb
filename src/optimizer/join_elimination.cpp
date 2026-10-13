@@ -115,6 +115,13 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_LIMIT:
+	case LogicalOperatorType::LOGICAL_TOP_N:
+	case LogicalOperatorType::LOGICAL_SAMPLE: {
+		// these pick rows based on input cardinality, so a distinct group above them does not hold below them
+		pipe_info.distinct_groups.clear();
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
 		if (get.table_filters.HasFilters()) {
