@@ -682,7 +682,7 @@ PEGTransformerFactory::TransformLogicalNotExpression(PEGTransformer &transformer
 }
 
 unique_ptr<ParsedExpression>
-PEGTransformerFactory::TransformNotComparisonOperand(PEGTransformer &transformer, const vector<bool> &not_expression,
+PEGTransformerFactory::TransformNotComparisonOperand(PEGTransformer &transformer, vector<bool> not_expression,
                                                      unique_ptr<ParsedExpression> is_expression) {
 	return ApplyNotKeywords(transformer, not_expression, std::move(is_expression));
 }

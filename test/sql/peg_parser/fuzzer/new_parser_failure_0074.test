@@ -31,9 +31,9 @@ SELECT array_agg(col0) WITHIN GROUP (ORDER BY col0) FILTER (WHERE col0 > 1) OVER
 [2, 3, 3]
 
 query I
-SELECT mode() WITHIN GROUP (ORDER BY col0) FILTER (WHERE col0 > 1) FROM t;
+SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY col0) FILTER (WHERE col0 > 1) FROM t;
 ----
-3
+3.0
 
 query I
 SELECT percentile_disc(0.5) WITHIN GROUP (ORDER BY col0) FILTER (WHERE col0 < 3) FROM t;
