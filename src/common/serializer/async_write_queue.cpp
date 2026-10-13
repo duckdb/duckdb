@@ -73,20 +73,16 @@ public:
 	AsyncWriteQueueTask(AsyncWriteQueue &queue_p, TaskExecutor &executor) : BaseExecutorTask(executor), queue(queue_p) {
 	}
 
-	~AsyncWriteQueueTask() override {
-		if (!started) {
-			queue.CancelScheduledTask();
-		}
+	void ExecuteTask() override {
+		queue.DrainRequests();
 	}
 
-	void ExecuteTask() override {
-		started = true;
-		queue.DrainRequests();
+	void Cancel() override {
+		queue.CancelScheduledTask();
 	}
 
 private:
 	AsyncWriteQueue &queue;
-	bool started = false;
 };
 
 AsyncWriteQueue::AsyncWriteQueue(ClientContext &client_context_p, AsyncWriteTarget &target_p)
