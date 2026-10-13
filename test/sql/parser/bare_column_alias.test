@@ -64,6 +64,53 @@ UNPIVOT (SELECT 1 AS x, 2 AS y) ON x day, y INTO NAME col VALUE val;
 ----
 <REGEX>:Parser Error: syntax error.*
 
+statement ok
+CREATE TABLE p(k VARCHAR, a INTEGER);
+
+statement ok
+INSERT INTO p VALUES ('x', 1), ('y', 2);
+
+query II
+PIVOT p ON k USING sum(a) total;
+----
+1	2
+
+statement error
+PIVOT p ON k USING sum(a) filter;
+----
+<REGEX>:Parser Error: syntax error.*
+
+# bare aliases propagate through CTEs, subqueries and macros
+query I
+WITH c AS (SELECT a name FROM t) SELECT name FROM c ORDER BY name LIMIT 1;
+----
+1
+
+query I
+SELECT (SELECT 1 name) sub;
+----
+1
+
+statement ok
+CREATE MACRO m() AS TABLE SELECT 1 name, 2 type;
+
+query II
+SELECT name, type FROM m();
+----
+1	2
+
+# nested type expressions take bare aliases too
+query III
+SELECT [1, 2] list, {'a': 1} struct_val, MAP {1: 2} map_val;
+----
+[1, 2]	{'a': 1}	{1=2}
+
+# a named window after OVER is still a window reference, not an alias
+query I
+SELECT sum(a) OVER w total FROM t WINDOW w AS () LIMIT 1;
+----
+4
+
 # interval units can follow an expression, so they are not bare labels
 statement error
 SELECT DATE '2020-01-01' + 1 month;
