@@ -144,6 +144,10 @@ FROM db.t2 WHERE id BETWEEN 1015 AND 1030;
 ----
 16	13	true
 
+# Keep nullable overflow strings while the scan advances through later segments.
+statement ok
+CREATE TEMP TABLE retained AS SELECT * FROM db.t2 WHERE id%1024<2 OR id%1024 BETWEEN 12 AND 13 OR id%1024>=1022;
+
 statement ok
 UPDATE db.t2 SET val = ('upd' || id || repeat('Z', 5000))::BLOB WHERE id IN (1500, 1505);
 
@@ -171,5 +175,13 @@ SELECT count(*), bool_and(CASE
 	WHEN id = 1501 OR id % 7 = 0 THEN val IS NULL
 	ELSE val = ('row' || id || repeat('Y', 5000))::BLOB END)
 FROM db.t2 WHERE id BETWEEN 1495 AND 1510;
+----
+16	true
+
+statement ok
+DETACH db;
+
+query II
+SELECT count(*), bool_and(val IS NOT DISTINCT FROM CASE WHEN id%7=0 THEN NULL ELSE ('row' || id || repeat('Y',5000))::BLOB END) FROM retained;
 ----
 16	true

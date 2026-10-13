@@ -532,6 +532,8 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 
 	auto result_data = FlatVector::Writer<T>(result, sel_count, result_offset);
 
+	// Keep the current run until the selection advances past it.
+	idx_t run_end = current_run.length - scan_state.position_in_entry;
 	idx_t prev_idx = 0;
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto next_idx = sel.get_index(i);
@@ -539,14 +541,16 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 			throw InternalException("Error in RLESelect - selection vector indices are not ordered");
 		}
 		D_ASSERT(next_idx < vector_count);
-		// skip forward to the next index
-		scan_state.SkipInternal(next_idx - prev_idx);
-		// read the element
-		result_data.WriteValue(scan_state.ValidateAndGetCurrentRun().value);
-		// move the next to the prev
+		while (next_idx >= run_end) {
+			scan_state.ForwardToNextRun();
+			current_run = scan_state.ValidateAndGetCurrentRun();
+			run_end += current_run.length;
+		}
+		result_data.WriteValue(current_run.value);
 		prev_idx = next_idx;
 	}
-	// skip the tail
+	// Restore the position at the last selected row before skipping the tail.
+	scan_state.position_in_entry = current_run.length - (run_end - prev_idx);
 	scan_state.SkipInternal(vector_count - prev_idx);
 }
 

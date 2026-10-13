@@ -157,49 +157,14 @@ const SelectionVector &CompressedStringScanState::GetSelVec(idx_t start, idx_t s
 }
 
 void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count) {
-	// Create a decompression buffer of sufficient size if we don't already have one.
-	auto &selvec = GetSelVec(start, scan_count);
-
-	//! (index 0 is reserved for NULL, which we don't have in this mode)
-	const idx_t start_offset = mode == DictFSSTMode::FSST_ONLY ? start + 1 : 0;
-
-	auto result_data = FlatVector::Writer<string_t>(result, scan_count, result_offset);
-	if (dictionary) {
-		// We have prepared the full dictionary, we can reference these strings directly
-		auto dictionary_values = FlatVector::GetData<string_t>(dictionary->data);
-		for (idx_t i = 0; i < scan_count; i++) {
-			// Lookup dict offset in index buffer
-			auto string_number = selvec.get_index(i + start_offset);
-			if (string_number == 0) {
-				result_data.WriteNull();
-				continue;
-			}
-			result_data.WriteStringRef(dictionary_values[string_number]);
-		}
-	} else {
-		for (idx_t i = 0; i < scan_count; i++) {
-			// Lookup dict offset in index buffer
-			auto string_number = selvec.get_index(start_offset + i);
-			if (string_number == 0) {
-				result_data.WriteNull();
-				continue;
-			}
-			if (decompress_position > string_number) {
-				throw InternalException("DICT_FSST: not performing a sequential scan?");
-			}
-			for (; decompress_position < string_number; decompress_position++) {
-				decompress_offset += string_lengths[decompress_position];
-			}
-			result_data.WriteStringRef(FetchStringFromDict(result, decompress_offset, string_number));
-		}
-	}
+	Select(result, result_offset, start, *FlatVector::IncrementalSelectionVector(), scan_count);
 	result.Verify();
 }
 
 void CompressedStringScanState::Select(Vector &result, idx_t result_offset, idx_t start, const SelectionVector &sel,
                                        idx_t sel_count) {
-	D_ASSERT(sel_count > 0);
-	auto &selvec = GetSelVec(start, sel.get_index(sel_count - 1) + 1);
+	const auto scan_count = sel_count == 0 ? 0 : sel.get_index(sel_count - 1) + 1;
+	auto &selvec = GetSelVec(start, scan_count);
 
 	//! (index 0 is reserved for NULL, which we don't have in this mode)
 	const idx_t start_offset = mode == DictFSSTMode::FSST_ONLY ? start + 1 : 0;

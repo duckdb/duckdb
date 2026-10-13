@@ -533,13 +533,14 @@ void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector
 	}
 
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
+	auto input_data = ValidityScanData(scan_state.reader, start, vector_count);
+	auto input_start = start % ValidityMask::BITS_PER_VALUE;
 	auto &result_mask = FlatVector::ValidityMutable(result);
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto selected_index = sel.get_index(i);
 		D_ASSERT(selected_index < vector_count);
-		auto source_idx = start + selected_index;
-		auto entry_offset = source_idx / ValidityMask::BITS_PER_VALUE * sizeof(validity_t);
-		auto entry = scan_state.reader.Get<validity_t>(entry_offset);
+		auto source_idx = input_start + selected_index;
+		auto entry = input_data[source_idx / ValidityMask::BITS_PER_VALUE];
 		if (!ValidityMask::RowIsValid(entry, source_idx % ValidityMask::BITS_PER_VALUE)) {
 			result_mask.SetInvalid(result_offset + i);
 		}
