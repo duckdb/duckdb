@@ -5,6 +5,11 @@
 
 namespace duckdb {
 
+void FixedSizeAllocator::ThrowInvalidPointer(const IndexPointer ptr) const {
+	throw DataCorruptionException("Index pointer to buffer %llu, segment %llu does not point to an allocated segment",
+	                              ptr.GetBufferId(), ptr.GetOffset());
+}
+
 FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager, MemoryTag memory_tag)
     : block_manager(block_manager), buffer_manager(block_manager.buffer_manager), memory_tag(memory_tag),
       segment_size(segment_size), total_segment_count(0) {
@@ -88,7 +93,9 @@ void FixedSizeAllocator::Free(const IndexPointer ptr) {
 	auto offset = ptr.GetOffset();
 
 	auto buffer_it = buffers.find(buffer_id);
-	D_ASSERT(buffer_it != buffers.end());
+	if (offset >= available_segments_per_buffer || buffer_it == buffers.end()) {
+		ThrowInvalidPointer(ptr);
+	}
 	auto &buffer = buffer_it->second;
 
 	buffer->FreeSegment(offset, available_segments_per_buffer);
