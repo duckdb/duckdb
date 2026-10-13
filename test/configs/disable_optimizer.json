@@ -42,6 +42,13 @@
       ]
     },
     {
+      "reason": "Value-returning DISTINCT collation handling requires the multi-stage aggregate rewrite.",
+      "paths": [
+        "test/sql/collate/collate_distinct_aggregate.test",
+        "test/sql/collate/collate_distinct_aggregate_icu.test"
+      ]
+    },
+    {
       "reason": "Unoptimized statement differs from original result (cross product, conversion, overflow, statistics).",
       "paths": [
         "test/fuzzer/duckfuzz/semi_join_has_correct_left_right_relations.test",

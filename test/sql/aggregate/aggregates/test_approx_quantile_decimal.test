@@ -50,7 +50,7 @@ SELECT finalize(approx_quantile(d, 0.5) EXPORT_STATE) = approx_quantile(d, 0.5) 
 true
 
 # Rounding through DOUBLE must not exceed the declared decimal width.
-# Cover each physical width, both signs and a nonzero scale, including persisted results and states.
+# Cover each physical width, both signs and a nonzero scale, including materialized results and states.
 foreach width 4 9 18 19 38
 
 foreach scale 0 2
@@ -58,7 +58,7 @@ foreach scale 0 2
 foreach sign + -
 
 statement ok
-CREATE OR REPLACE TABLE extremes AS
+CREATE OR REPLACE TEMP TABLE extremes AS
 SELECT d, approx_quantile(d, 0.5) q, approx_quantile(d, [0, 0.5, 1]) qs,
        approx_quantile(d, 0.5) EXPORT_STATE s, approx_quantile(d, [0, 0.5, 1]) EXPORT_STATE ss
 FROM (
