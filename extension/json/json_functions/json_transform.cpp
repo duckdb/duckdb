@@ -922,6 +922,26 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 		success = false;
 	}
 
+	// objects can have duplicate keys, and keys that fail to transform in non-strict mode are NULL
+	SelectionVector row_sel(1);
+	for (idx_t i = 0; i < count; i++) {
+		if (!list_validity.RowIsValid(i)) {
+			continue;
+		}
+		row_sel.set_index(0, i);
+		auto reason = MapVector::CheckMapValidity(result, 1, row_sel);
+		if (reason == MapInvalidReason::VALID) {
+			continue;
+		}
+		list_validity.SetInvalid(i);
+		if (success && options.strict_cast) {
+			options.error_message =
+			    reason == MapInvalidReason::DUPLICATE_KEY ? "Map keys must be unique" : "Map keys can not be NULL";
+			options.object_index = i;
+			success = false;
+		}
+	}
+
 	if (!options.delay_error && !success) {
 		throw InvalidInputException(options.error_message);
 	}
