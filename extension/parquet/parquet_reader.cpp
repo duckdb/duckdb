@@ -2245,10 +2245,27 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 				if (filters) {
 					if (state.prefetch_metrics.row_groups_executed == 0) {
 						filters_look_unselective = true;
-					} else if (static_cast<double>(state.prefetch_metrics.row_groups_with_matches) /
-					               static_cast<double>(state.prefetch_metrics.row_groups_executed) >
-					           ParquetReaderPrefetchConfig::PREFETCH_FILTER_MINIMUM_MATCH_RATIO) {
-						filters_look_unselective = true;
+						if (scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
+							unordered_set<idx_t> filter_column_chunks;
+							for (auto &scan_filter : state.scan_filters) {
+								state.GetColumnReader(scan_filter.filter_idx.GetIndex())
+								    .GatherColumnChunks(filter_column_chunks);
+							}
+							uint64_t filter_compressed_bytes = 0;
+							for (auto column_chunk : filter_column_chunks) {
+								filter_compressed_bytes +=
+								    NumericCast<uint64_t>(group.columns[column_chunk].meta_data.total_compressed_size);
+							}
+							filters_look_unselective =
+							    filter_column_chunks.empty() ||
+							    static_cast<double>(filter_compressed_bytes) /
+							            static_cast<double>(total_row_group_span) >
+							        ParquetReaderPrefetchConfig::FIRST_GROUP_PREFETCH_MAXIMUM_FILTER_SCAN;
+						}
+					} else {
+						filters_look_unselective = static_cast<double>(state.prefetch_metrics.row_groups_with_matches) /
+						                               static_cast<double>(state.prefetch_metrics.row_groups_executed) >
+						                           ParquetReaderPrefetchConfig::PREFETCH_FILTER_MINIMUM_MATCH_RATIO;
 					}
 				}
 

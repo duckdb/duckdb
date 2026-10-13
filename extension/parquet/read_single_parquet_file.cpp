@@ -399,8 +399,7 @@ ReadSingleParquetFileStatistics(ClientContext &context, const FunctionData *bind
 	if (column_index >= parquet_data.parquet_names.size()) {
 		return nullptr;
 	}
-	return ParquetReader::ReadStatistics(context, parquet_data.options, parquet_data.metadata,
-	                                     parquet_data.parquet_names[column_index]);
+	return parquet_data.GetMetadataReader(context).ReadStatistics(parquet_data.parquet_names[column_index]);
 }
 
 //! The row groups read from this file. The counts accumulate, so that a scan over several files reports their sum
