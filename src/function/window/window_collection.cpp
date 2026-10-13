@@ -37,7 +37,7 @@ void WindowCollection::GetCollection(idx_t row_idx, ColumnDataCollectionSpec &sp
 }
 
 void WindowCollection::Combine(const ColumnSet &validity_cols) {
-	std::call_once(combine_once, [&] {
+	CallOnce(combine_once, [&] {
 		try {
 			CombineInternal(validity_cols);
 		} catch (...) {
