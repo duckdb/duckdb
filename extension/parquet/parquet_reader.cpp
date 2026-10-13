@@ -1904,9 +1904,11 @@ unique_ptr<CachingFileHandle> ParquetReader::OpenScanHandle(ClientContext &conte
 
 void ParquetReader::PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &) {
 	// pre-open the scan handle while the file is opened, so the first InitializeScan skips its file-open
-	auto handle = OpenScanHandle(context);
-	lock_guard<mutex> guard(prewarm_lock);
-	prewarmed_scan_handle = std::move(handle);
+	InitializeScanHandle(context);
+}
+
+void ParquetReader::InitializeScanHandle(ClientContext &context) const {
+	std::call_once(scan_handle_initialized, [&] { shared_scan_handle = OpenScanHandle(context); });
 }
 
 void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const {
@@ -1919,14 +1921,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		state.prefetch_mode = ShouldAndCanPrefetch(context, *file_handle);
 		// all scan states share one handle (opened with parallel access), so open handles and
 		// connections scale with the number of readers instead of the number of row-group jobs
-		lock_guard<mutex> guard(prewarm_lock);
-		if (!shared_scan_handle) {
-			if (prewarmed_scan_handle) {
-				shared_scan_handle = std::move(prewarmed_scan_handle);
-			} else {
-				shared_scan_handle = OpenScanHandle(context);
-			}
-		}
+		InitializeScanHandle(context);
 		state.file_handle = shared_scan_handle;
 	}
 	state.scan_filters.clear();
@@ -2201,14 +2196,18 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 	// TODO: only need this if we have a deletion vector?
 	state.group_offset = GetRowGroupOffset(*this, state.group_index);
 
-	uint64_t to_scan_compressed_bytes = 0;
+	auto &group = GetGroup(state);
+	// several readers can read the same column chunk (e.g. two fields of one variant column), count each chunk once
+	unordered_set<idx_t> scanned_column_chunks;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto col_idx = MultiFileLocalIndex(i);
 		PrepareRowGroupBuffer(context, state, col_idx);
-		to_scan_compressed_bytes += state.GetColumnReader(i).TotalCompressedSize();
+		state.GetColumnReader(i).GatherColumnChunks(scanned_column_chunks);
 	}
-
-	auto &group = GetGroup(state);
+	uint64_t to_scan_compressed_bytes = 0;
+	for (auto column_chunk : scanned_column_chunks) {
+		to_scan_compressed_bytes += NumericCast<uint64_t>(group.columns[column_chunk].meta_data.total_compressed_size);
+	}
 	const bool row_group_skipped = state.offset_in_group == (idx_t)group.num_rows;
 	if (row_group_skipped) {
 		++state.row_groups_skipped;

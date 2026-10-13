@@ -739,6 +739,7 @@ struct MatchProcessLifetimeState {
 	bool fail_at_leaf = false;
 	bool state_valid = true;
 	idx_t root_children = 1;
+	idx_t peak_arena_bytes = 0;
 	vector<idx_t> destroyed;
 };
 
@@ -918,6 +919,7 @@ public:
 	ArenaNestedTestMatchProcess(const Matcher &matcher, MatchState &state, MatchProcessLifetimeState &lifetime_p)
 	    : NestedTestMatchProcess(matcher, state, lifetime_p), lifetime(lifetime_p) {
 		lifetime.storage_valid &= reinterpret_cast<uintptr_t>(this) % alignof(ArenaNestedTestMatchProcess) == 0;
+		lifetime.peak_arena_bytes = MaxValue(lifetime.peak_arena_bytes, state.context.process_allocator.SizeInBytes());
 		if (lifetime.throw_in_constructor && lifetime.active == lifetime.depth) {
 			throw InvalidInputException("Nested process constructor failure");
 		}
@@ -970,7 +972,10 @@ TEST_CASE("MatchState allocates processes through its shared context", "[api][gr
 	REQUIRE(parent_bytes >= sizeof(ArenaNestedTestMatchProcess<9000>));
 	REQUIRE(&child_state.context.process_allocator == &process_allocator);
 	REQUIRE(matcher.MatchParseResult(child_state).IsSuccess());
-	REQUIRE(process_allocator.SizeInBytes() > parent_bytes);
+	// the children were allocated from the shared arena while they were alive
+	REQUIRE(lifetime.peak_arena_bytes >= parent_bytes + sizeof(ArenaNestedTestMatchProcess<9000>));
+	// and released again when their frames were popped
+	REQUIRE(process_allocator.SizeInBytes() == parent_bytes);
 	REQUIRE(lifetime.active == 1);
 	parent.reset();
 	REQUIRE(lifetime.active == 0);

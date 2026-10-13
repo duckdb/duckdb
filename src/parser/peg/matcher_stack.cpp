@@ -17,7 +17,13 @@ MatchStack::~MatchStack() {
 
 void MatchStack::DestroyTopFrame() {
 	D_ASSERT(!frames.empty());
+	auto &frame = frames.back();
+	auto &process_allocator = frame.match_state.context.process_allocator;
+	const auto process_arena_position = frame.process_arena_position;
 	frames.pop_back();
+	// the processes of a frame and everything they allocated are dead once the frame is popped - release them so the
+	// process arena only ever holds the live frames instead of every process the whole statement ever created
+	process_allocator.Rewind(process_arena_position);
 }
 
 optional<MatcherResult> PackratMatchState::TryLoadCachedResult(const Matcher &matcher, MatchState &state) {
@@ -79,6 +85,7 @@ MatcherResult MatchStack::ExecuteAtomicMatcher(MatchInput input) {
 void MatchStack::PushFrame(MatchInput input) {
 	input.state.rule = input.matcher.GetRule();
 	frames.emplace_back(input);
+	frames.back().process_arena_position = input.state.context.process_allocator.GetPosition();
 }
 
 void MatchStack::InitializeFrame(MatchStackFrame &frame) {

@@ -62,10 +62,13 @@
         "test/sql/aggregate/aggregates/test_approx_quantile.test",
         "test/sql/aggregate/aggregates/test_binned_histogram.test",
         "test/sql/aggregate/aggregates/test_bitstring_agg.test",
+        "test/sql/types/bit/bit_sort_key_order.test",
+        "test/sql/types/time/timetz_minmax_order.test",
         "test/sql/aggregate/aggregates/test_entropy.test",
         "test/sql/aggregate/aggregates/test_histogram.test",
         "test/sql/aggregate/aggregates/test_histogram_3529.test",
         "test/sql/aggregate/aggregates/test_mode.test",
+        "test/sql/aggregate/aggregates/test_ordered_aggregate_inner_error.test",
         "test/sql/aggregate/aggregates/test_ordered_aggregates.test",
         "test/sql/aggregate/aggregates/test_reservoir_quantile_decimal.test",
         "test/sql/function/list/aggregates/histogram_decimal.test",
@@ -105,6 +108,7 @@
       "reason": "FIXME: pivot aggregate count mismatch - the verification rewrite adds aggregates that break PIVOT detection",
       "paths": [
         "test/sql/pivot/pivot_case_insensitive.test",
+        "test/sql/pivot/pivot_empty_string_value.test",
         "test/sql/pivot/test_pivot_duplicate_aggregates.test",
         "test/sql/sql_export/pivot_list_results.test",
         "test/sql/sql_export/pivot_sql_export.test"
