@@ -1526,13 +1526,9 @@ TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extensi
 	REQUIRE_NOTHROW(parser.ParseQuery("ANSWER"));
 	REQUIRE(parser.statements.size() == 1);
 
+	// Without the extension, a bare ANSWER is not a statement.
 	auto base_parser = Parser::GetBuiltinParser();
-	REQUIRE_NOTHROW(base_parser.ParseQuery("ANSWER"));
-	REQUIRE(base_parser.statements.size() == 1);
-	auto &base_select = base_parser.statements[0]->Cast<SelectStatement>().node->Cast<SelectNode>();
-	// Without the extension, ANSWER is a table name in a FROM-first query.
-	REQUIRE(base_select.select_list[0]->GetExpressionClass() == ExpressionClass::STAR);
-	REQUIRE(base_select.from_table->type == TableReferenceType::BASE_TABLE);
+	REQUIRE_THROWS(base_parser.ParseQuery("ANSWER"));
 }
 
 class AddInvalidGrammarExtensionTestRule final : public GrammarExtension {
@@ -1558,4 +1554,64 @@ TEST_CASE("Invalid Grammar extensions fail grammar compilation", "[api][grammar_
 	CheckGrammarExtensionTestSyntax(con);
 	auto setting = con.Query("SELECT current_setting('active_grammar_extensions')")->Collection().GetValue(0, 0);
 	REQUIRE(ListValue::GetChildren(setting).size() == 2);
+}
+
+class SuppressSuggestionsTestStatement final : public GrammarExtension {
+public:
+	explicit SuppressSuggestionsTestStatement(bool suppress_suggestions)
+	    : GrammarExtension(suppress_suggestions ? "suppressed_test_statement" : "suggested_test_statement",
+	                       "Grammar extension test statement"),
+	      suppress_suggestions(suppress_suggestions) {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddRule("GrammarExtensionTestStatement <- 'GRAMMAREXTENSIONTESTKEYWORD'",
+		                                         nullptr, suppress_suggestions));
+		changes.push_back(GrammarChange::AddChoice("Statement", "GrammarExtensionTestStatement"));
+		return changes;
+	}
+
+private:
+	bool suppress_suggestions;
+};
+
+static vector<string> GetStatementSuggestions(ClientContext &context) {
+	auto compiled_grammar = CompiledGrammar::Get(context);
+	vector<MatcherToken> tokens {MatcherToken("", 0, TokenType::END_OF_INPUT_AUTOCOMPLETE)};
+	TokenIterator token_iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator parse_allocator;
+	idx_t max_token_index = 0;
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext match_context(suggestions, parse_allocator, process_allocator, max_token_index,
+	                           MatchMode::RECOGNIZE_ONLY, IdentifierCaseMode::PRESERVE_CASE);
+	MatchState state(token_iterator, match_context);
+	compiled_grammar->ProgramMatcher().MatchParseResult(state);
+	vector<string> result;
+	for (auto &suggestion : suggestions) {
+		result.push_back(StringUtil::Upper(suggestion.keyword.candidate));
+	}
+	return result;
+}
+
+static bool HasSuggestion(const vector<string> &suggestions, const string &keyword) {
+	return std::find(suggestions.begin(), suggestions.end(), keyword) != suggestions.end();
+}
+
+TEST_CASE("Grammar extension rules can suppress autocomplete suggestions", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	GrammarExtension::Register(*db.instance, make_shared_ptr<SuppressSuggestionsTestStatement>(false));
+	GrammarExtension::Register(*db.instance, make_shared_ptr<SuppressSuggestionsTestStatement>(true));
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['suggested_test_statement']"));
+	auto suggested = GetStatementSuggestions(*con.context);
+	REQUIRE(HasSuggestion(suggested, "SELECT"));
+	REQUIRE(HasSuggestion(suggested, "GRAMMAREXTENSIONTESTKEYWORD"));
+
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['suppressed_test_statement']"));
+	auto suppressed = GetStatementSuggestions(*con.context);
+	REQUIRE(HasSuggestion(suppressed, "SELECT"));
+	REQUIRE_FALSE(HasSuggestion(suppressed, "GRAMMAREXTENSIONTESTKEYWORD"));
 }
