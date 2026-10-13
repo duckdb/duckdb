@@ -5,7 +5,6 @@
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -46,11 +45,7 @@ void OpenerFileSystem::VerifyCanAccessFileInternal(const string &path, FileType 
 		return;
 	}
 	auto &config = db->config;
-	if (Settings::Get<EnableExternalAccessSetting>(config)) {
-		return;
-	}
-	auto canonical_path = config.file_system->CanonicalizePath(path, opener);
-	if (!config.CanAccessFile(canonical_path, type)) {
+	if (!config.CanAccessFile(path, type, opener)) {
 		throw PermissionException("Cannot access %s \"%s\" - file system operations are disabled by configuration",
 		                          type == FileType::FILE_TYPE_DIR ? "directory" : "file", path);
 	}

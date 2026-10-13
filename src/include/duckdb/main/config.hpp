@@ -320,7 +320,7 @@ public:
 	//! Returns the default value of an option
 	static SettingLookupResult TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result);
 
-	bool CanAccessFile(const string &path, FileType type);
+	bool CanAccessFile(const string &path, FileType type, optional_ptr<FileOpener> opener = nullptr);
 	void AddAllowedConfig(const Identifier &config_name);
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
