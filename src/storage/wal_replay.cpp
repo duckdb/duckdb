@@ -960,10 +960,12 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	// Resolve the indexed columns and constraint type based on the constraint kind.
 	vector<LogicalIndex> logical_indexes;
 	IndexConstraintType constraint_type;
+	ConstraintCheckMode check_mode;
 	if (alter_info.IsAddUniqueConstraint()) {
 		auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
 		logical_indexes = unique_info.GetLogicalIndexes(column_list);
 		constraint_type = unique_info.GetIndexConstraintType();
+		check_mode = unique_info.check_mode;
 	} else {
 		auto &fk = constraint_info.constraint->Cast<ForeignKeyConstraint>();
 		for (const auto &physical_index : fk.info.fk_keys) {
@@ -971,6 +973,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 			logical_indexes.push_back(col.Logical());
 		}
 		constraint_type = IndexConstraintType::FOREIGN;
+		check_mode = ConstraintCheckMode::DEFAULT;
 	}
 
 	// Add the table to the bind context to bind the parsed expressions.
@@ -1012,7 +1015,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
 	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid,
-	                                      /*index_oid=*/optional_idx(), unique_info.check_mode);
+	                                      /*index_oid=*/optional_idx(), check_mode);
 
 	catalog.Alter(context, alter_info);
 }
