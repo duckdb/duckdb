@@ -271,14 +271,29 @@ TEST_CASE("HTTP retry budget numbers every send of the operation", "[http]") {
 	REQUIRE(budget.MaxAttempts() == 1 + 3 + HTTPRetryBudget::THROTTLE_EXTRA_RETRIES);
 	// Two sends in one inner loop, a corrected re-send without a retry in between, then one more
 	REQUIRE(budget.BeginAttempt() == 1);
+	REQUIRE(budget.Corrections() == 0);
 	REQUIRE(budget.BeginAttempt() == 2);
 	REQUIRE(budget.BeginAttempt() == 3);
 	REQUIRE(budget.RetriesUsed() == 0);
+	// Sends that consumed no retry are corrections and widen the advertised bound, so attempt <= max always holds
+	REQUIRE(budget.Corrections() == 2);
+	REQUIRE(budget.MaxAttempts() == 1 + 3 + HTTPRetryBudget::THROTTLE_EXTRA_RETRIES + 2);
 	budget.Run([&]() { return HTTPRetryDecision::Finish(); });
 	REQUIRE(budget.BeginAttempt() == 4);
+	REQUIRE(budget.Corrections() == 3);
 }
 
 namespace {
+
+//! Records the attempt headers a provider would tag every send with.
+class AttemptRecordingHTTPUtil : public HTTPUtil {
+public:
+	void PrepareAttempt(BaseRequest &request, idx_t attempt, idx_t max_attempts) override {
+		attempts.emplace_back(attempt, max_attempts);
+	}
+
+	vector<std::pair<idx_t, idx_t>> attempts;
+};
 
 unique_ptr<HTTPResponse> MakeResponse(HTTPStatusCode status, const string &body = string()) {
 	auto response = make_uniq<HTTPResponse>(status);
@@ -361,6 +376,56 @@ TEST_CASE("An S3-style 400 RequestTimeout is retried whether it was received or 
 	    final_error, {});
 	REQUIRE(sends == 1);
 	REQUIRE(response->HasRequestError());
+}
+
+TEST_CASE("Corrected re-sends stay within the advertised attempt bound", "[http]") {
+	AttemptRecordingHTTPUtil http_util;
+	HTTPParams params(http_util);
+	params.retry_wait_ms = 0;
+	HTTPHeaders headers;
+	const string url = "http://bucket.s3.amazonaws.com/key";
+
+	// One credential correction (a re-send that consumes no retry) followed by a throttling server
+	auto run_operation = [&]() {
+		http_util.attempts.clear();
+		HTTPRetryBudget budget(params);
+		bool corrected = false;
+		budget.Run([&]() {
+			for (;;) {
+				HeadRequestInfo request(url, headers, params);
+				request.retry_budget = budget;
+				request.try_request = true;
+				auto response = HTTPUtil::RunRequestWithRetry(
+				    [&]() {
+					    return MakeResponse(corrected ? HTTPStatusCode::ServiceUnavailable_503
+					                                  : HTTPStatusCode::Forbidden_403);
+				    },
+				    request, {});
+				if (response->status == HTTPStatusCode::Forbidden_403 && !corrected) {
+					corrected = true;
+					continue;
+				}
+				return HTTPRetryDecision::Finish();
+			}
+		});
+	};
+
+	params.retries = 3;
+	run_operation();
+	const auto base_max = 1 + 3 + HTTPRetryBudget::THROTTLE_EXTRA_RETRIES;
+	REQUIRE(http_util.attempts.size() == base_max + 1);
+	REQUIRE(http_util.attempts.front() == std::pair<idx_t, idx_t>(1, base_max));
+	for (auto &entry : http_util.attempts) {
+		REQUIRE(entry.first <= entry.second);
+	}
+	REQUIRE(http_util.attempts.back() == std::pair<idx_t, idx_t>(base_max + 1, base_max + 1));
+
+	// With retries switched off the corrected re-send is the second and last attempt
+	params.retries = 0;
+	run_operation();
+	REQUIRE(http_util.attempts.size() == 2);
+	REQUIRE(http_util.attempts[0] == std::pair<idx_t, idx_t>(1, 1));
+	REQUIRE(http_util.attempts[1] == std::pair<idx_t, idx_t>(2, 2));
 }
 
 TEST_CASE("HTTPUtil hands out one retry quota per host and forgets the quietest", "[http]") {

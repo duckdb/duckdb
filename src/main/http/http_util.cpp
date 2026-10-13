@@ -443,7 +443,6 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 	}
 	// Charge this request's host, even when a shared budget was bound to another host before.
 	retry_budget->BindQuota(params.http_util.GetRetryQuota(request.proto_host_port));
-	const idx_t max_attempts = retry_budget->MaxAttempts();
 
 	unique_ptr<HTTPResponse> response;
 	std::exception_ptr caught_e;
@@ -457,8 +456,10 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		    caught_error = ErrorData();
 		    exception_error.clear();
 		    unique_ptr<HTTPResponse> caught_response;
-		    // Attempts are numbered per operation, so a re-send after a correction counts as the retry it is.
-		    params.http_util.PrepareAttempt(request, retry_budget->BeginAttempt(), max_attempts);
+		    // Attempts are numbered per operation, so a re-send after a correction counts as the attempt it is; the
+		    // bound grows with such re-sends, which do not consume retries.
+		    const auto attempt = retry_budget->BeginAttempt();
+		    params.http_util.PrepareAttempt(request, attempt, retry_budget->MaxAttempts());
 		    try {
 			    response = on_request();
 			    if (response) {

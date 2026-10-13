@@ -96,8 +96,14 @@ uint64_t HTTPRetryBudget::ThrottleExtraRetries() const {
 #endif
 }
 
+uint64_t HTTPRetryBudget::Corrections() const {
+	// The first send and every admitted retry are accounted for; any other send was a corrected re-send.
+	const auto accounted = 1 + retries_used;
+	return attempts > accounted ? attempts - accounted : 0;
+}
+
 uint64_t HTTPRetryBudget::MaxAttempts() const {
-	return 1 + retries + ThrottleExtraRetries();
+	return 1 + retries + ThrottleExtraRetries() + Corrections();
 }
 
 bool HTTPRetryBudget::QuotaExhausted() const {

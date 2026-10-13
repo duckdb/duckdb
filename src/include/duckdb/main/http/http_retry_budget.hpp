@@ -104,7 +104,11 @@ public:
 	DUCKDB_API uint64_t RetriesUsed() const;
 	//! Number the next send of the operation: the first call returns 1.
 	DUCKDB_API uint64_t BeginAttempt();
-	//! Most attempts the operation can make: the first one, `http_retries`, and the throttle extras.
+	//! Sends so far that were neither the first nor an admitted retry: re-sends after the provider corrected the
+	//! request (credentials, region), which do not consume retries.
+	DUCKDB_API uint64_t Corrections() const;
+	//! Most attempts the operation can make: the first one, `http_retries`, the throttle extras and the corrected
+	//! re-sends made so far, so that every numbered attempt stays within the bound advertised with it.
 	DUCKDB_API uint64_t MaxAttempts() const;
 	//! Whether the current Run refused a retry because the host's quota ran out.
 	DUCKDB_API bool QuotaExhausted() const;
