@@ -603,32 +603,64 @@ option(FORCE_QUERY_LOG
        "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
+
+set(DUCKDB_EXTENSION_SELECTION_EXPLICIT FALSE)
+if(DEFINED DUCKDB_USE)
+  set(DUCKDB_EXPLICIT_USE "${DUCKDB_USE}")
+  set(DUCKDB_EXTENSION_SELECTION_EXPLICIT TRUE)
+elseif(DEFINED ENV{DUCKDB_USE})
+  set(DUCKDB_EXPLICIT_USE "$ENV{DUCKDB_USE}")
+  set(DUCKDB_EXTENSION_SELECTION_EXPLICIT TRUE)
+else()
+  set(DUCKDB_EXPLICIT_USE "")
+endif()
+if(DEFINED DUCKDB_EXTEND)
+  set(DUCKDB_EXPLICIT_EXTEND "${DUCKDB_EXTEND}")
+  set(DUCKDB_EXTENSION_SELECTION_EXPLICIT TRUE)
+elseif(DEFINED ENV{DUCKDB_EXTEND})
+  set(DUCKDB_EXPLICIT_EXTEND "$ENV{DUCKDB_EXTEND}")
+  set(DUCKDB_EXTENSION_SELECTION_EXPLICIT TRUE)
+else()
+  set(DUCKDB_EXPLICIT_EXTEND "")
+endif()
+set(DUCKDB_USE
+    "${DUCKDB_EXPLICIT_USE}"
+    CACHE STRING "Extensions and capabilities to build and link")
+set(DUCKDB_EXTEND
+    "${DUCKDB_EXPLICIT_EXTEND}"
+    CACHE STRING "Extensions to build without linking")
+
+foreach(LEGACY_EXTENSION_VARIABLE
+        BUILD_EXTENSIONS CORE_EXTENSIONS STATICALLY_LINK_EXTENSIONS
+        DUCKDB_CAPABILITIES SKIP_EXTENSIONS)
+  if(DEFINED ${LEGACY_EXTENSION_VARIABLE}
+     AND NOT "${${LEGACY_EXTENSION_VARIABLE}}" STREQUAL "")
+    message(
+      FATAL_ERROR
+        "${LEGACY_EXTENSION_VARIABLE} was removed; use DUCKDB_USE and DUCKDB_EXTEND"
+    )
+  endif()
+endforeach()
+
+foreach(LEGACY_EXTENSION_VARIABLE
+        LINK_CORE_EXTENSIONS DISABLE_BUILTIN_EXTENSIONS DISABLE_EXTENSION_LOAD
+        DISABLE_BUILTIN_HTTPLIB)
+  if(${LEGACY_EXTENSION_VARIABLE})
+    message(
+      FATAL_ERROR
+        "${LEGACY_EXTENSION_VARIABLE} was removed; use DUCKDB_USE and DUCKDB_EXTEND"
+    )
+  endif()
+endforeach()
+
 option(
   ENABLE_EXTENSION_LOAD
   "Build libduckdb_loadable_extensions.a and link it into the DuckDB targets, so they can install and load external extensions"
   TRUE)
-option(DISABLE_EXTENSION_LOAD
-       "Deprecated, use ENABLE_EXTENSION_LOAD=OFF instead" FALSE)
 option(
   ENABLE_BUILTIN_HTTPLIB
   "Build libduckdb_httplib.a and link it into the DuckDB targets as their default HTTP client"
   TRUE)
-option(DISABLE_BUILTIN_HTTPLIB
-       "Deprecated, use ENABLE_BUILTIN_HTTPLIB=OFF instead" FALSE)
-option(LINK_CORE_EXTENSIONS
-       "Also statically link the extensions named in BUILD_EXTENSIONS" FALSE)
-set(STATICALLY_LINK_EXTENSIONS
-    ""
-    CACHE
-      STRING
-      "Extensions the DuckDB targets link, e.g. 'json parquet' or 'none' (empty: the built ones the extension configs list with duckdb_extension_statically_link)"
-)
-set(DUCKDB_CAPABILITIES
-    ""
-    CACHE
-      STRING
-      "Capabilities the DuckDB targets link: 'httplib', 'loadable_extensions', 'local_extension_repository' or 'none' (empty: all of them)"
-)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY
        "Debug setting: disable memory access checks at runtime" FALSE)
@@ -735,23 +767,6 @@ if(PREBUILT_EXTENSIONS AND NOT PREBUILT_BINARY)
   message(FATAL_ERROR "PREBUILT_EXTENSIONS requires PREBUILT_BINARY")
 endif()
 
-if(DISABLE_EXTENSION_LOAD)
-  message(
-    WARNING
-      "DISABLE_EXTENSION_LOAD is deprecated, use ENABLE_EXTENSION_LOAD=OFF")
-  set(ENABLE_EXTENSION_LOAD FALSE)
-endif()
-
-if(DISABLE_BUILTIN_HTTPLIB)
-  message(
-    WARNING
-      "DISABLE_BUILTIN_HTTPLIB is deprecated, use ENABLE_BUILTIN_HTTPLIB=OFF")
-  set(ENABLE_BUILTIN_HTTPLIB FALSE)
-endif()
-if(NOT ENABLE_EXTENSION_LOAD)
-  set(ENABLE_BUILTIN_HTTPLIB FALSE)
-endif()
-
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
 endif()
@@ -771,22 +786,12 @@ endif()
 if(NOT BUILD_MAIN_DUCKDB_LIBRARY)
   set(BUILD_UNITTESTS FALSE)
   set(BUILD_SHELL FALSE)
-  set(STATICALLY_LINK_EXTENSIONS core_functions)
-endif()
-
-if(DISABLE_BUILTIN_EXTENSIONS)
-  message(
-    WARNING
-      "DISABLE_BUILTIN_EXTENSIONS is deprecated, use STATICALLY_LINK_EXTENSIONS=core_functions"
-  )
-  unset(DISABLE_BUILTIN_EXTENSIONS CACHE)
-  if("${STATICALLY_LINK_EXTENSIONS}" STREQUAL "")
-    set(STATICALLY_LINK_EXTENSIONS core_functions)
-  endif()
 endif()
 
 if(GENERATE_EXTENSION_ENTRIES)
-  set(STATICALLY_LINK_EXTENSIONS none)
+  set(DUCKDB_EXPLICIT_USE "")
+  set(DUCKDB_EXPLICIT_EXTEND "")
+  set(DUCKDB_EXTENSION_SELECTION_EXPLICIT TRUE)
 endif()
 
 if(TREAT_WARNINGS_AS_ERRORS)

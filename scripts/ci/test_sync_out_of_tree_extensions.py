@@ -84,7 +84,7 @@ class ExtensionSyncTest(unittest.TestCase):
             r'''
             duckdb_extension_load(avro GIT_URL url GIT_TAG revision
                 SUBMODULES "third_party/avro-c;path with spaces" "path(with)parens" escaped\ path
-                DONT_LINK LOAD_TESTS)
+                LOAD_TESTS)
             '''
         )
         self.assertEqual(
@@ -129,40 +129,38 @@ class ExtensionSyncTest(unittest.TestCase):
                 f'duckdb_extension_load({name} GIT_URL https://example.com/{name} GIT_TAG revision)'
             )
 
-    def test_core_extensions_are_additive_and_deduplicated(self):
+    def test_use_and_extend_are_combined_and_deduplicated(self):
         self.make_named_configs()
-        os.environ.update(BUILD_EXTENSIONS='avro;httpfs', CORE_EXTENSIONS="'httpfs;parquet;tpch'")
+        os.environ.update(DUCKDB_USE='avro;httpfs', DUCKDB_EXTEND="'httpfs;parquet;tpch'")
         self.assertEqual(list(sync.collect_extensions(self.root)), ['avro', 'httpfs'])
 
-    def test_core_extensions_without_build_extensions(self):
+    def test_extend_without_use(self):
         self.make_named_configs()
-        os.environ['CORE_EXTENSIONS'] = "'httpfs;parquet;tpch'"
+        os.environ['DUCKDB_EXTEND'] = "'httpfs;parquet;tpch'"
         self.assertEqual(list(sync.collect_extensions(self.root)), ['httpfs'])
 
-    def test_make_combines_quoted_core_extensions_with_build_extensions(self):
+    def test_arguments_accept_quoted_lists(self):
         self.make_named_configs()
         self.assertEqual(
-            list(sync.collect_extensions(self.root, "avro;'httpfs;parquet;tpch'")),
+            list(sync.collect_extensions(self.root, 'avro', "'httpfs;parquet;tpch'")),
             ['avro', 'httpfs'],
         )
 
-    def test_explicit_build_extensions_override_aliases(self):
+    def test_explicit_arguments_override_environment_lists(self):
         self.make_named_configs()
-        os.environ.update(BUILD_EXTENSIONS='aws', DUCKDB_EXTENSIONS='aws', CORE_EXTENSIONS='httpfs')
-        self.assertEqual(list(sync.collect_extensions(self.root, 'avro')), ['avro', 'httpfs'])
-
-    def test_duckdb_extensions_alias(self):
-        self.make_named_configs()
-        os.environ.update(DUCKDB_EXTENSIONS='aws', CORE_EXTENSIONS='httpfs')
-        self.assertEqual(list(sync.collect_extensions(self.root)), ['aws', 'httpfs'])
+        os.environ.update(DUCKDB_USE='aws', DUCKDB_EXTEND='httpfs')
+        self.assertEqual(list(sync.collect_extensions(self.root, 'avro', '')), ['avro'])
 
     def test_project_config_overrides_named_revision(self):
         self.make_named_configs()
         config = self.root / 'project.cmake'
         config.write_text(
-            'duckdb_extension_load(httpfs GIT_URL https://example.com/project-httpfs GIT_TAG project-pin)'
+            '''
+            duckdb_extension_load(httpfs GIT_URL https://example.com/project-httpfs GIT_TAG project-pin)
+            duckdb_extension_load(aws GIT_URL https://example.com/project-aws GIT_TAG project-pin)
+            '''
         )
-        extensions = sync.collect_extensions(self.root, 'httpfs;avro', str(config))
+        extensions = sync.collect_extensions(self.root, 'httpfs;avro', extension_configs_arg=str(config))
         self.assertEqual(list(extensions), ['httpfs', 'avro'])
         self.assertEqual(extensions['httpfs']['git_url'], 'https://example.com/project-httpfs')
         self.assertEqual(extensions['httpfs']['git_tag'], 'project-pin')
@@ -172,7 +170,7 @@ class ExtensionSyncTest(unittest.TestCase):
         first, second = self.root / 'first.cmake', self.root / 'second.cmake'
         first.write_text('duckdb_extension_load(httpfs GIT_URL first-url GIT_TAG first-pin)')
         second.write_text('duckdb_extension_load(httpfs GIT_URL second-url GIT_TAG second-pin)')
-        extensions = sync.collect_extensions(self.root, 'httpfs', f'{first};{second}')
+        extensions = sync.collect_extensions(self.root, 'httpfs', extension_configs_arg=f'{first};{second}')
         self.assertEqual(extensions['httpfs']['git_tag'], 'first-pin')
 
     def test_project_local_and_disabled_extensions_prevent_default_cloning(self):
@@ -185,7 +183,7 @@ class ExtensionSyncTest(unittest.TestCase):
             duckdb_extension_load(httpfs GIT_URL unused GIT_TAG unused)
             '''
         )
-        self.assertEqual(sync.collect_extensions(self.root, 'httpfs;avro', str(config)), {})
+        self.assertEqual(sync.collect_extensions(self.root, 'httpfs;avro', extension_configs_arg=str(config)), {})
 
     def test_custom_config_directory_from_environment_and_argument(self):
         self.make_named_configs()
@@ -214,12 +212,23 @@ class ExtensionSyncTest(unittest.TestCase):
         )
         project = self.root / 'project'
         project.mkdir()
-        (project / 'extension_config.cmake').write_text('include("${CMAKE_CURRENT_LIST_DIR}/group.cmake")')
+        (project / 'extension_config.cmake').write_text(
+            'set(DUCKDB_EXTEND httpfs)\ninclude("${CMAKE_CURRENT_LIST_DIR}/group.cmake")'
+        )
         (project / 'group.cmake').write_text('include("${EXTENSION_CONFIG_BASE_DIR}/httpfs.cmake")')
         extensions = sync.collect_extensions(
             self.root, extension_configs_arg='project/extension_config.cmake', extension_config_base_dir=config_dir
         )
         self.assertEqual(extensions['httpfs']['git_tag'], 'project-pin')
+
+    def test_config_lists_select_named_extensions(self):
+        self.make_named_configs()
+        config = self.root / 'project.cmake'
+        config.write_text('set(DUCKDB_USE httplib)\nset(DUCKDB_EXTEND httpfs avro)')
+        self.assertEqual(
+            list(sync.collect_extensions(self.root, extension_configs_arg=str(config))),
+            ['httpfs', 'avro'],
+        )
 
     def test_missing_explicit_config_and_directory_fail(self):
         with self.assertRaises(FileNotFoundError):
@@ -234,17 +243,12 @@ class ExtensionSyncTest(unittest.TestCase):
             sync.parse_cmake_file(config)
 
     @unittest.skipUnless(MAKE, 'Make is required for build command tests')
-    def test_make_extension_selectors_enable_new_mode(self):
-        os.environ.update(PATH=os.defpath, USE_MERGED_VCPKG_MANIFEST='1', VCPKG_TOOLCHAIN_PATH='/unused/vcpkg.cmake')
+    def test_make_extension_selectors_run_sync(self):
+        os.environ.update(PATH=os.defpath, VCPKG_TOOLCHAIN_PATH='/unused/vcpkg.cmake')
 
         selectors = [
-            ['DUCKDB_EXTENSIONS=httpfs'],
-            ['BUILD_EXTENSIONS=httpfs'],
-            ['CORE_EXTENSIONS=httpfs'],
-            ['BUILD_HTTPFS=1'],
-            ['BUILD_ALL_EXT=1'],
-            ['BUILD_ALL_IT_EXT=1'],
-            ['BUILD_ALL_OOT_EXT=1'],
+            ['DUCKDB_USE=httpfs;httplib'],
+            ['DUCKDB_EXTEND=httpfs'],
             ['EXTENSION_CONFIGS=/project/project.cmake'],
         ]
         for selector in selectors:
@@ -264,37 +268,19 @@ class ExtensionSyncTest(unittest.TestCase):
                     self.assertIn('-DDUCKDB_EXTENSION_CONFIGS="/project/project.cmake"', commands)
 
     @unittest.skipUnless(MAKE, 'Make is required for build command tests')
-    def test_make_new_mode_override_and_explicit_activation(self):
-        os.environ.update(PATH=os.defpath, USE_MERGED_VCPKG_MANIFEST='1', VCPKG_TOOLCHAIN_PATH='/unused/vcpkg.cmake')
-        base_command = [
-            MAKE,
-            '-Bn',
-            'reldebug',
-            'BUILD_EXTENSIONS=httpfs',
-            'EXTENSION_CONFIG_BASE_DIR=/project/custom configs',
-            'EXTENSION_CONFIGS=/project/project.cmake',
-        ]
-
-        commands = subprocess.check_output(
-            base_command + ['DUCKDB_NEW_EXTENSION_BUILD=0'],
-            cwd=REPO_ROOT,
-            text=True,
-            stderr=subprocess.STDOUT,
-        )
-        self.assertIn('-DEXTENSION_CONFIG_BASE_DIR="/project/custom configs"', commands)
-        self.assertIn('-DDUCKDB_EXTENSION_CONFIGS="/project/project.cmake"', commands)
-        self.assertIn('-DEXTENSION_CONFIG_BUILD=TRUE', commands)
-        self.assertNotIn('sync_out_of_tree_extensions.py', commands)
-
-        commands = subprocess.check_output(
-            [MAKE, '-Bn', 'reldebug', 'DUCKDB_NEW_EXTENSION_BUILD=1'],
-            cwd=REPO_ROOT,
-            text=True,
-            stderr=subprocess.STDOUT,
-        )
-        self.assertIn('sync_out_of_tree_extensions.py', commands)
-        self.assertNotIn('-DEXTENSION_CONFIG_BUILD=TRUE', commands)
-        self.assertNotIn('build/extension_configuration', commands)
+    def test_make_rejects_legacy_selectors(self):
+        os.environ['PATH'] = os.defpath
+        for selector in ['BUILD_EXTENSIONS=httpfs', 'DUCKDB_EXTENSIONS=httpfs', 'BUILD_HTTPFS=1']:
+            with self.subTest(selector=selector):
+                result = subprocess.run(
+                    [MAKE, '-Bn', 'reldebug', selector],
+                    cwd=REPO_ROOT,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('use DUCKDB_USE and DUCKDB_EXTEND', result.stdout)
 
     @unittest.skipUnless(CMAKE, 'CMake is required for configuration integration tests')
     def test_cmake_and_sync_use_the_same_project_configuration(self):
@@ -321,7 +307,7 @@ class ExtensionSyncTest(unittest.TestCase):
                     '-B',
                     str(build_dir),
                     '-DEXTENSION_CONFIG_BUILD=TRUE',
-                    '-DBUILD_EXTENSIONS=sample',
+                    '-DDUCKDB_USE=sample',
                 ]
                 if use_project:
                     os.environ['EXTENSION_CONFIG_BASE_DIR'] = str(config_dir)
@@ -331,12 +317,61 @@ class ExtensionSyncTest(unittest.TestCase):
                 configured = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
                 self.assertEqual(configured.returncode, 0, configured.stdout)
                 extensions = sync.collect_extensions(
-                    REPO_ROOT, 'sample', str(project) if use_project else '', config_dir
+                    REPO_ROOT,
+                    'sample',
+                    extension_configs_arg=str(project) if use_project else '',
+                    extension_config_base_dir=config_dir,
                 )
                 self.assertIn(
                     f'sample, "{extensions["sample"]["git_tag"]}"',
                     (build_dir / 'extensions.csv').read_text(),
                 )
+
+    @unittest.skipUnless(CMAKE, 'CMake is required for configuration integration tests')
+    def test_cmake_only_registers_selected_remote_extensions(self):
+        os.environ['PATH'] = os.defpath
+        extension_name = 'unsynchronized_test_extension'
+        project = self.root / 'project.cmake'
+        project.write_text(
+            f'duckdb_extension_load({extension_name} GIT_URL https://example.invalid/extension GIT_TAG test-pin)'
+        )
+        metadata_build = self.root / 'metadata-build'
+        configured = subprocess.run(
+            [
+                CMAKE,
+                '-S',
+                str(REPO_ROOT),
+                '-B',
+                str(metadata_build),
+                '-DEXTENSION_CONFIG_BUILD=TRUE',
+                '-DDUCKDB_USE=parquet',
+                f'-DDUCKDB_EXTENSION_CONFIGS={project}',
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        self.assertEqual(configured.returncode, 0, configured.stdout)
+        self.assertNotIn(extension_name, (metadata_build / 'extensions.csv').read_text())
+
+        selected_build = self.root / 'selected-build'
+        configured = subprocess.run(
+            [
+                CMAKE,
+                '-S',
+                str(REPO_ROOT),
+                '-B',
+                str(selected_build),
+                '-DEXTENSION_CONFIG_BUILD=TRUE',
+                f'-DDUCKDB_EXTEND={extension_name}',
+                f'-DDUCKDB_EXTENSION_CONFIGS={project}',
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        self.assertNotEqual(configured.returncode, 0)
+        self.assertIn('is not synchronized', configured.stdout)
 
     def test_sync_clones_only_required_submodule_and_reuses_checkout(self):
         os.environ.update(
