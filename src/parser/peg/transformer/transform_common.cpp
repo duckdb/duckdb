@@ -138,6 +138,9 @@ PEGTransformerFactory::TransformTimeType(PEGTransformer &transformer, const Logi
 			return make_uniq<TypeExpression>(Identifier(EnumUtil::ToString(LogicalType::TIMESTAMP)),
 			                                 vector<unique_ptr<ParsedExpression>> {});
 		}
+		if (with_timezone) {
+			throw ParserException("TIMESTAMP WITH TIME ZONE does not take a precision");
+		}
 		if (modifiers.size() > 1) {
 			throw ParserException("TIMESTAMP only supports a single modifier");
 		}
