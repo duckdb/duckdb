@@ -34,16 +34,16 @@ JSONTransformOptions::JSONTransformOptions(bool strict_cast_p, bool error_duplic
 }
 
 //! Forward declaration for recursion
-static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context);
+static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context, idx_t depth);
 
-static LogicalType StructureStringToTypeArray(yyjson_val *arr, ClientContext &context) {
+static LogicalType StructureStringToTypeArray(yyjson_val *arr, ClientContext &context, idx_t depth) {
 	if (yyjson_arr_size(arr) != 1) {
 		throw BinderException("Too many values in array of JSON structure");
 	}
-	return LogicalType::LIST(StructureStringToType(yyjson_arr_get_first(arr), context));
+	return LogicalType::LIST(StructureStringToType(yyjson_arr_get_first(arr), context, depth + 1));
 }
 
-static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context) {
+static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context, idx_t depth) {
 	unordered_set<string> names;
 	child_list_t<LogicalType> child_types;
 	size_t idx, max;
@@ -58,7 +58,7 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 			JSONCommon::ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
 		}
 		names.insert(key_str);
-		child_types.emplace_back(key_str, StructureStringToType(val, context));
+		child_types.emplace_back(key_str, StructureStringToType(val, context, depth + 1));
 	}
 	D_ASSERT(yyjson_obj_size(obj) == names.size());
 	if (child_types.empty()) {
@@ -67,12 +67,16 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 	return LogicalType::STRUCT(child_types);
 }
 
-static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context) {
+static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context, idx_t depth) {
+	if (depth > JSONCommon::MAX_RECURSION_DEPTH) {
+		throw InvalidInputException("JSON structure exceeds maximum recursion depth of %d",
+		                            JSONCommon::MAX_RECURSION_DEPTH);
+	}
 	switch (yyjson_get_tag(val)) {
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
-		return StructureStringToTypeArray(val, context);
+		return StructureStringToTypeArray(val, context, depth);
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
-		return StructureToTypeObject(val, context);
+		return StructureToTypeObject(val, context, depth);
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		return TransformStringToLogicalType(unsafe_yyjson_get_str(val), context);
@@ -97,7 +101,7 @@ static unique_ptr<FunctionData> JSONTransformBind(BindScalarFunctionInput &input
 		auto structure_string = json_structure_val->GetValueUnsafe<string_t>();
 		JSONAllocator json_allocator(Allocator::DefaultAllocator());
 		auto doc = JSONCommon::ReadDocument(structure_string, JSONCommon::READ_FLAG, json_allocator.GetYYAlc());
-		bound_function.SetReturnType(StructureStringToType(doc->root, context));
+		bound_function.SetReturnType(StructureStringToType(doc->root, context, 0));
 	}
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }

@@ -1,0 +1,20 @@
+# name: test/sql/json/scalar/test_json_transform_depth.test
+# description: Test that deeply nested structure arguments of json_transform are rejected
+# group: [scalar]
+
+require json
+
+statement error
+SELECT from_json('null', repeat('{"a":', 10000) || '"INT"' || repeat('}', 10000));
+----
+<REGEX>:.*exceeds maximum recursion depth.*
+
+statement error
+SELECT json_transform('null', repeat('[', 10000) || '"INT"' || repeat(']', 10000));
+----
+<REGEX>:.*exceeds maximum recursion depth.*
+
+query I
+SELECT from_json('{"a":{"a":1}}', '{"a":{"a":"INT"}}');
+----
+{'a': {'a': 1}}
