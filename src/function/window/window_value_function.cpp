@@ -1409,7 +1409,12 @@ static void FillInterpolateFunc(Vector &result, idx_t i, WindowCursor &cursor, i
 	}
 
 	FlatVector::SetNull(result, i, false);
-	data[i] = InterpolateOperator::Operation<T>(y0, slope.numerator, slope.denominator, y1);
+	if constexpr (std::is_integral_v<T>) {
+		// interpolate from the exact ratio instead of the already computed d
+		data[i] = InterpolateOperator::Operation<T>(y0, slope.numerator, slope.denominator, y1);
+	} else {
+		data[i] = InterpolateOperator::Operation<T>(y0, d, y1);
+	}
 }
 
 static fill_interpolate_t GetFillInterpolateFunction(const LogicalType &type) {

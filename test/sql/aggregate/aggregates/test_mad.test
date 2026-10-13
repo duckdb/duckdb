@@ -129,4 +129,4 @@ select mad(x) from (values
 query I
 select mad(x) from (values ('23:59:59.999999'::time), ('00:00:00'::time)) tbl(x);
 ----
-12:00:00
+11:59:59.999999

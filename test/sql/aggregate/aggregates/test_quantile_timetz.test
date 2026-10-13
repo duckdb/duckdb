@@ -23,11 +23,11 @@ SELECT finalize(median(x) EXPORT_STATE) FROM z
 ----
 07:00:00+00
 
-# interpolated results have a valid offset
+# interpolated results have a valid offset - exact .5 microsecond ties go to the earlier microsecond
 query I
 SELECT quantile_cont(x, 0.5)::VARCHAR FROM (VALUES (TIMETZ '00:00:00+15:59:59'), (TIMETZ '00:00:00.000001+15:59:59')) t(x)
 ----
-08:00:01.000001+00
+08:00:01+00
 
 # the median of equal values is that value
 query I

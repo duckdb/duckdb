@@ -1511,47 +1511,6 @@ int64_t InterpolateOperator::Operation(const int64_t &lo, const double d, const 
 }
 
 template <>
-int64_t InterpolateOperator::Operation(const int64_t &lo, double numerator, double denominator, const int64_t &hi) {
-	D_ASSERT(std::isfinite(numerator) && std::isfinite(denominator) && denominator != 0);
-	if (denominator < 0) {
-		numerator = -numerator;
-		denominator = -denominator;
-	}
-	if (numerator <= 0 || lo == hi) {
-		return lo;
-	}
-	if (numerator >= denominator) {
-		return hi;
-	}
-
-	// Keep the ratio exact so division cannot move an integral FILL result below its boundary.
-	constexpr auto digits = std::numeric_limits<double>::digits;
-	int32_t numerator_exponent;
-	int32_t denominator_exponent;
-	const auto numerator_fraction = std::frexp(numerator, &numerator_exponent);
-	const auto denominator_fraction = std::frexp(denominator, &denominator_exponent);
-	const auto numerator_significand = static_cast<int64_t>(std::ldexp(numerator_fraction, digits));
-	const auto denominator_significand = static_cast<int64_t>(std::ldexp(denominator_fraction, digits));
-	const auto shift = denominator_exponent - numerator_exponent;
-	D_ASSERT(shift >= 0);
-	const auto delta = hugeint_t(hi) - hugeint_t(lo);
-	const auto descending = delta < 0;
-	const auto product = (descending ? -delta : delta) * numerator_significand;
-	// Larger gaps make the denominator exceed the 117-bit product.
-	if (shift >= 65) {
-		return descending ? lo - 1 : lo;
-	}
-
-	const auto divisor = hugeint_t(denominator_significand) << shift;
-	hugeint_t remainder;
-	auto offset = Hugeint::DivMod(product, divisor, remainder);
-	if (descending && remainder != 0) {
-		offset += 1;
-	}
-	return Hugeint::Cast<int64_t>(hugeint_t(lo) + (descending ? -offset : offset));
-}
-
-template <>
 dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi) {
 	return dtime_t(InterpolateInt64(lo.value, d, hi.value, true));
 }
@@ -1562,10 +1521,10 @@ dtime_tz_t InterpolateOperator::Operation(const dtime_tz_t &lo, const double d, 
 	if (lo.sort_key() == hi.sort_key()) {
 		return lo;
 	}
-	// the sort key holds the normalized time (biased by the maximum offset) in its upper bits
-	const auto lo_micros = static_cast<double>(dtime_tz_t::decode_micros(lo.sort_key()));
-	const auto hi_micros = static_cast<double>(dtime_tz_t::decode_micros(hi.sort_key()));
-	auto micros = std::llround(lo_micros * (1.0 - d) + hi_micros * d);
+	// the sort key holds the normalized time (biased by the maximum offset) in its upper bits,
+	// interpolated exactly with .5 ties going to the earlier microsecond - matching TIME
+	auto micros =
+	    InterpolateInt64(dtime_tz_t::decode_micros(lo.sort_key()), d, dtime_tz_t::decode_micros(hi.sort_key()), true);
 	micros -= int64_t(dtime_tz_t::MAX_OFFSET) * int64_t(dtime_tz_t::OFFSET_MICROS);
 	micros %= Interval::MICROS_PER_DAY;
 	if (micros < 0) {
@@ -1584,12 +1543,13 @@ hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, co
 	hugeint_t delta_hugeint = hi;
 	if (Hugeint::TrySubtractInPlace(delta_hugeint, lo)) {
 		const auto delta = Hugeint::Cast<double>(delta_hugeint);
-		return lo + Hugeint::Convert(delta * d);
+		// floor toward the lower endpoint, matching the integer paths
+		return lo + Hugeint::Convert(std::floor(delta * d));
 	}
 
 	// if delta overflows, we fall back to original subtraction to avoid UB
 	// only happens when lo and hi are so apart that their difference can't be stored in a hugeint
-	return Hugeint::Convert(Operation(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
+	return Hugeint::Convert(std::floor(Operation(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi))));
 }
 
 template <>
@@ -1599,7 +1559,8 @@ uhugeint_t InterpolateOperator::Operation(const uhugeint_t &lo, const double d, 
 
 static interval_t MultiplyByDouble(const interval_t &i, const double &d) { // NOLINT
 	D_ASSERT(d >= 0 && d <= 1);
-	return Interval::FromMicro(std::llround(static_cast<double>(Interval::GetMicro(i)) * d));
+	// exact int64 interpolation, with .5 ties going to the earlier microsecond - matching the temporal types
+	return Interval::FromMicro(InterpolateInt64(0, d, Interval::GetMicro(i), true));
 }
 
 inline interval_t operator+(const interval_t &lhs, const interval_t &rhs) {

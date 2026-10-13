@@ -245,3 +245,36 @@ SELECT filled FROM (
 ) WHERE x = 1e-40;
 ----
 1
+
+# HUGEINT fills floor toward the lower endpoint as well, matching the other widths.
+query III
+WITH data AS (
+	SELECT x, CASE WHEN x = 0 THEN -10::HUGEINT WHEN x = 2 THEN -15::HUGEINT ELSE NULL END AS h,
+		CASE WHEN x = 0 THEN -10::BIGINT WHEN x = 2 THEN -15::BIGINT ELSE NULL END AS b
+	FROM (VALUES (0), (1), (2)) positions(x)
+)
+SELECT x, fill(h ORDER BY x) OVER (), fill(b ORDER BY x) OVER () FROM data ORDER BY x;
+----
+0	-10	-10
+1	-13	-13
+2	-15	-15
+
+# Integral ratios interpolate exactly on every integer width - dividing to DOUBLE first
+# would drop a result like 7/49 of a 49-wide span one below its boundary.
+query III
+WITH data AS (
+	SELECT x, CASE WHEN x IN (0, 49) THEN x::BIGINT ELSE NULL END AS b,
+		CASE WHEN x IN (0, 49) THEN x::INTEGER ELSE NULL END AS i
+	FROM range(50) positions(x)
+)
+SELECT x, fill(b ORDER BY x) OVER (), fill(i ORDER BY x) OVER ()
+FROM data WHERE x % 7 = 0 ORDER BY x;
+----
+0	0	0
+7	7	7
+14	14	14
+21	21	21
+28	28	28
+35	35	35
+42	42	42
+49	49	49

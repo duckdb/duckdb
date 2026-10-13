@@ -107,3 +107,25 @@ SELECT quantile_cont(y, 0.25), quantile_cont(y, 0.75)
 FROM (VALUES (TIME '00:00:00'), (TIME '00:00:00.000003')) t(y);
 ----
 00:00:00.000001	00:00:00.000002
+
+# TIMETZ rounds .5 ties to the earlier microsecond, matching TIME.
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIMETZ '00:00:00.000001+00'), (TIMETZ '00:00:00.000004+00')) t(y);
+----
+00:00:00.000002+00
+
+# INTERVAL medians round .5 ties to the earlier microsecond as well.
+query T
+SELECT median(y) FROM (VALUES (INTERVAL 1 MICROSECOND), (INTERVAL 4 MICROSECOND)) t(y);
+----
+00:00:00.000002
+
+# HUGEINT-backed decimals interpolate identically regardless of width, descending as well.
+query TT
+SELECT (SELECT quantile_cont(y, 0.5 ORDER BY y DESC) FROM
+		(VALUES (-0.01::DECIMAL(38,2)), (-0.02::DECIMAL(38,2))) t(y)),
+	(SELECT quantile_cont(y, 0.5 ORDER BY y DESC) FROM
+		(VALUES (-0.01::DECIMAL(18,2)), (-0.02::DECIMAL(18,2))) t(y));
+----
+-0.02	-0.02
