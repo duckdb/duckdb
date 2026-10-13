@@ -59,3 +59,9 @@ statement error
 SELECT array_agg(col0) WITHIN GROUP (ORDER BY col0) FILTER (WHERE TRUE) FROM t;
 ----
 Parser Error: Unknown ordered aggregate
+
+# the ordered-set aggregate renaming only applies to plain aggregates, so the window form fails in the binder (as in 1.5.x)
+statement error
+SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY col0) OVER () FROM t;
+----
+Catalog Error: Aggregate Function with name percentile_cont does not exist
