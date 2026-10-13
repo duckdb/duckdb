@@ -751,6 +751,11 @@
         "id": 112,
         "name": "column_statistics",
         "type": "Value"
+      },
+      {
+        "id": 113,
+        "name": "bound_schema",
+        "type": "vector<MultiFileColumnDefinition>"
       }
     ],
     "pointer_type": "none"

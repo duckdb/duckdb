@@ -52,7 +52,7 @@ jobs:
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (github.event.action != 'synchronize' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
-    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64;job.priority=2' || 'ubuntu-latest' }}
+    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-slim;job.priority=1' || 'ubuntu-latest' }}
     outputs:
       duckdb_commit: ${{ steps.version.outputs.duckdb_commit }}
       runner_linux_small: ${{ fromJSON(steps.config.outputs.runners).linux_small }}
@@ -144,6 +144,7 @@ jobs:
         uses: tj-actions/changed-files@v47
         with:
           separator: "\n"
+          safe_output: false
           files_yaml: |
             github:
               - .github/**
@@ -178,6 +179,8 @@ jobs:
       - name: Configure CI
         id: config
         shell: bash
+        env:
+          CHANGED_KEYS: ${{ steps.changed.outputs.changed_keys }}
         run: |
           skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
           python3 scripts/ci/job_stages.py \
@@ -186,7 +189,7 @@ jobs:
             --default_branch "${{ github.event.repository.default_branch }}" \
             --repository "${{ github.repository }}" \
             --skip-tests "$skip_tests" \
-            --changed-keys "${{ steps.changed.outputs.changed_keys }}" \
+            --changed-keys "$CHANGED_KEYS" \
             --reduced-ci-mode "${{ (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.run_all)) && 'enabled' || 'disabled' }}" \
             --runners '${{ steps.runners.outputs.runners }}' \
             --runner-provider '${{ steps.runners.outputs.runner_provider }}'
@@ -284,7 +287,9 @@ jobs:
 
     - name: Write changed tests file
       shell: bash
-      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "$RUNNER_TEMP/changed_tests.txt"
+      env:
+        CHANGED_TESTS_FILES: ${{ needs.prepare.outputs.changed_tests_files }}
+      run: printf '%s\n' "$CHANGED_TESTS_FILES" | sed '/^$/d' > "$RUNNER_TEMP/changed_tests.txt"
 
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
@@ -360,8 +365,7 @@ jobs:
       duckdb_version: ${{ needs.prepare.outputs.duckdb_version }}
       build_current_release: false
       run_slow_tests: ${{ needs.prepare.outputs.run_slow_tests == 'true' }}
-      runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
-      runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
+      runners: ${{ needs.prepare.outputs.runners }}
       runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
       images: ${{ needs.prepare.outputs.images }}
@@ -702,7 +706,9 @@ jobs:
 
     - name: Write changed tests file
       shell: bash
-      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "$RUNNER_TEMP/changed_tests.txt"
+      env:
+        CHANGED_TESTS_FILES: ${{ needs.prepare.outputs.changed_tests_files }}
+      run: printf '%s\n' "$CHANGED_TESTS_FILES" | sed '/^$/d' > "$RUNNER_TEMP/changed_tests.txt"
 
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
@@ -1136,7 +1142,6 @@ jobs:
     env:
       DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
       DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
-      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
     steps:
@@ -1174,7 +1179,9 @@ jobs:
 
       - name: Test
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-        run: make unittest_relassert
+        run: |
+          export LSAN_OPTIONS="suppressions=$PWD/.sanitizer-leak-suppressions.txt"
+          make unittest_relassert
 
  no-rtti:
     name: No RTTI
@@ -1374,7 +1381,7 @@ jobs:
  summary:
     name: Summary
     if: ${{ always() }}
-    runs-on: ubuntu-slim
+    runs-on: ${{ fromJSON(needs.prepare.outputs.runners).linux_slim }}
     needs:
       - prepare
       - linux-relassert

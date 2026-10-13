@@ -230,12 +230,13 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
                                       unsafe_optional_ptr<ht_entry_t> entries, Vector &pointers_result_v,
                                       optional_ptr<const SelectionVector> row_sel, idx_t &count) {
 	auto hashes_dense = FlatVector::GetDataMutable<hash_t>(state.hashes_dense_v);
+	const auto bitmask = ht.bitmask;
 
 	idx_t keys_to_compare_count = 0;
 
 	for (idx_t i = 0; i < count; i++) {
 		auto row_hash = hashes_dense[i]; // hashes have been flattened before -> always access dense
-		auto row_ht_offset = row_hash & ht.bitmask;
+		auto row_ht_offset = row_hash & bitmask;
 
 		if (USE_SALTS) {
 			// increment the ht_offset of the entry as long as the next entry is occupied and salt does not match
@@ -259,7 +260,7 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 				}
 
 				// full and salt do not match -> continue probing
-				IncrementAndWrap(row_ht_offset, ht.bitmask);
+				IncrementAndWrap(row_ht_offset, bitmask);
 			}
 		} else {
 			const ht_entry_t entry = entries.get()[row_ht_offset];
@@ -845,6 +846,7 @@ static inline void InsertMatchesAndIncrementMisses(unsafe_optional_ptr<atomic<ht
 		if (key_match_count != 0) {
 			ht.chains_longer_than_one.store(true, std::memory_order_relaxed);
 		}
+		const auto pointer_offset = ht.pointer_offset;
 		for (idx_t i = 0; i < key_match_count; i++) {
 			const auto need_compare_idx = state.key_match_sel.get_index(i);
 			const auto entry_index = state.keys_to_compare_sel.get_index(need_compare_idx);
@@ -854,7 +856,7 @@ static inline void InsertMatchesAndIncrementMisses(unsafe_optional_ptr<atomic<ht
 			const auto row_ptr_to_insert = lhs_row_locations[entry_index];
 
 			const auto salt = hash_salts[entry_index];
-			InsertRowToEntry<PARALLEL, false>(entry, row_ptr_to_insert, salt, ht.pointer_offset);
+			InsertRowToEntry<PARALLEL, false>(entry, row_ptr_to_insert, salt, pointer_offset);
 		}
 	}
 
@@ -927,6 +929,7 @@ static void InsertHashesLoop(unsafe_optional_ptr<atomic<ht_entry_t>> entries, Ve
 
 	// use the ht bitmask to make the modulo operation faster but keep the salt bits intact
 	idx_t capacity_mask = ht.bitmask | ht_entry_t::SALT_MASK;
+	const auto pointer_offset = ht.pointer_offset;
 	while (remaining_count > 0) {
 		idx_t salt_match_count = 0;
 
@@ -959,7 +962,7 @@ static void InsertHashesLoop(unsafe_optional_ptr<atomic<ht_entry_t>> entries, Ve
 				auto &atomic_entry = entries.get()[ht_offset];
 				const auto row_ptr_to_insert = lhs_row_locations[row_index];
 				const auto potential_collided_ptr =
-				    InsertRowToEntry<PARALLEL, true>(atomic_entry, row_ptr_to_insert, salt, ht.pointer_offset);
+				    InsertRowToEntry<PARALLEL, true>(atomic_entry, row_ptr_to_insert, salt, pointer_offset);
 
 				if (PARALLEL) {
 					// if the insertion was not successful, the entry was occupied in the meantime, so we have to

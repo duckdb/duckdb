@@ -45,7 +45,8 @@ public:
 	using ZippedTuple = std::tuple<idx_t, idx_t>;
 	using ZippedElements = vector<ZippedTuple>;
 
-	WindowDistinctSortTree(WindowDistinctAggregatorGlobalState &gdastate, idx_t count) : gdastate(gdastate) {
+	WindowDistinctSortTree(Allocator &allocator, WindowDistinctAggregatorGlobalState &gdastate, idx_t count)
+	    : MergeSortTree(allocator), gdastate(gdastate) {
 		//	Set up for parallel build
 		build_level = 0;
 		build_complete = 0;
@@ -118,7 +119,8 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
                                                                          const WindowDistinctAggregator &aggregator,
                                                                          idx_t group_count)
     : WindowAggregatorGlobalState(client, aggregator, group_count), stage(WindowDistinctSortStage::INIT),
-      tasks_assigned(0), tasks_completed(0), merge_sort_tree(*this, group_count), levels_flat_native(client, aggr) {
+      tasks_assigned(0), tasks_completed(0), zipped_tree(BufferAllocator::Get(client)),
+      merge_sort_tree(BufferAllocator::Get(client), *this, group_count), levels_flat_native(client, aggr) {
 	//	1:	functionComputePrevIdcs(𝑖𝑛)
 	//	2:		sorted ← []
 	//	We sort the aggregate arguments and use the partition index as a tie-breaker.
@@ -160,8 +162,8 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
 	merge_sort_tree.tree.reserve(zipped_tree.tree.size());
 	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
 		auto &zipped_level = zipped_tree.tree[level_nr].first;
-		WindowDistinctSortTree::Elements level;
-		WindowDistinctSortTree::Offsets cascades;
+		WindowDistinctSortTree::Elements level(merge_sort_tree.allocator);
+		WindowDistinctSortTree::Offsets cascades(merge_sort_tree.allocator);
 		level.resize(zipped_level.size());
 		merge_sort_tree.tree.emplace_back(std::move(level), std::move(cascades));
 	}
