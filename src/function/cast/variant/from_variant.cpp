@@ -594,8 +594,18 @@ static optional<Value> TryCastVariantValueToMap(FromVariantConversionData &conve
 	if (entries->IsNull()) {
 		return Value(target_type);
 	}
+	auto &children = ListValue::GetChildren(*entries);
+	for (auto &child : children) {
+		if (child.IsNull()) {
+			// a NULL entry has no key
+			if (conversion_data.error.empty()) {
+				conversion_data.error = "Map keys can not be NULL.";
+			}
+			return optional<Value>();
+		}
+	}
 	try {
-		return Value::MAP(entry_type, ListValue::GetChildren(*entries));
+		return Value::MAP(entry_type, children);
 	} catch (const InvalidInputException &ex) {
 		// the entries do not form a valid map (e.g. duplicate keys)
 		if (conversion_data.error.empty()) {
