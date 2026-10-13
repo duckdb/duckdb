@@ -79,7 +79,7 @@ static DatabaseInstance &GetDB(DatabaseInstance *db) {
 template <class BASE>
 static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) {
 	if (input.empty() || input.back() != '%') {
-		return DBConfig::ParseMemoryLimit(input);
+		return DBConfig::ParseMemoryLimitOrMaximum(input);
 	}
 	double percentage;
 	if (!TryDoubleCast(input.c_str(), input.size() - 1, percentage, false) || percentage < 0 || percentage > 100) {
@@ -119,6 +119,9 @@ bool AccessModeSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, cons
 // Allocator Background Threads
 //===----------------------------------------------------------------------===//
 void AllocatorBackgroundThreadsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", AllocatorBackgroundThreadsSetting::Name);
+	}
 	Allocator::SetBackgroundThreads(input.GetValue<bool>());
 }
 
@@ -127,7 +130,7 @@ void AllocatorBackgroundThreadsSetting::OnSet(SettingCallbackInfo &info, Value &
 //===----------------------------------------------------------------------===//
 void AllocatorBulkDeallocationFlushThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config,
                                                                const Value &input) {
-	config.options.allocator_bulk_deallocation_flush_threshold = DBConfig::ParseMemoryLimit(input.ToString());
+	config.options.allocator_bulk_deallocation_flush_threshold = DBConfig::ParseMemoryLimitOrMaximum(input.ToString());
 	if (db) {
 		BufferManager::GetBufferManager(*db).GetBufferPool().SetAllocatorBulkDeallocationFlushThreshold(
 		    config.options.allocator_bulk_deallocation_flush_threshold);
@@ -176,6 +179,9 @@ void AllocatorFlushThresholdSetting::OnSet(SettingCallbackInfo &info, Value &inp
 // Allow Community Extensions
 //===----------------------------------------------------------------------===//
 void AllowCommunityExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", AllowCommunityExtensionsSetting::Name);
+	}
 	if (info.db && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change allow_community_extensions setting while database is running");
 	}
@@ -198,6 +204,9 @@ static int ExtensionRepositoryAccessLevel(ExtensionRepositoryAccess access) {
 }
 
 void AllowExtensionRepositoriesSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", AllowExtensionRepositoriesSetting::Name);
+	}
 	// validate the value
 	auto new_access = ExtensionRepositoryManager::ParseAccess(StringValue::Get(input));
 	if (!info.db) {
@@ -234,6 +243,9 @@ void ExtensionRepositoryDirectorySetting::OnSet(SettingCallbackInfo &info, Value
 // Allow Persistent Secrets
 //===----------------------------------------------------------------------===//
 void AllowPersistentSecretsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", AllowPersistentSecretsSetting::Name);
+	}
 	auto value = input.DefaultCastAs(LogicalType::BOOLEAN);
 	config.secret_manager->SetEnablePersistentSecrets(value.GetValue<bool>());
 }
@@ -251,6 +263,9 @@ Value AllowPersistentSecretsSetting::GetSetting(const ClientContext &context) {
 // Allow Unredacted Secrets
 //===----------------------------------------------------------------------===//
 void AllowUnredactedSecretsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", AllowUnredactedSecretsSetting::Name);
+	}
 	if ((info.db || info.context) && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change allow_unredacted_secrets setting while database is running");
 	}
@@ -269,6 +284,9 @@ void DisableDatabaseInvalidationSetting::OnSet(SettingCallbackInfo &info, Value 
 // Allow Unsigned Extensions
 //===----------------------------------------------------------------------===//
 void AllowUnsignedExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", AllowUnsignedExtensionsSetting::Name);
+	}
 	if (info.db && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change allow_unsigned_extensions setting while database is running");
 	}
@@ -278,6 +296,9 @@ void AllowUnsignedExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &inp
 // Allowed Configs
 //===----------------------------------------------------------------------===//
 void AllowedConfigsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", AllowedConfigsSetting::Name);
+	}
 	config.options.allowed_configs.clear();
 	auto &list = ListValue::GetChildren(input);
 	for (auto &val : list) {
@@ -302,6 +323,9 @@ Value AllowedConfigsSetting::GetSetting(const ClientContext &context) {
 // Allowed Directories
 //===----------------------------------------------------------------------===//
 void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", AllowedDirectoriesSetting::Name);
+	}
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
@@ -335,6 +359,9 @@ Value AllowedDirectoriesSetting::GetSetting(const ClientContext &context) {
 // Allowed Paths
 //===----------------------------------------------------------------------===//void
 void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", AllowedPathsSetting::Name);
+	}
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
@@ -393,7 +420,7 @@ Value BlockAllocatorMemorySetting::GetSetting(const ClientContext &context) {
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	idx_t new_limit = DBConfig::ParseMemoryLimit(input.ToString());
+	idx_t new_limit = DBConfig::ParseMemoryLimitOrMaximum(input.ToString());
 	config.options.checkpoint_wal_size = new_limit;
 }
 
@@ -441,6 +468,9 @@ Value DebugVerificationModeSetting::GetSetting(const ClientContext &context) {
 // Default Block Size
 //===----------------------------------------------------------------------===//
 void DefaultBlockSizeSetting::OnSet(SettingCallbackInfo &, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", DefaultBlockSizeSetting::Name);
+	}
 	auto block_alloc_size = input.GetValue<uint64_t>();
 	Storage::VerifyBlockAllocSize(block_alloc_size);
 }
@@ -631,6 +661,9 @@ void VacuumRebuildIndexesSetting::OnSet(SettingCallbackInfo &info, Value &input)
 // Enable External Access
 //===----------------------------------------------------------------------===//
 void EnableExternalAccessSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", EnableExternalAccessSetting::Name);
+	}
 	if (!info.db) {
 		return;
 	}
@@ -659,6 +692,9 @@ void EnableExternalAccessSetting::OnSet(SettingCallbackInfo &info, Value &input)
 // Enable External File Cache
 //===----------------------------------------------------------------------===//
 void EnableExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", EnableExternalFileCacheSetting::Name);
+	}
 	if (info.db) {
 		ExternalFileCache::Get(*info.db).SetEnabled(input.GetValue<bool>());
 	}
@@ -679,14 +715,23 @@ static void ValidateExternalFileCacheBlockSize(const char *name, const Value &in
 }
 
 void ExternalFileCacheLocalMaxBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", ExternalFileCacheLocalMaxBlockSizeSetting::Name);
+	}
 	ValidateExternalFileCacheBlockSize(Name, input);
 }
 
 void ExternalFileCacheRemoteMaxBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", ExternalFileCacheRemoteMaxBlockSizeSetting::Name);
+	}
 	ValidateExternalFileCacheBlockSize(Name, input);
 }
 
 void ExternalFileCacheRemoteMinBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", ExternalFileCacheRemoteMinBlockSizeSetting::Name);
+	}
 	ValidateExternalFileCacheBlockSize(Name, input);
 }
 
@@ -697,6 +742,9 @@ Value EnableLogging::GetSetting(const ClientContext &context) {
 	return context.db->GetLogManager().GetConfig().enabled;
 }
 void EnableLogging::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", EnableLogging::Name);
+	}
 	auto &db = GetDB<EnableLogging>(db_p);
 	db.GetLogManager().SetEnableLogging(parameter.GetValue<bool>());
 }
@@ -790,6 +838,9 @@ Value ForceVariantShredding::GetSetting(const ClientContext &context) {
 // Extension Directory
 //===----------------------------------------------------------------------===//
 void ExtensionDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", ExtensionDirectoriesSetting::Name);
+	}
 	config.options.extension_directories.clear();
 
 	auto &list = ListValue::GetChildren(input);
@@ -1113,6 +1164,9 @@ void HTTPProxySetting::ResetGlobal(DatabaseInstance *, DBConfig &config) {
 // Index Scan Percentage
 //===----------------------------------------------------------------------===//
 void IndexScanPercentageSetting::OnSet(SettingCallbackInfo &, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", IndexScanPercentageSetting::Name);
+	}
 	auto index_scan_percentage = input.GetValue<double>();
 	if (index_scan_percentage < 0 || index_scan_percentage > 1.0) {
 		throw InvalidInputException("the index scan percentage must be within [0, 1]");
@@ -1123,6 +1177,9 @@ void IndexScanPercentageSetting::OnSet(SettingCallbackInfo &, Value &input) {
 // Initial Column Segment Size
 //===----------------------------------------------------------------------===//
 void InitialColumnSegmentSizeSetting::OnSet(SettingCallbackInfo &, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", InitialColumnSegmentSizeSetting::Name);
+	}
 	auto initial_column_segment_size = input.GetValue<uint64_t>();
 	if (initial_column_segment_size < DEFAULT_BLOCK_HEADER_STORAGE_SIZE) {
 		throw InvalidInputException(
@@ -1184,11 +1241,14 @@ Value MaxMemorySetting::GetSetting(const ClientContext &context) {
 // Max Temp Directory Size
 //===----------------------------------------------------------------------===//
 void MaxTempDirectorySizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", MaxTempDirectorySizeSetting::Name);
+	}
 	if (input == "90% of available disk space") {
 		ResetGlobal(db, config);
 		return;
 	}
-	auto maximum_swap_space = DBConfig::ParseMemoryLimit(input.ToString());
+	auto maximum_swap_space = DBConfig::ParseMemoryLimitOrMaximum(input.ToString());
 	if (maximum_swap_space == DConstants::INVALID_INDEX) {
 		// We use INVALID_INDEX to indicate that the value is not set by the user
 		// use one lower to indicate 'unlimited'
@@ -1237,6 +1297,7 @@ void OperatorMemoryLimitSetting::SetLocal(ClientContext &context, const Value &i
 	if (input.IsNull()) {
 		config.operator_memory_limit.SetInvalid();
 	} else {
+		// an unlimited size is the same as no operator memory limit
 		config.operator_memory_limit = DBConfig::ParseMemoryLimit(input.ToString());
 	}
 }
@@ -1442,6 +1503,9 @@ Value ProfilingCoverageSetting::GetSetting(const ClientContext &context) {
 // Progress Bar Time
 //===----------------------------------------------------------------------===//
 void ProgressBarTimeSetting::SetLocal(ClientContext &context, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", ProgressBarTimeSetting::Name);
+	}
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
 	config.wait_time = input.GetValue<int32_t>();
@@ -1568,7 +1632,7 @@ Value StandardVectorSizeSetting::GetSetting(const ClientContext &) {
 //===----------------------------------------------------------------------===//
 void MaxStreamingBufferSizeSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.max_streaming_buffer_size = DBConfig::ParseMemoryLimit(input.ToString());
+	config.max_streaming_buffer_size = DBConfig::ParseMemoryLimitOrMaximum(input.ToString());
 }
 
 void MaxStreamingBufferSizeSetting::ResetLocal(ClientContext &context) {
@@ -1631,6 +1695,9 @@ void TempFileEncryptionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 // Tracked Metrics
 //===----------------------------------------------------------------------===//
 void TrackedMetricsSetting::SetLocal(ClientContext &context, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", TrackedMetricsSetting::Name);
+	}
 	auto &config = ClientConfig::GetConfig(context);
 	config.tracked_metrics.clear();
 	if (input.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
@@ -1760,6 +1827,9 @@ Value HTTPClientPoolCapacitySetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 
 void WarningsAsErrorsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", WarningsAsErrorsSetting::Name);
+	}
 	auto &log_manager = LogManager::Get(*info.context);
 	if (input == Value(true) && !log_manager.GetConfig().enabled) {
 		throw Exception(
@@ -1775,6 +1845,7 @@ void WriteBufferRowGroupMemoryLimitSetting::SetGlobal(DatabaseInstance *db, DBCo
 	if (input.IsNull() || input.ToString().empty()) {
 		config.options.write_buffer_row_group_memory_limit = optional_idx();
 	} else {
+		// an unlimited size means that there is no limit
 		config.options.write_buffer_row_group_memory_limit = DBConfig::ParseMemoryLimit(input.ToString());
 	}
 }

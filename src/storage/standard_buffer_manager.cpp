@@ -375,7 +375,7 @@ BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<
 		// check if the block is already loaded
 		if (block_memory.GetState() == BlockState::BLOCK_LOADED) {
 			// the block is loaded, increment the reader count and set the BufferHandle
-			buf = handle->Load(context);
+			buf = handle->Load(lock, context);
 		}
 		required_memory = block_memory.GetMemoryUsage();
 	}
@@ -396,11 +396,11 @@ BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<
 	if (block_memory.GetState() == BlockState::BLOCK_LOADED) {
 		// the block is loaded, increment the reader count and return a pointer to the handle
 		reservation.Resize(0);
-		buf = handle->Load(context);
+		buf = handle->Load(lock, context);
 	} else {
 		// now we can actually load the current block
 		D_ASSERT(block_memory.GetReaders() == 0);
-		buf = handle->Load(context, std::move(reusable_buffer));
+		buf = handle->Load(lock, context, std::move(reusable_buffer));
 		if (!buf.IsValid()) {
 			reservation.Resize(0);
 			return buf; // Buffer was destroyed (e.g., due to DestroyBufferUpon::Eviction)
@@ -460,7 +460,7 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 			return;
 		}
 		D_ASSERT(block_memory.GetReaders() > 0);
-		auto new_readers = block_memory.DecrementReaders();
+		auto new_readers = block_memory.DecrementReaders(lock);
 		if (new_readers == 0) {
 			VerifyZeroReaders(lock, handle);
 			if (block_memory.MustAddToEvictionQueue()) {
@@ -509,17 +509,21 @@ string StandardBufferManager::GetTemporaryPath(block_id_t id) {
 }
 
 void StandardBufferManager::RequireTemporaryDirectory() {
+	if (temporary_directory.initialized.load(std::memory_order_acquire)) {
+		return;
+	}
+	lock_guard<mutex> guard(temporary_directory.lock);
+	if (temporary_directory.handle) {
+		return;
+	}
 	if (temporary_directory.path.empty()) {
 		throw InvalidInputException(
 		    "Out-of-memory: cannot write buffer because no temporary directory is specified!\nTo enable "
 		    "temporary buffer eviction set a temporary directory using PRAGMA temp_directory='/path/to/tmp.tmp'");
 	}
-	lock_guard<mutex> guard(temporary_directory.lock);
-	if (!temporary_directory.handle) {
-		// temp directory has not been created yet: initialize it
-		temporary_directory.handle = make_uniq<TemporaryDirectoryHandle>(
-		    db, temporary_directory.path, temporary_directory.size_on_disk, temporary_directory.maximum_swap_space);
-	}
+	temporary_directory.handle = make_uniq<TemporaryDirectoryHandle>(
+	    db, temporary_directory.path, temporary_directory.size_on_disk, temporary_directory.maximum_swap_space);
+	temporary_directory.initialized.store(true, std::memory_order_release);
 }
 
 bool StandardBufferManager::EncryptTemporaryFiles() {
@@ -662,7 +666,8 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 }
 
 void StandardBufferManager::DeleteTemporaryFile(BlockMemory &memory) {
-	if (!memory.IsUnloaded()) {
+	// Without spill storage, there are no temporary buffers to delete.
+	if (!memory.IsUnloaded() || GetUsedSwap() == 0) {
 		return;
 	}
 	auto id = memory.BlockId();
