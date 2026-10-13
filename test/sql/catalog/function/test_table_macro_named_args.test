@@ -1,0 +1,87 @@
+# name: test/sql/catalog/function/test_table_macro_named_args.test
+# description: Test named table function arguments inside table macros
+# group: [function]
+
+# Exercise the three supported named argument operators with a required macro parameter.
+foreach op := => =
+
+statement ok
+CREATE MACRO secrets_required(x) AS TABLE
+SELECT count(*) AS secret_count FROM duckdb_secrets(redact {op} x);
+
+query I
+SELECT secret_count FROM secrets_required(true);
+----
+0
+
+query I
+SELECT secret_count FROM secrets_required(false);
+----
+0
+
+statement ok
+DROP MACRO secrets_required;
+
+endloop
+
+statement ok
+CREATE MACRO secrets_with_default(masked := false) AS TABLE
+SELECT count(*) AS secret_count FROM duckdb_secrets(redact := masked);
+
+# The macro parameter name differs from the named argument on duckdb_secrets.
+query I
+SELECT secret_count FROM secrets_with_default();
+----
+0
+
+query I
+SELECT secret_count FROM secrets_with_default(masked := true);
+----
+0
+
+statement ok
+CREATE MACRO secrets_with_same_name(redact := false) AS TABLE
+SELECT count(*) AS secret_count FROM duckdb_secrets(redact := redact);
+
+query I
+SELECT secret_count FROM secrets_with_same_name(redact := true);
+----
+0
+
+statement ok
+CREATE MACRO secrets_with_cast(masked := false) AS TABLE
+SELECT count(*) AS secret_count FROM duckdb_secrets(redact := CAST(masked AS BOOLEAN));
+
+query I
+SELECT secret_count FROM secrets_with_cast(masked := true);
+----
+0
+
+statement ok
+CREATE MACRO secrets_with_quoted_parameter("MaskSecrets" := false) AS TABLE
+SELECT count(*) AS secret_count FROM duckdb_secrets(redact := "MaskSecrets");
+
+query I
+SELECT secret_count FROM secrets_with_quoted_parameter("MaskSecrets" := true);
+----
+0
+
+# Verify that a differing macro parameter is substituted into the table function option.
+statement ok
+COPY (SELECT 1 AS a, 2 AS b) TO
+'{TEST_DIR}/table_macro_named_args.csv' (FORMAT CSV, DELIMITER ';', HEADER false);
+
+statement ok
+CREATE MACRO read_semicolon_csv(delimiter := ';') AS TABLE
+SELECT * FROM read_csv('{TEST_DIR}/table_macro_named_args.csv', delim := delimiter,
+                       header := false, columns := {'a': 'INTEGER', 'b': 'INTEGER'});
+
+query II
+SELECT a, b FROM read_semicolon_csv();
+----
+1	2
+
+query II
+SELECT a, b FROM read_semicolon_csv(delimiter := ';');
+----
+1	2
