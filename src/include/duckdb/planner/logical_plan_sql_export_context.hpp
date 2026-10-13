@@ -66,6 +66,16 @@ public:
 	const vector<reference<LogicalOperator>> &Ancestors() const {
 		return ancestors;
 	}
+	//! Enters an operator exported outside the standard child recursion (e.g. a RETURNING root)
+	struct AncestorScope {
+		AncestorScope(LogicalPlanSQLExportContext &context_p, LogicalOperator &op) : context(context_p) {
+			context.ancestors.push_back(op);
+		}
+		~AncestorScope() {
+			context.ancestors.pop_back();
+		}
+		LogicalPlanSQLExportContext &context;
+	};
 	//! Make a CTE relation referenceable while its consumers are exported
 	void PushNamedRelation(TableIndex index, const Identifier &name, bool is_recurring);
 	//! Remove the innermost named relation and return how often it was referenced
