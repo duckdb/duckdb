@@ -94,11 +94,11 @@ SELECT hex(1.5::FLOAT::BIGNUM) = hex(1::BIGNUM)
 ----
 true
 
-# integers still reach the BIGNUM overload through their implicit casts
-query I
-SELECT hex(255::INTEGER) = hex(255::BIGINT)
+# integers still cast implicitly to BIGNUM, FLOAT does not
+query II
+SELECT can_cast_implicitly(NULL::INTEGER, NULL::BIGNUM), can_cast_implicitly(NULL::FLOAT, NULL::BIGNUM)
 ----
-true
+true	false
 
 # BIGNUM with DECIMAL has no implicit cast either and meets in DOUBLE like the arithmetic does
 query II
