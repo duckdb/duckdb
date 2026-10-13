@@ -263,7 +263,7 @@ namespace {
 	case DUCKDB_V2_ERROR_RUNTIME_INTERRUPT:
 		throw InterruptException(message, std::move(raw));
 	default:
-		throw Exception(code, std::move(message), std::move(raw));
+		throw Exception(code, message, std::move(raw));
 	}
 }
 

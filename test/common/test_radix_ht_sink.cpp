@@ -184,6 +184,63 @@ TEST_CASE("Increasing the reservation preserves an underfull aggregate table", "
 	REQUIRE_FALSE(local.spilling);
 }
 
+TEST_CASE("A reduced reservation does not prevent external aggregation", "[radix_ht_sink]") {
+	RadixSinkFixture fixture("128MB");
+	auto &global = fixture.Global();
+	const auto radix_bits = global.config.GetRadixBits();
+	const auto minimum_reservation = global.minimum_reservation.load();
+	REQUIRE(radix_bits > 1);
+	global.temporary_memory_state->SetRemainingSizeAndUpdateReservation(*fixture.con.context, 1);
+	global.config.SetRadixBits(1);
+	REQUIRE(global.config.GetRadixBits() == radix_bits);
+	REQUIRE_FALSE(global.external);
+	REQUIRE(global.config.SetRadixBitsToExternal());
+	REQUIRE(global.config.GetRadixBits() == radix_bits);
+	REQUIRE(global.minimum_reservation == minimum_reservation);
+	fixture.Keys(0, STANDARD_VECTOR_SIZE);
+	fixture.Sink();
+	fixture.Combine(0);
+	REQUIRE(fixture.ScanGroupCount() == STANDARD_VECTOR_SIZE);
+}
+
+TEST_CASE("Finished aggregate sources release their local hash tables", "[radix_ht_sink]") {
+	RadixSinkFixture fixture("128MB");
+	fixture.Keys(0, STANDARD_VECTOR_SIZE);
+	fixture.Sink(0);
+	fixture.Sink(1);
+	fixture.Combine(0);
+	fixture.Combine(1);
+	fixture.radix->SetMultiScan(*fixture.global);
+	fixture.radix->Finalize(*fixture.con.context, *fixture.global);
+	fixture.radix->MaxThreads(*fixture.global);
+	auto source = fixture.radix->GetGlobalSourceState(*fixture.con.context);
+	auto scan = [&]() {
+		auto local_source = fixture.radix->GetLocalSourceState(fixture.context);
+		OperatorSourceInput input {*source, *local_source, fixture.interrupt};
+		DataChunk output;
+		output.Initialize(Allocator::Get(*fixture.con.context), fixture.chunk.GetTypes());
+		idx_t count = 0;
+		while (true) {
+			output.Reset();
+			const auto result = fixture.radix->GetData(fixture.context, output, *fixture.global, input);
+			REQUIRE(result != SourceResultType::BLOCKED);
+			count += output.size();
+			if (result == SourceResultType::FINISHED) {
+				break;
+			}
+		}
+		REQUIRE(count == STANDARD_VECTOR_SIZE);
+		auto &manager = BufferManager::GetBufferManager(*fixture.con.context);
+		const auto used_memory = manager.GetUsedMemory();
+		local_source.reset();
+		return used_memory - manager.GetUsedMemory();
+	};
+	const auto first_scan_retained = scan();
+	fixture.radix->ResetGlobalSourceState(*fixture.con.context, *source);
+	// A rescan needs the same scan buffers but no hash table to finalize the partitions.
+	REQUIRE(first_scan_retained == scan());
+}
+
 TEST_CASE("State export retires aggregate telemetry even after another worker combines", "[radix_ht_sink]") {
 	for (const idx_t input_count : {idx_t(262144), idx_t(1114112)}) {
 		CAPTURE(input_count);

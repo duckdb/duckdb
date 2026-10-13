@@ -204,7 +204,7 @@ HTTPTransportManager::HTTPTransportManager(const shared_ptr<HTTPUtil> &initial_h
 	}
 	auto reuse_policy = initial_http_util->GetTransportReusePolicy();
 	ValidateReusePolicy(reuse_policy);
-	providers.push_back(make_uniq<HTTPTransportManagerState>(initial_http_util, reuse_policy, 0));
+	providers.push_back(make_uniq<HTTPTransportManagerState>(initial_http_util, reuse_policy, idx_t(0)));
 }
 
 HTTPTransportManager::~HTTPTransportManager() {
