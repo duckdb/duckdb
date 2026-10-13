@@ -45,7 +45,9 @@
         "test/sql/storage/test_eviction_queue_dead_nodes_underflow.test",
         "test/sql/copy/parquet/parquet_prefetch_tracked_memory.test",
         "test/sql/join/hash_join/hash_join_dict_surviving.test",
-        "test/sql/filter/filter_cache_dictionary.test"
+        "test/sql/filter/filter_cache_dictionary.test",
+        "test/sql/index/art/nodes/test_art_prefix_transform_deprecated_create.test",
+        "test/sql/storage/optimistic_write/optimistic_write_unique_index_wal_replay.test"
       ]
     },
     {
