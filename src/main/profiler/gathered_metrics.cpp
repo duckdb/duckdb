@@ -106,14 +106,14 @@ void GatheredMetrics::SetMetric(const string &key, const string &value) {
 }
 
 void GatheredMetrics::WriteMetricsToLog(ClientContext &context,
-                                        const unordered_map<string, MetricTimingBounds> &timing_bounds) const {
+                                        const unordered_map<string, MetricTiming> &timings) const {
 	auto &logger = Logger::Get(context);
 	if (logger.ShouldLog(MetricsLogType::NAME, MetricsLogType::LEVEL)) {
 		for (const auto &entry : metrics) {
-			auto timing = timing_bounds.find(entry.first);
+			auto timing = timings.find(entry.first);
 			logger.WriteLog(MetricsLogType::NAME, MetricsLogType::LEVEL,
-			                MetricsLogType::ConstructLogMessage(
-			                    entry.first, entry.second, timing == timing_bounds.end() ? nullptr : &timing->second));
+			                MetricsLogType::ConstructLogMessage(entry.first, entry.second,
+			                                                    timing == timings.end() ? nullptr : &timing->second));
 		}
 	}
 }

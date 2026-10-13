@@ -167,8 +167,7 @@ void QueryProfiler::AddParserTime(const Profiler &parser_timer, timestamp_t star
 	if (!parser_time_ns) {
 		return;
 	}
-	query_metrics.UpdateMetric(MetricParserTotalTime::Name, parser_time_ns);
-	query_metrics.UpdateTimingBounds(MetricParserTotalTime::Name, start_time, end_time);
+	query_metrics.UpdateMetric(MetricParserTotalTime::Name, parser_time_ns, start_time, end_time);
 }
 
 bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type) {
@@ -844,7 +843,7 @@ void QueryProfiler::ToLogInternal() const {
 	if (!root) {
 		return;
 	}
-	metrics->WriteMetricsToLog(context, query_metrics.GetTimingBounds());
+	metrics->WriteMetricsToLog(context, query_metrics.GetMetricTimings());
 }
 
 void QueryProfiler::ToLog() const {

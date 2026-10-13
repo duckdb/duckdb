@@ -45,19 +45,11 @@ public:
 
 public:
 	void UpdateMetric(const string &key, idx_t addition) {
-		string_timings[key] += addition;
+		string_timings[key].Add(addition);
 	}
 
-	void UpdateTimingBounds(const string &key, timestamp_t start_time, timestamp_t end_time) {
-		auto &bounds = timing_bounds[key];
-		if (!bounds.is_set) {
-			bounds.start_time = start_time;
-			bounds.end_time = end_time;
-			bounds.is_set = true;
-			return;
-		}
-		bounds.start_time = MinValue(bounds.start_time, start_time);
-		bounds.end_time = MaxValue(bounds.end_time, end_time);
+	void UpdateMetric(const string &key, idx_t addition, timestamp_t start_time, timestamp_t end_time) {
+		string_timings[key].Add(addition, start_time, end_time);
 	}
 
 	void UpdateMetricCounter(const string &key, idx_t addition) {
@@ -81,7 +73,7 @@ public:
 		if (it == string_timings.end()) {
 			return 0.0;
 		}
-		return static_cast<double>(it->second) / 1e9;
+		return static_cast<double>(it->second.duration) / 1e9;
 	}
 
 	idx_t GetStringCounter(const string &key) const {
@@ -104,7 +96,7 @@ public:
 		return total_memory_allocated.load();
 	}
 
-	const unordered_map<string, idx_t> &GetMetricTimings() const {
+	const unordered_map<string, MetricTiming> &GetMetricTimings() const {
 		return string_timings;
 	}
 
@@ -112,15 +104,10 @@ public:
 		return string_counters;
 	}
 
-	const unordered_map<string, MetricTimingBounds> &GetTimingBounds() const {
-		return timing_bounds;
-	}
-
 	void Reset() {
 		latency_timer.reset();
 		string_timings.clear();
 		string_counters.clear();
-		timing_bounds.clear();
 		bytes_read = 0;
 		bytes_written = 0;
 		total_memory_allocated = 0;
@@ -137,7 +124,7 @@ public:
 
 	void Merge(const QueryMetrics &other) {
 		for (const auto &entry : other.string_timings) {
-			string_timings[entry.first] += entry.second;
+			string_timings[entry.first].Merge(entry.second);
 		}
 		for (const auto &entry : other.string_counters) {
 			string_counters[entry.first] += entry.second;
@@ -149,9 +136,7 @@ public:
 
 private:
 	// String-keyed timings for optimizer, storage and phase timing metrics
-	unordered_map<string, idx_t> string_timings;
-	// Wall-clock bounds for timing metrics, used by timeline-oriented log consumers.
-	unordered_map<string, MetricTimingBounds> timing_bounds;
+	unordered_map<string, MetricTiming> string_timings;
 	// String-keyed counters for storage counter metrics (e.g. "storage.wal_replay_entry_count")
 	unordered_map<string, idx_t> string_counters;
 
@@ -204,8 +189,7 @@ public:
 		}
 		is_active = false;
 		profiler.End();
-		query_metrics->UpdateMetric(metric_name, profiler.ElapsedNanos());
-		query_metrics->UpdateTimingBounds(metric_name, start_time, Timestamp::GetCurrentTimestamp());
+		query_metrics->UpdateMetric(metric_name, profiler.ElapsedNanos(), start_time, Timestamp::GetCurrentTimestamp());
 	}
 
 	void Reset() {

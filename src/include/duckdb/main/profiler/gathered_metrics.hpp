@@ -29,10 +29,39 @@ namespace duckdb {
 struct QueryProfileResult;
 enum class ProfilingParameterNames : uint8_t { FORMAT, COVERAGE, SAVE_LOCATION, MODE, METRICS };
 
-struct MetricTimingBounds {
+struct MetricTiming {
+	idx_t duration = 0;
 	timestamp_t start_time = timestamp_t::epoch();
 	timestamp_t end_time = timestamp_t::epoch();
-	bool is_set = false;
+	bool has_bounds = false;
+
+	void Add(idx_t addition) {
+		duration += addition;
+	}
+
+	void Add(idx_t addition, timestamp_t start, timestamp_t end) {
+		Add(addition);
+		UpdateBounds(start, end);
+	}
+
+	void Merge(const MetricTiming &other) {
+		Add(other.duration);
+		if (other.has_bounds) {
+			UpdateBounds(other.start_time, other.end_time);
+		}
+	}
+
+private:
+	void UpdateBounds(timestamp_t start, timestamp_t end) {
+		if (!has_bounds) {
+			start_time = start;
+			end_time = end;
+			has_bounds = true;
+			return;
+		}
+		start_time = MinValue(start_time, start);
+		end_time = MaxValue(end_time, end);
+	}
 };
 
 class GatheredMetrics {
@@ -79,8 +108,7 @@ public:
 	}
 
 public:
-	void WriteMetricsToLog(ClientContext &context,
-	                       const unordered_map<string, MetricTimingBounds> &timing_bounds) const;
+	void WriteMetricsToLog(ClientContext &context, const unordered_map<string, MetricTiming> &timings) const;
 	//! Copy all enabled metrics into a QueryProfileResult node using lowercase string keys
 	void MetricsToProfileResult(QueryProfileResult &result) const;
 

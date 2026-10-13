@@ -370,12 +370,12 @@ LogicalType MetricsLogType::GetLogType() {
 }
 
 string MetricsLogType::ConstructLogMessage(const string &metric, const Value &value,
-                                           optional_ptr<const MetricTimingBounds> timing) {
+                                           optional_ptr<const MetricTiming> timing) {
 	child_list_t<Value> child_list = {
 	    {"metric", metric},
 	    {"value", value.ToString()},
-	    {"start_time", timing && timing->is_set ? Value::TIMESTAMP(timing->start_time) : Value()},
-	    {"end_time", timing && timing->is_set ? Value::TIMESTAMP(timing->end_time) : Value()},
+	    {"start_time", timing && timing->has_bounds ? Value::TIMESTAMP(timing->start_time) : Value()},
+	    {"end_time", timing && timing->has_bounds ? Value::TIMESTAMP(timing->end_time) : Value()},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }
