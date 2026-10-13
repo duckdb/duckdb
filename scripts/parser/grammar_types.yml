@@ -1888,6 +1888,8 @@ packrat_memoized_rules:
 excluded_rules:
   # Syntax only: the 'EXTERNAL' 'RESOURCE' keyword pair, shared by every singular form.
   - ExternalResourceKeyword
+  # Syntax only: OVERRIDING {USER|SYSTEM} VALUE is accepted and ignored.
+  - OverridingClause
   # Suggestion-only: exists so autocomplete offers the special SHOW forms as keywords; parsing of e.g.
   # "SHOW databases" resolves through ShowSettingName (the identifier), which the transformer special-cases.
   - ShowSpecialForm
@@ -1936,4 +1938,3 @@ excluded_rules:
   # expression.gram rules kept manual during incremental transformer generation migration
   - OverClause
   - PrefixExpression
-  - OverridingClause

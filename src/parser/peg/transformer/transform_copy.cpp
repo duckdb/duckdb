@@ -150,8 +150,7 @@ PEGTransformerFactory::TransformCopyTable(PEGTransformer &transformer, unique_pt
 	}
 	info->format = ExtractFormat(info->file_path);
 
-	auto generic_options = vector<GenericCopyOption>();
-	generic_options.reserve((legacy_option ? 1 : 0) + (copy_options ? copy_options->size() : 0));
+	vector<GenericCopyOption> generic_options;
 
 	if (legacy_option) {
 		generic_options.push_back(*legacy_option);

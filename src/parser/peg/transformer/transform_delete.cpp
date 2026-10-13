@@ -50,6 +50,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTruncateStatement(PEGTr
                                                                            const bool &has_result,
                                                                            unique_ptr<BaseTableRef> base_table_name,
                                                                            optional<bool> truncate_options) {
+	if (truncate_options && *truncate_options) {
+		throw NotImplementedException("TRUNCATE ... CASCADE is not implemented");
+	}
 	auto result = make_uniq<DeleteStatement>();
 	result->node->table = std::move(base_table_name);
 	return std::move(result);
@@ -57,12 +60,12 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTruncateStatement(PEGTr
 
 bool PEGTransformerFactory::TransformTruncateAliasOptions(PEGTransformer &transformer, const Identifier &target_alias,
                                                           optional<bool> truncate_drop_behavior) {
-	// the alias is ignored
-	return false;
+	// the alias is ignored, the result is whether CASCADE was given
+	return truncate_drop_behavior && *truncate_drop_behavior;
 }
 
 bool PEGTransformerFactory::TransformTruncateDropBehavior(PEGTransformer &transformer, const bool &drop_behavior) {
-	throw NotImplementedException("TRUNCATE ... %s is not implemented", drop_behavior ? "CASCADE" : "RESTRICT");
+	return drop_behavior;
 }
 
 } // namespace duckdb
