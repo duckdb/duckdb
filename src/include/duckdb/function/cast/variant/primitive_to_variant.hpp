@@ -17,6 +17,14 @@ public:
 	}
 
 public:
+	const string_t &GetString(idx_t index) const {
+		if (index >= size) {
+			throw InternalException("ENUM index %llu is out of range for an ENUM with %llu values", index, size);
+		}
+		return values[index];
+	}
+
+public:
 	const string_t *values;
 	idx_t size;
 };
@@ -101,19 +109,19 @@ static void WriteData(data_ptr_t ptr, const T &val, uint32_t lengths[3], EnumCon
 template <>
 void WriteData(data_ptr_t ptr, const uint8_t &val, uint32_t lengths[3], EnumConversionPayload &payload) {
 	EmptyConversionPayloadToVariant empty_payload;
-	auto &str = payload.values[val];
+	auto &str = payload.GetString(val);
 	WriteData(ptr, str, lengths, empty_payload);
 }
 template <>
 void WriteData(data_ptr_t ptr, const uint16_t &val, uint32_t lengths[3], EnumConversionPayload &payload) {
 	EmptyConversionPayloadToVariant empty_payload;
-	auto &str = payload.values[val];
+	auto &str = payload.GetString(val);
 	WriteData(ptr, str, lengths, empty_payload);
 }
 template <>
 void WriteData(data_ptr_t ptr, const uint32_t &val, uint32_t lengths[3], EnumConversionPayload &payload) {
 	EmptyConversionPayloadToVariant empty_payload;
-	auto &str = payload.values[val];
+	auto &str = payload.GetString(val);
 	WriteData(ptr, str, lengths, empty_payload);
 }
 
@@ -184,19 +192,19 @@ static void GetValueSize(const T &val, uint32_t lengths[3], idx_t &lengths_size,
 template <>
 void GetValueSize(const uint8_t &val, uint32_t lengths[3], idx_t &lengths_size, EnumConversionPayload &payload) {
 	EmptyConversionPayloadToVariant empty_payload;
-	auto &str = payload.values[val];
+	auto &str = payload.GetString(val);
 	GetValueSize(str, lengths, lengths_size, empty_payload);
 }
 template <>
 void GetValueSize(const uint16_t &val, uint32_t lengths[3], idx_t &lengths_size, EnumConversionPayload &payload) {
 	EmptyConversionPayloadToVariant empty_payload;
-	auto &str = payload.values[val];
+	auto &str = payload.GetString(val);
 	GetValueSize(str, lengths, lengths_size, empty_payload);
 }
 template <>
 void GetValueSize(const uint32_t &val, uint32_t lengths[3], idx_t &lengths_size, EnumConversionPayload &payload) {
 	EmptyConversionPayloadToVariant empty_payload;
-	auto &str = payload.values[val];
+	auto &str = payload.GetString(val);
 	GetValueSize(str, lengths, lengths_size, empty_payload);
 }
 
