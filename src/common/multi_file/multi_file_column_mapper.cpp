@@ -934,11 +934,18 @@ static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expressio
 	                                          StructExtractAtFun::GetBindData(child_idx));
 }
 
+static bool FileCastKeepsValuesApart(const LogicalType &file_type, const LogicalType &table_type) {
+	// a narrowing integer cast fails for a value out of range instead of merging it with another one
+	if (file_type.IsIntegral() && table_type.IsIntegral()) {
+		return true;
+	}
+	return BoundCastExpression::CastIsInvertible(file_type, table_type);
+}
+
 static bool TryCastConstant(Value &constant, const LogicalType &target_type) {
-	// this filter replaces the global one in the reader, so a constant that does not survive the cast
-	// exactly, or a file value that the reader casts with a loss, would silently change which rows match
+	// this filter replaces the global one, so both casts must preserve which rows match
 	if (!BoundCastExpression::CastIsInvertible(constant.type(), target_type) ||
-	    !BoundCastExpression::CastIsInvertible(target_type, constant.type())) {
+	    !FileCastKeepsValuesApart(target_type, constant.type())) {
 		return false;
 	}
 	auto cast = constant.DefaultTryCastAs(target_type);
