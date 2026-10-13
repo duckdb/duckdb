@@ -2,6 +2,9 @@
 # description: Test that overwritten update strings are freed, and that compacting the string heap keeps all versions
 # group: [update]
 
+# the memory bound below assumes the standard vector size
+require vector_size 2048
+
 load __TEST_DIR__/update_string_heap_compaction.db
 
 statement ok
