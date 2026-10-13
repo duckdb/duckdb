@@ -24,6 +24,11 @@ load {TEST_DIR}/collation_invalid_utf8.db readonly
 statement ok
 SET debug_verification_mode='none';
 
+# The fixture still has statistics for the original AAAA/BBBB strings.
+# Do not fold collation comparisons using those statistics.
+statement ok
+SET disabled_optimizers='statistics_propagation';
+
 statement ok
 LOAD icu
 
