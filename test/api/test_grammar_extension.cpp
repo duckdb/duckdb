@@ -1693,3 +1693,26 @@ TEST_CASE("Invalid Grammar extensions fail grammar compilation", "[api][grammar_
 	auto setting = con.Query("SELECT current_setting('active_grammar_extensions')")->Collection().GetValue(0, 0);
 	REQUIRE(ListValue::GetChildren(setting).size() == 2);
 }
+
+TEST_CASE("Grammar extensions that fail to compile do not evict cached grammars", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	std::atomic<idx_t> compilations(0);
+	for (idx_t i = 0; i < ParserCache::MAX_CACHED_EXTENSION_MATCHERS; i++) {
+		GrammarExtension::Register(
+		    *db.instance, make_shared_ptr<CountingSevenGrammarExtension>("counted_" + to_string(i), compilations));
+	}
+	GrammarExtension::Register(*db.instance, make_shared_ptr<AddInvalidGrammarExtensionTestRule>());
+	for (idx_t i = 0; i < ParserCache::MAX_CACHED_EXTENSION_MATCHERS; i++) {
+		Connection con(db);
+		REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['counted_" + to_string(i) + "']"));
+	}
+	REQUIRE(compilations == ParserCache::MAX_CACHED_EXTENSION_MATCHERS);
+
+	// the cache is full, but the least recently used grammar stays cached when compiling a new one fails
+	Connection invalid_con(db);
+	REQUIRE_FAIL(invalid_con.Query("SET active_grammar_extensions = ['invalid_grammar_extension']"));
+	Connection con(db);
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['counted_0']"));
+	RequireSeven(con);
+	REQUIRE(compilations == ParserCache::MAX_CACHED_EXTENSION_MATCHERS);
+}

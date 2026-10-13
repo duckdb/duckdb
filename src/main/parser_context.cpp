@@ -88,11 +88,13 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(const ClientContext &context
 			return extension_matchers.back().second;
 		}
 	}
+	// compile before evicting, so a grammar that fails to compile does not evict a valid one
+	auto new_matcher = CompiledGrammar::Create(selected_extensions);
 	if (extension_matchers.size() >= MAX_CACHED_EXTENSION_MATCHERS) {
 		// connections that still use the evicted grammar keep their own reference to it
 		extension_matchers.erase(extension_matchers.begin());
 	}
-	extension_matchers.emplace_back(std::move(extension_names), CompiledGrammar::Create(selected_extensions));
+	extension_matchers.emplace_back(std::move(extension_names), std::move(new_matcher));
 	return extension_matchers.back().second;
 }
 
