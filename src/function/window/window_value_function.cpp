@@ -1546,7 +1546,8 @@ void WindowFillExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpres
 	if (arg_order_idx.empty()) {
 		//	We use the range ordering, even if it has not been defined
 		if (executor.range_idx == DConstants::INVALID_INDEX) {
-			D_ASSERT(wexpr.OrderBy().size() == 1);
+			// the first ordering - also when it is shared with an argument ordering that is a prefix of the orderings
+			D_ASSERT(!wexpr.OrderBy().empty());
 			//	We don't need the validity mask because we have also requested the valid range for the ordering.
 			executor.range_idx = shared.RegisterCollection(wexpr.OrderBy()[0].expression, false);
 		}
