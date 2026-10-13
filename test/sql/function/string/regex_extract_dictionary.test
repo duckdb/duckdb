@@ -50,11 +50,14 @@ SELECT count(TRY(regexp_extract(s, '\C'))) FROM strings
 ----
 100000
 
-# Invalid constant patterns must not start throwing earlier during binding.
-query I
-SELECT count(*) FROM strings WHERE CASE WHEN false THEN regexp_extract(s, '[') ELSE 'ok' END = 'ok'
+# Invalid constant patterns bind successfully and fail only when executed.
+statement ok
+PREPARE invalid_constant_pattern AS SELECT regexp_extract(s, '[') FROM strings
+
+statement error
+EXECUTE invalid_constant_pattern
 ----
-300000
+missing ]: [
 
 # Variable patterns remain fallible, even after a previous non-fallible binding of the same overload.
 query I
