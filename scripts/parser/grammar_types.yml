@@ -1847,6 +1847,7 @@ matcher_rule_overrides:
 expression_depth_nesting_rules:
   - SingleExpression
   - Type
+  - SubqueryReference
 
 expression_depth_chain_rules:
   - LambdaArrowExpression
