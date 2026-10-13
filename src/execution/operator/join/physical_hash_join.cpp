@@ -3,6 +3,7 @@
 #include "duckdb/logging/log_manager.hpp"
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/once_flag.hpp"
 #include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types.hpp"
@@ -328,7 +329,7 @@ static bool BuildSideHasMultipleSources(const PhysicalOperator &op) {
 //! Synchronisation state for the first-chunk publication of the TupleDataLayout: the canonical layout
 //! shared by all per-thread JHTs, plus the per-column decision on whether to narrow the row-store slot.
 struct LayoutGate {
-	std::once_flag publish_once;
+	OnceFlag publish_once;
 	shared_ptr<TupleDataLayout> layout_ptr;
 	vector<uint8_t> dict_index_width;
 };
@@ -635,7 +636,7 @@ bool HashJoinGlobalSinkState::DictSurvivingActive() const {
 }
 
 void HashJoinGlobalSinkState::PublishLayoutIfFirst(HashJoinLocalSinkState &lstate, DataChunk &payload_chunk) {
-	std::call_once(layout_gate.publish_once, [&] {
+	CallOnce(layout_gate.publish_once, [&] {
 		const auto &cond_types = lstate.hash_table->condition_types;
 		const auto &build_types = lstate.hash_table->build_types;
 		vector<uint8_t> dict_index_width(build_types.size(), 0);
@@ -916,7 +917,7 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 	auto &gstate = global_state.Cast<HashJoinGlobalSinkState>();
 	// If no Sink chunk ever arrived, the layout was never published. Fall back to a default layout
 	// (all columns at their native width) so finalize-time scans can dereference data_collection.
-	std::call_once(gstate.layout_gate.publish_once, [&] {
+	CallOnce(gstate.layout_gate.publish_once, [&] {
 		const auto &cond_types = gstate.hash_table->condition_types;
 		const auto &build_types = gstate.hash_table->build_types;
 		vector<uint8_t> dict_index_width(build_types.size(), 0);
