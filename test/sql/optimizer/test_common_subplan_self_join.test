@@ -1,6 +1,12 @@
 # name: test/sql/optimizer/test_common_subplan_self_join.test
-# description: Common subplans that read the same table more than once are not merged
+# description: Common subplans that read the same table more than once keep the reads apart
 # group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+PRAGMA explain_output='optimized_only'
 
 statement ok
 CREATE TABLE t(a INTEGER, b INTEGER);
@@ -14,10 +20,16 @@ CREATE TABLE u(a INTEGER, b INTEGER);
 statement ok
 INSERT INTO u VALUES (0, 1), (1, 0);
 
+# The common subplan joins two reads of u, the duplicate must read the columns of the corresponding read
 query II
 SELECT count(*), sum(x11.a) FROM u x0, u x1, t x2, t x3, u x4, u x5, t x6, u x7, u x8, t x9, u x10, t x11 WHERE x1.a = x0.b AND x2.b = x0.b AND x3.b = x0.b AND x4.a = x0.b AND x5.a = x0.b AND x6.a = x0.b AND x7.b = x0.b AND x8.a = x0.b AND x9.b = x0.b AND x10.b = x0.b AND x11.a = x0.a;
 ----
 9	8
+
+query II
+EXPLAIN SELECT count(*), sum(x11.a) FROM u x0, u x1, t x2, t x3, u x4, u x5, t x6, u x7, u x8, t x9, u x10, t x11 WHERE x1.a = x0.b AND x2.b = x0.b AND x3.b = x0.b AND x4.a = x0.b AND x5.a = x0.b AND x6.a = x0.b AND x7.b = x0.b AND x8.a = x0.b AND x9.b = x0.b AND x10.b = x0.b AND x11.a = x0.a;
+----
+logical_opt	<REGEX>:(?:.*CTE_SCAN){2}.*
 
 statement ok
 SET approximate_join_order_threshold=2
@@ -28,6 +40,84 @@ SELECT count(*), sum(x8.a) FROM u x0, t x1, u x2, t x3, u x4, t x5, u x6, t x7, 
 6	2
 
 query II
-SELECT count(*), sum(x9.a) FROM u x0, u x1, t x2, t x3, t x4, u x5, t x6, u x7, u x8, u x9 WHERE x1.b = x0.a AND x2.a = x0.a AND x3.a = x0.b AND x4.b = x0.b AND x5.a = x0.b AND x6.b = x0.b AND x7.b = x0.b AND x8.b = x0.a AND x9.a = x0.a;
+SELECT count(*), sum(x9.a) FROM u x0, u x1, t x2, t x3, t x4, u x5, t x6, u x7, u x8, u x9 WHERE x1.b = x0.a AND x2.a = x0.a AND x3.a = x0.b AND x4.b = x0.b AND x5.a = x0.b AND x6.b = x0.b AND x7.b = x0.a AND x8.b = x0.a AND x9.a = x0.a;
 ----
 5	4
+
+statement ok
+RESET approximate_join_order_threshold
+
+statement ok
+CREATE TABLE s AS SELECT range a, range % 7 b, range % 3 c FROM range(100);
+
+statement ok
+CREATE TABLE v AS SELECT range a, range % 5 b, range % 4 c FROM range(50);
+
+# A self-join below an aggregate is still shared
+query I
+SELECT count(*) FROM s x JOIN s y ON x.a = y.a
+UNION ALL
+SELECT count(*) FROM s x JOIN s y ON x.a = y.a
+----
+100
+100
+
+query II
+EXPLAIN
+SELECT count(*) FROM s x JOIN s y ON x.a = y.a
+UNION ALL
+SELECT count(*) FROM s x JOIN s y ON x.a = y.a
+----
+logical_opt	<REGEX>:(?:.*CTE_SCAN){2}.*
+
+query II
+EXPLAIN
+SELECT count(*) FROM s x JOIN s y ON x.a = y.a
+UNION ALL
+SELECT count(*) FROM s x JOIN s y ON x.a = y.a
+----
+logical_opt	<!REGEX>:.*(?:AGGREGATE|COMPARISON_JOIN).*(?:AGGREGATE|COMPARISON_JOIN).*(?:AGGREGATE|COMPARISON_JOIN).*
+
+# Duplicate self-joins that expose different columns of the two reads, in a different order
+query II
+SELECT sum(x.c), sum(y.c) FROM s x JOIN s y ON x.a = y.b
+UNION ALL
+SELECT sum(y.c), NULL FROM s x JOIN s y ON x.a = y.b
+UNION ALL
+SELECT sum(y.c * 10 + x.c), sum(y.a) FROM s x JOIN s y ON x.a = y.b
+----
+85	99
+99	NULL
+1075	4950
+
+query II
+EXPLAIN
+SELECT sum(x.c), sum(y.c) FROM s x JOIN s y ON x.a = y.b
+UNION ALL
+SELECT sum(y.c), NULL FROM s x JOIN s y ON x.a = y.b
+UNION ALL
+SELECT sum(y.c * 10 + x.c), sum(y.a) FROM s x JOIN s y ON x.a = y.b
+----
+logical_opt	<REGEX>:(?:.*CTE_SCAN){2}.*
+
+# Nested common subplans: the reads of the self-join are shared, as is the join on top of it
+query III
+SELECT count(*), sum(w.xb), sum(w.yc) FROM (SELECT DISTINCT x.b xb, y.c yc FROM v x JOIN v y ON x.a = y.b) w
+UNION ALL
+SELECT count(*), sum(w.yc), sum(z.b) FROM s z JOIN (SELECT DISTINCT x.b xb, y.c yc FROM v x JOIN v y ON x.a = y.b) w ON z.a = w.xb
+UNION ALL
+SELECT count(*), sum(w.yc), sum(z.b) FROM s z JOIN (SELECT DISTINCT x.b xb, y.c yc FROM v x JOIN v y ON x.a = y.b) w ON z.a = w.xb
+----
+20	40	30
+20	30	40
+20	30	40
+
+query II
+EXPLAIN
+SELECT count(*), sum(w.xb), sum(w.yc) FROM (SELECT DISTINCT x.b xb, y.c yc FROM v x JOIN v y ON x.a = y.b) w
+UNION ALL
+SELECT count(*), sum(w.yc), sum(z.b) FROM s z JOIN (SELECT DISTINCT x.b xb, y.c yc FROM v x JOIN v y ON x.a = y.b) w ON z.a = w.xb
+UNION ALL
+SELECT count(*), sum(w.yc), sum(z.b) FROM s z JOIN (SELECT DISTINCT x.b xb, y.c yc FROM v x JOIN v y ON x.a = y.b) w ON z.a = w.xb
+----
+logical_opt	<REGEX>:(?:.*CTE){2}.*(?:.*CTE_SCAN){4}.*
