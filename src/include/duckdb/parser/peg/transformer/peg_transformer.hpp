@@ -943,13 +943,6 @@ public:
 	static void InitializeAnalyzeKeywordTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeAnalyzeKeywordTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
-	static void InitializeExpressionStatementTrampoline(PEGTransformer &transformer,
-	                                                    GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue> FinalizeExpressionStatementTrampoline(PEGTransformer &transformer,
-	                                                                             GeneratedTransformProcess &process);
-	static void InitializeExpressionAliasTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue> FinalizeExpressionAliasTrampoline(PEGTransformer &transformer,
-	                                                                         GeneratedTransformProcess &process);
 	static void InitializeIndexNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeIndexNameTrampoline(PEGTransformer &transformer,
 	                                                                   GeneratedTransformProcess &process);
@@ -1703,6 +1696,14 @@ public:
 	static void InitializeColumnConstraintTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeColumnConstraintTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
+	static void InitializeNameableColumnConstraintTrampoline(PEGTransformer &transformer,
+	                                                         GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeNameableColumnConstraintTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeColumnConstraintElementTrampoline(PEGTransformer &transformer,
+	                                                        GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeColumnConstraintElementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static void InitializeNotNullConstraintTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeNotNullConstraintTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
@@ -4274,8 +4275,6 @@ public:
 	static CatalogType TransformCommentColumn(PEGTransformer &transformer);
 	static Value TransformStringLiteralValue(PEGTransformer &transformer, const string &string_literal);
 	static Identifier TransformAnalyzeKeyword(PEGTransformer &transformer);
-	static unique_ptr<SQLStatement> TransformExpressionStatement(PEGTransformer &transformer,
-	                                                             vector<unique_ptr<ParsedExpression>> expression_alias);
 	static Identifier TransformConstraintName(PEGTransformer &transformer, const Identifier &col_id_or_string);
 	static Identifier TransformCollationName(PEGTransformer &transformer, const Identifier &identifier);
 	static unique_ptr<ParsedExpression> TransformNumberLiteral(PEGTransformer &transformer, ParseResult &parse_result);
@@ -4625,7 +4624,9 @@ public:
 	static ConstraintColumnDefinition
 	TransformColumnDefinition(PEGTransformer &transformer, const Identifier &identifier,
 	                          const optional<LogicalType> &type, optional<GeneratedColumnDefinition> generated_column,
-	                          const bool &has_result, optional<vector<ColumnConstraintEntry>> column_constraint);
+	                          optional<vector<ColumnConstraintEntry>> column_constraint);
+	static ColumnConstraintEntry TransformNameableColumnConstraint(PEGTransformer &transformer, const bool &has_result,
+	                                                               ColumnConstraintEntry child);
 	static ColumnConstraintEntry TransformNotNullConstraint(PEGTransformer &transformer, const bool &child);
 	static bool TransformNullConstraint(PEGTransformer &transformer);
 	static bool TransformNotNullColumnConstraint(PEGTransformer &transformer);
