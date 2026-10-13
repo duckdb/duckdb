@@ -89,10 +89,19 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
 	});
 
 	// Bind the index expressions.
+	// The expressions are bound again when the index is loaded, so they cannot depend on the session or the query
+	// they are bound in (e.g. now(), getvariable()) - such functions are folded to constants while binding.
+	auto &properties = binder.GetStatementProperties();
+	const auto statement_requires_rebind = properties.always_require_rebind;
 	vector<unique_ptr<Expression>> expressions;
 	for (auto &expr : create_index_info->expressions) {
+		properties.always_require_rebind = false;
 		expressions.push_back(Bind(expr));
+		if (properties.always_require_rebind) {
+			throw BinderException("Index keys cannot contain expressions with side effects.");
+		}
 	}
+	properties.always_require_rebind = statement_requires_rebind;
 
 	auto &get = plan->Cast<LogicalGet>();
 	InitCreateIndexInfo(get, *create_index_info);
