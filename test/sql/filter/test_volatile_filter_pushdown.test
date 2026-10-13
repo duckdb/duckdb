@@ -1,0 +1,39 @@
+# name: test/sql/filter/test_volatile_filter_pushdown.test
+# description: Volatile filters must not be pushed below DISTINCT or GROUP BY
+# group: [filter]
+
+statement ok
+CREATE TABLE agg(p INTEGER, x INTEGER);
+
+statement ok
+INSERT INTO agg VALUES (1,10), (1,20), (1,30), (1,40);
+
+statement ok
+CREATE SEQUENCE s1 START 1;
+
+# volatile HAVING predicate is evaluated once per group, not per input row
+query I
+SELECT SUM(x)::INTEGER FROM agg GROUP BY p HAVING nextval('s1') <= p + 1;
+----
+100
+
+statement ok
+CREATE TABLE dd(a INTEGER);
+
+statement ok
+INSERT INTO dd VALUES (1), (1), (2), (2), (3);
+
+statement ok
+CREATE SEQUENCE s2 START 1;
+
+# volatile predicate above DISTINCT is evaluated per distinct row, not per input row
+query I
+SELECT count(*) FROM (SELECT DISTINCT a FROM dd) q WHERE nextval('s2') <= 2;
+----
+2
+
+# non-volatile filters still push below DISTINCT
+query I
+SELECT count(*) FROM (SELECT DISTINCT a FROM dd) q WHERE a >= 2;
+----
+2
