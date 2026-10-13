@@ -657,7 +657,9 @@ static uint64_t ValueXXH64(const Value &constant) {
 	case PhysicalType::DOUBLE:
 		return ValueXH64FixedWidth<double>(constant);
 	case PhysicalType::VARCHAR: {
-		auto val = constant.GetValue<string>();
+		// hash the raw bytes: GetValue<string>() would give the escaped text form for BLOB constants
+		// (e.g. "\x02\xE2"), which never matches the bytes the Parquet writer hashed
+		auto &val = StringValue::Get(constant);
 		return duckdb_zstd::XXH64(val.c_str(), val.length(), 0);
 	}
 	default:
