@@ -22,3 +22,8 @@ query I
 FROM query('SELECT count(*) FROM data WHERE x < 1' || repeat(' OR x < 50 AND x >= 0', 49))
 ----
 50
+
+query I
+FROM query('SELECT count(*) FROM data WHERE x < 1' || repeat(' OR x < 50', 20000))
+----
+50

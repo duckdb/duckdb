@@ -412,12 +412,10 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 				break;
 			}
 			if (CharacterIsInitialNumber(c)) {
-				if (c != '.' || (i + 1 < sql.size() && sql[i + 1] == '_') == false) {
-					// parse a numeric literal
-					state = TokenizeState::NUMERIC;
-					last_pos = i;
-					break;
-				}
+				// parse a numeric literal
+				state = TokenizeState::NUMERIC;
+				last_pos = i;
+				break;
 			}
 			if (CharacterIsSpecialStringCharacter(c)) {
 				// Look ahead to see if a quote follows
@@ -444,8 +442,9 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 			if (CharacterIsInitialNumber(c)) {
 				break; // Continue tokenizing
 			}
-			// Allow underscore only when immediately followed by a digit (no consecutive underscores)
-			if (c == '_' && i + 1 < sql.size() && CharacterIsInitialNumber(sql[i + 1])) {
+			// A digit separator must sit between two digits
+			if (c == '_' && StringUtil::CharacterIsDigit(sql[i - 1]) && i + 1 < sql.size() &&
+			    StringUtil::CharacterIsDigit(sql[i + 1])) {
 				break;
 			}
 

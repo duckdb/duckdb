@@ -72,3 +72,14 @@ statement error
 SELECT ._1;
 ----
 <REGEX>:Parser Error:.*syntax error.*
+
+# an underscore after the decimal point starts an alias, not a digit separator
+query I
+SELECT c FROM (SELECT 1._5) t(c);
+----
+1
+
+query I
+SELECT _5 FROM (SELECT 1._5);
+----
+1
