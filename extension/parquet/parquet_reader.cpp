@@ -593,6 +593,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 				throw IOException("TIME_MICROS converted type can only be set for value of Type::INT64");
 			}
 		case ConvertedType::INTERVAL:
+			if (s_ele.type != Type::FIXED_LEN_BYTE_ARRAY || s_ele.type_length != 12) {
+				throw IOException(
+				    "INTERVAL converted type can only be set for value of Type::FIXED_LEN_BYTE_ARRAY of length 12");
+			}
 			return LogicalType::INTERVAL;
 		case ConvertedType::JSON:
 			return LogicalType::JSON();
