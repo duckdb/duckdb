@@ -64,6 +64,26 @@ bool ApproxQuantileCoding::Decode(const double &source, dtime_tz_t &target) {
 	return decoded;
 }
 
+template <>
+double ApproxQuantileCoding::Encode(const timestamp_t &input) {
+	return Encode<int64_t, double>(input.value);
+}
+
+template <>
+bool ApproxQuantileCoding::Decode(const double &source, timestamp_t &target) {
+	int64_t value;
+	const auto decoded = Decode<double, int64_t>(source, value);
+	// the infinities are the largest and smallest timestamps - do not return anything beyond them
+	if (value >= timestamp_t::infinity().value) {
+		target = timestamp_t::infinity();
+	} else if (value <= timestamp_t::ninfinity().value) {
+		target = timestamp_t::ninfinity();
+	} else {
+		target = timestamp_t(value);
+	}
+	return decoded;
+}
+
 struct ApproximateQuantileBindData : public FunctionData {
 	ApproximateQuantileBindData() {
 	}
@@ -309,6 +329,10 @@ AggregateFunction GetApproximateQuantileAggregateFunction(const LogicalType &typ
 		return AggregateFunction::UnaryAggregate<ApproxQuantileState, dtime_tz_t, dtime_tz_t,
 		                                         ApproxQuantileScalarOperation>(type, type);
 	}
+	if (type.id() == LogicalTypeId::TIMESTAMP || type.id() == LogicalTypeId::TIMESTAMP_TZ) {
+		return AggregateFunction::UnaryAggregate<ApproxQuantileState, timestamp_t, timestamp_t,
+		                                         ApproxQuantileScalarOperation>(type, type);
+	}
 	switch (type.InternalType()) {
 	case PhysicalType::INT8:
 		return AggregateFunction::UnaryAggregate<ApproxQuantileState, int8_t, int8_t, ApproxQuantileScalarOperation>(
@@ -498,10 +522,11 @@ AggregateFunction GetApproxQuantileListAggregateFunction(const LogicalType &type
 	case LogicalTypeId::DATE:
 		return GetTypedApproxQuantileListAggregateFunction<int32_t, int32_t>(type);
 	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIME:
 		return GetTypedApproxQuantileListAggregateFunction<int64_t, int64_t>(type);
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return GetTypedApproxQuantileListAggregateFunction<timestamp_t, timestamp_t>(type);
 	case LogicalTypeId::TIME_TZ:
 		//	Not binary comparable
 		return GetTypedApproxQuantileListAggregateFunction<dtime_tz_t, dtime_tz_t>(type);
