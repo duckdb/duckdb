@@ -9,11 +9,28 @@
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
+
+//! Callbacks can call external resource functions themselves - bound the nesting before it exhausts the stack
+static constexpr idx_t MAX_EXTERNAL_RESOURCE_CALLBACK_DEPTH = 16;
+
+unique_ptr<Connection> CreateExternalResourceCallbackConnection(DatabaseInstance &db,
+                                                                optional_ptr<ClientContext> caller) {
+	const idx_t depth = caller ? ClientData::Get(*caller).external_resource_callback_depth + 1 : 1;
+	if (depth > MAX_EXTERNAL_RESOURCE_CALLBACK_DEPTH) {
+		throw InvalidInputException("External resource callbacks are nested too deeply (maximum depth %llu) - does a "
+		                            "callback call itself recursively?",
+		                            MAX_EXTERNAL_RESOURCE_CALLBACK_DEPTH);
+	}
+	auto con = make_uniq<Connection>(db);
+	ClientData::Get(*con->context).external_resource_callback_depth = depth;
+	return con;
+}
 
 ResourceDeleter::ResourceDeleter(DatabaseInstance &db, string deleter_function_p, Value deleter_payload_p,
                                  string resource_type_p, string resource_name_p)
@@ -37,8 +54,8 @@ void ResourceDeleter::Delete() {
 		return;
 	}
 	// On a separate internal connection, since the current connection's context lock is held.
-	Connection con(db);
-	auto result = con.Query(sql);
+	auto con = CreateExternalResourceCallbackConnection(db, nullptr);
+	auto result = con->Query(sql);
 	DUCKDB_LOG(db, ExternalResourceLogType, resource_type, resource_name, string("destroy"),
 	           result->HasError() ? result->GetError() : string(),
 	           Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, vector<Value>(), vector<Value>()));
