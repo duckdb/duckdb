@@ -2,7 +2,6 @@
 
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
@@ -304,14 +303,8 @@ bool GroupingSetsOptimizer::TryRewriteGroupingSets(unique_ptr<LogicalOperator> &
 				    state_types[aggr_idx], ColumnBinding(cte_ref_index, ProjectionIndex(state_pos))));
 				auto combine_function =
 				    GetBuiltinAggregateFunction(optimizer.context, CombineAggrFun::Name, {state_types[aggr_idx]});
-				unique_ptr<BoundAggregateExpression> combine_aggregate;
-				try {
-					combine_aggregate =
-					    function_binder.BindAggregateFunction(std::move(combine_function), std::move(arguments));
-				} catch (const BinderException &) {
-					// the aggregate cannot be re-bound by name (e.g. internal aggregates such as sum_no_overflow)
-					return false;
-				}
+				auto combine_aggregate =
+				    function_binder.BindAggregateFunction(std::move(combine_function), std::move(arguments));
 				if (combine_aggregate->GetReturnType() != state_types[aggr_idx]) {
 					return false;
 				}
