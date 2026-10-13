@@ -3,6 +3,7 @@
 #include "duckdb/logging/log_manager.hpp"
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/once_flag.hpp"
 #include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types.hpp"
@@ -333,15 +334,15 @@ static bool BuildSideHasMultipleSources(const PhysicalOperator &op) {
 //! Synchronisation state for the first-chunk publication of the TupleDataLayout: the canonical layout
 //! shared by all per-thread JHTs, plus the per-column decision on whether to narrow the row-store slot.
 struct LayoutGate {
-	//! Recreated by Reset(): a std::once_flag itself cannot be re-armed for the next recursive CTE iteration
-	unique_ptr<std::once_flag> publish_once = make_uniq<std::once_flag>();
+	//! Recreated by Reset(): the flag must be re-armed for the next recursive CTE iteration
+	unique_ptr<OnceFlag> publish_once = make_uniq<OnceFlag>();
 	shared_ptr<TupleDataLayout> layout_ptr;
 	//! Per narrowed build column: slot width, owned dictionary (+ NULL slot) and upstream dictionary id; shared by all
 	//! threads, nullptr when no column is narrowed
 	shared_ptr<const DictSurvivingInfo> dict_info;
 
 	void Reset() {
-		publish_once = make_uniq<std::once_flag>();
+		publish_once = make_uniq<OnceFlag>();
 		layout_ptr.reset();
 		dict_info.reset();
 	}
@@ -635,7 +636,7 @@ bool HashJoinGlobalSinkState::DictSurvivingActive() const {
 }
 
 void HashJoinGlobalSinkState::PublishLayoutIfFirst(HashJoinLocalSinkState &lstate, DataChunk &payload_chunk) {
-	std::call_once(*layout_gate.publish_once, [&] {
+	CallOnce(*layout_gate.publish_once, [&] {
 		const auto &cond_types = lstate.hash_table->condition_types;
 		const auto &build_types = lstate.hash_table->build_types;
 
@@ -924,7 +925,7 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 	auto &gstate = global_state.Cast<HashJoinGlobalSinkState>();
 	// If no Sink chunk ever arrived, the layout was never published. Fall back to a default layout
 	// (all columns at their native width) so finalize-time scans can dereference data_collection.
-	std::call_once(*gstate.layout_gate.publish_once, [&] {
+	CallOnce(*gstate.layout_gate.publish_once, [&] {
 		const auto &cond_types = gstate.hash_table->condition_types;
 		const auto &build_types = gstate.hash_table->build_types;
 		// no dict_info => BuildJoinLayout keeps every build column at its native width

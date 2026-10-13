@@ -18,6 +18,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/once_flag.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_functions.hpp"
@@ -517,7 +518,7 @@ private:
 
 private:
 	unique_ptr<CachingFileHandle> file_handle;
-	mutable std::once_flag scan_handle_initialized;
+	mutable OnceFlag scan_handle_initialized;
 	//! Scan handle shared by all scan states of this reader
 	mutable shared_ptr<CachingFileHandle> shared_scan_handle;
 	mutable annotated_mutex variant_stats_lock;
