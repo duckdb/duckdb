@@ -1158,6 +1158,24 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		if (!is_variant && parquet_options.variant_legacy_encoding && IsVariantType(s_ele, child_schemas)) {
 			is_variant = true;
 		}
+		if (is_variant) {
+			// the VARIANT reader reads the 'metadata' and 'value' columns as binary
+			for (auto &child_schema : child_schemas) {
+				if (child_schema.name != "metadata" && child_schema.name != "value") {
+					continue;
+				}
+				// a logical type annotation (e.g. GEOMETRY) would make the column reader produce another type
+				const auto is_binary =
+				    child_schema.type.id() == LogicalTypeId::BLOB || child_schema.type.id() == LogicalTypeId::VARCHAR;
+				if (!child_schema.children.empty() || child_schema.parquet_type != duckdb_parquet::Type::BYTE_ARRAY ||
+				    !is_binary || child_schema.schema_type != ParquetColumnSchemaType::COLUMN) {
+					throw DataCorruptionException(
+					    "Failed to read Parquet file \"%s\": the '%s' column of VARIANT column \"%s\" "
+					    "must be a binary BYTE_ARRAY column",
+					    file.path, child_schema.name, s_ele.name);
+				}
+			}
+		}
 
 		if (!is_map_kv && this_idx > 0) {
 			// check if the parent node of this is a map
