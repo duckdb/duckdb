@@ -63,6 +63,11 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 	unique_ptr<Expression> default_expr = nullptr;
 
 	if (map_index == 1) {
+		// every WHEN compares a copy of the key, and a bound subquery cannot be copied
+		if (input.children[0]->HasSubquery()) {
+			throw BinderException("SWITCH does not support a subquery as the key, compute the key in a subquery "
+			                      "or a CTE first, or use CASE");
+		}
 		base_expr = std::move(input.children[0]);
 	}
 

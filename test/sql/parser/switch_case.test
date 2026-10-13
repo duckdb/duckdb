@@ -154,3 +154,24 @@ statement error
 SELECT switch(map([1],[2]), map([true],[7]), 55);
 ----
 <REGEX>:.*Cannot deduce template type 'K'.*
+
+# every WHEN compares a copy of the key, which a subquery cannot provide
+statement error
+SELECT switch((SELECT 0), map([0], [1]));
+----
+SWITCH does not support a subquery as the key
+
+statement error
+SELECT switch((SELECT 0), map([0], [1]), 7);
+----
+SWITCH does not support a subquery as the key
+
+query I
+SELECT switch(k, map([0], [1])) FROM (SELECT 0 AS k);
+----
+1
+
+query I
+WITH keys AS (SELECT (SELECT 0) AS k) SELECT switch(k, map([0], [1]), 7) FROM keys;
+----
+1
