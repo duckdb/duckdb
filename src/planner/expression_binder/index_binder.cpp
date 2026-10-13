@@ -80,12 +80,18 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
 	// Add the dependencies.
 	auto &dependencies = create_index_info->dependencies;
 	auto &catalog = table_entry.ParentCatalog();
-	SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
+	SetCatalogLookupCallback([&dependencies, &catalog, &table_entry](CatalogEntry &entry) {
 		if (&catalog != &entry.ParentCatalog()) {
 			return;
 		}
-		// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
-		dependencies.AddDependency(entry, DependencyDependentFlags());
+		if (&entry == &table_entry) {
+			// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
+			dependencies.AddDependency(entry, DependencyDependentFlags());
+			return;
+		}
+		// other entries the index expressions use (e.g. macros) cannot be dropped, replaced or altered while the index
+		// exists (note that blocking alone is the legacy value that is read as non-blocking for indexes)
+		dependencies.AddDependency(entry, DependencyDependentFlags().SetBlocking().SetAlterBlocking());
 	});
 
 	// Bind the index expressions.
