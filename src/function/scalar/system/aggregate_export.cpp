@@ -905,6 +905,20 @@ unique_ptr<ParsedExpression> ExportAggregateFunction::StateToSQL(const LogicalTy
 	return make_uniq<FunctionExpression>(QualifiedName("system", "main", "to_aggregate_state"), std::move(arguments));
 }
 
+void ExportAggregateFunction::GetSortedStateOrders(const LogicalType &state_type,
+                                                   vector<SortedAggregateStateOrder> &orders) {
+	auto ext_info = state_type.GetExtensionInfo();
+	if (!ext_info || state_type.id() != LogicalTypeId::LIST) {
+		throw InternalException("GetSortedStateOrders called on a state type that is not an ordered aggregate state");
+	}
+	auto order_entry = ext_info->properties.find("order_bys");
+	if (order_entry == ext_info->properties.end()) {
+		throw InternalException("GetSortedStateOrders called on a state type that is not an ordered aggregate state");
+	}
+	auto &buffer_struct = ListType::GetChildType(state_type);
+	ParseOrderBys(order_entry->second, StructType::GetChildTypes(buffer_struct).size(), orders);
+}
+
 void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {
 	auto &bound_function = aggregate.FunctionMutable();
 	// functions with an explicit export callback use it as the finalize; others use the field-based serialization
