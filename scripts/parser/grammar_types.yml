@@ -1768,6 +1768,9 @@ matcher_rule_overrides:
   ReservedIdentifier:
     matcher: reserved_identifier
     suggestion: SUGGEST_VARIABLE
+  BareColLabel:
+    matcher: identifier
+    suggestion: SUGGEST_BARE_LABEL
   CatalogName:
     matcher: identifier
     suggestion: SUGGEST_CATALOG_NAME
