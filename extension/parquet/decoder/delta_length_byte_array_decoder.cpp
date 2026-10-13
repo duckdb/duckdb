@@ -45,13 +45,33 @@ bool IsContinuationByte(uint8_t b) {
 	return (b & 0xC0) == 0x80;
 }
 
-bool TouchesUtf8Boundary(const char *data, uint32_t len) {
+//! Whether a string starts or ends in the middle of a multi-byte character. These are the only strings that can be
+//! invalid on their own when the batch they are part of is valid UTF-8
+bool CutsUtf8Character(const char *data, uint32_t len) {
 	if (len == 0) {
 		return false;
 	}
-	const uint8_t first = static_cast<uint8_t>(data[0]);
-	const uint8_t last = static_cast<uint8_t>(data[len - 1]);
-	return IsContinuationByte(first) || (last & 0x80) != 0;
+	const auto bytes = const_data_ptr_cast(data);
+	if (IsContinuationByte(bytes[0])) {
+		return true;
+	}
+	// find the first byte of the last character - a character is at most 4 bytes
+	idx_t last_start = len - 1;
+	while (last_start > 0 && len - last_start < 4 && IsContinuationByte(bytes[last_start])) {
+		last_start--;
+	}
+	const auto first_byte = bytes[last_start];
+	idx_t char_length;
+	if (first_byte < 0x80) {
+		char_length = 1;
+	} else if (first_byte >= 0xF0) {
+		char_length = 4;
+	} else if (first_byte >= 0xE0) {
+		char_length = 3;
+	} else {
+		char_length = 2;
+	}
+	return len - last_start != char_length;
 }
 
 void DeltaLengthByteArrayDecoder::Read(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *defines, idx_t read_count,
@@ -111,10 +131,10 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 			auto verified = string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
 			result_data.WriteValue(verified);
 		} else {
-			if (TouchesUtf8Boundary(char_ptr_cast(block.ptr), str_len)) {
+			if (CutsUtf8Character(char_ptr_cast(block.ptr), str_len)) {
 				string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
 			}
-			result_data.WriteValue(string_t(char_ptr_cast(block.ptr), str_len));
+			result_data.WriteStringRef(string_t(char_ptr_cast(block.ptr), str_len));
 		}
 		block.unsafe_inc(str_len);
 	}
