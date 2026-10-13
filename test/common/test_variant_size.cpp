@@ -37,11 +37,11 @@ struct VariantSizeData {
 	}
 
 	void Reset() {
-		variant::InitializeOffsets(offsets, 1);
+		duckdb::variant::InitializeOffsets(offsets, 1);
 	}
 
 	uint32_t &BlobOffset() {
-		return variant::OffsetData::GetBlob(offsets)[0];
+		return duckdb::variant::OffsetData::GetBlob(offsets)[0];
 	}
 
 	Vector output;
@@ -49,7 +49,7 @@ struct VariantSizeData {
 	SelectionVector keys_selvec;
 	OrderedOwningStringMap<uint32_t> dictionary;
 	VariantVectorData variant_data;
-	variant::ToVariantGlobalResultData result;
+	duckdb::variant::ToVariantGlobalResultData result;
 };
 
 } // namespace
@@ -88,14 +88,14 @@ TEST_CASE("VARIANT container headers reject overflowing blob offsets", "[variant
 		INFO(header.length);
 		data.Reset();
 		data.BlobOffset() = maximum - header.bytes;
-		variant::WriteContainerData<false>(data.variant_data, 0, data.BlobOffset(), header.length,
-		                                   header.children_offset);
+		duckdb::variant::WriteContainerData<false>(data.variant_data, 0, data.BlobOffset(), header.length,
+		                                           header.children_offset);
 		REQUIRE(data.BlobOffset() == maximum);
 
 		data.BlobOffset() = maximum - header.bytes + 1;
 		auto original_offset = data.BlobOffset();
-		REQUIRE_THROWS_WITH(variant::WriteContainerData<false>(data.variant_data, 0, data.BlobOffset(), header.length,
-		                                                       header.children_offset),
+		REQUIRE_THROWS_WITH(duckdb::variant::WriteContainerData<false>(data.variant_data, 0, data.BlobOffset(),
+		                                                               header.length, header.children_offset),
 		                    Catch::Matchers::Contains("encoded row size exceeds the maximum"));
 		REQUIRE(data.BlobOffset() == original_offset);
 	}
@@ -132,18 +132,19 @@ TEST_CASE("VARIANT JSON size pass rejects overflowing blob offsets", "[variant][
 			auto writer = FlatVector::Writer<string_t>(source, 1);
 			writer.WriteValue(string_t(entry.first));
 		}
-		variant::ToVariantSourceData source_data(source, 1);
+		duckdb::variant::ToVariantSourceData source_data(source, 1);
 		data.Reset();
 		data.BlobOffset() = maximum - entry.second;
-		REQUIRE((variant::ConvertJSONToVariant<false, false>(source_data, data.result, 1, nullptr, nullptr, true)));
+		REQUIRE(
+		    (duckdb::variant::ConvertJSONToVariant<false, false>(source_data, data.result, 1, nullptr, nullptr, true)));
 		REQUIRE(data.BlobOffset() == maximum);
 
 		if (entry.second) {
 			data.Reset();
 			data.BlobOffset() = maximum - entry.second + 1;
-			REQUIRE_THROWS_WITH(
-			    (variant::ConvertJSONToVariant<false, false>(source_data, data.result, 1, nullptr, nullptr, true)),
-			    Catch::Matchers::Contains("encoded row size exceeds the maximum"));
+			REQUIRE_THROWS_WITH((duckdb::variant::ConvertJSONToVariant<false, false>(source_data, data.result, 1,
+			                                                                         nullptr, nullptr, true)),
+			                    Catch::Matchers::Contains("encoded row size exceeds the maximum"));
 		}
 	}
 }
@@ -154,13 +155,13 @@ TEST_CASE("VARIANT JSON string sizes include the length prefix without wrapping"
 	duckdb_yyjson::yyjson_val value {};
 	// The size pass only reads this descriptor's length.
 	REQUIRE(duckdb_yyjson::yyjson_set_strn(&value, "", maximum - 5));
-	REQUIRE(variant::ConvertJSONPrimitive<false>(&value, data.result, 0, true));
+	REQUIRE(duckdb::variant::ConvertJSONPrimitive<false>(&value, data.result, 0, true));
 	REQUIRE(data.BlobOffset() == maximum);
 
 	for (auto length : {maximum - 4, maximum}) {
 		data.Reset();
 		REQUIRE(duckdb_yyjson::yyjson_set_strn(&value, "", length));
-		REQUIRE_THROWS_WITH(variant::ConvertJSONPrimitive<false>(&value, data.result, 0, true),
+		REQUIRE_THROWS_WITH(duckdb::variant::ConvertJSONPrimitive<false>(&value, data.result, 0, true),
 		                    Catch::Matchers::Contains("encoded row size exceeds the maximum"));
 	}
 }
