@@ -80,11 +80,11 @@ SELECT * FROM  gm('^m');
 
 # create a scalar macro with same name as table macro
 statement ok
-CREATE MACRO main.xt(a,b) as a+b;
+CREATE MACRO xt(a,b) as a+b;
 
 # drop table macro
 statement ok  
-DROP MACRO TABLE main.xt;
+DROP MACRO TABLE xt;
 
 # use column identifer as a macro parameter
 statement ok

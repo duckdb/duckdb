@@ -1194,7 +1194,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeExpres
 	if (!in_predicate && !between_like_op) {
 		return expr;
 	}
-	auto predicate_count = in_predicate ? in_predicate->size() : 0;
+	idx_t predicate_count = 0;
+	if (in_predicate) {
+		for (auto &predicate : *in_predicate) {
+			predicate_count += 1 + predicate.casts.size();
+		}
+	}
 	if (between_like_op) {
 		predicate_count++;
 	}
