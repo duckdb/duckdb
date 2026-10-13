@@ -58,6 +58,9 @@ SELECT typeof(v), v[1], v[2048], len(v) FROM arr
 ----
 FLOAT[2048]	0.0	2047.0	2048
 
+# the 100000-element array below exhausts the address space of 32-bit builds when the suite runs with many threads
+require 64bit
+
 # an array with more elements than the limit (32 * 2048) is not folded but still evaluates correctly
 query II
 EXPLAIN SELECT list_transform(range(100000), lambda x: x::FLOAT)::FLOAT[100000]
