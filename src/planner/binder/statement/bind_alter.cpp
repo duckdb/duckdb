@@ -23,7 +23,7 @@ unique_ptr<LogicalOperator> DuckCatalog::BindAlterAddForeignKey(Binder &binder, 
                                                                 unique_ptr<LogicalOperator> plan,
                                                                 unique_ptr<CreateIndexInfo> create_info,
                                                                 unique_ptr<AlterTableInfo> alter_info) {
-	// TODO: ZZZ Seems no need this func?
+	// TODO: Seems no need this func?
 	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
 	IndexBinder index_binder(binder, binder.context);
 	return index_binder.BindCreateIndex(binder.context, std::move(create_info), table_entry, std::move(plan),
@@ -42,7 +42,7 @@ unique_ptr<LogicalOperator> DuckCatalog::BindAlterAddIndex(Binder &binder, Table
 
 void Binder::BindParsedForeignKeyConstraint(ForeignKeyConstraint &fk, SchemaCatalogEntry &schema,
                                             TableCatalogEntry &table) {
-	// TODO: ZZZ. Fill ForeignKeyConstraint info.
+	// TODO:  Fill ForeignKeyConstraint info.
 	// auto &fk = cond->Cast<ForeignKeyConstraint>();
 	if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 		return;
@@ -97,7 +97,7 @@ void Binder::BindParsedForeignKeyConstraint(ForeignKeyConstraint &fk, SchemaCata
 }
 BoundStatement Binder::BindAlterAddForeignKey(BoundStatement &result, CatalogEntry &entry,
                                               unique_ptr<AlterInfo> alter_info) {
-	// TODO: ZZZ How to bind FK?
+	// TODO: How to bind FK?
 	// Copy from BindAlterAddIndex, modify if needed
 	auto &table_info = alter_info->Cast<AlterTableInfo>();
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
@@ -107,8 +107,8 @@ BoundStatement Binder::BindAlterAddForeignKey(BoundStatement &result, CatalogEnt
 	// FK is NOT UniqueConstraint
 	// auto bound_constraint = BindUniqueConstraint(*constraint_info.constraint, table_info.name, column_list);
 	// auto &bound_unique = bound_constraint->Cast<BoundUniqueConstraint>();
-	// TODO: ZZZ. SetCatalogLookupCallback() Do we need this here? Leave it for now.
-	// TODO: ZZZ parse the PK list first! Check BindCreateTableConstraints for ref.
+	// TODO: SetCatalogLookupCallback() Do we need this here? Leave it for now.
+	// TODO: Parse the PK list first! Check BindCreateTableConstraints for ref.
 	// BindParsedForeignKeyConstraint(*constraint_info.constraint, table_info.schema);
 	// void Binder::BindParsedForeignKeyConstraint(ForeignKeyConstraint& fk, SchemaCatalogEntry &schema) Or
 	// void Binder::BindParsedForeignKeyConstraint(ForeignKeyConstraint& fk, TableCatalogEntry &table)
@@ -133,7 +133,7 @@ BoundStatement Binder::BindAlterAddForeignKey(BoundStatement &result, CatalogEnt
 		create_index_info->parsed_expressions.push_back(parsed->Copy());
 	}
 
-	// TODO: ZZZ index name
+	// TODO: index name
 	// Need FK index name
 	auto index_name = fk.GetName(table_info.GetQualifiedName().Name().GetIdentifierName());
 	create_index_info->SetIndexName(Identifier(index_name));
