@@ -22,7 +22,7 @@ statement ok
 SET allowed_configs=['threads', 'memory_limit']
 
 query I
-SELECT current_setting('allowed_configs') = ['max_memory', 'threads']
+SELECT list_sort(current_setting('allowed_configs')) = ['max_memory', 'threads']
 ----
 true
 

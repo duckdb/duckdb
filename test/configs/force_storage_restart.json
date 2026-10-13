@@ -73,6 +73,12 @@
       ]
     },
     {
+      "reason": "disabled_compression_methods doesn't survive database restarts",
+      "paths": [
+        "test/sql/settings/setting_validation_and_reset.test"
+      ]
+    },
+    {
       "reason": "Parquet metadata cache doesn't survive restarts",
       "paths": [
         "test/sql/copy/parquet/parquet_glob_cache.test"

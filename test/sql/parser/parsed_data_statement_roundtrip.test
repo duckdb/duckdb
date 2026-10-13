@@ -99,32 +99,32 @@ DROP EXTENSION REPOSITORY IF EXISTS parsed_data_repo
 
 # Trigger variants
 statement ok
-DROP SCHEMA IF EXISTS parsed_data_trigger CASCADE
+DROP TABLE IF EXISTS parsed_data_trigger_target
 
 statement ok
-CREATE SCHEMA parsed_data_trigger
+DROP TABLE IF EXISTS parsed_data_trigger_audit
 
 statement ok
-CREATE TABLE parsed_data_trigger.target(i INTEGER, j INTEGER)
+CREATE TEMP TABLE parsed_data_trigger_target(i INTEGER, j INTEGER)
 
 statement ok
-CREATE TABLE parsed_data_trigger.audit(i INTEGER)
+CREATE TEMP TABLE parsed_data_trigger_audit(i INTEGER)
 
 statement ok
 CREATE OR REPLACE TRIGGER parsed_data_tr
-AFTER UPDATE ON parsed_data_trigger.target
+AFTER UPDATE ON parsed_data_trigger_target
 REFERENCING NEW TABLE AS new_rows OLD TABLE AS old_rows
 FOR EACH STATEMENT
-INSERT INTO parsed_data_trigger.audit SELECT i FROM new_rows
+INSERT INTO parsed_data_trigger_audit SELECT i FROM new_rows
 
 statement ok
-DROP TRIGGER parsed_data_tr ON parsed_data_trigger.target
+DROP TRIGGER parsed_data_tr ON parsed_data_trigger_target
 
 statement error
 CREATE TRIGGER IF NOT EXISTS parsed_data_missing_tr
 AFTER UPDATE OF i, j ON missing_trigger_table
 FOR EACH ROW
-INSERT INTO parsed_data_trigger.audit VALUES (1)
+INSERT INTO parsed_data_trigger_audit VALUES (1)
 ----
 Table with name missing_trigger_table does not exist
 
