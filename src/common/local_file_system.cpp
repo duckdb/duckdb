@@ -1985,6 +1985,28 @@ string LocalFileSystem::CanonicalizePath(const string &input, optional_ptr<FileO
 	// make the path absolute
 	string path = MakePathAbsolute(input, opener);
 
+#ifndef _WIN32
+	// a symbolic link to a file that does not exist (yet) cannot be resolved by realpath - follow it manually
+	static constexpr idx_t MAX_SYMLINK_HOPS = 40;
+	for (idx_t hops = 0; hops < MAX_SYMLINK_HOPS; hops++) {
+		string existing_path = path;
+		if (TryCanonicalizeExistingPath(existing_path)) {
+			break;
+		}
+		char link_target[4096];
+		auto link_size = readlink(path.c_str(), link_target, sizeof(link_target) - 1);
+		if (link_size <= 0) {
+			break;
+		}
+		string target(link_target, NumericCast<idx_t>(link_size));
+		if (target[0] != path_sep[0]) {
+			auto last_sep = path.rfind(path_sep[0]);
+			target = (last_sep == string::npos ? string() : path.substr(0, last_sep + 1)) + target;
+		}
+		path = std::move(target);
+	}
+#endif
+
 	string current = path;
 	string remainder;
 	idx_t dot_dot_count = 0;

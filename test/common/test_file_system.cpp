@@ -680,8 +680,15 @@ TEST_CASE("Test path canonicalization with symlinks", "[file_system]") {
 	// create symlink from fake_file -> real_file
 	TestCreateSymlink(fs->JoinPath(fake_dir, "fake_file"), fs->JoinPath(fs->GetWorkingDirectory(), real_file), false);
 
+	// create symlink from dangling_file -> a file that does not exist yet
+	TestCreateSymlink(fs->JoinPath(fs->GetWorkingDirectory(), fs->JoinPath(real_dir, "dangling_file")),
+	                  fs->JoinPath(fs->GetWorkingDirectory(), fs->JoinPath(real_dir, "not_created_file")), false);
+
 	// all of these tests are in the test dir
 	std::vector<CanonicalizationTest> test_cases;
+	test_cases.emplace_back("real_dir/dangling_file", "real_dir/not_created_file", "follow dangling file symlink");
+	test_cases.emplace_back("fake_dir/dangling_file", "real_dir/not_created_file",
+	                        "follow dangling file symlink through directory symlink");
 	test_cases.emplace_back("fake_dir", "real_dir", "base directory");
 	test_cases.emplace_back("fake_dir/file", "real_dir/file", "follow directory symlink");
 	test_cases.emplace_back("fake_dir/real_file", "real_dir/real_file", "follow directory symlink for real file");
