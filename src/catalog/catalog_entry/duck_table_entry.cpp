@@ -873,7 +873,10 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	if (create_info->columns.empty()) {
 		throw CatalogException("Cannot drop column: table only has one column remaining!");
 	}
-	auto adjusted_indices = column_dependency_manager.RemoveColumn(removed_index, columns.LogicalColumnCount());
+	// operate on a copy: this is the live catalog entry, and mutating it here races with concurrent ALTERs and leaves
+	// the dependency map corrupted if a later step throws and the ALTER is rolled back
+	auto column_dependencies = column_dependency_manager.Copy();
+	auto adjusted_indices = column_dependencies.RemoveColumn(removed_index, columns.LogicalColumnCount());
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_constraints = binder->BindConstraints(constraints, name, columns);
@@ -1414,6 +1417,18 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 		if (unique.is_primary_key && existing_pk) {
 			auto existing_name = existing_pk->ToString();
 			throw CatalogException("table %s can have only one primary key: %s", name, existing_name);
+		}
+
+		// Constraint index names are not unique, detect a duplicate constraint by its kind and columns.
+		for (const auto &constraint : GetConstraints()) {
+			if (constraint->type != ConstraintType::UNIQUE) {
+				continue;
+			}
+			auto &existing = constraint->Cast<UniqueConstraint>();
+			if (existing.is_primary_key == unique.is_primary_key &&
+			    existing.GetLogicalIndexes(columns) == unique.GetLogicalIndexes(columns)) {
+				throw CatalogException("table %s already has the constraint %s", name, existing.ToString());
+			}
 		}
 		table_info.constraints.push_back(info.constraint->Copy());
 

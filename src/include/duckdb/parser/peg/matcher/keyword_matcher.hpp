@@ -57,6 +57,15 @@ public:
 		return optional_idx();
 	}
 
+	void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const override {
+		auto literal = GetDispatchLiteral(table);
+		if (literal.IsValid()) {
+			first_set.AddLiteral(literal.GetIndex());
+		} else {
+			first_set.any = true;
+		}
+	}
+
 private:
 	bool MatchKeyword(MatchState &state) const {
 		auto token = state.token_iterator.Current();

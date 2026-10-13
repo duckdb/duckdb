@@ -605,12 +605,11 @@ void Executor::ThrowException() {
 }
 
 void Executor::Flush(ThreadContext &thread_context) {
-	auto global_profiler = profiler;
-	if (global_profiler) {
-		global_profiler->Flush(thread_context.profiler);
+	if (profiler) {
+		profiler->Flush(thread_context.profiler);
 
 		auto blocked_time = blocked_thread_time.load();
-		global_profiler->SetBlockedTime(double(blocked_time) / 1000.0 / 1000.0);
+		profiler->SetBlockedTime(double(blocked_time) / 1000.0 / 1000.0);
 	}
 }
 

@@ -1,5 +1,7 @@
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/helper.hpp"
@@ -217,7 +219,8 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 				}
 				auto &bind_col = proj.expressions[col_bind.column_index]->Cast<BoundColumnRefExpression>();
 				auto unnest_expr = make_uniq<BoundUnnestExpression>(unnest_get->types[i]);
-				unnest_expr->ChildMutable() = proj.expressions[col_bind.column_index]->Copy();
+				unnest_expr->ChildMutable() =
+				    BoundCastExpression::AddArrayCastToList(context, proj.expressions[col_bind.column_index]->Copy());
 				bind_col.BindingMutable() = ColumnBinding(unnest_get_index, bind_col.Binding().column_index);
 				auto unnest_proj_idx = ColumnBinding::PushExpression(unnest->expressions, std::move(unnest_expr));
 				ColumnBinding new_column_ref(bind_col.Binding().table_index, unnest_proj_idx);
@@ -236,8 +239,9 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 	}
 }
 
-static bool ConvertCTETableInOutUnnest(unique_ptr<LogicalOperator> &root, unique_ptr<LogicalOperator> &op,
-                                       TableIndex input_cte_index, bool require_input_cte_ref = true) {
+static bool ConvertCTETableInOutUnnest(ClientContext &context, unique_ptr<LogicalOperator> &root,
+                                       unique_ptr<LogicalOperator> &op, TableIndex input_cte_index,
+                                       bool require_input_cte_ref = true) {
 	if (op->type != LogicalOperatorType::LOGICAL_GET) {
 		return false;
 	}
@@ -284,7 +288,8 @@ static bool ConvertCTETableInOutUnnest(unique_ptr<LogicalOperator> &root, unique
 		}
 		auto &bind_col = proj.expressions[col_bind.column_index]->Cast<BoundColumnRefExpression>();
 		auto unnest_expr = make_uniq<BoundUnnestExpression>(unnest_get->types[i]);
-		unnest_expr->ChildMutable() = proj.expressions[col_bind.column_index]->Copy();
+		unnest_expr->ChildMutable() =
+		    BoundCastExpression::AddArrayCastToList(context, proj.expressions[col_bind.column_index]->Copy());
 		bind_col.BindingMutable() = ColumnBinding(unnest_get_index, bind_col.Binding().column_index);
 		auto unnest_proj_idx = ColumnBinding::PushExpression(unnest->expressions, std::move(unnest_expr));
 		ColumnBinding new_column_ref(bind_col.Binding().table_index, unnest_proj_idx);
@@ -416,7 +421,7 @@ bool UnnestRewriter::RewriteInlineCTEDedupCandidate(unique_ptr<LogicalOperator> 
 	idx_t other_side = 1 - domain_side.GetIndex();
 	auto domain_ref_bindings = join.children[domain_side.GetIndex()]->GetColumnBindings();
 	if (join.children[other_side]->type == LogicalOperatorType::LOGICAL_GET &&
-	    !ConvertCTETableInOutUnnest(root, join.children[other_side], domain_cte.table_index, false)) {
+	    !ConvertCTETableInOutUnnest(context, root, join.children[other_side], domain_cte.table_index, false)) {
 		return false;
 	}
 
@@ -580,7 +585,7 @@ bool UnnestRewriter::RewriteCTECandidate(unique_ptr<LogicalOperator> &root, uniq
 	idx_t other_side = 1 - domain_side.GetIndex();
 
 	if (join.children[other_side]->type == LogicalOperatorType::LOGICAL_GET &&
-	    !ConvertCTETableInOutUnnest(root, join.children[other_side], dedup_cte.table_index)) {
+	    !ConvertCTETableInOutUnnest(context, root, join.children[other_side], dedup_cte.table_index)) {
 		return false;
 	}
 

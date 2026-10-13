@@ -201,8 +201,8 @@ functions:
       out_type:
         type: logical_type
         indirection: 1
-        kind: OUT_BORROW
-        description: Receives the caller-owned logical type handle.
+        kind: OUT
+        description: Receives the caller-owned logical type handle. Destroy via logical_type_destroy.
       err:
         type: error_info
         indirection: 1
@@ -442,6 +442,67 @@ functions:
       vector:
         type: vector
         description: The vector to flatten.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  vector_cast:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-11" ]
+    description: |
+      Casts every row of a vector into another vector, using a factory.
+
+      The conversion is the one SQL `CAST` / `TRY_CAST` performs, registered
+      custom casts included, from the type of `source` to the type of
+      `target`. It covers as many rows as `source` holds
+      (`[[vector_get_size]]`), of any representation. `target` is replaced
+      by the result, as `[[vector_reference]]` would, taking its size: data
+      and views taken from it beforehand do not survive the call, and nothing
+      it held before carries over. In CAST_MODE_NORMAL a row that does not convert fails the call
+      with the engine's conversion error, and the contents of `target` are
+      unspecified. In CAST_MODE_TRY such rows are NULL in `target` instead and
+      the call succeeds; compare the validity of `source` and `target` to find
+      them. `cast_err` then receives the conversion error of one of them, e.g.
+      to report why the cast did not convert every row.
+
+      A connection's or callback's factory casts with that client's cast
+      functions and settings (e.g. TimeZone). An instance's factory supports
+      only the built-in casts, with default settings. `source` and `target`
+      must be different vectors; `target` is typically a vector of a data
+      chunk created by the caller, or the result vector of a callback.
+    role: method
+    belongs_to: vector
+    parameters:
+      factory:
+        type: factory
+        description: The factory supplying the cast functions.
+      source:
+        type: vector
+        description: The vector to cast. Borrowed for the call only.
+      target:
+        type: vector
+        description: The vector to write the cast rows into. Its logical type is the target type.
+      mode:
+        type: CAST_MODE
+        description: Whether a row that does not convert fails the call, or becomes NULL.
+      out_converted:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: |
+          Optional. Receives whether every row converted. Always true when a
+          CAST_MODE_NORMAL cast succeeds.
+      cast_err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: |
+          Optional. When a CAST_MODE_TRY cast succeeds without converting every
+          row, receives an opaque info handle with the conversion error of one
+          row that did not convert, which the caller must destroy via
+          error_info_destroy. Otherwise receives NULL.
       err:
         type: error_info
         indirection: 1

@@ -17,12 +17,19 @@
 
 namespace duckdb {
 
+//! Whether a reader that picks the consumption mode on its consumer's behalf streams a statement: only a SELECT that
+//! returns rows does. written_type is the statement as written, since a prepared execution reports the EXECUTE that
+//! runs it, and the properties are the running statement's, since an unresolved parameter type leaves the prepared
+//! statement's own copy incomplete. A reader that may stop reading also needs a statement that writes nothing, since
+//! a statement abandoned before its end is rolled back
+DUCKDB_API bool StreamsByDefault(StatementType written_type, const StatementProperties &properties,
+                                 bool reads_to_the_end = true);
+
 //! Opening a stream settles retention on draining and consumes the handle: no random access
 class ResultStreamBase {
 public:
 	//! Opens a stream on a submitted query. Throws InvalidInputException when the handle carries an
-	//! error, when its retention is already retained, when the planner marked the statement as
-	//! completing before its result is returned, or when the result's format is not the expected one.
+	//! error, when its retention is already retained, or when the result's format is not the expected one.
 	//! A throw consumes the handle: it is destroyed with this object, which ends the query
 	DUCKDB_API ResultStreamBase(unique_ptr<QueryResult> result, const char *expected_format);
 	DUCKDB_API virtual ~ResultStreamBase();

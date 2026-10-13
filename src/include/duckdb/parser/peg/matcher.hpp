@@ -265,6 +265,31 @@ enum class MatcherType {
 	CUSTOM
 };
 
+//! Over-approximation of the tokens a matcher can start with (its FIRST set), computed once per grammar. Lets the
+//! matcher skip sub-matchers that certainly cannot match at the current token.
+struct MatcherFirstSet {
+	bool computed = false;
+	//! the matcher can succeed without consuming a token
+	bool nullable = false;
+	//! no information: never skip
+	bool any = false;
+	//! MatcherTokenClass bits
+	uint8_t class_mask = 0;
+	//! bitset over grammar literal ids (keywords and symbols)
+	vector<uint64_t> literals;
+	optional_ptr<const GrammarLiteralTable> table;
+
+	bool HasLiteral(idx_t literal_id) const {
+		auto word = literal_id / 64;
+		return word < literals.size() && (literals[word] >> (literal_id % 64)) & 1;
+	}
+	DUCKDB_API void AddLiteral(idx_t literal_id);
+	//! Merge other into this set, returns whether anything changed
+	DUCKDB_API bool Merge(const MatcherFirstSet &other);
+	//! False only if the matcher certainly cannot match at the current token
+	DUCKDB_API bool MightMatch(MatchState &state) const;
+};
+
 class Matcher {
 public:
 	explicit Matcher(MatcherType type = MatcherType::CUSTOM) : type(type) {
@@ -321,6 +346,13 @@ public:
 	bool IsCollapsible() const {
 		return collapsible;
 	}
+	//! The matcher runs the built-in implementation of its type (set by MatcherFactory, never for derived matchers)
+	void SetStructural() {
+		structural = true;
+	}
+	bool IsStructural() const {
+		return structural;
+	}
 
 public:
 	template <class TARGET>
@@ -339,6 +371,9 @@ public:
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
+public:
+	MatcherFirstSet first_set;
+
 protected:
 	friend class MatcherAllocator;
 	MatcherType type;
@@ -346,8 +381,12 @@ protected:
 	optional_idx packrat_id;
 	bool packrat_memoized = false;
 	bool collapsible = false;
+	bool structural = false;
 	optional_ptr<const CompiledGrammarRule> rule;
 };
+
+//! Compute the FIRST sets of all matchers reachable from root
+DUCKDB_API void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table);
 
 class AtomicMatcher : public Matcher {
 public:
@@ -359,6 +398,10 @@ public:
 	}
 	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state) const final;
 	virtual MatcherResult MatchAtomic(MatchState &state) const = 0;
+	//! Describes the tokens this matcher can start with; the default (no information) never skips the matcher
+	virtual void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const {
+		first_set.any = true;
+	}
 };
 
 class KeywordInfo {

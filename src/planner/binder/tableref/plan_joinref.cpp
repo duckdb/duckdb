@@ -372,16 +372,15 @@ static void PlanMarkJoin(LogicalOperator &op) {
 			return;
 		}
 		bool all_equal = !join.conditions.empty();
-		bool all_null_safe = all_equal;
 		for (auto &condition : join.conditions) {
 			if (!condition.IsComparison()) {
-				all_equal = all_null_safe = false;
+				all_equal = false;
 				break;
 			}
 			all_equal &= condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL;
-			all_null_safe &= condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 		}
-		if (all_equal || all_null_safe || (join.conditions.size() == 1 && join.conditions[0].IsComparison())) {
+		if (all_equal || join.HasNullSafeMarkJoinConditions() ||
+		    (join.conditions.size() == 1 && join.conditions[0].IsComparison())) {
 			return;
 		}
 	}

@@ -68,6 +68,10 @@ public:
 		return "STRING_LITERAL";
 	}
 
+	void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const override {
+		first_set.class_mask = MatcherTokenClass::STRING;
+	}
+
 private:
 	static bool IsStringLiteral(const MatcherToken &token, const SpecialStringInfo &string_info) {
 		idx_t dollar_quote_delimiter_length;
