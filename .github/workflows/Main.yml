@@ -1142,7 +1142,6 @@ jobs:
     env:
       DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
       DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
-      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
     steps:
@@ -1180,7 +1179,9 @@ jobs:
 
       - name: Test
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-        run: make unittest_relassert
+        run: |
+          export LSAN_OPTIONS="suppressions=$PWD/.sanitizer-leak-suppressions.txt"
+          make unittest_relassert
 
  no-rtti:
     name: No RTTI

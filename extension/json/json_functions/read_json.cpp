@@ -77,7 +77,8 @@ public:
 		auto &reader = *json_reader;
 		auto_detect_state.sampled_readers[file_idx] = std::move(json_reader);
 
-		auto &global_allocator = Allocator::Get(context);
+		// the sampled readers keep their first buffer for the scan, so it has to count against the memory limit
+		auto &global_allocator = BufferAllocator::Get(context);
 		idx_t buffer_capacity = json_data.options.maximum_object_size * 2;
 		JSONReaderScanState scan_state(context, global_allocator, buffer_capacity);
 		auto &options = json_data.options;
