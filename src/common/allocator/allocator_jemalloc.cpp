@@ -76,7 +76,8 @@ optional_idx Allocator::DecayDelay() {
 }
 
 optional_idx Allocator::GetMappedMemory() const {
-	if (allocate_function != DefaultAllocate || free_function != DefaultFree || reallocate_function != DefaultReallocate) {
+	if (allocate_function != DefaultAllocate || free_function != DefaultFree ||
+	    reallocate_function != DefaultReallocate) {
 		return optional_idx();
 	}
 	uint64_t epoch = 1;

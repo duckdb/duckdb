@@ -381,7 +381,8 @@ idx_t BlockAllocator::GetEstimatedUnflushedMemory() const {
 	return estimated_unflushed_memory.load(std::memory_order_relaxed);
 }
 
-bool BlockAllocator::TryFlushDeallocated(const idx_t threshold, const idx_t memory_limit, const idx_t used_memory) const {
+bool BlockAllocator::TryFlushDeallocated(const idx_t threshold, const idx_t memory_limit,
+                                         const idx_t used_memory) const {
 	if (!SupportsFlush()) {
 		return false;
 	}
