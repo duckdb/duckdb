@@ -104,6 +104,12 @@ struct FileMetadata {
 	unordered_map<string, Value> extended_file_info;
 };
 
+//! Result of an optional suffix read. The bytes cover the end of the file described by metadata.
+struct SuffixReadResult {
+	idx_t bytes_read = 0;
+	FileMetadata metadata;
+};
+
 //! Measured network throughput for a (remote) file handle. Used to size prefetch coalescing gaps.
 struct NetworkThroughputEstimate {
 	//! Round-trip latency + request setup, in seconds
@@ -122,6 +128,8 @@ public:
 	// File offset will be changed, which advances for number of bytes read.
 	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Read(QueryContext context, void *buffer, idx_t nr_bytes);
+	//! Try to read up to buffer_len bytes from the end of the file without first obtaining its size.
+	DUCKDB_API bool TryReadSuffix(data_ptr_t buffer, idx_t buffer_len, SuffixReadResult &result);
 	DUCKDB_API int64_t Write(void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Write(QueryContext context, void *buffer, idx_t nr_bytes);
 	// Read at [nr_bytes] bytes into [buffer].
@@ -217,6 +225,9 @@ public:
 	//! Read nr_bytes from the specified file into the buffer, moving the file pointer forward by nr_bytes. Returns the
 	//! amount of bytes read.
 	DUCKDB_API virtual int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes);
+	//! Optional suffix read. Filesystems that do not support it return false.
+	DUCKDB_API virtual bool TryReadSuffix(FileHandle &handle, data_ptr_t buffer, idx_t buffer_len,
+	                                      SuffixReadResult &result);
 	//! Write nr_bytes from the buffer into the file, moving the file pointer forward by nr_bytes.
 	DUCKDB_API virtual int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes);
 	//! Excise a range of the file. The OS can drop pages from the page-cache, and the file-system is free to deallocate

@@ -28,7 +28,9 @@ class DatabaseInstance;
 class FileOpenFlags;
 class FileSystem;
 struct FileHandle;
+struct FileMetadata;
 struct NetworkThroughputEstimate;
+struct SuffixReadResult;
 class QueryContext;
 class CachingFileSystem;
 
@@ -70,6 +72,10 @@ public:
 	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
 	//! Read and record time
 	DUCKDB_API void ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location);
+	//! Try to read a suffix into a buffer-manager allocation.
+	DUCKDB_API bool TryReadSuffix(idx_t max_bytes, FileBufferHandleGroup &data, SuffixReadResult &result);
+	//! Maximum cache block size configured for this file.
+	DUCKDB_API idx_t GetCacheMaxBlockSize() const;
 	//! Whether responses observed by this handle prohibit sharing cached data (e.g., HTTP no-store/Vary)
 	DUCKDB_API bool IsCacheReuseProhibited();
 	//! Get some properties of the file
@@ -90,6 +96,12 @@ private:
 	bool StripForceFullDownloadIfPresent();
 	//! Refresh the cached file if the global cache state has changed.
 	shared_ptr<CachedFile> EnsureCachedFileCurrent();
+	//! Ensure validation metadata has been initialized.
+	void EnsureFileMetadata();
+	//! Initialize validation and shared cache metadata from one file snapshot.
+	void InitializeFileMetadata(const shared_ptr<FileHandle> &handle, FileMetadata metadata);
+	//! Copy a suffix read into ordinary zero-offset cache blocks.
+	void TryCacheSuffix(const_data_ptr_t data, const SuffixReadResult &result);
 	//! Whether validation metadata permits using cached blocks.
 	bool CanUseCache();
 	//! Read without caching, splitting large reads of cacheable files into parallel reads of at most a block.
@@ -125,6 +137,9 @@ private:
 	shared_ptr<FileHandle> file_handle;
 	//! Metadata snapshot taken with a single Stats call when the file handle is opened.
 	CacheValidationInfo validation_info;
+	//! Whether Stats was intentionally deferred until the first metadata-producing operation.
+	bool defer_file_info;
+	bool file_metadata_initialized = false;
 
 	//! Current position (if non-seeking reads)
 	idx_t position;

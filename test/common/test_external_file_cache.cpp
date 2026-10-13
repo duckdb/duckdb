@@ -124,10 +124,48 @@ private:
 	bool read_blocked DUCKDB_GUARDED_BY(lock) = false;
 };
 
+class SuffixTrackingFileSystem : public SimpleTrackingFileSystem {
+public:
+	FileMetadata Stats(FileHandle &handle) override {
+		stats_count++;
+		auto metadata = LocalFileSystem::Stats(handle);
+		metadata.version_tag = stats_version_tag;
+		return metadata;
+	}
+
+	bool TryReadSuffix(FileHandle &handle, data_ptr_t buffer, idx_t buffer_len, SuffixReadResult &result) override {
+		suffix_requests.push_back(buffer_len);
+		if (!suffix_supported) {
+			return false;
+		}
+
+		auto metadata = LocalFileSystem::Stats(handle);
+		metadata.version_tag = suffix_version_tag;
+		const auto file_size = NumericCast<idx_t>(metadata.file_size);
+		const auto bytes_read = MinValue(file_size, buffer_len);
+		LocalFileSystem::Read(handle, buffer, bytes_read, file_size - bytes_read);
+		result.bytes_read = bytes_read;
+		result.metadata = std::move(metadata);
+		return true;
+	}
+
+	bool suffix_supported = true;
+	string suffix_version_tag = "suffix-v1";
+	string stats_version_tag = "stats-v1";
+	idx_t stats_count = 0;
+	vector<idx_t> suffix_requests;
+};
+
 OpenFileInfo MakeTestOpenFileInfo(const string &path) {
 	OpenFileInfo info(path);
 	info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
 	info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
+	return info;
+}
+
+OpenFileInfo MakeDeferredOpenFileInfo(const string &path) {
+	auto info = MakeTestOpenFileInfo(path);
+	info.extended_info->options["defer_file_info"] = Value::BOOLEAN(true);
 	return info;
 }
 
@@ -252,6 +290,89 @@ TEST_CASE("Large reads are split at the cache block size", "[external_file_cache
 	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
 	REQUIRE(recording_fs->TakeReads().empty());
 	REQUIRE(CountCachedBlocks(cache) == 4);
+}
+
+TEST_CASE("Suffix reads use the remote cache block size and populate the cache", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET GLOBAL external_file_cache_remote_max_block_size=4096"));
+
+	const idx_t FILE_SIZE = 8192 + 123;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_suffix_cache.bin", content);
+	const auto remote_path = CACHING_TEST_REMOTE_PREFIX + test_file.GetPath();
+	auto recording_fs = make_uniq<SuffixTrackingFileSystem>();
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeDeferredOpenFileInfo(remote_path), ReaderSizedFlags());
+	REQUIRE(recording_fs->stats_count == 0);
+	REQUIRE(handle->CanSeek());
+	REQUIRE(recording_fs->stats_count == 0);
+
+	FileBufferHandleGroup suffix;
+	SuffixReadResult result;
+	REQUIRE(handle->TryReadSuffix(8, suffix, result));
+	string suffix_bytes(8, '\0');
+	suffix.CopyTo(data_ptr_cast(&suffix_bytes[0]), suffix_bytes.size());
+
+	REQUIRE(recording_fs->suffix_requests == vector<idx_t> {4096});
+	REQUIRE(recording_fs->stats_count == 0);
+	REQUIRE(result.bytes_read == 8);
+	REQUIRE(result.metadata.file_size == NumericCast<int64_t>(FILE_SIZE));
+	REQUIRE(result.metadata.version_tag == recording_fs->suffix_version_tag);
+	REQUIRE(handle->GetVersionTag() == recording_fs->suffix_version_tag);
+	REQUIRE(suffix_bytes == content.substr(FILE_SIZE - suffix_bytes.size()));
+	REQUIRE(TotalCachedBytes(db_instance.GetExternalFileCache()) == 4096);
+
+	REQUIRE(ReadFull(*handle, 32, FILE_SIZE - 32) == content.substr(FILE_SIZE - 32));
+	REQUIRE(recording_fs->TakeReads().empty());
+	REQUIRE(recording_fs->stats_count == 0);
+}
+
+TEST_CASE("Uncached suffix reads preserve the reader request size", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+	db_instance.GetExternalFileCache().SetEnabled(false);
+
+	const idx_t FILE_SIZE = 8192 + 123;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_suffix_uncached.bin", content);
+	const auto remote_path = CACHING_TEST_REMOTE_PREFIX + test_file.GetPath();
+	auto recording_fs = make_uniq<SuffixTrackingFileSystem>();
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeDeferredOpenFileInfo(remote_path), ReaderSizedFlags());
+	FileBufferHandleGroup suffix;
+	SuffixReadResult result;
+	REQUIRE(handle->TryReadSuffix(8, suffix, result));
+
+	REQUIRE(recording_fs->suffix_requests == vector<idx_t> {8});
+	REQUIRE(recording_fs->stats_count == 0);
+	REQUIRE(result.bytes_read == 8);
+	REQUIRE(TotalCachedBytes(db_instance.GetExternalFileCache()) == 0);
+}
+
+TEST_CASE("Unsupported suffix reads retain lazy metadata fallback", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+
+	const idx_t FILE_SIZE = 8192 + 123;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_suffix_fallback.bin", content);
+	const auto remote_path = CACHING_TEST_REMOTE_PREFIX + test_file.GetPath();
+	auto recording_fs = make_uniq<SuffixTrackingFileSystem>();
+	recording_fs->suffix_supported = false;
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeDeferredOpenFileInfo(remote_path), ReaderSizedFlags());
+	FileBufferHandleGroup suffix;
+	SuffixReadResult result;
+	REQUIRE_FALSE(handle->TryReadSuffix(8, suffix, result));
+	REQUIRE(recording_fs->stats_count == 0);
+
+	REQUIRE(handle->GetFileSize() == FILE_SIZE);
+	REQUIRE(recording_fs->stats_count == 1);
 }
 
 TEST_CASE("Uncached reads are split at the cache block size", "[external_file_cache]") {
