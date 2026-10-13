@@ -3,6 +3,9 @@
 # group: [collate]
 
 statement ok
+SET debug_verify_serializer = true;
+
+statement ok
 CREATE TABLE tbl(g INTEGER, s VARCHAR);
 
 statement ok
@@ -18,6 +21,107 @@ query I
 SELECT count(DISTINCT s) FROM tbl
 ----
 5
+
+# DISTINCT LIST removes equivalent spellings, while raw LIST keeps both.
+query III
+SELECT len(list(DISTINCT s COLLATE NOCASE)), len(list(DISTINCT s)),
+       len(list(DISTINCT s COLLATE NOCASE))
+FROM tbl;
+----
+3	5	3
+
+# ROW collations must distinguish both the binder's aggregate map and shared deduplication branches.
+query II
+SELECT count(DISTINCT row(s)), len(list(DISTINCT row(s COLLATE NOCASE)))
+FROM tbl;
+----
+5	3
+
+query III
+SELECT len(list(DISTINCT row(s COLLATE NOCASE))), len(list(DISTINCT row(s))),
+       len(list(DISTINCT row(s COLLATE NOCASE)))
+FROM tbl;
+----
+3	5	3
+
+# Check the reverse binding order and a STRUCT containing a LIST.
+query II
+SELECT len(list(DISTINCT row(s))), len(list(DISTINCT row(s COLLATE NOCASE)))
+FROM tbl;
+----
+5	3
+
+query II
+SELECT len(list(DISTINCT {'values': [s COLLATE NOCASE]})),
+       len(list(DISTINCT {'values': [s]}))
+FROM tbl;
+----
+3	5
+
+# VARIANT comparison keys also change the physical type, while LIST keeps VARIANT representatives.
+query IIT
+SELECT count(DISTINCT v), len(list(DISTINCT v)), typeof(list(DISTINCT v))
+FROM (VALUES (1::INTEGER::VARIANT), (1::BIGINT::VARIANT)) t(v);
+----
+1	1	VARIANT[]
+
+# FILTER preserves the group even when no row qualifies, and excludes NULL filters.
+query III
+SELECT g, len(list(DISTINCT s COLLATE NOCASE) FILTER (WHERE keep)),
+       len(list(DISTINCT s) FILTER (WHERE keep))
+FROM (VALUES (1, 'a', true), (1, 'A', true), (1, 'z', false),
+             (2, 'b', false), (2, 'B', NULL)) t(g, s, keep)
+GROUP BY g ORDER BY g;
+----
+1	1	2
+2	NULL	NULL
+
+# A NULL row is distinct from a non-NULL row containing NULL.
+query III
+SELECT count(DISTINCT v), len(list(DISTINCT v)), len(list(DISTINCT row(v)))
+FROM (VALUES (row('a' COLLATE NOCASE)), (row('A' COLLATE NOCASE)),
+             (row(NULL)), (NULL)) t(v);
+----
+2	3	3
+
+# All three paths receive no rows.
+query III
+SELECT count(DISTINCT s COLLATE NOCASE), len(list(DISTINCT s COLLATE NOCASE)),
+       len(list(DISTINCT row(s COLLATE NOCASE)))
+FROM tbl WHERE false;
+----
+0	NULL	NULL
+
+# The shared input evaluates a volatile argument once per row, before key/value expressions are copied.
+statement ok
+CREATE SEQUENCE collation_sequence;
+
+query I
+SELECT len(list(DISTINCT nextval('collation_sequence')::VARCHAR COLLATE NOCASE))
+FROM range(3);
+----
+3
+
+query I
+SELECT currval('collation_sequence');
+----
+3
+
+# Prepared plans retain both nested collation policies across executions.
+statement ok
+PREPARE distinct_rows AS
+SELECT len(list(DISTINCT row(s COLLATE NOCASE))), len(list(DISTINCT row(s)))
+FROM (VALUES ($1::VARCHAR), ($2::VARCHAR)) t(s);
+
+query II
+EXECUTE distinct_rows('a', 'A');
+----
+1	2
+
+query II
+EXECUTE distinct_rows('a', 'b');
+----
+2	2
 
 # ... including per group
 query II
@@ -63,6 +167,12 @@ SELECT list_sort(list(DISTINCT s COLLATE NOCASE)) FROM (VALUES ('x'), (NULL), ('
 # the default collation applies to arguments without an explicit COLLATE
 statement ok
 SET default_collation='nocase'
+
+query III
+SELECT count(DISTINCT s), len(list(DISTINCT s)), len(list(DISTINCT lower(s)))
+FROM tbl;
+----
+3	3	3
 
 query I
 SELECT count(DISTINCT s) FROM tbl

@@ -8,7 +8,6 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
-#include "duckdb/planner/collation_binding.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -31,12 +30,15 @@ MultiStageAggregateRewriter::MultiStageAggregateRewriter(
 namespace {
 
 struct DistinctAggregateSet {
-	explicit DistinctAggregateSet(idx_t source_index) : source_index(source_index) {
+	DistinctAggregateSet(idx_t source_index, vector<unique_ptr<Expression>> keys_p)
+	    : source_index(source_index), keys(std::move(keys_p)) {
 		aggregate_indices.push_back(source_index);
 	}
 
 	idx_t source_index;
 	vector<idx_t> aggregate_indices;
+	//! Actual deduplication keys, including collations unless the binder already applied them.
+	vector<unique_ptr<Expression>> keys;
 	vector<unique_ptr<Expression>> order_expressions;
 };
 
@@ -69,11 +71,15 @@ static optional_idx FindExpression(const vector<unique_ptr<Expression>> &express
 //! Expression equality ignores the return type, but a collation lives in the return type and decides which
 //! argument values are duplicates of each other. Two distinct aggregates can only share a deduplication branch
 //! if their arguments agree on that as well.
-static bool ArgumentCollationsEqual(const BoundAggregateExpression &lhs, const BoundAggregateExpression &rhs) {
-	D_ASSERT(lhs.GetChildren().size() == rhs.GetChildren().size());
-	for (idx_t child_idx = 0; child_idx < lhs.GetChildren().size(); child_idx++) {
-		if (!CollationBinding::SameCollation(lhs.GetChildren()[child_idx]->GetReturnType(),
-		                                     rhs.GetChildren()[child_idx]->GetReturnType())) {
+static bool ArgumentsEqualIncludingCollation(const BoundAggregateExpression &lhs, const BoundAggregateExpression &rhs) {
+	auto &left = lhs.GetChildren();
+	auto &right = rhs.GetChildren();
+	if (left.size() != right.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < left.size(); i++) {
+		if (!Expression::Equals(*left[i], *right[i]) ||
+		    !left[i]->GetReturnType().EqualsIncludingCollation(right[i]->GetReturnType())) {
 			return false;
 		}
 	}
@@ -94,20 +100,10 @@ static void AddOrderExpressions(DistinctAggregateSet &set, const BoundAggregateE
 	}
 }
 
-//! Where the deduplicated value of an argument of the distinct aggregate lives in the distinct branch.
-//! Ordinarily that is the group column that was deduplicated on, but an argument with a collation is
-//! deduplicated on its collated key, so its original value is carried by a FIRST aggregate instead.
-struct DistinctValueColumn {
-	//! The table the value column belongs to (the group or the aggregate table of the distinct branch)
-	TableIndex table;
-	//! The column index within that table
-	ProjectionIndex column;
-};
-
 static unique_ptr<BoundAggregateExpression> CreateFinalAggregate(const BoundAggregateExpression &source,
                                                                  const DistinctAggregateSet &set,
                                                                  TableIndex input_table, idx_t order_column_offset,
-                                                                 const vector<DistinctValueColumn> &value_columns,
+                                                                 const vector<ColumnBinding> &value_columns,
                                                                  optional_idx filter_column_offset = optional_idx()) {
 	auto result = unique_ptr_cast<Expression, BoundAggregateExpression>(source.Copy());
 	result->GetAggregateTypeMutable() = AggregateType::NON_DISTINCT;
@@ -115,8 +111,8 @@ static unique_ptr<BoundAggregateExpression> CreateFinalAggregate(const BoundAggr
 	for (idx_t child_idx = 0; child_idx < source.GetChildren().size(); child_idx++) {
 		auto &child = source.GetChildren()[child_idx];
 		auto &value_column = value_columns[child_idx];
-		result->GetChildrenMutable().push_back(make_uniq<BoundColumnRefExpression>(
-		    child->GetReturnType(), ColumnBinding(value_column.table, value_column.column)));
+		result->GetChildrenMutable().push_back(
+		    make_uniq<BoundColumnRefExpression>(child->GetReturnType(), value_column));
 	}
 	if (source.GetOrderBys()) {
 		result->GetOrderBysMutable() = make_uniq<BoundOrderModifier>();
@@ -125,8 +121,7 @@ static unique_ptr<BoundAggregateExpression> CreateFinalAggregate(const BoundAggr
 			ColumnBinding order_binding;
 			if (order_idx.IsValid()) {
 				// the ORDER BY is one of the arguments - sort on the value of that argument
-				auto &value_column = value_columns[order_idx.GetIndex()];
-				order_binding = ColumnBinding(value_column.table, value_column.column);
+				order_binding = value_columns[order_idx.GetIndex()];
 			} else {
 				order_idx = FindExpression(set.order_expressions, *order.expression);
 				D_ASSERT(order_idx.IsValid());
@@ -186,35 +181,27 @@ static BranchResult CreateDistinctBranch(Optimizer &optimizer, LogicalAggregate 
 	auto distinct_group_index = optimizer.binder.GenerateTableIndex();
 	auto distinct_aggregate_index = optimizer.binder.GenerateTableIndex();
 
-	// the arguments of the aggregate are the deduplication keys. An argument with a collation must be
-	// deduplicated on its collated key ('a' and 'A' are the same value under NOCASE), but the aggregate still
-	// consumes the original value - the collation only defines equality, and a collation function can map to a
-	// sort key that is not a readable string at all. We therefore group on the collated key and carry the
-	// original value along in a FIRST aggregate, the same way a collated GROUP BY key is handled.
+	// Group on comparison keys, but pass original values to the final aggregate. When these differ,
+	// FIRST carries a representative, just as for collated GROUP BY.
 	vector<unique_ptr<Expression>> distinct_aggregates;
-	vector<DistinctValueColumn> value_columns;
+	vector<ColumnBinding> value_columns;
 	value_columns.reserve(source_aggregate.GetChildren().size());
-	for (auto &child : source_aggregate.GetChildren()) {
-		auto group_expr = AggregateRewriteHelper::CopyAndRebind(*child, input_replacements);
-		auto value_expr = group_expr->Copy();
-		const auto group_idx = distinct_groups.size();
-		if (!ExpressionBinder::PushCollation(optimizer.GetContext(), group_expr, group_expr->GetReturnType())) {
-			// no collation - the group column is the value
-			value_columns.push_back(DistinctValueColumn {distinct_group_index, ProjectionIndex(group_idx)});
-			distinct_groups.push_back(std::move(group_expr));
-			continue;
+	FunctionBinder function_binder(optimizer.GetContext());
+	for (idx_t child_idx = 0; child_idx < source_aggregate.GetChildren().size(); child_idx++) {
+		auto &child = source_aggregate.GetChildren()[child_idx];
+		auto &key = set.keys[child_idx];
+		auto value_binding = ColumnBinding(distinct_group_index, ProjectionIndex(distinct_groups.size()));
+		if (!Expression::Equals(*child, *key)) {
+			vector<unique_ptr<Expression>> first_children;
+			first_children.push_back(AggregateRewriteHelper::CopyAndRebind(*child, input_replacements));
+			auto first_aggregate =
+			    function_binder.BindAggregateFunction(FirstFunctionGetter::GetFunction(child->GetReturnType()),
+			                                          std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
+			value_binding = ColumnBinding(distinct_aggregate_index, ProjectionIndex(distinct_aggregates.size()));
+			distinct_aggregates.push_back(std::move(first_aggregate));
 		}
-		auto value_type = value_expr->GetReturnType();
-		vector<unique_ptr<Expression>> first_children;
-		first_children.push_back(std::move(value_expr));
-		FunctionBinder function_binder(optimizer.GetContext());
-		auto first_aggregate =
-		    function_binder.BindAggregateFunction(FirstFunctionGetter::GetFunction(value_type),
-		                                          std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
-		value_columns.push_back(
-		    DistinctValueColumn {distinct_aggregate_index, ProjectionIndex(distinct_aggregates.size())});
-		distinct_aggregates.push_back(std::move(first_aggregate));
-		distinct_groups.push_back(std::move(group_expr));
+		value_columns.push_back(value_binding);
+		distinct_groups.push_back(AggregateRewriteHelper::CopyAndRebind(*key, input_replacements));
 	}
 	for (auto &order_expr : set.order_expressions) {
 		distinct_groups.push_back(AggregateRewriteHelper::CopyAndRebind(*order_expr, input_replacements));
@@ -746,11 +733,20 @@ bool MultiStageAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 			regular_aggregates.push_back(aggregate_idx);
 			continue;
 		}
+		// Resolve keys before sharing branches: COUNT may already consume keys from the binder, while a
+		// value-returning aggregate with the same argument still needs its collation applied.
+		vector<unique_ptr<Expression>> keys;
+		for (auto &child : aggregate.GetChildren()) {
+			auto key = child->Copy();
+			if (aggregate.Function().GetCollationHandling() != FunctionCollationHandling::PUSH_DISTINCT_COLLATIONS) {
+				ExpressionBinder::PushCollation(optimizer.GetContext(), key, key->GetReturnType());
+			}
+			keys.push_back(std::move(key));
+		}
 		bool found_match = false;
 		for (auto &set : distinct_sets) {
 			auto &other = aggr.expressions[set.source_index]->Cast<BoundAggregateExpression>();
-			if (Expression::ListEquals(aggregate.GetChildren(), other.GetChildren()) &&
-			    ArgumentCollationsEqual(aggregate, other) &&
+			if (ArgumentsEqualIncludingCollation(aggregate, other) && Expression::ListEquals(keys, set.keys) &&
 			    Expression::Equals(aggregate.GetFilter(), other.GetFilter())) {
 				set.aggregate_indices.push_back(aggregate_idx);
 				AddOrderExpressions(set, aggregate);
@@ -759,7 +755,7 @@ bool MultiStageAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 			}
 		}
 		if (!found_match) {
-			distinct_sets.emplace_back(aggregate_idx);
+			distinct_sets.emplace_back(aggregate_idx, std::move(keys));
 			AddOrderExpressions(distinct_sets.back(), aggregate);
 		}
 	}
