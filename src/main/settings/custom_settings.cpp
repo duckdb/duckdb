@@ -619,17 +619,17 @@ void DisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 		}
 		disabled_optimizers.insert(OptimizerTypeFromString(param));
 	}
-	config.options.disabled_optimizers = std::move(disabled_optimizers);
+	config.SetDisabledOptimizers(std::move(disabled_optimizers));
 }
 
 void DisabledOptimizersSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.disabled_optimizers = DBConfigOptions().disabled_optimizers;
+	config.SetDisabledOptimizers(DBConfigOptions().disabled_optimizers);
 }
 
 Value DisabledOptimizersSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	string result;
-	for (auto &optimizer : config.options.disabled_optimizers) {
+	for (auto &optimizer : config.GetDisabledOptimizers()) {
 		if (!result.empty()) {
 			result += ",";
 		}

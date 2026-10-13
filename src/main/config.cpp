@@ -976,6 +976,21 @@ void DBConfig::AddAllowedDirectory(const string &path) {
 	options.allowed_directories.insert(allowed_directory);
 }
 
+bool DBConfig::IsOptimizerDisabled(OptimizerType type) const {
+	lock_guard<mutex> guard(disabled_optimizers_lock);
+	return options.disabled_optimizers.find(type) != options.disabled_optimizers.end();
+}
+
+set<OptimizerType> DBConfig::GetDisabledOptimizers() const {
+	lock_guard<mutex> guard(disabled_optimizers_lock);
+	return options.disabled_optimizers;
+}
+
+void DBConfig::SetDisabledOptimizers(set<OptimizerType> disabled_optimizers) {
+	lock_guard<mutex> guard(disabled_optimizers_lock);
+	options.disabled_optimizers = std::move(disabled_optimizers);
+}
+
 void DBConfig::AddAllowedPath(const string &path) {
 	auto allowed_path = SanitizeAllowedPath(path);
 	lock_guard<mutex> guard(allowed_paths_lock);
