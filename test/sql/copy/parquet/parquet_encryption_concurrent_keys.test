@@ -1,0 +1,27 @@
+# name: test/sql/copy/parquet/parquet_encryption_concurrent_keys.test
+# description: Adding Parquet encryption keys from several connections at the same time
+# group: [parquet]
+
+require parquet
+
+concurrentloop i 0 8
+
+loop j 0 100
+
+statement ok
+PRAGMA add_parquet_key('key_{i}_{j}', '0123456789112345');
+
+endloop
+
+endloop
+
+# the keys exist: only the missing crypto module is reported
+statement error
+COPY (SELECT 42 AS a) TO '{TEST_DIR}/concurrent_keys.parquet' (ENCRYPTION_CONFIG {footer_key: 'key_7_99'});
+----
+<REGEX>:.*crypto module.*
+
+statement error
+COPY (SELECT 42 AS a) TO '{TEST_DIR}/concurrent_keys.parquet' (ENCRYPTION_CONFIG {footer_key: 'no_such_key'});
+----
+<REGEX>:.*No key with name.*
