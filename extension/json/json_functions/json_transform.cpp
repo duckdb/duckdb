@@ -7,6 +7,8 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "json_transform.hpp"
 
+#include "duckdb/common/case_insensitive_map.hpp"
+
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -44,7 +46,8 @@ static LogicalType StructureStringToTypeArray(yyjson_val *arr, ClientContext &co
 }
 
 static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context) {
-	unordered_set<string> names;
+	// STRUCT field names are case-insensitive
+	case_insensitive_set_t names;
 	child_list_t<LogicalType> child_types;
 	size_t idx, max;
 	yyjson_val *key, *val;
