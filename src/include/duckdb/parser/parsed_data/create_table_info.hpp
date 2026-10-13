@@ -54,7 +54,7 @@ public:
 
 	//! Sort key expressions without sort modifiers, used to serialize to storage versions before v2.0.0
 	vector<unique_ptr<ParsedExpression>> GetLegacySortKeys() const;
-	void SetLegacySortKeys(vector<unique_ptr<ParsedExpression>> legacy_sort_keys);
+	DUCKDB_API void SetLegacySortKeys(vector<unique_ptr<ParsedExpression>> legacy_sort_keys);
 	string ToString() const override;
 };
 
