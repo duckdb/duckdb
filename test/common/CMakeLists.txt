@@ -19,6 +19,7 @@ add_library_unity(
   test_http_transport_manager.cpp
   test_literal.cpp
   test_lru_cache.cpp
+  test_minmax_n_heap.cpp
   test_numeric_utils.cpp
   test_optional_idx.cpp
   test_parse_expression.cpp
