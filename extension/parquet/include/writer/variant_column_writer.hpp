@@ -108,6 +108,7 @@ public:
 	}
 
 public:
+	static LogicalType GetParquetVariantType(optional_ptr<LogicalType> shredding = nullptr);
 	static ScalarFunction GetTransformFunction(bool preserve_nulls = false);
 	//! 'variant_bytes_to_variant': decode a binary Variant value (metadata followed by value)
 	//! into a VARIANT. The inverse of 'variant_to_parquet_variant'.
