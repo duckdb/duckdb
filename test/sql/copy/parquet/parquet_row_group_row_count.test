@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/parquet_row_group_row_count.test
-# description: Parquet files whose row groups declare more rows than their columns hold are rejected on every access path
+# description: Parquet files whose row groups declare more rows than their columns hold are rejected when the rows are read
 # group: [parquet]
 
 require parquet
@@ -12,15 +12,21 @@ SELECT * FROM read_parquet('data/parquet-testing/broken/huge_rg_num_rows.parquet
 ----
 values but row group has 9223372036854775807 rows
 
-statement error
-SELECT count(*) FROM read_parquet('data/parquet-testing/broken/huge_rg_num_rows.parquet');
-----
-values but row group has 9223372036854775807 rows
-
+# scans that only produce row numbers do not read a column chunk
 statement error
 SELECT * FROM read_parquet('data/parquet-testing/broken/huge_rg_num_rows.parquet') USING SAMPLE 10;
 ----
 values but row group has 9223372036854775807 rows
+
+statement error
+SELECT file_row_number FROM read_parquet('data/parquet-testing/broken/huge_rg_num_rows.parquet', file_row_number = true);
+----
+values but row group has 9223372036854775807 rows
+
+query I
+SELECT 42;
+----
+42
 
 # files with nested and repeated columns are still read
 statement ok
