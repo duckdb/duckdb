@@ -4,6 +4,9 @@
 
 require parquet
 
+# Keep the explicit unloaded state until type resolution triggers autoloading.
+require skip_reload
+
 restart no_extension_load
 
 query I
