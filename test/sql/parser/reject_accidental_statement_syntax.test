@@ -14,10 +14,24 @@ CREATE PERSISTENT MACRO m() AS 1;
 PERSISTENT is only supported for CREATE SECRET
 
 statement ok
+SET secret_directory='{TEST_DIR}/reject_accidental_statement_syntax';
+
+statement ok
 CREATE TEMPORARY TABLE x (a INTEGER);
 
 statement ok
 CREATE TEMPORARY SECRET s (TYPE http);
+
+statement ok
+CREATE PERSISTENT SECRET p (TYPE http);
+
+query II
+SELECT name, persistent FROM duckdb_secrets() WHERE name = 'p';
+----
+p	true
+
+statement ok
+DROP PERSISTENT SECRET p;
 
 statement error
 DROP SECRET s CASCADE;
@@ -83,17 +97,17 @@ CREATE TABLE y (a INTEGER CONSTRAINT c NOT NULL, b INTEGER CONSTRAINT d CHECK (b
 statement error
 SELECT * FROM t WHERE a > 0 TABLESAMPLE 1 ROWS;
 ----
-syntax error
+Parser Error: syntax error at or near "TABLESAMPLE"
 
 statement error
 SELECT a FROM t GROUP BY a TABLESAMPLE 1;
 ----
-syntax error
+Parser Error: syntax error at or near "TABLESAMPLE"
 
 statement error
 SELECT a FROM t USING SAMPLE 1 USING SAMPLE 1;
 ----
-syntax error
+Parser Error: syntax error at or near "USING"
 
 query I
 SELECT count(*) FROM t TABLESAMPLE 2 ROWS;
