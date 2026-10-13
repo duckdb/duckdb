@@ -229,6 +229,12 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 			break;
 		}
 		break;
+	case LogicalTypeId::TIME_NS:
+		// a cast to microseconds rounds the nanoseconds
+		if (target_type.id() == LogicalTypeId::TIME) {
+			return false;
+		}
+		break;
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::TIME_TZ:

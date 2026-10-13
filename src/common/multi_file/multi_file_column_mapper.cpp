@@ -966,9 +966,9 @@ static bool MappedCastIsInvertible(const MultiFileIndexMapping &mapping, const L
 }
 
 static bool TryCastConstant(Value &constant, const MultiFileIndexMapping &mapping, const LogicalType &target_type) {
-	// this filter replaces the global one in the reader, so it is only equivalent if the cast of the column from the
-	// local (file) type to the global type is invertible, and if the constant survives the cast to the local type
-	if (!MappedCastIsInvertible(mapping, target_type, constant.type())) {
+	// this filter replaces the global one, so both casts must preserve which rows match
+	if (!BoundCastExpression::CastIsInvertible(constant.type(), target_type) ||
+	    !MappedCastIsInvertible(mapping, target_type, constant.type())) {
 		return false;
 	}
 	auto cast = constant.DefaultTryCastAs(target_type);
