@@ -201,17 +201,30 @@
       {
         "id": 205,
         "name": "sort_keys",
-        "type": "vector<ParsedExpression*>"
+        "type": "vector<ParsedExpression*>",
+        "status": "read_only",
+        "serialize_property": "GetLegacySortKeys()",
+        "version": "v2.0.0"
       },
       {
         "id": 206,
         "name": "options",
         "type": "case_insensitive_map_t<ParsedExpression*>"
+      },
+      {
+        "id": 207,
+        "name": "sort_orders",
+        "type": "vector<OrderByNode>",
+        "property": "sort_keys",
+        "version": "v2.0.0"
       }
     ],
     "methods": {
       "SetName": [
         "table"
+      ],
+      "SetLegacySortKeys": [
+        "sort_keys"
       ]
     }
   },

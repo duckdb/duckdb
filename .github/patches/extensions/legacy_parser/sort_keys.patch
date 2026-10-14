@@ -1,0 +1,26 @@
+diff --git a/src/transform/statement/transform_create_table.cpp b/src/transform/statement/transform_create_table.cpp
+index 29f2a98..61c0e60 100644
+--- a/src/transform/statement/transform_create_table.cpp
++++ b/src/transform/statement/transform_create_table.cpp
+@@ -158,7 +158,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
+ 	if (stmt.sort_list) {
+ 		TransformExpressionList(*stmt.sort_list, order_keys);
+ 	}
+-	info->sort_keys = std::move(order_keys);
++	info->SetLegacySortKeys(std::move(order_keys));
+ 
+ 	if (stmt.options) {
+ 		TransformTableOptions(info->options, stmt.options);
+diff --git a/src/transform/statement/transform_create_table_as.cpp b/src/transform/statement/transform_create_table_as.cpp
+index 58896ee..4b6fce3 100644
+--- a/src/transform/statement/transform_create_table_as.cpp
++++ b/src/transform/statement/transform_create_table_as.cpp
+@@ -37,7 +37,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
+ 	if (stmt.into->sort_list) {
+ 		TransformExpressionList(*stmt.into->sort_list, order_keys);
+ 	}
+-	info->sort_keys = std::move(order_keys);
++	info->SetLegacySortKeys(std::move(order_keys));
+ 
+ 	if (stmt.into->options) {
+ 		TransformTableOptions(info->options, *stmt.into->options);
