@@ -317,13 +317,10 @@ PEGTransformerFactory::FinalizeSimpleSelectTrampoline(PEGTransformer &transforme
 }
 
 FunctionArgument PEGTransformerFactory::TransformNamedFunctionArgument(PEGTransformer &transformer,
-                                                                       MacroParameter named_parameter) {
-	if (named_parameter.type != LogicalType::UNKNOWN) {
-		throw ParserException("Named argument \"%s\" of a function call cannot have a type",
-		                      named_parameter.name.GetIdentifierName());
-	}
-	named_parameter.expression->SetAlias(named_parameter.name);
-	return FunctionArgument(named_parameter.name, std::move(named_parameter.expression));
+                                                                       const Identifier &type_func_name,
+                                                                       unique_ptr<ParsedExpression> expression) {
+	expression->SetAlias(type_func_name);
+	return FunctionArgument(type_func_name, std::move(expression));
 }
 
 FunctionArgument PEGTransformerFactory::TransformPositionalFunctionArgument(PEGTransformer &transformer,
@@ -774,6 +771,9 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(
     PEGTransformer &transformer, const optional<bool> &lateral, const QualifiedName &qualified_table_function,
     vector<FunctionArgument> table_function_arguments, const optional<bool> &with_ordinality,
     const optional<TableAlias> &table_alias, optional<unique_ptr<SampleOptions>> sample_clause) {
+	if (lateral.value_or(false) && sample_clause) {
+		throw ParserException("TABLESAMPLE cannot be applied to a LATERAL table function");
+	}
 	auto result = make_uniq<TableFunctionRef>();
 
 	result->with_ordinality =
@@ -1361,6 +1361,9 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableSubquery(PEGTransforme
 	if (table_alias_colon && table_alias) {
 		throw ParserException("Table reference %s cannot have two aliases", subquery_reference->ToString());
 	}
+	if (lateral.value_or(false) && sample_clause) {
+		throw ParserException("TABLESAMPLE cannot be applied to a LATERAL subquery");
+	}
 	if (table_alias_colon) {
 		subquery_reference->alias = *table_alias_colon;
 	}
@@ -1407,7 +1410,8 @@ Identifier PEGTransformerFactory::TransformTableAliasColon(PEGTransformer &trans
 unique_ptr<TableRef> PEGTransformerFactory::TransformValuesRef(PEGTransformer &transformer,
                                                                const optional<Identifier> &table_alias_colon,
                                                                unique_ptr<SelectStatement> values_clause,
-                                                               const optional<TableAlias> &table_alias) {
+                                                               const optional<TableAlias> &table_alias,
+                                                               optional<unique_ptr<SampleOptions>> sample_clause) {
 	if (table_alias_colon && table_alias) {
 		throw ParserException("Table reference cannot have two aliases");
 	}
@@ -1418,6 +1422,9 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformValuesRef(PEGTransformer &t
 	if (table_alias) {
 		subquery_ref->alias = table_alias->name;
 		subquery_ref->column_name_alias = table_alias->column_name_alias;
+	}
+	if (sample_clause) {
+		subquery_ref->sample = std::move(*sample_clause);
 	}
 	return std::move(subquery_ref);
 }
