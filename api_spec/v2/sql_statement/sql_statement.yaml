@@ -201,10 +201,10 @@ functions:
       alongside a paused stream. It is single-consumer like the stepping
       functions, so bind concurrently only on a second connection.
       Prepare-time errors — binder, catalog, preprocessing — surface here. A
-      statement that preprocessing expands into a group (a dynamic PIVOT, or
+      statement that expands into a group (a dynamic PIVOT, or
       statement-expanding DDL such as ALTER ADD COLUMN with a non-constant
-      DEFAULT) cannot be bound and is rejected with ERROR_INPUT_INVALID;
-      execute it instead.
+      DEFAULT) has a schema known only at execution, and is reported with
+      ERROR_INPUT_METADATA_DEFERRED; execute it instead.
 
       *out_schema and *out_parameters are set to NULL on failure.
     role: method
@@ -295,8 +295,10 @@ functions:
       `[[statement_execute]]` applies, if any. So a PRAGMA reports PRAGMA even
       where execution rewrites it into a SELECT or a CALL.
       `[[result_get_statement_type]]` on the executed result reports the
-      rewritten type. A statement the parser expands into a group reports
-      MULTI. Its parts are not visible here, and statement_bind rejects it.
+      rewritten type of a statement that rewrites into one. A statement the
+      parser expands into a group reports MULTI, here and on its result. Its
+      parts are not visible here, and statement_bind reports
+      ERROR_INPUT_METADATA_DEFERRED for it.
     role: getter
     belongs_to: sql_statement
     parameters:

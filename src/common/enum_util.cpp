@@ -6492,19 +6492,20 @@ const StringUtil::EnumStringLiteral *GetSuggestionStateValues() {
 		{ static_cast<uint32_t>(SuggestionState::SUGGEST_TABLE_FUNCTION_NAME), "SUGGEST_TABLE_FUNCTION_NAME" },
 		{ static_cast<uint32_t>(SuggestionState::SUGGEST_PRAGMA_NAME), "SUGGEST_PRAGMA_NAME" },
 		{ static_cast<uint32_t>(SuggestionState::SUGGEST_SETTING_NAME), "SUGGEST_SETTING_NAME" },
-		{ static_cast<uint32_t>(SuggestionState::SUGGEST_RESERVED_VARIABLE), "SUGGEST_RESERVED_VARIABLE" }
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_RESERVED_VARIABLE), "SUGGEST_RESERVED_VARIABLE" },
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_BARE_LABEL), "SUGGEST_BARE_LABEL" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<SuggestionState>(SuggestionState value) {
-	return StringUtil::EnumToString(GetSuggestionStateValues(), 14, "SuggestionState", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSuggestionStateValues(), 15, "SuggestionState", static_cast<uint32_t>(value));
 }
 
 template<>
 SuggestionState EnumUtil::FromString<SuggestionState>(const char *value) {
-	return static_cast<SuggestionState>(StringUtil::StringToEnum(GetSuggestionStateValues(), 14, "SuggestionState", value));
+	return static_cast<SuggestionState>(StringUtil::StringToEnum(GetSuggestionStateValues(), 15, "SuggestionState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTableColumnTypeValues() {
