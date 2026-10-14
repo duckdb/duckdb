@@ -16,6 +16,7 @@ else()
   set(SHELL_SOURCES
       shell_command_line_option.cpp
       shell_extension.cpp
+      shell_grammar_extension.cpp
       shell.cpp
       shell_helpers.cpp
       shell_manual.cpp

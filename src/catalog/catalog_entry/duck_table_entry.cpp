@@ -181,7 +181,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			auto column_indexes = unique.GetLogicalIndexes(columns);
 			if (info.indexes.empty()) {
 				auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-				storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info), index_oid);
+				storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info), index_oid,
+				                  unique.check_mode);
 				continue;
 			}
 
@@ -192,7 +193,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				index_storage_info.name = name_info.name;
 			}
 
-			storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_storage_info), index_oid);
+			storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_storage_info), index_oid,
+			                  unique.check_mode);
 			continue;
 		}
 
@@ -212,7 +214,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				if (info.indexes.empty()) {
 					auto constraint_type = IndexConstraintType::FOREIGN;
 					auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-					storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info), index_oid);
+					storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info), index_oid,
+					                  ConstraintCheckMode::DEFAULT);
 					continue;
 				}
 
@@ -224,7 +227,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				}
 
 				storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN, std::move(index_storage_info),
-				                  index_oid);
+				                  index_oid, ConstraintCheckMode::DEFAULT);
 			}
 		}
 	}
@@ -873,7 +876,10 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	if (create_info->columns.empty()) {
 		throw CatalogException("Cannot drop column: table only has one column remaining!");
 	}
-	auto adjusted_indices = column_dependency_manager.RemoveColumn(removed_index, columns.LogicalColumnCount());
+	// operate on a copy: this is the live catalog entry, and mutating it here races with concurrent ALTERs and leaves
+	// the dependency map corrupted if a later step throws and the ALTER is rolled back
+	auto column_dependencies = column_dependency_manager.Copy();
+	auto adjusted_indices = column_dependencies.RemoveColumn(removed_index, columns.LogicalColumnCount());
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_constraints = binder->BindConstraints(constraints, name, columns);
@@ -1415,6 +1421,18 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 			auto existing_name = existing_pk->ToString();
 			throw CatalogException("table %s can have only one primary key: %s", name, existing_name);
 		}
+
+		// Constraint index names are not unique, detect a duplicate constraint by its kind and columns.
+		for (const auto &constraint : GetConstraints()) {
+			if (constraint->type != ConstraintType::UNIQUE) {
+				continue;
+			}
+			auto &existing = constraint->Cast<UniqueConstraint>();
+			if (existing.is_primary_key == unique.is_primary_key &&
+			    existing.GetLogicalIndexes(columns) == unique.GetLogicalIndexes(columns)) {
+				throw CatalogException("table %s already has the constraint %s", name, existing.ToString());
+			}
+		}
 		table_info.constraints.push_back(info.constraint->Copy());
 
 	} else {
@@ -1533,8 +1551,8 @@ optional_ptr<CatalogEntry> DuckTableEntry::GetTrigger(CatalogTransaction transac
 	return triggers->GetEntry(transaction, name);
 }
 
-void DuckTableEntry::ScanTriggersNonTransactional(const std::function<void(CatalogEntry &)> &callback) {
-	triggers->Scan(callback);
+void DuckTableEntry::ScanTriggers(VisibilityBound bound, const std::function<void(CatalogEntry &)> &callback) {
+	triggers->Scan(bound, callback);
 }
 
 bool DuckTableEntry::DropTrigger(CatalogTransaction transaction, const Identifier &name, bool cascade) {

@@ -20,6 +20,7 @@
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/json_document.hpp"
 
 #include <utility>
@@ -268,12 +269,16 @@ void QueryProfiler::FinalizeMetrics() {
 	FinalizeMetricsInternal();
 }
 
-void QueryProfiler::TrackBytesRead(const idx_t amount) {
-	query_metrics.UpdateBytesRead(amount);
+void QueryProfiler::TrackBytesRead(const idx_t amount, const idx_t elapsed_us) {
+	query_metrics.UpdateBytesRead(amount, elapsed_us);
 }
 
-void QueryProfiler::TrackBytesWritten(const idx_t amount) {
-	query_metrics.UpdateBytesWritten(amount);
+void QueryProfiler::TrackBytesWritten(const idx_t amount, const idx_t elapsed_us) {
+	query_metrics.UpdateBytesWritten(amount, elapsed_us);
+}
+
+void QueryProfiler::TrackBytesSpilled(const idx_t amount) {
+	query_metrics.UpdateBytesSpilled(amount);
 }
 
 void QueryProfiler::TrackBytesScanned(const idx_t amount) {
@@ -557,6 +562,9 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
+	if (!running.load(std::memory_order_relaxed)) {
+		return;
+	}
 	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
@@ -589,6 +597,9 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 }
 
 void QueryProfiler::SetBlockedTime(const double &blocked_thread_time) {
+	if (!running.load(std::memory_order_relaxed)) {
+		return;
+	}
 	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
@@ -958,8 +969,13 @@ unique_ptr<QueryProfileResult> QueryProfiler::ToLegacyResultTree() const {
 
 	emit("total_memory_allocated", "system.total_memory_allocated");
 	emit("total_bytes_written", "io.total_bytes_written");
+	emit("total_write_operations", "io.total_write_operations");
 	emit("total_bytes_read", "io.total_bytes_read");
+	emit("total_read_operations", "io.total_read_operations");
+	emit("total_write_time", "io.total_write_time");
+	emit("total_read_time", "io.total_read_time");
 	emit("system_peak_temp_dir_size", "system.peak_temp_dir_size");
+	emit("total_bytes_spilled", "system.total_bytes_spilled");
 	emit("system_peak_buffer_memory", "system.peak_buffer_memory");
 	emit("system_peak_streaming_buffer_size", "system.peak_streaming_buffer_size");
 

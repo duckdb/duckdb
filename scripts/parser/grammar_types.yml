@@ -46,7 +46,7 @@
 # ---------------------------------------------------------------------------
 
 additional_transform_result_types:
-  - "unique_ptr<TransformResultValue>"
+  - "arena_ptr<TransformResultValue>"
   - "vector<Identifier>"
 
 SQLStatementList:
@@ -86,7 +86,6 @@ SQLStatement:
     - ExplainableStatements
     - ExplainSelectStatement
     - ExportStatement
-    - ExpressionStatement
     - ImportStatement
     - InsertStatement
     - LoadStatement
@@ -551,6 +550,23 @@ Expression:
     - IndexElement
     - RelOptionArgumentOpt
     - ExpressionAlias
+    - MeasuresElement
+    - PatternClause
+    - RowPattern
+    - RowPatternAlternative
+    - RowPatternTerm
+    - RowPatternFactor
+    - RowPatternPrimary
+    - RowPatternPermute
+    - RowPatternAnchor
+    - PatternStart
+    - PatternEnd
+    - RowPatternGroup
+    - RowPatternEmpty
+    - RowPatternExclusion
+    - RowPatternLabel
+    - MeasureSemanticsExpression
+    - DefineElement
 
 ColumnRefExpression:
   type: "unique_ptr<ColumnRefExpression>"
@@ -602,6 +618,8 @@ TableRef:
     - CTEBody
     - CTESelectBody
     - CTEDMLBody
+    - TableMatchRecognizeClause
+    - MatchRecognizeBody
 
 BaseTableRef:
   type: "unique_ptr<BaseTableRef>"
@@ -654,6 +672,8 @@ ExpressionList:
     - SetAssignment
     - VariableList
     - UsingKey
+    - MeasuresClause
+    - DefineClause
 
 FunctionArgumentList:
   type: "vector<FunctionArgument>"
@@ -1125,6 +1145,14 @@ String:
     - DoubleType
     - UpdateSetColumnTarget
 
+ConstraintCheckMode:
+  type: "ConstraintCheckMode"
+  by_value: false
+  rules:
+    - ConstraintTiming
+    - ImmediateConstraint
+    - DeferredConstraint
+
 Bool:
   type: "bool"
   by_value: false
@@ -1257,6 +1285,8 @@ ColumnConstraintEntry:
   by_value: true
   rules:
     - ColumnConstraint
+    - NameableColumnConstraint
+    - ColumnConstraintElement
     - NotNullConstraint
     - UniqueConstraint
     - PrimaryKeyConstraint
@@ -1840,6 +1870,34 @@ matcher_rule_overrides:
     allow_type_overlap: true
     matcher: all_operators
 
+# expression_depth_nesting_rules / expression_depth_chain_rules: see ParsedGrammar::SetExpressionDepth. While an
+# expression is transformed, every nesting rule on the transform stack counts one level and every chain rule
+# as many levels as it has repeated elements, so that max_expression_depth bounds the depth of the resulting
+# expression trees. Add a rule here when its repetitions nest the result one level each.
+expression_depth_nesting_rules:
+  - SingleExpression
+  - Type
+
+expression_depth_chain_rules:
+  - LambdaArrowExpression
+  - LogicalOrExpression
+  - LogicalAndExpression
+  - NotExpression
+  - IsExpressionContinuation
+  - IsDistinctFromExpression
+  - ComparisonExpression
+  - BetweenInLikeExpression
+  - InfixOtherOperatorExpression
+  - BitwiseExpression
+  - TildeExpression
+  - AdditiveExpression
+  - MultiplicativeExpression
+  - ExponentiationExpression
+  - CollateExpression
+  - AtTimeZoneExpression
+  - PrefixExpression
+  - IndirectionList
+
 # collapsible_rules: see ParsedGrammar::SetTransformProcess. Every rule below has a transformer that returns its
 # operand unchanged when the rest of the rule matched nothing. Take a rule out of this list if that stops being
 # true. The flag is attached to the default transform, so an extension that replaces the transform of
@@ -1935,3 +1993,70 @@ excluded_rules:
   # expression.gram rules kept manual during incremental transformer generation migration
   - OverClause
   - PrefixExpression
+
+MatchRecognizeClauseEntry:
+  type: "MatchRecognizeClause"
+  by_value: true
+  rules:
+    - MatchRecognizeClause
+    - MRPartition
+    - MROrderBy
+    - MRMeasures
+    - MRRows
+    - MRSkip
+    - MRPattern
+    - MRSubset
+    - MRDefineAuto
+    - MRDefine
+MatchRecognizeSubset:
+  type: "MatchRecognizeSubset"
+  by_value: true
+  rules:
+    - SubsetElement
+MatchRecognizeSubsetList:
+  type: "vector<MatchRecognizeSubset>"
+  by_value: true
+  rules:
+    - SubsetClause
+MeasureSemantics:
+  type: "bool"
+  rules:
+    - MeasureSemantics
+    - RunningSemantics
+    - FinalSemantics
+    - QuantifierReluctant
+MatchRecognizeRows:
+  type: "MatchRecognizeRows"
+  rules:
+    - RowsPerMatch
+    - OneRowPerMatch
+    - AllRowsPerMatch
+    - AllRowsEmptyMatches
+    - ShowEmptyMatches
+    - OmitEmptyMatches
+    - WithUnmatchedRows
+MatchRecognizeAfterMatchClause:
+  type: "MatchRecognizeAfterMatchClause"
+  by_value: true
+  rules:
+    - AfterMatchSkip
+    - AfterMatchSkipTarget
+    - SkipToNextRow
+    - SkipPastLastRow
+    - SkipToFirstVar
+    - SkipToLastVar
+    - SkipToVar
+MatchRecognizeQuantifier:
+  type: "MatchRecognizeQuantifier"
+  rules:
+    - RowPatternQuantifier
+    - RowPatternQuantifierKind
+    - QuantifierStar
+    - QuantifierPlus
+    - QuantifierOptional
+    - QuantifierRange
+    - QuantifierBounds
+    - QuantifierMinMax
+    - QuantifierMin
+    - QuantifierMax
+    - QuantifierExact
