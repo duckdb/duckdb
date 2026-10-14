@@ -90,3 +90,24 @@ FROM range(3);
 1	42
 1	42
 1	42
+
+# Deferred PKs are not UCC
+statement ok
+CREATE TABLE d(id INTEGER PRIMARY KEY DEFERRED);
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO d VALUES (1),(1);
+
+query II
+SELECT id, count(*) OVER (
+    ORDER BY id RANGE BETWEEN CURRENT ROW AND CURRENT ROW
+) FROM d;
+----
+1	2
+1	2
+
+statement ok
+ROLLBACK;
