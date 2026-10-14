@@ -16,6 +16,7 @@
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/planner/expression_nullability.hpp"
@@ -2789,11 +2790,55 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 	return output_replacements;
 }
 
+static idx_t CountMarkerReferences(LogicalOperator &op, TableIndex mark_index) {
+	idx_t count = 0;
+	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expression) {
+		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+		    **expression,
+		    [&](const BoundColumnRefExpression &colref) { count += colref.Binding().table_index == mark_index; });
+	});
+	for (auto &child : op.children) {
+		count += CountMarkerReferences(*child, mark_index);
+	}
+	return count;
+}
+
+//! A MARK join whose only use is a NOT(marker) filter right above it, with conditions that never yield a NULL marker,
+//! becomes an ANTI join before the rewrite, so the marker does not flow through the projections of the CTE
+static void ConvertNegatedMarkJoinToAnti(LogicalFilter &filter, LogicalComparisonJoin &delim_join,
+                                         LogicalOperator &rewrite_root) {
+	if (delim_join.join_type != JoinType::MARK || !FilterNegatesDelimJoinMarker(filter, delim_join)) {
+		return;
+	}
+	for (auto &cond : delim_join.conditions) {
+		if (cond.IsComparison() && cond.GetComparisonType() != ExpressionType::COMPARE_DISTINCT_FROM &&
+		    cond.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			return;
+		}
+	}
+	if (CountMarkerReferences(rewrite_root, delim_join.mark_index) != 1) {
+		return;
+	}
+	for (auto &expr : filter.expressions) {
+		if (expr->GetExpressionType() == ExpressionType::OPERATOR_NOT &&
+		    ExpressionIsMarkerRef(*expr->Cast<BoundOperatorExpression>().GetChildren()[0], delim_join.mark_index)) {
+			expr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+			delim_join.join_type = JoinType::ANTI;
+			return;
+		}
+	}
+}
+
 BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan,
                                                                       LogicalOperator &rewrite_root,
                                                                       bool null_rejecting_filter_above,
                                                                       bool preserve_evidence_side) {
 	BindingReplacementGraph output_replacements;
+	if (plan->type == LogicalOperatorType::LOGICAL_FILTER &&
+	    plan->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		ConvertNegatedMarkJoinToAnti(plan->Cast<LogicalFilter>(), plan->children[0]->Cast<LogicalComparisonJoin>(),
+		                             rewrite_root);
+	}
 	bool preserve_nested_evidence_side = false;
 	bool has_non_subquery_selection = false;
 	if (plan->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
