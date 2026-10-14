@@ -2348,9 +2348,22 @@ void Value::Serialize(Serializer &serializer) const {
 }
 
 //! Whether the value (excluding its children) is within the domain of its type
-//! Whether a child value has the type its parent expects - ANY accepts values of any type (e.g. in secrets)
+//! Whether a child value has the layout its parent expects - the child is checked against its own type separately
+//! Older versions wrote nested values whose types differ from the declared child type (e.g. MAP(VARCHAR, ANY) and
+//! MAP(VARCHAR, VARCHAR) secret maps with MAP values), so the types are not required to be equal
 static bool ChildTypeMatches(const Value &child, const LogicalType &expected_type) {
-	return expected_type.id() == LogicalTypeId::ANY || child.type() == expected_type;
+	if (expected_type.id() == LogicalTypeId::ANY) {
+		return true;
+	}
+	auto &child_type = child.type();
+	if (child_type.InternalType() != expected_type.InternalType()) {
+		return false;
+	}
+	if (child_type.InternalType() == PhysicalType::STRUCT &&
+	    StructType::GetChildCount(child_type) != StructType::GetChildCount(expected_type)) {
+		return false;
+	}
+	return true;
 }
 
 static bool ValueIsValidShallow(const Value &value) {
