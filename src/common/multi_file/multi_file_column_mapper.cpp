@@ -996,7 +996,7 @@ static unique_ptr<Expression> RewriteDynamicFilterExpression(const shared_ptr<Dy
 	if (!filter_data || !filter_data->initialized) {
 		return nullptr;
 	}
-	lock_guard<mutex> lock(filter_data->lock);
+	annotated_shared_lock<annotated_shared_mutex> lock(filter_data->lock);
 	auto new_constant = filter_data->constant;
 	if (!TryCastConstant(new_constant, target_type)) {
 		return nullptr;

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
@@ -219,9 +220,9 @@ struct DynamicFilterData {
 public:
 	DynamicFilterData(ExpressionType comparison_type, Value constant);
 
-	mutex lock;
+	mutable annotated_shared_mutex lock;
 	ExpressionType comparison_type;
-	Value constant;
+	Value constant DUCKDB_GUARDED_BY(lock);
 	atomic<bool> initialized = {false};
 
 	unique_ptr<Expression> ToExpression(const Expression &column) const;
