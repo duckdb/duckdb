@@ -287,7 +287,7 @@ bool BufferPool::AddToEvictionQueue(BlockLock &lock, shared_ptr<BlockHandle> &ha
 		queue.IncrementDeadNodes();
 	}
 
-	auto ts = memory.NextEvictionSequenceNumber();
+	auto ts = memory.NextEvictionSequenceNumber(lock);
 	if (track_eviction_timestamps) {
 		memory.SetLRUTimestamp(std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
 		                           .time_since_epoch()
@@ -624,29 +624,36 @@ BufferPool::MemoryUsage::MemoryUsage() {
 		v = 0;
 	}
 	for (auto &cache : memory_usage_caches) {
-		for (auto &v : cache) {
+		for (auto &v : cache.counters) {
 			v = 0;
 		}
 	}
 }
 
 void BufferPool::MemoryUsage::UpdateUsedMemory(MemoryTag tag, int64_t size) {
-	auto tag_idx = (idx_t)tag;
-	if ((idx_t)AbsValue(size) < MEMORY_USAGE_CACHE_THRESHOLD) {
+	if (size == 0) {
+		return;
+	}
+	auto tag_idx = static_cast<idx_t>(tag);
+	if (static_cast<idx_t>(AbsValue(size)) < MEMORY_USAGE_TAG_CACHE_THRESHOLD) {
 		// update cache and update global counter when cache exceeds threshold
 		// Get corresponding cache slot based on current CPU core index
 		// Two threads may access the same cache simultaneously,
 		// ensuring correctness through atomic operations
-		auto cache_idx = (idx_t)TaskScheduler::GetEstimatedCPUId() % MEMORY_USAGE_CACHE_COUNT;
-		auto &cache = memory_usage_caches[cache_idx];
+		auto cache_idx = static_cast<idx_t>(TaskScheduler::GetEstimatedCPUId()) % MEMORY_USAGE_CACHE_COUNT;
+		auto &cache = memory_usage_caches[cache_idx].counters;
 		auto new_tag_size = cache[tag_idx].fetch_add(size, std::memory_order_relaxed) + size;
-		if ((idx_t)AbsValue(new_tag_size) >= MEMORY_USAGE_CACHE_THRESHOLD) {
+		if (static_cast<idx_t>(AbsValue(new_tag_size)) >= MEMORY_USAGE_TAG_CACHE_THRESHOLD) {
 			// cached tag memory usage exceeds threshold
 			auto tag_size = cache[tag_idx].exchange(0, std::memory_order_relaxed);
 			memory_usage[tag_idx].fetch_add(tag_size, std::memory_order_relaxed);
 		}
+		if (static_cast<idx_t>(AbsValue(size)) >= MEMORY_USAGE_CACHE_THRESHOLD) {
+			memory_usage[TOTAL_MEMORY_USAGE_INDEX].fetch_add(size, std::memory_order_relaxed);
+			return;
+		}
 		auto new_total_size = cache[TOTAL_MEMORY_USAGE_INDEX].fetch_add(size, std::memory_order_relaxed) + size;
-		if ((idx_t)AbsValue(new_total_size) >= MEMORY_USAGE_CACHE_THRESHOLD) {
+		if (static_cast<idx_t>(AbsValue(new_total_size)) >= MEMORY_USAGE_CACHE_THRESHOLD) {
 			// cached total memory usage exceeds threshold
 			auto total_size = cache[TOTAL_MEMORY_USAGE_INDEX].exchange(0, std::memory_order_relaxed);
 			memory_usage[TOTAL_MEMORY_USAGE_INDEX].fetch_add(total_size, std::memory_order_relaxed);
