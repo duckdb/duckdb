@@ -127,14 +127,21 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 	}
 
 	if (op.children.size() == 1) {
-		// UNNEST emits multiple rows per input row, so a distinct group found below it does not hold above it
-		const auto invalidates_distinct = op.type == LogicalOperatorType::LOGICAL_UNNEST;
+		// Operators that change row cardinality or depend on row multiplicity/order invalidate distinct groups:
+		// distinct groups from above cannot hold below (because duplicating rows changes the slice or values computed),
+		// and distinct groups from below cannot hold above (because multiple or sampled rows are produced).
+		const auto blocks_distinct = op.type == LogicalOperatorType::LOGICAL_UNNEST ||
+		                             op.type == LogicalOperatorType::LOGICAL_LIMIT ||
+		                             op.type == LogicalOperatorType::LOGICAL_TOP_N ||
+		                             op.type == LogicalOperatorType::LOGICAL_SAMPLE ||
+		                             op.type == LogicalOperatorType::LOGICAL_WINDOW;
 		unordered_map<TableIndex, column_binding_set_t> distinct_groups_above;
-		if (invalidates_distinct) {
-			distinct_groups_above = pipe_info.distinct_groups;
+		if (blocks_distinct) {
+			distinct_groups_above = std::move(pipe_info.distinct_groups);
+			pipe_info.distinct_groups.clear();
 		}
 		OptimizeChildren(*op.children[0], op, idx);
-		if (invalidates_distinct) {
+		if (blocks_distinct) {
 			pipe_info.distinct_groups = std::move(distinct_groups_above);
 		}
 	} else {

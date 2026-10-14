@@ -292,3 +292,33 @@ query II
 explain select count(*) from probe_keys left join (select distinct k from (select k, unnest([1,2,3]) e from dup_keys) u) t on t.k=probe_keys.idb;
 ----
 physical_plan	<!REGEX>:.*JOIN.*
+
+# DISTINCT above LIMIT/OFFSET must not eliminate join below it (issue #27155)
+statement ok
+CREATE TABLE p (id BIGINT, g VARCHAR);
+
+statement ok
+INSERT INTO p VALUES (1,'x'),(2,'y'),(3,'x'),(4,'y'),(5,'x'),(6,'y'),(7,'z');
+
+statement ok
+CREATE TABLE k (a BIGINT, b BIGINT);
+
+statement ok
+INSERT INTO k VALUES (1,2),(1,3),(2,3),(3,4),(4,1),(5,1),(6,7),(6,4);
+
+query T
+SELECT DISTINCT pg FROM (
+  SELECT p.id AS pid, p.g AS pg FROM p LEFT JOIN k ON p.id = k.a
+  ORDER BY p.g DESC, p.id LIMIT 2 OFFSET 3
+) ORDER BY pg;
+----
+y
+
+query II
+EXPLAIN SELECT DISTINCT pg FROM (
+  SELECT p.id AS pid, p.g AS pg FROM p LEFT JOIN k ON p.id = k.a
+  ORDER BY p.g DESC, p.id LIMIT 2 OFFSET 3
+) ORDER BY pg;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
