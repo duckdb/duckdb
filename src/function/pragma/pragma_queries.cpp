@@ -32,7 +32,9 @@ string PragmaShowTables(const string &database, const string &schema, optional_i
 			where_conditions.push_back(StringUtil::Format("lower(database_name) = lower(%s)", SQLString(database)));
 		}
 		if (!schema.empty()) {
-			where_conditions.push_back(StringUtil::Format("lower(schema_name) = lower(%s)", SQLString(schema)));
+			// Bare equality on the canonical schema name (resolved in bind_showref.cpp) so the schema-lookup fast
+			// path in SystemCatalogPruning engages; a lower() wrapper would defeat it.
+			where_conditions.push_back(StringUtil::Format("schema_name = %s", SQLString(schema)));
 		}
 	}
 	if (where_conditions.empty()) {
