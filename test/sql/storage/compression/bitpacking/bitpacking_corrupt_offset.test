@@ -1,0 +1,22 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_corrupt_offset.test
+# description: Test that a corrupt bitpacking group offset is rejected instead of read out of bounds
+# group: [bitpacking]
+
+require block_size 262144
+
+require vector_size 2048
+
+# test_bp is an INTEGER column stored with forced bitpacking compression;
+# the data offset of its first group has been set out of range in the file
+unzip data/storage/bitpacking_corrupt_group_offset.db.gz {TEST_DIR}/bitpacking_corrupt_group_offset.db
+
+statement ok
+ATTACH '{TEST_DIR}/bitpacking_corrupt_group_offset.db' AS db2 (READ_ONLY)
+
+statement ok
+USE db2
+
+statement error
+SELECT sum(a) FROM test_bp
+----
+IO Error: Corrupted bitpacking segment: stored group offset (16777215) exceeds the segment's block size (262136)
