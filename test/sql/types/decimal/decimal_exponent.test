@@ -270,6 +270,23 @@ SELECT TRY_CAST('1.0e38' AS DECIMAL(38,0)), TRY_CAST('-1.7e38' AS DECIMAL(38,0))
 ----
 NULL	NULL
 
+# the width, not the HUGEINT storage, limits the digits before the point
+query III
+SELECT '1.70141e36'::DECIMAL(38,1), '-1.70141e36'::DECIMAL(38,1), '9.99e17'::DECIMAL(19,1)
+----
+1701410000000000000000000000000000000.0	-1701410000000000000000000000000000000.0	999000000000000000.0
+
+statement error
+SELECT '1.70141e+37'::DECIMAL(38,1)
+----
+<REGEX>:Conversion Error.*Could not convert string.*
+
+query III
+SELECT TRY_CAST('1.70141e+37' AS DECIMAL(38,1)), TRY_CAST('-1.70141e+37' AS DECIMAL(38,1)),
+	TRY_CAST('1.25e18' AS DECIMAL(19,1))
+----
+NULL	NULL	NULL
+
 # zeros that the exponent moves before the point leave room for the integer digits
 query IIII
 SELECT '0.01e3'::DECIMAL(4,2), '-0.01e3'::DECIMAL(4,2), '0.01e7'::DECIMAL(9,3), '0.01e2'::DECIMAL(38,37)
