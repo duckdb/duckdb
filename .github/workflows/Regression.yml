@@ -201,7 +201,7 @@ jobs:
             --benchmarks "${{ matrix.benchmark }}" \
             --verbose \
             --early-stop \
-            --memory-limit 7GiB \
+            --memory-limit 6.5GiB \
             --threads 2
 
   regression-bench-tpc:
@@ -267,7 +267,7 @@ jobs:
             --verbose \
             --early-stop \
             --disable-timeout \
-            --memory-limit 7GiB \
+            --memory-limit 6.5GiB \
             --benchmark-argument sf=${{ matrix.sf }} \
             --threads ${{ matrix.threads }}
 
@@ -324,7 +324,7 @@ jobs:
             --benchmarks benchmark/fivetran/benchmark_list.csv \
             --verbose \
             --early-stop \
-            --memory-limit 7GiB \
+            --memory-limit 6.5GiB \
             --threads 2
 
   regression-tests:
