@@ -62,6 +62,10 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	dictionary_indices_width =
 	    (bitpacking_width_t)(Load<uint8_t>(data_ptr_cast(&header_ptr->dictionary_indices_width)));
 	string_lengths_width = (bitpacking_width_t)(Load<uint8_t>(data_ptr_cast(&header_ptr->string_lengths_width)));
+	if (dictionary_indices_width > sizeof(uint32_t) * 8 || string_lengths_width > sizeof(uint32_t) * 8) {
+		throw IOException("Failed to scan dictionary string - bitpacking width was invalid. Database file appears to "
+		                  "be corrupted.");
+	}
 
 	auto string_lengths_space = BitpackingPrimitives::GetRequiredSize(dict_count, string_lengths_width);
 	auto dictionary_indices_space =
@@ -206,7 +210,7 @@ void CompressedStringScanState::Select(Vector &result, idx_t start, const Select
 		for (; decompress_position < string_number; decompress_position++) {
 			decompress_offset += string_lengths[decompress_position];
 		}
-		result_data.WriteValue(FetchStringFromDict(result, decompress_offset, string_number));
+		result_data.WriteStringRef(FetchStringFromDict(result, decompress_offset, string_number));
 	}
 }
 

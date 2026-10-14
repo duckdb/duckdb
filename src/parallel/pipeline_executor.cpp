@@ -5,6 +5,7 @@
 #include "duckdb/main/client_context.hpp"
 
 #include "duckdb/main/settings.hpp"
+#include "duckdb/parallel/progress_verifier.hpp"
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 #include <chrono>
@@ -92,6 +93,7 @@ void PipelineExecutor::Reset() {
 	source_profiling_finalized = false;
 	source_finish_notification_state = SourceFinishNotificationState::PENDING;
 	should_flush_current_idx = true;
+	unsampled_progress_rows = 0;
 	while (!in_process_operators.empty()) {
 		in_process_operators.pop();
 	}
@@ -706,6 +708,12 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 	finalized = true;
 	NotifySourceFinished();
 
+	SampleProgress();
+	auto progress_verifier = pipeline.executor.GetProgressVerifier();
+	if (progress_verifier && !exhausted_source && !pipeline.IsExternalInput()) {
+		progress_verifier->OnEarlyExit(pipeline);
+	}
+
 	// If source was not exhausted (e.g. LIMIT stopped the pipeline), collect exact metrics now
 	if (!source_profiling_finalized && local_source_state && global_source_state) {
 		context.thread.profiler.FinishSource(*pipeline.source, *global_source_state, *local_source_state);
@@ -851,6 +859,8 @@ PipelineExecutor::SourceFetchResult PipelineExecutor::FetchFromSource(DataChunk 
 	D_ASSERT(!pipeline.IsExternalInput());
 	D_ASSERT(global_source_state);
 	D_ASSERT(local_source_state);
+	// the previous chunk has been pushed through the pipeline
+	SampleProgress();
 	StartOperator(*pipeline.source);
 
 	OperatorSourceInput source_input = {*global_source_state, *local_source_state, interrupt_state};
@@ -869,7 +879,19 @@ PipelineExecutor::SourceFetchResult PipelineExecutor::FetchFromSource(DataChunk 
 	}
 	EndOperator(*pipeline.source, &result);
 
+	if (pipeline.executor.GetProgressVerifier()) {
+		unsampled_progress_rows = result.size();
+	}
 	return fetch_result;
+}
+
+void PipelineExecutor::SampleProgress() {
+	auto progress_verifier = pipeline.executor.GetProgressVerifier();
+	if (!progress_verifier || unsampled_progress_rows == 0) {
+		return;
+	}
+	progress_verifier->OnSourceChunk(pipeline, unsampled_progress_rows);
+	unsampled_progress_rows = 0;
 }
 
 void PipelineExecutor::InitializeChunk(DataChunk &chunk) {

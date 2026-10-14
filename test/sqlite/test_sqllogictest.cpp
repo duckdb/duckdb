@@ -1,7 +1,6 @@
 #include "catch.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/main/extension/generated_extension_loader.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
@@ -159,9 +158,7 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 				runner.Reconnect();
 			}
 			auto res = runner.con->Query(on_cleanup);
-			if (res->HasError()) {
-				res->GetErrorObject().Throw();
-			}
+			res->ThrowIfError();
 		} catch (std::exception &ex) {
 			string cleanup_failure = "Error while running clean-up routine:\n";
 			ErrorData cleanup_error(ex);
@@ -305,7 +302,7 @@ static bool IsSQLiteLogicTestPath(FileSystem &fs, const string &path) {
 
 static bool IsExtensionTestPath(const string &path) {
 	auto normalized_path = StringUtil::Replace(path, "\\", "/");
-	for (const auto &extension_test_path : ExtensionHelper::LoadedExtensionTestPaths()) {
+	for (const auto &extension_test_path : LoadedExtensionTestPaths()) {
 		auto normalized_root = StringUtil::Replace(extension_test_path, "\\", "/");
 		if (PathStartsWith(normalized_path, normalized_root)) {
 			return true;
@@ -346,7 +343,7 @@ void RegisterSqllogictests() {
 		}
 	});
 
-	for (const auto &extension_test_path : ExtensionHelper::LoadedExtensionTestPaths()) {
+	for (const auto &extension_test_path : LoadedExtensionTestPaths()) {
 		listFiles(*fs, extension_test_path, [&](const string &path) {
 			if (IsSQLLogicTestFile(path)) {
 				auto fun = testRunner<true>;

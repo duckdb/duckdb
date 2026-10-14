@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/main/capi/cast/utils.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/query_result.hpp"
 
 namespace duckdb {
 
@@ -97,7 +97,7 @@ bool CastDecimalCInternal(duckdb_result *source, RESULT_TYPE &result, idx_t col,
 	case duckdb::PhysicalType::VARCHAR: {
 		// wide decimal: the materialized duckdb_decimal only holds values that fit in 128 bits, so convert the
 		// original value instead
-		auto value = query_result->Cast<MaterializedQueryResult>().GetValue(col, row);
+		auto value = query_result->Collection().GetValue(col, row);
 		if (value.IsNull()) {
 			return false;
 		}

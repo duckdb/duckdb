@@ -34,7 +34,7 @@ bool CastDecimalCInternal(duckdb_result *source, duckdb_string &result, idx_t co
 	case duckdb::PhysicalType::VARCHAR: {
 		// wide decimal: the materialized duckdb_decimal only holds values that fit in 128 bits, so format the
 		// original value instead
-		auto value = query_result->Cast<MaterializedQueryResult>().GetValue(col, row);
+		auto value = query_result->Collection().GetValue(col, row);
 		if (value.IsNull()) {
 			return false;
 		}

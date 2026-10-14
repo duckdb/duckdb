@@ -235,6 +235,7 @@ int Terminal::EditRaw(char *buf, size_t buflen, const char *prompt) {
 	}
 	Linenoise l(STDIN_FILENO, STDOUT_FILENO, buf, buflen, prompt);
 	count = l.Edit();
+	Terminal::BufferAvailableInput();
 	Terminal::DisableRawMode();
 	printf("\n");
 	return count;
