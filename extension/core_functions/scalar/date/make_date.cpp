@@ -109,7 +109,7 @@ struct MakeTimestampOperator {
 	static RESULT_TYPE Operation(T value) {
 		const auto result = RESULT_TYPE(value);
 		if (!Timestamp::IsValid(result)) {
-			throw ConversionException("Timestamp microseconds out of range: %ld", value);
+			throw ConversionException("Timestamp units out of range: %ld", value);
 		}
 		return result;
 	}
