@@ -60,6 +60,8 @@ public:
 	inline idx_t ColumnCount() const {
 		return data.size();
 	}
+	//! The number of rows the vectors of this chunk were initialized to hold
+	DUCKDB_API idx_t GetCapacity() const;
 	//! Verify all child vectors have the expected cardinality
 	void CheckCardinality(idx_t count_p);
 	//! Sets the cardinality of all child vectors of this chunk

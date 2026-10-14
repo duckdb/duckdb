@@ -6,10 +6,9 @@ handles:
   copy_function:
     description: |
       An owned opaque handle to a custom copy function being built: an output format for `COPY ... TO`, an input
-      format for `COPY ... FROM`, or both. Created with `[[copy_function_create_with_connection]]` or
-      `[[copy_function_create_with_extension]]`, configured with the setter functions (e.g.
+      format for `COPY ... FROM`, or both. Created with `[[copy_function_create]]`, configured with the setter functions (e.g.
       `[[copy_function_set_name]]`, `[[copy_to_set_batch_callback]]`, `[[copy_from_set_exec_callback]]`, etc.), made
-      available with `[[copy_function_register]]`, and destroyed with `[[copy_function_destroy]]`.
+      available with `[[connection_register_copy_function]]` or `[[extension_register_copy_function]]`, and destroyed with `[[copy_function_destroy]]`.
 
   copy_to_bind_info:
     description: |
@@ -46,6 +45,12 @@ handles:
       A borrowed opaque handle to the arguments supplied to a copy function during the per-file "finalize" phase of a
       `COPY ... TO` statement. The "finalize" callback receives this handle and can use it to e.g. close the file
       after every batch has been flushed to it.
+
+  copy_to_statistics_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a copy function when a `COPY ... TO` statement reports
+      statistics about the files it wrote (e.g. with `RETURN_STATS`). The "statistics" callback receives this
+      handle and uses it to report the statistics of one written file.
 
   copy_from_bind_info:
     description: |
@@ -167,6 +172,20 @@ callbacks:
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
+  copy_to_statistics_callback:
+    parameters:
+      info:
+        type: copy_to_statistics_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
   copy_from_bind_callback:
     parameters:
       info:
@@ -244,49 +263,26 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Constructors
   #---------------------------------------------------------------------------------------------------------------------
-  copy_function_create_with_connection:
+  copy_function_create:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-03" ]
     description: |
-      Creates a new copy function that will be registered on the connection's database.
+      Creates a new copy function through a factory.
 
-      A copy function implements a file format for `COPY`: once registered, SQL reaches it with
-      `COPY ... TO 'path' (FORMAT name)` and `COPY table FROM 'path' (FORMAT name)`. The function starts out
-      empty: configure it with the setter functions (e.g. `[[copy_function_set_name]]`, the `copy_to_set_*` callbacks
-      for writing, the `copy_from_set_*` callbacks for reading, or both), then make it available with
-      `[[copy_function_register]]`. The caller owns the returned handle and must destroy it with
-      `[[copy_function_destroy]]`, also after registration.
+      A copy function implements a file format for `COPY`: once registered, SQL reaches it with `COPY ... TO 'path'
+      (FORMAT name)` and `COPY table FROM 'path' (FORMAT name)`. The function starts out empty: configure it with the
+      setter functions (e.g. `[[copy_function_set_name]]`, the `copy_to_set_*` callbacks for writing, the
+      `copy_from_set_*` callbacks for reading, or both), then make it available with
+      `[[connection_register_copy_function]]` or `[[extension_register_copy_function]]`. The caller owns the returned
+      handle and must destroy it with `[[copy_function_destroy]]`, also after registration.
+
+      The copy function can only be registered on the database the factory belongs to.
+    role: constructor
+    belongs_to: copy_function
     parameters:
-      connection:
-        type: connection
-        description: The connection to create the function in.
-      function:
-        type: copy_function
-        indirection: 1
-        kind: OUT
-        description: On success, receives the newly created copy function. Owned by the caller.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  copy_function_create_with_extension:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-03" ]
-    description: |
-      Creates a new copy function that will be registered on the loading extension's database.
-
-      A copy function implements a file format for `COPY`: once registered, SQL reaches it with
-      `COPY ... TO 'path' (FORMAT name)` and `COPY table FROM 'path' (FORMAT name)`. Use this from an extension load callback, where an extension handle is available. The function starts out
-      empty: configure it with the setter functions (e.g. `[[copy_function_set_name]]`, the `copy_to_set_*` callbacks
-      for writing, the `copy_from_set_*` callbacks for reading, or both), then make it available with
-      `[[copy_function_register]]`. The caller owns the returned handle and must destroy it with
-      `[[copy_function_destroy]]`, also after registration.
-    parameters:
-      extension:
-        type: extension
-        description: The extension to create the function in.
+      factory:
+        type: factory
+        description: The factory to create the copy function through.
       function:
         type: copy_function
         indirection: 1
@@ -315,9 +311,37 @@ functions:
         type: copy_function
         description: The function to set the name of.
       name:
+        type: identifier
+        indirection: 1
+        const: true
+        kind: IN
+        description: The name to set. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_function_set_file_extension:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-12" ]
+    description: |
+      Sets the file extension of the files the copy function writes, without the leading dot, e.g. `parquet`.
+
+      DuckDB uses it when it names files itself, e.g. the files of `COPY ... TO 'dir' (PARTITION_BY ...)` or
+      `(PER_THREAD_OUTPUT)`. A statement can override it with the `FILE_EXTENSION` option. An extension starting with
+      a dot is rejected. The extension is borrowed and copied. Calling this again replaces the previous extension.
+      Optional, but without it the names DuckDB gives files end in a bare dot, e.g. `data_0.`.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the file extension of.
+      extension:
         type: str
         indirection: 1
-        description: The name to set. Borrowed and copied.
+        const: true
+        kind: IN
+        description: The extension to set, without the leading dot. Borrowed and copied.
       err:
         type: error_info
         indirection: 1
@@ -1833,25 +1857,59 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Register
   #---------------------------------------------------------------------------------------------------------------------
-  copy_function_register:
+  connection_register_copy_function:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-03" ]
     description: |
       Registers the copy function, making it available as a `COPY` format.
 
-      The function is registered on the target given at creation: the connection's database or the loading
-      extension. Registration requires a name and at least one configured side: a `COPY ... TO` side needs its batch
-      and flush callbacks, a `COPY ... FROM` side needs its bind and exec callbacks. A statement in a direction the
-      function does not implement fails with an error. The caller still owns the handle after registration and must
-      destroy it with `[[copy_function_destroy]]`, which does not affect the registered function.
+      The function is registered on the connection's database, visible to every connection, in the connection's
+      transaction: inside an explicit transaction, it is invisible to other connections until the transaction commits,
+      and a rollback undoes it. Registration requires a name and at least one configured side: a `COPY ... TO` side
+      needs its batch and flush callbacks, a `COPY ... FROM` side needs its bind and exec callbacks. A statement in a
+      direction the function does not implement fails with an error. The copy function must have been created through a
+      factory of the same database. The caller still owns the handle after registration and must destroy it with
+      `[[copy_function_destroy]]`, which does not affect the registered function.
+    role: method
+    belongs_to: connection
     parameters:
+      conn:
+        type: connection
+        description: The connection to register on.
       function:
         type: copy_function
-        description: The function to register.
+        description: The copy function to register.
       err:
         type: error_info
         indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+
+  extension_register_copy_function:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Registers the copy function, making it available as a `COPY` format.
+
+      The function is registered on the loading extension's database and attributed to the extension. Use this from the
+      extension's load callback. Registration requires a name and at least one configured side: a `COPY ... TO` side
+      needs its batch and flush callbacks, a `COPY ... FROM` side needs its bind and exec callbacks. A statement in a
+      direction the function does not implement fails with an error. The copy function must have been created through a
+      factory of the same database. The caller still owns the handle after registration and must destroy it with
+      `[[copy_function_destroy]]`, which does not affect the registered function.
+    role: method
+    belongs_to: extension
+    parameters:
+      extension:
+        type: extension
+        description: The loading extension.
+      function:
+        type: copy_function
+        description: The copy function to register.
+      err:
+        type: error_info
+        indirection: 1
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -1871,4 +1929,121 @@ functions:
         type: copy_function
         description: The function to destroy.
         indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY TO Statistics
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_to_set_statistics_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: |
+      Sets the optional statistics callback of the `COPY ... TO` side.
+
+      The statistics callback reports statistics about a written file, such as the number of rows and bytes it
+      holds, which `COPY ... TO` returns when the statement asks for them with `RETURN_STATS`. It is invoked once
+      per output file, after the finalize callback of that file, and only when the statement asks for the
+      statistics. Without a statistics callback, `RETURN_STATS` is rejected for the function.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the callback of.
+      callback:
+        type: copy_to_statistics_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_statistics_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: Retrieves the user data set on the copy function via `[[copy_function_set_user_data]]`.
+    parameters:
+      info:
+        type: copy_to_statistics_info
+        description: The statistics info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_statistics_get_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: Retrieves the bind data set by the function's `COPY ... TO` bind callback.
+    parameters:
+      info:
+        type: copy_to_statistics_info
+        description: The statistics info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_statistics_get_init_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: Retrieves the init data set by the function's `COPY ... TO` init callback for the file being reported.
+    parameters:
+      info:
+        type: copy_to_statistics_info
+        description: The statistics info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the init data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_statistics_set_row_count:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: Reports how many rows were written to the file. Reported as 0 when the callback does not set it.
+    parameters:
+      info:
+        type: copy_to_statistics_info
+        description: The statistics info handle.
+      row_count:
+        type: idx
+        description: The number of rows written to the file.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_statistics_set_file_size:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: Reports the size of the written file in bytes. Reported as 0 when the callback does not set it.
+    parameters:
+      info:
+        type: copy_to_statistics_info
+        description: The statistics info handle.
+      file_size_bytes:
+        type: idx
+        description: The size of the file in bytes.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR

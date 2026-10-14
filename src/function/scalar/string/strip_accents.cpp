@@ -1,5 +1,6 @@
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/swar.hpp"
 
 #include "utf8proc.hpp"
@@ -29,6 +30,15 @@ bool IsAscii(const char *input, idx_t n) {
 	return FirstNonAscii(input, n) == n;
 }
 
+idx_t DecodeCodepoint(const char *input, idx_t size, int32_t &codepoint) {
+	D_ASSERT(size > 0);
+	auto bytes = utf8proc_iterate(const_uchar_ptr_cast(input), UnsafeNumericCast<utf8proc_ssize_t>(size), &codepoint);
+	if (bytes <= 0) {
+		throw InternalException("Invalid UTF-8 encountered in DecodeCodepoint");
+	}
+	return UnsafeNumericCast<idx_t>(bytes);
+}
+
 namespace {
 
 struct StripAccentsOperator {
@@ -41,6 +51,10 @@ struct StripAccentsOperator {
 		// non-ascii, perform collation
 		auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)input.GetData(),
 		                                        UnsafeNumericCast<utf8proc_ssize_t>(input.GetSize()));
+		if (!stripped) {
+			// invalid UTF-8
+			return input;
+		}
 		auto result_str = heap.AddString(const_char_ptr_cast(stripped));
 		free(stripped);
 		return result_str;

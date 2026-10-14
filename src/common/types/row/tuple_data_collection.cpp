@@ -8,6 +8,7 @@
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 #include "duckdb/main/database.hpp"
@@ -59,8 +60,7 @@ void TupleDataCollection::Initialize() {
 	} else {
 		scatter_functions.reserve(layout.ColumnCount());
 		gather_functions.reserve(layout.ColumnCount());
-		for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
-			auto &type = layout.GetTypes()[col_idx];
+		for (auto &type : layout.GetTypes()) {
 			scatter_functions.emplace_back(GetScatterFunction(type));
 			gather_functions.emplace_back(GetGatherFunction(type));
 		}
@@ -109,6 +109,24 @@ idx_t TupleDataCollection::ChunkCount() const {
 
 idx_t TupleDataCollection::SizeInBytes() const {
 	return data_size + stl_allocator->AllocationSize();
+}
+
+idx_t TupleDataCollection::GetBlockAllocationSize() const {
+	if (segments.empty() || (segments.size() == 1 && segments[0] && segments[0]->allocator == allocator)) {
+		return allocator->GetBlockAllocationSize();
+	}
+	reference_set_t<TupleDataAllocator> allocators;
+	allocators.insert(*allocator);
+	for (const auto &segment : segments) {
+		if (segment) {
+			allocators.insert(*segment->allocator);
+		}
+	}
+	idx_t result = 0;
+	for (auto &entry : allocators) {
+		result += entry.get().GetBlockAllocationSize();
+	}
+	return result;
 }
 
 void TupleDataCollection::Unpin() {

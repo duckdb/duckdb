@@ -29,19 +29,19 @@ struct ArgMinMaxValueAssign {
 template <>
 struct ArgMinMaxValueAssign<string_t> {
 	//! The size of the arena allocation for a non-inlined string value
-	uint32_t alloc_size;
+	idx_t alloc_size;
 
 	void Assign(string_t &target, string_t new_value, AggregateInputData &aggregate_input_data) {
 		if (new_value.IsInlined()) {
 			target = new_value;
 			alloc_size = 0;
 		} else {
-			auto len = UnsafeNumericCast<uint32_t>(new_value.GetSize());
+			auto len = UnsafeNumericCast<idx_t>(new_value.GetSize());
 			char *ptr;
 			if (alloc_size >= len) {
 				ptr = target.GetDataWriteable();
 			} else {
-				alloc_size = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(len));
+				alloc_size = UnsafeNumericCast<idx_t>(NextPowerOfTwo(len));
 				ptr = char_ptr_cast(aggregate_input_data.allocator.Allocate(alloc_size));
 			}
 			memcpy(ptr, new_value.GetData(), len);
@@ -210,9 +210,7 @@ struct ArgMinMaxBase {
 		auto &context = input.GetClientContext();
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		if (arguments[1]->GetReturnType().InternalType() == PhysicalType::VARCHAR) {
-			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
-		}
+		ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
 		function.GetArguments()[0] = arguments[0]->GetReturnType();
 		function.GetArguments()[1] = arguments[1]->GetReturnType();
 		function.SetReturnType(arguments[0]->GetReturnType());
@@ -379,9 +377,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		auto &context = input.GetClientContext();
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		if (arguments[1]->GetReturnType().InternalType() == PhysicalType::VARCHAR) {
-			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
-		}
+		ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
 		function.GetArguments()[0] = arguments[0]->GetReturnType();
 		function.GetArguments()[1] = arguments[1]->GetReturnType();
 		function.SetReturnType(arguments[0]->GetReturnType());
@@ -886,6 +882,7 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType val_type, PhysicalType arg_ty
 
 template <ArgMinMaxNullHandling NULL_HANDLING, bool NULLS_LAST, class COMPARATOR>
 unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	for (auto &arg : arguments) {
@@ -893,6 +890,7 @@ unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
 			throw ParameterNotResolvedException();
 		}
 	}
+	ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
 
 	const auto val_type = arguments[0]->GetReturnType().InternalType();
 	const auto arg_type = arguments[1]->GetReturnType().InternalType();
@@ -918,7 +916,7 @@ void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 	    .AddParameter("val", LogicalTypeId::ANY)
 	    .AddParameter("N", LogicalType::BIGINT);
 
-	return set.AddFunction(function);
+	set.AddFunction(function);
 }
 
 } // namespace

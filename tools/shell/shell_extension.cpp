@@ -1,4 +1,5 @@
 #include "shell_extension.hpp"
+#include "shell_grammar_extension.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/main/config.hpp"
@@ -61,6 +62,9 @@ unique_ptr<TableRef> ShellScanLastResult(ClientContext &context, ReplacementScan
 // would have fired)
 void ShellPostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 	auto &state = duckdb_shell::ShellState::Get();
+	if (!state.conn || !RefersToSameObject(*state.conn->context, input.context)) {
+		return;
+	}
 	if (state.last_result_referenced) {
 		return;
 	}
@@ -132,6 +136,9 @@ void ShellExtension::Load(ExtensionLoader &loader) {
 	PlannerExtension planner_ext;
 	planner_ext.post_bind_function = duckdb::ShellPostBind;
 	PlannerExtension::Register(config, planner_ext);
+
+	// opt-in grammar: the CLI enables it via SET active_grammar_extensions=['shell'] when it opens a database
+	GrammarExtension::Register(loader.GetDatabaseInstance(), make_shared_ptr<ShellGrammarExtension>());
 
 	// highlight the CLI profiler "query_tree" output
 	duckdb_shell::RegisterProfilerHighlighting(config);

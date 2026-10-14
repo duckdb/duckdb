@@ -16,7 +16,6 @@
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -25,7 +24,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/wal_entry.hpp"
 #include "duckdb/main/attached_database.hpp"
-#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -101,7 +99,7 @@ bool WriteAheadLog::Initialized() const {
 //===--------------------------------------------------------------------===//
 class ChecksumWriter : public WriteStream {
 public:
-	explicit ChecksumWriter(WriteAheadLog &wal) : wal(wal), memory_stream(Allocator::Get(wal.GetDatabase())) {
+	explicit ChecksumWriter(WriteAheadLog &wal) : wal(wal), memory_stream(BufferAllocator::Get(wal.GetDatabase())) {
 	}
 
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override {
@@ -156,7 +154,7 @@ public:
 
 		// temp buffer
 		const idx_t ciphertext_size = size + sizeof(uint64_t);
-		std::unique_ptr<uint8_t[]> temp_buf(new uint8_t[ciphertext_size]);
+		auto temp_buf = BufferAllocator::Get(db).Allocate(ciphertext_size);
 
 		EncryptionNonce nonce(db.GetStorageManager().GetCipher(), db.GetStorageManager().GetEncryptionVersion());
 		EncryptionTag tag;
@@ -321,14 +319,7 @@ void WriteAheadLog::WriteCreateSchema(const SchemaCatalogEntry &entry) {
 	WriteAheadLogSerializer serializer(*this, WALType::CREATE_SCHEMA);
 	// serialize the schema as a QualifiedName: parent schemas form the path, the schema name is the name. For storage
 	// versions older than v2.0.0 (which only support top-level schemas) the legacy "schema" name field is written.
-	vector<Identifier> parent_schemas;
-	auto parent = entry.GetParentSchema();
-	while (parent) {
-		parent_schemas.push_back(parent->name);
-		parent = parent->GetParentSchema();
-	}
-	std::reverse(parent_schemas.begin(), parent_schemas.end());
-	serializer.WriteEntry(WALCreateSchema {entry.name, QualifiedName(std::move(parent_schemas), entry.name)});
+	serializer.WriteEntry(WALCreateSchema {entry.name, QualifiedName::FromPath(entry.GetSchemaPath())});
 	serializer.End();
 }
 
@@ -387,20 +378,13 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 // Indexes
 //===--------------------------------------------------------------------===//
 
-void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, TableIndexList &list,
-                    const Identifier &name) {
-	case_insensitive_map_t<Value> options;
+void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, TableIndexList &list, idx_t index_oid) {
 	auto storage_version = db.GetStorageManager().GetStorageVersion();
-	// Before: serialization version 3
-	auto v1_0_0_storage = StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version);
-	if (!v1_0_0_storage) {
-		options["v1_0_0_storage"] = v1_0_0_storage;
-	}
-
-	auto info = list.SerializeToWAL(name, options);
+	auto info = list.SerializeToWAL(index_oid, storage_version);
 	if (!info) {
 		return;
 	}
+
 	serializer.WriteProperty(102, "index_storage_info", *info);
 	serializer.WriteList(103, "index_storage", info->buffers.size(), [&](Serializer::List &list, idx_t i) {
 		auto &buffers = info->buffers[i];
@@ -418,7 +402,7 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	auto &index_entry = entry.Cast<DuckIndexEntry>();
 	auto &list = index_entry.GetDataTableInfo().GetIndexes();
 	auto &database = GetDatabase();
-	SerializeIndex(database, serializer, list, index_entry.name);
+	SerializeIndex(database, serializer, list, index_entry.oid);
 	serializer.End();
 }
 
@@ -481,14 +465,7 @@ void WriteAheadLog::WriteDropSchema(const SchemaCatalogEntry &entry) {
 	WriteAheadLogSerializer serializer(*this, WALType::DROP_SCHEMA);
 	// serialize the schema as a QualifiedName: parent schemas form the path, the schema name is the name. For storage
 	// versions older than v2.0.0 (which only support top-level schemas) the legacy "schema" name field is written.
-	vector<Identifier> parent_schemas;
-	auto parent = entry.GetParentSchema();
-	while (parent) {
-		parent_schemas.push_back(parent->name);
-		parent = parent->GetParentSchema();
-	}
-	std::reverse(parent_schemas.begin(), parent_schemas.end());
-	serializer.WriteEntry(WALDropSchema {entry.name, QualifiedName(std::move(parent_schemas), entry.name)});
+	serializer.WriteEntry(WALDropSchema {entry.name, QualifiedName::FromPath(entry.GetSchemaPath())});
 	serializer.End();
 }
 
@@ -557,18 +534,15 @@ void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 		return serializer.End();
 	}
 
-	auto &table_info = info.Cast<AlterTableInfo>();
-	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
-	auto &unique = constraint_info.constraint->Cast<UniqueConstraint>();
-
-	auto &table_entry = entry.Cast<DuckTableEntry>();
-	auto &parent = table_entry.Parent().Cast<DuckTableEntry>();
-	auto &parent_info = parent.GetStorage().GetDataTableInfo();
-	auto &list = parent_info->GetIndexes();
-
-	auto name = unique.GetName(parent.name);
-	auto &database = GetDatabase();
-	SerializeIndex(database, serializer, list, name);
+	auto &table = entry.Cast<DuckTableEntry>();
+	auto &parent = entry.Parent().Cast<DuckTableEntry>();
+	auto added_oids = parent.GetAddedUniqueIndexOids(table);
+	if (added_oids.size() != 1) {
+		throw InternalException("WriteAlter: expected one added UNIQUE constraint on table \"%s\", found %llu",
+		                        parent.name, added_oids.size());
+	}
+	auto &list = parent.GetStorage().GetDataTableInfo()->GetIndexes();
+	SerializeIndex(GetDatabase(), serializer, list, added_oids[0]);
 	serializer.End();
 }
 
