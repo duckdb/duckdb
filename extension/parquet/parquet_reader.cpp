@@ -441,10 +441,15 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 
 	// Try to read the GeoParquet metadata (if present)
 	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
-	const auto last_modified =
-	    suffix_metadata ? suffix_metadata->last_modification_time : file_handle.GetLastModifiedTime();
-	auto version_tag = suffix_metadata ? std::move(suffix_metadata->version_tag) : file_handle.GetVersionTag();
-	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), last_modified, std::move(version_tag),
+	FileMetadata source_metadata;
+	if (suffix_metadata) {
+		source_metadata = std::move(*suffix_metadata);
+	} else {
+		source_metadata.file_size = NumericCast<int64_t>(file_handle.GetFileSize());
+		source_metadata.last_modification_time = file_handle.GetLastModifiedTime();
+		source_metadata.version_tag = file_handle.GetVersionTag();
+	}
+	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), std::move(source_metadata),
 	                                                 std::move(geo_metadata), std::move(crypto_metadata),
 	                                                 std::move(encryption_key_hash), footer_len);
 }
@@ -1412,7 +1417,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 			footer_size = footer_size_option;
 		}
 	}
-	if (!metadata_p && !footer_size.IsValid() && FileSystem::IsRemoteFile(file.path)) {
+	if (!footer_size.IsValid() && FileSystem::IsRemoteFile(file.path)) {
 		auto extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
 		if (file.extended_info) {
 			*extended_info = *file.extended_info;
@@ -1424,6 +1429,9 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 	auto flags = FileFlags::FILE_FLAGS_READ;
 	flags.SetRequestSizing(RequestSizing::BY_READER);
 	file_handle = fs.OpenFile(context_p, file, flags);
+	if (metadata_p && FileSystem::IsRemoteFile(file.path)) {
+		file_handle->SetFileMetadata(metadata_p->GetFileMetadata());
+	}
 	if (!file_handle->CanSeek()) {
 		throw NotImplementedException(
 		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
@@ -1960,7 +1968,11 @@ unique_ptr<CachingFileHandle> ParquetReader::OpenScanHandle(ClientContext &conte
 			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 		}
 	}
-	return fs.OpenFile(context, file, flags);
+	auto result = fs.OpenFile(context, file, flags);
+	if (FileSystem::IsRemoteFile(file.path)) {
+		result->SetFileMetadata(metadata->GetFileMetadata());
+	}
+	return result;
 }
 
 void ParquetReader::PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &) {

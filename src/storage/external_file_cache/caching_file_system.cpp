@@ -56,6 +56,23 @@ bool ShouldDeferFileInfo(const OpenFileInfo &path) {
 	return path.extended_info->TryGetOption("defer_file_info", defer_file_info) && defer_file_info;
 }
 
+void SetFileMetadataOptions(OpenFileInfo &path, const FileMetadata &metadata) {
+	auto extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	if (path.extended_info) {
+		*extended_info = *path.extended_info;
+	}
+	auto &options = extended_info->options;
+	if (metadata.file_size >= 0) {
+		options["file_size"] = Value::UBIGINT(NumericCast<idx_t>(metadata.file_size));
+	}
+	options["last_modified"] = Value::TIMESTAMP(metadata.last_modification_time);
+	options["etag"] = Value::BLOB_RAW(metadata.version_tag);
+	for (auto &entry : metadata.extended_file_info) {
+		options[entry.first] = entry.second;
+	}
+	path.extended_info = std::move(extended_info);
+}
+
 void TightenCacheDeadline(optional<timestamp_t> &cached, const optional<timestamp_t> &current) {
 	if (current && (!cached || *current < *cached)) {
 		cached = current;
@@ -309,8 +326,10 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
       cached_file(nullptr), defer_file_info(ShouldDeferFileInfo(path_p)), position(0) {
 	cached_file = external_file_cache.GetOrCreateCachedFile(path_p.path);
 	if (!external_file_cache.IsEnabled() || Validate()) {
-		// If caching is disabled, or if we must validate cache entries, we always have to open the file
-		GetFileHandle();
+		if (!defer_file_info) {
+			// If caching is disabled, or if we must validate cache entries, we normally open the file immediately.
+			GetFileHandle();
+		}
 		return;
 	}
 	// If we don't have any cached blocks, we must also open the file.
@@ -481,6 +500,12 @@ bool CachingFileHandle::TryReadCachedSuffix(idx_t request_size, const shared_ptr
 		return false;
 	}
 
+	{
+		annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+		if (!validation_info) {
+			validation_info = cached_validation_info;
+		}
+	}
 	result.bytes_read = bytes_read;
 	result.metadata = GetFileMetadata(cached_validation_info);
 	vector<FileBufferHandleGroup::MemoryHandle> result_handles;
@@ -603,6 +628,19 @@ bool CachingFileHandle::TryReadSuffix(idx_t min_bytes, FileBufferHandleGroup &da
 	handles.push_back({std::move(suffix_buffer), 0, result.bytes_read});
 	data = FileBufferHandleGroup(std::move(handles));
 	return true;
+}
+
+void CachingFileHandle::SetFileMetadata(FileMetadata metadata) {
+	{
+		annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+		SetFileMetadataOptions(path, metadata);
+		if (!validation_info) {
+			file_handle.reset();
+		}
+	}
+	auto handle = GetFileHandle();
+	annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+	InitializeFileMetadata(handle, std::move(metadata));
 }
 
 FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t location) {

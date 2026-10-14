@@ -19,13 +19,13 @@
 namespace duckdb {
 
 ParquetFileMetadataCache::ParquetFileMetadataCache(unique_ptr<duckdb_parquet::FileMetaData> file_metadata,
-                                                   timestamp_t last_modified_p, string version_tag_p,
+                                                   FileMetadata source_metadata_p,
                                                    unique_ptr<GeoParquetFileMetadata> geo_metadata,
                                                    unique_ptr<FileCryptoMetaData> crypto_metadata,
                                                    string encryption_key_hash_p, idx_t footer_size)
     : metadata(std::move(file_metadata)), geo_metadata(std::move(geo_metadata)),
       crypto_metadata(std::move(crypto_metadata)), encryption_key_hash(std::move(encryption_key_hash_p)),
-      footer_size(footer_size), last_modified(last_modified_p), version_tag(std::move(version_tag_p)) {
+      footer_size(footer_size), source_metadata(std::move(source_metadata_p)) {
 }
 
 string ParquetFileMetadataCache::ObjectType() {
@@ -57,13 +57,17 @@ optional_idx ParquetFileMetadataCache::GetEstimatedCacheMemory() const {
 
 	memory += footer_size;
 	memory += encryption_key_hash.size();
-	memory += version_tag.size();
+	memory += source_metadata.version_tag.size();
 
 	return memory;
 }
 
 bool ParquetFileMetadataCache::IsEncrypted() const {
 	return crypto_metadata != nullptr;
+}
+
+const FileMetadata &ParquetFileMetadataCache::GetFileMetadata() const {
+	return source_metadata;
 }
 
 bool ParquetFileMetadataCache::CanUseMetadataStatistics(const shared_ptr<ParquetEncryptionConfig> &encryption_config,
@@ -88,7 +92,8 @@ string ParquetFileMetadataCache::CreateEncryptionKeyHash(const ParquetEncryption
 }
 
 bool ParquetFileMetadataCache::IsValid(CachingFileHandle &new_handle) const {
-	return ExternalFileCache::IsValid(new_handle.Validate(), version_tag, last_modified, new_handle.GetVersionTag(),
+	return ExternalFileCache::IsValid(new_handle.Validate(), source_metadata.version_tag,
+	                                  source_metadata.last_modification_time, new_handle.GetVersionTag(),
 	                                  new_handle.GetLastModifiedTime());
 }
 
@@ -112,7 +117,8 @@ ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info,
 	string new_etag;
 	extended_info.TryGetOption("etag", new_etag);
 
-	if (ExternalFileCache::IsValid(/*validate=*/true, version_tag, last_modified, new_etag, new_last_modified)) {
+	if (ExternalFileCache::IsValid(/*validate=*/true, source_metadata.version_tag,
+	                               source_metadata.last_modification_time, new_etag, new_last_modified)) {
 		return ParquetCacheValidity::VALID;
 	}
 	return ParquetCacheValidity::INVALID;

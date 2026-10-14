@@ -74,6 +74,8 @@ public:
 	DUCKDB_API void ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location);
 	//! Try to read a suffix of at least min_bytes into a buffer-manager allocation.
 	DUCKDB_API bool TryReadSuffix(idx_t min_bytes, FileBufferHandleGroup &data, SuffixReadResult &result);
+	//! Seed this handle with metadata obtained from the same file snapshot as externally supplied data.
+	DUCKDB_API void SetFileMetadata(FileMetadata metadata);
 	//! Maximum cache block size configured for this file.
 	DUCKDB_API idx_t GetCacheMaxBlockSize() const;
 	//! Whether responses observed by this handle prohibit sharing cached data (e.g., HTTP no-store/Vary)
