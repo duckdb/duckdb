@@ -275,6 +275,9 @@ static void WarnShowDescribesQuery(ClientContext &context) {
 BoundStatement Binder::BindShow(ShowRef &ref) {
 	BoundStatement result;
 	if (ref.GetTableName().empty()) {
+		if (!ref.query) {
+			throw BinderException("SHOW requires a setting name, a table name or a query");
+		}
 		// "SHOW (SELECT ...)": describe the columns of the query. Deprecated in favor of DESCRIBE, and not affected
 		// by show_behavior (a parenthesized query is neither a setting nor a named table).
 		WarnShowDescribesQuery(context);

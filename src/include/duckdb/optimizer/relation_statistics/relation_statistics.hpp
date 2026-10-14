@@ -12,6 +12,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
 
@@ -52,6 +53,20 @@ public:
 	double filter_strength = 1;
 	bool stats_initialized = false;
 	Identifier table_name;
+};
+
+//! Looks up column statistics by binding, the first relation and column with a binding wins
+class RelationColumnStatsLookup {
+public:
+	RelationColumnStatsLookup() = default;
+	explicit RelationColumnStatsLookup(const RelationStats &stats);
+
+public:
+	void AddRelation(const RelationStats &stats);
+	optional_ptr<const RelationColumnStats> Find(ColumnBinding binding) const;
+
+private:
+	column_binding_map_t<reference<const RelationColumnStats>> columns;
 };
 
 } // namespace duckdb

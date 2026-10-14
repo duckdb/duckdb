@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/common/pair.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
@@ -41,7 +42,7 @@ public:
 	static shared_ptr<CompiledGrammar> DefaultGrammar();
 	//! Compile the base DuckDB grammar.
 	static shared_ptr<CompiledGrammar> Create();
-	//! Compile a grammar for the selected extensions without changing the client configuration.
+	//! Get the (cached) grammar for the selected extensions without changing the client configuration.
 	static shared_ptr<CompiledGrammar> Create(const ClientContext &context, const vector<string> &active_extensions);
 
 private:
@@ -53,19 +54,27 @@ private:
 	const Matcher &top_level_statement_matcher;
 };
 
-//! Per-database holder for the compiled base grammar.
+//! Per-database holder for the compiled base grammar and the grammars compiled for active grammar extensions.
 struct ParserCache {
 public:
 	ParserCache();
 	~ParserCache();
 
+	//! The maximum number of grammars compiled for grammar extensions that are kept
+	static constexpr idx_t MAX_CACHED_EXTENSION_MATCHERS = 16;
+
 	shared_ptr<CompiledGrammar> GetMatcher();
+	//! The grammar compiled for the given grammar extensions, in order - shared by all connections that use them
+	shared_ptr<CompiledGrammar> GetMatcher(const ClientContext &context, const vector<string> &active_extensions);
 	//! The grammar that forwards statements instead of interpreting them, used while CONNECT-ed
 	shared_ptr<CompiledGrammar> GetPassthroughMatcher(const ClientContext &context);
 
 private:
 	std::mutex mutex;
 	shared_ptr<CompiledGrammar> matcher;
+	std::mutex extension_mutex;
+	//! The compiled grammars with the names of their grammar extensions in order, from least to most recently used
+	vector<pair<vector<string>, shared_ptr<CompiledGrammar>>> extension_matchers;
 	std::mutex passthrough_mutex;
 	unique_ptr<PassthroughDialect> passthrough_dialect;
 };

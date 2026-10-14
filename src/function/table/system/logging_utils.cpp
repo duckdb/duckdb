@@ -6,6 +6,8 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_helper.hpp"
@@ -67,6 +69,13 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 	if (input.inputs.size() > 1) {
 		throw InvalidInputException("EnableLogging: expected 0 or 1 parameter");
 	}
+
+	auto &config = DBConfig::GetConfig(context);
+	config.CheckLock(EnableLogging::Name);
+	config.CheckLock(EnabledLogTypes::Name);
+	config.CheckLock(LoggingLevel::Name);
+	config.CheckLock(LoggingMode::Name);
+	config.CheckLock(LoggingStorage::Name);
 
 	auto result = make_uniq<EnableLoggingBindData>();
 
@@ -170,6 +179,7 @@ static void TruncateLogs(ClientContext &context, TableFunctionInput &data, DataC
 
 static unique_ptr<FunctionData> BindDisableLogging(ClientContext &context, TableFunctionBindInput &input,
                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
+	DBConfig::GetConfig(context).CheckLock(EnableLogging::Name);
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 

@@ -782,7 +782,7 @@ void Binder::BindCopyFormat(CopyInfo &info) {
 	if (info.file_path_expression) {
 		auto inputs = BindCopyOption(context, *this, "filename", info.file_path_expression, conversion_policy);
 		if (inputs.size() != 1 || inputs[0].type().id() != LogicalTypeId::VARCHAR) {
-			throw InternalException("Unsupported parameter type for filename: expected e.g. TARGET 'file.parquet'");
+			throw BinderException("Unsupported parameter type for filename: expected e.g. TARGET 'file.parquet'");
 		}
 		if (!info.file_path.empty()) {
 			throw InternalException("Both a file path and a file path expression were provided for COPY - only one of "

@@ -1311,10 +1311,6 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 		db->LoadStaticExtension<duckdb::ShellExtension>();
 		// bare expressions / table names as statements - only in the CLI, so it is opt-in grammar
 		ExecuteQuery("SET active_grammar_extensions=['shell']");
-		if (safe_mode) {
-			ExecuteQuery("SET enable_external_access=false");
-			ExecuteQuery("SET lock_configuration=true");
-		}
 		if (stdout_is_console || agent_mode_active) {
 			ExecuteQuery("PRAGMA enable_progress_bar");
 			ExecuteQuery("PRAGMA enable_print_progress_bar");
@@ -1322,6 +1318,10 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 		if (agent_mode_active) {
 			// structured errors: the engine renders them as JSON instead of a LINE/caret block
 			ExecuteQuery("SET errors_as_json = true");
+		}
+		if (safe_mode) {
+			ExecuteQuery("SET enable_external_access=false");
+			ExecuteQuery("SET lock_configuration=true");
 		}
 	}
 }
