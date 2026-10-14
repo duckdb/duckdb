@@ -200,6 +200,36 @@ TEST_CASE("V2: require_cacheable rejects a re-bound plan", "[capi_v2][prepared_s
 	REQUIRE_FALSE(PsReusesPlan(fx.conn, "SELECT x FROM t WHERE x = $1"));
 }
 
+TEST_CASE("V2: a prepared statement that expands runs at each execution", "[capi_v2][prepared_statement]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE TABLE sales (city VARCHAR, year INT, amount INT)");
+	ExecSQL(fx.conn, "INSERT INTO sales VALUES ('ams', 2023, 10), ('rtm', 2024, 40)");
+
+	// Kept as written and expanded at each execution, so it is re-bound every time
+	auto rc = DUCKDB_V2_ERROR_NONE;
+	REQUIRE(PsPrepare(fx.conn, "PIVOT sales ON year USING sum(amount)", true, &rc) == nullptr);
+	REQUIRE(rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE_FALSE(PsReusesPlan(fx.conn, "PIVOT sales ON year USING sum(amount)"));
+
+	auto prepared = PsPrepare(fx.conn, "PIVOT sales ON year USING sum(amount)");
+	REQUIRE(prepared != nullptr);
+	for (idx_t columns : {3, 4}) {
+		duckdb_v2_result_handle r = nullptr;
+		REQUIRE(duckdb_v2_prepared_statement_execute(prepared, nullptr, nullptr, 0, &r, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		DUCKDB_V2_STATEMENT_TYPE st = DUCKDB_V2_STATEMENT_TYPE_INVALID;
+		REQUIRE(duckdb_v2_result_get_statement_type(r, &st, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(st == DUCKDB_V2_STATEMENT_TYPE_MULTI);
+		RequireSchemaDeferred(r);
+		REQUIRE(DrainRowCount(r) == 2);
+		REQUIRE(ColumnCount(r) == columns);
+		duckdb_v2_result_destroy(&r);
+		// A new year becomes a new column at the next execution
+		ExecSQL(fx.conn, "INSERT INTO sales VALUES ('ams', 2025, 5)");
+	}
+	duckdb_v2_prepared_statement_destroy(&prepared);
+}
+
 // ===========================================================================
 // Parameters. Same arrays, same rules, same error codes as statement_execute.
 // ===========================================================================
@@ -595,6 +625,76 @@ TEST_CASE("V2: prepared_statement functions guard null arguments", "[capi_v2][pr
 	// Every rejection above left the prepared statement usable.
 	REQUIRE(PsExecuteWith(fx.factory, prepared, {}) == std::vector<int64_t> {1});
 	duckdb_v2_prepared_statement_destroy(&prepared);
+}
+
+namespace {
+
+//! A streamed result holds the connection until it ends; a retained one has already completed, so another statement
+//! runs while its rows are still being read.
+bool HoldsConnectionAfterFirstChunk(duckdb_v2_connection_handle conn, duckdb_v2_result_handle r) {
+	auto chunk = StepChunk(r);
+	REQUIRE(chunk != nullptr);
+	duckdb_v2_data_chunk_destroy(&chunk);
+	duckdb_v2_result_handle probe = nullptr;
+	auto rc = Query(conn, "SELECT 1", &probe);
+	if (probe) {
+		DrainRowCount(probe);
+		duckdb_v2_result_destroy(&probe);
+	}
+	REQUIRE((rc == DUCKDB_V2_ERROR_NONE || rc == DUCKDB_V2_ERROR_RESOURCE_IN_USE));
+	return rc == DUCKDB_V2_ERROR_RESOURCE_IN_USE;
+}
+
+struct StreamCase {
+	const char *sql;
+	bool streams;
+};
+
+const StreamCase STREAM_CASES[] = {
+    {"SELECT i FROM range(100000) t(i)", true},
+    {"EXPLAIN SELECT i FROM range(100000) t(i)", false},
+    {"INSERT INTO t SELECT i FROM range(100000) t(i) RETURNING i", false},
+    {"WITH ins AS (INSERT INTO t SELECT i FROM range(100000) t(i) RETURNING i) SELECT i FROM ins", true},
+    {"CALL pragma_version()", false},
+};
+
+} // namespace
+
+TEST_CASE("V2: only a statement written as a SELECT streams", "[capi_v2][prepared_statement]") {
+	EnvFixture fx;
+	duckdb_v2_result_handle setup = nullptr;
+	REQUIRE(Query(fx.conn, "CREATE TABLE t(i BIGINT)", &setup) == DUCKDB_V2_ERROR_NONE);
+	DrainRowCount(setup);
+	duckdb_v2_result_destroy(&setup);
+
+	SECTION("statement_execute") {
+		for (auto &entry : STREAM_CASES) {
+			INFO(entry.sql);
+			duckdb_v2_result_handle r = nullptr;
+			REQUIRE(Query(fx.conn, entry.sql, &r) == DUCKDB_V2_ERROR_NONE);
+			REQUIRE(HoldsConnectionAfterFirstChunk(fx.conn, r) == entry.streams);
+			duckdb_v2_result_destroy(&r);
+		}
+	}
+	SECTION("prepared_statement_execute") {
+		// The engine runs a prepared statement through an EXECUTE, so its result reports that type, not the SELECT's
+		for (auto &entry : STREAM_CASES) {
+			INFO(entry.sql);
+			auto prepared = PsPrepare(fx.conn, entry.sql);
+			REQUIRE(prepared != nullptr);
+			duckdb_v2_result_handle r = nullptr;
+			REQUIRE(duckdb_v2_prepared_statement_execute(prepared, nullptr, nullptr, 0, &r, nullptr) ==
+			        DUCKDB_V2_ERROR_NONE);
+			REQUIRE(HoldsConnectionAfterFirstChunk(fx.conn, r) == entry.streams);
+			duckdb_v2_result_destroy(&r);
+			duckdb_v2_prepared_statement_destroy(&prepared);
+		}
+	}
+	// The retained insert completed before its result was destroyed half read, the streamed one was abandoned
+	duckdb_v2_result_handle count = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT i FROM t", &count) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(count) == 100000);
+	duckdb_v2_result_destroy(&count);
 }
 
 } // namespace test_capi_v2

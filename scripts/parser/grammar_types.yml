@@ -86,7 +86,6 @@ SQLStatement:
     - ExplainableStatements
     - ExplainSelectStatement
     - ExportStatement
-    - ExpressionStatement
     - ImportStatement
     - InsertStatement
     - LoadStatement
@@ -550,7 +549,6 @@ Expression:
     - UsingExpression
     - IndexElement
     - RelOptionArgumentOpt
-    - ExpressionAlias
 
 ColumnRefExpression:
   type: "unique_ptr<ColumnRefExpression>"
@@ -1257,6 +1255,8 @@ ColumnConstraintEntry:
   by_value: true
   rules:
     - ColumnConstraint
+    - NameableColumnConstraint
+    - ColumnConstraintElement
     - NotNullConstraint
     - UniqueConstraint
     - PrimaryKeyConstraint

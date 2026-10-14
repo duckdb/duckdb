@@ -82,9 +82,9 @@ string FunctionExpression::ToString() const {
 	}
 	result += StringUtil::Join(arguments, arguments.size(), ", ",
 	                           [&](const FunctionArgument &child) { return child.ToString(); });
-	// ordered aggregate
+	// ordered aggregate - WITHIN GROUP is only accepted for mode, other aggregates take the ORDER BY as an argument
 	if (order_bys && !order_bys->orders.empty()) {
-		if (arguments.empty()) {
+		if (arguments.empty() && qualified_name.Name() == Identifier("mode")) {
 			result += ") WITHIN GROUP (";
 		}
 		result += " ORDER BY ";

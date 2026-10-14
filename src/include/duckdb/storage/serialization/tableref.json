@@ -2,6 +2,9 @@
   {
     "class": "TableRef",
     "class_type": "type",
+    "finalize_deserialization": [
+      "result->VerifyDeserialized();"
+    ],
     "includes": [
       "duckdb/parser/tableref/list.hpp"
     ],

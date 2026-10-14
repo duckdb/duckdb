@@ -31,6 +31,13 @@ unique_ptr<QueryResult> Submit(Connection &con, const string &query, QueryParame
 	return handle;
 }
 
+//! Submit a query and settle its result as retained, so that no producer waits for the consumer's choice
+unique_ptr<QueryResult> SubmitRetained(Connection &con, const string &query) {
+	auto handle = Submit(con, query);
+	handle->Materialize();
+	return handle;
+}
+
 idx_t DrainCursor(QueryResult &result) {
 	idx_t rows = 0;
 	while (auto chunk = result.Fetch()) {
@@ -373,21 +380,112 @@ TEST_CASE("Poll observes an interrupt on a materializing handle", "[api][query_r
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
 }
 
-TEST_CASE("A statement that completes on return is retained and refuses a stream", "[api][query_result]") {
+TEST_CASE("A side-effecting statement can be streamed and applies its effect on drain", "[api][query_result]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i INTEGER)"));
 
-	for (auto query : {"INSERT INTO t VALUES (1), (2) RETURNING i", "CREATE TABLE ctas AS SELECT 42 AS i"}) {
+	for (auto query : {"INSERT INTO t VALUES (1), (2) RETURNING i", "CREATE TABLE ctas AS SELECT 42 AS i",
+	                   "WITH ins AS (INSERT INTO t VALUES (3) RETURNING i) SELECT i FROM ins"}) {
+		INFO(query);
 		auto handle = Submit(con, query);
-		REQUIRE(handle->GetStatementProperties().result_eagerness == ResultEagerness::FORCED);
-		// The store is settled before execution starts, so no producer parks for a decision
-		REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::RETAINED);
-		REQUIRE_THROWS_AS(QueryResultStream<>(std::move(handle)), InvalidInputException);
+		// Nothing settles the retention at submission: the consumer's first call does
+		REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::UNDECIDED);
+		QueryResultStream<> stream(std::move(handle));
+		DrainWatchdog watchdog(con);
+		REQUIRE(stream.GetBufferedData().Lifetime() == ResultLifetime::DRAINING);
+		while (auto chunk = stream.Fetch()) {
+		}
+		REQUIRE(!stream.HasError());
 	}
-	// The refused streams released their queries, so the connection is free again
-	auto inserted = con.Query("INSERT INTO t VALUES (1), (2) RETURNING i");
-	REQUIRE(inserted->RowCount() == 2);
+	auto rows = con.Query("SELECT i FROM t ORDER BY i");
+	REQUIRE(CHECK_COLUMN(rows, 0, {1, 2, 3}));
+	auto created = con.Query("SELECT i FROM ctas");
+	REQUIRE(CHECK_COLUMN(created, 0, {42}));
+}
+
+TEST_CASE("A DDL submission finishes without a consumer call", "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection observer(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=2"));
+
+	// No producer waits for a choice, since the statement produces no rows
+	auto handle = Submit(con, "CREATE TABLE t(i BIGINT)");
+	Deadline deadline;
+	while (handle->Poll() != QueryResultState::FINISHED) {
+		REQUIRE(!deadline.Passed());
+		std::this_thread::sleep_for(std::chrono::microseconds(100));
+	}
+	REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::UNDECIDED);
+	REQUIRE(handle->ExecuteTask() == QueryResultState::FINISHED);
+	handle->Close();
+
+	auto count = observer.Query("SELECT count(*) FROM t");
+	REQUIRE(CHECK_COLUMN(count, 0, {0}));
+}
+
+TEST_CASE("A submitted insert parks until the consumer chooses", "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection observer(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=2"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i BIGINT)"));
+
+	auto handle = Submit(con, "INSERT INTO t VALUES (1)");
+	Deadline deadline;
+	auto state = handle->Poll();
+	while (state != QueryResultState::READY && !IsTerminal(state)) {
+		REQUIRE(!deadline.Passed());
+		std::this_thread::sleep_for(std::chrono::microseconds(100));
+		state = handle->Poll();
+	}
+	// The row count parks for the consumer's choice, so the workers cannot finish the query
+	REQUIRE(state == QueryResultState::READY);
+	REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::UNDECIDED);
+	auto empty = observer.Query("SELECT count(*) FROM t");
+	REQUIRE(CHECK_COLUMN(empty, 0, {0}));
+
+	handle->Materialize();
+	REQUIRE(StepToEnd(*handle) == QueryResultState::FINISHED);
+	auto rows = observer.Query("SELECT i FROM t");
+	REQUIRE(CHECK_COLUMN(rows, 0, {1}));
+}
+
+TEST_CASE("A parked insert holds the connection until its consumer settles it", "[api][query_result]") {
+	for (bool in_transaction : {false, true}) {
+		for (bool complete : {true, false}) {
+			INFO("in a transaction: " << in_transaction << ", completed: " << complete);
+			DuckDB db(nullptr);
+			Connection con(db);
+			Connection observer(db);
+			REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i BIGINT)"));
+			if (in_transaction) {
+				REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+			}
+
+			auto handle = Submit(con, "INSERT INTO t VALUES (1)");
+			REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::UNDECIDED);
+			auto refused = con.Query("SELECT 42");
+			RequireRefused(refused->GetErrorObject());
+			if (complete) {
+				handle->Complete();
+				REQUIRE(!handle->HasError());
+				REQUIRE(handle->Fetch()->GetValue(0, 0).GetValue<int64_t>() == 1);
+				REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+			} else {
+				handle.reset();
+				auto next = con.Query("SELECT 42");
+				// An abandoned write leaves nothing in the transaction that may commit
+				REQUIRE(next->HasError() == in_transaction);
+			}
+			if (in_transaction) {
+				REQUIRE_NO_FAIL(con.Query(complete ? "COMMIT" : "ROLLBACK"));
+			}
+			auto count = observer.Query("SELECT count(*) FROM t");
+			REQUIRE(CHECK_COLUMN(count, 0, {complete ? 1 : 0}));
+		}
+	}
 }
 
 TEST_CASE("Multi-statement text chains completed results", "[api][query_result]") {
@@ -744,7 +842,7 @@ TEST_CASE("Every way a result ends frees the connection", "[api][query_result]")
 		REQUIRE_NO_FAIL(*handle);
 	}
 	SECTION("a write stepped to FINISHED") {
-		handle = Submit(con, "INSERT INTO t SELECT i FROM range(100000) t(i)");
+		handle = SubmitRetained(con, "INSERT INTO t SELECT i FROM range(100000) t(i)");
 		REQUIRE(StepToEnd(*handle) == QueryResultState::FINISHED);
 	}
 	SECTION("a failure found while binding") {
@@ -778,7 +876,7 @@ TEST_CASE("A result polled to FINISHED holds the connection until a call ends it
 	REQUIRE_NO_FAIL(con.Query("SET threads=2"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i BIGINT)"));
 
-	auto handle = Submit(con, "INSERT INTO t SELECT i FROM range(1000) t(i)");
+	auto handle = SubmitRetained(con, "INSERT INTO t SELECT i FROM range(1000) t(i)");
 	Deadline deadline;
 	while (handle->Poll() != QueryResultState::FINISHED) {
 		REQUIRE(!deadline.Passed());
@@ -876,28 +974,18 @@ TEST_CASE("Cancelling the transaction abandons an open result", "[api][query_res
 	REQUIRE(CHECK_COLUMN(count, 0, {0}));
 }
 
-TEST_CASE("An unfinished statement closed inside a wrapped group rolls the whole group back", "[api][query_result]") {
+TEST_CASE("An unfinished statement that expands into several rolls back as a whole when closed",
+          "[api][query_result]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(1000000)"));
 
-	// A volatile default expands into BEGIN, ADD COLUMN, UPDATE, SET DEFAULT and COMMIT, in a transaction
-	// the preprocessor opened itself
-	auto statements = con.ExtractStatements("ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random()");
-	REQUIRE(statements.size() == 5);
-	REQUIRE(statements[2]->type == StatementType::UPDATE_STATEMENT);
-	for (idx_t i = 0; i < 2; i++) {
-		auto handle = con.Submit(std::move(statements[i]));
-		handle->Complete();
-		REQUIRE_NO_FAIL(*handle);
-	}
-	REQUIRE(con.context->transaction.GetAutoRollback());
-
-	auto update = con.Submit(std::move(statements[2]));
-	REQUIRE(!update->HasError());
-	StepUnfinished(*update);
-	update->Close();
+	// A volatile default expands into ADD COLUMN, UPDATE and SET DEFAULT, which run in the query's own transaction
+	auto handle = con.Submit("ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random()");
+	REQUIRE(!handle->HasError());
+	StepUnfinished(*handle);
+	handle->Close();
 
 	// The column the group added went with it
 	REQUIRE(!con.context->transaction.HasActiveTransaction());
@@ -914,7 +1002,7 @@ TEST_CASE("An insert that finished executing but that no call ended leaves no ro
 	REQUIRE_NO_FAIL(con.Query("SET threads=2"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i BIGINT)"));
 
-	auto handle = Submit(con, "INSERT INTO t SELECT i FROM range(1000) t(i)");
+	auto handle = SubmitRetained(con, "INSERT INTO t SELECT i FROM range(1000) t(i)");
 	REQUIRE(WaitForExecution(con));
 	handle->Close();
 
@@ -929,7 +1017,7 @@ TEST_CASE("Polling an insert to FINISHED does not end it", "[api][query_result]"
 	REQUIRE_NO_FAIL(con.Query("SET threads=2"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i BIGINT)"));
 
-	auto handle = Submit(con, "INSERT INTO t SELECT i FROM range(1000) t(i)");
+	auto handle = SubmitRetained(con, "INSERT INTO t SELECT i FROM range(1000) t(i)");
 	Deadline deadline;
 	while (handle->Poll() != QueryResultState::FINISHED) {
 		REQUIRE(!deadline.Passed());
@@ -949,7 +1037,7 @@ TEST_CASE("Stepping an insert to FINISHED commits it", "[api][query_result]") {
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i BIGINT)"));
 
-	auto handle = Submit(con, "INSERT INTO t SELECT i FROM range(1000) t(i)");
+	auto handle = SubmitRetained(con, "INSERT INTO t SELECT i FROM range(1000) t(i)");
 	REQUIRE(StepToEnd(*handle) == QueryResultState::FINISHED);
 
 	// The step that reported FINISHED ended the query, before any other call on the handle
@@ -1006,7 +1094,7 @@ TEST_CASE("A commit that fails when a step ends the query is reported by that st
 	REQUIRE_NO_FAIL(con.Query("SET threads=2"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i INTEGER PRIMARY KEY)"));
 
-	auto handle = Submit(con, "INSERT INTO t VALUES (1)");
+	auto handle = SubmitRetained(con, "INSERT INTO t VALUES (1)");
 	REQUIRE(WaitForExecution(con));
 	// The key is only in this handle's transaction, so the other connection commits it first
 	REQUIRE_NO_FAIL(other.Query("INSERT INTO t VALUES (1)"));
@@ -1027,7 +1115,7 @@ TEST_CASE("A step can end the query after its connection is gone", "[api][query_
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("SET threads=1"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i BIGINT)"));
-		handle = Submit(con, "INSERT INTO t SELECT i FROM range(100000) t(i)");
+		handle = SubmitRetained(con, "INSERT INTO t SELECT i FROM range(100000) t(i)");
 	}
 	// The handle holds the last reference to the context, which the ending step releases
 	REQUIRE(StepToEnd(*handle) == QueryResultState::FINISHED);

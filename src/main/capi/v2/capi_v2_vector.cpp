@@ -1,5 +1,6 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
@@ -78,7 +79,10 @@ DUCKDB_V2_ERROR duckdb_v2_vector_flatten(duckdb_v2_vector_handle vector, duckdb_
 
 DUCKDB_V2_ERROR duckdb_v2_vector_cast(duckdb_v2_factory_handle factory, duckdb_v2_vector_handle source,
                                       duckdb_v2_vector_handle target, DUCKDB_V2_CAST_MODE mode, bool *out_converted,
-                                      duckdb_v2_error_info_handle *err) {
+                                      duckdb_v2_error_info_handle *cast_err, duckdb_v2_error_info_handle *err) {
+	if (cast_err) {
+		*cast_err = nullptr;
+	}
 	DUCKDB_CHECK_ARG(factory);
 	DUCKDB_CHECK_ARG(source);
 	DUCKDB_CHECK_ARG(target);
@@ -103,6 +107,16 @@ DUCKDB_V2_ERROR duckdb_v2_vector_cast(duckdb_v2_factory_handle factory, duckdb_v
 		dst->Reference(result);
 		if (out_converted) {
 			*out_converted = converted;
+		}
+		if (cast_err && !converted) {
+			// rendered like any error the API reports, as a conversion error
+			auto info = duckdb::make_uniq<CV2ErrorInfo>();
+			try {
+				throw duckdb::ConversionException(error);
+			} catch (...) {
+				RenderCaughtError(info->code, info->message, info->raw_message);
+			}
+			*cast_err = Convert(info.release());
 		}
 	});
 }
