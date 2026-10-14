@@ -93,6 +93,12 @@ ParserOverrideResult ObservePreprocessParse(ParserExtensionInfo *info_p, const s
 	return ParserOverrideResult();
 }
 
+StatementSignature BindPreprocessStatement(Connection &con, const string &query) {
+	auto statements = con.ExtractStatements(query);
+	REQUIRE(statements.size() == 1);
+	return con.context->BindStatement(std::move(statements[0]));
+}
+
 } // namespace
 
 TEST_CASE("Statement preprocessing encloses transaction callbacks and PRAGMA reparsing", "[api][preprocess_hooks]") {
@@ -120,8 +126,8 @@ TEST_CASE("Statement preprocessing encloses transaction callbacks and PRAGMA rep
 		    return "SELECT 42";
 	    }));
 
-	auto statements = con.ExtractStatements("PRAGMA preprocess_answer");
-	REQUIRE(statements.size() == 1);
+	auto signature = BindPreprocessStatement(con, "PRAGMA preprocess_answer");
+	REQUIRE(signature.names.size() == 1);
 	REQUIRE(state->starts == 1);
 	REQUIRE(state->ends == 1);
 	REQUIRE(state->depth == 0);
@@ -153,7 +159,7 @@ TEST_CASE("Statement preprocessing unwinds after catalog and reparse errors", "[
 		    "preprocess_invalid", +[](ClientContext &, const FunctionParameters &) -> string { return "SELECT ("; }));
 		query = "PRAGMA preprocess_invalid";
 	}
-	REQUIRE_THROWS(con.ExtractStatements(query));
+	REQUIRE_THROWS(con.Query(query)->ThrowIfError());
 	REQUIRE(state->starts == 1);
 	REQUIRE(state->ends == 1);
 	REQUIRE(state->depth == 0);
@@ -167,10 +173,13 @@ TEST_CASE("Statement preprocessing remains scoped in explicit transactions and l
 	auto state = RegisterPreprocessState(con);
 	con.BeginTransaction();
 	const auto starts = state->starts;
-	auto iterator = con.context->IterateStatements("PRAGMA table_info('synthetic')");
+	auto iterator = con.context->IterateStatements("PRAGMA version");
 	REQUIRE(iterator.Peek());
 	REQUIRE(state->starts == starts);
-	REQUIRE(iterator.GetStatement());
+	auto statement = iterator.GetStatement();
+	REQUIRE(statement);
+	REQUIRE(state->starts == starts);
+	con.context->BindStatement(std::move(statement));
 	REQUIRE(state->starts == starts + 1);
 	REQUIRE(state->ends == state->starts);
 	REQUIRE(state->depth == 0);
@@ -190,7 +199,7 @@ TEST_CASE("Statement preprocessing unwinds when transaction callbacks throw", "[
 	// Injected failures interrupt transaction callback dispatch before all transaction observers are notified.
 	con.context->registered_state->Remove("debug_client_context_state");
 	auto state = RegisterPreprocessState(con);
-	string query = "PRAGMA table_info('synthetic')";
+	string query = "PRAGMA version";
 	const auto fail = [] {
 		throw InvalidInputException("transaction callback failed");
 	};
@@ -204,7 +213,7 @@ TEST_CASE("Statement preprocessing unwinds when transaction callbacks throw", "[
 		state->on_transaction_rollback = fail;
 		query = "PRAGMA missing_preprocess_pragma";
 	}
-	REQUIRE_THROWS(con.ExtractStatements(query));
+	REQUIRE_THROWS(con.Query(query)->ThrowIfError());
 	REQUIRE(state->starts == 1);
 	REQUIRE(state->ends == 1);
 	REQUIRE(state->depth == 0);
@@ -228,10 +237,10 @@ TEST_CASE("Statement preprocessing callbacks support reentrancy", "[api][preproc
 		if (state->depth != 1) {
 			return;
 		}
-		REQUIRE(nested.ExtractStatements("PRAGMA table_info('inner_table')").size() == 1);
+		BindPreprocessStatement(nested, "PRAGMA version");
 		REQUIRE(state->depth == 1);
 	};
-	REQUIRE(con.ExtractStatements("PRAGMA table_info('outer_table')").size() == 1);
+	BindPreprocessStatement(con, "PRAGMA version");
 	REQUIRE(state->starts == 2);
 	REQUIRE(state->ends == 2);
 	REQUIRE(state->depth == 0);
@@ -259,12 +268,12 @@ TEST_CASE("Statement preprocessing retains the entry snapshot until paired callb
 			destroyed++;
 		};
 	}
-	REQUIRE(con.ExtractStatements("PRAGMA table_info('synthetic')").size() == 1);
+	BindPreprocessStatement(con, "PRAGMA version");
 	REQUIRE(ended == 1);
 	REQUIRE(destroyed == 1);
 	REQUIRE(later->starts == 0);
 	REQUIRE(later->ends == 0);
-	REQUIRE(con.ExtractStatements("PRAGMA table_info('synthetic')").size() == 1);
+	BindPreprocessStatement(con, "PRAGMA version");
 	REQUIRE(later->starts == 1);
 	REQUIRE(later->ends == 1);
 }
@@ -295,7 +304,7 @@ TEST_CASE("Statement preprocessing unwinds successful callbacks when a later beg
 		third.depth--;
 		throw InvalidInputException("preprocessing begin failed");
 	};
-	REQUIRE_THROWS(con.ExtractStatements("PRAGMA table_info('synthetic')"));
+	REQUIRE_THROWS(BindPreprocessStatement(con, "PRAGMA version"));
 	REQUIRE(first.starts == 1);
 	REQUIRE(first.ends == 1);
 	REQUIRE(first.depth == 0);
@@ -310,4 +319,38 @@ TEST_CASE("Statement preprocessing unwinds successful callbacks when a later beg
 	REQUIRE_FALSE(con.context->transaction.HasActiveTransaction());
 	third.on_begin = nullptr;
 	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+}
+
+TEST_CASE("Statement preprocessing covers query execution and repeated prepared expansion", "[api][preprocess_hooks]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto state = RegisterPreprocessState(con);
+	ExtensionInfo extension_info {};
+	ExtensionActiveLoad load_info {*db.instance, extension_info, "test_extension", ""};
+	ExtensionLoader loader {load_info};
+	loader.RegisterFunction(PragmaFunction::PragmaStatement(
+	    "preprocess_group", +[](ClientContext &context, const FunctionParameters &) -> string {
+		    auto state = context.registered_state->Get<PreprocessHookState>("preprocess_test");
+		    REQUIRE(state->depth == 1);
+		    return "SELECT 41; SELECT 42";
+	    }));
+
+	REQUIRE_NO_FAIL(con.Query("PRAGMA preprocess_group"));
+	REQUIRE(state->starts == 1);
+	REQUIRE(state->ends == 1);
+	REQUIRE(state->depth == 0);
+	REQUIRE(state->query_begins == 1);
+	auto prepared = con.Prepare("PRAGMA preprocess_group");
+	REQUIRE_FALSE(prepared->HasError());
+	REQUIRE(state->starts == 2);
+	REQUIRE(state->ends == 2);
+	for (idx_t i = 0; i < 2; i++) {
+		REQUIRE_NO_FAIL(prepared->Execute());
+		REQUIRE(state->starts == 3 + i);
+		REQUIRE(state->ends == state->starts);
+		REQUIRE(state->depth == 0);
+	}
+	const auto starts = state->starts;
+	REQUIRE_NO_FAIL(con.Query("BEGIN; SELECT 42; ROLLBACK"));
+	REQUIRE(state->starts == starts);
 }

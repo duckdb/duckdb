@@ -15,12 +15,30 @@
 namespace duckdb {
 class ClientContext;
 class ClientContextLock;
+class ClientContextState;
 class SQLStatement;
 struct PragmaInfo;
 
 //! The statements one user statement expands into
 struct PreprocessedStatement {
 	vector<unique_ptr<SQLStatement>> statements;
+};
+
+//! Pairs preprocessing callbacks across expansion and its surrounding transaction work.
+class StatementPreprocessScope {
+public:
+	StatementPreprocessScope(ClientContext &context, const SQLStatement &statement);
+	~StatementPreprocessScope();
+
+	StatementPreprocessScope(const StatementPreprocessScope &) = delete;
+	StatementPreprocessScope &operator=(const StatementPreprocessScope &) = delete;
+
+private:
+	void End() noexcept;
+
+	ClientContext &context;
+	vector<shared_ptr<ClientContextState>> states;
+	idx_t started = 0;
 };
 
 //! Expands a parsed user statement: reparses pragmas and unpacks multi-statements

@@ -581,6 +581,7 @@ StatementSignature ClientContext::BindStatement(unique_ptr<SQLStatement> stateme
 	auto lock = LockContext();
 	StatementSignature signature;
 	ErrorData bind_error;
+	StatementPreprocessScope scope(*this, *statement);
 	RunFunctionInTransactionInternal(
 	    *lock,
 	    [&]() {
