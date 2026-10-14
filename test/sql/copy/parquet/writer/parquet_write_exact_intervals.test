@@ -24,3 +24,26 @@ query I
 SELECT count(*) FROM '{TEST_DIR}/exact_intervals.parquet' WHERE iv = INTERVAL '1 month'
 ----
 100
+
+# hours stay hours as long as the milliseconds field can hold them
+statement ok
+COPY (
+	FROM (VALUES (INTERVAL '24 hours'), (INTERVAL '4294967295 milliseconds'), (INTERVAL '4294967296 milliseconds')) v(iv)
+) TO '{TEST_DIR}/exact_hours.parquet'
+
+query I
+SELECT iv::VARCHAR FROM '{TEST_DIR}/exact_hours.parquet'
+----
+24:00:00
+1193:02:47.295
+49 days 17:02:47.296
+
+statement ok
+COPY (SELECT CASE WHEN i % 2 = 0 THEN INTERVAL '1 day' ELSE INTERVAL '24 hours' END AS iv FROM range(100) r(i))
+TO '{TEST_DIR}/exact_days.parquet'
+
+query II
+SELECT iv::VARCHAR, count(*) FROM '{TEST_DIR}/exact_days.parquet' GROUP BY ALL ORDER BY ALL
+----
+1 day	50
+24:00:00	50
