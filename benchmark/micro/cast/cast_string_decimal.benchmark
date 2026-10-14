@@ -1,0 +1,15 @@
+# name: benchmark/micro/cast/cast_string_decimal.benchmark
+# description: Cast string values to decimals
+# group: [cast]
+
+name Cast VARCHAR -> DECIMAL
+group cast
+
+load
+CREATE TABLE varchars AS SELECT (i * 0.001)::DECIMAL(18,6)::VARCHAR v FROM range(0, 10000000) tbl(i);
+
+run
+SELECT MAX(CAST(v AS DECIMAL(18,6))) FROM varchars
+
+result I
+9999.999000
