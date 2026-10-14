@@ -348,12 +348,9 @@ TemporaryMemoryManager &BufferPool::GetTemporaryMemoryManager() {
 BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, idx_t extra_memory, idx_t memory_limit) {
 	TempBufferPoolReservation r(tag, *this, extra_memory);
 
-	// Entries can own reservations beyond their cache weight, or remain alive after eviction.
-	while (memory_usage.GetUsedMemory(MemoryUsageCaches::FLUSH) > memory_limit) {
-		if (!object_cache->EvictLeastRecentlyUsed()) {
-			r.Resize(0);
-			return {false, std::move(r)};
-		}
+	if (!object_cache->EvictToMemoryLimit(memory_limit)) {
+		r.Resize(0);
+		return {false, std::move(r)};
 	}
 	if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
 		FlushAllocator(extra_memory);
