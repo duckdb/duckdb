@@ -230,6 +230,19 @@ void Binder::AddBoundView(ViewCatalogEntry &view) {
 	bound_views.insert(view);
 }
 
+void Binder::AddBoundTableMacro(CatalogEntry &table_macro) {
+	// check if the table macro is already being expanded
+	auto current = this;
+	while (current) {
+		if (current->bound_table_macros.find(table_macro) != current->bound_table_macros.end()) {
+			throw BinderException("infinite recursion detected: attempting to recursively expand table macro %s",
+			                      table_macro.name);
+		}
+		current = current->parent.get();
+	}
+	bound_table_macros.insert(table_macro);
+}
+
 TableIndex Binder::GenerateTableIndex() {
 	return TableIndex(global_binder_state->bound_tables++);
 }
@@ -603,12 +616,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	projection->AddChild(std::move(child_operator));
 	D_ASSERT(result.types.size() == result.names.size());
 	result.plan = std::move(projection);
-	// If an insert/delete/update statement returns data, there are sometimes issues with streaming results
-	// where the data modification doesn't take place until the streamed result is exhausted. Once a row is
-	// returned, it should be guaranteed that the row has been inserted.
-	// see https://github.com/duckdb/duckdb/issues/8310
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }

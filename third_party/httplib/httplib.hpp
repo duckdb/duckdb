@@ -730,10 +730,11 @@ inline from_chars_result<T> from_chars(const char *first, const char *last,
     }
 
     if (digit < 0 || digit >= base) { break; }
-    if (result > ((std::numeric_limits<T>::max)() - digit) / base) {
+    if (result > ((std::numeric_limits<T>::max)() - static_cast<T>(digit)) /
+                     static_cast<T>(base)) {
       return {p, std::errc::result_out_of_range};
     }
-    result = result * base + digit;
+    result = result * static_cast<T>(base) + static_cast<T>(digit);
   }
 
   if (p == first || (negative && p == first + 1)) {

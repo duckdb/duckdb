@@ -11,6 +11,7 @@
 #include "duckdb/common/serializer/varint.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/checked_integer.hpp"
 
 namespace duckdb {
 namespace variant {
@@ -31,13 +32,24 @@ public:
 	static uint32_t *GetBlob(DataChunk &offsets) {
 		return FlatVector::GetDataMutable<uint32_t>(offsets.data[3]);
 	}
+	//! Adds len to offset, throwing if the running total would exceed what a uint32_t blob offset can represent.
+	static void AddBlobOffset(uint32_t &offset, uint32_t len) {
+		try {
+			offset = uinteger_t(offset) += len;
+		} catch (OutOfRangeException &) {
+			throw InvalidInputException(
+			    "Cannot convert value to VARIANT: encoded row size exceeds the maximum supported %u bytes",
+			    NumericLimits<uint32_t>::Maximum());
+		}
+	}
 };
 
 struct ToVariantGlobalResultData {
 public:
 	ToVariantGlobalResultData(VariantVectorData &variant, DataChunk &offsets,
-	                          OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector &keys_selvec)
-	    : variant(variant), offsets(offsets), dictionary(dictionary), keys_selvec(keys_selvec) {
+	                          OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector &keys_selvec,
+	                          Allocator &allocator)
+	    : variant(variant), offsets(offsets), dictionary(dictionary), keys_selvec(keys_selvec), allocator(allocator) {
 	}
 
 public:
@@ -54,6 +66,8 @@ public:
 	OrderedOwningStringMap<uint32_t> &dictionary;
 	//! The selection vector to populate with mapping from keys index -> dictionary index
 	SelectionVector &keys_selvec;
+	//! Allocator for temporary conversion memory (e.g. JSON parsing), tracked by DuckDB's memory accounting
+	Allocator &allocator;
 };
 
 template <bool WRITE_DATA>

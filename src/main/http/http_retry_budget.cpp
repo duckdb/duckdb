@@ -29,6 +29,10 @@ HTTPRetryBudget::HTTPRetryBudget(const HTTPParams &params)
     : retries(params.retries), retry_wait_ms(params.retry_wait_ms), retry_backoff(params.retry_backoff) {
 }
 
+uint64_t HTTPRetryBudget::ThrottledRetries() const {
+	return throttled_retries;
+}
+
 void HTTPRetryBudget::Run(const std::function<HTTPRetryDecision()> &attempt) {
 	Run(attempt, {});
 }
@@ -63,6 +67,9 @@ bool HTTPRetryBudget::ConsumeAndWait(const HTTPRetryDecision &decision) {
 		return false;
 	}
 	retries_used++;
+	if (throttled) {
+		throttled_retries++;
+	}
 #ifndef DUCKDB_NO_THREADS
 	if (retries_used > 1 || throttled) {
 		static constexpr uint64_t THROTTLE_MAX_BACKOFF_MS = 10000;

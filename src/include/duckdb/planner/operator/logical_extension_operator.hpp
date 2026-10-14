@@ -20,6 +20,9 @@ enum class DecorrelationMode { NOT_SUPPORTED, SINGLE_CHILD_PASSTHROUGH };
 
 struct LogicalExtensionOperator : public LogicalOperator {
 public:
+	LogicalPlanSQLExportResult ToSQL(LogicalPlanSQLExportContext &context,
+	                                 const LogicalPlanVerificationPath &path) override;
+
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR;
 
 public:

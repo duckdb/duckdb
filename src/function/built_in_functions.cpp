@@ -112,7 +112,7 @@ static unique_ptr<Expression> BindExtensionFunction(FunctionBindExpressionInput 
 	auto &extension_name = function_info.extension;
 	auto &db = *context.db;
 
-	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
+	if (!ExtensionHelper::CanAutoloadExtension(db, extension_name)) {
 		throw BinderException("Trying to call function %s which is present in extension \"%s\" - but the extension "
 		                      "is not loaded and could not be auto-loaded",
 		                      bound_function.GetName(), extension_name);
