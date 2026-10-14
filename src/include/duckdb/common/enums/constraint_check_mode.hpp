@@ -1,15 +1,17 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/enums/current_transaction_state.hpp
+// duckdb/common/enums/constraint_check_mode.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "duckdb/common/constants.hpp"
+
 namespace duckdb {
 
-enum CurrentTransactionState { IN_ACTIVE_TRANSACTION, NOT_IN_ACTIVE_TRANSACTION };
+enum class ConstraintCheckMode : uint8_t { DEFAULT, IMMEDIATE, DEFERRED };
 
 } // namespace duckdb
