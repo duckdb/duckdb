@@ -125,6 +125,8 @@ void ConstantVector::Reference(Vector &vector, count_t count, const Vector &sour
 
 		ListVector::SetListSize(vector, ListVector::GetListSize(source));
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto &validity = vector.BufferMutable().GetValidityMask();
+		validity.Set(0, true);
 		FlatVector::SetSize(vector, count);
 		break;
 	}

@@ -217,23 +217,24 @@ idx_t RadixHTConfig::GetMaximumSinkRadixBits() const {
 }
 
 void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external) {
-	if (sink_radix_bits > radix_bits_p || sink.any_combined) {
+	if ((!external && sink_radix_bits > radix_bits_p) || sink.any_combined) {
 		return;
 	}
 
 	const annotated_lock_guard<annotated_mutex> guard {sink.lock};
-	if (sink_radix_bits > radix_bits_p || sink.any_combined) {
+	if ((!external && sink_radix_bits > radix_bits_p) || sink.any_combined) {
 		return;
 	}
 
+	const auto radix_bits = MaxValue(radix_bits_p, sink_radix_bits.load());
 	if (external) {
-		const auto partition_multiplier = RadixPartitioning::NumberOfPartitions(radix_bits_p) /
-		                                  RadixPartitioning::NumberOfPartitions(sink_radix_bits);
+		const auto partition_multiplier =
+		    RadixPartitioning::NumberOfPartitions(radix_bits) / RadixPartitioning::NumberOfPartitions(sink_radix_bits);
 		sink.minimum_reservation = sink.minimum_reservation * partition_multiplier;
 		sink.external = true;
 	}
 
-	sink_radix_bits = radix_bits_p;
+	sink_radix_bits = radix_bits;
 }
 
 idx_t RadixHTConfig::InitialSinkRadixBits() const {
@@ -1228,6 +1229,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	         sink.scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE);
 
 	if (gstate.finished) {
+		lstate.ht.reset();
 		return SourceResultType::FINISHED;
 	}
 
@@ -1283,6 +1285,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	if (chunk.size() != 0) {
 		return SourceResultType::HAVE_MORE_OUTPUT;
 	} else {
+		lstate.ht.reset();
 		return SourceResultType::FINISHED;
 	}
 }

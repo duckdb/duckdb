@@ -262,7 +262,6 @@ TEST_CASE("Owned chunk SQL export retains delivered rows before conversion error
 			        LogicalPlanVerificationConstructIdentity::ExportFeature("chunk_consumer_evaluation"));
 		}
 		QueryParameters parameters;
-		parameters.result_eagerness = ResultEagerness::AUTO;
 		auto drain = [&](unique_ptr<QueryResult> result) {
 			unique_ptr<QueryResultStream<>> stream;
 			if (!result->HasError()) {
@@ -442,7 +441,6 @@ TEST_CASE("Owned chunk SQL export accounts for intrinsic SINGLE join errors",
 					REQUIRE(exported.IsSuccess());
 				}
 				QueryParameters parameters;
-				parameters.result_eagerness = ResultEagerness::AUTO;
 				auto drain = [&](unique_ptr<QueryResult> result) {
 					unique_ptr<QueryResultStream<>> stream;
 					if (!result->HasError()) {
