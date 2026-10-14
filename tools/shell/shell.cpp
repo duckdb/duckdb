@@ -962,6 +962,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	unique_ptr<duckdb::QueryResult> result;
 	unique_ptr<duckdb::QueryResultStream<>> stream;
 	const bool render_materialized = renderer->RequireMaterializedResult();
+	const auto written_type = statement->type;
 	if (render_materialized) {
 		// we need to materialize the result prior to rendering
 		result = con.Query(std::move(statement), duckdb::ChunkFormat::BufferManaged());
@@ -974,10 +975,8 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		return SuccessState::FAILURE;
 	}
 	auto &properties = res.GetStatementProperties();
-	// Row-wise rendering drains the result as it is produced; everything else is retained
-	const bool render_streaming = !render_materialized &&
-	                              properties.return_type == duckdb::StatementReturnType::QUERY_RESULT &&
-	                              properties.result_eagerness != duckdb::ResultEagerness::FORCED;
+	// A renderer stops at its row cap and a closed pipe stops the shell outright, so a stream is never read to its end
+	const bool render_streaming = !render_materialized && duckdb::StreamsByDefault(written_type, properties, false);
 	if (!render_materialized && !render_streaming) {
 		// the statement is not rendered row by row, but its side effects must still happen
 		res.Complete();
@@ -1298,6 +1297,8 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif
 		db->LoadStaticExtension<duckdb::ShellExtension>();
+		// bare expressions / table names as statements - only in the CLI, so it is opt-in grammar
+		ExecuteQuery("SET active_grammar_extensions=['shell']");
 		if (safe_mode) {
 			ExecuteQuery("SET enable_external_access=false");
 			ExecuteQuery("SET lock_configuration=true");

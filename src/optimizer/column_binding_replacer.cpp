@@ -138,7 +138,10 @@ void ColumnBindingReplacer::VisitOperator(LogicalOperator &op) {
 	if (stop_operator && stop_operator.get() == &op) {
 		return;
 	}
-	VisitOperatorChildren(op);
+	// Binding replacement keeps child layouts intact, so projection maps are left untouched
+	for (auto &child : op.children) {
+		VisitOperator(*child);
+	}
 	VisitOperatorBindings(op);
 }
 

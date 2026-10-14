@@ -40,6 +40,9 @@ public:
 	optional<MatcherResult> child_result;
 	optional<MatcherResult> result;
 	PackratMatchState packrat_state;
+	//! The position of the process arena when the frame was pushed - the arena is rewound to it when the frame is
+	//! popped
+	ArenaAllocator::Position process_arena_position;
 };
 
 class MatchStack {

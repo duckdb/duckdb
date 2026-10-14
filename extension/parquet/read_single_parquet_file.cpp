@@ -4,6 +4,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "parquet_reader.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/once_flag.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
@@ -49,17 +50,16 @@ struct ReadSingleParquetFileData : public TableFunctionData {
 	//! A reader over the metadata of the file, created on first use. The row groups it describes refer to the schema
 	//! it holds, so it is kept for as long as this bind data is
 	ParquetReader &GetMetadataReader(ClientContext &context) const {
-		lock_guard<mutex> guard(bind_reader_lock);
-		if (!metadata_reader) {
-			metadata_reader = ParquetReader::CreateMetadataReader(context, options, metadata);
-		}
+		CallOnce(metadata_reader_initialized,
+		         [&] { metadata_reader = ParquetReader::CreateMetadataReader(context, options, metadata); });
 		return *metadata_reader;
 	}
 
 private:
-	//! Guards the readers below
+	//! Guards the transfer of the bind reader
 	mutable mutex bind_reader_lock;
 	mutable shared_ptr<ParquetReader> bind_reader;
+	mutable OnceFlag metadata_reader_initialized;
 	mutable shared_ptr<ParquetReader> metadata_reader;
 };
 
@@ -276,7 +276,16 @@ static bool ReadSingleParquetFileClaimBatch(ClientContext &context, TableFunctio
 	auto &lstate = input.local_state->Cast<ReadSingleParquetFileLocalState>();
 	// our caller hands out the row groups, so we must not claim the next one ourselves
 	lstate.claimed_externally = true;
-	return ClaimNextRowGroup(context, gstate, lstate);
+	// our caller holds the lock of its scan here - the claimed row group is prepared in the prepare_batch callback
+	lock_guard<mutex> guard(gstate.lock);
+	return gstate.reader->TryInitializeScan(context, gstate.state, lstate.state);
+}
+
+static void ReadSingleParquetFilePrepareBatch(ClientContext &context, TableFunctionInput &input) {
+	auto &gstate = input.global_state->Cast<ReadSingleParquetFileGlobalState>();
+	auto &lstate = input.local_state->Cast<ReadSingleParquetFileLocalState>();
+	gstate.reader->PrepareScan(context, gstate.state, lstate.state);
+	lstate.has_row_group = true;
 }
 
 //! Pre-open the handle the scan reads the file through, so that claiming a row group does not have to open the file
@@ -399,8 +408,7 @@ ReadSingleParquetFileStatistics(ClientContext &context, const FunctionData *bind
 	if (column_index >= parquet_data.parquet_names.size()) {
 		return nullptr;
 	}
-	return ParquetReader::ReadStatistics(context, parquet_data.options, parquet_data.metadata,
-	                                     parquet_data.parquet_names[column_index]);
+	return parquet_data.GetMetadataReader(context).ReadStatistics(parquet_data.parquet_names[column_index]);
 }
 
 //! The row groups read from this file. The counts accumulate, so that a scan over several files reports their sum
@@ -453,13 +461,8 @@ bool ParquetScanFunction::ProjectionExpressionPushdown(ClientContext &context,
 		return false;
 	}
 	const idx_t idx = column_id.GetPrimaryIndex();
-	// Don't do pushdown of strlen to hive and filename columns
-	for (const auto &partition : bind_data.reader_bind.hive_partitioning_indexes) {
-		if (partition.index == idx) {
-			return false;
-		}
-	}
-	if (bind_data.reader_bind.filename_idx.IsValid() && bind_data.reader_bind.filename_idx.GetIndex() == idx) {
+	// Generated values do not come from the physical column, even when its name and type match.
+	if (bind_data.IsGeneratedColumn(idx)) {
 		return false;
 	}
 	// We run scalar function pushdown after filter pushdown - a filter pushed into the scan needs the column itself
@@ -474,6 +477,12 @@ bool ParquetScanFunction::ProjectionExpressionPushdown(ClientContext &context,
 	auto &metadata_reader = parquet_data.GetMetadataReader(context);
 	auto &children = metadata_reader.root_schema->children;
 	if (idx >= children.size() || idx >= bind_data.types.size() || idx >= reader.types.size()) {
+		return false;
+	}
+	if (!bind_data.file_options.bound_schema.empty() &&
+	    (idx >= reader.columns.size() ||
+	     !bind_data.MatchesPhysicalColumn(idx, reader.columns[idx].name, reader.types[idx]))) {
+		// The pushed expression addresses a physical column, before name mapping and conversion.
 		return false;
 	}
 	const idx_t column_flat_idx = children[idx].column_index;
@@ -532,6 +541,7 @@ TableFunctionMultiFileSettings ParquetScanFunction::GetMultiFileSettings() {
 	settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "parquet");
 	settings.reader_type = "Parquet";
 	settings.claim_batch = ReadSingleParquetFileClaimBatch;
+	settings.prepare_batch = ReadSingleParquetFilePrepareBatch;
 	settings.finish_batch = ReadSingleParquetFileFinishBatch;
 	settings.supports_read_ahead = ReadSingleParquetFileSupportsReadAhead;
 	settings.schedule_io = ReadSingleParquetFileScheduleIO;
