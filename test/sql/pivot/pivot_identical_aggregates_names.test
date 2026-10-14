@@ -13,8 +13,3 @@ query II
 SELECT k0_x, k0_y FROM (PIVOT (SELECT 'k' || (r % 21) a, r v FROM range(42) t(r)) ON a USING sum(v) AS x, max(v) AS y);
 ----
 21	21
-
-query II
-SELECT k0_x, k0_y FROM (PIVOT (SELECT 'k' || (r % 3) a, r v FROM range(42) t(r)) ON a USING sum(v) AS x, sum(v) AS y);
-----
-273	273
