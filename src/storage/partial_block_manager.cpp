@@ -26,10 +26,6 @@ PartialBlock::PartialBlock(BlockManager &block_manager, block_id_t block_id)
     : block_manager(block_manager), block_handle(nullptr), block_id(block_id) {
 }
 
-PartialBlock::PartialBlock(BlockManager &block_manager, const shared_ptr<BlockHandle> &block_handle)
-    : block_manager(block_manager), block_handle(block_handle) {
-}
-
 idx_t PartialBlock::AvailableSpace() {
 	return block_manager.GetBlockSize() - offset;
 }

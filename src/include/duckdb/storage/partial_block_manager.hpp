@@ -47,7 +47,6 @@ public:
 
 struct PartialBlock {
 	PartialBlock(BlockManager &block_manager, block_id_t block_id);
-	PartialBlock(BlockManager &block_manager, const shared_ptr<BlockHandle> &block_handle);
 	virtual ~PartialBlock() {
 	}
 
