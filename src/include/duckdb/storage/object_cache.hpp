@@ -198,6 +198,12 @@ public:
 		return lru_cache.EvictToReduceAtLeast(target_bytes);
 	}
 
+	//! Evict one entry. Return false if no evictable entries remain, regardless of non-evictable entries.
+	bool EvictLeastRecentlyUsed() {
+		const lock_guard<mutex> lock(lock_mutex);
+		return lru_cache.EvictLeastRecentlyUsed();
+	}
+
 private:
 	//! Build the internal cache key for a typed entry by namespacing the caller-provided key with the entry's
 	//! ObjectType.
