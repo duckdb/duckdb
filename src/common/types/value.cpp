@@ -2436,6 +2436,9 @@ static bool ValueIsValidShallow(const Value &value) {
 			const auto decimal_value = value.GetValueUnsafe<hugeint_t>();
 			return decimal_value > -Hugeint::POWERS_OF_TEN[width] && decimal_value < Hugeint::POWERS_OF_TEN[width];
 		}
+		case PhysicalType::VARCHAR:
+			// wide decimals hold their unscaled value as a BIGNUM blob
+			return BignumDecimal::FitsWidth(string_t(StringValue::Get(value)), width);
 		default:
 			throw InternalException("Invalid physical type for DECIMAL");
 		}
