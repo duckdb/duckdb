@@ -50,13 +50,11 @@ struct ICUDateFunc {
 		if (SRC::PRECISION == DST::PRECISION) {
 			dst.value = src.value;
 		} else {
-			//	Truncate away from the epoch
-			//	Scale first so we don't overflow.
+			//	Truncate towards -infinity, not epoch.
+			D_ASSERT(SRC::PRECISION > DST::PRECISION);
 			const int64_t scaling = SRC::PRECISION / DST::PRECISION;
-			dst.value = src.value / scaling; // NOLINT
-			if (dst.value < 0) {
-				--dst.value;
-			}
+			int64_t frac;
+			Timestamp::SplitTime(src.value, scaling, dst.value, frac);
 		}
 		return dst;
 	}

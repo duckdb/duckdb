@@ -915,3 +915,9 @@ FROM nanos;
 {'day': 12, 'microsecond': 56987654}
 {'day': 31, 'microsecond': 56123456}
 
+query II
+SELECT 
+	day('1969-12-31'::TIMESTAMPTZ_NS) AS d,
+	day('1969-12-31'::TIMESTAMPTZ)    AS d_us;
+----
+31	31
