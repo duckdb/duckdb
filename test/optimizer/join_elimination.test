@@ -334,6 +334,18 @@ explain select distinct pg from (select p.g as pg from p left join k on p.id = k
 ----
 physical_plan	<REGEX>:.*Join Type: LEFT.*
 
+# a window function computes values that depend on row multiplicity, so the join's duplicated rows
+# shift the row_number values and change which rows a rn-filter keeps
+query I
+select distinct pg from (select p.g as pg, row_number() over (order by p.id) as rn from p left join k on p.id = k.a) t where rn <= 2;
+----
+x
+
+query II
+explain select distinct pg from (select p.g as pg, row_number() over (order by p.id) as rn from p left join k on p.id = k.a) t where rn <= 2;
+----
+physical_plan	<REGEX>:.*Join Type: LEFT.*
+
 # group by instead of distinct: the join survives and the result is unchanged
 query I
 select pg from (select p.id as pid, p.g as pg from p left join k on p.id = k.a order by p.g desc, p.id limit 2 offset 3) group by pg order by pg;

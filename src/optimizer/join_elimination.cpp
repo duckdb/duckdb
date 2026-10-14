@@ -117,8 +117,10 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT:
 	case LogicalOperatorType::LOGICAL_TOP_N:
-	case LogicalOperatorType::LOGICAL_SAMPLE: {
-		// these pick rows based on input cardinality, so a distinct group above them does not hold below them
+	case LogicalOperatorType::LOGICAL_SAMPLE:
+	case LogicalOperatorType::LOGICAL_WINDOW: {
+		// these pick rows by cardinality, or compute values that depend on row multiplicity (window), so a
+		// distinct group above them does not hold below them
 		pipe_info.distinct_groups.clear();
 		break;
 	}
