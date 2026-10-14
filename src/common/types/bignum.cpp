@@ -537,11 +537,8 @@ bool Bignum::BignumToDouble(const bignum_t &blob, double &result, bool &strict) 
 	if (is_negative) {
 		result *= -1;
 	}
-	if (!std::isfinite(result)) {
-		// We throw an error
-		throw ConversionException("Could not convert bignum '%s' to Double", BignumToVarchar(blob));
-	}
-	return true;
+	// the value does not fit in a double
+	return std::isfinite(result);
 }
 
 } // namespace duckdb

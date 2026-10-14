@@ -532,6 +532,17 @@ public:
 	idx_t max_partition_count;
 	idx_t probe_side_requirement;
 
+	//! Throws if the memory reservation cannot hold the probe side partitioning buffers
+	void CheckProbeSideRequirement() const {
+		const auto reservation = temporary_memory_state->GetReservation();
+		if (reservation < probe_side_requirement) {
+			throw OutOfMemoryException(
+			    "Not enough memory for the external hash join: the probe side requires %s, but only %s are reserved",
+			    StringUtil::BytesToHumanReadableString(probe_side_requirement),
+			    StringUtil::BytesToHumanReadableString(reservation));
+		}
+	}
+
 	//! Hash tables built by each thread (owned by the corresponding local sink states)
 	vector<reference<JoinHashTable>> local_hash_tables;
 	//! Local hash tables whose ownership has been transferred during the normal one-shot finalize path
@@ -1419,7 +1430,7 @@ public:
 
 		FinalizeExternalRuntimeFilters(sink.context, op, sink);
 
-		D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
+		sink.CheckProbeSideRequirement();
 		sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
 		                                         sink.probe_side_requirement);
 		sink.ScheduleFinalize(*pipeline, *this);
@@ -2017,8 +2028,10 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		    (max_partition_ht_size + sink.probe_side_requirement) > sink.temporary_memory_state->GetReservation()) {
 			// We have to repartition
 			const auto radix_bits_before = ht.GetRadixBits();
-			ht.SetRepartitionRadixBits(sink.temporary_memory_state->GetReservation(), sink.max_partition_size,
-			                           sink.max_partition_count);
+			const auto reservation = sink.temporary_memory_state->GetReservation();
+			const auto max_ht_size =
+			    reservation > sink.probe_side_requirement ? reservation - sink.probe_side_requirement : 0;
+			ht.SetRepartitionRadixBits(max_ht_size, sink.max_partition_size, sink.max_partition_count);
 			DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalHashJoin", "Repartition",
 			           {{"partitions_before", to_string(RadixPartitioning::NumberOfPartitions(radix_bits_before))},
 			            {"partitions_after", to_string(RadixPartitioning::NumberOfPartitions(ht.GetRadixBits()))}});
@@ -2032,7 +2045,8 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			sink.local_hash_tables.clear();
 			sink.owned_local_hash_tables.clear();
 			FinalizeExternalRuntimeFilters(context, *this, sink);
-			D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
+			ht.PrepareBloomFilterForFinalize();
+			sink.CheckProbeSideRequirement();
 			sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
 			                                         sink.probe_side_requirement);
 			sink.ScheduleFinalize(pipeline, event);

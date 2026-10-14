@@ -359,16 +359,21 @@ public:
 	//! Returns the default value of an option
 	static SettingLookupResult TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result);
 
-	bool CanAccessFile(const string &path, FileType type);
+	//! The opener (if any) is used to expand "~" using the connection-specific home_directory
+	bool CanAccessFile(const string &path, FileType type, optional_ptr<FileOpener> opener = nullptr);
 	void AddAllowedConfig(const Identifier &config_name);
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
+	//! Whether the given optimizer is disabled (disabled_optimizers)
+	DUCKDB_API bool IsOptimizerDisabled(OptimizerType type) const;
+	DUCKDB_API set<OptimizerType> GetDisabledOptimizers() const;
+	DUCKDB_API void SetDisabledOptimizers(set<OptimizerType> disabled_optimizers);
 	//! Allows a database file and its WAL files, so a database can be opened while external access is disabled.
 	//! Only possible through API calls, not SQL calls.
 	void AddAllowedDatabasePath(const string &database_path);
 	vector<string> GetAllowedDirectories() const;
 	vector<string> GetAllowedPaths() const;
-	string SanitizeAllowedPath(const string &path) const;
+	string SanitizeAllowedPath(const string &path, optional_ptr<FileOpener> opener = nullptr) const;
 	ExtensionCallbackManager &GetCallbackManager();
 	const ExtensionCallbackManager &GetCallbackManager() const;
 
@@ -384,6 +389,8 @@ private:
 	mutable mutex config_lock;
 	//! Guards allowed_paths and allowed_directories, which a running instance can extend while files are being opened
 	mutable mutex allowed_paths_lock;
+	//! Guards disabled_optimizers, which can be changed while other connections plan queries
+	mutable mutex disabled_optimizers_lock;
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<EncodingFunctionSet> encoding_functions;
 	unique_ptr<ArrowTypeExtensionSet> arrow_extensions;

@@ -931,6 +931,7 @@ vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(GroupByExp
 		for (auto &child_expr : group_by_expr.children) {
 			auto child_sets = GroupByExpressionUnfolding(child_expr, map, result);
 			result_sets.insert(result_sets.end(), child_sets.begin(), child_sets.end());
+			CheckGroupingSetMax(result_sets.size());
 		}
 	} else if (group_by_expr.type == GroupByExpressionInfoType::CUBE ||
 	           group_by_expr.type == GroupByExpressionInfoType::ROLLUP) {

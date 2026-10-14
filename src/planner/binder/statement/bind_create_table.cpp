@@ -43,6 +43,11 @@ static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageMa
 	auto &base = info.base->Cast<CreateTableInfo>();
 	for (auto &col : base.columns.Logical()) {
 		auto compression_type = col.CompressionType();
+		if (col.Generated() && compression_type != CompressionType::COMPRESSION_AUTO) {
+			throw BinderException("Can't set a compression type on generated column %s, generated columns are "
+			                      "not stored",
+			                      col.Name());
+		}
 		auto compression_availability_result = CompressionTypeIsAvailable(compression_type, storage_manager);
 		if (!compression_availability_result.IsAvailable()) {
 			if (compression_availability_result.IsDeprecated()) {

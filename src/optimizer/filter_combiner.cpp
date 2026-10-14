@@ -799,7 +799,19 @@ static bool IsLessThan(ExpressionType type) {
 //! Margins: 2h for DST ambiguity (TIMESTAMP<->TIMESTAMPTZ), 24h for time-of-day loss, 1s for rounding loss.
 static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target) {
 	if (source == target) {
-		return 0;
+		switch (source) {
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return 0;
+		default:
+			// non-temporal types with the same id can differ (e.g. UNION or DECIMAL types)
+			return -1;
+		}
 	}
 	switch (source) {
 	case LogicalTypeId::TIMESTAMP:

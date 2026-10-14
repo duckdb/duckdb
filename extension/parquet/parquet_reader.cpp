@@ -593,6 +593,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 				throw IOException("TIME_MICROS converted type can only be set for value of Type::INT64");
 			}
 		case ConvertedType::INTERVAL:
+			if (s_ele.type != Type::FIXED_LEN_BYTE_ARRAY || s_ele.type_length != 12) {
+				throw DataCorruptionException(
+				    "INTERVAL converted type can only be set for value of Type::FIXED_LEN_BYTE_ARRAY of length 12");
+			}
 			return LogicalType::INTERVAL;
 		case ConvertedType::JSON:
 			return LogicalType::JSON();
@@ -1041,11 +1045,20 @@ static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnS
 	return true;
 }
 
+//! The maximum nesting depth of a Parquet schema - deeper schemas would overflow the stack while being read
+static constexpr idx_t MAX_PARQUET_SCHEMA_DEPTH = 500;
+
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                         idx_t &next_schema_idx, idx_t &next_file_idx,
                                                         ClientContext &context) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
+	if (depth > MAX_PARQUET_SCHEMA_DEPTH) {
+		throw InvalidInputException(
+		    "Malformed Parquet schema in file \"%s\": the schema is nested more than %llu levels "
+		    "deep",
+		    file.path, MAX_PARQUET_SCHEMA_DEPTH);
+	}
 	if (next_schema_idx >= file_meta_data->schema.size()) {
 		throw InvalidInputException("Malformed Parquet schema in file \"%s\": invalid schema index %d", file.path,
 		                            next_schema_idx);
@@ -1144,6 +1157,24 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		bool is_variant = s_ele.__isset.logicalType && s_ele.logicalType.__isset.VARIANT == true;
 		if (!is_variant && parquet_options.variant_legacy_encoding && IsVariantType(s_ele, child_schemas)) {
 			is_variant = true;
+		}
+		if (is_variant) {
+			// the VARIANT reader reads the 'metadata' and 'value' columns as binary
+			for (auto &child_schema : child_schemas) {
+				if (child_schema.name != "metadata" && child_schema.name != "value") {
+					continue;
+				}
+				// a logical type annotation (e.g. GEOMETRY) would make the column reader produce another type
+				const auto is_binary =
+				    child_schema.type.id() == LogicalTypeId::BLOB || child_schema.type.id() == LogicalTypeId::VARCHAR;
+				if (!child_schema.children.empty() || child_schema.parquet_type != duckdb_parquet::Type::BYTE_ARRAY ||
+				    !is_binary || child_schema.schema_type != ParquetColumnSchemaType::COLUMN) {
+					throw DataCorruptionException(
+					    "Failed to read Parquet file \"%s\": the '%s' column of VARIANT column \"%s\" "
+					    "must be a binary BYTE_ARRAY column",
+					    file.path, child_schema.name, s_ele.name);
+				}
+			}
 		}
 
 		if (!is_map_kv && this_idx > 0) {
