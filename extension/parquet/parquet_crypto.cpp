@@ -41,15 +41,18 @@ ParquetKeys &ParquetKeys::Get(ClientContext &context) {
 }
 
 void ParquetKeys::AddKey(const string &key_name, const string &key) {
+	lock_guard<mutex> guard(lock);
 	keys[key_name] = key;
 }
 
 bool ParquetKeys::HasKey(const string &key_name) const {
+	lock_guard<mutex> guard(lock);
 	return keys.find(key_name) != keys.end();
 }
 
-const string &ParquetKeys::GetKey(const string &key_name) const {
-	D_ASSERT(HasKey(key_name));
+string ParquetKeys::GetKey(const string &key_name) const {
+	lock_guard<mutex> guard(lock);
+	D_ASSERT(keys.find(key_name) != keys.end());
 	return keys.at(key_name);
 }
 
