@@ -420,7 +420,7 @@ public:
 	int ShellLoadHistory(const char *path);
 	int ShellSaveHistory(const char *path);
 	int ShellSetHistoryMaxLength(idx_t max_length);
-	char *OneInputLine(FILE *in, char *zPrior, int isContinuation);
+	char *OneInputLine(FILE *in, char *&zPrior, int isContinuation);
 
 	int RunOneSqlLine(InputMode mode, char *zSql);
 	string GetDefaultDuckDBRC();

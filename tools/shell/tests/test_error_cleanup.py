@@ -214,8 +214,8 @@ def test_configured_command_error_cleans_up_database(shell, tmp_path, mode):
 @pytest.mark.parametrize("mode", ["-format", "-format-file"])
 def test_format_failure_stops_following_commands(shell, tmp_path, mode):
     database = tmp_path / "format.duckdb"
-    # Force a deterministic formatter failure, independent of installed extensions.
-    setup = "CREATE TABLE saved AS SELECT 42 AS value; CREATE MACRO duckdb_format_sql(s) AS error('format_cleanup_failure');"
+    # Fail binding the formatter query before function lookup, with or without autocomplete.
+    setup = "CREATE TABLE saved AS SELECT 42 AS value; SET max_expression_depth=1;"
     arguments = ["-c", setup, mode]
     if mode == "-format-file":
         script = tmp_path / "format.sql"
@@ -224,6 +224,77 @@ def test_format_failure_stops_following_commands(shell, tmp_path, mode):
     arguments += ["-c", "SELECT 'SHOULD_NOT_RUN';"]
     result = run_shell(shell, database, arguments, "select 1")
     assert result.returncode == 1, result.stderr
-    assert "format_cleanup_failure" in result.stderr
+    assert "Max expression depth limit of 1 exceeded" in result.stderr
     assert "SHOULD_NOT_RUN" not in result.stdout
     assert_checkpointed(database)
+
+
+@pytest.mark.parametrize("output_command", [".once -e", ".excel"])
+@pytest.mark.parametrize("failure", [".exit 3", "SELECT * FROM missing_cleanup_table;"])
+def test_early_exit_removes_temporary_output(shell, tmp_path, monkeypatch, output_command, failure):
+    temporary_output = tmp_path / "output"
+    temporary_output.mkdir()
+    monkeypatch.setenv("TEMP", str(temporary_output))
+    monkeypatch.setenv("TMP", str(temporary_output))
+    database = tmp_path / "temporary_output.duckdb"
+    setup = "SET wal_autocheckpoint='1TB'; CREATE TABLE saved AS SELECT 42 AS value;"
+    result = run_shell(shell, database, ["-cmd", setup, "-cmd", output_command, "-c", failure])
+    assert result.returncode == (3 if failure == ".exit 3" else 1), result.stderr
+    assert not list(temporary_output.iterdir())
+    assert_checkpointed(database)
+
+
+@pytest.mark.parametrize("mode", ["-connect", "-serve"])
+def test_invalid_connection_target_returns_requested_failure(shell, tmp_path, mode):
+    result = run_shell(shell, None, [mode, "invalid_cleanup_target"])
+    assert result.returncode == 1, result.stderr
+    assert result.stderr
+    assert "Exited due to error" not in result.stderr
+
+
+@pytest.mark.skipif(os.name == "nt", reason="requires a POSIX pseudo-terminal")
+@pytest.mark.parametrize("exit_command, exit_code", [(".exit 2", 2), (".exit 0", 0)])
+def test_interactive_exit_saves_history(shell, tmp_path, monkeypatch, exit_command, exit_code):
+    import pty
+
+    history = tmp_path / "history"
+    monkeypatch.setenv("DUCKDB_HISTORY", str(history))
+    monkeypatch.setenv("TERM", "dumb")
+    master, slave = pty.openpty()
+    process = None
+    try:
+        process = subprocess.Popen(
+            [shell, "-no-init", "-interactive"], stdin=slave, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        os.close(slave)
+        slave = None
+        os.write(master, f"SELECT 26856;\n{exit_command}\n".encode())
+        stdout, stderr = process.communicate(timeout=30)
+        assert process.returncode == exit_code, stderr.decode()
+        assert history.is_file(), stdout.decode()
+        saved_history = history.read_text()
+        assert "SELECT 26856;" in saved_history
+        assert exit_command in saved_history
+    finally:
+        if process is not None and process.poll() is None:
+            process.kill()
+            process.communicate()
+        os.close(master)
+        if slave is not None:
+            os.close(slave)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="requires a POSIX output pipe")
+def test_explicit_exit_closes_output_pipe(shell, tmp_path):
+    import shlex
+    import sys
+
+    completion = tmp_path / "pipe_finished"
+    program = f"import sys; from pathlib import Path; sys.stdin.read(); Path({str(completion)!r}).write_text('closed')"
+    script = tmp_path / "consumer.py"
+    script.write_text(program)
+    pipe = f'.output "|{shlex.quote(sys.executable)} {shlex.quote(str(script))}"'
+    result = run_shell(shell, None, ["-cmd", pipe, "-c", ".exit 3"])
+    assert result.returncode == 3, result.stderr
+    # pclose must wait for the consumer to finish, not merely abandon the pipe on process exit.
+    assert completion.read_text() == "closed"
