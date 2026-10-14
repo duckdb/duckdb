@@ -7,4 +7,4 @@
 statement error
 SELECT make_timestamp(-9223372036854775806)::TIME;
 ----
-Conversion Error: Timestamp microseconds out of range
+Conversion Error: Timestamp units out of range
