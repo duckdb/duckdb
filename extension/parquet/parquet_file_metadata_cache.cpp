@@ -19,13 +19,13 @@
 namespace duckdb {
 
 ParquetFileMetadataCache::ParquetFileMetadataCache(unique_ptr<duckdb_parquet::FileMetaData> file_metadata,
-                                                   CachingFileHandle &handle,
+                                                   timestamp_t last_modified_p, string version_tag_p,
                                                    unique_ptr<GeoParquetFileMetadata> geo_metadata,
                                                    unique_ptr<FileCryptoMetaData> crypto_metadata,
                                                    string encryption_key_hash_p, idx_t footer_size)
     : metadata(std::move(file_metadata)), geo_metadata(std::move(geo_metadata)),
       crypto_metadata(std::move(crypto_metadata)), encryption_key_hash(std::move(encryption_key_hash_p)),
-      footer_size(footer_size), last_modified(handle.GetLastModifiedTime()), version_tag(handle.GetVersionTag()) {
+      footer_size(footer_size), last_modified(last_modified_p), version_tag(std::move(version_tag_p)) {
 }
 
 string ParquetFileMetadataCache::ObjectType() {

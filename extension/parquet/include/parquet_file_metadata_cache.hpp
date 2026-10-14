@@ -33,8 +33,8 @@ enum class ParquetCacheValidity { VALID, INVALID, UNKNOWN };
 
 class ParquetFileMetadataCache : public ObjectCacheEntry {
 public:
-	ParquetFileMetadataCache(unique_ptr<duckdb_parquet::FileMetaData> file_metadata, CachingFileHandle &handle,
-	                         unique_ptr<GeoParquetFileMetadata> geo_metadata,
+	ParquetFileMetadataCache(unique_ptr<duckdb_parquet::FileMetaData> file_metadata, timestamp_t last_modified,
+	                         string version_tag, unique_ptr<GeoParquetFileMetadata> geo_metadata,
 	                         unique_ptr<FileCryptoMetaData> crypto_metadata, string encryption_key_hash,
 	                         idx_t footer_size);
 	~ParquetFileMetadataCache() override = default;

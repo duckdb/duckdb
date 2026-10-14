@@ -101,7 +101,8 @@ public:
 
 	//! Get the blocks covering [location, location + nr_bytes), creating empty blocks for the missing bytes.
 	vector<shared_ptr<CacheBlock>> AcquireBlocks(CachedFile &cached_file, idx_t location, idx_t nr_bytes,
-	                                             idx_t max_block_size);
+	                                             idx_t max_block_size,
+	                                             optional_idx expected_content_generation = optional_idx());
 	//! Drop all blocks of a file, e.g. because the file changed. Readers keep the blocks they hold.
 	void DropBlocks(CachedFile &cached_file);
 	idx_t GetContentGeneration(CachedFile &cached_file);

@@ -307,15 +307,15 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	FooterReadSource footer_source = FooterReadSource::FILE;
 	unique_ptr<duckdb_apache::thrift::protocol::TProtocol> file_proto;
 	FileBufferHandleGroup suffix_buffer;
+	optional<FileMetadata> suffix_metadata;
 	idx_t file_size = 0;
 
 	bool footer_encrypted;
 	uint32_t footer_len;
 
 	if (!footer_size.IsValid() && file_handle.IsRemoteFile()) {
-		const auto suffix_size = ShouldAndCanPrefetch(context, file_handle) ? file_handle.GetCacheMaxBlockSize() : 8;
 		SuffixReadResult suffix_result;
-		if (file_handle.TryReadSuffix(suffix_size, suffix_buffer, suffix_result)) {
+		if (file_handle.TryReadSuffix(8, suffix_buffer, suffix_result)) {
 			if (suffix_result.metadata.file_size < 0) {
 				throw IOException("Filesystem returned an invalid file size for suffix read of '%s'",
 				                  file_handle.GetPath());
@@ -331,6 +331,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 			ParseParquetFooter(suffix_ptr + suffix_result.bytes_read - 8, file_handle.GetPath(), file_size,
 			                   encryption_config, footer_len, footer_encrypted);
 			footer_source = FooterReadSource::SUFFIX;
+			suffix_metadata = suffix_result.metadata;
 
 			const auto total_footer_len = NumericCast<idx_t>(footer_len) + 8;
 			if (total_footer_len <= suffix_result.bytes_read) {
@@ -440,9 +441,12 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 
 	// Try to read the GeoParquet metadata (if present)
 	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
-	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), file_handle, std::move(geo_metadata),
-	                                                 std::move(crypto_metadata), std::move(encryption_key_hash),
-	                                                 footer_len);
+	const auto last_modified =
+	    suffix_metadata ? suffix_metadata->last_modification_time : file_handle.GetLastModifiedTime();
+	auto version_tag = suffix_metadata ? std::move(suffix_metadata->version_tag) : file_handle.GetVersionTag();
+	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), last_modified, std::move(version_tag),
+	                                                 std::move(geo_metadata), std::move(crypto_metadata),
+	                                                 std::move(encryption_key_hash), footer_len);
 }
 
 static bool CanUseParquetMetadataStatistics(ClientContext &context,
