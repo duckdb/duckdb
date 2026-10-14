@@ -619,8 +619,16 @@ struct DecimalCastOperation {
 		}
 		//! If we expect an exponent, we need to preserve the decimals
 		//! But we don't want to overflow, so we prevent overflowing the result with this check
-		if (state.digit_count + state.decimal_count >= DecimalWidth<decltype(state.result)>::max) {
-			return true;
+		using store_t = typename T::StoreType;
+		constexpr auto max_digits = DecimalWidth<store_t>::max;
+		if (state.digit_count + state.decimal_count >= max_digits) {
+			// leading zeros of the decimals are not digits of the result
+			auto full = UnsafeNumericCast<store_t>(
+			    DecimalCastTraits<store_t>::POWERS_OF_TEN_CLASS::POWERS_OF_TEN[max_digits - 1]);
+			bool result_is_full = NEGATIVE ? state.result <= -full : state.result >= full;
+			if (result_is_full || state.decimal_count == NumericLimits<uint8_t>::Maximum()) {
+				return true;
+			}
 		}
 		state.decimal_count++;
 		if (NEGATIVE) {

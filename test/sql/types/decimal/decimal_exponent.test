@@ -292,3 +292,15 @@ query IIII
 SELECT '0.01e3'::DECIMAL(4,2), '-0.01e3'::DECIMAL(4,2), '0.01e7'::DECIMAL(9,3), '0.01e2'::DECIMAL(38,37)
 ----
 10.00	-10.00	100000.000	1.0000000000000000000000000000000000000
+
+# digits after leading zeros of the decimals are kept for the exponent
+query III
+SELECT '0.00019e1'::DECIMAL(4,4), '-0.00019e1'::DECIMAL(4,4),
+	'0.00000000000000000000000000000000000012345e40'::DECIMAL(38,10)
+----
+.0019	-.0019	1234.5000000000
+
+query II
+SELECT ('0.' || repeat('0', 254) || '1e255')::DECIMAL(38,2), ('0.' || repeat('0', 256) || '5')::DECIMAL(18,3)
+----
+1.00	0.000
