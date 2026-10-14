@@ -298,3 +298,21 @@ def test_explicit_exit_closes_output_pipe(shell, tmp_path):
     assert result.returncode == 3, result.stderr
     # pclose must wait for the consumer to finish, not merely abandon the pipe on process exit.
     assert completion.read_text() == "closed"
+
+
+@pytest.mark.parametrize("exit_code", [0, 3])
+def test_database_shutdown_keeps_output_open(shell, tmp_path, exit_code):
+    database = tmp_path / "shutdown_logging.duckdb"
+    output = tmp_path / "shutdown.log"
+    setup = (
+        "CALL enable_logging(level='TRACE', storage='shell_log_storage');"
+        "SET wal_autocheckpoint='1TB'; CREATE TABLE saved AS SELECT 42 AS value;"
+    )
+    result = run_shell(
+        shell, database, ["-cmd", f'.output "{output.as_posix()}"', "-c", setup, "-c", f".exit {exit_code}"]
+    )
+    assert result.returncode == exit_code, result.stderr
+    assert result.stdout == ""
+    # The pending WAL is checkpointed during database destruction, before output is closed.
+    assert "Start Checkpoint" in output.read_text()
+    assert_checkpointed(database)
