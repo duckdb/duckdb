@@ -64,6 +64,11 @@ functions:
       `ERROR_INPUT_INVALID` when the plan would not be reused, so a caller who wants the handle only for the speedup
       finds out here rather than after silently taking the slow path.
 
+      A statement that DuckDB expands into several, such as a dynamic PIVOT, is kept as written and expanded again at
+      each execution, in the transaction state of that execution. It runs nothing here, its plan is never reused, and
+      its result's metadata is deferred as for `[[statement_execute]]`. Parameters on such a statement are refused
+      with `ERROR_INPUT_INVALID`.
+
       Refuses with `ERROR_RESOURCE_IN_USE` while a statement on the connection is still running. Drain, destroy, or
       interrupt that result first, or prepare on another connection. `*out_prepared` is set to NULL on failure.
     role: constructor
