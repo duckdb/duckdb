@@ -133,7 +133,7 @@ jobs:
     name: Bench ${{ matrix.name }}
     needs:
       - linux-base
-    runs-on: ${{ matrix.runner || fromJSON(inputs.runners).linux_small }}
+    runs-on: ${{ fromJSON(inputs.runners).linux_small }}
     container:
       image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     strategy:
@@ -154,7 +154,6 @@ jobs:
             benchmark: .github/regression/csv.csv
           - name: RealNest
             benchmark: .github/regression/realnest.csv
-            runner: ubuntu-24.04 # Needs more memory until the buffer-managed result fix is in the base build.
             data_setup: |
               mkdir -p duckdb_benchmark_data
               python3 scripts/ci/retry.py -- wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
