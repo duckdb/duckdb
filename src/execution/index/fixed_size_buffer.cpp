@@ -64,6 +64,9 @@ void FixedSizeBuffer::Finalize(shared_ptr<BlockHandle> block_handle_p, uint32_t 
 	D_ASSERT(block_handle_p);
 	D_ASSERT(block_handle_p->BlockId() < MAXIMUM_BLOCK);
 
+	if (OnDisk()) {
+		block_manager.MarkBlockAsModified(block_pointer.block_id);
+	}
 	block_pointer = BlockPointer(block_handle_p->BlockId(), offset);
 	block_handle = std::move(block_handle_p);
 	dirty = false;
@@ -93,11 +96,6 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 
 	// The buffer is in memory.
 	D_ASSERT(InMemory());
-	if (OnDisk()) {
-		// We copied it onto a new buffer when loading from disk.
-		block_manager.MarkBlockAsModified(block_pointer.block_id);
-	}
-
 	partial_block_manager.Write(*this, std::move(buffer_handle), allocation_size);
 }
 
