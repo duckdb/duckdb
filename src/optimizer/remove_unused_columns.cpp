@@ -1825,6 +1825,13 @@ static bool TryGetCastChild(unique_ptr<Expression> &expr, optional_ptr<unique_pt
 	if (BoundCastExpression::IsTryCast(cast)) {
 		return false;
 	}
+	if (cast.GetReturnType().IsJSONType()) {
+		// JSON casts depend on the logical input type, not the underlying storage type.
+		// TODO: Generalize beyond JSON by checking that T -> VARIANT -> U equals T -> U.
+		// Invertibility is insufficient: VARIANT uses stricter string-to-number parsing,
+		// and zoned timestamp serialization can differ between the two paths.
+		return false;
+	}
 
 	child = BoundCastExpression::ChildMutable(cast);
 	return true;
