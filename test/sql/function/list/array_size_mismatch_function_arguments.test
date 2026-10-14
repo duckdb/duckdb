@@ -26,3 +26,20 @@ query I
 SELECT list_append([[1, 2]::INT[2]], [9,8]::INT[2]);
 ----
 [[1, 2], [9, 8]]
+
+# UNPIVOT over arrays of different sizes
+statement error
+UNPIVOT (SELECT [[1,2],[7,8]]::INT[2][] a, [[3,4,5]]::INT[3][] b) ON a, b INTO NAME n VALUE v;
+----
+<REGEX>:Conversion Error.*Cannot cast array of size 2 to array of size 3.*
+
+statement error
+UNPIVOT (SELECT [1,2]::INT[2] a, [3,4,5]::INT[3] b) ON a, b INTO NAME n VALUE v;
+----
+<REGEX>:Conversion Error.*Cannot cast array of size 2 to array of size 3.*
+
+query II
+UNPIVOT (SELECT [1,2]::INT[2] a, [3,4]::INT[2] b) ON a, b INTO NAME n VALUE v;
+----
+a	[1, 2]
+b	[3, 4]
