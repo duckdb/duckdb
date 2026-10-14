@@ -2163,7 +2163,7 @@ TableRef <- InnerTableRef JoinOrPivot*
 TableSubquery <- TableAliasColon? Lateral? SubqueryReference TableAlias? SampleClause?
 BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?
 TableAliasColon <- ColIdOrString ':'
-ValuesRef <- TableAliasColon? ValuesClause TableAlias?
+ValuesRef <- TableAliasColon? ValuesClause TableAlias? SampleClause?
 ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
 
 JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause

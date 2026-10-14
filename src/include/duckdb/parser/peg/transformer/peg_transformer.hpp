@@ -5623,7 +5623,8 @@ public:
 	static unique_ptr<TableRef> TransformValuesRef(PEGTransformer &transformer,
 	                                               const optional<Identifier> &table_alias_colon,
 	                                               unique_ptr<SelectStatement> values_clause,
-	                                               const optional<TableAlias> &table_alias);
+	                                               const optional<TableAlias> &table_alias,
+	                                               optional<unique_ptr<SampleOptions>> sample_clause);
 	static unique_ptr<TableRef> TransformParensTableRef(PEGTransformer &transformer,
 	                                                    const optional<Identifier> &table_alias_colon,
 	                                                    unique_ptr<TableRef> table_ref,
