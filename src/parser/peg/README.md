@@ -135,8 +135,16 @@ Keywords are defined in list files under `grammar/keywords/`:
 | `column_name_keyword.list` | Allowed as column names |
 | `func_name_keyword.list` | Allowed as function names |
 | `type_name_keyword.list` | Allowed as type names |
+| `bare_label_keyword.list` | Allowed as a column alias without `AS` (e.g. `SELECT 1 name`) |
 
-A keyword must appear in exactly one list. The build script validates this.
+A keyword must appear in exactly one of the category lists. The build script validates this.
+
+`bare_label_keyword.list` is orthogonal to the categories, following Postgres' `bare_label_keyword`: every entry must
+also appear in a category list, and only unreserved or column-name keywords listed there can be used as an `AS`-less
+alias. Keywords that can follow an expression or type are deliberately left out (interval units such as `DAY`, function
+suffixes such as `FILTER` and `OVER`, type suffixes such as `VARYING` and `WITHOUT`, and star modifiers such as
+`EXCLUDE`), so `SELECT d + 1 day` is a syntax error rather than a column named `day`. New unreserved keywords should be
+added to the list unless they can trail an expression.
 
 ## Building the Grammar
 

@@ -159,10 +159,13 @@ public:
 	idx_t count = 0;
 	//! The number of blocks in the group
 	idx_t blocks = 0;
-	//! The partition boundary mask
+	//! The partition boundary mask. The masks are O(rows): their storage comes from the buffer allocator and the
+	//! masks point into it
 	ValidityMask partition_mask;
+	AllocatedData partition_mask_data;
 	//! The order boundary mask (maps sort column END to mask)
 	OrderMasks order_masks;
+	unordered_map<idx_t, AllocatedData> order_mask_data;
 	OnceFlag masks_initialized;
 	//! The fully materialised data collection
 	unique_ptr<WindowCollection> collection;
@@ -663,23 +666,36 @@ void WindowHashGroup::UpdateScanner(ScannerPtr &scanner, idx_t begin_idx) const 
 	}
 }
 
+//! Backs a mask of `count` rows (all valid) with a block from the allocator, so that it counts against the memory limit
+static void AllocateMask(Allocator &allocator, idx_t count, ValidityMask &mask, AllocatedData &storage) {
+	storage = allocator.Allocate(ValidityMask::EntryCount(count) * sizeof(validity_t));
+	memset(storage.get(), 0xFF, storage.GetSize());
+	mask.Initialize(reinterpret_cast<validity_t *>(storage.get()), count);
+}
+
 void WindowHashGroup::AllocateMasks() {
 	CallOnce(masks_initialized, [&] {
+		auto &allocator = BufferAllocator::Get(gsink.client);
 		ValidityMask new_partition_mask;
-		new_partition_mask.Initialize(count);
+		AllocatedData new_partition_mask_data;
+		AllocateMask(allocator, count, new_partition_mask, new_partition_mask_data);
 		OrderMasks new_order_masks;
+		unordered_map<idx_t, AllocatedData> new_order_mask_data;
 
 		// All masks refer to the shared sort's partition columns, including duplicate expressions.
 		const auto &sort_expr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
 		const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : sort_expr.Partitions().size();
 		for (auto &wexec : gsink.executors) {
-			auto &order_mask = new_order_masks[order_begin + wexec->wexpr.OrderBy().size()];
+			const auto order_idx = order_begin + wexec->wexpr.OrderBy().size();
+			auto &order_mask = new_order_masks[order_idx];
 			if (!order_mask.IsMaskSet()) {
-				order_mask.Initialize(count);
+				AllocateMask(allocator, count, order_mask, new_order_mask_data[order_idx]);
 			}
 		}
 		partition_mask = std::move(new_partition_mask);
+		partition_mask_data = std::move(new_partition_mask_data);
 		order_masks = std::move(new_order_masks);
+		order_mask_data = std::move(new_order_mask_data);
 	});
 }
 
