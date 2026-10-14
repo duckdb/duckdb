@@ -20,6 +20,7 @@ set(TEST_API_OBJECTS
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp
     test_config.cpp
+    test_compression_select.cpp
     test_connection_secrets.cpp
     test_copy_output_lifecycle.cpp
     test_custom_allocator.cpp
@@ -46,6 +47,7 @@ set(TEST_API_OBJECTS
     test_query_result_format.cpp
     test_query_result_format_buffer.cpp
     test_query_result_stream.cpp
+    test_expanding_statements.cpp
     test_retained_result_collection.cpp
     test_plan_serialization.cpp
     test_relation_api.cpp

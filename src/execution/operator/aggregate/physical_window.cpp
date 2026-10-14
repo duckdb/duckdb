@@ -159,10 +159,13 @@ public:
 	idx_t count = 0;
 	//! The number of blocks in the group
 	idx_t blocks = 0;
-	//! The partition boundary mask
+	//! The partition boundary mask. The masks are O(rows): their storage comes from the buffer allocator and the
+	//! masks point into it
 	ValidityMask partition_mask;
+	AllocatedData partition_mask_data;
 	//! The order boundary mask (maps sort column END to mask)
 	OrderMasks order_masks;
+	unordered_map<idx_t, AllocatedData> order_mask_data;
 	OnceFlag masks_initialized;
 	//! The fully materialised data collection
 	unique_ptr<WindowCollection> collection;
@@ -515,7 +518,9 @@ public:
 		return !stopped && finished < total_tasks;
 	}
 	//! Get the next task given the current state
-	bool TryNextTask(TaskPtr &task, Task &task_local);
+	bool TryNextTask(TaskPtr &task, Task &task_local) DUCKDB_EXCLUDES(lock);
+	//! Select a task with the lock held, after the previous task has been retired.
+	bool TryNextTaskLocked(TaskPtr &task, Task &task_local) DUCKDB_REQUIRES(lock);
 
 	//! Context for executing computations
 	ClientContext &client;
@@ -663,23 +668,36 @@ void WindowHashGroup::UpdateScanner(ScannerPtr &scanner, idx_t begin_idx) const 
 	}
 }
 
+//! Backs a mask of `count` rows (all valid) with a block from the allocator, so that it counts against the memory limit
+static void AllocateMask(Allocator &allocator, idx_t count, ValidityMask &mask, AllocatedData &storage) {
+	storage = allocator.Allocate(ValidityMask::EntryCount(count) * sizeof(validity_t));
+	memset(storage.get(), 0xFF, storage.GetSize());
+	mask.Initialize(reinterpret_cast<validity_t *>(storage.get()), count);
+}
+
 void WindowHashGroup::AllocateMasks() {
 	CallOnce(masks_initialized, [&] {
+		auto &allocator = BufferAllocator::Get(gsink.client);
 		ValidityMask new_partition_mask;
-		new_partition_mask.Initialize(count);
+		AllocatedData new_partition_mask_data;
+		AllocateMask(allocator, count, new_partition_mask, new_partition_mask_data);
 		OrderMasks new_order_masks;
+		unordered_map<idx_t, AllocatedData> new_order_mask_data;
 
 		// All masks refer to the shared sort's partition columns, including duplicate expressions.
 		const auto &sort_expr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
 		const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : sort_expr.Partitions().size();
 		for (auto &wexec : gsink.executors) {
-			auto &order_mask = new_order_masks[order_begin + wexec->wexpr.OrderBy().size()];
+			const auto order_idx = order_begin + wexec->wexpr.OrderBy().size();
+			auto &order_mask = new_order_masks[order_idx];
 			if (!order_mask.IsMaskSet()) {
-				order_mask.Initialize(count);
+				AllocateMask(allocator, count, order_mask, new_order_mask_data[order_idx]);
 			}
 		}
 		partition_mask = std::move(new_partition_mask);
+		partition_mask_data = std::move(new_partition_mask_data);
 		order_masks = std::move(new_order_masks);
+		order_mask_data = std::move(new_order_mask_data);
 	});
 }
 
@@ -1033,7 +1051,10 @@ bool WindowGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 	WindowHashGroupPtr finished_group;
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	finished_group = FinishTask(task);
+	return TryNextTaskLocked(task, task_local);
+}
 
+bool WindowGlobalSourceState::TryNextTaskLocked(TaskPtr &task, Task &task_local) {
 	if (!HasMoreTasks()) {
 		task = nullptr;
 		return false;
@@ -1278,11 +1299,15 @@ SourceResultType PhysicalWindow::GetDataInternal(ExecutionContext &context, Data
 				// no more tasks - exit
 				gsource.UnblockTasks();
 				break;
-			} else {
-				// there are more tasks available, but we can't execute them yet
-				// block the source
-				return gsource.BlockSource(source.interrupt_state);
 			}
+			// TryAssignTask released the lock: another thread may have prepared the next stage and unblocked the
+			// blocked tasks in between, so look again before blocking, or no one would ever unblock this task.
+			if (gsource.TryNextTaskLocked(lsource.task, lsource.task_local)) {
+				continue;
+			}
+			// there are more tasks available, but we can't execute them yet
+			// block the source
+			return gsource.BlockSource(source.interrupt_state);
 		}
 	}
 

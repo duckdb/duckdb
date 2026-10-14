@@ -1176,6 +1176,11 @@ void WriteAheadLogDeserializer::ReplaySequenceValue() {
 	// fetch the sequence from the catalog
 	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(context, ReplayEntryName(catalog, entry.qualified_name));
 	seq.ReplayValue(entry.usage_count, entry.counter, entry.last_value);
+	auto &storage_manager = db.GetStorageManager();
+	if (storage_manager.HasStorageVersion() &&
+	    StorageManager::IsPriorToVersion(StorageVersion::V2_0_0, storage_manager.GetStorageVersion())) {
+		seq.DeriveLastValue();
+	}
 }
 
 //===--------------------------------------------------------------------===//

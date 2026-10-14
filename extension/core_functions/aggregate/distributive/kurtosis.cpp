@@ -1,3 +1,4 @@
+#include "duckdb/common/operator/add.hpp"
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -64,8 +65,10 @@ struct KurtosisOperation {
 			target = source;
 			return;
 		}
-		const auto count = target.n + source.n;
-		D_ASSERT(count >= target.n); // This is a check that we are not overflowing
+		idx_t count;
+		if (!TryAddOperator::Operation(target.n, source.n, count)) {
+			throw OutOfRangeException("Overflow in aggregate state combine");
+		}
 		const double na = static_cast<double>(target.n);
 		const double nb = static_cast<double>(source.n);
 		const double n = static_cast<double>(count);
