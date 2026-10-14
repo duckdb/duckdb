@@ -1301,6 +1301,28 @@ static unique_ptr<ParsedExpression> TransformOperatorFunction(const string &oper
 	return std::move(result);
 }
 
+//! Whether the expression is the subquery created for ARRAY(SELECT ...) by TransformArrayParensSelect
+static bool IsArrayParensSelect(const ParsedExpression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::SUBQUERY) {
+		return false;
+	}
+	auto &subquery = expr.Cast<SubqueryExpression>();
+	if (subquery.GetSubqueryType() != SubqueryType::SCALAR || !subquery.Subquery() ||
+	    subquery.Subquery()->node->type != QueryNodeType::SELECT_NODE) {
+		return false;
+	}
+	auto &select_node = subquery.Subquery()->node->Cast<SelectNode>();
+	if (select_node.select_list.size() != 1 || !select_node.from_table ||
+	    select_node.from_table->type != TableReferenceType::SUBQUERY ||
+	    select_node.select_list[0]->GetExpressionClass() != ExpressionClass::CASE) {
+		return false;
+	}
+	auto &case_expr = select_node.select_list[0]->Cast<CaseExpression>();
+	auto &else_expr = case_expr.Else();
+	return case_expr.CaseChecks().size() == 1 && else_expr.GetExpressionClass() == ExpressionClass::FUNCTION &&
+	       else_expr.Cast<FunctionExpression>().FunctionName() == string("array_agg");
+}
+
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformInfixOtherOperatorExpression(PEGTransformer &transformer,
                                                              unique_ptr<ParsedExpression> bitwise_expression,
@@ -1319,7 +1341,8 @@ PEGTransformerFactory::TransformInfixOtherOperatorExpression(PEGTransformer &tra
 			auto expression_type = OperatorToExpressionType(op_string);
 
 			auto subquery_expr = make_uniq<SubqueryExpression>();
-			if (right_expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
+			// ANY(ARRAY(SELECT ...)) compares against the elements of the list, like ANY of any other list
+			if (right_expr->GetExpressionClass() == ExpressionClass::SUBQUERY && !IsArrayParensSelect(*right_expr)) {
 				if (expression_type == ExpressionType::INVALID) {
 					throw ParserException("ANY and ALL operators require one of =,<>,>,<,>=,<= comparisons!");
 				}
