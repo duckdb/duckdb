@@ -1,0 +1,122 @@
+# name: test/sql/pragma/show_tables_from_canonical_schema.test
+# description: SHOW TABLES FROM emits bare equality on the binder-resolved canonical schema name (component (f))
+# group: [pragma]
+
+# The test switches to the default catalog by its in-memory name 'memory'.
+require noforcestorage
+
+# Fixture: two attached catalogs, each with schemas s1/s2 and a table in each.
+
+statement ok
+ATTACH ':memory:' AS db1;
+
+statement ok
+ATTACH ':memory:' AS db2;
+
+foreach db db1 db2
+
+statement ok
+CREATE SCHEMA {db}.s1;
+
+statement ok
+CREATE SCHEMA {db}.s2;
+
+statement ok
+CREATE TABLE {db}.s1.t1(i INTEGER);
+
+statement ok
+CREATE VIEW {db}.s1.v1 AS SELECT 1;
+
+statement ok
+CREATE TABLE {db}.s2.t2(i INTEGER);
+
+endloop
+
+# ------------------------------------------------------------------------------------------------
+# 1. Fully qualified, schema-only (default catalog), and bare SHOW TABLES
+# ------------------------------------------------------------------------------------------------
+
+query I
+SHOW TABLES FROM db1.s1;
+----
+t1
+v1
+
+query I
+SHOW TABLES FROM db1.s2;
+----
+t2
+
+statement ok
+USE db1;
+
+query I
+SHOW TABLES FROM s1;
+----
+t1
+v1
+
+# bare SHOW TABLES follows the search path (currently db1.main, which is empty)
+query I
+SHOW TABLES;
+----
+
+statement ok
+SET search_path = 'db1.s1';
+
+query I
+SHOW TABLES;
+----
+t1
+v1
+
+statement ok
+USE memory;
+
+statement ok
+RESET search_path;
+
+# ------------------------------------------------------------------------------------------------
+# 2. Mixed-case input resolves to the canonical schema: SHOW TABLES FROM DB1.S1 == SHOW TABLES FROM db1.s1
+# ------------------------------------------------------------------------------------------------
+
+query I
+SHOW TABLES FROM DB1.S1;
+----
+t1
+v1
+
+# ------------------------------------------------------------------------------------------------
+# 3. Promoted catalog form (single unambiguous name is a catalog, not a schema): lists all its schemas
+# ------------------------------------------------------------------------------------------------
+
+query I
+SHOW TABLES FROM db1;
+----
+t1
+t2
+v1
+
+# ------------------------------------------------------------------------------------------------
+# 4. Non-existent schema still throws at bind (bind behaviour unchanged by component (f))
+# ------------------------------------------------------------------------------------------------
+
+statement error
+SHOW TABLES FROM db1.nope;
+----
+No catalog + schema named
+
+# ------------------------------------------------------------------------------------------------
+# 5. Embedded single quote in the schema name round-trips through the generated canonical-name SQL
+# ------------------------------------------------------------------------------------------------
+
+statement ok
+CREATE SCHEMA db1."O'Brien";
+
+statement ok
+CREATE TABLE db1."O'Brien".t(i INTEGER);
+
+query I
+SHOW TABLES FROM db1."O'Brien";
+----
+t
