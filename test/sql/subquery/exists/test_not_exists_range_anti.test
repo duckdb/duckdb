@@ -35,7 +35,7 @@ FROM files WHERE file_id >= 198 ORDER BY file_id
 
 query I nosort not_in
 SELECT list(file_id ORDER BY file_id) FROM files
-WHERE begin_snapshot NOT IN (SELECT snapshot_id + 5 FROM snapshots WHERE snapshot_id < end_snapshot - 25)
+WHERE begin_snapshot NOT IN (SELECT CASE WHEN snapshot_id = 3 THEN NULL ELSE snapshot_id + 5 END FROM snapshots WHERE snapshot_id < end_snapshot - 25)
 ----
 
 query I nosort exists_and_not_exists
@@ -44,8 +44,21 @@ WHERE EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id = begin_snapshot)
 AND NOT EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id >= end_snapshot - 1 AND snapshot_id < end_snapshot)
 ----
 
+# only equality conditions let the deliminator drop the domain of an ANTI join
 statement ok
-PRAGMA disable_optimizer
+CREATE TABLE o AS SELECT 2 AS v
+
+statement ok
+CREATE TABLE i AS SELECT 1 AS v
+
+query I
+SELECT count(*) FROM o WHERE NOT EXISTS (SELECT 1 FROM (SELECT i.v FROM i WHERE i.v <> o.v) q WHERE q.v <> o.v)
+----
+0
+
+# the delim join stays a delim join without the rewrite into a CTE
+statement ok
+SET delim_join_as_cte = false
 
 query I
 SELECT list(file_id ORDER BY file_id) FROM files
@@ -60,7 +73,7 @@ FROM files WHERE file_id >= 198 ORDER BY file_id
 
 query I nosort not_in
 SELECT list(file_id ORDER BY file_id) FROM files
-WHERE begin_snapshot NOT IN (SELECT snapshot_id + 5 FROM snapshots WHERE snapshot_id < end_snapshot - 25)
+WHERE begin_snapshot NOT IN (SELECT CASE WHEN snapshot_id = 3 THEN NULL ELSE snapshot_id + 5 END FROM snapshots WHERE snapshot_id < end_snapshot - 25)
 ----
 
 query I nosort exists_and_not_exists
