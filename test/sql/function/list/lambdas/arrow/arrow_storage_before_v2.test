@@ -29,6 +29,7 @@ CREATE VIEW v20.v AS SELECT list_transform([1, 2], x -> x + 1) AS r
 statement ok
 DETACH v20
 
+# the default setting binds stored arrows with a warning
 statement ok
 RESET lambda_syntax
 
@@ -53,6 +54,20 @@ SELECT count(*) > 0 FROM duckdb_logs WHERE log_level = 'WARNING' AND starts_with
 ----
 true
 
+# the lambda keyword does not warn
+statement ok
+CALL truncate_duckdb_logs()
+
+query I
+SELECT list_transform([1, 2], lambda x: x + 1)
+----
+[2, 3]
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE log_level = 'WARNING' AND starts_with(message, 'Deprecated lambda arrow')
+----
+0
+
 # new SQL still rejects the arrow
 statement error
 SELECT list_transform([1, 2], x -> x + 1)
@@ -73,13 +88,32 @@ SELECT r FROM v20.v
 ----
 Deprecated lambda arrow (->) detected
 
+# the new syntax only binds stored arrows, without a warning
 statement ok
 SET lambda_syntax = 'DISABLE_SINGLE_ARROW'
+
+statement ok
+CALL truncate_duckdb_logs()
 
 query I
 SELECT r FROM v15.v
 ----
 [2, 3]
+
+query I
+SELECT v15.m([10, 20])
+----
+[11, 22]
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE log_level = 'WARNING' AND starts_with(message, 'Deprecated lambda arrow')
+----
+0
+
+statement error
+SELECT list_transform([1, 2], x -> x + 1)
+----
+Deprecated lambda arrow (->) detected
 
 # arrow lambdas replayed from the WAL
 statement ok
