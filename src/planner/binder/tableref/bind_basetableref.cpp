@@ -62,8 +62,8 @@ BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTable
 
 	// Then the database-wide ones, including the built-in file scans
 	if (!replacement_function) {
-		for (const auto &scan : DBConfig::GetConfig(context).replacement_scans) {
-			if (auto result = scan.function(context, input, scan.data.get())) {
+		for (const auto &scan : DBConfig::GetConfig(context).replacement_scans.Snapshot()) {
+			if (auto result = scan->function(context, input, scan->data.get())) {
 				replacement_function = std::move(result);
 				break;
 			}
