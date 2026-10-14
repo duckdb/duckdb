@@ -277,7 +277,7 @@ void TableFunctionFileReader::SetScanState(GlobalTableFunctionState &gstate) {
 }
 
 void TableFunctionFileReader::InitializeFunctionState(ClientContext &context) {
-	std::call_once(initialize_once, [&] {
+	CallOnce(initialize_once, [&] {
 		if (!function.init_global) {
 			return;
 		}
@@ -336,6 +336,16 @@ bool TableFunctionFileReader::TryInitializeScan(ClientContext &context, GlobalTa
 		return settings.claim_batch(context, input);
 	}
 	return true;
+}
+
+void TableFunctionFileReader::PrepareScan(ClientContext &context, GlobalTableFunctionState &,
+                                          LocalTableFunctionState &lstate_p) {
+	if (!settings.prepare_batch) {
+		return;
+	}
+	auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();
+	TableFunctionInput input(bind_data.get(), lstate.local_state.get(), global_state.get());
+	settings.prepare_batch(context, input);
 }
 
 AsyncResult TableFunctionFileReader::ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
