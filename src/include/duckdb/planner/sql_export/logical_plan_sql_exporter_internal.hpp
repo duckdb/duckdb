@@ -24,6 +24,8 @@ class LogicalComparisonJoin;
 class LogicalColumnDataGet;
 class LogicalGet;
 class LogicalExpressionGet;
+class LogicalCopyToFile;
+class LogicalCreateTable;
 class LogicalFilter;
 class LogicalProjection;
 class LogicalSecureView;
@@ -105,6 +107,19 @@ struct LogicalPlanSQLExportHelpers {
 
 	static bool IsIdentityProjection(const LogicalProjection &projection,
 	                                 const vector<LogicalPlanSQLExportField> &fields);
+
+	//! Alias the relation's visible columns with the statement's output names.
+	static LogicalPlanSQLExportResult ApplyOutputNames(LogicalPlanSQLExportResult result,
+	                                                   const vector<Identifier> &output_names);
+};
+
+//! Export of write statements with a query source (sql_export_statements.cpp)
+struct SQLExportStatementHelpers {
+	static LogicalPlanSQLExportResult ExportCopyToNode(LogicalCopyToFile &op, LogicalPlanSQLExportContext &context,
+	                                                   const LogicalPlanVerificationPath &path);
+	static LogicalPlanSQLExportResult ExportCreateTableAsNode(LogicalCreateTable &op,
+	                                                          LogicalPlanSQLExportContext &context,
+	                                                          const LogicalPlanVerificationPath &path);
 };
 
 //! Export of data-modifying plan roots and CTE bodies (sql_export_dml.cpp)

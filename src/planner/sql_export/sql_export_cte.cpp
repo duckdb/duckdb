@@ -71,6 +71,12 @@ LogicalPlanSQLExportResult LogicalMaterializedCTE::ToSQL(LogicalPlanSQLExportCon
 		// a data-modifying statement cannot be wrapped in a SELECT: it carries this CTE itself,
 		// in front of the definitions its export already collected
 		auto relation = std::move(consumer.GetValue().relation);
+		if (relation.query->type == QueryNodeType::COPY_QUERY_NODE ||
+		    relation.query->type == QueryNodeType::STATEMENT_NODE) {
+			// the generated text of these nodes cannot carry a WITH clause
+			return LogicalPlanSQLExportResult::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
+			    path, "cte_statement_consumer", "The statement cannot carry the CTE definitions it consumes")});
+		}
 		if (relation.fields.size() != fields.GetValue().size()) {
 			return LogicalPlanSQLExportResult::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
 			    path, "cte_dml_consumer", "The data-modifying CTE consumer does not forward the CTE's columns")});

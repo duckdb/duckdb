@@ -95,8 +95,8 @@ static LogicalPlanSQLExportResult EnsureSQLProjection(LogicalPlanSQLExportResult
 	return result;
 }
 
-static LogicalPlanSQLExportResult ApplyOutputNames(LogicalPlanSQLExportResult result,
-                                                   const vector<Identifier> &output_names) {
+LogicalPlanSQLExportResult LogicalPlanSQLExportHelpers::ApplyOutputNames(LogicalPlanSQLExportResult result,
+                                                                         const vector<Identifier> &output_names) {
 	if (result.HasError()) {
 		return result;
 	}
@@ -346,7 +346,7 @@ LogicalPlanSQLExporter::Export(ClientContext &context, LogicalOperator &root,
 	if (!options.output_names) {
 		return result;
 	}
-	return ApplyOutputNames(std::move(result), *options.output_names);
+	return LogicalPlanSQLExportHelpers::ApplyOutputNames(std::move(result), *options.output_names);
 }
 
 LogicalPlanSQLExportResult
@@ -441,7 +441,9 @@ LogicalPlanSQLExporter::ExportWithSources(ClientContext &context, LogicalOperato
 		               captured->GetIdentifierName());
 	}
 	auto success = LogicalPlanSQLExportResult::Success(std::move(result));
-	return options.output_names ? ApplyOutputNames(std::move(success), *options.output_names) : std::move(success);
+	return options.output_names
+	           ? LogicalPlanSQLExportHelpers::ApplyOutputNames(std::move(success), *options.output_names)
+	           : std::move(success);
 }
 
 } // namespace duckdb
