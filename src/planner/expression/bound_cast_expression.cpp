@@ -168,6 +168,21 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 	if (source_type.IsNested() || target_type.IsNested()) {
 		return NestedCastIsInvertible(source_type, target_type);
 	}
+	if (source_type.id() == LogicalTypeId::ENUM && target_type.id() == LogicalTypeId::ENUM) {
+		// the cast is only invertible if all source values exist in the target in the same relative order
+		auto &source_values = EnumType::GetValuesInsertOrder(source_type);
+		auto source_data = FlatVector::GetData<string_t>(source_values);
+		auto source_size = EnumType::GetSize(source_type);
+		int64_t previous_position = -1;
+		for (idx_t i = 0; i < source_size; i++) {
+			auto position = NumericCast<int64_t>(EnumType::GetPos(target_type, source_data[i]));
+			if (position < 0 || position <= previous_position) {
+				return false;
+			}
+			previous_position = position;
+		}
+		return true;
+	}
 	if (source_type.id() == LogicalTypeId::DECIMAL || target_type.id() == LogicalTypeId::DECIMAL) {
 		uint8_t source_width, target_width;
 		uint8_t source_scale, target_scale;
