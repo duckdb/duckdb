@@ -457,6 +457,12 @@ public:
 	//! The number of active local states
 	atomic<idx_t> active_local_states;
 
+	//! The memory available to the hash table: the reservation minus what partitioning the probe side requires
+	idx_t GetMaxExternalHTSize() const {
+		const auto reservation = temporary_memory_state->GetReservation();
+		return reservation > probe_side_requirement ? reservation - probe_side_requirement : 0;
+	}
+
 	//! Whether we are doing an external + some sizes
 	bool external;
 	idx_t total_size;
@@ -1323,9 +1329,7 @@ public:
 		                                                   sink.probe_side_requirement);
 		sink.temporary_memory_state->UpdateReservation(executor.context);
 
-		D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
-		sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
-		                                         sink.probe_side_requirement);
+		sink.hash_table->PrepareExternalFinalize(sink.GetMaxExternalHTSize());
 		sink.ScheduleFinalize(*pipeline, *this);
 	}
 };
@@ -1913,10 +1917,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		    (max_partition_ht_size + sink.probe_side_requirement) > sink.temporary_memory_state->GetReservation()) {
 			// We have to repartition
 			const auto radix_bits_before = ht.GetRadixBits();
-			const auto reservation = sink.temporary_memory_state->GetReservation();
-			const auto max_ht_size =
-			    reservation > sink.probe_side_requirement ? reservation - sink.probe_side_requirement : 0;
-			ht.SetRepartitionRadixBits(max_ht_size, sink.max_partition_size, sink.max_partition_count);
+			ht.SetRepartitionRadixBits(sink.GetMaxExternalHTSize(), sink.max_partition_size, sink.max_partition_count);
 			DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalHashJoin", "Repartition",
 			           {{"partitions_before", to_string(RadixPartitioning::NumberOfPartitions(radix_bits_before))},
 			            {"partitions_after", to_string(RadixPartitioning::NumberOfPartitions(ht.GetRadixBits()))}});
@@ -1935,9 +1936,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 				                                 sink.global_filter_state.get());
 			}
 			ht.PrepareBloomFilterForFinalize();
-			D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
-			sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
-			                                         sink.probe_side_requirement);
+			sink.hash_table->PrepareExternalFinalize(sink.GetMaxExternalHTSize());
 			sink.ScheduleFinalize(pipeline, event);
 		}
 		sink.finalized = true;
@@ -2438,9 +2437,7 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	                                                                                    sink.probe_side_requirement);
 
 	// Try to put the next partitions in the block collection of the HT
-	D_ASSERT(!sink.external || sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
-	if (!sink.external ||
-	    !ht.PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() - sink.probe_side_requirement)) {
+	if (!sink.external || !ht.PrepareExternalFinalize(sink.GetMaxExternalHTSize())) {
 		global_stage = HashJoinSourceStage::DONE;
 		sink.temporary_memory_state->SetZero();
 		return;
