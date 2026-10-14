@@ -2,6 +2,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/function/function_set.hpp"
 
@@ -42,6 +43,9 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunc
 		}
 	} else {
 		db = db_manager.GetDatabase(context, DatabaseManager::GetDefaultDatabase(context));
+	}
+	if (!db->HasStorageManager()) {
+		throw BinderException("Cannot checkpoint database \"%s\": it does not have storage", db->GetName());
 	}
 	return make_uniq<CheckpointBindData>(db);
 }
