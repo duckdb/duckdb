@@ -602,11 +602,14 @@ static unique_ptr<ParsedExpression> FoldConjunctionExpression(PEGTransformer &tr
 	if (!tails) {
 		return expr;
 	}
-	auto depth_guard = transformer.StackCheck(tails->size());
+	auto depth_guard = transformer.StackCheck(1);
+	vector<unique_ptr<ParsedExpression>> children;
+	children.reserve(tails->size() + 1);
+	children.push_back(std::move(expr));
 	for (auto &tail : *tails) {
-		expr = make_uniq<ConjunctionExpression>(conjunction_type, std::move(expr), std::move(tail));
+		children.push_back(std::move(tail));
 	}
-	return expr;
+	return make_uniq<ConjunctionExpression>(conjunction_type, std::move(children));
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalOrExpression(
@@ -709,6 +712,13 @@ static unique_ptr<ParsedExpression> ApplyIsTest(unique_ptr<ParsedExpression> exp
 	                        ExpressionClassToString(is_expr->GetExpressionClass()));
 }
 
+static unique_ptr<ParsedExpression> ApplyCastOperator(unique_ptr<ParsedExpression> expr,
+                                                      unique_ptr<ParsedExpression> cast_operator) {
+	auto cast_expr = unique_ptr_cast<ParsedExpression, CastExpression>(std::move(cast_operator));
+	cast_expr->ChildMutable() = std::move(expr);
+	return std::move(cast_expr);
+}
+
 static unique_ptr<ParsedExpression> ApplyIsDistinctFromTail(unique_ptr<ParsedExpression> expr,
                                                             IsDistinctFromTail tail) {
 	return make_uniq<ComparisonExpression>(tail.comparison_type, std::move(expr), std::move(tail.expression));
@@ -749,6 +759,9 @@ PEGTransformerFactory::TransformIsExpression(PEGTransformer &transformer,
 			expr = TransformInfixOtherOperatorExpression(transformer, std::move(expr), std::move(other_tail));
 			break;
 		}
+		case ExpressionTailType::CAST:
+			expr = ApplyCastOperator(std::move(expr), std::move(tail.cast));
+			break;
 		}
 		previous_type = tail.type;
 	}
@@ -797,6 +810,14 @@ IsExpressionTail PEGTransformerFactory::TransformIsOtherOperatorTail(PEGTransfor
 	IsExpressionTail result;
 	result.type = ExpressionTailType::OTHER_OPERATOR;
 	result.other = std::move(other_operator_tail);
+	return result;
+}
+
+IsExpressionTail PEGTransformerFactory::TransformIsCastTail(PEGTransformer &transformer,
+                                                            unique_ptr<ParsedExpression> cast_operator) {
+	IsExpressionTail result;
+	result.type = ExpressionTailType::CAST;
+	result.cast = std::move(cast_operator);
 	return result;
 }
 
@@ -1124,7 +1145,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeExpres
 	if (!in_predicate && !between_like_op) {
 		return expr;
 	}
-	auto predicate_count = in_predicate ? in_predicate->size() : 0;
+	idx_t predicate_count = 0;
+	if (in_predicate) {
+		for (auto &predicate : *in_predicate) {
+			predicate_count += 1 + predicate.casts.size();
+		}
+	}
 	if (between_like_op) {
 		predicate_count++;
 	}
@@ -1132,6 +1158,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeExpres
 	if (in_predicate) {
 		for (auto &predicate : *in_predicate) {
 			expr = ApplyBetweenInLikeOperator(std::move(expr), predicate);
+			for (auto &cast : predicate.casts) {
+				expr = ApplyCastOperator(std::move(expr), std::move(cast));
+			}
 		}
 	}
 	if (between_like_op) {
@@ -1140,9 +1169,15 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeExpres
 	return expr;
 }
 
-BetweenInLikeOperator PEGTransformerFactory::TransformInPredicate(PEGTransformer &transformer, const bool &has_result,
-                                                                  unique_ptr<ParsedExpression> in_clause) {
-	return {has_result, std::move(in_clause)};
+BetweenInLikeOperator
+PEGTransformerFactory::TransformInPredicate(PEGTransformer &transformer, const bool &has_result,
+                                            unique_ptr<ParsedExpression> in_clause,
+                                            optional<vector<unique_ptr<ParsedExpression>>> cast_operator) {
+	BetweenInLikeOperator result {has_result, std::move(in_clause)};
+	if (cast_operator) {
+		result.casts = std::move(*cast_operator);
+	}
+	return result;
 }
 
 BetweenInLikeOperator

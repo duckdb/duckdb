@@ -2280,19 +2280,20 @@ const StringUtil::EnumStringLiteral *GetExpressionTailTypeValues() {
 		{ static_cast<uint32_t>(ExpressionTailType::IS_TEST), "IS_TEST" },
 		{ static_cast<uint32_t>(ExpressionTailType::DISTINCT), "DISTINCT" },
 		{ static_cast<uint32_t>(ExpressionTailType::COMPARISON), "COMPARISON" },
-		{ static_cast<uint32_t>(ExpressionTailType::OTHER_OPERATOR), "OTHER_OPERATOR" }
+		{ static_cast<uint32_t>(ExpressionTailType::OTHER_OPERATOR), "OTHER_OPERATOR" },
+		{ static_cast<uint32_t>(ExpressionTailType::CAST), "CAST" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ExpressionTailType>(ExpressionTailType value) {
-	return StringUtil::EnumToString(GetExpressionTailTypeValues(), 4, "ExpressionTailType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExpressionTailTypeValues(), 5, "ExpressionTailType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExpressionTailType EnumUtil::FromString<ExpressionTailType>(const char *value) {
-	return static_cast<ExpressionTailType>(StringUtil::StringToEnum(GetExpressionTailTypeValues(), 4, "ExpressionTailType", value));
+	return static_cast<ExpressionTailType>(StringUtil::StringToEnum(GetExpressionTailTypeValues(), 5, "ExpressionTailType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExpressionTypeValues() {

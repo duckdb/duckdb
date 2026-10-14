@@ -1722,6 +1722,8 @@ static const TransformFrameOps IS_COMPARISON_TAIL_OPS = {"IsComparisonTail",
 static const TransformFrameOps IS_OTHER_OPERATOR_TAIL_OPS = {
     "IsOtherOperatorTail", &PEGTransformerFactory::InitializeIsOtherOperatorTailTrampoline,
     &PEGTransformerFactory::FinalizeIsOtherOperatorTailTrampoline};
+static const TransformFrameOps IS_CAST_TAIL_OPS = {"IsCastTail", &PEGTransformerFactory::InitializeIsCastTailTrampoline,
+                                                   &PEGTransformerFactory::FinalizeIsCastTailTrampoline};
 static const TransformFrameOps IS_TEST_OPS = {"IsTest", &PEGTransformerFactory::InitializeIsTestTrampoline,
                                               &PEGTransformerFactory::FinalizeIsTestTrampoline};
 static const TransformFrameOps IS_LITERAL_OPS = {"IsLiteral", &PEGTransformerFactory::InitializeIsLiteralTrampoline,
@@ -3685,6 +3687,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"IsDistinctTail", &IS_DISTINCT_TAIL_OPS},
 	    {"IsComparisonTail", &IS_COMPARISON_TAIL_OPS},
 	    {"IsOtherOperatorTail", &IS_OTHER_OPERATOR_TAIL_OPS},
+	    {"IsCastTail", &IS_CAST_TAIL_OPS},
 	    {"IsTest", &IS_TEST_OPS},
 	    {"IsLiteral", &IS_LITERAL_OPS},
 	    {"IsLiteralValue", &IS_LITERAL_VALUE_OPS},
@@ -12446,7 +12449,13 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDropTableTrampoli
 void PEGTransformerFactory::InitializeDropTableFunctionTrampoline(PEGTransformer &transformer,
                                                                   GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(2);
+	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	auto dynamic_child_count = list_items.size();
+	process.ReserveChildSlots(3 + dynamic_child_count - 1);
+	for (idx_t i = list_items.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		process.PushChild({transformer.GetRule("QualifiedTableFunction"), list_items[child_idx].get()}, 2 + child_idx);
+	}
 	auto &if_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (if_exists_opt.HasResult()) {
 		process.PushChild({transformer.GetRule("IfExists"), if_exists_opt.GetResult()}, 1);
@@ -12458,17 +12467,18 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeDropTableFunctionTrampoline(PEGTransformer &transformer,
                                                            GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	auto dynamic_child_count = dynamic_list_items.size();
 	auto comment_macro_table = process.TakeResult<CatalogType>(0);
 	optional<bool> if_exists {};
 	if (process.child_results[1]) {
 		if_exists = process.TakeResult<bool>(1);
 	}
-	vector<Identifier> table_function_name;
-	auto table_function_name_items = ExtractParseResultsFromList(list_pr.GetChild(2));
-	for (auto &table_function_name_item : table_function_name_items) {
-		table_function_name.push_back(table_function_name_item.get().Cast<IdentifierParseResult>().identifier);
+	vector<QualifiedName> qualified_table_function;
+	for (idx_t i = 2; i < 2 + dynamic_child_count; i++) {
+		qualified_table_function.push_back(process.TakeResult<QualifiedName>(i));
 	}
-	auto result = TransformDropTableFunction(transformer, comment_macro_table, if_exists, table_function_name);
+	auto result = TransformDropTableFunction(transformer, comment_macro_table, if_exists, qualified_table_function);
 	return transformer.MakeResult<unique_ptr<DropStatement>>(std::move(result));
 }
 
@@ -16036,6 +16046,20 @@ PEGTransformerFactory::FinalizeIsOtherOperatorTailTrampoline(PEGTransformer &tra
 	return transformer.MakeResult<IsExpressionTail>(std::move(result));
 }
 
+void PEGTransformerFactory::InitializeIsCastTailTrampoline(PEGTransformer &transformer,
+                                                           GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("CastOperator"), list_pr.GetChild(0)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeIsCastTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto cast_operator = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	auto result = TransformIsCastTail(transformer, std::move(cast_operator));
+	return transformer.MakeResult<IsExpressionTail>(std::move(result));
+}
+
 void PEGTransformerFactory::InitializeIsTestTrampoline(PEGTransformer &transformer,
                                                        GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
@@ -16512,18 +16536,46 @@ PEGTransformerFactory::FinalizeBetweenInLikeExpressionTrampoline(PEGTransformer 
 void PEGTransformerFactory::InitializeInPredicateTrampoline(PEGTransformer &transformer,
                                                             GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(1);
+	auto &repeat_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	idx_t dynamic_child_count = 0;
+	if (repeat_opt.HasResult()) {
+		auto &repeat_pr = repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto repeat_children = repeat_pr.GetChildren();
+		dynamic_child_count = repeat_children.size();
+		process.ReserveChildSlots(2 + dynamic_child_count - 1);
+		for (idx_t i = repeat_children.size(); i > 0; i--) {
+			auto child_idx = i - 1;
+			process.PushChild({transformer.GetRule("CastOperator"), repeat_children[child_idx].get()}, 1 + child_idx);
+		}
+	} else {
+		process.ReserveChildSlots(2 - 1);
+	}
 	process.PushChild({transformer.GetRule("InClause"), list_pr.GetChild(1)}, 0);
 }
 
 arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeInPredicateTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	idx_t dynamic_child_count = 0;
+	auto &dynamic_repeat_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (dynamic_repeat_opt.HasResult()) {
+		auto &dynamic_repeat_pr = dynamic_repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
+		dynamic_child_count = dynamic_repeat_children.size();
+	}
 	bool has_result {};
 	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
 	has_result = has_result_opt.HasResult();
 	auto in_clause = process.TakeResult<unique_ptr<ParsedExpression>>(0);
-	auto result = TransformInPredicate(transformer, has_result, std::move(in_clause));
+	optional<vector<unique_ptr<ParsedExpression>>> cast_operator {};
+	if (dynamic_child_count > 0) {
+		vector<unique_ptr<ParsedExpression>> cast_operator_value;
+		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
+			cast_operator_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
+		}
+		cast_operator = std::move(cast_operator_value);
+	}
+	auto result = TransformInPredicate(transformer, has_result, std::move(in_clause), std::move(cast_operator));
 	return transformer.MakeResult<BetweenInLikeOperator>(std::move(result));
 }
 

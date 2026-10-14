@@ -17,6 +17,7 @@ struct ComparisonExpressionTail {
 struct BetweenInLikeOperator {
 	bool has_not = false;
 	unique_ptr<ParsedExpression> expression;
+	vector<unique_ptr<ParsedExpression>> casts;
 };
 
 struct ParsedOperator {
@@ -30,7 +31,7 @@ struct OtherOperatorTail {
 	unique_ptr<ParsedExpression> expression;
 };
 
-enum class ExpressionTailType : uint8_t { IS_TEST, DISTINCT, COMPARISON, OTHER_OPERATOR };
+enum class ExpressionTailType : uint8_t { IS_TEST, DISTINCT, COMPARISON, OTHER_OPERATOR, CAST };
 
 struct IsExpressionTail {
 	ExpressionTailType type = ExpressionTailType::IS_TEST;
@@ -38,6 +39,7 @@ struct IsExpressionTail {
 	IsDistinctFromTail distinct;
 	ComparisonExpressionTail comparison;
 	OtherOperatorTail other;
+	unique_ptr<ParsedExpression> cast;
 };
 
 struct BinaryExpressionTail {

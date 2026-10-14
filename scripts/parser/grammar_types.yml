@@ -1674,6 +1674,9 @@ overrides:
   IsOtherOperatorTail:
     type: "IsExpressionTail"
     by_value: true
+  IsCastTail:
+    type: "IsExpressionTail"
+    by_value: true
   BetweenLikeOp:
     type: "BetweenInLikeOperator"
     by_value: true
@@ -1864,8 +1867,6 @@ expression_depth_nesting_rules:
 
 expression_depth_chain_rules:
   - LambdaArrowExpression
-  - LogicalOrExpression
-  - LogicalAndExpression
   - NotExpression
   - IsExpressionContinuation
   - IsDistinctFromExpression
