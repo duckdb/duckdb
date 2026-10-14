@@ -1142,7 +1142,12 @@ void ClientContext::Interrupt() {
 }
 
 bool ClientContext::IsInterrupted() const {
-	return interrupt_state.load(std::memory_order_relaxed) == ClientInterruptState::INTERRUPTED;
+	auto state = interrupt_state.load(std::memory_order_relaxed);
+	if (state == ClientInterruptState::INTERRUPTS_SUPPRESSED) {
+		return false;
+	}
+	// an internal connection is also interrupted when its base client is
+	return state == ClientInterruptState::INTERRUPTED || (base_context && base_context->IsInterrupted());
 }
 
 void ClientContext::ClearInterrupt() {
@@ -1158,7 +1163,7 @@ void ClientContext::InterruptCheck() const {
 	static constexpr uint32_t TIMEOUT_CHECK_INTERVAL = 256;
 	thread_local uint32_t timeout_check_counter = 0;
 
-	if (interrupt_state.load(std::memory_order_relaxed) == ClientInterruptState::INTERRUPTED) {
+	if (IsInterrupted()) {
 		throw InterruptException();
 	}
 	// Only check timeout every N calls to avoid expensive steady_clock::now() syscall

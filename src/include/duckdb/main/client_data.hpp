@@ -59,9 +59,6 @@ public:
 	//! DEPRECATED: Now, queries are written to the generic log.
 	unique_ptr<BufferedFileWriter> log_query_writer;
 
-	//! The nesting depth of external resource callbacks running on this (internal) connection
-	idx_t external_resource_callback_depth = 0;
-
 public:
 	DUCKDB_API static ClientData &Get(ClientContext &context);
 	DUCKDB_API static const ClientData &Get(const ClientContext &context);

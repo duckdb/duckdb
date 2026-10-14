@@ -123,6 +123,12 @@ public:
 	atomic<ClientInterruptState> interrupt_state {ClientInterruptState::NOT_INTERRUPTED};
 	//! The deadline for the current query (milliseconds since epoch)
 	optional_idx query_deadline;
+	//! For an internal connection created on behalf of another client: the outermost client, whose interrupts apply
+	shared_ptr<ClientContext> base_context;
+	//! The number of internal connections between this client and its base client (0 for a base client)
+	idx_t internal_depth = 0;
+	//! For an internal connection: the deadline of the creating client's query, which bounds this client's queries
+	optional_idx base_deadline;
 	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
 	unique_ptr<RegisteredStateManager> registered_state;
 	//! The logger to be used by this ClientContext
