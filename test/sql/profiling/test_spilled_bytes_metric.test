@@ -6,6 +6,8 @@ require json
 
 require no_vector_verification
 
+require vector_size 2048
+
 # Force spilling: a small memory limit plus a large sort that exceeds it, with a
 # temporary directory to spill into. A single thread with insertion order not
 # preserved keeps the sort's working set within the limit so it spills to disk

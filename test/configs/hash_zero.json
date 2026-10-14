@@ -35,6 +35,12 @@
         "test/optimizer/joins/left_join_reordering/left_join_cardinality_estimation.test",
         "test/optimizer/deliminator.test",
         "test/sql/cte/materialized/test_materialized_cte.test",
+        "test/sql/cte/materialized/materialized_cte_parallel_buffered.test",
+        "test/sql/cte/materialized/test_cte_hash_join_exchange.test",
+        "test/sql/cte/recursive_cte_invariant_build_logging.test",
+        "test/sql/cte/recursive_cte_key_probe.test",
+        "test/sql/cte/recursive_cte_logging.test",
+        "test/sql/cte/recursive_cte_parallel_union_distinct_sink.test",
         "test/sql/optimizer/monotone_preimage.test",
         "test/sql/storage/test_eviction_queue_dead_nodes_underflow.test",
         "test/sql/copy/parquet/parquet_prefetch_tracked_memory.test",
@@ -62,7 +68,18 @@
         "test/sql/types/geo/geometry_shred_empty.test",
         "test/sql/types/geo/geometry_shred_limit.test",
         "test/sql/types/geo/geometry_shred_checkpoint.test",
-        "test/optimizer/joins/denominator_cardinality_estimation.test"
+        "test/optimizer/joins/denominator_cardinality_estimation.test",
+        "test/sql/optimizer/secure_view_statistics.test",
+        "test/sql/alter/add_col/test_add_col_distinct_stats.test",
+        "test/sql/alter/alter_type/alter_type_distinct_stats.test",
+        "test/issues/general/test_24049.test",
+        "test/optimizer/joins/fkpk_composite_key_ce.test",
+        "test/optimizer/partitioned_execution_coverage.test",
+        "test/optimizer/projection_placement.test",
+        "test/optimizer/statistics/statistics_count_not_null_pruning.test",
+        "test/sql/sql_export/aggregate_topn_rewrites.test",
+        "test/sql/aggregate/aggregate_state_export/approx_count_distinct_export_state.test",
+        "test/optimizer/pushdown/cte_domain_join_filter.test"
       ]
     },
     {
@@ -71,8 +88,17 @@
         "test/sql/function/generic/hash_func.test",
         "test/sql/copy/file_size_bytes.test",
         "test/sql/copy/parquet/parquet_prefetch_projection.test",
+        "test/sql/copy/parquet/parquet_prefetch_shared_column_chunks.test",
         "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
-        "test/sql/copy/return_stats_extra_info.test"
+        "test/sql/copy/return_stats_extra_info.test",
+        "test/sql/timezone/test_icu_calendar_chinese.test",
+        "test/sql/timezone/test_icu_calendar_hebrew.test",
+        "test/sql/timezone/test_icu_calendar_islamic.test",
+        "test/sql/timezone/test_icu_calendar_islamic_observed.test",
+        "test/sql/timezone/test_icu_calendar_japanese.test",
+        "test/sql/timezone/test_icu_datetime_sweep.test",
+        "test/sql/optimizer/constant_function_zonemap_pruning.test",
+        "test/sql/sql_export/call_values.test"
       ]
     }
   ]

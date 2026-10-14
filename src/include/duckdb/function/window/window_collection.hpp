@@ -9,9 +9,13 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/once_flag.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+
+#include <exception>
 
 namespace duckdb {
 
@@ -38,7 +42,7 @@ public:
 
 	//! Update a thread-local collection for appending data to a given row
 	void GetCollection(idx_t row_idx, ColumnDataCollectionSpec &spec);
-	//! Single-threaded, idempotent ordered combining of all the appended data.
+	//! Combine once in order after all appends have finished.
 	void Combine(const ColumnSet &build_validity);
 
 	//! The collection data. May be null if the column count is 0.
@@ -62,6 +66,14 @@ public:
 	//! The (sorted) collection ranges
 	using Range = pair<idx_t, idx_t>;
 	vector<Range> ranges;
+
+private:
+	void CombineInternal(const ColumnSet &validity_cols);
+
+private:
+	OnceFlag combine_once;
+	//! Combining consumes its inputs, so failures must be shared rather than retried.
+	std::exception_ptr combine_error;
 };
 
 class WindowBuilder {
