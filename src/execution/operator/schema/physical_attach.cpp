@@ -1,8 +1,10 @@
 #include "duckdb/execution/operator/schema/physical_attach.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/execution/operator/helper/launch_external_resource.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -13,6 +15,27 @@
 #include "duckdb/main/database_path_and_type.hpp"
 
 namespace duckdb {
+
+//! Warn when a DuckLake metadata catalog is attached as a plain DuckDB database
+static void WarnIfDuckLakeMetadata(ClientContext &context, AttachedDatabase &attached_db, const string &path) {
+	auto &catalog = attached_db.GetCatalog();
+	if (!catalog.IsDuckCatalog()) {
+		return;
+	}
+	auto default_schema = catalog.GetDefaultSchema();
+	if (!default_schema) {
+		return;
+	}
+	QualifiedName metadata_table(catalog.GetName(), *default_schema, Identifier("ducklake_metadata"));
+	if (!Catalog::GetEntry<TableCatalogEntry>(context, metadata_table, OnEntryNotFound::RETURN_NULL)) {
+		return;
+	}
+	DUCKDB_LOG_WARNING(context,
+	                   "\"%s\" is a DuckLake metadata catalog, attached as a DuckDB database: only the DuckLake "
+	                   "metadata tables are visible. Use \"ATTACH 'ducklake:%s'\" to attach the DuckLake, or "
+	                   "\"(TYPE duckdb)\" to attach the metadata catalog without this warning.",
+	                   path, path);
+}
 
 //===--------------------------------------------------------------------===//
 // Source
@@ -89,9 +112,15 @@ SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, Data
 			name = Identifier(AttachedDatabase::ExtractDatabaseName(path, fs));
 		}
 
+		// an explicit TYPE duckdb or a hidden attach (e.g. by DuckLake itself) opens the metadata on purpose
+		bool warn_ducklake_metadata = options.db_type.empty() && options.visibility == AttachVisibility::SHOWN;
+
 		// check ATTACH IF NOT EXISTS
 		auto &db_manager = DatabaseManager::Get(context.client);
-		db_manager.AttachDatabase(context.client, *attach_info, options);
+		auto attached_db = db_manager.AttachDatabase(context.client, *attach_info, options);
+		if (warn_ducklake_metadata) {
+			WarnIfDuckLakeMetadata(context.client, *attached_db, path);
+		}
 	} catch (...) {
 		// Compensating teardown (best-effort): a resource we just PROVISIONED has nothing owning it yet.
 		// A borrowed (referenced) resource is never torn down here.
