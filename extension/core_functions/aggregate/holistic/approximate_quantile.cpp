@@ -38,6 +38,22 @@ struct ApproxQuantileCoding {
 		}
 		return false;
 	}
+
+	template <typename SAVE_TYPE, typename TARGET_TYPE>
+	static void Decode(const SAVE_TYPE &source, TARGET_TYPE &target, const LogicalType &type) {
+		Decode(source, target);
+		if (type.id() != LogicalTypeId::DECIMAL) {
+			return;
+		}
+		// The unscaled decimal range can be narrower than its physical integer range.
+		const auto limit = Hugeint::POWERS_OF_TEN[DecimalType::GetWidth(type)] - 1;
+		const auto value = Cast::Operation<TARGET_TYPE, hugeint_t>(target);
+		if (value > limit) {
+			target = Cast::Operation<hugeint_t, TARGET_TYPE>(limit);
+		} else if (value < -limit) {
+			target = Cast::Operation<hugeint_t, TARGET_TYPE>(-limit);
+		}
+	}
 };
 
 template <>
@@ -159,7 +175,7 @@ struct ApproxQuantileScalarOperation : public ApproxQuantileOperation {
 		auto &bind_data = finalize_data.input.bind_data->template Cast<ApproximateQuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto source = state.h->quantile(bind_data.quantiles[0]);
-		ApproxQuantileCoding::Decode(source, target);
+		ApproxQuantileCoding::Decode(source, target, finalize_data.result.GetType());
 	}
 };
 
@@ -339,15 +355,12 @@ AggregateFunction GetApproximateQuantileAggregateFunction(const LogicalType &typ
 AggregateFunction GetApproximateQuantileDecimalAggregateFunction(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::INT8:
-		return GetApproximateQuantileAggregateFunction(LogicalType::TINYINT);
 	case PhysicalType::INT16:
-		return GetApproximateQuantileAggregateFunction(LogicalType::SMALLINT);
 	case PhysicalType::INT32:
-		return GetApproximateQuantileAggregateFunction(LogicalType::INTEGER);
 	case PhysicalType::INT64:
-		return GetApproximateQuantileAggregateFunction(LogicalType::BIGINT);
 	case PhysicalType::INT128:
-		return GetApproximateQuantileAggregateFunction(LogicalType::HUGEINT);
+		// keep the DECIMAL type as the input and return type so that the width and scale survive the bind
+		return GetApproximateQuantileAggregateFunction(type);
 	default:
 		throw InternalException("Unimplemented quantile decimal aggregate");
 	}
@@ -461,7 +474,7 @@ struct ApproxQuantileListOperation : public ApproxQuantileOperation {
 			const auto &quantile = bind_data.quantiles[q];
 			const auto &source = state.h->quantile(quantile);
 			auto &target = rdata[ridx + q];
-			ApproxQuantileCoding::Decode(source, target);
+			ApproxQuantileCoding::Decode(source, target, result.GetType());
 		}
 
 		ListVector::SetListSize(finalize_data.result, entry.offset + entry.length);

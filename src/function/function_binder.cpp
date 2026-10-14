@@ -1125,6 +1125,8 @@ static string PushArgumentCollations(ClientContext &context, BoundSimpleFunction
 		return string();
 	case FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS:
 		return PushCollations(context, bound_function, children, CollationType::COMBINABLE_COLLATIONS);
+	case FunctionCollationHandling::PUSH_DISTINCT_COLLATIONS:
+		throw InternalException("PUSH_DISTINCT_COLLATIONS is only supported for aggregate functions");
 	default:
 		throw InternalException("Unrecognized collation handling");
 	}
@@ -1698,6 +1700,15 @@ FunctionBinder::BindAggregateFunction(shared_ptr<const AggregateFunction> functi
                                       vector<unique_ptr<Expression>> children,
                                       vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
                                       unique_ptr<Expression> filter, AggregateType aggr_type) {
+	if (aggr_type == AggregateType::DISTINCT &&
+	    function->GetCollationHandling() == FunctionCollationHandling::PUSH_DISTINCT_COLLATIONS) {
+		for (auto &child : children) {
+			ExpressionBinder::PushCollation(context, child, child->GetReturnType());
+		}
+		for (auto &argument : keyword_args) {
+			ExpressionBinder::PushCollation(context, argument.second, argument.second->GetReturnType());
+		}
+	}
 	auto [bound_function, bind_info] = ResolveFunction(std::move(function), children, keyword_args);
 
 	return make_uniq<BoundAggregateExpression>(std::move(bound_function), std::move(children), std::move(filter),
