@@ -11574,13 +11574,34 @@ PEGTransformerFactory::FinalizeEnumSelectTypeTrampoline(PEGTransformer &transfor
 
 void PEGTransformerFactory::InitializeEnumStringLiteralListTrampoline(PEGTransformer &transformer,
                                                                       GeneratedTransformProcess &process) {
-	process.ReserveChildSlots(0);
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &repeat_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	idx_t dynamic_child_count = 0;
+	if (repeat_opt.HasResult()) {
+		auto &repeat_pr = repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto repeat_children = repeat_pr.GetChildren();
+		dynamic_child_count = repeat_children.size();
+		process.ReserveChildSlots(1 + dynamic_child_count - 1);
+		for (idx_t i = repeat_children.size(); i > 0; i--) {
+			auto child_idx = i - 1;
+			process.PushChild({transformer.GetRule("ArrayBounds"), repeat_children[child_idx].get()}, 0 + child_idx);
+		}
+	} else {
+		process.ReserveChildSlots(1 - 1);
+	}
 }
 
 arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeEnumStringLiteralListTrampoline(PEGTransformer &transformer,
                                                                GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	idx_t dynamic_child_count = 0;
+	auto &dynamic_repeat_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (dynamic_repeat_opt.HasResult()) {
+		auto &dynamic_repeat_pr = dynamic_repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
+		dynamic_child_count = dynamic_repeat_children.size();
+	}
 	optional<vector<string>> string_literal {};
 	auto &string_literal_opt = ExtractResultFromParens(list_pr.GetChild(1)).Cast<OptionalParseResult>();
 	if (string_literal_opt.HasResult()) {
@@ -11592,7 +11613,15 @@ PEGTransformerFactory::FinalizeEnumStringLiteralListTrampoline(PEGTransformer &t
 		}
 		string_literal = std::move(string_literal_value);
 	}
-	auto result = TransformEnumStringLiteralList(transformer, string_literal);
+	optional<vector<int64_t>> array_bounds {};
+	if (dynamic_child_count > 0) {
+		vector<int64_t> array_bounds_value;
+		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+			array_bounds_value.push_back(process.TakeResult<int64_t>(i));
+		}
+		array_bounds = std::move(array_bounds_value);
+	}
+	auto result = TransformEnumStringLiteralList(transformer, string_literal, array_bounds);
 	return transformer.MakeResult<unique_ptr<CreateTypeInfo>>(std::move(result));
 }
 
