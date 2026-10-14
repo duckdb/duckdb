@@ -1,0 +1,67 @@
+# name: test/sql/copy/parquet/bloom_filter_blob.test
+# description: Bloom filter lookups on BLOB / FIXED_LEN_BYTE_ARRAY columns must hash the raw bytes of the constant
+# group: [parquet]
+
+require parquet
+
+# The bloom filter probe used to hash the escaped text form of a BLOB constant ('\x6D\x8F...') instead of the raw
+# bytes, so any BLOB containing non-printable bytes was skipped in every row group (silently returning 0 rows).
+# The previous bloom filter tests only used printable ASCII blobs, where both forms coincide.
+
+# files written by other writers: FIXED_LEN_BYTE_ARRAY(32) with a bloom filter on every column chunk
+# 40 distinct random 32-byte ids x 100 rows each, sorted by id, 4 row groups of 1000 rows
+foreach file flba_blob_bloom_chdb flba_blob_bloom_pyarrow
+
+query II
+select distinct type, bool_and(bloom_filter_offset > 0) from parquet_metadata('data/parquet-testing/bloom/${file}.parquet') where path_in_schema = 'token_id' group by type;
+----
+FIXED_LEN_BYTE_ARRAY	true
+
+query I
+select count(*) from 'data/parquet-testing/bloom/${file}.parquet' where token_id = unhex('6d8fc58df7673b9e4f93c0d74aff56e83298c8ef88bb14691d87228be6e7e710');
+----
+100
+
+query I
+select count(*) from 'data/parquet-testing/bloom/${file}.parquet' where token_id = unhex('039d56a822be8001d8c577f4de965d26ec45ec8490c4d18e975ae4a66ebd807f');
+----
+100
+
+query I
+select count(*) from 'data/parquet-testing/bloom/${file}.parquet' where token_id in (unhex('6d8fc58df7673b9e4f93c0d74aff56e83298c8ef88bb14691d87228be6e7e710'), unhex('f8b3893d704cd2cf71b1448cbea6c0b12faa09dcc044dccd4c14f403f9046ecf'));
+----
+200
+
+# agrees with the zonemap-only formulation
+query I
+select count(*) from 'data/parquet-testing/bloom/${file}.parquet' where token_id between unhex('6d8fc58df7673b9e4f93c0d74aff56e83298c8ef88bb14691d87228be6e7e710') and unhex('6d8fc58df7673b9e4f93c0d74aff56e83298c8ef88bb14691d87228be6e7e710');
+----
+100
+
+# a value inside the min/max range that is not in the file is still pruned/empty
+query I
+select count(*) from 'data/parquet-testing/bloom/${file}.parquet' where token_id = unhex('6d8fc58df7673b9e4f93c0d74aff56e83298c8ef88bb14691d87228be6e7e711');
+----
+0
+
+endloop
+
+# DuckDB roundtrip: BLOB column with non-printable bytes, written by DuckDB itself (writer hashes raw bytes)
+statement ok
+copy (select unhex(sha256((r % 50)::VARCHAR))::BLOB as b, r from range(1000) t(r) order by b) to '__TEST_DIR__/bloom_blob_roundtrip.parquet' (format parquet, row_group_size 100);
+
+query II
+select type, bool_and(bloom_filter_offset > 0) from parquet_metadata('__TEST_DIR__/bloom_blob_roundtrip.parquet') where path_in_schema = 'b' group by type;
+----
+BYTE_ARRAY	true
+
+# (bloom filters are only written for dictionary-encoded chunks, hence the low cardinality)
+query I
+select count(*) from '__TEST_DIR__/bloom_blob_roundtrip.parquet' where b = unhex(sha256('23'));
+----
+20
+
+query I
+select count(*) from '__TEST_DIR__/bloom_blob_roundtrip.parquet' where b in (unhex(sha256('5')), unhex(sha256('49')), unhex(sha256('not-there')));
+----
+40
