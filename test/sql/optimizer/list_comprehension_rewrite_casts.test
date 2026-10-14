@@ -1,0 +1,54 @@
+# name: test/sql/optimizer/list_comprehension_rewrite_casts.test
+# description: the list comprehension rewrite must not drop casts from the lambdas it rewrites
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification
+
+# the result lambda casts 2 -> true -> 1
+query I
+SELECT list_transform(
+    list_filter(list_transform(l, lambda x: struct_pack(filter := true, result := x)), lambda s: s.filter),
+    lambda s: s.result::BOOLEAN::INTEGER
+) FROM (VALUES ([2])) t(l);
+----
+[1]
+
+# a TRY_CAST in the result lambda stays a TRY_CAST
+query I
+SELECT list_transform(
+    list_filter(list_transform(l, lambda x: struct_pack(filter := true, result := x)), lambda s: s.filter),
+    lambda s: TRY_CAST(s.result AS INTEGER)
+) FROM (VALUES (['1', 'x'])) t(l);
+----
+[1, NULL]
+
+# a cast in the filter lambda is honoured
+query I
+SELECT list_transform(
+    list_filter(list_transform(l, lambda x: struct_pack(filter := x, result := x)), lambda s: s.filter::INTEGER::BOOLEAN),
+    lambda s: s.result
+) FROM (VALUES ([0, 1, 2])) t(l);
+----
+[1, 2]
+
+# the plain comprehension pattern is still rewritten and still correct
+query I
+SELECT [x * 10 FOR x IN l IF x > 1] FROM (VALUES ([1, 2, 3])) t(l);
+----
+[20, 30]
+
+query I
+SELECT list_transform(
+    list_filter(list_transform(l, lambda x: struct_pack(filter := x > 1, result := x * 10)), lambda s: s.filter),
+    lambda s: s.result
+) FROM (VALUES ([1, 2, 3])) t(l);
+----
+[20, 30]
+
+query II
+SELECT [x FOR x IN l IF x IS NOT NULL], [x FOR x IN l] FROM (VALUES ([1, NULL, 3]), ([]::INTEGER[]), (NULL)) t(l);
+----
+[1, 3]	[1, NULL, 3]
+[]	[]
+NULL	NULL
