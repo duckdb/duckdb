@@ -5,8 +5,14 @@
 require parquet
 
 statement ok
-COPY (SELECT * FROM (VALUES (1, TIMETZ '24:00:00+00'), (2, TIMETZ '23:00:00-01'), (3, TIMETZ '12:00:00+00')) t(i, tz))
-TO '{TEST_DIR}/timetz_end_of_day.parquet'
+COPY (SELECT * FROM (VALUES
+	(1, TIMETZ '24:00:00+00'),
+	(2, TIMETZ '23:00:00-01'),
+	(3, TIMETZ '12:00:00+00'),
+	(4, TIMETZ '08:00:01-15:59:59'),
+	(5, TIMETZ '00:00:00+00'),
+	(6, TIMETZ '01:00:00+01')
+) t(i, tz)) TO '{TEST_DIR}/timetz_end_of_day.parquet'
 
 query II
 SELECT i, tz::VARCHAR FROM '{TEST_DIR}/timetz_end_of_day.parquet' ORDER BY i
@@ -14,11 +20,14 @@ SELECT i, tz::VARCHAR FROM '{TEST_DIR}/timetz_end_of_day.parquet' ORDER BY i
 1	24:00:00+00
 2	24:00:00+00
 3	12:00:00+00
+4	24:00:00+00
+5	00:00:00+00
+6	00:00:00+00
 
 query I
 SELECT count(*) FROM '{TEST_DIR}/timetz_end_of_day.parquet' WHERE tz = TIMETZ '24:00:00+00'
 ----
-2
+3
 
 query I
 SELECT max(tz)::VARCHAR FROM '{TEST_DIR}/timetz_end_of_day.parquet'
