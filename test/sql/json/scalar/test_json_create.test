@@ -388,3 +388,9 @@ query I
 SELECT row(1, 'a')::JSON::TUPLE(INTEGER, VARCHAR);
 ----
 (1, a)
+
+# json_build_object is an alias of json_object
+query I
+SELECT json_build_object('name', 'C', 'schema', NULL)
+----
+{"name":"C","schema":null}
