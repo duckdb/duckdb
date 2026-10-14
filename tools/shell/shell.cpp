@@ -414,6 +414,7 @@ ShellState::ShellState() : seenInterrupt(0), program_name("duckdb") {
 }
 
 ShellState::~ShellState() {
+	Destroy();
 	// Do not launch an external viewer while shutting down.
 	doXdgOpen = 0;
 	ResetOutput();
@@ -421,9 +422,9 @@ ShellState::~ShellState() {
 }
 
 void ShellState::Destroy() {
-	db.reset();
-	conn.reset();
 	last_result.reset();
+	conn.reset();
+	db.reset();
 }
 
 bool ShellState::IsSpace(char c) {

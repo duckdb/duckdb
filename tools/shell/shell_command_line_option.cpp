@@ -183,7 +183,6 @@ MetadataResult MarkClientMode(ShellState &state, const vector<string> &args) {
 	string type, secret;
 	if (!ParseConnectionTarget(state, "connect", args[1], type, secret)) {
 		ShellState::Exit(1);
-		return MetadataResult::EXIT;
 	}
 	state.command_parameters["type"] = type;
 	if (!secret.empty()) {
@@ -199,14 +198,12 @@ MetadataResult SetServeTarget(ShellState &state, const vector<string> &args) {
 	string type, secret;
 	if (!ParseConnectionTarget(state, "serve", args[1], type, secret)) {
 		ShellState::Exit(1);
-		return MetadataResult::EXIT;
 	}
 	if (!StringUtil::CIEquals(type, SERVE_TYPE)) {
 		state.PrintF(PrintOutput::STDERR,
 		             "%s: Error: cannot serve a database of type '%s' - only '%s' is supported by '-serve'\n",
 		             state.program_name, type.c_str(), SERVE_TYPE);
 		ShellState::Exit(1);
-		return MetadataResult::EXIT;
 	}
 	if (!secret.empty()) {
 		state.command_parameters["serve_secret"] = StringUtil::Format(", secret='%s'", QuoteSecretName(secret));
