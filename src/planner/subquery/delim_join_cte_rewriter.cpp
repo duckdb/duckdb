@@ -1215,13 +1215,13 @@ bool GeneratedDedupRefEliminator::RemoveInequalityJoinConditions(LogicalOperator
 	if (dedup_ref_count != 1 || delim_conditions.size() != join_conditions.size()) {
 		return false;
 	}
-	if (delim_join.join_type != JoinType::ANTI && delim_join.join_type != JoinType::MARK &&
-	    delim_join.join_type != JoinType::SEMI && delim_join.join_type != JoinType::SINGLE) {
+	// an ANTI join keeps the domain that its inequality conditions correlate with
+	if (delim_join.join_type != JoinType::MARK && delim_join.join_type != JoinType::SEMI &&
+	    delim_join.join_type != JoinType::SINGLE) {
 		return false;
 	}
 
-	if (delim_join.join_type == JoinType::SINGLE || delim_join.join_type == JoinType::MARK ||
-	    delim_join.join_type == JoinType::ANTI) {
+	if (delim_join.join_type == JoinType::SINGLE || delim_join.join_type == JoinType::MARK) {
 		bool has_one_equality = false;
 		for (auto &cond : join_conditions) {
 			has_one_equality = has_one_equality || IsEqualityJoinCondition(cond);
