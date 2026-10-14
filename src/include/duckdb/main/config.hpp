@@ -172,6 +172,45 @@ struct DBConfigOptions {
 	bool operator==(const DBConfigOptions &other) const;
 };
 
+//! The replacement scans of a database. Scans can be registered while queries are being bound, so the list is
+//! guarded by a lock and the binder iterates over a snapshot.
+class ReplacementScanList {
+public:
+	ReplacementScanList() = default;
+	ReplacementScanList(ReplacementScanList &&other) noexcept {
+		lock_guard<mutex> guard(other.lock);
+		scans = std::move(other.scans);
+	}
+	ReplacementScanList &operator=(ReplacementScanList &&other) noexcept {
+		if (this != &other) {
+			lock_guard<mutex> other_guard(other.lock);
+			lock_guard<mutex> guard(lock);
+			scans = std::move(other.scans);
+		}
+		return *this;
+	}
+
+	template <class... ARGS>
+	void emplace_back(ARGS &&...args) { // NOLINT
+		auto scan = make_shared_ptr<ReplacementScan>(std::forward<ARGS>(args)...);
+		lock_guard<mutex> guard(lock);
+		scans.push_back(std::move(scan));
+	}
+	void push_back(ReplacementScan scan) { // NOLINT
+		auto shared_scan = make_shared_ptr<ReplacementScan>(std::move(scan));
+		lock_guard<mutex> guard(lock);
+		scans.push_back(std::move(shared_scan));
+	}
+	vector<shared_ptr<ReplacementScan>> Snapshot() const {
+		lock_guard<mutex> guard(lock);
+		return scans;
+	}
+
+private:
+	mutable mutex lock;
+	vector<shared_ptr<ReplacementScan>> scans;
+};
+
 struct DBConfig {
 	friend class DatabaseInstance;
 	friend class StorageManager;
@@ -183,7 +222,7 @@ public:
 	DUCKDB_API ~DBConfig();
 
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
-	vector<ReplacementScan> replacement_scans;
+	ReplacementScanList replacement_scans;
 
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
