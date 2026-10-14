@@ -1,0 +1,48 @@
+# name: test/sql/order/order_merge_buffer_fallback.test
+# description: Sorts whose run merges go through the buffered merge, with keys the radix sort cannot order, with and without a tight memory limit
+# group: [order]
+
+require notwindows
+
+statement ok
+SET temp_directory = '{TEST_DIR}/order_merge_buffer_tmp';
+
+# Four ascending runs of 250k keys that share their first 13 bytes: the radix pass over the first 8 bytes of the
+# sort key leaves one bucket, so the comparison sort fallback sorts each run and merges the runs it finds
+statement ok
+CREATE TABLE wide AS SELECT 'common_prefix' || lpad((i % 250000)::VARCHAR, 8, '0') AS s, i FROM range(1000000) t(i);
+
+# The same with a fixed-size 16-byte key (two BIGINTs, the first one constant)
+statement ok
+CREATE TABLE fixed AS SELECT 0::BIGINT AS c, (i % 250000) * 4 + (i // 250000) AS k FROM range(1000000) t(i);
+
+# One thread sorts a single run in place, four threads sort runs and merge them; the small limit makes the merge
+# buffer too small for the runs (it is halved until it fits), the big one lets it hold half the keys
+foreach threads 1 4
+
+foreach mem 64MiB 2GiB
+
+statement ok
+SET threads = {threads};
+
+statement ok
+SET memory_limit = '{mem}';
+
+query II
+SELECT s, i FROM wide ORDER BY s, i;
+----
+2000000 values hashing to ace2efc4a55b7a71caeacdb36638dbc9
+
+query II
+SELECT c, k FROM fixed ORDER BY c, k;
+----
+2000000 values hashing to 3a7b44e20294169ff4b9f760f2bb975f
+
+query II
+SELECT s, i FROM wide ORDER BY s DESC, i DESC;
+----
+2000000 values hashing to f905d32c1f51c99a145d31f0b43fecc1
+
+endloop
+
+endloop

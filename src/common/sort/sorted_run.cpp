@@ -248,17 +248,14 @@ static void TemplatedSort(ClientContext &context, TupleDataCollection &key_data,
 	auto ska_extract_key =
 	    SkaExtractKey<SORT_KEY>(requires_next_sort, ska_sort_width, sort_skippable_bytes, context.interrupt_state);
 
-	const auto fallback = [ska_extract_key](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
-		duckdb_ska_sort::ska_sort(fb_begin, fb_end, ska_extract_key);
-	};
 	// vergesort merges the sorted runs it finds with a temporary buffer of up to half the keys - allocate that
-	// buffer through the buffer allocator instead of letting std::inplace_merge take it from operator new
+	// buffer through the buffer allocator instead of letting std::inplace_merge take it from operator new. The same
+	// buffer serves the merges of the nested vergesort that ska_sort runs over the buckets its radix passes cannot
+	// order, so that no merge anywhere in this sort allocates on its own (BufferedMerge never does)
 	SortMergeBuffer merge_buffer(BufferAllocator::Get(context), key_data.Count(), sizeof(SORT_KEY));
-	auto buffer_ptr = merge_buffer.Keys<SORT_KEY>();
-	const auto merge_buffer_count = merge_buffer.Count();
-	const auto merge = [buffer_ptr, merge_buffer_count](const BLOCK_ITERATOR &first, const BLOCK_ITERATOR &middle,
-	                                                    const BLOCK_ITERATOR &last, const std::less<SORT_KEY> &cmp) {
-		BufferedMerge<SORT_KEY>(first, middle, last, cmp, buffer_ptr, merge_buffer_count);
+	const BufferedMergePolicy<SORT_KEY> merge(merge_buffer);
+	const auto fallback = [&ska_extract_key, &merge](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
+		duckdb_ska_sort::ska_sort(fb_begin, fb_end, ska_extract_key, merge);
 	};
 	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback, merge);
 

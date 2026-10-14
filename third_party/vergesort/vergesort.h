@@ -47,6 +47,19 @@
 
 namespace duckdb_vergesort
 {
+    // Merge policy used for the final pairwise run merges: a callable merge(first, middle, last, compare) that
+    // merges the sorted ranges [first, middle) and [middle, last). The default is std::inplace_merge, which takes
+    // its temporary buffer from operator new; callers that want to control that memory pass their own policy.
+    struct inplace_merge_policy
+    {
+        template<typename RandomAccessIterator, typename Compare>
+        void operator()(RandomAccessIterator first, RandomAccessIterator middle,
+                        RandomAccessIterator last, Compare compare) const
+        {
+            std::inplace_merge(first, middle, last, compare);
+        }
+    };
+
     namespace detail
     {
         // In-place merge where [first, middle1), [middle1, middle2)
@@ -177,18 +190,6 @@ namespace duckdb_vergesort
                 std::inplace_merge(first, begin_unstable, last, compare);
             }
         }
-
-        // Merge policy used for the final pairwise run merges: std::inplace_merge allocates its temporary buffer
-        // with operator new, callers that want to control that memory pass their own merge
-        struct inplace_merge_policy
-        {
-            template<typename RandomAccessIterator, typename Compare>
-            void operator()(RandomAccessIterator first, RandomAccessIterator middle,
-                            RandomAccessIterator last, Compare compare) const
-            {
-                std::inplace_merge(first, middle, last, compare);
-            }
-        };
 
         template<typename RandomAccessIterator, typename Compare, typename Fallback, typename Merge>
         void vergesort(RandomAccessIterator first, RandomAccessIterator last,
@@ -355,7 +356,7 @@ namespace duckdb_vergesort
     void vergesort(BidirectionalIterator first, BidirectionalIterator last,
                    Compare compare, Fallback fallback)
     {
-        vergesort(first, last, compare, fallback, detail::inplace_merge_policy());
+        vergesort(first, last, compare, fallback, inplace_merge_policy());
     }
 
     template<typename BidirectionalIterator, typename Fallback>

@@ -659,12 +659,7 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 	// the run merges need a scratch buffer of up to half the keys - take it from the buffer allocator so that it is
 	// counted against the memory limit instead of coming from operator new inside std::inplace_merge
 	SortMergeBuffer merge_buffer(BufferAllocator::Get(gstate.context), merged_partition_count, sizeof(SORT_KEY));
-	auto buffer_ptr = merge_buffer.Keys<SORT_KEY>();
-	const auto merge_buffer_count = merge_buffer.Count();
-	const auto merge = [buffer_ptr, merge_buffer_count](SORT_KEY *first, SORT_KEY *middle, SORT_KEY *last,
-	                                                    const std::less<SORT_KEY> &cmp) {
-		BufferedMerge<SORT_KEY>(first, middle, last, cmp, buffer_ptr, merge_buffer_count);
-	};
+	const BufferedMergePolicy<SORT_KEY> merge(merge_buffer);
 	duckdb_vergesort::vergesort(merged_partition_keys, merged_partition_keys + merged_partition_count,
 	                            std::less<SORT_KEY>(), fallback, merge);
 }
