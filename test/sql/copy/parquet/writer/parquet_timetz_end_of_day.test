@@ -6,36 +6,41 @@ require parquet
 
 statement ok
 COPY (SELECT * FROM (VALUES (1, TIMETZ '24:00:00+00'), (2, TIMETZ '23:00:00-01'), (3, TIMETZ '12:00:00+00')) t(i, tz))
-TO '__TEST_DIR__/timetz_end_of_day.parquet'
+TO '{TEST_DIR}/timetz_end_of_day.parquet'
 
 query II
-SELECT i, tz::VARCHAR FROM '__TEST_DIR__/timetz_end_of_day.parquet' ORDER BY i
+SELECT i, tz::VARCHAR FROM '{TEST_DIR}/timetz_end_of_day.parquet' ORDER BY i
 ----
 1	24:00:00+00
 2	24:00:00+00
 3	12:00:00+00
 
 query I
-SELECT count(*) FROM '__TEST_DIR__/timetz_end_of_day.parquet' WHERE tz = TIMETZ '24:00:00+00'
+SELECT count(*) FROM '{TEST_DIR}/timetz_end_of_day.parquet' WHERE tz = TIMETZ '24:00:00+00'
 ----
 2
 
 query I
-SELECT max(tz)::VARCHAR FROM '__TEST_DIR__/timetz_end_of_day.parquet'
+SELECT max(tz)::VARCHAR FROM '{TEST_DIR}/timetz_end_of_day.parquet'
 ----
 24:00:00+00
 
 # a dictionary encoded file has a bloom filter that finds the value
 statement ok
 COPY (SELECT (i % 3) AS i, CASE i % 3 WHEN 0 THEN TIMETZ '24:00:00+00' WHEN 1 THEN TIMETZ '12:00:00+00' ELSE TIMETZ '06:00:00+00' END AS tz
-FROM range(3000) t(i)) TO '__TEST_DIR__/timetz_end_of_day_dictionary.parquet' (DICTIONARY_SIZE_LIMIT 1000)
+FROM range(3000) t(i)) TO '{TEST_DIR}/timetz_end_of_day_dictionary.parquet' (DICTIONARY_SIZE_LIMIT 1000)
 
 query I
-SELECT bool_or(bloom_filter_excludes) FROM parquet_bloom_probe('__TEST_DIR__/timetz_end_of_day_dictionary.parquet', 'tz', TIMETZ '24:00:00+00')
+SELECT bool_and(bloom_filter_offset IS NOT NULL) FROM parquet_metadata('{TEST_DIR}/timetz_end_of_day_dictionary.parquet') WHERE path_in_schema = 'tz'
+----
+true
+
+query I
+SELECT bool_or(bloom_filter_excludes) FROM parquet_bloom_probe('{TEST_DIR}/timetz_end_of_day_dictionary.parquet', 'tz', TIMETZ '24:00:00+00')
 ----
 false
 
 query I
-SELECT count(*) FROM '__TEST_DIR__/timetz_end_of_day_dictionary.parquet' WHERE tz = TIMETZ '24:00:00+00'
+SELECT count(*) FROM '{TEST_DIR}/timetz_end_of_day_dictionary.parquet' WHERE tz = TIMETZ '24:00:00+00'
 ----
 1000
