@@ -15,33 +15,33 @@ namespace duckdb {
 
 //! Snapshot of the read statistics of the external file cache
 struct ExternalFileCacheStatsInformation {
-	//! Bytes requested by readers through the cache
+	//! Bytes requested by readers through the cache, clamped to the file size
 	idx_t read_request_bytes;
 	//! Requested bytes served from cached blocks
 	idx_t cache_hit_request_bytes;
-	//! Bytes read from the underlying file system due to cache misses
+	//! Bytes read from the underlying file system, including alignment and prefetch beyond the request
 	idx_t actual_io_bytes;
-	//! Block reads served from the cache (memory or spill)
+	//! Requested blocks served from the cache (memory, spill, or a concurrent reader's fetch)
 	idx_t hit_count;
-	//! Block reads that fetched from the underlying file system
+	//! Requested blocks fetched from the underlying file system
 	idx_t miss_count;
-	//! Subset of misses that re-fetched a previously loaded block that was evicted
+	//! Evicted cache blocks that had to be fetched again
 	idx_t eviction_refetch_count;
 };
 
 //! Read statistics of the external file cache, updated lock-free by readers
 struct ExternalFileCacheStats {
-	//! Bytes requested by readers through the cache
+	//! Bytes requested by readers through the cache, clamped to the file size
 	atomic<idx_t> read_request_bytes {0};
 	//! Requested bytes served from cached blocks
 	atomic<idx_t> cache_hit_request_bytes {0};
-	//! Bytes read from the underlying file system due to cache misses
+	//! Bytes read from the underlying file system, including alignment and prefetch beyond the request
 	atomic<idx_t> actual_io_bytes {0};
-	//! Block reads served from the cache (memory or spill)
+	//! Requested blocks served from the cache (memory, spill, or a concurrent reader's fetch)
 	atomic<idx_t> hit_count {0};
-	//! Block reads that fetched from the underlying file system
+	//! Requested blocks fetched from the underlying file system
 	atomic<idx_t> miss_count {0};
-	//! Subset of misses that re-fetched a previously loaded block that was evicted
+	//! Evicted cache blocks that had to be fetched again
 	atomic<idx_t> eviction_refetch_count {0};
 
 	ExternalFileCacheStatsInformation GetSnapshot() const {

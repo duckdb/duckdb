@@ -53,3 +53,28 @@ select (100 * warm_hit_bytes / warm_read_bytes)::INTEGER,
 from rates;
 ----
 100	true	true	true
+
+# Re-reading blocks that were evicted counts as eviction refetches.
+statement ok
+copy (select hash(i) a from range(1000000) t(i)) to '{TEST_DIR}/test_cache_stats_evict.parquet';
+
+statement ok
+select sum(a) from '{TEST_DIR}/test_cache_stats_evict.parquet';
+
+statement ok
+create temp table stats_evict as select * from duckdb_external_file_cache_stats();
+
+statement ok
+set memory_limit='1MB';
+
+statement ok
+set memory_limit='1GB';
+
+statement ok
+select sum(a) from '{TEST_DIR}/test_cache_stats_evict.parquet';
+
+query II
+select s.eviction_refetch_count > b.eviction_refetch_count, s.miss_count > b.miss_count
+from duckdb_external_file_cache_stats() s, stats_evict b;
+----
+true	true

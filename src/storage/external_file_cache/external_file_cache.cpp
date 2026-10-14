@@ -147,6 +147,7 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::AcquireBlocks(CachedFile &cach
 				continue;
 			}
 			// re-fetch a dropped block only as far as this read needs it
+			stats.eviction_refetch_count.fetch_add(1, std::memory_order_relaxed);
 			it = blocks.erase(it);
 		}
 		// create blocks for the missing bytes up to the next cached block
