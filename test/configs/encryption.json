@@ -49,7 +49,8 @@
     {
       "reason": "Calls a deleter by unqualified name: the internal connection running it uses the default catalog, not this config's attached one.",
       "paths": [
-        "test/sql/table_function/external_resource_logging.test"
+        "test/sql/table_function/external_resource_logging.test",
+        "test/sql/table_function/external_resource_callback_recursion.test"
       ]
     },
     {
