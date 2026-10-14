@@ -1,0 +1,47 @@
+# name: test/sql/subquery/exists/test_not_exists_range_anti.test
+# description: A correlated NOT EXISTS with only range predicates is planned as an ANTI join, not a MARK join
+# group: [exists]
+
+statement ok
+CREATE TABLE snapshots AS SELECT range AS snapshot_id FROM range(40)
+
+statement ok
+CREATE TABLE files AS
+SELECT range AS file_id, (range % 20)::BIGINT AS begin_snapshot, (20 + range % 30)::BIGINT AS end_snapshot FROM range(200)
+UNION ALL SELECT 200, 45, 50
+UNION ALL SELECT 201, NULL, 10
+UNION ALL SELECT 202, 5, NULL
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+query II
+EXPLAIN SELECT count(*) FROM files
+WHERE NOT EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id >= begin_snapshot AND snapshot_id < end_snapshot)
+----
+logical_opt	<!REGEX>:.*MARK.*
+
+query I
+SELECT list(file_id ORDER BY file_id) FROM files
+WHERE NOT EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id >= begin_snapshot AND snapshot_id < end_snapshot)
+----
+[200, 201, 202]
+
+# the marker is still needed when it is also selected
+query II
+SELECT file_id, NOT EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id >= begin_snapshot AND snapshot_id < end_snapshot) AS free
+FROM files WHERE file_id >= 199 AND NOT EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id >= begin_snapshot AND snapshot_id < end_snapshot)
+ORDER BY file_id
+----
+200	true
+201	true
+202	true
+
+statement ok
+PRAGMA disable_optimizer
+
+query I
+SELECT list(file_id ORDER BY file_id) FROM files
+WHERE NOT EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id >= begin_snapshot AND snapshot_id < end_snapshot)
+----
+[200, 201, 202]
