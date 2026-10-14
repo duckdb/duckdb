@@ -24,6 +24,10 @@ AsyncResult BaseFileReader::ScheduleIO(ClientContext &, GlobalTableFunctionState
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
+bool BaseFileReader::RecheckRowGroupFilters(ClientContext &, GlobalTableFunctionState &, LocalTableFunctionState &) {
+	return true;
+}
+
 void BaseFileReader::PrepareReader(ClientContext &context, GlobalTableFunctionState &) {
 }
 

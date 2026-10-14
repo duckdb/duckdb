@@ -25,6 +25,7 @@
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_adaptive_filter_cache.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
@@ -393,6 +394,8 @@ public:
 	                 LocalTableFunctionState &lstate_p) override;
 	AsyncResult ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
+	bool RecheckRowGroupFilters(ClientContext &context, GlobalTableFunctionState &gstate,
+	                            LocalTableFunctionState &lstate) override;
 	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
@@ -476,6 +479,9 @@ private:
 	//! Group span is the distance between the min page offset and the max page offset plus the max page compressed size
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ClientContext &context, ParquetReaderScanState &state, idx_t out_col_idx);
+	//! Prune a row group for one column using only its statistics (no bloom filter / data access)
+	FilterPropagateResult CheckRowGroupStatsPrune(ClientContext &context, ParquetReaderScanState &state,
+	                                              ColumnReader &column_reader, const TableFilter &filter);
 	//! Whole-group prefetch strategy.
 	ParquetPrefetchStrategy WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
 	                                           const duckdb_parquet::RowGroup &group, uint64_t total_row_group_span,

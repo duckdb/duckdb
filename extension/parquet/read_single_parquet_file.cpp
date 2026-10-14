@@ -299,6 +299,17 @@ static bool ReadSingleParquetFileSupportsReadAhead(optional_ptr<const FunctionDa
 	return true;
 }
 
+//! Re-check the claimed row group against the current filters before scanning it - read-ahead schedules its I/O
+//! before it is decoded, so a dynamic filter set in between (e.g. by a Top-N sink) can prune it after the fact
+static bool ReadSingleParquetFileRecheckRowGroup(ClientContext &context, TableFunctionInput &input) {
+	auto &gstate = input.global_state->Cast<ReadSingleParquetFileGlobalState>();
+	auto &lstate = input.local_state->Cast<ReadSingleParquetFileLocalState>();
+	if (!lstate.has_row_group) {
+		return true;
+	}
+	return gstate.reader->RecheckRowGroupFilters(context, gstate.state, lstate.state);
+}
+
 //! Load the data of the claimed row group
 static AsyncResult ReadSingleParquetFileScheduleIO(ClientContext &context, TableFunctionInput &input) {
 	auto &gstate = input.global_state->Cast<ReadSingleParquetFileGlobalState>();
@@ -545,6 +556,7 @@ TableFunctionMultiFileSettings ParquetScanFunction::GetMultiFileSettings() {
 	settings.finish_batch = ReadSingleParquetFileFinishBatch;
 	settings.supports_read_ahead = ReadSingleParquetFileSupportsReadAhead;
 	settings.schedule_io = ReadSingleParquetFileScheduleIO;
+	settings.recheck_row_group = ReadSingleParquetFileRecheckRowGroup;
 	settings.prepare_read_ahead = ReadSingleParquetFilePrepareReadAhead;
 	settings.get_file_columns = ReadSingleParquetFileColumns;
 	// the order the filters are best applied in is learned while reading, and carries over to the next file

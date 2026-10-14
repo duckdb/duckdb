@@ -1076,6 +1076,14 @@ public:
 				case ScanReadAheadAcquire::ACQUIRED:
 					break;
 				}
+				if (gstate.read_ahead && data.job &&
+				    !data.job->reader->RecheckRowGroupFilters(context, *gstate.global_state, *data.job->scan_state)) {
+					// a dynamic filter set since the job was produced prunes its row group - finish it without
+					// decoding, so Top-N pruning no longer depends on how far ahead read-ahead ran
+					gstate.state_pool.Push(std::move(data.job->scan_state));
+					data.job_state = MultiFileJobState::NONE;
+					continue;
+				}
 			}
 			switch (DecodeCurrentJob(context, data_p, data, gstate, bind_data, output)) {
 			case MultiFileDecodeResult::CONTINUE:

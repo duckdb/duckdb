@@ -1770,6 +1770,35 @@ ColumnReader &ParquetReaderScanState::GetColumnReader(idx_t i) {
 	return *column_readers[i];
 }
 
+FilterPropagateResult ParquetReader::CheckRowGroupStatsPrune(ClientContext &context, ParquetReaderScanState &state,
+                                                             ColumnReader &column_reader, const TableFilter &filter) {
+	auto &group = GetGroup(state);
+	auto schema_column_index = column_reader.ColumnIndex();
+	bool is_generated_column = schema_column_index >= group.columns.size();
+	bool is_expression = column_reader.Schema().schema_type == ParquetColumnSchemaType::EXPRESSION;
+	auto stats = column_reader.Stats(state.group_index, group.columns);
+	if (!stats) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	bool has_min_max = false;
+	if (!is_generated_column) {
+		has_min_max = group.columns[schema_column_index].meta_data.statistics.__isset.min_value &&
+		              group.columns[schema_column_index].meta_data.statistics.__isset.max_value;
+	}
+	if (!is_expression && !is_generated_column && has_min_max &&
+	    (column_reader.Type().id() == LogicalTypeId::FLOAT || column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
+	    ParquetStatisticsUtils::CanHaveNaN(group.columns[schema_column_index].meta_data.statistics,
+	                                       parquet_options.can_have_nan)) {
+		// floating point columns can have NaN values in addition to the min/max bounds defined in the file
+		// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning based on
+		// nan
+		return CheckParquetFloatFilter(context, column_reader, group.columns[schema_column_index].meta_data.statistics,
+		                               filter);
+	}
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::CheckRowGroupStatsPrune");
+	return expr_filter.CheckStatistics(context, *stats);
+}
+
 void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderScanState &state, idx_t i) {
 	auto &group = GetGroup(state);
 	auto col_idx = MultiFileLocalIndex(i);
@@ -1794,33 +1823,7 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 		if (filter_entry) {
 			auto &filter = *filter_entry;
 
-			auto schema_column_index = column_reader.ColumnIndex();
-			auto prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-			bool is_generated_column = schema_column_index >= group.columns.size();
-			bool is_expression = column_reader.Schema().schema_type == ParquetColumnSchemaType::EXPRESSION;
-			auto stats = column_reader.Stats(state.group_index, group.columns);
-			if (stats) {
-				bool has_min_max = false;
-				if (!is_generated_column) {
-					has_min_max = group.columns[schema_column_index].meta_data.statistics.__isset.min_value &&
-					              group.columns[schema_column_index].meta_data.statistics.__isset.max_value;
-				}
-				if (!is_expression && !is_generated_column && has_min_max &&
-				    (column_reader.Type().id() == LogicalTypeId::FLOAT ||
-				     column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
-				    ParquetStatisticsUtils::CanHaveNaN(group.columns[schema_column_index].meta_data.statistics,
-				                                       parquet_options.can_have_nan)) {
-					// floating point columns can have NaN values in addition to the min/max bounds defined in the file
-					// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
-					// based on nan
-					prune_result = CheckParquetFloatFilter(
-					    context, column_reader, group.columns[schema_column_index].meta_data.statistics, filter);
-				} else {
-					auto &expr_filter =
-					    ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::PrepareRowGroupBuffer");
-					prune_result = expr_filter.CheckStatistics(context, *stats);
-				}
-			}
+			auto prune_result = CheckRowGroupStatsPrune(context, state, column_reader, filter);
 			// check the bloom filter if present
 			auto bloom_source = TryGetBloomFilterSource(column_reader);
 			if (bloom_source) {
