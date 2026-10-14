@@ -1415,7 +1415,7 @@ static void BignumDivideOperation(DataChunk &args, ExpressionState &state, Vecto
 template <bool MODULO>
 static unique_ptr<FunctionData> BindBignumDivide(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	auto null_on_zero = Settings::Get<NullOnDivisionByZeroSetting>(input.GetClientContext());
+	auto null_on_zero = !Settings::Get<ErrorOnDivisionByZeroSetting>(input.GetClientContext());
 	if (null_on_zero) {
 		bound_function.SetFunctionCallback(BignumDivideOperation<true, MODULO>);
 	} else {

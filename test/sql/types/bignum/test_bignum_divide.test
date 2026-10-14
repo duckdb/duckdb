@@ -73,7 +73,7 @@ SELECT TRY(100::BIGNUM // 0::BIGNUM)
 NULL
 
 statement ok
-SET null_on_division_by_zero = true
+SET error_on_division_by_zero = false
 
 query I
 SELECT 100::BIGNUM // 0::BIGNUM
@@ -88,7 +88,7 @@ NULL	1
 3	10
 
 statement ok
-SET null_on_division_by_zero = false
+SET error_on_division_by_zero = true
 
 statement error
 SELECT 100::BIGNUM // 0::BIGNUM
