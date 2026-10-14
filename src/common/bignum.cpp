@@ -439,12 +439,8 @@ idx_t BitsToBytes(idx_t bits) {
 string_t WriteMagnitude(StringHeap &heap, const bignum_magnitude_t &digits, bool is_negative) {
 	if (digits.empty()) {
 		// zero is always encoded as a single positive zero byte
-		auto target = heap.EmptyString(1 + Bignum::BIGNUM_HEADER_SIZE);
-		auto target_data = target.GetDataWriteable();
-		Bignum::SetHeader(target_data, 1, false);
-		target_data[Bignum::BIGNUM_HEADER_SIZE] = 0;
-		target.Finalize();
-		return target;
+		const auto zero = Bignum::InitializeBignumZero();
+		return heap.AddBlob(zero.data(), zero.size());
 	}
 	const idx_t byte_count = BitsToBytes(MagnitudeBitCount(digits));
 	if (byte_count > Bignum::MAX_DATA_SIZE) {
@@ -494,7 +490,9 @@ void DivModMagnitudes(BignumArithmeticState &state, const bignum_magnitude_t &di
 	const idx_t n = divisor.size();
 	if (m < n) {
 		quotient.clear();
-		remainder = dividend;
+		if (want_remainder) {
+			remainder = dividend;
+		}
 		return;
 	}
 	constexpr twodigit_t BASE = static_cast<twodigit_t>(1) << Bignum::DIGIT_BITS;
