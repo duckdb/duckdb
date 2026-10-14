@@ -80,7 +80,7 @@ static const DefaultView internal_views[] = {
      "contypid, 0 conindid, 0 conparentid, 0 confrelid, NULL confupdtype, NULL confdeltype, NULL confmatchtype, true "
      "conislocal, 0 coninhcount, false connoinherit, constraint_column_indexes conkey, NULL confkey, NULL conpfeqop, "
      "NULL conppeqop, NULL conffeqop, NULL conexclop, expression conbin FROM duckdb_constraints()"},
-    {"pg_catalog", "pg_collation", "SELECT NULL::OID oid, NULL::VARCHAR collname WHERE FALSE"},
+    {"pg_catalog", "pg_collation", "SELECT NULL::OID oid, NULL::VARCHAR collname, NULL::OID collnamespace WHERE FALSE"},
     {"pg_catalog", "pg_database",
      "SELECT database_oid oid, database_name datname, true::boolean datallowconn, false::boolean AS datistemplate FROM "
      "duckdb_databases()"},
