@@ -904,7 +904,7 @@ format-check-silent: $(FORMAT_SETUP_DEPS)
 
 format-check-files: $(FORMAT_SETUP_DEPS)
 	@test -n "$(FORMAT_FILES_FROM)" || (echo "FORMAT_FILES_FROM is required" >&2; exit 1)
-	$(FORMAT_PYTHON) scripts/format.py --files-from "$(FORMAT_FILES_FROM)" --check --silent $(T)
+	$(FORMAT_PYTHON) scripts/format.py --files-from "$(FORMAT_FILES_FROM)" --check $(T)
 
 format-fix-files: $(FORMAT_SETUP_DEPS)
 	@test -n "$(FORMAT_FILES_FROM)" || (echo "FORMAT_FILES_FROM is required" >&2; exit 1)
