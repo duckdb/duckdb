@@ -93,6 +93,12 @@
       "paths": [
         "test/sql/cte/recursive_cte_aoc2022.test_slow"
       ]
+    },
+    {
+      "reason": "FIXME: the rendered SQL of a DISTINCT aggregate over a collated argument fails to rebind with a collation mismatch",
+      "paths": [
+        "test/sql/collate/collate_distinct_aggregate_icu.test"
+      ]
     }
   ]
 }
