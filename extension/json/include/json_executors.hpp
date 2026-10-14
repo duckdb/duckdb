@@ -18,19 +18,39 @@
 
 namespace duckdb {
 
+template <bool RESET_ALLOCATOR_AFTER_EACH_ROW>
+struct JSONAllocatorResetter {
+	explicit JSONAllocatorResetter(JSONAllocator &) {
+	}
+};
+
+template <>
+struct JSONAllocatorResetter<true> {
+	explicit JSONAllocatorResetter(JSONAllocator &allocator) : allocator(allocator) {
+	}
+	~JSONAllocatorResetter() {
+		allocator.Reset();
+	}
+
+	JSONAllocator &allocator;
+};
+
 template <class T>
 using json_function_t = std::function<optional<T>(yyjson_val *, yyjson_alc *, Vector &)>;
 
 struct JSONExecutors {
 public:
 	//! Single-argument JSON read function, i.e. json_type('[1, 2, 3]')
-	template <class T>
+	template <class T, bool RESET_ALLOCATOR_AFTER_EACH_ROW = false>
 	static void UnaryExecute(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun) {
+		static_assert(!RESET_ALLOCATOR_AFTER_EACH_ROW || std::is_arithmetic<T>::value,
+		              "Per-row JSON arena reset requires an arithmetic result type");
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator->GetYYAlc();
 
 		const auto &inputs = args.data[0];
 		UnaryExecutor::Execute<string_t, T>(inputs, result, [&](string_t input) -> optional<T> {
+			JSONAllocatorResetter<RESET_ALLOCATOR_AFTER_EACH_ROW> resetter(*lstate.json_allocator);
 			auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
 			return fun(doc->root, alc, result);
 		});
@@ -39,8 +59,10 @@ public:
 	}
 
 	//! Two-argument JSON read function (with path query), i.e. json_type('[1, 2, 3]', '$[0]')
-	template <class T, bool SET_NULL_IF_NOT_FOUND = true>
+	template <class T, bool SET_NULL_IF_NOT_FOUND = true, bool RESET_ALLOCATOR_AFTER_EACH_ROW = false>
 	static void BinaryExecute(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun) {
+		static_assert(!RESET_ALLOCATOR_AFTER_EACH_ROW || std::is_arithmetic<T>::value,
+		              "Per-row JSON arena reset requires an arithmetic result type");
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		const auto &info = func_expr.BindInfo()->Cast<JSONReadFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
@@ -52,6 +74,7 @@ public:
 			const idx_t &len = info.len;
 			if (info.path_type == JSONCommon::JSONPathType::REGULAR) {
 				UnaryExecutor::Execute<string_t, T>(inputs, result, [&](string_t input) -> optional<T> {
+					JSONAllocatorResetter<RESET_ALLOCATOR_AFTER_EACH_ROW> resetter(*lstate.json_allocator);
 					auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
 					// Use the path elements parsed at bind time when available
 					auto val = info.use_elements ? JSONCommon::GetPathElements(doc->root, info.elements)
@@ -66,6 +89,7 @@ public:
 				D_ASSERT(info.path_type == JSONCommon::JSONPathType::WILDCARD);
 				vector<yyjson_val *> vals;
 				UnaryExecutor::Execute<string_t, list_entry_t>(inputs, result, [&](string_t input) {
+					JSONAllocatorResetter<RESET_ALLOCATOR_AFTER_EACH_ROW> resetter(*lstate.json_allocator);
 					vals.clear();
 
 					auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
@@ -107,6 +131,7 @@ public:
 			}
 			BinaryExecutor::Execute<string_t, string_t, T>(
 			    inputs, *casted_paths, result, args.size(), [&](string_t input, string_t path) -> optional<T> {
+				    JSONAllocatorResetter<RESET_ALLOCATOR_AFTER_EACH_ROW> resetter(*lstate.json_allocator);
 				    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
 				    auto val = JSONCommon::Get(doc->root, path, args.data[1].GetType().IsIntegral());
 				    if (SET_NULL_IF_NOT_FOUND && !val) {
@@ -120,8 +145,10 @@ public:
 	}
 
 	//! JSON read function with list of path queries, i.e. json_type('[1, 2, 3]', ['$[0]', '$[1]'])
-	template <class T, bool SET_NULL_IF_NOT_FOUND = true>
+	template <class T, bool SET_NULL_IF_NOT_FOUND = true, bool RESET_ALLOCATOR_AFTER_EACH_ROW = false>
 	static void ExecuteMany(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun) {
+		static_assert(!RESET_ALLOCATOR_AFTER_EACH_ROW || std::is_arithmetic<T>::value,
+		              "Per-row JSON arena reset requires an arithmetic result type");
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		const auto &info = func_expr.BindInfo()->Cast<JSONReadManyFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
@@ -154,6 +181,7 @@ public:
 				continue;
 			}
 
+			JSONAllocatorResetter<RESET_ALLOCATOR_AFTER_EACH_ROW> resetter(*lstate.json_allocator);
 			auto doc = JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, alc);
 			for (idx_t path_i = 0; path_i < num_paths; path_i++) {
 				auto child_idx = offset + path_i;

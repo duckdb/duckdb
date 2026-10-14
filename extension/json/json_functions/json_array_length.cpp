@@ -7,15 +7,15 @@ static inline optional<uint64_t> GetArrayLength(yyjson_val *val, yyjson_alc *, V
 }
 
 static void UnaryArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONExecutors::UnaryExecute<uint64_t>(args, state, result, GetArrayLength);
+	JSONExecutors::UnaryExecute<uint64_t, true>(args, state, result, GetArrayLength);
 }
 
 static void BinaryArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONExecutors::BinaryExecute<uint64_t>(args, state, result, GetArrayLength);
+	JSONExecutors::BinaryExecute<uint64_t, true, true>(args, state, result, GetArrayLength);
 }
 
 static void ManyArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONExecutors::ExecuteMany<uint64_t>(args, state, result, GetArrayLength);
+	JSONExecutors::ExecuteMany<uint64_t, true, true>(args, state, result, GetArrayLength);
 }
 
 static void GetArrayLengthFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {

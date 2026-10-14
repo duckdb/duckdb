@@ -277,9 +277,12 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 				HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error), parameters);
 				success = false;
 			}
+			lstate.json_allocator->Reset();
 			return nullopt;
 		}
 
+		// The cast returns the original VARCHAR storage, so parsed JSON can be released now.
+		lstate.json_allocator->Reset();
 		return input;
 	});
 	StringVector::AddHeapReference(result, source);
