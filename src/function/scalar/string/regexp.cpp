@@ -281,6 +281,9 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 		BinaryExecutor::Execute<string_t, string_t, string_t>(
 		    strings, patterns, result, [&](string_t input, string_t pattern) {
 			    RE2 re(CreateStringPiece(pattern), info.options);
+			    if (!re.ok()) {
+				    throw InvalidInputException(re.error());
+			    }
 			    return ExtractCaptureGroup(input, re, info.group_index, info.no_match_returns_input);
 		    });
 	}

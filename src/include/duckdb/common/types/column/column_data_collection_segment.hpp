@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/types/column/column_data_allocator.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
@@ -39,10 +40,13 @@ struct SwizzleMetaData {
 	SwizzleMetaData(VectorDataIndex child_index_p, data_ptr_t ptr_p, uint16_t offset_p, uint16_t count_p)
 	    : child_index(child_index_p), ptr(ptr_p), offset(offset_p), count(count_p) {
 	}
+	SwizzleMetaData(const SwizzleMetaData &other) noexcept
+	    : SwizzleMetaData(other.child_index, other.ptr.load(std::memory_order_relaxed), other.offset, other.count) {
+	}
 	//! Index of block storing heap
 	VectorDataIndex child_index;
 	//! Last-known pointer
-	data_ptr_t ptr;
+	atomic<data_ptr_t> ptr;
 	//! Offset into the string_t vector
 	uint16_t offset;
 	//! Number of strings starting at 'offset' that have strings stored in the block with index 'child_index'
