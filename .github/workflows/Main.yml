@@ -117,12 +117,9 @@ jobs:
           alpha_args=()
           staged_version=""
           extension_allow_failure_archs=
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            extension_allow_failure_archs=windows_arm64
-          fi
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "${{ inputs.duckdb_commit }}" && -z "$INPUT_VERSION" ]]; then
             alpha_args=(--alpha-run-number "${{ github.run_number }}")
-            extension_allow_failure_archs="windows_arm64;windows_amd64_mingw;linux_amd64_musl;linux_arm64_musl"
+            extension_allow_failure_archs="windows_arm64;osx_amd64;windows_amd64_mingw;linux_amd64_musl;linux_arm64_musl"
           fi
           version_output="$(python3 scripts/ci/version.py \
             --duckdb-commit "$RESOLVED_COMMIT" \
@@ -198,10 +195,12 @@ jobs:
             --runners '${{ steps.runners.outputs.runners }}' \
             --runner-provider '${{ steps.runners.outputs.runner_provider }}'
 
-          if [[ "${{ github.event_name }}" != "pull_request" || "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             extra_exclude_archs=
+          elif [[ "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
+            extra_exclude_archs="windows_arm64;osx_amd64"
           else
-            extra_exclude_archs=wasm_eh
+            extra_exclude_archs="windows_arm64;osx_amd64;wasm_eh"
           fi
 
           echo "extra_exclude_archs=$extra_exclude_archs" >> "$GITHUB_OUTPUT"
