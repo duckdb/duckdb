@@ -34,6 +34,19 @@ void ConstantVector::Reference(Vector &vector, const Value &value, count_t count
 	vector.SetBuffer(CreateConstantBuffer(value, count));
 }
 
+static bool IsReusableBufferType(VectorBufferType buffer_type) {
+	switch (buffer_type) {
+	case VectorBufferType::STANDARD_BUFFER:
+	case VectorBufferType::STRUCT_BUFFER:
+	case VectorBufferType::ARRAY_BUFFER:
+	case VectorBufferType::LIST_BUFFER:
+	case VectorBufferType::STRING_BUFFER:
+		return true;
+	default:
+		return false;
+	}
+}
+
 //! Whether the buffer of the vector can be turned into a NULL constant in place: it must not be shared with other
 //! vectors (e.g. a referenced payload), and the children that are nulled as well must be flat or constant
 static bool CanSetNullInPlace(const Vector &vector) {
@@ -63,10 +76,16 @@ static bool CanSetNullInPlace(const Vector &vector) {
 }
 
 void ConstantVector::SetNull(Vector &vector, count_t count) {
-	if (!CanSetNullInPlace(vector)) {
-		// the buffer can be shared with (or its children can reference) other vectors - replace it by a NULL constant
+	auto &buffer_ref = vector.GetBufferRef();
+	if (!buffer_ref || !IsReusableBufferType(buffer_ref->GetBufferType())) {
+		// we cannot re-use the buffer - refer a null-value which has code necessary to create a new buffer
 		Reference(vector, Value(vector.GetType()), count);
 		return;
+	}
+	if (!CanSetNullInPlace(vector)) {
+		// the buffer is shared with other vectors (or has children that cannot be nulled) - use a fresh buffer
+		auto capacity = MaxValue<idx_t>(buffer_ref->Capacity(), 1);
+		vector.Initialize(VectorDataInitialization::UNINITIALIZED, capacity);
 	}
 	// re-use the buffer, so that e.g. the reserved capacity of a list child is kept
 	vector.SetVectorType(VectorType::CONSTANT_VECTOR);
