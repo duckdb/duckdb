@@ -1055,6 +1055,7 @@ TEST_CASE("max_execution_time bounds the whole group", "[api][expanding_statemen
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	REQUIRE(StepToEnd(*handle) == QueryResultState::EXECUTION_ERROR);
 	REQUIRE(StringUtil::Contains(handle->GetError(), "maximum execution time"));
+	REQUIRE_NO_FAIL(con.Query("RESET max_execution_time"));
 	REQUIRE(!ColumnExists(con, "c"));
 }
 
