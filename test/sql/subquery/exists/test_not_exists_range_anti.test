@@ -56,6 +56,24 @@ SELECT count(*) FROM o WHERE NOT EXISTS (SELECT 1 FROM (SELECT i.v FROM i WHERE 
 ----
 0
 
+statement ok
+CREATE TABLE o3 AS SELECT * FROM (VALUES (1, 2, 0), (1, NULL, 1), (2, 1, NULL), (NULL, 3, 2), (3, 3, 3), (2, 2, 1), (4, NULL, NULL)) t(k, v, w)
+
+statement ok
+CREATE TABLE i3 AS SELECT * FROM (VALUES (1, 1, 0), (1, 3, NULL), (2, 1, 1), (NULL, 2, 2), (3, NULL, 3), (2, 2, 2)) t(k, v, w)
+
+query III
+SELECT count(*), sum(o.v), sum(o.w) FROM o3 o WHERE NOT EXISTS (
+SELECT 1 FROM (SELECT i.k, i.v, i.w FROM i3 i WHERE i.w IS DISTINCT FROM o.k AND i.v = o.w) q WHERE q.k >= o.k)
+----
+5	9	5
+
+query III
+SELECT count(*), sum(o.v), sum(o.w) FROM o3 o WHERE NOT EXISTS (
+SELECT 1 FROM (SELECT i.k, i.v, i.w FROM i3 i WHERE i.w IS DISTINCT FROM o.k AND i.v IS NOT DISTINCT FROM o.w) q WHERE q.v IS DISTINCT FROM o.k)
+----
+3	5	4
+
 # the delim join stays a delim join without the rewrite into a CTE
 statement ok
 SET delim_join_as_cte = false
