@@ -1,0 +1,26 @@
+# name: test/sql/copy/parquet/writer/parquet_timetz_end_of_day.test
+# description: TIMETZ values at 24:00:00 UTC keep the end of the day when written to Parquet
+# group: [writer]
+
+require parquet
+
+statement ok
+COPY (SELECT * FROM (VALUES (1, TIMETZ '24:00:00+00'), (2, TIMETZ '23:00:00-01'), (3, TIMETZ '12:00:00+00')) t(i, tz))
+TO '__TEST_DIR__/timetz_end_of_day.parquet'
+
+query II
+SELECT i, tz::VARCHAR FROM '__TEST_DIR__/timetz_end_of_day.parquet' ORDER BY i
+----
+1	24:00:00+00
+2	24:00:00+00
+3	12:00:00+00
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/timetz_end_of_day.parquet' WHERE tz = TIMETZ '24:00:00+00'
+----
+2
+
+query I
+SELECT max(tz)::VARCHAR FROM '__TEST_DIR__/timetz_end_of_day.parquet'
+----
+24:00:00+00
