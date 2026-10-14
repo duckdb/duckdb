@@ -219,11 +219,11 @@ jobs:
         include:
           - name: TPCH SF10
             benchmarks: .github/regression/tpch_sf10.csv
-            threads: 2
+            threads: 4
             sf: 10
           - name: TPCDS SF10
             benchmarks: .github/regression/tpcds_sf10.csv
-            threads: 2
+            threads: 4
             sf: 10
           - name: TPCH-PARQUET SF1
             benchmarks: .github/regression/tpch_parquet.csv
