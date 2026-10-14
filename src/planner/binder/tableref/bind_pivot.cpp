@@ -391,8 +391,9 @@ static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, Piv
 	for (auto &group_name : bound_pivot->bound_group_names) {
 		final_pivot_operator->select_list.push_back(make_uniq<ColumnRefExpression>(group_name));
 	}
-	// gather aggregate names
-	vector<Identifier> aggregate_names;
+	// gather aggregate names - these are deduplicated together with the group names, as they are all output columns
+	vector<Identifier> aggregate_names = bound_pivot->bound_group_names;
+	const auto group_count = aggregate_names.size();
 	for (auto &pivot_value : bound_pivot->bound_pivot_values) {
 		for (idx_t aggr_idx = 0; aggr_idx < ref.aggregates.size(); aggr_idx++) {
 			auto aggr = ref.aggregates[aggr_idx]->Copy();
@@ -402,6 +403,7 @@ static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, Piv
 		}
 	}
 	QueryResult::DeduplicateColumns(aggregate_names);
+	aggregate_names.erase(aggregate_names.begin(), aggregate_names.begin() + NumericCast<int64_t>(group_count));
 
 	idx_t aggr_name_idx = 0;
 	for (idx_t pivot_idx = 0; pivot_idx < bound_pivot->bound_pivot_values.size(); pivot_idx++) {
