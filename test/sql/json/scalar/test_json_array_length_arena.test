@@ -1,0 +1,58 @@
+# name: test/sql/json/scalar/test_json_array_length_arena.test
+# description: Keep JSON array-length parsing bounded by one document per row
+# group: [scalar]
+
+require json
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET memory_limit = '128MB';
+
+# The cast validates each VARCHAR as JSON. Its validation arena must also be
+# released between input rows, while the JSON strings remain owned by the table.
+statement ok
+CREATE TABLE cast_documents(document JSON);
+
+statement ok
+INSERT INTO cast_documents
+SELECT '[' || repeat('0,', 10000) || i::VARCHAR || ']'
+FROM range(1024) t(i);
+
+query I
+SELECT count(document) FROM cast_documents;
+----
+1024
+
+statement ok
+DROP TABLE cast_documents;
+
+# Each input differs, so the expression cannot be folded to a constant.
+# The old vector-wide JSON arenas retain all 256 parsed documents and exceed
+# this limit; each of the six array_length overloads must still return the
+# exact number of elements after its per-row arena is reset.
+query IIIIII
+WITH documents AS (
+    SELECT '[' || repeat('0,', 10000) || i::VARCHAR || ']' AS document
+    FROM range(256) t(i)
+)
+SELECT sum(json_array_length(document)),
+       sum(json_array_length(document::JSON)),
+       sum(json_array_length(document, '$')),
+       sum(json_array_length(document::JSON, '$')),
+       sum(list_sum(json_array_length(document, ['$', '$[0]']))),
+       sum(list_sum(json_array_length(document::JSON, ['$', '$[0]'])))
+FROM documents;
+----
+2560256	2560256	2560256	2560256	2560256	2560256
+
+query IIIIII
+SELECT json_array_length('[]'::JSON),
+       json_array_length('null'::JSON),
+       json_array_length(NULL::JSON),
+       json_array_length(TRY_CAST('{bad' AS JSON)),
+       json_array_length('[1,2]'::JSON, '$[1]'),
+       json_array_length('{"a":[1,2]}'::JSON, ['$.a', '$.missing']);
+----
+0	0	NULL	NULL	NULL	[2, NULL]
