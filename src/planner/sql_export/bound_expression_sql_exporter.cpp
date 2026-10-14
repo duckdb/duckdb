@@ -118,11 +118,7 @@ BoundExpressionSQLExportState::PreserveCollation(const LogicalType &type, BoundE
 			result.GetValue() = make_uniq<CollateExpression>(std::move(collation), std::move(result.GetValue()));
 		}
 	} else if (BoundExpressionSQLExportState::HasNestedCollation(type)) {
-		auto issue = BoundExpressionSQLExportState::UnsupportedFeature(
-		    path, "nested_result_collation", "Nested result collations require a typed SQL representation");
-		issue.facts.emplace_back("logical_type", Value(type.ToString()));
-		issue.facts.emplace_back("varchar_collations", Value(SQLExportHelpers::TypeCollationSignature(type)));
-		return BoundExpressionSQLExportResult::Failure({std::move(issue)});
+		return CastToConstructedType(type, std::move(result.GetValue()), path);
 	}
 	return result;
 }
