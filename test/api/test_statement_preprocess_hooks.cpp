@@ -332,7 +332,7 @@ TEST_CASE("Statement preprocessing covers query execution and repeated prepared 
 	    "preprocess_group", +[](ClientContext &context, const FunctionParameters &) -> string {
 		    auto state = context.registered_state->Get<PreprocessHookState>("preprocess_test");
 		    REQUIRE(state->depth == 1);
-		    return "SELECT 41; SELECT 42";
+		    return "SET threads=1; SELECT 42";
 	    }));
 
 	REQUIRE_NO_FAIL(con.Query("PRAGMA preprocess_group"));
