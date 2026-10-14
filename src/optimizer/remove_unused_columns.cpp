@@ -1825,12 +1825,6 @@ static bool TryGetCastChild(unique_ptr<Expression> &expr, optional_ptr<unique_pt
 	if (BoundCastExpression::IsTryCast(cast)) {
 		return false;
 	}
-	if (cast.GetReturnType().IsJSONType()) {
-		// JSON casts depend on the logical input type, not the underlying storage type.
-		// Other casts are checked by the scan against the type a VARIANT field is shredded on.
-		return false;
-	}
-
 	child = BoundCastExpression::ChildMutable(cast);
 	return true;
 }

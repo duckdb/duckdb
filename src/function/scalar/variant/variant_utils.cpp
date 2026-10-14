@@ -449,8 +449,8 @@ bool VariantUtils::ShreddedCastMatchesVariantCast(const LogicalType &shredded_ty
 	if (target.id() == LogicalTypeId::VARIANT || shredded_type == target) {
 		return true;
 	}
-	// a VARIANT casts its value with a strict cast, which only differs from a regular cast when parsing strings
-	return shredded_type.IsNumeric() && target.IsNumeric();
+	// casts to JSON serialize the VARIANT, and the VARIANT cast has no conversion to e.g. ENUM or UNION
+	return VariantSupportsType(target);
 }
 
 //===--------------------------------------------------------------------===//

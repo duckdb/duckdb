@@ -30,12 +30,11 @@ public:
 	    : variant(variant_format), client(client) {
 	}
 
-	optional<Value> TryCastAs(const Value &value, const LogicalType &target_type, string *error_message = nullptr,
-	                          bool strict = false) {
+	optional<Value> TryCastAs(const Value &value, const LogicalType &target_type, string *error_message = nullptr) {
 		if (client) {
-			return value.TryCastAs(*client, target_type, error_message, strict);
+			return value.TryCastAs(*client, target_type, error_message);
 		}
-		return value.DefaultTryCastAs(target_type, error_message, strict);
+		return value.DefaultTryCastAs(target_type, error_message);
 	}
 
 public:
@@ -209,7 +208,7 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 		}
 		if (!converted) {
 			auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, sel[i]);
-			auto cast_value = conversion_data.TryCastAs(value, target_type, nullptr, true);
+			auto cast_value = conversion_data.TryCastAs(value, target_type);
 			if (!cast_value) {
 				conversion_data.error = StringUtil::Format("Can't convert VARIANT(%s) value '%s'",
 				                                           EnumUtil::ToString(type_id), value.ToString());
@@ -587,7 +586,7 @@ static bool VerifyConvertedMaps(FromVariantConversionData &conversion_data, Vect
 static optional<Value> TryCastVariantValueToMap(FromVariantConversionData &conversion_data, const Value &value,
                                                 const LogicalType &target_type) {
 	auto entry_type = ListType::GetChildType(target_type);
-	auto entries = conversion_data.TryCastAs(value, LogicalType::LIST(entry_type), nullptr, true);
+	auto entries = conversion_data.TryCastAs(value, LogicalType::LIST(entry_type));
 	if (!entries) {
 		return entries;
 	}
@@ -669,7 +668,7 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			try {
 				auto cast_value = target_type.id() == LogicalTypeId::MAP
 				                      ? TryCastVariantValueToMap(conversion_data, value, target_type)
-				                      : conversion_data.TryCastAs(value, target_type, nullptr, true);
+				                      : conversion_data.TryCastAs(value, target_type);
 				if (!cast_value) {
 					cast_value = Value(target_type);
 					all_valid = false;
