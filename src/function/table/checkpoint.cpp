@@ -51,6 +51,9 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunc
 	if (db->IsSystem() || db->IsTemporary()) {
 		throw BinderException("Cannot checkpoint database \"%s\": it does not have storage", db->GetName());
 	}
+	if (!db->HasStorageManager()) {
+		throw BinderException("Cannot checkpoint database \"%s\": it does not have storage", db->GetName());
+	}
 	return make_uniq<CheckpointBindData>(db);
 }
 
