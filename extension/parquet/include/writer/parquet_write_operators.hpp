@@ -338,12 +338,7 @@ struct ParquetUUIDOperator : public BaseParquetOperator {
 struct ParquetTimeTZOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
-		// a UTC time of exactly 24:00:00 is written as the end of the day, as for TIME
-		auto utc_micros = input.time().value - input.offset() * Interval::MICROS_PER_SEC;
-		if (utc_micros == Interval::MICROS_PER_DAY) {
-			return utc_micros;
-		}
-		return Time::NormalizeTimeTZ(input).value;
+		return ParquetTimeTZToUTCMicros(input);
 	}
 
 	template <class SRC, class TGT>
