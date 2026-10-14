@@ -10,6 +10,7 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/once_flag.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -70,7 +71,7 @@ private:
 	void CombineInternal(const ColumnSet &validity_cols);
 
 private:
-	std::once_flag combine_once;
+	OnceFlag combine_once;
 	//! Combining consumes its inputs, so failures must be shared rather than retried.
 	std::exception_ptr combine_error;
 };

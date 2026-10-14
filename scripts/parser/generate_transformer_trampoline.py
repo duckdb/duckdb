@@ -79,6 +79,7 @@ IDENTIFIER_OR_KEYWORD_RULES = (
     "ColumnNameKeyword",
     "FuncNameKeyword",
     "TypeNameKeyword",
+    "BareLabelKeyword",
     "SettingName",
 )
 TRAMPOLINE_START_BLOCK = (
