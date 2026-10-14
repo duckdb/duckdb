@@ -274,13 +274,15 @@ SELECT make_timestamp_ns(-9223286400000000000);
 ----
 1677-09-22 00:00:00
 
-statement error
-SELECT make_timestamp_ns(-9223286400000000001);
+# Every finite nanosecond count is a valid TIMESTAMP_NS (see timestamp_ns_lower_bound.test),
+# so only infinities are rejected - e.g. INT64_MIN is valid:
+query I
+SELECT make_timestamp_ns(-9223372036854775806);
 ----
-Conversion Error: Timestamp microseconds out of range
+1677-09-21 00:12:43.145224194
 
 statement error
-SELECT make_timestamp_ns(-9223372036854775806);
+SELECT make_timestamp_ns(-9223372036854775807); -- Negative infinity
 ----
 Conversion Error: Timestamp microseconds out of range
 

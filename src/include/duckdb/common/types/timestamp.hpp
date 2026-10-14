@@ -47,17 +47,16 @@ public:
 	constexpr static const int32_t MIN_DAY = 22;
 	//! Minimum finite TIMESTAMP in microseconds since epoch: 290309-12-22 (BC) 00:00:00
 	constexpr static const int64_t MIN_MICROS = -9223372022400000000LL;
-	//! Minimum finite TIMESTAMP_NS in nanoseconds since epoch
-	constexpr static const int64_t MIN_NANOS = -9223286400000000000LL;
 
 public:
 	//! Returns true if the microsecond count is a valid finite TIMESTAMP (i.e. it can be split into date/time parts)
 	static inline bool IsValid(timestamp_t timestamp) {
 		return timestamp.IsFinite() && timestamp.value >= MIN_MICROS;
 	}
-	//! Returns true if the nanosecond count is a valid finite TIMESTAMP_NS
+	//! Every finite nanosecond count splits into a date (days, fits int32) plus a time of day,
+	//! so finiteness alone decides validity for TIMESTAMP_NS
 	static inline bool IsValid(timestamp_ns_t timestamp) {
-		return timestamp.IsFinite() && timestamp.value >= MIN_NANOS;
+		return timestamp.IsFinite();
 	}
 
 	//! Convert a string in the format "YYYY-MM-DD hh:mm:ss[.f][-+TH[:tm]]" to a timestamp object
