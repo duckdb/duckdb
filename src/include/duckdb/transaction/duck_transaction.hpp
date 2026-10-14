@@ -95,8 +95,8 @@ public:
 	                idx_t base_row);
 	void PushSequenceUsage(SequenceCatalogEntry &entry, const SequenceData &data);
 	void PushAppend(DuckTableEntry &table_entry, idx_t row_start, idx_t row_count);
-	UndoBufferReference CreateUpdateInfo(DuckTableEntry &table_entry, idx_t type_size, idx_t entries,
-	                                     idx_t row_group_start);
+	UndoBufferReference CreateUpdateInfo(DuckTableEntry &table_entry, idx_t type_size, idx_t capacity,
+	                                     idx_t value_capacity, idx_t row_group_start);
 
 	DuckTransactionManager &GetTransactionManager();
 	bool IsDuckTransaction() const override {

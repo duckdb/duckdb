@@ -17,7 +17,6 @@ add_library_unity(
   materialized_aggregate_reuse.cpp
   aggregate_rewrite_helper.cpp
   build_probe_side_optimizer.cpp
-  builtin_function_lookup.cpp
   column_binding_replacer.cpp
   column_lifetime_analyzer.cpp
   constant_or_null_simplification.cpp
@@ -27,6 +26,8 @@ add_library_unity(
   compressed_materialization.cpp
   cse_optimizer.cpp
   cte_filter_pusher.cpp
+  cte_join_filter_collector.cpp
+  cte_join_filter_pusher.cpp
   cte_inlining.cpp
   deliminator.cpp
   multi_stage_aggregate_rewriter.cpp

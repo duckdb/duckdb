@@ -40,7 +40,12 @@ bool CanInferConstantFromNumericBounds(const Value &value) {
 }
 
 bool TryInferConstantBounds(const BaseStatistics &stats, Value &constant) {
-	if (stats.CanHaveNull()) {
+	if (stats.CanHaveNull() && !stats.CanHaveNoNull()) {
+		constant = Value(stats.GetType());
+		return true;
+	}
+	// bounds of empty stats do not describe any actual value
+	if (stats.CanHaveNull() || !stats.CanHaveNoNull()) {
 		return false;
 	}
 	if (stats.GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(stats)) {

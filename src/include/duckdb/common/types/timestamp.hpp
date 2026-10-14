@@ -70,6 +70,16 @@ public:
 	DUCKDB_API static date_t GetDate(timestamp_t timestamp);
 	DUCKDB_API static date_t GetDateNS(timestamp_ns_t timestamp);
 
+	//	Split a time at some precision, producing positive values.
+	static inline void SplitTime(const int64_t value, const int64_t precision, int64_t &whole, int64_t &frac) {
+		whole = value / precision;
+		frac = value % precision;
+		if (frac < 0) {
+			frac += precision;
+			--whole;
+		}
+	}
+
 	DUCKDB_API static dtime_t GetTime(timestamp_t timestamp);
 	DUCKDB_API static dtime_ns_t GetTimeNs(timestamp_ns_t timestamp);
 	//! Create a Timestamp object from a specified (date, time) combination

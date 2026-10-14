@@ -7,6 +7,7 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/function/cast/vector_cast_helpers.hpp"
 
 namespace duckdb {
 
@@ -106,6 +107,14 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 
 	auto in_data = FlatVector::GetData<string_t>(child);
 
+	// string elements are quoted and escaped where required, as for lists
+	auto child_is_nested = ArrayType::GetChildType(source.GetType()).IsNested();
+	auto string_length_func = child_is_nested ? VectorCastHelpers::CalculateStringLength
+	                                          : VectorCastHelpers::CalculateEscapedStringLength<false>;
+	auto write_string_func =
+	    child_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString<false>;
+	auto needs_quotes = make_unsafe_uniq_array_uninitialized<bool>(MaxValue<idx_t>(size, 1));
+
 	static constexpr idx_t SEP_LENGTH = 2;
 	static constexpr idx_t NULL_LENGTH = 4;
 
@@ -124,7 +133,8 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 			if (j > 0) {
 				array_varchar_length += SEP_LENGTH;
 			}
-			array_varchar_length += child_validity.RowIsValid(elem_idx) ? elem.GetSize() : NULL_LENGTH;
+			array_varchar_length +=
+			    child_validity.RowIsValid(elem_idx) ? string_length_func(elem, needs_quotes[j]) : NULL_LENGTH;
 		}
 
 		auto &out_str = result_data.WriteEmptyString(array_varchar_length);
@@ -141,9 +151,7 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 				offset += SEP_LENGTH;
 			}
 			if (child_validity.RowIsValid(elem_idx)) {
-				auto len = elem.GetSize();
-				memcpy(dataptr + offset, elem.GetData(), len);
-				offset += len;
+				offset += write_string_func(dataptr + offset, elem, needs_quotes[j]);
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
 				offset += NULL_LENGTH;

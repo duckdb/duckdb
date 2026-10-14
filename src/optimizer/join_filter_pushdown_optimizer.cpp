@@ -4,7 +4,7 @@
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/optimizer/builtin_function_lookup.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -368,6 +368,9 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		JoinFilterPushdownFilter get_filter;
 		get_filter.dynamic_filters = get.dynamic_filters;
 		get_filter.columns = std::move(target.columns);
+		if (get.has_estimated_cardinality) {
+			get_filter.estimated_scan_cardinality = get.estimated_cardinality;
+		}
 		pushdown_info->probe_info.push_back(std::move(get_filter));
 	}
 

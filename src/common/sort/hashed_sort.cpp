@@ -272,27 +272,8 @@ bool HashedSortGlobalSinkState::CanBypassSort(idx_t hash_bin) const {
 }
 
 ProgressData HashedSortGlobalSinkState::GetSinkProgress(ClientContext &client, const ProgressData source) const {
-	ProgressData result;
-	result.done = source.done / 2;
-	result.total = source.total;
-	result.invalid = source.invalid;
-
-	// Sort::GetSinkProgress assumes that there is only 1 sort.
-	// So we just use it to figure out how many rows have been sorted.
-	const ProgressData zero_progress;
-	lock_guard<mutex> guard(lock);
-	const auto &sort = hashed_sort.sort;
-	for (auto &hash_group : hash_groups) {
-		if (!hash_group || !hash_group->sort_global) {
-			continue;
-		}
-
-		const auto group_progress = sort->GetSinkProgress(client, *hash_group->sort_global, zero_progress);
-		result.done += group_progress.done;
-		result.invalid = result.invalid || group_progress.invalid;
-	}
-
-	return result;
+	// the hash groups are sorted after the sink has finished
+	return source;
 }
 
 SinkFinalizeType HashedSort::Finalize(ClientContext &client, OperatorSinkFinalizeInput &finalize) const {
@@ -529,19 +510,10 @@ static void PackDirectColumnData(HashedSortGroup &hash_group) {
 	}
 
 	auto result = std::move(fragments[0]);
-	ColumnDataAppendState append_state;
-	result->InitializeAppend(append_state);
-	DataChunk chunk;
-	result->InitializeScanChunk(chunk);
 
 	// Downstream source tasks address hash groups by packed chunk index.
 	for (idx_t fragment_idx = 1; fragment_idx < fragments.size(); fragment_idx++) {
-		auto &fragment = *fragments[fragment_idx];
-		ColumnDataScanState scan_state;
-		fragment.InitializeScan(scan_state);
-		while (fragment.Scan(scan_state, chunk)) {
-			result->Append(append_state, chunk);
-		}
+		result->Append(*fragments[fragment_idx]);
 	}
 
 	D_ASSERT(result->Count() == hash_group.count);
