@@ -1,0 +1,20 @@
+# name: benchmark/micro/join/not_exists_range_anti.benchmark
+# description: A correlated NOT EXISTS with only range predicates streams its range matches through an ANTI join
+# group: [join]
+
+name Correlated NOT EXISTS Range Anti Join
+group join
+
+load
+CREATE TABLE snapshots AS SELECT range AS snapshot_id FROM range(4000);
+CREATE TABLE files AS
+SELECT range AS file_id, (hash(range) % 2000)::BIGINT AS begin_snapshot,
+       (2000 + hash(range * 7) % 2000)::BIGINT AS end_snapshot
+FROM range(20000);
+
+run
+SELECT count(*) FROM files
+WHERE NOT EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id >= begin_snapshot AND snapshot_id < end_snapshot);
+
+result I
+0
