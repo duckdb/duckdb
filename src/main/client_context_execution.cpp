@@ -452,6 +452,7 @@ void ClientContext::AbandonActiveQuery(ClientContextLock &lock) {
 		AbortInternal(lock);
 	}
 	interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
+	client_data->profiler->ResetQueryStart();
 }
 
 unique_ptr<QueryResult> ClientContext::CompleteInternal(ClientContextLock &lock, unique_ptr<QueryResult> result) {

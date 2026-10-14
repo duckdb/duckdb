@@ -64,19 +64,22 @@
 		"total_memory_allocated": {
 			"metric_type": "uint64",
 			"description": "The total memory allocated by the buffer manager",
-			"unit": "bytes"
+			"unit": "bytes",
+			"live": true
 		}
 	},
 	"io": {
 		"total_bytes_read": {
 			"metric_type": "uint64",
 			"description": "The total amount of bytes read from storage",
-			"unit": "bytes"
+			"unit": "bytes",
+			"live": true
 		},
 		"total_bytes_written": {
 			"metric_type": "uint64",
 			"description": "The total amount of bytes written to storage",
-			"unit": "bytes"
+			"unit": "bytes",
+			"live": true
 		}
 	},
 	"storage": {
