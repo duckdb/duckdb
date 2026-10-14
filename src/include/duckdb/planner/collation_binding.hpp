@@ -36,6 +36,10 @@ public:
 public:
 	DUCKDB_API static CollationBinding &Get(ClientContext &context);
 	DUCKDB_API static CollationBinding &Get(DatabaseInstance &db);
+	//! Hashes the collation metadata of a type, including nested types.
+	DUCKDB_API static hash_t HashCollations(const LogicalType &type);
+	//! Checks whether two types have identical collation metadata, including nested types.
+	DUCKDB_API static bool CollationsEqual(const LogicalType &left, const LogicalType &right);
 
 	DUCKDB_API void RegisterCollation(CollationCallback callback);
 	DUCKDB_API bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
