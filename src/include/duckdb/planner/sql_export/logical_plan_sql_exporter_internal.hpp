@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/table_column.hpp"
 #include "duckdb/planner/logical_plan_sql_export_context.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
@@ -122,5 +123,18 @@ struct SQLExportDMLHelpers {
 	                                             const LogicalPlanVerificationPath &path);
 	//! Whether this exported query is a data-modifying statement node.
 	static bool IsDMLNode(const QueryNode &query);
+	//! The row-id column that keys an exported data-modifying statement, with its position among the
+	//! row-id columns the binder appends to the bound source.
+	struct SelectedRowId {
+		//! The selected column, pointing into the given map, or null when no key exists
+		optional_ptr<const TableColumn> column;
+		//! Index of the selected column within the row-id set
+		idx_t ordinal = 0;
+		//! Number of row-id columns the binder appends to the source
+		idx_t count = 0;
+	};
+	//! Selects the single row-id column, or the logical row identifier among several.
+	static SelectedRowId SelectRowIdColumn(const vector<column_t> &row_id_columns,
+	                                       const virtual_column_map_t &virtual_columns);
 };
 } // namespace duckdb
