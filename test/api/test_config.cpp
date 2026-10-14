@@ -261,3 +261,27 @@ TEST_CASE("Test secret_directory configuration update after secret creation", "[
 	auto update_secret_directory = con.Query("SET secret_directory='new_secret_dir';");
 	REQUIRE_FAIL(update_secret_directory);
 }
+
+TEST_CASE("Test deprecated extension options warn when set", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &config = DBConfig::GetConfig(*db.instance);
+	config.AddExtensionOption("my_deprecated_option", "A deprecated option", LogicalType::BOOLEAN, Value(false),
+	                          nullptr, SetScope::SESSION, false, true);
+	config.AddExtensionOption("my_option", "An option", LogicalType::BOOLEAN, Value(false));
+
+	REQUIRE_NO_FAIL(con.Query("SET enable_logging=true"));
+	REQUIRE_NO_FAIL(con.Query("SET warnings_as_errors=true"));
+
+	auto result = con.Query("SET my_deprecated_option=true");
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(),
+	                             "The 'my_deprecated_option' setting is deprecated and will be removed"));
+	REQUIRE_NO_FAIL(con.Query("RESET my_deprecated_option"));
+	REQUIRE_NO_FAIL(con.Query("SET my_option=true"));
+
+	result = con.Query("SELECT count(*) FROM duckdb_settings() WHERE name = 'my_deprecated_option'");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	result = con.Query("SELECT count(*) FROM duckdb_settings(deprecated := true) WHERE name = 'my_deprecated_option'");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}

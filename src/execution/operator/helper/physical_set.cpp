@@ -28,6 +28,9 @@ void PhysicalSet::SetExtensionVariable(ClientContext &context, const Identifier 
 	if (extension_option.info) {
 		extension_option.info->OnSet(context, resolved_scope, target_value, false);
 	}
+	if (extension_option.is_deprecated && !name.GetIdentifierName().empty()) {
+		SettingCallbackInfo(context, resolved_scope).WarnDeprecated(name.GetIdentifierName());
+	}
 	scope = resolved_scope;
 	auto setting_index = extension_option.setting_index.GetIndex();
 	SetGenericVariable(context, setting_index, scope, std::move(target_value));
@@ -85,9 +88,12 @@ void PhysicalSet::SetVariable(ClientContext &context, const Identifier &name, Se
 
 	Value input_val = value.CastAs(context, DBConfig::ParseLogicalType(option->parameter_type));
 	if (option->default_value) {
+		SettingCallbackInfo info(context, variable_scope);
 		if (option->set_callback) {
-			SettingCallbackInfo info(context, variable_scope);
 			option->set_callback(info, input_val);
+		}
+		if (option->is_deprecated) {
+			info.WarnDeprecated(option->name);
 		}
 		auto setting_index = option->setting_idx.GetIndex();
 		SetGenericVariable(context, setting_index, variable_scope, std::move(input_val));

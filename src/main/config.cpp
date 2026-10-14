@@ -147,7 +147,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(DefaultOrderSetting),
     DUCKDB_GLOBAL(DefaultSecretStorageSetting),
     DUCKDB_SETTING_CALLBACK(DefaultTransactionInvalidationPolicySetting),
-    DUCKDB_SETTING_CALLBACK(DelimJoinAsCteSetting),
+    DUCKDB_SETTING(DelimJoinAsCteSetting),
     DUCKDB_SETTING_CALLBACK(DialectCompatibilityModeSetting),
     DUCKDB_SETTING_CALLBACK(DisableDatabaseInvalidationSetting),
     DUCKDB_SETTING(DisableTimestamptzCastsSetting),
@@ -163,7 +163,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(EnableHTTPMetadataCacheSetting),
     DUCKDB_GLOBAL(EnableLogging),
     DUCKDB_SETTING(EnableMacroDependenciesSetting),
-    DUCKDB_SETTING_CALLBACK(EnableObjectCacheSetting),
+    DUCKDB_SETTING(EnableObjectCacheSetting),
     DUCKDB_SETTING(EnableOptimisticWriteSetting),
     DUCKDB_SETTING(EnableOptimizerSetting),
     DUCKDB_LOCAL(EnableProfilingSetting),
@@ -171,12 +171,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(EnableProgressBarPrintSetting),
     DUCKDB_SETTING(EnableViewDependenciesSetting),
     DUCKDB_GLOBAL(EnabledLogTypes),
-    DUCKDB_SETTING_CALLBACK(ErrorOnDivisionByZeroSetting),
+    DUCKDB_SETTING(ErrorOnDivisionByZeroSetting),
     DUCKDB_SETTING(ErrorsAsJSONSetting),
-    DUCKDB_SETTING_CALLBACK(ExperimentalMetadataReuseSetting),
+    DUCKDB_SETTING(ExperimentalMetadataReuseSetting),
     DUCKDB_SETTING_CALLBACK(ExplainOutputSetting),
     DUCKDB_GLOBAL(ExtensionDirectoriesSetting),
-    DUCKDB_SETTING_CALLBACK(ExtensionDirectorySetting),
+    DUCKDB_SETTING(ExtensionDirectorySetting),
     DUCKDB_SETTING_CALLBACK(ExtensionRepositoryDirectorySetting),
     DUCKDB_SETTING_CALLBACK(ExternalFileCacheLocalMaxBlockSizeSetting),
     DUCKDB_SETTING_CALLBACK(ExternalFileCacheRemoteMaxBlockSizeSetting),
@@ -185,7 +185,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ExternalFileCacheSpillSetting),
     DUCKDB_SETTING_CALLBACK(ExternalThreadsSetting),
     DUCKDB_SETTING(FileSearchPathSetting),
-    DUCKDB_SETTING_CALLBACK(ForceColumnMetadataReuseSetting),
+    DUCKDB_SETTING(ForceColumnMetadataReuseSetting),
     DUCKDB_SETTING_CALLBACK(ForceCompressionSetting),
     DUCKDB_SETTING_CALLBACK(FsyncModeSetting),
     DUCKDB_SETTING(GeometryMinimumShreddingSize),
@@ -203,8 +203,8 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(IntegerDivisionSetting),
     DUCKDB_SETTING_CALLBACK(LambdaSyntaxSetting),
     DUCKDB_SETTING(LateMaterializationMaxRowsSetting),
-    DUCKDB_SETTING_CALLBACK(LegacyDisableNullTypeSetting),
-    DUCKDB_SETTING_CALLBACK(LegacyMetricsFormatSetting),
+    DUCKDB_SETTING(LegacyDisableNullTypeSetting),
+    DUCKDB_SETTING(LegacyMetricsFormatSetting),
     DUCKDB_SETTING(LockConfigurationSetting),
     DUCKDB_SETTING_CALLBACK(LogQueryPathSetting),
     DUCKDB_GLOBAL(LoggingLevel),
@@ -218,7 +218,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(MaxVacuumTasksSetting),
     DUCKDB_SETTING(MergeJoinThresholdSetting),
     DUCKDB_SETTING(NestedLoopJoinThresholdSetting),
-    DUCKDB_SETTING_CALLBACK(OldImplicitCastingSetting),
+    DUCKDB_SETTING(OldImplicitCastingSetting),
     DUCKDB_LOCAL(OperatorMemoryLimitSetting),
     DUCKDB_SETTING(OrderByNonIntegerLiteralSetting),
     DUCKDB_SETTING_CALLBACK(OrderedAggregateThresholdSetting),
@@ -232,7 +232,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(PreferRangeJoinsSetting),
     DUCKDB_SETTING_CALLBACK(PreserveIdentifierCaseSetting),
     DUCKDB_SETTING(PreserveInsertionOrderSetting),
-    DUCKDB_SETTING_CALLBACK(ProduceArrowStringViewSetting),
+    DUCKDB_SETTING(ProduceArrowStringViewSetting),
     DUCKDB_LOCAL(ProfilingCoverageSetting),
     DUCKDB_LOCAL(ProfilingModeSetting),
     DUCKDB_LOCAL(ProfilingOutputSetting),
@@ -304,6 +304,18 @@ SettingCallbackInfo::SettingCallbackInfo(ClientContext &context_p, SetScope scop
 
 SettingCallbackInfo::SettingCallbackInfo(DBConfig &config, optional_ptr<DatabaseInstance> db)
     : config(config), db(db), context(nullptr), scope(SetScope::GLOBAL) {
+}
+
+void SettingCallbackInfo::WarnDeprecated(const string &name) const {
+	if (is_reset) {
+		return;
+	}
+	auto message = StringUtil::Format("The '%s' setting is deprecated and will be removed in a future release.", name);
+	if (context) {
+		DUCKDB_LOG_WARNING(*context, message);
+	} else if (db) {
+		DUCKDB_LOG_WARNING(*db, message);
+	}
 }
 
 idx_t DBConfig::GetOptionCount() {
@@ -410,9 +422,12 @@ void DBConfig::SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationO
 	Value input = value.DefaultCastAs(ParseLogicalType(option.parameter_type));
 	if (option.default_value) {
 		// generic option
+		SettingCallbackInfo info(*this, db);
 		if (option.set_callback) {
-			SettingCallbackInfo info(*this, db);
 			option.set_callback(info, input);
+		}
+		if (option.is_deprecated) {
+			info.WarnDeprecated(option.name);
 		}
 		user_settings.SetUserSetting(option.setting_idx.GetIndex(), std::move(input));
 		return;
