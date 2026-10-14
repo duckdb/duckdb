@@ -33,6 +33,12 @@
         "test/sql/sql_export/composition_q1_plan.test",
         "test/sql/sql_export/dml_statements.test"
       ]
+    },
+    {
+      "reason": "Asserts that duplicate subplans are shared; synthetic verification projections make the duplicates differ.",
+      "paths": [
+        "test/sql/optimizer/test_common_subplan_self_join.test"
+      ]
     }
   ]
 }
