@@ -3315,6 +3315,7 @@ static void FillDecimalDigits(SRC input, duckdb_fast_float::decimal &decimal, bo
 }
 
 static void FillDecimalDigits(hugeint_t input, duckdb_fast_float::decimal &decimal, bool &negative) {
+	negative = false;
 	if (input == 0) {
 		return;
 	}
@@ -3322,8 +3323,6 @@ static void FillDecimalDigits(hugeint_t input, duckdb_fast_float::decimal &decim
 	if (input < 0) {
 		negative = true;
 		Hugeint::NegateInPlace(input);
-	} else {
-		negative = false;
 	}
 
 	// a hugeint can have one more digit than the maximum decimal width
@@ -3346,7 +3345,7 @@ bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t width, uint8_
 	}
 
 	duckdb_fast_float::decimal decimal;
-	bool negative;
+	bool negative = false;
 	FillDecimalDigits(input, decimal, negative);
 	decimal.decimal_point = UnsafeNumericCast<int32_t>(decimal.num_digits) - UnsafeNumericCast<int32_t>(scale);
 	while (decimal.num_digits > 0 && decimal.digits[decimal.num_digits - 1] == 0) {
