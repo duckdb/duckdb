@@ -15649,7 +15649,7 @@ PEGTransformerFactory::FinalizeLogicalNotExpressionTrampoline(PEGTransformer &tr
 		not_expression = process.TakeResult<vector<bool>>(0);
 	}
 	auto is_expression = process.TakeResult<unique_ptr<ParsedExpression>>(1);
-	auto result = TransformLogicalNotExpression(transformer, std::move(not_expression), std::move(is_expression));
+	auto result = TransformLogicalNotExpression(transformer, not_expression, std::move(is_expression));
 	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
 }
 
@@ -15678,7 +15678,7 @@ PEGTransformerFactory::FinalizeNotExpressionTrampoline(PEGTransformer &transform
 		not_keyword.push_back(process.TakeResult<bool>(i));
 	}
 	auto result = TransformNotExpression(transformer, not_keyword);
-	return transformer.MakeResult<vector<bool>>(std::move(result));
+	return transformer.MakeResult<vector<bool>>(result);
 }
 
 void PEGTransformerFactory::InitializeNotKeywordTrampoline(PEGTransformer &transformer,
@@ -16158,7 +16158,7 @@ PEGTransformerFactory::FinalizeNotComparisonOperandTrampoline(PEGTransformer &tr
                                                               GeneratedTransformProcess &process) {
 	auto not_expression = process.TakeResult<vector<bool>>(0);
 	auto is_expression = process.TakeResult<unique_ptr<ParsedExpression>>(1);
-	auto result = TransformNotComparisonOperand(transformer, std::move(not_expression), std::move(is_expression));
+	auto result = TransformNotComparisonOperand(transformer, not_expression, std::move(is_expression));
 	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
 }
 

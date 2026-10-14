@@ -673,7 +673,8 @@ static unique_ptr<ParsedExpression> ApplyNotKeywords(PEGTransformer &transformer
 }
 
 unique_ptr<ParsedExpression>
-PEGTransformerFactory::TransformLogicalNotExpression(PEGTransformer &transformer, optional<vector<bool>> not_expression,
+PEGTransformerFactory::TransformLogicalNotExpression(PEGTransformer &transformer,
+                                                     const optional<vector<bool>> &not_expression,
                                                      unique_ptr<ParsedExpression> is_expression) {
 	if (!not_expression) {
 		return is_expression;
@@ -682,7 +683,7 @@ PEGTransformerFactory::TransformLogicalNotExpression(PEGTransformer &transformer
 }
 
 unique_ptr<ParsedExpression>
-PEGTransformerFactory::TransformNotComparisonOperand(PEGTransformer &transformer, vector<bool> not_expression,
+PEGTransformerFactory::TransformNotComparisonOperand(PEGTransformer &transformer, const vector<bool> &not_expression,
                                                      unique_ptr<ParsedExpression> is_expression) {
 	return ApplyNotKeywords(transformer, not_expression, std::move(is_expression));
 }

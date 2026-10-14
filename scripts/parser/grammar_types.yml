@@ -1637,7 +1637,7 @@ overrides:
   # expression.gram
   NotExpression:
     type: "vector<bool>"
-    by_value: true
+    by_value: false
   IsDistinctFromTail:
     type: "IsDistinctFromTail"
     by_value: true
