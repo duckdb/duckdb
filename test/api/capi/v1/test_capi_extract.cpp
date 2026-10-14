@@ -72,14 +72,18 @@ TEST_CASE("Test invalid PRAGMA in C API", "[capi]") {
 	REQUIRE(duckdb_open(nullptr, &db) == DuckDBSuccess);
 	REQUIRE(duckdb_connect(db, &con) == DuckDBSuccess);
 
+	// Extraction only parses, so the unknown PRAGMA function is reported when the statement is prepared
 	duckdb_extracted_statements stmts;
 	auto size = duckdb_extract_statements(con, "PRAGMA something;", &stmts);
+	REQUIRE(size == 1);
 
-	REQUIRE(size == 0);
-	err_msg = duckdb_extract_statements_error(stmts);
+	duckdb_prepared_statement prepared = nullptr;
+	REQUIRE(duckdb_prepare_extracted_statement(con, stmts, 0, &prepared) == DuckDBError);
+	err_msg = duckdb_prepare_error(prepared);
 	REQUIRE(err_msg != nullptr);
 	REQUIRE(string(err_msg).find("Catalog Error") != std::string::npos);
 
+	duckdb_destroy_prepare(&prepared);
 	duckdb_destroy_extracted(&stmts);
 	duckdb_disconnect(&con);
 	duckdb_close(&db);
@@ -95,17 +99,13 @@ TEST_CASE("Test extract statements for 'ALTER TABLE ... ADD COLUMN ... DEFAULT' 
 	    tester.connection,
 	    "ALTER TABLE my_table ADD COLUMN my_column TIMESTAMP WITH TIME ZONE DEFAULT non_existent_function();", &stmts);
 
-	REQUIRE(size == 5);
+	// The engine expands the ALTER when it is submitted, so extraction yields it as written
+	REQUIRE(size == 1);
 	REQUIRE(stmts != nullptr);
 	auto wrapper = (ExtractStatementsWrapper *)stmts;
 
-	REQUIRE(wrapper->statements[0]->query == "BEGIN;");
-	REQUIRE(wrapper->statements[1]->query ==
-	        "ALTER TABLE my_table ADD COLUMN my_column TIMESTAMP WITH TIME ZONE DEFAULT NULL;");
-	REQUIRE(wrapper->statements[2]->query == "UPDATE my_table SET my_column = non_existent_function();");
-	REQUIRE(wrapper->statements[3]->query ==
-	        "ALTER TABLE my_table ALTER COLUMN my_column SET DEFAULT non_existent_function();");
-	REQUIRE(wrapper->statements[4]->query == "COMMIT;");
+	REQUIRE(wrapper->statements[0]->query ==
+	        "ALTER TABLE my_table ADD COLUMN my_column TIMESTAMP WITH TIME ZONE DEFAULT non_existent_function();");
 
 	duckdb_destroy_extracted(&stmts);
 }

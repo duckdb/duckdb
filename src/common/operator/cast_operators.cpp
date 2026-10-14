@@ -1134,6 +1134,14 @@ static bool TryCastTimestampBase(const SRC &input, DST &result, bool strict = tr
 			++result.value;
 		}
 		result.value /= 2;
+		// rounding can go past the largest (or smallest) timestamp - the result must still be a valid timestamp
+		if (DST::PRECISION < Interval::MICROS_PER_SEC) {
+			int64_t micros;
+			if (!TryMultiplyOperator::Operation(result.value, Interval::MICROS_PER_SEC / DST::PRECISION, micros) ||
+			    !timestamp_t(micros).IsFinite()) {
+				return false;
+			}
+		}
 		return true;
 	}
 }
@@ -1376,6 +1384,16 @@ bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_ns_t &result, bool st
 }
 
 template <>
+bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_ms_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_tz_ns_t, timestamp_ms_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_sec_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_tz_ns_t, timestamp_sec_t>(input, result, strict);
+}
+
+template <>
 bool TryCast::Operation(timestamp_t input, timestamp_tz_t &result, bool strict) {
 	return TryCastTimestampBase<timestamp_t, timestamp_tz_t>(input, result, strict);
 }
@@ -1608,12 +1626,15 @@ string_t CastFromBlob::Operation(string_t input, StringHeap &heap) {
 }
 
 template <>
-string_t CastFromBlobToBit::Operation(string_t input, StringHeap &heap) {
-	idx_t result_size = input.GetSize() + 1;
-	if (result_size <= 1) {
-		throw ConversionException("Cannot cast empty BLOB to BIT");
+bool TryCastBlobToBit::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
+	if (input.GetSize() == 0) {
+		HandleCastError::AssignError("Cannot cast empty BLOB to BIT", parameters);
+		return false;
 	}
-	return heap.AddBlob(Bit::BlobToBit(input));
+	result = StringVector::EmptyString(result_vector, input.GetSize() + 1);
+	Bit::BlobToBit(input, result);
+	result.Finalize();
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1835,9 +1856,20 @@ hugeint_t CastFromUHugeintToUUID::Operation(uhugeint_t input) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
-	// Pass the query location of the cast source if available.
-	return Geometry::FromString(input, result, StringVector::GetStringHeap(result_vector), parameters.strict,
-	                            parameters.cast_source ? parameters.cast_source->GetQueryLocation() : QueryLocation());
+	auto &heap = StringVector::GetStringHeap(result_vector);
+	if (!parameters.error_message) {
+		// Pass the query location of the cast source if available.
+		return Geometry::FromString(input, result, heap, parameters.strict,
+		                            parameters.cast_source ? parameters.cast_source->GetQueryLocation()
+		                                                   : QueryLocation());
+	}
+	// the caller collects errors (e.g. TRY_CAST) - report malformed WKT as a cast error
+	string error_message;
+	if (Geometry::TryFromString(input, result, heap, error_message)) {
+		return true;
+	}
+	HandleCastError::AssignError(error_message, parameters);
+	return false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1960,7 +1992,11 @@ bool TryCast::Operation(string_t input, dtime_ns_t &result, bool strict) {
 	if (!TryCast::Operation(micros, result)) {
 		return false;
 	}
-	return TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, nanos, result.value);
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, nanos, result.value)) {
+		return false;
+	}
+	// the nanoseconds can push e.g. 24:00:00 past the end of the day
+	return result.value <= Interval::NANOS_PER_DAY;
 }
 
 template <>
@@ -2148,7 +2184,7 @@ struct HugeIntCastData {
 	using Operation = OP;
 	ResultType result;
 	IntermediateType intermediate;
-	uint8_t digits;
+	idx_t digits;
 
 	ResultType decimal;
 	uint16_t decimal_total_digits;
@@ -3290,7 +3326,8 @@ static void FillDecimalDigits(hugeint_t input, duckdb_fast_float::decimal &decim
 		negative = false;
 	}
 
-	char buffer[DecimalWidth<hugeint_t>::max];
+	// a hugeint can have one more digit than the maximum decimal width
+	char buffer[DecimalWidth<hugeint_t>::max + 1];
 	auto end = buffer + sizeof(buffer);
 	auto begin = NumericHelper::FormatUnsigned(input, end);
 

@@ -86,7 +86,8 @@ void PragmaMetadataInfo::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet metadata_info("pragma_metadata_info");
 	metadata_info.AddFunction(
 	    TableFunction({}, PragmaMetadataInfoFunction, PragmaMetadataInfoBind, PragmaMetadataInfoInit));
-	metadata_info.AddFunction(TableFunction({LogicalType::VARCHAR}, PragmaMetadataInfoFunction, PragmaMetadataInfoBind,
+	metadata_info.AddFunction(TableFunction(FunctionSignature().AddPositionalOnly("database", LogicalType::VARCHAR),
+	                                        PragmaMetadataInfoFunction, PragmaMetadataInfoBind,
 	                                        PragmaMetadataInfoInit));
 	set.AddFunction(metadata_info);
 }

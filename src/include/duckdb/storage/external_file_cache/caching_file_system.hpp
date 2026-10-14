@@ -92,17 +92,20 @@ private:
 	shared_ptr<CachedFile> EnsureCachedFileCurrent();
 	//! Whether validation metadata permits using cached blocks.
 	bool CanUseCache();
+	//! Read without caching, splitting large reads of cacheable files into parallel reads of at most a block.
+	void ReadUncached(data_ptr_t buffer, idx_t nr_bytes, idx_t location);
 	//! Reconcile cached blocks with validation metadata observed while reading them.
-	void ReconcileCacheAfterRead(CachedFile &cached_file, idx_t first_block,
-	                             const vector<shared_ptr<CacheBlock>> &blocks);
+	void ReconcileCacheAfterRead(CachedFile &cached_file);
 	//! Record a timed read of a local file into the throughput estimate
 	void RecordReadThroughput(double total_seconds, idx_t bytes);
 
 private:
 	QueryContext context;
 
-	//! The client caching file system that was used to create this CachingFileHandle
-	CachingFileSystem &caching_file_system;
+	//! The client file system, held directly because the caching file system can be destroyed before this handle
+	FileSystem &file_system;
+	//! The DatabaseInstance
+	DatabaseInstance &db;
 	//! The DB external file cache
 	ExternalFileCache &external_file_cache;
 	//! For opening the file (possibly with extra info)
@@ -145,10 +148,11 @@ public:
 public:
 	DUCKDB_API static CachingFileSystem Get(ClientContext &context);
 
-	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
+	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, const FileOpenFlags &flags,
 	                                                  optional_ptr<FileOpener> opener = nullptr);
 	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(QueryContext context, const OpenFileInfo &path,
-	                                                  FileOpenFlags flags, optional_ptr<FileOpener> opener = nullptr);
+	                                                  const FileOpenFlags &flags,
+	                                                  optional_ptr<FileOpener> opener = nullptr);
 
 private:
 	//! The Client FileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)
