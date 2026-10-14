@@ -35,3 +35,18 @@ query I
 SELECT 42;
 ----
 42
+
+# the deadline of the calling query bounds the callbacks
+statement ok
+CREATE MACRO slow_deleter(h) AS TABLE SELECT sum(i) AS s FROM range(100000000000) t(i);
+
+statement ok
+SET max_execution_time=500;
+
+statement error
+FROM destroy_external_resource('slow_deleter', 1);
+----
+maximum execution time
+
+statement ok
+RESET max_execution_time;

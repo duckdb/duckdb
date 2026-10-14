@@ -9,7 +9,6 @@
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/qualified_name.hpp"
@@ -21,15 +20,15 @@ static constexpr idx_t MAX_EXTERNAL_RESOURCE_CALLBACK_DEPTH = 16;
 
 unique_ptr<Connection> CreateExternalResourceCallbackConnection(DatabaseInstance &db,
                                                                 optional_ptr<ClientContext> caller) {
-	const idx_t depth = caller ? ClientData::Get(*caller).external_resource_callback_depth + 1 : 1;
-	if (depth > MAX_EXTERNAL_RESOURCE_CALLBACK_DEPTH) {
+	if (!caller) {
+		return make_uniq<Connection>(Connection::CreateInternal(db));
+	}
+	if (caller->internal_depth + 1 > MAX_EXTERNAL_RESOURCE_CALLBACK_DEPTH) {
 		throw InvalidInputException("External resource callbacks are nested too deeply (maximum depth %llu) - does a "
 		                            "callback call itself recursively?",
 		                            MAX_EXTERNAL_RESOURCE_CALLBACK_DEPTH);
 	}
-	auto con = make_uniq<Connection>(db);
-	ClientData::Get(*con->context).external_resource_callback_depth = depth;
-	return con;
+	return make_uniq<Connection>(Connection::CreateInternal(*caller));
 }
 
 ResourceDeleter::ResourceDeleter(DatabaseInstance &db, string deleter_function_p, Value deleter_payload_p,

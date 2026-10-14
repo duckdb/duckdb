@@ -42,6 +42,9 @@ public:
 	DUCKDB_API explicit Connection(DuckDB &database);
 	DUCKDB_API explicit Connection(DatabaseInstance &database);
 	DUCKDB_API static Connection CreateInternal(DatabaseInstance &database);
+	//! Creates an internal connection that runs on behalf of `caller`: it follows the interrupts of caller's base
+	//! client and the deadline of caller's current query
+	DUCKDB_API static Connection CreateInternal(ClientContext &caller);
 	// disable copy constructors
 	Connection(const Connection &other) = delete;
 	Connection &operator=(const Connection &) = delete;
