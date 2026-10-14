@@ -34,18 +34,18 @@ DROP TABLE cast_documents;
 # exact number of elements after its per-row arena is reset.
 query IIIIII
 WITH documents AS (
-    SELECT '[' || repeat('0,', 10000) || i::VARCHAR || ']' AS document
+    SELECT '[' || repeat('0,', 10000) || i::VARCHAR || ']' AS document, i
     FROM range(256) t(i)
 )
 SELECT sum(json_array_length(document)),
        sum(json_array_length(document::JSON)),
-       sum(json_array_length(document, '$')),
-       sum(json_array_length(document::JSON, '$')),
+       sum(json_array_length(document, CASE WHEN i % 2 = 0 THEN '$' ELSE '$[0]' END)),
+       sum(json_array_length(document::JSON, CASE WHEN i % 2 = 0 THEN '$' ELSE '$[0]' END)),
        sum(list_sum(json_array_length(document, ['$', '$[0]']))),
        sum(list_sum(json_array_length(document::JSON, ['$', '$[0]'])))
 FROM documents;
 ----
-2560256	2560256	2560256	2560256	2560256	2560256
+2560256	2560256	1280128	1280128	2560256	2560256
 
 query IIIIII
 SELECT json_array_length('[]'::JSON),
