@@ -1,7 +1,9 @@
 #include "duckdb/execution/operator/schema/physical_attach.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/execution/operator/helper/launch_external_resource.hpp"
 #include "duckdb/logging/logger.hpp"
@@ -26,8 +28,19 @@ static void WarnIfDuckLakeMetadata(ClientContext &context, AttachedDatabase &att
 	if (!default_schema) {
 		return;
 	}
-	QualifiedName metadata_table(catalog.GetName(), *default_schema, Identifier("ducklake_metadata"));
-	if (!Catalog::GetEntry<TableCatalogEntry>(context, metadata_table, OnEntryNotFound::RETURN_NULL)) {
+	// scan the committed entries, a catalog lookup would open a transaction on the database
+	bool has_metadata_table = false;
+	catalog.Cast<DuckCatalog>().ScanSchemas(VisibilityBound::AllCommitted(), [&](DuckSchemaEntry &schema) {
+		if (schema.name != *default_schema) {
+			return;
+		}
+		schema.Scan(CatalogType::TABLE_ENTRY, VisibilityBound::AllCommitted(), [&](CatalogEntry &entry) {
+			if (entry.name == "ducklake_metadata") {
+				has_metadata_table = true;
+			}
+		});
+	});
+	if (!has_metadata_table) {
 		return;
 	}
 	DUCKDB_LOG_WARNING(context,

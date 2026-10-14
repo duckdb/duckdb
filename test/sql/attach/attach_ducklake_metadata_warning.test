@@ -90,3 +90,24 @@ SELECT count(*) FROM duckdb_logs WHERE log_level = 'WARNING' AND contains(messag
 ----
 0
 
+
+statement ok
+DETACH other
+
+# the check does not leave a transaction open on the attached database
+statement ok
+BEGIN
+
+statement ok
+ATTACH '{TEST_DIR}/lake.ducklake' AS lake
+
+statement ok
+DETACH lake
+
+statement ok
+COMMIT
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE log_level = 'WARNING' AND contains(message, 'is a DuckLake metadata catalog')
+----
+1
