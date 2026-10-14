@@ -19,7 +19,7 @@ static_assert(sizeof(dtime_t) == sizeof(int64_t), "dtime_t was padded");
 // ISO 8601
 
 bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
-                              optional_ptr<int32_t> nanos) {
+                              optional_ptr<int32_t> nanos, bool round_fraction) {
 	int32_t hour = -1, min = -1, sec = -1, micros = -1;
 	pos = 0;
 
@@ -113,6 +113,25 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++, mult /= 10) {
 			if (mult > 0) {
 				micros += (buf[pos] - '0') * mult;
+			} else {
+				break;
+			}
+		}
+		if (pos < len && StringUtil::CharacterIsDigit(buf[pos])) {
+			const int32_t first_discarded = buf[pos++] - '0';
+			bool discarded_tail_nonzero = false;
+			for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++) {
+				discarded_tail_nonzero |= buf[pos] != '0';
+			}
+			// A round-up must never reach 24:00:00: a timestamp would otherwise roll into the next day
+			// (and DATE casts, which ignore the time part, would disagree with TIMESTAMP casts).
+			// In nanosecond mode `micros` holds nanoseconds, so the last fraction value differs.
+			const int32_t last_fraction = nanos ? 999999999 : 999999;
+			const bool at_end_of_day = hour >= 24 || (hour == 23 && min == 59 && sec == 59 && micros == last_fraction);
+			const bool round_up =
+			    first_discarded > 5 || (first_discarded == 5 && (discarded_tail_nonzero || (micros & 1)));
+			if (round_fraction && round_up && !at_end_of_day) {
+				micros++;
 			}
 		}
 		if (nanos) {
@@ -139,7 +158,13 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 
 bool Time::TryConvertInterval(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
                               optional_ptr<int32_t> nanos) {
-	return Time::TryConvertInternal(buf, len, pos, result, strict, nanos);
+	// Intervals keep truncating the fraction: rounding would change what existing interval literals mean
+	return Time::TryConvertInternal(buf, len, pos, result, strict, nanos, false);
+}
+
+bool Time::TryConvertTimestampTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
+                                   optional_ptr<int32_t> nanos) {
+	return Time::TryConvertInternal(buf, len, pos, result, strict, nanos, true);
 }
 
 bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,

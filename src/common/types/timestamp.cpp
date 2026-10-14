@@ -70,10 +70,10 @@ TimestampCastResult Timestamp::TryConvertTimestampTZ(const char *str, idx_t len,
 		pos++;
 	}
 	idx_t time_pos = 0;
-	// TryConvertTime may recursively call us, so we use TryConvertInterval.
+	// TryConvertTime may recursively call us, so we use TryConvertTimestampTime.
 	// Note that we can't pass strict== true here because we want to process any suffix.
 	auto time_len = TimestampTimeLength(str + pos, len - pos);
-	if (!Time::TryConvertInterval(str + pos, time_len, time_pos, time, false, nanos) || time_pos != time_len) {
+	if (!Time::TryConvertTimestampTime(str + pos, time_len, time_pos, time, false, nanos) || time_pos != time_len) {
 		return TimestampCastResult::ERROR_INCORRECT_FORMAT;
 	}
 	//	We parsed an interval, so make sure it is in range.
