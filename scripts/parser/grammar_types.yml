@@ -86,7 +86,6 @@ SQLStatement:
     - ExplainableStatements
     - ExplainSelectStatement
     - ExportStatement
-    - ExpressionStatement
     - ImportStatement
     - InsertStatement
     - LoadStatement
@@ -1286,6 +1285,8 @@ ColumnConstraintEntry:
   by_value: true
   rules:
     - ColumnConstraint
+    - NameableColumnConstraint
+    - ColumnConstraintElement
     - NotNullConstraint
     - UniqueConstraint
     - PrimaryKeyConstraint

@@ -99,7 +99,7 @@ bool WriteAheadLog::Initialized() const {
 //===--------------------------------------------------------------------===//
 class ChecksumWriter : public WriteStream {
 public:
-	explicit ChecksumWriter(WriteAheadLog &wal) : wal(wal), memory_stream(Allocator::Get(wal.GetDatabase())) {
+	explicit ChecksumWriter(WriteAheadLog &wal) : wal(wal), memory_stream(BufferAllocator::Get(wal.GetDatabase())) {
 	}
 
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override {
@@ -154,7 +154,7 @@ public:
 
 		// temp buffer
 		const idx_t ciphertext_size = size + sizeof(uint64_t);
-		std::unique_ptr<uint8_t[]> temp_buf(new uint8_t[ciphertext_size]);
+		auto temp_buf = BufferAllocator::Get(db).Allocate(ciphertext_size);
 
 		EncryptionNonce nonce(db.GetStorageManager().GetCipher(), db.GetStorageManager().GetEncryptionVersion());
 		EncryptionTag tag;

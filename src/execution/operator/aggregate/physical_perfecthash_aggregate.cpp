@@ -87,7 +87,7 @@ unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(All
 class PerfectHashAggregateGlobalState : public GlobalSinkState {
 public:
 	PerfectHashAggregateGlobalState(const PhysicalPerfectHashAggregate &op, ClientContext &context)
-	    : ht(op.CreateHT(Allocator::Get(context), context)) {
+	    : ht(op.CreateHT(BufferAllocator::Get(context), context)) {
 	}
 
 	//! The lock for updating the global aggregate state
@@ -99,7 +99,7 @@ public:
 class PerfectHashAggregateLocalState : public LocalSinkState {
 public:
 	PerfectHashAggregateLocalState(const PhysicalPerfectHashAggregate &op, ExecutionContext &context)
-	    : ht(op.CreateHT(Allocator::Get(context.client), context.client)) {
+	    : ht(op.CreateHT(BufferAllocator::Get(context.client), context.client)) {
 		group_chunk.InitializeEmpty(op.group_types);
 		if (!op.payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(op.payload_types);

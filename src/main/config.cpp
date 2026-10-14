@@ -265,9 +265,11 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(WarningsAsErrorsSetting),
     DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
     DUCKDB_GLOBAL(WriteBufferRowGroupMemoryLimitSetting),
-    DUCKDB_SETTING(ZstdMinStringLengthSetting),    FINAL_SETTING};
+    DUCKDB_SETTING(ZstdMinStringLengthSetting),
+    FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("__delta_only_variant_encoding_enabled", DebugDeltaOnlyVariantEncodingEnabledSetting),
+static const ConfigurationAlias setting_aliases[] = {
+    DUCKDB_SETTING_ALIAS("__delta_only_variant_encoding_enabled", DebugDeltaOnlyVariantEncodingEnabledSetting),
     DUCKDB_SETTING_ALIAS("enable_caching_operators", EnableCachingOperatorsSetting),
     DUCKDB_SETTING_ALIAS("force_bitpacking_mode", ForceBitpackingModeSetting),
     DUCKDB_SETTING_ALIAS("force_mbedtls_unsafe", ForceMbedtlsUnsafeSetting),
@@ -742,10 +744,10 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 	return available_memory;
 }
 
-idx_t DBConfig::ParseMemoryLimit(const string &arg) {
+optional_idx DBConfig::ParseMemoryLimit(const string &arg) {
 	if (arg[0] == '-' || arg == "null" || arg == "none") {
-		// infinite
-		return NumericLimits<idx_t>::Maximum();
+		// unlimited
+		return optional_idx();
 	}
 
 	idx_t result;
@@ -753,13 +755,19 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 
 	if (!error.empty()) {
 		if (error == "Memory cannot be negative") {
-			result = DConstants::INVALID_INDEX;
-		} else {
-			throw ParserException(error);
+			return optional_idx();
 		}
+		throw ParserException(error);
 	}
-
+	if (result == DConstants::INVALID_INDEX) {
+		return optional_idx();
+	}
 	return result;
+}
+
+idx_t DBConfig::ParseMemoryLimitOrMaximum(const string &arg) {
+	auto limit = ParseMemoryLimit(arg);
+	return limit.IsValid() ? limit.GetIndex() : NumericLimits<idx_t>::Maximum();
 }
 
 optional_idx DBConfig::ParseMemoryLimitSlurm(const string &arg) {

@@ -386,7 +386,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// rewrites UNNESTs in DelimJoins by moving them to the projection
 	RunOptimizer(OptimizerType::UNNEST_REWRITER, [&]() {
-		UnnestRewriter unnest_rewriter;
+		UnnestRewriter unnest_rewriter(context);
 		plan = unnest_rewriter.Optimize(std::move(plan));
 	});
 

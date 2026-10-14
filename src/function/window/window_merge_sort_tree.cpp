@@ -16,10 +16,10 @@ WindowMergeSortTree::WindowMergeSortTree(ClientContext &client, const vector<Bou
 	LogicalType index_type;
 	if (count < std::numeric_limits<uint32_t>::max() && !force_external) {
 		index_type = LogicalType::INTEGER;
-		mst32 = make_uniq<MergeSortTree32>();
+		mst32 = make_uniq<MergeSortTree32>(BufferAllocator::Get(client));
 	} else {
 		index_type = LogicalType::BIGINT;
-		mst64 = make_uniq<MergeSortTree64>();
+		mst64 = make_uniq<MergeSortTree64>(BufferAllocator::Get(client));
 	}
 
 	vector<BoundOrderByNode> orders;

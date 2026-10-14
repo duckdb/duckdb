@@ -30,6 +30,8 @@ void TableStatistics::InitializeEmpty(const TableStatistics &other) {
 	D_ASSERT(!table_sample);
 	D_ASSERT(other.stats_lock);
 
+	// hold other's lock while reading its stats - a concurrent ANALYZE/VACUUM can replace them (e.g. SetDistinct)
+	lock_guard<mutex> l(*other.stats_lock);
 	stats_lock = make_shared_ptr<mutex>();
 	// concurrent appends merge into the other statistics
 	lock_guard<mutex> other_lock(*other.stats_lock);

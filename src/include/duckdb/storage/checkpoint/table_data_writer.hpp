@@ -38,6 +38,7 @@ public:
 
 	virtual void WriteUnchangedTable(MetaBlockPointer pointer, const vector<MetaBlockPointer> &metadata_pointers,
 	                                 idx_t total_rows, idx_t next_row_id) = 0;
+	//! global_stats is empty when reusing existing table metadata.
 	virtual void FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info, RowGroupCollection &collection,
 	                           const vector<shared_ptr<const IndexStorageInfo>> &index_infos,
 	                           Serializer &serializer) = 0;

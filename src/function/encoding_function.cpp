@@ -21,6 +21,13 @@ void DecodeUTF16ToUTF8(CSVEncoderBuffer &encoded_buffer, char *target_buffer, id
 			// We are done
 			return;
 		}
+		if (encoded_buffer.cur_pos + 1 >= encoded_buffer.actual_encoded_buffer_size) {
+			if (encoded_buffer.last_buffer) {
+				throw InvalidInputException("File is not utf-16 encoded");
+			}
+			// the second byte is passed on to the next buffer
+			return;
+		}
 		const uint16_t ch =
 		    static_cast<uint16_t>(static_cast<unsigned char>(encoded_ptr[encoded_buffer.cur_pos]) |
 		                          (static_cast<unsigned char>(encoded_ptr[encoded_buffer.cur_pos + 1]) << 8));
