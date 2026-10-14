@@ -255,6 +255,25 @@ LogicalPlanSQLExportResult SQLExportStatementHelpers::ExportCreateTableAsNode(Lo
 	return LogicalPlanSQLExportResult::Success({std::move(node), std::move(fields.GetValue())});
 }
 
+QueryNode &SQLExportStatementHelpers::SourceDefinitionNode(QueryNode &query) {
+	switch (query.type) {
+	case QueryNodeType::COPY_QUERY_NODE: {
+		auto &info = *query.Cast<CopyQueryNode>().info;
+		D_ASSERT(info.select_statement);
+		return SourceDefinitionNode(*info.select_statement);
+	}
+	case QueryNodeType::STATEMENT_NODE: {
+		auto &statement = query.Cast<StatementNode>().stmt;
+		D_ASSERT(statement.type == StatementType::CREATE_STATEMENT);
+		auto &info = statement.Cast<CreateStatement>().info->Cast<CreateTableInfo>();
+		D_ASSERT(info.query && info.query->node);
+		return *info.query->node;
+	}
+	default:
+		return query;
+	}
+}
+
 LogicalPlanSQLExportResult LogicalCopyToFile::ToSQL(LogicalPlanSQLExportContext &context,
                                                     const LogicalPlanVerificationPath &path) {
 	if (auto issue = StatementBoundaryIssue(context, path)) {

@@ -38,7 +38,8 @@ LogicalPlanSQLExportResult LogicalMaterializedCTE::ToSQL(LogicalPlanSQLExportCon
 	auto consumer_path = LogicalPlanSQLExportHelpers::PlanChildPath(path, 1);
 	// A data-modifying consumer exports as the statement itself rather than a relation to select from.
 	auto consumer = [&]() -> LogicalPlanVerificationResult<LogicalPlanSQLExportedChild> {
-		if (!SQLExportDMLHelpers::MatchDMLBody(*cte.children[1])) {
+		if (!SQLExportDMLHelpers::MatchDMLBody(*cte.children[1]) ||
+		    SQLExportDMLHelpers::ContainsReplacedBoundary(export_context, *cte.children[1])) {
 			return export_context.ExportChild(*cte.children[1], consumer_path);
 		}
 		auto body = SQLExportDMLHelpers::ExportBody(export_context, *cte.children[1], consumer_path);
@@ -255,7 +256,7 @@ LogicalPlanSQLExportContext::ExportNamedProducer(LogicalOperator &op, const Logi
 	}
 	// A data-modifying body exports as the statement itself; parsed DML nodes are legal CTE bodies.
 	// This runs before the identity-projection reduction so a RETURNING projection stays intact.
-	if (SQLExportDMLHelpers::MatchDMLBody(op)) {
+	if (SQLExportDMLHelpers::MatchDMLBody(op) && !SQLExportDMLHelpers::ContainsReplacedBoundary(*this, op)) {
 		auto exported = SQLExportDMLHelpers::ExportBody(*this, op, path);
 		if (exported.HasError()) {
 			return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Failure(exported);

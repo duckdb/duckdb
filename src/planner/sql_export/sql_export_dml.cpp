@@ -421,6 +421,22 @@ bool SQLExportDMLHelpers::MatchDMLBody(LogicalOperator &op) {
 	}
 }
 
+bool SQLExportDMLHelpers::ContainsReplacedBoundary(const LogicalPlanSQLExportContext &context, LogicalOperator &op) {
+	reference<LogicalOperator> current(op);
+	while (true) {
+		if (context.FindSource(current)) {
+			return true;
+		}
+		auto &node = current.get();
+		if (node.type == LogicalOperatorType::LOGICAL_PROJECTION && node.children.size() == 1 &&
+		    MatchDMLBody(*node.children[0])) {
+			current = *node.children[0];
+			continue;
+		}
+		return false;
+	}
+}
+
 bool SQLExportDMLHelpers::IsDMLNode(const QueryNode &query) {
 	switch (query.type) {
 	case QueryNodeType::INSERT_QUERY_NODE:

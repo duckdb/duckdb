@@ -120,6 +120,8 @@ struct SQLExportStatementHelpers {
 	static LogicalPlanSQLExportResult ExportCreateTableAsNode(LogicalCreateTable &op,
 	                                                          LogicalPlanSQLExportContext &context,
 	                                                          const LogicalPlanVerificationPath &path);
+	//! The query node that carries WITH definitions for this exported relation.
+	static QueryNode &SourceDefinitionNode(QueryNode &query);
 };
 
 //! Export of data-modifying plan roots and CTE bodies (sql_export_dml.cpp)
@@ -132,6 +134,9 @@ struct SQLExportDMLHelpers {
 	                                                  const LogicalPlanVerificationPath &path);
 	//! Whether this operator is a data-modifying statement body: a DML operator or its RETURNING projection.
 	static bool MatchDMLBody(LogicalOperator &op);
+	//! Whether the statement-body chain itself crosses a replaced source boundary, in which case
+	//! the ordinary relational export must handle it instead of the statement export.
+	static bool ContainsReplacedBoundary(const LogicalPlanSQLExportContext &context, LogicalOperator &op);
 	//! Export a data-modifying statement body outside the plan root (e.g. a materialized CTE side).
 	static LogicalPlanSQLExportResult ExportBody(LogicalPlanSQLExportContext &context, LogicalOperator &op,
 	                                             const LogicalPlanVerificationPath &path);
