@@ -507,6 +507,9 @@ TEST_CASE("A query that fails to begin keeps no copy of the callback", "[api][qu
 	QueryParameters parameters;
 	parameters.notify_callback = [captured]() {
 	};
+	// The debug build's state checks that every query end follows its own begin, which a begin hook that throws
+	// breaks whichever hook runs first
+	con.context->registered_state->Remove("debug_client_context_state");
 	con.context->registered_state->Insert("throwing_query_begin", make_shared_ptr<ThrowingQueryBegin>());
 	auto failed = con.Submit("SELECT 42", parameters);
 	REQUIRE(failed->HasError());
