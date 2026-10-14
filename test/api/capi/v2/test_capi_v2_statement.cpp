@@ -387,8 +387,7 @@ TEST_CASE("V2: statement_execute rejects parameters on a statement that expands"
 	ExecSQL(fx.conn, "CREATE TABLE et(i INTEGER)");
 	ExecSQL(fx.conn, "INSERT INTO et VALUES (1), (2), (3)");
 
-	// A volatile DEFAULT makes ALTER ADD COLUMN expand into BEGIN/.../COMMIT; the
-	// parameter would bind against the injected BEGIN, so the call is refused.
+	// A volatile DEFAULT makes ALTER ADD COLUMN expand into several statements, which take no parameters
 	auto stmt = StmtParseOne(fx.conn, "ALTER TABLE et ADD COLUMN c INTEGER DEFAULT ((random() * 0)::INTEGER + $1)");
 	duckdb_v2_value_handle v = MakeInt64Value(fx.factory, 40);
 	duckdb_v2_value_handle params[1] = {v};
@@ -398,7 +397,7 @@ TEST_CASE("V2: statement_execute rejects parameters on a statement that expands"
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(r == nullptr);
 
-	// Rejected before any fragment ran: the table is untouched, the connection usable.
+	// Rejected before anything ran: the table is untouched, the connection usable.
 	duckdb_v2_result_handle check = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT count(*) FROM et", &check, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(StmtScalarI64(check) == 3);

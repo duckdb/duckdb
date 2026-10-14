@@ -287,21 +287,15 @@ DUCKDB_V2_ERROR duckdb_v2_statement_bind(duckdb_v2_connection_handle conn, duckd
 		}
 
 		auto *connection = Convert(conn);
-		// Borrowed, not consumed: bind a copy. Preprocess it so the schema matches
-		// what execution would bind (pragma reparse, expansion).
-		duckdb::vector<duckdb::unique_ptr<duckdb::SQLStatement>> fragments;
-		fragments.push_back(Convert(statement)->Copy());
-		connection->context->PreprocessStatements(fragments);
-		if (fragments.size() != 1) {
-			// A statement that expands into a group (a dynamic PIVOT, or
-			// statement-expanding DDL) is not bindable: bind binds one engine statement.
-			throw duckdb::InvalidInputException(
-			    "statement expands into multiple engine statements; bind is not supported, execute it instead");
+		// Borrowed, not consumed: bind a copy. BindStatement, not Prepare: bind phase only (read-only, no optimize /
+		// physical plan) and allowed while a result is live (Prepare is refused). It expands the statement as
+		// execution would, and throws on a bind error, routed through WithErrorHandler.
+		auto signature = connection->context->BindStatement(Convert(statement)->Copy());
+		if (signature.metadata_deferred) {
+			throw MetadataDeferredException(
+			    "the statement expands into several, so its schema is known only once execution binds the one that "
+			    "produces the result; execute it instead");
 		}
-		// BindStatement, not Prepare: bind phase only (read-only, no optimize / physical
-		// plan) and allowed while a result is live (Prepare is refused). It
-		// throws on a bind error, routed through WithErrorHandler.
-		auto signature = connection->context->BindStatement(std::move(fragments[0]));
 		// Assemble into locals, publish to the out-params only at the end once nothing
 		// can throw, so a failure leaves them NULL.
 		auto output = duckdb::make_uniq<CV2Schema>();

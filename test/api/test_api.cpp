@@ -42,12 +42,16 @@ TEST_CASE("Test ExtractStatements with an explicit transaction", "[api]") {
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(a INT)"));
 
-	// The ALTER expands into multiple statements, which must not be wrapped in their own transaction
+	// The ALTER expands into several statements when it runs, inside the user's transaction
 	auto stmts = con.ExtractStatements("BEGIN; ALTER TABLE t ADD COLUMN c INT DEFAULT 1 NOT NULL; COMMIT;");
-	REQUIRE(stmts.size() == 6);
+	REQUIRE(stmts.size() == 3);
+	REQUIRE(stmts[1]->type == StatementType::MULTI_STATEMENT);
 	for (auto &stmt : stmts) {
 		REQUIRE_NO_FAIL(con.Query(std::move(stmt)));
 	}
+	REQUIRE(!con.context->transaction.HasActiveTransaction());
+	auto result = con.Query("SELECT column_name FROM duckdb_columns() WHERE table_name = 't' ORDER BY column_index");
+	REQUIRE(CHECK_COLUMN(result, 0, {"a", "c"}));
 }
 
 TEST_CASE("Test using connection after database is gone", "[api]") {
