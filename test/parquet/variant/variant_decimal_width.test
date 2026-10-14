@@ -1,0 +1,47 @@
+# name: test/parquet/variant/variant_decimal_width.test
+# description: A decimal read from an unshredded VARIANT never gets a width smaller than its scale
+# group: [variant]
+
+require parquet
+
+# two scales in one field, so the writer does not shred it
+statement ok
+COPY (
+	SELECT * FROM (VALUES
+		(1, {'x': 0.012345678::DECIMAL(9,9)}::VARIANT),
+		(2, {'x': 0.12345678::DECIMAL(9,8)}::VARIANT),
+		(3, {'x': 0.05::DECIMAL(3,2)}::VARIANT),
+		(4, {'x': -0.05::DECIMAL(3,2)}::VARIANT),
+		(5, {'x': 0.00::DECIMAL(3,2)}::VARIANT),
+		(6, {'x': 12.5::DECIMAL(4,1)}::VARIANT)
+	) t(i, v)
+) TO '{TEST_DIR}/unshredded_decimals.parquet';
+
+query I
+SELECT count(*) FROM parquet_schema('{TEST_DIR}/unshredded_decimals.parquet') WHERE name = 'typed_value'
+----
+0
+
+query II
+SELECT variant_typeof(v['x']), v['x']::DOUBLE FROM '{TEST_DIR}/unshredded_decimals.parquet' ORDER BY i
+----
+DECIMAL(9, 9)	0.012345678
+DECIMAL(8, 8)	0.12345678
+DECIMAL(2, 2)	0.05
+DECIMAL(2, 2)	-0.05
+DECIMAL(2, 2)	0.0
+DECIMAL(3, 1)	12.5
+
+# re-writing a single small decimal shreds it with a valid type
+statement ok
+COPY (SELECT v FROM '{TEST_DIR}/unshredded_decimals.parquet' WHERE i = 1) TO '{TEST_DIR}/shredded_decimal.parquet';
+
+query II
+SELECT precision, scale FROM parquet_schema('{TEST_DIR}/shredded_decimal.parquet') WHERE precision IS NOT NULL
+----
+9	9
+
+query I
+SELECT v['x']::DOUBLE FROM '{TEST_DIR}/shredded_decimal.parquet'
+----
+0.012345678

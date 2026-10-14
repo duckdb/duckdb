@@ -144,8 +144,10 @@ static T DecodeDecimal(const_data_ptr_t data, idx_t data_offset, idx_t data_size
 	if (abs_val < 0) {
 		abs_val = -abs_val;
 	}
-	uint8_t digits = floor(log10(abs_val)) + 1;
-	width = digits;
+	//! The implied precision is floor(log10(|val|)) + 1, but a DECIMAL's width can't be smaller than its scale:
+	//! 0.05 (unscaled 5, scale 2) is DECIMAL(2,2), not DECIMAL(1,2). log10(0) is undefined, so 0 has one digit.
+	uint8_t digits = abs_val == 0 ? 1 : static_cast<uint8_t>(floor(log10(abs_val)) + 1);
+	width = MaxValue<uint8_t>(digits, scale);
 	return result;
 }
 
