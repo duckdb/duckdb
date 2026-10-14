@@ -371,6 +371,7 @@ static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row
 	case VariantLogicalType::TIMESTAMP_MICROS:
 	case VariantLogicalType::TIMESTAMP_NANOS:
 	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
 		total_size += sizeof(uint64_t);
 		break;
 	case VariantLogicalType::UINT8:
@@ -546,6 +547,10 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 		break;
 	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
 		WritePrimitiveTypeHeader<VariantPrimitiveType::TIMESTAMP_MICROS>(value_data);
+		CopySimplePrimitiveData<int64_t>(variant, value_data, row, values_index);
+		break;
+	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
+		WritePrimitiveTypeHeader<VariantPrimitiveType::TIMESTAMP_NANOS>(value_data);
 		CopySimplePrimitiveData<int64_t>(variant, value_data, row, values_index);
 		break;
 	case VariantLogicalType::DECIMAL: {
