@@ -4747,7 +4747,8 @@ public:
 	static unique_ptr<CreateTypeInfo> TransformEnumSelectType(PEGTransformer &transformer,
 	                                                          unique_ptr<SelectStatement> select_statement_internal);
 	static unique_ptr<CreateTypeInfo> TransformEnumStringLiteralList(PEGTransformer &transformer,
-	                                                                 const optional<vector<string>> &string_literal);
+	                                                                 const optional<vector<string>> &string_literal,
+	                                                                 const optional<vector<int64_t>> &array_bounds);
 	static unique_ptr<CreateStatement>
 	TransformCreateViewStmt(PEGTransformer &transformer, const optional<bool> &create_secure,
 	                        const optional<bool> &create_recursive, const optional<bool> &if_not_exists,

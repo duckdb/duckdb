@@ -1913,6 +1913,7 @@ collapsible_rules:
 
 packrat_memoized_rules:
   - Expression
+  - TableRef
   - Identifier
   - ColId
   - CatalogQualification

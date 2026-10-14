@@ -62,6 +62,8 @@ struct ICUDateFunc {
 
 		//! Returns a calendar for the time zone. Throws for unknown zones.
 		Calendar *GetCalendar(const string_t &tz_id);
+		//! Returns a calendar for the time zone, or nullptr for unknown zones (filling error_message if provided).
+		Calendar *TryGetCalendar(const string_t &tz_id, string *error_message = nullptr);
 		//! Sets the time zone for the calendar.
 		//! For unknown zones, fills error_message if provided and throws otherwise.
 		void SetTimeZone(Calendar *calendar, const string_t &tz_id, string *error_message = nullptr);
@@ -122,6 +124,8 @@ struct ICUDateFunc {
 	//! constructs an ICU timestamp, and then converts that back to a DuckDB instant
 	//! Adding offset doesn't really work around DST because the bin values are ambiguous
 	static timestamp_tz_t FromNaive(Calendar *calendar, timestamp_t naive);
+	//! Non-throwing form of FromNaive - sets the error and returns false if the result is out of range
+	static bool TryFromNaive(Calendar *calendar, timestamp_t naive, timestamp_tz_t &result, string &error);
 
 	//! Truncates the calendar time to the given part precision
 	typedef void (*part_trunc_t)(Calendar *calendar, uint64_t &micros);
