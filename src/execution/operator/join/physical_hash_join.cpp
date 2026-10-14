@@ -2045,7 +2045,6 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			sink.local_hash_tables.clear();
 			sink.owned_local_hash_tables.clear();
 			FinalizeExternalRuntimeFilters(context, *this, sink);
-			ht.PrepareBloomFilterForFinalize();
 			sink.CheckProbeSideRequirement();
 			sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
 			                                         sink.probe_side_requirement);

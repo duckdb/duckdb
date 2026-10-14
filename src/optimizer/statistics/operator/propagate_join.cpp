@@ -82,7 +82,7 @@ bool StatisticsPropagator::HandleJoinAlwaysMatches(LogicalJoin &join, unique_ptr
 		limit->AddChild(std::move(join.children[1]));
 		auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
 		cross_product->SetEstimatedCardinality(join.estimated_cardinality);
-		node_ptr = PromoteJoinSide(std::move(cross_product), std::move(projection_map));
+		node_ptr = LogicalJoin::PromoteJoinSide(std::move(cross_product), std::move(projection_map));
 		return true;
 	}
 	case JoinType::INNER: {
@@ -96,7 +96,7 @@ bool StatisticsPropagator::HandleJoinAlwaysMatches(LogicalJoin &join, unique_ptr
 		}
 		auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(join.children[1]));
 		cross_product->SetEstimatedCardinality(join.estimated_cardinality);
-		node_ptr = PromoteJoinSide(std::move(cross_product), std::move(projection_map));
+		node_ptr = LogicalJoin::PromoteJoinSide(std::move(cross_product), std::move(projection_map));
 		return true;
 	}
 	default:
