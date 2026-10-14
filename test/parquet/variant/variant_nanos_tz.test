@@ -26,3 +26,18 @@ query II
 from '{DATA_DIR}/parquet-testing/variant_timestamp_nanos_tz_negative.parquet';
 ----
 1	1957-11-07 12:33:54.123456789+00
+
+# Writing unshredded TIMESTAMPTZ_NS values keeps them, also nested and next to other types
+statement ok
+COPY (FROM (VALUES
+	(1, '1957-11-07 12:33:54.123456789+00'::TIMESTAMPTZ_NS::VARIANT),
+	(2, 42::VARIANT),
+	(3, {'t': '2024-11-07 12:33:54.123456789+00'::TIMESTAMPTZ_NS}::VARIANT)
+) t(i, v)) TO '{TEST_DIR}/variant_nanos_tz_writing.parquet';
+
+query III
+SELECT i, v, variant_typeof(coalesce(v.t, v)) FROM '{TEST_DIR}/variant_nanos_tz_writing.parquet' ORDER BY i;
+----
+1	1957-11-07 12:33:54.123456789+00	TIMESTAMP_NANOS_TZ
+2	42	INT32
+3	{'t': '2024-11-07 12:33:54.123456789+00'}	TIMESTAMP_NANOS_TZ
