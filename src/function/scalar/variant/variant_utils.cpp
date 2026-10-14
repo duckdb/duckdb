@@ -445,6 +445,14 @@ bool VariantUtils::VariantSupportsType(const LogicalType &type) {
 	}
 }
 
+bool VariantUtils::ShreddedCastMatchesVariantCast(const LogicalType &shredded_type, const LogicalType &target) {
+	if (target.id() == LogicalTypeId::VARIANT || shredded_type == target) {
+		return true;
+	}
+	// a VARIANT casts its value with a strict cast, which only differs from a regular cast when parsing strings
+	return shredded_type.IsNumeric() && target.IsNumeric();
+}
+
 //===--------------------------------------------------------------------===//
 // ToVariant sources
 //===--------------------------------------------------------------------===//

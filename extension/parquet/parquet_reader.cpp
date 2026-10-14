@@ -53,6 +53,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -769,6 +770,28 @@ optional_ptr<const BaseStatistics> ParquetReader::GetVariantStats(const ParquetC
 	return *res.first->second;
 }
 
+//! Whether the cast of the extracted field can be applied to its 'typed_value' instead of to the VARIANT
+static bool TypedValueCastMatchesVariantCast(const ParquetColumnSchema &schema, const ColumnIndex &column_id) {
+	D_ASSERT(schema.name == "typed_value");
+	reference<const ParquetColumnSchema> typed_value(schema);
+	reference<const ColumnIndex> path_iter(column_id);
+	while (path_iter.get().HasChildren()) {
+		auto &child = path_iter.get().GetChildIndexes()[0];
+		auto child_column_index = typed_value.get().GetChildIndexByName(child.GetFieldName());
+		if (!child_column_index.IsValid()) {
+			return false;
+		}
+		auto &child_column = typed_value.get().GetChildByIndex(child_column_index.GetIndex());
+		auto typed_value_index = child_column.GetChildIndexByName("typed_value");
+		if (!typed_value_index.IsValid()) {
+			return false;
+		}
+		typed_value = child_column.GetChildByIndex(typed_value_index.GetIndex());
+		path_iter = child;
+	}
+	return VariantUtils::ShreddedCastMatchesVariantCast(typed_value.get().type, path_iter.get().GetType());
+}
+
 static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &schema, const ColumnIndex &column_id) {
 	D_ASSERT(schema.name == "typed_value");
 	reference<const ParquetColumnSchema> typed_value(schema);
@@ -935,7 +958,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 			D_ASSERT(typed_value_schema.name == "typed_value");
 			auto variant_stats = GetVariantStats(schema);
 
-			if (variant_stats && IsFullyShredded(*variant_stats, column_id)) {
+			if (variant_stats && IsFullyShredded(*variant_stats, column_id) &&
+			    TypedValueCastMatchesVariantCast(typed_value_schema, column_id)) {
 				//! This field is present in 'typed_value' across all rowgroups
 				//! So we can directly push a struct extract into 'typed_value' and ignore 'value'+'metadata'
 				auto typed_value_index = CreateVariantTypedValuePushdown(typed_value_schema, column_id);
