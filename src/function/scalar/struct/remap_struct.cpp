@@ -492,8 +492,17 @@ struct RemapEntry {
 	static LogicalType RemapCast(const LogicalType &type, const identifier_map_t<RemapEntry> &remap_map) {
 		unordered_map<idx_t, string> source_name_map;
 		for (auto &entry : remap_map) {
-			if (entry.second.index.IsValid()) {
-				source_name_map.emplace(entry.second.index.GetIndex(), entry.first);
+			if (!entry.second.index.IsValid()) {
+				continue;
+			}
+			auto result = source_name_map.emplace(entry.second.index.GetIndex(), entry.first);
+			if (!result.second) {
+				auto &other = remap_map.find(Identifier(result.first->second))->second;
+				if (other.target_type != entry.second.target_type) {
+					throw BinderException("remap_struct cannot map a single source field to targets of different "
+					                      "types ('%s' and '%s')",
+					                      other.target_type.ToString(), entry.second.target_type.ToString());
+				}
 			}
 		}
 
