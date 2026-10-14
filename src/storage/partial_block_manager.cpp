@@ -293,15 +293,13 @@ unique_ptr<PartialBlock> PartialBlockManager::TakePartialBlock(uint32_t byte_siz
 	auto partial_block = std::move(entry->second);
 	partially_filled_blocks.erase(entry);
 
-	D_ASSERT(partial_block->state.offset > 0);
-	D_ASSERT(ValueIsAligned(partial_block->state.offset));
+	D_ASSERT(partial_block->AvailableSpace() < block_manager.GetBlockSize());
+	D_ASSERT(ValueIsAligned(block_manager.GetBlockSize() - partial_block->AvailableSpace()));
 
 	return partial_block;
 }
 
 unique_ptr<PartialBlock> PartialBlockManager::CreatePartialBlock() {
-	D_ASSERT(segment_size <= block_manager.GetBlockSize());
-
 	if (partial_block_type == PartialBlockType::IN_MEMORY_CHECKPOINT) {
 		return make_uniq<InMemoryPartialBlock>(block_manager);
 	}
@@ -317,6 +315,7 @@ unique_ptr<PartialBlock> PartialBlockManager::CreatePartialBlock() {
 }
 
 unique_ptr<PartialBlock> PartialBlockManager::AcquirePartialBlock(uint32_t byte_size) {
+	D_ASSERT(byte_size <= block_manager.GetBlockSize());
 	unique_ptr<PartialBlock> partial_block;
 
 	if (byte_size <= max_partial_block_size) {
@@ -373,7 +372,7 @@ optional<BlockPointer> PartialBlockManager::Write(BlockPackable &packable, Buffe
 	RetainOrFlush(std::move(block));
 
 	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
-		D_ASSERT(block_ptr != INVALID_BLOCK);
+		D_ASSERT(block_ptr.IsValid());
 		return block_ptr;
 	}
 
