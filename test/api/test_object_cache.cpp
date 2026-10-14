@@ -143,3 +143,17 @@ TEST_CASE("Test ObjectCache Manual Eviction", "[api][object_cache]") {
 	}
 	REQUIRE(!cache.IsEmpty());
 }
+
+TEST_CASE("Test ObjectCache Single Entry Eviction", "[api][object_cache]") {
+	DuckDB db;
+	auto &cache = db.instance->GetObjectCache();
+	REQUIRE(!cache.EvictLeastRecentlyUsed());
+
+	cache.Put("non-evictable", make_shared_ptr<TestObject>(1));
+	cache.Put("zero-weight", make_shared_ptr<EvictableTestObject>(2, 0));
+	REQUIRE(cache.EvictLeastRecentlyUsed());
+	REQUIRE(cache.GetObject("zero-weight") == nullptr);
+	REQUIRE(cache.GetObject("non-evictable") != nullptr);
+	REQUIRE(!cache.IsEmpty());
+	REQUIRE(!cache.EvictLeastRecentlyUsed());
+}

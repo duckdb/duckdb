@@ -8,6 +8,7 @@
 #include "duckdb/common/thread.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/storage/object_cache.hpp"
@@ -1317,6 +1318,85 @@ TEST_CASE("Dropping cache blocks preserves existing readers and starts a new gen
 	REQUIRE(replacements.size() == 2);
 	REQUIRE(replacements[0] != acquired[0]);
 	REQUIRE(replacements[1] != acquired[1]);
+}
+
+TEST_CASE("Metadata eviction stops when enough memory is reclaimed", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &cache = db.instance->GetExternalFileCache();
+	auto &buffer_pool = db.instance->GetBufferPool();
+	const auto initial_memory = buffer_pool.GetUsedMemory();
+	constexpr idx_t FILE_COUNT = 20;
+	constexpr idx_t EVICT_COUNT = 5;
+	constexpr idx_t BLOCK_SIZE = 1024;
+	idx_t block_count = 0;
+	SECTION("Large metadata reservations") {
+		block_count = 1024;
+	}
+	SECTION("Metadata reservations below the memory counter flush threshold") {
+		block_count = 4;
+	}
+
+	idx_t file_memory = 0;
+	for (idx_t i = 0; i < FILE_COUNT; i++) {
+		auto file = cache.GetOrCreateCachedFile(StringUtil::Format("metadata-eviction-%02llu", i));
+		cache.AcquireBlocks(*file, 0, block_count * BLOCK_SIZE, BLOCK_SIZE);
+		if (i == 0) {
+			file_memory = buffer_pool.GetUsedMemory() - initial_memory;
+		}
+	}
+	REQUIRE(file_memory > 0);
+	REQUIRE(cache.GetCachedFileCount() == FILE_COUNT);
+	REQUIRE(buffer_pool.GetUsedMemory() == initial_memory + FILE_COUNT * file_memory);
+
+	const auto limit = initial_memory + (FILE_COUNT - EVICT_COUNT) * file_memory;
+	buffer_pool.SetLimit(limit, "");
+	REQUIRE(buffer_pool.GetUsedMemory() == limit);
+	REQUIRE(cache.GetCachedFileCount() == FILE_COUNT - EVICT_COUNT);
+
+	// The newest files keep their metadata; looking up an evicted file creates an empty one.
+	for (idx_t i = 0; i < FILE_COUNT; i++) {
+		auto file = cache.GetOrCreateCachedFile(StringUtil::Format("metadata-eviction-%02llu", i));
+		const annotated_lock_guard<annotated_mutex> guard(file->map_lock);
+		REQUIRE(file->blocks.size() == (i < EVICT_COUNT ? 0 : block_count));
+	}
+}
+
+TEST_CASE("Metadata eviction accounts for files retained by readers", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &cache = db.instance->GetExternalFileCache();
+	auto &object_cache = db.instance->GetObjectCache();
+	auto &buffer_pool = db.instance->GetBufferPool();
+	const auto initial_memory = buffer_pool.GetUsedMemory();
+	constexpr idx_t FILE_COUNT = 3;
+	constexpr idx_t BLOCK_COUNT = 1024;
+	constexpr idx_t BLOCK_SIZE = 1024;
+
+	shared_ptr<ExternalFileCache::CachedFile> retained_file;
+	for (idx_t i = 0; i < FILE_COUNT; i++) {
+		auto file = cache.GetOrCreateCachedFile(StringUtil::Format("retained-metadata-%llu", i));
+		cache.AcquireBlocks(*file, 0, BLOCK_COUNT * BLOCK_SIZE, BLOCK_SIZE);
+		if (i == 0) {
+			retained_file = file;
+		}
+	}
+	const auto entry_memory = object_cache.GetCurrentMemory() / FILE_COUNT;
+	const auto total_memory = buffer_pool.GetUsedMemory();
+	const auto file_memory = (total_memory - initial_memory) / FILE_COUNT;
+	const auto metadata_memory = file_memory - entry_memory;
+	REQUIRE(metadata_memory > entry_memory);
+
+	// Removing the oldest entry only frees its entry reservation while a reader retains the file.
+	const auto limit = total_memory - entry_memory - file_memory;
+	buffer_pool.SetLimit(limit, "");
+	REQUIRE(buffer_pool.GetUsedMemory() == limit);
+	REQUIRE(cache.GetCachedFileCount() == 1);
+	{
+		const annotated_lock_guard<annotated_mutex> guard(retained_file->map_lock);
+		REQUIRE(retained_file->blocks.size() == BLOCK_COUNT);
+	}
+
+	retained_file.reset();
+	REQUIRE(buffer_pool.GetUsedMemory() == initial_memory + file_memory);
 }
 
 TEST_CASE("Request sizing can make every read cover the aligned blocks around it", "[external_file_cache]") {
