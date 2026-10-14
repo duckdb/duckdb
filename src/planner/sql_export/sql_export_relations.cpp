@@ -323,7 +323,7 @@ LogicalPlanSQLExportResult LogicalSetOperation::ToSQL(LogicalPlanSQLExportContex
 		// Retain the UNION boundary when optimization removed every other arm.
 		LogicalEmptyResult empty(op.types, op.GetColumnBindings());
 		empty.ResolveOperatorTypes();
-		auto exported = empty.ToSQL(export_context, path);
+		auto exported = export_context.Export(empty, path);
 		if (exported.HasError()) {
 			return exported;
 		}
@@ -502,7 +502,8 @@ LogicalPlanSQLExportResult LogicalWindow::ToSQL(LogicalPlanSQLExportContext &con
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields);
 	}
-	if (op.children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+	// A replaced input exports as a named source, so its ordinality fusion does not apply.
+	if (op.children[0]->type == LogicalOperatorType::LOGICAL_GET && !context.FindSource(*op.children[0])) {
 		auto &get = op.children[0]->Cast<LogicalGet>();
 		if (get.source_ordinality == OrdinalityType::WITH_ORDINALITY && !get.ordinality_idx.IsValid()) {
 			bool supported =

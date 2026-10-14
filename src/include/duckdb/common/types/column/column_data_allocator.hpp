@@ -32,6 +32,7 @@ private:
 
 public:
 	shared_ptr<BlockHandle> GetHandle() const;
+	BufferHandle Pin(BufferManager &buffer_manager);
 	void SetHandle(ManagedResultSet &managed_result_set, shared_ptr<BlockHandle> handle);
 	uint32_t Capacity();
 };
