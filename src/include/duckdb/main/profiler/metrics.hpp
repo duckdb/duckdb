@@ -29,6 +29,13 @@ struct MetricQuerySQL {
 	static constexpr const char *Unit = "";
 	static constexpr const char *TypeStr = "string";
 };
+struct MetricQueryTotalBytesScanned {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "query.total_bytes_scanned";
+	static constexpr const char *Description = "Cumulative compressed size of the Parquet column chunks scanned by the query, however many bytes were read from storage to scan them";
+	static constexpr const char *Unit = "bytes";
+	static constexpr const char *TypeStr = "uint64";
+};
 struct MetricQueryTotalIntermediateRows {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "query.total_intermediate_rows";
@@ -184,6 +191,13 @@ struct MetricStorageWriteToWALLatency {
 };
 
 // Operator metrics
+struct MetricOperatorBytesScanned {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "operator.bytes_scanned";
+	static constexpr const char *Description = "Compressed size of the Parquet column chunks scanned by the operator";
+	static constexpr const char *Unit = "bytes";
+	static constexpr const char *TypeStr = "uint64";
+};
 struct MetricOperatorCPUTime {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "operator.cpu_time";

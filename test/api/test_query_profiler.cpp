@@ -150,3 +150,24 @@ TEST_CASE("Test latency when interrupting query", "[api]") {
 	// REQUIRE(latency > 0);
 	// REQUIRE(latency < 0.1);
 }
+
+TEST_CASE("Test the running total of bytes scanned", "[api][parquet]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto path = TestCreatePath("bytes_scanned_running_total.parquet");
+	REQUIRE_NO_FAIL(
+	    con.Query("COPY (SELECT range AS i FROM range(6144)) TO '" + path + "' (FORMAT parquet, ROW_GROUP_SIZE 2048)"));
+	auto chunks = con.Query("SELECT sum(total_compressed_size)::UBIGINT FROM parquet_metadata('" + path + "')");
+	REQUIRE_NO_FAIL(*chunks);
+	auto chunk_bytes = chunks->Collection().GetValue(0, 0).GetValue<uint64_t>();
+	REQUIRE(chunk_bytes > 0);
+
+	// tracked with profiling disabled
+	REQUIRE_NO_FAIL(con.Query("SELECT sum(i) FROM read_parquet('" + path + "')"));
+	REQUIRE(QueryProfiler::Get(*con.context).GetBytesScanned() == chunk_bytes);
+
+	// and for a scan inside a secure view, which query.total_bytes_scanned leaves out
+	REQUIRE_NO_FAIL(con.Query("CREATE SECURE VIEW secure_scan AS SELECT i FROM read_parquet('" + path + "')"));
+	REQUIRE_NO_FAIL(con.Query("SELECT sum(i) FROM secure_scan"));
+	REQUIRE(QueryProfiler::Get(*con.context).GetBytesScanned() == chunk_bytes);
+}
