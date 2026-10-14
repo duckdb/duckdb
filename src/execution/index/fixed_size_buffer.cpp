@@ -77,7 +77,11 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 	}
 	if (OnDisk()) {
 		// marking a block as modified decreases the reference count of multi-use blocks
-		block_manager.MarkBlockAsModified(block_pointer.block_id);
+		// this must not throw out of a destructor, e.g., if the block ids of a corrupt file overlap
+		try {
+			block_manager.MarkBlockAsModified(block_pointer.block_id);
+		} catch (...) { // NOLINT
+		}
 	}
 }
 
