@@ -1297,6 +1297,8 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif
 		db->LoadStaticExtension<duckdb::ShellExtension>();
+		// bare expressions / table names as statements - only in the CLI, so it is opt-in grammar
+		ExecuteQuery("SET active_grammar_extensions=['shell']");
 		if (safe_mode) {
 			ExecuteQuery("SET enable_external_access=false");
 			ExecuteQuery("SET lock_configuration=true");
