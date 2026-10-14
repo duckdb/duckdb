@@ -58,12 +58,6 @@ struct WriterRows {
 	bitset<STANDARD_VECTOR_SIZE> rows;
 };
 
-//! The last writer of each row of a vector, and the one before it while a transaction might not see the last one
-struct RowUpdateWriters {
-	vector<WriterRows> last;
-	vector<WriterRows> previous;
-};
-
 class ChunkVectorInfo {
 public:
 	explicit ChunkVectorInfo(FixedSizeAllocator &allocator, idx_t start, transaction_t insert_id = 0);
@@ -168,7 +162,7 @@ private:
 	//! re-scanning the ids while this is false.
 	bool recheck_compression = true;
 	//! The writers of the rows that a transaction might not see yet (if any), to detect conflicting writes
-	unique_ptr<RowUpdateWriters> row_writers;
+	unique_ptr<vector<WriterRows>> row_writers;
 };
 
 } // namespace duckdb

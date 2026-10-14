@@ -274,14 +274,28 @@ bool ChunkVectorInfo::Fetch(TransactionData transaction, row_t row) {
 	return UseVersion(transaction, fetch_insert_id) && !UseVersion(transaction, fetch_deleted_id);
 }
 
-//! The writer of the row in the list (0 for none)
-static transaction_t FindWriter(const vector<WriterRows> &writer_rows, idx_t row) {
-	for (auto &entry : writer_rows) {
-		if (entry.rows[row]) {
-			return entry.writer;
+//! Whether the rows (rows[i] - offset) are exactly the first count rows of the vector
+static bool CoversFirstRows(const row_t rows[], idx_t count, row_t offset) {
+	for (idx_t i = 0; i < count; i++) {
+		if (rows[i] - offset != row_t(i)) {
+			return false;
 		}
 	}
-	return 0;
+	return true;
+}
+
+//! The rows (ids[i] - offset) as a bitset
+static bitset<STANDARD_VECTOR_SIZE> GetRows(const row_t ids[], idx_t count, row_t offset) {
+	bitset<STANDARD_VECTOR_SIZE> rows;
+	if (CoversFirstRows(ids, count, offset)) {
+		rows.set();
+		rows >>= STANDARD_VECTOR_SIZE - count;
+		return rows;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		rows[NumericCast<idx_t>(ids[i] - offset)] = true;
+	}
+	return rows;
 }
 
 //! The rows of the writer in the list (added if missing)
@@ -302,6 +316,20 @@ static void RemoveWriters(vector<WriterRows> &writer_rows, VisibilityBound lowes
 		                                 return entry.rows.none() || entry.writer < lowest_visibility_bound;
 	                                 }),
 	                  writer_rows.end());
+}
+
+//! Removes the rows of a writer that a later writer committed for good (one that the transaction sees) also wrote
+static void RemoveRewrittenRows(vector<WriterRows> &writer_rows, TransactionData transaction) {
+	std::sort(writer_rows.begin(), writer_rows.end(),
+	          [](const WriterRows &a, const WriterRows &b) { return a.writer > b.writer; });
+	bitset<STANDARD_VECTOR_SIZE> rewritten_rows;
+	for (auto &entry : writer_rows) {
+		if (entry.writer == transaction.GetTransactionId() || !transaction.view.Sees(entry.writer)) {
+			continue;
+		}
+		entry.rows &= ~rewritten_rows;
+		rewritten_rows |= entry.rows;
+	}
 }
 
 bool ChunkVectorInfo::HasConflictingWrite(TransactionData transaction, const row_t ids[], idx_t count,
@@ -341,23 +369,17 @@ bool ChunkVectorInfo::HasConflictingWrite(TransactionData transaction, const row
 	if (!row_writers) {
 		return false;
 	}
-	bool sees_all_writers = true;
-	for (auto writer_rows : {&row_writers->last, &row_writers->previous}) {
-		for (auto &entry : *writer_rows) {
-			sees_all_writers = sees_all_writers && transaction.view.Sees(entry.writer);
+	bitset<STANDARD_VECTOR_SIZE> rows;
+	bool has_rows = false;
+	for (auto &entry : *row_writers) {
+		if (transaction.view.Sees(entry.writer)) {
+			continue;
 		}
-	}
-	if (sees_all_writers) {
-		return false;
-	}
-	for (idx_t i = 0; i < count; i++) {
-		auto row = NumericCast<idx_t>(ids[i] - offset);
-		// without a last writer (e.g. once it rolled back), the previous one counts
-		auto writer = FindWriter(row_writers->last, row);
-		if (writer == 0) {
-			writer = FindWriter(row_writers->previous, row);
+		if (!has_rows) {
+			rows = GetRows(ids, count, offset);
+			has_rows = true;
 		}
-		if (!transaction.view.Sees(writer)) {
+		if ((entry.rows & rows).any()) {
 			return true;
 		}
 	}
@@ -461,16 +483,6 @@ void ChunkVectorInfo::DecompressDeleteMask() {
 	recheck_compression = true;
 }
 
-//! Whether the rows (rows[i] - offset) are exactly the first count rows of the vector
-static bool CoversFirstRows(const row_t rows[], idx_t count, row_t offset) {
-	for (idx_t i = 0; i < count; i++) {
-		if (rows[i] - offset != row_t(i)) {
-			return false;
-		}
-	}
-	return true;
-}
-
 idx_t ChunkVectorInfo::Delete(TransactionData transaction, row_t rows[], idx_t count) {
 	auto transaction_id = transaction.GetTransactionId();
 	if (HasConflictingWrite(transaction, rows, count, 0)) {
@@ -506,46 +518,17 @@ idx_t ChunkVectorInfo::Delete(TransactionData transaction, row_t rows[], idx_t c
 
 void ChunkVectorInfo::Update(TransactionData transaction, const row_t ids[], idx_t count, row_t offset,
                              VisibilityBound lowest_visibility_bound) {
-	auto transaction_id = transaction.GetTransactionId();
 	if (HasConflictingWrite(transaction, ids, count, offset)) {
 		throw TransactionException("Conflict on update!");
 	}
 	if (!row_writers) {
-		row_writers = make_uniq<RowUpdateWriters>();
+		row_writers = make_uniq<vector<WriterRows>>();
 	}
 	// the writers can be forgotten once all transactions see them - re-arm the compression check
 	recheck_compression = true;
-	auto &last = row_writers->last;
-	auto &previous = row_writers->previous;
-	RemoveWriters(last, lowest_visibility_bound);
-	RemoveWriters(previous, lowest_visibility_bound);
-	auto &own_rows = GetWriterRows(last, transaction_id).rows;
-	bitset<STANDARD_VECTOR_SIZE> updated_rows;
-	if (CoversFirstRows(ids, count, offset)) {
-		updated_rows.set();
-		updated_rows >>= STANDARD_VECTOR_SIZE - count;
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			updated_rows[NumericCast<idx_t>(ids[i] - offset)] = true;
-		}
-	}
-	updated_rows &= ~own_rows;
-	for (auto &entry : last) {
-		auto moved_rows = entry.rows & updated_rows;
-		if (entry.writer == transaction_id || moved_rows.none()) {
-			continue;
-		}
-		// others might not see this writer: it becomes the previous writer of the rows, added before any row moves
-		auto &previous_rows = GetWriterRows(previous, entry.writer).rows;
-		for (auto &previous_entry : previous) {
-			previous_entry.rows &= ~moved_rows;
-		}
-		previous_rows |= moved_rows;
-		entry.rows &= ~moved_rows;
-	}
-	own_rows |= updated_rows;
-	RemoveWriters(last, lowest_visibility_bound);
-	RemoveWriters(previous, lowest_visibility_bound);
+	RemoveRewrittenRows(*row_writers, transaction);
+	RemoveWriters(*row_writers, lowest_visibility_bound);
+	GetWriterRows(*row_writers, transaction.GetTransactionId()).rows |= GetRows(ids, count, offset);
 }
 
 void ChunkVectorInfo::ReplaceUpdateWriter(transaction_t old_id, transaction_t new_id) {
@@ -553,15 +536,16 @@ void ChunkVectorInfo::ReplaceUpdateWriter(transaction_t old_id, transaction_t ne
 		return;
 	}
 	recheck_compression = true;
-	auto &last = row_writers->last;
-	for (auto &entry : last) {
+	auto &writers = *row_writers;
+	for (auto &entry : writers) {
 		if (entry.writer == old_id) {
 			entry.writer = new_id;
 		}
 	}
 	// a rolled back writer has no rows
-	last.erase(std::remove_if(last.begin(), last.end(), [](const WriterRows &entry) { return entry.writer == 0; }),
-	           last.end());
+	writers.erase(
+	    std::remove_if(writers.begin(), writers.end(), [](const WriterRows &entry) { return entry.writer == 0; }),
+	    writers.end());
 }
 
 void ChunkVectorInfo::CommitDelete(transaction_t commit_id, const DeleteInfo &info) {
@@ -723,9 +707,8 @@ VersionCompressionResult ChunkVectorInfo::CompressVersionIds(VisibilityBound low
 		}
 	}
 	if (row_writers) {
-		RemoveWriters(row_writers->last, lowest_visibility_bound);
-		RemoveWriters(row_writers->previous, lowest_visibility_bound);
-		if (row_writers->last.empty() && row_writers->previous.empty()) {
+		RemoveWriters(*row_writers, lowest_visibility_bound);
+		if (row_writers->empty()) {
 			// no write of a row can conflict with the updates anymore
 			row_writers.reset();
 		} else {
@@ -948,16 +931,13 @@ string ChunkVectorInfo::ToString(idx_t max_count) const {
 		throw InternalException("Unknown DeleteIdState in ToString");
 	}
 	if (row_writers) {
-		auto print_writers = [&](const string &name, const vector<WriterRows> &writer_rows) {
-			result += ", " + name + ": [";
-			for (idx_t i = 0; i < writer_rows.size(); i++) {
-				result += (i > 0 ? ", " : "") + to_string(writer_rows[i].writer) + " (" +
-				          to_string(writer_rows[i].rows.count()) + " rows)";
-			}
-			result += "]";
-		};
-		print_writers("Last Writers", row_writers->last);
-		print_writers("Previous Writers", row_writers->previous);
+		auto &writers = *row_writers;
+		result += ", Update Writers: [";
+		for (idx_t i = 0; i < writers.size(); i++) {
+			result += (i > 0 ? ", " : "") + to_string(writers[i].writer) + " (" + to_string(writers[i].rows.count()) +
+			          " rows)";
+		}
+		result += "]";
 	}
 	result += "]";
 	return result;

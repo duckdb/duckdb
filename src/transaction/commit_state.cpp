@@ -396,7 +396,6 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 	}
 	case UndoFlags::UPDATE_ROWS: {
 		auto info = reinterpret_cast<UpdateRowsInfo *>(data);
-		info->commit_id = commit_id;
 		info->version_info->ReplaceUpdateWriter(transaction.GetTransactionId(), commit_id);
 		break;
 	}
@@ -451,7 +450,7 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::UPDATE_ROWS: {
 		auto info = reinterpret_cast<UpdateRowsInfo *>(data);
 		// revert the commit by writing the (uncommitted) transaction_id back into the version info
-		info->version_info->ReplaceUpdateWriter(info->commit_id, transaction_id);
+		info->version_info->ReplaceUpdateWriter(transaction.commit_id, transaction_id);
 		break;
 	}
 	case UndoFlags::ATTACHED_DATABASE:

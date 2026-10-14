@@ -136,7 +136,6 @@ void DuckTransaction::PushUpdateRows(RowVersionManager &info) {
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::UPDATE_ROWS, sizeof(UpdateRowsInfo));
 	auto update_info = reinterpret_cast<UpdateRowsInfo *>(undo_entry.GetDataMutable());
 	update_info->version_info = &info;
-	update_info->commit_id = 0;
 }
 
 void DuckTransaction::PushAppend(DuckTableEntry &table_entry, idx_t start_row, idx_t row_count) {
