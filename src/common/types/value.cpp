@@ -1816,6 +1816,13 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 		return NestedToSQLString(*this, [](const Value &child) { return child.ToSQLString(); });
+	case LogicalTypeId::DECIMAL:
+		// Wide decimals (width > 38) are bignum-backed; the bare numeric literal would be
+		// reparsed as DOUBLE or BIGNUM and lose precision, so emit an explicit cast.
+		if (type_.InternalType() == PhysicalType::VARCHAR) {
+			return "'" + ToString() + "'::" + type_.ToString();
+		}
+		return ToString();
 	case LogicalTypeId::FLOAT:
 		if (!FloatIsFinite(FloatValue::Get(*this)) ||
 		    (FloatValue::Get(*this) == 0 && std::signbit(FloatValue::Get(*this)))) {
