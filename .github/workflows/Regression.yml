@@ -113,6 +113,13 @@ jobs:
           git checkout --detach "${BASE_REF}"
           git submodule update --init --recursive
 
+      - name: Upload base TPC-DS answers
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-base-tpcds-answers
+          path: extension/tpcds/dsdgen/answers
+          if-no-files-found: error
+
       - name: Build base release
         uses: duckdb/duckdb-ci/build-duckdb@main
         env:
@@ -219,6 +226,7 @@ jobs:
             benchmarks: .github/regression/tpcds_sf10.csv
             threads: 4
             sf: 10
+            extra_args: --old-tpcds-answers build/base/tpcds-answers
           - name: TPCH-PARQUET SF1
             benchmarks: .github/regression/tpch_parquet.csv
             threads: 2
@@ -253,12 +261,20 @@ jobs:
           rm -rf build/base/release
           tar -xzf build/base/release-artifact.tar.gz -C build/base
 
+      - name: Download base TPC-DS answers
+        if: ${{ matrix.name == 'TPCDS SF10' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: linux-base-tpcds-answers
+          path: build/base/tpcds-answers
+
       - name: Run regression benchmark
         run: |
           python scripts/regression/test_runner.py \
             --old build/base/release/benchmark/benchmark_runner \
             --new build/current/release/benchmark/benchmark_runner \
             --benchmarks ${{ matrix.benchmarks }} \
+            ${{ matrix.extra_args }} \
             --verbose \
             --early-stop \
             --disable-timeout \
