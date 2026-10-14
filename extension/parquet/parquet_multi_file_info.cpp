@@ -185,10 +185,11 @@ struct ParquetCachedPartitionRowGroup {
 };
 
 //! The row groups of every file of the scan, taken from their cached metadata - empty unless all of it can be used
-static vector<PartitionStatistics>
-GetCachedPartitionStats(ClientContext &context, const vector<ParquetMetadataCacheEntry> &cached_metadata,
-                        const shared_ptr<ParquetEncryptionConfig> &encryption_config,
-                        optional_ptr<const ParquetOptions> parquet_options, bool union_by_name) {
+static vector<PartitionStatistics> GetCachedPartitionStats(ClientContext &context,
+                                                           const vector<ParquetMetadataCacheEntry> &cached_metadata,
+                                                           const shared_ptr<ParquetEncryptionConfig> &encryption_config,
+                                                           optional_ptr<const ParquetOptions> parquet_options,
+                                                           const MultiFileBindData &bind_data) {
 	vector<PartitionStatistics> result;
 	if (cached_metadata.empty()) {
 		// no cached metadata - bail
@@ -219,11 +220,16 @@ GetCachedPartitionStats(ClientContext &context, const vector<ParquetMetadataCach
 
 	// all caches are valid! we can return the partition stats
 	for (auto &cache : cached_metadata) {
-		if (union_by_name || !parquet_options) {
+		if (bind_data.file_options.union_by_name || !parquet_options) {
 			ParquetReader::GetPartitionStats(*cache.metadata->metadata, result);
 			continue;
 		}
 		auto reader = ParquetReader::CreateMetadataReader(context, *parquet_options, cache.metadata);
+		// Column accessors address physical ordinals and types, not the mapped output or generated roles.
+		if (!bind_data.HasIdentityMapping(reader->GetColumns())) {
+			ParquetReader::GetPartitionStats(*cache.metadata->metadata, result);
+			continue;
+		}
 		const idx_t first_new = result.size();
 		reader->GetPartitionStats(result);
 		for (idx_t i = first_new; i < result.size(); i++) {
@@ -269,7 +275,7 @@ static vector<PartitionStatistics> ParquetMultiFileGetPartitionStats(ClientConte
 		encryption_config = parquet_options->encryption_config;
 	}
 	return GetCachedPartitionStats(context, LoadMetadataCaches(context, *bind_data.file_list), encryption_config,
-	                               parquet_options, bind_data.file_options.union_by_name);
+	                               parquet_options, bind_data);
 }
 
 void ParquetScanFunction::AddNamedParameters(TableFunction &table_function) {
