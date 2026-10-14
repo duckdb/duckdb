@@ -57,6 +57,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -962,7 +963,6 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	unique_ptr<duckdb::QueryResult> result;
 	unique_ptr<duckdb::QueryResultStream<>> stream;
 	const bool render_materialized = renderer->RequireMaterializedResult();
-	const auto written_type = statement->type;
 	if (render_materialized) {
 		// we need to materialize the result prior to rendering
 		result = con.Query(std::move(statement), duckdb::ChunkFormat::BufferManaged());
@@ -974,9 +974,9 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		PrintDatabaseError(res.GetError());
 		return SuccessState::FAILURE;
 	}
-	auto &properties = res.GetStatementProperties();
 	// A renderer stops at its row cap and a closed pipe stops the shell outright, so a stream is never read to its end
-	const bool render_streaming = !render_materialized && duckdb::StreamsByDefault(written_type, properties, false);
+	// The result's type, so that a PRAGMA the engine reparses into a SELECT streams as that SELECT
+	const bool render_streaming = !render_materialized && duckdb::StreamsByDefault(res.GetStatementType(), res, false);
 	if (!render_materialized && !render_streaming) {
 		// the statement is not rendered row by row, but its side effects must still happen
 		res.Complete();
@@ -985,6 +985,8 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 			return SuccessState::FAILURE;
 		}
 	}
+	// Known by now: a statement whose properties are known only once it runs is never streamed
+	auto &properties = res.GetStatementProperties();
 	if (properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
 		auto result_chunk = res.Fetch();
 		if (result_chunk && result_chunk->size() == 1) {
@@ -1065,15 +1067,24 @@ void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
 	explain.format = duckdb::ProfilerPrintFormat("shell_explain_printer");
 }
 
+//! The statement whose rows the shell renders. Of a statement the engine expands into several, only the last can
+//! return rows
+static duckdb::SQLStatement &RenderedStatement(duckdb::SQLStatement &statement) {
+	if (statement.type == duckdb::StatementType::MULTI_STATEMENT) {
+		auto &multi = statement.Cast<duckdb::MultiStatement>();
+		if (!multi.statements.empty()) {
+			return *multi.statements.back();
+		}
+	}
+	return statement;
+}
+
 SuccessState ShellState::ExecuteSQL(const string &zSql) {
 	auto &con = *conn;
 	try {
 		auto iterator = con.context->IterateStatements(zSql);
 		while (iterator.Peek()) {
 			auto statement = iterator.GetStatementForExecution();
-			if (!statement) {
-				continue; // a peel that preprocessing swallowed
-			}
 			auto &statement_query = statement->query.empty() ? zSql : statement->query;
 			idx_t start_pos = statement->stmt_location.offset;
 			idx_t len = statement->stmt_location.length;
@@ -1089,11 +1100,12 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			}
 
 			cMode = mode;
-			if (statement->type == duckdb::StatementType::EXPLAIN_STATEMENT) {
+			auto &rendered = RenderedStatement(*statement);
+			if (rendered.type == duckdb::StatementType::EXPLAIN_STATEMENT) {
 				cMode = RenderMode::EXPLAIN;
-				SetupPrettyExplain(*statement);
+				SetupPrettyExplain(rendered);
 			}
-			if (mode == RenderMode::DUCKBOX && UseDescribeRenderMode(*statement, describe_table_name)) {
+			if (mode == RenderMode::DUCKBOX && UseDescribeRenderMode(rendered, describe_table_name)) {
 				cMode = RenderMode::DESCRIBE;
 			}
 
@@ -1297,6 +1309,8 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif
 		db->LoadStaticExtension<duckdb::ShellExtension>();
+		// bare expressions / table names as statements - only in the CLI, so it is opt-in grammar
+		ExecuteQuery("SET active_grammar_extensions=['shell']");
 		if (safe_mode) {
 			ExecuteQuery("SET enable_external_access=false");
 			ExecuteQuery("SET lock_configuration=true");

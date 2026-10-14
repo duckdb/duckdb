@@ -110,60 +110,6 @@ static unique_ptr<ParsedExpression> TransformParserFunctionRewrite(const string 
 	return nullptr;
 }
 
-unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
-                                                    vector<unique_ptr<ParsedExpression>> expression_alias) {
-	auto expressions = std::move(expression_alias);
-	auto select_statement = make_uniq<SelectStatement>();
-	auto select_node = make_uniq<SelectNode>();
-
-	bool any_column_ref = false;
-	for (auto &expr : expressions) {
-		if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-			any_column_ref = true;
-			break;
-		}
-	}
-
-	if (any_column_ref && expressions.size() > 1) {
-		throw ParserException("Mix of table names and expressions is not supported. "
-		                      "Use SELECT to explicitly specify what you want to query.");
-	}
-
-	if (any_column_ref) {
-		// Single COLUMN_REF: treat as table scan
-		auto &col_expr = expressions[0]->Cast<ColumnRefExpression>();
-		if (col_expr.IsQualified()) {
-			if (col_expr.ColumnNames().size() >= 4) {
-				throw ParserException(
-				    "Too many qualifiers encountered. Expected \"catalog.schema.table\" or \"schema.table\"");
-			}
-			if (col_expr.ColumnNames().size() == 3) {
-				auto table_description = TableDescription(
-				    QualifiedName(col_expr.ColumnNames()[0], col_expr.ColumnNames()[1], col_expr.ColumnNames()[2]));
-				select_node->from_table = make_uniq<BaseTableRef>(table_description);
-			} else if (col_expr.ColumnNames().size() == 2) {
-				auto table_description =
-				    TableDescription(QualifiedName({col_expr.ColumnNames()[0]}, col_expr.ColumnNames()[1]));
-				select_node->from_table = make_uniq<BaseTableRef>(table_description);
-			}
-		} else {
-			auto base_table = make_uniq<BaseTableRef>();
-			base_table->SetTable(col_expr.GetColumnName());
-			select_node->from_table = std::move(base_table);
-		}
-		select_node->select_list.push_back(make_uniq<StarExpression>());
-	} else {
-		for (auto &expr : expressions) {
-			select_node->select_list.push_back(std::move(expr));
-		}
-		select_node->from_table = make_uniq<EmptyTableRef>();
-	}
-
-	select_statement->node = std::move(select_node);
-	return std::move(select_statement);
-}
-
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformBaseExpression(PEGTransformer &transformer,
                                                unique_ptr<ParsedExpression> single_expression,
@@ -1200,6 +1146,12 @@ BetweenInLikeOperator PEGTransformerFactory::TransformInPredicate(PEGTransformer
 BetweenInLikeOperator
 PEGTransformerFactory::TransformBetweenLikeOp(PEGTransformer &transformer, const bool &has_result,
                                               unique_ptr<ParsedExpression> between_like_op_expression) {
+	if (has_result && between_like_op_expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &function_name = between_like_op_expression->Cast<FunctionExpression>().FunctionName();
+		if (StringUtil::StartsWith(function_name.GetIdentifierName(), "!")) {
+			throw ParserException("NOT cannot precede an operator that is already negated (!~~, !~~*, !~ or !~*)");
+		}
+	}
 	return {has_result, std::move(between_like_op_expression)};
 }
 
@@ -2001,11 +1953,12 @@ PEGTransformerFactory::TransformSliceExpression(PEGTransformer &transformer,
 	return make_uniq<OperatorExpression>(ExpressionType::ARRAY_SLICE, std::move(slice_bound));
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSliceBound(
-    PEGTransformer &transformer, optional<unique_ptr<ParsedExpression>> expression,
-    optional<unique_ptr<ParsedExpression>> end_slice_bound, optional<unique_ptr<ParsedExpression>> step_slice_bound) {
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformSliceBound(PEGTransformer &transformer,
+                                           optional<unique_ptr<ParsedExpression>> expression,
+                                           optional<vector<unique_ptr<ParsedExpression>>> slice_upper_bound) {
 	vector<unique_ptr<ParsedExpression>> slice_bounds;
-	if (!end_slice_bound && !step_slice_bound) {
+	if (!slice_upper_bound) {
 		if (expression && *expression) {
 			slice_bounds.push_back(std::move(*expression));
 		}
@@ -2016,11 +1969,27 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSliceBound(
 	} else {
 		slice_bounds.push_back(OperatorExpression::EmptySliceBound());
 	}
-	if (end_slice_bound && *end_slice_bound) {
-		slice_bounds.push_back(std::move(*end_slice_bound));
-	} else {
-		slice_bounds.push_back(OperatorExpression::EmptySliceBound());
+	for (auto &bound : *slice_upper_bound) {
+		slice_bounds.push_back(std::move(bound));
 	}
+	return slice_bounds;
+}
+
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformMinusStepSliceBound(PEGTransformer &transformer,
+                                                    unique_ptr<ParsedExpression> step_slice_bound) {
+	vector<unique_ptr<ParsedExpression>> slice_bounds;
+	slice_bounds.push_back(OperatorExpression::EmptySliceBound());
+	slice_bounds.push_back(std::move(step_slice_bound));
+	return slice_bounds;
+}
+
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformEndStepSliceBound(PEGTransformer &transformer,
+                                                  unique_ptr<ParsedExpression> end_slice_bound,
+                                                  optional<unique_ptr<ParsedExpression>> step_slice_bound) {
+	vector<unique_ptr<ParsedExpression>> slice_bounds;
+	slice_bounds.push_back(std::move(end_slice_bound));
 	if (step_slice_bound && *step_slice_bound) {
 		slice_bounds.push_back(std::move(*step_slice_bound));
 	}
@@ -2029,16 +1998,12 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSliceBound(
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformEndSliceBound(PEGTransformer &transformer,
-                                              optional<unique_ptr<ParsedExpression>> end_slice_value) {
+                                              optional<unique_ptr<ParsedExpression>> expression) {
 	// If either the lower or upper bound is not specified, we use an empty constant LIST,
 	// which we handle in the execution.
-	if (end_slice_value && *end_slice_value) {
-		return std::move(*end_slice_value);
+	if (expression && *expression) {
+		return std::move(*expression);
 	}
-	return OperatorExpression::EmptySliceBound();
-}
-
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformEndSliceMinus(PEGTransformer &transformer) {
 	return OperatorExpression::EmptySliceBound();
 }
 

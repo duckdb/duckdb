@@ -1065,6 +1065,8 @@ public:
 	/// Binds a statement without executing it, borrowing it rather than consuming it.
 	/// @param statement The statement to bind.
 	/// @return Its signature: the columns it will produce and the parameters it expects.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` for a statement that expands into several,
+	/// whose columns are known only once it executes.
 	auto Bind(const SqlStatement &statement) const -> Signature;
 
 	/// Resolves a table name and snapshots its description: where it resolved, its columns, and per-column facts.
@@ -3162,15 +3164,16 @@ public:
 	~QueryResult() override;
 
 	/// The result's columns, their names and types, as one owned `Schema`.
-	/// @throws InvalidInputException When the schema is not available yet; step the result first.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the schema is not available yet, for
+	/// a statement that expands into several; step the result first.
 	auto GetSchema() const -> Schema;
 
 	/// The shape of the result, so a caller can decide between consuming rows and draining without inspecting the SQL.
-	/// @throws InvalidInputException When the shape is not available yet; step the result first.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the shape is not available yet, for a
+	/// statement that expands into several; step the result first.
 	auto GetResultType() const -> ResultType;
 
-	/// The kind of SQL statement this result came from.
-	/// @throws InvalidInputException When the kind is not available yet; step the result first.
+	/// The kind of SQL statement this result came from, as written: MULTI for one that expands into several.
 	auto GetStatementType() const -> StatementType;
 
 	/// Does a bounded amount of work and returns without blocking.
@@ -3252,16 +3255,16 @@ public:
 	/// copy. Available as soon as `QueryResult::GetSchema` would be: at once for most statements, after stepping for
 	/// one that expands into several, such as PIVOT.
 	/// @param out Caller-allocated; overwritten. The caller then owns it and releases it with `out.release(&out)`.
-	/// @throws InvalidInputException When the schema is not available yet; step the result first. `out` is left
-	/// released on any throw.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the schema is not available yet;
+	/// step the result first. `out` is left released on any throw.
 	auto GetSchema(ArrowSchema &out) const -> void;
 
 	/// The shape of the result, so a caller can decide between reading arrays and draining without inspecting the SQL.
-	/// @throws InvalidInputException When the shape is not available yet; step the result first.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the shape is not available yet, for a
+	/// statement that expands into several; step the result first.
 	auto GetResultType() const -> ResultType;
 
-	/// The kind of SQL statement this result came from.
-	/// @throws InvalidInputException When the kind is not available yet; step the result first.
+	/// The kind of SQL statement this result came from, as written: MULTI for one that expands into several.
 	auto GetStatementType() const -> StatementType;
 
 	/// Does a bounded amount of work and returns without blocking.

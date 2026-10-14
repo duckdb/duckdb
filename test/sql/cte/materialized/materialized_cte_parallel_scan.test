@@ -2,6 +2,8 @@
 # description: Parallel materialized scans preserve partial chunks and nested values
 # group: [materialized]
 
+require 64bit
+
 statement ok
 SET debug_verify_progress='error';
 
