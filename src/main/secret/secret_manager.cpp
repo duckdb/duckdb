@@ -542,8 +542,8 @@ vector<SecretEntry> SecretManager::AllSecrets(CatalogTransaction transaction) {
 	}
 
 	// Add results from all backends to the result set
-	for (const auto &backend : secret_storages) {
-		auto backend_result = backend.second->AllSecrets(&transaction);
+	for (const auto &backend : GetSecretStorages()) {
+		auto backend_result = backend.get().AllSecrets(&transaction);
 		for (const auto &it : backend_result) {
 			result.push_back(it);
 		}
