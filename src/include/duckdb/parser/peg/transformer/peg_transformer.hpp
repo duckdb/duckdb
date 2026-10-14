@@ -5685,7 +5685,9 @@ public:
 	                                                     const Identifier &table_function_name);
 	static vector<FunctionArgument>
 	TransformTableFunctionArguments(PEGTransformer &transformer, optional<vector<FunctionArgument>> function_argument);
-	static FunctionArgument TransformNamedFunctionArgument(PEGTransformer &transformer, MacroParameter named_parameter);
+	static FunctionArgument TransformNamedFunctionArgument(PEGTransformer &transformer,
+	                                                       const Identifier &type_func_name,
+	                                                       unique_ptr<ParsedExpression> expression);
 	static FunctionArgument TransformPositionalFunctionArgument(PEGTransformer &transformer,
 	                                                            unique_ptr<ParsedExpression> expression);
 	static MacroParameter TransformNamedParameter(PEGTransformer &transformer, const Identifier &type_func_name,

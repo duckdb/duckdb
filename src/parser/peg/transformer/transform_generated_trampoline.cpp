@@ -22606,15 +22606,17 @@ PEGTransformerFactory::FinalizeFunctionArgumentTrampoline(PEGTransformer &transf
 void PEGTransformerFactory::InitializeNamedFunctionArgumentTrampoline(PEGTransformer &transformer,
                                                                       GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(1);
-	process.PushChild({transformer.GetRule("NamedParameter"), list_pr.GetChild(0)}, 0);
+	process.ReserveChildSlots(2);
+	process.PushChild({transformer.GetRule("Expression"), list_pr.GetChild(2)}, 1);
+	process.PushChild({transformer.GetRule("TypeFuncName"), list_pr.GetChild(0)}, 0);
 }
 
 arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeNamedFunctionArgumentTrampoline(PEGTransformer &transformer,
                                                                GeneratedTransformProcess &process) {
-	auto named_parameter = process.TakeResult<MacroParameter>(0);
-	auto result = TransformNamedFunctionArgument(transformer, std::move(named_parameter));
+	auto type_func_name = process.TakeResult<Identifier>(0);
+	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(1);
+	auto result = TransformNamedFunctionArgument(transformer, type_func_name, std::move(expression));
 	return transformer.MakeResult<FunctionArgument>(std::move(result));
 }
 

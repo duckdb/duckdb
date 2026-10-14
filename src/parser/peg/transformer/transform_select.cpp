@@ -317,13 +317,10 @@ PEGTransformerFactory::FinalizeSimpleSelectTrampoline(PEGTransformer &transforme
 }
 
 FunctionArgument PEGTransformerFactory::TransformNamedFunctionArgument(PEGTransformer &transformer,
-                                                                       MacroParameter named_parameter) {
-	if (named_parameter.type != LogicalType::UNKNOWN) {
-		throw ParserException("Named argument \"%s\" of a function call cannot have a type",
-		                      named_parameter.name.GetIdentifierName());
-	}
-	named_parameter.expression->SetAlias(named_parameter.name);
-	return FunctionArgument(named_parameter.name, std::move(named_parameter.expression));
+                                                                       const Identifier &type_func_name,
+                                                                       unique_ptr<ParsedExpression> expression) {
+	expression->SetAlias(type_func_name);
+	return FunctionArgument(type_func_name, std::move(expression));
 }
 
 FunctionArgument PEGTransformerFactory::TransformPositionalFunctionArgument(PEGTransformer &transformer,
