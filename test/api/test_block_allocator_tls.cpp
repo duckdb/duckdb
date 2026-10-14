@@ -73,7 +73,7 @@ public:
 		allocator.FlushPool(allocator.DivBlockSize(bytes));
 	}
 	static idx_t Deallocated(const BlockAllocator &allocator) {
-		return allocator.deallocated_since_flush.load(std::memory_order_relaxed);
+		return allocator.estimated_unflushed_memory.load(std::memory_order_relaxed);
 	}
 	static bool IsInPool(const BlockAllocator &allocator, data_ptr_t pointer) {
 		return allocator.IsInPool(pointer);
@@ -185,6 +185,84 @@ TEST_CASE("BufferPool checks fallback pressure after small reservations", "[api]
 	}
 	pool.UpdateUsedMemory(MemoryTag::ALLOCATOR, -int64_t(MEMORY_LIMIT - FREED_SIZE));
 	CHECK(pool.GetUsedMemory() == 0);
+}
+
+TEST_CASE("BlockAllocator bounds fallback retention after repeated reuse", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t FALLBACK_SIZE = 1024 * 1024;
+	Allocator fallback;
+	if (!fallback.GetMappedMemory().IsValid()) {
+		return;
+	}
+	const auto pool_size = GENERATE_COPY(static_cast<idx_t>(0), BLOCK_SIZE);
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE, pool_size);
+	if (pool_size) {
+		auto pooled = allocator.AllocateData(BLOCK_SIZE);
+		pooled[0] = 42;
+		allocator.FreeData(pooled, BLOCK_SIZE);
+	}
+	// Allow room for arena initialization while repeatedly reusing the same small allocation.
+	const auto headroom = 2 * fallback.GetMappedMemory().GetIndex() + 64 * FALLBACK_SIZE;
+	for (idx_t freed = 0; freed <= headroom; freed += FALLBACK_SIZE) {
+		auto pointer = allocator.AllocateData(FALLBACK_SIZE);
+		pointer[0] = 42;
+		allocator.FreeData(pointer, FALLBACK_SIZE);
+	}
+	REQUIRE(BlockAllocatorTestHelper::Deallocated(allocator) > headroom);
+	CHECK_FALSE(allocator.TryFlushDeallocated(FALLBACK_SIZE, headroom));
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) >= FALLBACK_SIZE);
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) <= headroom - allocator.GetCachedMemory());
+
+	SECTION("Concurrent frees remain eligible for subsequent pressure checks") {
+		atomic<bool> start {false};
+		vector<std::thread> workers;
+		for (idx_t t = 0; t < 4; t++) {
+			workers.emplace_back([&] {
+				while (!start.load()) {
+					std::this_thread::yield();
+				}
+				for (idx_t i = 0; i < 2000; i++) {
+					auto pointer = allocator.AllocateData(FALLBACK_SIZE);
+					pointer[0] = 42;
+					allocator.FreeData(pointer, FALLBACK_SIZE);
+				}
+			});
+		}
+		start = true;
+		for (idx_t i = 0; i < 256; i++) {
+			CHECK_FALSE(allocator.TryFlushDeallocated(FALLBACK_SIZE, headroom));
+		}
+		for (auto &worker : workers) {
+			worker.join();
+		}
+		CHECK_FALSE(allocator.TryFlushDeallocated(FALLBACK_SIZE, headroom));
+		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) >= FALLBACK_SIZE);
+		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) <= headroom - allocator.GetCachedMemory());
+	}
+	// The cap must not suppress reclamation when headroom is actually exhausted.
+	CHECK(allocator.TryFlushDeallocated(FALLBACK_SIZE, 0));
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
+	if (pool_size) {
+		auto pooled = allocator.AllocateData(BLOCK_SIZE);
+		CHECK(pooled[0] == 42);
+		allocator.FreeData(pooled, BLOCK_SIZE);
+	}
+}
+
+TEST_CASE("BlockAllocator retains conservative pressure checks for custom allocators", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	auto allocate = [](PrivateAllocatorData *data, idx_t size) {
+		return Allocator::DefaultAllocate(data, size);
+	};
+	Allocator fallback(allocate, Allocator::DefaultFree, Allocator::DefaultReallocate, nullptr);
+	CHECK_FALSE(fallback.GetMappedMemory().IsValid());
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE, 0);
+	for (idx_t i = 0; i < 100; i++) {
+		auto pointer = allocator.AllocateData(BLOCK_SIZE);
+		allocator.FreeData(pointer, BLOCK_SIZE);
+	}
+	CHECK(allocator.TryFlushDeallocated(BLOCK_SIZE, 99 * BLOCK_SIZE) == Allocator::SupportsFlush());
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == (Allocator::SupportsFlush() ? 0 : 100 * BLOCK_SIZE));
 }
 
 TEST_CASE("BufferAllocator routes allocation transitions through BlockAllocator", "[api][block_allocator]") {

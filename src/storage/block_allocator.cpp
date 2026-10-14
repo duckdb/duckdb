@@ -476,7 +476,7 @@ void BlockAllocator::UpdateCachedBlocks(const int64_t count, const idx_t slot) c
 void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) const {
 	if (!IsActive() || !IsInPool(pointer)) {
 		allocator.FreeData(pointer, size);
-		deallocated_since_flush.fetch_add(size, std::memory_order_relaxed);
+		estimated_unflushed_memory.fetch_add(size, std::memory_order_relaxed);
 		return;
 	}
 	D_ASSERT(size == block_size);
@@ -660,30 +660,40 @@ idx_t BlockAllocator::FlushPool(const optional_idx block_limit, const optional_i
 
 void BlockAllocator::FlushAll() const noexcept {
 	FlushPool();
-	FlushFallbackAllocator(deallocated_since_flush.exchange(0, std::memory_order_relaxed));
+	FlushFallbackAllocator(estimated_unflushed_memory.exchange(0, std::memory_order_relaxed));
 }
 
 void BlockAllocator::FlushOnShutdown() const noexcept {
-	FlushFallbackAllocator(deallocated_since_flush.exchange(0, std::memory_order_relaxed));
+	FlushFallbackAllocator(estimated_unflushed_memory.exchange(0, std::memory_order_relaxed));
 }
 
 void BlockAllocator::FlushForAllocation(const idx_t extra_memory, const idx_t memory_headroom) const noexcept {
 	if (GetCachedMemory() > memory_headroom) {
 		FlushPool(DivBlockSize(extra_memory), optional_idx(), ReclaimMode::FORCE, DivBlockSize(memory_headroom));
 	}
-	FlushFallbackAllocator(deallocated_since_flush.exchange(0, std::memory_order_relaxed));
+	FlushFallbackAllocator(estimated_unflushed_memory.exchange(0, std::memory_order_relaxed));
 }
 
 bool BlockAllocator::TryFlushDeallocated(const idx_t threshold, const idx_t memory_headroom) const noexcept {
-	auto deallocated = deallocated_since_flush.load(std::memory_order_relaxed);
+	auto deallocated = estimated_unflushed_memory.load(std::memory_order_relaxed);
 	if (deallocated == 0 || deallocated < threshold || !Allocator::SupportsFlush()) {
 		return false;
 	}
 	if (deallocated <= memory_headroom && (!IsEnabled() || GetCachedMemory() <= memory_headroom - deallocated)) {
 		return false;
 	}
-	if (!deallocated_since_flush.compare_exchange_strong(deallocated, 0, std::memory_order_relaxed)) {
+	if (!estimated_unflushed_memory.compare_exchange_strong(deallocated, 0, std::memory_order_relaxed)) {
 		return false;
+	}
+	const auto mapped_memory = allocator.GetMappedMemory();
+	if (mapped_memory.IsValid()) {
+		// Repeated frees of reused memory cannot retain more than the fallback allocator's mapped footprint.
+		const auto unflushed = MinValue(deallocated, mapped_memory.GetIndex());
+		if (unflushed <= memory_headroom && GetCachedMemory() <= memory_headroom - unflushed) {
+			// Preserve the bound and any frees made while checking allocator statistics.
+			estimated_unflushed_memory.fetch_add(unflushed, std::memory_order_relaxed);
+			return false;
+		}
 	}
 	FlushFallbackAllocator(deallocated);
 	return true;
@@ -696,7 +706,7 @@ void BlockAllocator::FlushFallbackAllocator(const idx_t deallocated) const noexc
 		}
 	} catch (...) {
 		// Keep failed purges eligible for retry without losing concurrent frees.
-		deallocated_since_flush.fetch_add(deallocated, std::memory_order_relaxed);
+		estimated_unflushed_memory.fetch_add(deallocated, std::memory_order_relaxed);
 	}
 }
 

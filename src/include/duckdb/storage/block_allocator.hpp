@@ -158,8 +158,8 @@ private:
 	//! Bound before workers start and cleared after they join; never owns the scheduler.
 	optional_ptr<TaskScheduler> scheduler;
 
-	//! Keep fallback free traffic separate from fields used by pooled allocations.
-	alignas(64) mutable atomic<idx_t> deallocated_since_flush {0};
+	//! Estimated memory freed but still held by the fallback allocator, separate from pooled allocations.
+	alignas(64) mutable atomic<idx_t> estimated_unflushed_memory {0};
 };
 
 } // namespace duckdb
