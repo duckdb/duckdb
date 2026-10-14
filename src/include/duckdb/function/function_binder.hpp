@@ -28,6 +28,14 @@ struct SortedAggregateStateOrder {
 	OrderByNullType null_order;
 };
 
+//! A scalar function with its argument and return types resolved, before the bind callback is invoked
+struct ResolvedScalarFunctionTypes {
+	BoundScalarFunction bound_function;
+	vector<Identifier> argument_names;
+	//! The collation pushed into the arguments, to be propagated to the return type after binding
+	string pushed_collation;
+};
+
 //! Overload selection: picks the cheapest matching overload out of a function set, given the argument types of a
 //! call. Free-standing so that callers without a ClientContext - which only limits the set of implicit casts
 //! considered, can select overloads too.
@@ -36,9 +44,6 @@ struct FunctionOverloads {
 	DUCKDB_API static optional_idx Cost(optional_ptr<ClientContext> context, const SimpleFunction &func,
 	                                    const vector<LogicalType> &arguments,
 	                                    const vector<pair<Identifier, LogicalType>> &named_arguments);
-	DUCKDB_API static optional_idx Cost(optional_ptr<ClientContext> context, const SimpleNamedParameterFunction &func,
-	                                    const vector<LogicalType> &arguments,
-	                                    const vector<pair<Identifier, LogicalType>> &);
 
 	//! All overloads that match at the lowest cost. Empty (and error set) if none match.
 	template <class T>
@@ -119,12 +124,38 @@ public:
 	                                     const vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
 	                                     ErrorData &error);
 
+	//! Bind a table function: select the overload, check the named arguments against its signature, and cast both
+	//! the positional and the named arguments to the types it declares
+	DUCKDB_API optional_idx BindFunction(const Identifier &name, const TableFunctionSet &functions,
+	                                     vector<unique_ptr<Expression>> &positional_arguments,
+	                                     vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+	                                     vector<Value> &parameters, named_argument_map_t &named_parameters,
+	                                     ErrorData &error);
+
+	//! Casts a constant to the type of the parameter it fills, as an argument of any function is cast - a parameter
+	//! whose type is not concrete, such as ANY, takes it as it is
+	DUCKDB_API static Value CastToParameterType(ClientContext &context, Value value, const LogicalType &parameter_type);
+
+	//! Bind a table in-out function. Its arguments are the columns of an input table, so there is nothing to place
+	//! or fold - only the overload is chosen
+	DUCKDB_API optional_idx BindTableInOutFunction(const Identifier &name, const TableFunctionSet &functions,
+	                                               const vector<LogicalType> &input_types, ErrorData &error);
+
 	//! Bind a pragma function from the set of functions and input arguments
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const PragmaFunctionSet &functions,
-	                                     vector<Value> &parameters, ErrorData &error);
+	                                     vector<unique_ptr<Expression>> &positional_arguments,
+	                                     vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+	                                     vector<Value> &parameters, named_argument_map_t &named_parameters,
+	                                     ErrorData &error);
 
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const Identifier &schema, const Identifier &name,
 	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
+	                                                     bool is_operator = false,
+	                                                     optional_ptr<Binder> binder = nullptr);
+
+	//! Throws the binding error instead of returning nullptr
+	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const Identifier &schema, const Identifier &name,
+	                                                     vector<unique_ptr<Expression>> children,
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
 
@@ -309,6 +340,11 @@ public:
 	}
 
 private:
+	//! Resolves the argument / return types of the function and casts the children to them - everything that happens
+	//! before the bind callback is invoked
+	ResolvedScalarFunctionTypes
+	ResolveScalarFunctionTypes(shared_ptr<const ScalarFunction> function, vector<unique_ptr<Expression>> &children,
+	                           vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args);
 	//! Cast a set of expressions to the arguments of this function
 	void CastToFunctionArguments(BoundSimpleFunction &function, vector<unique_ptr<Expression>> &children);
 

@@ -185,40 +185,50 @@ template <char PERCENTAGE, char UNDERSCORE, bool HAS_ESCAPE, class READER = Stan
 bool TemplatedLikeOperator(const char *sdata, idx_t slen, const char *pdata, idx_t plen, char escape) {
 	idx_t pidx = 0;
 	idx_t sidx = 0;
-	for (; pidx < plen && sidx < slen; pidx++) {
-		char pchar = READER::Operation(pdata, pidx);
-		char schar = READER::Operation(sdata, sidx);
-		if (HAS_ESCAPE && pchar == escape) {
-			pidx++;
-			if (pidx == plen) {
-				throw SyntaxException("Like pattern must not end with escape character!");
-			}
-			if (pdata[pidx] != schar) {
-				return false;
-			}
-			sidx++;
-		} else if (pchar == UNDERSCORE) {
-			READER::NextCharacter(sdata, slen, sidx);
-		} else if (pchar == PERCENTAGE) {
-			pidx++;
-			while (pidx < plen && pdata[pidx] == PERCENTAGE) {
-				pidx++;
-			}
-			if (pidx == plen) {
-				return true; /* tail is acceptable */
-			}
-			for (; sidx < slen; sidx++) {
-				if (TemplatedLikeOperator<PERCENTAGE, UNDERSCORE, HAS_ESCAPE, READER>(
-				        sdata + sidx, slen - sidx, pdata + pidx, plen - pidx, escape)) {
-					return true;
+	// position right after the last '%' seen, used to retry the match one character further on mismatch
+	bool has_percentage = false;
+	idx_t retry_pidx = 0;
+	idx_t retry_sidx = 0;
+	while (sidx < slen) {
+		if (pidx < plen) {
+			char pchar = READER::Operation(pdata, pidx);
+			char schar = READER::Operation(sdata, sidx);
+			if (HAS_ESCAPE && pchar == escape) {
+				if (pidx + 1 == plen) {
+					throw SyntaxException("Like pattern must not end with escape character!");
 				}
+				if (pdata[pidx + 1] == schar) {
+					pidx += 2;
+					sidx++;
+					continue;
+				}
+			} else if (pchar == UNDERSCORE) {
+				pidx++;
+				READER::NextCharacter(sdata, slen, sidx);
+				continue;
+			} else if (pchar == PERCENTAGE) {
+				pidx++;
+				while (pidx < plen && pdata[pidx] == PERCENTAGE) {
+					pidx++;
+				}
+				if (pidx == plen) {
+					return true; /* tail is acceptable */
+				}
+				has_percentage = true;
+				retry_pidx = pidx;
+				retry_sidx = sidx;
+				continue;
+			} else if (pchar == schar) {
+				pidx++;
+				sidx++;
+				continue;
 			}
-			return false;
-		} else if (pchar == schar) {
-			sidx++;
-		} else {
+		}
+		if (!has_percentage) {
 			return false;
 		}
+		pidx = retry_pidx;
+		sidx = ++retry_sidx;
 	}
 	// a trailing '%' only matches an empty suffix when it is not escaped
 	while (pidx < plen) {
@@ -447,7 +457,8 @@ bool ILikeOperatorFunctionInternal(string_t &str, string_t &pattern, char escape
 	if (!HAS_ESCAPE) {
 		return LikeOperatorFunction(str_lcase, pat_lcase);
 	}
-	return LikeOperatorFunction(str_lcase, pat_lcase, escape);
+	// the pattern is lowercased, so the escape character must be as well
+	return LikeOperatorFunction(str_lcase, pat_lcase, StringUtil::CharacterToLower(escape));
 }
 
 bool ILikeOperatorFunction(string_t &str, string_t &pattern) {
@@ -543,7 +554,8 @@ void ILikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &result
 	    escape_vec.GetVectorType() == VectorType::CONSTANT_VECTOR && !ConstantVector::IsNull(escape_vec)) {
 		auto pattern = *ConstantVector::GetData<string_t>(pattern_vec);
 		auto escape = *ConstantVector::GetData<string_t>(escape_vec);
-		char escape_char = GetEscapeChar(escape);
+		// the pattern is lowercased, so the escape character must be as well
+		char escape_char = StringUtil::CharacterToLower(GetEscapeChar(escape));
 		bool has_escape = escape.GetSize() != 0;
 
 		// lowercase the pattern exactly once, up front

@@ -7,6 +7,7 @@
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
@@ -54,10 +55,10 @@ class FetchBlockTask : public BaseExecutorTask {
 public:
 	FetchBlockTask(CachingFileHandle &caching_file_handle_p, TaskExecutor &executor, QueryContext context_p,
 	               BufferManager &buffer_manager_p, ExternalFileCacheStats &stats_p, shared_ptr<CacheBlock> block_p,
-	               idx_t block_idx_p, idx_t block_size_p, idx_t request_bytes_p, BufferHandle &result_pin_p)
+	               idx_t request_bytes_p, BufferHandle &result_pin_p)
 	    : BaseExecutorTask(executor), caching_file_handle(caching_file_handle_p), context(context_p),
-	      buffer_manager(buffer_manager_p), stats(stats_p), block(std::move(block_p)), block_idx(block_idx_p),
-	      block_size(block_size_p), request_bytes(request_bytes_p), result_pin(result_pin_p) {
+	      buffer_manager(buffer_manager_p), stats(stats_p), block(std::move(block_p)), request_bytes(request_bytes_p),
+	      result_pin(result_pin_p) {
 	}
 
 	void ExecuteTask() override {
@@ -88,7 +89,7 @@ public:
 
 				try {
 					const idx_t file_size = caching_file_handle.GetFileSize();
-					const idx_t offset = block_idx * block_size;
+					const idx_t offset = block->location;
 					if (offset >= file_size) {
 						lk.lock();
 						// If there're other workers waiting for this block, we need to reset the block to empty state
@@ -97,7 +98,7 @@ public:
 						block->cv.notify_all();
 						return;
 					}
-					const idx_t to_read = MinValue(block_size, file_size - offset);
+					const idx_t to_read = MinValue(block->size, file_size - offset);
 					auto buf =
 					    ExternalFileCache::AllocateCacheBuffer(buffer_manager, caching_file_handle.GetPath(), to_read);
 					caching_file_handle.ReadAndRecord(context, buf.GetDataMutable(), to_read, offset);
@@ -152,10 +153,32 @@ private:
 	BufferManager &buffer_manager;
 	ExternalFileCacheStats &stats;
 	shared_ptr<CacheBlock> block;
-	idx_t block_idx;
-	idx_t block_size;
 	idx_t request_bytes;
 	BufferHandle &result_pin;
+};
+
+//===----------------------------------------------------------------------===//
+// ReadRangeTask
+//===----------------------------------------------------------------------===//
+
+class ReadRangeTask : public BaseExecutorTask {
+public:
+	ReadRangeTask(CachingFileHandle &caching_file_handle_p, TaskExecutor &executor, QueryContext context_p,
+	              data_ptr_t buffer_p, idx_t nr_bytes_p, idx_t location_p)
+	    : BaseExecutorTask(executor), caching_file_handle(caching_file_handle_p), context(context_p), buffer(buffer_p),
+	      nr_bytes(nr_bytes_p), location(location_p) {
+	}
+
+	void ExecuteTask() override {
+		caching_file_handle.ReadAndRecord(context, buffer, nr_bytes, location);
+	}
+
+private:
+	CachingFileHandle &caching_file_handle;
+	QueryContext context;
+	data_ptr_t buffer;
+	idx_t nr_bytes;
+	idx_t location;
 };
 
 } // namespace
@@ -253,8 +276,7 @@ bool CachingFileHandle::CanUseCache() {
 	return !current_cached_file->validation_info.IsExpired();
 }
 
-void CachingFileHandle::ReconcileCacheAfterRead(CachedFile &cached_file, idx_t first_block,
-                                                const vector<shared_ptr<CacheBlock>> &blocks) {
+void CachingFileHandle::ReconcileCacheAfterRead(CachedFile &cached_file) {
 	CacheValidationInfo current;
 	{
 		const annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
@@ -270,14 +292,14 @@ void CachingFileHandle::ReconcileCacheAfterRead(CachedFile &cached_file, idx_t f
 
 	cached = current;
 	// Existing readers retain their pinned blocks while future reads fetch replacements.
-	external_file_cache.RetireBlocks(cached_file, first_block, blocks);
+	external_file_cache.DropBlocks(cached_file);
 }
 
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
                                      const OpenFileInfo &path_p, FileOpenFlags flags_p,
                                      optional_ptr<FileOpener> opener_p)
-    : context(context), caching_file_system(caching_file_system_p),
-      external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(std::move(flags_p)),
+    : context(context), file_system(caching_file_system_p.file_system), db(caching_file_system_p.db),
+      external_file_cache(caching_file_system_p.external_file_cache), path(path_p), flags(std::move(flags_p)),
       opener(opener_p), validate(ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetClientContext(),
                                                                                caching_file_system_p.db)),
       cached_file(nullptr), position(0) {
@@ -315,9 +337,9 @@ shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
 	// Request parallel access on the underlying filesystem handle to avoid races in implementations that
 	// require explicit opt-in for concurrent pread-style access (e.g., HTTPFS).
 	auto internal_flags = flags | FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
-	file_handle = caching_file_system.file_system.OpenFile(path, internal_flags, opener);
+	file_handle = file_system.OpenFile(path, internal_flags, opener);
 	// Snapshot the metadata with a single Stats call, avoiding repeated metadata lookups (e.g., fstat)
-	validation_info = GetValidationInfo(caching_file_system.file_system, *file_handle);
+	validation_info = GetValidationInfo(file_system, *file_handle);
 
 	{
 		annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
@@ -328,9 +350,7 @@ shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
 			    !refresh_expired_cache &&
 			    ExternalFileCache::IsValid(Validate(), cached_file->validation_info, validation_info);
 			if (!cache_is_valid) {
-				annotated_lock_guard<annotated_mutex> map_guard(cached_file->map_lock);
-				cached_file->blocks.clear();
-				cached_file->cached_block_size.SetInvalid();
+				external_file_cache.DropBlocks(*cached_file);
 			}
 			// A successful validator check refreshes freshness. Without validators, preserve the original deadline.
 			const bool revalidated = cache_is_valid && ExternalFileCache::HasValidationMetadata(validation_info);
@@ -357,7 +377,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 
 	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path) || !CanUseCache()) {
 		auto buf = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
-		ReadAndRecord(context, buf.GetDataMutable(), nr_bytes, location);
+		ReadUncached(buf.GetDataMutable(), nr_bytes, location);
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 		mem_handles.push_back({std::move(buf), 0, nr_bytes});
 		return FileBufferHandleGroup(std::move(mem_handles));
@@ -365,42 +385,72 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 
 	auto current_cached_file = EnsureCachedFileCurrent();
 	external_file_cache.GetStats().read_request_bytes.fetch_add(nr_bytes, std::memory_order_relaxed);
-	const idx_t block_size = external_file_cache.GetCacheBlockSize(current_cached_file->path);
-	const idx_t first_block = location / block_size;
-	const idx_t last_block = (location + nr_bytes - 1) / block_size;
-	const idx_t num_blocks = last_block - first_block + 1;
-
-	// Atomically reindex (if needed) and acquire the block range.
-	auto blocks =
-	    external_file_cache.ReindexAndAcquireBlocks(*current_cached_file, block_size, first_block, num_blocks);
+	const idx_t file_size = GetFileSize();
+	if (location >= file_size) {
+		return FileBufferHandleGroup();
+	}
+	const idx_t max_block_size = external_file_cache.GetCacheMaxBlockSize(current_cached_file->path);
+	const idx_t min_block_size =
+	    MinValue(external_file_cache.GetCacheMinBlockSize(current_cached_file->path), max_block_size);
+	auto request_sizing = flags.GetRequestSizing();
+	switch (Settings::Get<ExternalFileCacheRequestSizingSetting>(db)) {
+	case ExternalFileCacheRequestSizing::GRID:
+		request_sizing = RequestSizing::BY_CACHE;
+		break;
+	case ExternalFileCacheRequestSizing::EXACT:
+		request_sizing = RequestSizing::BY_READER;
+		break;
+	case ExternalFileCacheRequestSizing::AUTO:
+		break;
+	}
+	idx_t fetch_location = location;
+	idx_t fetch_end = location + nr_bytes;
+	if (file_size <= max_block_size) {
+		// fetch a file that fits in one block whole, so later reads of it hit the cache
+		fetch_location = 0;
+		fetch_end = file_size;
+	} else if (request_sizing == RequestSizing::BY_CACHE) {
+		fetch_location = location - location % max_block_size;
+		fetch_end = AlignValue(fetch_end, max_block_size);
+	} else {
+		fetch_location = location - location % min_block_size;
+		fetch_end = AlignValue(fetch_end, min_block_size);
+	}
+	fetch_end = MinValue(fetch_end, file_size);
+	auto blocks = external_file_cache.AcquireBlocks(*current_cached_file, fetch_location, fetch_end - fetch_location,
+	                                                max_block_size);
+	const idx_t num_blocks = blocks.size();
 
 	// Schedule block fetch tasks for all blocks.
 	vector<BufferHandle> pins(num_blocks);
-	auto &scheduler = TaskScheduler::GetScheduler(caching_file_system.db);
+	auto &scheduler = TaskScheduler::GetScheduler(db);
 	TaskExecutor executor(scheduler, TaskSchedulerType::ASYNC);
 
-	idx_t remaining_request_bytes = nr_bytes;
+	const idx_t request_end = location + nr_bytes;
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
-		const idx_t offset_in_block = idx == 0 ? location - first_block * block_size : 0;
-		const idx_t request_bytes = MinValue(block_size - offset_in_block, remaining_request_bytes);
-		remaining_request_bytes -= request_bytes;
-		executor.ScheduleTask(make_uniq<FetchBlockTask>(
-		    *this, executor, context, external_file_cache.GetBufferManager(), external_file_cache.GetStats(),
-		    blocks[idx], first_block + idx, block_size, request_bytes, pins[idx]));
+		const auto &block = *blocks[idx];
+		const idx_t overlap_start = MaxValue(block.location, location);
+		const idx_t overlap_end = MinValue(block.location + block.size, request_end);
+		const idx_t request_bytes = overlap_end > overlap_start ? overlap_end - overlap_start : 0;
+		executor.ScheduleTask(
+		    make_uniq<FetchBlockTask>(*this, executor, context, external_file_cache.GetBufferManager(),
+		                              external_file_cache.GetStats(), blocks[idx], request_bytes, pins[idx]));
 	}
-	D_ASSERT(remaining_request_bytes == 0);
 	executor.WorkOnTasks();
 
 	// Build the handle group.
 	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 	mem_handles.reserve(num_blocks);
 	idx_t remaining = nr_bytes;
-	for (idx_t idx = 0; idx < num_blocks; idx++) {
-		const idx_t block_start = (first_block + idx) * block_size;
-		const idx_t offset_in_block = (idx == 0) ? (location - block_start) : 0;
+	for (idx_t idx = 0; idx < num_blocks && remaining > 0; idx++) {
+		auto &block = *blocks[idx];
+		if (block.location + block.size <= location) {
+			// part of a small file fetched whole, before the requested range
+			continue;
+		}
+		const idx_t offset_in_block = location > block.location ? location - block.location : 0;
 		idx_t block_valid_bytes = 0;
 		{
-			auto &block = *blocks[idx];
 			annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
 			block_valid_bytes = block.nr_bytes;
 		}
@@ -411,9 +461,28 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		remaining -= length;
 	}
 
-	ReconcileCacheAfterRead(*current_cached_file, first_block, blocks);
+	ReconcileCacheAfterRead(*current_cached_file);
 
 	return FileBufferHandleGroup(std::move(mem_handles));
+}
+
+void CachingFileHandle::ReadUncached(data_ptr_t buffer, idx_t nr_bytes, idx_t location) {
+	const idx_t max_block_size = external_file_cache.GetCacheMaxBlockSize(path.path);
+	auto &scheduler = TaskScheduler::GetScheduler(db);
+	// idle worker threads also run async tasks, so the pieces are only sure to run serially without any other thread
+	const bool single_threaded = scheduler.NumberOfThreads() <= 1 && scheduler.NumberOfAsyncThreads() == 0;
+	if (nr_bytes <= max_block_size || !external_file_cache.ShouldCacheFile(path.path) || !CanSeek() ||
+	    single_threaded) {
+		ReadAndRecord(context, buffer, nr_bytes, location);
+		return;
+	}
+	// split like cached reads, so the requests are the same whether or not the cache is enabled
+	TaskExecutor executor(scheduler, TaskSchedulerType::ASYNC);
+	for (idx_t offset = 0; offset < nr_bytes; offset += max_block_size) {
+		executor.ScheduleTask(make_uniq<ReadRangeTask>(*this, executor, context, buffer + offset,
+		                                               MinValue(max_block_size, nr_bytes - offset), location + offset));
+	}
+	executor.WorkOnTasks();
 }
 
 FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {

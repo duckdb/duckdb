@@ -39,8 +39,8 @@ void CommitDropState::DropBlock(block_id_t block_id) {
 	dropped_block_ids.push_back(block_id);
 }
 
-void CommitDropState::RemoveIndex(TableIndexList &indexes, Identifier name) {
-	pending_index_removals.push_back(PendingIndexRemoval {indexes, std::move(name)});
+void CommitDropState::RemoveIndex(TableIndexList &indexes, idx_t index_oid) {
+	pending_index_removals.push_back(PendingIndexRemoval {indexes, index_oid});
 }
 
 void CommitDropState::FinalizeCommit() {
@@ -53,7 +53,7 @@ void CommitDropState::FinalizeCommit() {
 	D_ASSERT(block_manager || dropped_block_ids.empty());
 
 	for (auto &removal : pending_index_removals) {
-		removal.indexes.get().RemoveIndex(removal.name);
+		removal.indexes.get().RemoveIndex(removal.index_oid);
 	}
 	dropped_block_ids.clear();
 	pending_index_removals.clear();

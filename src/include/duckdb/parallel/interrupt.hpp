@@ -91,6 +91,13 @@ public:
 		return can_block;
 	}
 
+	//! Take the blocked tasks so their callbacks can run after releasing the lock
+	vector<InterruptState> TakeBlockedTasks() DUCKDB_REQUIRES(lock) {
+		vector<InterruptState> result;
+		result.swap(blocked_tasks);
+		return result;
+	}
+
 	//! Unblock all tasks (must hold the lock)
 	bool UnblockTasks() DUCKDB_REQUIRES(lock) {
 		if (blocked_tasks.empty()) {

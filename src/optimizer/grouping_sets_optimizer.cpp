@@ -192,9 +192,9 @@ bool GroupingSetsOptimizer::TryExpandGroupingSets(unique_ptr<LogicalOperator> &o
 	}
 
 	auto cte_name = Identifier(StringUtil::Format("__grouping_sets_input_cte_%llu", cte_index.index));
-	result = make_uniq<LogicalMaterializedCTE>(std::move(cte_name), cte_index, input_types.size(),
-	                                           std::move(op->children[0]), std::move(result),
-	                                           CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	auto input = LogicalProjection::CreateIdentity(optimizer.binder.GenerateTableIndex(), std::move(op->children[0]));
+	result = make_uniq<LogicalMaterializedCTE>(std::move(cte_name), cte_index, input_types.size(), std::move(input),
+	                                           std::move(result), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	if (aggr.has_estimated_cardinality) {
 		result->SetEstimatedCardinality(aggr.estimated_cardinality);
 	}

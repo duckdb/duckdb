@@ -138,6 +138,7 @@ unique_ptr<Expression> CMHelper::CreateDefaultStatsAwareCast(ClientContext &cont
 		throw InternalException("Expected a cast in CMHelper::CreateDefaultStatsAwareCast");
 	} // LCOV_EXCL_STOP
 	auto &cast = result->Cast<BoundFunctionExpression>();
+	CMUtils::MarkCast(cast);
 	result_stats = BoundCastExpression::PropagateStatistics(cast, input_stats, context);
 	if (!result_stats) { // LCOV_EXCL_START
 		throw InternalException("Could not propagate cast statistics in compressed materialization");
@@ -355,8 +356,22 @@ unique_ptr<CompressExpression> CMHelper::CreateIntegralFunctionCompress(unique_p
 // CompressedMaterialization
 //===--------------------------------------------------------------------===//
 CompressedMaterialization::CompressedMaterialization(Optimizer &optimizer_p, LogicalOperator &root_p,
+                                                     const vector<reference<unique_ptr<LogicalOperator>>> &ancestors_p,
                                                      statistics_map_t &statistics_map_p)
-    : optimizer(optimizer_p), context(optimizer.context), root(&root_p), statistics_map(statistics_map_p) {
+    : optimizer(optimizer_p), context(optimizer.context), root(&root_p), ancestors(ancestors_p),
+      statistics_map(statistics_map_p) {
+}
+
+void CompressedMaterialization::RebindAncestors(ColumnBindingReplacer &replacer) {
+	// Table indexes are unique to a single operator, so references to the replaced bindings
+	// can only occur in the operators between the compressed operator and the root
+	for (auto &ancestor : ancestors) {
+		auto &ancestor_op = ancestor.get();
+		if (replacer.stop_operator && replacer.stop_operator.get() == ancestor_op.get()) {
+			continue;
+		}
+		replacer.VisitOperatorBindings(*ancestor_op);
+	}
 }
 
 void CompressedMaterialization::GetReferencedBindings(const Expression &root_expr,
@@ -432,7 +447,7 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 		return;
 	}
 
-	root->ResolveOperatorTypes();
+	op->ResolveOperatorTypes();
 
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
@@ -540,7 +555,7 @@ void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOpera
 	replacer.stop_operator = child_op.get();
 
 	// Make the plan consistent again
-	replacer.VisitOperator(*root);
+	RebindAncestors(replacer);
 
 	// Replace in/out exprs in the binding map too
 	CMHelper::RemapBindingMap(info, replacement_bindings);
@@ -646,7 +661,7 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 	replacer.stop_operator = op.get();
 
 	// Make the plan consistent again
-	replacer.VisitOperator(*root);
+	RebindAncestors(replacer);
 }
 
 unique_ptr<CompressExpression> CompressedMaterialization::GetCompressExpression(const ColumnBinding &binding,
@@ -992,7 +1007,8 @@ unique_ptr<Expression> CompressedMaterialization::GetGeometryDecompress(unique_p
 
 	BoundScalarFunction bound_function(decompress_function);
 	bound_function.SetReturnType(result_type);
-	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	auto result = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	return std::move(result);
 }
 
 unique_ptr<Expression> CompressedMaterialization::GetIntegralDecompress(unique_ptr<Expression> input,
@@ -1008,7 +1024,8 @@ unique_ptr<Expression> CompressedMaterialization::GetIntegralDecompress(unique_p
 	BoundScalarFunction bound_function(decompress_function);
 	bound_function.SetReturnType(result_type);
 
-	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	auto result = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	return std::move(result);
 }
 
 unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr<Expression> input,
@@ -1022,7 +1039,8 @@ unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr
 	BoundScalarFunction bound_function(decompress_function);
 	bound_function.SetReturnType(result_type);
 
-	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	auto result = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	return std::move(result);
 }
 
 unique_ptr<Expression> CompressedMaterialization::GetVariantDecompress(unique_ptr<Expression> input,

@@ -225,4 +225,14 @@ struct InternalDecompressStringFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct InternalCompressedMaterializationCastFun {
+	static constexpr const char *Name = "__internal_compressed_materialization_cast";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "";
+	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

@@ -59,8 +59,7 @@ public:
 	idx_t GroupRowsAvailable() override {
 		return NumericLimits<idx_t>::Maximum();
 	};
-	uint64_t TotalCompressedSize() override {
-		return 0;
+	void GatherColumnChunks(unordered_set<idx_t> &column_chunks) override {
 	}
 	idx_t FileOffset() const override {
 		return 0;
@@ -91,8 +90,7 @@ public:
 	idx_t GroupRowsAvailable() override {
 		return NumericLimits<idx_t>::Maximum();
 	};
-	uint64_t TotalCompressedSize() override {
-		return 0;
+	void GatherColumnChunks(unordered_set<idx_t> &column_chunks) override {
 	}
 	idx_t FileOffset() const override {
 		return 0;

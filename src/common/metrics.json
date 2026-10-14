@@ -53,7 +53,7 @@
 		},
 		"peak_streaming_buffer_size": {
 			"metric_type": "uint64",
-			"description": "Peak number of bytes buffered by a streaming query result",
+			"description": "Peak number of bytes a streaming query result held: queued bytes plus the units blocked workers hold, both exact. Units still under construction are not counted",
 			"unit": "bytes"
 		},
 		"peak_temp_dir_size": {
