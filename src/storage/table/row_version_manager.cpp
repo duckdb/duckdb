@@ -204,11 +204,15 @@ idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_
 void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info) {
 	lock_guard<mutex> lock(version_lock);
 	needs_compression_check = true;
-	if (!newest_uncheckpointed_delete_commit.IsValid() || commit_id > newest_uncheckpointed_delete_commit.GetIndex()) {
-		newest_uncheckpointed_delete_commit = commit_id;
-	}
-	if (!oldest_uncheckpointed_delete_commit.IsValid() || commit_id < oldest_uncheckpointed_delete_commit.GetIndex()) {
-		oldest_uncheckpointed_delete_commit = commit_id;
+	if (IsCommitted(commit_id)) {
+		if (!newest_uncheckpointed_delete_commit.IsValid() ||
+		    commit_id > newest_uncheckpointed_delete_commit.GetIndex()) {
+			newest_uncheckpointed_delete_commit = commit_id;
+		}
+		if (!oldest_uncheckpointed_delete_commit.IsValid() ||
+		    commit_id < oldest_uncheckpointed_delete_commit.GetIndex()) {
+			oldest_uncheckpointed_delete_commit = commit_id;
+		}
 	}
 	GetVectorInfo(vector_idx).CommitDelete(commit_id, info);
 }
