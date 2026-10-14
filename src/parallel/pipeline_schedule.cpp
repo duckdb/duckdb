@@ -252,6 +252,11 @@ unique_ptr<PipelineSchedule> BuildPipelineSchedule(const vector<shared_ptr<MetaP
 				continue;
 			}
 
+			if (child1->HasEagerBuildFinalize()) {
+				// Filter producers must finalize before sibling scans consume their filters.
+				continue;
+			}
+
 			for (auto &child2 : children) {
 				if (child2->Type() != MetaPipelineType::JOIN_BUILD || RefersToSameObject(*child1, *child2)) {
 					continue;

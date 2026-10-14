@@ -47,6 +47,25 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	if (build_rhs) {
 		// on the RHS (build side), we construct a child MetaPipeline with this operator as its sink
 		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, op, MetaPipelineType::JOIN_BUILD);
+		// register filter sets published at Finalize, so consuming scans can order behind this build
+		// (see PhysicalTableScan::BuildPipelines)
+		switch (op.type) {
+		case PhysicalOperatorType::HASH_JOIN:
+		case PhysicalOperatorType::PIECEWISE_MERGE_JOIN:
+		case PhysicalOperatorType::NESTED_LOOP_JOIN: {
+			auto &join = op.Cast<PhysicalComparisonJoin>();
+			if (join.filter_pushdown) {
+				for (auto &probe : join.filter_pushdown->probe_info) {
+					if (probe.dynamic_filters) {
+						state.filter_set_producers[*probe.dynamic_filters].push_back(child_meta_pipeline);
+					}
+				}
+			}
+			break;
+		}
+		default:
+			break;
+		}
 		child_meta_pipeline.Build(op.children[1]);
 		if (op.children[1].get().CanSaturateThreads(current.GetClientContext())) {
 			// if the build side can saturate all available threads,
