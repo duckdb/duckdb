@@ -904,8 +904,7 @@ format-check-silent: $(FORMAT_SETUP_DEPS)
 
 format-check-files: $(FORMAT_SETUP_DEPS)
 	@test -n "$(FORMAT_FILES_FROM)" || (echo "FORMAT_FILES_FROM is required" >&2; exit 1)
-	DUCKDB_FORMAT_SKIP_TYPOS=1 $(FORMAT_PYTHON) scripts/format.py --files-from "$(FORMAT_FILES_FROM)" --check $(T); echo "format rc=$$?"
-	typos --version; typos --force-exclude -c scripts/typos.toml $$(sort -u "$(FORMAT_FILES_FROM)") ; echo "typos rc=$$?"; exit 1
+	$(FORMAT_PYTHON) scripts/format.py --files-from "$(FORMAT_FILES_FROM)" --check --silent $(T)
 
 format-fix-files: $(FORMAT_SETUP_DEPS)
 	@test -n "$(FORMAT_FILES_FROM)" || (echo "FORMAT_FILES_FROM is required" >&2; exit 1)
