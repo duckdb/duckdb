@@ -393,6 +393,8 @@ Expression:
     - ColDefAndExpressionTail
     - LogicalNotExpression
     - IsExpression
+    - ComparisonOperand
+    - NotComparisonOperand
     - IsTest
     - IsLiteral
     - NotNull
@@ -1647,7 +1649,7 @@ overrides:
   # expression.gram
   NotExpression:
     type: "vector<bool>"
-    by_value: true
+    by_value: false
   IsDistinctFromTail:
     type: "IsDistinctFromTail"
     by_value: true

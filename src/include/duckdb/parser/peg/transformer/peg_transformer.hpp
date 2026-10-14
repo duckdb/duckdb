@@ -2692,6 +2692,13 @@ public:
 	                                                         GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
 	FinalizeComparisonExpressionTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeComparisonOperandTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeComparisonOperandTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeNotComparisonOperandTrampoline(PEGTransformer &transformer,
+	                                                     GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeNotComparisonOperandTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
 	static void InitializeComparisonOperatorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeComparisonOperatorTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
@@ -5122,7 +5129,7 @@ public:
 	TransformColDefAndExpressionTail(PEGTransformer &transformer,
 	                                 unique_ptr<ParsedExpression> is_distinct_from_expression);
 	static unique_ptr<ParsedExpression> TransformLogicalNotExpression(PEGTransformer &transformer,
-	                                                                  optional<vector<bool>> not_expression,
+	                                                                  const optional<vector<bool>> &not_expression,
 	                                                                  unique_ptr<ParsedExpression> is_expression);
 	static vector<bool> TransformNotExpression(PEGTransformer &transformer, const vector<bool> &not_keyword);
 	static bool TransformNotKeyword(PEGTransformer &transformer);
@@ -5157,10 +5164,12 @@ public:
 	static unique_ptr<ParsedExpression>
 	TransformComparisonExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> between_in_like_expression,
 	                              optional<vector<ComparisonExpressionTail>> comparison_expression_tail);
-	static ComparisonExpressionTail
-	TransformComparisonExpressionTail(PEGTransformer &transformer, const ExpressionType &comparison_operator,
-	                                  optional<vector<bool>> not_expression,
-	                                  unique_ptr<ParsedExpression> between_in_like_expression);
+	static ComparisonExpressionTail TransformComparisonExpressionTail(PEGTransformer &transformer,
+	                                                                  const ExpressionType &comparison_operator,
+	                                                                  unique_ptr<ParsedExpression> comparison_operand);
+	static unique_ptr<ParsedExpression> TransformNotComparisonOperand(PEGTransformer &transformer,
+	                                                                  const vector<bool> &not_expression,
+	                                                                  unique_ptr<ParsedExpression> is_expression);
 	static ExpressionType TransformOperatorEqual(PEGTransformer &transformer);
 	static ExpressionType TransformOperatorNotEqual(PEGTransformer &transformer);
 	static ExpressionType TransformOperatorLessThan(PEGTransformer &transformer);

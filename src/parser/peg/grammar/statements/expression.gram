@@ -192,7 +192,10 @@ IsDistinctFromTail <- IsDistinctFromOp ComparisonExpression
 IsDistinctFromOp <- 'IS' 'NOT'? 'DISTINCT' 'FROM'
 # LEVEL 6
 ComparisonExpression <- BetweenInLikeExpression ComparisonExpressionTail*
-ComparisonExpressionTail <- ComparisonOperator NotExpression? BetweenInLikeExpression
+ComparisonExpressionTail <- ComparisonOperator ComparisonOperand
+ComparisonOperand <- NotComparisonOperand / BetweenInLikeExpression
+# NOT after a comparison operator binds everything up to the IS level: a < NOT b IS NULL is a < (NOT (b IS NULL))
+NotComparisonOperand <- NotExpression IsExpression
 ComparisonOperator <-
     OperatorEqual /
     OperatorNotEqual /

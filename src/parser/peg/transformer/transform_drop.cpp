@@ -214,6 +214,9 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSecret(PEGTransfor
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->SetName(secret_name);
 	if (drop_secret_storage) {
+		if (extra_drop_info->persist_mode == SecretPersistType::TEMPORARY) {
+			throw ParserException("Can not combine TEMPORARY with specifying a storage for drop secret");
+		}
 		extra_drop_info->secret_storage = drop_secret_storage->GetIdentifierName();
 	}
 	info->extra_drop_info = std::move(extra_drop_info);
