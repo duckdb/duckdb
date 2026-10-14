@@ -198,7 +198,13 @@ static unique_ptr<SelectNode> PivotFilteredAggregate(ClientContext &context, Piv
 			D_ASSERT(aggregates.size() == 1);
 
 			auto &aggr = aggregates[0].get().Cast<FunctionExpression>();
-			aggr.FilterMutable() = filter->Copy();
+			if (aggr.FilterMutable()) {
+				// keep the FILTER of the aggregate - only the rows that match both filters are aggregated
+				aggr.FilterMutable() = make_uniq<ConjunctionExpression>(
+				    ExpressionType::CONJUNCTION_AND, std::move(aggr.FilterMutable()), filter->Copy());
+			} else {
+				aggr.FilterMutable() = filter->Copy();
+			}
 			auto &aggr_name = aggregate->GetAlias();
 			auto name = pivot_value.name;
 			if (ref.aggregates.size() > 1 || !aggr_name.empty()) {
