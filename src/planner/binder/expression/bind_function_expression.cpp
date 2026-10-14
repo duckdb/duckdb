@@ -106,23 +106,20 @@ struct ListReduceRebindResult {
 	bool override_has_accumulator_type = false;
 };
 
-void ForceLambdaReturnTypeForDecimals(ClientContext &context, BindResult &bind_lambda_result,
-                                      const LogicalType &accumulator_type) {
+//! Avoid repeated rebinds for DECIMAL type widening by forcing the lambda return type to the chosen accumulator type
+//! when decimals are involved
+static void CastDecimalLambdaToAccumulatorType(ClientContext &context, BindResult &bind_lambda_result,
+                                               const LogicalType &accumulator_type) {
 	auto &rebound_lambda_expr = bind_lambda_result.expression->Cast<BoundLambdaExpression>();
-	// Avoid repeated rebinds for DECIMAL type widening by forcing the lambda return type to the chosen
-	// accumulator type when decimals are involved.
-	if (!TypeContainsDecimal(accumulator_type) &&
-	    !TypeContainsDecimal(rebound_lambda_expr.LambdaExpr()->GetReturnType())) {
+	const auto return_type = rebound_lambda_expr.LambdaExpr()->GetReturnType();
+	if (return_type == accumulator_type ||
+	    (!TypeContainsDecimal(accumulator_type) && !TypeContainsDecimal(return_type))) {
 		return;
 	}
-	if (rebound_lambda_expr.LambdaExpr()->GetReturnType() == accumulator_type) {
-		return;
-	}
-	const auto old_return_type = rebound_lambda_expr.LambdaExpr()->GetReturnType();
 	auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(rebound_lambda_expr.LambdaExprMutable()),
 	                                                    accumulator_type);
 	if (!cast_expr) {
-		throw BinderException("Could not cast lambda return type %s to accumulator type %s", old_return_type.ToString(),
+		throw BinderException("Could not cast lambda return type %s to accumulator type %s", return_type.ToString(),
 		                      accumulator_type.ToString());
 	}
 	rebound_lambda_expr.LambdaExprMutable() = std::move(cast_expr);
@@ -180,7 +177,7 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 			bind_lambda_result.error.Throw();
 		}
 
-		ForceLambdaReturnTypeForDecimals(context, bind_lambda_result, accumulator_type);
+		CastDecimalLambdaToAccumulatorType(context, bind_lambda_result, accumulator_type);
 		result.did_rebind = true;
 		result.capture_child_types = std::move(rebind_child_types);
 	} else if (accumulator_type != list_child_type) {
@@ -195,7 +192,7 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 		if (bind_lambda_result.HasError()) {
 			bind_lambda_result.error.Throw();
 		}
-		ForceLambdaReturnTypeForDecimals(context, bind_lambda_result, accumulator_type);
+		CastDecimalLambdaToAccumulatorType(context, bind_lambda_result, accumulator_type);
 		result.did_rebind = true;
 		result.override_accumulator_type_storage = accumulator_type;
 		result.override_has_accumulator_type = true;
