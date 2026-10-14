@@ -178,13 +178,41 @@ static bool CombineEqualUnion(LogicalTypeResolver &logical_type_resolver, const 
                               const LogicalType &right, LogicalType &result) {
 	auto left_member_count = UnionType::GetMemberCount(left);
 	auto right_member_count = UnionType::GetMemberCount(right);
-	if (left_member_count != right_member_count) {
-		// return the "larger" type, with the most members
-		result = left_member_count > right_member_count ? left : right;
-		return true;
+	// start from the "larger" type, with the most members (the left one if they are equal)
+	auto &base = right_member_count > left_member_count ? right : left;
+	auto &other = right_member_count > left_member_count ? left : right;
+	// merge the member types, so that no member value is narrowed by the cast to the common type
+	child_list_t<LogicalType> members;
+	for (idx_t i = 0; i < UnionType::GetMemberCount(base); i++) {
+		members.emplace_back(UnionType::GetMemberName(base, i), UnionType::GetMemberType(base, i));
 	}
-	// otherwise, keep left, don't try to meld the two together.
-	result = left;
+	for (idx_t i = 0; i < UnionType::GetMemberCount(other); i++) {
+		auto &member_name = UnionType::GetMemberName(other, i);
+		auto &member_type = UnionType::GetMemberType(other, i);
+		bool found = false;
+		for (auto &member : members) {
+			if (member.first != member_name) {
+				continue;
+			}
+			found = true;
+			LogicalType new_member_type;
+			if (!logical_type_resolver.Operation(member.second, member_type, new_member_type)) {
+				// the members cannot be combined - keep the base type
+				result = base;
+				return true;
+			}
+			member.second = std::move(new_member_type);
+			break;
+		}
+		if (!found) {
+			if (members.size() >= UnionType::MAX_UNION_MEMBERS) {
+				result = base;
+				return true;
+			}
+			members.emplace_back(member_name, member_type);
+		}
+	}
+	result = LogicalType::UNION(std::move(members));
 	return true;
 }
 
