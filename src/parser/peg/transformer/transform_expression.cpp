@@ -1146,6 +1146,12 @@ BetweenInLikeOperator PEGTransformerFactory::TransformInPredicate(PEGTransformer
 BetweenInLikeOperator
 PEGTransformerFactory::TransformBetweenLikeOp(PEGTransformer &transformer, const bool &has_result,
                                               unique_ptr<ParsedExpression> between_like_op_expression) {
+	if (has_result && between_like_op_expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &function_name = between_like_op_expression->Cast<FunctionExpression>().FunctionName();
+		if (StringUtil::StartsWith(function_name.GetIdentifierName(), "!")) {
+			throw ParserException("NOT cannot precede an operator that is already negated (!~~, !~~*, !~ or !~*)");
+		}
+	}
 	return {has_result, std::move(between_like_op_expression)};
 }
 
@@ -1947,11 +1953,12 @@ PEGTransformerFactory::TransformSliceExpression(PEGTransformer &transformer,
 	return make_uniq<OperatorExpression>(ExpressionType::ARRAY_SLICE, std::move(slice_bound));
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSliceBound(
-    PEGTransformer &transformer, optional<unique_ptr<ParsedExpression>> expression,
-    optional<unique_ptr<ParsedExpression>> end_slice_bound, optional<unique_ptr<ParsedExpression>> step_slice_bound) {
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformSliceBound(PEGTransformer &transformer,
+                                           optional<unique_ptr<ParsedExpression>> expression,
+                                           optional<vector<unique_ptr<ParsedExpression>>> slice_upper_bound) {
 	vector<unique_ptr<ParsedExpression>> slice_bounds;
-	if (!end_slice_bound && !step_slice_bound) {
+	if (!slice_upper_bound) {
 		if (expression && *expression) {
 			slice_bounds.push_back(std::move(*expression));
 		}
@@ -1962,11 +1969,27 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSliceBound(
 	} else {
 		slice_bounds.push_back(OperatorExpression::EmptySliceBound());
 	}
-	if (end_slice_bound && *end_slice_bound) {
-		slice_bounds.push_back(std::move(*end_slice_bound));
-	} else {
-		slice_bounds.push_back(OperatorExpression::EmptySliceBound());
+	for (auto &bound : *slice_upper_bound) {
+		slice_bounds.push_back(std::move(bound));
 	}
+	return slice_bounds;
+}
+
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformMinusStepSliceBound(PEGTransformer &transformer,
+                                                    unique_ptr<ParsedExpression> step_slice_bound) {
+	vector<unique_ptr<ParsedExpression>> slice_bounds;
+	slice_bounds.push_back(OperatorExpression::EmptySliceBound());
+	slice_bounds.push_back(std::move(step_slice_bound));
+	return slice_bounds;
+}
+
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformEndStepSliceBound(PEGTransformer &transformer,
+                                                  unique_ptr<ParsedExpression> end_slice_bound,
+                                                  optional<unique_ptr<ParsedExpression>> step_slice_bound) {
+	vector<unique_ptr<ParsedExpression>> slice_bounds;
+	slice_bounds.push_back(std::move(end_slice_bound));
 	if (step_slice_bound && *step_slice_bound) {
 		slice_bounds.push_back(std::move(*step_slice_bound));
 	}
@@ -1975,16 +1998,12 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSliceBound(
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformEndSliceBound(PEGTransformer &transformer,
-                                              optional<unique_ptr<ParsedExpression>> end_slice_value) {
+                                              optional<unique_ptr<ParsedExpression>> expression) {
 	// If either the lower or upper bound is not specified, we use an empty constant LIST,
 	// which we handle in the execution.
-	if (end_slice_value && *end_slice_value) {
-		return std::move(*end_slice_value);
+	if (expression && *expression) {
+		return std::move(*expression);
 	}
-	return OperatorExpression::EmptySliceBound();
-}
-
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformEndSliceMinus(PEGTransformer &transformer) {
 	return OperatorExpression::EmptySliceBound();
 }
 

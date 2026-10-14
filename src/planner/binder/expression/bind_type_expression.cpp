@@ -80,6 +80,7 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 	for (auto &param : unbound_parameters) {
 		// Otherwise, try to fold it to a constant value
 		ConstantBinder binder(this->binder, context, StringUtil::Format("Type parameter for type '%s'", type_name));
+		binder.ContinueStackDepth(*this);
 
 		auto expr = param->Copy();
 		auto bound_expr = binder.Bind(expr);
