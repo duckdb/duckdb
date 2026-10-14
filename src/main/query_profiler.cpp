@@ -1141,6 +1141,19 @@ void QueryProfiler::Print() {
 	PrintProfilerOutput(renderer.get());
 }
 
+static bool HasScanWithoutBytesScanned(ProfilingNode &node) {
+	auto &metrics = node.GetOperatorMetrics();
+	if (metrics.operator_type == PhysicalOperatorType::TABLE_SCAN && !metrics.bytes_scanned_reported) {
+		return true;
+	}
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		if (HasScanWithoutBytesScanned(*node.GetChild(i))) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static void MergeOperatorMeasurements(ProfilingNode &root, OperatorMetrics &result) {
 	// merge in this layer
 	result.Accumulate(root.GetOperatorMetrics());
@@ -1196,7 +1209,10 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		metrics->SetMetric<MetricQueryTotalIntermediateSizeBytes>(cumulative_metrics.intermediate_size_bytes);
 		metrics->SetMetric<MetricQueryTotalRowGroupsScanned>(cumulative_metrics.row_groups_scanned);
 		metrics->SetMetric<MetricQueryTotalRowGroupsToScan>(cumulative_metrics.total_row_groups_to_scan);
-		metrics->SetMetric<MetricQueryTotalBytesScanned>(cumulative_metrics.bytes_scanned);
+		// a scan that doesn't count the bytes it scans falls back to the bytes the query read
+		auto bytes_scanned =
+		    HasScanWithoutBytesScanned(*root) ? query_metrics.GetBytesRead() : cumulative_metrics.bytes_scanned;
+		metrics->SetMetric<MetricQueryTotalBytesScanned>(bytes_scanned);
 	}
 	query_metrics.FinalizeMetrics(*metrics);
 	metrics_finalized = true;

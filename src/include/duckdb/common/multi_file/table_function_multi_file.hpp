@@ -143,10 +143,6 @@ typedef unique_ptr<FunctionData> (*table_function_combine_schema_t)(ClientContex
 //! mapped onto one another with these, so reporting only names and types is not enough
 typedef vector<MultiFileColumnDefinition> (*table_function_get_file_columns_t)(ClientContext &context,
                                                                                const FunctionData &bind_data);
-//! The size of the file the function has open, as it is stored (compressed): what a function with
-//! BytesScannedReporting::STORED_FILE_SIZE reports as the bytes its scan scans. Returns an invalid index when it is
-//! not known
-typedef optional_idx (*table_function_file_size_t)(const TableFunctionInput &input);
 
 //! The options of a wrapped single-file table function - the named parameters that are forwarded to it as-is
 class TableFunctionFileReaderOptions : public BaseFileReaderOptions {
@@ -204,12 +200,6 @@ struct TableFunctionMultiFileSettings {
 	table_function_prepare_read_ahead_t prepare_read_ahead = nullptr;
 	table_function_combine_schema_t combine_schema = nullptr;
 	table_function_get_file_columns_t get_file_columns = nullptr;
-	table_function_file_size_t file_size = nullptr;
-	//! How the wrapped function reports the bytes its scan scans - see BytesScannedReporting. A function that counts
-	//! the bytes it reads itself, through the metrics of its scan (columnar: the Parquet reader, per row group), sets
-	//! COUNTED_BY_READER. Otherwise the stored size of its file is reported when the scan starts: the size "file_size"
-	//! reports, or failing that the size the file list reported
-	BytesScannedReporting bytes_scanned_reporting = BytesScannedReporting::STORED_FILE_SIZE;
 	//! Whether one local state may be used to scan several files in turn - the scan then keeps the state it created
 	//! rather than making a new one per file, so that what the function learns while reading a file (like the order
 	//! its filters are best applied in) carries over to the next
@@ -218,6 +208,8 @@ struct TableFunctionMultiFileSettings {
 	//! TableFunctionFileInitInput::cast_map. The function then reports the schema of its own file, and still
 	//! produces the types of the scan
 	bool supports_cast_map = false;
+	//! Whether the function counts the bytes it scans, reported as operator.bytes_scanned of the scan
+	bool reports_bytes_scanned = false;
 };
 
 //! The function info of a multi-file wrapper - holds the single-file function that is wrapped
@@ -276,8 +268,6 @@ public:
 	                 DataChunk &chunk) override;
 	double GetProgressInFile(ClientContext &context) override;
 	InsertionOrderPreservingMap<Value> GetMetadata() const override;
-	BytesScannedReporting GetBytesScannedReporting() const override;
-	optional_idx GetStoredFileSize() const override;
 
 	//! Release the resources the given local state holds for the batch it scanned last
 	void FinishBatch(ClientContext &context, LocalTableFunctionState &local_state);
@@ -405,6 +395,9 @@ public:
 
 public:
 	void InitializeFileOptions(MultiFileOptions &file_options) override;
+	bool ReportsBytesScanned() const override {
+		return settings.reports_bytes_scanned;
+	}
 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                    optional_ptr<TableFunctionInfo> info) override;
 	bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,

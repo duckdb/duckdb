@@ -571,9 +571,7 @@ TableFunctionMultiFileSettings ParquetScanFunction::GetMultiFileSettings() {
 	settings.get_file_columns = ReadSingleParquetFileColumns;
 	// the order the filters are best applied in is learned while reading, and carries over to the next file
 	settings.reuses_local_state = true;
-	// Parquet is columnar: only the column chunks of the projected columns are read, and their compressed size is
-	// counted per row group as they are read (ReadSingleParquetFileGetMetrics)
-	settings.bytes_scanned_reporting = BytesScannedReporting::COUNTED_BY_READER;
+	settings.reports_bytes_scanned = true;
 	return settings;
 }
 

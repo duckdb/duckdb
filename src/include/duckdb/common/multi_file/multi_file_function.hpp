@@ -29,7 +29,7 @@ struct MultiFileReaderInterface {
 
 	//! Whether the scans of this reader report operator.bytes_scanned
 	virtual bool ReportsBytesScanned() const {
-		return true;
+		return false;
 	}
 
 	virtual void InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list);
@@ -718,9 +718,6 @@ public:
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
 			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
 				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state, *job.scan_state)) {
-					// every scan of a file claims it here first - the bytes scanned its reader knows up front are
-					// reported now
-					gstate.ReportBytesScannedOnScanStart(context, current_reader_data);
 					job.reader = current_reader_data.reader;
 					if (!job.reader) {
 						throw InternalException("MultiFileReader was moved");
@@ -1379,8 +1376,6 @@ public:
 			auto &local = input.local_state->Cast<MultiFileLocalState>();
 			input.operator_metrics.rows_scanned = local.rows_scanned;
 		}
-		// the bytes scanned reported for the files are handed over once - the profiler sums what every thread reports
-		input.operator_metrics.bytes_scanned += gstate.bytes_scanned_unreported.exchange(0);
 		if (input.bind_data && input.bind_data->Cast<MultiFileBindData>().interface->ReportsBytesScanned()) {
 			input.operator_metrics.bytes_scanned_reported = true;
 		}

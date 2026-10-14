@@ -1,5 +1,5 @@
 # name: test/sql/pragma/profiling/test_profiling_bytes_scanned.test
-# description: Test query.total_bytes_scanned for Parquet scans
+# description: Test query.total_bytes_scanned and operator.bytes_scanned
 # group: [profiling]
 
 require parquet
@@ -195,3 +195,34 @@ query II
 EXPLAIN ANALYZE (FORMAT json) SELECT sum(i) FROM '{TEST_DIR}/bytes_scanned_1.parquet'
 ----
 analyzed_plan	<REGEX>:[\s\S]*"bytes_scanned": [1-9][\s\S]*
+
+# a file scan that doesn't count the bytes it scans falls back to the bytes the query read
+statement ok
+COPY (SELECT range AS i FROM range(100000)) TO '{TEST_DIR}/bytes_scanned_fallback.csv';
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/bytes_scanned_fallback.json';
+
+statement ok
+SET tracked_metrics = ['query.total_bytes_scanned', 'io.total_bytes_read', 'operator.bytes_scanned'];
+
+statement ok
+SELECT sum(i) FROM '{TEST_DIR}/bytes_scanned_fallback.csv';
+
+statement ok
+PRAGMA disable_profiling;
+
+query II
+SELECT query.total_bytes_scanned = io.total_bytes_read,
+       query.total_bytes_scanned = (SELECT size FROM read_blob('{TEST_DIR}/bytes_scanned_fallback.csv'))
+FROM '{TEST_DIR}/bytes_scanned_fallback.json';
+----
+true	true
+
+query II
+EXPLAIN ANALYZE (FORMAT json) SELECT sum(i) FROM '{TEST_DIR}/bytes_scanned_fallback.csv'
+----
+analyzed_plan	<!REGEX>:[\s\S]*"bytes_scanned"[\s\S]*
