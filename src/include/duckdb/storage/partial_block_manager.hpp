@@ -9,8 +9,14 @@
 #pragma once
 
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/storage/block.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/storage/metadata/metadata_writer.hpp"
+#include <cstdint>
 
 namespace duckdb {
 class DatabaseInstance;
@@ -29,25 +35,22 @@ struct UninitializedRegion {
 	idx_t end;
 };
 
-//! The current state of a partial block
-struct PartialBlockState {
-	//! The block id of the partial block
-	block_id_t block_id;
-	//! The total bytes that we can assign to this block
-	uint32_t block_size;
-	//! Next allocation offset, and also the current allocation size
-	uint32_t offset;
-	//! The number of times that this block has been used for partial allocations
-	uint32_t block_use_count;
+//! Interface required for packing data into partial blocks, implementing
+//! classes can be managed through the partial block manager.
+class BlockPackable {
+public:
+	virtual ~BlockPackable() = default;
+
+public:
+	virtual void Finalize(shared_ptr<BlockHandle> block_handle_p, uint32_t offset) = 0;
 };
 
 struct PartialBlock {
-	PartialBlock(PartialBlockState state, BlockManager &block_manager, const shared_ptr<BlockHandle> &block_handle);
+	PartialBlock(BlockManager &block_manager, block_id_t block_id);
+	PartialBlock(BlockManager &block_manager, const shared_ptr<BlockHandle> &block_handle);
 	virtual ~PartialBlock() {
 	}
 
-	//! The current state of a partial block
-	PartialBlockState state;
 	//! All uninitialized regions on this block, we need to zero-initialize them when flushing
 	vector<UninitializedRegion> uninitialized_regions;
 	//! The block manager of the partial block manager
@@ -56,14 +59,21 @@ struct PartialBlock {
 	shared_ptr<BlockHandle> block_handle;
 
 public:
+	idx_t AvailableSpace();
+	uint32_t UseCount();
 	//! Add regions that need zero-initialization to avoid leaking memory
 	void AddUninitializedRegion(const idx_t start, const idx_t end);
-	virtual void AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block);
+	//! Register the object at the current allocation offset.
+	void AddPackable(BlockPackable &packable);
+
+	shared_ptr<BlockHandle> ReuseBuffer(BufferHandle &source);
+	BlockPointer Store(BlockPackable &packable, BufferHandle source, uint32_t byte_size);
 	//! Flush the block to disk and zero-initialize any free space and uninitialized regions
-	virtual void Flush(QueryContext context, const idx_t free_space_left) = 0;
+	virtual void Flush(QueryContext context);
 	void FlushInternal(const idx_t free_space_left);
-	virtual void Merge(PartialBlock &other, idx_t offset, idx_t other_size) = 0;
-	virtual void Clear() = 0;
+	//! Merge bytes and segment references before either block has a persistent block ID.
+	virtual void Merge(PartialBlock &other);
+	virtual void Clear();
 
 public:
 	template <class TARGET>
@@ -71,17 +81,20 @@ public:
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
-};
 
-struct PartialBlockAllocation {
-	//! The BlockManager owning the block_id
-	BlockManager *block_manager {nullptr};
-	//! The number of assigned bytes to the caller
-	uint32_t allocation_size;
-	//! The current state of the partial block
-	PartialBlockState state;
-	//! Arbitrary state related to the partial block storage
-	unique_ptr<PartialBlock> partial_block;
+protected:
+	//! Install the final buffer and offsets before releasing the partial block.
+	void FinalizePackables();
+
+private:
+	//! Type-erased buffers that will be packed in the current block.
+	vector<std::pair<reference<BlockPackable>, uint32_t>> packables;
+	//! The block id of the partial block
+	block_id_t block_id;
+	//! Next allocation offset, and also the current allocation size
+	uint32_t offset = 0;
+	//! The number of references to this block from partial allocations
+	uint32_t block_use_count = 0;
 };
 
 enum class PartialBlockType { FULL_CHECKPOINT, APPEND_TO_TABLE, IN_MEMORY_CHECKPOINT };
@@ -104,11 +117,6 @@ public:
 	virtual ~PartialBlockManager();
 
 public:
-	PartialBlockAllocation GetBlockAllocation(uint32_t segment_size);
-
-	//! Register a partially filled block that is filled with "segment_size" entries
-	void RegisterPartialBlock(PartialBlockAllocation allocation);
-
 	//! Clear remaining blocks without writing them to disk
 	void ClearBlocks();
 
@@ -121,8 +129,19 @@ public:
 	//! Flush any remaining partial blocks to disk
 	void FlushPartialBlocks();
 
-	unique_ptr<PartialBlock> CreatePartialBlock(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
-	                                            BlockManager &block_manager);
+	unique_ptr<PartialBlock> TakePartialBlock(uint32_t byte_size);
+
+	unique_ptr<PartialBlock> CreatePartialBlock();
+
+	unique_ptr<PartialBlock> AcquirePartialBlock(uint32_t byte_size);
+
+	void Retain(unique_ptr<PartialBlock> partial_block);
+
+	unique_ptr<PartialBlock> PruneFreeList();
+
+	void RetainOrFlush(unique_ptr<PartialBlock> partial_block);
+
+	optional<BlockPointer> Write(BlockPackable &packable, BufferHandle source, uint32_t byte_size);
 
 	unique_lock<mutex> GetLock() {
 		return unique_lock<mutex>(partial_block_lock);
@@ -134,7 +153,7 @@ public:
 	//! Returns the optional client context.
 	optional_ptr<ClientContext> GetClientContext() const;
 
-protected:
+private:
 	//! The optional client context in which we use the partial block manager.
 	//! The SingleFileCheckpointWriter contains a partial block manager, and the destructor of
 	//! AttachedDatabase invokes CreateCheckpoint with that checkpoint writer.
@@ -152,14 +171,10 @@ protected:
 	uint32_t max_partial_block_size;
 	uint32_t max_use_count;
 
-protected:
-	virtual void AllocateBlock(PartialBlockState &state, uint32_t segment_size);
+private:
 	//! Try to obtain a partially filled block that can fit "segment_size" bytes
 	//! If successful, returns true and returns the block_id and offset_in_block to write to
 	//! Otherwise, returns false
-	bool GetPartialBlock(idx_t segment_size, unique_ptr<PartialBlock> &state);
-
-	bool HasBlockAllocation(uint32_t segment_size);
 };
 
 } // namespace duckdb

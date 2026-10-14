@@ -11,6 +11,7 @@
 #include "duckdb/storage/checkpoint/row_group_writer.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
+#include "duckdb/storage/partial_block_manager.hpp"
 
 namespace duckdb {
 
@@ -82,14 +83,10 @@ private:
 
 struct InMemoryPartialBlock : public PartialBlock {
 public:
-	InMemoryPartialBlock(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
-	                     BlockManager &block_manager);
+	explicit InMemoryPartialBlock(BlockManager &block_manager);
 	~InMemoryPartialBlock() override;
 
 public:
-	void Flush(QueryContext context, const idx_t free_space_left) override;
-	void Merge(PartialBlock &other, idx_t offset, idx_t other_size) override;
-	void AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block) override;
-	void Clear() override;
+	void Flush(QueryContext context) override;
 };
 } // namespace duckdb

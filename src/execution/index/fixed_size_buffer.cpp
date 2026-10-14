@@ -2,31 +2,9 @@
 
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/partial_block_manager.hpp"
 
 namespace duckdb {
-
-//===--------------------------------------------------------------------===//
-// PartialBlockForIndex
-//===--------------------------------------------------------------------===//
-
-PartialBlockForIndex::PartialBlockForIndex(PartialBlockState state, BlockManager &block_manager,
-                                           const shared_ptr<BlockHandle> &block_handle)
-    : PartialBlock(state, block_manager, block_handle) {
-}
-
-void PartialBlockForIndex::Flush(QueryContext context, const idx_t free_space_left) {
-	FlushInternal(free_space_left);
-	block_handle = block_manager.ConvertToPersistent(context, state.block_id, std::move(block_handle));
-	Clear();
-}
-
-void PartialBlockForIndex::Merge(PartialBlock &other, idx_t offset, idx_t other_size) {
-	throw InternalException("no merge for PartialBlockForIndex");
-}
-
-void PartialBlockForIndex::Clear() {
-	block_handle.reset();
-}
 
 //===--------------------------------------------------------------------===//
 // FixedSizeBuffer
@@ -80,9 +58,21 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 	}
 }
 
+void FixedSizeBuffer::Finalize(shared_ptr<BlockHandle> block_handle_p, uint32_t offset) {
+	D_ASSERT(readers == 0);
+	D_ASSERT(!buffer_handle.IsValid());
+	D_ASSERT(block_handle_p);
+	D_ASSERT(block_handle_p->BlockId() < MAXIMUM_BLOCK);
+
+	block_pointer = BlockPointer(block_handle_p->BlockId(), offset);
+	block_handle = std::move(block_handle_p);
+	dirty = false;
+}
+
 void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, const idx_t available_segments,
                                 const idx_t segment_size, const idx_t bitmask_offset) {
 	D_ASSERT(readers == 0);
+	D_ASSERT(&partial_block_manager.GetBlockManager() == &block_manager);
 
 	// Early-out, if the block is already on disk and not in memory.
 	if (!InMemory()) {
@@ -108,42 +98,7 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 		block_manager.MarkBlockAsModified(block_pointer.block_id);
 	}
 
-	// Write the changes.
-	// First, we get a partial block allocation.
-	PartialBlockAllocation allocation =
-	    partial_block_manager.GetBlockAllocation(NumericCast<uint32_t>(allocation_size));
-	block_pointer.block_id = allocation.state.block_id;
-	block_pointer.offset = allocation.state.offset;
-
-	auto &buffer_manager = block_manager.buffer_manager;
-
-	if (allocation.partial_block) {
-		// There is space, so we copy to an existing partial block.
-		D_ASSERT(block_pointer.offset > 0);
-		auto &p_block_for_index = allocation.partial_block->Cast<PartialBlockForIndex>();
-		auto dst_handle = buffer_manager.Pin(p_block_for_index.block_handle);
-		memcpy(dst_handle.GetDataMutable() + block_pointer.offset, buffer_handle.Ptr(), allocation_size);
-
-	} else {
-		// No partial block available, so we create a new partial block.
-		D_ASSERT(block_handle);
-		D_ASSERT(!block_pointer.offset);
-		auto p_block_for_index = make_uniq<PartialBlockForIndex>(allocation.state, block_manager, block_handle);
-		allocation.partial_block = std::move(p_block_for_index);
-	}
-
-	// We are done with this buffer.
-	// To use the fixed-size buffer again, we need to re-load it from disk.
-	buffer_handle.Destroy();
-
-	// Register the partial block and the block handle.
-	partial_block_manager.RegisterPartialBlock(std::move(allocation));
-
-	block_handle = block_manager.RegisterBlock(block_pointer.block_id);
-	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
-
-	// We persisted any changes, so the fixed-size buffer is no longer dirty.
-	dirty = false;
+	partial_block_manager.Write(*this, std::move(buffer_handle), allocation_size);
 }
 
 void FixedSizeBuffer::LoadFromDisk() {

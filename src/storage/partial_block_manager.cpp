@@ -1,6 +1,20 @@
 #include "duckdb/storage/partial_block_manager.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/file_buffer.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/storage/block.hpp"
+#include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/table/in_memory_checkpoint.hpp"
-#include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
+#include <cstdint>
+#include <cstring>
 
 namespace duckdb {
 
@@ -8,17 +22,173 @@ namespace duckdb {
 // PartialBlock
 //===--------------------------------------------------------------------===//
 
-PartialBlock::PartialBlock(PartialBlockState state, BlockManager &block_manager,
-                           const shared_ptr<BlockHandle> &block_handle)
-    : state(state), block_manager(block_manager), block_handle(block_handle) {
+PartialBlock::PartialBlock(BlockManager &block_manager, block_id_t block_id)
+    : block_manager(block_manager), block_handle(nullptr), block_id(block_id) {
+}
+
+PartialBlock::PartialBlock(BlockManager &block_manager, const shared_ptr<BlockHandle> &block_handle)
+    : block_manager(block_manager), block_handle(block_handle) {
+}
+
+idx_t PartialBlock::AvailableSpace() {
+	return block_manager.GetBlockSize() - offset;
+}
+
+uint32_t PartialBlock::UseCount() {
+	return block_use_count;
 }
 
 void PartialBlock::AddUninitializedRegion(idx_t start, idx_t end) {
 	uninitialized_regions.push_back({start, end});
 }
 
-void PartialBlock::AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block) {
-	throw InternalException("PartialBlock::AddSegmentToTail not supported for this block type");
+void PartialBlock::AddPackable(BlockPackable &packable) {
+	packables.emplace_back(packable, offset);
+}
+
+shared_ptr<BlockHandle> PartialBlock::ReuseBuffer(BufferHandle &source) {
+	auto source_handle = source.GetBlockHandle();
+	if (source_handle->BlockId() < MAXIMUM_BLOCK) {
+		// if the buffer has a backing disk block, we might overwrite other segments in the block when growing the
+		// buffer for the partial block manager.
+		return nullptr;
+	}
+
+	auto &source_buffer = source.GetFileBuffer();
+	if (source_buffer.GetBufferType() != FileBufferType::MANAGED_BUFFER) {
+		// only ordinary managed storage for now
+		return nullptr;
+	}
+	if (!source_buffer.OwnsInternalBuffer()) {
+		// memory mapped buffer is not supported
+		return nullptr;
+	}
+	if (source_buffer.AllocSize() != block_manager.GetBlockAllocSize()) {
+		// allocated space should be equal to the block size so we never write outside the allocated region when writing
+		// other packables
+		return nullptr;
+	}
+	if (source_buffer.GetHeaderSize() != block_manager.GetBlockHeaderSize()) {
+		// prevent misinterpretation of payload bytes as header bytes and vice versa
+		return nullptr;
+	}
+
+	auto &source_memory = source.GetBlockHandle()->GetMemory();
+	if (!source_memory.MustWriteToTemporaryFile()) {
+		// under memory pressure we should spill in flight partial blocks, otherwise data may be lost when we want to
+		// flush buffer to the backing disk blocks.
+		return nullptr;
+	}
+	if (&source_memory.GetBufferManager() != &block_manager.buffer_manager) {
+		// moving buffers across managed memory pools might lead to accounting inconsistencies
+		return nullptr;
+	}
+
+	return source_handle;
+}
+
+BlockPointer PartialBlock::Store(BlockPackable &packable, BufferHandle source, uint32_t byte_size) {
+	D_ASSERT(source.IsValid());
+	D_ASSERT(byte_size > 0);
+	D_ASSERT(ValueIsAligned(offset));
+
+	const auto unaligned_size = idx_t(offset) + byte_size;
+	const auto aligned_size = AlignValue(unaligned_size);
+	D_ASSERT(aligned_size <= block_manager.GetBlockSize());
+
+	const BlockPointer block_ptr(block_id, offset);
+	auto &buffer_manager = block_manager.buffer_manager;
+
+	if (block_handle) {
+		D_ASSERT(source.GetBlockHandle() != block_handle);
+		auto dst = buffer_manager.Pin(block_handle);
+		D_ASSERT(dst.GetFileBuffer().Size() == block_manager.GetBlockSize());
+		memcpy(dst.GetDataMutable() + offset, source.Ptr(), byte_size);
+	} else {
+		if (auto source_handle = ReuseBuffer(source)) {
+			block_handle = std::move(source_handle);
+		} else {
+			auto &source_memory = source.GetBlockHandle()->GetMemory();
+			auto dst = buffer_manager.Allocate(source_memory.GetMemoryTag(), &block_manager, false);
+			memcpy(dst.GetDataMutable(), source.Ptr(), byte_size);
+			block_handle = dst.GetBlockHandle();
+		}
+	}
+
+	if (unaligned_size != aligned_size) {
+		AddUninitializedRegion(unaligned_size, aligned_size);
+	}
+
+	AddPackable(packable);
+	offset = NumericCast<uint32_t>(aligned_size);
+	block_use_count++;
+
+	if (block_id != INVALID_BLOCK && block_use_count > 1) {
+		block_manager.IncreaseBlockReferenceCount(block_id);
+	}
+
+	return block_ptr;
+}
+
+void PartialBlock::Flush(QueryContext context) {
+	if (!block_handle) {
+		throw InternalException("Flush called on partial block that was already flushed");
+	}
+
+	FlushInternal(AvailableSpace());
+
+	bool fetch_new_block = block_id == INVALID_BLOCK;
+	if (fetch_new_block) {
+		block_id = block_manager.GetFreeBlockId();
+	}
+	block_handle = block_manager.ConvertToPersistent(context, block_id, std::move(block_handle));
+
+	if (fetch_new_block) {
+		for (idx_t i = 1; i < block_use_count; i++) {
+			block_manager.IncreaseBlockReferenceCount(block_id);
+		}
+	}
+
+	FinalizePackables();
+	Clear();
+}
+
+void PartialBlock::FinalizePackables() {
+	for (auto &[packable, offset] : packables) {
+		packable.get().Finalize(block_handle, offset);
+	}
+}
+
+void PartialBlock::Merge(PartialBlock &other) {
+	if (&block_manager != &other.block_manager) {
+		throw InternalException("Cannot merge partial blocks with different block managers");
+	}
+	if (block_id != INVALID_BLOCK || other.block_id != INVALID_BLOCK) {
+		throw InternalException("Cannot merge partial blocks with assigned block IDs");
+	}
+
+	auto &buffer_manager = block_manager.buffer_manager;
+	auto old_handle = buffer_manager.Pin(other.block_handle);
+	auto new_handle = buffer_manager.Pin(block_handle);
+	memcpy(new_handle.GetDataMutable() + offset, old_handle.Ptr(), other.offset);
+
+	for (auto &region : other.uninitialized_regions) {
+		uninitialized_regions.push_back({region.start + offset, region.end + offset});
+	}
+	for (auto &[packable, other_offset] : other.packables) {
+		packables.emplace_back(packable, NumericCast<uint32_t>(other_offset + offset));
+	}
+
+	offset += other.offset;
+	block_use_count += other.block_use_count;
+
+	other.Clear();
+}
+
+void PartialBlock::Clear() {
+	uninitialized_regions.clear();
+	block_handle.reset();
+	packables.clear();
 }
 
 void PartialBlock::FlushInternal(const idx_t free_space_left) {
@@ -56,45 +226,6 @@ PartialBlockManager::PartialBlockManager(QueryContext context, BlockManager &blo
 PartialBlockManager::~PartialBlockManager() {
 }
 
-PartialBlockAllocation PartialBlockManager::GetBlockAllocation(uint32_t segment_size) {
-	PartialBlockAllocation allocation;
-	allocation.block_manager = &block_manager;
-	allocation.allocation_size = segment_size;
-
-	// if the block is less than 80% full, we consider it a "partial block"
-	// which means we will try to fit it with other blocks
-	// check if there is a partial block available we can write to
-	if (segment_size <= max_partial_block_size && GetPartialBlock(segment_size, allocation.partial_block)) {
-		//! there is! increase the reference count of this block
-		allocation.partial_block->state.block_use_count += 1;
-		allocation.state = allocation.partial_block->state;
-		if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
-			block_manager.IncreaseBlockReferenceCount(allocation.state.block_id);
-		}
-	} else {
-		// full block: get a free block to write to
-		AllocateBlock(allocation.state, segment_size);
-	}
-	return allocation;
-}
-
-bool PartialBlockManager::HasBlockAllocation(uint32_t segment_size) {
-	return segment_size <= max_partial_block_size &&
-	       partially_filled_blocks.lower_bound(segment_size) != partially_filled_blocks.end();
-}
-
-void PartialBlockManager::AllocateBlock(PartialBlockState &state, uint32_t segment_size) {
-	D_ASSERT(segment_size <= block_manager.GetBlockSize());
-	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
-		state.block_id = GetFreeBlockId();
-	} else {
-		state.block_id = INVALID_BLOCK;
-	}
-	state.block_size = NumericCast<uint32_t>(block_manager.GetBlockSize());
-	state.offset = 0;
-	state.block_use_count = 1;
-}
-
 block_id_t PartialBlockManager::GetFreeBlockId() {
 	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
 		return block_manager.GetFreeBlockIdForCheckpoint();
@@ -103,87 +234,42 @@ block_id_t PartialBlockManager::GetFreeBlockId() {
 	}
 }
 
-bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<PartialBlock> &partial_block) {
-	auto entry = partially_filled_blocks.lower_bound(segment_size);
-	if (entry == partially_filled_blocks.end()) {
-		return false;
-	}
-	// found a partially filled block! fill in the info
-	partial_block = std::move(entry->second);
-	partially_filled_blocks.erase(entry);
-
-	D_ASSERT(partial_block->state.offset > 0);
-	D_ASSERT(ValueIsAligned(partial_block->state.offset));
-	return true;
-}
-
-unique_ptr<PartialBlock> PartialBlockManager::CreatePartialBlock(ColumnData &column_data, ColumnSegment &segment,
-                                                                 PartialBlockState state, BlockManager &block_manager) {
-	if (partial_block_type == PartialBlockType::IN_MEMORY_CHECKPOINT) {
-		return make_uniq<InMemoryPartialBlock>(column_data, segment, state, block_manager);
-	}
-	return make_uniq<PartialBlockForCheckpoint>(column_data, segment, state, block_manager);
-}
-
-void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation) {
-	auto &state = allocation.partial_block->state;
-	D_ASSERT(partial_block_type != PartialBlockType::FULL_CHECKPOINT || state.block_id >= 0);
-	if (state.block_use_count < max_use_count) {
-		auto unaligned_size = allocation.allocation_size + state.offset;
-		auto new_size = AlignValue(unaligned_size);
-		if (new_size != unaligned_size) {
-			// register the uninitialized region so we can correctly initialize it before writing to disk
-			allocation.partial_block->AddUninitializedRegion(unaligned_size, new_size);
-		}
-		state.offset = new_size;
-		auto new_space_left = state.block_size - new_size;
-		// check if the block is STILL partially filled after adding the segment_size
-		if (new_space_left >= block_manager.GetBlockSize() - max_partial_block_size) {
-			// the block is still partially filled: add it to the partially_filled_blocks list
-			D_ASSERT(allocation.partial_block->state.offset > 0);
-			partially_filled_blocks.insert(make_pair(new_space_left, std::move(allocation.partial_block)));
-		}
-	}
-	idx_t free_space = state.block_size - state.offset;
-	auto block_to_free = std::move(allocation.partial_block);
-	if (!block_to_free && partially_filled_blocks.size() > MAX_BLOCK_MAP_SIZE) {
-		// Free the page with the least space free.
-		auto itr = partially_filled_blocks.begin();
-		block_to_free = std::move(itr->second);
-		free_space = itr->first;
-		partially_filled_blocks.erase(itr);
-	}
-	// Flush any block that we're not going to reuse.
-	if (block_to_free) {
-		block_to_free->Flush(context, free_space);
-	}
-}
+// unique_ptr<PartialBlock> PartialBlockManager::CreatePartialBlock(BlockPackable &segment, PartialBlockState state) {
+// 	if (partial_block_type == PartialBlockType::IN_MEMORY_CHECKPOINT) {
+// 		return make_uniq<InMemoryPartialBlock>(segment, state, block_manager);
+// 	}
+// 	auto partial_block = make_uniq<PartialBlock>(block_manager, segment.GetBlockHandle());
+// 	partial_block->AddSegmentToTail(segment);
+// 	return partial_block;
+// }
 
 void PartialBlockManager::Merge(PartialBlockManager &other) {
 	if (&other == this) {
 		throw InternalException("Cannot merge into itself");
 	}
-	// for each partially filled block in the other manager, check if we can merge it into an existing block in this
-	// manager
-	for (auto &e : other.partially_filled_blocks) {
-		if (!e.second) {
+	if (&block_manager != &other.block_manager || partial_block_type != other.partial_block_type) {
+		throw InternalException("Cannot merge partial block managers with different block managers or block types");
+	}
+
+	for (auto &[other_offset, other_block] : other.partially_filled_blocks) {
+		if (!other_block) {
 			throw InternalException("Empty partially filled block found");
 		}
-		auto used_space = NumericCast<uint32_t>(block_manager.GetBlockSize() - e.first);
-		if (HasBlockAllocation(used_space)) {
-			// we can merge this block into an existing block - merge them
-			// merge blocks
-			auto allocation = GetBlockAllocation(used_space);
-			allocation.partial_block->Merge(*e.second, allocation.state.offset, used_space);
 
-			// re-register the partial block
-			allocation.state.offset += used_space;
-			RegisterPartialBlock(std::move(allocation));
-		} else {
-			// we cannot merge this block - append it directly to the current block manager
-			partially_filled_blocks.insert(make_pair(e.first, std::move(e.second)));
+		auto used_space = NumericCast<uint32_t>(block_manager.GetBlockSize() - other_offset);
+		if (used_space > max_partial_block_size) {
+			RetainOrFlush(std::move(other_block));
+			continue;
 		}
+		if (auto partial_block = TakePartialBlock(used_space)) {
+			partial_block->Merge(*other_block);
+			RetainOrFlush(std::move(partial_block));
+			continue;
+		}
+
+		RetainOrFlush(std::move(other_block));
 	}
+
 	other.partially_filled_blocks.clear();
 }
 
@@ -196,9 +282,106 @@ void PartialBlockManager::ClearBlocks() {
 
 void PartialBlockManager::FlushPartialBlocks() {
 	for (auto &e : partially_filled_blocks) {
-		e.second->Flush(context, e.first);
+		e.second->Flush(context);
 	}
 	partially_filled_blocks.clear();
+}
+
+unique_ptr<PartialBlock> PartialBlockManager::TakePartialBlock(uint32_t byte_size) {
+	auto entry = partially_filled_blocks.lower_bound(byte_size);
+	if (entry == partially_filled_blocks.end()) {
+		// no available partial blocks have enough space available to fit the requested size
+		return nullptr;
+	}
+
+	auto partial_block = std::move(entry->second);
+	partially_filled_blocks.erase(entry);
+
+	D_ASSERT(partial_block->state.offset > 0);
+	D_ASSERT(ValueIsAligned(partial_block->state.offset));
+
+	return partial_block;
+}
+
+unique_ptr<PartialBlock> PartialBlockManager::CreatePartialBlock() {
+	D_ASSERT(segment_size <= block_manager.GetBlockSize());
+
+	if (partial_block_type == PartialBlockType::IN_MEMORY_CHECKPOINT) {
+		return make_uniq<InMemoryPartialBlock>(block_manager);
+	}
+
+	block_id_t block_id;
+	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
+		block_id = GetFreeBlockId();
+	} else {
+		block_id = INVALID_BLOCK;
+	}
+
+	return make_uniq<PartialBlock>(block_manager, block_id);
+}
+
+unique_ptr<PartialBlock> PartialBlockManager::AcquirePartialBlock(uint32_t byte_size) {
+	unique_ptr<PartialBlock> partial_block;
+
+	if (byte_size <= max_partial_block_size) {
+		partial_block = TakePartialBlock(byte_size);
+	}
+	if (!partial_block) {
+		partial_block = CreatePartialBlock();
+	}
+
+	return partial_block;
+}
+
+void PartialBlockManager::Retain(unique_ptr<PartialBlock> partial_block) {
+	partially_filled_blocks.insert(make_pair(partial_block->AvailableSpace(), std::move(partial_block)));
+}
+
+unique_ptr<PartialBlock> PartialBlockManager::PruneFreeList() {
+	if (partially_filled_blocks.size() <= MAX_BLOCK_MAP_SIZE) {
+		return nullptr;
+	}
+
+	auto entry = partially_filled_blocks.begin();
+	auto block = std::move(entry->second);
+	partially_filled_blocks.erase(entry);
+
+	return block;
+}
+
+void PartialBlockManager::RetainOrFlush(unique_ptr<PartialBlock> partial_block) {
+	auto min_reusable_space = block_manager.GetBlockSize() - max_partial_block_size;
+	auto available_space = partial_block->AvailableSpace();
+
+	if (partial_block->UseCount() >= max_use_count) {
+		partial_block->Flush(context);
+		return;
+	}
+	if (available_space < min_reusable_space) {
+		partial_block->Flush(context);
+		return;
+	}
+
+	Retain(std::move(partial_block));
+
+	if (auto pruned_block = PruneFreeList()) {
+		pruned_block->Flush(context);
+	}
+}
+
+optional<BlockPointer> PartialBlockManager::Write(BlockPackable &packable, BufferHandle source, uint32_t byte_size) {
+	unique_lock<mutex> lock(partial_block_lock);
+
+	auto block = AcquirePartialBlock(byte_size);
+	BlockPointer block_ptr = block->Store(packable, std::move(source), byte_size);
+	RetainOrFlush(std::move(block));
+
+	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
+		D_ASSERT(block_ptr != INVALID_BLOCK);
+		return block_ptr;
+	}
+
+	return nullopt;
 }
 
 BlockManager &PartialBlockManager::GetBlockManager() const {

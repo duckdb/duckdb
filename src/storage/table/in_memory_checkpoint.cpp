@@ -7,6 +7,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
@@ -123,31 +124,18 @@ MetadataManager &InMemoryTableDataWriter::GetMetadataManager() {
 	return checkpoint_manager.GetMetadataManager();
 }
 
-InMemoryPartialBlock::InMemoryPartialBlock(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
-                                           BlockManager &block_manager)
-    : PartialBlock(state, block_manager, segment.GetBlockHandle()) {
-	InMemoryPartialBlock::AddSegmentToTail(data, segment, 0);
+InMemoryPartialBlock::InMemoryPartialBlock(BlockManager &block_manager) : PartialBlock(block_manager, INVALID_BLOCK) {
 }
 
 InMemoryPartialBlock::~InMemoryPartialBlock() {
 }
 
-void InMemoryPartialBlock::Flush(QueryContext context, const idx_t free_space_left) {
+void InMemoryPartialBlock::Flush(QueryContext context) {
+	if (!block_handle) {
+		throw InternalException("Flush called on partial block that was already flushed");
+	}
+	FinalizePackables();
 	Clear();
-}
-
-void InMemoryPartialBlock::Merge(PartialBlock &other_p, idx_t offset, idx_t other_size) {
-	auto &other = other_p.Cast<InMemoryPartialBlock>();
-	other.Clear();
-}
-
-void InMemoryPartialBlock::AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block) {
-	segment.SetBlock(block_handle, offset_in_block);
-}
-
-void InMemoryPartialBlock::Clear() {
-	uninitialized_regions.clear();
-	block_handle.reset();
 }
 
 } // namespace duckdb
