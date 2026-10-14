@@ -55,4 +55,4 @@ SELECT json_array_length('[]'::JSON),
        json_array_length('[1,2]'::JSON, '$[1]'),
        json_array_length('{"a":[1,2]}'::JSON, ['$.a', '$.missing']);
 ----
-0	0	NULL	NULL	NULL	[2, NULL]
+0	0	NULL	NULL	0	[2, NULL]
