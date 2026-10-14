@@ -411,6 +411,7 @@ bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult &res
 }
 
 bool ClientContext::ExecutionIsFinished() {
+	lock_guard<mutex> guard(context_lock);
 	if (!active_query || !active_query->executor) {
 		return false;
 	}
