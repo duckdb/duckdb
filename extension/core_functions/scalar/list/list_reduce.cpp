@@ -359,9 +359,6 @@ void ListReduceRebindLambda(FunctionRebindLambdaInput &input) {
 	}
 
 	input.Rebind(make_uniq<ListReduceBindLambdaContext>(accumulator_type));
-	if (!has_initial) {
-		return;
-	}
 	// avoid repeated rebinds for DECIMAL widening by forcing the lambda result to the accumulator type
 	auto &rebound_lambda_expr = input.bound_lambda->Cast<BoundLambdaExpression>();
 	const auto rebound_return_type = rebound_lambda_expr.LambdaExpr()->GetReturnType();

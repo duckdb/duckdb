@@ -40,3 +40,9 @@ query I
 SELECT list_reduce([1, 2], lambda x, y: x || [y], []);
 ----
 [1, 2]
+
+# without an initial value, the DECIMAL result is cast to the accumulator type after the rebind
+query II
+SELECT list_reduce([1.0, 2.5], lambda x, y: x + y), reduce([1.0, 2.5, 3.25], lambda x, y: x + y);
+----
+3.5	6.75
