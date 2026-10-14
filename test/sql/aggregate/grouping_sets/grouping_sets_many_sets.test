@@ -2,6 +2,8 @@
 # description: Queries with many grouping sets
 # group: [grouping_sets]
 
+require 64bit
+
 statement ok
 SET threads=4;
 

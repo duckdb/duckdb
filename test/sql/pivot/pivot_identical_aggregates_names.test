@@ -2,6 +2,8 @@
 # description: PIVOT with identical aggregates under different names
 # group: [pivot]
 
+require no_alternative_verify
+
 statement error
 PIVOT (SELECT 'k' || (r % 21) a, r v FROM range(42) t(r)) ON a USING sum(v) AS x, sum(v) AS y;
 ----
