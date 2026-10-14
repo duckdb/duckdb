@@ -34,6 +34,14 @@ struct PrimitiveCastOperator {
 	static void WriteToStream(const TGT &input, WriteStream &ser) {
 		ser.WriteData(const_data_ptr_cast(&input), sizeof(TGT));
 	}
+	template <class SRC, class TGT>
+	static hash_t DictionaryHash(const SRC &value) {
+		return Hash(value);
+	}
+	template <class SRC, class TGT>
+	static bool DictionaryEquals(const SRC &left, const SRC &right) {
+		return left == right;
+	}
 };
 
 template <class SRC, class TGT = SRC, class OP = PrimitiveCastOperator>
@@ -159,8 +167,9 @@ public:
 	}
 	//! Look up a value in the dictionary using linear probing
 	primitive_dictionary_entry_t &Lookup(const SRC &value) const {
-		auto offset = Hash(value) & capacity_mask;
-		while (!dictionary[offset].IsEmpty() && dictionary[offset].value != value) {
+		auto offset = OP::template DictionaryHash<SRC, TGT>(value) & capacity_mask;
+		while (!dictionary[offset].IsEmpty() &&
+		       !OP::template DictionaryEquals<SRC, TGT>(dictionary[offset].value, value)) {
 			++offset &= capacity_mask;
 		}
 		return dictionary[offset];

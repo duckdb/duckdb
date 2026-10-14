@@ -1,0 +1,26 @@
+# name: test/sql/copy/parquet/writer/parquet_write_exact_intervals.test
+# description: Intervals that compare equal keep their own representation when written to Parquet
+# group: [writer]
+
+require parquet
+
+# a dictionary does not merge intervals that only compare equal
+statement ok
+COPY (SELECT CASE WHEN i % 2 = 0 THEN INTERVAL '30 days' ELSE INTERVAL '1 month' END AS iv FROM range(100) r(i))
+TO '{TEST_DIR}/exact_intervals.parquet'
+
+query I
+SELECT encodings FROM parquet_metadata('{TEST_DIR}/exact_intervals.parquet')
+----
+PLAIN_DICTIONARY
+
+query II
+SELECT iv::VARCHAR, count(*) FROM '{TEST_DIR}/exact_intervals.parquet' GROUP BY ALL ORDER BY ALL
+----
+1 month	50
+30 days	50
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/exact_intervals.parquet' WHERE iv = INTERVAL '1 month'
+----
+100

@@ -12,23 +12,14 @@
 #include "parquet_interval.hpp"
 #include "parquet_timestamp.hpp"
 #include "zstd/common/xxhash.hpp"
+#include "duckdb/common/primitive_dictionary.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
-struct BaseParquetOperator {
-	template <class SRC, class TGT>
-	static void WriteToStream(const TGT &input, WriteStream &ser) {
-		ser.WriteData(const_data_ptr_cast(&input), sizeof(TGT));
-	}
-
-	template <class SRC, class TGT>
-	static constexpr idx_t WriteSize(const TGT &input) {
-		return sizeof(TGT);
-	}
-
+struct BaseParquetOperator : public PrimitiveCastOperator {
 	template <class SRC, class TGT>
 	static uint64_t XXHash64(const TGT &target_value) {
 		return duckdb_zstd::XXH64(&target_value, sizeof(target_value), 0);
@@ -288,6 +279,18 @@ struct ParquetIntervalOperator : public BaseParquetOperator {
 	static optional<uint64_t> GetExtraBloomFilterHash(const SRC &source_value, const TGT &) {
 		// Preserve the Parquet plain-encoding hash and add the hash used by DuckDB comparisons.
 		return ParquetIntervalUtils::HashNormalized(source_value);
+	}
+
+	//! Intervals that compare equal, such as 1 month and 30 days, keep separate dictionary entries
+	template <class SRC, class TGT>
+	static hash_t DictionaryHash(const SRC &value) {
+		const int64_t fields[] = {value.months, value.days, value.micros};
+		return Hash(const_char_ptr_cast(fields), sizeof(fields));
+	}
+
+	template <class SRC, class TGT>
+	static bool DictionaryEquals(const SRC &left, const SRC &right) {
+		return left.months == right.months && left.days == right.days && left.micros == right.micros;
 	}
 };
 
