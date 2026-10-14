@@ -203,6 +203,20 @@ public:
 	static string ConstructLogMessage(const string &pool, idx_t task_count);
 };
 
+class ReadAheadBudgetLogType : public LogType {
+public:
+	static constexpr const char *NAME = "ReadAheadBudget";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_DEBUG;
+
+	ReadAheadBudgetLogType();
+
+	static LogicalType GetLogType();
+
+	//! One entry per read-ahead job pushed: the backlog charge after the push, the budget it may grow to and the
+	//! jobs scheduled ahead of decoding
+	static string ConstructLogMessage(idx_t pending_bytes, idx_t budget_bytes, idx_t active_jobs);
+};
+
 class ProgressVerificationLogType : public LogType {
 public:
 	static constexpr const char *NAME = "ProgressVerification";
