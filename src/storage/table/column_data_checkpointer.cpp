@@ -421,6 +421,10 @@ void ColumnDataCheckpointer::Checkpoint() {
 	if (!has_changes) {
 		// Nothing has undergone any changes, no need to checkpoint
 		// just move on to finalizing
+		if (checkpoint_info.GetPartialBlockManager().GetPartialBlockType() == PartialBlockType::APPEND_TO_TABLE) {
+			// an optimistic write: its blocks stay newly used until its commit
+			return;
+		}
 		// mark block ids as checkpointed
 		CheckpointBlockIdMarker marker(storage_manager.GetBlockManager());
 		for (idx_t i = 0; i < checkpoint_states.size(); i++) {

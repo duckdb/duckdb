@@ -131,6 +131,9 @@ public:
 
 	//! Returns a reference to the underlying block manager.
 	BlockManager &GetBlockManager() const;
+	PartialBlockType GetPartialBlockType() const {
+		return partial_block_type;
+	}
 	//! Returns the optional client context.
 	optional_ptr<ClientContext> GetClientContext() const;
 

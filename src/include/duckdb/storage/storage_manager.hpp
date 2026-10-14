@@ -38,7 +38,7 @@ public:
 	//! Revert the commit
 	virtual void RevertCommit() = 0;
 	// Make the commit persistent
-	virtual void FlushCommit() = 0;
+	virtual void FlushCommit(transaction_t commit_id) = 0;
 
 	virtual void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                             unique_ptr<PersistentCollectionData> row_group_data) = 0;
