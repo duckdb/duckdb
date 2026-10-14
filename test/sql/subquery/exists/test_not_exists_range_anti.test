@@ -27,15 +27,22 @@ WHERE NOT EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id >= begin_snapshot AN
 ----
 [200, 201, 202]
 
-# the marker is still needed when it is also selected
-query II
-SELECT file_id, NOT EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id >= begin_snapshot AND snapshot_id < end_snapshot) AS free
-FROM files WHERE file_id >= 199 AND NOT EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id >= begin_snapshot AND snapshot_id < end_snapshot)
-ORDER BY file_id
+# a marker in the select list, a NOT IN whose condition can be NULL, and EXISTS with NOT EXISTS keep MARK semantics
+query II nosort selected_marker
+SELECT file_id, NOT EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id >= begin_snapshot AND snapshot_id < end_snapshot)
+FROM files WHERE file_id >= 198 ORDER BY file_id
 ----
-200	true
-201	true
-202	true
+
+query I nosort not_in
+SELECT list(file_id ORDER BY file_id) FROM files
+WHERE begin_snapshot NOT IN (SELECT snapshot_id + 5 FROM snapshots WHERE snapshot_id < end_snapshot - 25)
+----
+
+query I nosort exists_and_not_exists
+SELECT list(file_id ORDER BY file_id) FROM files
+WHERE EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id = begin_snapshot)
+AND NOT EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id >= end_snapshot - 1 AND snapshot_id < end_snapshot)
+----
 
 statement ok
 PRAGMA disable_optimizer
@@ -45,3 +52,19 @@ SELECT list(file_id ORDER BY file_id) FROM files
 WHERE NOT EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id >= begin_snapshot AND snapshot_id < end_snapshot)
 ----
 [200, 201, 202]
+
+query II nosort selected_marker
+SELECT file_id, NOT EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id >= begin_snapshot AND snapshot_id < end_snapshot)
+FROM files WHERE file_id >= 198 ORDER BY file_id
+----
+
+query I nosort not_in
+SELECT list(file_id ORDER BY file_id) FROM files
+WHERE begin_snapshot NOT IN (SELECT snapshot_id + 5 FROM snapshots WHERE snapshot_id < end_snapshot - 25)
+----
+
+query I nosort exists_and_not_exists
+SELECT list(file_id ORDER BY file_id) FROM files
+WHERE EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id = begin_snapshot)
+AND NOT EXISTS (SELECT 1 FROM snapshots WHERE snapshot_id >= end_snapshot - 1 AND snapshot_id < end_snapshot)
+----
