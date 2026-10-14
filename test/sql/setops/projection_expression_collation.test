@@ -111,6 +111,6 @@ SELECT count(*) FROM ((SELECT s FROM l) INTERSECT (SELECT DISTINCT s COLLATE NOC
 
 # A projection with the same semantic type can still be omitted.
 query TT
-EXPLAIN SELECT s FROM l;
+EXPLAIN (FORMAT JSON) SELECT s FROM l;
 ----
 physical_plan	<!REGEX>:.*PROJECTION.*
