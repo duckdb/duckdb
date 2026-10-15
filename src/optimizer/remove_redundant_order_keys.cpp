@@ -69,6 +69,10 @@ void ApplyFunctionalDependencies::VisitLogicalGet(LogicalGet &get) {
 			continue;
 		}
 		auto &unique = constraint->Cast<UniqueConstraint>();
+		// a deferred constraint is checked at commit, so the transaction can see duplicate keys
+		if (unique.IsDeferred()) {
+			continue;
+		}
 		auto &names = unique.GetColumnNames();
 		if (!unique.HasIndex() && !std::all_of(names.begin(), names.end(),
 		                                       [&](const Identifier &name) { return columns.ColumnExists(name); })) {
