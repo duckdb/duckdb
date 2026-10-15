@@ -35,6 +35,7 @@ public:
 		return *tokenizer;
 	}
 	optional_ptr<const CompiledGrammarRule> GetRule(const string &rule_name) const;
+	optional_ptr<const CompiledGrammarRule> GetRule(PEGRuleId rule_id) const;
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);
@@ -50,6 +51,8 @@ private:
 	unique_ptr<PEGKeywordHelper> keyword_helper;
 	unique_ptr<Tokenizer> tokenizer;
 	case_insensitive_map_t<unique_ptr<CompiledGrammarRule>> rules;
+	//! Rules indexed by PEGRuleId; built-in slots stay empty when the grammar does not define the rule
+	vector<optional_ptr<const CompiledGrammarRule>> rules_by_id;
 	const Matcher &program_matcher;
 	const Matcher &top_level_statement_matcher;
 };

@@ -12,6 +12,16 @@ CompiledGrammar::CompiledGrammar(MatcherAllocator &&allocator_p, unique_ptr<PEGK
     : allocator(std::move(allocator_p)), keyword_helper(std::move(keyword_helper_p)), tokenizer(std::move(tokenizer_p)),
       rules(std::move(rules_p)), program_matcher(program_matcher),
       top_level_statement_matcher(top_level_statement_matcher) {
+	rules_by_id.resize(static_cast<idx_t>(PEGRuleId::BUILTIN_COUNT));
+	for (auto &entry : rules) {
+		auto &rule = *entry.second;
+		rule.rule_id = PEGRuleIdFromString(rule.name);
+		if (rule.rule_id == PEGRuleId::INVALID) {
+			rule.rule_id = static_cast<PEGRuleId>(rules_by_id.size());
+			rules_by_id.emplace_back();
+		}
+		rules_by_id[static_cast<idx_t>(rule.rule_id)] = rule;
+	}
 }
 
 static void ValidateParsedGrammarRoots(const ParsedGrammar &grammar) {
@@ -158,6 +168,14 @@ shared_ptr<CompiledGrammar> CompiledGrammar::DefaultGrammar() {
 
 shared_ptr<CompiledGrammar> CompiledGrammar::Create() {
 	return Create({});
+}
+
+optional_ptr<const CompiledGrammarRule> CompiledGrammar::GetRule(PEGRuleId rule_id) const {
+	auto index = static_cast<idx_t>(rule_id);
+	if (index >= rules_by_id.size()) {
+		return nullptr;
+	}
+	return rules_by_id[index];
 }
 
 optional_ptr<const CompiledGrammarRule> CompiledGrammar::GetRule(const string &rule_name) const {

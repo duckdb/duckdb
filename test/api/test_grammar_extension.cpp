@@ -483,7 +483,11 @@ TEST_CASE("Transform result types use stable registered names", "[api][grammar_e
 	TypedTransformResult<RegisteredTransformResult> result({42});
 	auto copied_type_name = string(TransformResultTypeName<RegisteredTransformResult>());
 
-	REQUIRE(result.GetValuePointer(copied_type_name.c_str()) == &result.value);
+	// a copied name (different address, as across an extension boundary) still matches through the hash + compare
+	REQUIRE(result.GetValuePointer(copied_type_name.c_str(), TransformResultTypeNameHash(copied_type_name.c_str())) ==
+	        &result.value);
+	// a hash mismatch rejects without comparing the name
+	REQUIRE(result.GetValuePointer(copied_type_name.c_str(), 0) == nullptr);
 	REQUIRE(TryGetTransformResult<RegisteredTransformResult>(result) == &result.value);
 	REQUIRE(TryGetTransformResult<bool>(result) == nullptr);
 }
@@ -1663,6 +1667,44 @@ TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extensi
 	// Without the extension, a bare ANSWER is not a statement.
 	auto base_parser = Parser::GetBuiltinParser();
 	REQUIRE_THROWS(base_parser.ParseQuery("ANSWER"));
+}
+
+TEST_CASE("Runtime grammar rules get IDs past the built-in range", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	RegisterGrammarExtensionTestSyntax(*db.instance);
+	Connection con(db);
+	ActivateGrammarExtensionTestSyntax(con);
+	auto grammar = CompiledGrammar::Get(*con.context);
+
+	// a built-in rule keeps its generated ID, also when an extension modifies it
+	auto select_atom = grammar->GetRule("SelectAtom");
+	REQUIRE(select_atom);
+	REQUIRE(select_atom->rule_id == PEGRuleId::SelectAtom);
+	REQUIRE(grammar->GetRule(PEGRuleId::SelectAtom).get() == select_atom.get());
+	REQUIRE(string(PEGRuleIdToString(PEGRuleId::SelectAtom)) == "SelectAtom");
+	REQUIRE(PEGRuleIdFromString("selectatom") == PEGRuleId::SelectAtom);
+
+	// rules added at runtime get distinct dynamic IDs that resolve back to the rule
+	auto value_rule = grammar->GetRule("GrammarExtensionTestValue");
+	auto atom_rule = grammar->GetRule("GrammarExtensionTestAtom");
+	REQUIRE(value_rule);
+	REQUIRE(atom_rule);
+	REQUIRE(value_rule->rule_id >= PEGRuleId::BUILTIN_COUNT);
+	REQUIRE(atom_rule->rule_id >= PEGRuleId::BUILTIN_COUNT);
+	REQUIRE(value_rule->rule_id != atom_rule->rule_id);
+	REQUIRE(grammar->GetRule(value_rule->rule_id).get() == value_rule.get());
+	REQUIRE(grammar->GetRule(atom_rule->rule_id).get() == atom_rule.get());
+	REQUIRE(PEGRuleIdToString(value_rule->rule_id) == nullptr);
+	REQUIRE(PEGRuleIdFromString("GrammarExtensionTestValue") == PEGRuleId::INVALID);
+
+	// dynamic IDs are only meaningful within the grammar that assigned them
+	auto base_grammar = CompiledGrammar::DefaultGrammar();
+	REQUIRE(!base_grammar->GetRule("GrammarExtensionTestValue"));
+	auto base_rule = base_grammar->GetRule(value_rule->rule_id);
+	REQUIRE((!base_rule || base_rule->name != value_rule->name));
+	REQUIRE(!base_grammar->GetRule(PEGRuleId::INVALID));
+	REQUIRE(!base_grammar->GetRule(static_cast<PEGRuleId>(1u << 30)));
+	REQUIRE(base_grammar->GetRule(PEGRuleId::SelectAtom));
 }
 
 class AddInvalidGrammarExtensionTestRule final : public GrammarExtension {

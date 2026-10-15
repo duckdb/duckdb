@@ -460,6 +460,7 @@ public:
 	}
 
 	const CompiledGrammarRule &GetRule(const string &rule_name) const;
+	const CompiledGrammarRule &GetRule(PEGRuleId rule_id) const;
 
 public:
 	template <typename T>

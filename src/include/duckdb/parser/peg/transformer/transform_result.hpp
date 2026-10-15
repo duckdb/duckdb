@@ -27,15 +27,29 @@ struct TransformResultTypeIdentifier {
 
 //! A stable per-type name, used to identify transform results across loadable extension boundaries without RTTI.
 template <class T>
-const char *TransformResultTypeName() {
+constexpr const char *TransformResultTypeName() {
 	return TransformResultTypeIdentifier<T>::GetName();
+}
+
+//! FNV-1a hash of a type name, computed at compile time so that mismatching types are rejected without a string compare
+constexpr uint64_t TransformResultTypeNameHash(const char *name) {
+	uint64_t hash = 14695981039346656037ULL;
+	for (; *name; name++) {
+		hash = (hash ^ static_cast<uint64_t>(static_cast<unsigned char>(*name))) * 1099511628211ULL;
+	}
+	return hash;
+}
+
+template <class T>
+constexpr uint64_t TransformResultTypeHash() {
+	return TransformResultTypeNameHash(TransformResultTypeName<T>());
 }
 
 struct DUCKDB_API TransformResultValue {
 	virtual ~TransformResultValue() = default;
 
 	//! Returns a pointer to the value if its type matches, without relying on RTTI
-	virtual void *GetValuePointer(const char *type_name) = 0;
+	virtual void *GetValuePointer(const char *type_name, uint64_t type_hash) = 0;
 };
 
 template <class T>
@@ -45,7 +59,12 @@ struct DUCKDB_API TypedTransformResult : public TransformResultValue {
 	TypedTransformResult(const TypedTransformResult &) = delete;
 	TypedTransformResult &operator=(const TypedTransformResult &) = delete;
 
-	void *GetValuePointer(const char *type_name) override {
+	static constexpr uint64_t TYPE_HASH = TransformResultTypeHash<T>();
+
+	void *GetValuePointer(const char *type_name, uint64_t type_hash) override {
+		if (type_hash != TYPE_HASH) {
+			return nullptr;
+		}
 		auto expected = TransformResultTypeName<T>();
 		return type_name == expected || std::strcmp(type_name, expected) == 0 ? &value : nullptr;
 	}
@@ -56,7 +75,8 @@ struct DUCKDB_API TypedTransformResult : public TransformResultValue {
 //! Returns a pointer to the contained value if the result holds exactly T, and nullptr otherwise
 template <class T>
 T *TryGetTransformResult(TransformResultValue &result) {
-	return reinterpret_cast<T *>(result.GetValuePointer(TransformResultTypeName<T>()));
+	constexpr uint64_t type_hash = TransformResultTypeHash<T>();
+	return reinterpret_cast<T *>(result.GetValuePointer(TransformResultTypeName<T>(), type_hash));
 }
 
 } // namespace duckdb
