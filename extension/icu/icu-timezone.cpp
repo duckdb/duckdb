@@ -533,6 +533,9 @@ dtime_tz_t ICUToTimeTZ::Operation(Calendar *calendar, dtime_tz_t timetz) {
 bool ICUToTimeTZ::ToTimeTZ(Calendar *calendar, timestamp_tz_t instant, dtime_tz_t &result,
                            optional_ptr<string> error_message) {
 	if (!instant.IsFinite()) {
+		if (error_message) {
+			*error_message = "Can't get TIME of infinite TIMESTAMP";
+		}
 		return false;
 	}
 
