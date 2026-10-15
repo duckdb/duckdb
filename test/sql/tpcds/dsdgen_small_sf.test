@@ -27,7 +27,7 @@ SELECT count(DISTINCT d_year) FROM catalog_sales JOIN date_dim ON cs_sold_date_s
 statement ok
 CREATE SCHEMA mixed
 
-# only web_sales has too few orders, store_sales and catalog_sales are scaled by the calendar weights as before
+# only web_sales has too few orders, store_sales and catalog_sales are scaled by the calendar weights
 statement ok
 CALL dsdgen(sf=0.005, schema='mixed')
 
@@ -42,23 +42,30 @@ SELECT min(cs_sold_date_sk), max(cs_sold_date_sk) FROM mixed.catalog_sales
 ----
 2450815	2452891
 
-# with 457 web orders no day gets one by its weight, with 458 some days do
+# with 457 catalog orders no day gets one by its weight, with 458 some days do
 statement ok
 CREATE SCHEMA cut457
 
 statement ok
-CALL dsdgen(sf=0.0076167, schema='cut457')
+CALL dsdgen(sf=0.002857, schema='cut457')
 
 statement ok
 CREATE SCHEMA cut458
 
 statement ok
-CALL dsdgen(sf=0.00764, schema='cut458')
+CALL dsdgen(sf=0.002863, schema='cut458')
 
-query II
-SELECT (SELECT count(DISTINCT ws_order_number) FROM cut457.web_sales), (SELECT count(DISTINCT ws_order_number) FROM cut458.web_sales)
+# spread evenly, the orders fall in every year including the leap year 2000
+query III
+SELECT count(DISTINCT cs_order_number), max(cs_sold_date_sk), count(DISTINCT cs_order_number) FILTER (d_year = 2000) FROM cut457.catalog_sales JOIN date_dim ON cs_sold_date_sk = d_date_sk
 ----
-457	458
+457	2452637	92
+
+# by weight, no day of the leap year 2000 gets an order, and the dates run past 2002
+query III
+SELECT count(DISTINCT cs_order_number), max(cs_sold_date_sk), count(DISTINCT cs_order_number) FILTER (d_year = 2000) FROM cut458.catalog_sales JOIN date_dim ON cs_sold_date_sk = d_date_sk
+----
+458	2454443	0
 
 # a single catalog order lands on the first day
 statement ok

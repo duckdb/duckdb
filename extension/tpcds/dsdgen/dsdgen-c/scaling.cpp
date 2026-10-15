@@ -617,6 +617,7 @@ ds_key_t dateScaling(int nTable, ds_key_t jDate) {
 	static thread_local dist_t *pDist;
 	static thread_local std::vector<int> arMaxDayWeight;
 	static thread_local date_t StartDate;
+	static thread_local ds_key_t kSalesDays;
 	d_idx_t *pDistIndex;
 	date_t Date;
 	int nDateWeight = 1, nCalendarTotal, nDayWeight;
@@ -628,7 +629,6 @@ ds_key_t dateScaling(int nTable, ds_key_t jDate) {
 		pDist = pDistIndex->dist;
 		if (!pDist)
 			ReportError(QERR_NO_MEMORY, "dateScaling()", 1);
-		/* the largest weight of a single day in each weight set */
 		arMaxDayWeight.assign(pDistIndex->w_width + 1, 0);
 		for (int nWeightSet = 1; nWeightSet <= pDistIndex->w_width; nWeightSet++) {
 			for (int nDay = 1; nDay <= pDistIndex->length; nDay++) {
@@ -639,6 +639,10 @@ ds_key_t dateScaling(int nTable, ds_key_t jDate) {
 			}
 		}
 		strtodt(&StartDate, DATA_START_DATE);
+		kSalesDays = 0;
+		for (int nYear = StartDate.year; nYear < StartDate.year + 5; nYear++) {
+			kSalesDays += is_leap(nYear) ? 366 : 365;
+		}
 		InitConstants::dateScaling_init = 1;
 	}
 
@@ -675,7 +679,7 @@ ds_key_t dateScaling(int nTable, ds_key_t jDate) {
 
 	if (nTable != INVENTORY) /* inventory rowcount is uniform thorughout the year */
 	{
-		/* with too few rows for any day to get one by its weight, spread them evenly over the five years */
+		/* spread the rows evenly over the five years when every weighted day count rounds to zero */
 		bool bDayGetsRows = false;
 		for (int nWeightSet = nDateWeight; nWeightSet <= nDateWeight + 1; nWeightSet++) {
 			nCalendarTotal = dist_max(pDist, nWeightSet) * 5;
@@ -684,12 +688,8 @@ ds_key_t dateScaling(int nTable, ds_key_t jDate) {
 			}
 		}
 		if (!bDayGetsRows) {
-			ds_key_t kDays = 0;
-			for (int nYear = StartDate.year; nYear < StartDate.year + 5; nYear++) {
-				kDays += is_leap(nYear) ? 366 : 365;
-			}
 			ds_key_t kDay = jDate - StartDate.julian;
-			return ((kDay + 1) * kRowCount / kDays - kDay * kRowCount / kDays);
+			return ((kDay + 1) * kRowCount / kSalesDays - kDay * kRowCount / kSalesDays);
 		}
 
 		if (is_leap(Date.year))
