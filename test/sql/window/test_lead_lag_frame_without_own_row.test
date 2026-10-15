@@ -1,0 +1,95 @@
+# name: test/sql/window/test_lead_lag_frame_without_own_row.test
+# description: LEAD and LAG with an argument ORDER BY over frames that do not contain the own row
+# group: [window]
+
+statement ok
+CREATE TABLE t (id INTEGER, x VARCHAR);
+
+statement ok
+INSERT INTO t VALUES (1, 'b'), (2, 'a');
+
+# argument orderings that sort the rows the same way give the same result
+query IIII
+SELECT
+	id,
+	x,
+	LEAD(x ORDER BY x DESC, id DESC) OVER (ORDER BY x DESC, id ASC ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING),
+	LEAD(x ORDER BY x DESC, id ASC) OVER (ORDER BY x DESC, id ASC ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING)
+FROM t
+ORDER BY id
+----
+1	b	a	a
+2	a	NULL	NULL
+
+statement ok
+CREATE TABLE f (id INTEGER, x VARCHAR);
+
+statement ok
+INSERT INTO f VALUES (1, 'e'), (2, 'd'), (3, 'c'), (4, 'b'), (5, 'a');
+
+# an argument ordering that is not a prefix of the window ordering
+query IIIIIIIII
+SELECT
+	id,
+	LEAD(x ORDER BY x DESC, id DESC) OVER w1,
+	LEAD(x, 2 ORDER BY x DESC, id DESC) OVER w1,
+	LEAD(x, 0 ORDER BY x DESC, id DESC) OVER w1,
+	LAG(x ORDER BY x DESC, id DESC) OVER w1,
+	LEAD(x ORDER BY x DESC, id DESC) OVER w2,
+	LAG(x ORDER BY x DESC, id DESC) OVER w2,
+	LEAD(x ORDER BY x DESC, id DESC) OVER w3,
+	LAG(x, 2 ORDER BY x DESC, id DESC) OVER w3
+FROM f
+WINDOW
+	w1 AS (ORDER BY x DESC, id ASC ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING),
+	w2 AS (ORDER BY x DESC, id ASC ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING),
+	w3 AS (ORDER BY x DESC, id ASC ROWS BETWEEN 2 FOLLOWING AND 4 FOLLOWING)
+ORDER BY id
+----
+1	d	c	e	NULL	NULL	NULL	c	NULL
+2	c	b	d	NULL	NULL	e	b	NULL
+3	b	a	c	NULL	NULL	d	a	NULL
+4	a	NULL	b	NULL	NULL	c	NULL	NULL
+5	NULL	NULL	a	NULL	NULL	b	NULL	NULL
+
+# an argument ordering that is a prefix of the window ordering
+query IIIIIIIII
+SELECT
+	id,
+	LEAD(x ORDER BY x DESC) OVER w1,
+	LEAD(x, 2 ORDER BY x DESC) OVER w1,
+	LEAD(x, 0 ORDER BY x DESC) OVER w1,
+	LAG(x ORDER BY x DESC) OVER w1,
+	LEAD(x ORDER BY x DESC) OVER w2,
+	LAG(x ORDER BY x DESC) OVER w2,
+	LEAD(x ORDER BY x DESC) OVER w3,
+	LAG(x, 2 ORDER BY x DESC) OVER w3
+FROM f
+WINDOW
+	w1 AS (ORDER BY x DESC, id ASC ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING),
+	w2 AS (ORDER BY x DESC, id ASC ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING),
+	w3 AS (ORDER BY x DESC, id ASC ROWS BETWEEN 2 FOLLOWING AND 4 FOLLOWING)
+ORDER BY id
+----
+1	d	c	e	NULL	NULL	NULL	c	NULL
+2	c	b	d	NULL	NULL	e	b	NULL
+3	b	a	c	NULL	NULL	d	a	NULL
+4	a	NULL	b	NULL	NULL	c	NULL	NULL
+5	NULL	NULL	a	NULL	NULL	b	NULL	NULL
+
+# a default value and partitions
+query IIII
+SELECT
+	id,
+	LEAD(x, 1, 'none' ORDER BY x DESC, id DESC) OVER w,
+	LAG(x, 1, 'none' ORDER BY x DESC, id DESC) OVER w,
+	LEAD(x, 1, 'none' ORDER BY x DESC) OVER w
+FROM f
+WINDOW w AS (PARTITION BY id % 2 ORDER BY x DESC, id ASC ROWS BETWEEN 1 FOLLOWING AND 1 FOLLOWING)
+ORDER BY id
+----
+1	c	none	c
+2	b	none	b
+3	a	none	a
+4	none	none	none
+5	none	none	none
