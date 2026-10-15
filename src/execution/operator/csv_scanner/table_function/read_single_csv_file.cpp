@@ -21,7 +21,8 @@ struct ReadSingleCSVFileGlobalState : public GlobalTableFunctionState {
 public:
 	ReadSingleCSVFileGlobalState(ClientContext &context, ReadSingleCSVFileData &csv_data,
 	                             const TableFunctionInitInput &input)
-	    : state(context, csv_data, csv_data.csv_names, TableFunctionFileInitInput::Get(input).file_count, input.op) {
+	    : state(context, csv_data, csv_data.csv_names, TableFunctionFileInitInput::Get(input).GetFileCount(),
+	            input.op) {
 	}
 
 public:

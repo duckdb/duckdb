@@ -85,10 +85,16 @@ struct TableFunctionFileInitInput {
 	//! (Optional) The virtual columns among the column indexes, as a map of the index they are projected in to the
 	//! virtual column id wanted there. A virtual column gets an index of its own, past the columns the function bound
 	optional_ptr<const unordered_map<column_t, column_t>> virtual_columns;
-	//! The index of the file this function reads within the scan, and the number of files the scan reads in total.
+	//! The index of the file this function reads within the scan, and the files the scan reads in total.
 	//! TableFunctionInitInput::op is the operator all those files are read for
 	optional_idx file_index;
-	idx_t file_count = 1;
+	optional_ptr<const MultiFileList> file_list;
+
+	//! The number of files the scan reads. Counting expands every file of a lazily expanded list, so only functions
+	//! that need the count call this
+	idx_t GetFileCount() const {
+		return file_list ? file_list->GetTotalFileCount() : 1;
+	}
 
 	//! The multi-file input of an initialization - an empty one when the function is not read as part of a
 	//! multi-file scan
@@ -299,9 +305,9 @@ public:
 	unordered_map<column_t, column_t> virtual_columns;
 	//! The key-value metadata the wrapped function reported for this file
 	InsertionOrderPreservingMap<Value> metadata;
-	//! The operator this file is scanned for, and the number of files that scan reads
+	//! The operator this file is scanned for, and the files that scan reads
 	optional_ptr<const PhysicalOperator> scan_op;
-	idx_t scan_file_count = 1;
+	optional_ptr<const MultiFileList> scan_file_list;
 
 public:
 	//! The state of the wrapped function for this file, if it has been initialized

@@ -18,9 +18,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class TableFunctionMultiFileGlobalState : public GlobalTableFunctionState {
 public:
-	//! The operator the files are scanned for, and how many files that scan reads
+	//! The operator the files are scanned for, and the files that scan reads
 	optional_ptr<const PhysicalOperator> op;
-	idx_t file_count = 1;
+	optional_ptr<const MultiFileList> file_list;
 	//! What the wrapped function has reported for the files of this scan - collected whenever a file may have
 	//! counted more, so that a reader can be released without losing what it counted.
 	//! "scanned" is handed over and cleared on every report - the profiler sums what each thread reports, so a
@@ -252,7 +252,7 @@ TableFunctionInitInput TableFunctionFileReader::GetInitInput(TableFunctionFileIn
 		file_input.filter_global_indices = filter_global_indices;
 	}
 	file_input.file_index = file_list_idx;
-	file_input.file_count = scan_file_count;
+	file_input.file_list = scan_file_list;
 	if (!cast_map.empty()) {
 		file_input.cast_map = cast_map;
 	}
@@ -273,7 +273,7 @@ optional_idx TableFunctionFileReader::MaxThreads(ClientContext &context, GlobalT
 void TableFunctionFileReader::SetScanState(GlobalTableFunctionState &gstate) {
 	auto &scan_state = gstate.Cast<TableFunctionMultiFileGlobalState>();
 	scan_op = scan_state.op;
-	scan_file_count = scan_state.file_count;
+	scan_file_list = scan_state.file_list;
 }
 
 void TableFunctionFileReader::InitializeFunctionState(ClientContext &context) {
@@ -638,7 +638,7 @@ TableFunctionMultiFileWrapper::InitializeGlobalState(ClientContext &, MultiFileB
                                                      MultiFileGlobalState &global_state) {
 	auto result = make_uniq<TableFunctionMultiFileGlobalState>();
 	result->op = global_state.op;
-	result->file_count = global_state.file_list.GetTotalFileCount();
+	result->file_list = global_state.file_list;
 	return std::move(result);
 }
 
