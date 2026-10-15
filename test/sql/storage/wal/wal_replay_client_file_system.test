@@ -42,10 +42,10 @@ SELECT i FROM db.t
 ----
 42
 
-# the session settings of the client, like the certificates of a remote file, reach the WAL as they reach the file
-query II
-SELECT scope, regexp_replace(message, '"path":"[^"]*/', '"path":"') AS msg
-FROM duckdb_logs
-WHERE type = 'FileSystem' AND contains(message, 'wal_replay_client_file_system.db.wal') AND contains(message, '"OPEN"')
+# the WAL is opened through the client's file system, so its open is logged in the connection scope
+query III
+SELECT scope, parse_filename(path), op
+FROM duckdb_logs_parsed('FileSystem')
+WHERE parse_filename(path) = 'wal_replay_client_file_system.db.wal' AND op = 'OPEN'
 ----
-CONNECTION	{"fs":"LocalFileSystem","path":"wal_replay_client_file_system.db.wal","op":"OPEN"}
+CONNECTION	wal_replay_client_file_system.db.wal	OPEN
