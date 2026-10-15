@@ -1744,6 +1744,60 @@ TEST_CASE("Packrat results outlive reset process arenas", "[api][grammar_extensi
 	}
 }
 
+class ObservedNumberLiteralMatcher : public NumberLiteralMatcher {
+public:
+	explicit ObservedNumberLiteralMatcher(idx_t &attempts) : attempts(attempts) {
+	}
+
+	MatcherResult MatchAtomic(MatchState &state) const override {
+		attempts++;
+		return NumberLiteralMatcher::MatchAtomic(state);
+	}
+
+private:
+	idx_t &attempts;
+};
+
+TEST_CASE("Choice rejection preserves atomic callbacks and alternative indices", "[api][grammar_extension]") {
+	idx_t attempts = 0;
+	ObservedNumberLiteralMatcher number(attempts);
+	ListMatcher rejected({number});
+	rejected.SetStructural();
+	KeywordMatcher keyword("SELECT", KeywordInfo());
+	ChoiceMatcher choice({number, rejected, keyword});
+	choice.SetStructural();
+	auto grammar = CompiledGrammar::DefaultGrammar();
+	ComputeFirstSets(choice, grammar->GetKeywordHelper().GetLiteralTable());
+	vector<MatcherToken> tokens {MatcherToken("select", 0, TokenType::KEYWORD)};
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator results;
+	ArenaAllocator processes(Allocator::DefaultAllocator());
+	idx_t max_position = 0;
+	MatchMode mode = MatchMode::BUILD_PARSE_RESULT;
+	SECTION("Build results") {
+	}
+	SECTION("Recognition retains all atomic attempts") {
+		mode = MatchMode::RECOGNIZE_ONLY;
+	}
+	MatchContext context(suggestions, results, processes, max_position, mode);
+	MatchState state(iterator, context);
+	REQUIRE_FALSE(number.first_set.MightMatch(state));
+	REQUIRE_FALSE(rejected.first_set.MightMatch(state));
+	auto result = choice.MatchParseResult(state);
+	REQUIRE(result.IsSuccess());
+	REQUIRE(state.token_iterator.Position() == 1);
+	REQUIRE(max_position == 1);
+	auto build_results = mode == MatchMode::BUILD_PARSE_RESULT;
+	REQUIRE(attempts == (build_results ? 1 : 2));
+	REQUIRE(result.HasParseResult() == build_results);
+	if (build_results) {
+		auto &parsed = result.GetParseResult()->Cast<ChoiceParseResult>();
+		REQUIRE(parsed.GetResult().type == ParseResultType::KEYWORD);
+		REQUIRE(parsed.ToString().find("CHOICE (idx: 2)") != string::npos);
+	}
+}
+
 TEST_CASE("Compiled grammar processes use arena ownership", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
