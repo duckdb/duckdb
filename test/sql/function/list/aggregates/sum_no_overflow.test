@@ -79,3 +79,9 @@ query I
 SELECT sum_no_overflow(x) OVER () FROM (VALUES (9223372036854775807::BIGINT), (9223372036854775807::BIGINT)) t(x) LIMIT 1
 ----
 18446744073709551614
+
+# a call by name exports the states of the regular sum
+query I
+SELECT finalize(combine(sum_no_overflow(1::INTEGER) EXPORT_STATE, sum(1::INTEGER) EXPORT_STATE))
+----
+2

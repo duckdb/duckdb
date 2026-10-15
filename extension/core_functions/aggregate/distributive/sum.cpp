@@ -324,8 +324,7 @@ AggregateFunction GetSumAggregateNoOverflowDecimal() {
 	return aggr;
 }
 
-//! Binding sum_no_overflow by name delegates to the regular sum. Only the states it exported keep the no-overflow
-//! implementation that statistics propagation chose for them
+//! Binding sum_no_overflow by name delegates to the regular sum, except to read the states it exported
 unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
