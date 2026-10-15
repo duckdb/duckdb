@@ -50,6 +50,23 @@ public:
 void RemapNested(Vector &input, Vector &default_vector, Vector &result, idx_t result_size,
                  const vector<RemapColumnInfo> &remap_info);
 
+//! Marks the children of every struct row that is NULL in the validity as NULL
+void PropagateStructNulls(Vector &vec, const ValidityMask &validity, idx_t count) {
+	if (vec.GetType().id() != LogicalTypeId::STRUCT) {
+		return;
+	}
+	for (auto &child : StructVector::GetEntries(vec)) {
+		child.Flatten();
+		auto &child_validity = FlatVector::ValidityMutable(child);
+		for (idx_t row = 0; row < count; row++) {
+			if (!validity.RowIsValid(row)) {
+				child_validity.SetInvalid(row);
+			}
+		}
+		PropagateStructNulls(child, child_validity, count);
+	}
+}
+
 void RemapChildVectors(const Vector &result, const vector<reference<Vector>> &input_vectors,
                        const vector<reference<Vector>> &result_vectors, const vector<RemapColumnInfo> &remap_info,
                        Vector &default_vector, const bool has_top_level_null, idx_t count) {
@@ -76,6 +93,7 @@ void RemapChildVectors(const Vector &result, const vector<reference<Vector>> &in
 				RemapNested(nested_default, nested_default, result_vectors[i], count, remap.child_remap_info);
 				if (has_top_level_null) {
 					FlatVector::SetValidity(result_vectors[i], FlatVector::Validity(result));
+					PropagateStructNulls(result_vectors[i], FlatVector::Validity(result), count);
 				}
 				continue;
 			}
