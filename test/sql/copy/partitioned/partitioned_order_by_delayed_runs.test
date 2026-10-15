@@ -1,0 +1,56 @@
+# name: test/sql/copy/partitioned/partitioned_order_by_delayed_runs.test
+# description: ORDER_BY keeps delayed partitions sorted, with one sorted run or with runs of several flush rounds
+# group: [partitioned]
+
+require parquet
+
+statement ok
+PRAGMA threads=4;
+
+# All partitions stay below the flush threshold, so each one is delayed as a single sorted run
+statement ok
+CREATE TABLE single_run AS SELECT (i % 16)::INTEGER AS p, (100000 - i)::INTEGER AS k, i AS v FROM range(0, 50000) tbl(i);
+
+statement ok
+COPY single_run TO '{TEST_DIR}/single_run' (FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (k));
+
+query II
+SELECT count(*), count(DISTINCT filename)
+FROM read_parquet('{TEST_DIR}/single_run/**/*.parquet', filename = true, hive_partitioning = true);
+----
+50000	16
+
+query I
+SELECT count(*) FROM (
+	SELECT k < lag(k) OVER (PARTITION BY filename ORDER BY file_row_number) AS unsorted
+	FROM read_parquet('{TEST_DIR}/single_run/**/*.parquet', filename = true, file_row_number = true)
+) WHERE unsorted;
+----
+0
+
+# A large partition starts several flush rounds, and each small partition is delayed in each of them
+statement ok
+SET partitioned_write_flush_threshold=64;
+
+statement ok
+CREATE TABLE several_runs AS
+SELECT CASE WHEN i % 50 = 0 THEN ((i / 50) % 4) + 1 ELSE 0 END::INTEGER AS p, (100000 - i)::INTEGER AS k, i AS v
+FROM range(0, 50000) tbl(i);
+
+statement ok
+COPY (SELECT * FROM several_runs ORDER BY v)
+TO '{TEST_DIR}/several_runs' (FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (k), ROW_GROUP_SIZE 64);
+
+query II
+SELECT count(*), sum(v) = (SELECT sum(v) FROM several_runs)
+FROM read_parquet('{TEST_DIR}/several_runs/**/*.parquet', hive_partitioning = true);
+----
+50000	true
+
+query I
+SELECT count(*) FROM (
+	SELECT k < lag(k) OVER (PARTITION BY filename ORDER BY file_row_number) AS unsorted
+	FROM read_parquet('{TEST_DIR}/several_runs/**/*.parquet', filename = true, file_row_number = true)
+) WHERE unsorted;
+----
+0
