@@ -223,6 +223,13 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 			stats.push_back(stat->Copy());
 		}
 	}
+	for (auto &child : func.GetChildren()) {
+		// a parameter invalidated for a rebind at execution has no type yet, so its statistics fit no argument
+		if (child->GetExpressionType() == ExpressionType::VALUE_PARAMETER &&
+		    child->GetReturnType().id() == LogicalTypeId::SQLNULL) {
+			return nullptr;
+		}
+	}
 	auto constant_stats = PropagateConstantInputs(context, func, stats);
 	if (constant_stats) {
 		return constant_stats;
