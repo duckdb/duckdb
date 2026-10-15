@@ -2540,3 +2540,149 @@ TEST_CASE("Parse result source extents preserve unknown and out-of-range positio
 		REQUIRE(parent.GetLocation() == QueryLocation(10, 5));
 	}
 }
+
+class DerivedOptionalTailTestMatcher final : public OptionalMatcher {
+public:
+	explicit DerivedOptionalTailTestMatcher(Matcher &nominal, idx_t &calls_p)
+	    : OptionalMatcher(nominal), child("TAIL", KeywordInfo()), calls(calls_p) {
+	}
+	arena_ptr<MatchProcess> StartMatch(MatchState &state) const override {
+		calls++;
+		return state.Make<GrammarExtensionTestMatchProcess>(child, state);
+	}
+
+private:
+	KeywordMatcher child;
+	idx_t &calls;
+};
+
+enum class EmptyTailTestVariant {
+	ORDINARY,
+	NAMED_OPTIONALS,
+	NONCOLLAPSIBLE,
+	UNNAMED_FIRST,
+	EMPTY_FIRST,
+	NULLABLE_TAIL,
+	REQUIRED_TAIL,
+	DERIVED_TAIL,
+	LEADING_CHAIN
+};
+
+static vector<string> MatchEmptyTailTest(bool structural, EmptyTailTestVariant variant, MatchMode mode,
+                                         const string &text, bool cursor) {
+	auto grammar = CompiledGrammar::DefaultGrammar();
+	CompiledGrammarRule atom_rule("Atom", nullptr), list_rule("List", nullptr), optional_rule("Optional", nullptr),
+	    outer_rule("Outer", nullptr);
+	KeywordMatcher atom("ANSWER", KeywordInfo());
+	NumberLiteralMatcher number;
+	OptionalMatcher first_optional(number), tail(number), last(number), nested(tail);
+	idx_t override_calls = 0;
+	DerivedOptionalTailTestMatcher derived(number, override_calls);
+	if (variant != EmptyTailTestVariant::UNNAMED_FIRST) {
+		atom.SetRule(atom_rule);
+	}
+	first_optional.SetRule(atom_rule);
+	if (variant == EmptyTailTestVariant::NAMED_OPTIONALS) {
+		tail.SetRule(optional_rule);
+		last.SetRule(optional_rule);
+	}
+	if (structural) {
+		first_optional.SetStructural();
+		tail.SetStructural();
+		last.SetStructural();
+		nested.SetStructural();
+	}
+	ListMatcher list;
+	list.SetRule(list_rule);
+	if (variant != EmptyTailTestVariant::NONCOLLAPSIBLE) {
+		list.SetCollapsible();
+	}
+	list.matchers.push_back(variant == EmptyTailTestVariant::EMPTY_FIRST ? reference<Matcher>(first_optional)
+	                                                                     : reference<Matcher>(atom));
+	if (variant == EmptyTailTestVariant::NULLABLE_TAIL) {
+		list.matchers.push_back(nested);
+	} else if (variant == EmptyTailTestVariant::REQUIRED_TAIL) {
+		list.matchers.push_back(number);
+	} else if (variant == EmptyTailTestVariant::DERIVED_TAIL) {
+		list.matchers.push_back(derived);
+	} else {
+		list.matchers.push_back(tail);
+	}
+	list.matchers.push_back(last);
+	ListMatcher outer({list, last});
+	outer.SetRule(outer_rule);
+	outer.SetCollapsible();
+	if (structural) {
+		list.SetStructural();
+		outer.SetStructural();
+	}
+	const Matcher &root = variant == EmptyTailTestVariant::LEADING_CHAIN ? static_cast<const Matcher &>(outer) : list;
+	ComputeFirstSets(outer, grammar->GetKeywordHelper().GetLiteralTable());
+	list.InitializeListChain();
+	outer.InitializeListChain();
+	auto tokens = TokenizeFirstSetTestInput(*grammar, text);
+	REQUIRE(tokens.back().type == TokenType::END_OF_INPUT);
+	if (cursor) {
+		tokens.back().type = TokenType::END_OF_INPUT_AUTOCOMPLETE;
+	}
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	ArenaAllocator processes(Allocator::DefaultAllocator());
+	idx_t max_position = 0;
+	MatchContext context(suggestions, allocator, processes, max_position, mode);
+	MatchState state(iterator, context);
+	auto result = root.MatchParseResult(state);
+	REQUIRE(processes.SizeInBytes() == 0);
+	vector<string> snapshot {StringUtil::Format("%d:%llu:%llu:%llu", result.IsSuccess(),
+	                                            state.token_iterator.Position(), max_position, override_calls)};
+	for (auto &suggestion : suggestions) {
+		snapshot.push_back(suggestion.keyword.candidate);
+	}
+	vector<reference<ParseResult>> pending;
+	if (result.HasParseResult()) {
+		pending.push_back(*result.GetParseResult());
+	}
+	while (!pending.empty()) {
+		auto &node = pending.back().get();
+		pending.pop_back();
+		auto location = node.GetLocation();
+		snapshot.push_back(StringUtil::Format("%s:%s:%s:%d:%llu:%llu", ParseResultToString(node.type), node.Name(),
+		                                      node.GetRule() ? node.GetRule()->name : string(), node.collapsed,
+		                                      location.offset, location.length));
+		if (node.type == ParseResultType::LIST) {
+			for (auto &child : node.Cast<ListParseResult>().GetChildren()) {
+				pending.push_back(child);
+			}
+		} else if (node.type == ParseResultType::OPTIONAL) {
+			auto &optional = node.Cast<OptionalParseResult>();
+			if (optional.HasResult()) {
+				pending.push_back(optional.GetResult());
+			}
+		}
+	}
+	return snapshot;
+}
+
+TEST_CASE("Collapsing known-empty list tails preserves child semantics", "[api][grammar_extension]") {
+	for (auto variant :
+	     {EmptyTailTestVariant::ORDINARY, EmptyTailTestVariant::NAMED_OPTIONALS, EmptyTailTestVariant::NONCOLLAPSIBLE,
+	      EmptyTailTestVariant::UNNAMED_FIRST, EmptyTailTestVariant::EMPTY_FIRST, EmptyTailTestVariant::NULLABLE_TAIL,
+	      EmptyTailTestVariant::REQUIRED_TAIL, EmptyTailTestVariant::DERIVED_TAIL,
+	      EmptyTailTestVariant::LEADING_CHAIN}) {
+		CAPTURE(static_cast<int>(variant));
+		for (auto mode : {MatchMode::BUILD_PARSE_RESULT, MatchMode::RECOGNIZE_ONLY}) {
+			for (auto cursor : {false, true}) {
+				for (auto &text :
+				     vector<string> {"", "ANSWER", "ANSWER 1", "ANSWER 1 2", "ANSWER TAIL", "ANSWER nope"}) {
+					CAPTURE(text);
+					CAPTURE(cursor);
+					CAPTURE(static_cast<int>(mode));
+					auto expected = MatchEmptyTailTest(false, variant, mode, text, cursor);
+					auto actual = MatchEmptyTailTest(true, variant, mode, text, cursor);
+					REQUIRE(actual == expected);
+				}
+			}
+		}
+	}
+}

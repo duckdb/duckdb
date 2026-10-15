@@ -94,6 +94,10 @@ public:
 				child_index++;
 			}
 			auto &current_matcher = matcher.get();
+			if (child_index == 1 && child_index < current_matcher.matchers.size() && current_matcher.IsCollapsible() &&
+			    CanCollapseEmptyTail()) {
+				child_index = current_matcher.matchers.size();
+			}
 			while (child_index < current_matcher.matchers.size()) {
 				auto &child_matcher = current_matcher.matchers[child_index].get();
 				auto current = list_state.token_iterator.Current();
@@ -134,6 +138,24 @@ public:
 	}
 
 private:
+	bool CanCollapseEmptyTail() {
+		if (!state.BuildParseResult() || !FindCollapsibleResult()) {
+			return false;
+		}
+		auto current = list_state.token_iterator.Current();
+		if (current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			return false;
+		}
+		for (idx_t i = child_index; i < matcher.get().matchers.size(); i++) {
+			auto &child = matcher.get().matchers[i].get();
+			if (child.Type() != MatcherType::OPTIONAL || !child.IsStructural() ||
+			    child.Cast<OptionalMatcher>().GetChildMatcher().first_set.MightMatch(list_state)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	void ReserveResults() {
 		if (state.BuildParseResult()) {
 			results.reserve(matcher.get().matchers.size());
