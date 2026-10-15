@@ -671,7 +671,11 @@ optional<Value> BindFunctionInput::TryGetConstant(idx_t arg_idx) const {
 	if (!expr.IsFoldable()) {
 		return {};
 	}
-	return ExpressionExecutor::EvaluateScalar(context, expr);
+	Value result;
+	if (!ExpressionExecutor::TryEvaluateScalar(context, expr, result)) {
+		return {};
+	}
+	return result;
 }
 
 optional<Value> BindFunctionInput::TryGetConstant(const Identifier &name) const {
