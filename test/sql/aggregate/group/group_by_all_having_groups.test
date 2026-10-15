@@ -1,0 +1,41 @@
+# name: test/sql/aggregate/group/group_by_all_having_groups.test
+# description: HAVING refers to the groups of GROUP BY ALL instead of adding groups of its own
+# group: [group]
+
+query I
+SELECT small: x < 2 FROM unnest([0, 1]) _(x) GROUP BY ALL HAVING small ORDER BY ALL;
+----
+true
+
+query II
+SELECT small: x < 2, count(*) AS n FROM unnest([0, 1]) _(x) GROUP BY ALL HAVING small;
+----
+true	2
+
+query II
+SELECT x % 2 AS k, count(*) AS n FROM range(6) t(x) GROUP BY ALL HAVING k = 0;
+----
+0	3
+
+query II
+SELECT x % 2 AS k, count(*) AS n FROM range(6) t(x) GROUP BY ALL HAVING x % 2 = 0;
+----
+0	3
+
+query II
+SELECT x % 2 AS k, count(*) AS n FROM range(5) t(x) GROUP BY ALL HAVING n > 2;
+----
+0	3
+
+# a column that is not in the select list still becomes a group
+query II
+SELECT x % 2 AS k, count(*) AS n FROM range(6) t(x) GROUP BY ALL HAVING x > 3 ORDER BY ALL;
+----
+0	1
+1	1
+
+query I
+SELECT count(*) FROM range(6) t(x) GROUP BY ALL HAVING x > 3;
+----
+1
+1
