@@ -1,0 +1,17 @@
+# name: benchmark/micro/optimizer/empty_result_below_order_by.benchmark
+# description: A join with an ordered subquery whose HAVING can never be true
+# group: [optimizer]
+
+name Empty Result Below Order By
+group optimizer
+
+load
+CREATE TABLE t AS SELECT i % 100 AS g, i % 10 AS v FROM range(1000000) AS r(i);
+
+run
+SELECT count(*) FROM t AS x1 JOIN t AS x2 ON x1.g = x2.g AND x1.v = x2.v
+JOIN (SELECT g, var_samp(v) AS s FROM t GROUP BY g HAVING var_samp(v) = 5 AND var_samp(v) = 6 AND count(*) > 0 ORDER BY g) AS q
+ON x2.g <= q.g;
+
+result I
+0

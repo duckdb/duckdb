@@ -1,0 +1,48 @@
+# name: test/optimizer/empty_result_pullup_order_by.test
+# description: An empty result below an ORDER BY, a top-n or a LIMIT empties the operators above it
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t AS SELECT i % 100 AS g, i % 10 AS v FROM range(10000) AS r(i);
+
+statement ok
+PRAGMA explain_output = 'OPTIMIZED_ONLY';
+
+# the reported query: a join with an ordered subquery whose HAVING can never be true
+query II
+EXPLAIN SELECT x1.g FROM t AS x1 JOIN t AS x2 ON x1.g = x2.g JOIN t AS x3 ON x2.g = x3.g
+JOIN (SELECT g, var_samp(v) AS s FROM t GROUP BY g HAVING var_samp(v) = 5 AND var_samp(v) = 6 AND count(*) > 0 ORDER BY g) AS q
+ON x3.g <= q.g;
+----
+logical_opt	<!REGEX>:(?s).*(Join|Seq Scan|Order By).*
+
+query II
+EXPLAIN SELECT * FROM (SELECT g FROM t WHERE false ORDER BY g) q, t;
+----
+logical_opt	<!REGEX>:(?s).*(Cross Product|Seq Scan|Order By).*
+
+query II
+EXPLAIN SELECT * FROM (SELECT g FROM t WHERE false ORDER BY g LIMIT 5) q, t;
+----
+logical_opt	<!REGEX>:(?s).*(Cross Product|Seq Scan|Top N|Limit).*
+
+query I
+SELECT count(*) FROM t AS x1 JOIN (SELECT g, var_samp(v) AS s FROM t GROUP BY g HAVING var_samp(v) = 5 AND var_samp(v) = 6 AND count(*) > 0 ORDER BY g) AS q
+ON x1.g <= q.g;
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT g FROM t WHERE false ORDER BY g) q, t;
+----
+0
+
+query II
+EXPLAIN SELECT * FROM (SELECT g FROM t WHERE false LIMIT 5 OFFSET 2) q, t;
+----
+logical_opt	<!REGEX>:(?s).*(Cross Product|Seq Scan|Limit).*
+
+query I
+SELECT count(*) FROM (SELECT g FROM t WHERE false ORDER BY g LIMIT 5) q, t;
+----
+0
