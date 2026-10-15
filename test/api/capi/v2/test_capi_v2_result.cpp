@@ -2,6 +2,8 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/main/client_context_state.hpp"
+#include "duckdb/main/connection.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -440,7 +442,7 @@ TEST_CASE("V2: statement_execute failure tolerates err == nullptr", "[capi_v2][q
 	EnvFixture fx;
 
 	duckdb_v2_result_handle r = nullptr;
-	REQUIRE(Query(fx.conn, "BADSQL", &r, nullptr) == DUCKDB_V2_ERROR_DATABASE_CATALOG);
+	REQUIRE(Query(fx.conn, "FROM BADSQL", &r, nullptr) == DUCKDB_V2_ERROR_DATABASE_CATALOG);
 	REQUIRE(r == nullptr);
 }
 
@@ -898,7 +900,7 @@ TEST_CASE("V2: statement_execute leaves pre-existing err untouched on success", 
 
 	duckdb_v2_result_handle r = nullptr;
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(Query(fx.conn, "BADSQL", &r, &err) == DUCKDB_V2_ERROR_DATABASE_CATALOG);
+	REQUIRE(Query(fx.conn, "FROM BADSQL", &r, &err) == DUCKDB_V2_ERROR_DATABASE_CATALOG);
 	REQUIRE(err != nullptr);
 
 	REQUIRE(Query(fx.conn, "SELECT 1", &r, &err) == DUCKDB_V2_ERROR_NONE);
@@ -970,9 +972,9 @@ TEST_CASE("V2: results are independent; destroying one leaves the other usable",
 }
 
 // ===========================================================================
-// One live result per connection: statement_execute refuses with
-// RESOURCE_IN_USE while a live result exists, and the connection is
-// freed by drain, destroy, interrupt-then-step, or a sticky error.
+// One running statement per connection: statement_execute refuses with
+// RESOURCE_IN_USE while a result's statement is running, and the connection
+// is freed by drain, destroy, interrupt-then-step, or a sticky error.
 // ===========================================================================
 #if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: statement_execute refuses while a live result exists", "[capi_v2][query_result]") {
@@ -990,7 +992,7 @@ TEST_CASE("V2: statement_execute refuses while a live result exists", "[capi_v2]
 	duckdb_v2_str msg = {nullptr, 0};
 	duckdb_v2_error_info_get_text(err, &msg);
 	REQUIRE(msg.ptr != nullptr);
-	REQUIRE(Convert(msg).find("live result") != std::string::npos);
+	REQUIRE(Convert(msg).find("connection has an open result") != std::string::npos);
 	duckdb_v2_error_info_destroy(&err);
 
 	// Consuming the live result still works after the refusal.
@@ -1007,6 +1009,251 @@ TEST_CASE("V2: statement_execute refuses while a live result exists", "[capi_v2]
 	REQUIRE(DrainRowCount(second) == 1);
 	duckdb_v2_result_destroy(&second);
 	duckdb_v2_result_destroy(&live);
+}
+#endif
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
+TEST_CASE("V2: a statement that expands into a group holds the connection until it finishes",
+          "[capi_v2][query_result]") {
+	EnvFixture fx;
+	duckdb_v2_result_handle setup = nullptr;
+	REQUIRE(Query(fx.conn, "SET threads=1", &setup) == DUCKDB_V2_ERROR_NONE);
+	DrainRowCount(setup);
+	duckdb_v2_result_destroy(&setup);
+	REQUIRE(Query(fx.conn, "CREATE TABLE t AS SELECT range i FROM range(100000)", &setup) == DUCKDB_V2_ERROR_NONE);
+	DrainRowCount(setup);
+	duckdb_v2_result_destroy(&setup);
+
+	// A volatile default expands into ADD COLUMN, UPDATE and SET DEFAULT, which run as one query. Like a single
+	// statement that completed before its rows are read, the group frees the connection once its query ended, and not
+	// before: whenever another statement is let in, the whole group has applied
+	duckdb_v2_result_handle group = nullptr;
+	REQUIRE(Query(fx.conn, "ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random()", &group) == DUCKDB_V2_ERROR_NONE);
+	// Latched, so the assertion count does not depend on how many steps the group takes
+	bool freed_only_once_applied = true;
+	idx_t refused_steps = 0;
+	auto step_rc = DUCKDB_V2_ERROR_NONE;
+	auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
+	while (true) {
+		duckdb_v2_data_chunk_handle chunk = nullptr;
+		step_rc = duckdb_v2_result_step(group, &chunk, &status, nullptr);
+		duckdb_v2_data_chunk_destroy(&chunk);
+		if (step_rc != DUCKDB_V2_ERROR_NONE || status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED) {
+			break;
+		}
+		duckdb_v2_result_handle other = nullptr;
+		auto rc = Query(fx.conn, "SELECT c FROM t WHERE c IS NOT NULL", &other);
+		if (rc == DUCKDB_V2_ERROR_RESOURCE_IN_USE) {
+			refused_steps++;
+			continue;
+		}
+		if (rc != DUCKDB_V2_ERROR_NONE || DrainRowCount(other) != 100000) {
+			freed_only_once_applied = false;
+		}
+		duckdb_v2_result_destroy(&other);
+	}
+	REQUIRE(step_rc == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED);
+	REQUIRE(freed_only_once_applied);
+	REQUIRE(refused_steps > 0);
+	duckdb_v2_result_destroy(&group);
+
+	duckdb_v2_result_handle filled = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT c FROM t WHERE c IS NOT NULL", &filled) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(filled) == 100000);
+	duckdb_v2_result_destroy(&filled);
+}
+
+TEST_CASE("V2: a statement that expands into a group is refused while another statement runs",
+          "[capi_v2][query_result]") {
+	EnvFixture fx;
+	duckdb_v2_result_handle setup = nullptr;
+	REQUIRE(Query(fx.conn, "CREATE TABLE t AS SELECT range i FROM range(1000)", &setup) == DUCKDB_V2_ERROR_NONE);
+	DrainRowCount(setup);
+	duckdb_v2_result_destroy(&setup);
+
+	duckdb_v2_result_handle live = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT i FROM range(100000) t(i)", &live) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_result_handle group = nullptr;
+	REQUIRE(Query(fx.conn, "ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random()", &group) ==
+	        DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	REQUIRE(DrainRowCount(live) == 100000);
+	duckdb_v2_result_destroy(&live);
+
+	REQUIRE(Query(fx.conn, "ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random()", &group) == DUCKDB_V2_ERROR_NONE);
+	DrainRowCount(group);
+	duckdb_v2_result_destroy(&group);
+	duckdb_v2_result_handle filled = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT c FROM t WHERE c IS NOT NULL", &filled) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(filled) == 1000);
+	duckdb_v2_result_destroy(&filled);
+}
+
+//! Executes through the Arrow entry point, destroying any result
+DUCKDB_V2_ERROR ExecuteArrow(duckdb_v2_connection_handle conn, const char *sql) {
+	duckdb_v2_statement_iterator_handle iter = nullptr;
+	REQUIRE(duckdb_v2_parse_sql(conn, sql, &iter, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_sql_statement_handle stmt = nullptr;
+	REQUIRE(duckdb_v2_statement_iterator_next(iter, &stmt, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_arrow_result_handle result = nullptr;
+	auto rc = duckdb_v2_statement_execute_arrow(conn, stmt, nullptr, nullptr, 0, 0, &result, nullptr);
+	if (result) {
+		duckdb_v2_arrow_result_destroy(&result);
+	}
+	duckdb_v2_sql_statement_destroy(&stmt);
+	duckdb_v2_statement_iterator_destroy(&iter);
+	return rc;
+}
+
+TEST_CASE("V2: a statement refused while another runs leaves the transaction intact", "[capi_v2][query_result]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE TABLE t(i INTEGER)");
+	ExecSQL(fx.conn, "BEGIN");
+	ExecSQL(fx.conn, "INSERT INTO t VALUES (42)");
+
+	duckdb_v2_result_handle live = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT i FROM range(100000) t(i)", &live) == DUCKDB_V2_ERROR_NONE);
+	// A failing PRAGMA would invalidate the transaction while it is preprocessed: it is refused first
+	duckdb_v2_result_handle refused = nullptr;
+	REQUIRE(Query(fx.conn, "PRAGMA no_such_pragma", &refused) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	REQUIRE(ExecuteArrow(fx.conn, "PRAGMA no_such_pragma") == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	REQUIRE(DrainRowCount(live) == 100000);
+	duckdb_v2_result_destroy(&live);
+
+	ExecSQL(fx.conn, "COMMIT");
+	duckdb_v2_result_handle rows = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT i FROM t", &rows) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(rows) == 1);
+	duckdb_v2_result_destroy(&rows);
+}
+
+//! Requests a cancellation while the statement is being planned, after the engine began the query
+class CancelWhilePlanning : public duckdb::ClientContextState {
+public:
+	explicit CancelWhilePlanning(duckdb_v2_connection_handle conn) : conn(conn) {
+	}
+	bool CanRequestRebind() override {
+		return true;
+	}
+	duckdb::RebindQueryInfo OnFinalizePrepare(duckdb::ClientContext &, duckdb::PreparedStatementData &,
+	                                          duckdb::PreparedStatementMode) override {
+		std::thread cancel([&] { duckdb_v2_connection_interrupt(conn, nullptr); });
+		cancel.join();
+		return duckdb::RebindQueryInfo::DO_NOT_REBIND;
+	}
+
+	duckdb_v2_connection_handle conn;
+};
+
+TEST_CASE("V2: a cancel requested while a statement is submitted cancels it", "[capi_v2][query_result]") {
+	EnvFixture fx;
+	auto &con = *reinterpret_cast<duckdb::Connection *>(fx.conn);
+	con.context->registered_state->Insert("cancel_while_planning",
+	                                      duckdb::make_shared_ptr<CancelWhilePlanning>(fx.conn));
+	duckdb_v2_result_handle result = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT 42", &result) == DUCKDB_V2_ERROR_NONE);
+	con.context->registered_state->Remove("cancel_while_planning");
+
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
+	REQUIRE(duckdb_v2_result_step(result, &chunk, &status, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(status == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED);
+	duckdb_v2_result_destroy(&result);
+}
+
+TEST_CASE("V2: destroying a finished expanded statement leaves a later transaction alone", "[capi_v2][query_result]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE TABLE t(i INTEGER)");
+	ExecSQL(fx.conn, "INSERT INTO t VALUES (1)");
+	duckdb_v2_result_handle group = nullptr;
+	REQUIRE(Query(fx.conn, "ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random()", &group) == DUCKDB_V2_ERROR_NONE);
+	DrainRowCount(group);
+
+	ExecSQL(fx.conn, "BEGIN");
+	ExecSQL(fx.conn, "INSERT INTO t(i) VALUES (2)");
+	duckdb_v2_result_destroy(&group);
+	ExecSQL(fx.conn, "COMMIT");
+	duckdb_v2_result_handle rows = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT i FROM t", &rows) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(rows) == 2);
+	duckdb_v2_result_destroy(&rows);
+}
+
+TEST_CASE("V2: an expanded statement abandoned at any step applies all or nothing", "[capi_v2][query_result]") {
+	bool explicit_transaction = false;
+	SECTION("autocommit") {
+	}
+	SECTION("inside a user transaction") {
+		explicit_transaction = true;
+	}
+	// Latched, so the assertion count does not depend on how many steps the statement takes
+	bool all_or_nothing = true;
+	bool finished = false;
+	for (idx_t steps = 0; !finished; steps++) {
+		EnvFixture fx;
+		ExecSQL(fx.conn, "SET threads=1");
+		ExecSQL(fx.conn, "CREATE TABLE t AS SELECT range i FROM range(10)");
+		if (explicit_transaction) {
+			ExecSQL(fx.conn, "BEGIN");
+		}
+		duckdb_v2_result_handle group = nullptr;
+		REQUIRE(Query(fx.conn, "ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random()", &group) == DUCKDB_V2_ERROR_NONE);
+		for (idx_t step = 0; step < steps && !finished; step++) {
+			duckdb_v2_data_chunk_handle chunk = nullptr;
+			auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
+			duckdb_v2_result_step(group, &chunk, &status, nullptr);
+			duckdb_v2_data_chunk_destroy(&chunk);
+			finished = status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED;
+		}
+		duckdb_v2_result_destroy(&group);
+		if (explicit_transaction) {
+			// An abandoned group invalidated the transaction, so this rolls it back
+			ExecSQL(fx.conn, "COMMIT");
+		}
+		duckdb_v2_result_handle column = nullptr;
+		REQUIRE(Query(fx.conn, "SELECT column_name FROM duckdb_columns() WHERE table_name = 't' AND column_name = 'c'",
+		              &column) == DUCKDB_V2_ERROR_NONE);
+		auto added = DrainRowCount(column) == 1;
+		duckdb_v2_result_destroy(&column);
+		if (added) {
+			duckdb_v2_result_handle unfilled = nullptr;
+			REQUIRE(Query(fx.conn, "SELECT i FROM t WHERE c IS NULL", &unfilled) == DUCKDB_V2_ERROR_NONE);
+			if (DrainRowCount(unfilled) != 0) {
+				all_or_nothing = false;
+			}
+			duckdb_v2_result_destroy(&unfilled);
+		} else if (finished) {
+			all_or_nothing = false;
+		}
+	}
+	REQUIRE(all_or_nothing);
+}
+
+TEST_CASE("V2: a statement that completed before its rows are read does not hold the connection",
+          "[capi_v2][query_result]") {
+	EnvFixture fx;
+	duckdb_v2_result_handle setup = nullptr;
+	REQUIRE(Query(fx.conn, "CREATE TABLE t(i BIGINT)", &setup) == DUCKDB_V2_ERROR_NONE);
+	DrainRowCount(setup);
+	duckdb_v2_result_destroy(&setup);
+
+	// An insert completes, and commits, before the rows it returns are read
+	duckdb_v2_result_handle returning = nullptr;
+	REQUIRE(Query(fx.conn, "INSERT INTO t SELECT range FROM range(100000) RETURNING i", &returning) ==
+	        DUCKDB_V2_ERROR_NONE);
+	auto first = StepChunk(returning);
+	REQUIRE(first != nullptr);
+	idx_t rows = 0;
+	duckdb_v2_data_chunk_get_size(first, &rows, nullptr);
+	duckdb_v2_data_chunk_destroy(&first);
+
+	duckdb_v2_result_handle count = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT i FROM t", &count) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(count) == 100000);
+	duckdb_v2_result_destroy(&count);
+
+	rows += DrainRowCount(returning);
+	REQUIRE(rows == 100000);
+	duckdb_v2_result_destroy(&returning);
 }
 #endif
 #if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
@@ -1032,8 +1279,11 @@ TEST_CASE("V2: a cancelled result frees the connection once the step observes it
 	QueryResult live;
 	REQUIRE(Query(fx.conn, "SELECT i FROM range(10000000) t(i)", &live, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_connection_interrupt(fx.conn, nullptr) == DUCKDB_V2_ERROR_NONE);
+	// A refused execute leaves the cancellation to the running result
+	QueryResult refused;
+	REQUIRE(Query(fx.conn, "SELECT 1", &refused, nullptr) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
 
-	// The slot is released on the terminal transition, i.e. when a step
+	// The connection is freed on the terminal transition, i.e. when a step
 	// observes the cancellation, not by the interrupt itself.
 	DUCKDB_V2_RESULT_STEP_STATUS status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
 	status = StepUntilCancelled(live);
@@ -1290,11 +1540,10 @@ TEST_CASE("V2: an undrained result survives disconnect and close", "[capi_v2][qu
 #endif
 
 // ===========================================================================
-// Statement expansion: preprocessing can turn one user statement into a
-// group of engine statements ("fragments"). The group executes as one
-// result; selection mirrors ClientContext::Query (first row-producing
-// fragment, else the last fragment), and metadata is deferred until the
-// principal fragment is prepared.
+// Statement expansion: the engine can turn one user statement into a group
+// of internal statements. The group executes as one query with one result:
+// the rows of its first row-producing statement, and metadata deferred until
+// that statement is bound.
 // ===========================================================================
 
 TEST_CASE("V2: PIVOT expands to a group and streams the pivoted rows", "[capi_v2][query_result]") {
@@ -1304,26 +1553,27 @@ TEST_CASE("V2: PIVOT expands to a group and streams the pivoted rows", "[capi_v2
 	ExecSQL(fx.conn,
 	        "INSERT INTO sales VALUES ('ams', 2023, 10), ('ams', 2024, 20), ('rtm', 2023, 30), ('rtm', 2024, 40)");
 
-	// Auto-PIVOT parses to one raw statement (a MultiStatement) and
-	// expands at statement_execute into CREATE TYPE (enum) + SELECT.
+	// Auto-PIVOT parses to one raw statement (a MultiStatement), which the
+	// engine expands into CREATE TYPE (enum) + SELECT.
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(Query(fx.conn, "PIVOT sales ON year USING sum(amount)", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	// Metadata is deferred until the row-producing fragment is prepared.
+	// The statement type is the one written; the rest is deferred until the SELECT is bound.
+	DUCKDB_V2_STATEMENT_TYPE st = DUCKDB_V2_STATEMENT_TYPE_INVALID;
+	REQUIRE(duckdb_v2_result_get_statement_type(r, &st, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(st == DUCKDB_V2_STATEMENT_TYPE_MULTI);
 	DUCKDB_V2_RESULT_TYPE rt = DUCKDB_V2_RESULT_TYPE_NOTHING;
 	RequireSchemaDeferred(r);
-	REQUIRE(duckdb_v2_result_get_result_type(r, &rt, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_result_get_result_type(r, &rt, nullptr) == DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED);
 
 	// Only the pivoted SELECT's rows surface: one row per city.
 	REQUIRE(DrainRowCount(r) == 2);
 
-	// The principal fragment's metadata is now available.
 	REQUIRE(ColumnCount(r) == 3); // city + one column per year
 	REQUIRE(duckdb_v2_result_get_result_type(r, &rt, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(rt == DUCKDB_V2_RESULT_TYPE_QUERY_RESULT);
-	DUCKDB_V2_STATEMENT_TYPE st = DUCKDB_V2_STATEMENT_TYPE_INVALID;
 	REQUIRE(duckdb_v2_result_get_statement_type(r, &st, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(st == DUCKDB_V2_STATEMENT_TYPE_SELECT);
+	REQUIRE(st == DUCKDB_V2_STATEMENT_TYPE_MULTI);
 
 	duckdb_v2_result_destroy(&r);
 }
@@ -1334,25 +1584,23 @@ TEST_CASE("V2: ALTER with a non-constant DEFAULT expands and executes fully", "[
 	ExecSQL(fx.conn, "CREATE TABLE t (i INTEGER)");
 	ExecSQL(fx.conn, "INSERT INTO t SELECT * FROM range(1000)");
 
-	// Expands into BEGIN / ALTER ADD (DEFAULT NULL) / UPDATE / ALTER SET
-	// DEFAULT / COMMIT, wrapped by the engine's preprocessor.
+	// Expands into ALTER ADD (DEFAULT NULL) / UPDATE / ALTER SET DEFAULT, run as one query.
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(Query(fx.conn, "ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random()", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	// Metadata deferred while the group runs.
 	RequireSchemaDeferred(r);
 
-	// No fragment produces rows; the internal UPDATE's Count chunk is
+	// No statement produces rows; the internal UPDATE's Count chunk is
 	// discarded, exactly as ClientContext::Query discards it.
 	REQUIRE(DrainRowCount(r) == 0);
 
-	// Engine-mirrored principal: the last fragment (the injected COMMIT).
 	DUCKDB_V2_RESULT_TYPE rt = DUCKDB_V2_RESULT_TYPE_QUERY_RESULT;
 	REQUIRE(duckdb_v2_result_get_result_type(r, &rt, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(rt == DUCKDB_V2_RESULT_TYPE_NOTHING);
 	DUCKDB_V2_STATEMENT_TYPE st = DUCKDB_V2_STATEMENT_TYPE_INVALID;
 	REQUIRE(duckdb_v2_result_get_statement_type(r, &st, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(st == DUCKDB_V2_STATEMENT_TYPE_TRANSACTION);
+	REQUIRE(st == DUCKDB_V2_STATEMENT_TYPE_MULTI);
 	duckdb_v2_result_destroy(&r);
 
 	// The whole group really ran: the column exists and is populated.
@@ -1371,8 +1619,8 @@ TEST_CASE("V2: result_drain runs an expanded group to completion", "[capi_v2][qu
 	REQUIRE(Query(fx.conn, "ALTER TABLE t ADD COLUMN c INTEGER DEFAULT (1 + random())::INT", &r, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 
-	// Drain applies all fragments; the interior UPDATE's count is
-	// suppressed (the principal COMMIT reports NOTHING).
+	// Drain applies all statements; the interior UPDATE's count is
+	// suppressed (the group reports NOTHING).
 	idx_t rows_changed = 99;
 	REQUIRE(duckdb_v2_result_drain(r, &rows_changed, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(rows_changed == 0);
@@ -1381,6 +1629,73 @@ TEST_CASE("V2: result_drain runs an expanded group to completion", "[capi_v2][qu
 	REQUIRE(Query(fx.conn, "SELECT i FROM t WHERE c IS NOT NULL", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(DrainRowCount(r) == 100);
 	duckdb_v2_result_destroy(&r);
+}
+
+TEST_CASE("V2: statement_bind on a statement that expands reports deferred metadata", "[capi_v2][query_result]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE TABLE sales (city VARCHAR, year INT, amount INT)");
+	ExecSQL(fx.conn, "INSERT INTO sales VALUES ('ams', 2023, 10), ('rtm', 2024, 40)");
+
+	for (const char *sql :
+	     {"PIVOT sales ON year USING sum(amount)", "ALTER TABLE sales ADD COLUMN c DOUBLE DEFAULT random()"}) {
+		duckdb_v2_statement_iterator_handle iter = nullptr;
+		REQUIRE(duckdb_v2_parse_sql(fx.conn, sql, &iter, nullptr) == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_sql_statement_handle stmt = nullptr;
+		REQUIRE(duckdb_v2_statement_iterator_next(iter, &stmt, nullptr) == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_schema_handle out = nullptr;
+		duckdb_v2_schema_handle params = nullptr;
+		REQUIRE(duckdb_v2_statement_bind(fx.conn, stmt, &out, &params, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED);
+		REQUIRE(out == nullptr);
+		REQUIRE(params == nullptr);
+		duckdb_v2_sql_statement_destroy(&stmt);
+		duckdb_v2_statement_iterator_destroy(&iter);
+	}
+
+	// Binding ran nothing: no enum type, no column
+	duckdb_v2_result_handle r = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT type_name FROM duckdb_types() WHERE type_name LIKE '__pivot_enum%'", &r) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(r) == 0);
+	duckdb_v2_result_destroy(&r);
+	REQUIRE(Query(fx.conn, "SELECT c FROM sales", &r) == DUCKDB_V2_ERROR_QUERY_BINDER);
+}
+
+TEST_CASE("V2: a group that ended before its metadata was known reports how it ended", "[capi_v2][query_result]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE TABLE sales (city VARCHAR, year INT, amount INT)");
+	ExecSQL(fx.conn, "INSERT INTO sales VALUES ('ams', 2023, 10)");
+	ExecSQL(fx.conn, "CREATE TABLE t AS SELECT range AS i FROM range(2000000)");
+
+	SECTION("failed") {
+		// The CREATE TYPE runs, then the SELECT fails to bind
+		duckdb_v2_result_handle r = nullptr;
+		REQUIRE(Query(fx.conn, "PIVOT sales ON year USING sum(amount) ORDER BY missing_column", &r) ==
+		        DUCKDB_V2_ERROR_NONE);
+		auto rc = DUCKDB_V2_ERROR_NONE;
+		while (rc == DUCKDB_V2_ERROR_NONE) {
+			duckdb_v2_data_chunk_handle chunk = nullptr;
+			auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
+			rc = duckdb_v2_result_step(r, &chunk, &status, nullptr);
+			duckdb_v2_data_chunk_destroy(&chunk);
+			REQUIRE(status != DUCKDB_V2_RESULT_STEP_STATUS_FINISHED);
+		}
+		REQUIRE(rc == DUCKDB_V2_ERROR_QUERY_BINDER);
+		duckdb_v2_schema_handle schema = nullptr;
+		REQUIRE(duckdb_v2_result_get_schema(r, &schema, nullptr) == DUCKDB_V2_ERROR_QUERY_BINDER);
+		auto rt = DUCKDB_V2_RESULT_TYPE_NOTHING;
+		REQUIRE(duckdb_v2_result_get_result_type(r, &rt, nullptr) == DUCKDB_V2_ERROR_QUERY_BINDER);
+		duckdb_v2_result_destroy(&r);
+	}
+	SECTION("cancelled") {
+		duckdb_v2_result_handle r = nullptr;
+		REQUIRE(Query(fx.conn, "ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random()", &r) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_connection_interrupt(fx.conn, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(StepUntilCancelled(r) == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED);
+		duckdb_v2_schema_handle schema = nullptr;
+		REQUIRE(duckdb_v2_result_get_schema(r, &schema, nullptr) == DUCKDB_V2_ERROR_RUNTIME_INTERRUPT);
+		duckdb_v2_result_destroy(&r);
+	}
 }
 
 TEST_CASE("V2: query-backed PRAGMA reparses at statement_execute", "[capi_v2][query_result]") {
@@ -1433,7 +1748,7 @@ TEST_CASE("V2: an error inside an expanded group is sticky and rolls back", "[ca
 	REQUIRE(duckdb_v2_result_step(r, &chunk, &status, nullptr) == DUCKDB_V2_ERROR_TYPE_CONVERSION);
 	duckdb_v2_result_destroy(&r);
 
-	// The wrapped transaction rolled back: no column, no partial data.
+	// The group's transaction rolled back: no column, no partial data.
 	REQUIRE(Query(fx.conn, "SELECT c FROM t", &r, nullptr) == DUCKDB_V2_ERROR_QUERY_BINDER);
 	REQUIRE(r == nullptr);
 

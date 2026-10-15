@@ -228,11 +228,16 @@ void RowVersionManager::ReplaceUpdateWriter(transaction_t old_id, transaction_t 
 void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info) {
 	lock_guard<mutex> lock(version_lock);
 	needs_compression_check = true;
-	if (!newest_uncheckpointed_delete_commit.IsValid() || commit_id > newest_uncheckpointed_delete_commit.GetIndex()) {
-		newest_uncheckpointed_delete_commit = commit_id;
-	}
-	if (!oldest_uncheckpointed_delete_commit.IsValid() || commit_id < oldest_uncheckpointed_delete_commit.GetIndex()) {
-		oldest_uncheckpointed_delete_commit = commit_id;
+	if (commit_id != NOT_DELETED_ID) {
+		// a reverted delete changes nothing a checkpoint writes
+		if (!newest_uncheckpointed_delete_commit.IsValid() ||
+		    commit_id > newest_uncheckpointed_delete_commit.GetIndex()) {
+			newest_uncheckpointed_delete_commit = commit_id;
+		}
+		if (!oldest_uncheckpointed_delete_commit.IsValid() ||
+		    commit_id < oldest_uncheckpointed_delete_commit.GetIndex()) {
+			oldest_uncheckpointed_delete_commit = commit_id;
+		}
 	}
 	GetVectorInfo(vector_idx).CommitDelete(commit_id, info);
 }
@@ -273,8 +278,7 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
 	auto options = writer.GetCheckpointOptions();
 	if (!oldest_uncheckpointed_delete_commit.IsValid() ||
 	    oldest_uncheckpointed_delete_commit.GetIndex() >= options.visibility_bound) {
-		// nothing below the bound changed since the last checkpoint: the blocks on disk are current. A delete that
-		// committed above the bound, while this checkpoint ran, is written by the next checkpoint
+		// nothing below the bound changed since the last checkpoint; a delete above it is written by the next one
 		// ensure the blocks we are pointing to are not marked as free
 		manager.ClearModifiedBlocks(storage_pointers);
 		// return the current set of pointers

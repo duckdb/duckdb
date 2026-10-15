@@ -711,18 +711,24 @@ static idx_t IntersectSelections(const SelectionVector &left, idx_t left_count, 
 	return result_count;
 }
 
+static BaseStatistics CreateRowIdStats(idx_t beg_row, idx_t end_row) {
+	D_ASSERT(end_row > beg_row);
+	auto result = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
+	result.SetHasNoNullFast();
+	NumericStats::SetMin(result, UnsafeNumericCast<row_t>(beg_row));
+	NumericStats::SetMax(result, UnsafeNumericCast<row_t>(end_row - 1));
+	return result;
+}
+
 FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row) {
 	if (end_row <= beg_row) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 	// RowId columns dont have a zonemap, but we can trivially create stats to check the filter against.
-	BaseStatistics dummy_stats = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
-	dummy_stats.SetHasNoNullFast();
-	NumericStats::SetMin(dummy_stats, UnsafeNumericCast<row_t>(beg_row));
-	NumericStats::SetMax(dummy_stats, UnsafeNumericCast<row_t>(end_row - 1));
+	auto rowid_stats = CreateRowIdStats(beg_row, end_row);
 
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RowGroup::CheckRowIdFilter");
-	return expr_filter.CheckStatistics(dummy_stats);
+	return expr_filter.CheckStatistics(rowid_stats);
 }
 
 bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters, idx_t row_start) {
@@ -739,7 +745,11 @@ bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo 
 					throw InternalException("Multi-column filter column index out of range");
 				}
 				const auto &storage_index = (*column_ids)[column_index.GetIndex()];
-				if (storage_index.IsRowIdColumn() || storage_index.IsRowNumberColumn()) {
+				if (storage_index.IsRowIdColumn()) {
+					input_stats.push_back(CreateRowIdStats(row_start, row_start + count));
+					continue;
+				}
+				if (storage_index.IsRowNumberColumn()) {
 					supported = false;
 					break;
 				}
@@ -1263,6 +1273,9 @@ void RowGroup::RevertAppend(idx_t new_count) {
 	for (auto &column : GetColumns()) {
 		column->RevertAppend(UnsafeNumericCast<row_t>(new_count));
 	}
+	if (transient) {
+		*transient = SuballocationBlock();
+	}
 	SetCount(new_count);
 	Verify();
 }
@@ -1278,17 +1291,32 @@ void RowGroup::InitializeAppend(SegmentNode<RowGroup> &row_group, RowGroupAppend
 	append_state.row_group = row_group;
 	row_group.GetNode().InitializeAppendInternal(append_state);
 }
+
+void RowGroup::InitializeNextAppend(SegmentNode<RowGroup> &row_group, RowGroupAppendState &append_state) {
+	D_ASSERT(append_state.row_group);
+	auto &previous = append_state.row_group->GetNode();
+	auto &next = row_group.GetNode();
+	D_ASSERT(!RefersToSameObject(previous, next));
+	D_ASSERT(RefersToSameObject(previous.GetCollection(), next.GetCollection()));
+	D_ASSERT(!next.transient);
+	next.transient = std::move(previous.transient);
+	InitializeAppend(row_group, append_state);
+}
+
 void RowGroup::InitializeAppendInternal(RowGroupAppendState &append_state) {
 	if (!RefersToSameObject(append_state.row_group->GetNode(), *this)) {
 		throw InternalException("RowGroup::InitializeAppend mismatch - call RowGroupAppendState::InitializeAppend");
 	}
 	append_state.offset_in_row_group = this->count;
+	if (!transient) {
+		transient = make_uniq<SuballocationBlock>();
+	}
 	// for each column, initialize the append state
 	append_state.states = make_unsafe_uniq_array<ColumnAppendState>(GetColumnCount());
 	for (idx_t i = 0; i < GetColumnCount(); i++) {
 		auto &col_data = GetColumn(i);
 		auto &state = append_state.states[i];
-		state.transient = &append_state.transient;
+		state.transient = transient.get();
 		col_data.InitializeAppend(state);
 	}
 }

@@ -34,6 +34,8 @@ struct DuckDBAdbcConnectionWrapper {
 	void UnregisterStream(duckdb_adbc::DuckDBAdbcStreamWrapper *stream);
 	//! Materialize all active streams, fetching remaining data into memory.
 	void MaterializeStreams();
+	//! Ends every open stream on this connection, which then reports `reason` once its materialized arrays are read
+	void CloseStreams(const char *reason);
 	//! Detach all streams from this connection and clear the list (called on connection release).
 	void DetachAndClearStreams();
 

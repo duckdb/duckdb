@@ -22,26 +22,28 @@ module: query_result
 # a caller can choose between consuming rows and draining without inspecting
 # the SQL.
 #
-# A connection runs one result at a time. While a live result exists — one
-# that is not finished, cancelled, errored, or destroyed — statement_execute
-# refuses with ERROR_RESOURCE_IN_USE. For concurrent queries, open another
-# connection.
+# A connection runs one statement at a time. While a result's statement is
+# still running, statement_execute refuses with ERROR_RESOURCE_IN_USE. A
+# statement runs at most until its result is finished, cancelled, errored, or
+# destroyed; a statement that expands into a group runs exactly that long. For
+# concurrent queries, open another connection.
 #
 # The result handle carries the schema (column names and types), the statement
 # type, and the result type from prepare time. "Prepare-time metadata" in the
 # getter descriptions below means: valid before the first step, during
 # consumption, and after the stream ends.
 #
-# Statement expansion: statement_execute preprocesses the statement, and a
-# single statement can expand into a group (e.g. PIVOT, or ALTER ... ADD
-# COLUMN with a non-constant DEFAULT, which is wrapped in a transaction). The
-# group executes as one result, driven by the same steps. Result selection
-# follows the same rule DuckDB applies internally: the caller sees the first
-# row-producing statement of the group, or the last statement when none
-# produces rows, and the output of the others is discarded. For an expanding
-# statement the metadata getters fail with ERROR_INPUT_INVALID until stepping
-# has prepared the result-producing statement; for every other statement the
-# metadata is available from statement_execute on, as described above.
+# Statement expansion: DuckDB can expand a single statement into a group
+# (e.g. PIVOT, or ALTER ... ADD COLUMN with a non-constant DEFAULT). The group
+# executes as one query in one transaction, driven by the same steps. The
+# caller sees the rows of the first row-producing statement of the group, and
+# the output of the others is discarded; a group with no row-producing
+# statement reports NOTHING with a BOOLEAN success column once it ends. For an
+# expanding statement the metadata getters other than result_get_statement_type
+# fail with ERROR_INPUT_METADATA_DEFERRED until stepping has bound the
+# row-producing statement, or the group ended without one; for every other
+# statement the metadata is available from statement_execute on, as described
+# above.
 #
 # The result handle is single-consumer: step, fetch, and wait from one thread
 # at a time. Cross-thread control of an in-flight query goes through the
@@ -126,17 +128,18 @@ functions:
       are mutually exclusive: passing values for a statement that preprocesses
       into a group is rejected with ERROR_INPUT_INVALID.
 
-      Preprocessing can expand one statement into a group — a dynamic PIVOT, or
+      DuckDB can expand one statement into a group: a dynamic PIVOT, or
       statement-expanding DDL such as ALTER ... ADD COLUMN with a non-constant
       DEFAULT. The group executes as one result through the same steps, and the
-      stream surfaces the first row-producing statement of the group, or the
-      last statement when none produces rows. An expansion with more than one
-      row-producing statement cannot be streamed as a single result and reports
-      ERROR_QUERY_NOT_IMPLEMENTED; no known expansion produces one.
+      stream surfaces the rows of the first row-producing statement of the
+      group. A row-producing statement followed by another cannot be served as
+      a single result and reports ERROR_QUERY_NOT_IMPLEMENTED; no known
+      expansion produces one.
 
-      One live result per connection: this refuses with ERROR_RESOURCE_IN_USE
-      while the connection already has a live result. Drain, destroy, or
-      interrupt that one first, or open another connection.
+      One running statement per connection: this refuses with
+      ERROR_RESOURCE_IN_USE while a statement on the connection is still
+      running. Drain, destroy, or interrupt that result first, or open another
+      connection.
 
       Schema metadata — result type, statement type, column count, names,
       logical types — is available on the returned handle immediately, before
@@ -420,9 +423,9 @@ functions:
       RETURNING, NOTHING for DDL and other statements with no row output.
 
       Prepare-time metadata: available from statement_execute on, except for a
-      statement that preprocessing expands into a group, where it fails with
-      ERROR_INPUT_INVALID until stepping has prepared the row-producing
-      fragment.
+      statement that expands into a group, where it fails with
+      ERROR_INPUT_METADATA_DEFERRED until stepping has bound the row-producing
+      statement, or the group ended without one.
     role: getter
     belongs_to: result
     parameters:
@@ -446,10 +449,9 @@ functions:
     description: |
       Returns the SQL statement type that produced the result.
 
-      Prepare-time metadata: available from statement_execute on, except for a
-      statement that preprocessing expands into a group, where it fails with
-      ERROR_INPUT_INVALID until stepping has prepared the row-producing
-      fragment.
+      Prepare-time metadata: available from statement_execute on. A statement
+      that expands into a group reports its type as written: MULTI, or PRAGMA
+      for a pragma such as IMPORT DATABASE.
     role: getter
     belongs_to: result
     parameters:
@@ -476,7 +478,8 @@ functions:
       Builds an owned schema of the result's column names and types into
       *out_schema; destroy it via schema_destroy. Prepare-time metadata,
       available before the first step, or for an expanding statement once
-      stepping has prepared the row-producing fragment. Never empty: a
+      stepping has bound the row-producing statement (before that it fails with
+      ERROR_INPUT_METADATA_DEFERRED). Never empty: a
       non-SELECT reports a single status column, either a BIGINT changed-rows
       count or a BOOLEAN success.
 

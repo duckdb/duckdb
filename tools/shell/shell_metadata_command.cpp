@@ -495,21 +495,21 @@ MetadataResult QuitProcess(ShellState &, const vector<string> &args) {
 }
 
 MetadataResult SetOutput(ShellState &state, const vector<string> &args) {
-	if (!state.SetOutputFile(args, '\0')) {
+	if (!state.SetOutputFile(args, OutputCommand::OUTPUT)) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
 
 MetadataResult SetOutputOnce(ShellState &state, const vector<string> &args) {
-	if (!state.SetOutputFile(args, 'o')) {
+	if (!state.SetOutputFile(args, OutputCommand::ONCE)) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
 
 MetadataResult SetOutputExcel(ShellState &state, const vector<string> &args) {
-	if (!state.SetOutputFile(args, 'e')) {
+	if (!state.SetOutputFile(args, OutputCommand::EXCEL)) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
@@ -919,6 +919,10 @@ MetadataResult SetPager(ShellState &state, const vector<string> &args) {
 	} else if (args[1] == "automatic") {
 		state.pager_mode = PagerMode::PAGER_AUTOMATIC;
 	} else {
+		if (state.safe_mode) {
+			state.Print(PrintOutput::STDERR, ".pager cannot be used in -safe mode\n");
+			return MetadataResult::FAIL;
+		}
 		state.pager_command = args[1];
 	}
 	return MetadataResult::SUCCESS;

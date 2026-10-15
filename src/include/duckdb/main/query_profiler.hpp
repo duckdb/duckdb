@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/profiling_coverage.hpp"
 #include "duckdb/common/deque.hpp"
@@ -103,10 +104,12 @@ public:
 	//! Finalize query metrics for output; safe to call multiple times.
 	DUCKDB_API void FinalizeMetrics();
 
-	//! Track bytes read (always tracked, even when profiling disabled).
-	DUCKDB_API void TrackBytesRead(idx_t amount);
-	//! Track bytes written (always tracked, even when profiling disabled).
-	DUCKDB_API void TrackBytesWritten(idx_t amount);
+	//! Track bytes read and the time spent reading.
+	DUCKDB_API void TrackBytesRead(idx_t amount, idx_t elapsed_us);
+	//! Track bytes written and the time spent writing.
+	DUCKDB_API void TrackBytesWritten(idx_t amount, idx_t elapsed_us);
+	//! Track bytes spilled to the temporary directory (always tracked, even when profiling disabled).
+	DUCKDB_API void TrackBytesSpilled(idx_t amount);
 	//! Track memory allocated (thread-safe; always tracked).
 	DUCKDB_API void TrackTotalMemoryAllocated(idx_t amount);
 	//! Add to a metric counter (profiling-only).
@@ -192,8 +195,8 @@ public:
 private:
 	ClientContext &context;
 
-	//! Whether or not the query profiler is running
-	bool running;
+	//! Atomic so inactive flushes can skip acquiring the profiler lock.
+	atomic<bool> running;
 	//! The lock used for accessing the global query profiler or flushing information to it from a thread
 	mutable std::mutex lock;
 
