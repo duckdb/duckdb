@@ -1172,6 +1172,7 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
     {"era", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[INTERVAL]>BIGINT"},
     {"era", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMP]>BIGINT"},
     {"era", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMPTZ]>BIGINT"},
+    {"era", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMPTZ_NS]>BIGINT"},
     {"generate_series", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[BIGINT]>BIGINT[]"},
     {"generate_series", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[BIGINT,BIGINT]>BIGINT[]"},
     {"generate_series", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[BIGINT,BIGINT,BIGINT]>BIGINT[]"},
