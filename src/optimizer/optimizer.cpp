@@ -324,7 +324,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	aggregate_rewriter.VisitOperator(plan);
 
 	RunOptimizer(OptimizerType::DISJUNCTIVE_JOIN_REWRITER, [&]() {
-		DisjunctiveJoinRewriter disjunctive_join_rewriter(context, binder);
+		DisjunctiveJoinRewriter disjunctive_join_rewriter(binder);
 		plan = disjunctive_join_rewriter.Optimize(std::move(plan));
 	});
 
