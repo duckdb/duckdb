@@ -65,3 +65,17 @@ query II
 SELECT count(*), count(DISTINCT filename) FROM read_csv(['{TEMP_DIR}/lazy_list*.csv' FOR x IN range(1000)], filename = true)
 ----
 1000	1
+
+# the rejects of two scans in one query get distinct file ids, which takes the exact count of the first scan
+statement ok
+COPY (SELECT * FROM (VALUES ('x'), ('1')) t(num)) TO '{TEMP_DIR}/lazy_rejects.csv' (HEADER);
+
+query II
+SELECT (SELECT sum(num) FROM read_csv(['{TEMP_DIR}/lazy_rejects*.csv' FOR x IN range(600)], columns = {'num': 'INTEGER'}, header = true, store_rejects = true)), (SELECT sum(num) FROM read_csv(['{TEMP_DIR}/lazy_rejects*.csv' FOR x IN range(700)], columns = {'num': 'INTEGER'}, header = true, store_rejects = true))
+----
+600	700
+
+query III
+SELECT count(*), count(DISTINCT (scan_id, file_id)), max(file_id) FROM reject_errors
+----
+1300	1300	1299
