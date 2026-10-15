@@ -331,6 +331,9 @@ bool LogicalPlanSQLExportHelpers::ComposeOrder(LogicalOperator &op, LogicalPlanS
 	AddSubstitutions(state, child, *source);
 	auto expressions = CollectExpressions(op);
 	auto &modifier = select.modifiers[0]->Cast<OrderModifier>();
+	if (modifier.orders.size() != expressions.size()) {
+		return false;
+	}
 	vector<unique_ptr<ParsedExpression>> orders;
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		auto &expression = *SemanticInput(expressions[i].get());

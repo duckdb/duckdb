@@ -33,6 +33,9 @@ PEGTransformerFactory::TransformCreateStatement(PEGTransformer &transformer, con
 		}
 		conflict_policy = OnCreateConflict::REPLACE_ON_CONFLICT;
 	}
+	if (temporary && *temporary == SecretPersistType::PERSISTENT && result->info->type != CatalogType::SECRET_ENTRY) {
+		throw ParserException("PERSISTENT is only supported for CREATE SECRET");
+	}
 	if (result->info->type == CatalogType::SECRET_ENTRY) {
 		auto &secret_info = result->info->Cast<CreateSecretInfo>();
 		secret_info.persist_type = temporary ? *temporary : SecretPersistType::DEFAULT;

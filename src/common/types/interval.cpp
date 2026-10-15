@@ -167,10 +167,10 @@ interval_parse_time : {
 	// parse the remainder of the time as a Time type
 	dtime_t time;
 	idx_t pos;
-	if (!Time::TryConvertInterval(str + start_pos, len - start_pos, pos, time)) {
+	if (!Time::TryConvertInterval(str + start_pos, len - start_pos, pos, time, false, nullptr, negative)) {
 		return false;
 	}
-	if (!IntervalTryAddition<int64_t>(result.micros, negative ? -time.value : time.value, 1, error_message)) {
+	if (!IntervalTryAddition<int64_t>(result.micros, time.value, 1, error_message)) {
 		return false;
 	}
 	found_any = true;

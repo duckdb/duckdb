@@ -415,6 +415,15 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 		}
 	}
 
+	if (constant_pattern && constant_string.find("\\C") == string::npos) {
+		auto validation_options = options;
+		validation_options.set_log_errors(false);
+		if (RE2(constant_string, validation_options).ok()) {
+			// A valid UTF-8 pattern without byte escapes cannot return a partial character.
+			bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
+		}
+	}
+
 	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern, group_index,
 	                                        no_match_returns_input);
 }

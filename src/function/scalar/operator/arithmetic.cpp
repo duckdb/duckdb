@@ -472,14 +472,16 @@ static void BignumAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 
 static void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
+	// negate a copy of the right operand - the input must not be modified, it can e.g. also be the left operand
+	vector<uint8_t> negated_rhs;
 	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
 	    args.data[0], args.data[1], result, [&](bignum_t a, bignum_t b) {
 		    const BignumIntermediate lhs(a);
-		    BignumIntermediate rhs(b);
+		    negated_rhs.resize(b.data.GetSize());
+		    memcpy(negated_rhs.data(), b.data.GetData(), b.data.GetSize());
+		    BignumIntermediate rhs(negated_rhs.data(), negated_rhs.size());
 		    rhs.NegateInPlace();
-		    auto result_value = BignumIntermediate::Add(heap, lhs, rhs);
-		    rhs.NegateInPlace();
-		    return result_value;
+		    return BignumIntermediate::Add(heap, lhs, rhs);
 	    });
 }
 
@@ -550,7 +552,9 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			function.SetFallible();
 			// INTERVAL ordering uses 30-day months but DATE arithmetic uses calendar months,
 			// e.g. '2025-02-01' + INTERVAL '29 days' = '2025-03-02' > + INTERVAL '1 month' = '2025-03-01'.
-			function.SetArgProperties({inc, unset});
+			// Adding months clamps the day, e.g. both '2000-01-30' and '2000-01-31' + INTERVAL '1 month' are
+			// '2000-02-29', so this is not strictly increasing in the DATE.
+			function.SetArgProperties({ArgProperties().NonDecreasing(), unset});
 			return function;
 		} else if (right_type.id() == LogicalTypeId::TIME) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
@@ -586,7 +590,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<interval_t, date_t, timestamp_t, AddOperator>);
 			function.SetFallible();
-			function.SetArgProperties({unset, inc});
+			function.SetArgProperties({unset, ArgProperties().NonDecreasing()});
 			return function;
 		} else if (right_type.id() == LogicalTypeId::TIME) {
 			// TIME +/- INTERVAL wraps modulo 24h.
@@ -604,7 +608,8 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<interval_t, timestamp_t, timestamp_t, AddOperator>);
 			function.SetFallible();
-			function.SetArgProperties({unset, inc});
+			// not monotonic: adding months clamps the day but keeps the time, e.g.
+			// '2000-01-30 23:00' + INTERVAL '1 month' > '2000-01-31 01:00' + INTERVAL '1 month'
 			return function;
 		}
 		break;
@@ -640,7 +645,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, AddOperator>);
 			function.SetFallible();
-			function.SetArgProperties({inc, unset});
+			// not monotonic: see INTERVAL + TIMESTAMP
 			return function;
 		}
 		break;
@@ -874,7 +879,8 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			function.SetFallible();
 			// Monotonic in DATE only; INTERVAL ordering uses 30-day months but DATE arithmetic uses
 			// calendar months so monotonicity in the INTERVAL arg is broken (see OperatorAddFun).
-			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties()});
+			// Subtracting months clamps the day, so this is not strictly increasing in the DATE.
+			function.SetArgProperties({ArgProperties().NonDecreasing(), ArgProperties()});
 			return function;
 		}
 		break;
@@ -891,8 +897,9 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			    "-", {left_type, right_type}, LogicalType::TIMESTAMP,
 			    ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, SubtractOperator>);
 			function.SetFallible();
-			// Monotonic in TIMESTAMP only; see DATE - INTERVAL above.
-			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties()});
+			// not monotonic: subtracting months clamps the day but keeps the time, e.g.
+			// '2000-03-30 23:00' - INTERVAL '1 month' > '2000-03-31 01:00' - INTERVAL '1 month'
+
 			return function;
 		}
 		break;
