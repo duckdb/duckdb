@@ -67,6 +67,19 @@ void RemapChildVectors(const Vector &result, const vector<reference<Vector>> &in
 			RemapNested(input_vector, child_default.get(), result_vectors[i], count, remap.child_remap_info);
 			continue;
 		}
+		if (!remap.index.IsValid() && remap.default_index.IsValid() && !remap.child_remap_info.empty()) {
+			// nested default without a source - remap the fields of the default to the target type
+			auto &defaults = StructVector::GetEntries(default_vector);
+			auto &nested_default = defaults[remap.default_index.GetIndex()];
+			if (nested_default.GetType().id() == LogicalTypeId::STRUCT &&
+			    result_vectors[i].get().GetType().id() == LogicalTypeId::STRUCT) {
+				RemapNested(nested_default, nested_default, result_vectors[i], count, remap.child_remap_info);
+				if (has_top_level_null) {
+					FlatVector::SetValidity(result_vectors[i], FlatVector::Validity(result));
+				}
+				continue;
+			}
+		}
 		// primitive type remap
 		if (remap.default_index.IsValid()) {
 			auto &defaults = StructVector::GetEntries(default_vector);
