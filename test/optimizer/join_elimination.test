@@ -386,13 +386,22 @@ insert into z values (5);
 statement ok
 create sequence seq_join;
 
-query I
+statement ok
 select count(*) from (select distinct s.g from (select p.id, p.g, unnest([1]) e from p left join k on p.id = k.a) s join z on s.id + nextval('seq_join') = z.id);
-----
-0
 
 query I
 select currval('seq_join');
+----
+9
+
+statement ok
+create sequence seq_any_join;
+
+statement ok
+select count(*) from (select distinct s.g from (select p.id, p.g, unnest([1]) e from p left join k on p.id = k.a) s join z on s.id + z.id + nextval('seq_any_join') < 0);
+
+query I
+select currval('seq_any_join');
 ----
 9
 
