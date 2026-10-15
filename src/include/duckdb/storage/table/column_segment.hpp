@@ -10,27 +10,20 @@
 
 #include "duckdb/common/enums/scan_vector_type.hpp"
 #include "duckdb/common/optional.hpp"
-#include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/block_packable.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
-#include <cstdint>
 
 namespace duckdb {
 
-class BaseStatistics;
 class BlockManager;
-class ColumnData;
-class ColumnSegment;
 class DatabaseInstance;
 class TableFilter;
-class Transaction;
-class UpdateSegment;
 struct ColumnAppendState;
 struct ColumnFetchState;
 struct ColumnScanState;

@@ -8,6 +8,7 @@
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/compression/standard_compression_state.hpp"

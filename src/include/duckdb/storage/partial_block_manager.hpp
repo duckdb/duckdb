@@ -9,118 +9,74 @@
 #pragma once
 
 #include "duckdb/common/map.hpp"
-#include "duckdb/common/shared_ptr_ipp.hpp"
-#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/query_context.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/buffer/buffer_handle.hpp"
-#include "duckdb/storage/storage_info.hpp"
-#include "duckdb/storage/storage_manager.hpp"
-#include <cstdint>
 
 namespace duckdb {
-class DatabaseInstance;
-class ClientContext;
-class ColumnSegment;
-class MetadataReader;
-class SchemaCatalogEntry;
-class SequenceCatalogEntry;
-class TableCatalogEntry;
-class ViewCatalogEntry;
-class TypeCatalogEntry;
+
+class BlockManager;
+class BlockPackable;
+class BufferHandle;
+struct PartialBlock;
 
 enum class PartialBlockType { FULL_CHECKPOINT, APPEND_TO_TABLE, IN_MEMORY_CHECKPOINT };
 
-//! Interface required for packing data into partial blocks, implementing
-//! classes can be managed through the partial block manager.
-class BlockPackable {
-public:
-	virtual ~BlockPackable() = default;
-
-public:
-	virtual void Finalize(shared_ptr<BlockHandle> block_handle_p, uint32_t offset) = 0;
-};
-
-struct PartialBlock {
-	PartialBlock(BlockManager &block_manager, block_id_t block_id);
-
-public:
-	//! How much space is left in the current block for further packing.
-	idx_t AvailableSpace();
-	//! How many packables are residing in the current block.
-	uint32_t UseCount();
-	//! Write data of the packable into the buffer backed by the partial block.
-	BlockPointer Store(BlockPackable &packable, BufferHandle source, uint32_t byte_size);
-	//! Flush the block to disk and zero-initialize any tail free space.
-	void Flush(QueryContext context, PartialBlockType type);
-	//! Merge packables from another block into the current block, before either block has a persistent block ID.
-	void Merge(PartialBlock &other);
-	//! Remove all packables and the associated backing block.
-	void Clear();
-
-private:
-	//! Determine if we can reuse the source buffer for further packing, this saves on an allocation and copy when
-	//! starting a new partial block. If reusable, we return the backing temporary block.
-	bool CanReuseBuffer(BufferHandle &source);
-
-private:
-	//! The block manager of the partial block manager
-	BlockManager &block_manager;
-	//! The block handle of the underlying block that this partial block writes to
-	shared_ptr<BlockHandle> block_handle;
-	//! Type-erased buffers that will be packed in the current block.
-	vector<std::pair<reference<BlockPackable>, uint32_t>> packables;
-	//! The reserved database block id, or INVALID_BLOCK.
-	block_id_t block_id;
-	//! Next allocation offset, and also the current allocation size.
-	uint32_t offset = 0;
-};
-
-//! Enables sharing blocks across some scope. Scope is whatever we want to share
-//! blocks across. It may be an entire checkpoint or just a single row group.
-//! In any case, they must share a block manager.
+//! Packs allocations sharing a block manager into blocks across a checkpoint or append scope.
 class PartialBlockManager {
 public:
-	//! Max number of shared references to a block. No effective limit by default.
+	//! Default flush threshold for allocations sharing a block; effectively unlimited for normal block sizes.
 	static constexpr const idx_t DEFAULT_MAX_USE_COUNT = 1u << 20;
-	//! No point letting map size grow unbounded. We'll drop blocks with the
-	//! least free space first.
+	//! No point letting map size grow unbounded. We'll drop blocks with the least free space first.
 	static constexpr const idx_t MAX_BLOCK_MAP_SIZE = 1u << 31;
 
 public:
+	//! Use the default packing threshold unless supplied; it must not exceed the block size.
 	PartialBlockManager(QueryContext context, BlockManager &block_manager, PartialBlockType partial_block_type,
 	                    optional_idx max_partial_block_size = optional_idx(),
 	                    uint32_t max_use_count = DEFAULT_MAX_USE_COUNT);
-	virtual ~PartialBlockManager();
+	//! Discard pending blocks without flushing or finalizing their packables.
+	~PartialBlockManager();
 
 public:
-	//! Clear remaining blocks without writing them to disk
+	//! Discard pending blocks without writing or finalizing; already flushed blocks are unaffected.
 	void ClearBlocks();
 
-	//! Merge this block manager into another one
+	//! Absorb other's pending blocks, leaving it empty on success; may flush and finalize packables.
+	//! Managers must be distinct, exclusively accessed, and share the block manager and mode.
+	//! Coalescing blocks requires unassigned persistent block IDs.
 	void Merge(PartialBlockManager &other);
 
-	//! Flush any remaining partial blocks to disk
+	//! Flush and finalize all pending blocks, leaving the map empty on success; in-memory mode skips disk IO.
 	void FlushPartialBlocks();
 
-	unique_ptr<PartialBlock> TakePartialBlock(uint32_t byte_size);
-
-	unique_ptr<PartialBlock> CreatePartialBlock();
-
-	unique_ptr<PartialBlock> AcquirePartialBlock(uint32_t byte_size);
-
-	unique_ptr<PartialBlock> PruneFreeList();
-
-	void RetainOrFlush(unique_ptr<PartialBlock> partial_block);
-
+	//! Consume a valid source pin and pack its first byte_size bytes; 0 < byte_size <= block size.
+	//! Returns a fixed destination only in FULL_CHECKPOINT mode, otherwise nullopt; may flush before returning.
+	//! The packable must outlive its pending allocation, until flushed or discarded.
 	optional<BlockPointer> Write(BlockPackable &packable, BufferHandle source, uint32_t byte_size);
 
+	//! Reserve a disk block ID, using checkpoint accounting in FULL_CHECKPOINT mode; not for in-memory storage.
 	block_id_t GetFreeBlockId();
 
 	//! Returns a reference to the underlying block manager.
 	BlockManager &GetBlockManager() const;
 	//! Returns the optional client context.
 	optional_ptr<ClientContext> GetClientContext() const;
+
+private:
+	//! Remove the smallest fitting block from the map, or return nullptr if none fits.
+	unique_ptr<PartialBlock> TakePartialBlock(uint32_t byte_size);
+	//! Create an empty block; reserve its persistent ID eagerly only in FULL_CHECKPOINT mode.
+	unique_ptr<PartialBlock> CreatePartialBlock();
+	//! Take a reusable block or create one; the result is not registered until retained or flushed.
+	unique_ptr<PartialBlock> AcquirePartialBlock(uint32_t byte_size);
+	//! Remove the block with least free space if the map limit is exceeded; otherwise return nullptr.
+	unique_ptr<PartialBlock> PruneFreeList();
+	//! Consume the block, retaining it if reusable or flushing it otherwise.
+	void RetainOrFlush(unique_ptr<PartialBlock> partial_block);
 
 private:
 	//! The optional client context in which we use the partial block manager.
@@ -131,13 +87,13 @@ private:
 	BlockManager &block_manager;
 	PartialBlockType partial_block_type;
 	mutex partial_block_lock;
-	//! A map of (available space -> PartialBlock) for partially filled blocks
-	//! This is a multimap because there might be outstanding partial blocks with
-	//! the same amount of left-over space
+	//! Owns nonempty, unflushed blocks keyed by AvailableSpace(); equal keys are allowed.
+	//! Remove a block before changing its used size so the key stays consistent.
 	multimap<idx_t, unique_ptr<PartialBlock>> partially_filled_blocks;
 
-	//! The maximum size (in bytes) at which a partial block will be considered a partial block
+	//! Largest allocation eligible for reuse; retained blocks have at least block_size - this much free space.
 	uint32_t max_partial_block_size;
+	//! Flush threshold for the number of packables; merging can cross this threshold.
 	uint32_t max_use_count;
 };
 

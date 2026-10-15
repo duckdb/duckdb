@@ -8,17 +8,14 @@
 
 #pragma once
 
-#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/storage/block_packable.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/block_manager.hpp"
-#include "duckdb/storage/partial_block_manager.hpp"
-#include <cstdint>
 
 namespace duckdb {
 
 class FixedSizeAllocator;
-class MetadataWriter;
 class PartialBlockManager;
 
 //! A fixed-size buffer holds fixed-size segments of data. It lazily deserializes a buffer, if on-disk and not

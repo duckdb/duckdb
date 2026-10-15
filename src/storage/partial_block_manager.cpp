@@ -1,19 +1,15 @@
 #include "duckdb/storage/partial_block_manager.hpp"
-#include "duckdb/common/assert.hpp"
+
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/optional.hpp"
-#include "duckdb/common/shared_ptr_ipp.hpp"
-#include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/storage/block.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/block_packable.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/storage_info.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
-#include <cstdint>
+
 #include <cstring>
 
 namespace duckdb {
@@ -21,6 +17,38 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // PartialBlock
 //===--------------------------------------------------------------------===//
+
+struct PartialBlock {
+	PartialBlock(BlockManager &block_manager, block_id_t block_id);
+
+public:
+	//! How much space is left in the current block for further packing.
+	idx_t AvailableSpace();
+	//! How many packables are residing in the current block.
+	uint32_t UseCount();
+	//! Write data of the packable into the buffer backed by the partial block.
+	BlockPointer Store(BlockPackable &packable, BufferHandle source, uint32_t byte_size);
+	//! Flush the block to disk and zero-initialize any tail free space.
+	void Flush(QueryContext context, PartialBlockType type);
+	//! Merge packables before either block has a persistent block ID.
+	void Merge(PartialBlock &other);
+	//! Remove all packables and the associated backing block.
+	void Clear();
+
+private:
+	//! Whether the source can serve as the packing buffer without an allocation or copy.
+	bool CanReuseBuffer(BufferHandle &source);
+
+private:
+	BlockManager &block_manager;
+	//! The temporary packing buffer, replaced by a persistent handle when flushed to disk.
+	shared_ptr<BlockHandle> block_handle;
+	vector<std::pair<reference<BlockPackable>, uint32_t>> packables;
+	//! The reserved database block id, or INVALID_BLOCK.
+	block_id_t block_id;
+	//! Next allocation offset, and also the current allocation size.
+	uint32_t offset = 0;
+};
 
 PartialBlock::PartialBlock(BlockManager &block_manager, block_id_t block_id)
     : block_manager(block_manager), block_handle(nullptr), block_id(block_id) {
@@ -93,7 +121,7 @@ BlockPointer PartialBlock::Store(BlockPackable &packable, BufferHandle source, u
 		dst = buffer_manager.Pin(block_handle);
 	} else if (CanReuseBuffer(source)) {
 		dst = std::move(source);
-		block_handle = source.GetBlockHandle();
+		block_handle = dst.GetBlockHandle();
 	} else {
 		auto &source_memory = source.GetBlockHandle()->GetMemory();
 		dst = buffer_manager.Allocate(source_memory.GetMemoryTag(), &block_manager, false);
@@ -197,8 +225,7 @@ PartialBlockManager::PartialBlockManager(QueryContext context, BlockManager &blo
 	max_partial_block_size = NumericCast<uint32_t>(block_manager.GetBlockSize() / 5 * 4);
 }
 
-PartialBlockManager::~PartialBlockManager() {
-}
+PartialBlockManager::~PartialBlockManager() = default;
 
 block_id_t PartialBlockManager::GetFreeBlockId() {
 	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
@@ -305,21 +332,20 @@ unique_ptr<PartialBlock> PartialBlockManager::PruneFreeList() {
 void PartialBlockManager::RetainOrFlush(unique_ptr<PartialBlock> partial_block) {
 	auto min_reusable_space = block_manager.GetBlockSize() - max_partial_block_size;
 	auto available_space = partial_block->AvailableSpace();
-	auto block_type = partial_block_type;
 
 	if (partial_block->UseCount() >= max_use_count) {
-		partial_block->Flush(context, block_type);
+		partial_block->Flush(context, partial_block_type);
 		return;
 	}
 	if (available_space < min_reusable_space) {
-		partial_block->Flush(context, block_type);
+		partial_block->Flush(context, partial_block_type);
 		return;
 	}
 
 	partially_filled_blocks.insert(make_pair(partial_block->AvailableSpace(), std::move(partial_block)));
 
 	if (auto pruned_block = PruneFreeList()) {
-		pruned_block->Flush(context, block_type);
+		pruned_block->Flush(context, partial_block_type);
 	}
 }
 

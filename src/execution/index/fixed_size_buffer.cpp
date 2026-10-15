@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 
+#include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
