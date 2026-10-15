@@ -209,8 +209,8 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		return;
 	}
 	if (error.Type() == ExceptionType::CONSTRAINT) {
-		// a constraint violation is detected before the chunk is added to the index:
-		// remove only the previously appended chunks
+		// the index append already removed the conflicting chunk's keys before returning:
+		// remove the keys of the chunks appended before it
 		RevertIndexAppend(transaction, append_state.row_start, append_state.current_row);
 	}
 	// Other errors are not reverted here: the catch in Flush invalidates the database.
@@ -562,6 +562,10 @@ void LocalStorage::Update(DataTable &table, DuckTableEntry &table_entry, Vector 
 
 static void ThrowOnForcedFlushAppendFailure(DataTable &table) {
 	if (table.db.IsSystem() || table.db.IsTemporary()) {
+		return;
+	}
+	if (!table.db.GetStorageManager().IsLoaded()) {
+		// do not inject failures into commits that replay the WAL
 		return;
 	}
 	if (Settings::Get<DebugForceFlushAppendFailureSetting>(table.db.GetDatabase())) {

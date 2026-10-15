@@ -3,10 +3,10 @@
 # group: [transactions]
 
 statement ok
-CREATE TABLE pk (k INTEGER PRIMARY KEY, v VARCHAR);
+CREATE TABLE pk (k INTEGER PRIMARY KEY, u INTEGER UNIQUE, v VARCHAR);
 
 statement ok
-INSERT INTO pk VALUES (0, 'seed');
+INSERT INTO pk VALUES (0, 0, 'seed');
 
 statement ok con1
 BEGIN;
@@ -15,19 +15,21 @@ statement ok con2
 BEGIN;
 
 statement ok con1
-INSERT INTO pk VALUES (1, 'first');
+INSERT INTO pk VALUES (5000, 5000, 'first');
 
+# the duplicate key 5000 sits in the third chunk: the two chunks before it are
+# fully appended to both indexes at commit and must be reverted
 statement ok con2
-INSERT INTO pk VALUES (1, 'second'), (2, 'second');
+INSERT INTO pk SELECT i, i, 'second' FROM range(1, 5001) r(i);
 
 statement ok con1
 COMMIT;
 
-# The duplicate key is only detected when con2 appends to the shared index at COMMIT.
+# the duplicate is only detected when con2 appends to the shared indexes at COMMIT
 statement error con2
 COMMIT;
 ----
-<REGEX>:.*Failed to commit.*duplicate key.*
+<REGEX>:.*Failed to commit.*
 
 # The failed commit must not invalidate the database.
 query II
@@ -36,23 +38,28 @@ SELECT count(*), count(DISTINCT k) FROM pk;
 2	2
 
 query I
-SELECT v FROM pk WHERE k = 1;
+SELECT v FROM pk WHERE k = 5000;
 ----
 first
 
-# Key 2 was reverted at commit and must be insertable again.
+# All keys of the failed commit must have been removed from both indexes.
 statement ok
-INSERT INTO pk VALUES (2, 'retry');
+INSERT INTO pk SELECT i, i, 'retry' FROM range(1, 5000) r(i);
 
 statement error
-INSERT INTO pk VALUES (1, 'duplicate');
+INSERT INTO pk VALUES (1, 50000, 'duplicate');
 ----
 violates primary key constraint
+
+statement error
+INSERT INTO pk VALUES (50001, 1, 'duplicate');
+----
+<REGEX>:Constraint Error.*
 
 statement ok
 CHECKPOINT;
 
-query II
-SELECT count(*), max(k) FROM pk;
+query III
+SELECT count(*), count(DISTINCT k), count(DISTINCT u) FROM pk;
 ----
-3	2
+5001	5001	5001
