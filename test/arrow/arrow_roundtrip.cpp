@@ -184,6 +184,33 @@ TEST_CASE("Test arrow NULL value roundtrip", "[arrow]") {
 	TestArrowRoundtrip("SELECT [{'x': NULL, 'y': NULL}, {'x': NULL, 'y': NULL}]");
 }
 
+TEST_CASE("Test arrow roundtrip of ENUM in fixed-size arrays", "[arrow]") {
+	DuckDB db;
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TYPE color AS ENUM ('red', 'green', 'blue')"));
+	// an ENUM is exported as a dictionary with uint8 indices and scanned as its VARCHAR values
+	string query = "SELECT CASE WHEN i % 7 = 6 THEN NULL ELSE ['red', NULL, ['red', 'green', 'blue'][i % 3 + 1]] "
+	               "END::color[3] AS a, [{'s': ['blue', 'green']}]::STRUCT(s color[2])[] AS l, "
+	               "[['green'], [NULL]]::color[1][2] AS aa, [{'c': 'blue'}]::STRUCT(c color)[1] AS sa "
+	               "FROM range(3000) t(i)";
+	auto result = con.Query(query);
+	REQUIRE_NO_FAIL(*result);
+	auto types = result->GetTypes();
+	auto names = IdentifiersToStrings(result->GetNames());
+	ArrowTestFactory factory(std::move(types), std::move(names), std::move(result), con.context->GetClientProperties(),
+	                         *con.context);
+	auto arrow_result = ArrowTestHelper::ScanArrowObject(con, ArrowTestHelper::ConstructArrowScan(factory));
+	REQUIRE(arrow_result);
+	child_list_t<LogicalType> l_children {{"s", LogicalType::ARRAY(LogicalType::VARCHAR, 2)}};
+	child_list_t<LogicalType> sa_children {{"c", LogicalType::VARCHAR}};
+	vector<LogicalType> expected_types {LogicalType::ARRAY(LogicalType::VARCHAR, 3),
+	                                    LogicalType::LIST(LogicalType::STRUCT(l_children)),
+	                                    LogicalType::ARRAY(LogicalType::ARRAY(LogicalType::VARCHAR, 1), 2),
+	                                    LogicalType::ARRAY(LogicalType::STRUCT(sa_children), 1)};
+	REQUIRE(arrow_result->GetTypes() == expected_types);
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, false));
+}
+
 TEST_CASE("Test Arrow fixed-size binary format parsing", "[arrow]") {
 	// Verify that GetTypeFromFormat correctly parses the size from "w:NN" format strings.
 	// Regression test for duckdb/duckdb-wasm#2199: format.find(':') would match colons

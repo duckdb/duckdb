@@ -368,6 +368,11 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 		auto &child = list_info.GetChild();
 		return LogicalType::LIST(child.GetDuckType(true));
 	}
+	case LogicalTypeId::ARRAY: {
+		auto &array_info = type_info->Cast<ArrowArrayInfo>();
+		auto &child = array_info.GetChild();
+		return LogicalType::ARRAY(child.GetDuckType(true), array_info.FixedSize());
+	}
 	case LogicalTypeId::MAP: {
 		auto &list_info = type_info->Cast<ArrowListInfo>();
 		auto &struct_child = list_info.GetChild();
