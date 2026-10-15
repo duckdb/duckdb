@@ -148,7 +148,6 @@ struct NestedRunEndSchema {
 	ArrowSchema schema {};
 };
 
-// The type arrow_scan binds the column as.
 LogicalType BoundType(ClientContext &context, ArrowSchema &col_schema) {
 	ArrowTableSchema table;
 	table.AddColumn(0, ArrowType::GetArrowLogicalType(context, col_schema), "a");
