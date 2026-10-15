@@ -16956,8 +16956,7 @@ void PEGTransformerFactory::InitializeAnyAllSubqueryTailTrampoline(PEGTransforme
                                                                    GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(2);
-	process.PushChild({transformer.GetRule("SelectStatementInternal"), ExtractResultFromParens(list_pr.GetChild(1))},
-	                  1);
+	process.PushChild({transformer.GetRule("SubqueryReference"), list_pr.GetChild(1)}, 1);
 	process.PushChild({transformer.GetRule("AnyAllParsedOperator"), list_pr.GetChild(0)}, 0);
 }
 
@@ -16965,9 +16964,9 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeAnyAllSubqueryTailTrampoline(PEGTransformer &transformer,
                                                             GeneratedTransformProcess &process) {
 	auto any_all_parsed_operator = process.TakeResult<ParsedOperator>(0);
-	auto select_statement_internal = process.TakeResult<unique_ptr<SelectStatement>>(1);
-	auto result = TransformAnyAllSubqueryTail(transformer, std::move(any_all_parsed_operator),
-	                                          std::move(select_statement_internal));
+	auto subquery_reference = process.TakeResult<unique_ptr<TableRef>>(1);
+	auto result =
+	    TransformAnyAllSubqueryTail(transformer, std::move(any_all_parsed_operator), std::move(subquery_reference));
 	return transformer.MakeResult<OtherOperatorTail>(std::move(result));
 }
 

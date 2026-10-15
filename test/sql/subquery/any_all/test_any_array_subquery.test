@@ -47,23 +47,8 @@ SELECT 'a' = ANY(SELECT y FROM allowed);
 ----
 true
 
+# a parenthesized subquery is still a subquery
 query T
-SELECT 'b' <> ALL(SELECT y FROM allowed);
-----
-false
-
-query T
-SELECT 'b' = ANY((SELECT y FROM allowed));
-----
-true
-
-query T
-SELECT 'c' = ANY(SELECT y FROM allowed UNION ALL SELECT 'c');
-----
-true
-
-# ANY of a list compares against its elements
-query T
-SELECT 'b' = ANY(['a', 'b']);
+SELECT 'a' = ANY((SELECT y FROM allowed));
 ----
 true

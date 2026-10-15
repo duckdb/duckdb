@@ -5216,7 +5216,7 @@ public:
 	                                unique_ptr<ParsedExpression> other_operator_expression);
 	static OtherOperatorTail TransformAnyAllSubqueryTail(PEGTransformer &transformer,
 	                                                     ParsedOperator any_all_parsed_operator,
-	                                                     unique_ptr<SelectStatement> select_statement_internal);
+	                                                     unique_ptr<TableRef> subquery_reference);
 	static OtherOperatorTail TransformOtherOperatorExpressionTail(PEGTransformer &transformer,
 	                                                              ParsedOperator other_operator,
 	                                                              unique_ptr<ParsedExpression> bitwise_expression);

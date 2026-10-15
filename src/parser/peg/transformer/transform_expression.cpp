@@ -1393,11 +1393,12 @@ PEGTransformerFactory::TransformCustomPrefixExpression(PEGTransformer &transform
 	return TransformOperatorFunction(operator_literal, std::move(children));
 }
 
-OtherOperatorTail
-PEGTransformerFactory::TransformAnyAllSubqueryTail(PEGTransformer &transformer, ParsedOperator any_all_parsed_operator,
-                                                   unique_ptr<SelectStatement> select_statement_internal) {
+OtherOperatorTail PEGTransformerFactory::TransformAnyAllSubqueryTail(PEGTransformer &transformer,
+                                                                     ParsedOperator any_all_parsed_operator,
+                                                                     unique_ptr<TableRef> subquery_reference) {
 	auto subquery = make_uniq<SubqueryExpression>();
-	subquery->SubqueryMutable() = std::move(select_statement_internal);
+	subquery->GetSubqueryTypeMutable() = SubqueryType::SCALAR;
+	subquery->SubqueryMutable() = std::move(subquery_reference->Cast<SubqueryRef>().subquery);
 	OtherOperatorTail result;
 	result.op = std::move(any_all_parsed_operator);
 	result.expression = std::move(subquery);

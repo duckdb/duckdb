@@ -29,7 +29,7 @@ struct ParsedOperator {
 struct OtherOperatorTail {
 	ParsedOperator op;
 	unique_ptr<ParsedExpression> expression;
-	//! Whether the right-hand side is a parenthesized subquery, i.e. x = ANY(SELECT ...)
+	//! Whether the right-hand side is a subquery, as in ANY(SELECT ...)
 	bool is_subquery = false;
 };
 

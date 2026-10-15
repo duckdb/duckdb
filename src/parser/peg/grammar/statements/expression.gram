@@ -239,7 +239,7 @@ OtherOperatorExpression <- InfixOtherOperatorExpression / CustomPrefixExpression
 InfixOtherOperatorExpression <- BitwiseExpression OtherOperatorTail*
 CustomPrefixExpression <- OperatorLiteral OtherOperatorExpression
 OtherOperatorTail <- AnyAllSubqueryTail / OtherOperatorExpressionTail
-AnyAllSubqueryTail <- AnyAllParsedOperator Parens(SelectStatementInternal)
+AnyAllSubqueryTail <- AnyAllParsedOperator SubqueryReference
 OtherOperatorExpressionTail <- OtherOperator BitwiseExpression
 OtherOperator <-
     AnyAllParsedOperator / NamedOtherOperator
