@@ -463,6 +463,13 @@ TEST_CASE("decompose a timestamp whose day starts below the timestamp range", "[
 	REQUIRE(timestamp.time.min == 59);
 	REQUIRE(timestamp.time.sec == 5);
 	REQUIRE(timestamp.time.micros == 224194);
+
+	// the smallest finite timestamp
+	ts.micros = NumericLimits<int64_t>::Minimum();
+	REQUIRE(duckdb_is_finite_timestamp(ts));
+	timestamp = duckdb_from_timestamp(ts);
+	REQUIRE(timestamp.date.day == 21);
+	REQUIRE(timestamp.time.micros == 224192);
 }
 
 TEST_CASE("create time_tz value") {
