@@ -392,7 +392,7 @@ static void ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStat
 		return;
 	}
 	auto &input = *input_p;
-	D_ASSERT(input.GetType().id() == LogicalTypeId::BLOB);
+	D_ASSERT(input.GetType().id() == LogicalTypeId::BLOB || input.GetType().id() == LogicalTypeId::VARCHAR);
 	result.CopyValidity(input);
 
 	if (!result.CanHaveNoNull()) {
