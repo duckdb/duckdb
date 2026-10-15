@@ -1,0 +1,67 @@
+# name: test/issues/general/test_27226.test
+# description: Join elimination keeps an outer join whose inner columns a join condition above reads
+# group: [general]
+
+statement ok
+CREATE TABLE a AS SELECT range AS i, range % 7 AS k, range::VARCHAR AS s FROM range(100);
+
+statement ok
+CREATE TABLE b AS SELECT range AS i, range % 5 AS k FROM range(50);
+
+statement ok
+CREATE TABLE c AS SELECT range AS i FROM range(10);
+
+query II
+SELECT count(*), sum(s::INTEGER) FROM (
+	SELECT DISTINCT a.s FROM a FULL JOIN b ON a.k = b.k
+	WHERE a.i IS NOT NULL AND b.i NOT IN (SELECT i FROM c)
+);
+----
+72	3522
+
+query I
+SELECT DISTINCT a.k FROM a FULL JOIN b ON a.k = b.k
+WHERE a.i IS NOT NULL AND b.i NOT IN (SELECT i FROM c) ORDER BY ALL;
+----
+0
+1
+2
+3
+4
+
+query I
+SELECT DISTINCT a.k FROM a FULL JOIN b ON a.k IS NOT DISTINCT FROM b.k
+WHERE a.i IS NOT NULL AND b.i <> ALL (SELECT i FROM c) ORDER BY ALL;
+----
+0
+1
+2
+3
+4
+
+query I
+SELECT DISTINCT a.k FROM a FULL JOIN b ON a.k = b.k
+WHERE a.i > 5 AND b.k NOT IN (VALUES (1), (2)) ORDER BY ALL;
+----
+0
+3
+4
+
+# the join with b is still eliminated when only columns of a are read above it
+query II
+EXPLAIN SELECT DISTINCT a.k FROM a FULL JOIN b ON a.k = b.k
+WHERE a.i IS NOT NULL AND a.i NOT IN (SELECT i FROM c);
+----
+physical_plan	<!REGEX>:.*main\.b.*
+
+query I
+SELECT DISTINCT a.k FROM a FULL JOIN b ON a.k = b.k
+WHERE a.i IS NOT NULL AND a.i NOT IN (SELECT i FROM c) ORDER BY ALL;
+----
+0
+1
+2
+3
+4
+5
+6

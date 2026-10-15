@@ -27,8 +27,12 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 		D_ASSERT(!pipe_info.join_parent);
 		pipe_info.join_parent = parent;
 		pipe_info.join_index = idx;
+		// the joins below must keep the columns these conditions read, which do not block eliminating this join
+		auto ref_table_ids = pipe_info.ref_table_ids;
+		VisitOperatorExpressions(op);
 		left_child = CreateChildren();
 		right_child = CreateChildren();
+		pipe_info.ref_table_ids = std::move(ref_table_ids);
 		left_child->OptimizeInternal(std::move(op.children[0]));
 		right_child->OptimizeInternal(std::move(op.children[1]));
 		return;
