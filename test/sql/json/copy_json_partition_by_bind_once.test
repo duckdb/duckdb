@@ -22,10 +22,16 @@ statement ok
 COPY (SELECT range AS v, 'POINT (1 2)'::GEOMETRY AS geom, 0 AS p FROM range(nextval('geo_seq')))
 TO '{TEST_DIR}/geojson_partition_bind_once' (FORMAT GEOJSON, PARTITION_BY (p));
 
-query I
-SELECT currval('geo_seq')
+statement ok
+COPY (SELECT range AS v, 'POINT (1 2)'::GEOMETRY AS geom, 0 AS p FROM range(nextval('geo_seq')))
+TO '{TEST_DIR}/geojsonl_partition_bind_once' (FORMAT GEOJSONL, PARTITION_BY (p));
+
+query III
+SELECT currval('geo_seq'),
+	(SELECT count(*) FROM read_json('{TEST_DIR}/geojson_partition_bind_once/**/*.geojson')),
+	(SELECT count(*) FROM read_json('{TEST_DIR}/geojsonl_partition_bind_once/**/*.geojsonl'))
 ----
-1
+2	1	2
 
 # every column as partition column still needs WRITE_PARTITION_COLUMNS, and '*' still writes them
 statement error
@@ -40,3 +46,52 @@ query II
 SELECT currval('seq'), (SELECT count(*) FROM read_json('{TEST_DIR}/json_partition_bind_once_star/**/*.json'))
 ----
 3	3
+
+# a COPY option error after the query is bound
+statement error
+COPY (SELECT a.v, 0 AS p FROM (VALUES (1)) a(v) LEFT JOIN (VALUES (1)) b(v) ON a.v = (SELECT b.v))
+TO '{TEST_DIR}/json_partition_bind_once_error' (FORMAT JSON, PARTITION_BY (p), COMPRESSION 42);
+----
+could not be cast
+
+statement ok
+COPY (WITH c AS MATERIALIZED (SELECT range AS v, range % 2 AS p FROM range(4)) SELECT * FROM c)
+TO '{TEST_DIR}/json_partition_bind_once_cte' (FORMAT JSON, PARTITION_BY (p));
+
+query II
+SELECT v, p FROM read_json('{TEST_DIR}/json_partition_bind_once_cte/**/*.json', hive_partitioning = true) ORDER BY v
+----
+0	0
+1	1
+2	0
+3	1
+
+statement ok
+COPY (
+	WITH RECURSIVE r(v) AS (SELECT 1 UNION ALL SELECT v + 1 FROM r WHERE v < 3)
+	SELECT v, v % 2 AS p, (SELECT max(r2.v) FROM r r2 WHERE r2.v <= r.v) AS m FROM r
+) TO '{TEST_DIR}/json_partition_bind_once_correlated' (FORMAT JSON, PARTITION_BY (p));
+
+query III
+SELECT v, p, m FROM read_json('{TEST_DIR}/json_partition_bind_once_correlated/**/*.json', hive_partitioning = true)
+ORDER BY v
+----
+1	1	1
+2	0	2
+3	1	3
+
+statement ok
+PREPARE copy_params AS COPY (SELECT $1::INT AS v, $2::INT AS p)
+TO '{TEST_DIR}/json_partition_bind_once_params' (FORMAT JSON, PARTITION_BY (p), APPEND);
+
+statement ok
+EXECUTE copy_params(1, 5);
+
+statement ok
+EXECUTE copy_params(2, 6);
+
+query II
+SELECT v, p FROM read_json('{TEST_DIR}/json_partition_bind_once_params/**/*.json', hive_partitioning = true) ORDER BY v
+----
+1	5
+2	6
