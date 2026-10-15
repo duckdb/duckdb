@@ -1,4 +1,3 @@
-# FIXME: disabled for now while CopyFunction undergoes heavy changes
 if (NOT DEFINED VORTEX_ENABLED)
     set(VORTEX_ENABLED ON)
 endif()
