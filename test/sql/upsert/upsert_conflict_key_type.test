@@ -62,6 +62,15 @@ SELECT * FROM t2 ORDER BY k
 1	9
 2	8
 
+# a prepared upsert sees the cast key in the update condition and in RETURNING
+statement ok
+PREPARE upsert_t2 AS INSERT INTO t2 SELECT $1, 20 ON CONFLICT (k) DO UPDATE SET n = excluded.n WHERE excluded.k = 1 RETURNING k, n;
+
+query II
+EXECUTE upsert_t2(1.4);
+----
+1	20
+
 # source rows that become the same key
 statement ok
 INSERT INTO t2 SELECT 3.1, 1 UNION ALL SELECT 3.2, 2 ON CONFLICT DO NOTHING;
