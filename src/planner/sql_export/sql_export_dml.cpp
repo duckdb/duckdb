@@ -277,8 +277,8 @@ static LogicalPlanSQLExportResult ExportMergeNode(LogicalMergeInto &op, LogicalP
 				auto set_info = make_uniq<UpdateSetInfo>();
 				auto written_column_count = bound_action->columns.size() - bound_action->returning_only_column_count;
 				if (written_column_count == 0) {
-					// an UPDATE needs a SET, so an action that writes no column assigns all of them
-					written_column_count = bound_action->columns.size();
+					return LogicalPlanSQLExportResult::Failure({UnsupportedDML(
+					    path, "merge_update", "A MERGE update action that assigns no column cannot be exported")});
 				}
 				for (idx_t i = 0; i < bound_action->columns.size(); i++) {
 					auto value = export_input();

@@ -97,17 +97,23 @@ UPDATE checked SET value = 2 RETURNING *;
 ----
 1	2
 
-# an INSERT OR REPLACE that writes no column is exported with all of them
+# an INSERT OR REPLACE that writes no column cannot be exported
 statement ok
 CREATE TABLE replaced (id INTEGER PRIMARY KEY, v INTEGER);
 
 statement ok
 INSERT INTO replaced VALUES (1, 10);
 
-query TT
+statement ok
+CREATE TABLE replaced_child (id INTEGER REFERENCES replaced(id));
+
+statement ok
+INSERT INTO replaced_child VALUES (1);
+
+statement error
 EXPLAIN (SQL) INSERT OR REPLACE INTO replaced(id) VALUES (1) RETURNING *;
 ----
-sql	<REGEX>:(?s)MERGE\s+INTO.*WHEN\s+MATCHED\s+THEN\s+UPDATE\s+SET\s+v\s+=\s+r\d+\.c\d+,\s+id\s+=\s+r\d+\.c\d+\s+WHEN\s+NOT\s+MATCHED.*
+A MERGE update action that assigns no column cannot be exported
 
 query II
 INSERT OR REPLACE INTO replaced(id) VALUES (1) RETURNING *;

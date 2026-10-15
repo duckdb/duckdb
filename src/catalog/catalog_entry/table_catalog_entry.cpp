@@ -324,7 +324,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	if (update.return_chunk) {
 		LogicalUpdate::BindAllColumns(*this, get, proj, update);
 		if (HasGeneratedColumns()) {
-			// only the insert of a delete and insert verifies generated columns, keep them as before
+			// generated expressions are verified when a delete and insert inserts the row
 			written_column_count = update.columns.size();
 		}
 	}
