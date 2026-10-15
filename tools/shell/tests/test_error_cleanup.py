@@ -17,7 +17,7 @@ def run_shell(shell, database, arguments, stdin="", init_file=None):
             *arguments,
         ],
         input=stdin,
-        text=True,
+        encoding="utf-8",
         capture_output=True,
         timeout=30,
         env=ShellTest(shell).get_environment(),
@@ -321,7 +321,7 @@ def test_database_shutdown_keeps_output_open(shell, tmp_path, exit_code):
     assert result.returncode == exit_code, result.stderr
     assert result.stdout == ""
     # The pending WAL is checkpointed during database destruction, before output is closed.
-    assert "Start Checkpoint" in output.read_text()
+    assert "Start Checkpoint" in output.read_text(encoding="utf-8")
     assert_checkpointed(database)
 
 
