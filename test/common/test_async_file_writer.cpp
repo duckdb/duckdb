@@ -165,6 +165,20 @@ private:
 	atomic<idx_t> abort_count {0};
 };
 
+class SizeMismatchWriteFileSystem : public TrackingWriteFileSystem {
+public:
+	explicit SizeMismatchWriteFileSystem(int64_t size_difference_p) : size_difference(size_difference_p) {
+	}
+
+	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+		TrackingWriteFileSystem::Write(handle, buffer, nr_bytes, location);
+		LocalFileSystem::Truncate(handle, NumericCast<int64_t>(location) + nr_bytes + size_difference);
+	}
+
+private:
+	int64_t size_difference;
+};
+
 class PublishingFileHandle : public FileHandle {
 public:
 	PublishingFileHandle(FileSystem &fs, const string &path, FileOpenFlags flags, atomic<idx_t> &publish_count_p,
@@ -900,6 +914,26 @@ TEST_CASE("AsyncWriteQueue drains positional requests on multiple async threads"
 	REQUIRE(saw_second);
 }
 
+TEST_CASE("AsyncWriteQueue schedules a small prefix before a large pending request", "[async_write_queue]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 3);
+	BlockingAsyncWriteTarget target;
+	AsyncWriteQueue queue(*con->context, target);
+
+	auto write_size = AsyncWriteConfig::TASK_BYTE_BUDGET + 1;
+	queue.Submit(AsyncWriteRequest(make_uniq<StringAsyncWriteBuffer>(string(write_size, 'a')), 0));
+	queue.Submit(AsyncWriteRequest(make_uniq<StringAsyncWriteBuffer>("header"), write_size));
+	queue.Submit(AsyncWriteRequest(make_uniq<StringAsyncWriteBuffer>(string(write_size, 'b')), write_size + 6));
+
+	auto saw_three_writes = target.WaitForEnteredWrites(3);
+	target.ReleaseWrites();
+	queue.Close();
+
+	REQUIRE(saw_three_writes);
+	REQUIRE(target.MaxActiveWrites() == 3);
+	REQUIRE(target.write_sizes.size() == 3);
+}
+
 TEST_CASE("ManagedAsyncWriteQueue accepts non-contiguous positional writes", "[async_write_queue]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
@@ -1560,6 +1594,42 @@ TEST_CASE("AsyncFileWriter waits for remote coalesce threshold before first drai
 	fs.RemoveFile(path);
 }
 
+TEST_CASE("AsyncFileWriter schedules a large remote write behind a small prefix", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 4);
+	ConcurrentSequentialWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_remote_prefix_large.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string prefix = "header";
+	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
+	string tail = "footer";
+	AsyncFileWriter writer(*con->context, fs, path);
+	{
+		auto batch_guard = writer.StartBatch();
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(prefix));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(prefix));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(tail));
+		batch_guard.Finish();
+	}
+
+	auto saw_four_backend_writes = fs.WaitForBackendWrites(4);
+	auto admitted_offsets = fs.AdmittedOffsets();
+	fs.ReleaseAllWrites();
+	writer.Close();
+
+	REQUIRE(saw_four_backend_writes);
+	REQUIRE(admitted_offsets ==
+	        vector<idx_t> {0, prefix.size(), prefix.size() + first.size(), 2 * prefix.size() + first.size()});
+	REQUIRE(ReadFile(path) == prefix + first + prefix + second + tail);
+	fs.RemoveFile(path);
+}
+
 TEST_CASE("AsyncFileWriter coalesces remote non-positional writes", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
@@ -1925,6 +1995,36 @@ TEST_CASE("AsyncFileWriter publishes only on successful explicit close", "[async
 	REQUIRE(fs.AbortCount() == 0);
 	REQUIRE(ReadFile(path) == "published");
 	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter rejects incorrect final file sizes", "[async_file_writer]") {
+	for (auto async_threads : {0, 2}) {
+		for (auto size_difference : {-32768, 32768}) {
+			for (auto exclusive_create : {false, true}) {
+				CAPTURE(async_threads, size_difference, exclusive_create);
+				DuckDB db(nullptr);
+				auto con = CreateConnectionWithAsyncThreads(db, async_threads);
+				SizeMismatchWriteFileSystem fs(size_difference);
+				auto path = TestCreatePath("async_file_writer_size_mismatch.tmp");
+				fs.TryRemoveFile(path);
+
+				auto flags = AsyncFileWriter::DEFAULT_OPEN_FLAGS;
+				if (exclusive_create) {
+					flags |= FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
+				}
+				AsyncFileWriter writer(*con->context, fs, path, flags);
+				writer.WriteData(make_uniq<StringAsyncWriteBuffer>(string(65536, 'x')));
+				auto error = CaptureException([&]() { writer.Close(); });
+				REQUIRE(error.find("File size mismatch") != string::npos);
+				REQUIRE(error.find("expected 65536 bytes") != string::npos);
+				REQUIRE(error.find("found " + to_string(65536 + size_difference) + " bytes") != string::npos);
+				REQUIRE(CaptureException([&]() { writer.Close(); }) == error);
+				REQUIRE(fs.AbortCount() == 1);
+				REQUIRE(fs.FileExists(path) == !exclusive_create);
+				fs.TryRemoveFile(path);
+			}
+		}
+	}
 }
 
 TEST_CASE("AsyncFileWriter exclusive creation preserves existing files", "[async_file_writer]") {

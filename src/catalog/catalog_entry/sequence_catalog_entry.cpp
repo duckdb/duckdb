@@ -6,6 +6,7 @@
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 
 #include <algorithm>
@@ -56,14 +57,15 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 	lock_guard<mutex> seqlock(lock);
 	int64_t result;
 	result = data.counter;
-	bool overflow = !TryAddOperator::Operation(data.counter, data.increment, data.counter);
+	int64_t next_counter;
+	bool overflow = !TryAddOperator::Operation(data.counter, data.increment, next_counter);
 	if (data.cycle) {
 		if (overflow) {
-			data.counter = data.increment < 0 ? data.max_value : data.min_value;
-		} else if (data.counter < data.min_value) {
-			data.counter = data.max_value;
-		} else if (data.counter > data.max_value) {
-			data.counter = data.min_value;
+			next_counter = data.increment < 0 ? data.max_value : data.min_value;
+		} else if (next_counter < data.min_value) {
+			next_counter = data.max_value;
+		} else if (next_counter > data.max_value) {
+			next_counter = data.min_value;
 		}
 	} else {
 		if (result < data.min_value || (overflow && data.increment < 0)) {
@@ -73,6 +75,7 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 			throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", name, data.max_value);
 		}
 	}
+	data.counter = next_counter;
 	data.last_value = result;
 	data.usage_count++;
 	if (!temporary) {
@@ -109,6 +112,22 @@ void SequenceCatalogEntry::ReplayValue(uint64_t v_usage_count, int64_t v_counter
 		data.counter = v_counter;
 		data.last_value = last_value;
 	}
+}
+
+void SequenceCatalogEntry::DeriveLastValue() {
+	lock_guard<mutex> seqlock(lock);
+	if (data.last_value || data.usage_count == 0) {
+		return;
+	}
+	int64_t last_value;
+	if (!TrySubtractOperator::Operation(data.counter, data.increment, last_value)) {
+		return;
+	}
+	// a counter that wrapped around in a cycle does not tell us the last value
+	if (last_value < data.min_value || last_value > data.max_value) {
+		return;
+	}
+	data.last_value = last_value;
 }
 
 unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {

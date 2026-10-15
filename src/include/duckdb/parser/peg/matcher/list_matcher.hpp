@@ -14,7 +14,7 @@ public:
 	explicit ListMatcher(vector<reference<Matcher>> matchers_p) : Matcher(TYPE), matchers(std::move(matchers_p)) {
 	}
 
-	unique_ptr<MatchProcess> StartMatch(MatchState &state) const override;
+	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state) const override;
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		if (suppress_suggestions) {
@@ -37,7 +37,7 @@ public:
 			if (!result.empty()) {
 				result += " ";
 			}
-			result += matcher.get().GetName();
+			result += matcher.get().GetPrintName();
 		}
 		return "(" + result + ")";
 	}

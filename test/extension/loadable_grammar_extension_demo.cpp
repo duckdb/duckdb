@@ -14,7 +14,7 @@
 using namespace duckdb;
 
 static bool IsRule(const ParseResult &parse_result, const char *name) {
-	return StringUtil::CIEquals(parse_result.name, name);
+	return StringUtil::CIEquals(parse_result.Name(), name);
 }
 
 static ParseResult &GetChoice(ParseResult &parse_result) {
@@ -145,19 +145,23 @@ static void ApplyPipeStage(PEGTransformer &transformer, ParseResult &parse_resul
 	} else if (IsRule(operation, "PipeAggregateGroupOnly")) {
 		ApplyAggregate(transformer, operation, select_node, true);
 	} else {
-		throw InternalException("Unknown pipe operator rule '%s'", operation.name);
+		throw InternalException("Unknown pipe operator rule '%s'", operation.Name());
 	}
 }
 
-static unique_ptr<TransformResultValue> TransformPipeSelectAtom(PEGTransformer &transformer,
-                                                                ParseResult &parse_result) {
+static arena_ptr<TransformResultValue> FinalizePipeSelectAtom(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &pipe = parse_result.Cast<ListParseResult>();
 	auto statement = TransformPipeSource(transformer, pipe.GetChild(0));
 	auto &stages = pipe.Child<RepeatParseResult>(1);
 	for (auto &stage : stages.GetChildren()) {
 		ApplyPipeStage(transformer, stage.get(), *statement);
 	}
-	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(statement));
+	return transformer.MakeResult<unique_ptr<SelectStatement>>(std::move(statement));
+}
+
+static arena_ptr<TransformProcess> StartPipeSelectAtomTransform(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	return transformer.MakeProcess<FinalizeTransformProcess>(transformer, parse_result, FinalizePipeSelectAtom);
 }
 
 class PipeSQLGrammarChange final : public GrammarExtension {
@@ -171,7 +175,8 @@ public:
 	vector<GrammarChange> GetChanges() const override {
 		vector<GrammarChange> changes;
 		changes.push_back(GrammarChange::AddChoice("ReservedKeyword", "'EXTEND'"));
-		changes.push_back(GrammarChange::AddRule("PipeSelectAtom <- PipeSource PipeStage+", TransformPipeSelectAtom));
+		changes.push_back(
+		    GrammarChange::AddRule("PipeSelectAtom <- PipeSource PipeStage+", StartPipeSelectAtomTransform));
 		changes.push_back(GrammarChange::AddRule("PipeSource <- FromClause / SelectStatementType / SelectParens"));
 		changes.push_back(GrammarChange::AddRule("PipeStage <- '|>' PipeOperator"));
 		changes.push_back(GrammarChange::AddRule(

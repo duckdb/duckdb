@@ -1,4 +1,5 @@
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/common/common.hpp"
@@ -541,8 +542,8 @@ vector<SecretEntry> SecretManager::AllSecrets(CatalogTransaction transaction) {
 	}
 
 	// Add results from all backends to the result set
-	for (const auto &backend : secret_storages) {
-		auto backend_result = backend.second->AllSecrets(&transaction);
+	for (const auto &backend : GetSecretStorages()) {
+		auto backend_result = backend.get().AllSecrets(&transaction);
 		for (const auto &it : backend_result) {
 			result.push_back(it);
 		}
@@ -557,6 +558,20 @@ vector<SecretType> SecretManager::AllSecretTypes() {
 
 	for (const auto &secret : secret_types) {
 		result.push_back(secret.second);
+	}
+
+	return result;
+}
+
+vector<CreateSecretFunction> SecretManager::AllSecretFunctions() {
+	unique_lock<mutex> lck(manager_lock);
+	vector<CreateSecretFunction> result;
+
+	for (auto &secret_set : secret_functions) {
+		auto &inner_functions = secret_set.second.GetFunctions();
+		for (auto &func_pair : inner_functions) {
+			result.push_back(func_pair.second);
+		}
 	}
 
 	return result;

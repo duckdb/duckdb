@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/copy_database_statement.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
@@ -50,14 +51,13 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(Catalog &from_databas
 
 unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog,
                                                          const Identifier &target_database_name) {
-	auto source_schemas = source_catalog.GetSchemas(context);
-
-	// We can just use ExtractEntries here because the order doesn't matter
-	ExportEntries entries;
-	PhysicalExport::ExtractEntries(context, source_schemas, entries);
+	auto entries = PhysicalExport::GetNaiveExportOrder(context, source_catalog);
 
 	vector<unique_ptr<LogicalOperator>> insert_nodes;
-	for (auto &table_ref : entries.tables) {
+	for (auto &table_ref : entries) {
+		if (table_ref.get().type != CatalogType::TABLE_ENTRY) {
+			continue;
+		}
 		auto &table = table_ref.get().Cast<TableCatalogEntry>();
 		// generate the insert statement
 		InsertStatement insert_stmt;
@@ -127,7 +127,6 @@ BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 	result.plan = std::move(plan);
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::NOTHING;
 
 	DatabaseModificationType modification;

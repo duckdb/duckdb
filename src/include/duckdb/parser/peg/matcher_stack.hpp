@@ -36,25 +36,35 @@ public:
 public:
 	const Matcher &matcher;
 	MatchState &match_state;
-	unique_ptr<MatchProcess> process;
+	arena_ptr<MatchProcess> process;
 	optional<MatcherResult> child_result;
 	optional<MatcherResult> result;
 	PackratMatchState packrat_state;
+	//! The position of the process arena when the frame was pushed - the arena is rewound to it when the frame is
+	//! popped
+	ArenaAllocator::Position process_arena_position;
 };
 
 class MatchStack {
 public:
+	MatchStack();
+	~MatchStack();
+
 	MatcherResult Execute(MatchInput input);
 
 private:
+	static constexpr idx_t INITIAL_FRAME_CAPACITY = 64;
+
 	MatcherResult ExecuteAtomicMatcher(MatchInput input);
+	void DestroyTopFrame();
 	void PushFrame(MatchInput input);
 	void InitializeFrame(MatchStackFrame &frame);
-	void ExecuteFrame(MatchStackFrame &frame);
+	//! Returns true when the frame has completed.
+	bool ExecuteFrame(MatchStackFrame &frame);
 	MatcherResult FinalizeFrame(MatchStackFrame &frame);
 
 private:
-	vector<unique_ptr<MatchStackFrame>> frames;
+	vector<MatchStackFrame> frames;
 };
 
 } // namespace duckdb

@@ -1,7 +1,7 @@
 #include "json_structure.hpp"
 
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/logical_type_info.hpp"
 #include "json_executors.hpp"
 #include "json_geojson.hpp"
 #include "json_scan.hpp"
@@ -519,15 +519,16 @@ JSONStructureNode &JSONStructureDescription::GetOrCreateChild(const char *key_pt
 }
 
 JSONStructureNode &JSONStructureDescription::GetOrCreateChild(yyjson_val *key, yyjson_val *val,
-                                                              const bool ignore_errors, const bool detect_geojson) {
+                                                              const bool ignore_errors, const bool detect_geojson,
+                                                              const idx_t depth) {
 	D_ASSERT(yyjson_is_str(key));
 	auto &child = GetOrCreateChild(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
-	JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson);
+	JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson, depth);
 	return child;
 }
 
 static void ExtractStructureArray(yyjson_val *arr, JSONStructureNode &node, const bool ignore_errors,
-                                  const bool detect_geojson) {
+                                  const bool detect_geojson, const idx_t depth) {
 	D_ASSERT(yyjson_is_arr(arr));
 	auto &description = node.GetOrCreateDescription(LogicalTypeId::LIST);
 	auto &child = description.GetOrCreateChild();
@@ -535,12 +536,12 @@ static void ExtractStructureArray(yyjson_val *arr, JSONStructureNode &node, cons
 	size_t idx, max;
 	yyjson_val *val;
 	yyjson_arr_foreach(arr, idx, max, val) {
-		JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson);
+		JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson, depth + 1);
 	}
 }
 
 static void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &node, const bool ignore_errors,
-                                   const bool detect_geojson) {
+                                   const bool detect_geojson, const idx_t depth) {
 	D_ASSERT(yyjson_is_obj(obj));
 	auto &description = node.GetOrCreateDescription(LogicalTypeId::STRUCT);
 
@@ -562,7 +563,7 @@ static void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &node, con
 			                                    *insert_result.first + "\" in object %s",
 			                                obj);
 		}
-		description.GetOrCreateChild(key, val, ignore_errors, detect_geojson);
+		description.GetOrCreateChild(key, val, ignore_errors, detect_geojson, depth + 1);
 	}
 }
 
@@ -577,7 +578,10 @@ static void ExtractStructureVal(yyjson_val *val, JSONStructureNode &node) {
 }
 
 void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, const bool ignore_errors,
-                                     const bool detect_geojson) {
+                                     const bool detect_geojson, const idx_t depth) {
+	if (depth >= JSONCommon::MAX_RECURSION_DEPTH) {
+		throw InvalidInputException("JSON exceeds maximum recursion depth of %d", JSONCommon::MAX_RECURSION_DEPTH);
+	}
 	node.count++;
 	const auto tag = yyjson_get_tag(val);
 	if (tag == (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE)) {
@@ -586,7 +590,7 @@ void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, c
 
 	switch (tag) {
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
-		return ExtractStructureArray(val, node, ignore_errors, detect_geojson);
+		return ExtractStructureArray(val, node, ignore_errors, detect_geojson, depth);
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
 		// A GeoJSON geometry is a leaf: it becomes GEOMETRY rather than a struct of type/coordinates. Detecting it
 		// here (rather than on the finished tree) means geometries of different kinds still merge into one type.
@@ -594,7 +598,7 @@ void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, c
 			node.GetOrCreateDescription(LogicalTypeId::GEOMETRY);
 			return;
 		}
-		return ExtractStructureObject(val, node, ignore_errors, detect_geojson);
+		return ExtractStructureObject(val, node, ignore_errors, detect_geojson, depth);
 	default:
 		return ExtractStructureVal(val, node);
 	}
@@ -665,8 +669,9 @@ static void StructureFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetStructureFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type}, LogicalType::JSON(), StructureFunction, nullptr, nullptr,
-	                               JSONFunctionLocalState::Init));
+	ScalarFunction fun({}, LogicalType::JSON(), StructureFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("json", input_type);
+	set.AddFunction(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetStructureFunction() {
@@ -889,9 +894,19 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 		}
 	}
 
+	// An empty key can't be a STRUCT member name, so such objects can only be a MAP or JSON
+	bool has_empty_key = false;
+	for (auto &child : desc.children) {
+		D_ASSERT(child.key);
+		has_empty_key = has_empty_key || child.key->empty();
+	}
+	if (has_empty_key && map_inference_threshold == DConstants::INVALID_INDEX) {
+		return LogicalType::JSON();
+	}
+
 	// If it's an inconsistent object we also just do MAP with the best-possible, recursively-merged value type
-	if (map_inference_threshold != DConstants::INVALID_INDEX &&
-	    IsStructureInconsistent(desc, node.count, node.null_count, field_appearance_threshold)) {
+	if (has_empty_key || (map_inference_threshold != DConstants::INVALID_INDEX &&
+	                      IsStructureInconsistent(desc, node.count, node.null_count, field_appearance_threshold))) {
 		return LogicalType::MAP(LogicalType::VARCHAR,
 		                        GetMergedType(context, node, max_depth, field_appearance_threshold,
 		                                      map_inference_threshold, depth + 1, null_type));

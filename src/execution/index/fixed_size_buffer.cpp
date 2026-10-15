@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/storage/block_manager.hpp"
@@ -56,7 +57,11 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 	}
 	if (OnDisk()) {
 		// marking a block as modified decreases the reference count of multi-use blocks
-		block_manager.MarkBlockAsModified(block_pointer.block_id);
+		// this must not throw out of a destructor, e.g., if the block ids of a corrupt file overlap
+		try {
+			block_manager.MarkBlockAsModified(block_pointer.block_id);
+		} catch (...) { // NOLINT
+		}
 	}
 }
 
@@ -65,40 +70,40 @@ void FixedSizeBuffer::Finalize(shared_ptr<BlockHandle> block_handle_p, uint32_t 
 	D_ASSERT(!buffer_handle.IsValid());
 	D_ASSERT(block_handle_p);
 	D_ASSERT(block_handle_p->BlockId() < MAXIMUM_BLOCK);
+	D_ASSERT(!OnDisk() || block_pointer.block_id == block_handle_p->BlockId());
+	D_ASSERT(!OnDisk() || block_pointer.offset == offset);
 
-	if (OnDisk()) {
-		block_manager.MarkBlockAsModified(block_pointer.block_id);
-	}
 	block_pointer = BlockPointer(block_handle_p->BlockId(), offset);
 	block_handle = std::move(block_handle_p);
 	dirty = false;
 }
 
-void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, const idx_t available_segments,
-                                const idx_t segment_size, const idx_t bitmask_offset) {
+shared_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partial_block_manager,
+                                                     const idx_t available_segments, const idx_t segment_size,
+                                                     const idx_t bitmask_offset) {
 	D_ASSERT(readers == 0);
+	D_ASSERT(RequiresPersist());
+	D_ASSERT(segment_count != 0);
 	D_ASSERT(&partial_block_manager.GetBlockManager() == &block_manager);
 
-	// Early-out, if the block is already on disk and not in memory.
+	// We cannot persist a buffer which is not in memory.
 	if (!InMemory()) {
-		if (!OnDisk() || dirty) {
-			throw InternalException("invalid or missing buffer in FixedSizeAllocator");
-		}
-		return;
+		throw InternalException("invalid or missing buffer in FixedSizeAllocator");
 	}
 
-	// Early-out, if the buffer is already on disk and not dirty.
-	if (!dirty && OnDisk()) {
-		return;
-	}
+	const auto new_allocation_size = GetNewAllocationSize(available_segments, segment_size, bitmask_offset);
+	auto result = make_shared_ptr<FixedSizeBuffer>(block_manager, MemoryTag::ART_INDEX);
+	result->segment_count = segment_count;
+	result->allocation_size = new_allocation_size;
+	memcpy(result->buffer_handle.GetDataMutable(), buffer_handle.Ptr(), new_allocation_size);
 
-	// Adjust the allocation size.
-	D_ASSERT(segment_count != 0);
-	SetAllocationSize(available_segments, segment_size, bitmask_offset);
-
-	// The buffer is in memory.
-	D_ASSERT(InMemory());
-	partial_block_manager.Write(*this, std::move(buffer_handle), NumericCast<uint32_t>(allocation_size));
+	auto new_block_pointer = partial_block_manager.Write(*result, std::move(result->buffer_handle),
+	                                                     NumericCast<uint32_t>(new_allocation_size));
+	D_ASSERT(new_block_pointer);
+	// Checkpoint metadata is collected before shared partial blocks are flushed.
+	result->block_pointer = *new_block_pointer;
+	result->block_handle = block_manager.RegisterBlock(new_block_pointer->block_id);
+	return result;
 }
 
 void FixedSizeBuffer::LoadFromDisk() {
@@ -120,9 +125,12 @@ void FixedSizeBuffer::LoadFromDisk() {
 	block_handle = std::move(new_block_handle);
 }
 
-uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count, const idx_t available_segments) {
+uint32_t FixedSizeBuffer::AllocateSegment(const idx_t bitmask_count, const idx_t available_segments) {
+	D_ASSERT(segment_count < available_segments);
+
 	// Get a handle to the buffer's validity mask (offset 0).
 	SegmentHandle handle(*this, 0);
+	handle.MarkModified();
 	const auto bitmask_ptr = handle.GetPtr<validity_t>();
 
 	ValidityMask mask(bitmask_ptr, available_segments);
@@ -130,8 +138,10 @@ uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count, const idx_t avail
 
 	// fills up a buffer sequentially before searching for free bits
 	if (mask.RowIsValid(segment_count)) {
-		mask.SetInvalid(segment_count);
-		return UnsafeNumericCast<uint32_t>(segment_count);
+		const auto offset = segment_count;
+		mask.SetInvalid(offset);
+		segment_count++;
+		return UnsafeNumericCast<uint32_t>(offset);
 	}
 
 	for (idx_t entry_idx = 0; entry_idx < bitmask_count; entry_idx++) {
@@ -161,13 +171,29 @@ uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count, const idx_t avail
 		}
 		D_ASSERT(entry);
 
-		auto prev_bits = entry_idx * sizeof(validity_t) * 8;
-		D_ASSERT(mask.RowIsValid(prev_bits + first_valid_bit));
-		mask.SetInvalid(prev_bits + first_valid_bit);
-		return UnsafeNumericCast<uint32_t>(prev_bits + first_valid_bit);
+		const auto offset = entry_idx * sizeof(validity_t) * 8 + first_valid_bit;
+		D_ASSERT(mask.RowIsValid(offset));
+		mask.SetInvalid(offset);
+		segment_count++;
+		return UnsafeNumericCast<uint32_t>(offset);
 	}
 
 	throw InternalException("Invalid bitmask for FixedSizeAllocator");
+}
+
+void FixedSizeBuffer::FreeSegment(const idx_t offset, const idx_t available_segments) {
+	D_ASSERT(segment_count > 0);
+	D_ASSERT(offset < available_segments);
+
+	SegmentHandle handle(*this, 0);
+	handle.MarkModified();
+	const auto bitmask_ptr = handle.GetPtr<validity_t>();
+
+	ValidityMask mask(bitmask_ptr, available_segments);
+	D_ASSERT(!mask.RowIsValid(offset));
+	mask.SetValid(offset);
+
+	segment_count--;
 }
 
 void FixedSizeBuffer::SetAllocationSize(const idx_t available_segments, const idx_t segment_size,
@@ -176,6 +202,11 @@ void FixedSizeBuffer::SetAllocationSize(const idx_t available_segments, const id
 		return;
 	}
 
+	allocation_size = GetNewAllocationSize(available_segments, segment_size, bitmask_offset);
+}
+
+idx_t FixedSizeBuffer::GetNewAllocationSize(const idx_t available_segments, const idx_t segment_size,
+                                            const idx_t bitmask_offset) {
 	// We traverse from the back. A binary search would be faster.
 	// However, buffers are often (almost) full, so the overhead is acceptable.
 
@@ -191,7 +222,7 @@ void FixedSizeBuffer::SetAllocationSize(const idx_t available_segments, const id
 			break;
 		}
 	}
-	allocation_size = max_offset * segment_size + bitmask_offset;
+	return max_offset * segment_size + bitmask_offset;
 }
 
 SegmentHandle::SegmentHandle(FixedSizeBuffer &buffer_p, const idx_t offset) : buffer_ptr(buffer_p) {

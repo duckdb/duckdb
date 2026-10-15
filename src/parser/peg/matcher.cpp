@@ -18,40 +18,10 @@
 
 namespace duckdb {
 
-static MatcherResult ExecuteRecursive(MatchInput input) {
-	auto &matcher = input.matcher;
-	auto &state = input.state;
-	state.rule = matcher.GetRule();
-	PackratMatchState packrat_state;
-	if (PackratMatchState::IsEnabled(matcher, state)) {
-		auto cached_result = packrat_state.TryLoadCachedResult(matcher, state);
-		if (cached_result) {
-			return *cached_result;
-		}
-	}
-
-	auto process = matcher.StartMatch(state);
-	optional<MatcherResult> child_result;
-	while (true) {
-		auto step = process->Resume(child_result);
-		child_result.reset();
-		auto child = step.GetChild();
-		if (!child) {
-			auto result = step.GetResult();
-			packrat_state.StoreResult(matcher, state, result);
-			return result;
-		}
-		child_result = ExecuteRecursive(*child);
-	}
-}
-
 MatcherResult Matcher::MatchParseResult(MatchState &state) const {
 	MatchInput input {*this, state};
-	if (state.context.use_heap_based_parser) {
-		MatchStack stack;
-		return stack.Execute(input);
-	}
-	return ExecuteRecursive(input);
+	MatchStack stack;
+	return stack.Execute(input);
 }
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
@@ -67,7 +37,7 @@ SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 	return AddSuggestionInternal(state);
 }
 
-string Matcher::GetName() const {
+string Matcher::GetPrintName() const {
 	if (name.empty()) {
 		return ToString();
 	}
@@ -89,10 +59,9 @@ Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
 	return result;
 }
 
-optional_ptr<ParseResult> ParseResultAllocator::Allocate(unique_ptr<ParseResult> parse_result) {
-	auto result_ptr = parse_result.get();
-	parse_results.push_back(std::move(parse_result));
-	return optional_ptr<ParseResult>(result_ptr);
+ParseResultAllocator::ParseResultAllocator() : arena(Allocator::DefaultAllocator()), pending_destructors(arena) {
 }
+
+ParseResultAllocator::~ParseResultAllocator() = default;
 
 } // namespace duckdb

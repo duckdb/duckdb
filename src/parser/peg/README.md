@@ -135,8 +135,16 @@ Keywords are defined in list files under `grammar/keywords/`:
 | `column_name_keyword.list` | Allowed as column names |
 | `func_name_keyword.list` | Allowed as function names |
 | `type_name_keyword.list` | Allowed as type names |
+| `bare_label_keyword.list` | Allowed as a column alias without `AS` (e.g. `SELECT 1 name`) |
 
-A keyword must appear in exactly one list. The build script validates this.
+A keyword must appear in exactly one of the category lists. The build script validates this.
+
+`bare_label_keyword.list` is orthogonal to the categories, following Postgres' `bare_label_keyword`: every entry must
+also appear in a category list, and only unreserved or column-name keywords listed there can be used as an `AS`-less
+alias. Keywords that can follow an expression or type are deliberately left out (interval units such as `DAY`, function
+suffixes such as `FILTER` and `OVER`, type suffixes such as `VARYING` and `WITHOUT`, and star modifiers such as
+`EXCLUDE`), so `SELECT d + 1 day` is a syntax error rather than a column named `day`. New unreserved keywords should be
+added to the list unless they can trail an expression.
 
 ## Building the Grammar
 
@@ -167,23 +175,27 @@ Each grammar rule that produces a parse result needs a corresponding transformer
 
 ### Generating Wrappers
 
-Run the grammar build script to regenerate parser artifacts and typed transformer wrappers:
+Run the grammar build script to regenerate parser artifacts and typed transformer processes:
 
 ```bash
 ./scripts/parser/build_grammar.sh
 ```
 
-The transformer generator (`scripts/parser/generate_transformer.py`) reads `scripts/parser/grammar_types.yml` to map grammar rules to C++ return types. For supported rules, it updates:
+The transformer generator (`scripts/parser/generate_transformer_trampoline.py`) reads
+`scripts/parser/grammar_types.yml` to map grammar rules to C++ return types. For supported rules, it updates:
 
 | File | Generated Content |
 |------|-------------------|
-| `peg_transformer.hpp` | Internal wrapper declarations and typed body declarations |
-| `transform_generated.cpp` | Internal wrappers and generated registration table |
-| `matcher.cpp` | Matcher rule overrides |
+| `peg_transformer.hpp` | Transformer process declarations and transform result types |
+| `transform_generated_trampoline.cpp` | Transformer process implementations and registration table |
+| `matcher.cpp` | Packrat-memoized matcher rules |
+| `compiled_grammar.cpp` | Matcher rule overrides |
 
-If a generated wrapper needs a hand-written semantic body, the script reports the exact C++ signature and a body stub. Add that implementation to the appropriate `transform_*.cpp` file, then rerun `build_grammar.sh`.
+If a generated process needs a hand-written semantic body, add that implementation to the appropriate
+`transform_*.cpp` file, then rerun `build_grammar.sh`.
 
-Run `scripts/parser/generate_transformer.py --write` directly only when regenerating transformer wrappers without rebuilding the inlined grammar.
+Run `scripts/parser/generate_transformer_trampoline.py --write` directly only when regenerating transformer
+processes without rebuilding the inlined grammar.
 
 ### Transformer Implementation Pattern
 
@@ -191,7 +203,7 @@ A typical transformer function:
 
 1. Casts the parse result to the expected type (usually `ListParseResult` for sequences, `ChoiceParseResult` for alternatives)
 2. Extracts children by index (matching the grammar rule's element order)
-3. Recursively transforms children via `transformer.Transform<T>(child)`
+3. Schedules child transformations on the explicit transform stack
 4. Constructs and returns the appropriate AST node
 
 Example for `ShowTables <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName`:

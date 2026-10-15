@@ -73,8 +73,8 @@ ExpressionType ComparisonGetExpressionType(FunctionToStringInput &input) {
 
 template <ExpressionType TYPE>
 static ScalarFunction GetComparisonFunctionInternal(const string &name) {
-	ScalarFunction comparison_fun(Identifier(name), {LogicalType::ANY, LogicalType::ANY}, LogicalType::BOOLEAN,
-	                              ComparisonFunction<TYPE>);
+	ScalarFunction comparison_fun(Identifier(name), {}, LogicalType::BOOLEAN, ComparisonFunction<TYPE>);
+	comparison_fun.GetSignature().AddParameter("left", LogicalType::ANY).AddParameter("right", LogicalType::ANY);
 	comparison_fun.SetGetExpressionTypeCallback(ComparisonGetExpressionType<TYPE>);
 	if constexpr (TYPE == ExpressionType::COMPARE_DISTINCT_FROM || TYPE == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 		comparison_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);

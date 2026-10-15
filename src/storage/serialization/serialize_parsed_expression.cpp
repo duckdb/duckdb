@@ -70,6 +70,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deseria
 	case ExpressionClass::PARAMETER:
 		result = ParameterExpression::Deserialize(deserializer);
 		break;
+	case ExpressionClass::PATTERN:
+		result = PatternExpression::Deserialize(deserializer);
+		break;
 	case ExpressionClass::POSITIONAL_REFERENCE:
 		result = PositionalReferenceExpression::Deserialize(deserializer);
 		break;
@@ -92,6 +95,7 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deseria
 	result->alias = std::move(alias);
 	result->query_location = query_location;
 	result->query_location.length = query_location_length;
+	result->VerifyDeserialized();
 	return result;
 }
 
@@ -120,21 +124,6 @@ unique_ptr<ParsedExpression> CaseExpression::Deserialize(Deserializer &deseriali
 	auto result = duckdb::unique_ptr<CaseExpression>(new CaseExpression());
 	deserializer.ReadPropertyWithDefault<vector<CaseCheck>>(200, "case_checks", result->case_checks);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(201, "else_expr", result->else_expr);
-	return std::move(result);
-}
-
-void CastExpression::Serialize(Serializer &serializer) const {
-	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "child", child);
-	serializer.WriteProperty<LogicalType>(201, "cast_type", cast_type);
-	serializer.WritePropertyWithDefault<bool>(202, "try_cast", try_cast);
-}
-
-unique_ptr<ParsedExpression> CastExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<CastExpression>(new CastExpression());
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "child", result->child);
-	deserializer.ReadProperty<LogicalType>(201, "cast_type", result->cast_type);
-	deserializer.ReadPropertyWithDefault<bool>(202, "try_cast", result->try_cast);
 	return std::move(result);
 }
 
@@ -188,13 +177,19 @@ unique_ptr<ParsedExpression> ConjunctionExpression::Deserialize(Deserializer &de
 
 void ConstantExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WriteProperty<Value>(200, "value", value);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WriteProperty<Value>(200, "value", GetValueForSerialization());
+	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WriteProperty<Literal>(201, "literal", literal);
+	}
 }
 
 unique_ptr<ParsedExpression> ConstantExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<ConstantExpression>(new ConstantExpression());
-	deserializer.ReadProperty<Value>(200, "value", result->value);
-	return std::move(result);
+	auto value = deserializer.ReadPropertyWithExplicitDefault<Value>(200, "value", Value());
+	auto literal = deserializer.ReadPropertyWithExplicitDefault<Literal>(201, "literal", Literal());
+	auto result = ConstantExpression::DeserializeConstant(value, literal);
+	return result;
 }
 
 void DefaultExpression::Serialize(Serializer &serializer) const {
