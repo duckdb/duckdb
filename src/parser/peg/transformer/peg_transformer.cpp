@@ -29,8 +29,8 @@ arena_ptr<TransformResultValue> TransformStep::TakeResult() {
 
 GeneratedTransformProcess::GeneratedTransformProcess(PEGTransformer &transformer_p, TransformInput input,
                                                      const TransformFrameOps &info_p)
-    : parse_result(input.parse_result), info(info_p), child_results(transformer_p.GetAllocator()),
-      transformer(transformer_p), pending_children(transformer_p.GetAllocator()) {
+    : parse_result(input.parse_result), info(info_p), child_results(transformer_p.process_allocator),
+      transformer(transformer_p), pending_children(transformer_p.process_allocator) {
 	if (!info.initialize || !info.finalize) {
 		throw InternalException("Incomplete transformer process for rule '%s'", info.name);
 	}
@@ -137,6 +137,7 @@ TransformStack::~TransformStack() {
 void TransformStack::PushFrame(TransformInput input) {
 	frames.emplace(input);
 	auto &frame = frames.top();
+	frame.process_arena_position = transformer.process_allocator.GetPosition();
 	auto weight = transformer.ExpressionDepthWeight(frame.rule, frame.parse_result);
 	if (weight) {
 		// recorded first: the frame is released (and the weight subtracted) when entering throws
@@ -146,10 +147,12 @@ void TransformStack::PushFrame(TransformInput input) {
 }
 
 void TransformStack::PopFrame() {
+	const auto process_arena_position = frames.top().process_arena_position;
 	if (frames.top().expression_depth_weight) {
 		transformer.ExitExpression(frames.top().expression_depth_weight);
 	}
 	frames.pop();
+	transformer.process_allocator.Rewind(process_arena_position);
 }
 
 void TransformStack::InitializeFrame(TransformStackFrame &frame) {

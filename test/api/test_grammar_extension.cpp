@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include <algorithm>
 #include <atomic>
 #include <thread>
 #include <type_traits>
@@ -504,6 +505,294 @@ TEST_CASE("Transform result types use stable registered names", "[api][grammar_e
 	REQUIRE(result.GetValuePointer(copied_type_name.c_str()) == &result.value);
 	REQUIRE(TryGetTransformResult<RegisteredTransformResult>(result) == &result.value);
 	REQUIRE(TryGetTransformResult<bool>(result) == nullptr);
+}
+
+struct TransformLifetimeState {
+	idx_t active = 0;
+	idx_t started = 0;
+	idx_t depth = 257;
+	bool throw_at_leaf = false;
+	bool throw_in_factory = false;
+	vector<idx_t> destroyed;
+};
+
+class NestedTestTransformProcess final : public TransformProcess {
+public:
+	NestedTestTransformProcess(PEGTransformer &transformer, ParseResult &input, TransformLifetimeState &lifetime)
+	    : transformer(transformer), input(input.Cast<OptionalParseResult>()), lifetime(lifetime),
+	      depth(++lifetime.active) {
+		lifetime.started++;
+	}
+
+	~NestedTestTransformProcess() override {
+		lifetime.destroyed.push_back(depth);
+		lifetime.active--;
+	}
+
+	TransformStep Resume(arena_ptr<TransformResultValue> child_result) override {
+		if (child_result) {
+			if (depth == 1 && ++completed_children < 2) {
+				return TransformStep::Child({input.GetResult()});
+			}
+			return TransformStep::Complete(std::move(child_result));
+		}
+		if (input.HasResult()) {
+			return TransformStep::Child({input.GetResult()});
+		}
+		if (lifetime.throw_at_leaf) {
+			throw InvalidInputException("Nested transform test failure");
+		}
+		return TransformStep::Complete(transformer.MakeResult<bool>(true));
+	}
+
+private:
+	PEGTransformer &transformer;
+	OptionalParseResult &input;
+	TransformLifetimeState &lifetime;
+	idx_t depth;
+	idx_t completed_children = 0;
+};
+
+TEST_CASE("Transform stack growth preserves processes and unwinds expression depth", "[api][grammar_extension]") {
+	TransformLifetimeState lifetime;
+	CompiledGrammarRule rule(
+	    "NestedTransformTest",
+	    [&lifetime](PEGTransformer &transformer, ParseResult &input) {
+		    if (lifetime.throw_in_factory && lifetime.active + 1 == lifetime.depth) {
+			    throw InvalidInputException("Nested transform factory failure");
+		    }
+		    return transformer.MakeProcess<NestedTestTransformProcess>(transformer, input, lifetime);
+	    },
+	    false, ExpressionDepthKind::NESTING);
+	vector<unique_ptr<OptionalParseResult>> nodes;
+	for (idx_t i = 0; i < lifetime.depth; i++) {
+		auto node = nodes.empty() ? make_uniq<OptionalParseResult>()
+		                          : make_uniq<OptionalParseResult>(nodes.back().get(), optional_idx());
+		node->SetRule(rule);
+		nodes.push_back(std::move(node));
+	}
+	auto grammar = CompiledGrammar::DefaultGrammar();
+	auto options = ParserOptions::Builtin();
+	options.max_expression_depth = lifetime.depth;
+	vector<MatcherToken> tokens;
+	TokenIterator iterator(tokens);
+	ArenaAllocator arena(Allocator::DefaultAllocator());
+	PEGTransformer transformer(arena, iterator, options, *grammar);
+	SECTION("Parents resume after two deep children") {
+	}
+	SECTION("A child throws while its parents wait") {
+		lifetime.throw_at_leaf = true;
+	}
+	SECTION("A new frame's process factory throws") {
+		lifetime.throw_in_factory = true;
+	}
+	{
+		TransformStack stack(transformer);
+		if (lifetime.throw_at_leaf || lifetime.throw_in_factory) {
+			REQUIRE_THROWS_AS(stack.Execute<bool>({*nodes.back()}), InvalidInputException);
+		} else {
+			REQUIRE(stack.Execute<bool>({*nodes.back()}));
+			REQUIRE(lifetime.started == 1 + 2 * (lifetime.depth - 1));
+		}
+	}
+	REQUIRE(lifetime.active == 0);
+	REQUIRE(lifetime.destroyed.size() == lifetime.started);
+	REQUIRE(lifetime.destroyed.back() == 1);
+	for (idx_t i = 1; i < lifetime.destroyed.size(); i++) {
+		REQUIRE((lifetime.destroyed[i] == lifetime.depth || lifetime.destroyed[i] + 1 == lifetime.destroyed[i - 1]));
+	}
+	// Reusing the transformer at its exact depth limit also checks exceptional depth accounting.
+	lifetime.throw_at_leaf = false;
+	lifetime.throw_in_factory = false;
+	TransformStack stack(transformer);
+	REQUIRE(stack.Execute<bool>({*nodes.back()}));
+	REQUIRE(lifetime.active == 0);
+}
+
+struct TransformAllocationData : PrivateAllocatorData {
+	idx_t current = 0;
+	idx_t peak = 0;
+};
+
+static data_ptr_t TrackedAllocate(PrivateAllocatorData *data, idx_t size) {
+	auto result = Allocator::DefaultAllocate(nullptr, size);
+	auto &stats = data->Cast<TransformAllocationData>();
+	stats.current += size;
+	stats.peak = MaxValue(stats.peak, stats.current);
+	return result;
+}
+
+static void TrackedFree(PrivateAllocatorData *data, data_ptr_t pointer, idx_t size) {
+	data->Cast<TransformAllocationData>().current -= size;
+	Allocator::DefaultFree(nullptr, pointer, size);
+}
+
+static data_ptr_t TrackedReallocate(PrivateAllocatorData *data, data_ptr_t pointer, idx_t old_size, idx_t size) {
+	auto result = Allocator::DefaultReallocate(nullptr, pointer, old_size, size);
+	auto &stats = data->Cast<TransformAllocationData>();
+	stats.current = stats.current - old_size + size;
+	stats.peak = MaxValue(stats.peak, stats.current);
+	return result;
+}
+
+struct TransformMemoryState {
+	idx_t active = 0;
+	idx_t started = 0;
+	idx_t destroyed = 0;
+	idx_t leaves = 0;
+	idx_t throw_after = 0;
+	bool intact = true;
+	bool reentrant = false;
+};
+
+class ScratchTransformProcess final : public TransformProcess {
+public:
+	ScratchTransformProcess(PEGTransformer &transformer, ParseResult &input, TransformMemoryState &state)
+	    : transformer(transformer), input(input.Cast<OptionalParseResult>()), state(state) {
+		state.active++;
+		state.started++;
+		std::fill_n(scratch, sizeof(scratch), this->input.HasResult() ? 0x35 : 0x77);
+	}
+
+	~ScratchTransformProcess() override {
+		auto expected = input.HasResult() ? 0x35 : 0x77;
+		for (auto value : scratch) {
+			state.intact = state.intact && value == expected;
+		}
+		state.active--;
+		state.destroyed++;
+	}
+
+	TransformStep Resume(arena_ptr<TransformResultValue> child_result) override {
+		if (state.reentrant && input.HasResult()) {
+			for (idx_t i = 0; i < 4096; i++) {
+				TransformStack nested(transformer);
+				if (!nested.Execute<bool>({input.GetResult()})) {
+					throw InternalException("Reentrant scratch transform returned false");
+				}
+			}
+			return TransformStep::Complete(transformer.MakeResult<bool>(true));
+		}
+		if (child_result) {
+			auto value = TryGetTransformResult<bool>(*child_result);
+			if (!value || !*value) {
+				throw InternalException("Scratch transform child result did not survive");
+			}
+			if (++completed_children == 4096) {
+				return TransformStep::Complete(std::move(child_result));
+			}
+		}
+		if (input.HasResult()) {
+			return TransformStep::Child({input.GetResult()});
+		}
+		state.leaves++;
+		if (state.throw_after && state.leaves == state.throw_after) {
+			throw InvalidInputException("Scratch transform test failure");
+		}
+		return TransformStep::Complete(transformer.MakeResult<bool>(true));
+	}
+
+private:
+	PEGTransformer &transformer;
+	OptionalParseResult &input;
+	TransformMemoryState &state;
+	idx_t completed_children = 0;
+	uint8_t scratch[4096];
+};
+
+static idx_t MeasureTransformScratchMemory(bool throws, bool reentrant) {
+	TransformMemoryState state;
+	state.reentrant = reentrant;
+	CompiledGrammarRule rule("ScratchTransformTest", [&state](PEGTransformer &transformer, ParseResult &input) {
+		return transformer.MakeProcess<ScratchTransformProcess>(transformer, input, state);
+	});
+	OptionalParseResult leaf;
+	leaf.SetRule(rule);
+	OptionalParseResult root(&leaf, optional_idx());
+	root.SetRule(rule);
+	auto grammar = CompiledGrammar::DefaultGrammar();
+	auto options = ParserOptions::Builtin();
+	vector<MatcherToken> tokens;
+	TokenIterator iterator(tokens);
+	auto data = make_uniq<TransformAllocationData>();
+	auto &stats = *data;
+	Allocator underlying(TrackedAllocate, TrackedFree, TrackedReallocate, std::move(data));
+	{
+		ArenaAllocator results(underlying);
+		PEGTransformer transformer(results, iterator, options, *grammar);
+		for (idx_t attempt = 0; attempt < 2; attempt++) {
+			state.leaves = 0;
+			state.throw_after = throws && attempt == 0 ? 2048 : 0;
+			bool caught = false;
+			try {
+				TransformStack stack(transformer);
+				if (!stack.Execute<bool>({root})) {
+					throw InternalException("Scratch transform returned false");
+				}
+			} catch (InvalidInputException &) {
+				caught = true;
+			}
+			if (caught != bool(state.throw_after) || state.active || !state.intact ||
+			    state.started != state.destroyed) {
+				throw InternalException("Scratch transform lifetime contract failed");
+			}
+		}
+	}
+	if (stats.current) {
+		throw InternalException("Scratch transform leaked tracked arena storage");
+	}
+	return stats.peak;
+}
+
+TEST_CASE("Transform process storage follows live frames across siblings and reentry", "[api][grammar_extension]") {
+	bool throws = false;
+	bool reentrant = false;
+	SECTION("Success and reuse") {
+	}
+	SECTION("Exception and reuse") {
+		throws = true;
+	}
+	SECTION("Reentrant success and reuse") {
+		reentrant = true;
+	}
+	SECTION("Reentrant exception and reuse") {
+		throws = true;
+		reentrant = true;
+	}
+	REQUIRE(MeasureTransformScratchMemory(throws, reentrant) < 4 * 1024 * 1024);
+}
+
+TEST_CASE("Failed generated process initialization releases child buffers", "[api][grammar_extension]") {
+	static const TransformFrameOps ops {
+	    "ThrowInInitializer",
+	    [](PEGTransformer &, GeneratedTransformProcess &process) {
+		    process.ReserveChildSlots(4096);
+		    throw InvalidInputException("Generated initializer test failure");
+	    },
+	    [](PEGTransformer &, GeneratedTransformProcess &) -> arena_ptr<TransformResultValue> {
+		    throw InternalException("Failed initializer must not reach finalization");
+	    }};
+	CompiledGrammarRule rule("ThrowInInitializer", [](PEGTransformer &transformer, ParseResult &input) {
+		return transformer.MakeProcess<GeneratedTransformProcess>(transformer, TransformInput {input}, ops);
+	});
+	OptionalParseResult input;
+	input.SetRule(rule);
+	auto grammar = CompiledGrammar::DefaultGrammar();
+	auto options = ParserOptions::Builtin();
+	vector<MatcherToken> tokens;
+	TokenIterator iterator(tokens);
+	auto data = make_uniq<TransformAllocationData>();
+	auto &stats = *data;
+	Allocator underlying(TrackedAllocate, TrackedFree, TrackedReallocate, std::move(data));
+	{
+		ArenaAllocator results(underlying);
+		PEGTransformer transformer(results, iterator, options, *grammar);
+		for (idx_t i = 0; i < 512; i++) {
+			REQUIRE_THROWS_AS(transformer.Transform<bool>(input), InvalidInputException);
+		}
+		REQUIRE(stats.peak < 4 * 1024 * 1024);
+	}
+	REQUIRE(stats.current == 0);
 }
 
 class GrammarExtensionTestValueTransformProcess final : public TransformProcess {
