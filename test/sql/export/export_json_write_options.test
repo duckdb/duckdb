@@ -1,0 +1,29 @@
+# name: test/sql/export/export_json_write_options.test
+# description: EXPORT DATABASE in JSON keeps the write options of COPY out of load.sql
+# group: [export]
+
+require json
+
+statement ok
+CREATE TABLE t AS SELECT 1 AS i
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/export_json_return_files' (FORMAT JSON, RETURN_FILES)
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/export_json_tmp_file' (FORMAT JSON, USE_TMP_FILE true, PRESERVE_ORDER true)
+
+foreach export_dir export_json_return_files export_json_tmp_file
+
+statement ok
+DROP TABLE t
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/${export_dir}'
+
+query I
+SELECT i FROM t
+----
+1
+
+endloop

@@ -313,6 +313,10 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		for (auto &erased : erased_options) {
 			options.erase(erased);
 		}
+	} else {
+		for (auto &write_option : GetFullCopyOptionsList(function, CopyOptionMode::WRITE_ONLY)) {
+			options.erase(write_option.first);
+		}
 	}
 
 	// create the export node
