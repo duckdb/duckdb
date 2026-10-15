@@ -2,6 +2,8 @@
 # description: An ART node pointer in a database file that does not point to an allocated segment is reported as data corruption
 # group: [storage]
 
+require vector_size 2048
+
 # the file holds t(a BIGINT) with 20000 rows and an index on a. One child pointer on the path of a = 17 has a
 # segment offset beyond the segments of its buffer (the block checksum matches)
 unzip data/storage/art_corrupt_pointer.db.gz {TEST_DIR}/art_corrupt_pointer.db

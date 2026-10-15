@@ -233,13 +233,18 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	if (!inverse && function.FunctionName() == "regexp_full_match" && function.GetArguments().size() == 2 &&
 	    star.ExcludeList().empty()) {
 		// * SIMILAR TO '[regex]' is equivalent to COLUMNS('^(?:[regex])$') - COLUMNS matches partially
-		vector<unique_ptr<ParsedExpression>> prefix_children;
-		prefix_children.push_back(ConstantExpression::FromValue(Value("^(?:")));
-		prefix_children.push_back(std::move(right.GetExpressionMutable()));
-		vector<unique_ptr<ParsedExpression>> anchored_children;
-		anchored_children.push_back(make_uniq<FunctionExpression>("||", std::move(prefix_children)));
-		anchored_children.push_back(ConstantExpression::FromValue(Value(")$")));
-		child_expr = make_uniq<FunctionExpression>("||", std::move(anchored_children));
+		auto &pattern = right.GetExpression().Cast<ConstantExpression>();
+		if (pattern.GetLiteral().kind == LiteralKind::STRING) {
+			child_expr = ConstantExpression::String("^(?:" + pattern.GetLiteral().text + ")$");
+		} else {
+			vector<unique_ptr<ParsedExpression>> prefix_children;
+			prefix_children.push_back(ConstantExpression::String("^(?:"));
+			prefix_children.push_back(std::move(right.GetExpressionMutable()));
+			vector<unique_ptr<ParsedExpression>> anchored_children;
+			anchored_children.push_back(make_uniq<FunctionExpression>("||", std::move(prefix_children)));
+			anchored_children.push_back(ConstantExpression::String(")$"));
+			child_expr = make_uniq<FunctionExpression>("||", std::move(anchored_children));
+		}
 	} else {
 		// for other expressions -> generate a columns expression
 		// "* LIKE '%literal%'
