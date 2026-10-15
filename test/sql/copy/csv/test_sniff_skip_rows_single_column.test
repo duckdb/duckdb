@@ -54,3 +54,38 @@ query II
 SELECT id, name FROM read_csv('{TEST_DIR}/notes.csv');
 ----
 1	a
+
+# the same with a quoted value written before the last one
+statement ok
+CREATE TABLE q(c0 VARCHAR);
+
+statement ok
+INSERT INTO q VALUES ('a,b'), ('x;y');
+
+statement ok
+COPY q TO '{TEST_DIR}/quoted.csv' (FORMAT CSV);
+
+query I
+SELECT c0 FROM read_csv('{TEST_DIR}/quoted.csv');
+----
+a,b
+x;y
+
+# comments are not skipped rows
+statement ok
+COPY (SELECT l FROM (VALUES (1, '# note'), (2, '1;2')) t(i, l) ORDER BY i) TO '{TEST_DIR}/comment.csv' (FORMAT CSV, QUOTE '', HEADER 0);
+
+query II
+FROM read_csv('{TEST_DIR}/comment.csv', header = false);
+----
+1	2
+
+# leading rows that fill the whole sample are still skipped
+statement ok
+COPY (SELECT l FROM (SELECT i, 'note ' || i AS l FROM range(2047) t(i) UNION ALL VALUES (2047, 'id;name'), (2048, '1;a'), (2049, '2;b')) ORDER BY i) TO '{TEST_DIR}/long_notes.csv' (FORMAT CSV, QUOTE '', HEADER 0);
+
+query II
+SELECT id, name FROM read_csv('{TEST_DIR}/long_notes.csv');
+----
+1	a
+2	b
