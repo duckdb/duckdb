@@ -105,6 +105,27 @@ COMMIT
 statement ok con2
 COMMIT
 
+# a NULL update after a value update that committed after the transaction started
+statement ok con1
+BEGIN
+
+statement ok con2
+BEGIN
+
+statement ok con1
+UPDATE t SET i = 10 WHERE id = 1
+
+statement ok con1
+COMMIT
+
+statement error con2
+UPDATE t SET i = NULL WHERE id = 1
+----
+Conflict on update
+
+statement ok con2
+ROLLBACK
+
 # a NULL update after a committed value update does not conflict
 statement ok con1
 UPDATE t SET i = 8 WHERE id = 1
