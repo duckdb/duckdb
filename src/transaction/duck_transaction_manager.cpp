@@ -347,16 +347,6 @@ void DuckTransactionManager::CleanupTransactions() {
 	}
 }
 
-//! Sets the validity flag that gates this database's checkpoints, so that none can persist the state.
-//! A non-initial database has its own flag; the instance is additionally invalidated as the error propagates.
-static void InvalidateDatabase(AttachedDatabase &db, const string &reason) {
-	if (db.IsInitialDatabase()) {
-		ValidChecker::Invalidate(db.GetDatabase(), reason);
-	} else {
-		ValidChecker::Invalidate(db, reason);
-	}
-}
-
 ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	// flush the transaction-local blocks of bulk appends before taking any commit locks (see PreFlushOptimisticBlocks)
@@ -460,8 +450,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		DUCKDB_LOG(context, TransactionLogType, db, "Rollback (after failed commit)", info.commit_id);
 
 		if (Exception::InvalidatesDatabase(error.Type())) {
-			// Invalidate while we hold the commit locks, so that no checkpoint can persist the state.
-			InvalidateDatabase(db, error.RawMessage());
+			// invalidate while we hold the commit locks: the checkpoint writer reads this
+			// flag, so no checkpoint can persist the corrupt shared state
+			ValidChecker::Invalidate(db.GetDatabase(), error.RawMessage());
 		}
 
 		// COMMIT not successful: ROLLBACK.
@@ -470,7 +461,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 		auto rollback_error = transaction.Rollback();
 		if (rollback_error.HasError()) {
-			InvalidateDatabase(db, rollback_error.RawMessage());
+			ValidChecker::Invalidate(db.GetDatabase(), rollback_error.RawMessage());
 			throw FatalException(
 			    "Failed to rollback transaction. Cannot continue operation.\nOriginal Error: %s\nRollback Error: %s",
 			    error.Message(), rollback_error.Message());

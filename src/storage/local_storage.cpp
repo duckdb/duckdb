@@ -209,10 +209,11 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		return;
 	}
 	if (error.Type() == ExceptionType::CONSTRAINT) {
-		// A conflict is detected without modifying the index: scrub the chunks appended so far.
+		// a constraint violation is detected before the chunk is added to the index:
+		// remove only the previously appended chunks
 		RevertIndexAppend(transaction, append_state.row_start, append_state.current_row);
 	}
-	// Any non-conflict error fails the commit closed through the catch in Flush.
+	// Other errors are not reverted here: the catch in Flush invalidates the database.
 	error.Throw();
 }
 
@@ -569,7 +570,7 @@ static void ThrowOnForcedFlushAppendFailure(DataTable &table) {
 }
 
 //! Flushes the transaction-local rows of a table into the shared table and its indexes at commit.
-//! A failure either leaves both unchanged (an ordinary, retryable error) or invalidates the database.
+//! A failure either leaves both unchanged (a retryable error) or invalidates the database.
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state) {
 	if (storage.is_dropped) {
 		storage.Rollback();
@@ -604,8 +605,11 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// flushed a partial row group that does not qualify as a bulk append
 		storage.Rollback();
 	}
-	// The code below modifies the shared indexes and table, but a rollback only reverts what
-	// PushAppend recorded in the undo buffer: any failure must revert its own changes or invalidate.
+	// The code below publishes the local rows into the shared indexes and the shared table.
+	// Rollback can only undo changes recorded in the undo buffer, and the append is only
+	// recorded there once PushAppend completes. Until then, a failure must either revert the
+	// shared state it modified (constraint conflicts do, and remain retryable) or invalidate
+	// the database (the catch below).
 	try {
 		// Append to the indexes. A conflict reverts the keys and surfaces as a CONSTRAINT error.
 		storage.AppendToIndexes(transaction, append_state);
@@ -622,10 +626,9 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		transaction.PushAppend(*storage.table_entry, NumericCast<idx_t>(append_state.row_start), append_count);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
-		// a CONSTRAINT or TRANSACTION error promises that the shared table and indexes were restored;
+		// a CONSTRAINT error promises that the shared table and indexes were restored;
 		// any other error may have left state that a rollback cannot revert, so we fail closed
-		if (error.Type() == ExceptionType::CONSTRAINT || error.Type() == ExceptionType::TRANSACTION ||
-		    Exception::InvalidatesDatabase(error.Type())) {
+		if (error.Type() == ExceptionType::CONSTRAINT || Exception::InvalidatesDatabase(error.Type())) {
 			throw;
 		}
 		throw FatalException("Failed to flush table \"%s\" during commit: %s", table.GetTableName(),
