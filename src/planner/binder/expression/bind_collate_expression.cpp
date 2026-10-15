@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/collate_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -17,6 +18,10 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 	}
 	if (child->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 		throw BinderException(child->GetQueryLocation(), "collations are only supported for type varchar");
+	}
+	if (child->GetReturnType().IsJSONType()) {
+		// the collation changes the type of the expression: do not change the type of the JSON column itself
+		child = BoundCastExpression::AddCastToType(context, std::move(child), LogicalType::VARCHAR);
 	}
 	// Validate the collation, but don't use it
 	auto collation_test = make_uniq_base<Expression, BoundConstantExpression>(Value(child->GetReturnType()));

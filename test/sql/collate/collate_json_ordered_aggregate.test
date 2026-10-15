@@ -1,0 +1,41 @@
+# name: test/sql/collate/collate_json_ordered_aggregate.test
+# description: COLLATE on a JSON column in the ORDER BY of an ordered aggregate or a window
+# group: [collate]
+
+require json
+
+statement ok
+CREATE TABLE tbl(id INT, val JSON);
+
+statement ok
+INSERT INTO tbl VALUES (1, '"b"'), (2, '"A"'), (3, '"c"');
+
+query I
+SELECT list(id ORDER BY val COLLATE nocase) FROM tbl;
+----
+[2, 1, 3]
+
+query I
+SELECT string_agg(id::VARCHAR, ',' ORDER BY val COLLATE nocase) FROM tbl;
+----
+2,1,3
+
+query II
+SELECT id, row_number() OVER (ORDER BY val COLLATE nocase) FROM tbl ORDER BY id;
+----
+1	2
+2	1
+3	3
+
+query I
+SELECT id FROM tbl ORDER BY val COLLATE nocase;
+----
+2
+1
+3
+
+# other non-VARCHAR types are still rejected
+statement error
+SELECT list(1 ORDER BY v COLLATE nocase) FROM (SELECT 'x'::VARIANT v);
+----
+Binder Error: collations are only supported for type varchar
