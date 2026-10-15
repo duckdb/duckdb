@@ -50,10 +50,9 @@ void DecodeUTF16ToUTF8(CSVEncoderBuffer &encoded_buffer, char *target_buffer, id
 				throw InvalidInputException("File is not utf-16 encoded");
 			}
 			const uint32_t code_point = 0x10000 + ((static_cast<uint32_t>(ch - 0xD800)) << 10) + (low - 0xDC00);
-			const char utf8[4] = {static_cast<char>(0xF0 | (code_point >> 18)),
-			                      static_cast<char>(0x80 | ((code_point >> 12) & 0x3F)),
-			                      static_cast<char>(0x80 | ((code_point >> 6) & 0x3F)),
-			                      static_cast<char>(0x80 | (code_point & 0x3F))};
+			const char utf8[4] = {
+			    static_cast<char>(0xF0 | (code_point >> 18)), static_cast<char>(0x80 | ((code_point >> 12) & 0x3F)),
+			    static_cast<char>(0x80 | ((code_point >> 6) & 0x3F)), static_cast<char>(0x80 | (code_point & 0x3F))};
 			idx_t written = 0;
 			while (written < 4 && target_buffer_current_position < target_buffer_size) {
 				target_buffer[target_buffer_current_position++] = utf8[written++];

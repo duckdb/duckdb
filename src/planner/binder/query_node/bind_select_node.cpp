@@ -769,7 +769,8 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			auto function = function_binder.BindAggregateFunction(std::move(first_fun), std::move(first_children));
 			function->SetAlias("__collated_group");
 			auto aggregate_idx = ColumnBinding::PushExpression(result.aggregates, std::move(function));
-			expr = make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(result.aggregate_index, aggregate_idx));
+			expr =
+			    make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(result.aggregate_index, aggregate_idx));
 			continue;
 		}
 		auto group_ref =
