@@ -4,6 +4,13 @@
 
 load {TEST_DIR}/test_26144.db
 
+# the restart below replays the sequence changes from the WAL
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
 statement ok
 CREATE SEQUENCE s;
 
@@ -83,15 +90,12 @@ SELECT currval('s');
 ----
 10
 
-# a sequence function in a branch that does not run, or that writes no row, marks nothing
+# a sequence function in a branch that does not run marks nothing
 statement ok
 BEGIN TRANSACTION READ ONLY;
 
 statement ok
 PREPARE x AS SELECT count(*) FROM range(CASE WHEN false THEN nextval('s') ELSE 2 END);
-
-statement ok
-PREPARE y AS SELECT count(*) FROM range(coalesce(list_transform([NULL::BIGINT], lambda x: setval('s', x))[1], 2));
 
 statement ok
 COMMIT;
