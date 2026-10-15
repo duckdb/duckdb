@@ -133,6 +133,7 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 	collapsible_rules.insert("OtherOperatorExpression");
 	collapsible_rules.insert("InfixOtherOperatorExpression");
 	collapsible_rules.insert("BitwiseExpression");
+	collapsible_rules.insert("TildeExpression");
 	collapsible_rules.insert("AdditiveExpression");
 	collapsible_rules.insert("MultiplicativeExpression");
 	collapsible_rules.insert("ExponentiationExpression");
