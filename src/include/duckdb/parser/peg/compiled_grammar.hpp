@@ -2,7 +2,6 @@
 
 #include "duckdb/common/pair.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
-#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
 
 namespace duckdb {
@@ -35,9 +34,7 @@ public:
 		return *tokenizer;
 	}
 	optional_ptr<const CompiledGrammarRule> GetRule(const string &rule_name) const;
-	optional_ptr<const CompiledGrammarRule> GetRule(TransformRuleId rule_id) const {
-		return transform_rules[static_cast<idx_t>(rule_id)];
-	}
+	optional_ptr<const CompiledGrammarRule> GetRule(PEGRuleId rule_id) const;
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);
@@ -53,8 +50,8 @@ private:
 	unique_ptr<PEGKeywordHelper> keyword_helper;
 	unique_ptr<Tokenizer> tokenizer;
 	case_insensitive_map_t<unique_ptr<CompiledGrammarRule>> rules;
-	//! Generated transformer references resolved against this grammar's final rules.
-	vector<optional_ptr<const CompiledGrammarRule>> transform_rules;
+	//! Rules indexed by PEGRuleId; built-in slots stay empty when the grammar does not define the rule
+	vector<optional_ptr<const CompiledGrammarRule>> rules_by_id;
 	const Matcher &program_matcher;
 	const Matcher &top_level_statement_matcher;
 };

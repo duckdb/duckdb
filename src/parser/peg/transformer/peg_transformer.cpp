@@ -280,18 +280,19 @@ void PEGTransformer::ExitExpression(idx_t weight) {
 	expression_depth -= weight;
 }
 
-const CompiledGrammarRule &PEGTransformer::GetRule(const string &rule_name) const {
-	auto rule = grammar.GetRule(rule_name);
+const CompiledGrammarRule &PEGTransformer::GetRule(PEGRuleId rule_id) const {
+	auto rule = grammar.GetRule(rule_id);
 	if (!rule) {
-		throw InternalException("No registered data exists for rule '%s'", rule_name);
+		auto rule_name = PEGRuleIdToString(rule_id);
+		throw InternalException("No registered data exists for rule '%s'", rule_name ? rule_name : "<runtime rule>");
 	}
 	return *rule;
 }
 
-const CompiledGrammarRule &PEGTransformer::GetRule(TransformRuleId rule_id) const {
-	auto rule = grammar.GetRule(rule_id);
+const CompiledGrammarRule &PEGTransformer::GetRule(const string &rule_name) const {
+	auto rule = grammar.GetRule(rule_name);
 	if (!rule) {
-		throw InternalException("No registered data exists for rule '%s'", GetTransformRuleName(rule_id));
+		throw InternalException("No registered data exists for rule '%s'", rule_name);
 	}
 	return *rule;
 }
