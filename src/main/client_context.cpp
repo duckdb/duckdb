@@ -520,6 +520,13 @@ static PreparedStatementInfo GetPreparedStatementInfo(PreparedStatementData &dat
 
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
                                                              unique_ptr<SQLStatement> statement) {
+	if (is_connected) {
+		// the connected database runs the statement as written, at each execution
+		if (!statement->named_param_map.empty()) {
+			throw InvalidInputException(CONNECTED_PARAMETERS_ERROR);
+		}
+		return make_uniq<PreparedStatement>(shared_from_this(), std::move(statement));
+	}
 	// Only a pragma or a multi-statement can expand, and only one that does not expand into exactly one statement
 	// keeps the statement as written, to expand it again at each execution
 	unique_ptr<SQLStatement> written_statement;
@@ -725,12 +732,10 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 		if (!IsConnectControlStatement(statement->type)) {
 			// Parameterized prepared statements would need parameter substitution we don't do in v0 — reject.
 			// No-param prepared statements have a fully-resolved `query` already, route them.
-			if (HasBoundParameterValues(*statement)) {
-				return ErrorResult<QueryResult>(
-				    ErrorData(InvalidInputException("Parameterized prepared statements cannot be executed while "
-				                                    "CONNECT-ed; DISCONNECT first, or run the SQL as a fresh "
-				                                    "statement to route through the CONNECT binding")),
-				    statement->query);
+			if (HasBoundParameterValues(*statement) ||
+			    (parameters.statement_args && !parameters.statement_args->empty())) {
+				return ErrorResult<QueryResult>(ErrorData(InvalidInputException(CONNECTED_PARAMETERS_ERROR)),
+				                                statement->query);
 			}
 			auto live = TryGetConnectedCatalog();
 			if (!live) {

@@ -107,6 +107,10 @@ public:
 	//! The error of a statement that expands into several, given parameters
 	static constexpr const char *EXPANDING_PARAMETERS_ERROR =
 	    "parameters are not supported for a statement that expands into several";
+	//! The error of a prepared statement with parameters, while CONNECT-ed
+	static constexpr const char *CONNECTED_PARAMETERS_ERROR =
+	    "Parameterized prepared statements cannot be executed while CONNECT-ed; DISCONNECT first, or run the SQL as a "
+	    "fresh statement to route through the CONNECT binding";
 
 public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
