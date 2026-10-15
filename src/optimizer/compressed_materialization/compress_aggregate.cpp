@@ -1,7 +1,10 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
 
@@ -35,6 +38,7 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 	vector<CompressedMaterializationType> materialization_types(groups.size(), CompressedMaterializationType::INVALID);
 	vector<unique_ptr<BaseStatistics>> stored_group_stats;
 	stored_group_stats.resize(groups.size());
+	vector<pair<idx_t, unique_ptr<BaseStatistics>>> variant_groups;
 	auto try_compress_group = [&](idx_t group_idx, Expression &group_expr, optional_ptr<BaseStatistics> stats) {
 		if (!stats) {
 			return false;
@@ -49,6 +53,20 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 		group_stats[group_idx] = std::move(compress_expr->stats);
 		return true;
 	};
+	// A VARIANT group may be compressed to a nested type if that removes a first(v) of it
+	if (aggregate.grouping_sets.size() <= 1 && aggregate.grouping_functions.empty()) {
+		for (const auto &group : groups) {
+			auto colref = TryGetVariantWrapperColumnRef(*group);
+			if (!colref) {
+				continue;
+			}
+			for (const auto &expr : aggregate.expressions) {
+				if (IsRemovableFirstAggregate(expr->Cast<BoundAggregateExpression>(), *colref)) {
+					nested_variant_bindings.insert(colref->Binding());
+				}
+			}
+		}
+	}
 	for (idx_t group_idx = 0; group_idx < groups.size(); group_idx++) {
 		auto &group_expr = *groups[group_idx];
 		if (group_expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
@@ -62,6 +80,7 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 
 		// The non-colref expression won't be compressed generically, so try to compress it here
 		if (try_compress_group(group_idx, group_expr, GetVariantWrapperStats(group_expr))) {
+			variant_groups.emplace_back(group_idx, stored_group_stats[group_idx]->ToUnique());
 			continue;
 		}
 		try_compress_group(group_idx, group_expr, group_stats[group_idx].get());
@@ -127,9 +146,81 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 
 	// Now try to compress
 	CreateProjections(op, info);
+	nested_variant_bindings.clear();
+	RemoveVariantFirstAggregates(op, variant_groups);
 
 	// Update aggregate statistics
 	UpdateAggregateStats(op);
+}
+
+bool CompressedMaterialization::IsRemovableFirstAggregate(const BoundAggregateExpression &aggr,
+                                                          const BoundColumnRefExpression &variant_colref) {
+	return aggr.Function().GetName() == FirstFun::Name && !aggr.IsDistinct() && !aggr.GetFilter() &&
+	       !aggr.GetOrderBys() && aggr.StateExportMode() == AggregateStateExportMode::NONE &&
+	       aggr.GetChildren().size() == 1 && aggr.GetChildren()[0]->Equals(variant_colref);
+}
+
+void CompressedMaterialization::RemoveVariantFirstAggregates(
+    unique_ptr<LogicalOperator> &op, vector<pair<idx_t, unique_ptr<BaseStatistics>>> &variant_groups) {
+	if (variant_groups.empty() || op->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+		return;
+	}
+	auto &projection = op->Cast<LogicalProjection>();
+	auto &aggregate = op->children[0]->Cast<LogicalAggregate>();
+	if (aggregate.grouping_sets.size() > 1 || !aggregate.grouping_functions.empty()) {
+		// With multiple grouping sets the group can be NULL while first(v) is not
+		return;
+	}
+	const auto group_count = aggregate.groups.size();
+	D_ASSERT(projection.expressions.size() == group_count + aggregate.expressions.size());
+	// The projection keeps its columns, so track which projection column each remaining aggregate restores
+	vector<idx_t> aggregate_projection_idx;
+	for (idx_t aggr_idx = 0; aggr_idx < aggregate.expressions.size(); aggr_idx++) {
+		aggregate_projection_idx.push_back(group_count + aggr_idx);
+	}
+	for (auto &variant_group : variant_groups) {
+		const auto group_idx = variant_group.first;
+		// The VARIANT column the group was compressed from
+		optional_ptr<const BoundColumnRefExpression> variant_colref;
+		idx_t colref_count = 0;
+		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(*aggregate.groups[group_idx],
+		                                                              [&](const BoundColumnRefExpression &colref) {
+			                                                              variant_colref = &colref;
+			                                                              colref_count++;
+		                                                              });
+		if (colref_count != 1 || variant_colref->GetReturnType().id() != LogicalTypeId::VARIANT) {
+			continue;
+		}
+		for (idx_t aggr_idx = aggregate.expressions.size(); aggr_idx-- > 0;) {
+			auto &aggr = aggregate.expressions[aggr_idx]->Cast<BoundAggregateExpression>();
+			if (!IsRemovableFirstAggregate(aggr, *variant_colref)) {
+				continue;
+			}
+			auto &restore_expr = projection.expressions[aggregate_projection_idx[aggr_idx]];
+			if (restore_expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+				continue;
+			}
+			// All values within the group have the same VARIANT representation, so first(v) is the group itself
+			auto group_ref =
+			    make_uniq<BoundColumnRefExpression>(aggregate.groups[group_idx]->GetReturnType(),
+			                                        ColumnBinding(aggregate.group_index, ProjectionIndex(group_idx)));
+			restore_expr =
+			    GetVariantDecompress(std::move(group_ref), restore_expr->GetReturnType(), *variant_group.second);
+			aggregate_projection_idx.erase(aggregate_projection_idx.begin() + NumericCast<int64_t>(aggr_idx));
+			aggregate.expressions.erase(aggregate.expressions.begin() + NumericCast<int64_t>(aggr_idx));
+			for (auto &expr : projection.expressions) {
+				ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+				    expr, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &) {
+					    auto &binding = colref.BindingMutable();
+					    if (binding.table_index == aggregate.aggregate_index && binding.column_index > aggr_idx) {
+						    binding.column_index = ProjectionIndex(binding.column_index.GetIndex() - 1);
+					    }
+				    });
+			}
+		}
+	}
+	aggregate.ResolveOperatorTypes();
+	projection.ResolveOperatorTypes();
 }
 
 void CompressedMaterialization::UpdateAggregateStats(unique_ptr<LogicalOperator> &op) {

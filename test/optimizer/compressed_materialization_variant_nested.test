@@ -1,0 +1,247 @@
+# name: test/optimizer/compressed_materialization_variant_nested.test
+# description: Compressed materialization of DISTINCT/GROUP BY on VARIANT columns that are fully shredded on a nested type
+# group: [optimizer]
+
+load {TEST_DIR}/compressed_materialization_variant_nested.db readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+# objects with fields that are always present
+statement ok
+CREATE TABLE ts AS
+SELECT struct_pack(b := (range % 3)::INT, a := 'x' || (range % 2))::VARIANT AS v, range AS payload
+FROM range(100);
+
+# objects with a field that is sometimes NULL, and NULL rows
+statement ok
+CREATE TABLE tn AS
+SELECT CASE WHEN range % 10 = 9 THEN NULL
+       ELSE struct_pack(a := (range % 2)::INT, b := CASE WHEN range % 3 = 0 THEN 'y' END)::VARIANT END AS v
+FROM range(100);
+
+# objects with a field that is sometimes missing
+statement ok
+CREATE TABLE tm AS
+SELECT CASE WHEN range % 2 = 0 THEN struct_pack(a := (range % 3)::INT, b := 1)::VARIANT
+       ELSE struct_pack(a := (range % 3)::INT)::VARIANT END AS v
+FROM range(100);
+
+# nested lists and objects
+statement ok
+CREATE TABLE tl AS
+SELECT struct_pack(a := (range % 2)::INT, l := [(range % 3)::INT, NULL], s := struct_pack(x := 'z' || (range % 2)))::VARIANT AS v
+FROM range(100);
+
+# objects with a DOUBLE field
+statement ok
+CREATE TABLE td AS
+SELECT struct_pack(a := (range % 2)::INT, d := (range % 3)::DOUBLE)::VARIANT AS v
+FROM range(100);
+
+# variant shredded on INTEGER
+statement ok
+CREATE TABLE ti AS
+SELECT (range % 5)::INT::VARIANT AS v
+FROM range(100);
+
+statement ok
+CHECKPOINT;
+
+# the shredding statistics are loaded on restart
+restart
+
+statement ok
+SET explain_output = OPTIMIZED_ONLY
+
+# DISTINCT deduplicates on the shredded STRUCT and restores the VARIANT from it
+query II
+EXPLAIN (FORMAT yaml) SELECT DISTINCT v FROM ts
+----
+logical_opt	<REGEX>:.*AS STRUCT\(a VARCHAR, b INTEGER\).*
+
+query I
+SELECT DISTINCT v FROM ts ORDER BY ALL
+----
+{'a': x0, 'b': 0}
+{'a': x0, 'b': 1}
+{'a': x0, 'b': 2}
+{'a': x1, 'b': 0}
+{'a': x1, 'b': 1}
+{'a': x1, 'b': 2}
+
+query I
+SELECT count(DISTINCT v) FROM ts
+----
+6
+
+# GROUP BY that projects the group restores it from the shredded STRUCT instead of a first(v)
+query II
+EXPLAIN (FORMAT yaml) SELECT v, count(*) FROM ts GROUP BY v
+----
+logical_opt	<REGEX>:.*AS STRUCT\(a VARCHAR, b INTEGER\).*
+
+query II
+EXPLAIN (FORMAT yaml) SELECT v, count(*) FROM ts GROUP BY v
+----
+logical_opt	<!REGEX>:.*__collated_group.*
+
+query III
+SELECT v, count(*), sum(payload) FROM ts GROUP BY v ORDER BY ALL
+----
+{'a': x0, 'b': 0}	17	816
+{'a': x0, 'b': 1}	16	784
+{'a': x0, 'b': 2}	17	850
+{'a': x1, 'b': 0}	17	867
+{'a': x1, 'b': 1}	17	833
+{'a': x1, 'b': 2}	16	800
+
+# explicit first(v) of the group is restored from the group as well
+query III
+SELECT v, first(v), count(*) FROM ts GROUP BY v ORDER BY ALL
+----
+{'a': x0, 'b': 0}	{'a': x0, 'b': 0}	17
+{'a': x0, 'b': 1}	{'a': x0, 'b': 1}	16
+{'a': x0, 'b': 2}	{'a': x0, 'b': 2}	17
+{'a': x1, 'b': 0}	{'a': x1, 'b': 0}	17
+{'a': x1, 'b': 1}	{'a': x1, 'b': 1}	17
+{'a': x1, 'b': 2}	{'a': x1, 'b': 2}	16
+
+# but an ordered first(v) is kept
+query II
+SELECT v, first(v ORDER BY payload DESC) FROM ts GROUP BY v ORDER BY ALL
+----
+{'a': x0, 'b': 0}	{'a': x0, 'b': 0}
+{'a': x0, 'b': 1}	{'a': x0, 'b': 1}
+{'a': x0, 'b': 2}	{'a': x0, 'b': 2}
+{'a': x1, 'b': 0}	{'a': x1, 'b': 0}
+{'a': x1, 'b': 1}	{'a': x1, 'b': 1}
+{'a': x1, 'b': 2}	{'a': x1, 'b': 2}
+
+# grouping without needing the value keeps grouping on the variant_comparator
+query II
+EXPLAIN (FORMAT yaml) SELECT count(*) FROM ts GROUP BY v
+----
+logical_opt	<!REGEX>:.*AS STRUCT.*
+
+query I
+SELECT count(*) FROM ts GROUP BY v ORDER BY ALL
+----
+16
+16
+17
+17
+17
+17
+
+# grouping sets
+query II
+SELECT v, count(*) FROM ts GROUP BY ROLLUP (v) ORDER BY ALL
+----
+{'a': x0, 'b': 0}	17
+{'a': x0, 'b': 1}	16
+{'a': x0, 'b': 2}	17
+{'a': x1, 'b': 0}	17
+{'a': x1, 'b': 1}	17
+{'a': x1, 'b': 2}	16
+NULL	100
+
+# NULL fields and NULL rows
+query II
+EXPLAIN (FORMAT yaml) SELECT DISTINCT v FROM tn
+----
+logical_opt	<REGEX>:.*AS STRUCT\(a INTEGER, b VARCHAR\).*
+
+query II
+SELECT v, count(*) FROM tn GROUP BY v ORDER BY ALL
+----
+{'a': 0, 'b': y}	17
+{'a': 0, 'b': NULL}	33
+{'a': 1, 'b': y}	13
+{'a': 1, 'b': NULL}	27
+NULL	10
+
+query I
+SELECT variant_typeof(v.b) FROM (SELECT DISTINCT v FROM tn) WHERE v IS NOT NULL ORDER BY ALL
+----
+VARCHAR
+VARCHAR
+VARIANT_NULL
+VARIANT_NULL
+
+# fields that can be missing are not compressed: a missing field is not the same as a NULL field
+query II
+EXPLAIN (FORMAT yaml) SELECT DISTINCT v FROM tm
+----
+logical_opt	<!REGEX>:.*AS STRUCT.*
+
+query I
+SELECT DISTINCT v FROM tm ORDER BY ALL
+----
+{'a': 0}
+{'a': 0, 'b': 1}
+{'a': 1}
+{'a': 1, 'b': 1}
+{'a': 2}
+{'a': 2, 'b': 1}
+
+# nested lists and objects
+query II
+EXPLAIN (FORMAT yaml) SELECT DISTINCT v FROM tl
+----
+logical_opt	<REGEX>:.*AS STRUCT\(a INTEGER, l INTEGER\[\], s STRUCT\(x VARCHAR\)\).*
+
+query I
+SELECT DISTINCT v FROM tl ORDER BY ALL
+----
+{'a': 0, 'l': [0, NULL], 's': {'x': z0}}
+{'a': 0, 'l': [1, NULL], 's': {'x': z0}}
+{'a': 0, 'l': [2, NULL], 's': {'x': z0}}
+{'a': 1, 'l': [0, NULL], 's': {'x': z1}}
+{'a': 1, 'l': [1, NULL], 's': {'x': z1}}
+{'a': 1, 'l': [2, NULL], 's': {'x': z1}}
+
+# objects with a DOUBLE field are not compressed
+query II
+EXPLAIN (FORMAT yaml) SELECT DISTINCT v FROM td
+----
+logical_opt	<!REGEX>:.*AS STRUCT.*
+
+query I
+SELECT DISTINCT v FROM td ORDER BY ALL
+----
+{'a': 0, 'd': 0.0}
+{'a': 0, 'd': 1.0}
+{'a': 0, 'd': 2.0}
+{'a': 1, 'd': 0.0}
+{'a': 1, 'd': 1.0}
+{'a': 1, 'd': 2.0}
+
+# DISTINCT and GROUP BY on a primitive shredded variant do not need a first(v) either
+query II
+EXPLAIN (FORMAT yaml) SELECT DISTINCT v FROM ti
+----
+logical_opt	<REGEX>:.*__internal_compress_integral.*
+
+query II
+EXPLAIN (FORMAT yaml) SELECT v, count(*) FROM ti GROUP BY v
+----
+logical_opt	<!REGEX>:.*__collated_group.*
+
+query I
+SELECT DISTINCT v FROM ti ORDER BY ALL
+----
+0
+1
+2
+3
+4
+
+query II
+SELECT v, count(*) FROM ti GROUP BY v ORDER BY ALL
+----
+0	20
+1	20
+2	20
+3	20
+4	20

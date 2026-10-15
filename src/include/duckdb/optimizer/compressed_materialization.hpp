@@ -19,6 +19,7 @@ class ClientContext;
 class ColumnBindingReplacer;
 class LogicalOperator;
 class Expression;
+class BoundAggregateExpression;
 class BoundColumnRefExpression;
 class BoundFunctionExpression;
 struct JoinCondition;
@@ -118,6 +119,13 @@ private:
 	void CompressDistinct(unique_ptr<LogicalOperator> &op);
 	void CompressOrder(unique_ptr<LogicalOperator> &op);
 
+	//! Whether the aggregate is a plain first(v) of the given VARIANT column
+	static bool IsRemovableFirstAggregate(const BoundAggregateExpression &aggr,
+	                                      const BoundColumnRefExpression &variant_colref);
+	//! Replace first(v) aggregates over a compressed VARIANT group v with the decompressed group
+	void RemoveVariantFirstAggregates(unique_ptr<LogicalOperator> &op,
+	                                  vector<pair<idx_t, unique_ptr<BaseStatistics>>> &variant_groups);
+
 	//! Update statistics after compressing
 	void UpdateAggregateStats(unique_ptr<LogicalOperator> &op);
 	void UpdateComparisonJoinStats(unique_ptr<LogicalOperator> &op);
@@ -153,6 +161,8 @@ private:
 	unique_ptr<CompressExpression> GetStringCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
 	unique_ptr<CompressExpression> GetGeometryCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
 	unique_ptr<CompressExpression> GetVariantCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
+	//! Whether a VARIANT with these statistics can be compressed to (and restored from) its shredded type
+	static bool CanCompressVariant(const BaseStatistics &stats);
 	bool TryGetVariantJoinKeyInfo(const Expression &expr, VariantJoinKeyInfo &result);
 	static unique_ptr<BaseStatistics> CastVariantJoinKeyStats(const VariantJoinKeyInfo &key_info,
 	                                                          const LogicalType &target_type);
@@ -181,6 +191,8 @@ private:
 	const vector<reference<unique_ptr<LogicalOperator>>> &ancestors;
 	//! The map of ColumnBinding -> statistics for the various nodes
 	statistics_map_t &statistics_map;
+	//! VARIANT columns that may be compressed to a nested shredded type
+	column_binding_set_t nested_variant_bindings;
 };
 
 } // namespace duckdb
