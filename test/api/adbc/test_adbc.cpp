@@ -6457,4 +6457,129 @@ TEST_CASE("ADBC - rollback keeps the error a stream already reported", "[adbc]")
 	REQUIRE(ErrorTypeDetail(*stream_error) == "InvalidInput");
 }
 
+static constexpr const char *EXPANDING_PIVOT = "PIVOT sales ON year USING sum(amount) ORDER BY city";
+static constexpr const char *EXPANDING_ALTER = "ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random()";
+
+static void CreateExpandingTables(ADBCTestDatabase &db) {
+	REQUIRE(!db.Query("CREATE TABLE sales(city VARCHAR, year INTEGER, amount INTEGER)")->HasError());
+	REQUIRE(!db.Query("INSERT INTO sales VALUES ('ams', 2023, 10), ('ams', 2024, 20), ('rtm', 2023, 30), "
+	                  "('rtm', 2024, 40)")
+	             ->HasError());
+	REQUIRE(!db.Query("CREATE TABLE t AS SELECT range AS i FROM range(10)")->HasError());
+}
+
+static string ColumnCountOfT(ADBCTestDatabase &db, const string &column) {
+	auto result =
+	    db.Query("SELECT count(*) FROM duckdb_columns() WHERE table_name = 't' AND column_name = '" + column + "'");
+	REQUIRE(!result->HasError());
+	return result->Collection().GetValue(0, 0).ToString();
+}
+
+static AdbcStatusCode ExecuteSchemaOf(ADBCTestDatabase &db, const char *query, string &message) {
+	AdbcStatement statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&statement, query, &db.adbc_error)));
+	ArrowSchema schema = {};
+	auto status = AdbcStatementExecuteSchema(&statement, &schema, &db.adbc_error);
+	if (schema.release) {
+		schema.release(&schema);
+	}
+	message = db.adbc_error.message ? db.adbc_error.message : "";
+	if (db.adbc_error.release) {
+		db.adbc_error.release(&db.adbc_error);
+	}
+	InitializeADBCError(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+	return status;
+}
+
+TEST_CASE("ADBC - Executing a dynamic PIVOT returns its rows", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	CreateExpandingTables(db);
+
+	AdbcStatement statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&statement, EXPANDING_PIVOT, &db.adbc_error)));
+	ArrowArrayStream stream = {};
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, &stream, nullptr, &db.adbc_error)));
+	ArrowSchema schema = {};
+	REQUIRE(stream.get_schema(&stream, &schema) == 0);
+	auto column_count = schema.n_children;
+	string first_year = schema.children[1]->name;
+	schema.release(&schema);
+	ArrowArray array = {};
+	REQUIRE(stream.get_next(&stream, &array) == 0);
+	auto row_count = array.length;
+	if (array.release) {
+		array.release(&array);
+	}
+	stream.release(&stream);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+
+	REQUIRE(column_count == 3);
+	REQUIRE(first_year == "2023");
+	REQUIRE(row_count == 2);
+}
+
+TEST_CASE("ADBC - Executing an ALTER that expands applies it", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	CreateExpandingTables(db);
+
+	AdbcStatement statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&statement, EXPANDING_ALTER, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, nullptr, nullptr, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+
+	REQUIRE(ColumnCountOfT(db, "c") == "1");
+	auto nulls = db.Query("SELECT count(*) FROM t WHERE c IS NULL");
+	REQUIRE(!nulls->HasError());
+	REQUIRE(nulls->Collection().GetValue(0, 0).ToString() == "0");
+}
+
+TEST_CASE("ADBC - Setting a statement that expands runs nothing until it is executed", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	CreateExpandingTables(db);
+
+	AdbcStatement statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&statement, EXPANDING_ALTER, &db.adbc_error)));
+	auto columns_once_set = ColumnCountOfT(db, "c");
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, nullptr, nullptr, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+
+	REQUIRE(columns_once_set == "0");
+	REQUIRE(ColumnCountOfT(db, "c") == "1");
+}
+
+TEST_CASE("ADBC - StatementExecuteSchema of a parameter whose type is not known", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	string message;
+	REQUIRE(ExecuteSchemaOf(db, "SELECT ?", message) == ADBC_STATUS_NOT_IMPLEMENTED);
+	REQUIRE(StringUtil::Contains(message, "known only once it is executed"));
+}
+
+TEST_CASE("ADBC - StatementExecuteSchema of a dynamic PIVOT", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	CreateExpandingTables(db);
+	string message;
+	REQUIRE(ExecuteSchemaOf(db, EXPANDING_PIVOT, message) == ADBC_STATUS_NOT_IMPLEMENTED);
+	REQUIRE(StringUtil::Contains(message, "known only once it is executed"));
+}
+
 } // namespace duckdb
