@@ -40,11 +40,8 @@ static bool GlobMatchesBracket(char s, const char *pattern, idx_t plen, idx_t &p
 			break;
 		}
 		bool matches;
-		if (pattern[pidx + 1] == '-') {
+		if (pattern[pidx + 1] == '-' && pidx + 2 < plen && pattern[pidx + 2] != ']') {
 			// range! find the next character in the range
-			if (pidx + 2 == plen) {
-				break;
-			}
 			auto next_char = pattern[pidx + 2];
 			// check if the current character is within the range
 			matches = s >= p && s <= next_char;
@@ -457,7 +454,8 @@ bool ILikeOperatorFunctionInternal(string_t &str, string_t &pattern, char escape
 	if (!HAS_ESCAPE) {
 		return LikeOperatorFunction(str_lcase, pat_lcase);
 	}
-	return LikeOperatorFunction(str_lcase, pat_lcase, escape);
+	// the pattern is lowercased, so the escape character must be as well
+	return LikeOperatorFunction(str_lcase, pat_lcase, StringUtil::CharacterToLower(escape));
 }
 
 bool ILikeOperatorFunction(string_t &str, string_t &pattern) {
@@ -553,7 +551,8 @@ void ILikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &result
 	    escape_vec.GetVectorType() == VectorType::CONSTANT_VECTOR && !ConstantVector::IsNull(escape_vec)) {
 		auto pattern = *ConstantVector::GetData<string_t>(pattern_vec);
 		auto escape = *ConstantVector::GetData<string_t>(escape_vec);
-		char escape_char = GetEscapeChar(escape);
+		// the pattern is lowercased, so the escape character must be as well
+		char escape_char = StringUtil::CharacterToLower(GetEscapeChar(escape));
 		bool has_escape = escape.GetSize() != 0;
 
 		// lowercase the pattern exactly once, up front

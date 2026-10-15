@@ -339,13 +339,12 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 	// If this ALTER produced a new DuckTableEntry, refresh the LocalTableStorage's table_entry
 	// pointer so that commit-time Flush pushes an AppendInfo referencing the current DuckTableEntry.
 	if (transaction.context && value->type == CatalogType::TABLE_ENTRY) {
-		auto &tce = value->Cast<TableCatalogEntry>();
-		if (tce.IsDuckTable()) {
-			auto &new_entry = tce.Cast<DuckTableEntry>();
-			auto &new_storage = new_entry.GetStorage();
+		auto new_entry = value->Cast<TableCatalogEntry>().TryGetDuckTableEntry();
+		if (new_entry) {
+			auto &new_storage = new_entry->GetStorage();
 			auto lstorage = LocalStorage::Get(*transaction.context, new_storage.db).GetStorage(new_storage);
 			if (lstorage) {
-				lstorage->table_entry = &new_entry;
+				lstorage->table_entry = new_entry;
 			}
 		}
 	}
@@ -550,18 +549,6 @@ CatalogEntry &CatalogSet::GetEntryForTransaction(CatalogTransaction transaction,
 		entry = entry.get().Child();
 	}
 	visible = false;
-	return entry.get();
-}
-
-CatalogEntry &CatalogSet::GetCommittedEntry(CatalogEntry &current) {
-	reference<CatalogEntry> entry(current);
-	while (entry.get().HasChild()) {
-		if (IsCommitted(entry.get().timestamp.load())) {
-			// this entry is committed: use it
-			break;
-		}
-		entry = entry.get().Child();
-	}
 	return entry.get();
 }
 
@@ -787,14 +774,14 @@ void CatalogSet::ScanWithPrefix(CatalogTransaction transaction, const std::funct
 	}
 }
 
-void CatalogSet::Scan(const std::function<void(CatalogEntry &)> &callback) {
+void CatalogSet::Scan(VisibilityBound bound, const std::function<void(CatalogEntry &)> &callback) {
 	// lock the catalog set
 	lock_guard<mutex> lock(catalog_lock);
+	CatalogTransaction transaction(catalog.GetDatabase(), MAX_TRANSACTION_ID, bound);
 	for (auto &kv : map.Entries()) {
-		auto &entry = *kv.second;
-		auto &committed_entry = GetCommittedEntry(entry);
-		if (!committed_entry.deleted) {
-			callback(committed_entry);
+		auto &entry = GetEntryForTransaction(transaction, *kv.second);
+		if (!entry.deleted) {
+			callback(entry);
 		}
 	}
 }
@@ -807,7 +794,7 @@ void CatalogSet::SetDefaultGenerator(unique_ptr<DefaultGenerator> defaults_p) {
 void CatalogSet::Verify(Catalog &catalog_p) {
 	D_ASSERT(&catalog_p == &catalog);
 	vector<reference<CatalogEntry>> entries;
-	Scan([&](CatalogEntry &entry) { entries.push_back(entry); });
+	Scan(VisibilityBound::AllCommitted(), [&](CatalogEntry &entry) { entries.push_back(entry); });
 	for (auto &entry : entries) {
 		entry.get().Verify(catalog_p);
 	}

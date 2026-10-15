@@ -1,5 +1,6 @@
 #include "duckdb/parser/peg/matcher_stack.hpp"
 #include "duckdb/common/optional.hpp"
+#include "duckdb/parser/peg/matcher/optional_matcher.hpp"
 
 namespace duckdb {
 
@@ -16,7 +17,13 @@ MatchStack::~MatchStack() {
 
 void MatchStack::DestroyTopFrame() {
 	D_ASSERT(!frames.empty());
+	auto &frame = frames.back();
+	auto &process_allocator = frame.match_state.context.process_allocator;
+	const auto process_arena_position = frame.process_arena_position;
 	frames.pop_back();
+	// the processes of a frame and everything they allocated are dead once the frame is popped - release them so the
+	// process arena only ever holds the live frames instead of every process the whole statement ever created
+	process_allocator.Rewind(process_arena_position);
 }
 
 optional<MatcherResult> PackratMatchState::TryLoadCachedResult(const Matcher &matcher, MatchState &state) {
@@ -78,6 +85,7 @@ MatcherResult MatchStack::ExecuteAtomicMatcher(MatchInput input) {
 void MatchStack::PushFrame(MatchInput input) {
 	input.state.rule = input.matcher.GetRule();
 	frames.emplace_back(input);
+	frames.back().process_arena_position = input.state.context.process_allocator.GetPosition();
 }
 
 void MatchStack::InitializeFrame(MatchStackFrame &frame) {
@@ -112,6 +120,21 @@ bool MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 	if (child->matcher.IsAtomic()) {
 		frame.child_result = ExecuteAtomicMatcher(*child);
 		return false;
+	}
+	if (child->state.BuildParseResult()) {
+		// skip sub-matchers that certainly cannot match at the current token (see MatcherFirstSet); such an attempt
+		// would fail without consuming a token, so skipping it changes neither the result nor the error position
+		if (child->matcher.Type() == MatcherType::OPTIONAL && child->matcher.IsStructural() &&
+		    !child->matcher.Cast<OptionalMatcher>().GetChildMatcher().first_set.MightMatch(child->state)) {
+			// what the optional's own process returns when its element fails
+			child->state.rule = child->matcher.GetRule();
+			frame.child_result = child->state.AllocateParseResult<OptionalParseResult>();
+			return false;
+		}
+		if (!child->matcher.first_set.MightMatch(child->state)) {
+			frame.child_result = MatcherResult::Failure();
+			return false;
+		}
 	}
 	PushFrame(*child);
 	return false;

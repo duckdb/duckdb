@@ -1,6 +1,7 @@
 
 #include "sqllogic_test_runner.hpp"
 
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/json_document.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
@@ -168,6 +169,13 @@ void SQLLogicTestRunner::EmitEnd(const string &test_name, const string &status, 
 	obj.Add("passes", writer.CreateUnsignedInteger(test_stat_passes.load()));
 	obj.Add("fails", writer.CreateUnsignedInteger(test_stat_fails.load()));
 	obj.Add("skip-mode", writer.CreateUnsignedInteger(test_stat_skip_mode.load()));
+	if (!partial_skip_reasons.empty()) {
+		auto reasons = writer.CreateArray();
+		for (auto &reason : partial_skip_reasons) {
+			reasons.AppendString(reason);
+		}
+		obj.Add("partial-skip-reasons", reasons);
+	}
 	if (!data.empty()) {
 		obj.AddString("data", data);
 	}
@@ -228,9 +236,21 @@ ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::str
 	auto &test_config = TestConfiguration::Get();
 	Connection con(db);
 	if (test_config.GetExtensionAutoLoadingMode() == TestConfiguration::ExtensionAutoLoadingMode::NONE) {
-		// try INSTALL extension
-		auto repo = test_config.GetLocalExtensionRepository();
-		con.Query("INSTALL " + extension + " FROM '" + repo + "'");
+		auto extension_path = extension;
+		if (!ExtensionHelper::IsFullPath(extension)) {
+			auto &fs = FileSystem::GetFileSystem(*con.context);
+			auto extension_name = ExtensionHelper::ApplyExtensionAlias(extension);
+			extension_path =
+			    fs.JoinPath(test_config.GetLocalExtensionRepository(), ExtensionHelper::GetVersionDirectoryName());
+			extension_path = fs.JoinPath(extension_path, DuckDB::Platform());
+			extension_path = fs.JoinPath(extension_path, extension_name + ".duckdb_extension");
+		}
+		try {
+			ExtensionHelper::LoadExternalExtension(*con.context, ExtensionLoadOptions(extension_path));
+			return ExtensionLoadResult::LOADED_EXTENSION;
+		} catch (std::exception &) {
+			return linked_result;
+		}
 	}
 
 	// try LOAD extension
@@ -508,7 +528,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			parser.Fail("require ram requires a parameter");
 		}
 		// require a minimum amount of ram
-		auto required_limit = DBConfig::ParseMemoryLimit(params[1]);
+		auto required_limit = DBConfig::ParseMemoryLimitOrMaximum(params[1]);
 		auto limit = FileSystem::GetAvailableMemory();
 		if (!limit.IsValid()) {
 			return RequireResult::MISSING;
@@ -524,7 +544,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			parser.Fail("require disk_space requires a parameter");
 		}
 		// require a minimum amount of disk space
-		auto required_limit = DBConfig::ParseMemoryLimit(params[1]);
+		auto required_limit = DBConfig::ParseMemoryLimitOrMaximum(params[1]);
 		auto available_space = FileSystem::GetAvailableDiskSpace(".");
 		if (!available_space.IsValid()) {
 			return RequireResult::MISSING;
@@ -1045,7 +1065,9 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 						reason += " " + token.parameters[i];
 					}
 				}
-				AddSkipReason("mode skip " + reason);
+				auto skip_reason = "mode skip " + reason;
+				AddSkipReason(skip_reason);
+				partial_skip_reasons.insert(std::move(skip_reason));
 				skip_level++;
 			} else if (parameter == "unskip") {
 				skip_level--;
@@ -1317,6 +1339,7 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 			auto sleep_duration = std::stoull(token.parameters[0]);
 			auto sleep_unit = SleepCommand::ParseUnit(token.parameters[1]);
 			auto command = make_uniq<SleepCommand>(*this, sleep_duration, sleep_unit);
+			command->conditions = std::move(conditions);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_UNZIP) {
 			if (token.parameters.size() != 1 && token.parameters.size() != 2) {

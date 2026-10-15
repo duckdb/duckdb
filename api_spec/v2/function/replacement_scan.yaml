@@ -10,13 +10,13 @@ module: replacement scan
 # A claim names one of three things: a table function and its arguments, a
 # `[[column_data_collection]]` the caller holds, or a SQL query.
 #
-# Scope follows the constructor. A scan created with
-# `[[replacement_scan_create_with_connection]]` is visible only to that
-# connection, is released when the connection is destroyed, and is consulted before every
-# instance-wide scan, including the built-in file scans. A scan created with
-# `[[replacement_scan_create_with_instance]]` or
-# `[[replacement_scan_create_with_extension]]` is visible to every connection
-# to that instance and lives until the instance is destroyed. A registered scan
+# Scope follows the registration. A scan registered with
+# `[[connection_register_replacement_scan]]` is visible only to that
+# connection, is released when the connection is destroyed, and is consulted
+# before every instance-wide scan, including the built-in file scans. A scan
+# registered with `[[instance_register_replacement_scan]]` or
+# `[[extension_register_replacement_scan]]` is visible to every connection to
+# that instance and lives until the instance is destroyed. A registered scan
 # cannot be unregistered.
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -25,11 +25,9 @@ module: replacement scan
 handles:
   replacement_scan:
     description: |
-      An owned opaque handle to a replacement scan being built. Created with
-      `[[replacement_scan_create_with_connection]]`, `[[replacement_scan_create_with_instance]]` or
-      `[[replacement_scan_create_with_extension]]`, configured with `[[replacement_scan_set_callback]]` and
-      `[[replacement_scan_set_user_data]]`, made available with `[[replacement_scan_register]]`, and destroyed with
-      `[[replacement_scan_destroy]]`.
+      An owned opaque handle to a replacement scan being built. Created with `[[replacement_scan_create]]`,
+      configured with `[[replacement_scan_set_callback]]` and `[[replacement_scan_set_user_data]]`, made available
+      with `[[connection_register_replacement_scan]]`, `[[instance_register_replacement_scan]]` or `[[extension_register_replacement_scan]]`, and destroyed with `[[replacement_scan_destroy]]`.
 
   replacement_scan_info:
     description: |
@@ -63,72 +61,23 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Constructors
   #---------------------------------------------------------------------------------------------------------------------
-  replacement_scan_create_with_connection:
+  replacement_scan_create:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-02" ]
     description: |
-      Creates a new replacement scan that will be registered on the connection.
+      Creates a new replacement scan through a factory.
 
-      The scan is visible only to queries on this connection and is released when the connection is destroyed. It is
-      consulted before every instance-wide scan, so it can claim a name that a built-in scan would otherwise take.
       The scan starts out empty: configure it with `[[replacement_scan_set_callback]]` and optionally
-      `[[replacement_scan_set_user_data]]`, then make it available with `[[replacement_scan_register]]`. The caller
-      owns the returned handle and must destroy it with `[[replacement_scan_destroy]]`, also after registration.
+      `[[replacement_scan_set_user_data]]`, then make it available with `[[connection_register_replacement_scan]]`, `[[instance_register_replacement_scan]]` or `[[extension_register_replacement_scan]]`. The caller owns the
+      returned handle and must destroy it with `[[replacement_scan_destroy]]`, also after registration.
+
+      The scan can only be registered on the database the factory belongs to.
+    role: constructor
+    belongs_to: replacement_scan
     parameters:
-      connection:
-        type: connection
-        description: The connection to create the scan on.
-      scan:
-        type: replacement_scan
-        indirection: 1
-        kind: OUT
-        description: On success, receives the newly created replacement scan. Owned by the caller.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  replacement_scan_create_with_instance:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-02" ]
-    description: |
-      Creates a new replacement scan that will be registered on the instance.
-
-      The scan is visible to every connection to the instance and lives until the instance is destroyed. The scan starts
-      out empty: configure it with `[[replacement_scan_set_callback]]` and optionally
-      `[[replacement_scan_set_user_data]]`, then make it available with `[[replacement_scan_register]]`. The caller
-      owns the returned handle and must destroy it with `[[replacement_scan_destroy]]`, also after registration.
-    parameters:
-      instance:
-        type: instance
-        description: The instance to create the scan on.
-      scan:
-        type: replacement_scan
-        indirection: 1
-        kind: OUT
-        description: On success, receives the newly created replacement scan. Owned by the caller.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  replacement_scan_create_with_extension:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-02" ]
-    description: |
-      Creates a new replacement scan that will be registered on the loading extension's instance.
-
-      Use this from an extension load callback, where an extension handle is available. The scan is visible to every
-      connection to that instance and lives until the instance is destroyed. The scan starts out empty: configure it with
-      `[[replacement_scan_set_callback]]` and optionally `[[replacement_scan_set_user_data]]`, then make it available
-      with `[[replacement_scan_register]]`. The caller owns the returned handle and must destroy it with
-      `[[replacement_scan_destroy]]`, also after registration.
-    parameters:
-      extension:
-        type: extension
-        description: The extension to create the scan on.
+      factory:
+        type: factory
+        description: The factory to create the scan through.
       scan:
         type: replacement_scan
         indirection: 1
@@ -423,27 +372,88 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Register
   #---------------------------------------------------------------------------------------------------------------------
-  replacement_scan_register:
+  connection_register_replacement_scan:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-02" ]
     description: |
       Registers the replacement scan, making it consulted for names the catalog cannot resolve.
 
-      The scan is registered on the target given at creation: the connection, the instance or the loading
-      extension's instance. Registration requires a callback. Scans are consulted in registration order within their
-      scope, connection-scoped ones before instance-wide ones, and the first to claim a name wins. A scan cannot be
-      registered twice, and a registered scan cannot be unregistered: it lives until its scope ends. Registering an
-      instance-wide scan while queries are binding on other connections is not thread-safe; register from an
-      extension load callback or before issuing queries. The caller still owns the handle after registration and
-      must destroy it with `[[replacement_scan_destroy]]`, which does not affect the registered scan.
+      The scan is visible only to queries on this connection and is released when the connection is destroyed. It is
+      consulted before every instance-wide scan, so it can claim a name that a built-in scan would otherwise take.
+      Registration requires a callback. Scans are consulted in registration order within their scope, connection-scoped
+      ones before instance-wide ones, and the first to claim a name wins. A scan cannot be registered twice, and a
+      registered scan cannot be unregistered: it lives until its scope ends. The scan must have been created through a
+      factory of the same database. The caller still owns the handle after registration and must destroy it with
+      `[[replacement_scan_destroy]]`, which does not affect the registered scan.
+    role: method
+    belongs_to: connection
     parameters:
+      conn:
+        type: connection
+        description: The connection to register on.
       scan:
         type: replacement_scan
-        description: The scan to register.
+        description: The replacement scan to register.
       err:
         type: error_info
         indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+
+  instance_register_replacement_scan:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Registers the replacement scan, making it consulted for names the catalog cannot resolve.
+
+      The scan is visible to every connection to the instance and lives until the instance is destroyed. Registering it
+      while queries are binding on other connections is not thread-safe: register before issuing queries. Registration
+      requires a callback. Scans are consulted in registration order within their scope, connection-scoped ones before
+      instance-wide ones, and the first to claim a name wins. A scan cannot be registered twice, and a registered scan
+      cannot be unregistered: it lives until its scope ends. The scan must have been created through a factory of the
+      same database. The caller still owns the handle after registration and must destroy it with
+      `[[replacement_scan_destroy]]`, which does not affect the registered scan.
+    role: method
+    belongs_to: instance
+    parameters:
+      instance:
+        type: instance
+        description: The instance to register on.
+      scan:
+        type: replacement_scan
+        description: The replacement scan to register.
+      err:
+        type: error_info
+        indirection: 1
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+
+  extension_register_replacement_scan:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Registers the replacement scan, making it consulted for names the catalog cannot resolve.
+
+      The scan is visible to every connection to the loading extension's instance and lives until the instance is
+      destroyed. Use this from the extension's load callback. Registration requires a callback. Scans are consulted in
+      registration order within their scope, connection-scoped ones before instance-wide ones, and the first to claim a
+      name wins. A scan cannot be registered twice, and a registered scan cannot be unregistered: it lives until its
+      scope ends. The scan must have been created through a factory of the same database. The caller still owns the
+      handle after registration and must destroy it with `[[replacement_scan_destroy]]`, which does not affect the
+      registered scan.
+    role: method
+    belongs_to: extension
+    parameters:
+      extension:
+        type: extension
+        description: The loading extension.
+      scan:
+        type: replacement_scan
+        description: The replacement scan to register.
+      err:
+        type: error_info
+        indirection: 1
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------

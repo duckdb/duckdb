@@ -123,6 +123,9 @@ static unique_ptr<FunctionData> ReadSingleCSVFileBind(ClientContext &context, Ta
 		throw BinderException("read_single_csv_file requires a non-NULL file name");
 	}
 	result->file = TableFunctionFileBindInput::GetFile(input);
+	if (result->file.path.empty()) {
+		throw BinderException("read_single_csv_file requires a non-empty file name");
+	}
 
 	// the options of the scan this file is part of steer the sniffer - the file list is this single file
 	MultiFileOptions file_options;
@@ -473,7 +476,7 @@ static unique_ptr<NodeStatistics> ReadSingleCSVFileCardinality(ClientContext &co
 }
 
 TableFunction ReadCSVTableFunction::GetSingleFileFunction() {
-	TableFunction read_csv("read_single_csv_file", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+	TableFunction read_csv("read_single_csv_file", FunctionSignature().AddPositionalOnly("file", LogicalType::ANY),
 	                       ReadSingleCSVFileFunction, ReadSingleCSVFileBind, ReadSingleCSVFileInitGlobal,
 	                       ReadSingleCSVFileInitLocal);
 	read_csv.table_scan_progress = ReadSingleCSVFileProgress;
