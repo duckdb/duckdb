@@ -144,3 +144,33 @@ ORDER BY id
 3	4	NULL	4
 4	5	NULL	5
 5	NULL	NULL	NULL
+
+# the own row ranks between frame rows of the argument ordering
+query III
+SELECT
+	id,
+	LEAD(v ORDER BY v) OVER w,
+	LAG(v ORDER BY v) OVER w
+FROM (VALUES (1, 20), (2, 10), (3, 30)) t(id, v)
+WINDOW w AS (ORDER BY id ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING)
+ORDER BY id
+----
+1	30	10
+2	30	NULL
+3	NULL	NULL
+
+# NULLs ignored after some rows of the frame qualify
+query IIIII
+SELECT
+	id,
+	LEAD(v, 1, 99 ORDER BY id, v IGNORE NULLS) OVER w,
+	LEAD(v, 2, 99 ORDER BY id, v IGNORE NULLS) OVER w,
+	LEAD(v, 1, 99 ORDER BY id IGNORE NULLS) OVER w,
+	LEAD(v, 2, 99 ORDER BY id IGNORE NULLS) OVER w
+FROM (VALUES (1, 10), (2, NULL), (3, 30)) t(id, v)
+WINDOW w AS (ORDER BY id ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING)
+ORDER BY id
+----
+1	30	99	30	99
+2	30	99	30	99
+3	99	99	99	99
