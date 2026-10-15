@@ -43,13 +43,14 @@ struct PreparedStatementInfo {
 
 //! A handle to a prepared statement that lives in the client context. The statement itself is prepared through
 //! `PREPARE <name> AS ...` and executed through `EXECUTE <name>(...)` - this class only holds the name.
-//! A statement that expands into several is not prepared in the client context: each execution submits it anew.
+//! A statement that expands into several, or one prepared while CONNECT-ed, is not prepared in the client context,
+//! and each execution submits it anew.
 class PreparedStatement {
 public:
 	//! Create a handle to the prepared statement with the given name in the client context
 	DUCKDB_API PreparedStatement(const shared_ptr<ClientContext> &context, string name, string query,
 	                             PreparedStatementInfo info);
-	//! Create a handle to a statement that does not expand into exactly one, whose result is known only at execution
+	//! Create a handle to a statement that each execution submits anew, whose result is known only at execution
 	DUCKDB_API PreparedStatement(const shared_ptr<ClientContext> &context, unique_ptr<SQLStatement> statement);
 	//! Create a prepared statement that was not successfully prepared
 	DUCKDB_API explicit PreparedStatement(ErrorData error);
@@ -211,7 +212,7 @@ private:
 	ErrorData error;
 	//! The metadata of the statement, as it was prepared
 	PreparedStatementInfo info;
-	//! The statement as the user wrote it, when it does not expand into exactly one
+	//! The statement as the user wrote it, when each execution submits it anew
 	unique_ptr<SQLStatement> expanding_statement;
 
 private:
