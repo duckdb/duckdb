@@ -1,0 +1,30 @@
+# name: test/issues/general/test_26191.test
+# description: A json_transform structure nests no deeper than max_expression_depth
+# group: [general]
+
+require json
+
+statement error
+SELECT json_transform('1', repeat('{"a":', 20000) || '"VARCHAR"' || repeat('}', 20000));
+----
+Max expression depth limit of 1000 exceeded
+
+statement error
+SELECT from_json('[1]', repeat('[', 20000) || '"VARCHAR"' || repeat(']', 20000));
+----
+Max expression depth limit of 1000 exceeded
+
+# a structure below the limit is accepted
+query I
+SELECT json_transform(repeat('{"a":', 50) || '1' || repeat('}', 50), repeat('{"a":', 50) || '"INTEGER"' || repeat('}', 50))::VARCHAR
+	= repeat('{''a'': ', 50) || '1' || repeat('}', 50);
+----
+true
+
+statement ok
+SET max_expression_depth = 30;
+
+statement error
+SELECT json_transform('{}', repeat('{"a":', 50) || '"INTEGER"' || repeat('}', 50));
+----
+Max expression depth limit of 30 exceeded
