@@ -27,7 +27,7 @@ namespace {
 BufferHandle AllocateUncachedReadBuffer(BufferManager &buffer_manager, idx_t size) {
 	BufferHandle buffer;
 	const auto header_size = Storage::DEFAULT_BLOCK_HEADER_SIZE;
-	if (size >= 256 * 1024 && size <= 64 * 1024 * 1024 - header_size) {
+	if (size >= 256ULL * 1024 && size <= 64ULL * 1024 * 1024 - header_size) {
 		// Reserve the full capacity while keeping the requested I/O range unchanged.
 		const auto capacity = NextPowerOfTwo(size + header_size);
 		try {
