@@ -68,11 +68,19 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 			next_counter = data.min_value;
 		}
 	} else {
-		if (result < data.min_value || (overflow && data.increment < 0)) {
+		// an exhausted sequence keeps a counter outside of its range
+		bool exhausted = result < data.min_value || result > data.max_value;
+		if (!exhausted && overflow) {
+			// the next value does not fit in an int64, so the counter moves past the other end of the range
+			next_counter = data.increment < 0 ? NumericLimits<int64_t>::Maximum() : NumericLimits<int64_t>::Minimum();
+			// unless the range holds every int64, then the sequence stops before its last value
+			exhausted = next_counter >= data.min_value && next_counter <= data.max_value;
+		}
+		if (exhausted && data.increment < 0) {
 			throw SequenceException("nextval: reached minimum value of sequence %s (%lld)", name, data.min_value);
 		}
-		if (result > data.max_value || overflow) {
-			throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", name, data.max_value);
+		if (exhausted) {
+			throw SequenceException("nextval: reached maximum value of sequence %s (%lld)", name, data.max_value);
 		}
 	}
 	data.counter = next_counter;
