@@ -80,7 +80,6 @@ unique_ptr<LogicalOperator> EmptyResultPullup::Optimize(unique_ptr<LogicalOperat
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_PIVOT:
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
-	case LogicalOperatorType::LOGICAL_TOP_N:
 	case LogicalOperatorType::LOGICAL_LIMIT:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 		for (auto &child : op->children) {
