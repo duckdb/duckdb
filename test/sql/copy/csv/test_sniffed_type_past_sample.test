@@ -168,6 +168,11 @@ SELECT max(a), max(b) FROM read_csv(['{TEST_DIR}/columns_ab.csv', '{TEST_DIR}/co
 ----
 <REGEX>:.*converting column "b".*
 
+query I
+SELECT max(a) FROM read_csv(['{TEST_DIR}/columns_ab.csv', '{TEST_DIR}/columns_ba.csv'], types = {'a': 'BIGINT'}, sample_size = 2048, union_by_name = true)
+----
+2
+
 # BIGNUM values are checked as the sniffer checks them
 statement ok
 COPY (SELECT CASE WHEN i < 2048 THEN '1' || repeat('0', 40) ELSE '1.5' END AS n FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_bignum.csv' (HEADER, QUOTE '');
@@ -177,10 +182,10 @@ SELECT * FROM read_csv('{TEST_DIR}/past_sample_bignum.csv', sample_size = 2048)
 ----
 Could not convert string "1.5" to 'BIGNUM'
 
-query I
-SELECT max(n) FROM read_csv('{TEST_DIR}/past_sample_bignum.csv', sample_size = 2048, types = {'n': 'BIGNUM'})
+query II
+SELECT min(n), count(n) FROM read_csv('{TEST_DIR}/past_sample_bignum.csv', sample_size = 2048, types = {'n': 'BIGNUM'})
 ----
-10000000000000000000000000000000000000000
+2	2049
 
 # a comma decimal separator is refined as strictly as the first chunk is sniffed
 statement ok
