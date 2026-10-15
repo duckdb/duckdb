@@ -25,6 +25,9 @@ TEST_CASE("Test that listing and updating extensions skip an install in progress
 
 	auto result = con.Query("SELECT count(*) FROM duckdb_extensions() WHERE extension_name = 'in_progress'");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	result = con.Query("UPDATE EXTENSIONS");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->RowCount() == 0);
 
 	WriteExtensionDirectoryFile(*fs, temp_path + ".info", "");
 	result = con.Query("SELECT count(*) FROM duckdb_extensions() WHERE extension_name = 'in_progress'");
@@ -34,10 +37,15 @@ TEST_CASE("Test that listing and updating extensions skip an install in progress
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->RowCount() == 0);
 
-	// an installed extension next to it is still listed
+	// an installed extension is still listed, also while it is installed again
 	WriteExtensionDirectoryFile(*fs, fs->JoinPath(directory, "installed.duckdb_extension"), "stub");
-	result = con.Query("SELECT extension_name, installed FROM duckdb_extensions() WHERE extension_name IN "
-	                   "('in_progress', 'installed')");
+	WriteExtensionDirectoryFile(*fs,
+	                            fs->JoinPath(directory, "installed.duckdb_extension.tmp-5d2f8c1e-7b3a-4c9d-8e6f-"
+	                                                    "1a2b3c4d5e6f.duckdb_extension"),
+	                            "not an extension yet");
+	result = con.Query("SELECT extension_name, installed, install_path LIKE '%.tmp-%' FROM duckdb_extensions() WHERE "
+	                   "extension_name IN ('in_progress', 'installed')");
 	REQUIRE(CHECK_COLUMN(result, 0, {"installed"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {true}));
+	REQUIRE(CHECK_COLUMN(result, 2, {false}));
 }
