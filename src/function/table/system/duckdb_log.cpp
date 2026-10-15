@@ -43,18 +43,6 @@ string DuckDBLogFun::GetSinkName(TableFunctionBindInput &input) {
 	return sink_setting->second.GetValue<string>();
 }
 
-shared_ptr<LogSink> DuckDBLogFun::GetLogSink(ClientContext &context, const string &sink_name) {
-	auto &log_manager = LogManager::Get(context);
-	if (sink_name.empty()) {
-		return log_manager.GetLogSink();
-	}
-	auto log_sink = log_manager.GetRegisteredLogSink(sink_name);
-	if (!log_sink) {
-		throw InvalidInputException("Log sink '%s' is not registered", sink_name);
-	}
-	return log_sink;
-}
-
 static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunctionBindInput &input,
                                               vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("context_id");
@@ -77,13 +65,7 @@ static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunct
 
 unique_ptr<GlobalTableFunctionState> DuckDBLogInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<DuckDBLogBindData>();
-	auto log_sink = DuckDBLogFun::GetLogSink(context, bind_data.sink_name);
-	if (!log_sink->CanScan(LoggingTargetTable::LOG_ENTRIES)) {
-		throw InvalidConfigurationException(
-		    "Log sink '%s' does not support this query. Select a queryable sink, such as 'memory' or 'file', before "
-		    "generating logs.",
-		    bind_data.sink_name.empty() ? LogManager::Get(context).GetConfig().storage : bind_data.sink_name);
-	}
+	auto log_sink = LogManager::Get(context).GetScannableLogSink(bind_data.sink_name, LoggingTargetTable::LOG_ENTRIES);
 	return make_uniq<DuckDBLogData>(std::move(log_sink));
 }
 
@@ -112,7 +94,7 @@ static double DuckDBLogProgress(ClientContext &context, const FunctionData *bind
 
 unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	auto sink_name = DuckDBLogFun::GetSinkName(input);
-	auto log_sink = DuckDBLogFun::GetLogSink(context, sink_name);
+	auto log_sink = LogManager::Get(context).GetLogSink(sink_name);
 
 	bool denormalized_table = false;
 	auto denormalized_table_setting = input.named_parameters.find("denormalized_table");

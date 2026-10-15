@@ -55,13 +55,7 @@ static unique_ptr<FunctionData> DuckDBLogContextBind(ClientContext &context, Tab
 
 unique_ptr<GlobalTableFunctionState> DuckDBLogContextInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<DuckDBLogContextBindData>();
-	auto log_sink = DuckDBLogFun::GetLogSink(context, bind_data.sink_name);
-	if (!log_sink->CanScan(LoggingTargetTable::LOG_CONTEXTS)) {
-		throw InvalidConfigurationException(
-		    "Log sink '%s' does not support this query. Select a queryable sink, such as 'memory' or 'file', before "
-		    "generating logs.",
-		    bind_data.sink_name.empty() ? LogManager::Get(context).GetConfig().storage : bind_data.sink_name);
-	}
+	auto log_sink = LogManager::Get(context).GetScannableLogSink(bind_data.sink_name, LoggingTargetTable::LOG_CONTEXTS);
 	return make_uniq<DuckDBLogContextData>(std::move(log_sink));
 }
 
@@ -71,7 +65,7 @@ void DuckDBLogContextFunction(ClientContext &context, TableFunctionInput &data_p
 }
 
 static unique_ptr<TableRef> DuckDBLogContextsBindReplace(ClientContext &context, TableFunctionBindInput &input) {
-	auto log_sink = DuckDBLogFun::GetLogSink(context, DuckDBLogFun::GetSinkName(input));
+	auto log_sink = LogManager::Get(context).GetLogSink(DuckDBLogFun::GetSinkName(input));
 
 	// Attempt to let the sink BindReplace the scan function
 	return log_sink->BindReplace(context, input, LoggingTargetTable::LOG_CONTEXTS);

@@ -151,8 +151,6 @@ struct DuckDBLogFun {
 
 	//! The value of the sink parameter, or an empty string if it was not given
 	static string GetSinkName(TableFunctionBindInput &input);
-	//! The registered log sink with this name, or the log sink if the name is empty
-	static shared_ptr<LogSink> GetLogSink(ClientContext &context, const string &sink_name);
 };
 
 struct DuckDBLogContextFun {
