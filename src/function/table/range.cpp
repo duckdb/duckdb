@@ -289,7 +289,7 @@ unique_ptr<NodeStatistics> RangeDateTimeCardinality(ClientContext &context, cons
 		return nullptr;
 	}
 	auto &bind_data = bind_data_p->Cast<RangeDateTimeBindData>();
-	// months and days have no fixed length, so the row count is an estimate and not a maximum
+	// months have no fixed length and the division truncates, so the row count is an estimate and not a maximum
 	return make_uniq<NodeStatistics>(bind_data.cardinality);
 }
 

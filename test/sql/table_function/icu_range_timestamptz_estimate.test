@@ -35,7 +35,7 @@ SELECT s FROM (SELECT sum(1::BIGINT) AS s FROM generate_series(TIMESTAMPTZ '2024
 ----
 8
 
-# a sum must not use a kernel that cannot overflow
+# a sum must not use a kernel that assumes no overflow
 statement ok
 CREATE TABLE big AS SELECT 1700000000000000000::BIGINT AS v;
 

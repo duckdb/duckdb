@@ -12,3 +12,12 @@ query I
 SELECT count(*) FROM (SELECT * FROM range(DATE '2023-02-01', DATE '2023-03-02', INTERVAL 1 MONTH) LIMIT 1)
 ----
 1
+
+# a sum must not use a kernel that assumes no overflow
+statement ok
+CREATE TABLE big AS SELECT 5000000000000000000::BIGINT AS v;
+
+query II
+SELECT sum(v), count(*) FROM big, range(TIMESTAMP '2023-02-01', TIMESTAMP '2023-03-02', INTERVAL 1 MONTH)
+----
+10000000000000000000	2
