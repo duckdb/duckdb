@@ -538,7 +538,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		}
 	}
 	// cast the conflict columns to the types of the table, so they are compared as they are inserted
-	// collations are left out, as the index compares the values without them
+	// a collation is not part of the value, so it is left out of the cast
 	auto cast_star = make_uniq<StarExpression>();
 	for (auto &distinct_on_columns : all_distinct_on_columns) {
 		for (auto &col : distinct_on_columns) {
