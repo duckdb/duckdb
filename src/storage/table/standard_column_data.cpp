@@ -165,8 +165,13 @@ void StandardColumnData::Update(TransactionData transaction, DuckTableEntry &tab
 	FetchUpdateData(standard_state, row_ids, base_vector, row_group_start);
 	validity->FetchUpdateData(validity_state, row_ids, base_vector, row_group_start);
 
-	UpdateInternal(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,
-	               row_group_start);
+	// a concurrent update of the same rows can be stored in either the data or the validity, so update both at once
+	lock_guard<mutex> update_guard(update_lock);
+	if (!updates) {
+		updates = make_uniq<UpdateSegment>(*this);
+	}
+	updates->Update(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,
+	                row_group_start);
 	validity->UpdateInternal(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,
 	                         row_group_start);
 }

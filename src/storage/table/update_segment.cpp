@@ -1490,10 +1490,25 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 
 	// update statistics
 	SelectionVector sel;
+	idx_t not_null_count;
 	{
 		lock_guard<mutex> stats_guard(stats_lock);
-		count = statistics_update_function(this, stats, update_format, count, sel);
+		not_null_count = statistics_update_function(this, stats, update_format, count, sel);
 	}
+	if (not_null_count < count && transaction.transaction) {
+		// rows set to NULL are not stored here, but still conflict with updates of their values
+		idx_t vector_index = (UnsafeNumericCast<idx_t>(ids[0]) - row_group_start) / STANDARD_VECTOR_SIZE;
+		if (root && vector_index < root->info.size() && root->info[vector_index].IsSet()) {
+			SelectionVector all_sel;
+			auto all_count = SortSelectionVector(all_sel, count, ids);
+			auto root_pin = root->info[vector_index].Pin();
+			UndoBufferReference node_ref;
+			CheckForConflicts(UpdateInfo::Get(root_pin).next, transaction, ids, all_sel, all_count,
+			                  UnsafeNumericCast<row_t>(row_group_start + vector_index * STANDARD_VECTOR_SIZE),
+			                  node_ref);
+		}
+	}
+	count = not_null_count;
 	if (count == 0) {
 		return;
 	}
