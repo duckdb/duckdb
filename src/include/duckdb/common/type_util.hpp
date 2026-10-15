@@ -15,6 +15,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/types/double_na_equal.hpp"
+#include "duckdb/common/types/interval_exact_equal.hpp"
 
 namespace duckdb {
 struct bignum_t;
@@ -87,7 +88,7 @@ PhysicalType GetTypeId() {
 	} else if (std::is_same<TYPE, const char *>() || std::is_same<TYPE, char *>() || std::is_same<TYPE, string_t>() ||
 	           std::is_same<TYPE, bignum_t>()) {
 		return PhysicalType::VARCHAR;
-	} else if (std::is_same<TYPE, interval_t>()) {
+	} else if (std::is_same<TYPE, interval_t>() || std::is_same<TYPE, interval_exact_equal>()) {
 		return PhysicalType::INTERVAL;
 	} else if (std::is_same<TYPE, list_entry_t>()) {
 		return PhysicalType::LIST;

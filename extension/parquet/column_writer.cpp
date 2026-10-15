@@ -30,6 +30,7 @@
 #include "duckdb/common/types/double_na_equal.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/interval_exact_equal.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/uhugeint.hpp"
@@ -555,7 +556,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		return make_uniq<StandardColumnWriter<hugeint_t, ParquetUUIDTargetType, ParquetUUIDOperator>>(
 		    writer, std::move(schema), path_in_schema);
 	case LogicalTypeId::INTERVAL:
-		return make_uniq<StandardColumnWriter<interval_t, ParquetIntervalTargetType, ParquetIntervalOperator>>(
+		return make_uniq<
+		    StandardColumnWriter<interval_exact_equal, ParquetIntervalTargetType, ParquetIntervalOperator>>(
 		    writer, std::move(schema), path_in_schema);
 	case LogicalTypeId::ENUM:
 		return make_uniq<EnumColumnWriter>(writer, std::move(schema), path_in_schema);
@@ -623,6 +625,11 @@ hash_t Hash(double_na_equal val) {
 		return Hash<double>(std::numeric_limits<double>::quiet_NaN());
 	}
 	return Hash<double>(val.val);
+}
+
+template <>
+hash_t Hash(interval_exact_equal val) {
+	return Hash<interval_t>(val);
 }
 
 } // namespace duckdb

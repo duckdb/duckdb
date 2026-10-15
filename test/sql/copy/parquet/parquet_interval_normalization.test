@@ -1,0 +1,49 @@
+# name: test/sql/copy/parquet/parquet_interval_normalization.test
+# description: Keep intervals that are only equal after normalization apart in Parquet dictionaries
+# group: [parquet]
+
+require parquet
+
+statement ok
+CREATE TABLE intervals AS
+SELECT [INTERVAL '32 days', INTERVAL '1 month 2 days', INTERVAL '30 days', INTERVAL '1 month',
+        INTERVAL '31 days', INTERVAL '1 month 1 day'][i % 6 + 1] AS iv
+FROM range(3000) t(i)
+
+statement ok
+CREATE TABLE nested AS SELECT iv, [iv, iv] AS l, {'iv': iv} AS s FROM intervals
+
+foreach version V1 V2
+
+statement ok
+COPY nested TO '{TEST_DIR}/interval_normalization_{version}.parquet' (FORMAT PARQUET, PARQUET_VERSION {version})
+
+query IIII
+SELECT iv::VARCHAR, count(*), count(*) FILTER (WHERE l[2]::VARCHAR = iv::VARCHAR), count(*) FILTER (WHERE s.iv::VARCHAR = iv::VARCHAR)
+FROM read_parquet('{TEST_DIR}/interval_normalization_{version}.parquet')
+GROUP BY ALL ORDER BY ALL
+----
+1 month	500	500	500
+1 month 1 day	500	500	500
+1 month 2 days	500	500	500
+30 days	500	500	500
+31 days	500	500	500
+32 days	500	500	500
+
+query I
+SELECT count(*) FROM (
+	SELECT iv::VARCHAR, l::VARCHAR, s::VARCHAR FROM read_parquet('{TEST_DIR}/interval_normalization_{version}.parquet')
+	EXCEPT ALL
+	SELECT iv::VARCHAR, l::VARCHAR, s::VARCHAR FROM nested
+)
+----
+0
+
+# the values are still dictionary encoded
+query II
+SELECT count(*), bool_and(encodings = CASE WHEN '{version}' = 'V1' THEN 'PLAIN_DICTIONARY' ELSE 'RLE_DICTIONARY' END)
+FROM parquet_metadata('{TEST_DIR}/interval_normalization_{version}.parquet')
+----
+3	true
+
+endloop
