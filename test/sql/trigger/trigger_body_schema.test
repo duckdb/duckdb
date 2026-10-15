@@ -291,3 +291,63 @@ query II
 SELECT (SELECT list(x) FROM other.q.log), (SELECT count(*) FROM memory.q.log);
 ----
 [10]	0
+
+# a qualifier that names a database for the trigger, and a schema for the statement that fires it
+statement ok
+CREATE SCHEMA memory.other;
+
+statement ok
+CREATE MACRO other.main.val() AS 30;
+
+statement ok
+USE other.main;
+
+statement ok
+CREATE TRIGGER other_catalog AFTER INSERT ON t FOR EACH STATEMENT INSERT INTO audit VALUES (other.val());
+
+statement ok
+USE memory;
+
+statement ok
+INSERT INTO other.main.t VALUES (3);
+
+query I
+SELECT list(x ORDER BY x) FROM other.main.audit;
+----
+[2, 2, 2, 30]
+
+# names qualified with a nested schema resolve in the database of the trigger
+statement ok
+CREATE SCHEMA other.q.r;
+
+statement ok
+CREATE SCHEMA memory.q.r;
+
+statement ok
+CREATE MACRO other.q.r.val() AS 40;
+
+statement ok
+CREATE MACRO memory.q.r.val() AS 50;
+
+statement ok
+CREATE TABLE other.q.r.log (x INTEGER);
+
+statement ok
+CREATE TABLE memory.q.r.log (x INTEGER);
+
+statement ok
+USE other.main;
+
+statement ok
+CREATE TRIGGER other_nested AFTER INSERT ON t FOR EACH STATEMENT INSERT INTO q.r.log VALUES (q.r.val());
+
+statement ok
+USE memory;
+
+statement ok
+INSERT INTO other.main.t VALUES (4);
+
+query II
+SELECT (SELECT list(x) FROM other.q.r.log), (SELECT count(*) FROM memory.q.r.log);
+----
+[40]	0

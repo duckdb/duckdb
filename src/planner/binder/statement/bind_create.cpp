@@ -115,7 +115,7 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, Identifier &catalog, Id
 }
 
 void Binder::BindSchemaOrCatalog(Identifier &catalog, Identifier &schema) {
-	BindSchemaOrCatalog(context, catalog, schema);
+	BindSchemaOrCatalog(entry_retriever, catalog, schema);
 }
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName &qualified_name) {
@@ -137,7 +137,7 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, QualifiedName &qualifie
 }
 
 void Binder::BindSchemaOrCatalog(QualifiedName &qualified_name) {
-	BindSchemaOrCatalog(context, qualified_name);
+	BindSchemaOrCatalog(entry_retriever, qualified_name);
 }
 
 Identifier Binder::BindCatalog(const Identifier &catalog) {
