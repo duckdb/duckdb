@@ -50,7 +50,7 @@ public:
 	virtual ~WriteAheadLog();
 
 public:
-	//! Replay and initialize the WAL, through the file system of the client of the context if it has one
+	//! Replay and initialize the WAL
 	static unique_ptr<WriteAheadLog> Replay(QueryContext context, StorageManager &storage_manager,
 	                                        const string &wal_path);
 
