@@ -96,7 +96,8 @@ public:
 	void Rollback();
 	idx_t EstimatedSize() const;
 
-	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state);
+	//! Appends to the table's indexes at commit. A returned error means the indexes were restored.
+	ErrorData AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state);
 	void AppendToTable(DuckTransaction &transaction, TableAppendState &append_state);
 	ErrorData AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
 	                          const vector<LogicalType> &table_types, row_t &start_row);

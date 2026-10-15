@@ -3,7 +3,6 @@
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -196,27 +195,22 @@ void LocalTableStorage::AppendToTable(DuckTransaction &transaction, TableAppendS
 	table.FinalizeAppend(transaction, append_state);
 }
 
-void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state) {
+ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state) {
 	auto &table = table_ref.get();
 	if (!table.HasIndexes()) {
 		// no indexes to append to
-		return;
+		return ErrorData();
 	}
 	auto data_table_info = table.GetDataTableInfo();
 	auto &index_list = data_table_info->GetIndexes();
 	auto &collection = *row_groups->collection;
 	auto error = AppendToIndexes(transaction, collection, index_list, table.GetTypes(), append_state.current_row);
-	if (!error.HasError()) {
-		return;
+	if (error.HasError()) {
+		// a returned error means the index append removed the failing chunk's keys before
+		// returning: remove the keys of the chunks appended before it
+		RevertIndexAppend(transaction, append_state.row_start, append_state.current_row);
 	}
-	// a returned error means the index append removed the failing chunk's keys before returning:
-	// remove the keys of the chunks appended before it
-	RevertIndexAppend(transaction, append_state.row_start, append_state.current_row);
-	if (error.Type() == ExceptionType::CONSTRAINT) {
-		error.Throw();
-	}
-	// fully reverted: rethrow as a retryable commit failure
-	throw TransactionException(error.RawMessage());
+	return error;
 }
 
 void LocalTableStorage::RevertIndexAppend(DuckTransaction &transaction, row_t row_start, row_t row_end) {
@@ -613,33 +607,32 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 	}
 	// The code below publishes the local rows into the shared indexes and the shared table.
 	// Rollback can only undo changes recorded in the undo buffer, and the append is only
-	// recorded there once PushAppend completes. Until then, a failure must either revert the
-	// shared state it modified (constraint conflicts do, and remain retryable) or invalidate
-	// the database (the catch below).
+	// recorded there once PushAppend completes. Until then, a returned error means the shared
+	// state was restored and the commit can be retried; anything thrown may have left changes
+	// that a rollback cannot revert and invalidates the database (the catch below).
+	ErrorData retryable_error;
 	try {
-		// Append to the indexes. A conflict reverts the keys and surfaces as a CONSTRAINT error.
-		storage.AppendToIndexes(transaction, append_state);
-		// table_entry is set through the append path (InitializeAppend/Append/LocalMerge/Alter)
-		D_ASSERT(storage.table_entry);
-		if (merge_storage) {
-			// move over the row groups
-			table.MergeStorage(storage.GetCollection(), commit_state);
-		} else {
-			// copy the local rows into the shared table
-			storage.AppendToTable(transaction, append_state);
+		retryable_error = storage.AppendToIndexes(transaction, append_state);
+		if (!retryable_error.HasError()) {
+			// table_entry is set through the append path (InitializeAppend/Append/LocalMerge/Alter)
+			D_ASSERT(storage.table_entry);
+			if (merge_storage) {
+				// move over the row groups
+				table.MergeStorage(storage.GetCollection(), commit_state);
+			} else {
+				// copy the local rows into the shared table
+				storage.AppendToTable(transaction, append_state);
+			}
+			ThrowOnForcedFlushAppendFailure(table);
+			transaction.PushAppend(*storage.table_entry, NumericCast<idx_t>(append_state.row_start), append_count);
 		}
-		ThrowOnForcedFlushAppendFailure(table);
-		transaction.PushAppend(*storage.table_entry, NumericCast<idx_t>(append_state.row_start), append_count);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
-		// CONSTRAINT and TRANSACTION errors are only thrown after the index append reverted
-		// its changes and remain retryable; any other error may have left changes that a
-		// rollback cannot revert: invalidate the database
-		if (error.Type() == ExceptionType::CONSTRAINT || error.Type() == ExceptionType::TRANSACTION) {
-			throw;
-		}
 		throw FatalException("Failed to flush table \"%s\" during commit: %s", table.GetTableName(),
 		                     error.RawMessage());
+	}
+	if (retryable_error.HasError()) {
+		retryable_error.Throw();
 	}
 
 #ifdef DEBUG
