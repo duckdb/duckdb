@@ -1,0 +1,35 @@
+# name: test/sql/pg_catalog/sqlalchemy_columns.test
+# description: The column reflection query of SQLAlchemy 2.1, as sent by duckdb_engine
+# group: [pg_catalog]
+
+require json
+
+statement ok
+CREATE TABLE items (id INTEGER PRIMARY KEY, name VARCHAR NOT NULL DEFAULT 'x', price DECIMAL(9, 2));
+
+statement ok
+COMMENT ON COLUMN items.price IS 'in euro';
+
+query IIIIIIIII
+SELECT pg_catalog.pg_attribute.attname AS name, pg_catalog.format_type(pg_catalog.pg_attribute.atttypid, pg_catalog.pg_attribute.atttypmod) AS format_type, CASE WHEN pg_catalog.pg_attribute.atthasdef THEN (SELECT pg_catalog.pg_get_expr(pg_catalog.pg_attrdef.adbin, pg_catalog.pg_attrdef.adrelid) AS pg_get_expr_1
+FROM pg_catalog.pg_attrdef
+WHERE pg_catalog.pg_attribute.atthasdef AND pg_catalog.pg_attrdef.adrelid = pg_catalog.pg_attribute.attrelid AND pg_catalog.pg_attrdef.adnum = pg_catalog.pg_attribute.attnum) ELSE NULL END AS "default", pg_catalog.pg_attribute.attnotnull AS not_null, pg_catalog.pg_class.relname AS table_name, pg_catalog.pg_description.description AS comment, NULL AS generated, NULL AS identity_options, CASE WHEN (pg_catalog.pg_attribute.attcollation != 0 AND (SELECT pg_catalog.pg_type.typcollation
+FROM pg_catalog.pg_type
+WHERE pg_catalog.pg_type.oid = pg_catalog.pg_attribute.atttypid) != pg_catalog.pg_attribute.attcollation) THEN (SELECT json_build_object('name', pg_catalog.pg_collation.collname, 'schema', CASE WHEN pg_catalog.pg_collation_is_visible(pg_catalog.pg_collation.oid) THEN NULL ELSE pg_catalog.pg_namespace.nspname END) AS json_build_object_1
+FROM pg_catalog.pg_collation JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_collation.collnamespace
+WHERE pg_catalog.pg_collation.oid = pg_catalog.pg_attribute.attcollation) ELSE NULL END AS collation
+FROM pg_catalog.pg_class LEFT OUTER JOIN pg_catalog.pg_attribute ON pg_catalog.pg_class.oid = pg_catalog.pg_attribute.attrelid AND pg_catalog.pg_attribute.attnum > 0 AND NOT pg_catalog.pg_attribute.attisdropped LEFT OUTER JOIN pg_catalog.pg_description ON pg_catalog.pg_description.objoid = pg_catalog.pg_attribute.attrelid AND pg_catalog.pg_description.objsubid = pg_catalog.pg_attribute.attnum JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_class.relnamespace
+WHERE pg_catalog.pg_class.relkind = ANY (ARRAY['r', 'p', 'f']) AND pg_catalog.pg_table_is_visible(pg_catalog.pg_class.oid) AND pg_catalog.pg_namespace.nspname != 'pg_catalog' AND pg_catalog.pg_class.relname IN ('items') ORDER BY pg_catalog.pg_class.relname, pg_catalog.pg_attribute.attnum;
+----
+id	int4	NULL	true	items	NULL	NULL	NULL	NULL
+name	varchar	'x'	true	items	NULL	NULL	NULL	NULL
+price	numeric(9,2)	NULL	false	items	in euro	NULL	NULL	NULL
+
+query III
+SELECT oid, collname, collnamespace FROM pg_catalog.pg_collation;
+----
+
+query I
+SELECT (SELECT pg_catalog.pg_collation.collnamespace FROM pg_catalog.pg_collation) FROM pg_catalog.pg_class WHERE relname = 'items';
+----
+NULL
