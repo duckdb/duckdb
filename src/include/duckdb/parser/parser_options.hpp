@@ -17,6 +17,7 @@
 namespace duckdb {
 class ClientContext;
 class ExtensionCallbackManager;
+class Logger;
 class ParserExtension;
 struct CompiledGrammar;
 
@@ -38,6 +39,8 @@ public:
 	optional_ptr<const ExtensionCallbackManager> extensions;
 	AllowParserOverride parser_override_setting = AllowParserOverride::DEFAULT_OVERRIDE;
 	shared_ptr<CompiledGrammar> compiled_grammar;
+	//! Logger for parser warnings (not set when parsing without a client context)
+	shared_ptr<Logger> logger;
 };
 
 } // namespace duckdb

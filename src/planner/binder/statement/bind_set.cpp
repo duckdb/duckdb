@@ -1,4 +1,3 @@
-#include "duckdb/logging/logger.hpp"
 #include "duckdb/parser/statement/set_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_set.hpp"
@@ -14,13 +13,6 @@ BoundStatement Binder::Bind(SetVariableStatement &stmt) {
 	BoundStatement result;
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
-
-	if (stmt.from_pragma) {
-		DUCKDB_LOG_WARNING(context,
-		                   "Using \"PRAGMA %s=...\" to set a setting is deprecated and will be removed in a future "
-		                   "release, use \"SET %s=...\" instead.",
-		                   stmt.name.GetIdentifierName(), stmt.name.GetIdentifierName());
-	}
 
 	// evaluate the scalar value
 	Value value;

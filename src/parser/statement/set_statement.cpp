@@ -14,7 +14,7 @@ SetVariableStatement::SetVariableStatement(Identifier name_p, unique_ptr<ParsedE
 }
 
 SetVariableStatement::SetVariableStatement(const SetVariableStatement &other)
-    : SetStatement(other), value(other.value->Copy()), from_pragma(other.from_pragma) {
+    : SetStatement(other), value(other.value->Copy()) {
 }
 
 unique_ptr<SQLStatement> SetVariableStatement::Copy() const {
