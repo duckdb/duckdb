@@ -430,10 +430,19 @@ bool DatabaseManager::IsAttachedDatabaseFile(ClientContext &context, const strin
 	auto &fs = FileSystem::GetFileSystem(context);
 	// attached database paths are canonicalized when the database is attached
 	auto canonical_path = fs.CanonicalizePath(path);
-	if (StringUtil::EndsWith(canonical_path, ".wal")) {
-		canonical_path = canonical_path.substr(0, canonical_path.size() - 4);
+	if (path_manager->IsDatabasePath(canonical_path)) {
+		return true;
 	}
-	return path_manager->IsDatabasePath(canonical_path);
+	// the WAL files of the database
+	for (auto &wal_suffix : {".wal", ".wal.checkpoint", ".wal.recovery"}) {
+		if (StringUtil::EndsWith(canonical_path, wal_suffix)) {
+			auto database_path = canonical_path.substr(0, canonical_path.size() - strlen(wal_suffix));
+			if (path_manager->IsDatabasePath(database_path)) {
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 vector<string> DatabaseManager::GetAttachedDatabasePaths() {
