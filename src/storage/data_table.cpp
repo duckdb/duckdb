@@ -1,6 +1,4 @@
 #include "duckdb/storage/data_table.hpp"
-
-#include <algorithm>
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/transaction/commit_state.hpp"
@@ -1344,18 +1342,6 @@ idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, DuckTab
 
 	row_identifiers.Flatten();
 	auto ids = FlatVector::GetDataMutable<row_t>(row_identifiers);
-
-	// the same row can be matched multiple times (e.g. DELETE ... USING with duplicate matches) - delete it only once
-	// the ids are sorted, which also groups the committed rows before the transaction-local rows
-	vector<row_t> sorted_ids(ids, ids + count);
-	std::sort(sorted_ids.begin(), sorted_ids.end());
-	auto unique_end = std::unique(sorted_ids.begin(), sorted_ids.end());
-	Vector unique_row_ids(LogicalType::ROW_TYPE, count);
-	if (NumericCast<idx_t>(unique_end - sorted_ids.begin()) != count) {
-		count = NumericCast<idx_t>(unique_end - sorted_ids.begin());
-		memcpy(FlatVector::GetDataMutable<row_t>(unique_row_ids), sorted_ids.data(), count * sizeof(row_t));
-		return Delete(state, context, table_entry, unique_row_ids, count);
-	}
 
 	idx_t pos = 0;
 	idx_t delete_count = 0;

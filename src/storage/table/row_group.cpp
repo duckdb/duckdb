@@ -2112,9 +2112,10 @@ void RowGroup::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group
 //===--------------------------------------------------------------------===//
 class VersionDeleteState {
 public:
-	VersionDeleteState(RowGroup &info, TransactionData transaction, DuckTableEntry &table_entry, idx_t base_row)
+	VersionDeleteState(RowGroup &info, TransactionData transaction, DuckTableEntry &table_entry, idx_t base_row,
+	                   optional_ptr<vector<row_t>> deleted_ids)
 	    : info(info), transaction(transaction), table_entry(table_entry), current_chunk(DConstants::INVALID_INDEX),
-	      count(0), base_row(base_row), delete_count(0) {
+	      count(0), base_row(base_row), delete_count(0), deleted_ids(deleted_ids) {
 	}
 
 	RowGroup &info;
@@ -2126,6 +2127,7 @@ public:
 	idx_t base_row;
 	idx_t chunk_row;
 	idx_t delete_count;
+	optional_ptr<vector<row_t>> deleted_ids;
 
 public:
 	void Delete(row_t row_id);
@@ -2133,8 +2135,8 @@ public:
 };
 
 idx_t RowGroup::Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids, idx_t count,
-                       idx_t row_group_start) {
-	VersionDeleteState del_state(*this, transaction, table_entry, row_group_start);
+                       idx_t row_group_start, optional_ptr<vector<row_t>> deleted_ids) {
+	VersionDeleteState del_state(*this, transaction, table_entry, row_group_start, deleted_ids);
 
 	// obtain a write lock
 	for (idx_t i = 0; i < count; i++) {
@@ -2192,6 +2194,12 @@ void VersionDeleteState::Flush() {
 	// this is returned in the actual_delete_count
 	auto actual_delete_count = info.DeleteRows(current_chunk, transaction.GetTransactionId(), rows, count);
 	delete_count += actual_delete_count;
+	if (deleted_ids) {
+		// DeleteRows moves the rows that were actually deleted to the front
+		for (idx_t i = 0; i < actual_delete_count; i++) {
+			deleted_ids->push_back(UnsafeNumericCast<row_t>(base_row + chunk_row) + rows[i]);
+		}
+	}
 	if (transaction.transaction && actual_delete_count > 0) {
 		// now push the delete into the undo buffer, but only if any deletes were actually performed
 		transaction.transaction->PushDelete(table_entry, info.GetOrCreateVersionInfo(), current_chunk, rows,

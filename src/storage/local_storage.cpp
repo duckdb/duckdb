@@ -1,4 +1,5 @@
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
@@ -540,15 +541,29 @@ idx_t LocalStorage::Delete(DataTable &table, DuckTableEntry &table_entry, Vector
 	auto storage = table_manager.GetStorage(table);
 	D_ASSERT(storage);
 
-	// delete from unique indices (if any)
-	if (!storage->append_indexes.Empty()) {
-		storage->GetCollection().RemoveFromIndexes(context, storage->append_indexes, row_ids, count,
-		                                           IndexRemovalType::MAIN_INDEX_ONLY);
-	}
-
 	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
-	idx_t delete_count = storage->GetCollection().Delete(TransactionData::Unversioned(), table_entry, ids, count);
+	if (storage->append_indexes.Empty()) {
+		idx_t delete_count = storage->GetCollection().Delete(TransactionData::Unversioned(), table_entry, ids, count);
+		storage->deleted_rows += delete_count;
+		return delete_count;
+	}
+	// a row can be matched multiple times (e.g. DELETE ... USING) - only remove the rows that were deleted now from
+	// the unique indices
+	vector<row_t> deleted_ids;
+	idx_t delete_count =
+	    storage->GetCollection().Delete(TransactionData::Unversioned(), table_entry, ids, count, deleted_ids);
 	storage->deleted_rows += delete_count;
+	if (!deleted_ids.empty()) {
+		Vector deleted_row_ids(LogicalType::ROW_TYPE, deleted_ids.size());
+		{
+			auto writer = FlatVector::Writer<row_t>(deleted_row_ids, deleted_ids.size());
+			for (auto &row_id : deleted_ids) {
+				writer.WriteValue(row_id);
+			}
+		}
+		storage->GetCollection().RemoveFromIndexes(context, storage->append_indexes, deleted_row_ids,
+		                                           deleted_ids.size(), IndexRemovalType::MAIN_INDEX_ONLY);
+	}
 	return delete_count;
 }
 
