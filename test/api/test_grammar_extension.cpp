@@ -1191,6 +1191,246 @@ TEST_CASE("FIRST sets do not assume built-in semantics for derived matchers", "[
 	REQUIRE(list.MatchParseResult(state).IsSuccess());
 }
 
+enum class ListChainTestVariant {
+	OPTIONAL_TAILS,
+	INNER_REQUIRED,
+	OUTER_REQUIRED,
+	EMPTY_INNER,
+	UNNAMED_ATOM,
+	NONCOLLAPSIBLE_INNER,
+	NONCOLLAPSIBLE_MIDDLE,
+	NONCOLLAPSIBLE_OUTER,
+	SUPPRESSED_MIDDLE,
+	MEMOIZED_MIDDLE
+};
+
+static vector<string> MatchListChainTest(bool structural, ListChainTestVariant variant, MatchMode mode,
+                                         const string &text, bool cursor) {
+	CompiledGrammarRule atom_rule("Atom", nullptr), inner_rule("Inner", nullptr), middle_rule("Middle", nullptr),
+	    outer_rule("Outer", nullptr);
+	KeywordMatcher a("A", KeywordInfo()), b("B", KeywordInfo()), c("C", KeywordInfo()), d("D", KeywordInfo());
+	if (variant != ListChainTestVariant::UNNAMED_ATOM) {
+		a.SetRule(atom_rule);
+	}
+	OptionalMatcher optional_b(b), optional_c(c), optional_d(d);
+	MatcherAllocator matchers;
+	auto &inner = matchers.Allocate(make_uniq<ListMatcher>()).Cast<ListMatcher>();
+	auto &middle = matchers.Allocate(make_uniq<ListMatcher>()).Cast<ListMatcher>();
+	auto &outer = matchers.Allocate(make_uniq<ListMatcher>()).Cast<ListMatcher>();
+	inner.SetRule(inner_rule);
+	middle.SetRule(middle_rule);
+	outer.SetRule(outer_rule);
+	auto set_flags = [&](ListMatcher &matcher, ListChainTestVariant noncollapsible) {
+		if (variant != noncollapsible) {
+			matcher.SetCollapsible();
+		}
+		if (structural) {
+			matcher.SetStructural();
+		}
+	};
+	set_flags(inner, ListChainTestVariant::NONCOLLAPSIBLE_INNER);
+	set_flags(middle, ListChainTestVariant::NONCOLLAPSIBLE_MIDDLE);
+	set_flags(outer, ListChainTestVariant::NONCOLLAPSIBLE_OUTER);
+	if (variant != ListChainTestVariant::EMPTY_INNER) {
+		inner.matchers.push_back(a);
+		inner.matchers.push_back(variant == ListChainTestVariant::INNER_REQUIRED ? reference<Matcher>(b)
+		                                                                         : reference<Matcher>(optional_b));
+	}
+	middle.matchers = {inner, optional_c};
+	outer.matchers = {middle, variant == ListChainTestVariant::OUTER_REQUIRED ? reference<Matcher>(d)
+	                                                                          : reference<Matcher>(optional_d)};
+	middle.suppress_suggestions = variant == ListChainTestVariant::SUPPRESSED_MIDDLE;
+	if (variant == ListChainTestVariant::MEMOIZED_MIDDLE) {
+		middle.SetPackratMemoized();
+	}
+	auto grammar = CompiledGrammar::DefaultGrammar();
+	ComputeFirstSets(outer, grammar->GetKeywordHelper().GetLiteralTable());
+	matchers.InitializeListChains();
+	vector<MatcherToken> tokens;
+	idx_t offset = 0;
+	for (auto &word : StringUtil::Split(text, ' ')) {
+		if (!word.empty()) {
+			tokens.emplace_back(word, offset, TokenType::KEYWORD);
+		}
+		offset += word.size() + 1;
+	}
+	tokens.emplace_back("", text.size(), cursor ? TokenType::END_OF_INPUT_AUTOCOMPLETE : TokenType::END_OF_INPUT);
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	ArenaAllocator processes(Allocator::DefaultAllocator()), cache_allocator(Allocator::DefaultAllocator());
+	ParserPackratCache cache(cache_allocator);
+	idx_t max_position = 0;
+	MatchContext context(suggestions, allocator, processes, max_position, mode, IdentifierCaseMode::PRESERVE_CASE,
+	                     &cache);
+	vector<string> snapshot;
+	for (idx_t attempt = 0; attempt < 2; attempt++) {
+		suggestions.clear();
+		MatchState state(iterator, context);
+		auto result = outer.MatchParseResult(state);
+		REQUIRE(processes.SizeInBytes() == 0);
+		snapshot.push_back(
+		    StringUtil::Format("%d:%llu:%llu", result.IsSuccess(), state.token_iterator.Position(), max_position));
+		for (auto &suggestion : suggestions) {
+			snapshot.push_back(suggestion.keyword.candidate);
+		}
+		vector<reference<ParseResult>> pending;
+		if (result.HasParseResult()) {
+			pending.push_back(*result.GetParseResult());
+		}
+		while (!pending.empty()) {
+			auto &node = pending.back().get();
+			pending.pop_back();
+			auto location = node.GetLocation();
+			snapshot.push_back(StringUtil::Format("%s:%s:%s:%d:%llu:%llu", ParseResultToString(node.type), node.Name(),
+			                                      node.GetRule() ? node.GetRule()->name : string(), node.collapsed,
+			                                      location.offset, location.length));
+			if (node.type == ParseResultType::LIST) {
+				for (auto &child : node.Cast<ListParseResult>().GetChildren()) {
+					pending.push_back(child);
+				}
+			} else if (node.type == ParseResultType::OPTIONAL) {
+				auto &optional = node.Cast<OptionalParseResult>();
+				if (optional.HasResult()) {
+					pending.push_back(optional.GetResult());
+				}
+			}
+		}
+	}
+	return snapshot;
+}
+
+TEST_CASE("Leading list chains preserve results, failure state and suggestions", "[api][grammar_extension]") {
+	auto variant = ListChainTestVariant::OPTIONAL_TAILS;
+	SECTION("Optional tails") {
+	}
+	SECTION("A required inner tail can fail") {
+		variant = ListChainTestVariant::INNER_REQUIRED;
+	}
+	SECTION("A required outer tail can fail") {
+		variant = ListChainTestVariant::OUTER_REQUIRED;
+	}
+	SECTION("An empty inner list retains its own result") {
+		variant = ListChainTestVariant::EMPTY_INNER;
+	}
+	SECTION("An atom without a rule cannot replace its list") {
+		variant = ListChainTestVariant::UNNAMED_ATOM;
+	}
+	SECTION("A noncollapsible inner list retains its result") {
+		variant = ListChainTestVariant::NONCOLLAPSIBLE_INNER;
+	}
+	SECTION("A noncollapsible middle list retains its result") {
+		variant = ListChainTestVariant::NONCOLLAPSIBLE_MIDDLE;
+	}
+	SECTION("A noncollapsible outer list retains its result") {
+		variant = ListChainTestVariant::NONCOLLAPSIBLE_OUTER;
+	}
+	SECTION("Suggestion suppression remains a boundary") {
+		variant = ListChainTestVariant::SUPPRESSED_MIDDLE;
+	}
+	SECTION("Memoized children retain their cache boundary") {
+		variant = ListChainTestVariant::MEMOIZED_MIDDLE;
+	}
+	for (auto mode : {MatchMode::BUILD_PARSE_RESULT, MatchMode::RECOGNIZE_ONLY}) {
+		for (auto cursor : {false, true}) {
+			for (auto &text : vector<string> {"", "A", "A B", "A C", "A D", "A B C D", "A X", "X"}) {
+				CAPTURE(text);
+				CAPTURE(cursor);
+				auto expected = MatchListChainTest(false, variant, mode, text, cursor);
+				auto actual = MatchListChainTest(true, variant, mode, text, cursor);
+				REQUIRE(actual == expected);
+			}
+		}
+	}
+}
+
+TEST_CASE("List chain preparation follows the finalized graph", "[api][grammar_extension]") {
+	ListMatcher parent, child;
+	parent.SetStructural();
+	child.SetStructural();
+	parent.matchers.push_back(child);
+	REQUIRE_FALSE(parent.GetChainChild());
+	parent.InitializeListChain();
+	REQUIRE(parent.GetChainChild().get() == &child);
+
+	SECTION("Changing a link replaces the prepared edge") {
+		ListMatcher replacement;
+		replacement.SetStructural();
+		parent.matchers[0] = replacement;
+		parent.InitializeListChain();
+		REQUIRE(parent.GetChainChild().get() == &replacement);
+	}
+	SECTION("Removing the child clears the prepared edge") {
+		parent.matchers.clear();
+		parent.InitializeListChain();
+		REQUIRE_FALSE(parent.GetChainChild());
+	}
+	SECTION("Parent suppression clears the prepared edge") {
+		parent.suppress_suggestions = true;
+		parent.InitializeListChain();
+		REQUIRE_FALSE(parent.GetChainChild());
+	}
+	SECTION("Child suppression clears the prepared edge") {
+		child.suppress_suggestions = true;
+		parent.InitializeListChain();
+		REQUIRE_FALSE(parent.GetChainChild());
+	}
+	SECTION("Child memoization clears the prepared edge") {
+		child.SetPackratMemoized();
+		parent.InitializeListChain();
+		REQUIRE_FALSE(parent.GetChainChild());
+	}
+	SECTION("Custom implementations do not form a prepared edge") {
+		MatchProcessLifetimeState lifetime;
+		DerivedListTestMatcher custom(lifetime);
+		parent.matchers[0] = custom;
+		parent.InitializeListChain();
+		REQUIRE_FALSE(parent.GetChainChild());
+	}
+}
+
+TEST_CASE("Deep leading list chains retain heap-owned state through exceptions", "[api][grammar_extension]") {
+	CompiledGrammarRule rule("Wrapper", nullptr);
+	MatchProcessLifetimeState lifetime;
+	lifetime.depth = 3;
+	lifetime.create_result = true;
+	NestedTestMatcher leaf(lifetime);
+	vector<unique_ptr<ListMatcher>> lists;
+	for (idx_t i = 0; i < 4096; i++) {
+		auto list = make_uniq<ListMatcher>();
+		list->SetStructural();
+		list->SetCollapsible();
+		list->SetRule(rule);
+		list->matchers.push_back(lists.empty() ? reference<Matcher>(leaf) : reference<Matcher>(*lists.back()));
+		lists.push_back(std::move(list));
+	}
+	for (auto &list : lists) {
+		list->InitializeListChain();
+	}
+	SECTION("Success") {
+	}
+	SECTION("Exception in a custom descendant") {
+		lifetime.throw_at_leaf = true;
+	}
+	vector<MatcherToken> tokens;
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	ArenaAllocator processes(Allocator::DefaultAllocator());
+	idx_t max_position = 0;
+	MatchContext context(suggestions, allocator, processes, max_position);
+	MatchState state(iterator, context);
+	if (lifetime.throw_at_leaf) {
+		REQUIRE_THROWS_AS(lists.back()->MatchParseResult(state), InvalidInputException);
+	} else {
+		REQUIRE(lists.back()->MatchParseResult(state).IsSuccess());
+	}
+	REQUIRE(processes.SizeInBytes() == 0);
+	REQUIRE(lifetime.active == 0);
+	REQUIRE(lifetime.state_valid);
+	REQUIRE(lifetime.destroyed == vector<idx_t> {3, 2, 1});
+}
+
 static vector<MatcherToken> TokenizeFirstSetTestInput(const CompiledGrammar &grammar, const string &sql) {
 	vector<MatcherToken> tokens;
 	ParserTokenizerBehavior behavior(sql, tokens);
