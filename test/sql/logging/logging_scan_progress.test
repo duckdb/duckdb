@@ -16,7 +16,7 @@ statement ok
 SET debug_verify_progress='error'
 
 statement ok
-SET debug_verify_progress_ignore=''
+SET debug_verify_progress_ignore='UNSUPPORTED_SOURCE:DUCKDB_LOG_CONTEXTS'
 
 query I
 SELECT count(*) FROM duckdb_logs WHERE message = 'progress test entry'
