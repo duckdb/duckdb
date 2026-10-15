@@ -113,7 +113,9 @@ bool ParseIterator::PeekInternal() {
 		current_statement = std::move((*overridden_statements)[override_cursor++]);
 		return true;
 	}
-	if (!parser) {
+	// parser options can change between statements of the same input (SET statements such as
+	// integer_division or active_grammar_extensions), rebuild the cached parser when they do
+	if (!parser || parser->GetOptions() != options) {
 		parser = make_uniq<Parser>(options);
 	}
 	EnsureTokenized();
