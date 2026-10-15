@@ -540,8 +540,12 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	auto cast_star = make_uniq<StarExpression>();
 	for (auto &distinct_on_columns : all_distinct_on_columns) {
 		for (auto &col : distinct_on_columns) {
-			cast_star->ReplaceListMutable()[col] =
-			    make_uniq<CastExpression>(columns.GetColumn(col).Type(), make_uniq<ColumnRefExpression>(col));
+			auto &type = columns.GetColumn(col).Type();
+			if (!TypeExpression::CanRepresent(type)) {
+				// a parsed cast cannot express this type
+				continue;
+			}
+			cast_star->ReplaceListMutable()[col] = make_uniq<CastExpression>(type, make_uniq<ColumnRefExpression>(col));
 		}
 	}
 	auto cast_node = make_uniq<SelectNode>();
