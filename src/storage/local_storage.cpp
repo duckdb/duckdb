@@ -630,8 +630,8 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		transaction.PushAppend(*storage.table_entry, NumericCast<idx_t>(append_state.row_start), append_count);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
-		// a CONSTRAINT error promises that the shared table and indexes were restored;
-		// any other error may have left state that a rollback cannot revert, so we fail closed
+		// constraint conflicts revert their own changes and remain retryable; any other
+		// error may have left changes that a rollback cannot revert: invalidate the database
 		if (error.Type() == ExceptionType::CONSTRAINT || Exception::InvalidatesDatabase(error.Type())) {
 			throw;
 		}
