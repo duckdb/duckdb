@@ -1,0 +1,56 @@
+# name: test/sql/copy/csv/test_sniff_skip_rows_single_column.test
+# description: The sniffer does not skip the rows of a single column file for a delimiter seen only in its last row
+# group: [csv]
+
+statement ok
+COPY (SELECT l FROM (VALUES (1, 'c0'), (2, 'v0'), (3, 'a;b')) t(i, l) ORDER BY i) TO '{TEST_DIR}/semicolon.csv' (FORMAT CSV, QUOTE '', HEADER 0);
+
+query I
+SELECT c0 FROM read_csv('{TEST_DIR}/semicolon.csv');
+----
+v0
+a;b
+
+statement ok
+COPY (SELECT l FROM (VALUES (1, 'c0'), (2, 'v0'), (3, 'a|b')) t(i, l) ORDER BY i) TO '{TEST_DIR}/pipe.csv' (FORMAT CSV, QUOTE '', HEADER 0);
+
+query I
+SELECT c0 FROM read_csv('{TEST_DIR}/pipe.csv');
+----
+v0
+a|b
+
+statement ok
+COPY (SELECT l FROM (VALUES (1, 'c0'), (2, 'v0'), (3, 'a' || chr(9) || 'b')) t(i, l) ORDER BY i) TO '{TEST_DIR}/tab.csv' (FORMAT CSV, QUOTE '', HEADER 0);
+
+query I
+SELECT c0 = 'a' || chr(9) || 'b' FROM read_csv('{TEST_DIR}/tab.csv');
+----
+false
+true
+
+# a single column file written by COPY reads back as it was written
+statement ok
+CREATE TABLE t(c0 VARCHAR);
+
+statement ok
+INSERT INTO t VALUES ('a'), ('b'), ('x;y');
+
+statement ok
+COPY t TO '{TEST_DIR}/roundtrip.csv' (FORMAT CSV);
+
+query I
+SELECT c0 FROM read_csv('{TEST_DIR}/roundtrip.csv');
+----
+a
+b
+x;y
+
+# leading rows are still skipped when a header and a row follow them
+statement ok
+COPY (SELECT l FROM (VALUES (1, 'report'), (2, 'june'), (3, 'id;name'), (4, '1;a')) t(i, l) ORDER BY i) TO '{TEST_DIR}/notes.csv' (FORMAT CSV, QUOTE '', HEADER 0);
+
+query II
+SELECT id, name FROM read_csv('{TEST_DIR}/notes.csv');
+----
+1	a
