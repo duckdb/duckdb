@@ -545,7 +545,8 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			auto type = TypeVisitor::VisitReplace(columns.GetColumn(col).Type(), [](const LogicalType &child) {
 				return StringType::GetCollation(child).empty() ? child : LogicalType::VARCHAR;
 			});
-			if (!TypeExpression::CanRepresent(type)) {
+			if (!TypeExpression::CanRepresent(type) || type.HasAlias() || type.id() == LogicalTypeId::ENUM) {
+				// a parsed cast resolves these types again, by name or from all their values
 				continue;
 			}
 			cast_star->ReplaceListMutable()[col] = make_uniq<CastExpression>(type, make_uniq<ColumnRefExpression>(col));

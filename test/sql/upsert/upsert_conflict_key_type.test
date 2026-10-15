@@ -133,7 +133,7 @@ SELECT * FROM t5 ORDER BY a
 ----
 1	1	2000-01-01	3
 
-# a key with a collation is compared without it, as the index does
+# the key cast does not add the collation of the column
 statement ok
 CREATE TABLE t8 (k VARCHAR COLLATE NOCASE PRIMARY KEY);
 
