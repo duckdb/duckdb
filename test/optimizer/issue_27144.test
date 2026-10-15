@@ -1,0 +1,65 @@
+# name: test/optimizer/issue_27144.test
+# description: Issue #27144: a narrowing DECIMAL cast must not be peeled off a comparison
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t(d DECIMAL(10,2));
+
+statement ok
+INSERT INTO t VALUES (0.50), (1.00), (2.00), (1234.00);
+
+# DECIMAL(5,2) tops out at 999.99, so TRY_CAST maps 1234.00 to NULL
+# and the predicate is not true for that row
+
+query I
+SELECT list(d ORDER BY d) FROM t WHERE TRY_CAST(d AS DECIMAL(5,2)) > 1.00;
+----
+[2.00]
+
+# the cast must reach the physical plan instead of being reduced to d > 1.00
+
+query II
+EXPLAIN SELECT count(*) FROM t WHERE TRY_CAST(d AS DECIMAL(5,2)) > 1.00;
+----
+physical_plan	<REGEX>:.*TRY_CAST.*
+
+# raising the scale does not make the cast safe: DECIMAL(5,4) only reaches 9.9999
+
+query I
+SELECT list(d ORDER BY d) FROM t WHERE TRY_CAST(d AS DECIMAL(5,4)) > 1.0000;
+----
+[2.00]
+
+# plain CAST must still raise instead of silently dropping the cast
+
+statement error
+SELECT d FROM t WHERE CAST(d AS DECIMAL(5,2)) > 1.00;
+----
+<REGEX>:.*Conversion Error.*
+
+# a widening cast holds every value here, so it must not filter anything
+
+query I
+SELECT list(d ORDER BY d) FROM t WHERE TRY_CAST(d AS DECIMAL(20,2)) > 1.00;
+----
+[2.00, 1234.00]
+
+# the optimized and unoptimized answers must agree
+
+statement ok
+PRAGMA disable_optimizer;
+
+query I
+SELECT list(d ORDER BY d) FROM t WHERE TRY_CAST(d AS DECIMAL(5,2)) > 1.00;
+----
+[2.00]
+
+query I
+SELECT list(d ORDER BY d) FROM t WHERE TRY_CAST(d AS DECIMAL(5,4)) > 1.0000;
+----
+[2.00]
+
+query I
+SELECT list(d ORDER BY d) FROM t WHERE TRY_CAST(d AS DECIMAL(20,2)) > 1.00;
+----
+[2.00, 1234.00]
