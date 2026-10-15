@@ -29,10 +29,7 @@ SELECT count(*) FROM glob('{TEST_DIR}/wal_replay_client_file_system.db.wal')
 1
 
 statement ok
-SET enable_logging = true
-
-statement ok
-SET logging_level = 'trace'
+CALL enable_logging('FileSystem')
 
 statement ok
 ATTACH '{TEST_DIR}/wal_replay_client_file_system.db' AS db
