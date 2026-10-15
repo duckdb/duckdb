@@ -23,7 +23,6 @@ namespace duckdb {
 static bool DependsOnDuplicates(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_LIMIT:
-	case LogicalOperatorType::LOGICAL_TOP_N:
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		return true;
@@ -40,6 +39,10 @@ static bool DependsOnDuplicates(LogicalOperator &op) {
 }
 
 void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<LogicalOperator> parent, idx_t idx) {
+	if (DependsOnDuplicates(op)) {
+		// a distinct group above this operator does not hold below it
+		pipe_info.distinct_groups.clear();
+	}
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		if (!parent) {
 			return;
@@ -147,10 +150,6 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 	}
 
 	if (op.children.size() == 1) {
-		if (DependsOnDuplicates(op)) {
-			// a distinct group above this operator does not hold below it
-			pipe_info.distinct_groups.clear();
-		}
 		// UNNEST emits multiple rows per input row, so a distinct group found below it does not hold above it
 		const auto invalidates_distinct = op.type == LogicalOperatorType::LOGICAL_UNNEST;
 		unordered_map<TableIndex, column_binding_set_t> distinct_groups_above;
