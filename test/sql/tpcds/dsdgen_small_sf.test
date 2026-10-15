@@ -78,3 +78,8 @@ query I
 SELECT list(DISTINCT d_date) FROM single.catalog_sales JOIN date_dim ON cs_sold_date_sk = d_date_sk
 ----
 [1998-01-01]
+
+query III
+SELECT (SELECT count(DISTINCT ss_ticket_number) FROM single.store_sales), (SELECT count(DISTINCT cs_order_number) FROM single.catalog_sales), (SELECT count(DISTINCT ws_order_number) FROM single.web_sales)
+----
+1	1	1
