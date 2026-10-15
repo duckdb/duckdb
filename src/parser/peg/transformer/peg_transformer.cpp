@@ -125,6 +125,7 @@ TransformStackFrame::TransformStackFrame(TransformInput input)
 }
 
 TransformStack::TransformStack(PEGTransformer &transformer_p) : transformer(transformer_p) {
+	frames.reserve(32);
 }
 
 TransformStack::~TransformStack() {
@@ -135,8 +136,8 @@ TransformStack::~TransformStack() {
 }
 
 void TransformStack::PushFrame(TransformInput input) {
-	frames.emplace(input);
-	auto &frame = frames.top();
+	frames.emplace_back(input);
+	auto &frame = frames.back();
 	frame.process_arena_position = transformer.process_allocator.GetPosition();
 	auto weight = transformer.ExpressionDepthWeight(frame.rule, frame.parse_result);
 	if (weight) {
@@ -147,11 +148,11 @@ void TransformStack::PushFrame(TransformInput input) {
 }
 
 void TransformStack::PopFrame() {
-	const auto process_arena_position = frames.top().process_arena_position;
-	if (frames.top().expression_depth_weight) {
-		transformer.ExitExpression(frames.top().expression_depth_weight);
+	const auto process_arena_position = frames.back().process_arena_position;
+	if (frames.back().expression_depth_weight) {
+		transformer.ExitExpression(frames.back().expression_depth_weight);
 	}
-	frames.pop();
+	frames.pop_back();
 	transformer.process_allocator.Rewind(process_arena_position);
 }
 
@@ -183,17 +184,16 @@ arena_ptr<TransformResultValue> TransformStack::Execute(TransformInput input) {
 	}
 	PushFrame(input);
 	while (!frames.empty()) {
-		auto &frame = frames.top();
-		auto result = ExecuteFrame(frame);
+		auto result = ExecuteFrame(frames.back());
 		if (!result) {
 			continue;
 		}
-		transformer.SetResultLocation(frame.parse_result, *result);
+		transformer.SetResultLocation(frames.back().parse_result, *result);
 		PopFrame();
 		if (frames.empty()) {
 			return result;
 		}
-		auto &parent = frames.top();
+		auto &parent = frames.back();
 		D_ASSERT(!parent.child_result);
 		parent.child_result = std::move(result);
 	}
