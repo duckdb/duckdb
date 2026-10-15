@@ -157,7 +157,7 @@ OperatorResultType CrossProductExecutor::Execute(const DataChunk &input, DataChu
 	for (idx_t i = 0; i < col_count; i++) {
 		auto &source = scan.data[i];
 		auto &target = output.data[col_offset + i];
-		if (source.GetVectorType() == VectorType::DICTIONARY_VECTOR && DictionaryVector::IsGlobalDictionary(source)) {
+		if (DictionaryVector::IsGlobalDictionary(source)) {
 			// repeat the row within the global dictionary, which its consumers expect in every chunk
 			target.Slice(source, position_in_chunk, position_in_chunk + 1);
 			target.Slice(*ConstantVector::ZeroSelectionVector(), output.size());
