@@ -1,0 +1,49 @@
+# name: test/sql/tpcds/dsdgen_small_sf.test
+# description: dsdgen finishes for scale factors that give a sales table too few orders for any day (issue #26881)
+# group: [tpcds]
+
+require tpcds
+
+# every sales table has too few orders for any day to get one by its weight
+statement ok
+CALL dsdgen(sf=0.001)
+
+query III
+SELECT (SELECT count(DISTINCT ss_ticket_number) FROM store_sales), (SELECT count(DISTINCT cs_order_number) FROM catalog_sales), (SELECT count(DISTINCT ws_order_number) FROM web_sales)
+----
+240	160	60
+
+# the catalog orders are spread over the five years of sales
+query II
+SELECT min(d_date), max(d_date) FROM catalog_sales JOIN date_dim ON cs_sold_date_sk = d_date_sk
+----
+1998-01-01	2002-12-20
+
+query I
+SELECT count(DISTINCT d_year) FROM catalog_sales JOIN date_dim ON cs_sold_date_sk = d_date_sk
+----
+5
+
+statement ok
+CREATE SCHEMA mixed
+
+# only web_sales has too few orders, store_sales and catalog_sales are scaled by the calendar weights as before
+statement ok
+CALL dsdgen(sf=0.005, schema='mixed')
+
+query III
+SELECT (SELECT count(DISTINCT ss_ticket_number) FROM mixed.store_sales), (SELECT count(DISTINCT cs_order_number) FROM mixed.catalog_sales), (SELECT count(DISTINCT ws_order_number) FROM mixed.web_sales)
+----
+1200	800	300
+
+# a single order per sales table still lands on the first day
+statement ok
+CREATE SCHEMA single
+
+statement ok
+CALL dsdgen(sf=0.000001, schema='single')
+
+query I
+SELECT list(DISTINCT d_date) FROM single.catalog_sales JOIN date_dim ON cs_sold_date_sk = d_date_sk
+----
+[1998-01-01]
