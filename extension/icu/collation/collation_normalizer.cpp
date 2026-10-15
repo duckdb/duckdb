@@ -71,6 +71,12 @@ uint32_t Normalizer::Decode(const char *data, idx_t size, vector<uint32_t> &resu
 			pos++;
 			continue;
 		}
+		if (codepoint > 0x10FFFF) {
+			// code points beyond the Unicode range would index the collation tables out of bounds
+			result.push_back(REPLACEMENT_CHARACTER);
+			pos += length;
+			continue;
+		}
 		if (codepoint >= 0x80) {
 			// ASCII characters never carry a combining class and never decompose
 			flags |= TEXT_HAS_MARKS;
