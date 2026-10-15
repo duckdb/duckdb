@@ -261,9 +261,17 @@ public:
 			pipeline->ResetForReschedule(false);
 		}
 
-		auto max_threads = GetRecursivePipelineMaxThreads(*pipeline, worker_limit);
+		SchedulePrepared(GetRecursivePipelineMaxThreads(*pipeline, worker_limit));
+	}
+
+	// The caller has prepared the pipeline and determined its worker count.
+	void SchedulePrepared(idx_t max_threads) {
+		D_ASSERT(max_threads > 0);
+		D_ASSERT(max_threads <= worker_limit);
+		prepared_for_schedule = true;
 		if (state.GetMetrics().Enabled()) {
 			state.GetMetrics().RecordTasks(max_threads);
+			state.GetEpochMetrics().RecordPipelineWorkers(max_threads);
 		}
 		state.GetScheduler().PrepareExecutors(*pipeline, max_threads);
 		auto &executors = state.GetScheduler().GetExecutors(*pipeline);
@@ -360,11 +368,14 @@ BuildRecursivePipelineSchedulePlan(const vector<shared_ptr<MetaPipeline>> &meta_
 	// 2. a per-iteration Event graph for the multi-threaded path
 	auto plan = make_uniq<RecursiveCTEPipelineSchedulePlan>();
 	reference_map_t<const Pipeline, RecursiveCTEPipelineMetricType> pipeline_metric_types;
+	reference_set_t<const Pipeline> invariant_build_pipelines;
 	for (auto &meta_pipeline : meta_pipelines) {
 		auto metric_type = RecursiveCTEPipelineMetricType::RECURSIVE;
+		bool is_invariant_build = false;
 		if (recursive_cte.invariant_meta_pipelines.find(*meta_pipeline) !=
 		    recursive_cte.invariant_meta_pipelines.end()) {
 			auto sink = meta_pipeline->GetSink();
+			is_invariant_build = !sink || sink->type != PhysicalOperatorType::CTE;
 			metric_type = sink && sink->type == PhysicalOperatorType::CTE
 			                  ? RecursiveCTEPipelineMetricType::INVARIANT_CTE_MATERIALIZATION
 			                  : RecursiveCTEPipelineMetricType::INVARIANT_BUILD;
@@ -373,6 +384,9 @@ BuildRecursivePipelineSchedulePlan(const vector<shared_ptr<MetaPipeline>> &meta_
 		meta_pipeline->GetPipelines(pipelines, false);
 		for (auto &pipeline : pipelines) {
 			pipeline_metric_types.emplace(*pipeline, metric_type);
+			if (is_invariant_build) {
+				invariant_build_pipelines.insert(*pipeline);
+			}
 		}
 	}
 	// Retained invariant meta-pipelines are absent after the first epoch, so build the induced schedule for
@@ -403,7 +417,8 @@ BuildRecursivePipelineSchedulePlan(const vector<shared_ptr<MetaPipeline>> &meta_
 		recursive_stage_indices[stage_idx] = plan->stages.size();
 		auto metric_type = pipeline_metric_types.find(pipeline);
 		D_ASSERT(metric_type != pipeline_metric_types.end());
-		plan->stages.emplace_back(stage.type, pipeline, has_source_tasks, metric_type->second);
+		plan->stages.emplace_back(stage.type, pipeline, has_source_tasks, metric_type->second,
+		                          invariant_build_pipelines.find(pipeline) != invariant_build_pipelines.end());
 	}
 	for (idx_t stage_idx = 0; stage_idx < schedule->stages.size(); stage_idx++) {
 		const auto recursive_stage_idx = recursive_stage_indices[stage_idx];
@@ -741,13 +756,18 @@ static void ScheduleRecursivePlan(const RecursiveCTEPipelineSchedulePlan &plan, 
 		pipeline.get().ResetSource(true);
 	}
 
+	const auto configured_threads =
+	    TaskScheduler::GetScheduler(state.GetOperator().recursive_meta_pipeline->GetExecutor().context)
+	        .NumberOfThreads();
 	events.reserve(plan.stages.size());
 	for (auto &stage : plan.stages) {
 		auto pipeline = stage.pipeline.get().shared_from_this();
 		switch (stage.type) {
 		case PipelineScheduleStageType::EXECUTE:
 			events.push_back(make_shared_ptr<RecursiveCTEPipelineEvent>(
-			    std::move(pipeline), state, parallelism.WorkerCount(stage.has_source_tasks), stage.metric_type));
+			    std::move(pipeline), state,
+			    stage.is_invariant_build ? configured_threads : parallelism.WorkerCount(stage.has_source_tasks),
+			    stage.metric_type));
 			break;
 		case PipelineScheduleStageType::PREPARE_FINISH:
 			events.push_back(make_shared_ptr<PipelinePrepareFinishEvent>(std::move(pipeline)));
@@ -807,7 +827,17 @@ static void ExecuteRecursiveInlinePlan(RecursiveCTEState &state, Executor &execu
 		switch (stage.type) {
 		case PipelineScheduleStageType::EXECUTE: {
 			pipeline.ResetForReschedule(false);
-			auto max_threads = GetRecursivePipelineMaxThreads(pipeline, 1);
+			// Invariant builds have independent source work even when the recursive frontier is tiny.
+			const auto worker_limit =
+			    stage.is_invariant_build ? TaskScheduler::GetScheduler(executor.context).NumberOfThreads() : idx_t(1);
+			const auto max_threads = GetRecursivePipelineMaxThreads(pipeline, worker_limit);
+			if (max_threads > 1) {
+				auto event = make_shared_ptr<RecursiveCTEPipelineEvent>(pipeline.shared_from_this(), state,
+				                                                        worker_limit, stage.metric_type);
+				event->SchedulePrepared(max_threads);
+				WaitForRecursiveEvent(executor, *event);
+				break;
+			}
 			D_ASSERT(max_threads == 1);
 			state.GetScheduler().PrepareExecutors(pipeline, max_threads);
 			auto &executors = state.GetScheduler().GetExecutors(pipeline);

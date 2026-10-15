@@ -6,8 +6,9 @@
 
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "reader/variant_column_reader.hpp"
-#include "reader/variant/parquet_variant_iterator.hpp"
+#include "duckdb/common/types/variant/parquet_variant_iterator.hpp"
 #include "column_reader.hpp"
+#include "parquet_reader.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
@@ -73,6 +74,11 @@ VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetRe
 		}
 	}
 
+	if (child_readers.size() < 2 || !child_readers[0] || !child_readers[1]) {
+		throw DataCorruptionException("Failed to read file \"%s\": the Variant column must have 'metadata' and 'value' "
+		                              "as the first two columns",
+		                              reader.GetFileName());
+	}
 	if (child_readers[0]->Schema().name == "metadata" && child_readers[1]->Schema().name == "value") {
 		metadata_reader_idx = 0;
 		value_reader_idx = 1;
@@ -80,7 +86,9 @@ VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetRe
 		metadata_reader_idx = 1;
 		value_reader_idx = 0;
 	} else {
-		throw InternalException("The Variant column must have 'metadata' and 'value' as the first two columns");
+		throw DataCorruptionException("Failed to read file \"%s\": the Variant column must have 'metadata' and 'value' "
+		                              "as the first two columns",
+		                              reader.GetFileName());
 	}
 }
 
@@ -214,15 +222,13 @@ void VariantColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool 
 	}
 }
 
-uint64_t VariantColumnReader::TotalCompressedSize() {
-	uint64_t size = 0;
+void VariantColumnReader::GatherColumnChunks(unordered_set<idx_t> &column_chunks) {
 	for (auto &child : child_readers) {
 		if (!child) {
 			continue;
 		}
-		size += child->TotalCompressedSize();
+		child->GatherColumnChunks(column_chunks);
 	}
-	return size;
 }
 
 idx_t VariantColumnReader::GroupRowsAvailable() {
@@ -241,13 +247,17 @@ bool VariantColumnReader::TypedValueLayoutToType(const LogicalType &typed_value,
 		return true;
 	}
 	auto type_id = typed_value.id();
-	if (type_id == LogicalTypeId::STRUCT) {
+	if (StructType::IsStruct(type_id)) {
 		//! OBJECT (...)
 		auto &object_fields = StructType::GetChildTypes(typed_value);
 		child_list_t<LogicalType> children;
 		for (auto &object_field : object_fields) {
 			auto &name = object_field.first;
 			auto &field = object_field.second;
+			if (name.empty()) {
+				//! An empty key can't be a STRUCT member name
+				return false;
+			}
 			//! <name>: {
 			//! 	value: BLOB,
 			//! 	typed_value: <type>

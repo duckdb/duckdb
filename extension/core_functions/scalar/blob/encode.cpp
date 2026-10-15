@@ -82,7 +82,7 @@ void BinaryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &resul
 			    auto new_str = Utf8Proc::RemoveInvalid(input_data, input_length);
 			    auto target = StringVector::EmptyString(result, new_str.size());
 			    auto output = target.GetDataWriteable();
-			    memcpy(output, new_str.data(), new_str.size());
+			    memcpy(output, new_str.data(), new_str.size()); // NOLINT(bugprone-not-null-terminated-result)
 			    target.Finalize();
 			    return target;
 		    }

@@ -145,6 +145,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	// Identify streaming windows, partitioned windows and degenerate frames (0,1)
 	using Columns = vector<column_t>;
 	const bool enable_optimizer = Settings::Get<EnableOptimizerSetting>(context);
+	const bool can_stream = enable_optimizer && (plan.get().GetSources().size() == 1);
 	vector<idx_t> blocking_windows;
 	vector<idx_t> streaming_windows;
 	vector<idx_t> partitioned_windows;
@@ -155,7 +156,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 		Columns partition_columns;
 		if (HasDegenerateFrame(context, wexpr)) {
 			degenerate_frames.emplace_back(expr_idx);
-		} else if (enable_optimizer && PhysicalStreamingWindow::IsStreamingFunction(context, wexpr)) {
+		} else if (can_stream && PhysicalStreamingWindow::IsStreamingFunction(context, wexpr)) {
 			streaming_windows.push_back(expr_idx);
 		} else if (!wexpr.Partitions().empty() &&
 		           HasSingleValuePartitions(context, wexpr.Partitions(), plan, partition_columns)) {
@@ -310,9 +311,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	}
 	// Evaluate the degenerate functions as scalar window functions
 	FunctionBinder binder(context);
+	const vector<LogicalType> input_types(op.types.begin(), op.types.begin() + NumericCast<int64_t>(input_width));
 	for (const auto &expr_idx : degenerate_frames) {
 		auto &wexpr = op.expressions[expr_idx]->Cast<BoundWindowExpression>();
-		select_list[input_width + expr_idx] = binder.BindScalarWindowFunction(wexpr);
+		select_list[input_width + expr_idx] = binder.BindScalarWindowFunction(wexpr, input_types);
 	}
 
 	auto &proj = Make<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);

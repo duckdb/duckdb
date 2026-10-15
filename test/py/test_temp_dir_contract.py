@@ -30,6 +30,7 @@ SELECT 42
 42
 """
 
+
 # Dumps the substituted contract vars so the harness can assert on them from outside.
 PROBE = """# name: probe.test
 # group: [compat]
@@ -622,3 +623,28 @@ def test_per_test_dir_is_not_recreated_after_cleanup(run, tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
     leftovers = sorted(p.name for p in (root / "R").iterdir())
     assert leftovers == [], f"per-test dir recreated after cleanup: {leftovers}"
+
+
+@pytest.mark.parametrize("flag", ["-f", "--input-file"])
+@pytest.mark.parametrize("with_config", [False, True])
+@pytest.mark.parametrize("pattern", [False, True])
+@pytest.mark.parametrize("shadow_list", [False, True])
+def test_input_file_invocation_directory(unittest_bin, tmp_path, flag, with_config, pattern, shadow_list):
+    working_dir = tmp_path / "suite"
+    tests = working_dir / "test" / "sql"
+    tests.mkdir(parents=True)
+    body = TRIVIAL
+    args = [str(unittest_bin.resolve()), "--test-dir", "suite", flag, "tests.txt"]
+    if with_config:
+        (tmp_path / "config.json").write_text(json.dumps({"on_init": "CREATE MACRO input_file_probe() AS 42"}))
+        args.extend(["--test-config", "config.json"])
+        body = body.replace("SELECT 42", "SELECT input_file_probe()")
+    (tests / "probe.test").write_text(body)
+    (tmp_path / "tests.txt").write_text("test/sql/*\n" if pattern else "test/sql/probe.test\n")
+    if shadow_list:
+        (working_dir / "tests.txt").write_text("suite/test/sql/missing.test\n")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("DUCKDB_TEST_")}
+    result = subprocess.run(args, cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60)
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "1 test case" in output, output
