@@ -44,6 +44,24 @@ SELECT coalesce(TRY(CAST(s AS INTEGER) + 1), -1) AS x, coalesce(TRY(CAST(s AS IN
 43	44
 -1	-2
 
+# an occurrence that always runs is shared with the one inside TRY, which still catches its own errors
+statement ok
+CREATE TABLE big(s VARCHAR);
+
+statement ok
+INSERT INTO big VALUES ('9223372036854775807'), ('1');
+
+query II
+SELECT CAST(s AS BIGINT) AS x, TRY(CAST(s AS BIGINT) + 1) AS y FROM big ORDER BY x
+----
+1	2
+9223372036854775807	NULL
+
+query II
+EXPLAIN SELECT CAST(s AS BIGINT) AS x, TRY(CAST(s AS BIGINT) + 1) AS y FROM big
+----
+physical_plan	<REGEX>:[\s\S]*Projection ─[\s\S]*Projection ─[\s\S]*
+
 # an occurrence outside of TRY throws for 'abc' on its own
 statement error
 SELECT TRY(CAST(s AS INTEGER) + 1) AS x, CAST(s AS INTEGER) + 2 AS y FROM t
