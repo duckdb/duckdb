@@ -292,3 +292,62 @@ query II
 explain select count(*) from probe_keys left join (select distinct k from (select k, unnest([1,2,3]) e from dup_keys) u) t on t.k=probe_keys.idb;
 ----
 physical_plan	<!REGEX>:.*JOIN.*
+
+# a distinct above LIMIT, TOP_N, SAMPLE or a window does not hold below it, because duplicate rows change the result
+
+statement ok
+create table p(id bigint, g varchar);
+
+statement ok
+insert into p values (1,'x'),(2,'y'),(3,'x'),(4,'y'),(5,'x'),(6,'y'),(7,'z');
+
+statement ok
+create table k(a bigint, b bigint);
+
+statement ok
+insert into k values (1,2),(1,3),(2,3),(3,4),(4,1),(5,1),(6,7),(6,4);
+
+query I
+select distinct pg from (select p.id as pid, p.g as pg from p left join k on p.id = k.a order by p.g desc, p.id limit 2 offset 3) order by pg;
+----
+y
+
+query I
+select distinct pg from (select p.id as pid, p.g as pg from k right join p on p.id = k.a order by p.g desc, p.id limit 2 offset 3) order by pg;
+----
+y
+
+query I
+select count(*) > 0 from (select distinct pg from (select p.g as pg from p left join k on p.id = k.a limit 2 offset 7));
+----
+true
+
+query I
+select distinct g from (select p.g, row_number() over (order by p.id) rn from p left join k on p.id = k.a) where rn <= 2 order by g;
+----
+x
+
+query I
+select distinct g from (select p.g, count(*) over () c from p left join k on p.id = k.a) where c = 9 order by g;
+----
+x
+y
+z
+
+query II
+explain select distinct g from (select p.g from p left join k on p.id = k.a using sample 50%);
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# a distinct below a LIMIT still eliminates the join
+
+query I
+select * from (select distinct p.g from p left join k on p.id = k.a) order by g limit 2;
+----
+x
+y
+
+query II
+explain select * from (select distinct p.g from p left join k on p.id = k.a) order by g limit 2;
+----
+physical_plan	<!REGEX>:.*JOIN.*
