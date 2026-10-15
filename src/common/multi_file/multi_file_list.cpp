@@ -272,7 +272,7 @@ SimpleMultiFileList::SimpleMultiFileList(vector<OpenFileInfo> paths_p) : paths(s
 
 SimpleMultiFileList::SimpleMultiFileList(vector<OpenFileInfo> paths_p, vector<idx_t> file_indexes_p)
     : paths(std::move(paths_p)), file_indexes(std::move(file_indexes_p)) {
-	D_ASSERT(file_indexes.size() == paths.size());
+	D_ASSERT(file_indexes.empty() || file_indexes.size() == paths.size());
 }
 
 idx_t SimpleMultiFileList::GetFileIndex(idx_t i) const {
@@ -280,7 +280,7 @@ idx_t SimpleMultiFileList::GetFileIndex(idx_t i) const {
 }
 
 unique_ptr<MultiFileList> SimpleMultiFileList::Copy() const {
-	return make_uniq<SimpleMultiFileList>(paths, file_indexes);
+	return make_uniq<SimpleMultiFileList>(GetAllFiles(), file_indexes);
 }
 
 vector<OpenFileInfo> SimpleMultiFileList::GetAllFiles() const {

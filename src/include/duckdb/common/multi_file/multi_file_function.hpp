@@ -342,7 +342,8 @@ public:
 	                                             optional_idx file_idx, MultiFileGlobalState &global_state) {
 		auto &reader = *reader_data.reader;
 		// Mark the file in the file list we are scanning here
-		reader.file_list_idx =
+		reader.file_list_idx = file_idx;
+		reader.bound_file_list_idx =
 		    file_idx.IsValid() ? optional_idx(global_state.file_list.GetFileIndex(file_idx.GetIndex())) : file_idx;
 
 		// 'reader_bind.schema' could be set explicitly by:

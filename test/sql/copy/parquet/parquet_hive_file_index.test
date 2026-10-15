@@ -5,57 +5,67 @@
 require parquet
 
 statement ok
-COPY (SELECT * FROM (VALUES (0, 10), (1, 20), (2, 30)) t(part, x)) TO '__TEST_DIR__/file_index_hive' (FORMAT PARQUET, PARTITION_BY (part));
+COPY (SELECT * FROM (VALUES (0, 10), (1, 20), (2, 30)) t(part, x)) TO '{TEST_DIR}/file_index_hive' (FORMAT PARQUET, PARTITION_BY (part));
 
 statement ok
-COPY (SELECT * FROM (VALUES (0, 10), (1, 20), (2, 30)) t(part, x)) TO '__TEST_DIR__/file_index_hive_csv' (FORMAT CSV, PARTITION_BY (part));
+COPY (SELECT * FROM (VALUES (0, 10), (1, 20), (2, 30)) t(part, x)) TO '{TEST_DIR}/file_index_hive_csv' (FORMAT CSV, PARTITION_BY (part));
 
 query III
-SELECT file_index, part, x FROM read_parquet('__TEST_DIR__/file_index_hive/*/*.parquet', hive_partitioning = true) ORDER BY file_index
+SELECT file_index, part, x FROM read_parquet('{TEST_DIR}/file_index_hive/*/*.parquet', hive_partitioning = true) ORDER BY file_index
 ----
 0	0	10
 1	1	20
 2	2	30
 
 query III
-SELECT file_index, part, x FROM read_parquet(['__TEST_DIR__/file_index_hive/part=0/*.parquet', '__TEST_DIR__/file_index_hive/part=1/*.parquet', '__TEST_DIR__/file_index_hive/part=2/*.parquet'], hive_partitioning = true) WHERE part = 1
+SELECT file_index, part, x FROM read_parquet(['{TEST_DIR}/file_index_hive/part=0/*.parquet', '{TEST_DIR}/file_index_hive/part=1/*.parquet', '{TEST_DIR}/file_index_hive/part=2/*.parquet'], hive_partitioning = true) WHERE part = 1
 ----
 1	1	20
 
 query II
-SELECT file_index, x FROM read_parquet('__TEST_DIR__/file_index_hive/*/*.parquet', hive_partitioning = true, filename = true) WHERE filename LIKE '%part=2%'
+SELECT file_index, x FROM read_parquet('{TEST_DIR}/file_index_hive/*/*.parquet', hive_partitioning = true, filename = true) WHERE filename LIKE '%part=2%'
 ----
 2	30
 
 query II
-SELECT file_index, x FROM read_parquet('__TEST_DIR__/file_index_hive/*/*.parquet', hive_partitioning = true) WHERE part = 1 AND file_index = 1
+SELECT file_index, x FROM read_parquet('{TEST_DIR}/file_index_hive/*/*.parquet', hive_partitioning = true) WHERE part = 1 AND file_index = 1
 ----
 1	20
 
 query II
-SELECT file_index, x FROM read_parquet('__TEST_DIR__/file_index_hive/*/*.parquet', hive_partitioning = true) WHERE part >= 1 ORDER BY ALL
+SELECT file_index, x FROM read_parquet('{TEST_DIR}/file_index_hive/*/*.parquet', hive_partitioning = true) WHERE part >= 1 ORDER BY ALL
 ----
 1	20
 2	30
 
 query II
-SELECT file_index, x FROM read_parquet(['__TEST_DIR__/file_index_hive/part=0/*.parquet', '__TEST_DIR__/file_index_hive/part=1/*.parquet', '__TEST_DIR__/file_index_hive/part=2/*.parquet'], hive_partitioning = true, union_by_name = true) WHERE part = 2
+SELECT file_index, x FROM read_parquet(['{TEST_DIR}/file_index_hive/part=0/*.parquet', '{TEST_DIR}/file_index_hive/part=1/*.parquet', '{TEST_DIR}/file_index_hive/part=2/*.parquet'], hive_partitioning = true, union_by_name = true) WHERE part = 2
 ----
 2	30
 
 query II
-SELECT file_index, x FROM read_parquet(['__TEST_DIR__/file_index_hive/part=0/*.parquet', '__TEST_DIR__/file_index_hive/part=1/*.parquet', '__TEST_DIR__/file_index_hive/part=1/*.parquet'], hive_partitioning = true) WHERE part = 1 ORDER BY ALL
+SELECT file_index, x FROM read_parquet(['{TEST_DIR}/file_index_hive/part=0/*.parquet', '{TEST_DIR}/file_index_hive/part=1/*.parquet', '{TEST_DIR}/file_index_hive/part=1/*.parquet'], hive_partitioning = true) WHERE part = 1 ORDER BY ALL
 ----
 1	20
 2	20
 
 query II
-SELECT file_index, x FROM read_csv(['__TEST_DIR__/file_index_hive_csv/part=0/*.csv', '__TEST_DIR__/file_index_hive_csv/part=1/*.csv', '__TEST_DIR__/file_index_hive_csv/part=2/*.csv'], hive_partitioning = true) WHERE part = 2
+SELECT file_index, x FROM read_csv(['{TEST_DIR}/file_index_hive_csv/part=0/*.csv', '{TEST_DIR}/file_index_hive_csv/part=1/*.csv', '{TEST_DIR}/file_index_hive_csv/part=2/*.csv'], hive_partitioning = true) WHERE part = 2
 ----
 2	30
 
+query II
+SELECT file_index, parse_path(filename)[-2] FROM read_text('{TEST_DIR}/file_index_hive/*/*.parquet') WHERE part = 1
+----
+1	part=1
+
+query II
+SELECT file_index, parse_path(filename)[-2] FROM read_blob('{TEST_DIR}/file_index_hive/*/*.parquet') WHERE part = 2
+----
+2	part=2
+
 statement ok
-PREPARE file_index_of_part AS SELECT file_index FROM read_parquet('__TEST_DIR__/file_index_hive/*/*.parquet', hive_partitioning = true) WHERE part = $1;
+PREPARE file_index_of_part AS SELECT file_index FROM read_parquet('{TEST_DIR}/file_index_hive/*/*.parquet', hive_partitioning = true) WHERE part = $1;
 
 query I
 EXECUTE file_index_of_part(2);
@@ -70,6 +80,6 @@ statement ok
 CREATE TABLE selected AS SELECT 2 AS part;
 
 query III
-SELECT file_index, part, x FROM read_parquet('__TEST_DIR__/file_index_hive/*/*.parquet', hive_partitioning = true) JOIN selected USING (part) WHERE part >= 1
+SELECT file_index, part, x FROM read_parquet('{TEST_DIR}/file_index_hive/*/*.parquet', hive_partitioning = true) JOIN selected USING (part) WHERE part >= 1
 ----
 2	2	30

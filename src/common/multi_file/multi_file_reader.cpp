@@ -812,7 +812,7 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 		auto global_idx = MultiFileGlobalIndex(i);
 		auto &col_id = global_column_ids[i];
 		auto column_id = col_id.GetPrimaryIndex();
-		if (TryResolvePreOpenConstant(column_id, filename, reader_data.reader->file_list_idx.GetIndex(), options,
+		if (TryResolvePreOpenConstant(column_id, filename, reader_data.reader->bound_file_list_idx.GetIndex(), options,
 		                              file_options, context, hive_partitions, hive_partitions_parsed,
 		                              pre_open_constant)) {
 			reader_data.constant_map.Add(global_idx, pre_open_constant);
