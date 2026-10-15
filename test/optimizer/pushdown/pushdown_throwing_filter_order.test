@@ -6,7 +6,7 @@ statement ok
 CREATE TABLE t(id VARCHAR, s VARCHAR, g GEOMETRY, i INTEGER);
 
 statement ok
-INSERT INTO t VALUES ('bad', 'x', 'POINT(0 0)', 0), ('2', 'keep', 'POINT(2 2)', 2);
+INSERT INTO t VALUES ('bad', 'x', 'POINT(0 0)', 0), ('2', 'keep', 'POINT(2 2)', 2), ('3', 'keep', 'POINT(2 2)', 2);
 
 # the cast never runs on the row the other filter removes
 query I

@@ -257,7 +257,7 @@ vector<idx_t> ExpressionHeuristics::GetInitialOrder(const TableFilterSet &table_
 	struct FilterCost {
 		idx_t index;
 		idx_t cost;
-		//! a filter that can throw runs after the others, so it does not run on the rows they remove
+		//! a filter that can throw runs after the filters that cannot, so it does not run on the rows they remove
 		bool can_throw;
 
 		bool operator==(const FilterCost &p) const {
