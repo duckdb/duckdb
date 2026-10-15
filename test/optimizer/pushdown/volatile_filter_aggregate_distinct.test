@@ -1,5 +1,5 @@
 # name: test/optimizer/pushdown/volatile_filter_aggregate_distinct.test
-# description: Volatile filters are evaluated once per group or distinct row, not once per input row
+# description: Volatile filters do not move across GROUP BY or DISTINCT
 # group: [pushdown]
 
 statement ok
@@ -76,6 +76,32 @@ query I
 SELECT currval('s6');
 ----
 2
+
+statement ok
+CREATE SEQUENCE s9 START 1;
+
+query I
+SELECT count(*) FROM (SELECT DISTINCT a FROM dd) q WHERE nextval('s9') <= 2 AND random() < 2 AND a >= 1;
+----
+2
+
+query I
+SELECT currval('s9');
+----
+3
+
+statement ok
+CREATE SEQUENCE s10 START 1;
+
+query I
+SELECT count(*) FROM (SELECT DISTINCT ON (a) a, b FROM dd) q WHERE nextval('s10') <= 2;
+----
+2
+
+query I
+SELECT currval('s10');
+----
+3
 
 statement ok
 CREATE SEQUENCE s7 START 1;

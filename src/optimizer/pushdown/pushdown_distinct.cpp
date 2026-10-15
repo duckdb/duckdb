@@ -8,7 +8,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownDistinct(unique_ptr<LogicalO
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_DISTINCT);
 	auto &distinct = op->Cast<LogicalDistinct>();
 	if (!distinct.order_by) {
-		// regular DISTINCT, volatile filters stay above it and are evaluated once per distinct row
+		// volatile filters stay above the DISTINCT, where they run once per distinct row
 		vector<unique_ptr<Expression>> volatile_filters;
 		for (idx_t i = 0; i < filters.size(); i++) {
 			if (!filters[i]->filter->IsVolatile()) {
