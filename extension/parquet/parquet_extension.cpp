@@ -283,6 +283,9 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			for (idx_t i = 0; i < values.size(); i++) {
 				auto &value = values[i];
 				auto key = StructType::GetChildName(kv_struct_type, i);
+				if (value.IsNull()) {
+					throw BinderException("kv_metadata value for key %s cannot be NULL", key);
+				}
 				// If the value is a blob, write the raw blob bytes
 				// otherwise, cast to string
 				if (value.type().id() == LogicalTypeId::BLOB) {
@@ -322,8 +325,8 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			bind_data->enable_bloom_filters = BooleanValue::Get(option_values[0].DefaultCastAs(LogicalType::BOOLEAN));
 		} else if (option_name == "bloom_filter_false_positive_ratio") {
 			auto val = option_values[0].GetValue<double>();
-			if (val <= 0) {
-				throw BinderException("bloom_filter_false_positive_ratio must be greater than 0");
+			if (!(val > 0 && val <= 1)) {
+				throw BinderException("bloom_filter_false_positive_ratio must be greater than 0 and at most 1");
 			}
 			bind_data->bloom_filter_false_positive_ratio = val;
 		} else if (option_name == "compression_level") {

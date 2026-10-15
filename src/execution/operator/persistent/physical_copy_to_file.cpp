@@ -634,7 +634,7 @@ public:
 
 	PartitionWriteInfo &Get() const {
 		D_ASSERT(write_info);
-		return *write_info.get_mutable();
+		return *write_info;
 	}
 
 	PartitionWriteInfo &operator*() const {
@@ -649,7 +649,7 @@ public:
 
 private:
 	optional_ptr<PartitionWriteManager> manager;
-	optional_ptr<PartitionWriteInfo> write_info;
+	mutable optional_ptr<PartitionWriteInfo> write_info;
 };
 
 class PartitionWriteManager {
@@ -766,8 +766,21 @@ struct PartitionedCopyFlushAction {
 
 struct PartitionedCopyBatchState {
 private:
+	//! Partition values can be NULL, so they are compared with IS NOT DISTINCT FROM semantics
+	static bool PartitionValuesEqual(const vector<Value> &left, const vector<Value> &right) {
+		if (left.size() != right.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < left.size(); i++) {
+			if (!Value::NotDistinctFrom(left[i], right[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	void SetValues(vector<Value> values_p) {
-		D_ASSERT(!values || *values == values_p);
+		D_ASSERT(!values || PartitionValuesEqual(*values, values_p));
 		if (!values) {
 			values = std::move(values_p);
 		}
@@ -2717,8 +2730,10 @@ unique_ptr<const SortStrategy> PartitionedCopy::ConstructSortStrategy() const {
 		partition_bys.push_back(make_uniq<BoundReferenceExpression>(op.expected_types[col], col));
 	}
 	vector<unique_ptr<BaseStatistics>> partition_stats;
+	OperatorPartitionInfo unpartitioned_info;
 
 	return SortStrategy::Factory(context, partition_bys, op.order_columns, op.expected_types, partition_stats,
+	                             unpartitioned_info,
 	                             op.children.empty() ? 0 : op.children[0].get().estimated_cardinality);
 }
 
@@ -3912,6 +3927,11 @@ bool PhysicalCopyToFile::Rotate() const {
 
 static bool PhysicalCopyRotateNow(const PhysicalCopyToFile &op, GlobalFileState &global_state)
     DUCKDB_REQUIRES(global_state.lock) {
+	if (global_state.num_batches == 0) {
+		// never rotate a file that holds no data yet - e.g. a CSV header or a Parquet header can exceed the
+		// file size limit by itself, and rotating would then create new empty files forever
+		return false;
+	}
 	if (op.file_size_bytes.IsValid()) {
 		return op.function.file_size_bytes(*global_state.data) >= op.file_size_bytes.GetIndex();
 	}

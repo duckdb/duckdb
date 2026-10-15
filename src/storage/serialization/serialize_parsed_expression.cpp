@@ -70,6 +70,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deseria
 	case ExpressionClass::PARAMETER:
 		result = ParameterExpression::Deserialize(deserializer);
 		break;
+	case ExpressionClass::PATTERN:
+		result = PatternExpression::Deserialize(deserializer);
+		break;
 	case ExpressionClass::POSITIONAL_REFERENCE:
 		result = PositionalReferenceExpression::Deserialize(deserializer);
 		break;
@@ -92,6 +95,7 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deseria
 	result->alias = std::move(alias);
 	result->query_location = query_location;
 	result->query_location.length = query_location_length;
+	result->VerifyDeserialized();
 	return result;
 }
 

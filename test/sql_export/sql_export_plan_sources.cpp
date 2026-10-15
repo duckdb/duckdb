@@ -315,7 +315,6 @@ TEST_CASE("Table row number SQL export retains stream effects",
 				auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
 				REQUIRE(exported.IsSuccess());
 				QueryParameters parameters;
-				parameters.result_eagerness = ResultEagerness::AUTO;
 				unique_ptr<QueryResult> result;
 				plan.reset();
 				if (route == 0) {

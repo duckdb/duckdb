@@ -64,6 +64,8 @@ public:
 	int64_t NextValue(DuckTransaction &transaction);
 	int64_t SetValue(DuckTransaction &transaction, int64_t value, bool is_called);
 	void ReplayValue(uint64_t usage_count, int64_t counter, optional<int64_t> last_value);
+	//! Derive the last value from the counter - storage versions prior to v2.0.0 do not store it
+	void DeriveLastValue();
 
 	string ToSQL() const override;
 

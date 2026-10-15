@@ -243,7 +243,7 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 	    context, QualifiedName(Catalog::GetSystemCatalog(context).GetName(), Identifier::DefaultSchema(),
 	                           Identifier(function_name)));
 	if (func.type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
-		throw InternalException("Could not find aggregate %s", function_name);
+		throw BinderException("Could not find aggregate %s", function_name);
 	}
 	auto &aggr_entry = func.Cast<AggregateFunctionCatalogEntry>();
 
@@ -388,6 +388,10 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	ParseOrderBys(order_entry->second, column_count, orders);
 	// the leading buffered columns are the inner aggregate's bound arguments (post constant-erasure)
 	const idx_t argument_count = inner->aggr.GetArguments().size();
+	if (argument_count == 0) {
+		throw BinderException("Aggregate \"%s\" has no arguments and cannot have an ordered aggregate state",
+		                      function_name);
+	}
 	if (argument_count > column_count) {
 		throw BinderException("to_aggregate_state: argument count %llu exceeds the number of state columns (%llu)",
 		                      (uint64_t)argument_count, (uint64_t)column_count);
@@ -750,10 +754,14 @@ unique_ptr<FunctionData> BindToAggregateState(INPUT &input) {
 			                      "constant");
 		}
 	}
-	auto function_name_val = input.GetNonNullConstant(1);
+	// the arguments are not yet cast to the parameter types when binding
+	auto function_name_val = input.GetNonNullConstant(1).DefaultCastAs(LogicalType::VARCHAR);
 	auto function_name = StringValue::Get(function_name_val);
 
 	auto signature_val = input.GetNonNullConstant(2);
+	if (signature_val.type().id() != LogicalTypeId::LIST) {
+		throw BinderException("to_aggregate_state: the signature must be a list of types");
+	}
 	// the signature lists all of the argument types in order
 	vector<LogicalType> argument_types;
 	for (auto &arg : ListValue::GetChildren(signature_val)) {
@@ -792,6 +800,11 @@ unique_ptr<FunctionData> BindToAggregateState(INPUT &input) {
 		const idx_t column_count = buffer_columns.size();
 		// the leading buffered columns are the aggregate's arguments - cast them to the argument types
 		auto &aggr_arguments = aggr.GetArguments();
+		if (aggr_arguments.empty()) {
+			throw BinderException("to_aggregate_state: aggregate \"%s\" has no arguments and cannot have an ordered "
+			                      "aggregate state",
+			                      function_name);
+		}
 		if (aggr_arguments.size() > column_count) {
 			throw BinderException("to_aggregate_state: argument count %llu exceeds the number of state columns (%llu)",
 			                      (uint64_t)aggr_arguments.size(), (uint64_t)column_count);
@@ -896,6 +909,20 @@ unique_ptr<ParsedExpression> ExportAggregateFunction::StateToSQL(const LogicalTy
 	return make_uniq<FunctionExpression>(QualifiedName("system", "main", "to_aggregate_state"), std::move(arguments));
 }
 
+void ExportAggregateFunction::GetSortedStateOrders(const LogicalType &state_type,
+                                                   vector<SortedAggregateStateOrder> &orders) {
+	auto ext_info = state_type.GetExtensionInfo();
+	if (!ext_info || state_type.id() != LogicalTypeId::LIST) {
+		throw InternalException("GetSortedStateOrders called on a state type that is not an ordered aggregate state");
+	}
+	auto order_entry = ext_info->properties.find("order_bys");
+	if (order_entry == ext_info->properties.end()) {
+		throw InternalException("GetSortedStateOrders called on a state type that is not an ordered aggregate state");
+	}
+	auto &buffer_struct = ListType::GetChildType(state_type);
+	ParseOrderBys(order_entry->second, StructType::GetChildTypes(buffer_struct).size(), orders);
+}
+
 void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {
 	auto &bound_function = aggregate.FunctionMutable();
 	// functions with an explicit export callback use it as the finalize; others use the field-based serialization
@@ -930,9 +957,11 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	D_ASSERT(bound_function.HasStateSizeCallback());
 	D_ASSERT(bound_function.HasStateFinalizeCallback());
 	D_ASSERT(child_aggregate->Function().GetReturnType().id() != LogicalTypeId::INVALID);
-	if (child_aggregate->GetOrderBys() && !child_aggregate->GetOrderBys()->orders.empty()) {
-		// ordered aggregate: export the buffer of values. The sorted wrapper is built later (physical planning); here
-		// we only fix the AGGREGATE_STATE type so downstream binding (finalize/combine) sees it
+	if (child_aggregate->GetOrderBys() && !child_aggregate->GetOrderBys()->orders.empty() &&
+	    !child_aggregate->GetChildren().empty()) {
+		// ordered aggregate (the ORDER BY of an aggregate without arguments is ignored): export the buffer of values.
+		// The sorted wrapper is built later (physical planning); here we only fix the AGGREGATE_STATE type so
+		// downstream binding (finalize/combine) sees it
 		LogicalType buffer_struct;
 		vector<SortedAggregateStateOrder> orders;
 		idx_t argument_count; // re-derived from the inner aggregate on re-bind
