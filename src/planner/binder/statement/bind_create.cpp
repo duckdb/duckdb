@@ -272,8 +272,7 @@ QualifiedName Binder::BindTableName(CatalogEntryRetriever &retriever, const Qual
 }
 
 QualifiedName Binder::BindTableName(const QualifiedName &name) {
-	CatalogEntryRetriever retriever(context);
-	return BindTableName(retriever, name);
+	return BindTableName(entry_retriever, name);
 }
 
 void Binder::RegisterEntryRead(optional_ptr<Binder> binder, ClientContext &context, CatalogEntry &entry) {

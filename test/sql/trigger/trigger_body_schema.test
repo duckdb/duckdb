@@ -235,3 +235,59 @@ query III
 SELECT (SELECT count(*) FROM p.s.log), (SELECT count(*) FROM s.log), (SELECT count(*) FROM main.log);
 ----
 0	0	1
+
+# RETURNING of a trigger body that fires a trigger itself, and the dependency on its macro
+statement ok
+CREATE TABLE s4.log_audit (x INTEGER);
+
+statement ok
+CREATE TRIGGER s4_log_after AFTER INSERT ON s4.log FOR EACH STATEMENT INSERT INTO log_audit VALUES (5);
+
+statement ok
+INSERT INTO s4.t VALUES (2);
+
+query II
+SELECT (SELECT count(*) FROM s4.log), (SELECT count(*) FROM s4.log_audit);
+----
+2	1
+
+statement error
+DROP MACRO s4.plus_one;
+----
+<REGEX>:.*Dependency Error.*
+
+# qualified names in a trigger body of an attached database resolve in that database
+statement ok
+CREATE SCHEMA other.q;
+
+statement ok
+CREATE SCHEMA memory.q;
+
+statement ok
+CREATE MACRO other.q.val() AS 10;
+
+statement ok
+CREATE MACRO memory.q.val() AS 20;
+
+statement ok
+CREATE TABLE other.q.log (x INTEGER);
+
+statement ok
+CREATE TABLE memory.q.log (x INTEGER);
+
+statement ok
+USE other;
+
+statement ok
+CREATE TRIGGER other_qualified AFTER INSERT ON t FOR EACH STATEMENT INSERT INTO q.log VALUES (q.val());
+
+statement ok
+USE memory;
+
+statement ok
+INSERT INTO other.t VALUES (2);
+
+query II
+SELECT (SELECT list(x) FROM other.q.log), (SELECT count(*) FROM memory.q.log);
+----
+[10]	0
