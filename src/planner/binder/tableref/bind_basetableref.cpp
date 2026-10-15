@@ -15,6 +15,8 @@
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/planner/tableref/bound_at_clause.hpp"
+#include "duckdb/planner/table_binding.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/query_node/cte_node.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
@@ -178,8 +180,12 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	// resolve the catalog/schema qualification for the lookup only - the reference itself keeps the name as written,
 	// which is what name extraction and replacement scans report
 	auto bound_name = BindTableName(entry_retriever, ref.GetQualifiedName());
-	auto table_or_view =
-	    entry_retriever.GetEntry(EntryLookupInfo(table_lookup, bound_name), OnEntryNotFound::RETURN_NULL);
+	// name extraction reports the names as written: it does not follow redirects, so a dead one does not fail it
+	bool extracting_names =
+	    GetBindingMode() == BindingMode::EXTRACT_NAMES || GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES;
+	auto resolved =
+	    ResolveTable(EntryLookupInfo(table_lookup, bound_name), OnEntryNotFound::RETURN_NULL, !extracting_names);
+	auto table_or_view = resolved.entry;
 	// we still didn't find the table
 	if (GetBindingMode() == BindingMode::EXTRACT_NAMES || GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		if (!table_or_view || table_or_view->type == CatalogType::TABLE_ENTRY) {
@@ -244,14 +250,18 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		// could not find an alternative: bind again to get the error
 		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed
 		// in catalogs that do not have transactional DDL
-		table_or_view =
-		    entry_retriever.GetEntry(EntryLookupInfo(table_lookup, bound_name), OnEntryNotFound::THROW_EXCEPTION);
+		resolved = ResolveTable(EntryLookupInfo(table_lookup, bound_name), OnEntryNotFound::THROW_EXCEPTION,
+		                        !extracting_names);
+		table_or_view = resolved.entry;
 	}
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
 		// base table
 		auto table_index = GenerateTableIndex();
 		auto &table = table_or_view->Cast<TableCatalogEntry>();
+		if (resolved.redirected_from) {
+			redirect_sources.emplace(table_index.index, *resolved.redirected_from);
+		}
 
 		auto &properties = GetStatementProperties();
 		properties.RegisterDBRead(table.ParentCatalog(), context);
@@ -292,6 +302,11 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		auto &col_ids = logical_get->GetMutableColumnIds();
 		if (!table_entry) {
 			bind_context.AddBaseTable(table_index, ref.alias, table_names, table_types, col_ids, ref.Table());
+		} else if (resolved.redirected_from) {
+			// the columns are qualified by the name the statement used, not by the table that serves it
+			auto alias = TableBinding::GetAlias(ref.alias, resolved.redirected_from->Cast<StandardEntry>());
+			bind_context.AddBaseTable(table_index, std::move(alias), table_names, table_types, col_ids, *table_entry,
+			                          table_entry->GetVirtualColumns());
 		} else {
 			bind_context.AddBaseTable(table_index, ref.alias, table_names, table_types, col_ids, *table_entry);
 		}

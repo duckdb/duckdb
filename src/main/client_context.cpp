@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry_retriever.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/error_data.hpp"
@@ -1292,16 +1293,24 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const Identifier &database
                                                       const Identifier &table_name) {
 	unique_ptr<TableDescription> result;
 	RunFunctionInTransaction([&]() {
-		// Obtain the table from the catalog.
-		auto table = Catalog::GetEntry<TableCatalogEntry>(*this, QualifiedName(database_name, schema_name, table_name),
-		                                                  OnEntryNotFound::RETURN_NULL);
-		if (!table) {
+		// Obtain the table from the catalog: the one a statement naming it would bind (Catalog::TryRedirectEntry)
+		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, QualifiedName(database_name, schema_name, table_name));
+		table_lookup.SetAllowRedirect(true);
+		CatalogEntryRetriever retriever(*this);
+		auto resolved = Catalog::ResolveEntry(retriever, table_lookup, OnEntryNotFound::RETURN_NULL);
+		if (!resolved.Found()) {
 			return;
 		}
-		// Describe the table at its resolved location, not the input identifiers.
-		auto &catalog = table->ParentCatalog();
-		result = make_uniq<TableDescription>(QualifiedName(catalog.GetName(), table->ParentSchema().name, table->name));
-		result->readonly = catalog.GetAttached().IsReadOnly();
+		if (resolved.entry->type != CatalogType::TABLE_ENTRY) {
+			throw CatalogException("%s is not an %s", table_name.GetIdentifierName(), TableCatalogEntry::Name);
+		}
+		auto table = &resolved.entry->Cast<TableCatalogEntry>();
+		// Describe the table at the resolved location of the name, not the input identifiers: a statement binding
+		// the description's name must take the same (single) redirect this lookup took
+		auto &named = resolved.redirected_from ? *resolved.redirected_from : *resolved.entry;
+		auto &catalog = named.ParentCatalog();
+		result = make_uniq<TableDescription>(QualifiedName(catalog.GetName(), named.ParentSchema().name, named.name));
+		result->readonly = catalog.GetAttached().IsReadOnly() || table->ParentCatalog().GetAttached().IsReadOnly();
 		for (auto &column : table->GetColumns().Logical()) {
 			result->columns.emplace_back(column.Copy());
 		}

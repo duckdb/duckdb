@@ -1,0 +1,186 @@
+# name: test/sql/catalog/redirect/table_redirect_storage.test
+# description: Redirected tables with a persistent redirecting catalog - WAL replay, READ_ONLY, prepared statements
+# group: [redirect]
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+require noforcestorage
+
+require notmingw
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension'
+
+statement ok
+ATTACH ':memory:' AS dst
+
+statement ok
+CREATE TABLE dst.redirect_t AS SELECT 1 AS i UNION ALL SELECT 2
+
+# WAL replay looks tables up in the catalog being replayed and never redirects
+statement ok
+SET wal_autocheckpoint = '1TB'
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+ATTACH '{TEST_DIR}/table_redirect_wal.db' AS wsrc (TYPE table_redirect_test, TARGET 'dst')
+
+statement ok
+CREATE TABLE wsrc.redirect_w AS SELECT 100 AS i
+
+statement ok
+CREATE TABLE wsrc.other AS SELECT 1 AS i
+
+statement ok
+INSERT INTO wsrc.other VALUES (2)
+
+statement ok
+DETACH wsrc
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/table_redirect_wal.db.wal')
+----
+1
+
+statement ok
+ATTACH '{TEST_DIR}/table_redirect_wal.db' AS wsrc (TYPE table_redirect_test, TARGET 'dst')
+
+query I
+SELECT table_name FROM duckdb_tables() WHERE database_name = 'wsrc' ORDER BY 1
+----
+other
+redirect_w
+
+query I
+SELECT i FROM wsrc.other ORDER BY i
+----
+1
+2
+
+query I
+SELECT count(*) FROM duckdb_tables() WHERE database_name = 'dst' AND table_name = 'redirect_w'
+----
+0
+
+statement error
+SELECT i FROM wsrc.redirect_w
+----
+is redirected to dst.main.redirect_w, which does not exist
+
+statement ok
+DETACH wsrc
+
+# a READ_ONLY redirecting catalog reads through the redirect but refuses every write through its name
+statement ok
+ATTACH '{TEST_DIR}/table_redirect_ro.db' AS setup
+
+statement ok
+CREATE TABLE setup.redirect_t(i INTEGER)
+
+statement ok
+DETACH setup
+
+statement ok
+ATTACH '{TEST_DIR}/table_redirect_ro.db' AS ro (TYPE table_redirect_test, TARGET 'dst', READ_ONLY)
+
+query I
+SELECT i FROM ro.redirect_t ORDER BY i
+----
+1
+2
+
+statement error
+INSERT INTO ro.redirect_t VALUES (3)
+----
+Cannot execute statement of type "INSERT" on database "ro" which is attached in read-only mode!
+
+statement error
+UPDATE ro.redirect_t SET i = 0
+----
+Cannot execute statement of type "UPDATE" on database "ro" which is attached in read-only mode!
+
+statement error
+DELETE FROM ro.redirect_t
+----
+Cannot execute statement of type "DELETE" on database "ro" which is attached in read-only mode!
+
+statement error
+ALTER TABLE ro.redirect_t ADD COLUMN j INTEGER
+----
+Cannot execute statement of type "ALTER" on database "ro" which is attached in read-only mode!
+
+statement error
+DROP TABLE ro.redirect_t
+----
+Cannot execute statement of type "DROP" on database "ro" which is attached in read-only mode!
+
+statement error
+COPY ro.redirect_t FROM '{TEST_DIR}/does_not_matter.csv'
+----
+Cannot execute statement of type "COPY" on database "ro" which is attached in read-only mode!
+
+statement error
+CREATE INDEX ro_idx ON ro.redirect_t(i)
+----
+Cannot create an index on table "redirect_t" of catalog "ro"
+
+query I
+SELECT i FROM dst.redirect_t ORDER BY i
+----
+1
+2
+
+statement ok
+DETACH ro
+
+# a prepared statement depends on the redirecting catalog: re-attaching it with another target rebinds
+statement ok
+ATTACH ':memory:' AS src (TYPE table_redirect_test, TARGET 'dst')
+
+statement ok
+CREATE TABLE src.redirect_t(i INTEGER)
+
+statement ok
+PREPARE ins AS INSERT INTO src.redirect_t VALUES (?)
+
+statement ok
+EXECUTE ins(3)
+
+query I
+SELECT i FROM dst.redirect_t ORDER BY i
+----
+1
+2
+3
+
+statement ok
+DETACH src
+
+statement ok
+ATTACH ':memory:' AS dst3
+
+statement ok
+CREATE TABLE dst3.redirect_t(i INTEGER)
+
+statement ok
+ATTACH ':memory:' AS src (TYPE table_redirect_test, TARGET 'dst3')
+
+statement ok
+CREATE TABLE src.redirect_t(i INTEGER)
+
+statement ok
+EXECUTE ins(4)
+
+query I
+SELECT i FROM dst3.redirect_t
+----
+4
+
+query I
+SELECT count(*) FROM dst.redirect_t
+----
+3

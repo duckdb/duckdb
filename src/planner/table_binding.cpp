@@ -177,7 +177,14 @@ optional_ptr<StandardEntry> EntryBinding::GetStandardEntry() {
 TableBinding::TableBinding(const Identifier &alias, vector<LogicalType> types_p, vector<Identifier> names_p,
                            vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, TableIndex index,
                            virtual_column_map_t virtual_columns_p)
-    : Binding(BindingType::TABLE, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index),
+    : TableBinding(GetAlias(alias, entry), std::move(types_p), std::move(names_p), bound_column_ids, entry, index,
+                   std::move(virtual_columns_p)) {
+}
+
+TableBinding::TableBinding(BindingAlias alias, vector<LogicalType> types_p, vector<Identifier> names_p,
+                           vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, TableIndex index,
+                           virtual_column_map_t virtual_columns_p)
+    : Binding(BindingType::TABLE, std::move(alias), std::move(types_p), std::move(names_p), index),
       bound_column_ids(bound_column_ids), entry(entry), virtual_columns(std::move(virtual_columns_p)) {
 	for (auto &ventry : virtual_columns) {
 		auto idx = ventry.first;

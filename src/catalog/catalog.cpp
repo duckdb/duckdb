@@ -1005,7 +1005,8 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 }
 
 CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) {
-	if (lookup_info.GetAtClause() && !SupportsTimeTravel()) {
+	if (lookup_info.GetAtClause() && !SupportsTimeTravel() && !lookup_info.AllowRedirect()) {
+		// a lookup that may be redirected is checked against the catalog that ends up serving it (ApplyRedirect)
 		return {nullptr, nullptr, ErrorData(BinderException("Catalog type does not support time travel"))};
 	}
 	// the (possibly nested) schema qualification is everything up to the entry name; LookupSchema resolves it
@@ -1021,6 +1022,59 @@ CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transactio
 		return {schema_entry, nullptr, ErrorData()};
 	}
 	return {schema_entry, entry, ErrorData()};
+}
+
+bool Catalog::TryRedirectEntry(ClientContext &context, TableCatalogEntry &entry, const EntryLookupInfo &lookup_info,
+                               QualifiedName &target) {
+	return false;
+}
+
+CatalogEntryLookup Catalog::ApplyRedirect(CatalogEntryRetriever &retriever, Catalog &catalog, CatalogEntryLookup result,
+                                          const EntryLookupInfo &lookup_info, bool &time_travel_refused) {
+	time_travel_refused = false;
+	if (!result.Found() || !lookup_info.AllowRedirect()) {
+		return result;
+	}
+	QualifiedName target;
+	if (lookup_info.GetCatalogType() != CatalogType::TABLE_ENTRY || result.entry->type != CatalogType::TABLE_ENTRY ||
+	    !catalog.TryRedirectEntry(retriever.GetContext(), result.entry->Cast<TableCatalogEntry>(), lookup_info,
+	                              target)) {
+		// not redirected: the time travel check TryLookupEntryInternal left to this point
+		if (lookup_info.GetAtClause() && !catalog.SupportsTimeTravel()) {
+			time_travel_refused = true;
+			return {nullptr, nullptr, ErrorData(BinderException("Catalog type does not support time travel"))};
+		}
+		return result;
+	}
+	auto &catalog_name = catalog.GetName().GetIdentifierName();
+	auto &table_name = lookup_info.GetEntryName();
+	if (target.Catalog().empty() || target.Name().empty()) {
+		return {nullptr, nullptr,
+		        ErrorData(InvalidInputException("Catalog \"%s\" redirected table \"%s\" to the incomplete name %s",
+		                                        catalog_name, table_name, target.ToString()))};
+	}
+	if (!GetCatalogEntry(retriever, target.Catalog())) {
+		return {nullptr, nullptr,
+		        ErrorData(CatalogException(lookup_info.GetErrorContext(),
+		                                   "Table \"%s\" of catalog \"%s\" is redirected to catalog \"%s\", which is "
+		                                   "not attached",
+		                                   table_name, catalog_name, target.Catalog().GetIdentifierName()))};
+	}
+	// the target is resolved exactly once: it can not be redirected again
+	EntryLookupInfo target_lookup(lookup_info, target);
+	target_lookup.SetAllowRedirect(false);
+	auto redirected = TryLookupEntryAcrossCatalogs(retriever, target_lookup, OnEntryNotFound::RETURN_NULL);
+	if (redirected.error.HasError()) {
+		return redirected;
+	}
+	if (!redirected.Found()) {
+		return {nullptr, nullptr,
+		        ErrorData(CatalogException(lookup_info.GetErrorContext(),
+		                                   "Table \"%s\" of catalog \"%s\" is redirected to %s, which does not exist",
+		                                   table_name, catalog_name, target.ToString()))};
+	}
+	redirected.redirected_from = result.entry;
+	return redirected;
 }
 
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const EntryLookupInfo &lookup_info,
@@ -1181,7 +1235,15 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		auto transaction = lookup.catalog.GetCatalogTransaction(context);
 		result = lookup.catalog.TryLookupEntryInternal(transaction, lookup.lookup_info);
 		if (result.Found()) {
-			break;
+			bool time_travel_refused;
+			result = ApplyRedirect(retriever, lookup.catalog, std::move(result), lookup_info, time_travel_refused);
+			if (result.Found()) {
+				break;
+			}
+			if (!time_travel_refused) {
+				// a redirect that leads nowhere is an error of the name as written, whatever if_not_found says
+				return result;
+			}
 		}
 		if (result.schema) {
 			schemas.insert(*result.schema);
@@ -1198,6 +1260,15 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	if (lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY && allow_default_lookup) {
 		if (!result.Found()) {
 			result = TryLookupDefaultTable(retriever, lookup_info, false);
+			if (result.Found()) {
+				bool time_travel_refused;
+				auto &default_table_catalog = result.entry->ParentCatalog();
+				result = ApplyRedirect(retriever, default_table_catalog, std::move(result), lookup_info,
+				                       time_travel_refused);
+				if (!result.Found() && !time_travel_refused) {
+					return result;
+				}
+			}
 			if (result.error.HasError()) {
 				error_data = std::move(result.error);
 			}
@@ -1291,6 +1362,7 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 
 		EntryLookupInfo info(CatalogType::TABLE_ENTRY,
 		                     QualifiedName(catalog_by_name->GetName(), table_schema, table_name), at_clause, context);
+		info.SetAllowRedirect(lookup_info.AllowRedirect());
 		return catalog_by_name->TryLookupEntryInternal(transaction, info);
 	}
 
@@ -1324,6 +1396,11 @@ CatalogEntryLookup Catalog::TryLookupDefaultSchema(CatalogEntryRetriever &retrie
 
 optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, const EntryLookupInfo &lookup_info,
                                              OnEntryNotFound if_not_found) {
+	return ResolveEntry(retriever, lookup_info, if_not_found).entry;
+}
+
+CatalogEntryLookup Catalog::ResolveEntry(CatalogEntryRetriever &retriever, const EntryLookupInfo &lookup_info,
+                                         OnEntryNotFound if_not_found) {
 	auto result = TryLookupEntryAcrossCatalogs(retriever, lookup_info, if_not_found);
 
 	// Try autoloading extension to resolve lookup
@@ -1338,11 +1415,8 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, c
 		result.error.Throw();
 	}
 
-	if (!result.Found()) {
-		D_ASSERT(if_not_found == OnEntryNotFound::RETURN_NULL);
-		return nullptr;
-	}
-	return result.entry.get();
+	D_ASSERT(result.Found() || if_not_found == OnEntryNotFound::RETURN_NULL);
+	return result;
 }
 
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, const EntryLookupInfo &lookup_info,

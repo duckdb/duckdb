@@ -393,6 +393,16 @@ public:
 	CatalogEntryRetriever &EntryRetriever() {
 		return entry_retriever;
 	}
+	//! Statement-level table lookup, the one lookup a catalog may redirect (Catalog::TryRedirectEntry)
+	CatalogEntryLookup ResolveTable(EntryLookupInfo lookup_info, OnEntryNotFound if_not_found,
+	                                bool allow_redirect = true);
+	//! The entry a table bound under this index was redirected from, if it was
+	optional_ptr<CatalogEntry> GetRedirectSource(TableIndex index) const;
+	//! Refuse modifying a redirected table through a name of a read-only database
+	void CheckRedirectedModify(optional_ptr<CatalogEntry> redirected_from, StatementType statement_type);
+	//! Refuse creating an index or trigger through a redirected name: it belongs to the catalog that stores the table
+	void CheckRedirectedCreate(optional_ptr<CatalogEntry> redirected_from, const CatalogEntry &target,
+	                           const string &what);
 	optional_ptr<BoundParameterMap> GetParameters();
 	void SetParameters(BoundParameterMap &parameters);
 	//! Returns a ColumnRefExpression after it was resolved (i.e. past the STAR expression/USING clauses)
@@ -440,6 +450,8 @@ private:
 	reference_set_t<CatalogEntry> bound_table_macros;
 	//! Used to retrieve CatalogEntry's
 	CatalogEntryRetriever entry_retriever;
+	//! The entries that tables bound by this binder were redirected from, by table index
+	unordered_map<idx_t, reference<CatalogEntry>> redirect_sources;
 	//! Unnamed subquery index
 	idx_t unnamed_subquery_index = 1;
 	//! Binder depth
@@ -527,10 +539,12 @@ private:
 	void BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns,
 	                            vector<unique_ptr<Expression>> &projection_expressions,
 	                            LogicalOperator &target_binding);
+	//! `redirected_from` is the entry the table's name resolved to before a redirect, which qualifies its columns
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
 	                             const Identifier &alias, TableIndex update_table_index,
 	                             unique_ptr<LogicalOperator> child_operator,
-	                             virtual_column_map_t virtual_columns = virtual_column_map_t());
+	                             virtual_column_map_t virtual_columns = virtual_column_map_t(),
+	                             optional_ptr<CatalogEntry> redirected_from = nullptr);
 
 	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func, idx_t depth);
 
@@ -542,11 +556,13 @@ private:
 	BoundStatement BindNode(QueryNode &node);
 	BoundStatement BindNode(StatementNode &node);
 	BoundStatement BindNode(InsertQueryNode &node);
-	unique_ptr<BoundStatement> TryExpandTriggers(QueryNode &node, TableCatalogEntry &table,
-	                                             TriggerEventType event_type);
+	//! `redirected_from` is the entry the table's name resolved to before a redirect, which qualifies RETURNING columns
+	unique_ptr<BoundStatement> TryExpandTriggers(QueryNode &node, TableCatalogEntry &table, TriggerEventType event_type,
+	                                             optional_ptr<CatalogEntry> redirected_from = nullptr);
 	BoundStatement ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 	                              const vector<const_reference<TriggerCatalogEntry>> &before_triggers,
-	                              const vector<const_reference<TriggerCatalogEntry>> &after_triggers);
+	                              const vector<const_reference<TriggerCatalogEntry>> &after_triggers,
+	                              optional_ptr<CatalogEntry> redirected_from);
 	unique_ptr<BoundStatement> TryExpandRowTriggers(QueryNode &node,
 	                                                vector<unique_ptr<ParsedExpression>> &returning_list,
 	                                                TableCatalogEntry &table, TriggerEventType event_type);

@@ -22,12 +22,13 @@ EntryLookupInfo::EntryLookupInfo(CatalogType catalog_type_p, Identifier name_p, 
 
 EntryLookupInfo::EntryLookupInfo(const EntryLookupInfo &parent, QualifiedName name_p)
     : catalog_type(parent.catalog_type), name(std::move(name_p)), at_clause(parent.at_clause),
-      error_context(parent.error_context) {
+      error_context(parent.error_context), allow_redirect(parent.allow_redirect) {
 }
 
 EntryLookupInfo::EntryLookupInfo(const EntryLookupInfo &parent, optional_ptr<BoundAtClause> at_clause)
     : EntryLookupInfo(parent.catalog_type, parent.name, parent.at_clause ? parent.at_clause : at_clause,
                       parent.error_context) {
+	allow_redirect = parent.allow_redirect;
 }
 
 EntryLookupInfo EntryLookupInfo::SchemaLookup(const EntryLookupInfo &parent, vector<Identifier> schema_path) {
@@ -65,6 +66,14 @@ const QueryErrorContext &EntryLookupInfo::GetErrorContext() const {
 
 const optional_ptr<BoundAtClause> EntryLookupInfo::GetAtClause() const {
 	return at_clause;
+}
+
+bool EntryLookupInfo::AllowRedirect() const {
+	return allow_redirect;
+}
+
+void EntryLookupInfo::SetAllowRedirect(bool allow_redirect_p) {
+	allow_redirect = allow_redirect_p;
 }
 
 } // namespace duckdb

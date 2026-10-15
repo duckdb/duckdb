@@ -611,14 +611,16 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 
 	node.qualified_name = BindTableName(node.qualified_name);
 	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, node.qualified_name);
-	auto &table_entry = *entry_retriever.GetEntry(table_lookup, OnEntryNotFound::THROW_EXCEPTION);
+	auto resolved = ResolveTable(table_lookup, OnEntryNotFound::THROW_EXCEPTION);
+	auto &table_entry = *resolved.entry;
 	if (table_entry.type != CatalogType::TABLE_ENTRY) {
 		throw CatalogException("%s is not an %s", node.qualified_name.Name().GetIdentifierName(),
 		                       TableCatalogEntry::Name);
 	}
 	auto &table = table_entry.Cast<TableCatalogEntry>();
+	CheckRedirectedModify(resolved.redirected_from, StatementType::INSERT_STATEMENT);
 
-	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::INSERT_EVENT)) {
+	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::INSERT_EVENT, resolved.redirected_from)) {
 		return std::move(*expanded);
 	}
 	if (auto expanded = TryExpandRowTriggers(node, node.returning_list, table, TriggerEventType::INSERT_EVENT)) {
@@ -715,7 +717,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 
 		return BindReturning(std::move(node.returning_list), table,
 		                     node.table_ref ? node.table_ref->alias : Identifier(), insert_table_index,
-		                     std::move(index_as_logicaloperator));
+		                     std::move(index_as_logicaloperator), virtual_column_map_t(), resolved.redirected_from);
 	}
 
 	D_ASSERT(result.types.size() == result.names.size());

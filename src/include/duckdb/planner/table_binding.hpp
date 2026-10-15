@@ -128,6 +128,9 @@ public:
 	TableBinding(const Identifier &alias, vector<LogicalType> types, vector<Identifier> names,
 	             vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, TableIndex index,
 	             virtual_column_map_t virtual_columns);
+	TableBinding(BindingAlias alias, vector<LogicalType> types, vector<Identifier> names,
+	             vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, TableIndex index,
+	             virtual_column_map_t virtual_columns);
 
 	//! A reference to the set of bound column ids
 	vector<ColumnIndex> &bound_column_ids;

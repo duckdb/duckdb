@@ -138,15 +138,27 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	stmt.info->SetQualifiedName(BindTableName(stmt.info->GetQualifiedName()));
 
 	optional_ptr<CatalogEntry> entry;
+	optional_ptr<CatalogEntry> redirected_from;
 	if (stmt.info->type == AlterType::SET_COLUMN_COMMENT) {
 		// Extra step for column comments: They can alter a table or a view, and we resolve that here.
 		auto &info = stmt.info->Cast<SetColumnCommentInfo>();
-		entry = info.TryResolveCatalogEntry(entry_retriever);
-		if (entry && info.catalog_entry_type == CatalogType::VIEW_ENTRY) {
-			// when running SET COLUMN on a VIEW - ensure the view is bound
-			auto &view = entry->Cast<ViewCatalogEntry>();
-			view.BindView(context);
+		EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, info.GetQualifiedName());
+		auto resolved = ResolveTable(lookup_info, stmt.info->if_not_found);
+		entry = resolved.entry;
+		redirected_from = resolved.redirected_from;
+		if (entry) {
+			info.catalog_entry_type = entry->type;
+			if (entry->type == CatalogType::VIEW_ENTRY) {
+				// when running SET COLUMN on a VIEW - ensure the view is bound
+				auto &view = entry->Cast<ViewCatalogEntry>();
+				view.BindView(context);
+			}
 		}
+	} else if (stmt.info->GetCatalogType() == CatalogType::TABLE_ENTRY) {
+		EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, stmt.info->GetQualifiedName());
+		auto resolved = ResolveTable(lookup_info, stmt.info->if_not_found);
+		entry = resolved.entry;
+		redirected_from = resolved.redirected_from;
 	} else {
 		// For any other ALTER, we retrieve the catalog entry directly.
 		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), stmt.info->GetQualifiedName());
@@ -175,14 +187,16 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	if (catalog.IsSystemCatalog()) {
 		throw BinderException("Can not comment on System Catalog entries");
 	}
+	CheckRedirectedModify(redirected_from, StatementType::ALTER_STATEMENT);
 	properties.RegisterDBModify(catalog, context, stmt.info->GetModifications());
-	stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
+	stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(entry->name));
 
 	if (!stmt.info->IsAddUniqueConstraint()) {
 		result.plan = make_uniq<LogicalAlter>(std::move(stmt.info));
 		return result;
 	}
 
+	CheckRedirectedCreate(redirected_from, *entry, "an index");
 	return BindAlterAddIndex(result, *entry, std::move(stmt.info));
 }
 

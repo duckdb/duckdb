@@ -30,13 +30,15 @@ BoundStatement Binder::BindNode(DeleteQueryNode &node) {
 	}
 	auto &table = *table_ptr;
 
-	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::DELETE_EVENT)) {
+	if (auto expanded =
+	        TryExpandTriggers(node, table, TriggerEventType::DELETE_EVENT, GetRedirectSource(get.table_index))) {
 		return std::move(*expanded);
 	}
 	if (auto expanded = TryExpandRowTriggers(node, node.returning_list, table, TriggerEventType::DELETE_EVENT)) {
 		return std::move(*expanded);
 	}
 
+	CheckRedirectedModify(GetRedirectSource(get.table_index), StatementType::DELETE_STATEMENT);
 	GetStatementProperties().RegisterDBModify(table.catalog, context, DatabaseModificationType::DELETE_DATA);
 
 	// plan any tables from the various using clauses
@@ -115,7 +117,8 @@ BoundStatement Binder::BindNode(DeleteQueryNode &node) {
 		// Include virtual columns (like rowid) so they can be referenced in RETURNING
 		auto virtual_columns = table.GetVirtualColumns();
 		return BindReturning(std::move(node.returning_list), table, node.table->alias, update_table_index,
-		                     std::move(del_as_logicaloperator), std::move(virtual_columns));
+		                     std::move(del_as_logicaloperator), std::move(virtual_columns),
+		                     GetRedirectSource(get.table_index));
 	}
 	BoundStatement result;
 	result.plan = std::move(del);

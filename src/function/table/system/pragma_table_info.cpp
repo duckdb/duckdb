@@ -176,9 +176,15 @@ static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, Tabl
 	// look up the table name in the catalog
 	CatalogEntryRetriever retriever(context);
 	qname = Binder::BindTableName(retriever, qname);
-	auto &entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname);
-	Binder::RegisterEntryRead(input.binder, context, entry);
-	return make_uniq<PragmaTableFunctionData>(entry, IS_PRAGMA_TABLE_INFO);
+	// the table a statement naming it would bind (Catalog::TryRedirectEntry)
+	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, qname);
+	table_lookup.SetAllowRedirect(true);
+	auto resolved = Catalog::ResolveEntry(retriever, table_lookup, OnEntryNotFound::THROW_EXCEPTION);
+	if (resolved.redirected_from) {
+		Binder::RegisterEntryRead(input.binder, context, *resolved.redirected_from);
+	}
+	Binder::RegisterEntryRead(input.binder, context, *resolved.entry);
+	return make_uniq<PragmaTableFunctionData>(*resolved.entry, IS_PRAGMA_TABLE_INFO);
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaTableInfoInit(ClientContext &context, TableFunctionInitInput &input) {

@@ -1,0 +1,351 @@
+# name: test/sql/catalog/redirect/table_redirect_ddl.test
+# description: DDL through a redirected table name acts on the target entry, by the target's own name
+# group: [redirect]
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+require notmingw
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension'
+
+statement ok
+ATTACH ':memory:' AS dst
+
+# ren redirects redirect_a to dst.redirect_a_r; dst.redirect_a is a decoy with the name the statement uses
+statement ok
+ATTACH ':memory:' AS ren (TYPE table_redirect_test, TARGET 'dst', TARGET_SUFFIX '_r')
+
+statement ok
+CREATE TABLE dst.redirect_a_r(i INTEGER)
+
+statement ok
+CREATE TABLE dst.redirect_a(i INTEGER)
+
+statement ok
+CREATE TABLE ren.redirect_a(i INTEGER)
+
+statement ok
+ALTER TABLE ren.redirect_a ADD COLUMN j INTEGER
+
+statement ok
+COMMENT ON COLUMN ren.redirect_a.i IS 'redirected'
+
+statement ok
+COMMENT ON TABLE ren.redirect_a IS 'redirected table'
+
+query IIII
+SELECT database_name, table_name, column_name, comment FROM duckdb_columns() WHERE table_name LIKE 'redirect_a%' ORDER BY 1, 2, 3
+----
+dst	redirect_a	i	NULL
+dst	redirect_a_r	i	redirected
+dst	redirect_a_r	j	NULL
+ren	redirect_a	i	NULL
+
+query II
+SELECT table_name, comment FROM duckdb_tables() WHERE database_name = 'dst' AND table_name LIKE 'redirect_a%' ORDER BY 1
+----
+redirect_a	NULL
+redirect_a_r	redirected table
+
+query I
+INSERT INTO ren.redirect_a VALUES (1, 2) RETURNING ren.redirect_a.j
+----
+2
+
+statement ok
+DROP TABLE ren.redirect_a
+
+query II
+SELECT database_name, table_name FROM duckdb_tables() WHERE table_name LIKE 'redirect_a%' ORDER BY 1, 2
+----
+dst	redirect_a
+ren	redirect_a
+
+# in a chain src -> mid -> dst every statement stops at mid
+statement ok
+ATTACH ':memory:' AS mid (TYPE table_redirect_test, TARGET 'dst')
+
+statement ok
+ATTACH ':memory:' AS src (TYPE table_redirect_test, TARGET 'mid')
+
+statement ok
+CREATE TABLE dst.redirect_c AS SELECT 3 AS i
+
+statement ok
+CREATE TABLE mid.redirect_c AS SELECT 2 AS i
+
+statement ok
+CREATE TABLE src.redirect_c AS SELECT 1 AS i
+
+query I
+SELECT i FROM src.redirect_c
+----
+2
+
+statement ok
+ALTER TABLE src.redirect_c ADD COLUMN j INTEGER
+
+query II
+SELECT database_name, column_name FROM duckdb_columns() WHERE table_name = 'redirect_c' ORDER BY 1, 2
+----
+dst	i
+mid	i
+mid	j
+src	i
+
+statement ok
+DROP TABLE src.redirect_c
+
+query I
+SELECT database_name FROM duckdb_tables() WHERE table_name = 'redirect_c' ORDER BY 1
+----
+dst
+src
+
+# CREATE is never redirected: the existence check and the new table are the source's, also when the target is dead
+statement ok
+CREATE TABLE src.redirect_dead(i INTEGER)
+
+statement ok
+CREATE TABLE IF NOT EXISTS src.redirect_dead(i INTEGER)
+
+statement ok
+CREATE OR REPLACE TABLE src.redirect_dead(i INTEGER, j INTEGER)
+
+query I
+SELECT column_name FROM duckdb_columns() WHERE database_name = 'src' AND table_name = 'redirect_dead' ORDER BY 1
+----
+i
+j
+
+statement error
+SELECT * FROM src.redirect_dead
+----
+is redirected to mid.main.redirect_dead, which does not exist
+
+# an index belongs to the catalog that stores the table: creating one through a redirected name is refused
+statement ok
+CREATE TABLE dst.redirect_i(i INTEGER)
+
+statement ok
+CREATE TABLE ren.redirect_i(i INTEGER)
+
+statement ok
+CREATE TABLE dst.redirect_i_r(i INTEGER)
+
+statement error
+CREATE INDEX idx ON ren.redirect_i(i)
+----
+Cannot create an index on table "redirect_i" of catalog "ren": the table is redirected to catalog "dst", create it there
+
+statement ok
+CREATE TABLE mid.redirect_i(i INTEGER)
+
+statement ok
+CREATE TABLE src.redirect_i(i INTEGER)
+
+statement error
+ALTER TABLE src.redirect_i ADD PRIMARY KEY (i)
+----
+Cannot create an index on table "redirect_i" of catalog "src": the table is redirected to catalog "mid", create it there
+
+statement ok
+CREATE INDEX idx ON dst.redirect_i_r(i)
+
+query I
+SELECT count(*) FROM duckdb_indexes() WHERE database_name = 'dst' AND table_name = 'redirect_i_r'
+----
+1
+
+# a trigger belongs to the catalog that stores the table too: created there, it can be dropped through the redirect
+statement ok
+CREATE TABLE dst.audit(x INTEGER)
+
+statement error
+CREATE TRIGGER trg AFTER INSERT ON ren.redirect_i FOR EACH STATEMENT INSERT INTO dst.audit VALUES (1)
+----
+Cannot create a trigger on table "redirect_i" of catalog "ren": the table is redirected to catalog "dst", create it there
+
+statement ok
+CREATE TRIGGER trg AFTER INSERT ON dst.redirect_i_r FOR EACH STATEMENT INSERT INTO dst.audit VALUES (1)
+
+statement error
+DROP TRIGGER nope ON ren.redirect_i
+----
+does not exist on table
+
+statement ok
+DROP TRIGGER trg ON ren.redirect_i
+
+query I
+SELECT count(*) FROM duckdb_triggers() WHERE database_name = 'dst' AND trigger_name = 'trg'
+----
+0
+
+# RENAME acts on the target; the redirecting catalog keeps its entry and name, so the redirect leads nowhere until
+# it follows (a metastore does, this test catalog does not)
+statement ok
+CREATE TABLE dst.redirect_n(i INTEGER)
+
+statement ok
+CREATE TABLE src.redirect_n(i INTEGER)
+
+statement ok
+CREATE TABLE mid.redirect_n(i INTEGER)
+
+statement ok
+ALTER TABLE mid.redirect_n RENAME TO redirect_n2
+
+query II
+SELECT database_name, table_name FROM duckdb_tables() WHERE table_name LIKE 'redirect_n%' ORDER BY 1, 2
+----
+dst	redirect_n2
+mid	redirect_n
+src	redirect_n
+
+statement error
+SELECT * FROM mid.redirect_n
+----
+is redirected to dst.main.redirect_n, which does not exist
+
+# metadata by name describes the table a statement would bind
+statement ok
+CREATE TABLE dst.redirect_m(i INTEGER, extra VARCHAR)
+
+statement ok
+CREATE TABLE src.redirect_m(i INTEGER)
+
+statement ok
+CREATE TABLE mid.redirect_m(i INTEGER, extra VARCHAR)
+
+query I
+SELECT name FROM pragma_table_info('mid.redirect_m') ORDER BY cid
+----
+i
+extra
+
+query I
+SELECT column_name FROM duckdb_columns() WHERE database_name = 'mid' AND table_name = 'redirect_m' ORDER BY 1
+----
+extra
+i
+
+query I
+SELECT column_name FROM (DESCRIBE src.redirect_m) ORDER BY 1
+----
+extra
+i
+
+# RETURNING keeps the name the statement used when the target has statement triggers
+statement ok
+CREATE TABLE dst.redirect_r(i INTEGER)
+
+statement ok
+CREATE TABLE mid.redirect_r(i INTEGER)
+
+statement ok
+CREATE TRIGGER trg_r AFTER INSERT ON dst.redirect_r FOR EACH STATEMENT INSERT INTO dst.audit VALUES (2)
+
+statement ok
+CREATE TRIGGER trg_u AFTER UPDATE ON dst.redirect_r FOR EACH STATEMENT INSERT INTO dst.audit VALUES (3)
+
+statement ok
+CREATE TRIGGER trg_d AFTER DELETE ON dst.redirect_r FOR EACH STATEMENT INSERT INTO dst.audit VALUES (4)
+
+query I
+INSERT INTO mid.redirect_r VALUES (7) RETURNING mid.redirect_r.i
+----
+7
+
+query I
+UPDATE mid.redirect_r SET i = 8 RETURNING mid.redirect_r.i
+----
+8
+
+query I
+DELETE FROM mid.redirect_r RETURNING mid.redirect_r.i
+----
+8
+
+query I
+SELECT x FROM dst.audit ORDER BY x
+----
+2
+3
+4
+
+# ALTER ... ADD PRIMARY KEY on a view is refused as before
+statement ok
+CREATE VIEW src.redirect_pv AS SELECT 1 AS i
+
+statement error
+ALTER TABLE src.redirect_pv ADD PRIMARY KEY (i)
+----
+<REGEX>:.*(view|View).*
+
+# a cached pragma_table_info plan depends on the redirecting catalog as well
+statement ok
+PRAGMA disable_optimizer
+
+statement ok
+PREPARE cols AS SELECT name FROM pragma_table_info('mid.redirect_m') ORDER BY cid
+
+query I
+EXECUTE cols
+----
+i
+extra
+
+# dropping the redirecting catalog's entry alone (through src, which redirects to mid) invalidates the plan
+statement ok
+DROP TABLE src.redirect_m
+
+query I
+SELECT count(*) FROM duckdb_tables() WHERE table_name = 'redirect_m' AND database_name IN ('dst', 'mid', 'src')
+----
+2
+
+statement error
+EXECUTE cols
+----
+does not exist
+
+query I
+SELECT column_name FROM duckdb_columns() WHERE database_name = 'dst' AND table_name = 'redirect_m' ORDER BY 1
+----
+extra
+i
+
+statement ok
+PRAGMA enable_optimizer
+
+# ANALYZE and VACUUM bind their columns under the name the statement used
+statement ok
+CREATE TABLE dst.redirect_v_r(i INTEGER, j INTEGER)
+
+statement ok
+CREATE TABLE ren.redirect_v(i INTEGER)
+
+statement ok
+ANALYZE ren.redirect_v
+
+statement ok
+VACUUM ren.redirect_v(i)
+
+# a trigger body naming a redirected table depends on both catalogs: refused like any other cross-catalog reference
+statement ok
+CREATE TABLE dst.redirect_body(i INTEGER)
+
+statement ok
+CREATE TABLE mid.redirect_body(i INTEGER)
+
+statement ok
+CREATE TABLE dst.plain_log(i INTEGER)
+
+statement error
+CREATE TRIGGER trg_body AFTER INSERT ON dst.plain_log FOR EACH STATEMENT INSERT INTO mid.redirect_body VALUES (1)
+----
+<REGEX>:.*cannot reference.*different catalog.*

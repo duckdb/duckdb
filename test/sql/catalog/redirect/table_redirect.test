@@ -1,0 +1,242 @@
+# name: test/sql/catalog/redirect/table_redirect.test
+# description: Catalog::TryRedirectEntry - a catalog answers a table lookup with the same table in another catalog
+# group: [redirect]
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+require notmingw
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension'
+
+# dst holds the data; src lists redirect_* tables and redirects them to dst
+statement ok
+ATTACH ':memory:' AS dst
+
+statement ok
+ATTACH ':memory:' AS src (TYPE table_redirect_test, TARGET 'dst')
+
+statement ok
+CREATE TABLE dst.redirect_t(i INTEGER)
+
+statement ok
+INSERT INTO dst.redirect_t VALUES (1), (2)
+
+statement ok
+CREATE TABLE src.redirect_t(i INTEGER)
+
+statement ok
+CREATE TABLE src.plain AS SELECT 42 AS i
+
+# SELECT, DESCRIBE and unqualified names after USE resolve to the target
+query I
+SELECT i FROM src.redirect_t ORDER BY i
+----
+1
+2
+
+query I
+SELECT column_name FROM (DESCRIBE src.redirect_t)
+----
+i
+
+statement ok
+USE src
+
+query I
+SELECT count(*) FROM redirect_t
+----
+2
+
+query I
+SELECT i FROM plain
+----
+42
+
+statement ok
+USE memory
+
+# columns are qualified by the name the statement used, not by the target
+query I
+SELECT src.redirect_t.i FROM src.redirect_t ORDER BY 1
+----
+1
+2
+
+query I
+SELECT src.main.redirect_t.i FROM src.main.redirect_t ORDER BY 1
+----
+1
+2
+
+query I
+SELECT t.i FROM src.redirect_t t ORDER BY 1
+----
+1
+2
+
+statement error
+SELECT dst.redirect_t.i FROM src.redirect_t
+----
+Referenced table "dst.redirect_t" not found
+
+query I
+INSERT INTO src.redirect_t VALUES (5) RETURNING src.redirect_t.i
+----
+5
+
+query I
+UPDATE src.redirect_t SET i = 6 WHERE i = 5 RETURNING src.redirect_t.i
+----
+6
+
+query I
+DELETE FROM src.redirect_t WHERE i = 6 RETURNING src.redirect_t.i
+----
+6
+
+# DML through the redirecting name lands in the target, the source table stays empty
+statement ok
+INSERT INTO src.redirect_t VALUES (3)
+
+statement ok
+UPDATE src.redirect_t SET i = i * 10 WHERE i = 1
+
+statement ok
+DELETE FROM src.redirect_t WHERE i = 2
+
+query I
+SELECT i FROM dst.redirect_t ORDER BY i
+----
+3
+10
+
+query I
+SELECT estimated_size FROM duckdb_tables() WHERE database_name = 'src' AND table_name = 'redirect_t'
+----
+0
+
+# views are never redirected
+statement ok
+CREATE VIEW src.redirect_v AS SELECT 99 AS i
+
+query I
+SELECT i FROM src.redirect_v
+----
+99
+
+# a redirect is followed exactly once: dst2 would redirect onward to a catalog that is not attached
+statement ok
+ATTACH ':memory:' AS dst2 (TYPE table_redirect_test, TARGET 'nowhere')
+
+statement ok
+CREATE TABLE dst2.redirect_u AS SELECT 7 AS i
+
+statement ok
+ATTACH ':memory:' AS hop2 (TYPE table_redirect_test, TARGET 'dst2')
+
+statement ok
+CREATE TABLE hop2.redirect_u(i INTEGER)
+
+query I
+SELECT i FROM hop2.redirect_u
+----
+7
+
+statement error
+SELECT i FROM dst2.redirect_u
+----
+Table "redirect_u" of catalog "dst2" is redirected to catalog "nowhere", which is not attached
+
+# a redirect to a missing table is an error of the name as written, also for IF EXISTS
+statement ok
+CREATE TABLE src.redirect_missing(i INTEGER)
+
+statement error
+SELECT * FROM src.redirect_missing
+----
+Table "redirect_missing" of catalog "src" is redirected to dst.main.redirect_missing, which does not exist
+
+statement error
+DROP TABLE IF EXISTS src.redirect_missing
+----
+is redirected to dst.main.redirect_missing, which does not exist
+
+# the redirect also applies to a catalog's default table
+statement ok
+ATTACH ':memory:' AS dt (TYPE table_redirect_test, TARGET 'dst', DEFAULT_TABLE 'redirect_t')
+
+statement ok
+CREATE TABLE dt.redirect_t(i INTEGER)
+
+query I
+SELECT i FROM dt ORDER BY i
+----
+3
+10
+
+# AT (...) is checked against the catalog that serves the table
+statement ok
+ATTACH ':memory:' AS tt (TYPE table_redirect_target)
+
+statement ok
+CREATE TABLE tt.redirect_at AS SELECT 5 AS i
+
+statement ok
+ATTACH ':memory:' AS sat (TYPE table_redirect_test, TARGET 'tt')
+
+statement ok
+CREATE TABLE sat.redirect_at(i INTEGER)
+
+statement ok
+CREATE TABLE sat.plain_at(i INTEGER)
+
+query I
+SELECT i FROM sat.redirect_at AT (VERSION => 1)
+----
+5
+
+statement error
+SELECT i FROM sat.plain_at AT (VERSION => 1)
+----
+Catalog type does not support time travel
+
+statement error
+SELECT i FROM src.redirect_t AT (VERSION => 1)
+----
+Catalog type does not support time travel
+
+# a search path candidate that can not serve the AT clause is passed over, as before
+statement ok
+CREATE TABLE sat.t AS SELECT 1 AS i
+
+statement ok
+CREATE TABLE tt.t AS SELECT 2 AS i
+
+statement ok
+SET search_path = 'sat,tt'
+
+query I
+SELECT i FROM t
+----
+1
+
+query I
+SELECT i FROM t AT (VERSION => 1)
+----
+2
+
+statement ok
+RESET search_path
+
+# DROP TABLE through the redirecting name drops the target table and keeps the source entry
+statement ok
+DROP TABLE src.redirect_t
+
+query I
+SELECT database_name FROM duckdb_tables() WHERE table_name = 'redirect_t' ORDER BY 1
+----
+dt
+src

@@ -42,6 +42,9 @@ public:
 	//! Look up an entry described by the (catalog/schema-qualified) EntryLookupInfo
 	optional_ptr<CatalogEntry> GetEntry(const EntryLookupInfo &lookup_info,
 	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
+	//! GetEntry returning the whole lookup, including the entry a redirected lookup started from
+	CatalogEntryLookup ResolveEntry(const EntryLookupInfo &lookup_info,
+	                                OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
 	//! Look up a (catalog/schema-qualified) type
 	LogicalType GetType(const QualifiedName &name, OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
 	//! Look up the schema described by the (catalog-qualified) EntryLookupInfo
