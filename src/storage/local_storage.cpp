@@ -583,7 +583,6 @@ static void FlushCopiedAppend(DuckTransaction &transaction, DataTable &table, Lo
 			// do not touch a state these errors may have corrupted, and do not downgrade them
 			throw;
 		}
-		// revert the table first: freeing the copied rows gives the index revert memory headroom
 		table.RevertAppendInternal(NumericCast<idx_t>(append_state.row_start));
 		storage.RevertIndexAppend(transaction, append_state.row_start,
 		                          append_state.row_start + NumericCast<row_t>(append_count));
@@ -592,9 +591,8 @@ static void FlushCopiedAppend(DuckTransaction &transaction, DataTable &table, Lo
 	}
 }
 
-//! Publishes a table's transaction-local rows at commit: index keys, then the rows, then the undo
-//! buffer entry that makes the append revertible. A failure leaves the table and its indexes
-//! unchanged and throws an ordinary error, or invalidates the database.
+//! Flushes the transaction-local rows of a table into the shared table and its indexes at commit.
+//! A failure either leaves both unchanged (an ordinary, retryable error) or invalidates the database.
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state) {
 	if (storage.is_dropped) {
 		storage.Rollback();
@@ -629,8 +627,8 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// flushed a partial row group that does not qualify as a bulk append
 		storage.Rollback();
 	}
-	// the publication window: shared state is modified below, but a rollback cannot revert it
-	// until PushAppend records the append in the undo buffer - the catch fails closed
+	// The code below modifies the shared indexes and table, but a rollback only reverts what
+	// PushAppend recorded in the undo buffer: any failure must revert its own changes or invalidate.
 	try {
 		// Append to the indexes. A conflict reverts the keys and surfaces as a CONSTRAINT error.
 		storage.AppendToIndexes(transaction, append_state);
