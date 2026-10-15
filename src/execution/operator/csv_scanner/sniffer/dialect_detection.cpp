@@ -343,10 +343,13 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// If there are more than one consistent row.
 	const bool more_than_one_row = consistent_rows > 1;
 
+	// If the delimiter, the column count or null padding are set, a single column reading is not an alternative.
+	const bool single_column_ruled_out =
+	    options.null_padding || options.dialect_options.state_machine_options.delimiter.IsSetByUser() ||
+	    set_columns.IsSet() || !options.name_list.empty() || !options.sql_type_list.empty();
 	// Skipping rows for a sniffed delimiter that shows in a single row of the whole file discards data.
 	const bool skipped_rows_are_notes = dirty_notes_minus_comments == empty_lines || dirty_notes_hold_delimiter ||
-	                                    more_than_one_row || !scanner->FinishedFile() || options.null_padding ||
-	                                    options.dialect_options.state_machine_options.delimiter.IsSetByUser();
+	                                    more_than_one_row || !scanner->FinishedFile() || single_column_ruled_out;
 
 	// If there are more than one column.
 	const bool more_than_one_column = num_cols > 1;
