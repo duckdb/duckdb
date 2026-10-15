@@ -629,7 +629,7 @@ hash_t Hash(double_na_equal val) {
 
 template <>
 hash_t Hash(interval_exact_equal val) {
-	return Hash<interval_t>(val);
+	return CombineHash(CombineHash(Hash(val.months), Hash(val.days)), Hash(val.micros));
 }
 
 } // namespace duckdb
