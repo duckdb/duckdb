@@ -13,6 +13,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_casting.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "utf8proc_wrapper.hpp"
@@ -79,7 +80,9 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 			}
 			if (StringValueScanner::CanDirectlyCast(type, icu_loaded)) {
 				auto &options = state_machine.options;
-				const bool sniffed = !options.columns_set && !options.WasTypeManuallySet(i);
+				auto &projection_ids = csv_file_scan->projection_ids;
+				const auto column_idx = i < projection_ids.size() ? projection_ids[i].first : i;
+				const bool sniffed = !options.columns_set && !options.WasTypeManuallySet(column_idx);
 				parse_types[i] = ParseTypeInfo(type, true, sniffed);
 				logical_types.emplace_back(type);
 			} else {
@@ -369,6 +372,10 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 		break;
 	}
 	case LogicalTypeId::BIGNUM: {
+		if (strict && !CSVSniffer::CanYouCastBignum(value_ptr, size)) {
+			success = false;
+			break;
+		}
 		try {
 			while (size > 0 && StringUtil::CharacterIsSpace(*value_ptr)) {
 				value_ptr++;
@@ -422,7 +429,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 			const bool use_offset = (parse_types[chunk_col_id].type_id == LogicalTypeId::TIMESTAMP_TZ);
 			success = Timestamp::TryConvertTimestamp(
 			              value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-			              use_offset, nullptr, strict) == TimestampCastResult::SUCCESS;
+			              use_offset) == TimestampCastResult::SUCCESS;
 		}
 		break;
 	}

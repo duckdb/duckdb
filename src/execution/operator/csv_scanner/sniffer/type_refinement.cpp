@@ -27,7 +27,7 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 	if ((sql_type.id() == LogicalTypeId::DOUBLE || sql_type.id() == LogicalTypeId::FLOAT) &&
 	    options.decimal_separator == ",") {
 		string error_message;
-		CastParameters parameters(false, &error_message);
+		CastParameters parameters(true, &error_message);
 		idx_t line_error;
 		return CSVCast::TryCastFloatingVectorCommaSeparated(options, parse_chunk_col, dummy_result, size, parameters,
 		                                                    sql_type, line_error);

@@ -3,78 +3,78 @@
 # group: [csv]
 
 statement ok
-COPY (SELECT CASE WHEN i < 2048 THEN '1' ELSE '1.5' END AS c0 FROM range(2049) t(i)) TO '__TEST_DIR__/past_sample_decimal.csv' (HEADER, QUOTE '');
+COPY (SELECT CASE WHEN i < 2048 THEN '1' ELSE '1.5' END AS c0 FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_decimal.csv' (HEADER, QUOTE '');
 
 statement ok
-COPY (SELECT CASE WHEN i < 2048 THEN '1' ELSE '007' END AS c0 FROM range(2049) t(i)) TO '__TEST_DIR__/past_sample_zero.csv' (HEADER, QUOTE '');
+COPY (SELECT CASE WHEN i < 2048 THEN '1' ELSE '007' END AS c0 FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_zero.csv' (HEADER, QUOTE '');
 
 statement ok
-COPY (SELECT CASE WHEN i < 2048 THEN '1' ELSE '1_000' END AS c0 FROM range(2049) t(i)) TO '__TEST_DIR__/past_sample_underscore.csv' (HEADER, QUOTE '');
+COPY (SELECT CASE WHEN i < 2048 THEN '1' ELSE '1_000' END AS c0 FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_underscore.csv' (HEADER, QUOTE '');
 
 statement ok
-COPY (SELECT CASE WHEN i < 2048 THEN '2020-01-01' ELSE '2020-06-15T13:45:59' END AS c0 FROM range(2049) t(i)) TO '__TEST_DIR__/past_sample_date.csv' (HEADER, QUOTE '');
+COPY (SELECT CASE WHEN i < 2048 THEN '2020-01-01' ELSE '2020-06-15T13:45:59' END AS c0 FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_date.csv' (HEADER, QUOTE '');
 
 statement ok
-COPY (SELECT CASE WHEN i < 2048 THEN '1.5' ELSE '+2.5' END AS c0 FROM range(2049) t(i)) TO '__TEST_DIR__/past_sample_double.csv' (HEADER, QUOTE '');
+COPY (SELECT CASE WHEN i < 2048 THEN '1.5' ELSE '+2.5' END AS c0 FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_double.csv' (HEADER, QUOTE '');
 
 statement ok
-COPY (SELECT CASE WHEN i < 2048 THEN 'true' ELSE '1' END AS c0 FROM range(2049) t(i)) TO '__TEST_DIR__/past_sample_boolean.csv' (HEADER, QUOTE '');
+COPY (SELECT CASE WHEN i < 2048 THEN 'true' ELSE '1' END AS c0 FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_boolean.csv' (HEADER, QUOTE '');
 
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/past_sample_decimal.csv', sample_size = 2048)
+SELECT * FROM read_csv('{TEST_DIR}/past_sample_decimal.csv', sample_size = 2048)
 ----
 <REGEX>:.*Could not convert string "1.5" to 'BIGINT'.*sample_size=-1.*
 
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/past_sample_zero.csv', sample_size = 2048)
+SELECT * FROM read_csv('{TEST_DIR}/past_sample_zero.csv', sample_size = 2048)
 ----
 Could not convert string "007" to 'BIGINT'
 
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/past_sample_underscore.csv', sample_size = 2048)
+SELECT * FROM read_csv('{TEST_DIR}/past_sample_underscore.csv', sample_size = 2048)
 ----
 Could not convert string "1_000" to 'BIGINT'
 
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/past_sample_date.csv', sample_size = 2048)
+SELECT * FROM read_csv('{TEST_DIR}/past_sample_date.csv', sample_size = 2048)
 ----
 Could not convert string "2020-06-15T13:45:59" to 'DATE'
 
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/past_sample_double.csv', sample_size = 2048)
+SELECT * FROM read_csv('{TEST_DIR}/past_sample_double.csv', sample_size = 2048)
 ----
 Could not convert string "+2.5" to 'DOUBLE'
 
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/past_sample_boolean.csv', sample_size = 2048)
+SELECT * FROM read_csv('{TEST_DIR}/past_sample_boolean.csv', sample_size = 2048)
 ----
 Could not convert string "1" to 'BOOLEAN'
 
 # a larger sample detects the type of the value
 query II
-SELECT typeof(c0), max(c0) FROM read_csv('__TEST_DIR__/past_sample_decimal.csv', sample_size = -1) GROUP BY ALL
+SELECT typeof(c0), max(c0) FROM read_csv('{TEST_DIR}/past_sample_decimal.csv', sample_size = -1) GROUP BY ALL
 ----
 DOUBLE	1.5
 
 # rejected values are skipped with ignore_errors
 query II
-SELECT count(*), max(c0) FROM read_csv('__TEST_DIR__/past_sample_decimal.csv', sample_size = 2048, ignore_errors = true)
+SELECT count(*), max(c0) FROM read_csv('{TEST_DIR}/past_sample_decimal.csv', sample_size = 2048, ignore_errors = true)
 ----
 2048	1
 
 # types given by the user are cast as CAST does
 query I
-SELECT max(c0) FROM read_csv('__TEST_DIR__/past_sample_decimal.csv', sample_size = 2048, types = {'c0': 'BIGINT'})
+SELECT max(c0) FROM read_csv('{TEST_DIR}/past_sample_decimal.csv', sample_size = 2048, types = {'c0': 'BIGINT'})
 ----
 2
 
 query I
-SELECT max(c0) FROM read_csv('__TEST_DIR__/past_sample_decimal.csv', columns = {'c0': 'BIGINT'}, header = true)
+SELECT max(c0) FROM read_csv('{TEST_DIR}/past_sample_decimal.csv', columns = {'c0': 'BIGINT'}, header = true)
 ----
 2
 
 query I
-SELECT max(c0) FROM read_csv('__TEST_DIR__/past_sample_date.csv', sample_size = 2048, types = {'c0': 'DATE'})
+SELECT max(c0) FROM read_csv('{TEST_DIR}/past_sample_date.csv', sample_size = 2048, types = {'c0': 'DATE'})
 ----
 2020-06-15
 
@@ -82,18 +82,72 @@ statement ok
 CREATE TABLE t (c0 BIGINT);
 
 statement ok
-COPY t FROM '__TEST_DIR__/past_sample_decimal.csv' (SAMPLE_SIZE 2048);
+COPY t FROM '{TEST_DIR}/past_sample_decimal.csv' (SAMPLE_SIZE 2048);
 
 query I
 SELECT max(c0) FROM t
 ----
 2
 
-# TINYINT is sniffed as strictly as the other integer types
+# the type of each column decides, also when only some columns are read
 statement ok
-COPY (SELECT CASE WHEN i < 10 THEN '1' ELSE '1.5' END AS c0 FROM range(11) t(i)) TO '__TEST_DIR__/tinyint_decimal.csv' (HEADER, QUOTE '');
+COPY (SELECT CASE WHEN i < 2048 THEN '1' ELSE '1.5' END AS a, CASE WHEN i < 2048 THEN '1' ELSE '1.5' END AS b FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_two_columns.csv' (HEADER, QUOTE '');
+
+query I
+SELECT max(b) FROM read_csv('{TEST_DIR}/past_sample_two_columns.csv', sample_size = 2048, types = {'b': 'BIGINT'})
+----
+2
+
+statement error
+SELECT max(b) FROM read_csv('{TEST_DIR}/past_sample_two_columns.csv', sample_size = 2048, types = {'a': 'VARCHAR'})
+----
+Could not convert string "1.5" to 'BIGINT'
+
+# BIGNUM values are checked as the sniffer checks them
+statement ok
+COPY (SELECT CASE WHEN i < 2048 THEN '1' || repeat('0', 40) ELSE '1.5' END AS n FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_bignum.csv' (HEADER, QUOTE '');
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/past_sample_bignum.csv', sample_size = 2048)
+----
+Could not convert string "1.5" to 'BIGNUM'
+
+# a comma decimal separator is refined as strictly as the first chunk is sniffed
+statement ok
+COPY (SELECT CASE WHEN i < 2048 THEN '1,5' ELSE '+2,5' END AS d FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_comma.csv' (HEADER, QUOTE '', DELIMITER ';');
 
 query II
-SELECT typeof(c0), max(c0) FROM read_csv('__TEST_DIR__/tinyint_decimal.csv', auto_type_candidates = ['TINYINT', 'VARCHAR']) GROUP BY ALL
+SELECT typeof(d), max(d) FROM read_csv('{TEST_DIR}/past_sample_comma.csv', delim = ';', decimal_separator = ',', sample_size = -1) GROUP BY ALL
+----
+VARCHAR	1,5
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/past_sample_comma.csv', delim = ';', decimal_separator = ',', sample_size = 2048)
+----
+Could not convert string "+2,5" to 'DOUBLE'
+
+# timestamps with an offset are read as before
+statement ok
+COPY (SELECT '2020-01-01 00:00:00+02' AS ts) TO '{TEST_DIR}/timestamp_offset.csv' (HEADER, QUOTE '');
+
+query I
+SELECT typeof(ts) FROM read_csv('{TEST_DIR}/timestamp_offset.csv')
+----
+TIMESTAMP WITH TIME ZONE
+
+statement ok
+COPY (SELECT CASE WHEN i < 2048 THEN '2020-01-01 10:00:00' ELSE '2020-01-01 10:00:00+02' END AS ts FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_timestamp_offset.csv' (HEADER, QUOTE '');
+
+query II
+SELECT typeof(ts), count(*) FROM read_csv('{TEST_DIR}/past_sample_timestamp_offset.csv', sample_size = 2048) GROUP BY ALL
+----
+TIMESTAMP	2049
+
+# TINYINT is sniffed as strictly as the other integer types
+statement ok
+COPY (SELECT CASE WHEN i < 10 THEN '1' ELSE '1.5' END AS c0 FROM range(11) t(i)) TO '{TEST_DIR}/tinyint_decimal.csv' (HEADER, QUOTE '');
+
+query II
+SELECT typeof(c0), max(c0) FROM read_csv('{TEST_DIR}/tinyint_decimal.csv', auto_type_candidates = ['TINYINT', 'VARCHAR']) GROUP BY ALL
 ----
 VARCHAR	1.5
