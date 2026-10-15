@@ -32,6 +32,9 @@ public:
 	}
 
 	unique_ptr<TableRef> RemoteExecute(ClientContext &context, const string &sql) override {
+		if (sql == "UNREACHABLE") {
+			throw IOException("the connected database is unreachable");
+		}
 		routed_queries.push_back(sql);
 		auto node = make_uniq<SelectNode>();
 		node->select_list.push_back(ConstantExpression::String(sql));
@@ -154,12 +157,23 @@ TEST_CASE("Prepare statements while CONNECT-ed", "[api][connect]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"other"}));
 	REQUIRE(routed_queries.size() == 8);
 
-	// and fail once another connection detached it
+	// a statement that cannot be routed fails at execution, and the connection stays usable
+	auto unreachable = con.Prepare("UNREACHABLE");
+	REQUIRE(!unreachable->HasError());
+	result = unreachable->Execute();
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->GetError(), "unreachable"));
+	REQUIRE_FAIL(unreachable->Submit());
+	result = select->Execute();
+	REQUIRE(CHECK_COLUMN(result, 1, {"other"}));
+	REQUIRE(routed_queries.size() == 9);
+
+	// they fail once another connection detached the connected database
 	Connection detacher(db);
 	REQUIRE_NO_FAIL(detacher.Query("DETACH other"));
 	result = select->Execute();
 	REQUIRE_FAIL(result);
 	REQUIRE(StringUtil::Contains(result->GetError(), "has been detached"));
-	REQUIRE(routed_queries.size() == 8);
+	REQUIRE(routed_queries.size() == 9);
 	REQUIRE_NO_FAIL(con.Query("DISCONNECT"));
 }
