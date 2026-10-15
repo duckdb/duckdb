@@ -1,0 +1,34 @@
+# name: test/sql/function/operator/test_modulo_minimum.test
+# description: The minimum of a signed integer type modulo minus one is zero
+# group: [operator]
+
+query IIIII
+SELECT (-128)::TINYINT % (-1)::TINYINT, (-32768)::SMALLINT % (-1)::SMALLINT, (-2147483648)::INTEGER % (-1)::INTEGER, (-9223372036854775808)::BIGINT % (-1)::BIGINT, (-170141183460469231731687303715884105728)::HUGEINT % (-1)::HUGEINT
+----
+0	0	0	0	0
+
+query IIIII
+SELECT mod((-128)::TINYINT, (-1)::TINYINT), mod((-32768)::SMALLINT, (-1)::SMALLINT), mod((-2147483648)::INTEGER, (-1)::INTEGER), mod((-9223372036854775808)::BIGINT, (-1)::BIGINT), mod((-170141183460469231731687303715884105728)::HUGEINT, (-1)::HUGEINT)
+----
+0	0	0	0	0
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM (VALUES (-2147483648, -1), (-2147483648, 3), (7, -1), (NULL, -1)) t(i, j)
+
+query II
+SELECT i % j, mod(i, j) FROM integers
+----
+0	0
+-2	-2
+0	0
+NULL	NULL
+
+statement error
+SELECT i // j FROM integers
+----
+Overflow in division
+
+statement error
+SELECT (-170141183460469231731687303715884105728)::HUGEINT // (-1)::HUGEINT
+----
+Overflow in division
