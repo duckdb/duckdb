@@ -3,7 +3,6 @@
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -569,28 +568,6 @@ static void ThrowOnForcedFlushAppendFailure(DataTable &table) {
 	}
 }
 
-//! Copies the local rows into the shared table and records the append in the undo buffer.
-//! A failure reverts the copy and the index append, and rethrows as a TRANSACTION error.
-static void FlushCopiedAppend(DuckTransaction &transaction, DataTable &table, LocalTableStorage &storage,
-                              TableAppendState &append_state, idx_t append_count) {
-	try {
-		storage.AppendToTable(transaction, append_state);
-		ThrowOnForcedFlushAppendFailure(table);
-		transaction.PushAppend(*storage.table_entry, NumericCast<idx_t>(append_state.row_start), append_count);
-	} catch (std::exception &ex) {
-		ErrorData error(ex);
-		if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
-			// do not touch a state these errors may have corrupted, and do not downgrade them
-			throw;
-		}
-		table.RevertAppendInternal(NumericCast<idx_t>(append_state.row_start));
-		storage.RevertIndexAppend(transaction, append_state.row_start,
-		                          append_state.row_start + NumericCast<row_t>(append_count));
-		// fully reverted: surface an ordinary, retryable commit failure
-		throw TransactionException(error.RawMessage());
-	}
-}
-
 //! Flushes the transaction-local rows of a table into the shared table and its indexes at commit.
 //! A failure either leaves both unchanged (an ordinary, retryable error) or invalidates the database.
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state) {
@@ -635,13 +612,14 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// table_entry is set through the append path (InitializeAppend/Append/LocalMerge/Alter)
 		D_ASSERT(storage.table_entry);
 		if (merge_storage) {
-			// move over the row groups; this consumes the local collection, so failures below cannot be reverted
+			// move over the row groups
 			table.MergeStorage(storage.GetCollection(), commit_state);
-			ThrowOnForcedFlushAppendFailure(table);
-			transaction.PushAppend(*storage.table_entry, NumericCast<idx_t>(append_state.row_start), append_count);
 		} else {
-			FlushCopiedAppend(transaction, table, storage, append_state, append_count);
+			// copy the local rows into the shared table
+			storage.AppendToTable(transaction, append_state);
 		}
+		ThrowOnForcedFlushAppendFailure(table);
+		transaction.PushAppend(*storage.table_entry, NumericCast<idx_t>(append_state.row_start), append_count);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		// a CONSTRAINT or TRANSACTION error promises that the shared table and indexes were restored;

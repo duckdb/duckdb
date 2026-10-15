@@ -1268,11 +1268,8 @@ void RowGroup::RevertAppend(idx_t new_count) {
 	if (new_count > this->count) {
 		throw InternalException("RowGroup::RevertAppend new_count out of range");
 	}
-	if (new_count < this->count) {
-		auto &vinfo = GetOrCreateVersionInfo();
-		vinfo.RevertAppend(new_count);
-	}
-	// the columns can hold more rows than the row group if an append failed before it was finalized
+	auto &vinfo = GetOrCreateVersionInfo();
+	vinfo.RevertAppend(new_count);
 	for (auto &column : GetColumns()) {
 		column->RevertAppend(UnsafeNumericCast<row_t>(new_count));
 	}

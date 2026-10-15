@@ -1,8 +1,10 @@
 # name: test/sql/transactions/test_commit_flush_append_failure.test
-# description: A failed commit-time flush reverts the copy-path append; a merge-path failure invalidates
+# description: A failed commit-time flush invalidates the database and leaves no partial state behind
 # group: [transactions]
 
-require no_force_storage
+require skip_reload
+
+load __TEST_DIR__/commit_flush_append_failure.db
 
 # Copy path: appends to a non-empty table are copied row by row at commit.
 
@@ -24,17 +26,21 @@ SET debug_force_flush_append_failure = true;
 statement error
 COMMIT;
 ----
-Forced flush append failure
+Failed to flush table
 
-statement ok
-SET debug_force_flush_append_failure = false;
+statement error
+SELECT count(*) FROM pk;
+----
+<REGEX>:.*invalidated.*
 
+restart
+
+# The failed commit must not have persisted any rows or index keys.
 query II
 SELECT count(*), max(k) FROM pk;
 ----
 2	2
 
-# The reverted keys must not remain in the index.
 statement ok
 INSERT INTO pk VALUES (3, 'c2'), (4, 'd2');
 
@@ -51,18 +57,17 @@ SELECT count(*), max(k) FROM pk;
 ----
 4	4
 
-# Merge path: appends to an empty in-memory table are merged directly. The merge consumes the
-# transaction-local rows, so a failure on this path cannot be reverted and invalidates the
-# database. This must remain the last scenario in this file.
+# Merge path: a bulk append (at least one full row group, no deletes) moves the local row groups
+# over directly instead of copying.
 
 statement ok
-CREATE TABLE m (k INTEGER PRIMARY KEY, v VARCHAR);
+CREATE TABLE m (k INTEGER PRIMARY KEY);
 
 statement ok
 BEGIN;
 
 statement ok
-INSERT INTO m VALUES (1, 'a'), (2, 'b');
+INSERT INTO m SELECT i FROM range(122880) r(i);
 
 statement ok
 SET debug_force_flush_append_failure = true;
@@ -73,6 +78,13 @@ COMMIT;
 Failed to flush table
 
 statement error
-SELECT count(*) FROM pk;
+SELECT count(*) FROM m;
 ----
 <REGEX>:.*invalidated.*
+
+restart
+
+query I
+SELECT count(*) FROM m;
+----
+0
