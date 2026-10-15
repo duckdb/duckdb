@@ -339,6 +339,28 @@ explain select distinct g from (select p.g from p left join k on p.id = k.a usin
 ----
 physical_plan	<REGEX>:.*JOIN.*
 
+query I
+select distinct g from (select p.g, unnest([1, 2]) e from p left join k on p.id = k.a qualify count(*) over () = 9) order by g;
+----
+x
+y
+z
+
+# volatile expressions run once per row, so duplicate rows change their result
+
+statement ok
+create sequence seq;
+
+query I
+select count(*) > 0 from (select distinct p.g from p left join k on p.id = k.a where nextval('seq') > 7);
+----
+true
+
+query I
+select currval('seq');
+----
+9
+
 # a distinct below a LIMIT still eliminates the join
 
 query I
