@@ -58,6 +58,23 @@ struct ApproxQuantileCoding {
 };
 
 template <>
+double ApproxQuantileCoding::Encode(const dtime_t &input) {
+	return Encode<int64_t, double>(input.value);
+}
+
+template <>
+bool ApproxQuantileCoding::Decode(const double &source, dtime_t &target) {
+	int64_t micros;
+	auto decoded = Decode<double, int64_t>(source, micros);
+	if (micros < 0 || micros > Interval::MICROS_PER_DAY) {
+		micros = MinValue<int64_t>(MaxValue<int64_t>(micros, 0), Interval::MICROS_PER_DAY);
+		decoded = false;
+	}
+	target = dtime_t(micros);
+	return decoded;
+}
+
+template <>
 double ApproxQuantileCoding::Encode(const dtime_tz_t &input) {
 	return Encode<uint64_t, double>(input.sort_key());
 }
@@ -348,6 +365,10 @@ AggregateFunction GetApproximateQuantileAggregateFunction(const LogicalType &typ
 		return AggregateFunction::UnaryAggregate<ApproxQuantileState, dtime_tz_t, dtime_tz_t,
 		                                         ApproxQuantileScalarOperation>(type, type);
 	}
+	if (type == LogicalType::TIME) {
+		return AggregateFunction::UnaryAggregate<ApproxQuantileState, dtime_t, dtime_t, ApproxQuantileScalarOperation>(
+		    type, type);
+	}
 	if (type.id() == LogicalTypeId::TIMESTAMP || type.id() == LogicalTypeId::TIMESTAMP_TZ) {
 		return AggregateFunction::UnaryAggregate<ApproxQuantileState, timestamp_t, timestamp_t,
 		                                         ApproxQuantileScalarOperation>(type, type);
@@ -538,8 +559,9 @@ AggregateFunction GetApproxQuantileListAggregateFunction(const LogicalType &type
 	case LogicalTypeId::DATE:
 		return GetTypedApproxQuantileListAggregateFunction<int32_t, int32_t>(type);
 	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::TIME:
 		return GetTypedApproxQuantileListAggregateFunction<int64_t, int64_t>(type);
+	case LogicalTypeId::TIME:
+		return GetTypedApproxQuantileListAggregateFunction<dtime_t, dtime_t>(type);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return GetTypedApproxQuantileListAggregateFunction<timestamp_t, timestamp_t>(type);
