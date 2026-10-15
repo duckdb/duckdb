@@ -38,22 +38,11 @@ idx_t ChangedRows(QueryResult &result) {
 	if (types.size() != 1 || types[0].id() != duckdb::LogicalTypeId::BIGINT) {
 		return 0;
 	}
-	// A CHANGED_ROWS result is one BIGINT row, which the Arrow format wrapped in an array with a
-	// single int64 child
 	auto &arrays = result.Collection<ArrowFormat>();
 	if (arrays.empty()) {
 		return 0;
 	}
-	auto &array = arrays.front()->arrow_array;
-	if (array.length != 1 || array.n_children != 1 || !array.children || !array.children[0]) {
-		return 0;
-	}
-	auto &child = *array.children[0];
-	if (child.n_buffers < 2 || !child.buffers || !child.buffers[1]) {
-		return 0;
-	}
-	auto counts = reinterpret_cast<const int64_t *>(child.buffers[1]);
-	return duckdb::NumericCast<idx_t>(counts[array.offset + child.offset]);
+	return ArrowFormat::ChangedRows(arrays.front()->arrow_array);
 }
 
 } // namespace
@@ -149,17 +138,18 @@ duckdb_error_data duckdb_data_chunk_from_arrow(duckdb_connection connection, str
 
 	auto &arrow_types = arrow_table->GetColumns();
 	dchunk->SetChildCardinality(duckdb::NumericCast<idx_t>(arrow_array->length));
+	// All columns share ownership of the array, so it is only released once no column references it anymore
+	auto owned_data = duckdb::make_shared_ptr<duckdb::ArrowArrayWrapper>();
+	owned_data->arrow_array = *arrow_array;
+	// We set it to nullptr to effectively transfer the ownership
+	arrow_array->release = nullptr;
 	for (idx_t i = 0; i < dchunk->ColumnCount(); i++) {
 		auto &parent_array = *arrow_array;
 		auto &array = parent_array.children[i];
 		auto arrow_type = arrow_types.at(i);
 		auto array_physical_type = arrow_type->GetPhysicalType();
 		auto array_state = duckdb::make_uniq<duckdb::ArrowArrayScanState>(*conn->context);
-		// We need to make sure that our chunk will hold the ownership
-		array_state->owned_data = duckdb::make_shared_ptr<duckdb::ArrowArrayWrapper>();
-		array_state->owned_data->arrow_array = *arrow_array;
-		// We set it to nullptr to effectively transfer the ownership
-		arrow_array->release = nullptr;
+		array_state->owned_data = owned_data;
 		try {
 			switch (array_physical_type) {
 			case duckdb::ArrowArrayPhysicalType::DICTIONARY_ENCODED:

@@ -63,6 +63,9 @@ jobs:
       shell: pwsh
       run: |
         $commands = Get-Content compile_commands.json -Raw
+        if (!$commands.Contains('clang-cl')) {
+          throw 'Windows amd64 Release compile commands are not using clang-cl'
+        }
         if (!$commands.Contains('-march=haswell') -or !$commands.Contains('-mtune=generic')) {
           throw 'Windows amd64 Release compile commands are missing the CLI architecture flags'
         }
@@ -175,6 +178,9 @@ jobs:
     runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
     env:
       GEN: ninja
+      CC: clang-cl
+      CXX: clang-cl
+      EXTRA_CMAKE_VARIABLES: -DCMAKE_C_COMPILER_TARGET=i686-pc-windows-msvc -DCMAKE_CXX_COMPILER_TARGET=i686-pc-windows-msvc
 
     steps:
     - name: "Checkout"
@@ -198,7 +204,16 @@ jobs:
     - name: Build
       shell: bash
       run: |
+        clang-cl --version
         python scripts/ci/retry.py -- make windows_release_32
+
+    - name: Verify compiler
+      shell: pwsh
+      run: |
+        $commands = Get-Content compile_commands.json -Raw
+        if (!$commands.Contains('clang-cl')) {
+          throw 'Windows 32-bit compile commands are not using clang-cl'
+        }
 
     - name: Test
       shell: bash
@@ -251,6 +266,9 @@ jobs:
        shell: pwsh
        run: |
          $commands = Get-Content compile_commands.json -Raw
+         if (!$commands.Contains('clang-cl')) {
+           throw 'Windows ARM64 Release compile commands are not using clang-cl'
+         }
          if (!$commands.Contains('-march=armv8-a') -or !$commands.Contains('-mtune=generic')) {
            throw 'Windows ARM64 Release compile commands are missing the architecture flags'
          }

@@ -45,7 +45,7 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		return false;
 	}
 
-	// Allow up to 10 digit hours to support intervals
+	// Allow up to 10 digit interval hours
 	hour = 0;
 	for (int32_t digits = 10; pos < len && StringUtil::CharacterIsDigit(buf[pos]); ++pos) {
 		if (digits-- > 0) {
@@ -136,21 +136,19 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		}
 	}
 
-	// compute the (optionally negated) value with overflow checks, as interval hours can exceed the int64 range
-	int64_t hour_micros;
-	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(hour, Interval::MICROS_PER_HOUR, hour_micros)) {
-		return false;
-	}
-	const int64_t remainder_micros = Time::FromTime(0, min, sec, micros).value;
-	int64_t value;
+	// a negative interval accumulates below zero, so its minimum fits
+	int64_t time_micros;
+	auto sub_hour_micros = Time::FromTime(0, min, sec, micros).value;
 	if (negative) {
-		if (!TrySubtractOperator::Operation<int64_t, int64_t, int64_t>(-hour_micros, remainder_micros, value)) {
+		if (!TryMultiplyOperator::Operation(hour, -Interval::MICROS_PER_HOUR, time_micros) ||
+		    !TrySubtractOperator::Operation(time_micros, sub_hour_micros, time_micros)) {
 			return false;
 		}
-	} else if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(hour_micros, remainder_micros, value)) {
+	} else if (!TryMultiplyOperator::Operation(hour, Interval::MICROS_PER_HOUR, time_micros) ||
+	           !TryAddOperator::Operation(time_micros, sub_hour_micros, time_micros)) {
 		return false;
 	}
-	result = dtime_t(value);
+	result = dtime_t(time_micros);
 	return true;
 }
 
@@ -331,6 +329,12 @@ bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t mic
 		return false;
 	}
 	if (microseconds < 0 || microseconds > 1000000) {
+		return false;
+	}
+	// a leap second (or a full second of microseconds) is allowed, as long as the time does not exceed 24:00:00
+	const int64_t total_micros =
+	    ((int64_t(hour) * 60 + minute) * 60 + second) * Interval::MICROS_PER_SEC + microseconds;
+	if (total_micros > Interval::MICROS_PER_DAY) {
 		return false;
 	}
 	return true;

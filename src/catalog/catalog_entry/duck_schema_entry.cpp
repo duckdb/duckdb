@@ -281,13 +281,6 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(CatalogTransaction trans
 	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
 	info.dependencies.AddDependency(table, DependencyDependentFlags());
 
-	// currently, we can not alter PK/FK/UNIQUE constraints
-	// concurrency-safe name checks against other INDEX catalog entries happens in the catalog
-	if (info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT &&
-	    !table.GetStorage().IndexNameIsUnique(info.GetIndexName().GetIdentifierName())) {
-		throw CatalogException("An index with the name " + info.GetIndexName() + " already exists!");
-	}
-
 	auto index = make_uniq<DuckIndexEntry>(catalog, *this, info, table);
 	auto dependencies = index->dependencies;
 	return AddEntryInternal(transaction, std::move(index), info.on_conflict, dependencies);
@@ -354,8 +347,13 @@ void DuckSchemaEntry::Scan(CatalogTransaction transaction, CatalogType type,
 }
 
 void DuckSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) {
+	Scan(type, VisibilityBound::AllCommitted(), callback);
+}
+
+void DuckSchemaEntry::Scan(CatalogType type, VisibilityBound bound,
+                           const std::function<void(CatalogEntry &)> &callback) {
 	auto &set = GetCatalogSet(type);
-	set.Scan(callback);
+	set.Scan(bound, callback);
 }
 
 void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {

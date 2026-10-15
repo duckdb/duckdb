@@ -3,6 +3,7 @@
 #include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/operator/logical_merge_into.hpp"
@@ -185,6 +186,39 @@ void RewriteMergeBindings(unique_ptr<Expression> &expr, const vector<ColumnBindi
 	    });
 }
 
+static bool ContainsOperator(LogicalOperator &op, LogicalOperator &target) {
+	if (RefersToSameObject(op, target)) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (ContainsOperator(*child, target)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+//! Finds the join between the source and the target, subqueries in the join condition add other joins on top of it
+static optional_ptr<LogicalOperator> FindMergeJoin(LogicalOperator &op, LogicalOperator &source,
+                                                   LogicalOperator &target, idx_t &source_idx) {
+	if (op.children.size() == 2) {
+		for (idx_t child_idx = 0; child_idx < 2; child_idx++) {
+			if (ContainsOperator(*op.children[child_idx], source) &&
+			    ContainsOperator(*op.children[1 - child_idx], target)) {
+				source_idx = child_idx;
+				return op;
+			}
+		}
+	}
+	for (auto &child : op.children) {
+		auto result = FindMergeJoin(*child, source, target, source_idx);
+		if (result) {
+			return result;
+		}
+	}
+	return nullptr;
+}
+
 void RewriteMergeBindings(LogicalOperator &op, const vector<ColumnBinding> &source_bindings,
                           TableIndex new_table_index) {
 	LogicalOperatorVisitor::EnumerateExpressions(
@@ -231,30 +265,26 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		throw NotImplementedException("MERGE INTO is not supported on tables with triggers");
 	}
 
-	if (!table.temporary) {
-		// update of persistent table: not read only!
-		auto &properties = GetStatementProperties();
-		// modification type depends on actions
-		DatabaseModificationType modification;
-		for (auto &action_condition : node.actions) {
-			for (auto &action : action_condition.second) {
-				switch (action->action_type) {
-				case MergeActionType::MERGE_UPDATE:
-					modification |= DatabaseModificationType::UPDATE_DATA;
-					break;
-				case MergeActionType::MERGE_DELETE:
-					modification |= DatabaseModificationType::DELETE_DATA;
-					break;
-				case MergeActionType::MERGE_INSERT:
-					modification |= DatabaseModificationType::INSERT_DATA;
-					break;
-				default:
-					break;
-				}
+	// modification type depends on actions
+	DatabaseModificationType modification;
+	for (auto &action_condition : node.actions) {
+		for (auto &action : action_condition.second) {
+			switch (action->action_type) {
+			case MergeActionType::MERGE_UPDATE:
+				modification |= DatabaseModificationType::UPDATE_DATA;
+				break;
+			case MergeActionType::MERGE_DELETE:
+				modification |= DatabaseModificationType::DELETE_DATA;
+				break;
+			case MergeActionType::MERGE_INSERT:
+				modification |= DatabaseModificationType::INSERT_DATA;
+				break;
+			default:
+				break;
 			}
 		}
-		properties.RegisterDBModify(table.catalog, context, modification);
 	}
+	GetStatementProperties().RegisterDBModify(table.catalog, context, modification);
 
 	// bind the source
 	auto source_binder = Binder::CreateBinder(context, this);
@@ -320,6 +350,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	} else {
 		join.type = JoinType::INNER;
 	}
+	auto &source_op = *source_binding.plan;
 	join.left = make_uniq<BoundRefWrapper>(std::move(source_binding), std::move(source_binder));
 	join.right = make_uniq<BoundRefWrapper>(std::move(bound_table), std::move(target_binder));
 	if (node.join_condition) {
@@ -330,16 +361,14 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	auto bound_join_node = Bind(join);
 
 	auto root = std::move(bound_join_node.plan);
-	auto join_ref = reference<LogicalOperator>(*root);
-	while (join_ref.get().children.size() == 1) {
-		join_ref = *join_ref.get().children[0];
+	idx_t source_idx = 0;
+	auto merge_join = FindMergeJoin(*root, source_op, get, source_idx);
+	if (!merge_join) {
+		throw NotImplementedException("Expected a join after binding a join operator - but got a %s", root->type);
 	}
-	if (join_ref.get().children.size() != 2) {
-		throw NotImplementedException("Expected a join after binding a join operator - but got a %s",
-		                              join_ref.get().type);
-	}
-	// kind of hacky, CreatePlan turns a RIGHT join into a LEFT join so the children get reversed from what we need
-	bool inverted = join.type == JoinType::RIGHT;
+	auto join_ref = reference<LogicalOperator>(*merge_join);
+	// CreatePlan can turn a RIGHT join into a LEFT join - in that case the children are reversed
+	bool inverted = source_idx == 1;
 	auto &source = join_ref.get().children[inverted ? 1 : 0];
 
 	// bind WHEN_MATCHED merge actions (can contain references to both source and target)
@@ -451,7 +480,6 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	result.types = {LogicalType::BIGINT};
 
 	auto &properties = GetStatementProperties();
-	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }
