@@ -1,0 +1,53 @@
+# name: test/issues/general/test_26624.test
+# description: Issue 26624: common subexpression elimination does not move expressions out of TRY
+# group: [general]
+
+statement ok
+CREATE TABLE t (s VARCHAR);
+
+statement ok
+INSERT INTO t VALUES ('abc'), ('42');
+
+query II
+SELECT TRY(CAST(s AS INTEGER) + 1) AS x, TRY(CAST(s AS INTEGER) + 2) AS y FROM t ORDER BY s
+----
+43	44
+NULL	NULL
+
+# an occurrence in a branch of a CASE does not make the one inside TRY unconditional
+query II
+SELECT TRY(CAST(s AS INTEGER) + 1) AS x, CASE WHEN s = 'abc' THEN 0 ELSE CAST(s AS INTEGER) + 2 END AS y FROM t ORDER BY s
+----
+43	44
+NULL	0
+
+query II
+SELECT TRY(CAST(s AS INTEGER) * 2 + CAST(s AS INTEGER)) AS x, TRY(-CAST(s AS INTEGER)) AS y FROM t ORDER BY s
+----
+126	-42
+NULL	NULL
+
+# TRY inside a WHERE and nested in other expressions
+query I
+SELECT s FROM t WHERE TRY(CAST(s AS INTEGER) + 1) IS NULL AND TRY(CAST(s AS INTEGER) + 2) IS NULL
+----
+abc
+
+query II
+SELECT coalesce(TRY(CAST(s AS INTEGER) + 1), -1) AS x, coalesce(TRY(CAST(s AS INTEGER) + 2), -2) AS y FROM t ORDER BY s
+----
+43	44
+-1	-2
+
+# an occurrence outside of TRY throws for 'abc' on its own
+statement error
+SELECT TRY(CAST(s AS INTEGER) + 1) AS x, CAST(s AS INTEGER) + 2 AS y FROM t
+----
+Could not convert string 'abc' to INT32
+
+# the same TRY twice is still computed once
+query II
+SELECT TRY(CAST(s AS INTEGER) + 1) AS x, TRY(CAST(s AS INTEGER) + 1) AS y FROM t ORDER BY s
+----
+43	43
+NULL	NULL

@@ -73,6 +73,14 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 		}
 	}
 
+	if (expr.GetExpressionType() == ExpressionType::OPERATOR_TRY) {
+		// TRY turns the errors of its child into NULL, so nothing in it may be moved out of it on its own
+		const auto save_short_circuit = state.short_circuited;
+		state.short_circuited = true;
+		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { CountExpressions(child, state); });
+		state.short_circuited = save_short_circuit;
+		return;
+	}
 	// If we have a function that uses short circuiting, then we can only extract CSEs from the leftmost
 	// side of the argument tree (child_no == 0)
 	switch (expr.GetExpressionClass()) {
