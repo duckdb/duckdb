@@ -23,17 +23,6 @@ FROM read_parquet('{TEMP_DIR}/integers.parquet', schema=map {
 ----
 Binder Error: 'schema' cannot be combined with union_by_name=true
 
-# combines with hive_partitioning: the schema says what the files hold, hive partitioning adds the
-# columns taken from their paths - of which these paths have none, so the schema is the whole scan
-query II
-SELECT *
-FROM read_parquet('{TEMP_DIR}/integers.parquet', schema=map {
-                    0: {name: 'renamed_i', type: 'BIGINT', default_value: NULL},
-                    1: {name: 'new_column', type: 'UTINYINT', default_value: 43}
-                  }, hive_partitioning=true)
-----
-42	43
-
 statement ok
 COPY (
     SELECT 1 i1, 3 i3, 4 i4, 5 i5 UNION ALL
@@ -53,6 +42,18 @@ FROM read_parquet('{TEMP_DIR}/partitioned/*/*.parquet', schema=map {
 ----
 5	3	2	1
 5	3	2	2
+
+# asked for, hive partitioning adds the partition column from the paths after the schema's columns
+query III
+SELECT *
+FROM read_parquet('{TEMP_DIR}/partitioned/*/*.parquet', schema=map {
+                    3: {name: 'i3', type: 'BIGINT', default_value: NULL},
+                    4: {name: 'i4', type: 'BIGINT', default_value: 2}
+                  }, hive_partitioning=true)
+ORDER BY i1
+----
+3	2	1
+3	2	2
 
 # when partition columns are specified in FIELD_IDS, error message should suggest WRITE_PARTITION_COLUMNS option
 statement error

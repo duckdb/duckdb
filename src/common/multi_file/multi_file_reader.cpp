@@ -732,9 +732,18 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 					    "name also exists. Try setting a different name: filename='<filename column name>'",
 					    options.filename_column);
 				}
+				auto hive_type = options.GetHiveLogicalType(part.first);
+				// the path does not get to change a type the schema declares
+				if (!options.schema.empty() && idx < bind_data.schema.size() &&
+				    !bind_data.schema[idx].type.EqualsIncludingCollation(hive_type)) {
+					throw BinderException("'schema' declares column \"%s\" as %s, but its hive partition type is %s - "
+					                      "set the partition type with hive_types",
+					                      bind_data.schema[idx].name.GetIdentifierName(),
+					                      bind_data.schema[idx].type.ToString(), hive_type.ToString());
+				}
 				// hive partitioning column also exists in file - override
 				hive_partitioning_index = idx;
-				return_types[idx] = options.GetHiveLogicalType(part.first);
+				return_types[idx] = hive_type;
 			} else {
 				// hive partitioning column does not exist in file - add a new column containing the key
 				hive_partitioning_index = names.size();
