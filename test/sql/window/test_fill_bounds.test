@@ -259,22 +259,29 @@ SELECT x, fill(h ORDER BY x) OVER (), fill(b ORDER BY x) OVER () FROM data ORDER
 1	-13	-13
 2	-15	-15
 
-# Integral ratios interpolate exactly on every integer width - dividing to DOUBLE first
-# would drop a result like 7/49 of a 49-wide span one below its boundary.
-query III
+# Check every position: ratios such as 1/49 lose an integral result if divided first.
+foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT DECIMAL(4,0) DECIMAL(9,0) DECIMAL(18,0) DECIMAL(38,0)
+
+foreach order_type BIGINT DOUBLE
+
+query I
 WITH data AS (
-	SELECT x, CASE WHEN x IN (0, 49) THEN x::BIGINT ELSE NULL END AS b,
-		CASE WHEN x IN (0, 49) THEN x::INTEGER ELSE NULL END AS i
+	SELECT x, CASE WHEN x IN (0, 49) THEN x::{type} ELSE NULL END AS increasing,
+		CASE WHEN x IN (0, 49) THEN (49 - x)::{type} ELSE NULL END AS decreasing
 	FROM range(50) positions(x)
+), filled AS (
+	SELECT x, fill(increasing ORDER BY x::{order_type}) OVER () AS a,
+		fill(increasing ORDER BY x::{order_type} DESC) OVER () AS b,
+		fill(decreasing ORDER BY x::{order_type}) OVER () AS c,
+		fill(decreasing ORDER BY x::{order_type} DESC) OVER () AS d
+	FROM data
 )
-SELECT x, fill(b ORDER BY x) OVER (), fill(i ORDER BY x) OVER ()
-FROM data WHERE x % 7 = 0 ORDER BY x;
+SELECT count(*) FROM filled
+WHERE a IS DISTINCT FROM x OR b IS DISTINCT FROM x
+	OR c IS DISTINCT FROM 49 - x OR d IS DISTINCT FROM 49 - x;
 ----
-0	0	0
-7	7	7
-14	14	14
-21	21	21
-28	28	28
-35	35	35
-42	42	42
-49	49	49
+0
+
+endloop
+
+endloop

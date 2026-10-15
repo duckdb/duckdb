@@ -11,7 +11,9 @@
 #include <limits>
 
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
@@ -21,108 +23,74 @@ struct InterpolateOperator {
 	template <typename TARGET_TYPE>
 	static inline TARGET_TYPE Operation(const TARGET_TYPE &lo, const double numerator, const double denominator,
 	                                    const TARGET_TYPE &hi) {
-		if constexpr (std::is_integral_v<TARGET_TYPE>) {
-			// exact rational interpolation: dividing to DOUBLE first
-			// can drop an exactly-integral result just below its boundary
-			return InterpolateIntegerRatio<TARGET_TYPE>(lo, numerator, denominator, hi);
+		if constexpr (IsInteger<TARGET_TYPE>()) {
+			return InterpolateInteger(lo, numerator, denominator, hi);
 		} else {
 			return Operation<TARGET_TYPE>(lo, numerator / denominator, hi);
 		}
 	}
 
 	template <typename TARGET_TYPE>
+	static inline TARGET_TYPE Operation(const TARGET_TYPE &lo, const uhugeint_t &numerator,
+	                                    const uhugeint_t &denominator, const TARGET_TYPE &hi) {
+		static_assert(IsInteger<TARGET_TYPE>(), "Exact ratios require an integer target");
+		return InterpolateInteger(lo, numerator, denominator, hi);
+	}
+
+	template <typename TARGET_TYPE>
 	static inline TARGET_TYPE Operation(const TARGET_TYPE &lo, const double d, const TARGET_TYPE &hi) {
-		const auto delta = static_cast<double>(hi) - static_cast<double>(lo);
-		const auto result = static_cast<double>(lo) + delta * d;
-		// casting an out-of-range double to an integer is UB and platform-dependent
-		// (x86 cvttsd2si yields the integer indefinite value, ARM fcvtzs saturates) - clamp first.
-		// for uint64 the bound rounds up to exactly 2^64 in double, so every
-		// representable-in-double in-range value still passes through unchanged.
-		if (result >= static_cast<double>(NumericLimits<TARGET_TYPE>::Maximum())) {
-			return NumericLimits<TARGET_TYPE>::Maximum();
+		if constexpr (IsInteger<TARGET_TYPE>()) {
+			return Operation(lo, d, 1.0, hi);
+		} else {
+			const auto delta = static_cast<double>(hi) - static_cast<double>(lo);
+			return LossyNumericCast<TARGET_TYPE>(static_cast<double>(lo) + delta * d);
 		}
-		if (result <= static_cast<double>(NumericLimits<TARGET_TYPE>::Minimum())) {
-			return NumericLimits<TARGET_TYPE>::Minimum();
-		}
-		// integer targets round toward the lower endpoint, matching the exact int64 paths -
-		// a plain cast truncates toward zero, which rounds negative values up
-		if constexpr (std::is_integral_v<TARGET_TYPE>) {
-			return LossyNumericCast<TARGET_TYPE>(std::floor(result));
-		}
-		return LossyNumericCast<TARGET_TYPE>(result);
 	}
 
 private:
-	template <typename TARGET_TYPE>
-	static inline hugeint_t ToHugeint(const TARGET_TYPE &value) {
-		if constexpr (std::is_unsigned_v<TARGET_TYPE>) {
-			return hugeint_t(0, static_cast<uint64_t>(value));
+	template <typename T>
+	static constexpr bool IsInteger() {
+		return std::is_integral_v<T> || std::is_same_v<T, hugeint_t> || std::is_same_v<T, uhugeint_t>;
+	}
+
+	template <typename T>
+	static inline uhugeint_t ToOrderedInteger(const T &value) {
+		if constexpr (std::is_same_v<T, uhugeint_t>) {
+			return value;
+		} else if constexpr (std::is_unsigned_v<T>) {
+			return uhugeint_t(0, static_cast<uint64_t>(value));
 		} else {
-			return hugeint_t(static_cast<int64_t>(value));
+			const auto integer = hugeint_t(value);
+			return uhugeint_t(static_cast<uint64_t>(integer.upper) ^ (uint64_t(1) << 63), integer.lower);
 		}
 	}
 
-	//	Interpolate from the exact ratio, so results that are integral in exact arithmetic
-	//	stay integral. Floors the offset toward the lower endpoint.
-	template <typename TARGET_TYPE>
-	static inline TARGET_TYPE InterpolateIntegerRatio(const TARGET_TYPE &lo, double numerator, double denominator,
-	                                                  const TARGET_TYPE &hi) {
-		D_ASSERT(std::isfinite(numerator) && std::isfinite(denominator) && denominator != 0);
-		if (denominator < 0) {
-			numerator = -numerator;
-			denominator = -denominator;
+	template <typename T>
+	static inline T FromOrderedInteger(const uhugeint_t &value) {
+		if constexpr (std::is_same_v<T, uhugeint_t>) {
+			return value;
+		} else if constexpr (std::is_unsigned_v<T>) {
+			return Uhugeint::Cast<T>(value);
+		} else {
+			const auto integer = hugeint_t(static_cast<int64_t>(value.upper ^ (uint64_t(1) << 63)), value.lower);
+			return Hugeint::Cast<T>(integer);
 		}
-		if (numerator <= 0 || lo == hi) {
-			return lo;
-		}
-		if (numerator >= denominator) {
-			return hi;
-		}
-		const auto delta = ToHugeint(hi) - ToHugeint(lo);
-		const auto descending = delta < 0;
-		const auto distance = descending ? -delta : delta;
-
-		//	fast path: integral ratios (e.g. row positions) that fit native INT64 arithmetic
-		constexpr auto int64_max = std::numeric_limits<int64_t>::max();
-		if (numerator <= static_cast<double>(int64_max) && denominator <= static_cast<double>(int64_max) &&
-		    numerator == static_cast<double>(static_cast<int64_t>(numerator)) &&
-		    denominator == static_cast<double>(static_cast<int64_t>(denominator))) {
-			const auto num = static_cast<int64_t>(numerator);
-			const auto den = static_cast<int64_t>(denominator);
-			if (distance <= hugeint_t(int64_max / num)) {
-				const auto scaled = Hugeint::Cast<int64_t>(distance) * num;
-				auto offset = scaled / den;
-				if (descending && scaled % den != 0) {
-					offset += 1;
-				}
-				return Hugeint::Cast<TARGET_TYPE>(ToHugeint(lo) + (descending ? -offset : offset));
-			}
-		}
-
-		//	decompose the ratio exactly; the product needs at most 117 bits.
-		int32_t numerator_exponent;
-		int32_t denominator_exponent;
-		const auto numerator_fraction = std::frexp(numerator, &numerator_exponent);
-		const auto denominator_fraction = std::frexp(denominator, &denominator_exponent);
-		constexpr auto digits = std::numeric_limits<double>::digits;
-		const auto numerator_significand = static_cast<int64_t>(std::ldexp(numerator_fraction, digits));
-		const auto denominator_significand = static_cast<int64_t>(std::ldexp(denominator_fraction, digits));
-		const auto shift = denominator_exponent - numerator_exponent;
-		D_ASSERT(shift >= 0);
-		const auto product = distance * numerator_significand;
-		//	larger gaps make the denominator exceed the 117-bit product
-		if (shift >= 65) {
-			return descending && lo > NumericLimits<TARGET_TYPE>::Minimum() ? TARGET_TYPE(lo - 1) : lo;
-		}
-
-		const auto divisor = hugeint_t(denominator_significand) << shift;
-		hugeint_t remainder;
-		auto offset = Hugeint::DivMod(product, divisor, remainder);
-		if (descending && remainder != 0) {
-			offset += 1;
-		}
-		return Hugeint::Cast<TARGET_TYPE>(ToHugeint(lo) + (descending ? -offset : offset));
 	}
+
+	template <typename TARGET_TYPE, typename RATIO_TYPE>
+	static inline TARGET_TYPE InterpolateInteger(const TARGET_TYPE &lo, const RATIO_TYPE &numerator,
+	                                             const RATIO_TYPE &denominator, const TARGET_TYPE &hi) {
+		const auto first = ToOrderedInteger(lo);
+		const auto last = ToOrderedInteger(hi);
+		const auto descending = last < first;
+		const auto distance = descending ? first - last : last - first;
+		const auto offset = IntegerOffset(distance, numerator, denominator, descending);
+		return FromOrderedInteger<TARGET_TYPE>(descending ? first - offset : first + offset);
+	}
+
+	static uhugeint_t IntegerOffset(const uhugeint_t &distance, double numerator, double denominator, bool descending);
+	static uhugeint_t IntegerOffset(const uhugeint_t &distance, const uhugeint_t &numerator,
+	                                const uhugeint_t &denominator, bool descending);
 };
 
 template <>

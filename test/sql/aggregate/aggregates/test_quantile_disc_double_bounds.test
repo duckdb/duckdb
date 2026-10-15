@@ -1,0 +1,46 @@
+# name: test/sql/aggregate/aggregates/test_quantile_disc_double_bounds.test
+# description: Discrete DOUBLE quantile ranks preserve rounded products and stay within the input
+# group: [aggregates]
+
+# Decimal arguments retain their exact ranks after SQL export adds DOUBLE casts.
+query III
+SELECT quantile_disc(i, 0.1), quantile_disc(i, 0.5), quantile_disc(i, 0.9)
+FROM range(10000) data(i);
+----
+999	4999	8999
+
+# The DOUBLE product rounds to 9000 before the complementary rank is computed.
+query II
+SELECT quantile_disc(i, 0.9::DOUBLE), quantile_disc(i, [0.1, 0.5, 0.9]::DOUBLE[])
+FROM range(10000) data(i);
+----
+8999	[999, 4999, 8999]
+
+# A product slightly above seven still selects the seventh item after rank rounding.
+query III
+SELECT quantile_disc(i, 0.07::DOUBLE), quantile_disc(i, 0.9::DOUBLE),
+	quantile_disc(i, [0, 0.07, 0.9, 1]::DOUBLE[])
+FROM range(100) data(i);
+----
+6	89	[0, 6, 89, 99]
+
+query IIII
+SELECT quantile_disc(i, 0::DOUBLE), quantile_disc(i, '5e-324'::DOUBLE),
+	quantile_disc(i, '0.9999999999999999'::DOUBLE), quantile_disc(i, 1::DOUBLE)
+FROM range(100) data(i);
+----
+0	0	99	99
+
+# Negative fractions select from descending input, including negative zero.
+query IIII
+SELECT quantile_disc(i, '-0.0'::DOUBLE), quantile_disc(i, '-5e-324'::DOUBLE),
+	quantile_disc(i, '-0.9999999999999999'::DOUBLE), quantile_disc(i, -1::DOUBLE)
+FROM range(100) data(i);
+----
+99	99	0	0
+
+query I
+SELECT quantile_disc(i, [0, '5e-324'::DOUBLE, '0.9999999999999999'::DOUBLE, 1])
+FROM range(1) data(i);
+----
+[0, 0, 0, 0]
