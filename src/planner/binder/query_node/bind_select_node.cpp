@@ -760,7 +760,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		auto &expr = result.select_list[group_by_all_index];
 		auto return_type = expr->GetReturnType();
 		unique_ptr<Expression> uncollated_first;
-		// the uncollated value is selected through a copy, which a subquery or a volatile expression cannot be
+		// avoid evaluating subqueries and volatile groups twice
 		if (!expr->HasSubquery() && !expr->IsVolatile()) {
 			uncollated_first = CollateGroup(*this, expr, internal_sql_types[group_by_all_index]);
 		}
