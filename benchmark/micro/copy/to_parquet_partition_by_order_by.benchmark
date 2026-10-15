@@ -1,0 +1,12 @@
+# name: benchmark/micro/copy/to_parquet_partition_by_order_by.benchmark
+# description: Copy 5M rows to Parquet in 64 partitions, sorted within each partition with ORDER_BY
+# group: [copy]
+
+name Copy to Parquet, 64 partitions, ORDER_BY
+group copy
+
+load
+CREATE TABLE tbl AS SELECT (hash(i) % 64)::INTEGER AS part_col, (hash(i + 1) % 1000000)::BIGINT AS k, i AS v, 'value_' || i AS s FROM range(5000000) t(i);
+
+run
+COPY tbl TO '${BENCHMARK_DIR}/partitioned_order_by_write' (FORMAT parquet, PARTITION_BY part_col, ORDER_BY (k), OVERWRITE TRUE);
