@@ -1209,10 +1209,10 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		metrics->SetMetric<MetricQueryTotalIntermediateSizeBytes>(cumulative_metrics.intermediate_size_bytes);
 		metrics->SetMetric<MetricQueryTotalRowGroupsScanned>(cumulative_metrics.row_groups_scanned);
 		metrics->SetMetric<MetricQueryTotalRowGroupsToScan>(cumulative_metrics.total_row_groups_to_scan);
-		// a scan that doesn't count the bytes it scans falls back to the bytes the query read
-		auto bytes_scanned =
-		    HasScanWithoutBytesScanned(*root) ? query_metrics.GetBytesRead() : cumulative_metrics.bytes_scanned;
-		metrics->SetMetric<MetricQueryTotalBytesScanned>(bytes_scanned);
+		// left out if a scan doesn't count the bytes it scans, as the total would leave that scan out
+		if (!HasScanWithoutBytesScanned(*root)) {
+			metrics->SetMetric<MetricQueryTotalBytesScanned>(cumulative_metrics.bytes_scanned);
+		}
 	}
 	query_metrics.FinalizeMetrics(*metrics);
 	metrics_finalized = true;

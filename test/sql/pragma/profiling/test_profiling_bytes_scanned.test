@@ -196,33 +196,23 @@ EXPLAIN ANALYZE (FORMAT json) SELECT sum(i) FROM '{TEST_DIR}/bytes_scanned_1.par
 ----
 analyzed_plan	<REGEX>:[\s\S]*"bytes_scanned": [1-9][\s\S]*
 
-# a file scan that doesn't count the bytes it scans falls back to the bytes the query read
+# a query with a scan that doesn't count the bytes it scans leaves the total out, rather than undercounting
 statement ok
-COPY (SELECT range AS i FROM range(100000)) TO '{TEST_DIR}/bytes_scanned_fallback.csv';
-
-statement ok
-PRAGMA enable_profiling = 'json';
-
-statement ok
-PRAGMA profiling_output = '{TEST_DIR}/bytes_scanned_fallback.json';
-
-statement ok
-SET tracked_metrics = ['query.total_bytes_scanned', 'io.total_bytes_read', 'operator.bytes_scanned'];
-
-statement ok
-SELECT sum(i) FROM '{TEST_DIR}/bytes_scanned_fallback.csv';
-
-statement ok
-PRAGMA disable_profiling;
+COPY (SELECT range AS i FROM range(100000)) TO '{TEST_DIR}/bytes_scanned_uncounted.csv';
 
 query II
-SELECT query.total_bytes_scanned = io.total_bytes_read,
-       query.total_bytes_scanned = (SELECT size FROM read_blob('{TEST_DIR}/bytes_scanned_fallback.csv'))
-FROM '{TEST_DIR}/bytes_scanned_fallback.json';
+EXPLAIN ANALYZE (FORMAT json) SELECT sum(i) FROM '{TEST_DIR}/bytes_scanned_uncounted.csv'
 ----
-true	true
+analyzed_plan	<!REGEX>:[\s\S]*bytes_scanned[\s\S]*
 
 query II
-EXPLAIN ANALYZE (FORMAT json) SELECT sum(i) FROM '{TEST_DIR}/bytes_scanned_fallback.csv'
+EXPLAIN ANALYZE (FORMAT json)
+SELECT sum(p.i) FROM '{TEST_DIR}/bytes_scanned_1.parquet' p JOIN '{TEST_DIR}/bytes_scanned_uncounted.csv' c USING (i)
 ----
-analyzed_plan	<!REGEX>:[\s\S]*"bytes_scanned"[\s\S]*
+analyzed_plan	<!REGEX>:[\s\S]*"total_bytes_scanned"[\s\S]*
+
+query II
+EXPLAIN ANALYZE (FORMAT json)
+SELECT sum(p.i) FROM '{TEST_DIR}/bytes_scanned_1.parquet' p JOIN '{TEST_DIR}/bytes_scanned_uncounted.csv' c USING (i)
+----
+analyzed_plan	<REGEX>:[\s\S]*"bytes_scanned": [1-9][\s\S]*

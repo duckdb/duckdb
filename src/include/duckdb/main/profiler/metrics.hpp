@@ -34,8 +34,7 @@ struct MetricQueryTotalBytesScanned {
 	static constexpr const char *Name = "query.total_bytes_scanned";
 	static constexpr const char *Description =
 	    "Cumulative compressed size of the Parquet column chunks scanned by the query, however many bytes were read "
-	    "from storage to scan them. If a scan of the query does not count the bytes it scans, the bytes the query read "
-	    "from storage";
+	    "from storage to scan them. Left out if a scan of the query does not count the bytes it scans";
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
