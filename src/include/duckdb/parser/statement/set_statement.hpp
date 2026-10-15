@@ -42,6 +42,8 @@ public:
 
 public:
 	unique_ptr<ParsedExpression> value;
+	//! Whether the statement was written as PRAGMA name=value
+	bool from_pragma = false;
 };
 
 class ResetVariableStatement : public SetStatement {

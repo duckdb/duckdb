@@ -40,6 +40,7 @@ PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const 
 		return std::move(result);
 	}
 	auto set_statement = make_uniq<SetVariableStatement>(info.name, std::move(info.parameters[0]), SetScope::AUTOMATIC);
+	set_statement->from_pragma = true;
 	return std::move(set_statement);
 }
 
