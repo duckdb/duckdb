@@ -241,6 +241,8 @@ public:
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
 
 	unordered_map<TableIndex, LogicalOperator *> recursive_ctes;
+	//! A COPY TO query bound by a COPY TO rewrite, BindCopyTo uses it instead of binding the query
+	unique_ptr<BoundStatement> bound_copy_query;
 
 public:
 	//! Whether the expression is COUNT(tbl.*)

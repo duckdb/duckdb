@@ -418,8 +418,14 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	// bind the select statement
 	// preserve SQLNULL types from table functions (e.g. JSON reader null columns)
 	// so file writers that support it can emit the correct null type (e.g. parquet UNKNOWN/NullType)
-	auto node_copy = copy_info.select_statement->Copy();
-	auto select_node = Bind(*node_copy);
+	BoundStatement select_node;
+	if (bound_copy_query) {
+		select_node = std::move(*bound_copy_query);
+		bound_copy_query.reset();
+	} else {
+		auto node_copy = copy_info.select_statement->Copy();
+		select_node = Bind(*node_copy);
+	}
 
 	if (!function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
