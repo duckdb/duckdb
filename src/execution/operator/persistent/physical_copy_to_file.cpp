@@ -1394,6 +1394,7 @@ public:
 
 private:
 	unique_ptr<const SortStrategy> ConstructSortStrategy() const;
+	unique_ptr<const SortStrategy> ConstructPartitionSortStrategy() const;
 	template <class FUNC>
 	bool TryBlockOnFlush(ExecutionContext &execution_context, InterruptState &interrupt_state, idx_t observed_progress,
 	                     FUNC &&can_continue) DUCKDB_EXCLUDES(lock);
@@ -1437,6 +1438,8 @@ public:
 
 	//! Partition/sort strategy with PhysicalOperator-like interface
 	const unique_ptr<const SortStrategy> sort_strategy;
+	//! Sorts the rows of one partition, which need no partitioning and no partition keys
+	const unique_ptr<const SortStrategy> partition_sort_strategy;
 
 	//! Whether a flushing state currently exists
 	atomic<bool> flushing;
@@ -2708,7 +2711,8 @@ vector<vector<Value>> PartitionedCopyState::FinishTask(const PartitionedCopyTask
 PartitionedCopy::PartitionedCopy(const PhysicalCopyToFile &op_p, ClientContext &context_p,
                                  CopyToFileGlobalState &copy_gstate_p)
     : op(op_p), context(context_p), copy_gstate(copy_gstate_p), partition_writes(op_p, context_p),
-      sort_strategy(ConstructSortStrategy()), flushing(false), locals(0), finalized(false) {
+      sort_strategy(ConstructSortStrategy()), partition_sort_strategy(ConstructPartitionSortStrategy()),
+      flushing(false), locals(0), finalized(false) {
 	unordered_set<idx_t> part_col_set(op.partition_columns.begin(), op.partition_columns.end());
 	for (idx_t col_idx = 0; col_idx < op.expected_types.size(); col_idx++) {
 		raw_columns.push_back(col_idx);
@@ -2733,6 +2737,15 @@ unique_ptr<const SortStrategy> PartitionedCopy::ConstructSortStrategy() const {
 
 	return SortStrategy::Factory(context, partition_bys, op.order_columns, op.expected_types, partition_stats,
 	                             op.children.empty() ? 0 : op.children[0].get().estimated_cardinality);
+}
+
+unique_ptr<const SortStrategy> PartitionedCopy::ConstructPartitionSortStrategy() const {
+	if (op.order_columns.empty()) {
+		return nullptr;
+	}
+	vector<unique_ptr<Expression>> partition_bys;
+	vector<unique_ptr<BaseStatistics>> partition_stats;
+	return SortStrategy::Factory(context, partition_bys, op.order_columns, op.expected_types, partition_stats, 0);
 }
 
 bool PartitionedCopy::RequiresSerializedPartitionWrites() const {
@@ -3130,8 +3143,8 @@ unique_ptr<ColumnDataCollection> PartitionedCopy::SortPartitionCollection(Execut
 	D_ASSERT(collection);
 	D_ASSERT(collection->Count() > 0);
 
-	auto global_sink_state = sort_strategy->GetGlobalSinkState(context);
-	auto local_sink_state = sort_strategy->GetLocalSinkState(execution_context);
+	auto global_sink_state = partition_sort_strategy->GetGlobalSinkState(context);
+	auto local_sink_state = partition_sort_strategy->GetLocalSinkState(execution_context);
 
 	ColumnDataScanState scan_state;
 	collection->InitializeScan(scan_state);
@@ -3140,31 +3153,31 @@ unique_ptr<ColumnDataCollection> PartitionedCopy::SortPartitionCollection(Execut
 
 	while (collection->Scan(scan_state, scan_chunk)) {
 		OperatorSinkInput sink_input {*global_sink_state, *local_sink_state, interrupt_state};
-		sort_strategy->Sink(execution_context, scan_chunk, sink_input);
+		partition_sort_strategy->Sink(execution_context, scan_chunk, sink_input);
 	}
 
 	OperatorSinkCombineInput combine_input {*global_sink_state, *local_sink_state, interrupt_state};
-	sort_strategy->Combine(execution_context, combine_input);
+	partition_sort_strategy->Combine(execution_context, combine_input);
 
 	OperatorSinkFinalizeInput finalize_input {*global_sink_state, interrupt_state};
-	sort_strategy->Finalize(context, finalize_input);
+	partition_sort_strategy->Finalize(context, finalize_input);
 
-	auto global_source_state = sort_strategy->GetGlobalSourceState(context, *global_sink_state);
-	const auto &hash_groups = sort_strategy->GetHashGroups(*global_source_state);
+	auto global_source_state = partition_sort_strategy->GetGlobalSourceState(context, *global_sink_state);
+	const auto &hash_groups = partition_sort_strategy->GetHashGroups(*global_source_state);
 
-	auto local_source_state = sort_strategy->GetLocalSourceState(execution_context, *global_source_state);
+	auto local_source_state = partition_sort_strategy->GetLocalSourceState(execution_context, *global_source_state);
 	OperatorSourceInput source_input {*global_source_state, *local_source_state, interrupt_state};
 	for (idx_t group_idx = 0; group_idx < hash_groups.size(); group_idx++) {
 		if (!hash_groups[group_idx].count) {
 			continue;
 		}
 
-		sort_strategy->SortColumnData(execution_context, group_idx, finalize_input);
-		while (sort_strategy->MaterializeColumnData(execution_context, group_idx, source_input) ==
+		partition_sort_strategy->SortColumnData(execution_context, group_idx, finalize_input);
+		while (partition_sort_strategy->MaterializeColumnData(execution_context, group_idx, source_input) ==
 		       SourceResultType::HAVE_MORE_OUTPUT) {
 		}
 
-		auto result = sort_strategy->GetColumnData(group_idx, source_input);
+		auto result = partition_sort_strategy->GetColumnData(group_idx, source_input);
 		if (!result || result->Count() != collection->Count()) {
 			throw InternalException("Failed to materialize delayed partition data");
 		}
