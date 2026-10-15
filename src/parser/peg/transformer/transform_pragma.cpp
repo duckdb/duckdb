@@ -40,8 +40,8 @@ PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const 
 	if (sqlite_compat_pragmas.find(info.name) != sqlite_compat_pragmas.end()) {
 		return std::move(result);
 	}
-	if (transformer.options.logger) {
-		DUCKDB_LOG_WARNING(transformer.options.logger,
+	if (transformer.options.context) {
+		DUCKDB_LOG_WARNING(*transformer.options.context,
 		                   "Using \"PRAGMA %s=...\" to set a setting is deprecated and will be removed in a future "
 		                   "release, use \"SET %s=...\" instead.",
 		                   info.name.GetIdentifierName(), info.name.GetIdentifierName());
