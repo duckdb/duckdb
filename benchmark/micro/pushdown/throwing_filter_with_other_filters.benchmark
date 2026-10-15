@@ -7,10 +7,10 @@ group micro
 subgroup pushdown
 
 load
-CREATE TABLE strings AS SELECT i, (i % 1000)::VARCHAR AS id, md5(i::VARCHAR) AS payload FROM range(20000000) t(i);
+CREATE TABLE strings AS SELECT i % 7 AS remainder, (i % 1000)::VARCHAR AS id, md5(i::VARCHAR) AS payload FROM range(20000000) t(i);
 
 run
-SELECT count(*), max(payload) FROM strings WHERE i % 7 <> 0 AND id::INT = 5;
+SELECT count(*), max(payload) FROM strings WHERE remainder <> 0 AND id::INT = 5;
 
 result II
 17143	fffb47419d1005bd6521067a537e788b

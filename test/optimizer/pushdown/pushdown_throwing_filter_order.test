@@ -1,5 +1,5 @@
 # name: test/optimizer/pushdown/pushdown_throwing_filter_order.test
-# description: A filter that can throw stays above a table scan with other filters, since the scan reorders them
+# description: A filter that can throw runs after the other filters of a table scan
 # group: [pushdown]
 
 statement ok
@@ -39,16 +39,16 @@ SELECT count(*) FROM t WHERE id <> 'bad' AND id::INT = 2
 ----
 1
 
-# the filters that cannot throw are still pushed into the scan
+# both filters stay in the scan
 query II
 EXPLAIN SELECT count(*) FROM t WHERE s LIKE '%ee%' AND id::INT = 2
 ----
-physical_plan	<REGEX>:[\s\S]*Filter ─[\s\S]*Expression: CAST\(id AS INTEGER\) = 2[\s\S]*Filters: contains\(s, 'ee'\)[\s\S]*
+physical_plan	<!REGEX>:[\s\S]*Filter ─[\s\S]*
 
 query II
 EXPLAIN SELECT count(*) FROM t WHERE i = 2 AND id::INT = 2
 ----
-physical_plan	<REGEX>:[\s\S]*Filter ─[\s\S]*Expression: CAST\(id AS INTEGER\) = 2[\s\S]*Filters: i = 2[\s\S]*
+physical_plan	<!REGEX>:[\s\S]*Filter ─[\s\S]*
 
 # a filter that can throw is pushed when it is the only one
 query II
@@ -63,5 +63,32 @@ Could not convert string 'bad' to INT32
 
 query I
 SELECT count(*) FROM t WHERE TRY_CAST(id AS INT) = 2 AND s LIKE '%ee%'
+----
+1
+
+query II
+EXPLAIN SELECT count(*) FROM t WHERE TRY_CAST(id AS INT) = 2 AND s LIKE '%ee%'
+----
+physical_plan	<!REGEX>:[\s\S]*Filter ─[\s\S]*
+
+# the cast still raises its error on a row that the other filter keeps
+statement error
+SELECT count(*) FROM t WHERE i = 0 AND id::INT = 2
+----
+Could not convert string 'bad' to INT32
+
+# Parquet orders its filters the same way
+require parquet
+
+statement ok
+COPY t TO '{TEMP_DIR}/throwing_filter_order.parquet';
+
+query I
+SELECT count(*) FROM '{TEMP_DIR}/throwing_filter_order.parquet' WHERE s LIKE '%ee%' AND id::INT = 2
+----
+1
+
+query I
+SELECT count(*) FROM '{TEMP_DIR}/throwing_filter_order.parquet' WHERE i = 2 AND id::INT = 2
 ----
 1

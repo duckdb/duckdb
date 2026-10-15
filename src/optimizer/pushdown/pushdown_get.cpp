@@ -170,9 +170,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		// any generated filters have not been pushed down yet
 		pushdown_results.push_back(FilterPushdownResult::NO_PUSHDOWN);
 	}
-	// the scan does not keep the order of its filters, so a filter that can throw is only pushed when it is the only
-	// filter, and cannot run on rows that another filter removes
-	const bool single_filter = filters.size() == 1 && !get.table_filters.HasFilters();
 	// for any filters we did not manage to push into specialized table filters - try to push them as a generic
 	// expression
 	for (idx_t i = 0; i < filters.size(); ++i) {
@@ -192,7 +189,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		    (expr.CanThrow() || InClauseRewriter::HasRewritableInClause(expr))) {
 			continue;
 		}
-		if (expr.CanThrow() && !single_filter) {
+		// Allow pushing down filters that can throw only if there is a single expression
+		if (expr.CanThrow() && filters.size() > 1) {
 			continue;
 		}
 		pushdown_result = combiner.TryPushdownGenericExpression(get, expr);

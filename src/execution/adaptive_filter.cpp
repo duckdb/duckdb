@@ -8,6 +8,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/expression/expression_barrier.hpp"
@@ -32,13 +33,17 @@ AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), e
 AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters, vector<idx_t> filter_global_pos_p)
     : observe_interval(10), execute_interval(20), warmup(true) {
 	permutation = ExpressionHeuristics::GetInitialOrder(table_filters);
+	vector<bool> can_throw;
 	for (auto &entry : table_filters) {
 		auto &expr_filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "AdaptiveFilter");
-		if (expr_filter.expr->CanThrow() || ExpressionBarrier::Contains(*expr_filter.expr)) {
+		can_throw.push_back(expr_filter.expr->CanThrow());
+		if (can_throw.back() || ExpressionBarrier::Contains(*expr_filter.expr)) {
 			// a filter that can throw must keep the order the optimizer put it in
 			disable_permutations = true;
 		}
 	}
+	// a filter that can throw runs after the others, so it does not run on the rows they remove
+	std::stable_partition(permutation.begin(), permutation.end(), [&](idx_t idx) { return !can_throw[idx]; });
 	for (idx_t idx = 1; idx < table_filters.FilterCount(); idx++) {
 		swap_likeliness.push_back(100);
 	}
