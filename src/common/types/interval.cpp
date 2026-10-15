@@ -564,39 +564,8 @@ interval_t Interval::Invert(interval_t interval) {
 }
 
 date_t Interval::Add(date_t left, interval_t right) {
-	if (!left.IsFinite()) {
-		return left;
-	}
 	date_t result;
-	if (right.months != 0) {
-		int32_t year, month, day;
-		Date::Convert(left, year, month, day);
-		int32_t year_diff = right.months / Interval::MONTHS_PER_YEAR;
-		year += year_diff;
-		month += right.months - year_diff * Interval::MONTHS_PER_YEAR;
-		if (month > Interval::MONTHS_PER_YEAR) {
-			year++;
-			month -= Interval::MONTHS_PER_YEAR;
-		} else if (month <= 0) {
-			year--;
-			month += Interval::MONTHS_PER_YEAR;
-		}
-		day = MinValue<int32_t>(day, Date::MonthDays(year, month));
-		result = Date::FromDate(year, month, day);
-	} else {
-		result = left;
-	}
-	if (right.days != 0) {
-		if (!TryAddOperator::Operation(result.days, right.days, result.days)) {
-			throw OutOfRangeException("Date out of range");
-		}
-	}
-	if (right.micros != 0) {
-		if (!TryAddOperator::Operation(result.days, int32_t(right.micros / Interval::MICROS_PER_DAY), result.days)) {
-			throw OutOfRangeException("Date out of range");
-		}
-	}
-	if (!result.IsFinite()) {
+	if (!TryAdd(left, right, result)) {
 		throw OutOfRangeException("Date out of range");
 	}
 	return result;
