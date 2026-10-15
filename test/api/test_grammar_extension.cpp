@@ -5,6 +5,7 @@
 #include <type_traits>
 #include "test_helpers.hpp"
 
+#include "duckdb/common/limits.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
@@ -2482,4 +2483,57 @@ TEST_CASE("Grammar extension rules can suppress autocomplete suggestions", "[api
 	auto suppressed = GetStatementSuggestions(*con.context);
 	REQUIRE(HasSuggestion(suppressed, "SELECT"));
 	REQUIRE_FALSE(HasSuggestion(suppressed, "GRAMMAREXTENSIONTESTKEYWORD"));
+}
+
+TEST_CASE("Parse result source positions retain independent optional full-width values", "[api][grammar_extension]") {
+	vector<optional_idx> positions {optional_idx(),
+	                                idx_t(0),
+	                                idx_t(17),
+	                                idx_t(QueryLocation::INVALID_OFFSET) - 1,
+	                                idx_t(QueryLocation::INVALID_OFFSET),
+	                                NumericLimits<idx_t>::Maximum()};
+	for (auto offset : positions) {
+		for (auto length : positions) {
+			ParseResult result(ParseResultType::INVALID, offset, length);
+			REQUIRE(result.GetOffset() == offset);
+			REQUIRE(result.GetLength() == length);
+		}
+	}
+}
+
+TEST_CASE("Parse result source extents preserve unknown and out-of-range positions", "[api][grammar_extension]") {
+	ParseResult child(ParseResultType::INVALID, 20, 5);
+
+	SECTION("Enclosing a child gives an unknown extent a known length") {
+		ParseResult parent(ParseResultType::INVALID, 10);
+		REQUIRE_FALSE(parent.GetLength().IsValid());
+		REQUIRE(parent.GetLocation() == QueryLocation(10, 0));
+		parent.EncloseChild(child);
+		REQUIRE(parent.GetOffset() == optional_idx(10));
+		REQUIRE(parent.GetLength() == optional_idx(15));
+		REQUIRE(parent.GetLocation() == QueryLocation(10, 15));
+	}
+	SECTION("An unknown start is not inferred from a child") {
+		ParseResult parent(ParseResultType::INVALID, optional_idx());
+		parent.EncloseChild(child);
+		REQUIRE_FALSE(parent.GetOffset().IsValid());
+		REQUIRE_FALSE(parent.GetLength().IsValid());
+		REQUIRE_FALSE(parent.GetLocation().IsValid());
+	}
+	SECTION("An unrepresentable start retains its full-width value") {
+		auto offset = NumericLimits<idx_t>::Maximum();
+		ParseResult parent(ParseResultType::INVALID, offset);
+		parent.EncloseChild(child);
+		REQUIRE(parent.GetOffset() == optional_idx(offset));
+		REQUIRE(parent.GetLength() == optional_idx(5));
+		REQUIRE_FALSE(parent.GetLocation().IsValid());
+	}
+	SECTION("An unrepresentable extent can be replaced by an enclosed child") {
+		ParseResult parent(ParseResultType::INVALID, 10, NumericLimits<idx_t>::Maximum());
+		REQUIRE_FALSE(parent.GetLocation().IsValid());
+		parent.EncloseChild(child);
+		REQUIRE(parent.GetOffset() == optional_idx(10));
+		REQUIRE(parent.GetLength() == optional_idx(5));
+		REQUIRE(parent.GetLocation() == QueryLocation(10, 5));
+	}
 }
