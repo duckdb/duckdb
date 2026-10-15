@@ -137,6 +137,12 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		if (target_scale < source_scale) {
 			return false;
 		}
+		if (target_width < target_scale || source_width < source_scale) {
+			return false;
+		}
+		if (target_width - target_scale < source_width - source_scale) {
+			return false;
+		}
 		return true;
 	}
 	switch (source_type.id()) {

@@ -328,3 +328,21 @@ query I
 SELECT id FROM date_infinity_test WHERE d = TIMESTAMP '-infinity' ORDER BY id;
 ----
 1
+
+# Narrowing DECIMAL casts must not be simplified across comparisons (issue #27144)
+statement ok
+CREATE TABLE decimal_narrow_test(d DECIMAL(10,2));
+
+statement ok
+INSERT INTO decimal_narrow_test VALUES (0.50), (1.00), (2.00), (1234.00);
+
+query I
+SELECT list(d ORDER BY d) FROM decimal_narrow_test WHERE TRY_CAST(d AS DECIMAL(5,2)) > 1.00;
+----
+[2.00]
+
+query I
+SELECT list(d ORDER BY d) FROM decimal_narrow_test WHERE 1.00 < TRY_CAST(d AS DECIMAL(5,2));
+----
+[2.00]
+
