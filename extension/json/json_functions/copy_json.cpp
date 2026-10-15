@@ -167,7 +167,7 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 	vector<string> partition_columns;
 	bool write_partition_columns = false;
 	vector<Identifier> original_column_names;
-	unique_ptr<BoundStatement> bound_query;
+	BoundStatement bound_query;
 	shared_ptr<Binder> query_binder;
 	const auto is_geojson = format == JSONCopyToFormat::GEOJSON;
 	const auto is_geojsonl = is_geojson && StringUtil::CIEquals(stmt.info->format, "geojsonl");
@@ -217,14 +217,14 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 					ThrowJSONCopyNullException(format, option_name);
 				}
 			}
-			if (!bound_query) {
+			if (!query_binder) {
 				// the rewrite reads this binding, binding the query again would repeat its side effects
 				auto query_select = make_uniq<SelectStatement>();
 				query_select->node = copy_info.select_statement->Copy();
 				unique_ptr<TableRef> query_ref = make_uniq<SubqueryRef>(std::move(query_select));
 				query_binder = Binder::CreateBinder(binder.context, &binder);
-				bound_query = make_uniq<BoundStatement>(query_binder->Bind(*query_ref));
-				original_column_names = bound_query->names;
+				bound_query = query_binder->Bind(*query_ref);
+				original_column_names = bound_query.names;
 			}
 			auto converted = ConvertVectorToValue(vector<Value>(option_values));
 			auto partition_indices = ParseColumnsOrdered(converted, original_column_names, option_name);
@@ -326,11 +326,11 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 	copy_info.options["header"] = {{0}};
 
 	BoundStatement result;
-	if (bound_query) {
+	if (query_binder) {
 		// bind the rewrite on top of the query bound above, the statement keeps the parsed query
 		auto rewrite = select_node.Copy();
 		rewrite->Cast<SelectNode>().from_table =
-		    make_uniq<BoundRefWrapper>(std::move(*bound_query), std::move(query_binder));
+		    make_uniq<BoundRefWrapper>(std::move(bound_query), std::move(query_binder));
 		auto bound_rewrite = binder.Bind(*rewrite);
 		result = binder.Bind(stmt, bound_rewrite);
 	} else {

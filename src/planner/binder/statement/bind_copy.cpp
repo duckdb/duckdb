@@ -406,6 +406,10 @@ private:
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type,
                                   optional_ptr<BoundStatement> bound_query) {
 	if (function.plan) {
+		if (bound_query) {
+			throw InternalException("COPY TO with a bound query cannot be rewritten by FORMAT \"%s\"",
+			                        stmt.info->format);
+		}
 		// plan rewrite COPY TO
 		auto result = function.plan(*this, stmt);
 		// a rewrite that re-binds the COPY consumes PARTITION_PATH
