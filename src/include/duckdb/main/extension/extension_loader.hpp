@@ -27,6 +27,7 @@ struct CreateCollationInfo;
 struct CreateAggregateFunctionInfo;
 struct CreateScalarFunctionInfo;
 struct CreateTableFunctionInfo;
+struct CreatePragmaFunctionInfo;
 struct CreateWindowFunctionInfo;
 
 struct ExtensionLoaderInfo {
@@ -92,6 +93,7 @@ public:
 
 	//! Register a new pragma function set - throw an exception if the function already exists
 	DUCKDB_API void RegisterFunction(PragmaFunctionSet function);
+	DUCKDB_API void RegisterFunction(CreatePragmaFunctionInfo info);
 
 	//! Register a CreateSecretFunction
 	DUCKDB_API void RegisterFunction(CreateSecretFunction function);

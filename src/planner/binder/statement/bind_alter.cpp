@@ -43,6 +43,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 
 	auto bound_constraint =
 	    BindUniqueConstraint(*constraint_info.constraint, table_info.GetQualifiedName().Name(), column_list);
+	VerifyConstraintCheckModeStorageVersion(*constraint_info.constraint, table.ParentCatalog(), table.temporary);
 	auto &bound_unique = bound_constraint->Cast<BoundUniqueConstraint>();
 	auto &unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
 
@@ -174,7 +175,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	if (catalog.IsSystemCatalog()) {
 		throw BinderException("Can not comment on System Catalog entries");
 	}
-	properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
+	properties.RegisterDBModify(catalog, context, stmt.info->GetModifications());
 	stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
 
 	if (!stmt.info->IsAddUniqueConstraint()) {

@@ -57,6 +57,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -973,11 +974,9 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		PrintDatabaseError(res.GetError());
 		return SuccessState::FAILURE;
 	}
-	auto &properties = res.GetStatementProperties();
-	// Row-wise rendering drains the result as it is produced; everything else is retained
-	const bool render_streaming = !render_materialized &&
-	                              properties.return_type == duckdb::StatementReturnType::QUERY_RESULT &&
-	                              properties.result_eagerness != duckdb::ResultEagerness::FORCED;
+	// A renderer stops at its row cap and a closed pipe stops the shell outright, so a stream is never read to its end
+	// The result's type, so that a PRAGMA the engine reparses into a SELECT streams as that SELECT
+	const bool render_streaming = !render_materialized && duckdb::StreamsByDefault(res.GetStatementType(), res, false);
 	if (!render_materialized && !render_streaming) {
 		// the statement is not rendered row by row, but its side effects must still happen
 		res.Complete();
@@ -986,6 +985,8 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 			return SuccessState::FAILURE;
 		}
 	}
+	// Known by now: a statement whose properties are known only once it runs is never streamed
+	auto &properties = res.GetStatementProperties();
 	if (properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
 		auto result_chunk = res.Fetch();
 		if (result_chunk && result_chunk->size() == 1) {
@@ -1033,6 +1034,9 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 */
 void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
 	auto &explain = statement.Cast<duckdb::ExplainStatement>();
+	if (explain.explain_type == duckdb::ExplainType::EXPLAIN_SQL) {
+		return;
+	}
 	if (explain.format != duckdb::ProfilerPrintFormat::Default()) {
 		// the user explicitly requested an output format (e.g. EXPLAIN (FORMAT json))
 		return;
@@ -1063,15 +1067,24 @@ void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
 	explain.format = duckdb::ProfilerPrintFormat("shell_explain_printer");
 }
 
+//! The statement whose rows the shell renders. Of a statement the engine expands into several, only the last can
+//! return rows
+static duckdb::SQLStatement &RenderedStatement(duckdb::SQLStatement &statement) {
+	if (statement.type == duckdb::StatementType::MULTI_STATEMENT) {
+		auto &multi = statement.Cast<duckdb::MultiStatement>();
+		if (!multi.statements.empty()) {
+			return *multi.statements.back();
+		}
+	}
+	return statement;
+}
+
 SuccessState ShellState::ExecuteSQL(const string &zSql) {
 	auto &con = *conn;
 	try {
 		auto iterator = con.context->IterateStatements(zSql);
 		while (iterator.Peek()) {
 			auto statement = iterator.GetStatementForExecution();
-			if (!statement) {
-				continue; // a peel that preprocessing swallowed
-			}
 			auto &statement_query = statement->query.empty() ? zSql : statement->query;
 			idx_t start_pos = statement->stmt_location.offset;
 			idx_t len = statement->stmt_location.length;
@@ -1087,11 +1100,12 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			}
 
 			cMode = mode;
-			if (statement->type == duckdb::StatementType::EXPLAIN_STATEMENT) {
+			auto &rendered = RenderedStatement(*statement);
+			if (rendered.type == duckdb::StatementType::EXPLAIN_STATEMENT) {
 				cMode = RenderMode::EXPLAIN;
-				SetupPrettyExplain(*statement);
+				SetupPrettyExplain(rendered);
 			}
-			if (mode == RenderMode::DUCKBOX && UseDescribeRenderMode(*statement, describe_table_name)) {
+			if (mode == RenderMode::DUCKBOX && UseDescribeRenderMode(rendered, describe_table_name)) {
 				cMode = RenderMode::DESCRIBE;
 			}
 
@@ -1295,6 +1309,8 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif
 		db->LoadStaticExtension<duckdb::ShellExtension>();
+		// bare expressions / table names as statements - only in the CLI, so it is opt-in grammar
+		ExecuteQuery("SET active_grammar_extensions=['shell']");
 		if (safe_mode) {
 			ExecuteQuery("SET enable_external_access=false");
 			ExecuteQuery("SET lock_configuration=true");
@@ -1463,6 +1479,10 @@ string ShellState::GetSystemPager() {
 }
 
 bool ShellState::ShouldUsePager() {
+	if (safe_mode) {
+		// the pager runs an external command, which is not allowed in -safe mode
+		return false;
+	}
 	if (out != stdout || !stdout_is_console || !outfile.empty() || !stdin_is_interactive) {
 		// if we have an outfile specified, or we are in non-interactive/batch mode, don't use the pager
 		return false;
@@ -2093,24 +2113,19 @@ MetadataResult ShellState::SetSeparator(ShellState &state, const vector<string> 
 	return MetadataResult::SUCCESS;
 }
 
-bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
+bool ShellState::SetOutputFile(const vector<string> &args, OutputCommand output_command) {
 	if (safe_mode) {
 		PrintF(PrintOutput::STDERR, ".output/.once/.excel cannot be used in -safe mode\n");
 		return false;
 	}
 	string zFile;
 	int bTxtMode = 0;
-	int eMode = 0;
+	enum class OutputFileMode { DEFAULT, TEXT_EDITOR, SPREADSHEET };
+	auto file_mode = OutputFileMode::DEFAULT;
 	bool bBOM = false;
-	int bOnce = 0; /* 0: .output, 1: .once, 2: .excel */
 
-	if (output_mode == 'e') {
-		// .excel
-		eMode = 'x';
-		bOnce = 2;
-	} else if (output_mode == 'o') {
-		// .once
-		bOnce = 1;
+	if (output_command == OutputCommand::EXCEL) {
+		file_mode = OutputFileMode::SPREADSHEET;
 	}
 	for (idx_t i = 1; i < args.size(); i++) {
 		const char *z = args[i].c_str();
@@ -2120,10 +2135,10 @@ bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
 			}
 			if (strcmp(z, "-bom") == 0) {
 				bBOM = true;
-			} else if (output_mode != 'e' && strcmp(z, "-x") == 0) {
-				eMode = 'x'; /* spreadsheet */
-			} else if (output_mode != 'e' && strcmp(z, "-e") == 0) {
-				eMode = 'e'; /* text editor */
+			} else if (output_command != OutputCommand::EXCEL && strcmp(z, "-x") == 0) {
+				file_mode = OutputFileMode::SPREADSHEET;
+			} else if (output_command != OutputCommand::EXCEL && strcmp(z, "-e") == 0) {
+				file_mode = OutputFileMode::TEXT_EDITOR;
 			} else {
 				PrintF("ERROR: unknown option: \"%s\".  Usage:\n", args[i].c_str());
 				PrintHelp(args[0].c_str());
@@ -2140,17 +2155,17 @@ bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
 	if (zFile.empty()) {
 		zFile = "stdout";
 	}
-	if (bOnce) {
+	if (output_command != OutputCommand::OUTPUT) {
 		outCount = 2;
 	} else {
 		outCount = 0;
 	}
 	ResetOutput();
 #ifndef SQLITE_NOHAVE_SYSTEM
-	if (eMode == 'e' || eMode == 'x') {
+	if (file_mode != OutputFileMode::DEFAULT) {
 		doXdgOpen = 1;
 		PushOutputMode();
-		if (eMode == 'x') {
+		if (file_mode == OutputFileMode::SPREADSHEET) {
 			/* spreadsheet mode.  Output as CSV. */
 			NewTempFile("csv");
 			ShellClearFlag(ShellFlags::SHFLG_Echo);

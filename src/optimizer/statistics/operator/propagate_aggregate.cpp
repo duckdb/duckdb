@@ -533,9 +533,14 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 	}
 	aggr.distinct_validity = distinct_validity;
 
+	const auto is_ungrouped = aggr.groups.empty();
 	// after we propagate statistics - try to directly execute aggregates using statistics
 	TryExecuteAggregates(aggr, node_ptr);
 
+	if (is_ungrouped) {
+		// Ungrouped aggregate always returns exactly one row, even over empty input
+		return make_uniq<NodeStatistics>(1U, 1U);
+	}
 	// the max cardinality of an aggregate is the max cardinality of the input (i.e. when every row is a unique
 	// group)
 	return std::move(node_stats);

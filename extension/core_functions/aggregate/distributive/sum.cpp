@@ -230,6 +230,23 @@ struct HugeintSumOperation
 	}
 };
 
+//! The sum of a DECIMAL is a DECIMAL(38) - finalizing throws if the sum does not fit in it
+template <class OP>
+struct DecimalSumOperation : public OP {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		OP::template Finalize<T, STATE>(state, target, finalize_data);
+		if (!state.is_set) {
+			return;
+		}
+		const auto &max_value = Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL];
+		if (target >= max_value || target <= -max_value) {
+			throw OutOfRangeException("Overflow in SUM of DECIMAL: the result does not fit in DECIMAL(%d)",
+			                          Decimal::MAX_WIDTH_DECIMAL);
+		}
+	}
+};
+
 unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
 	throw BinderException("sum_no_overflow is for internal use only!");
 }
@@ -416,11 +433,36 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 	}
 }
 
+template <class INPUT_TYPE, class OP>
+AggregateFunction GetDecimalSumAggregate(const LogicalType &input_type) {
+	auto function =
+	    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, INPUT_TYPE, hugeint_t, DecimalSumOperation<OP>>(
+	        input_type, LogicalType::HUGEINT);
+	function.GetSignature().GetParameter(0).SetName("arg");
+	function.SetStatisticsCallback(SumPropagateStats);
+	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	return function;
+}
+
+AggregateFunction GetDecimalSumAggregate(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::INT32:
+		return GetDecimalSumAggregate<int32_t, SumToHugeintOperation>(LogicalType::INTEGER);
+	case PhysicalType::INT64:
+		return GetDecimalSumAggregate<int64_t, SumToHugeintOperation>(LogicalType::BIGINT);
+	case PhysicalType::INT128:
+		return GetDecimalSumAggregate<hugeint_t, HugeintSumOperation>(LogicalType::HUGEINT);
+	default:
+		// the sum of smaller decimals is accumulated in an int64_t, which always fits in a DECIMAL(38)
+		return GetSumAggregate(type);
+	}
+}
+
 unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto decimal_type = arguments[0]->GetReturnType();
-	function.ReplaceImplementation(GetSumAggregate(decimal_type.InternalType()));
+	function.ReplaceImplementation(GetDecimalSumAggregate(decimal_type.InternalType()));
 	function.SetName("sum");
 	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
