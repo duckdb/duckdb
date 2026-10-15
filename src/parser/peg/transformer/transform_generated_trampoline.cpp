@@ -4271,6 +4271,7 @@ PEGTransformerFactory::FinalizeAlterTableStmtTrampoline(PEGTransformer &transfor
 	}
 	auto base_table_name = process.TakeResult<unique_ptr<BaseTableRef>>(1);
 	vector<unique_ptr<AlterTableInfo>> alter_table_options;
+	alter_table_options.reserve(dynamic_child_count);
 	for (idx_t i = 2; i < 2 + dynamic_child_count; i++) {
 		alter_table_options.push_back(process.TakeResult<unique_ptr<AlterTableInfo>>(i));
 	}
@@ -4472,6 +4473,7 @@ PEGTransformerFactory::FinalizeAddColumnEntryTrampoline(PEGTransformer &transfor
 	optional<vector<ColumnConstraintEntry>> column_constraint {};
 	if (dynamic_child_count > 0) {
 		vector<ColumnConstraintEntry> column_constraint_value;
+		column_constraint_value.reserve(dynamic_child_count);
 		for (idx_t i = 3; i < 3 + dynamic_child_count; i++) {
 			column_constraint_value.push_back(process.TakeResult<ColumnConstraintEntry>(i));
 		}
@@ -4591,6 +4593,7 @@ PEGTransformerFactory::FinalizeNestedColumnNameTrampoline(PEGTransformer &transf
 	optional<vector<Identifier>> identifier_dot {};
 	if (dynamic_child_count > 0) {
 		vector<Identifier> identifier_dot_value;
+		identifier_dot_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			identifier_dot_value.push_back(process.TakeResult<Identifier>(i));
 		}
@@ -4649,6 +4652,7 @@ PEGTransformerFactory::FinalizeSetPartitionedByTrampoline(PEGTransformer &transf
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(3)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<ParsedExpression>> expression;
+	expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		expression.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -5071,6 +5075,7 @@ PEGTransformerFactory::FinalizeSetSequenceOptionTrampoline(PEGTransformer &trans
 	auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
 	auto dynamic_child_count = dynamic_repeat_children.size();
 	vector<pair<string, unique_ptr<SequenceOption>>> sequence_option;
+	sequence_option.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		sequence_option.push_back(process.TakeResult<pair<string, unique_ptr<SequenceOption>>>(i));
 	}
@@ -5678,6 +5683,7 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTypeTrampoline(PE
 	optional<vector<int64_t>> array_bounds {};
 	if (dynamic_child_count > 0) {
 		vector<int64_t> array_bounds_value;
+		array_bounds_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			array_bounds_value.push_back(process.TakeResult<int64_t>(i));
 		}
@@ -6244,6 +6250,7 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeBitTypeTrampoline
 	auto &expression_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (expression_opt.HasResult()) {
 		vector<unique_ptr<ParsedExpression>> expression_value;
+		expression_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			expression_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -6586,6 +6593,7 @@ PEGTransformerFactory::FinalizeCatalogReservedSchemaTypeNameTrampoline(PEGTransf
 	auto dynamic_child_count = dynamic_repeat_children.size();
 	auto catalog_qualification = process.TakeResult<Identifier>(0);
 	vector<Identifier> reserved_schema_qualification;
+	reserved_schema_qualification.reserve(dynamic_child_count);
 	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		reserved_schema_qualification.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -6645,6 +6653,7 @@ PEGTransformerFactory::FinalizeTypeModifiersTrampoline(PEGTransformer &transform
 	auto &expression_opt = ExtractResultFromParens(list_pr.GetChild(0)).Cast<OptionalParseResult>();
 	if (expression_opt.HasResult()) {
 		vector<unique_ptr<ParsedExpression>> expression_value;
+		expression_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			expression_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -6689,6 +6698,7 @@ PEGTransformerFactory::FinalizeNestedTypeTrampoline(PEGTransformer &transformer,
 	optional<vector<int64_t>> array_bounds {};
 	if (dynamic_child_count > 0) {
 		vector<int64_t> array_bounds_value;
+		array_bounds_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			array_bounds_value.push_back(process.TakeResult<int64_t>(i));
 		}
@@ -6767,6 +6777,7 @@ PEGTransformerFactory::FinalizeColIdTypeListTrampoline(PEGTransformer &transform
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<pair<Identifier, unique_ptr<ParsedExpression>>> col_id_type;
+	col_id_type.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		col_id_type.push_back(process.TakeResult<pair<Identifier, unique_ptr<ParsedExpression>>>(i));
 	}
@@ -6806,6 +6817,7 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeMapTypeTrampoline
 	auto &nested_type_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (nested_type_opt.HasResult()) {
 		vector<unique_ptr<ParsedExpression>> nested_type_value;
+		nested_type_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			nested_type_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -6834,6 +6846,7 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTupleTypeTrampoli
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(1)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<ParsedExpression>> nested_type;
+	nested_type.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		nested_type.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -7418,6 +7431,7 @@ PEGTransformerFactory::FinalizeIdentifierColIdTrampoline(PEGTransformer &transfo
 	auto dynamic_child_count = dynamic_repeat_children.size();
 	auto identifier = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
 	vector<Identifier> copy_file_name_suffix;
+	copy_file_name_suffix.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		copy_file_name_suffix.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -7532,6 +7546,7 @@ PEGTransformerFactory::FinalizeSpecializedOptionListTrampoline(PEGTransformer &t
 	optional<vector<GenericCopyOption>> specialized_option_tail {};
 	if (dynamic_child_count > 0) {
 		vector<GenericCopyOption> specialized_option_tail_value;
+		specialized_option_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			specialized_option_tail_value.push_back(process.TakeResult<GenericCopyOption>(i));
 		}
@@ -7931,6 +7946,7 @@ PEGTransformerFactory::FinalizeCopyGenericOptionListTrampoline(PEGTransformer &t
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<GenericCopyOption> copy_generic_option;
+	copy_generic_option.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		copy_generic_option.push_back(process.TakeResult<GenericCopyOption>(i));
 	}
@@ -8025,6 +8041,7 @@ PEGTransformerFactory::FinalizeGenericCopyOptionListTrampoline(PEGTransformer &t
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<GenericCopyOption> generic_copy_option;
+	generic_copy_option.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		generic_copy_option.push_back(process.TakeResult<GenericCopyOption>(i));
 	}
@@ -8304,6 +8321,7 @@ PEGTransformerFactory::FinalizeCreateIndexStmtTrampoline(PEGTransformer &transfo
 		index_type = process.TakeResult<Identifier>(3);
 	}
 	vector<unique_ptr<ParsedExpression>> index_element;
+	index_element.reserve(dynamic_child_count);
 	for (idx_t i = 4; i < 4 + dynamic_child_count; i++) {
 		index_element.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -8377,6 +8395,7 @@ PEGTransformerFactory::FinalizeRelOptionListTrampoline(PEGTransformer &transform
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<pair<Identifier, unique_ptr<ParsedExpression>>> rel_option;
+	rel_option.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		rel_option.push_back(process.TakeResult<pair<Identifier, unique_ptr<ParsedExpression>>>(i));
 	}
@@ -8608,6 +8627,7 @@ PEGTransformerFactory::FinalizeDottedColLabelTrampoline(PEGTransformer &transfor
 	optional<vector<string>> dot_col_label {};
 	if (dynamic_child_count > 0) {
 		vector<string> dot_col_label_value;
+		dot_col_label_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			dot_col_label_value.push_back(process.TakeResult<string>(i));
 		}
@@ -8737,6 +8757,7 @@ PEGTransformerFactory::FinalizeCreateMacroStmtTrampoline(PEGTransformer &transfo
 	}
 	auto qualified_name = process.TakeResult<QualifiedName>(2);
 	vector<unique_ptr<MacroFunction>> macro_definition;
+	macro_definition.reserve(dynamic_child_count);
 	for (idx_t i = 3; i < 3 + dynamic_child_count; i++) {
 		macro_definition.push_back(process.TakeResult<unique_ptr<MacroFunction>>(i));
 	}
@@ -8854,6 +8875,7 @@ PEGTransformerFactory::FinalizeMacroParametersTrampoline(PEGTransformer &transfo
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<MacroParameter> macro_parameter;
+	macro_parameter.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		macro_parameter.push_back(process.TakeResult<MacroParameter>(i));
 	}
@@ -9096,6 +9118,7 @@ PEGTransformerFactory::FinalizeCreateSequenceStmtTrampoline(PEGTransformer &tran
 	optional<vector<pair<string, unique_ptr<SequenceOption>>>> sequence_option {};
 	if (dynamic_child_count > 0) {
 		vector<pair<string, unique_ptr<SequenceOption>>> sequence_option_value;
+		sequence_option_value.reserve(dynamic_child_count);
 		for (idx_t i = 2; i < 2 + dynamic_child_count; i++) {
 			sequence_option_value.push_back(process.TakeResult<pair<string, unique_ptr<SequenceOption>>>(i));
 		}
@@ -9625,6 +9648,7 @@ PEGTransformerFactory::FinalizePartitionOptionsTrampoline(PEGTransformer &transf
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(2)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<ParsedExpression>> expression;
+	expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		expression.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -9652,6 +9676,7 @@ PEGTransformerFactory::FinalizeSortedOptionsTrampoline(PEGTransformer &transform
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(2)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<ParsedExpression>> expression;
+	expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		expression.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -9712,6 +9737,7 @@ PEGTransformerFactory::FinalizeIdentifierListTrampoline(PEGTransformer &transfor
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	vector<Identifier> identifier;
 	auto identifier_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	identifier.reserve(identifier_items.size());
 	for (auto &identifier_item : identifier_items) {
 		identifier.push_back(identifier_item.get().Cast<IdentifierParseResult>().identifier);
 	}
@@ -9840,6 +9866,7 @@ PEGTransformerFactory::FinalizeCatalogReservedSchemaIdentifierTrampoline(PEGTran
 	auto dynamic_child_count = dynamic_repeat_children.size();
 	auto catalog_qualification = process.TakeResult<Identifier>(0);
 	vector<Identifier> reserved_schema_qualification;
+	reserved_schema_qualification.reserve(dynamic_child_count);
 	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		reserved_schema_qualification.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -10028,6 +10055,7 @@ PEGTransformerFactory::FinalizeCreateTableColumnListTrampoline(PEGTransformer &t
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<CreateTableColumnElement> create_table_column_element;
+	create_table_column_element.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		create_table_column_element.push_back(process.TakeResult<CreateTableColumnElement>(i));
 	}
@@ -10139,6 +10167,7 @@ PEGTransformerFactory::FinalizeColumnDefinitionTrampoline(PEGTransformer &transf
 	optional<vector<ColumnConstraintEntry>> column_constraint {};
 	if (dynamic_child_count > 0) {
 		vector<ColumnConstraintEntry> column_constraint_value;
+		column_constraint_value.reserve(dynamic_child_count);
 		for (idx_t i = 2; i < 2 + dynamic_child_count; i++) {
 			column_constraint_value.push_back(process.TakeResult<ColumnConstraintEntry>(i));
 		}
@@ -10687,6 +10716,7 @@ PEGTransformerFactory::FinalizeColumnIdListTrampoline(PEGTransformer &transforme
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<Identifier> col_id;
+	col_id.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		col_id.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -10729,6 +10759,7 @@ PEGTransformerFactory::FinalizeDottedIdentifierTrampoline(PEGTransformer &transf
 	optional<vector<string>> dot_col_label {};
 	if (dynamic_child_count > 0) {
 		vector<string> dot_col_label_value;
+		dot_col_label_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			dot_col_label_value.push_back(process.TakeResult<string>(i));
 		}
@@ -11534,6 +11565,7 @@ PEGTransformerFactory::FinalizeTriggerColumnListTrampoline(PEGTransformer &trans
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<Identifier> col_id;
+	col_id.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		col_id.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -11698,6 +11730,7 @@ PEGTransformerFactory::FinalizeEnumStringLiteralListTrampoline(PEGTransformer &t
 	if (string_literal_opt.HasResult()) {
 		vector<string> string_literal_value;
 		auto string_literal_items = ExtractParseResultsFromList(string_literal_opt.GetResult());
+		string_literal_value.reserve(string_literal_items.size());
 		for (auto &string_literal_item : string_literal_items) {
 			auto string_literal_item_value = TransformStringLiteral(transformer, string_literal_item.get());
 			string_literal_value.push_back(string_literal_item_value);
@@ -11707,6 +11740,7 @@ PEGTransformerFactory::FinalizeEnumStringLiteralListTrampoline(PEGTransformer &t
 	optional<vector<int64_t>> array_bounds {};
 	if (dynamic_child_count > 0) {
 		vector<int64_t> array_bounds_value;
+		array_bounds_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			array_bounds_value.push_back(process.TakeResult<int64_t>(i));
 		}
@@ -12036,6 +12070,7 @@ PEGTransformerFactory::FinalizeDeleteUsingClauseTrampoline(PEGTransformer &trans
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(1));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<TableRef>> table_ref;
+	table_ref.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		table_ref.push_back(process.TakeResult<unique_ptr<TableRef>>(i));
 	}
@@ -12528,6 +12563,7 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDropTableTrampoli
 		if_exists = process.TakeResult<bool>(1);
 	}
 	vector<unique_ptr<BaseTableRef>> base_table_name;
+	base_table_name.reserve(dynamic_child_count);
 	for (idx_t i = 2; i < 2 + dynamic_child_count; i++) {
 		base_table_name.push_back(process.TakeResult<unique_ptr<BaseTableRef>>(i));
 	}
@@ -12565,6 +12601,7 @@ PEGTransformerFactory::FinalizeDropTableFunctionTrampoline(PEGTransformer &trans
 		if_exists = process.TakeResult<bool>(1);
 	}
 	vector<QualifiedName> qualified_table_function;
+	qualified_table_function.reserve(dynamic_child_count);
 	for (idx_t i = 2; i < 2 + dynamic_child_count; i++) {
 		qualified_table_function.push_back(process.TakeResult<QualifiedName>(i));
 	}
@@ -12601,6 +12638,7 @@ PEGTransformerFactory::FinalizeDropFunctionTrampoline(PEGTransformer &transforme
 		if_exists = process.TakeResult<bool>(1);
 	}
 	vector<QualifiedName> function_identifier;
+	function_identifier.reserve(dynamic_child_count);
 	for (idx_t i = 2; i < 2 + dynamic_child_count; i++) {
 		function_identifier.push_back(process.TakeResult<QualifiedName>(i));
 	}
@@ -12635,6 +12673,7 @@ PEGTransformerFactory::FinalizeDropSchemaTrampoline(PEGTransformer &transformer,
 		if_exists = process.TakeResult<bool>(0);
 	}
 	vector<QualifiedName> qualified_name;
+	qualified_name.reserve(dynamic_child_count);
 	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		qualified_name.push_back(process.TakeResult<QualifiedName>(i));
 	}
@@ -12669,6 +12708,7 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDropIndexTrampoli
 		if_exists = process.TakeResult<bool>(0);
 	}
 	vector<QualifiedName> qualified_index_name;
+	qualified_index_name.reserve(dynamic_child_count);
 	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		qualified_index_name.push_back(process.TakeResult<QualifiedName>(i));
 	}
@@ -12775,6 +12815,7 @@ PEGTransformerFactory::FinalizeDropSequenceTrampoline(PEGTransformer &transforme
 		if_exists = process.TakeResult<bool>(0);
 	}
 	vector<QualifiedName> qualified_sequence_name;
+	qualified_sequence_name.reserve(dynamic_child_count);
 	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		qualified_sequence_name.push_back(process.TakeResult<QualifiedName>(i));
 	}
@@ -12810,6 +12851,7 @@ PEGTransformerFactory::FinalizeDropCollationTrampoline(PEGTransformer &transform
 		if_exists = process.TakeResult<bool>(0);
 	}
 	vector<Identifier> collation_name;
+	collation_name.reserve(dynamic_child_count);
 	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		collation_name.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -12844,6 +12886,7 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDropTypeTrampolin
 		if_exists = process.TakeResult<bool>(0);
 	}
 	vector<QualifiedName> qualified_type_name;
+	qualified_type_name.reserve(dynamic_child_count);
 	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		qualified_type_name.push_back(process.TakeResult<QualifiedName>(i));
 	}
@@ -13114,6 +13157,7 @@ PEGTransformerFactory::FinalizeExplainOptionListTrampoline(PEGTransformer &trans
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<GenericCopyOption> explain_option;
+	explain_option.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		explain_option.push_back(process.TakeResult<GenericCopyOption>(i));
 	}
@@ -13327,6 +13371,7 @@ PEGTransformerFactory::FinalizeNestedSchemaTableColumnNameTrampoline(PEGTransfor
 	auto reserved_schema_qualification = process.TakeResult<Identifier>(1);
 	auto reserved_schema_qualification_1 = process.TakeResult<Identifier>(2);
 	vector<Identifier> reserved_schema_qualification_2;
+	reserved_schema_qualification_2.reserve(dynamic_child_count);
 	for (idx_t i = 3; i < 3 + dynamic_child_count; i++) {
 		reserved_schema_qualification_2.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -13532,6 +13577,7 @@ PEGTransformerFactory::FinalizeFunctionArgumentListTrampoline(PEGTransformer &tr
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<FunctionArgument> function_argument;
+	function_argument.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		function_argument.push_back(process.TakeResult<FunctionArgument>(i));
 	}
@@ -13611,6 +13657,7 @@ PEGTransformerFactory::FinalizeCatalogReservedSchemaFunctionNameTrampoline(PEGTr
 	optional<vector<Identifier>> reserved_schema_qualification {};
 	if (dynamic_child_count > 0) {
 		vector<Identifier> reserved_schema_qualification_value;
+		reserved_schema_qualification_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			reserved_schema_qualification_value.push_back(process.TakeResult<Identifier>(i));
 		}
@@ -13825,6 +13872,7 @@ PEGTransformerFactory::FinalizeParenthesisExpressionTrampoline(PEGTransformer &t
 	auto &expression_opt = ExtractResultFromParens(list_pr.GetChild(0)).Cast<OptionalParseResult>();
 	if (expression_opt.HasResult()) {
 		vector<unique_ptr<ParsedExpression>> expression_value;
+		expression_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			expression_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -14051,6 +14099,7 @@ PEGTransformerFactory::FinalizeStarQualifierListTrampoline(PEGTransformer &trans
 	auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
 	auto dynamic_child_count = dynamic_repeat_children.size();
 	vector<string> col_id_dot;
+	col_id_dot.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		col_id_dot.push_back(process.TakeResult<string>(i));
 	}
@@ -14112,6 +14161,7 @@ PEGTransformerFactory::FinalizeExcludeNameListTrampoline(PEGTransformer &transfo
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<QualifiedColumnName> exclude_name;
+	exclude_name.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		exclude_name.push_back(process.TakeResult<QualifiedColumnName>(i));
 	}
@@ -14254,6 +14304,7 @@ PEGTransformerFactory::FinalizeReplaceEntryListTrampoline(PEGTransformer &transf
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<pair<string, unique_ptr<ParsedExpression>>> replace_entry;
+	replace_entry.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		replace_entry.push_back(process.TakeResult<pair<string, unique_ptr<ParsedExpression>>>(i));
 	}
@@ -14332,6 +14383,7 @@ PEGTransformerFactory::FinalizeRenameEntryListTrampoline(PEGTransformer &transfo
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<pair<QualifiedColumnName, string>> rename_entry;
+	rename_entry.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		rename_entry.push_back(process.TakeResult<pair<QualifiedColumnName, string>>(i));
 	}
@@ -14460,6 +14512,7 @@ PEGTransformerFactory::FinalizeCaseExpressionTrampoline(PEGTransformer &transfor
 		expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
 	}
 	vector<CaseCheck> case_when_then;
+	case_when_then.reserve(dynamic_child_count);
 	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		case_when_then.push_back(process.TakeResult<CaseCheck>(i));
 	}
@@ -15118,6 +15171,7 @@ PEGTransformerFactory::FinalizeWindowPartitionTrampoline(PEGTransformer &transfo
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<ParsedExpression>> expression;
+	expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		expression.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -15215,6 +15269,7 @@ PEGTransformerFactory::FinalizeBoundedListExpressionTrampoline(PEGTransformer &t
 	auto &expression_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (expression_opt.HasResult()) {
 		vector<unique_ptr<ParsedExpression>> expression_value;
+		expression_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			expression_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -15257,6 +15312,7 @@ PEGTransformerFactory::FinalizeStructExpressionTrampoline(PEGTransformer &transf
 	auto &struct_field_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (struct_field_opt.HasResult()) {
 		vector<FunctionArgument> struct_field_value;
+		struct_field_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			struct_field_value.push_back(process.TakeResult<FunctionArgument>(i));
 		}
@@ -15330,6 +15386,7 @@ PEGTransformerFactory::FinalizeMapStructExpressionTrampoline(PEGTransformer &tra
 	auto &map_struct_field_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (map_struct_field_opt.HasResult()) {
 		vector<vector<unique_ptr<ParsedExpression>>> map_struct_field_value;
+		map_struct_field_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			map_struct_field_value.push_back(process.TakeResult<vector<unique_ptr<ParsedExpression>>>(i));
 		}
@@ -15391,6 +15448,7 @@ PEGTransformerFactory::FinalizeGroupingExpressionTrampoline(PEGTransformer &tran
 	auto &expression_opt = ExtractResultFromParens(list_pr.GetChild(1)).Cast<OptionalParseResult>();
 	if (expression_opt.HasResult()) {
 		vector<unique_ptr<ParsedExpression>> expression_value;
+		expression_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			expression_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -15576,6 +15634,7 @@ PEGTransformerFactory::FinalizeListComprehensionExpressionTrampoline(PEGTransfor
 	auto dynamic_child_count = dynamic_list_items.size();
 	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
 	vector<Identifier> col_id_or_string;
+	col_id_or_string.reserve(dynamic_child_count);
 	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		col_id_or_string.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -15706,6 +15765,7 @@ PEGTransformerFactory::FinalizeLambdaArrowExpressionTrampoline(PEGTransformer &t
 	optional<vector<unique_ptr<ParsedExpression>>> single_arrow_pair {};
 	if (dynamic_child_count > 0) {
 		vector<unique_ptr<ParsedExpression>> single_arrow_pair_value;
+		single_arrow_pair_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			single_arrow_pair_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -15768,6 +15828,7 @@ PEGTransformerFactory::FinalizeLogicalOrExpressionTrampoline(PEGTransformer &tra
 	optional<vector<unique_ptr<ParsedExpression>>> logical_or_expression_tail {};
 	if (dynamic_child_count > 0) {
 		vector<unique_ptr<ParsedExpression>> logical_or_expression_tail_value;
+		logical_or_expression_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			logical_or_expression_tail_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -15829,6 +15890,7 @@ PEGTransformerFactory::FinalizeColDefOrExprTrampoline(PEGTransformer &transforme
 	optional<vector<unique_ptr<ParsedExpression>>> col_def_or_expression_tail {};
 	if (dynamic_child_count > 0) {
 		vector<unique_ptr<ParsedExpression>> col_def_or_expression_tail_value;
+		col_def_or_expression_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			col_def_or_expression_tail_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -15891,6 +15953,7 @@ PEGTransformerFactory::FinalizeLogicalAndExpressionTrampoline(PEGTransformer &tr
 	optional<vector<unique_ptr<ParsedExpression>>> logical_and_expression_tail {};
 	if (dynamic_child_count > 0) {
 		vector<unique_ptr<ParsedExpression>> logical_and_expression_tail_value;
+		logical_and_expression_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			logical_and_expression_tail_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -15953,6 +16016,7 @@ PEGTransformerFactory::FinalizeColDefAndExprTrampoline(PEGTransformer &transform
 	optional<vector<unique_ptr<ParsedExpression>>> col_def_and_expression_tail {};
 	if (dynamic_child_count > 0) {
 		vector<unique_ptr<ParsedExpression>> col_def_and_expression_tail_value;
+		col_def_and_expression_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			col_def_and_expression_tail_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -16023,6 +16087,7 @@ PEGTransformerFactory::FinalizeNotExpressionTrampoline(PEGTransformer &transform
 	auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
 	auto dynamic_child_count = dynamic_repeat_children.size();
 	vector<bool> not_keyword;
+	not_keyword.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		not_keyword.push_back(process.TakeResult<bool>(i));
 	}
@@ -16103,6 +16168,7 @@ PEGTransformerFactory::FinalizeIsExpressionContinuationTrampoline(PEGTransformer
 	optional<vector<IsExpressionTail>> is_expression_tail {};
 	if (dynamic_child_count > 0) {
 		vector<IsExpressionTail> is_expression_tail_value;
+		is_expression_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			is_expression_tail_value.push_back(process.TakeResult<IsExpressionTail>(i));
 		}
@@ -16384,6 +16450,7 @@ PEGTransformerFactory::FinalizeIsDistinctFromExpressionTrampoline(PEGTransformer
 	optional<vector<IsDistinctFromTail>> is_distinct_from_tail {};
 	if (dynamic_child_count > 0) {
 		vector<IsDistinctFromTail> is_distinct_from_tail_value;
+		is_distinct_from_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			is_distinct_from_tail_value.push_back(process.TakeResult<IsDistinctFromTail>(i));
 		}
@@ -16464,6 +16531,7 @@ PEGTransformerFactory::FinalizeComparisonExpressionTrampoline(PEGTransformer &tr
 	optional<vector<ComparisonExpressionTail>> comparison_expression_tail {};
 	if (dynamic_child_count > 0) {
 		vector<ComparisonExpressionTail> comparison_expression_tail_value;
+		comparison_expression_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			comparison_expression_tail_value.push_back(process.TakeResult<ComparisonExpressionTail>(i));
 		}
@@ -16668,6 +16736,7 @@ PEGTransformerFactory::FinalizeBetweenInLikeExpressionTrampoline(PEGTransformer 
 	optional<vector<BetweenInLikeOperator>> in_predicate {};
 	if (dynamic_child_count > 0) {
 		vector<BetweenInLikeOperator> in_predicate_value;
+		in_predicate_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			in_predicate_value.push_back(process.TakeResult<BetweenInLikeOperator>(i));
 		}
@@ -16720,6 +16789,7 @@ PEGTransformerFactory::FinalizeInPredicateTrampoline(PEGTransformer &transformer
 	optional<vector<unique_ptr<ParsedExpression>>> cast_operator {};
 	if (dynamic_child_count > 0) {
 		vector<unique_ptr<ParsedExpression>> cast_operator_value;
+		cast_operator_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			cast_operator_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -17034,6 +17104,7 @@ PEGTransformerFactory::FinalizeInExpressionListTrampoline(PEGTransformer &transf
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<ParsedExpression>> expression;
+	expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		expression.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -17138,6 +17209,7 @@ PEGTransformerFactory::FinalizeInfixOtherOperatorExpressionTrampoline(PEGTransfo
 	optional<vector<OtherOperatorTail>> other_operator_tail {};
 	if (dynamic_child_count > 0) {
 		vector<OtherOperatorTail> other_operator_tail_value;
+		other_operator_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			other_operator_tail_value.push_back(process.TakeResult<OtherOperatorTail>(i));
 		}
@@ -17397,6 +17469,7 @@ PEGTransformerFactory::FinalizeQualifiedOperatorContentsTrampoline(PEGTransforme
 	optional<vector<string>> col_id_dot {};
 	if (dynamic_child_count > 0) {
 		vector<string> col_id_dot_value;
+		col_id_dot_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			col_id_dot_value.push_back(process.TakeResult<string>(i));
 		}
@@ -17444,6 +17517,7 @@ PEGTransformerFactory::FinalizeBitwiseExpressionTrampoline(PEGTransformer &trans
 	optional<vector<BinaryExpressionTail>> bitwise_expression_tail {};
 	if (dynamic_child_count > 0) {
 		vector<BinaryExpressionTail> bitwise_expression_tail_value;
+		bitwise_expression_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			bitwise_expression_tail_value.push_back(process.TakeResult<BinaryExpressionTail>(i));
 		}
@@ -17523,6 +17597,7 @@ PEGTransformerFactory::FinalizeTildeExpressionTrampoline(PEGTransformer &transfo
 	optional<vector<string>> tilde_prefix_operator {};
 	if (dynamic_child_count > 0) {
 		vector<string> tilde_prefix_operator_value;
+		tilde_prefix_operator_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			tilde_prefix_operator_value.push_back(process.TakeResult<string>(i));
 		}
@@ -17570,6 +17645,7 @@ PEGTransformerFactory::FinalizeAdditiveExpressionTrampoline(PEGTransformer &tran
 	optional<vector<BinaryExpressionTail>> additive_expression_tail {};
 	if (dynamic_child_count > 0) {
 		vector<BinaryExpressionTail> additive_expression_tail_value;
+		additive_expression_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			additive_expression_tail_value.push_back(process.TakeResult<BinaryExpressionTail>(i));
 		}
@@ -17647,6 +17723,7 @@ PEGTransformerFactory::FinalizeMultiplicativeExpressionTrampoline(PEGTransformer
 	optional<vector<BinaryExpressionTail>> multiplicative_expression_tail {};
 	if (dynamic_child_count > 0) {
 		vector<BinaryExpressionTail> multiplicative_expression_tail_value;
+		multiplicative_expression_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			multiplicative_expression_tail_value.push_back(process.TakeResult<BinaryExpressionTail>(i));
 		}
@@ -17724,6 +17801,7 @@ PEGTransformerFactory::FinalizeExponentiationExpressionTrampoline(PEGTransformer
 	optional<vector<BinaryExpressionTail>> exponentiation_expression_tail {};
 	if (dynamic_child_count > 0) {
 		vector<BinaryExpressionTail> exponentiation_expression_tail_value;
+		exponentiation_expression_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			exponentiation_expression_tail_value.push_back(process.TakeResult<BinaryExpressionTail>(i));
 		}
@@ -17802,6 +17880,7 @@ PEGTransformerFactory::FinalizeCollateExpressionTrampoline(PEGTransformer &trans
 	optional<vector<unique_ptr<ParsedExpression>>> collate_expression_tail {};
 	if (dynamic_child_count > 0) {
 		vector<unique_ptr<ParsedExpression>> collate_expression_tail_value;
+		collate_expression_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			collate_expression_tail_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -17864,6 +17943,7 @@ PEGTransformerFactory::FinalizeAtTimeZoneExpressionTrampoline(PEGTransformer &tr
 	optional<vector<unique_ptr<ParsedExpression>>> at_time_zone_expression_tail {};
 	if (dynamic_child_count > 0) {
 		vector<unique_ptr<ParsedExpression>> at_time_zone_expression_tail_value;
+		at_time_zone_expression_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			at_time_zone_expression_tail_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -18013,6 +18093,7 @@ PEGTransformerFactory::FinalizeIndirectionListTrampoline(PEGTransformer &transfo
 	auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
 	auto dynamic_child_count = dynamic_repeat_children.size();
 	vector<unique_ptr<ParsedExpression>> indirection;
+	indirection.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		indirection.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -18209,6 +18290,7 @@ PEGTransformerFactory::FinalizeMethodFunctionArgumentsTrampoline(PEGTransformer 
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<FunctionArgument> function_argument;
+	function_argument.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		function_argument.push_back(process.TakeResult<FunctionArgument>(i));
 	}
@@ -18415,6 +18497,7 @@ PEGTransformerFactory::FinalizeCoalesceExpressionTrampoline(PEGTransformer &tran
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(1)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<ParsedExpression>> expression;
+	expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		expression.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -18529,6 +18612,7 @@ PEGTransformerFactory::FinalizeLambdaExpressionTrampoline(PEGTransformer &transf
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(1));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<Identifier> col_id_or_string;
+	col_id_or_string.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		col_id_or_string.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -18636,6 +18720,7 @@ PEGTransformerFactory::FinalizeRowExpressionTrampoline(PEGTransformer &transform
 	auto &expression_opt = ExtractResultFromParens(list_pr.GetChild(1)).Cast<OptionalParseResult>();
 	if (expression_opt.HasResult()) {
 		vector<unique_ptr<ParsedExpression>> expression_value;
+		expression_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			expression_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -18702,6 +18787,7 @@ PEGTransformerFactory::FinalizeSubstringExpressionListTrampoline(PEGTransformer 
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<ParsedExpression>> expression;
+	expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		expression.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -18836,6 +18922,7 @@ PEGTransformerFactory::FinalizeTrimArgumentsTrampoline(PEGTransformer &transform
 		trim_source = process.TakeResult<unique_ptr<ParsedExpression>>(1);
 	}
 	vector<unique_ptr<ParsedExpression>> expression;
+	expression.reserve(dynamic_child_count);
 	for (idx_t i = 2; i < 2 + dynamic_child_count; i++) {
 		expression.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -19053,6 +19140,7 @@ PEGTransformerFactory::FinalizeOverlayExpressionListTrampoline(PEGTransformer &t
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<ParsedExpression>> expression;
+	expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		expression.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -19645,6 +19733,7 @@ PEGTransformerFactory::FinalizeColumnListTrampoline(PEGTransformer &transformer,
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<Identifier> col_id;
+	col_id.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		col_id.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -19985,6 +20074,7 @@ PEGTransformerFactory::FinalizeUpdateExtensionsStatementTrampoline(PEGTransforme
 	if (identifier_opt.HasResult()) {
 		vector<Identifier> identifier_value;
 		auto identifier_items = ExtractParseResultsFromList(ExtractResultFromParens(identifier_opt.GetResult()));
+		identifier_value.reserve(identifier_items.size());
 		for (auto &identifier_item : identifier_items) {
 			auto identifier_item_value = identifier_item.get().Cast<IdentifierParseResult>().identifier;
 			identifier_value.push_back(identifier_item_value);
@@ -20153,6 +20243,7 @@ PEGTransformerFactory::FinalizeRepositoryPublicKeyTrampoline(PEGTransformer &tra
 	has_result = has_result_opt.HasResult();
 	vector<string> string_literal;
 	auto string_literal_items = ExtractParseResultsFromList(list_pr.GetChild(3));
+	string_literal.reserve(string_literal_items.size());
 	for (auto &string_literal_item : string_literal_items) {
 		auto string_literal_value = TransformStringLiteral(transformer, string_literal_item.get());
 		string_literal.push_back(string_literal_value);
@@ -20225,6 +20316,7 @@ PEGTransformerFactory::FinalizeMergeIntoStatementTrampoline(PEGTransformer &tran
 	auto merge_into_using_clause = process.TakeResult<unique_ptr<TableRef>>(2);
 	auto join_qualifier = process.TakeResult<JoinQualifier>(3);
 	vector<pair<MergeActionCondition, unique_ptr<MergeIntoAction>>> merge_match;
+	merge_match.reserve(dynamic_child_count);
 	for (idx_t i = 4; i < 4 + dynamic_child_count; i++) {
 		merge_match.push_back(process.TakeResult<pair<MergeActionCondition, unique_ptr<MergeIntoAction>>>(i));
 	}
@@ -20512,6 +20604,7 @@ PEGTransformerFactory::FinalizeInsertValuesListTrampoline(PEGTransformer &transf
 		insert_column_list = process.TakeResult<vector<string>>(0);
 	}
 	vector<unique_ptr<ParsedExpression>> expression;
+	expression.reserve(dynamic_child_count);
 	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		expression.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -20732,6 +20825,7 @@ PEGTransformerFactory::FinalizePivotColumnListTrampoline(PEGTransformer &transfo
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<PivotColumn> pivot_column_entry;
+	pivot_column_entry.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		pivot_column_entry.push_back(process.TakeResult<PivotColumn>(i));
 	}
@@ -20853,6 +20947,7 @@ PEGTransformerFactory::FinalizeParenthesizedNameListTrampoline(PEGTransformer &t
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<Identifier> col_id_or_string;
+	col_id_or_string.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		col_id_or_string.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -20879,6 +20974,7 @@ PEGTransformerFactory::FinalizeBareNameListTrampoline(PEGTransformer &transforme
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<Identifier> col_id_or_string;
+	col_id_or_string.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		col_id_or_string.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -20985,6 +21081,7 @@ PEGTransformerFactory::FinalizeUnpivotHeaderListTrampoline(PEGTransformer &trans
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<Identifier> col_id_or_string;
+	col_id_or_string.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		col_id_or_string.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -21088,6 +21185,7 @@ PEGTransformerFactory::FinalizePragmaParametersTrampoline(PEGTransformer &transf
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<ParsedExpression>> expression;
+	expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		expression.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -21138,6 +21236,7 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTypeListTrampolin
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<LogicalType> type;
+	type.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		type.push_back(process.TakeResult<LogicalType>(i));
 	}
@@ -21197,6 +21296,7 @@ PEGTransformerFactory::FinalizeSelectSetOpChainTrampoline(PEGTransformer &transf
 	optional<vector<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>>> select_set_op_chain_tail {};
 	if (dynamic_child_count > 0) {
 		vector<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>> select_set_op_chain_tail_value;
+		select_set_op_chain_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			select_set_op_chain_tail_value.push_back(
 			    process.TakeResult<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>>(i));
@@ -21262,6 +21362,7 @@ PEGTransformerFactory::FinalizeIntersectChainTrampoline(PEGTransformer &transfor
 	optional<vector<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>>> intersect_chain_tail {};
 	if (dynamic_child_count > 0) {
 		vector<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>> intersect_chain_tail_value;
+		intersect_chain_tail_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			intersect_chain_tail_value.push_back(
 			    process.TakeResult<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>>(i));
@@ -21868,6 +21969,7 @@ PEGTransformerFactory::FinalizeTargetListTrampoline(PEGTransformer &transformer,
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<ParsedExpression>> aliased_expression;
+	aliased_expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		aliased_expression.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -21895,6 +21997,7 @@ PEGTransformerFactory::FinalizeColumnAliasesTrampoline(PEGTransformer &transform
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<Identifier> col_id_or_string;
+	col_id_or_string.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		col_id_or_string.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -21975,6 +22078,7 @@ PEGTransformerFactory::FinalizeDistinctOnTargetsTrampoline(PEGTransformer &trans
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(1)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<ParsedExpression>> expression;
+	expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		expression.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -22272,6 +22376,7 @@ PEGTransformerFactory::FinalizeTablePivotClauseBodyTrampoline(PEGTransformer &tr
 	auto dynamic_child_count = dynamic_repeat_children.size();
 	auto target_list = process.TakeResult<vector<unique_ptr<ParsedExpression>>>(0);
 	vector<PivotColumn> pivot_value_list;
+	pivot_value_list.reserve(dynamic_child_count);
 	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		pivot_value_list.push_back(process.TakeResult<PivotColumn>(i));
 	}
@@ -22359,6 +22464,7 @@ PEGTransformerFactory::FinalizeTableUnpivotClauseBodyTrampoline(PEGTransformer &
 	auto dynamic_child_count = dynamic_repeat_children.size();
 	auto unpivot_header = process.TakeResult<vector<string>>(0);
 	vector<PivotColumn> unpivot_value_list;
+	unpivot_value_list.reserve(dynamic_child_count);
 	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		unpivot_value_list.push_back(process.TakeResult<PivotColumn>(i));
 	}
@@ -22605,6 +22711,7 @@ PEGTransformerFactory::FinalizeCatalogReservedSchemaTableTrampoline(PEGTransform
 	auto dynamic_child_count = dynamic_repeat_children.size();
 	auto catalog_qualification = process.TakeResult<Identifier>(0);
 	vector<Identifier> reserved_schema_qualification;
+	reserved_schema_qualification.reserve(dynamic_child_count);
 	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		reserved_schema_qualification.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -22779,6 +22886,7 @@ PEGTransformerFactory::FinalizeQualifiedTableFunctionTrampoline(PEGTransformer &
 	optional<vector<Identifier>> schema_qualification {};
 	if (dynamic_child_count > 0) {
 		vector<Identifier> schema_qualification_value;
+		schema_qualification_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			schema_qualification_value.push_back(process.TakeResult<Identifier>(i));
 		}
@@ -22823,6 +22931,7 @@ PEGTransformerFactory::FinalizeTableFunctionArgumentsTrampoline(PEGTransformer &
 	auto &function_argument_opt = ExtractResultFromParens(list_pr.GetChild(0)).Cast<OptionalParseResult>();
 	if (function_argument_opt.HasResult()) {
 		vector<FunctionArgument> function_argument_value;
+		function_argument_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			function_argument_value.push_back(process.TakeResult<FunctionArgument>(i));
 		}
@@ -23569,6 +23678,7 @@ PEGTransformerFactory::FinalizeUsingClauseTrampoline(PEGTransformer &transformer
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(1)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<Identifier> using_column_name;
+	using_column_name.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		using_column_name.push_back(process.TakeResult<Identifier>(i));
 	}
@@ -23798,6 +23908,7 @@ PEGTransformerFactory::FinalizeFromClauseTrampoline(PEGTransformer &transformer,
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(1));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<TableRef>> table_ref;
+	table_ref.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		table_ref.push_back(process.TakeResult<unique_ptr<TableRef>>(i));
 	}
@@ -23911,6 +24022,7 @@ PEGTransformerFactory::FinalizeWindowClauseTrampoline(PEGTransformer &transforme
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(1));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<ParsedExpression>> window_definition;
+	window_definition.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		window_definition.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -24202,6 +24314,7 @@ PEGTransformerFactory::FinalizeGroupByListTrampoline(PEGTransformer &transformer
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<GroupByExpressionInfo> group_by_expression;
+	group_by_expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		group_by_expression.push_back(process.TakeResult<GroupByExpressionInfo>(i));
 	}
@@ -24292,6 +24405,7 @@ PEGTransformerFactory::FinalizeCubeOrRollupClauseTrampoline(PEGTransformer &tran
 	auto &expression_opt = ExtractResultFromParens(list_pr.GetChild(1)).Cast<OptionalParseResult>();
 	if (expression_opt.HasResult()) {
 		vector<unique_ptr<ParsedExpression>> expression_value;
+		expression_value.reserve(dynamic_child_count);
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 			expression_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 		}
@@ -24385,6 +24499,7 @@ PEGTransformerFactory::FinalizeGroupingSetsClauseTrampoline(PEGTransformer &tran
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(2)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<GroupByExpressionInfo> group_by_expression;
+	group_by_expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		group_by_expression.push_back(process.TakeResult<GroupByExpressionInfo>(i));
 	}
@@ -24584,6 +24699,7 @@ PEGTransformerFactory::FinalizeOrderByExpressionListTrampoline(PEGTransformer &t
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<OrderByNode> order_by_expression;
+	order_by_expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		order_by_expression.push_back(process.TakeResult<OrderByNode>(i));
 	}
@@ -24885,6 +25001,7 @@ PEGTransformerFactory::FinalizeValuesClauseTrampoline(PEGTransformer &transforme
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(1));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<vector<unique_ptr<ParsedExpression>>> values_expressions;
+	values_expressions.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		values_expressions.push_back(process.TakeResult<vector<unique_ptr<ParsedExpression>>>(i));
 	}
@@ -24912,6 +25029,7 @@ PEGTransformerFactory::FinalizeValuesExpressionsTrampoline(PEGTransformer &trans
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<ParsedExpression>> expression;
+	expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		expression.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -25279,6 +25397,7 @@ PEGTransformerFactory::FinalizeVariableListTrampoline(PEGTransformer &transforme
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<ParsedExpression>> expression;
+	expression.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		expression.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
@@ -25568,6 +25687,7 @@ PEGTransformerFactory::FinalizeUpdateSetClauseListTrampoline(PEGTransformer &tra
 	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<unique_ptr<UpdateSetInfo>> update_set_clause;
+	update_set_clause.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		update_set_clause.push_back(process.TakeResult<unique_ptr<UpdateSetInfo>>(i));
 	}
@@ -25609,6 +25729,7 @@ PEGTransformerFactory::FinalizeUpdateSetTupleTrampoline(PEGTransformer &transfor
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	vector<Identifier> column_name;
 	auto column_name_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	column_name.reserve(column_name_items.size());
 	for (auto &column_name_item : column_name_items) {
 		column_name.push_back(column_name_item.get().Cast<IdentifierParseResult>().identifier);
 	}
@@ -25669,6 +25790,7 @@ PEGTransformerFactory::FinalizeUpdateSetColumnTargetTrampoline(PEGTransformer &t
 	optional<vector<Identifier>> dot_identifier {};
 	if (dynamic_child_count > 0) {
 		vector<Identifier> dot_identifier_value;
+		dot_identifier_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			dot_identifier_value.push_back(process.TakeResult<Identifier>(i));
 		}
@@ -25838,6 +25960,7 @@ PEGTransformerFactory::FinalizeUseTargetCatalogSchemaTrampoline(PEGTransformer &
 	optional<vector<Identifier>> dot_identifier {};
 	if (dynamic_child_count > 0) {
 		vector<Identifier> dot_identifier_value;
+		dot_identifier_value.reserve(dynamic_child_count);
 		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			dot_identifier_value.push_back(process.TakeResult<Identifier>(i));
 		}
@@ -25931,6 +26054,7 @@ PEGTransformerFactory::FinalizeVacuumParensOptionsTrampoline(PEGTransformer &tra
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<string> vacuum_option;
+	vacuum_option.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		vacuum_option.push_back(process.TakeResult<string>(i));
 	}
@@ -26090,6 +26214,7 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeNameListTrampolin
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	vector<Identifier> col_id_or_string;
+	col_id_or_string.reserve(dynamic_child_count);
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		col_id_or_string.push_back(process.TakeResult<Identifier>(i));
 	}
