@@ -1511,7 +1511,11 @@ void ProgressBarTimeSetting::SetLocal(ClientContext &context, const Value &input
 	}
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
-	config.wait_time = input.GetValue<int32_t>();
+	auto wait_time = input.GetValue<int32_t>();
+	if (wait_time < 0) {
+		throw InvalidInputException("%s setting cannot be negative", ProgressBarTimeSetting::Name);
+	}
+	config.wait_time = wait_time;
 	config.enable_progress_bar = true;
 }
 
