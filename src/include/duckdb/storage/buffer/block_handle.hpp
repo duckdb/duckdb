@@ -74,19 +74,27 @@ public:
 	}
 	//! Returns the number of readers.
 	int32_t GetReaders() const {
-		return readers;
+		return readers.load(std::memory_order_relaxed);
 	}
 	//! Increments the number of readers prior to returning it.
-	int32_t IncrementReaders() {
-		return ++readers;
+	int32_t IncrementReaders(BlockLock &l) {
+		VerifyMutex(l);
+		// Tiny buffers do not decrement on unpin, so their reader count can wrap.
+		auto new_readers = static_cast<int32_t>(static_cast<uint32_t>(readers.load(std::memory_order_relaxed)) + 1);
+		readers.store(new_readers, std::memory_order_relaxed);
+		return new_readers;
 	}
 	//! Decrements the number of readers prior to returning it.
-	int32_t DecrementReaders() {
-		return --readers;
+	int32_t DecrementReaders(BlockLock &l) {
+		VerifyMutex(l);
+		auto new_readers = static_cast<int32_t>(static_cast<uint32_t>(readers.load(std::memory_order_relaxed)) - 1);
+		readers.store(new_readers, std::memory_order_relaxed);
+		return new_readers;
 	}
 	//! Sets the number of readers.
-	void SetReaders(int32_t n) {
-		readers = n;
+	void SetReaders(BlockLock &l, int32_t n) {
+		VerifyMutex(l);
+		readers.store(n, std::memory_order_relaxed);
 	}
 	//! Returns the memory tag.
 	MemoryTag GetMemoryTag() const {
@@ -111,11 +119,15 @@ public:
 	}
 	//! Returns the eviction sequence number.
 	idx_t GetEvictionSequenceNumber() const {
-		return eviction_seq_num;
+		return eviction_seq_num.load(std::memory_order_acquire);
 	}
 	//! Increments the eviction sequence number prior to returning it.
-	idx_t NextEvictionSequenceNumber() {
-		return ++eviction_seq_num;
+	idx_t NextEvictionSequenceNumber(BlockLock &l) {
+		VerifyMutex(l);
+		auto new_sequence_number = eviction_seq_num.load(std::memory_order_relaxed) + 1;
+		// Publish preceding dead-node accounting to lock-free queue readers.
+		eviction_seq_num.store(new_sequence_number, std::memory_order_release);
+		return new_sequence_number;
 	}
 	//! Returns true, if the block has a live (not yet dead-counted) entry in the eviction queue.
 	bool HasLiveQueueEntry(BlockLock &l) const {
@@ -186,14 +198,6 @@ public:
 		VerifyMutex(l);
 		memory_charge.Merge(std::move(reservation));
 	}
-	//! Returns true, if there is a swizzled memory pointer, else false.
-	bool IsSwizzled() const {
-		return !unswizzled;
-	}
-	//! Sets the swizzled memory pointer.
-	void SetSwizzling(const char *unswizzler) {
-		unswizzled = unswizzler;
-	}
 	//! Sets the eviction queue index.
 	void SetEvictionQueueIndex(const idx_t index) {
 		// The index can only be set once.
@@ -227,7 +231,7 @@ private:
 	mutex lock;
 	//! Whether the block is loaded or unloaded.
 	atomic<BlockState> state;
-	//! The number of concurrent readers.
+	//! The number of concurrent readers. Writers hold the block lock; reads may be unlocked.
 	atomic<int32_t> readers;
 	//! The memory tag.
 	const MemoryTag tag;
@@ -236,7 +240,7 @@ private:
 	//! A pointer to the loaded data, if any.
 	unique_ptr<FileBuffer> buffer;
 	//! The internal eviction sequence number. Monotonic: it is never reset, so an eviction queue
-	//! entry is stale if and only if its sequence number differs from this one.
+	//! entry is stale if and only if its sequence number differs from this one. Writers hold the block lock.
 	atomic<idx_t> eviction_seq_num;
 	//! Whether the block has a live entry in the eviction queue, i.e., an entry whose sequence
 	//! number matches eviction_seq_num and which has not been counted as a dead node.
@@ -251,8 +255,6 @@ private:
 	atomic<idx_t> memory_usage;
 	//! The current memory reservation/usage.
 	BufferPoolReservation memory_charge;
-	//! Swizzled memory pointers.
-	const char *unswizzled;
 	//! The eviction queue index, currently only FileBufferType::MANAGED_BUFFER.
 	atomic<idx_t> eviction_queue_idx;
 };
@@ -303,7 +305,7 @@ public:
 public:
 	BufferHandle LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer,
 	                            BufferPoolReservation reservation);
-	BufferHandle Load(QueryContext context, unique_ptr<FileBuffer> buffer = nullptr);
+	BufferHandle Load(BlockLock &l, QueryContext context, unique_ptr<FileBuffer> buffer = nullptr);
 
 private:
 	//! The block manager, which loads the block.

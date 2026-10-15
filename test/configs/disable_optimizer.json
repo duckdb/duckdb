@@ -12,6 +12,12 @@
       ]
     },
     {
+      "reason": "The error depends on the optimizer folding the cast of the constant",
+      "paths": [
+        "test/sql/cast/string_to_map_null_keys.test"
+      ]
+    },
+    {
       "reason": "Requires the join order optimizer to enforce debug_force_no_cross_product.",
       "paths": [
         "test/optimizer/joins/required_cross_product_activation.test"
@@ -33,6 +39,19 @@
         "test/sql/copy/parquet/parquet_expression_filter_pruning.test",
         "test/sql/copy/parquet/parquet_virtual_file_row_group_number.test",
         "test/sql/storage/prefetch/async_native_scan_read_ahead_pruning.test"
+      ]
+    },
+    {
+      "reason": "Fetching only the selected rows requires filter pushdown from optimizer.",
+      "paths": [
+        "test/sql/storage/overflow_strings/blob_row_fetch.test"
+      ]
+    },
+    {
+      "reason": "Value-returning DISTINCT collation handling requires the multi-stage aggregate rewrite.",
+      "paths": [
+        "test/sql/collate/collate_distinct_aggregate.test",
+        "test/sql/collate/collate_distinct_aggregate_icu.test"
       ]
     },
     {
@@ -93,6 +112,14 @@
       "reason": "Calibrates exact memory-fit boundaries that shift when the optimizer is disabled.",
       "paths": [
         "test/sql/copy/parquet/parquet_prefetch_tracked_memory.test"
+      ]
+    },
+    {
+      "reason": "Parquet prefetch strategies and I/O metrics require optimizer rewrites.",
+      "paths": [
+        "test/sql/copy/parquet/parquet_prefetch_first_group_cost.test",
+        "test/sql/copy/parquet/parquet_prefetch_overlapping_ranges.test",
+        "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test"
       ]
     },
     {
@@ -157,6 +184,7 @@
         "test/sql/sql_export/explain_sql_roundtrip.test",
         "test/sql/sql_export/correlated_metadata.test",
         "test/sql/sql_export/cte_result_matrices.test",
+        "test/sql/sql_export/plan_reconstruction_coverage.test",
         "test/sql/sql_export/recursive_payload_results.test"
       ]
     },

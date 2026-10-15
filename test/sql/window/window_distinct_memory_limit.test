@@ -2,13 +2,18 @@
 # description: Window merge sort trees and aggregate states are tracked by the buffer manager
 # group: [window]
 
-statement ok
-PRAGMA memory_limit='200MB'
+foreach threads 1 4
 
-# the DISTINCT aggregate builds two merge sort trees and one aggregate state per tree node for 3M rows,
-# which is several hundred MB and does not fit in the limit
+statement ok
+SET threads={threads}
+
+statement ok
+PRAGMA memory_limit='64MB'
+
+# the DISTINCT aggregate builds two merge sort trees and one aggregate state per tree node,
+# which does not fit in the limit
 statement error
-SELECT sum(c) FROM (SELECT count(DISTINCT i % 1000) OVER (ORDER BY i ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) c FROM range(3000000) t(i))
+SELECT sum(c) FROM (SELECT count(DISTINCT i % 1000) OVER (ORDER BY i ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) c FROM range(1000000) t(i))
 ----
 Out of Memory
 
@@ -17,3 +22,5 @@ query I
 SELECT sum(c) FROM (SELECT count(DISTINCT i % 1000) OVER (ORDER BY i ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) c FROM range(30000) t(i))
 ----
 3024950
+
+endloop

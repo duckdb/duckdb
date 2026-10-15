@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/main/http/http_util.hpp"
+#include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -362,14 +363,19 @@ LogicalType MetricsLogType::GetLogType() {
 	child_list_t<LogicalType> child_list = {
 	    {"metric", LogicalType::VARCHAR},
 	    {"value", LogicalType::VARCHAR},
+	    {"start_time", LogicalType::TIMESTAMP_TZ},
+	    {"end_time", LogicalType::TIMESTAMP_TZ},
 	};
 	return LogicalType::STRUCT(child_list);
 }
 
-string MetricsLogType::ConstructLogMessage(const string &metric, const Value &value) {
+string MetricsLogType::ConstructLogMessage(const string &metric, const Value &value,
+                                           optional_ptr<const MetricTiming> timing) {
 	child_list_t<Value> child_list = {
 	    {"metric", metric},
 	    {"value", value.ToString()},
+	    {"start_time", timing && timing->has_bounds ? Value::TIMESTAMP(timing->start_time) : Value()},
+	    {"end_time", timing && timing->has_bounds ? Value::TIMESTAMP(timing->end_time) : Value()},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }

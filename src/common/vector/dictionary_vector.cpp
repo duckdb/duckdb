@@ -183,14 +183,12 @@ const Vector &DictionaryVector::GetCachedHashes(const Vector &input) {
 	D_ASSERT(CanCacheHashes(input));
 
 	const auto &entry = input.Buffer().Cast<DictionaryBuffer>().GetEntry();
-	lock_guard<mutex> guard(entry.cached_hashes_lock);
-
-	if (!entry.cached_hashes) {
-		// Uninitialized: hash the dictionary
+	CallOnce(entry.cached_hashes_once, [&] {
 		const auto dictionary_size = DictionarySize(input).GetIndex();
-		entry.cached_hashes = make_uniq<Vector>(LogicalType::HASH, dictionary_size);
-		VectorOperations::Hash(entry.data, *entry.cached_hashes);
-	}
+		auto hashes = make_uniq<Vector>(LogicalType::HASH, dictionary_size);
+		VectorOperations::Hash(entry.data, *hashes);
+		entry.cached_hashes = std::move(hashes);
+	});
 	return *entry.cached_hashes;
 }
 

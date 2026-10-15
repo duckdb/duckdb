@@ -1,4 +1,6 @@
 #include "catch.hpp"
+#include <atomic>
+#include <thread>
 #include <type_traits>
 #include "test_helpers.hpp"
 
@@ -726,6 +728,142 @@ TEST_CASE("Overriding a transform opts its rule out of collapsing", "[api][gramm
 	result = collapsible_con.Query("SELECT 1 + 1");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(7));
+}
+
+TEST_CASE("Connections share the grammar compiled for the same active grammar extensions", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	GrammarExtension::Register(*db.instance, make_shared_ptr<OverrideAdditiveExpressionTransform>("seven", false));
+	GrammarExtension::Register(*db.instance,
+	                           make_shared_ptr<OverrideAdditiveExpressionTransform>("collapsible_seven", true));
+	Connection con(db);
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['seven', 'collapsible_seven']"));
+	auto grammar = CompiledGrammar::Get(*con.context);
+
+	// the names of grammar extensions are case insensitive
+	Connection same_con(db);
+	REQUIRE_NO_FAIL(*same_con.Query("SET active_grammar_extensions = ['SEVEN', 'collapsible_seven']"));
+	REQUIRE(CompiledGrammar::Get(*same_con.context) == grammar);
+
+	// the order of the grammar extensions determines the grammar: the last transform override wins
+	Connection reversed_con(db);
+	REQUIRE_NO_FAIL(*reversed_con.Query("SET active_grammar_extensions = ['collapsible_seven', 'seven']"));
+	REQUIRE(CompiledGrammar::Get(*reversed_con.context) != grammar);
+	auto result = con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(1));
+	result = reversed_con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(7));
+
+	Connection subset_con(db);
+	REQUIRE_NO_FAIL(*subset_con.Query("SET active_grammar_extensions = ['seven']"));
+	REQUIRE(CompiledGrammar::Get(*subset_con.context) != grammar);
+	REQUIRE(CompiledGrammar::Get(*subset_con.context) != CompiledGrammar::Get(*reversed_con.context));
+}
+
+//! Replaces the transform of AdditiveExpression like OverrideAdditiveExpressionTransform, and counts how often a
+//! grammar is compiled with it
+class CountingSevenGrammarExtension final : public GrammarExtension {
+public:
+	CountingSevenGrammarExtension(const string &name, std::atomic<idx_t> &compilations_p)
+	    : GrammarExtension(name, "CountingSevenGrammarExtension"), compilations(compilations_p) {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		compilations++;
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::SetTransformProcess("AdditiveExpression", StartConstantSevenTransform, false));
+		return changes;
+	}
+
+private:
+	std::atomic<idx_t> &compilations;
+};
+
+static void RequireSeven(Connection &con) {
+	auto result = con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(7));
+}
+
+TEST_CASE("Grammars for active grammar extensions are compiled once and outlive the connections that set them",
+          "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	std::atomic<idx_t> compilations(0);
+	GrammarExtension::Register(*db.instance, make_shared_ptr<CountingSevenGrammarExtension>("counted", compilations));
+
+	// connections that set the same extensions concurrently compile the grammar once
+	const idx_t thread_count = 8;
+	vector<shared_ptr<CompiledGrammar>> grammars(thread_count);
+	vector<uint8_t> succeeded(thread_count, 0);
+	vector<std::thread> threads;
+	for (idx_t i = 0; i < thread_count; i++) {
+		threads.emplace_back([&, i]() {
+			Connection con(db);
+			auto set_result = con.Query("SET active_grammar_extensions = ['counted']");
+			auto result = con.Query("SELECT 1");
+			succeeded[i] = !set_result->HasError() && !result->HasError() &&
+			               result->Collection().GetValue(0, 0) == Value::INTEGER(7);
+			grammars[i] = CompiledGrammar::Get(*con.context);
+		});
+	}
+	for (auto &thread : threads) {
+		thread.join();
+	}
+	REQUIRE(compilations == 1);
+	for (idx_t i = 0; i < thread_count; i++) {
+		REQUIRE(succeeded[i]);
+		REQUIRE(grammars[i] == grammars[0]);
+	}
+
+	// setting the extensions again after a RESET uses the cached grammar
+	Connection con(db);
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['counted']"));
+	REQUIRE(CompiledGrammar::Get(*con.context) == grammars[0]);
+	REQUIRE_NO_FAIL(*con.Query("RESET active_grammar_extensions"));
+	REQUIRE(CompiledGrammar::Get(*con.context) != grammars[0]);
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['counted']"));
+	REQUIRE(CompiledGrammar::Get(*con.context) == grammars[0]);
+	REQUIRE(compilations == 1);
+
+	// the grammar stays usable for a connection after the connection that compiled it is gone
+	auto other_con = make_uniq<Connection>(db);
+	Connection shared_con(db);
+	REQUIRE_NO_FAIL(*other_con->Query("SET active_grammar_extensions = ['counted']"));
+	REQUIRE_NO_FAIL(*shared_con.Query("SET active_grammar_extensions = ['counted']"));
+	other_con.reset();
+	REQUIRE_NO_FAIL(*con.Query("RESET active_grammar_extensions"));
+	RequireSeven(shared_con);
+	REQUIRE(compilations == 1);
+}
+
+TEST_CASE("The least recently used grammar for active grammar extensions is evicted", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	std::atomic<idx_t> compilations(0);
+	const idx_t extension_count = ParserCache::MAX_CACHED_EXTENSION_MATCHERS + 1;
+	for (idx_t i = 0; i < extension_count; i++) {
+		GrammarExtension::Register(
+		    *db.instance, make_shared_ptr<CountingSevenGrammarExtension>("counted_" + to_string(i), compilations));
+	}
+	auto set_extension = [&](idx_t i) {
+		Connection con(db);
+		REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['counted_" + to_string(i) + "']"));
+		RequireSeven(con);
+		return CompiledGrammar::Get(*con.context);
+	};
+	auto first = set_extension(0);
+	for (idx_t i = 1; i < ParserCache::MAX_CACHED_EXTENSION_MATCHERS; i++) {
+		set_extension(i);
+	}
+	REQUIRE(compilations == ParserCache::MAX_CACHED_EXTENSION_MATCHERS);
+	// using the first grammar again makes it the most recently used one, so adding another evicts the second
+	REQUIRE(set_extension(0) == first);
+	set_extension(ParserCache::MAX_CACHED_EXTENSION_MATCHERS);
+	REQUIRE(compilations == ParserCache::MAX_CACHED_EXTENSION_MATCHERS + 1);
+	REQUIRE(set_extension(0) == first);
+	REQUIRE(compilations == ParserCache::MAX_CACHED_EXTENSION_MATCHERS + 1);
+	set_extension(1);
+	REQUIRE(compilations == ParserCache::MAX_CACHED_EXTENSION_MATCHERS + 2);
 }
 
 struct MatchProcessLifetimeState {
@@ -1522,13 +1660,9 @@ TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extensi
 	REQUIRE_NOTHROW(parser.ParseQuery("ANSWER"));
 	REQUIRE(parser.statements.size() == 1);
 
+	// Without the extension, a bare ANSWER is not a statement.
 	auto base_parser = Parser::GetBuiltinParser();
-	REQUIRE_NOTHROW(base_parser.ParseQuery("ANSWER"));
-	REQUIRE(base_parser.statements.size() == 1);
-	auto &base_select = base_parser.statements[0]->Cast<SelectStatement>().node->Cast<SelectNode>();
-	// Without the extension, ANSWER is a table name in a FROM-first query.
-	REQUIRE(base_select.select_list[0]->GetExpressionClass() == ExpressionClass::STAR);
-	REQUIRE(base_select.from_table->type == TableReferenceType::BASE_TABLE);
+	REQUIRE_THROWS(base_parser.ParseQuery("ANSWER"));
 }
 
 class AddInvalidGrammarExtensionTestRule final : public GrammarExtension {
@@ -1554,4 +1688,87 @@ TEST_CASE("Invalid Grammar extensions fail grammar compilation", "[api][grammar_
 	CheckGrammarExtensionTestSyntax(con);
 	auto setting = con.Query("SELECT current_setting('active_grammar_extensions')")->Collection().GetValue(0, 0);
 	REQUIRE(ListValue::GetChildren(setting).size() == 2);
+}
+
+TEST_CASE("Grammar extensions that fail to compile do not evict cached grammars", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	std::atomic<idx_t> compilations(0);
+	for (idx_t i = 0; i < ParserCache::MAX_CACHED_EXTENSION_MATCHERS; i++) {
+		GrammarExtension::Register(
+		    *db.instance, make_shared_ptr<CountingSevenGrammarExtension>("counted_" + to_string(i), compilations));
+	}
+	GrammarExtension::Register(*db.instance, make_shared_ptr<AddInvalidGrammarExtensionTestRule>());
+	for (idx_t i = 0; i < ParserCache::MAX_CACHED_EXTENSION_MATCHERS; i++) {
+		Connection con(db);
+		REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['counted_" + to_string(i) + "']"));
+	}
+	REQUIRE(compilations == ParserCache::MAX_CACHED_EXTENSION_MATCHERS);
+
+	// the cache is full, but the least recently used grammar stays cached when compiling a new one fails
+	Connection invalid_con(db);
+	REQUIRE_FAIL(invalid_con.Query("SET active_grammar_extensions = ['invalid_grammar_extension']"));
+	Connection con(db);
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['counted_0']"));
+	RequireSeven(con);
+	REQUIRE(compilations == ParserCache::MAX_CACHED_EXTENSION_MATCHERS);
+}
+
+class SuppressSuggestionsTestStatement final : public GrammarExtension {
+public:
+	explicit SuppressSuggestionsTestStatement(bool suppress_suggestions)
+	    : GrammarExtension(suppress_suggestions ? "suppressed_test_statement" : "suggested_test_statement",
+	                       "Grammar extension test statement"),
+	      suppress_suggestions(suppress_suggestions) {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddRule("GrammarExtensionTestStatement <- 'GRAMMAREXTENSIONTESTKEYWORD'",
+		                                         nullptr, suppress_suggestions));
+		changes.push_back(GrammarChange::AddChoice("Statement", "GrammarExtensionTestStatement"));
+		return changes;
+	}
+
+private:
+	bool suppress_suggestions;
+};
+
+static vector<string> GetStatementSuggestions(ClientContext &context) {
+	auto compiled_grammar = CompiledGrammar::Get(context);
+	vector<MatcherToken> tokens {MatcherToken("", 0, TokenType::END_OF_INPUT_AUTOCOMPLETE)};
+	TokenIterator token_iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator parse_allocator;
+	idx_t max_token_index = 0;
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext match_context(suggestions, parse_allocator, process_allocator, max_token_index,
+	                           MatchMode::RECOGNIZE_ONLY, IdentifierCaseMode::PRESERVE_CASE);
+	MatchState state(token_iterator, match_context);
+	compiled_grammar->ProgramMatcher().MatchParseResult(state);
+	vector<string> result;
+	for (auto &suggestion : suggestions) {
+		result.push_back(StringUtil::Upper(suggestion.keyword.candidate));
+	}
+	return result;
+}
+
+static bool HasSuggestion(const vector<string> &suggestions, const string &keyword) {
+	return std::find(suggestions.begin(), suggestions.end(), keyword) != suggestions.end();
+}
+
+TEST_CASE("Grammar extension rules can suppress autocomplete suggestions", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	GrammarExtension::Register(*db.instance, make_shared_ptr<SuppressSuggestionsTestStatement>(false));
+	GrammarExtension::Register(*db.instance, make_shared_ptr<SuppressSuggestionsTestStatement>(true));
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['suggested_test_statement']"));
+	auto suggested = GetStatementSuggestions(*con.context);
+	REQUIRE(HasSuggestion(suggested, "SELECT"));
+	REQUIRE(HasSuggestion(suggested, "GRAMMAREXTENSIONTESTKEYWORD"));
+
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['suppressed_test_statement']"));
+	auto suppressed = GetStatementSuggestions(*con.context);
+	REQUIRE(HasSuggestion(suppressed, "SELECT"));
+	REQUIRE_FALSE(HasSuggestion(suppressed, "GRAMMAREXTENSIONTESTKEYWORD"));
 }
