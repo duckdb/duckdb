@@ -488,8 +488,6 @@ private:
 	                                           const duckdb_parquet::RowGroup &group, bool filters_look_unselective,
 	                                           bool log_prefetch) const;
 	//! Register the read-heads to fetch, and select prefetch strategy
-	//! Throws if the row group metadata contains a negative row count, offset or size
-	void ValidateRowGroup(const duckdb_parquet::RowGroup &group) const;
 	ParquetPrefetchStrategy RegisterRowGroupReads(ClientContext &context, ParquetReaderScanState &state);
 	//! Build the async I/O tasks for the registered read-heads
 	AsyncResult ScheduleRowGroupReads(ParquetReaderScanState &state, ParquetPrefetchStrategy strategy);

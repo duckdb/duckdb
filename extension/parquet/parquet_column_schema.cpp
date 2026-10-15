@@ -42,6 +42,15 @@ void ParquetColumnSchema::ValidateColumnMetadata(const ColumnChunk &column, int6
 		return;
 	}
 	auto &metadata = column.meta_data;
+	if (metadata.data_page_offset < 0 || metadata.dictionary_page_offset < 0 || metadata.index_page_offset < 0 ||
+	    metadata.total_compressed_size < 0) {
+		if (file_name) {
+			throw InvalidInputException(
+			    "Failed to read file \"%s\": metadata is corrupt. Column chunk has a negative offset or size",
+			    file_name);
+		}
+		throw InvalidInputException("Parquet metadata is corrupt. Column chunk has a negative offset or size");
+	}
 	if (metadata.num_values < 0) {
 		if (file_name) {
 			throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Column has invalid "
