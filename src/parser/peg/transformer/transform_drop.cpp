@@ -8,6 +8,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformDropStatement(PEGTransf
                                                                        unique_ptr<DropStatement> drop_entries,
                                                                        const optional<bool> &drop_behavior) {
 	if (drop_behavior) {
+		if (drop_entries->info->type == CatalogType::SECRET_ENTRY) {
+			throw ParserException("CASCADE and RESTRICT are not supported for DROP SECRET");
+		}
 		drop_entries->info->cascade = *drop_behavior;
 	}
 	return std::move(drop_entries);

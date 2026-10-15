@@ -9,6 +9,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression_binder/relation_binder.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -139,10 +140,12 @@ vector<BoundOrderByNode> BindOrderByNodes(Binder &binder, TableIndex table_index
                                           vector<OrderByNode> &orders) {
 	auto child_binder = Binder::CreateBinder(binder.context, &binder);
 	child_binder->bind_context.AddGenericBinding(table_index, alias, names, types);
-	ExpressionBinder expr_binder(*child_binder, binder.context);
+	RelationBinder expr_binder(*child_binder, binder.context, "ORDER_BY");
 	vector<BoundOrderByNode> bound_orders;
 	for (auto &order : orders) {
-		bound_orders.emplace_back(order.type, order.null_order, expr_binder.Bind(order.expression));
+		auto expression = expr_binder.Bind(order.expression);
+		ExpressionBinder::PushCollation(binder.context, expression, expression->GetReturnType());
+		bound_orders.emplace_back(order.type, order.null_order, std::move(expression));
 	}
 	return bound_orders;
 }

@@ -62,6 +62,8 @@ class Exception;
 class OptionDescription;
 struct OptionValue;
 class Config;
+class CustomOption;
+class Environment;
 class Instance;
 class Connection;
 class SqlStatement;
@@ -91,6 +93,9 @@ template <class CTX>
 class TypeBuilder;
 class CustomType;
 class CastFunction;
+class PragmaFunction;
+class LogSink;
+class MacroFunction;
 class ReplacementScan;
 class QualifiedName;
 class TableDescription;
@@ -546,6 +551,116 @@ private:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+// Custom Option
+//----------------------------------------------------------------------------------------------------------------------
+
+/// A configuration setting of your own. Create one through a `Factory` of the database it will be registered in,
+/// describe it (name, type, default value, scopes), then register it with `Connection::Register` or
+/// `Extension::Register`. From then on it is a setting like any other: read and written through a `Config` and from
+/// SQL with `SET` and `RESET`, and described by `Config::DescribeOption`.
+///
+/// Registration is not transactional: a registered option is visible to every connection at once, is not undone by a
+/// rollback, and lives for as long as the database does.
+class CustomOption final : public detail::Handle<CustomOption> {
+	friend detail::HandleFactory;
+	friend class Connection;
+	friend class Extension;
+
+public:
+	class UpdateInput;
+
+	/// Called whenever the option is set or reset, after the new value is cast to the option's type and before it is
+	/// stored. May replace the value through `UpdateInput::SetValue`, or refuse it by throwing. Not called for the
+	/// default value at registration, nor for a value given to the database at startup. Must not write settings
+	/// itself.
+	using UpdateCallback = void (*)(UpdateInput &input);
+
+	CustomOption(CustomOption &&) noexcept = default;
+	CustomOption &operator=(CustomOption &&) noexcept = default;
+
+	~CustomOption() override;
+
+	/// Creates an empty CustomOption through `factory`. Register it through a `Connection` or an `Extension` of the
+	/// factory's database.
+	static auto Create(Factory &factory) -> CustomOption;
+
+	/// Sets the option's name, as `SET` and `Config` refer to it.
+	auto SetName(const std::string &name) & -> CustomOption &;
+	/// Sets the type every value written to the option is cast to. Optional when a default value is set, whose type
+	/// the option then takes.
+	auto SetType(const LogicalType &type) & -> CustomOption &;
+	/// Sets the value the option has until it is set, and that `RESET` restores. Cast to the option's type at
+	/// registration. Without one, the option reads as NULL until it is set.
+	auto SetDefaultValue(const Value &value) & -> CustomOption &;
+	/// Sets the description `OptionDescription::GetDescription` and `duckdb_settings()` report.
+	auto SetDescription(std::string_view description) & -> CustomOption &;
+	/// Sets the scope a write at `SettingScope::DEFAULT` goes to: GLOBAL or SESSION, and one the option supports.
+	/// Defaults to SESSION, or to GLOBAL when the option does not support SESSION.
+	auto SetDefaultScope(SettingScope scope) & -> CustomOption &;
+	/// Sets whether the option can be written at a scope, GLOBAL or SESSION. Both are supported unless told otherwise.
+	auto SetSupportsScope(SettingScope scope, bool supported) & -> CustomOption &;
+
+	/// Constructs user data of type `T`, carried by the registered option and freed at database teardown; read it from
+	/// the update callback via `UpdateInput::GetUserData<T>`. Consumed by registration: set it again before
+	/// re-registering.
+	template <class T, class... ARGS>
+	auto SetUserData(ARGS &&... args) & -> CustomOption & {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		SetUserDataInternal(ptr, detail::TypedDelete<T>);
+		return *this;
+	}
+
+	auto SetUpdateCallback(UpdateCallback callback) & -> CustomOption &;
+
+private:
+	explicit CustomOption(void *impl);
+	//! Moves what the callback needs into the C handle, right before it is registered.
+	auto PrepareRegistration() -> void;
+
+	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
+
+	UpdateCallback update_callback = nullptr;
+	detail::UserData user_data;
+
+public:
+	/// What the update callback works with. Borrowed, valid only for the callback duration.
+	class UpdateInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The user data set via `CustomOption::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// The value the option is updated to, cast to its type. On a reset, the default value, which may be NULL.
+		auto GetValue() const -> Value;
+		/// Replaces the value the option is updated to. Cast to the option's type.
+		auto SetValue(const Value &value) -> void;
+		/// The scope the value is written at: GLOBAL or SESSION, a DEFAULT write resolved to the default scope.
+		auto GetScope() const -> SettingScope;
+		/// Whether the update is a reset to the default value, like SQL `RESET`.
+		auto IsReset() const -> bool;
+
+		/// The context setting the option. When the option is written through the config of an `Instance`, or given
+		/// at startup, this is an internal context whose session state is discarded after the update. Borrowed, valid
+		/// only for the callback duration.
+		auto GetContext() -> Context &;
+
+	private:
+		UpdateInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
+		}
+
+		void *args;
+		Context context;
+
+		void *GetUserDataInternal() const;
+	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
 // SQL statements
 //----------------------------------------------------------------------------------------------------------------------
 // A SQL string is parsed once into statements, which can then be bound or executed repeatedly. Parsing is purely
@@ -615,6 +730,18 @@ public:
 	/// identifier for named ones ($name). Parse-time, so it needs no catalog; only the types wait for `Bind`.
 	/// @return Views borrowed from this statement, valid until it is destroyed.
 	auto GetParameterNames() const -> std::vector<std::string_view>;
+
+	/// Makes a collection visible to the statement as a table named `name`, as a common table expression. Each
+	/// execution reads the collection's contents at that moment, so a prepared statement can run again after the
+	/// collection was cleared and refilled. Only SELECT, INSERT, UPDATE, DELETE and MERGE INTO statements accept one.
+	/// @param name The name the statement refers to the collection by; it shadows a catalog table of that name.
+	/// @param collection Borrowed: it must outlive this statement, every statement copied or prepared from it, and
+	/// every result executing it, and must not be cleared or reset while such a result is live.
+	/// @param column_names Names for the collection's columns, one per column; empty names them col1..colN.
+	/// @throws InvalidInputException For another statement type, a name the statement already defines, or a
+	/// mismatched number of column names.
+	auto AddCollection(std::string_view name, const ColumnDataCollection &collection,
+	                   const std::vector<std::string> &column_names = {}) -> void;
 
 private:
 	explicit SqlStatement(void *impl);
@@ -824,6 +951,17 @@ public:
 	/// @throws InvalidInputException When the source type, target type, or exec callback is missing, or either type is
 	/// not concrete.
 	auto Register(CastFunction &cast_function) -> void;
+	/// Registers the pragma. The function object remains valid; user data set via `SetUserData` is consumed by the
+	/// first registration.
+	/// @throws InvalidInputException When the name is missing, not exactly one of the query and exec callbacks is set,
+	/// the signature declares a return type, or a pragma of the same name already exists.
+	auto Register(PragmaFunction &pragma_function) -> void;
+	/// Registers the option on the database, visible to every connection. Not transactional: it takes effect at once,
+	/// also inside an explicit transaction, and a rollback does not undo it. The option object remains valid; user
+	/// data set via `SetUserData` is consumed by the first registration.
+	/// @throws InvalidInputException When the name, or both the type and the default value, are missing, the default
+	/// value does not cast to the type, the scopes are inconsistent, or an option of the same name already exists.
+	auto Register(CustomOption &custom_option) -> void;
 	/// Registers the scan. Scans are consulted in registration order within
 	/// their scope, connection-scoped ones before database-wide ones, and the first to claim a name wins. A scan can
 	/// be registered only once.
@@ -927,6 +1065,8 @@ public:
 	/// Binds a statement without executing it, borrowing it rather than consuming it.
 	/// @param statement The statement to bind.
 	/// @return Its signature: the columns it will produce and the parameters it expects.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` for a statement that expands into several,
+	/// whose columns are known only once it executes.
 	auto Bind(const SqlStatement &statement) const -> Signature;
 
 	/// Resolves a table name and snapshots its description: where it resolved, its columns, and per-column facts.
@@ -973,8 +1113,29 @@ private:
 // Instance
 //----------------------------------------------------------------------------------------------------------------------
 // An open database: the catalog, the storage behind it, and the settings shared by every session on it. Databases are
-// opened by constructing an `Instance` and worked with through the `Connection`s they hand out. Every instance of the
-// process shares one environment, so a file can only be open in one instance at a time.
+// opened by constructing an `Instance` and worked with through the `Connection`s they hand out. Every instance lives in
+// an `Environment`, and a file can only be open in one instance of an environment at a time. Instances opened without
+// an explicit environment share the process-wide default one.
+
+/// The environment database instances are created in. Optional: an `Instance` constructed without one lives in the
+/// process-wide `Environment::Default()`. Create one explicitly to control the lifetime of the environment, or to keep
+/// a group of instances apart from the default one. It must outlive every `Instance` created in it; destroying it
+/// while instances are still alive leaks it.
+class Environment final : public detail::Handle<Environment> {
+public:
+	/// Creates a new environment.
+	Environment();
+	~Environment() override;
+	Environment(Environment &&) noexcept = default;
+	Environment &operator=(Environment &&) noexcept = default;
+
+	/// The process-wide environment instances are created in when none is given. Created on first use and never
+	/// destroyed, so it outlives every instance, including ones destroyed during static destruction.
+	static auto Default() -> Environment &;
+
+	/// How many database instances are currently alive in this environment.
+	auto GetInstanceCount() const -> size_t;
+};
 
 /// The options an `Instance` can only be given when it is created: once it exists they can no longer change, or only
 /// become stricter. Each setter returns the options, so they chain: `StartupOptions().EnableUnsignedExtensions(true)`.
@@ -1029,24 +1190,33 @@ class Instance final : public detail::Handle<Instance> {
 	friend detail::HandleFactory;
 
 public:
-	/// Creates a database instance with nothing attached. Attach a database with `Attach` and make it the default
-	/// with `SetDefault`.
+	/// Creates a database instance with nothing attached, in the default environment. Attach a database with
+	/// `Attach` and make it the default with `SetDefault`.
 	Instance();
 
-	/// Creates a database instance with nothing attached, with the options that can only be chosen at startup.
+	/// Creates a database instance with nothing attached, in the default environment, with the options that can only
+	/// be chosen at startup.
 	explicit Instance(const StartupOptions &options);
 
-	/// Creates a database instance, attaches `path`, and makes it the default database.
+	/// Creates a database instance in the default environment, attaches `path`, and makes it the default database.
 	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
 	/// @param options The options that can only be chosen at startup.
 	explicit Instance(const std::string &path, const StartupOptions &options = {});
 
+	/// Creates a database instance with nothing attached, in `env`.
+	/// @param env The environment to create the instance in. Must outlive the instance.
+	/// @param options The options that can only be chosen at startup.
+	explicit Instance(Environment &env, const StartupOptions &options = {});
+
+	/// Creates a database instance in `env`, attaches `path`, and makes it the default database.
+	/// @param env The environment to create the instance in. Must outlive the instance.
+	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
+	/// @param options The options that can only be chosen at startup.
+	Instance(Environment &env, const std::string &path, const StartupOptions &options = {});
+
 	~Instance() override;
 	Instance(Instance &&) noexcept = default;
 	Instance &operator=(Instance &&) noexcept = default;
-
-	/// How many database instances are currently alive in this process.
-	static auto GetInstanceCount() -> size_t;
 
 	/// Attaches a database to this instance, like SQL `ATTACH 'path'`, under the name derived from the path: `memory`
 	/// for an in-memory database, else the file name up to its first `.` (`/data/sales.2024.db` -> `sales`).
@@ -1106,6 +1276,11 @@ public:
 	/// be registered only once.
 	/// @throws InvalidInputException When the callback is missing, or the scan is already registered.
 	auto Register(ReplacementScan &replacement_scan) -> void;
+	/// Registers the log sink, making it available to the logging configuration under its name. Not transactional;
+	/// the sink lives as long as the database. User data set via `SetUserData` is consumed by registration.
+	/// @throws InvalidInputException When the name or write callback is missing, or the name is taken, by a sink
+	/// DuckDB provides itself or by one registered before.
+	auto Register(LogSink &log_sink) -> void;
 
 	/// The file system of this database, with its GLOBAL settings and secrets. Borrowed, and valid only while the
 	/// instance is.
@@ -1177,11 +1352,31 @@ public:
 	/// @throws InvalidInputException When the source type, target type, or exec callback is missing, or either type is
 	/// not concrete.
 	auto Register(CastFunction &cast_function) -> void;
+	/// Registers the pragma. The function object remains valid; user data set via `SetUserData` is consumed by the
+	/// first registration.
+	/// @throws InvalidInputException When the name is missing, not exactly one of the query and exec callbacks is set,
+	/// the signature declares a return type, or a pragma of the same name already exists.
+	auto Register(PragmaFunction &pragma_function) -> void;
+	/// Registers the macro function. The function object remains valid.
+	/// @throws InvalidInputException When the name or the body is missing, the body does not parse, the signature has
+	/// a parameter that is not a standard one or declares a return type, or a function of the same name exists.
+	auto Register(MacroFunction &macro_function) -> void;
+	/// Registers the option on the database, visible to every connection. Not transactional: it takes effect at once,
+	/// also inside an explicit transaction, and a rollback does not undo it. The option object remains valid; user
+	/// data set via `SetUserData` is consumed by the first registration.
+	/// @throws InvalidInputException When the name, or both the type and the default value, are missing, the default
+	/// value does not cast to the type, the scopes are inconsistent, or an option of the same name already exists.
+	auto Register(CustomOption &custom_option) -> void;
 	/// Registers the scan. Scans are consulted in registration order within
 	/// their scope, connection-scoped ones before database-wide ones, and the first to claim a name wins. A scan can
 	/// be registered only once.
 	/// @throws InvalidInputException When the callback is missing, or the scan is already registered.
 	auto Register(ReplacementScan &replacement_scan) -> void;
+	/// Registers the log sink, making it available to the logging configuration under its name. Not transactional;
+	/// the sink lives as long as the database. User data set via `SetUserData` is consumed by registration.
+	/// @throws InvalidInputException When the name or write callback is missing, or the name is taken, by a sink
+	/// DuckDB provides itself or by one registered before.
+	auto Register(LogSink &log_sink) -> void;
 
 private:
 	explicit Extension(void *impl);
@@ -2418,6 +2613,18 @@ public:
 	/// @throws InvalidInputException When the source's type does not match the vector's.
 	auto Reference(const Vector &source) -> void;
 
+	/// Casts every row into `target`, like SQL `CAST`, from this vector's type to the target's. `target` is replaced
+	/// by the result, taking this vector's size; pointers and views taken from it beforehand do not survive this.
+	/// A connection's or callback's factory casts with that client's cast functions and settings, an
+	/// instance's factory with the built-in casts only.
+	/// @throws Exception When a row does not convert; `target` is then unspecified.
+	auto Cast(Factory &factory, Vector &target) const -> void;
+
+	/// `Cast` like SQL `TRY_CAST`: a row that does not convert becomes NULL in `target` instead of failing the cast.
+	/// @param error_message Optional. When not every row converted, receives the conversion error of one that did not.
+	/// @return Whether every row converted.
+	auto TryCast(Factory &factory, Vector &target, std::string *error_message = nullptr) const -> bool;
+
 	/// How many rows the vector holds.
 	auto GetSize() const -> idx_t;
 
@@ -2434,6 +2641,9 @@ public:
 
 	/// How the vector is laid out.
 	auto GetVectorType() const -> VectorType;
+
+	/// The logical type of the vector's rows.
+	auto GetLogicalType() const -> LogicalType;
 
 	/// The validity mask for writing, allocating it if the vector does not have one yet.
 	/// @throws InvalidInputException Unless the vector is FLAT.
@@ -2548,6 +2758,11 @@ public:
 	/// How many rows the chunk can hold, e.g. how many rows a table function may write into its output chunk in one
 	/// call. Unstable API.
 	auto GetCapacity() const -> idx_t;
+
+	/// Empties the chunk so it can be filled again: its row count becomes 0, and its vectors writable FLAT vectors of
+	/// their types, as on creation. Pointers and views taken from the chunk or its vectors beforehand do not survive
+	/// this. Not for a chunk DuckDB lends to a callback for reading.
+	auto Clear() -> void;
 
 	/// Access one column, e.g. to read or write its data.
 	/// @param index Column index in [0, GetVectorCount()).
@@ -2704,15 +2919,13 @@ private:
 /// touching the database, and `Flush` runs the statement over everything buffered so far and empties the buffer.
 /// Many small inserts thereby become one bulk insert.
 ///
-/// The appender is built on the public API alone: a connection-scoped `ReplacementScan` exposes the buffer to the
-/// statement under a name. The same can be done by hand when a different shape is needed.
+/// The appender is built on the public API alone: `SqlStatement::AddCollection` exposes the buffer to the statement
+/// under a name. The same can be done by hand when a different shape is needed.
 ///
 /// An appender is bound to the connection it was created on and can only be flushed there. It is not thread-safe:
 /// append from one thread at a time, or give each thread its own appender. It must not outlive its `Connection`.
 ///
-/// Destroying an appender does not flush: rows buffered but not flushed are dropped. Since replacement scans cannot
-/// be unregistered, every appender leaves an inert scan registered on its connection; create appenders once and
-/// reuse them rather than creating one per batch.
+/// Destroying an appender does not flush: rows buffered but not flushed are dropped.
 class Appender {
 public:
 	/// Creates an appender that inserts into `table`.
@@ -2729,12 +2942,14 @@ public:
 	/// Use this when a plain INSERT of every column is not what is needed: a subset of columns, an UPDATE or MERGE
 	/// driven by the buffer, or an INSERT with an ON CONFLICT clause.
 	/// @param conn The connection to buffer against and flush on.
-	/// @param query Exactly one statement, referring to the buffer by `buffer_name`.
+	/// @param query Exactly one SELECT, INSERT, UPDATE, DELETE or MERGE INTO statement, referring to the buffer by
+	/// `buffer_name`.
 	/// @param column_types One type per buffer column, at least one.
-	/// @param buffer_name The name `query` reads the buffer under. Must be unique among the appenders on this
-	/// connection: the first one registered claims the name.
+	/// @param buffer_name The name `query` reads the buffer under. It shadows a table of that name, and must not be
+	/// the name of a common table expression `query` defines itself.
 	/// @param column_names Names for the buffer's columns; empty names them col1..colN.
-	/// @throws InvalidInputException When `column_types` is empty, or `query` is not exactly one statement.
+	/// @throws InvalidInputException When `column_types` is empty, `query` is not exactly one statement of a
+	/// supported type, or it already defines `buffer_name`.
 	Appender(Connection &conn, std::string_view query, std::vector<LogicalType> column_types,
 	         std::string_view buffer_name, const std::vector<std::string> &column_names = {});
 
@@ -2767,23 +2982,16 @@ public:
 	void Clear();
 
 private:
-	// Shared with the replacement scan that exposes the buffer. The scan outlives the appender, since scans cannot be
-	// unregistered, so it holds this by shared_ptr; the appender's destructor nulls the collection to make it decline.
-	struct Buffer {
-		std::string name;
-		std::vector<std::string> column_names;
-		std::unique_ptr<ColumnDataCollection> collection;
-	};
-
 	// The shared body of both constructors.
 	void Initialize(Connection &conn, const std::string &query, std::vector<LogicalType> column_types,
 	                const std::string &buffer_name, const std::vector<std::string> &column_names);
 	void ResetBuffer();
 
-	// The connection the buffer's replacement scan is registered on, and the only one a flush can run on.
+	// The connection the statement runs on.
 	Connection *connection = nullptr;
 	std::vector<LogicalType> types;
-	std::shared_ptr<Buffer> buffer;
+	// The buffer, declared before the statement that borrows it so it is destroyed after it.
+	std::unique_ptr<ColumnDataCollection> collection;
 	// The statement, parsed once and re-executed per flush, and the append state, recreated after every reset.
 	std::unique_ptr<SqlStatement> statement;
 	std::unique_ptr<ColumnDataCollection::AppendState> append_state;
@@ -2956,15 +3164,16 @@ public:
 	~QueryResult() override;
 
 	/// The result's columns, their names and types, as one owned `Schema`.
-	/// @throws InvalidInputException When the schema is not available yet; step the result first.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the schema is not available yet, for
+	/// a statement that expands into several; step the result first.
 	auto GetSchema() const -> Schema;
 
 	/// The shape of the result, so a caller can decide between consuming rows and draining without inspecting the SQL.
-	/// @throws InvalidInputException When the shape is not available yet; step the result first.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the shape is not available yet, for a
+	/// statement that expands into several; step the result first.
 	auto GetResultType() const -> ResultType;
 
-	/// The kind of SQL statement this result came from.
-	/// @throws InvalidInputException When the kind is not available yet; step the result first.
+	/// The kind of SQL statement this result came from, as written: MULTI for one that expands into several.
 	auto GetStatementType() const -> StatementType;
 
 	/// Does a bounded amount of work and returns without blocking.
@@ -3046,16 +3255,16 @@ public:
 	/// copy. Available as soon as `QueryResult::GetSchema` would be: at once for most statements, after stepping for
 	/// one that expands into several, such as PIVOT.
 	/// @param out Caller-allocated; overwritten. The caller then owns it and releases it with `out.release(&out)`.
-	/// @throws InvalidInputException When the schema is not available yet; step the result first. `out` is left
-	/// released on any throw.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the schema is not available yet;
+	/// step the result first. `out` is left released on any throw.
 	auto GetSchema(ArrowSchema &out) const -> void;
 
 	/// The shape of the result, so a caller can decide between reading arrays and draining without inspecting the SQL.
-	/// @throws InvalidInputException When the shape is not available yet; step the result first.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the shape is not available yet, for a
+	/// statement that expands into several; step the result first.
 	auto GetResultType() const -> ResultType;
 
-	/// The kind of SQL statement this result came from.
-	/// @throws InvalidInputException When the kind is not available yet; step the result first.
+	/// The kind of SQL statement this result came from, as written: MULTI for one that expands into several.
 	auto GetStatementType() const -> StatementType;
 
 	/// Does a bounded amount of work and returns without blocking.
@@ -5031,6 +5240,11 @@ public:
 	/// Sets the function's name: the format SQL selects it with, as in `COPY ... TO 'path' (FORMAT name)`.
 	auto SetName(const std::string &name) & -> CopyFunction &;
 
+	/// Sets the extension of the files the function writes, without the leading dot, e.g. `parquet`. DuckDB uses it
+	/// when it names files itself, as for `PARTITION_BY`; without it such names end in a bare dot.
+	/// @throws InvalidInputException When the extension starts with a dot.
+	auto SetFileExtension(const std::string &extension) & -> CopyFunction &;
+
 	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
 	/// any callback via the inputs' `GetUserData<T>`. Consumed by registration: set it again before
 	/// re-registering.
@@ -5836,6 +6050,346 @@ public:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+// Pragma Function
+//----------------------------------------------------------------------------------------------------------------------
+
+/// A user-defined pragma, called with the `PRAGMA` statement. Create one through a `Factory` of the database it will be
+/// registered in, describe it (name, signature, callback), then register it with `Connection::Register` or
+/// `Extension::Register`. The function object may be destroyed after registration; the registered pragma lives on in
+/// the catalog.
+///
+/// A pragma takes constant arguments and is one of two kinds, decided by the callback it is given: a query pragma
+/// returns SQL that runs in place of the `PRAGMA` statement, and an exec pragma runs for its side effects and produces
+/// no rows. Set exactly one of the two callbacks. A pragma without parameters is called as `PRAGMA name`, one with
+/// parameters as `PRAGMA name(...)`. A callback reports failure by throwing; the exception surfaces as the statement's
+/// error.
+class PragmaFunction final : public detail::Handle<PragmaFunction> {
+	friend detail::HandleFactory;
+	friend class Connection;
+	friend class Extension;
+
+public:
+	class QueryInput;
+	class ExecInput;
+
+	/// Called before the `PRAGMA` statement is bound; returns the SQL to run in its place, which may hold several
+	/// statements.
+	using QueryCallback = std::string (*)(QueryInput &input);
+	/// Called when the `PRAGMA` statement executes.
+	using ExecCallback = void (*)(ExecInput &input);
+
+	PragmaFunction(PragmaFunction &&) noexcept = default;
+	PragmaFunction &operator=(PragmaFunction &&) noexcept = default;
+
+	~PragmaFunction() override;
+
+	/// Creates an empty PragmaFunction through `factory`. Register it through a `Connection` or an `Extension` of the
+	/// factory's database.
+	static auto Create(Factory &factory) -> PragmaFunction;
+
+	/// Sets the pragma's name, as the `PRAGMA` statement calls it.
+	auto SetName(const std::string &name) & -> PragmaFunction &;
+	/// The documentation of the pragma, borrowed for in-place mutation.
+	auto GetDocs() -> FunctionDocs;
+
+	/// Calls `configure` with the documentation of the pragma, borrowed for in-place mutation.
+	template <class F>
+	auto WithDocs(F &&configure) & -> PragmaFunction & {
+		auto docs = GetDocs();
+		configure(docs);
+		return *this;
+	}
+
+	/// The pragma's signature, borrowed for in-place mutation. A pragma produces no value, so registration rejects a
+	/// signature with a return type.
+	auto GetSignature() -> FunctionSignature;
+
+	/// Calls `configure` with the pragma's signature, borrowed for in-place mutation.
+	template <class F>
+	auto WithSignature(F &&configure) & -> PragmaFunction & {
+		auto sig = GetSignature();
+		configure(sig);
+		return *this;
+	}
+
+	/// Constructs user data of type `T`, carried by the registered pragma and freed at engine teardown; read it from
+	/// the callback via the input's `GetUserData<T>`. Consumed by registration: set it again before re-registering.
+	template <class T, class... ARGS>
+	auto SetUserData(ARGS &&... args) & -> PragmaFunction & {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		SetUserDataInternal(ptr, detail::TypedDelete<T>);
+		return *this;
+	}
+
+	/// Makes this a query pragma. Registration fails when an exec callback is set as well.
+	auto SetQueryCallback(QueryCallback callback) & -> PragmaFunction &;
+	/// Makes this an exec pragma. Registration fails when a query callback is set as well.
+	auto SetExecCallback(ExecCallback callback) & -> PragmaFunction &;
+
+private:
+	explicit PragmaFunction(void *impl);
+	//! Moves what the callbacks need into the C handle, right before it is registered.
+	auto PrepareRegistration() -> void;
+
+	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
+
+	QueryCallback query_callback = nullptr;
+	ExecCallback exec_callback = nullptr;
+	detail::UserData user_data;
+
+public:
+	/// What the query callback works with: the arguments of the `PRAGMA` statement. Borrowed, valid only for the
+	/// callback duration.
+	class QueryInput final : public FunctionBindInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The user data set via `PragmaFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+	private:
+		QueryInput(void *args, void *context) : FunctionBindInput(args, context) {
+		}
+
+		/// Pragmas have no bind data
+		using FunctionBindInput::SetBindData;
+
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the exec callback works with: the arguments of the `PRAGMA` statement. Borrowed, valid only for the
+	/// callback duration.
+	class ExecInput final : public FunctionBindInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The user data set via `PragmaFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+	private:
+		ExecInput(void *args, void *context) : FunctionBindInput(args, context) {
+		}
+
+		/// Pragmas have no bind data
+		using FunctionBindInput::SetBindData;
+
+		void *GetUserDataInternal() const;
+	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Macro Function
+//----------------------------------------------------------------------------------------------------------------------
+
+/// A function defined in SQL: a call is replaced with the body, an expression for a scalar macro and a query for a
+/// table macro, which refers to the parameters by name. Create one through a `Factory` of the database it will be
+/// registered in, describe it (name, signature, body), then register it with `Extension::Register`; outside an
+/// extension, define a macro with SQL `CREATE MACRO` instead. The function object may be destroyed after
+/// registration; the registered macro lives on in the catalog.
+///
+/// A macro's parameters can always be passed by position or by name, so the signature may only hold standard
+/// parameters, optionally with a default value. A parameter of type ANY is untyped. The result follows from the body,
+/// so the signature cannot set a return type.
+class MacroFunction final : public detail::Handle<MacroFunction> {
+	friend detail::HandleFactory;
+	friend class Extension;
+
+public:
+	MacroFunction(MacroFunction &&) noexcept = default;
+	MacroFunction &operator=(MacroFunction &&) noexcept = default;
+
+	~MacroFunction() override;
+
+	/// Creates an empty scalar macro through `factory`: its body is an expression, and it is called like a scalar
+	/// function. Register it through an `Extension` of the factory's database.
+	static auto CreateScalar(Factory &factory) -> MacroFunction;
+	/// Creates an empty table macro through `factory`: its body is a SELECT query, and it is called like a table
+	/// function. Register it through an `Extension` of the factory's database.
+	static auto CreateTable(Factory &factory) -> MacroFunction;
+
+	/// Sets the macro's name, as SQL calls it.
+	auto SetName(const std::string &name) & -> MacroFunction &;
+	/// Sets the body, as SQL text: an expression for a scalar macro, a SELECT query for a table macro. Parsed at
+	/// registration; names in it are resolved when the macro is called.
+	auto SetBody(std::string_view body) & -> MacroFunction &;
+	/// The documentation of the macro, borrowed for in-place mutation.
+	auto GetDocs() -> FunctionDocs;
+
+	/// Calls `configure` with the documentation of the macro, borrowed for in-place mutation.
+	template <class F>
+	auto WithDocs(F &&configure) & -> MacroFunction & {
+		auto docs = GetDocs();
+		configure(docs);
+		return *this;
+	}
+
+	/// The macro's signature, borrowed for in-place mutation.
+	auto GetSignature() -> FunctionSignature;
+
+	/// Calls `configure` with the macro's signature, borrowed for in-place mutation.
+	template <class F>
+	auto WithSignature(F &&configure) & -> MacroFunction & {
+		auto sig = GetSignature();
+		configure(sig);
+		return *this;
+	}
+
+private:
+	explicit MacroFunction(void *impl);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Log Sink
+//----------------------------------------------------------------------------------------------------------------------
+
+/// The scope a log entry was written in, which decides which of its ids are present.
+enum class LogScope : uint8_t {
+	/// Written for the database as a whole, carrying no connection, transaction or query id.
+	DATABASE = 10,
+	/// Written by a connection, carrying its connection id and, inside one, the transaction and query ids.
+	CONNECTION = 20,
+	/// Written by a thread executing a query, carrying the thread id next to the connection's ids.
+	THREAD = 30,
+};
+
+/// Code of your own that receives DuckDB's log entries. Create one through a `Factory` of the database it will be
+/// registered in, give it a name and a write callback, then register it with `Instance::Register` or
+/// `Extension::Register`, which makes it available to the logging configuration under its name; once the
+/// configuration directs entries to it (currently with `SET logging_storage = '<name>'`), the write callback receives
+/// them. A log sink only receives entries: they cannot be read back through `duckdb_logs`.
+///
+/// Which entries a sink receives, and when and on which thread its callbacks run, are up to DuckDB: the callbacks must
+/// return quickly, must be safe to run concurrently and on any thread, and must not log or change the logging
+/// configuration. An exception a callback throws drops the entry; it never fails the operation that logged.
+class LogSink final : public detail::Handle<LogSink> {
+	friend detail::HandleFactory;
+	friend class Instance;
+	friend class Extension;
+
+public:
+	class Entry;
+	class FlushInput;
+
+	/// Called for every entry to store. Required.
+	using WriteCallback = void (*)(Entry &entry);
+	/// Called when DuckDB flushes its log, so entries the sink holds on to can be written out. When is up to DuckDB.
+	/// Optional.
+	using FlushCallback = void (*)(FlushInput &input);
+
+	LogSink(LogSink &&) noexcept = default;
+	LogSink &operator=(LogSink &&) noexcept = default;
+
+	~LogSink() override;
+
+	/// Creates an empty LogSink through `factory`. Register it through an `Instance` or an `Extension` of the
+	/// factory's database.
+	static auto Create(Factory &factory) -> LogSink;
+
+	/// Sets the name the logging configuration refers to the sink by, matched case-insensitively.
+	auto SetName(const std::string &name) & -> LogSink &;
+
+	/// Constructs user data of type `T`, carried by the registered sink and freed at database teardown; read it
+	/// from the callbacks via `GetUserData<T>`. Consumed by registration.
+	template <class T, class... ARGS>
+	auto SetUserData(ARGS &&... args) & -> LogSink & {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		SetUserDataInternal(ptr, detail::TypedDelete<T>);
+		return *this;
+	}
+
+	auto SetWriteCallback(WriteCallback callback) & -> LogSink &;
+	auto SetFlushCallback(FlushCallback callback) & -> LogSink &;
+
+private:
+	explicit LogSink(void *impl);
+	//! Moves what the callbacks need into the C handle, right before it is registered.
+	auto PrepareRegistration() -> void;
+
+	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
+
+	WriteCallback write_callback = nullptr;
+	FlushCallback flush_callback = nullptr;
+	detail::UserData user_data;
+
+public:
+	/// One log entry, borrowed for the duration of the write callback.
+	class Entry {
+		friend detail::HandleFactory;
+
+	public:
+		/// The user data set via `LogSink::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// When the entry was written.
+		auto GetTimestamp() const -> timestamp_tz_t;
+		/// The severity of the entry.
+		auto GetLevel() const -> LogLevel;
+		/// The log type the entry was written under, e.g. `QueryLog`. Valid only for the callback duration.
+		auto GetLogType() const -> std::string_view;
+		/// The message. Valid only for the callback duration.
+		auto GetLogMessage() const -> std::string_view;
+		/// The scope the entry was written in, which decides which of the ids below are present.
+		auto GetScope() const -> LogScope;
+		/// The ids `duckdb_logs` reports for the entry, each absent when the entry's scope has none. The thread id
+		/// identifies the thread that logged, which need not be the thread the write callback runs on.
+		auto GetConnectionId() const -> std::optional<idx_t>;
+		auto GetTransactionId() const -> std::optional<idx_t>;
+		auto GetQueryId() const -> std::optional<idx_t>;
+		auto GetThreadId() const -> std::optional<idx_t>;
+
+	private:
+		Entry(void *info, void *user_data, int64_t timestamp, LogLevel level, LogScope scope, std::string_view type,
+		      std::string_view message)
+		    : info(info), user_data(user_data), timestamp(timestamp), level(level), scope(scope), type(type),
+		      message(message) {
+		}
+
+		void *info;
+		void *user_data;
+		int64_t timestamp;
+		LogLevel level;
+		LogScope scope;
+		std::string_view type;
+		std::string_view message;
+
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the flush callback works with. Borrowed, valid only for the callback duration.
+	class FlushInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The user data set via `LogSink::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+	private:
+		explicit FlushInput(void *user_data) : user_data(user_data) {
+		}
+
+		void *user_data;
+
+		void *GetUserDataInternal() const;
+	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
 // File System
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -5986,6 +6540,26 @@ public:
 
 	/// Creates an empty set of options for this file system, the same as `FileOpenOptions::Create(*this)`.
 	auto CreateOpenOptions() const -> FileOpenOptions;
+
+	/// Whether a file exists at `path`, routed the way `OpenFile` routes it. A directory is not a file.
+	auto Exists(const std::string &path) const -> bool;
+	/// Whether `path` names a remote file, e.g. under `s3://` or `https://`. Decided from the path alone, so it
+	/// answers even when the extension providing the remote file system is not loaded.
+	auto IsRemote(const std::string &path) const -> bool;
+	/// `path` expanded as `OpenFile` expands it: a leading `~` becomes the configured home directory.
+	auto Expand(const std::string &path) const -> std::string;
+
+	/// The paths of the files matching a glob pattern, e.g. `data/*.csv`, in the order the file system lists them.
+	/// A pattern without glob characters matches the file it names, if there is one.
+	auto Glob(const std::string &pattern) const -> std::vector<std::string>;
+	/// Moves, or renames, a file. Whether an existing file at `target` is replaced, and whether the move is atomic, is
+	/// up to the file system; moving between two file systems is not supported.
+	/// @throws Exception When the file cannot be moved.
+	auto Move(const std::string &source, const std::string &target) const -> void;
+	/// Removes the file at `path`, if there is one.
+	/// @return Whether a file was removed.
+	/// @throws Exception When the file exists but cannot be removed.
+	auto Remove(const std::string &path) const -> bool;
 
 private:
 	explicit FileSystem(void *impl);

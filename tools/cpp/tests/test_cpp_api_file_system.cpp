@@ -4,6 +4,7 @@
 #include "test_cpp_api.hpp"
 #include "test_helpers.hpp"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -241,4 +242,52 @@ TEST_CASE("Stable C++API: opening a file specified as a file struct", "[cpp_api]
 	REQUIRE_THROWS_MATCHES(GetFilePath(no_path_struct), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	auto options = fs.CreateOpenOptions();
 	REQUIRE_THROWS_MATCHES(options.SetValues(no_path_struct), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+}
+
+TEST_CASE("Stable C++API: file system path queries", "[cpp_api]") {
+	using namespace duckdb::cxx;
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto fs = conn.GetFileSystem();
+
+	REQUIRE(fs.IsRemote("s3://bucket/book.xlsx"));
+	REQUIRE_FALSE(fs.IsRemote("/local/book.xlsx"));
+	REQUIRE_FALSE(fs.Exists("/definitely/not/here.xlsx"));
+
+	conn.Execute("SET home_directory = '/cpp_home'").Drain();
+	REQUIRE(fs.Expand("~/book.xlsx") == "/cpp_home/book.xlsx");
+}
+
+TEST_CASE("Stable C++API: file system glob, move and remove", "[cpp_api]") {
+	using namespace duckdb::cxx;
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto fs = conn.GetFileSystem();
+
+	const auto first = duckdb::TestCreatePath("cpp_glob_first.globtest");
+	const auto second = duckdb::TestCreatePath("cpp_glob_second.globtest");
+	for (auto &path : {first, second}) {
+		auto file = fs.OpenFile(path, {FileFlags::WRITE, FileFlags::FILE_CREATE_NEW});
+		WriteAll(file, "x");
+	}
+	const auto pattern = duckdb::TestCreatePath("cpp_glob_*.globtest");
+	auto matches = fs.Glob(pattern);
+	std::sort(matches.begin(), matches.end());
+	REQUIRE(matches.size() == 2);
+	REQUIRE(duckdb::StringUtil::EndsWith(matches[0], "cpp_glob_first.globtest"));
+	REQUIRE(duckdb::StringUtil::EndsWith(matches[1], "cpp_glob_second.globtest"));
+	REQUIRE(fs.Glob(duckdb::TestCreatePath("cpp_glob_none_*.globtest")).empty());
+
+	const auto moved = duckdb::TestCreatePath("cpp_glob_moved.globtest");
+	fs.Move(first, moved);
+	REQUIRE_FALSE(fs.Exists(first));
+	REQUIRE(fs.Exists(moved));
+	REQUIRE_THROWS_AS(fs.Move(first, moved), Exception);
+
+	REQUIRE(fs.Remove(moved));
+	REQUIRE_FALSE(fs.Exists(moved));
+	// Nothing to remove is not an error.
+	REQUIRE_FALSE(fs.Remove(moved));
+	REQUIRE(fs.Remove(second));
+	REQUIRE(fs.Glob(pattern).empty());
 }

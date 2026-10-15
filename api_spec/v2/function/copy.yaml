@@ -322,6 +322,32 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  copy_function_set_file_extension:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-12" ]
+    description: |
+      Sets the file extension of the files the copy function writes, without the leading dot, e.g. `parquet`.
+
+      DuckDB uses it when it names files itself, e.g. the files of `COPY ... TO 'dir' (PARTITION_BY ...)` or
+      `(PER_THREAD_OUTPUT)`. A statement can override it with the `FILE_EXTENSION` option. An extension starting with
+      a dot is rejected. The extension is borrowed and copied. Calling this again replaces the previous extension.
+      Optional, but without it the names DuckDB gives files end in a bare dot, e.g. `data_0.`.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the file extension of.
+      extension:
+        type: str
+        indirection: 1
+        const: true
+        kind: IN
+        description: The extension to set, without the leading dot. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   copy_function_set_user_data:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-03" ]

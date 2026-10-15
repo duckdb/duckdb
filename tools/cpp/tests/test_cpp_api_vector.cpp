@@ -816,3 +816,76 @@ TEST_CASE("Stable C++API: DataChunk capacity", "[cpp_api]") {
 	REQUIRE(chunk.GetCapacity() == STANDARD_VECTOR_SIZE);
 	REQUIRE(chunk.GetRowCount() == 0);
 }
+
+TEST_CASE("Stable C++API: vector cast and try cast", "[cpp_api]") {
+	using namespace duckdb::cxx;
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto &factory = conn.GetFactory();
+
+	std::vector<LogicalType> types;
+	types.push_back(factory.ParseType("VARCHAR"));
+	types.push_back(factory.ParseType("INTEGER"));
+	DataChunk chunk(factory, types);
+	auto source = chunk.GetVector(0);
+	auto target = chunk.GetVector(1);
+	// Padded past the inline string length: a build without string inlining reads the pointer of every string, and
+	// the API leaves it unset for the strings it inlines. The integer cast skips the leading spaces.
+	const std::string pad(16, ' ');
+	source.SetSize(3);
+	source.AssignString(0, pad + "1");
+	source.AssignString(1, pad + "x");
+	source.AssignString(2, pad + "3");
+
+	REQUIRE_THROWS_MATCHES(source.Cast(factory, target), Exception, HasErrorCode(DUCKDB_V2_ERROR_TYPE_CONVERSION));
+
+	REQUIRE_FALSE(source.TryCast(factory, target));
+	auto view = target.GetView();
+	REQUIRE(view.count == 3);
+	REQUIRE(view.IsValid(0));
+	REQUIRE(view.Data<int32_t>()[view.SelAt(0)] == 1);
+	REQUIRE_FALSE(view.IsValid(1));
+	REQUIRE(view.Data<int32_t>()[view.SelAt(2)] == 3);
+
+	// The error of the failed row is kept on request.
+	std::string error;
+	REQUIRE_FALSE(source.TryCast(factory, target, &error));
+	REQUIRE_THAT(error, Catch::Matchers::Contains("x"));
+
+	source.AssignString(1, pad + "2");
+	source.Cast(factory, target);
+	REQUIRE(target.GetView().Data<int32_t>()[1] == 2);
+	error.clear();
+	REQUIRE(source.TryCast(factory, target, &error));
+	REQUIRE(error.empty());
+}
+
+TEST_CASE("Stable C++API: vector logical type and chunk clear", "[cpp_api]") {
+	using namespace duckdb::cxx;
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto &factory = conn.GetFactory();
+
+	std::vector<LogicalType> types;
+	types.push_back(factory.ParseType("INTEGER"));
+	types.push_back(factory.ParseType("STRUCT(a VARCHAR)"));
+	DataChunk chunk(factory, types);
+	REQUIRE(chunk.GetVector(0).GetLogicalType().GetTypeId() == LogicalTypeId::INTEGER);
+	REQUIRE(chunk.GetVector(1).GetLogicalType().ToText() == "STRUCT(a VARCHAR)");
+
+	// A cleared chunk is empty and writable again, also after its vector was made CONSTANT.
+	auto vec = chunk.GetVector(0);
+	vec.SetSize(3);
+	vec.GetDataMutable<int32_t>()[0] = 7;
+	chunk.GetVector(1).SetSize(3);
+	REQUIRE(chunk.GetRowCount() == 3);
+	vec.MakeConstant(Value::Create(factory, int32_t {5}), 3);
+	REQUIRE(vec.GetVectorType() == VectorType::CONSTANT);
+	chunk.Clear();
+	REQUIRE(chunk.GetRowCount() == 0);
+	REQUIRE(vec.GetVectorType() == VectorType::FLAT);
+	REQUIRE(vec.GetLogicalType().GetTypeId() == LogicalTypeId::INTEGER);
+	vec.SetSize(1);
+	vec.GetDataMutable<int32_t>()[0] = 9;
+	REQUIRE(vec.GetView().Data<int32_t>()[0] == 9);
+}

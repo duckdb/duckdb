@@ -74,7 +74,6 @@ bool Exception::InvalidatesTransaction(ExceptionType exception_type) {
 
 bool Exception::InvalidatesDatabase(ExceptionType exception_type) {
 	switch (exception_type) {
-	case ExceptionType::DATA_CORRUPTION:
 	case ExceptionType::FATAL:
 		return true;
 	default:

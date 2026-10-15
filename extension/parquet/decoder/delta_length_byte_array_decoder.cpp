@@ -45,15 +45,6 @@ bool IsContinuationByte(uint8_t b) {
 	return (b & 0xC0) == 0x80;
 }
 
-bool TouchesUtf8Boundary(const char *data, uint32_t len) {
-	if (len == 0) {
-		return false;
-	}
-	const uint8_t first = static_cast<uint8_t>(data[0]);
-	const uint8_t last = static_cast<uint8_t>(data[len - 1]);
-	return IsContinuationByte(first) || (last & 0x80) != 0;
-}
-
 void DeltaLengthByteArrayDecoder::Read(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *defines, idx_t read_count,
                                        Vector &result, idx_t result_offset) {
 	if (defines) {
@@ -89,6 +80,7 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 	                                      StringColumnReader::Utf8ValidationOption::STRICT_UTF8;
 
 	const auto start_ptr = block.ptr;
+	auto current_ptr = start_ptr;
 	auto result_data = FlatVector::Writer<string_t>(result, read_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < read_count; row_idx++) {
@@ -105,20 +97,23 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 				    length_idx, byte_array_count);
 			}
 		}
-		const auto &str_len = length_data[length_idx++];
+		const auto str_len = length_data[length_idx++];
 
 		if (needs_full_individual_validation) {
-			auto verified = string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
+			auto verified = string_column_reader.VerifyString(char_ptr_cast(current_ptr), str_len);
 			result_data.WriteValue(verified);
 		} else {
-			if (TouchesUtf8Boundary(char_ptr_cast(block.ptr), str_len)) {
-				string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
+			// Batch validation below catches incomplete trailing characters. Within a valid batch, a character
+			// can only cross a string boundary if the next nonempty string starts with a continuation byte.
+			if (str_len > 0 && IsContinuationByte(current_ptr[0])) {
+				string_column_reader.VerifyString(char_ptr_cast(current_ptr), str_len);
 			}
-			result_data.WriteValue(string_t(char_ptr_cast(block.ptr), str_len));
+			result_data.WriteStringRef(string_t(char_ptr_cast(current_ptr), str_len));
 		}
-		block.unsafe_inc(str_len);
+		current_ptr += str_len;
 	}
 
+	block.unsafe_inc(current_ptr - start_ptr);
 	if (!needs_full_individual_validation) {
 		string_column_reader.VerifyString(char_ptr_cast(start_ptr), NumericCast<uint32_t>(block.ptr - start_ptr));
 	}

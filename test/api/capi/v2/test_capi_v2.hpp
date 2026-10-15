@@ -293,12 +293,11 @@ inline void RequireColumn(duckdb_v2_result_handle r, idx_t index, const char *na
 	duckdb_v2_schema_destroy(&schema);
 }
 
-// Asserts a result's schema is not yet available.
-// The statement expanded to a group whose row-producing fragment is not yet prepared,
-// so result_get_schema reports INVALID_INPUT.
+// Asserts a result's schema is not yet available: the statement expands into a group whose
+// row-producing statement is not bound yet.
 inline void RequireSchemaDeferred(duckdb_v2_result_handle r) {
 	duckdb_v2_schema_handle schema = nullptr;
-	REQUIRE(duckdb_v2_result_get_schema(r, &schema, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_result_get_schema(r, &schema, nullptr) == DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED);
 	REQUIRE(schema == nullptr);
 }
 
@@ -334,6 +333,30 @@ inline DUCKDB_V2_ERROR Query(duckdb_v2_connection_handle conn, const char *sql, 
 	// The statement is always still alive (it executes a copy), so destroy it unconditionally.
 	duckdb_v2_sql_statement_destroy(&stmt);
 	duckdb_v2_statement_iterator_destroy(&iter);
+	return rc;
+}
+
+// Runs a single statement to exhaustion, returning the code it failed with. Execution is lazy, so a failure may only
+// show up while stepping; nothing is asserted, so it also suits statements that are expected to fail.
+inline DUCKDB_V2_ERROR RunSql(duckdb_v2_connection_handle conn, const char *sql) {
+	duckdb_v2_result_handle result = nullptr;
+	auto rc = Query(conn, sql, &result);
+	auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
+	while (rc == DUCKDB_V2_ERROR_NONE) {
+		duckdb_v2_data_chunk_handle chunk = nullptr;
+		rc = duckdb_v2_result_step(result, &chunk, &status, nullptr);
+		if (chunk) {
+			duckdb_v2_data_chunk_destroy(&chunk);
+		}
+		if (rc != DUCKDB_V2_ERROR_NONE || status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED ||
+		    status == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED) {
+			break;
+		}
+		if (status == DUCKDB_V2_RESULT_STEP_STATUS_WAITING) {
+			rc = duckdb_v2_result_wait(result, nullptr);
+		}
+	}
+	duckdb_v2_result_destroy(&result);
 	return rc;
 }
 

@@ -3,10 +3,13 @@
 # group: [copy_database]
 
 statement ok
-ATTACH ':memory:' AS src
+SET threads = 4
 
 statement ok
-USE src
+ATTACH ':memory:' AS source
+
+statement ok
+USE source
 
 statement ok
 CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
@@ -20,12 +23,25 @@ INSERT INTO pk_integers VALUES (1), (2), (3)
 statement ok
 INSERT INTO fk_integers VALUES (1), (2)
 
-# now export the db
+# Copy the schema and data.
 statement ok
 ATTACH ':memory:' AS db1
 
 statement ok
-COPY FROM DATABASE src TO db1
+COPY FROM DATABASE source TO db1
+
+query I
+SELECT i FROM db1.pk_integers ORDER BY i
+----
+1
+2
+3
+
+query I
+SELECT j FROM db1.fk_integers ORDER BY j
+----
+1
+2
 
 statement ok
 USE db1
@@ -34,6 +50,7 @@ USE db1
 statement error
 INSERT INTO fk_integers VALUES (4)
 ----
+Violates foreign key constraint
 
 statement ok
 INSERT INTO fk_integers VALUES (3)
@@ -41,6 +58,7 @@ INSERT INTO fk_integers VALUES (3)
 statement error
 DELETE FROM pk_integers WHERE i=3
 ----
+Violates foreign key constraint
 
 statement ok
 DELETE FROM fk_integers WHERE j=3
@@ -51,14 +69,17 @@ DELETE FROM pk_integers WHERE i=3
 statement error
 UPDATE pk_integers SET i=5 WHERE i=2
 ----
+Violates foreign key constraint
 
 statement error
 UPDATE fk_integers SET j=4 WHERE j=2
 ----
+Violates foreign key constraint
 
 statement error
 DROP TABLE pk_integers;
 ----
+this table is main key table of the table "fk_integers"
 
 statement ok
 DROP TABLE fk_integers;
