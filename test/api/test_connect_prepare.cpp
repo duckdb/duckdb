@@ -18,7 +18,7 @@ namespace {
 //! The SQL of every statement routed to the connected database
 vector<string> routed_queries;
 
-//! A catalog that can be CONNECT-ed to, and answers every routed statement with its SQL
+//! A catalog that can be CONNECT-ed to, and answers every routed statement with its SQL and the catalog name
 class RoutingCatalog : public DuckCatalog {
 public:
 	explicit RoutingCatalog(AttachedDatabase &db) : DuckCatalog(db) {
@@ -35,6 +35,7 @@ public:
 		routed_queries.push_back(sql);
 		auto node = make_uniq<SelectNode>();
 		node->select_list.push_back(ConstantExpression::String(sql));
+		node->select_list.push_back(ConstantExpression::String(GetName().GetIdentifierName()));
 		node->from_table = make_uniq<EmptyTableRef>();
 		auto select = make_uniq<SelectStatement>();
 		select->node = std::move(node);
@@ -93,6 +94,15 @@ TEST_CASE("Prepare statements while CONNECT-ed", "[api][connect]") {
 	result = parsed->Execute();
 	REQUIRE(CHECK_COLUMN(result, 0, {"INSERT INTO t VALUES (2)"}));
 	REQUIRE(routed_queries.size() == 4);
+	auto handle = select->Submit();
+	REQUIRE_NO_FAIL(*handle);
+	handle->Complete();
+	REQUIRE(CHECK_COLUMN(handle, 0, {"SELECT 42"}));
+	REQUIRE(CHECK_COLUMN(handle, 1, {"remote"}));
+	REQUIRE(routed_queries.size() == 5);
+	// the result is known only at execution
+	REQUIRE(!select->MetadataAvailable());
+	REQUIRE(select->GetStatementType() == StatementType::PASSTHROUGH_STATEMENT);
 
 	// parameter values cannot be routed
 	REQUIRE(insert->GetParameterCount() == 0);
@@ -103,14 +113,14 @@ TEST_CASE("Prepare statements while CONNECT-ed", "[api][connect]") {
 	auto prepared = con.Prepare(std::move(parameterized[0]));
 	REQUIRE(prepared->HasError());
 	REQUIRE(StringUtil::Contains(prepared->GetError(), "cannot be executed while CONNECT-ed"));
-	REQUIRE(routed_queries.size() == 4);
+	REQUIRE(routed_queries.size() == 5);
 
 	// DISCONNECT prepared while CONNECT-ed runs locally
 	auto disconnect = con.Prepare("DISCONNECT");
 	REQUIRE(!disconnect->HasError());
 	REQUIRE_NO_FAIL(disconnect->Execute());
 	REQUIRE(!con.context->IsConnected());
-	REQUIRE(routed_queries.size() == 4);
+	REQUIRE(routed_queries.size() == 5);
 
 	// statements prepared for the connected database do not run locally
 	REQUIRE_FAIL(select->Execute());
@@ -118,5 +128,22 @@ TEST_CASE("Prepare statements while CONNECT-ed", "[api][connect]") {
 	REQUIRE_FAIL(parsed->Execute());
 	result = con.Query("SELECT count(*) FROM t");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
-	REQUIRE(routed_queries.size() == 4);
+	REQUIRE(routed_queries.size() == 5);
+
+	// they run on the database that is connected at execution
+	REQUIRE_NO_FAIL(con.Query("ATTACH 'routed' AS other (TYPE connect_routing_test)"));
+	REQUIRE_NO_FAIL(con.Query("CONNECT other"));
+	result = select->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {"SELECT 42"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"other"}));
+	REQUIRE(routed_queries.size() == 6);
+
+	// and fail once another connection detached it
+	Connection detacher(db);
+	REQUIRE_NO_FAIL(detacher.Query("DETACH other"));
+	result = select->Execute();
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->GetError(), "has been detached"));
+	REQUIRE(routed_queries.size() == 6);
+	REQUIRE_NO_FAIL(con.Query("DISCONNECT"));
 }

@@ -213,11 +213,11 @@ private:
 	//! The metadata of the statement, as it was prepared
 	PreparedStatementInfo info;
 	//! The statement as the user wrote it, when each execution submits it anew
-	unique_ptr<SQLStatement> expanding_statement;
+	unique_ptr<SQLStatement> written_statement;
 
 private:
-	//! Create the statement that runs this prepared statement with the given values: `EXECUTE <name>(...)`, or a
-	//! copy of the statement that expands, whose values are handed to the submission in the parameters
+	//! Create the statement that runs this prepared statement with the given values, `EXECUTE <name>(...)` or a copy
+	//! of the written statement, whose values are handed to the submission in the parameters
 	unique_ptr<SQLStatement> CreateStatement(identifier_map_t<BoundParameterData> &named_values,
 	                                         QueryParameters &parameters) const;
 
