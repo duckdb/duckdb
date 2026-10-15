@@ -1,0 +1,46 @@
+# name: test/issues/general/test_27247.test
+# description: Issue 27247: filters on a GEOMETRY column with a CRS are pushed into the scan next to other filters
+# group: [general]
+
+statement ok
+CREATE TABLE t AS
+SELECT i::VARCHAR AS id, ('POINT(' || i || ' ' || i || ')')::GEOMETRY('OGC:CRS84') AS g, ('POINT(' || i || ' ' || i || ')')::GEOMETRY AS h
+FROM range(200000) t(i);
+
+# the column is cast to GEOMETRY without a CRS, and both filters can be pushed down
+query II
+EXPLAIN SELECT count(*) FROM t WHERE g && 'POINT(2 2)'::GEOMETRY AND id::INT = 2
+----
+physical_plan	<REGEX>:[\s\S]*Filters:[\s\S]*CAST\(g AS GEOMETRY\) &&[\s\S]*CAST\(id AS INTEGER\) = 2[\s\S]*
+
+query II
+EXPLAIN SELECT count(*) FROM t WHERE g && 'POINT(2 2)'::GEOMETRY AND id::INT = 2
+----
+physical_plan	<!REGEX>:[\s\S]*Filter ─[\s\S]*
+
+query I
+SELECT count(*) FROM t WHERE g && 'POINT(2 2)'::GEOMETRY AND id::INT = 2
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE g && 'POINT(2 2)'::GEOMETRY AND id::INT = 2
+----
+analyzed_plan	<REGEX>:[\s\S]*Row Groups Scanned: 1 / 2[\s\S]*
+
+# a cast from GEOMETRY without a CRS to GEOMETRY with a CRS cannot throw either
+query II
+EXPLAIN SELECT count(*) FROM t WHERE h::GEOMETRY('OGC:CRS84') && 'POINT(199999 199999)'::GEOMETRY('OGC:CRS84') AND id::INT = 199999
+----
+physical_plan	<!REGEX>:[\s\S]*Filter ─[\s\S]*
+
+query I
+SELECT count(*) FROM t WHERE h::GEOMETRY('OGC:CRS84') && 'POINT(199999 199999)'::GEOMETRY('OGC:CRS84') AND id::INT = 199999
+----
+1
+
+# a cast between two different CRSs is rejected when it is bound, not when it runs
+statement error
+SELECT count(*) FROM t WHERE g::GEOMETRY('OGC:CRS83') && 'POINT(2 2)'::GEOMETRY('OGC:CRS83') AND id::INT = 2
+----
+Binder Error: Cannot cast GEOMETRY with CRS 'OGC:CRS84' to GEOMETRY with different CRS 'OGC:CRS83'
