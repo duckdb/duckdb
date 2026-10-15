@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/disjunctive_join_rewriter.hpp"
 
 #include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/planner/logical_operator_repeatability.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -94,14 +95,16 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::OptimizeInternal(unique_ptr
 	epilogue = NormalizeOutput(std::move(epilogue), orig_bindings, orig_types, left_cte, right_cte, join.join_type,
 	                           replacements);
 
-	// Wrap in CTEs
+	// Every branch must consume the same input occurrences unless copying is proven safe.
+	auto right_materialize = LogicalSubtreeIsRepeatable(*right_child) ? CTEMaterialize::CTE_MATERIALIZE_DEFAULT
+	                                                                  : CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+	auto left_materialize = LogicalSubtreeIsRepeatable(*left_child) ? CTEMaterialize::CTE_MATERIALIZE_DEFAULT
+	                                                                : CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
 	epilogue = make_uniq<LogicalMaterializedCTE>("rhs_cte", right_cte.table_index, right_cte.output_types.size(),
-	                                             std::move(right_child), std::move(epilogue),
-	                                             CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	                                             std::move(right_child), std::move(epilogue), right_materialize);
 
 	epilogue = make_uniq<LogicalMaterializedCTE>("lhs_cte", left_cte.table_index, left_cte.output_types.size(),
-	                                             std::move(left_child), std::move(epilogue),
-	                                             CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	                                             std::move(left_child), std::move(epilogue), left_materialize);
 
 	epilogue->ResolveOperatorTypes();
 	ColumnBindingRewrite::ValidateOutput(orig_bindings, epilogue->GetColumnBindings(), replacements);
@@ -217,6 +220,8 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildSemiJoin(const CTEInfo
                                                                    const vector<Branch> &branches) {
 	TableIndex probe_ref = NewTableIndex();
 	auto current = CreateCTERef(left_cte, probe_ref);
+	ColumnBindingReplacer probe_replacer;
+	probe_replacer.AddReplacements(left_cte.original_bindings, current->GetColumnBindings());
 	vector<unique_ptr<Expression>> marker_refs;
 
 	for (idx_t i = 0; i < branches.size(); i++) {
@@ -224,14 +229,11 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildSemiJoin(const CTEInfo
 		TableIndex mark_tbl = NewTableIndex();
 
 		auto build_scan = CreateCTERef(right_cte, build_ref);
-
-		auto left_expr = branches[i].left_expr->Copy();
-		auto right_expr = branches[i].right_expr->Copy();
-		RemapExpressions(left_cte, right_cte, probe_ref, build_ref, left_expr, right_expr);
+		ColumnBindingReplacer build_replacer;
+		build_replacer.AddReplacements(right_cte.original_bindings, build_scan->GetColumnBindings());
 
 		auto mark_join = make_uniq<LogicalComparisonJoin>(JoinType::MARK);
-		mark_join->conditions.push_back(
-		    JoinCondition(std::move(left_expr), std::move(right_expr), branches[i].comparison_type));
+		mark_join->conditions.push_back(CreateJoinCondition(branches[i], probe_replacer, build_replacer));
 		mark_join->mark_index = mark_tbl;
 		mark_join->AddChild(std::move(current));
 		mark_join->AddChild(std::move(build_scan));
@@ -252,38 +254,27 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildSemiJoin(const CTEInfo
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildAntiJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
                                                                    const vector<Branch> &branches) {
 	TableIndex probe_ref = NewTableIndex();
-	auto chain = CreateAntiJoinChain(left_cte, right_cte, branches, probe_ref);
-	return chain;
+	return CreateAntiJoinChain(left_cte, right_cte, branches, probe_ref);
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::CreateBranchJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
-                                                                      const vector<Branch> &branches, idx_t branch_idx,
-                                                                      TableIndex &left_ref_idx,
-                                                                      TableIndex &right_ref_idx) {
-	left_ref_idx = NewTableIndex();
-	right_ref_idx = NewTableIndex();
-
-	vector<unique_ptr<Expression>> exclusion_preds;
-	if (branch_idx > 0) {
-		exclusion_preds =
-		    CreateExclusionPredicates(left_cte, right_cte, branches, branch_idx, left_ref_idx, right_ref_idx);
-	}
-
-	auto left_scan = CreateCTERef(left_cte, left_ref_idx);
-	auto right_scan = CreateCTERef(right_cte, right_ref_idx);
-
-	auto left_expr = branches[branch_idx].left_expr->Copy();
-	auto right_expr = branches[branch_idx].right_expr->Copy();
-	RemapExpressions(left_cte, right_cte, left_ref_idx, right_ref_idx, left_expr, right_expr);
+                                                                      const vector<Branch> &branches,
+                                                                      idx_t branch_idx) {
+	auto left_scan = CreateCTERef(left_cte, NewTableIndex());
+	auto right_scan = CreateCTERef(right_cte, NewTableIndex());
+	ColumnBindingReplacer left_replacer, right_replacer;
+	left_replacer.AddReplacements(left_cte.original_bindings, left_scan->GetColumnBindings());
+	right_replacer.AddReplacements(right_cte.original_bindings, right_scan->GetColumnBindings());
 
 	auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
-	join->conditions.push_back(
-	    JoinCondition(std::move(left_expr), std::move(right_expr), branches[branch_idx].comparison_type));
-
-	if (!exclusion_preds.empty()) {
-		for (const auto &pred : exclusion_preds) {
-			join->conditions.push_back(JoinCondition(pred->Copy()));
-		}
+	join->conditions.push_back(CreateJoinCondition(branches[branch_idx], left_replacer, right_replacer));
+	for (idx_t i = 0; i < branch_idx; i++) {
+		auto comparison =
+		    JoinCondition::CreateExpression(CreateJoinCondition(branches[i], left_replacer, right_replacer));
+		// Exclude only pairs for which an earlier branch was TRUE, preserving UNKNOWN.
+		join->conditions.emplace_back(
+		    BoundComparisonExpression::Create(ExpressionType::COMPARE_DISTINCT_FROM, std::move(comparison),
+		                                      make_uniq<BoundConstantExpression>(Value::BOOLEAN(true))));
 	}
 
 	join->AddChild(std::move(left_scan));
@@ -298,9 +289,7 @@ vector<unique_ptr<LogicalOperator>> DisjunctiveJoinRewriter::CreateMatchedBranch
 	vector<unique_ptr<LogicalOperator>> union_children;
 
 	for (idx_t i = 0; i < branches.size(); i++) {
-		TableIndex left_ref_idx, right_ref_idx;
-		auto join = CreateBranchJoin(left_cte, right_cte, branches, i, left_ref_idx, right_ref_idx);
-		union_children.push_back(std::move(join));
+		union_children.push_back(CreateBranchJoin(left_cte, right_cte, branches, i));
 	}
 	return union_children;
 }
@@ -340,18 +329,17 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::CreateAntiJoinChain(const C
                                                                          const vector<Branch> &branches,
                                                                          TableIndex probe_ref_idx) {
 	auto current = CreateCTERef(probe_cte, probe_ref_idx);
+	ColumnBindingReplacer probe_replacer;
+	probe_replacer.AddReplacements(probe_cte.original_bindings, current->GetColumnBindings());
 
 	for (idx_t i = 0; i < branches.size(); i++) {
 		TableIndex build_ref = NewTableIndex();
 		auto build_scan = CreateCTERef(build_cte, build_ref);
-
-		auto left_expr = branches[i].left_expr->Copy();
-		auto right_expr = branches[i].right_expr->Copy();
-		RemapExpressions(probe_cte, build_cte, probe_ref_idx, build_ref, left_expr, right_expr);
+		ColumnBindingReplacer build_replacer;
+		build_replacer.AddReplacements(build_cte.original_bindings, build_scan->GetColumnBindings());
 
 		auto anti_join = make_uniq<LogicalComparisonJoin>(JoinType::ANTI);
-		anti_join->conditions.push_back(
-		    JoinCondition(std::move(left_expr), std::move(right_expr), branches[i].comparison_type));
+		anti_join->conditions.push_back(CreateJoinCondition(branches[i], probe_replacer, build_replacer));
 		anti_join->AddChild(std::move(current));
 		anti_join->AddChild(std::move(build_scan));
 
@@ -400,44 +388,13 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::NormalizeOutput(
 	return std::move(proj);
 }
 
-void DisjunctiveJoinRewriter::RemapExpressions(const CTEInfo &left_cte, const CTEInfo &right_cte, TableIndex left_ref,
-                                               TableIndex right_ref, unique_ptr<Expression> &left_expr,
-                                               unique_ptr<Expression> &right_expr) {
-	ColumnBindingReplacer expr_replacer;
-	for (idx_t col = 0; col < left_cte.original_bindings.size(); col++) {
-		expr_replacer.replacement_bindings.emplace_back(
-		    left_cte.original_bindings[col], ColumnBinding(left_ref, ProjectionIndex(col)), left_cte.output_types[col]);
-	}
-	expr_replacer.VisitExpression(&left_expr);
-
-	expr_replacer.replacement_bindings.clear();
-	for (idx_t col = 0; col < right_cte.original_bindings.size(); col++) {
-		expr_replacer.replacement_bindings.emplace_back(right_cte.original_bindings[col],
-		                                                ColumnBinding(right_ref, ProjectionIndex(col)),
-		                                                right_cte.output_types[col]);
-	}
-	expr_replacer.VisitExpression(&right_expr);
-}
-
-vector<unique_ptr<Expression>>
-DisjunctiveJoinRewriter::CreateExclusionPredicates(const CTEInfo &left_cte, const CTEInfo &right_cte,
-                                                   const vector<Branch> &branches, idx_t current_branch_idx,
-                                                   TableIndex left_ref_idx, TableIndex right_ref_idx) {
-	vector<unique_ptr<Expression>> exclusions;
-
-	for (idx_t i = 0; i < current_branch_idx; i++) {
-		auto earlier_left = branches[i].left_expr->Copy();
-		auto earlier_right = branches[i].right_expr->Copy();
-		RemapExpressions(left_cte, right_cte, left_ref_idx, right_ref_idx, earlier_left, earlier_right);
-
-		auto earlier_comparison = BoundComparisonExpression::Create(branches[i].comparison_type,
-		                                                            std::move(earlier_left), std::move(earlier_right));
-		// Exclude only pairs for which an earlier branch was TRUE, preserving UNKNOWN.
-		exclusions.push_back(
-		    BoundComparisonExpression::Create(ExpressionType::COMPARE_DISTINCT_FROM, std::move(earlier_comparison),
-		                                      make_uniq<BoundConstantExpression>(Value::BOOLEAN(true))));
-	}
-	return exclusions;
+JoinCondition DisjunctiveJoinRewriter::CreateJoinCondition(const Branch &branch, ColumnBindingReplacer &left_replacer,
+                                                           ColumnBindingReplacer &right_replacer) {
+	auto left_expr = branch.left_expr->Copy();
+	auto right_expr = branch.right_expr->Copy();
+	left_replacer.VisitExpression(&left_expr);
+	right_replacer.VisitExpression(&right_expr);
+	return JoinCondition(std::move(left_expr), std::move(right_expr), branch.comparison_type);
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::CreateCTERef(const CTEInfo &cte, TableIndex ref_idx) {

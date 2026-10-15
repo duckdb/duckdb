@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+struct JoinCondition;
+
 class DisjunctiveJoinRewriter {
 public:
 	explicit DisjunctiveJoinRewriter(Binder &binder);
@@ -60,8 +62,7 @@ private:
 	vector<unique_ptr<LogicalOperator>> CreateMatchedBranches(const CTEInfo &left_cte, const CTEInfo &right_cte,
 	                                                          const vector<Branch> &branches);
 	unique_ptr<LogicalOperator> CreateBranchJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
-	                                             const vector<Branch> &branches, idx_t branch_idx,
-	                                             TableIndex &left_ref_idx, TableIndex &right_ref_idx);
+	                                             const vector<Branch> &branches, idx_t branch_idx);
 	unique_ptr<LogicalOperator> CreateUnmatchedProbeSide(const CTEInfo &probe_cte, const CTEInfo &build_cte,
 	                                                     const vector<Branch> &branches);
 	unique_ptr<LogicalOperator> CreateUnmatchedBuildSide(const CTEInfo &left_cte, const CTEInfo &right_cte,
@@ -77,11 +78,8 @@ private:
 	                                            BindingReplacementGraph &replacements);
 
 	// Expression and Operator utilities
-	void RemapExpressions(const CTEInfo &left_cte, const CTEInfo &right_cte, TableIndex left_ref, TableIndex right_ref,
-	                      unique_ptr<Expression> &left_expr, unique_ptr<Expression> &right_expr);
-	vector<unique_ptr<Expression>> CreateExclusionPredicates(const CTEInfo &left_cte, const CTEInfo &right_cte,
-	                                                         const vector<Branch> &branches, idx_t current_branch_idx,
-	                                                         TableIndex left_ref_idx, TableIndex right_ref_idx);
+	JoinCondition CreateJoinCondition(const Branch &branch, ColumnBindingReplacer &left_replacer,
+	                                  ColumnBindingReplacer &right_replacer);
 
 	unique_ptr<LogicalOperator> CreateCTERef(const CTEInfo &cte, TableIndex ref_idx);
 	unique_ptr<LogicalOperator> CreateProjection(unique_ptr<LogicalOperator> child,
