@@ -36,7 +36,31 @@ SELECT (SELECT count(DISTINCT ss_ticket_number) FROM mixed.store_sales), (SELECT
 ----
 1200	800	300
 
-# a single order per sales table still lands on the first day
+# catalog_sales keeps its weighted dates, which run past 2002 at this scale factor
+query II
+SELECT min(cs_sold_date_sk), max(cs_sold_date_sk) FROM mixed.catalog_sales
+----
+2450815	2452891
+
+# with 457 web orders no day gets one by its weight, with 458 some days do
+statement ok
+CREATE SCHEMA cut457
+
+statement ok
+CALL dsdgen(sf=0.0076167, schema='cut457')
+
+statement ok
+CREATE SCHEMA cut458
+
+statement ok
+CALL dsdgen(sf=0.00764, schema='cut458')
+
+query II
+SELECT (SELECT count(DISTINCT ws_order_number) FROM cut457.web_sales), (SELECT count(DISTINCT ws_order_number) FROM cut458.web_sales)
+----
+457	458
+
+# a single catalog order lands on the first day
 statement ok
 CREATE SCHEMA single
 
