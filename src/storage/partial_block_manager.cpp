@@ -9,9 +9,9 @@
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_info.hpp"
-#include "duckdb/storage/table/in_memory_checkpoint.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include <cstdint>
 #include <cstring>
@@ -31,15 +31,7 @@ idx_t PartialBlock::AvailableSpace() {
 }
 
 uint32_t PartialBlock::UseCount() {
-	return block_use_count;
-}
-
-void PartialBlock::AddUninitializedRegion(idx_t start, idx_t end) {
-	uninitialized_regions.push_back({start, end});
-}
-
-void PartialBlock::AddPackable(BlockPackable &packable) {
-	packables.emplace_back(packable, offset);
+	return packables.size();
 }
 
 shared_ptr<BlockHandle> PartialBlock::ReuseBuffer(BufferHandle &source) {
@@ -94,10 +86,11 @@ BlockPointer PartialBlock::Store(BlockPackable &packable, BufferHandle source, u
 
 	const BlockPointer block_ptr(block_id, offset);
 	auto &buffer_manager = block_manager.buffer_manager;
+	BufferHandle dst;
 
 	if (block_handle) {
 		D_ASSERT(source.GetBlockHandle() != block_handle);
-		auto dst = buffer_manager.Pin(block_handle);
+		dst = buffer_manager.Pin(block_handle);
 		D_ASSERT(dst.GetFileBuffer().Size() == block_manager.GetBlockSize());
 		memcpy(dst.GetDataMutable() + offset, source.Ptr(), byte_size);
 	} else {
@@ -105,54 +98,57 @@ BlockPointer PartialBlock::Store(BlockPackable &packable, BufferHandle source, u
 			block_handle = std::move(source_handle);
 		} else {
 			auto &source_memory = source.GetBlockHandle()->GetMemory();
-			auto dst = buffer_manager.Allocate(source_memory.GetMemoryTag(), &block_manager, false);
+			dst = buffer_manager.Allocate(source_memory.GetMemoryTag(), &block_manager, false);
 			memcpy(dst.GetDataMutable(), source.Ptr(), byte_size);
 			block_handle = dst.GetBlockHandle();
 		}
 	}
 
 	if (unaligned_size != aligned_size) {
-		AddUninitializedRegion(unaligned_size, aligned_size);
+		memset(dst.GetDataMutable() + unaligned_size, 0, aligned_size - unaligned_size);
 	}
 
-	AddPackable(packable);
+	packables.emplace_back(packable, offset);
 	offset = NumericCast<uint32_t>(aligned_size);
-	block_use_count++;
 
-	if (block_id != INVALID_BLOCK && block_use_count > 1) {
+	if (block_id != INVALID_BLOCK && UseCount() > 1) {
 		block_manager.IncreaseBlockReferenceCount(block_id);
 	}
 
 	return block_ptr;
 }
 
-void PartialBlock::Flush(QueryContext context) {
+void PartialBlock::Flush(QueryContext context, PartialBlockType type) {
 	if (!block_handle) {
 		throw InternalException("Flush called on partial block that was already flushed");
 	}
 
-	FlushInternal(AvailableSpace());
+	if (type != PartialBlockType::IN_MEMORY_CHECKPOINT) {
+		auto free_space = AvailableSpace();
+		if (free_space > 0) {
+			// zero any tail bytes to prevent leaking buffer data to disk
+			auto buffer_handle = block_manager.buffer_manager.Pin(block_handle);
+			memset(buffer_handle.GetDataMutable() + block_manager.GetBlockSize() - free_space, 0, free_space);
+		}
 
-	bool fetch_new_block = block_id == INVALID_BLOCK;
-	if (fetch_new_block) {
-		block_id = block_manager.GetFreeBlockId();
-	}
-	block_handle = block_manager.ConvertToPersistent(context, block_id, std::move(block_handle));
+		bool fetch_new_block = block_id == INVALID_BLOCK;
+		if (fetch_new_block) {
+			block_id = block_manager.GetFreeBlockId();
+		}
+		block_handle = block_manager.ConvertToPersistent(context, block_id, std::move(block_handle));
 
-	if (fetch_new_block) {
-		for (idx_t i = 1; i < block_use_count; i++) {
-			block_manager.IncreaseBlockReferenceCount(block_id);
+		if (fetch_new_block) {
+			for (idx_t i = 1; i < UseCount(); i++) {
+				block_manager.IncreaseBlockReferenceCount(block_id);
+			}
 		}
 	}
 
-	FinalizePackables();
-	Clear();
-}
-
-void PartialBlock::FinalizePackables() {
 	for (auto &[packable, offset] : packables) {
 		packable.get().Finalize(block_handle, offset);
 	}
+
+	Clear();
 }
 
 void PartialBlock::Merge(PartialBlock &other) {
@@ -168,37 +164,18 @@ void PartialBlock::Merge(PartialBlock &other) {
 	auto new_handle = buffer_manager.Pin(block_handle);
 	memcpy(new_handle.GetDataMutable() + offset, old_handle.Ptr(), other.offset);
 
-	for (auto &region : other.uninitialized_regions) {
-		uninitialized_regions.push_back({region.start + offset, region.end + offset});
-	}
 	for (auto &[packable, other_offset] : other.packables) {
 		packables.emplace_back(packable, NumericCast<uint32_t>(other_offset + offset));
 	}
 
 	offset += other.offset;
-	block_use_count += other.block_use_count;
 
 	other.Clear();
 }
 
 void PartialBlock::Clear() {
-	uninitialized_regions.clear();
 	block_handle.reset();
 	packables.clear();
-}
-
-void PartialBlock::FlushInternal(const idx_t free_space_left) {
-	// ensure that we do not leak any data
-	if (free_space_left > 0 || !uninitialized_regions.empty()) {
-		auto buffer_handle = block_manager.buffer_manager.Pin(block_handle);
-
-		// memset any uninitialized regions
-		for (auto &uninitialized : uninitialized_regions) {
-			memset(buffer_handle.GetDataMutable() + uninitialized.start, 0, uninitialized.end - uninitialized.start);
-		}
-		// memset any free space at the end of the block to 0 prior to writing to disk
-		memset(buffer_handle.GetDataMutable() + block_manager.GetBlockSize() - free_space_left, 0, free_space_left);
-	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -229,15 +206,6 @@ block_id_t PartialBlockManager::GetFreeBlockId() {
 		return block_manager.GetFreeBlockId();
 	}
 }
-
-// unique_ptr<PartialBlock> PartialBlockManager::CreatePartialBlock(BlockPackable &segment, PartialBlockState state) {
-// 	if (partial_block_type == PartialBlockType::IN_MEMORY_CHECKPOINT) {
-// 		return make_uniq<InMemoryPartialBlock>(segment, state, block_manager);
-// 	}
-// 	auto partial_block = make_uniq<PartialBlock>(block_manager, segment.GetBlockHandle());
-// 	partial_block->AddSegmentToTail(segment);
-// 	return partial_block;
-// }
 
 void PartialBlockManager::Merge(PartialBlockManager &other) {
 	if (&other == this) {
@@ -270,15 +238,12 @@ void PartialBlockManager::Merge(PartialBlockManager &other) {
 }
 
 void PartialBlockManager::ClearBlocks() {
-	for (auto &e : partially_filled_blocks) {
-		e.second->Clear();
-	}
 	partially_filled_blocks.clear();
 }
 
 void PartialBlockManager::FlushPartialBlocks() {
 	for (auto &e : partially_filled_blocks) {
-		e.second->Flush(context);
+		e.second->Flush(context, partial_block_type);
 	}
 	partially_filled_blocks.clear();
 }
@@ -300,10 +265,6 @@ unique_ptr<PartialBlock> PartialBlockManager::TakePartialBlock(uint32_t byte_siz
 }
 
 unique_ptr<PartialBlock> PartialBlockManager::CreatePartialBlock() {
-	if (partial_block_type == PartialBlockType::IN_MEMORY_CHECKPOINT) {
-		return make_uniq<InMemoryPartialBlock>(block_manager);
-	}
-
 	block_id_t block_id;
 	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
 		block_id = GetFreeBlockId();
@@ -328,10 +289,6 @@ unique_ptr<PartialBlock> PartialBlockManager::AcquirePartialBlock(uint32_t byte_
 	return partial_block;
 }
 
-void PartialBlockManager::Retain(unique_ptr<PartialBlock> partial_block) {
-	partially_filled_blocks.insert(make_pair(partial_block->AvailableSpace(), std::move(partial_block)));
-}
-
 unique_ptr<PartialBlock> PartialBlockManager::PruneFreeList() {
 	if (partially_filled_blocks.size() <= MAX_BLOCK_MAP_SIZE) {
 		return nullptr;
@@ -347,20 +304,21 @@ unique_ptr<PartialBlock> PartialBlockManager::PruneFreeList() {
 void PartialBlockManager::RetainOrFlush(unique_ptr<PartialBlock> partial_block) {
 	auto min_reusable_space = block_manager.GetBlockSize() - max_partial_block_size;
 	auto available_space = partial_block->AvailableSpace();
+	auto block_type = partial_block_type;
 
 	if (partial_block->UseCount() >= max_use_count) {
-		partial_block->Flush(context);
+		partial_block->Flush(context, block_type);
 		return;
 	}
 	if (available_space < min_reusable_space) {
-		partial_block->Flush(context);
+		partial_block->Flush(context, block_type);
 		return;
 	}
 
-	Retain(std::move(partial_block));
+	partially_filled_blocks.insert(make_pair(partial_block->AvailableSpace(), std::move(partial_block)));
 
 	if (auto pruned_block = PruneFreeList()) {
-		pruned_block->Flush(context);
+		pruned_block->Flush(context, block_type);
 	}
 }
 

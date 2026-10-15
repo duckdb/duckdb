@@ -81,12 +81,4 @@ private:
 	MemoryStream metadata_writer;
 };
 
-struct InMemoryPartialBlock : public PartialBlock {
-public:
-	explicit InMemoryPartialBlock(BlockManager &block_manager);
-	~InMemoryPartialBlock() override;
-
-public:
-	void Flush(QueryContext context) override;
-};
 } // namespace duckdb

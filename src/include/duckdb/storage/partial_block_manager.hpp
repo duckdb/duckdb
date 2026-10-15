@@ -29,6 +29,8 @@ class TableCatalogEntry;
 class ViewCatalogEntry;
 class TypeCatalogEntry;
 
+enum class PartialBlockType { FULL_CHECKPOINT, APPEND_TO_TABLE, IN_MEMORY_CHECKPOINT };
+
 //! Regions that require zero-initialization to avoid leaking memory
 struct UninitializedRegion {
 	idx_t start;
@@ -47,32 +49,20 @@ public:
 
 struct PartialBlock {
 	PartialBlock(BlockManager &block_manager, block_id_t block_id);
-	virtual ~PartialBlock() {
-	}
-
-	//! All uninitialized regions on this block, we need to zero-initialize them when flushing
-	vector<UninitializedRegion> uninitialized_regions;
-	//! The block manager of the partial block manager
-	BlockManager &block_manager;
-	//! The block handle of the underlying block that this partial block writes to
-	shared_ptr<BlockHandle> block_handle;
 
 public:
+	//! How much space is left in the current block for further packing.
 	idx_t AvailableSpace();
+	//! How many packables are residing in the current block.
 	uint32_t UseCount();
-	//! Add regions that need zero-initialization to avoid leaking memory
-	void AddUninitializedRegion(const idx_t start, const idx_t end);
-	//! Register the object at the current allocation offset.
-	void AddPackable(BlockPackable &packable);
-
-	shared_ptr<BlockHandle> ReuseBuffer(BufferHandle &source);
+	//! Write data of the packable into the buffer backed by the partial block.
 	BlockPointer Store(BlockPackable &packable, BufferHandle source, uint32_t byte_size);
-	//! Flush the block to disk and zero-initialize any free space and uninitialized regions
-	virtual void Flush(QueryContext context);
-	void FlushInternal(const idx_t free_space_left);
-	//! Merge bytes and segment references before either block has a persistent block ID.
-	virtual void Merge(PartialBlock &other);
-	virtual void Clear();
+	//! Flush the block to disk and zero-initialize any tail free space.
+	void Flush(QueryContext context, PartialBlockType type);
+	//! Merge packables from another block into the current block, before either block has a persistent block ID.
+	void Merge(PartialBlock &other);
+	//! Remove all packables and the associated backing block.
+	void Clear();
 
 public:
 	template <class TARGET>
@@ -81,22 +71,23 @@ public:
 		return reinterpret_cast<TARGET &>(*this);
 	}
 
-protected:
-	//! Install the final buffer and offsets before releasing the partial block.
-	void FinalizePackables();
+private:
+	//! Determine if we can reuse the source buffer for further packing, this saves on an allocation and copy when
+	//! starting a new partial block.
+	shared_ptr<BlockHandle> ReuseBuffer(BufferHandle &source);
 
 private:
+	//! The block manager of the partial block manager
+	BlockManager &block_manager;
+	//! The block handle of the underlying block that this partial block writes to
+	shared_ptr<BlockHandle> block_handle;
 	//! Type-erased buffers that will be packed in the current block.
 	vector<std::pair<reference<BlockPackable>, uint32_t>> packables;
 	//! The block id of the partial block
 	block_id_t block_id;
 	//! Next allocation offset, and also the current allocation size
 	uint32_t offset = 0;
-	//! The number of references to this block from partial allocations
-	uint32_t block_use_count = 0;
 };
-
-enum class PartialBlockType { FULL_CHECKPOINT, APPEND_TO_TABLE, IN_MEMORY_CHECKPOINT };
 
 //! Enables sharing blocks across some scope. Scope is whatever we want to share
 //! blocks across. It may be an entire checkpoint or just a single row group.
@@ -134,17 +125,12 @@ public:
 
 	unique_ptr<PartialBlock> AcquirePartialBlock(uint32_t byte_size);
 
-	void Retain(unique_ptr<PartialBlock> partial_block);
-
 	unique_ptr<PartialBlock> PruneFreeList();
 
 	void RetainOrFlush(unique_ptr<PartialBlock> partial_block);
 
 	optional<BlockPointer> Write(BlockPackable &packable, BufferHandle source, uint32_t byte_size);
 
-	unique_lock<mutex> GetLock() {
-		return unique_lock<mutex>(partial_block_lock);
-	}
 	block_id_t GetFreeBlockId();
 
 	//! Returns a reference to the underlying block manager.
@@ -169,11 +155,6 @@ private:
 	//! The maximum size (in bytes) at which a partial block will be considered a partial block
 	uint32_t max_partial_block_size;
 	uint32_t max_use_count;
-
-private:
-	//! Try to obtain a partially filled block that can fit "segment_size" bytes
-	//! If successful, returns true and returns the block_id and offset_in_block to write to
-	//! Otherwise, returns false
 };
 
 } // namespace duckdb

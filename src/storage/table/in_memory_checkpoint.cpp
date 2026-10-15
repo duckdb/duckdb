@@ -124,18 +124,4 @@ MetadataManager &InMemoryTableDataWriter::GetMetadataManager() {
 	return checkpoint_manager.GetMetadataManager();
 }
 
-InMemoryPartialBlock::InMemoryPartialBlock(BlockManager &block_manager) : PartialBlock(block_manager, INVALID_BLOCK) {
-}
-
-InMemoryPartialBlock::~InMemoryPartialBlock() {
-}
-
-void InMemoryPartialBlock::Flush(QueryContext context) {
-	if (!block_handle) {
-		throw InternalException("Flush called on partial block that was already flushed");
-	}
-	FinalizePackables();
-	Clear();
-}
-
 } // namespace duckdb
