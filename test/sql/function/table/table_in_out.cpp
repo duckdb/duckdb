@@ -106,6 +106,55 @@ struct ThrottlingSum {
 	}
 };
 
+// TableInOutFunction that emits one row when it finishes, also without input rows
+struct EmitOnFinish {
+	struct EmitOnFinishLocalData : public LocalTableFunctionState {
+		bool emitted = false;
+	};
+
+	static duckdb::unique_ptr<LocalTableFunctionState>
+	LocalInit(ExecutionContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *global_state) {
+		return make_uniq<EmitOnFinishLocalData>();
+	}
+
+	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
+	                                             duckdb::vector<LogicalType> &return_types,
+	                                             duckdb::vector<Identifier> &names) {
+		return_types.emplace_back(LogicalType::INTEGER);
+		names.emplace_back("finished");
+		return make_uniq<TableFunctionData>();
+	}
+
+	static OperatorResultType Function(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
+	                                   DataChunk &output) {
+		output.SetChildCardinality(0);
+		return OperatorResultType::NEED_MORE_INPUT;
+	}
+
+	static OperatorFinalizeResultType Finalize(ExecutionContext &context, TableFunctionInput &data_p,
+	                                           DataChunk &output) {
+		auto &local_state = data_p.local_state->Cast<EmitOnFinishLocalData>();
+		if (!local_state.emitted) {
+			local_state.emitted = true;
+			output.data[0].Append(Value::INTEGER(42));
+			output.SetChildCardinality(1);
+		}
+		return OperatorFinalizeResultType::FINISHED;
+	}
+
+	static void Register(Connection &con) {
+		con.BeginTransaction();
+		auto &catalog = Catalog::GetSystemCatalog(*con.context);
+		TableFunction emit_on_finish("emit_on_finish", {LogicalType::TABLE}, nullptr, EmitOnFinish::Bind, nullptr,
+		                             EmitOnFinish::LocalInit);
+		emit_on_finish.in_out_function = EmitOnFinish::Function;
+		emit_on_finish.in_out_function_final = EmitOnFinish::Finalize;
+		CreateTableFunctionInfo emit_on_finish_info(emit_on_finish);
+		catalog.CreateTableFunction(*con.context, emit_on_finish_info);
+		con.Commit();
+	}
+};
+
 struct LateralStructEcho {
 	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
 	                                             duckdb::vector<LogicalType> &return_types,
@@ -570,4 +619,17 @@ TEST_CASE("WITH ORDINALITY reports unfiltered positions for table in-out functio
 	REQUIRE_NO_FAIL(*complex_filter);
 	REQUIRE(CHECK_COLUMN(complex_filter, 0, {4}));
 	REQUIRE(CHECK_COLUMN(complex_filter, 1, {4}));
+}
+
+TEST_CASE("Table in out function with a final call on an empty input", "[tablefunction]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+
+	EmitOnFinish::Register(con);
+
+	auto result = con.Query("SELECT * FROM emit_on_finish((SELECT i FROM range(3) t(i) WHERE false))");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	result = con.Query("SELECT * FROM emit_on_finish((SELECT i FROM range(3) t(i) WHERE false ORDER BY i LIMIT 5))");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 }

@@ -3,6 +3,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
 
@@ -72,11 +73,16 @@ unique_ptr<LogicalOperator> EmptyResultPullup::Optimize(unique_ptr<LogicalOperat
 		op->children[i] = Optimize(std::move(op->children[i]));
 	}
 	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_GET:
+		if (op->Cast<LogicalGet>().function.in_out_function_final) {
+			// a table in-out function can emit rows when it finishes, also without input rows
+			return op;
+		}
+		DUCKDB_EXPLICIT_FALLTHROUGH;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_WINDOW:
-	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_PIVOT:
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
