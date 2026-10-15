@@ -637,7 +637,8 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 
 static unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileLocalIndex local_idx,
                                                      ColumnMapResult &mapping, const LogicalType &global_column_type,
-                                                     const LogicalType &local_column_type, bool is_trivially_mappable) {
+                                                     const LogicalType &local_column_type, bool is_trivially_mappable,
+                                                     bool encode_varchar_as_blob) {
 	unique_ptr<Expression> expr = make_uniq<BoundReferenceExpression>(local_column_type, local_idx.GetIndex());
 	if (mapping.column_map.type().id() == LogicalTypeId::TUPLE) {
 		// A pushed-down extract already selects the source column; retain only its child mapping.
@@ -650,7 +651,11 @@ static unique_ptr<Expression> ConstructMapExpression(ClientContext &context, Mul
 	    !is_trivially_mappable && local_column_type.IsNested();
 	if (!can_use_remap_struct) {
 		// not a struct - potentially add a cast
-		if (local_column_type != global_column_type) {
+		if (encode_varchar_as_blob) {
+			vector<unique_ptr<Expression>> children;
+			children.push_back(std::move(expr));
+			expr = BindBuiltinScalarFunction(context, "encode", std::move(children));
+		} else if (local_column_type != global_column_type) {
 			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column_type);
 		}
 		return expr;
@@ -814,10 +819,15 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 		auto &local_type = local_columns[local_id].type;
 		auto global_column_type = global_id.HasType() ? global_id.GetScanType() : global_column.type;
 		auto local_column_type = local_index->HasType() ? local_index->GetScanType() : local_type;
-		auto expr =
-		    ConstructMapExpression(context, local_idx, column_map, global_column_type, local_column_type, trivial_map);
+		const bool encode_varchar_as_blob = reader_data.schema_is_union &&
+		                                    local_column_type.id() == LogicalTypeId::VARCHAR &&
+		                                    global_column_type.id() == LogicalTypeId::BLOB;
+		auto expr = ConstructMapExpression(context, local_idx, column_map, global_column_type, local_column_type,
+		                                   trivial_map, encode_varchar_as_blob);
 		reader_data.expressions.push_back(std::move(expr));
-		auto filter_conversion = trivial_map ? FilterConversionType::COPY_DIRECTLY : FilterConversionType::CAST_FILTER;
+		auto filter_conversion = trivial_map              ? FilterConversionType::COPY_DIRECTLY
+		                         : encode_varchar_as_blob ? FilterConversionType::CANNOT_CONVERT
+		                                                  : FilterConversionType::CAST_FILTER;
 
 		MultiFileColumnMap index_mapping(std::move(*column_map.mapping), local_column_type, global_column_type,
 		                                 filter_conversion);

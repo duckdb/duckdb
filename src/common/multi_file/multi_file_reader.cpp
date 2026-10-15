@@ -1134,6 +1134,7 @@ ReaderInitializeType MultiFileReader::InitializeReader(MultiFileReaderData &read
 			}
 		}
 	}
+	reader_data.schema_is_union = bind_data.file_options.SchemaIsUnion();
 	FinalizeBind(reader_data, bind_data.file_options, bind_data.reader_bind, global_columns, column_ids, context,
 	             gstate.multi_file_reader_state.get());
 	return CreateMapping(context, reader_data, global_columns, column_ids, table_filters, gstate.file_list,
