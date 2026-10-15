@@ -756,7 +756,13 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 			}
 			// Dispatch via the catalog — Supports(CONNECT) was validated at CONNECT time, so RemoteExecute
 			// is contracted to be implemented. Wrap the returned TableRef into a SelectStatement.
-			auto remote_ref = live->GetCatalog().RemoteExecute(*this, statement->query);
+			unique_ptr<TableRef> remote_ref;
+			try {
+				remote_ref = live->GetCatalog().RemoteExecute(*this, statement->query);
+			} catch (std::exception &ex) {
+				AttachedDatabase::InvokeCloseIfLastReference(live, *this);
+				return ErrorResult<QueryResult>(ErrorData(ex), statement->query);
+			}
 			auto rewritten = WrapAsSelect(std::move(remote_ref));
 			// the rewrite is invisible to the user - keep reporting the SQL they issued
 			rewritten->query = std::move(statement->query);
