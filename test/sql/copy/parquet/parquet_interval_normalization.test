@@ -51,3 +51,10 @@ FROM parquet_metadata('{TEST_DIR}/interval_normalization_{version}.parquet')
 3	true
 
 endloop
+
+# an interval with a negative part is refused, also after an equal interval without one
+statement error
+COPY (SELECT [INTERVAL '29 days', INTERVAL '1 month -1 day'][i % 2 + 1] AS iv FROM range(2) t(i))
+TO '{TEST_DIR}/interval_negative.parquet'
+----
+Parquet files do not support negative intervals
