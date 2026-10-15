@@ -1,0 +1,17 @@
+# name: benchmark/micro/csv/read_sniffed_types.benchmark
+# description: Read a CSV file whose integer, double, boolean and date columns are sniffed
+# group: [csv]
+
+name CSV Read Sniffed Types
+group csv
+
+cache read_sniffed_types.csv
+
+load
+COPY (SELECT i AS a, i * 0.5 AS b, i % 2 = 0 AS c, DATE '2020-01-01' + (i % 1000)::INTEGER AS d FROM range(5000000) t(i)) TO '${BENCHMARK_DIR}/read_sniffed_types.csv' (HEADER);
+
+run
+SELECT sum(a), sum(b), count(*) FILTER (WHERE c), max(d) FROM read_csv('${BENCHMARK_DIR}/read_sniffed_types.csv')
+
+result IIII
+12499997500000	6249998750000.0	2500000	2022-09-26
