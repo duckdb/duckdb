@@ -95,3 +95,46 @@ SELECT v, p FROM read_json('{TEST_DIR}/json_partition_bind_once_params/**/*.json
 ----
 1	5
 2	6
+
+statement ok
+PREPARE copy_untyped AS COPY (SELECT $1 AS v, 0 AS p) TO '{TEST_DIR}/json_partition_bind_once_untyped' (FORMAT JSON, PARTITION_BY (p));
+
+statement ok
+EXECUTE copy_untyped('x');
+
+query II
+SELECT v, p FROM read_json('{TEST_DIR}/json_partition_bind_once_untyped/**/*.json', hive_partitioning = true)
+----
+x	0
+
+# a prepared COPY binds again after the table changes
+statement ok
+CREATE TABLE src AS SELECT 1 AS v, 0 AS p;
+
+statement ok
+PREPARE copy_table AS COPY (SELECT * FROM src) TO '{TEST_DIR}/json_partition_bind_once_rebind' (FORMAT JSON, PARTITION_BY (p), OVERWRITE);
+
+statement ok
+EXECUTE copy_table;
+
+statement ok
+ALTER TABLE src ADD COLUMN w INT DEFAULT 7;
+
+statement ok
+EXECUTE copy_table;
+
+query III
+SELECT v, w, p FROM read_json('{TEST_DIR}/json_partition_bind_once_rebind/**/*.json', hive_partitioning = true)
+----
+1	7	0
+
+# a COPY inside a CTE
+statement ok
+WITH q AS (SELECT range AS v, 0 AS p FROM range(nextval('seq'))),
+	w AS (COPY (SELECT * FROM q) TO '{TEST_DIR}/json_partition_bind_once_in_cte' (FORMAT JSON, PARTITION_BY (p)))
+SELECT * FROM w;
+
+query II
+SELECT currval('seq'), (SELECT count(*) FROM read_json('{TEST_DIR}/json_partition_bind_once_in_cte/**/*.json'))
+----
+4	4
