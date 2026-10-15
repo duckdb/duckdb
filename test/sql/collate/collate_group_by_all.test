@@ -82,8 +82,8 @@ SELECT typeof(t), t, count(*) FROM (VALUES ('10:00:00+00'::TIMETZ)) v(t) GROUP B
 ----
 TIME WITH TIME ZONE	10:00:00+00	1
 
-# a collated NULL constant
+# a collated expression that is NULL
 query II
-SELECT NULL::VARCHAR COLLATE NOCASE AS n, count(*) FROM t GROUP BY ALL;
+SELECT (c0 || NULL)::VARCHAR COLLATE NOCASE AS n, count(*) FROM t GROUP BY ALL;
 ----
 NULL	5
