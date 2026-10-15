@@ -293,7 +293,7 @@ explain select count(*) from probe_keys left join (select distinct k from (selec
 ----
 physical_plan	<!REGEX>:.*JOIN.*
 
-# a distinct above LIMIT, TOP_N, SAMPLE or a window does not hold below it, because duplicate rows change the result
+# a distinct above LIMIT, SAMPLE or a window does not hold below it, because duplicate rows change the result
 
 statement ok
 create table p(id bigint, g varchar);
@@ -415,5 +415,10 @@ y
 
 query II
 explain select * from (select distinct p.g from p left join k on p.id = k.a) order by g limit 2;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select g, nextval('seq') from (select distinct p.g from p left join k on p.id = k.a);
 ----
 physical_plan	<!REGEX>:.*JOIN.*
