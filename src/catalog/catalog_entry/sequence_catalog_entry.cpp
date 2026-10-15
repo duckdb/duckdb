@@ -7,6 +7,8 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 
 #include <algorithm>
@@ -71,10 +73,13 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 		// an exhausted sequence keeps a counter outside of its range
 		bool exhausted = result < data.min_value || result > data.max_value;
 		if (!exhausted && overflow) {
-			// the next value does not fit in an int64, so the counter moves past the other end of the range
-			next_counter = data.increment < 0 ? NumericLimits<int64_t>::Maximum() : NumericLimits<int64_t>::Minimum();
-			// unless the range holds every int64, then the sequence stops before its last value
-			exhausted = next_counter >= data.min_value && next_counter <= data.max_value;
+			// the next value does not fit in an int64, so the counter moves to an int64 outside of the range
+			auto exhausted_counter = GetExhaustedCounter();
+			if (exhausted_counter) {
+				next_counter = exhausted_counter.value();
+			} else {
+				exhausted = true;
+			}
 		}
 		if (exhausted && data.increment < 0) {
 			throw SequenceException("nextval: reached minimum value of sequence %s (%lld)", name, data.min_value);
@@ -120,6 +125,23 @@ void SequenceCatalogEntry::ReplayValue(uint64_t v_usage_count, int64_t v_counter
 		data.counter = v_counter;
 		data.last_value = last_value;
 	}
+}
+
+optional<int64_t> SequenceCatalogEntry::GetExhaustedCounter() const {
+	if (!temporary) {
+		// storage versions prior to v2.0.0 derive the last value from the counter, which this counter does not allow
+		auto &storage_manager = catalog.GetAttached().GetStorageManager();
+		if (storage_manager.HasStorageVersion() &&
+		    StorageManager::IsPriorToVersion(StorageVersion::V2_0_0, storage_manager.GetStorageVersion())) {
+			return nullopt;
+		}
+	}
+	for (auto counter : {NumericLimits<int64_t>::Maximum(), NumericLimits<int64_t>::Minimum()}) {
+		if (counter < data.min_value || counter > data.max_value) {
+			return counter;
+		}
+	}
+	return nullopt;
 }
 
 void SequenceCatalogEntry::DeriveLastValue() {

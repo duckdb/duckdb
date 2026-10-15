@@ -70,6 +70,10 @@ public:
 	string ToSQL() const override;
 
 private:
+	//! An int64 outside of the range, the counter of a sequence whose next value does not fit in an int64. Unset
+	//! when every int64 is in the range, or when the storage cannot keep such a counter.
+	optional<int64_t> GetExhaustedCounter() const;
+
 	//! Lock for getting a value on the sequence
 	mutable mutex lock;
 	//! Sequence data

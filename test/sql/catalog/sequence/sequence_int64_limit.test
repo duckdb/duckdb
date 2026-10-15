@@ -116,6 +116,32 @@ SELECT nextval('whole');
 ----
 reached maximum value of sequence "whole"
 
+statement ok
+CREATE SEQUENCE nearly_whole INCREMENT BY 2 MINVALUE -9223372036854775808 MAXVALUE 9223372036854775806 START 9223372036854775806;
+
+query I
+SELECT nextval('nearly_whole');
+----
+9223372036854775806
+
+statement error
+SELECT nextval('nearly_whole');
+----
+reached maximum value of sequence "nearly_whole" (9223372036854775806)
+
+statement ok
+CREATE SEQUENCE nearly_whole_down INCREMENT BY -2 MINVALUE -9223372036854775807 MAXVALUE 9223372036854775807 START -9223372036854775807;
+
+query I
+SELECT nextval('nearly_whole_down');
+----
+-9223372036854775807
+
+statement error
+SELECT nextval('nearly_whole_down');
+----
+reached minimum value of sequence "nearly_whole_down" (-9223372036854775807)
+
 # exhausted sequences stay exhausted after a checkpoint and after replaying the WAL
 statement ok
 CHECKPOINT
@@ -161,19 +187,43 @@ SELECT nextval('up');
 ----
 reached maximum value of sequence "up"
 
-# storage before v2.0.0 keeps the counter as well
+# storage before v2.0.0 derives the last value from the counter, so there a sequence stops before its last value
 statement ok
 SET storage_compatibility_version = 'v1.5.2';
 
 load {TEST_DIR}/sequence_int64_limit_v1_5.db
 
 statement ok
-CREATE SEQUENCE up START 9223372036854775807;
+CREATE SEQUENCE up START 9223372036854775806;
 
 query I
 SELECT nextval('up');
 ----
+9223372036854775806
+
+statement error
+SELECT nextval('up');
+----
+reached maximum value of sequence "up" (9223372036854775807)
+
+statement ok
+CREATE TEMPORARY SEQUENCE temp_up START 9223372036854775807;
+
+query I
+SELECT nextval('temp_up');
+----
 9223372036854775807
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+CREATE SEQUENCE wal_up START 9223372036854775806;
+
+query I
+SELECT nextval('wal_up');
+----
+9223372036854775806
 
 restart
 
@@ -181,3 +231,8 @@ statement error
 SELECT nextval('up');
 ----
 reached maximum value of sequence "up"
+
+query II
+SELECT currval('up'), currval('wal_up');
+----
+9223372036854775806	9223372036854775806
