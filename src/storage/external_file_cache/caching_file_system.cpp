@@ -5,6 +5,7 @@
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
@@ -22,10 +23,22 @@ class DatabaseInstance;
 
 namespace {
 
-// Allocate an uncached read buffer to make sure it's de-allocated immediately, and its metadata is not stored in the
-// eviction queue.
+// Destroy the uncached buffer and its metadata on unpin; its allocation can still be reused.
 BufferHandle AllocateUncachedReadBuffer(BufferManager &buffer_manager, idx_t size) {
-	auto buffer = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, size);
+	BufferHandle buffer;
+	const auto header_size = Storage::DEFAULT_BLOCK_HEADER_SIZE;
+	if (size >= 256 * 1024 && size <= 64 * 1024 * 1024 - header_size) {
+		// Reserve the full capacity while keeping the requested I/O range unchanged.
+		const auto capacity = NextPowerOfTwo(size + header_size);
+		try {
+			buffer = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, capacity - header_size);
+		} catch (const OutOfMemoryException &) {
+			// Retry the exact size if only the rounding exceeds the memory limit.
+		}
+	}
+	if (!buffer.IsValid()) {
+		buffer = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, size);
+	}
 	buffer.GetBlockHandle()->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 	return buffer;
 }

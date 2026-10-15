@@ -21,6 +21,7 @@
 namespace duckdb {
 
 class Allocator;
+class AllocationCache;
 class AttachedDatabase;
 class DatabaseInstance;
 class TaskScheduler;
@@ -32,6 +33,7 @@ class BlockAllocator {
 	friend class BlockAllocatorThreadLocalState;
 	friend class BlockAllocatorFlushTask;
 	friend class BlockAllocatorTestHelper;
+	friend class BufferAllocator;
 	friend class TaskScheduler;
 
 public:
@@ -61,16 +63,20 @@ public:
 	void ThreadIdle() const DUCKDB_EXCLUDES(flush_lock);
 	//! Return local blocks without scheduling or discarding pool backing.
 	void ThreadExit() const;
-	//! Best-effort reclamation of all cached pool backing and fallback allocations.
+	//! Best-effort reclamation of all cached backing and fallback allocations.
 	void FlushAll() const noexcept DUCKDB_EXCLUDES(flush_lock);
-	//! Leave pool backing for unmapping and flush fallback allocations.
-	void FlushOnShutdown() const noexcept;
+	//! Leave pool backing for unmapping and release cached fallback allocations.
+	void FlushOnShutdown() const noexcept DUCKDB_EXCLUDES(flush_lock);
 	//! Retain cached backing that fits alongside the buffer manager's live reservations.
 	void FlushForAllocation(idx_t extra_memory, idx_t memory_headroom) const noexcept DUCKDB_EXCLUDES(flush_lock);
-	//! Purge accumulated fallback frees when they no longer fit alongside cached pool backing.
-	bool TryFlushDeallocated(idx_t threshold, idx_t memory_headroom) const noexcept;
+	//! Trim cached backing, then purge accumulated fallback frees that do not fit in the headroom.
+	bool TryFlushDeallocated(idx_t threshold, idx_t memory_headroom) const noexcept DUCKDB_EXCLUDES(flush_lock);
 
 private:
+	//! The buffer allocator's huge-page backend keeps matching allocation and release ownership.
+	data_ptr_t AllocateHugeData(idx_t size) const;
+	void FreeHugeData(data_ptr_t pointer, idx_t size) const;
+
 	enum class FlushState : uint8_t { IDLE, SCHEDULED, RESCHEDULE_REQUESTED };
 	enum class ReclaimMode : uint8_t { FORCE, DECAY, OPPORTUNISTIC };
 
@@ -91,8 +97,16 @@ private:
 	void ReuseRetention(idx_t count, idx_t now_ms) const;
 	idx_t RetentionTarget(idx_t now_ms) const;
 	void UpdateCachedBlocks(int64_t count, idx_t slot) const;
+	idx_t GetCachedPoolMemory() const;
 	void ReturnThreadLocalBlocks() const;
 	void FlushFallbackAllocator(idx_t deallocated) const noexcept;
+	//! Return bytes released to the fallback allocator, which may still need a purge.
+	idx_t TrimCachedMemory(idx_t memory_headroom, optional_idx pool_block_limit = optional_idx()) const noexcept
+	    DUCKDB_EXCLUDES(flush_lock);
+	idx_t FlushAllocationCache(idx_t byte_limit, ReclaimMode mode = ReclaimMode::FORCE) const noexcept
+	    DUCKDB_EXCLUDES(flush_lock);
+	bool HasReclaimableMemory() const DUCKDB_REQUIRES(flush_lock);
+	bool HasPendingCacheDecay() const;
 
 	void SetScheduler(TaskScheduler &scheduler);
 	void ClearScheduler();
@@ -114,6 +128,8 @@ private:
 	const hugeint_t uuid;
 	//! Fallback allocator
 	Allocator &allocator;
+	//! Cache of whole power-of-two fallback allocations, with preferred CPU-local reuse.
+	unique_ptr<AllocationCache> allocation_cache;
 
 	//! Block size (power of two)
 	const idx_t block_size;

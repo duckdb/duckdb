@@ -115,10 +115,6 @@ bool TaskScheduler::GetTaskInternal(ConsumerToken &consumer, shared_ptr<Task> &t
 	return false;
 }
 
-void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
-	ExecuteForever(marker, TaskSchedulerType::REGULAR);
-}
-
 bool TaskScheduler::TryDequeueAndProcessTask(const DBConfig &config, TaskSchedulerQueue &queue, ConsumerToken &consumer,
                                              shared_ptr<Task> &task) {
 	if (queue.Dequeue(consumer, task)) {
@@ -155,8 +151,27 @@ bool TaskScheduler::TryDequeueAndProcessTask(const DBConfig &config, TaskSchedul
 	return false;
 }
 
-void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType pool_type) {
 #ifndef DUCKDB_NO_THREADS
+static bool SetThreadAffinity(idx_t cpu_id) {
+#if defined(__GLIBC__)
+	if (cpu_id >= CPU_SETSIZE) {
+		return false;
+	}
+	cpu_set_t cpuset;
+	CPU_ZERO(&cpuset);
+	CPU_SET(cpu_id, &cpuset);
+	return pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) == 0;
+#else
+	return false;
+#endif
+}
+#endif
+
+void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType pool_type, optional_idx cpu) {
+#ifndef DUCKDB_NO_THREADS
+	if (cpu.IsValid() && SetThreadAffinity(cpu.GetIndex())) {
+		GetPinnedCPUId() = cpu;
+	}
 	static constexpr int64_t INITIAL_FLUSH_WAIT = 500000; // initial wait time of 0.5s (in mus) before flushing
 
 	const auto &block_allocator = BlockAllocator::Get(db);
@@ -183,9 +198,12 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType
 			} else {
 				if (!pool.Wait(UnsafeNumericCast<int64_t>(decay_delay.GetIndex()) * 1000000 - INITIAL_FLUSH_WAIT)) {
 					// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
-					// mark it as idle and start an untimed wait
+					// Another thread may have returned allocations during this worker's idle interval.
+					// Keep the wait timed until those cached allocations have had a chance to decay.
 					block_allocator.ThreadIdle();
-					pool.Wait();
+					if (!block_allocator.HasPendingCacheDecay()) {
+						pool.Wait();
+					}
 				}
 			}
 		}
@@ -360,7 +378,20 @@ void TaskScheduler::YieldThread() {
 #endif
 }
 
+optional_idx &TaskScheduler::GetPinnedCPUId() {
+#ifndef DUCKDB_NO_THREADS
+	static thread_local optional_idx cpu_id;
+#else
+	static optional_idx cpu_id;
+#endif
+	return cpu_id;
+}
+
 idx_t TaskScheduler::GetEstimatedCPUId() {
+	const auto &pinned_cpu_id = GetPinnedCPUId();
+	if (pinned_cpu_id.IsValid()) {
+		return pinned_cpu_id.GetIndex();
+	}
 #if defined(__EMSCRIPTEN__)
 	// FIXME: Wasm + multithreads can likely be implemented as
 	//   return return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());

@@ -14,6 +14,7 @@
 
 #include <chrono>
 #include <condition_variable>
+#include <thread>
 
 namespace duckdb {
 
