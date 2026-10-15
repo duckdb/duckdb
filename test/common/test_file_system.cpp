@@ -765,6 +765,54 @@ TEST_CASE("Moving over an open file preserves existing handles", "[file_system]"
 	fs->RemoveFile(target);
 }
 
+TEST_CASE("exclusive create fails when the file exists", "[file_system]") {
+	auto fs = FileSystem::CreateLocal();
+	auto fname = TestCreatePath("exclusive_create_test_file");
+	for (auto create_flag : {FileFlags::FILE_FLAGS_FILE_CREATE, FileFlags::FILE_FLAGS_FILE_CREATE_NEW}) {
+		for (auto null_if_exists : {false, true}) {
+			CAPTURE(create_flag.GetFlagsInternal(), null_if_exists);
+			fs->TryRemoveFile(fname);
+			auto flags = FileFlags::FILE_FLAGS_WRITE | create_flag | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
+			if (null_if_exists) {
+				flags |= FileFlags::FILE_FLAGS_NULL_IF_EXISTS;
+			}
+
+			// Both creation modes must succeed on a new path, including with NULL_IF_EXISTS.
+			string payload = "EXCLUSIVE_CREATE_ORIGINAL_CONTENT";
+			auto handle = fs->OpenFile(fname, flags);
+			REQUIRE(handle != nullptr);
+			handle->Write(QueryContext(), payload.data(), payload.size(), 0);
+			handle->Sync();
+			handle.reset();
+			REQUIRE(fs->FileExists(fname));
+
+			if (null_if_exists) {
+				REQUIRE(fs->OpenFile(fname, flags) == nullptr);
+			} else {
+				REQUIRE_THROWS_AS(fs->OpenFile(fname, flags), IOException);
+			}
+
+			// A collision must not truncate or alter the existing file.
+			string read_back(payload.size(), '\0');
+			auto read_handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ);
+			REQUIRE(read_handle->GetFileSize() == payload.size());
+			read_handle->Read(QueryContext(), read_back.data(), read_back.size(), 0);
+			REQUIRE(read_back == payload);
+			read_handle.reset();
+
+			// A regular file cannot be a parent directory; NULL_IF_EXISTS must not hide this error.
+			REQUIRE_THROWS_AS(fs->OpenFile(fs->JoinPath(fname, "child"), flags), IOException);
+
+			auto reopen = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+			REQUIRE(reopen != nullptr);
+			reopen.reset();
+
+			fs->RemoveFile(fname);
+			REQUIRE(!fs->FileExists(fname));
+		}
+	}
+}
+
 // ------------------------------------------------------------------------------------------------
 // Path struct tests
 // ------------------------------------------------------------------------------------------------
@@ -1442,4 +1490,19 @@ TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
 	REQUIRE_THROWS(vfs.OpenFile(filepath, flags, /*opener=*/nullptr));
 
 	fs->RemoveFile(filepath);
+}
+
+TEST_CASE("JoinPath keeps a remote URL's query string at the end of the path", "[file_system]") {
+	LocalFileSystem fs;
+	// A query string rides at the end, not buried before the appended segment.
+	REQUIRE(fs.JoinPath("s3://bucket/dir?s3_sse_c_key=abc", "file.parquet") ==
+	        "s3://bucket/dir/file.parquet?s3_sse_c_key=abc");
+	// Nested appends (a hive directory, then the file) keep it at the end -- the partitioned COPY case.
+	auto hive_dir = fs.JoinPath("s3://bucket/dir?s3_sse_c_key=abc", "part=7");
+	REQUIRE(hive_dir == "s3://bucket/dir/part=7?s3_sse_c_key=abc");
+	REQUIRE(fs.JoinPath(hive_dir, "data_0.parquet") == "s3://bucket/dir/part=7/data_0.parquet?s3_sse_c_key=abc");
+	// A URL without a query is unchanged.
+	REQUIRE(fs.JoinPath("s3://bucket/dir", "file.parquet") == "s3://bucket/dir/file.parquet");
+	// A '?' in a plain (non-URL) path is a literal character, not a query delimiter.
+	REQUIRE(fs.JoinPath("/tmp/weird?name", "file.parquet") == "/tmp/weird?name/file.parquet");
 }

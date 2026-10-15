@@ -4,6 +4,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "parquet_reader.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/once_flag.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
@@ -36,6 +37,20 @@ struct ReadSingleParquetFileData : public TableFunctionData {
 		}
 	}
 
+	unique_ptr<FunctionData> Copy() const override {
+		// the copy does not take over the reader the bind opened - its scans open the file themselves
+		auto result = make_uniq<ReadSingleParquetFileData>();
+		result->file = file;
+		result->options = options;
+		result->parquet_names = parquet_names;
+		result->parquet_types = parquet_types;
+		result->columns = columns;
+		result->metadata = metadata;
+		result->cardinality = cardinality;
+		result->projection_expressions = projection_expressions;
+		return std::move(result);
+	}
+
 	//! The reader the bind opened for this file, handed to the first scan of this bind data so that the file does
 	//! not have to be opened again. Only set when the bind data is used to read the file
 	shared_ptr<ParquetReader> TakeBindReader() const {
@@ -49,17 +64,16 @@ struct ReadSingleParquetFileData : public TableFunctionData {
 	//! A reader over the metadata of the file, created on first use. The row groups it describes refer to the schema
 	//! it holds, so it is kept for as long as this bind data is
 	ParquetReader &GetMetadataReader(ClientContext &context) const {
-		lock_guard<mutex> guard(bind_reader_lock);
-		if (!metadata_reader) {
-			metadata_reader = ParquetReader::CreateMetadataReader(context, options, metadata);
-		}
+		CallOnce(metadata_reader_initialized,
+		         [&] { metadata_reader = ParquetReader::CreateMetadataReader(context, options, metadata); });
 		return *metadata_reader;
 	}
 
 private:
-	//! Guards the readers below
+	//! Guards the transfer of the bind reader
 	mutable mutex bind_reader_lock;
 	mutable shared_ptr<ParquetReader> bind_reader;
+	mutable OnceFlag metadata_reader_initialized;
 	mutable shared_ptr<ParquetReader> metadata_reader;
 };
 
@@ -276,7 +290,16 @@ static bool ReadSingleParquetFileClaimBatch(ClientContext &context, TableFunctio
 	auto &lstate = input.local_state->Cast<ReadSingleParquetFileLocalState>();
 	// our caller hands out the row groups, so we must not claim the next one ourselves
 	lstate.claimed_externally = true;
-	return ClaimNextRowGroup(context, gstate, lstate);
+	// our caller holds the lock of its scan here - the claimed row group is prepared in the prepare_batch callback
+	lock_guard<mutex> guard(gstate.lock);
+	return gstate.reader->TryInitializeScan(context, gstate.state, lstate.state);
+}
+
+static void ReadSingleParquetFilePrepareBatch(ClientContext &context, TableFunctionInput &input) {
+	auto &gstate = input.global_state->Cast<ReadSingleParquetFileGlobalState>();
+	auto &lstate = input.local_state->Cast<ReadSingleParquetFileLocalState>();
+	gstate.reader->PrepareScan(context, gstate.state, lstate.state);
+	lstate.has_row_group = true;
 }
 
 //! Pre-open the handle the scan reads the file through, so that claiming a row group does not have to open the file
@@ -388,6 +411,12 @@ static virtual_column_map_t ReadSingleParquetFileVirtualColumns(ClientContext &c
 	return result;
 }
 
+//! The row number within the file identifies a row of a single file
+static vector<column_t> ReadSingleParquetFileRowIdColumns(ClientContext &context,
+                                                          optional_ptr<FunctionData> bind_data) {
+	return {MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER};
+}
+
 //! The statistics of a column of this file, read from its metadata
 static unique_ptr<BaseStatistics>
 ReadSingleParquetFileStatistics(ClientContext &context, const FunctionData *bind_data_p, column_t column_index) {
@@ -399,8 +428,7 @@ ReadSingleParquetFileStatistics(ClientContext &context, const FunctionData *bind
 	if (column_index >= parquet_data.parquet_names.size()) {
 		return nullptr;
 	}
-	return ParquetReader::ReadStatistics(context, parquet_data.options, parquet_data.metadata,
-	                                     parquet_data.parquet_names[column_index]);
+	return parquet_data.GetMetadataReader(context).ReadStatistics(parquet_data.parquet_names[column_index]);
 }
 
 //! The row groups read from this file. The counts accumulate, so that a scan over several files reports their sum
@@ -522,6 +550,7 @@ TableFunction ParquetScanFunction::GetSingleFileFunction() {
 	read_parquet.get_metrics = ReadSingleParquetFileGetMetrics;
 	read_parquet.projection_pushdown = true;
 	read_parquet.late_materialization = true;
+	read_parquet.get_row_id_columns = ReadSingleParquetFileRowIdColumns;
 	read_parquet.filter_pushdown = true;
 	read_parquet.filter_prune = true;
 	ParquetScanFunction::AddNamedParameters(read_parquet);
@@ -533,6 +562,7 @@ TableFunctionMultiFileSettings ParquetScanFunction::GetMultiFileSettings() {
 	settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "parquet");
 	settings.reader_type = "Parquet";
 	settings.claim_batch = ReadSingleParquetFileClaimBatch;
+	settings.prepare_batch = ReadSingleParquetFilePrepareBatch;
 	settings.finish_batch = ReadSingleParquetFileFinishBatch;
 	settings.supports_read_ahead = ReadSingleParquetFileSupportsReadAhead;
 	settings.schedule_io = ReadSingleParquetFileScheduleIO;

@@ -115,6 +115,13 @@ jobs:
           git checkout --detach "${BASE_REF}"
           git submodule update --init --recursive
 
+      - name: Upload base TPC-DS answers
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-base-tpcds-answers
+          path: extension/tpcds/dsdgen/answers
+          if-no-files-found: error
+
       - name: Build base release
         uses: duckdb/duckdb-ci/build-duckdb@main
         env:
@@ -144,8 +151,6 @@ jobs:
             benchmark: .github/regression/ingestion.csv
           - name: Micro
             benchmark: .github/regression/micro.csv
-            runner: ubuntu-24.04 # Needs more memory than linux_small provides.
-            memory_limit: 15GiB
           - name: Parser
             benchmark: .github/regression/parser.csv
           - name: H2OAI
@@ -154,10 +159,9 @@ jobs:
             benchmark: .github/regression/imdb.csv
           - name: CSV
             benchmark: .github/regression/csv.csv
-            runner: ubuntu-24.04 # Needs more memory than linux_small provides.
           - name: RealNest
             benchmark: .github/regression/realnest.csv
-            runner: ubuntu-24.04 # Needs more memory than linux_small provides.
+            runner: ubuntu-24.04 # Needs more memory until the buffer-managed result fix is in the base build.
             data_setup: |
               mkdir -p duckdb_benchmark_data
               python3 scripts/ci/retry.py -- wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
@@ -205,7 +209,7 @@ jobs:
             --benchmarks "${{ matrix.benchmark }}" \
             --verbose \
             --early-stop \
-            --memory-limit ${{ matrix.memory_limit || '7GiB' }} \
+            --memory-limit 7GiB \
             --threads 2
 
   regression-bench-tpc:
@@ -228,6 +232,7 @@ jobs:
             benchmarks: .github/regression/tpcds_sf10.csv
             threads: 4
             sf: 10
+            extra_args: --old-tpcds-answers build/base/tpcds-answers
           - name: TPCH-PARQUET SF1
             benchmarks: .github/regression/tpch_parquet.csv
             threads: 2
@@ -262,12 +267,20 @@ jobs:
           rm -rf build/base/release
           tar -xzf build/base/release-artifact.tar.gz -C build/base
 
+      - name: Download base TPC-DS answers
+        if: ${{ matrix.name == 'TPCDS SF10' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: linux-base-tpcds-answers
+          path: build/base/tpcds-answers
+
       - name: Run regression benchmark
         run: |
           python scripts/regression/test_runner.py \
             --old build/base/release/benchmark/benchmark_runner \
             --new build/current/release/benchmark/benchmark_runner \
             --benchmarks ${{ matrix.benchmarks }} \
+            ${{ matrix.extra_args }} \
             --verbose \
             --early-stop \
             --disable-timeout \

@@ -708,6 +708,10 @@ timestamp_tz_t ICUDateFunc::FromNaive(Calendar *calendar, timestamp_t naive) {
 	return ICUFromNaiveTimestamp::Operation(calendar, naive);
 }
 
+bool ICUDateFunc::TryFromNaive(Calendar *calendar, timestamp_t naive, timestamp_tz_t &result, string &error) {
+	return ICUFromNaiveTimestamp::TryOperation(calendar, naive, result, error);
+}
+
 void RegisterICUTimeZoneFunctions(ExtensionLoader &loader) {
 	//	Table functions
 	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit);

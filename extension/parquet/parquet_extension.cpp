@@ -283,6 +283,9 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			for (idx_t i = 0; i < values.size(); i++) {
 				auto &value = values[i];
 				auto key = StructType::GetChildName(kv_struct_type, i);
+				if (value.IsNull()) {
+					throw BinderException("kv_metadata value for key %s cannot be NULL", key);
+				}
 				// If the value is a blob, write the raw blob bytes
 				// otherwise, cast to string
 				if (value.type().id() == LogicalTypeId::BLOB) {

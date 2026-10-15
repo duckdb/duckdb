@@ -50,6 +50,9 @@ struct GroupingSetLevel {
 
 } // namespace
 
+//! The maximum number of grouping sets that are rewritten into separate aggregates
+static constexpr idx_t MAX_REWRITE_GROUPING_SETS = 1024;
+
 static bool CanRewriteAggregate(const BoundAggregateExpression &aggregate) {
 	if (aggregate.IsDistinct() || aggregate.GetOrderBys()) {
 		// DISTINCT / ORDER BY aggregates cannot be computed by combining states of a finer aggregation
@@ -248,6 +251,10 @@ bool GroupingSetsOptimizer::TryRewriteGroupingSets(unique_ptr<LogicalOperator> &
 		if (!CanRewriteAggregate(expr->Cast<BoundAggregateExpression>())) {
 			can_cascade = false;
 		}
+	}
+	if (aggr.grouping_sets.size() > MAX_REWRITE_GROUPING_SETS) {
+		// the rewritten plan nests a materialized CTE per grouping set - leave large grouping sets to the aggregate
+		return false;
 	}
 	vector<GroupingSetLevel> levels;
 	if (!can_cascade || !FindCascade(aggr.grouping_sets, levels)) {

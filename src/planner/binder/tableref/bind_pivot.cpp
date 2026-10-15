@@ -271,11 +271,35 @@ static unique_ptr<SelectNode> PivotInitialAggregate(ClientContext &context, Pivo
 	return subquery_stage1;
 }
 
+//! The key of a pivot value: the length of the value, followed by the value - or "N" for NULL values.
+//! Prefixing the length makes the concatenated keys of multiple pivot values unambiguous.
+static string PivotValueKey(const Value &value) {
+	if (value.IsNull()) {
+		return "N";
+	}
+	auto str = value.ToString();
+	return to_string(str.size()) + ":" + str;
+}
+
 unique_ptr<ParsedExpression> ConstructPivotExpression(unique_ptr<ParsedExpression> pivot_expr) {
+	// coalesce(strlen(pivot::VARCHAR)::VARCHAR || ':' || pivot::VARCHAR, 'N'), see PivotValueKey
 	auto cast = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(pivot_expr));
+	vector<unique_ptr<ParsedExpression>> strlen_children;
+	strlen_children.push_back(cast->Copy());
+	auto length = make_uniq<CastExpression>(LogicalType::VARCHAR,
+	                                        make_uniq<FunctionExpression>("strlen", std::move(strlen_children)));
+	vector<unique_ptr<ParsedExpression>> prefix_children;
+	prefix_children.push_back(std::move(length));
+	prefix_children.push_back(ConstantExpression::String(":"));
+	auto prefix = make_uniq<FunctionExpression>("||", std::move(prefix_children));
+	vector<unique_ptr<ParsedExpression>> key_children;
+	key_children.push_back(std::move(prefix));
+	key_children.push_back(std::move(cast));
+	auto key = make_uniq<FunctionExpression>("||", std::move(key_children));
+
 	vector<unique_ptr<ParsedExpression>> coalesce_children;
-	coalesce_children.push_back(std::move(cast));
-	coalesce_children.push_back(ConstantExpression::String("NULL"));
+	coalesce_children.push_back(std::move(key));
+	coalesce_children.push_back(ConstantExpression::String("N"));
 	auto coalesce = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE, std::move(coalesce_children));
 	return std::move(coalesce);
 }
@@ -447,8 +471,9 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 		}
 
 		if (unique_names.size() != aggregates.size()) {
-			throw InternalException("Pivot aggregate mismatch: %llu unique names, %llu aggregates", unique_names.size(),
-			                        aggregates.size());
+			// identical aggregates with different names are bound to a single aggregate
+			throw BinderException("PIVOT: identical aggregates must have the same name - use a single aggregate, or "
+			                      "make the aggregates differ");
 		}
 
 		identifier_map_t<idx_t> name_to_position;
@@ -489,13 +514,11 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 			auto name = pivot_value.name + aggr_name;
 
 			string pivot_str;
-			for (auto &value : pivot_value.values) {
-				auto str = value.ToString();
-				if (pivot_str.empty()) {
-					pivot_str = std::move(str);
-				} else {
-					pivot_str += "_" + str;
+			for (idx_t value_idx = 0; value_idx < pivot_value.values.size(); value_idx++) {
+				if (value_idx > 0) {
+					pivot_str += "_";
 				}
+				pivot_str += PivotValueKey(pivot_value.values[value_idx]);
 			}
 			result.bound_pivot.pivot_values.push_back(std::move(pivot_str));
 			names.push_back(Identifier(std::move(name)));

@@ -623,6 +623,13 @@ ParquetArrayIterator ParquetVariantNode::GetArrayChildren() const {
 void ParquetObjectIterator::Finalize() {
 	std::sort(ordered_entries.begin(), ordered_entries.end(),
 	          [](const ParquetObjectEntry &a, const ParquetObjectEntry &b) { return a.key < b.key; });
+	// the keys of a Variant object have to be unique
+	for (idx_t i = 1; i < ordered_entries.size(); i++) {
+		if (ordered_entries[i].key == ordered_entries[i - 1].key) {
+			throw InvalidInputException("Invalid VARIANT: object contains the key \"%s\" more than once",
+			                            ordered_entries[i].key.GetString());
+		}
+	}
 }
 
 ParquetObjectIterator::ParquetObjectIterator(const ParquetVariantIterator &state, const ShreddedGroupView &view,
