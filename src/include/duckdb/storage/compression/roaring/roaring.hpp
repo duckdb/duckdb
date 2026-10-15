@@ -608,7 +608,7 @@ public:
 
 struct RoaringScanState : public SegmentScanState {
 public:
-	explicit RoaringScanState(ColumnSegment &segment);
+	explicit RoaringScanState(const QueryContext &context, ColumnSegment &segment);
 
 public:
 	idx_t SkipVector(const ContainerMetadata &metadata);
