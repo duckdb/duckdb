@@ -362,14 +362,12 @@ static optional<RelationStats> CombineNonReorderableStats(LogicalOperator &op, c
 	auto ordinal_set_output = op.type == LogicalOperatorType::LOGICAL_UNION ||
 	                          op.type == LogicalOperatorType::LOGICAL_INTERSECT ||
 	                          op.type == LogicalOperatorType::LOGICAL_EXCEPT;
+	RelationColumnStatsLookup lookup;
+	for (auto &stats : child_stats) {
+		lookup.AddRelation(stats);
+	}
 	for (idx_t column_idx = 0; column_idx < bindings.size(); column_idx++) {
-		optional_ptr<const RelationColumnStats> source;
-		for (auto &stats : child_stats) {
-			source = stats.GetColumnStats(bindings[column_idx]);
-			if (source) {
-				break;
-			}
-		}
+		auto source = lookup.Find(bindings[column_idx]);
 		if (!source && ordinal_set_output && !child_stats.empty() && column_idx < child_stats[0].columns.size()) {
 			source = child_stats[0].columns[column_idx];
 		}
