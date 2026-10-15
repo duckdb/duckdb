@@ -181,3 +181,13 @@ TEST_CASE("Arrow scan of LIST(run-end encoded) across chunks with a leading chil
 	    "SELECT [CASE WHEN s // 1000 = 1 THEN NULL ELSE LEAST(s // 1000, 5) + 1 END::INT FOR s IN [3 + 2 * r, 4 + 2 * "
 	    "r]] FROM range(3000) t(r)"));
 }
+
+TEST_CASE("Arrow scan of LIST(run-end encoded) whose first chunk holds no list elements", "[arrow]") {
+	// child: [7, 7], the first 2048 lists are empty
+	arrow_run_end_encoded_test::RunEndColumn child({2}, {7}, {});
+	std::vector<int32_t> offsets(2049, 0);
+	offsets.push_back(2);
+	arrow_run_end_encoded_test::ListColumn col(child, offsets);
+	REQUIRE(arrow_run_end_encoded_test::ScanMatches(
+	    col.schema, col.array, "SELECT CASE WHEN r < 2048 THEN [] ELSE [7, 7] END::INT[] FROM range(2049) t(r)"));
+}
