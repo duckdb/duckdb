@@ -2,7 +2,7 @@
 # description: Concurrent readers never see the rows of a bulk insert before its transaction commits
 # group: [interquery]
 
-load __TEST_DIR__/concurrent_reads_during_bulk_replace.db
+load {TEST_DIR}/concurrent_reads_during_bulk_replace.db
 
 # keep the commits free of automatic checkpoints
 statement ok
