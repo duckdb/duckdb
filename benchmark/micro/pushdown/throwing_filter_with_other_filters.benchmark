@@ -1,0 +1,16 @@
+# name: benchmark/micro/pushdown/throwing_filter_with_other_filters.benchmark
+# description: A filter that can throw next to a filter that removes few rows, so it runs on most rows of the scan
+# group: [pushdown]
+
+name ThrowingFilterWithOtherFilters
+group micro
+subgroup pushdown
+
+load
+CREATE TABLE strings AS SELECT i, (i % 1000)::VARCHAR AS id, md5(i::VARCHAR) AS payload FROM range(20000000) t(i);
+
+run
+SELECT count(*), max(payload) FROM strings WHERE i % 7 <> 0 AND id::INT = 5;
+
+result II
+17143	fffb47419d1005bd6521067a537e788b
