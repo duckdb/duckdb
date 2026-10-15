@@ -166,12 +166,11 @@ void ColumnReader::ValidateColumnMetadata(idx_t row_group_num_rows, const Column
 	                                Reader().GetFileName().c_str());
 }
 
-uint64_t ColumnReader::TotalCompressedSize() {
+void ColumnReader::GatherColumnChunks(unordered_set<idx_t> &column_chunks) {
 	if (IsSkipped()) {
-		return 0;
+		return;
 	}
-
-	return chunk->meta_data.total_compressed_size;
+	column_chunks.insert(ColumnIndex());
 }
 
 // Note: It's not trivial to determine where all Column data is stored. Chunk->file_offset
@@ -251,6 +250,9 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_row
 	chunk = &columns[ColumnIndex()];
 	protocol = &protocol_p;
 	D_ASSERT(chunk);
+	if (chunk->__isset.crypto_metadata && !reader.metadata->crypto_metadata) {
+		throw InvalidInputException("File is encrypted but no file crypto metadata is set");
+	}
 	D_ASSERT(chunk->__isset.meta_data);
 
 	if (chunk->__isset.file_path) {
@@ -434,10 +436,12 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	}
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
+			// LCOV_EXCL_START
 			const auto &file_name = Reader().GetFileName();
 			throw InvalidInputException(
 			    "Parquet file (%s) corrupted: uncompressed page size mismatch (expected %d, actual: %d)", file_name,
 			    page_hdr.uncompressed_page_size, page_hdr.compressed_page_size);
+			// LCOV_EXCL_STOP
 		}
 		uncompressed = true;
 	}
@@ -452,24 +456,30 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	// to uint64_t, and the uint64_t casts in the comparisons below are safe.
 	if (page_hdr.data_page_header_v2.repetition_levels_byte_length < 0 ||
 	    page_hdr.data_page_header_v2.definition_levels_byte_length < 0) {
+		// LCOV_EXCL_START
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": header inconsistency, repetition_levels_byte_length and "
 		    "definition_levels_byte_length must be >= 0",
 		    Reader().GetFileName());
+		// LCOV_EXCL_STOP
 	}
 	uint64_t uncompressed_bytes = static_cast<uint64_t>(page_hdr.data_page_header_v2.repetition_levels_byte_length) +
 	                              page_hdr.data_page_header_v2.definition_levels_byte_length;
 	if (uncompressed_bytes > static_cast<uint64_t>(page_hdr.uncompressed_page_size)) {
+		// LCOV_EXCL_START
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": header inconsistency, uncompressed_page_size needs to be larger than "
 		    "repetition_levels_byte_length + definition_levels_byte_length",
 		    Reader().GetFileName());
+		// LCOV_EXCL_STOP
 	}
 	if (static_cast<uint64_t>(page_hdr.compressed_page_size) < uncompressed_bytes) {
+		// LCOV_EXCL_START
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": header inconsistency, compressed_page_size is smaller than "
 		    "repetition_levels_byte_length + definition_levels_byte_length",
 		    Reader().GetFileName());
+		// LCOV_EXCL_STOP
 	}
 
 	ReadData(block->ptr, uncompressed_bytes, page_hdr.type);
@@ -477,10 +487,12 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 
 	if (compressed_bytes == 0 && static_cast<uint64_t>(page_hdr.uncompressed_page_size) > uncompressed_bytes) {
+		// LCOV_EXCL_START
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": header inconsistency, compressed_page_size is too small for the "
 		    "declared value region",
 		    Reader().GetFileName());
+		// LCOV_EXCL_STOP
 	}
 
 	if (compressed_bytes > 0) {
@@ -507,9 +519,6 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	uint32_t compressed_page_size = page_hdr.compressed_page_size;
 
 	if (chunk->__isset.crypto_metadata) {
-		if (!reader.metadata->crypto_metadata) {
-			throw InvalidInputException("File is encrypted but no file crypto metadata is set");
-		}
 		auto const file_aad = reader.GetUniqueFileIdentifier(reader.metadata->crypto_metadata->encryption_algorithm);
 		if (!file_aad.empty()) {
 			// If there is a file aad (identifier), this means that the Encrypted file is written by Arrow
@@ -522,10 +531,12 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (compressed_page_size != NumericCast<uint32_t>(page_hdr.uncompressed_page_size)) {
+			// LCOV_EXCL_START
 			const auto &file_name = Reader().GetFileName();
 			throw InvalidInputException(
 			    "Parquet file (%s) corrupted: uncompressed page size mismatch (expected %d, actual: %d)", file_name,
 			    page_hdr.uncompressed_page_size, compressed_page_size);
+			// LCOV_EXCL_STOP
 		}
 		ReadData(block->ptr, compressed_page_size, page_hdr.type);
 		return;
@@ -539,6 +550,50 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	                   page_hdr.uncompressed_page_size);
 }
 
+static bool TryDecompressLZ4Hadoop(const_data_ptr_t src, idx_t src_size, data_ptr_t dst, idx_t dst_size) {
+	// Hadoop framing stores a big-endian uncompressed block size, followed by one or more
+	// chunks, each prefixed by its big-endian compressed size.
+	while (src_size > 0) {
+		if (src_size < sizeof(uint32_t)) {
+			return false;
+		}
+		auto block_size = BSwapIfLE(Load<uint32_t>(src));
+		src += sizeof(uint32_t);
+		src_size -= sizeof(uint32_t);
+		if (block_size > dst_size) {
+			return false;
+		}
+		if (block_size == 0) {
+			// Hadoop uses a zero-sized block to terminate an empty stream.
+			return src_size == 0 && dst_size == 0;
+		}
+		idx_t remaining = block_size;
+		while (remaining > 0) {
+			if (src_size < sizeof(uint32_t)) {
+				return false;
+			}
+			auto compressed_size = BSwapIfLE(Load<uint32_t>(src));
+			src += sizeof(uint32_t);
+			src_size -= sizeof(uint32_t);
+			if (compressed_size == 0 || compressed_size > src_size) {
+				return false;
+			}
+			auto decompressed_size =
+			    duckdb_lz4::LZ4_decompress_safe(const_char_ptr_cast(src), char_ptr_cast(dst),
+			                                    NumericCast<int>(compressed_size), NumericCast<int>(remaining));
+			if (decompressed_size <= 0) {
+				return false;
+			}
+			src += compressed_size;
+			src_size -= compressed_size;
+			dst += decompressed_size;
+			dst_size -= decompressed_size;
+			remaining -= decompressed_size;
+		}
+	}
+	return dst_size == 0;
+}
+
 void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size,
                                       data_ptr_t dst, idx_t dst_size) {
 	switch (codec) {
@@ -549,6 +604,12 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		s.Decompress(const_char_ptr_cast(src), src_size, char_ptr_cast(dst), dst_size);
 		break;
 	}
+	case CompressionCodec::LZ4:
+		if (TryDecompressLZ4Hadoop(src, src_size, dst, dst_size)) {
+			break;
+		}
+		// Early parquet-cpp writers used raw LZ4 under the legacy codec identifier.
+		DUCKDB_EXPLICIT_FALLTHROUGH;
 	case CompressionCodec::LZ4_RAW: {
 		auto res =
 		    duckdb_lz4::LZ4_decompress_safe(const_char_ptr_cast(src), char_ptr_cast(dst),
@@ -604,13 +665,13 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		break;
 	}
 
-	default: {
+	default: { // LCOV_EXCL_START
 		duckdb::stringstream codec_name;
 		codec_name << codec;
 		throw InvalidInputException("Failed to read file \"%s\": Unsupported compression codec \"%s\". Supported "
-		                            "options are uncompressed, brotli, gzip, lz4_raw, snappy or zstd",
+		                            "options are uncompressed, brotli, gzip, lz4, lz4_raw, snappy or zstd",
 		                            Reader().GetFileName(), codec_name.str());
-	}
+	} // LCOV_EXCL_STOP
 	}
 }
 
@@ -1012,6 +1073,20 @@ static unique_ptr<ColumnReader> CreateDecimalReader(const ParquetReader &reader,
 	}
 }
 
+static_assert(ParquetTimestampLogicalType(ParquetExtraTypeInfo::UNIT_NS) != LogicalTypeId::TIMESTAMP);
+static_assert(ParquetTimestampTzLogicalType(ParquetExtraTypeInfo::UNIT_NS) != LogicalTypeId::TIMESTAMP_TZ);
+
+static_assert(ParquetTimestampLogicalType(ParquetExtraTypeInfo::IMPALA_TIMESTAMP) != LogicalTypeId::TIMESTAMP_NS);
+static_assert(ParquetTimestampTzLogicalType(ParquetExtraTypeInfo::IMPALA_TIMESTAMP) != LogicalTypeId::TIMESTAMP_TZ_NS);
+static_assert(ParquetTimestampLogicalType(ParquetExtraTypeInfo::UNIT_MS) != LogicalTypeId::TIMESTAMP_NS);
+static_assert(ParquetTimestampTzLogicalType(ParquetExtraTypeInfo::UNIT_MS) != LogicalTypeId::TIMESTAMP_TZ_NS);
+static_assert(ParquetTimestampLogicalType(ParquetExtraTypeInfo::UNIT_MICROS) != LogicalTypeId::TIMESTAMP_NS);
+static_assert(ParquetTimestampTzLogicalType(ParquetExtraTypeInfo::UNIT_MICROS) != LogicalTypeId::TIMESTAMP_TZ_NS);
+
+static_assert(ParquetTimeLogicalType(ParquetExtraTypeInfo::UNIT_NS) != LogicalTypeId::TIME);
+static_assert(ParquetTimeLogicalType(ParquetExtraTypeInfo::UNIT_MS) != LogicalTypeId::TIME_NS);
+static_assert(ParquetTimeLogicalType(ParquetExtraTypeInfo::UNIT_MICROS) != LogicalTypeId::TIME_NS);
+
 unique_ptr<ColumnReader> ColumnReader::CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema) {
 	switch (schema.type.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -1052,8 +1127,6 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(const ParquetReader &reader,
 		case ParquetExtraTypeInfo::UNIT_MICROS:
 			return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(reader,
 			                                                                                                schema);
-		case ParquetExtraTypeInfo::UNIT_NS:
-			return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampNsToTimestamp>>(reader, schema);
 		default:
 			throw InternalException("TIMESTAMP requires type info");
 		}
@@ -1082,17 +1155,11 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(const ParquetReader &reader,
 			return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetMsIntToTime>>(reader, schema);
 		case ParquetExtraTypeInfo::UNIT_MICROS:
 			return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(reader, schema);
-		case ParquetExtraTypeInfo::UNIT_NS:
-			return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetNsIntToTime>>(reader, schema);
 		default:
 			throw InternalException("TIME requires type info");
 		}
 	case LogicalTypeId::TIME_NS:
 		switch (schema.type_info) {
-		case ParquetExtraTypeInfo::UNIT_MS:
-			return make_uniq<CallbackColumnReader<int32_t, dtime_ns_t, ParquetMsIntToTimeNs>>(reader, schema);
-		case ParquetExtraTypeInfo::UNIT_MICROS:
-			return make_uniq<CallbackColumnReader<int64_t, dtime_ns_t, ParquetUsIntToTimeNs>>(reader, schema);
 		case ParquetExtraTypeInfo::UNIT_NS:
 			return make_uniq<CallbackColumnReader<int64_t, dtime_ns_t, ParquetIntToTimeNs>>(reader, schema);
 		default:

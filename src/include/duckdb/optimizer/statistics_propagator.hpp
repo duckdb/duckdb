@@ -99,6 +99,8 @@ private:
 	FilterPropagateResult ClassifyFilter(Expression &condition);
 	//! Simplify conjunctions using filter truth semantics
 	bool SimplifyFilter(unique_ptr<Expression> &condition);
+	//! Remove constant_or_null(TRUE, ...) conjuncts whose NULL checks are implied by retained predicates
+	void SimplifyConstantOrNull(vector<unique_ptr<Expression>> &expressions);
 	//! Propagate a filter condition
 	FilterPropagateResult HandleFilter(unique_ptr<Expression> &condition);
 	//! Rewrite a join whose condition can never match; returns true if the operator was replaced
@@ -168,6 +170,8 @@ private:
 	unique_ptr<NodeStatistics> node_stats;
 	//! Whether statistics changed which relations a filter depends on
 	bool filter_bindings_changed = false;
+	//! The chain of operators from the root down to the operator currently being propagated
+	vector<reference<unique_ptr<LogicalOperator>>> propagation_path;
 };
 
 } // namespace duckdb

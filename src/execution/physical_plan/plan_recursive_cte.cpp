@@ -11,7 +11,8 @@
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
@@ -105,7 +106,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		vector<unique_ptr<Expression>> children;
 		children.push_back(make_uniq<BoundReferenceExpression>(distinct_types[key_idx], distinct_idx[key_idx]));
 		auto representative = function_binder.BindAggregateFunction(
-		    FirstFunctionGetter::GetFunction(distinct_types[key_idx]), std::move(children));
+		    GetBuiltinAggregateFunction(context, FirstFun::Name, {distinct_types[key_idx]}), std::move(children));
 		key_representative_indices[key_idx] = payload_aggregates.size();
 		aggregate_types.push_back(representative->GetReturnType());
 		payload_aggregates.push_back(std::move(representative));

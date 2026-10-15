@@ -132,6 +132,7 @@ unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformCopyTable(PEGTransformer &transformer, unique_ptr<BaseTableRef> base_table_name,
                                           const optional<vector<string>> &insert_column_list, const bool &from_or_to,
                                           unique_ptr<ParsedExpression> copy_file_name,
+                                          const optional<GenericCopyOption> &legacy_option,
                                           const optional<vector<GenericCopyOption>> &copy_options) {
 	auto result = make_uniq<CopyStatement>();
 	auto info = make_uniq<CopyInfo>();
@@ -149,8 +150,17 @@ PEGTransformerFactory::TransformCopyTable(PEGTransformer &transformer, unique_pt
 	}
 	info->format = ExtractFormat(info->file_path);
 
+	vector<GenericCopyOption> generic_options;
+
+	if (legacy_option) {
+		generic_options.push_back(*legacy_option);
+	}
+
 	if (copy_options) {
-		auto generic_options = *copy_options;
+		generic_options.insert(generic_options.end(), copy_options->begin(), copy_options->end());
+	}
+
+	if (!generic_options.empty()) {
 		SetCopyOptions(info, generic_options);
 	}
 
@@ -184,12 +194,18 @@ PEGTransformerFactory::TransformCopyFileNameIdentifierColId(PEGTransformer &tran
 }
 
 Identifier PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &transformer, const Identifier &identifier,
-                                                           const Identifier &col_id) {
-	string result;
-	result += identifier.GetIdentifierName();
-	result += ".";
-	result += col_id.GetIdentifierName();
+                                                           const vector<Identifier> &copy_file_name_suffix) {
+	string result = identifier.GetIdentifierName();
+	for (const auto &suffix : copy_file_name_suffix) {
+		result += ".";
+		result += suffix.GetIdentifierName();
+	}
 	return Identifier(result);
+}
+
+GenericCopyOption PEGTransformerFactory::TransformCopyLegacyOption(PEGTransformer &transformer, const bool &has_result,
+                                                                   const string &delimiter) {
+	return GenericCopyOption("delimiter", delimiter);
 }
 
 vector<GenericCopyOption>

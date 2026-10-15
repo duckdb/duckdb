@@ -20,9 +20,7 @@ ScalarFunctionCatalogEntry::ScalarFunctionCatalogEntry(Catalog &catalog, SchemaC
 
 shared_ptr<const ScalarFunction> ScalarFunctionCatalogEntry::FinalizeFunction(ScalarFunction function) const {
 	auto result = make_shared_ptr<ScalarFunction>(std::move(function));
-	result->SetName(name);
-	result->SetCatalogName(catalog.GetAttached().GetName());
-	result->SetSchemaName(schema.name);
+	result->SetQualifiedName(schema.GetQualifiedName(name));
 	return result;
 }
 
