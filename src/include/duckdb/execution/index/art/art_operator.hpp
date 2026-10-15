@@ -338,7 +338,7 @@ public:
 				grandparent_depth = parent_depth;
 				parent_depth = depth;
 
-				auto child_ptr_ref = current_ptr_ref.get().GetChildMutable(art, current_key_ref.get()[depth]);
+				auto child_ptr_ref = current_ptr_ref.get().GetChildMutableUnsafe(art, current_key_ref.get()[depth]);
 				if (!child_ptr_ref) {
 					// No child at the byte: nothing to erase.
 					return false;
