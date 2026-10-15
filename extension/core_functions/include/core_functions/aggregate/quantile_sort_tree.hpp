@@ -258,7 +258,6 @@ struct QuantileInterpolator<true> {
 			break;
 		}
 		}
-		}
 
 		return MaxValue<idx_t>(1, n - floored) - 1;
 	}
