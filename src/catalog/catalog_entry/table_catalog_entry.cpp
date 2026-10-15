@@ -319,18 +319,18 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 			LogicalUpdate::BindExtraColumns(*this, get, proj, update, check.bound_columns);
 		}
 	}
+	// RETURNING reads the whole row, the columns it adds are not written
+	auto written_column_count = update.columns.size();
 	if (update.return_chunk) {
 		LogicalUpdate::BindAllColumns(*this, get, proj, update);
 	}
 	// for index updates we always turn any update into an insert and a delete
 	// we thus need all the columns to be available, hence we check if the update touches any index columns
-	// If the returning keyword is used, we need access to the whole row in case the user requests it.
-	// Therefore switch the update to a delete and insert.
 	update.update_is_del_and_insert = Settings::Get<ForceUpdateToDelAndInsertSetting>(context);
 	TableStorageInfo table_storage_info = GetStorageInfo(context);
 	for (auto index : table_storage_info.index_info) {
-		for (auto &column : update.columns) {
-			if (index.column_set.find(column.index) != index.column_set.end()) {
+		for (idx_t i = 0; i < written_column_count; i++) {
+			if (index.column_set.find(update.columns[i].index) != index.column_set.end()) {
 				update.update_is_del_and_insert = true;
 				break;
 			}
@@ -338,7 +338,8 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	}
 
 	// we also convert any updates on LIST columns into delete + insert
-	for (auto &col_index : update.columns) {
+	for (idx_t i = 0; i < written_column_count; i++) {
+		auto &col_index = update.columns[i];
 		auto &column = GetColumns().GetColumn(col_index);
 		if (!column.Type().SupportsRegularUpdate()) {
 			update.update_is_del_and_insert = true;
@@ -347,9 +348,10 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	}
 
 	if (update.update_is_del_and_insert) {
-		// the update updates a column required by an index or requires returning the updated rows,
-		// push projections for all columns
+		// the update updates a column required by an index, push projections for all columns
 		LogicalUpdate::BindAllColumns(*this, get, proj, update);
+	} else {
+		update.returning_only_column_count = update.columns.size() - written_column_count;
 	}
 }
 

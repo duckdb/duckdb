@@ -1,0 +1,18 @@
+# name: benchmark/micro/update/update_returning_indexed.benchmark
+# description: UPDATE RETURNING of a column next to a primary key
+# group: [update]
+
+name Update Returning Indexed Table
+group update
+
+load
+CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER, s VARCHAR);
+INSERT INTO t SELECT i, i, 'str_' || i::VARCHAR FROM range(1000000) t(i);
+
+run
+UPDATE t SET v = v + 1 WHERE id % 10 = 0 RETURNING id, v;
+
+cleanup
+DROP TABLE IF EXISTS t;
+CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER, s VARCHAR);
+INSERT INTO t SELECT i, i, 'str_' || i::VARCHAR FROM range(1000000) t(i);

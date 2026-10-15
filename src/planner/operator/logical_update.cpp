@@ -65,8 +65,8 @@ void LogicalUpdate::RewriteInPlaceUpdates(LogicalOperator &update_op) {
 		return;
 	}
 	auto needs_reinsert = false;
-	for (auto &col_idx : update.columns) {
-		auto &column = update.table.GetColumns().GetColumn(col_idx);
+	for (idx_t i = 0; i < update.columns.size() - update.returning_only_column_count; i++) {
+		auto &column = update.table.GetColumns().GetColumn(update.columns[i]);
 		if (!column.Type().SupportsRegularUpdate()) {
 			needs_reinsert = true;
 			break;
@@ -205,6 +205,7 @@ void LogicalUpdate::RewriteInPlaceUpdates(LogicalOperator &update_op) {
 	}
 
 	update.update_is_del_and_insert = true;
+	update.returning_only_column_count = 0;
 	update.ResolveOperatorTypes();
 }
 

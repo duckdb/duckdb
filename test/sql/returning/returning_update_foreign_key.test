@@ -1,0 +1,88 @@
+# name: test/sql/returning/returning_update_foreign_key.test
+# description: RETURNING on an UPDATE or MERGE that leaves the key alone does not delete and insert the row
+# group: [returning]
+
+statement ok
+CREATE TABLE parent (id INTEGER PRIMARY KEY, value INTEGER, tags VARCHAR[]);
+
+statement ok
+CREATE TABLE child (parent_id INTEGER REFERENCES parent(id));
+
+statement ok
+INSERT INTO parent VALUES (1, 10, ['a']), (2, 20, ['b']);
+
+statement ok
+INSERT INTO child VALUES (1), (2);
+
+query I
+UPDATE parent SET value = 11 WHERE id = 1 RETURNING value;
+----
+11
+
+query III rowsort
+UPDATE parent SET value = value + 1 RETURNING *;
+----
+1	12	[a]
+2	21	[b]
+
+query II
+UPDATE parent SET value = 0 WHERE id = 2 RETURNING tags, id;
+----
+[b]	2
+
+query II
+MERGE INTO parent USING (SELECT 1 AS id, 100 AS v) src ON parent.id = src.id
+WHEN MATCHED THEN UPDATE SET value = src.v RETURNING id, value;
+----
+1	100
+
+query III
+SELECT * FROM parent ORDER BY id;
+----
+1	100	[a]
+2	0	[b]
+
+# changing the key, or a LIST column, still deletes and inserts the row, which the foreign key prevents
+statement error
+UPDATE parent SET id = 3 WHERE id = 1 RETURNING *;
+----
+Violates foreign key constraint
+
+statement error
+UPDATE parent SET tags = ['c'] WHERE id = 1 RETURNING id;
+----
+Violates foreign key constraint
+
+# the index stays correct after an update that returns its column
+statement ok
+CREATE TABLE u (k INTEGER UNIQUE, v INTEGER);
+
+statement ok
+INSERT INTO u VALUES (1, 1), (2, 2);
+
+query II rowsort
+UPDATE u SET v = v * 10 RETURNING k, v;
+----
+1	10
+2	20
+
+statement error
+INSERT INTO u VALUES (1, 5);
+----
+Duplicate key "k: 1"
+
+query II
+SELECT k, v FROM u WHERE k = 2;
+----
+2	20
+
+query II
+UPDATE u SET k = 3 WHERE k = 2 RETURNING k, v;
+----
+3	20
+
+query II
+SELECT k, v FROM u ORDER BY k;
+----
+1	10
+3	20
