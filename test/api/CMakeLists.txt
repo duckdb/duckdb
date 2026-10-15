@@ -20,6 +20,7 @@ set(TEST_API_OBJECTS
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp
     test_config.cpp
+    test_compression_select.cpp
     test_connection_secrets.cpp
     test_copy_output_lifecycle.cpp
     test_custom_allocator.cpp
@@ -27,7 +28,9 @@ set(TEST_API_OBJECTS
     test_external_extension_provider.cpp
     test_extension_setting_autoload.cpp
     test_instance_cache.cpp
+    test_metadata_pin_race.cpp
     test_storage_extension_alias.cpp
+    test_storage_extension_remote_path.cpp
     test_static_database_callback.cpp
     test_result_unit.cpp
     test_results.cpp
@@ -44,6 +47,7 @@ set(TEST_API_OBJECTS
     test_query_result_format.cpp
     test_query_result_format_buffer.cpp
     test_query_result_stream.cpp
+    test_expanding_statements.cpp
     test_retained_result_collection.cpp
     test_plan_serialization.cpp
     test_relation_api.cpp
@@ -71,8 +75,10 @@ set(TEST_API_OBJECTS
     test_windows_unicode_path.cpp
     test_object_cache.cpp
     test_partial_executor.cpp
+    test_scheduler_fairness.cpp
     test_buffer_pool_eviction.cpp
     test_block_allocator_tls.cpp
+    test_group_commit_bound.cpp
     test_data_table_scan_without_row_groups.cpp)
 
 if(NOT WIN32)

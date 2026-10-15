@@ -321,7 +321,7 @@ void VectorBuffer::Copy(const Vector &source_p, const SelectionVector &source_se
 			auto &dict_sel = DictionaryVector::SelVector(source);
 			// merge the selection vectors and verify the child
 			if (sel.IsSet()) {
-				auto new_buffer = dict_sel.Slice(sel, copy_count);
+				auto new_buffer = dict_sel.Slice(sel, source_offset + copy_count);
 				owned_sel.Initialize(new_buffer);
 				sel_ref = owned_sel;
 			} else {
@@ -331,18 +331,24 @@ void VectorBuffer::Copy(const Vector &source_p, const SelectionVector &source_se
 			break;
 		}
 		case VectorType::CONSTANT_VECTOR:
-			sel_ref = *ConstantVector::ZeroSelectionVector(copy_count, owned_sel);
+			sel_ref = *ConstantVector::ZeroSelectionVector(source_offset + copy_count, owned_sel);
 			finished = true;
 			break;
 		case VectorType::FLAT_VECTOR:
 			finished = true;
 			break;
 		default: {
-			// for exotic types we flatten followed by copying
+			// for exotic types we flatten followed by copying - only the copied rows are flattened, as e.g. list
+			// functions copy the children of every list at a different offset, and the selection vector might only
+			// cover the copied rows
+			D_ASSERT(source_count >= source_offset + copy_count);
+			SelectionVector range_sel(copy_count);
+			for (idx_t i = 0; i < copy_count; i++) {
+				range_sel.set_index(i, sel.get_index(source_offset + i));
+			}
 			Vector flattened_vector(Vector::Ref(source));
-			flattened_vector.Flatten(sel, source_offset + source_count);
-			Copy(flattened_vector, *FlatVector::IncrementalSelectionVector(), source_count, source_offset,
-			     target_offset, copy_count);
+			flattened_vector.Flatten(range_sel, copy_count);
+			Copy(flattened_vector, *FlatVector::IncrementalSelectionVector(), copy_count, 0, target_offset, copy_count);
 			return;
 		}
 		}

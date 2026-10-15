@@ -438,8 +438,32 @@ struct DatePart {
 			return YearWeekFromParts(yyyy, ww);
 		}
 
+		// ISO years >= 1 use yyyy * 100 + week. Year 0 and negative years subtract the week,
+		// so the function decreases as the week number increases.
+		static int32_t MinISOYear(date_t input) {
+			return Date::ExtractISOYearNumber(input);
+		}
+		static int32_t MinISOYear(timestamp_t input) {
+			return Date::ExtractISOYearNumber(Timestamp::GetDate(input));
+		}
+		template <class U>
+		static int32_t MinISOYear(U) {
+			return 0;
+		}
+
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			// Endpoint bounds do not contain the values in between once the range reaches the
+			// subtracted-week encoding. Positive ISO years are non-decreasing in the date.
+			auto &nstats = input.child_stats[0];
+			if (!NumericStats::HasMinMax(nstats)) {
+				return nullptr;
+			}
+			auto min = NumericStats::GetMin<T>(nstats);
+			auto max = NumericStats::GetMax<T>(nstats);
+			if (min > max || !min.IsFinite() || !max.IsFinite() || MinISOYear(min) < 1) {
+				return nullptr;
+			}
 			return PropagateDatePartStatistics<T, YearWeekOperator>(input.child_stats);
 		}
 	};
@@ -627,11 +651,14 @@ struct DatePart {
 
 		template <typename TA, typename TB, typename TR>
 		static TR Operation(TA interval, TB timetz) {
+			auto offset = interval.micros / Interval::MICROS_PER_SEC;
+			if (offset < dtime_tz_t::MIN_OFFSET || offset > dtime_tz_t::MAX_OFFSET) {
+				throw OutOfRangeException("Timezone offset out of range: %s", Interval::ToString(interval));
+			}
 			auto time = Time::NormalizeTimeTZ(timetz);
 			date_t date(0);
 			time = Interval::Add(time, interval, date);
-			auto offset = UnsafeNumericCast<int32_t>(interval.micros / Interval::MICROS_PER_SEC);
-			return TR(time, offset);
+			return TR(time, UnsafeNumericCast<int32_t>(offset));
 		}
 
 		template <typename TA, typename TB, typename TR>
@@ -2656,9 +2683,8 @@ ScalarFunctionSet HoursFun::GetFunctions() {
 }
 
 ScalarFunctionSet YearWeekFun::GetFunctions() {
-	auto set = GetDatePartFunction<DatePart::YearWeekOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
-	return set;
+	// Not monotone on the full date domain: see YearWeekOperator::YearWeekFromParts.
+	return GetDatePartFunction<DatePart::YearWeekOperator>();
 }
 
 ScalarFunctionSet DayOfMonthFun::GetFunctions() {

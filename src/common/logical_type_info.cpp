@@ -79,7 +79,7 @@ bool ExtensionTypeInfo::Equals(optional_ptr<ExtensionTypeInfo> lhs, optional_ptr
 //===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
-LogicalTypeInfo::LogicalTypeInfo(LogicalTypeInfoType type) : type(type) {
+LogicalTypeInfo::LogicalTypeInfo(LogicalTypeInfoType type) noexcept : type(type) {
 }
 LogicalTypeInfo::LogicalTypeInfo(LogicalTypeInfoType type, string alias) : type(type), alias(std::move(alias)) {
 }
@@ -370,8 +370,8 @@ string_t EnumType::GetString(const LogicalType &type, idx_t pos) {
 unique_ptr<LogicalTypeInfo> EnumTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto values_count = deserializer.ReadProperty<idx_t>(200, "values_count");
 	if (values_count > NumericLimits<uint32_t>::Maximum()) {
-		throw DataCorruptionException("Corrupted enum: enum size %llu exceeds maximum %llu", values_count,
-		                              static_cast<idx_t>(NumericLimits<uint32_t>::Maximum()));
+		throw SerializationException("Corrupted enum: enum size %llu exceeds maximum %llu", values_count,
+		                             static_cast<idx_t>(NumericLimits<uint32_t>::Maximum()));
 	}
 	auto enum_internal_type = EnumTypeInfo::DictType(values_count);
 	switch (enum_internal_type) {

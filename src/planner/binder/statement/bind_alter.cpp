@@ -43,6 +43,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 
 	auto bound_constraint =
 	    BindUniqueConstraint(*constraint_info.constraint, table_info.GetQualifiedName().Name(), column_list);
+	VerifyConstraintCheckModeStorageVersion(*constraint_info.constraint, table.ParentCatalog(), table.temporary);
 	auto &bound_unique = bound_constraint->Cast<BoundUniqueConstraint>();
 	auto &unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
 
@@ -98,7 +99,7 @@ static void BindAlterTypes(Binder &binder, AlterStatement &stmt) {
 			if (!alter_column_info.expression) {
 				// without USING, the column is cast to the target type
 				alter_column_info.expression = make_uniq<CastExpression>(
-				    alter_column_info.target_type, make_uniq<ColumnRefExpression>(alter_column_info.column_name));
+				    alter_column_info.target_type, make_uniq<ColumnRefExpression>(alter_column_info.column_path));
 			}
 		} break;
 		default:
@@ -174,10 +175,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	if (catalog.IsSystemCatalog()) {
 		throw BinderException("Can not comment on System Catalog entries");
 	}
-	if (!entry->temporary) {
-		// We can only alter temporary tables and views in read-only mode.
-		properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
-	}
+	properties.RegisterDBModify(catalog, context, stmt.info->GetModifications());
 	stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
 
 	if (!stmt.info->IsAddUniqueConstraint()) {
