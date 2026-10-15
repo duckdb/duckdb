@@ -16,8 +16,6 @@ struct DuckDBLogContextData : public GlobalTableFunctionState {
 		scan_state = log_sink->CreateScanState(LoggingTargetTable::LOG_CONTEXTS);
 		log_sink->InitializeScan(*scan_state);
 	}
-	DuckDBLogContextData() : log_sink(nullptr) {
-	}
 
 	//! The log sink we are scanning
 	shared_ptr<LogSink> log_sink;
@@ -48,17 +46,19 @@ static unique_ptr<FunctionData> DuckDBLogContextBind(ClientContext &context, Tab
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBLogContextInit(ClientContext &context, TableFunctionInitInput &input) {
-	if (LogManager::Get(context).CanScan(LoggingTargetTable::LOG_CONTEXTS)) {
-		return make_uniq<DuckDBLogContextData>(LogManager::Get(context).GetLogSink());
+	auto &log_manager = LogManager::Get(context);
+	if (!log_manager.CanScan(LoggingTargetTable::LOG_CONTEXTS)) {
+		throw InvalidConfigurationException(
+		    "Log sink '%s' does not support this query. Select a queryable sink, such as 'memory' or 'file', before "
+		    "generating logs.",
+		    log_manager.GetConfig().storage);
 	}
-	return make_uniq<DuckDBLogContextData>();
+	return make_uniq<DuckDBLogContextData>(log_manager.GetLogSink());
 }
 
 void DuckDBLogContextFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBLogContextData>();
-	if (data.log_sink) {
-		data.log_sink->Scan(*data.scan_state, output);
-	}
+	data.log_sink->Scan(*data.scan_state, output);
 }
 
 static unique_ptr<TableRef> DuckDBLogContextsBindReplace(ClientContext &context, TableFunctionBindInput &input) {

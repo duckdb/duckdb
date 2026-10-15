@@ -3,6 +3,7 @@
 
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -268,10 +269,11 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 		throw InternalException("ColumnData::SelectVector should be able to fetch everything from one segment");
 	}
 	if (state.scan_options && state.scan_options->force_fetch_row) {
+		auto start = state.GetPositionInSegment();
 		for (idx_t i = 0; i < sel_count; i++) {
 			auto source_idx = sel.get_index(i);
 			ColumnFetchState fetch_state;
-			current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.offset_in_column + source_idx), result, i);
+			current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(start + source_idx), result, i);
 		}
 	} else {
 		current.Select(state, target_count, result, sel, sel_count);
@@ -871,7 +873,7 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 	if (state.scan_options && state.scan_options->force_fetch_row) {
 		for (idx_t i = 0; i < count; i++) {
 			ColumnFetchState fetch_state;
-			fetch_state.row_group = state.parent->row_group;
+			fetch_state.row_group = state.parent->GetRowGroup();
 			segment.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.offset_in_column + i), scan_vector, i);
 		}
 	} else {
@@ -917,13 +919,20 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data) {
 }
 
 void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
-	D_ASSERT(type.InternalType() == column_data.logical_type.InternalType());
+	if (type.InternalType() != column_data.logical_type.InternalType()) {
+		throw DataCorruptionException("Column data of type %s found for a column of type %s", column_data.logical_type,
+		                              type);
+	}
 	// construct the segments based on the data pointers
 	this->count = 0;
 	for (auto &data_pointer : column_data.pointers) {
 		// Update the count and statistics
 		data_pointer.row_start = count;
-		this->count += data_pointer.tuple_count;
+		idx_t new_count;
+		if (!TryAddOperator::Operation<idx_t, idx_t, idx_t>(count.load(), data_pointer.tuple_count, new_count)) {
+			throw DataCorruptionException("Column data has more rows than can be represented");
+		}
+		this->count = new_count;
 
 		// Merge the statistics. If this is a child column, the target_stats reference will point into the parents stats
 		// otherwise if this is a top level column, `stats->statistics` == `target_stats`
@@ -1029,16 +1038,26 @@ static PersistentColumnData GetPersistentColumnDataType(Deserializer &deserializ
 	}
 
 	// Otherwise, the type of this segment may depend on extra data
+	auto &column_type = deserializer.Get<const LogicalType &>();
 	switch (extra_data->GetType()) {
 	case ExtraPersistentColumnDataType::VARIANT: {
+		if (column_type.id() != LogicalTypeId::VARIANT) {
+			throw DataCorruptionException("VARIANT column data found for a column of type %s", column_type);
+		}
 		auto unshredded_type = VariantShredding::GetUnshreddedType();
 		PersistentColumnData result(LogicalType::VARIANT());
 		result.extra_data = std::move(extra_data);
 		return result;
 	}
 	case ExtraPersistentColumnDataType::GEOMETRY: {
+		if (column_type.id() != LogicalTypeId::GEOMETRY) {
+			throw DataCorruptionException("GEOMETRY column data found for a column of type %s", column_type);
+		}
 		const auto &geometry_data = extra_data->Cast<GeometryPersistentColumnData>();
-		PersistentColumnData result(Geometry::GetVectorizedType(geometry_data.storage_type));
+		// WKB is stored as the column's own type, which may carry type parameters (e.g., a CRS)
+		PersistentColumnData result(geometry_data.storage_type == GeometryStorageType::WKB
+		                                ? deserializer.Get<const LogicalType &>()
+		                                : Geometry::GetVectorizedType(geometry_data.storage_type));
 		result.extra_data = std::move(extra_data);
 		return result;
 	}
@@ -1065,8 +1084,7 @@ PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserialize
 
 	// TODO: This is ugly
 	if (result.extra_data && result.extra_data->GetType() == ExtraPersistentColumnDataType::GEOMETRY) {
-		auto &geo_data = result.extra_data->Cast<GeometryPersistentColumnData>();
-		auto actual_type = Geometry::GetVectorizedType(geo_data.storage_type);
+		const auto &actual_type = type;
 
 		// We need to set the actual type in scope, as when we deserialize "data_pointers" we use it to detect
 		// the type of the statistics.

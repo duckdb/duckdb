@@ -108,7 +108,7 @@ public:
 		}
 
 		// Create new entry while holding lock
-		auto value = make_shared_ptr<T>(args...);
+		auto value = make_shared_ptr<T>(std::forward<ARGS>(args)...);
 		const auto estimated_memory = value->GetEstimatedCacheMemory();
 		const bool is_evictable = estimated_memory.IsValid();
 		if (!is_evictable) {

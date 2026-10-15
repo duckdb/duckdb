@@ -31,12 +31,6 @@ struct StructNames {
 		values[name] = make_uniq<Vector>(Value(name), count_t(0ULL));
 	}
 
-	Vector &Get(const string &name, idx_t count) const {
-		auto &result = *values.at(name);
-		FlatVector::SetSize(result, count);
-		return result;
-	}
-
 	StructNames Copy() const {
 		StructNames result;
 		// Have to do this because we can't implicitly copy Vector
@@ -305,8 +299,10 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	}
 }
 
+//! Resolves the argument types and the struct names - this is called from both resolve_types and bind, which only
+//! works because the JSON type of a JSON type is the same type
 static unique_ptr<FunctionData> JSONCreateBindParams(BoundScalarFunction &bound_function,
-                                                     vector<unique_ptr<Expression>> &arguments, bool object) {
+                                                     const vector<unique_ptr<Expression>> &arguments, bool object) {
 	StructNames const_struct_names;
 	auto &bound_arguments = bound_function.GetArguments();
 	bound_arguments.clear();
@@ -329,7 +325,8 @@ static unique_ptr<FunctionData> JSONCreateBindParams(BoundScalarFunction &bound_
 	return make_uniq<JSONCreateFunctionData>(std::move(const_struct_names));
 }
 
-static unique_ptr<FunctionData> JSONObjectBind(BindScalarFunctionInput &input) {
+template <class INPUT>
+static unique_ptr<FunctionData> JSONObjectBind(INPUT &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments.size() % 2 != 0) {
@@ -338,13 +335,15 @@ static unique_ptr<FunctionData> JSONObjectBind(BindScalarFunctionInput &input) {
 	return JSONCreateBindParams(bound_function, arguments, true);
 }
 
-static unique_ptr<FunctionData> JSONArrayBind(BindScalarFunctionInput &input) {
+template <class INPUT>
+static unique_ptr<FunctionData> JSONArrayBind(INPUT &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	return JSONCreateBindParams(bound_function, arguments, false);
 }
 
-static unique_ptr<FunctionData> ToJSONBind(BindScalarFunctionInput &input) {
+template <class INPUT>
+static unique_ptr<FunctionData> ToJSONBind(INPUT &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments.size() != 1) {
@@ -353,7 +352,8 @@ static unique_ptr<FunctionData> ToJSONBind(BindScalarFunctionInput &input) {
 	return JSONCreateBindParams(bound_function, arguments, false);
 }
 
-static unique_ptr<FunctionData> ArrayToJSONBind(BindScalarFunctionInput &input) {
+template <class INPUT>
+static unique_ptr<FunctionData> ArrayToJSONBind(INPUT &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments.size() != 1) {
@@ -369,7 +369,8 @@ static unique_ptr<FunctionData> ArrayToJSONBind(BindScalarFunctionInput &input) 
 	return JSONCreateBindParams(bound_function, arguments, false);
 }
 
-static unique_ptr<FunctionData> RowToJSONBind(BindScalarFunctionInput &input) {
+template <class INPUT>
+static unique_ptr<FunctionData> RowToJSONBind(INPUT &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments.size() != 1) {
@@ -383,6 +384,11 @@ static unique_ptr<FunctionData> RowToJSONBind(BindScalarFunctionInput &input) {
 		throw BinderException("row_to_json() argument type must be STRUCT");
 	}
 	return JSONCreateBindParams(bound_function, arguments, false);
+}
+
+template <unique_ptr<FunctionData> (*BIND)(ResolveScalarFunctionTypesInput &)>
+static void JSONCreateResolveTypes(ResolveScalarFunctionTypesInput &input) {
+	BIND(input);
 }
 
 static bool BindJSONCopyFormat(ClientContext &context, Expression &argument, const string &name, string &format_string,
@@ -422,13 +428,7 @@ static unique_ptr<Expression> BindJSONCopyTimestampTZFormatter(ClientContext &co
 	children.push_back(make_uniq<BoundConstantExpression>(Value(format_string)));
 
 	FunctionBinder function_binder(context);
-	ErrorData error;
-	auto result =
-	    function_binder.BindScalarFunction(Identifier::DefaultSchema(), "strftime", std::move(children), error);
-	if (!result) {
-		error.Throw();
-	}
-	return result;
+	return function_binder.BindScalarFunction(Identifier::DefaultSchema(), "strftime", std::move(children));
 }
 
 static unique_ptr<JSONCopyToJSONFunctionData>
@@ -626,7 +626,8 @@ static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yy
 	// Add the key/value pairs to the values
 	auto &entries = StructVector::GetEntries(value_v);
 	for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
-		auto &struct_key_v = names.Get(StructType::GetChildName(value_v.GetType(), entry_i).GetIdentifierName(), count);
+		Vector struct_key_v(Value(StructType::GetChildName(value_v.GetType(), entry_i).GetIdentifierName()),
+		                    count_t(count));
 		auto &struct_val_v = entries[entry_i];
 		CreateKeyValuePairs(names, doc, vals, nested_vals, struct_key_v, struct_val_v, count, options);
 	}
@@ -733,8 +734,8 @@ static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyj
 	// Add the key/value pairs to the values
 	for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(value_v.GetType()); member_idx++) {
 		auto &member_val_v = UnionVector::GetMember(value_v, member_idx);
-		auto &member_key_v =
-		    names.Get(UnionType::GetMemberName(value_v.GetType(), member_idx).GetIdentifierName(), count);
+		Vector member_key_v(Value(UnionType::GetMemberName(value_v.GetType(), member_idx).GetIdentifierName()),
+		                    count_t(count));
 
 		// This implementation is not optimal since we convert the entire member vector,
 		// and then skip the rows not matching the tag afterwards.
@@ -1277,7 +1278,7 @@ static void JSONCopyToGeoJSONFunction(DataChunk &args, ExpressionState &state, V
 	}
 
 	for (const auto property_index : info.property_indices) {
-		auto &key_v = names.Get(StructType::GetChildName(payload_type, property_index).GetIdentifierName(), count);
+		Vector key_v(Value(StructType::GetChildName(payload_type, property_index).GetIdentifierName()), count_t(count));
 		CreateKeyValuePairs(names, doc, properties, nested_vals, key_v, entries[property_index], count, options);
 	}
 	for (idx_t i = 0; i < count; i++) {
@@ -1480,9 +1481,10 @@ unique_ptr<Expression> JSONFunctions::CreateJSONCopyToJSONExpression(ClientConte
 }
 
 ScalarFunctionSet JSONFunctions::GetObjectFunction() {
-	ScalarFunction fun("json_object", {}, LogicalType::JSON(), ObjectFunction, JSONObjectBind, nullptr,
-	                   JSONFunctionLocalState::Init);
-	fun.SetVarArgs(LogicalType::ANY);
+	ScalarFunction fun("json_object", {}, LogicalType::JSON(), ObjectFunction, JSONObjectBind<BindScalarFunctionInput>,
+	                   nullptr, JSONFunctionLocalState::Init);
+	fun.GetSignature().AddArgs("args", LogicalType::ANY);
+	fun.SetResolveTypesCallback(JSONCreateResolveTypes<JSONObjectBind<ResolveScalarFunctionTypesInput>>);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	// throws if a key is NULL
 	fun.SetFallible();
@@ -1490,17 +1492,19 @@ ScalarFunctionSet JSONFunctions::GetObjectFunction() {
 }
 
 ScalarFunctionSet JSONFunctions::GetArrayFunction() {
-	ScalarFunction fun("json_array", {}, LogicalType::JSON(), ArrayFunction, JSONArrayBind, nullptr,
-	                   JSONFunctionLocalState::Init);
-	fun.SetVarArgs(LogicalType::ANY);
+	ScalarFunction fun("json_array", {}, LogicalType::JSON(), ArrayFunction, JSONArrayBind<BindScalarFunctionInput>,
+	                   nullptr, JSONFunctionLocalState::Init);
+	fun.GetSignature().AddArgs("args", LogicalType::ANY);
+	fun.SetResolveTypesCallback(JSONCreateResolveTypes<JSONArrayBind<ResolveScalarFunctionTypesInput>>);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetToJSONFunction() {
-	ScalarFunction fun("to_json", {}, LogicalType::JSON(), ToJSONFunction, ToJSONBind, nullptr,
+	ScalarFunction fun("to_json", {}, LogicalType::JSON(), ToJSONFunction, ToJSONBind<BindScalarFunctionInput>, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetSignature().AddArgs("args", LogicalType::ANY);
+	fun.SetResolveTypesCallback(JSONCreateResolveTypes<ToJSONBind<ResolveScalarFunctionTypesInput>>);
 	return ScalarFunctionSet(fun);
 }
 
@@ -1508,6 +1512,9 @@ ScalarFunction JSONFunctions::GetJSONCopyToJSONFunction() {
 	ScalarFunction fun(JSON_COPY_TO_JSON_INTERNAL_NAME, {LogicalType::ANY, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                   LogicalType::JSON(), JSONCopyToJSONFunction, JSONCopyToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().GetParameter(0).SetName("value");
+	fun.GetSignature().GetParameter(1).SetName("date_format");
+	fun.GetSignature().GetParameter(2).SetName("timestamp_format");
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetSerializeCallback(JSONCopyToJSONSerialize);
 	fun.SetDeserializeCallback(JSONCopyToJSONDeserialize);
@@ -1520,21 +1527,29 @@ ScalarFunction JSONFunctions::GetJSONCopyToGeoJSONFunction() {
 	                    LogicalType::VARCHAR, LogicalType::BOOLEAN},
 	                   LogicalType::JSON(), JSONCopyToGeoJSONFunction, JSONCopyToGeoJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().GetParameter(0).SetName("value");
+	fun.GetSignature().GetParameter(1).SetName("date_format");
+	fun.GetSignature().GetParameter(2).SetName("timestamp_format");
+	fun.GetSignature().GetParameter(3).SetName("geometry_column");
+	fun.GetSignature().GetParameter(4).SetName("id_column");
+	fun.GetSignature().GetParameter(5).SetName("write_bbox");
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 
 ScalarFunctionSet JSONFunctions::GetArrayToJSONFunction() {
-	ScalarFunction fun("array_to_json", {}, LogicalType::JSON(), ToJSONFunction, ArrayToJSONBind, nullptr,
-	                   JSONFunctionLocalState::Init);
-	fun.SetVarArgs(LogicalType::ANY);
+	ScalarFunction fun("array_to_json", {}, LogicalType::JSON(), ToJSONFunction,
+	                   ArrayToJSONBind<BindScalarFunctionInput>, nullptr, JSONFunctionLocalState::Init);
+	fun.GetSignature().AddArgs("args", LogicalType::ANY);
+	fun.SetResolveTypesCallback(JSONCreateResolveTypes<ArrayToJSONBind<ResolveScalarFunctionTypesInput>>);
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetRowToJSONFunction() {
-	ScalarFunction fun("row_to_json", {}, LogicalType::JSON(), ToJSONFunction, RowToJSONBind, nullptr,
-	                   JSONFunctionLocalState::Init);
-	fun.SetVarArgs(LogicalType::ANY);
+	ScalarFunction fun("row_to_json", {}, LogicalType::JSON(), ToJSONFunction, RowToJSONBind<BindScalarFunctionInput>,
+	                   nullptr, JSONFunctionLocalState::Init);
+	fun.GetSignature().AddArgs("args", LogicalType::ANY);
+	fun.SetResolveTypesCallback(JSONCreateResolveTypes<RowToJSONBind<ResolveScalarFunctionTypesInput>>);
 	return ScalarFunctionSet(fun);
 }
 

@@ -95,10 +95,10 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 	static void ExecuteFlatI64HugeintSum(const INPUT_TYPE *vals, const ClusteredAggr &clustered,
 	                                     const SelectionVector *isel, const sel_t *cluster_iter) {
 		idx_t pos = 0;
-		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
-			const auto *run_sel = clustered.group_runs[r].sel;
-			const idx_t run_count = clustered.group_runs[r].count;
+		for (auto &run : clustered.runs()) {
+			auto &state = *reinterpret_cast<STATE_TYPE *>(run.state);
+			const auto *run_sel = run.sel;
+			const idx_t run_count = run.count;
 			if (run_count == 0) {
 				continue;
 			}
@@ -144,10 +144,10 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 		input.ToUnifiedFormat(idata);
 		const auto *dict_sel = idata.sel->data();
 		auto &validity = idata.validity;
-		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
-			const auto *run_sel = clustered.group_runs[r].sel;
-			const idx_t run_count = clustered.group_runs[r].count;
+		for (auto &run : clustered.runs()) {
+			auto &state = *reinterpret_cast<STATE_TYPE *>(run.state);
+			const auto *run_sel = run.sel;
+			const idx_t run_count = run.count;
 			int64_t local64 = 0;
 			if (run_sel) {
 				for (idx_t k = 0; k < run_count; k++) {
@@ -227,6 +227,23 @@ struct HugeintSumOperation
 	template <class STATE, class OP>
 	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
 		RepeatedSumState::Combine(source, target, input, count);
+	}
+};
+
+//! The sum of a DECIMAL is a DECIMAL(38) - finalizing throws if the sum does not fit in it
+template <class OP>
+struct DecimalSumOperation : public OP {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		OP::template Finalize<T, STATE>(state, target, finalize_data);
+		if (!state.is_set) {
+			return;
+		}
+		const auto &max_value = Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL];
+		if (target >= max_value || target <= -max_value) {
+			throw OutOfRangeException("Overflow in SUM of DECIMAL: the result does not fit in DECIMAL(%d)",
+			                          Decimal::MAX_WIDTH_DECIMAL);
+		}
 	}
 };
 
@@ -416,11 +433,36 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 	}
 }
 
+template <class INPUT_TYPE, class OP>
+AggregateFunction GetDecimalSumAggregate(const LogicalType &input_type) {
+	auto function =
+	    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, INPUT_TYPE, hugeint_t, DecimalSumOperation<OP>>(
+	        input_type, LogicalType::HUGEINT);
+	function.GetSignature().GetParameter(0).SetName("arg");
+	function.SetStatisticsCallback(SumPropagateStats);
+	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	return function;
+}
+
+AggregateFunction GetDecimalSumAggregate(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::INT32:
+		return GetDecimalSumAggregate<int32_t, SumToHugeintOperation>(LogicalType::INTEGER);
+	case PhysicalType::INT64:
+		return GetDecimalSumAggregate<int64_t, SumToHugeintOperation>(LogicalType::BIGINT);
+	case PhysicalType::INT128:
+		return GetDecimalSumAggregate<hugeint_t, HugeintSumOperation>(LogicalType::HUGEINT);
+	default:
+		// the sum of smaller decimals is accumulated in an int64_t, which always fits in a DECIMAL(38)
+		return GetSumAggregate(type);
+	}
+}
+
 unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto decimal_type = arguments[0]->GetReturnType();
-	function.ReplaceImplementation(GetSumAggregate(decimal_type.InternalType()));
+	function.ReplaceImplementation(GetDecimalSumAggregate(decimal_type.InternalType()));
 	function.SetName("sum");
 	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));

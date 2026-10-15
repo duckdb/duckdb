@@ -55,6 +55,12 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 	return_types.emplace_back(LogicalType::VARIANT());
 
 	auto result = make_uniq<DuckDBSettingsBindData>();
+	for (auto name : {"debug", "deprecated"}) {
+		auto it = input.named_parameters.find(name);
+		if (it != input.named_parameters.end() && it->second.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for %s", name);
+		}
+	}
 	if (auto it = input.named_parameters.find("debug"); it != input.named_parameters.end()) {
 		result->debug = it->second.GetValue<bool>();
 	}
@@ -81,10 +87,10 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 	for (idx_t i = 0; i < options_count; i++) {
 		auto option = DBConfig::GetOptionByIndex(i);
 		D_ASSERT(option);
-		if (!bind_data.debug && option->is_debug) {
+		if (bind_data.debug != option->is_debug) {
 			continue;
 		}
-		if (!bind_data.deprecated && option->is_deprecated) {
+		if (bind_data.deprecated != option->is_deprecated) {
 			continue;
 		}
 		DuckDBSettingValue value;
@@ -116,6 +122,12 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		result->settings.push_back(std::move(value));
 	}
 	for (auto &ext_param : config.GetExtensionSettings()) {
+		if (bind_data.debug != ext_param.second.is_debug) {
+			continue;
+		}
+		if (bind_data.deprecated != ext_param.second.is_deprecated) {
+			continue;
+		}
 		Value setting_val;
 		auto scope = SettingScope::GLOBAL;
 		auto lookup_result = context.TryGetCurrentSetting(ext_param.first, setting_val);
@@ -176,8 +188,9 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 
 void DuckDBSettingsFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction settings_fun("duckdb_settings", {}, DuckDBSettingsFunction, DuckDBSettingsBind, DuckDBSettingsInit);
-	settings_fun.named_parameters["debug"] = LogicalType::BOOLEAN;
-	settings_fun.named_parameters["deprecated"] = LogicalType::BOOLEAN;
+	settings_fun.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("debug", LogicalType::BOOLEAN).Add("deprecated", LogicalType::BOOLEAN);
+	});
 	set.AddFunction(settings_fun);
 }
 

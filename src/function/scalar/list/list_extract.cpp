@@ -176,6 +176,9 @@ ScalarFunctionSet ListExtractFun::GetFunctions() {
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction,
 	                    StringExtractBind);
+	sfun.GetSignature().GetParameter(0).SetName("string");
+	sfun.GetSignature().GetParameter(1).SetName("index");
+
 	lfun.SetFallible();
 	list_extract_set.AddFunction(lfun);
 	list_extract_set.AddFunction(sfun);
