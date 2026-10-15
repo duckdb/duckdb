@@ -97,6 +97,40 @@ UPDATE checked SET value = 2 RETURNING *;
 ----
 1	2
 
+# an INSERT OR REPLACE that writes no column is exported with all of them
+statement ok
+CREATE TABLE replaced (id INTEGER PRIMARY KEY, v INTEGER);
+
+statement ok
+INSERT INTO replaced VALUES (1, 10);
+
+query TT
+EXPLAIN (SQL) INSERT OR REPLACE INTO replaced(id) VALUES (1) RETURNING *;
+----
+sql	<REGEX>:(?s)MERGE\s+INTO.*WHEN\s+MATCHED\s+THEN\s+UPDATE\s+SET\s+v\s+=\s+r\d+\.c\d+,\s+id\s+=\s+r\d+\.c\d+\s+WHEN\s+NOT\s+MATCHED.*
+
+query II
+INSERT OR REPLACE INTO replaced(id) VALUES (1) RETURNING *;
+----
+1	10
+
+# a table with generated columns still verifies them through a delete and insert
+statement ok
+CREATE TABLE generated (id INTEGER PRIMARY KEY, v VARCHAR, g INTEGER GENERATED ALWAYS AS (CAST(v AS INTEGER)));
+
+statement ok
+INSERT INTO generated (id, v) VALUES (1, '1');
+
+statement error
+UPDATE generated SET v = 'x' RETURNING id;
+----
+Incorrect value for generated column
+
+query III
+SELECT * FROM generated;
+----
+1	1	1
+
 # changing the key, or a LIST column, still deletes and inserts the row, which the foreign key prevents
 statement error
 UPDATE parent SET id = 3 WHERE id = 1 RETURNING *;

@@ -323,6 +323,10 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	auto written_column_count = update.columns.size();
 	if (update.return_chunk) {
 		LogicalUpdate::BindAllColumns(*this, get, proj, update);
+		if (HasGeneratedColumns()) {
+			// only the insert of a delete and insert verifies generated columns, keep them as before
+			written_column_count = update.columns.size();
+		}
 	}
 	// for index updates we always turn any update into an insert and a delete
 	// we thus need all the columns to be available, hence we check if the update touches any index columns
@@ -348,7 +352,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	}
 
 	if (update.update_is_del_and_insert) {
-		// the update updates a column required by an index, push projections for all columns
+		// a delete and insert needs the whole row
 		LogicalUpdate::BindAllColumns(*this, get, proj, update);
 	} else {
 		update.returning_only_column_count = update.columns.size() - written_column_count;

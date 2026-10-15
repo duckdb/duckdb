@@ -276,6 +276,10 @@ static LogicalPlanSQLExportResult ExportMergeNode(LogicalMergeInto &op, LogicalP
 				}
 				auto set_info = make_uniq<UpdateSetInfo>();
 				auto written_column_count = bound_action->columns.size() - bound_action->returning_only_column_count;
+				if (written_column_count == 0) {
+					// an UPDATE needs a SET, so an action that writes no column assigns all of them
+					written_column_count = bound_action->columns.size();
+				}
 				for (idx_t i = 0; i < bound_action->columns.size(); i++) {
 					auto value = export_input();
 					if (value.HasError()) {

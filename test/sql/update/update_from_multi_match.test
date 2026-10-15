@@ -253,7 +253,7 @@ statement ok
 INSERT INTO source_dup VALUES (1, 10), (1, 11), (2, 20), (2, 21);
 
 query I rowsort
-UPDATE target_pk SET value = source_dup.value FROM source_dup WHERE target_pk.id = source_dup.id RETURNING id;
+UPDATE target_pk SET id = source_dup.id, value = source_dup.value FROM source_dup WHERE target_pk.id = source_dup.id RETURNING id;
 ----
 1
 2
