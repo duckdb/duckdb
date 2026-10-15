@@ -71,3 +71,30 @@ query II
 SELECT id, v FROM c ORDER BY id;
 ----
 1	1
+
+# the first skipped row comes after rows spanning multiple vectors were deleted
+statement ok
+CREATE TABLE l(id INT PRIMARY KEY);
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO l SELECT range FROM range(5000);
+
+query I
+DELETE FROM l USING (SELECT range FROM range(5000) UNION ALL SELECT 4999) d(x) WHERE l.id = d.x;
+----
+5000
+
+# all deleted rows were removed from the index, so they can be inserted again
+statement ok
+INSERT INTO l SELECT range FROM range(5000);
+
+statement ok
+COMMIT;
+
+query II
+SELECT count(*), count(DISTINCT id) FROM l;
+----
+5000	5000
