@@ -1,0 +1,42 @@
+# name: test/sql/json/copy_json_partition_by_bind_once.test
+# description: COPY TO JSON with PARTITION_BY binds the query once, so bind time side effects run once
+# group: [json]
+
+require json
+
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+COPY (SELECT range AS v, 0 AS p FROM range(nextval('seq'))) TO '{TEST_DIR}/json_partition_bind_once' (FORMAT JSON, PARTITION_BY (p));
+
+query II
+SELECT currval('seq'), (SELECT count(*) FROM read_json('{TEST_DIR}/json_partition_bind_once/**/*.json'))
+----
+1	1
+
+statement ok
+CREATE SEQUENCE geo_seq;
+
+statement ok
+COPY (SELECT range AS v, 'POINT (1 2)'::GEOMETRY AS geom, 0 AS p FROM range(nextval('geo_seq')))
+TO '{TEST_DIR}/geojson_partition_bind_once' (FORMAT GEOJSON, PARTITION_BY (p));
+
+query I
+SELECT currval('geo_seq')
+----
+1
+
+# every column as partition column still needs WRITE_PARTITION_COLUMNS, and '*' still writes them
+statement error
+COPY (SELECT range AS v FROM range(nextval('seq'))) TO '{TEST_DIR}/json_partition_bind_once_all' (FORMAT JSON, PARTITION_BY '*');
+----
+No column to write as all columns are specified as partition columns
+
+statement ok
+COPY (SELECT range AS v FROM range(nextval('seq'))) TO '{TEST_DIR}/json_partition_bind_once_star' (FORMAT JSON, PARTITION_BY '*', WRITE_PARTITION_COLUMNS);
+
+query II
+SELECT currval('seq'), (SELECT count(*) FROM read_json('{TEST_DIR}/json_partition_bind_once_star/**/*.json'))
+----
+3	3
