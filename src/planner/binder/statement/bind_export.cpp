@@ -211,6 +211,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	unordered_set<string> table_name_index;
 	vector<unique_ptr<LogicalOperator>> export_nodes;
+	idx_t copy_column_count = 1;
 	for (auto &t : tables) {
 		auto &table = t.get().Cast<TableCatalogEntry>();
 		auto info = make_uniq<CopyInfo>();
@@ -269,10 +270,11 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		auto bound_statement = copy_binder->Bind(copy_stmt, CopyToType::EXPORT_DATABASE);
 
 		auto plan = std::move(bound_statement.plan);
+		copy_column_count = bound_statement.types.size();
 
 		export_nodes.push_back(std::move(plan));
 	}
-	auto child_operator = UnionOperators(std::move(export_nodes));
+	auto child_operator = UnionOperators(std::move(export_nodes), copy_column_count);
 
 	// try to create the directory, if it doesn't exist yet
 	// a bit hacky to do it here, but we need to create the directory BEFORE the copy statements run

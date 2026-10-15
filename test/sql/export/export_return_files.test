@@ -1,0 +1,38 @@
+# name: test/sql/export/export_return_files.test
+# description: EXPORT DATABASE of several tables with RETURN_FILES or RETURN_STATS
+# group: [export]
+
+require parquet
+
+statement ok
+CREATE TABLE a AS SELECT 1 AS i
+
+statement ok
+CREATE TABLE b AS SELECT 'x' AS j
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/export_return_files' (FORMAT parquet, RETURN_FILES)
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/export_return_stats' (FORMAT parquet, RETURN_STATS)
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/export_return_files_csv' (FORMAT csv, RETURN_FILES)
+
+foreach export_dir export_return_files export_return_stats export_return_files_csv
+
+statement ok
+DROP TABLE a
+
+statement ok
+DROP TABLE b
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/${export_dir}'
+
+query II
+SELECT i, j FROM a, b
+----
+1	x
+
+endloop
