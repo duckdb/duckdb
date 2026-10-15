@@ -14,10 +14,9 @@ using namespace duckdb;
 // construction, so Peek()/GetStatement() take no context argument:
 //   ParseIterator : Peek() parses + buffers one statement; GetStatement() returns it (no
 //                   preprocessing). GetStatement() before Peek returns nullptr.
-//   StatementIterator: Peek() answers "is there more input?" (parses ahead, NO preprocessing);
-//                   GetStatement() parses + preprocesses the next peel and may return nullptr
-//                   when that peel preprocesses to nothing. GetStatement is self-sufficient (works
-//                   without a prior Peek).
+//   StatementIterator: Peek() answers "is there more input?" (parses ahead); GetStatement()
+//                   returns the next user statement as parsed, or nullptr once the input is
+//                   exhausted. GetStatement is self-sufficient (works without a prior Peek).
 // So the two are tested separately below.
 
 //===--------------------------------------------------------------------===//
@@ -165,7 +164,7 @@ TEST_CASE("ParseIterator: statement query text is populated and normalized", "[a
 	REQUIRE(s0->stmt_location.offset == 0);
 	REQUIRE(s0->stmt_location.length == s0->query.size());
 
-	Parser reparser(ctx.GetParserOptions());
+	Parser reparser(ctx);
 	reparser.ParseQuery(s0->query);
 	REQUIRE(reparser.statements.size() == 1);
 }
@@ -197,16 +196,14 @@ TEST_CASE("ParseIterator: semicolons in strings and comments handled", "[api][pa
 }
 
 //===--------------------------------------------------------------------===//
-// StatementIterator (new contract: Peek = "more input?", Get = work, may be null)
+// StatementIterator (Peek = "more input?", Get = the next user statement)
 //===--------------------------------------------------------------------===//
 
 static vector<unique_ptr<SQLStatement>> DrainStatements(StatementIterator &it) {
 	vector<unique_ptr<SQLStatement>> result;
 	while (it.Peek()) {
 		auto stmt = it.GetStatement();
-		if (!stmt) {
-			continue; // a peel that preprocessing swallowed
-		}
+		REQUIRE(stmt);
 		result.push_back(std::move(stmt));
 	}
 	return result;
@@ -293,7 +290,7 @@ TEST_CASE("StatementIterator: GetStatement works without a prior Peek", "[api][s
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	// Unlike ParseIterator, StatementIterator's GetStatement is self-sufficient: it pulls + preprocesses
+	// Unlike ParseIterator, StatementIterator's GetStatement is self-sufficient: it pulls
 	// on demand, no priming Peek required.
 	StatementIterator it {ParseIterator(ctx, "SELECT 7;")};
 	auto stmt = it.GetStatement();
@@ -324,4 +321,24 @@ TEST_CASE("StatementIterator: movable", "[api][statement_iterator]") {
 	REQUIRE(moved.Peek());
 	REQUIRE(moved.GetStatement());
 	REQUIRE_FALSE(moved.Peek());
+}
+
+TEST_CASE("StatementIterator: a statement the engine expands is yielded as written", "[api][statement_iterator]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &ctx = *con.context;
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t (k VARCHAR, v INTEGER)"));
+
+	StatementIterator it {ParseIterator(ctx,
+	                                    "PIVOT t ON k USING sum(v); ALTER TABLE t ADD COLUMN r DOUBLE DEFAULT "
+	                                    "random(); PRAGMA show_tables; BEGIN; PIVOT t ON k USING sum(v); COMMIT;")};
+	auto stmts = DrainStatements(it);
+	REQUIRE(stmts.size() == 6);
+	REQUIRE(stmts[0]->type == StatementType::MULTI_STATEMENT);
+	REQUIRE(stmts[1]->type == StatementType::MULTI_STATEMENT);
+	REQUIRE(stmts[2]->type == StatementType::PRAGMA_STATEMENT);
+	REQUIRE(stmts[3]->type == StatementType::TRANSACTION_STATEMENT);
+	REQUIRE(stmts[4]->type == StatementType::MULTI_STATEMENT);
+	REQUIRE(stmts[5]->type == StatementType::TRANSACTION_STATEMENT);
+	REQUIRE(stmts[1]->query == "ALTER TABLE t ADD COLUMN r DOUBLE DEFAULT random(); ");
 }

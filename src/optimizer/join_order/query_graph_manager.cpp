@@ -26,27 +26,7 @@ QueryGraphManager::QueryGraphManager(ClientContext &context) : context(context),
 void QueryGraphManager::BuildPredicateModel() {
 	predicate_model.Clear();
 
-	column_binding_map_t<idx_t> binding_to_component;
-	vector<idx_t> parents;
-
-	auto get_component = [&](const ColumnBinding &binding) -> idx_t {
-		auto entry = binding_to_component.find(binding);
-		if (entry != binding_to_component.end()) {
-			return entry->second;
-		}
-		auto component = parents.size();
-		parents.push_back(component);
-		binding_to_component[binding] = component;
-		return component;
-	};
-
-	auto find_root = [&](idx_t component) -> idx_t {
-		while (parents[component] != component) {
-			parents[component] = parents[parents[component]];
-			component = parents[component];
-		}
-		return component;
-	};
+	JoinEqualityGroups equality_groups;
 
 	// First union all normalized equality predicates. Do not assign edge ids in this pass,
 	// because a later predicate can merge two previously separate components.
@@ -66,11 +46,7 @@ void QueryGraphManager::BuildPredicateModel() {
 			continue;
 		}
 
-		auto left_root = find_root(get_component(predicate.GetEqualityBinding(true)));
-		auto right_root = find_root(get_component(predicate.GetEqualityBinding(false)));
-		if (left_root != right_root) {
-			parents[MaxValue(left_root, right_root)] = MinValue(left_root, right_root);
-		}
+		equality_groups.AddEquality(predicate.GetEqualityBinding(true), predicate.GetEqualityBinding(false));
 	}
 
 	// Then assign stable final ids to every equality edge using the final roots.
@@ -81,7 +57,7 @@ void QueryGraphManager::BuildPredicateModel() {
 		if (!predicate.CanBuildEqualityClosure()) {
 			continue;
 		}
-		auto root = find_root(binding_to_component[predicate.GetEqualityBinding(true)]);
+		auto root = equality_groups.GetGroup(predicate.GetEqualityBinding(true));
 		auto entry = root_to_equivalence_id.find(root);
 		if (entry == root_to_equivalence_id.end()) {
 			entry = root_to_equivalence_id.insert(make_pair(root, root_to_equivalence_id.size())).first;
@@ -123,6 +99,79 @@ void QueryGraphManager::BuildPredicateModel() {
 				second_binding = edge.left_binding;
 			}
 			predicate_model.AddDirectEqualityPairClass(pair, equality_class.index, first_binding, second_binding);
+		}
+	}
+	BuildLeftEqualityPairs();
+}
+
+void QueryGraphManager::BuildLeftEqualityPairs() {
+	for (auto &op : join_operators) {
+		if (op->type != JoinOrderOperatorType::LEFT) {
+			continue;
+		}
+		JoinEqualityGroups groups;
+		auto add_equality = [&](ExpressionType type, const Expression &left, const Expression &right) {
+			if (type != ExpressionType::COMPARE_EQUAL && type != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+				return;
+			}
+			ColumnBinding left_binding;
+			ColumnBinding right_binding;
+			GetEquivalenceBinding(left, left_binding);
+			GetEquivalenceBinding(right, right_binding);
+			if (left_binding.table_index.IsValid() && right_binding.table_index.IsValid()) {
+				groups.AddEquality(left_binding, right_binding);
+			}
+		};
+		vector<reference<const Expression>> residuals;
+		for (auto &condition : op->conditions) {
+			if (condition.IsComparison()) {
+				add_equality(condition.GetComparisonType(), condition.GetLHS(), condition.GetRHS());
+			} else {
+				residuals.push_back(condition.GetJoinExpression());
+			}
+		}
+		// Same-side ON equalities can connect keys even though they are not costing predicates.
+		while (!residuals.empty()) {
+			auto &expression = residuals.back().get();
+			residuals.pop_back();
+			if (expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+				for (auto &child : expression.Cast<BoundConjunctionExpression>().GetChildren()) {
+					residuals.push_back(*child);
+				}
+			} else if (BoundComparisonExpression::IsComparison(expression)) {
+				auto &comparison = expression.Cast<BoundFunctionExpression>();
+				add_equality(expression.GetExpressionType(), BoundComparisonExpression::Left(comparison),
+				             BoundComparisonExpression::Right(comparison));
+			}
+		}
+		reference_map_t<JoinRelationSet, RelationPairEqualitySummary> summaries;
+		vector<pair<reference<JoinPredicate>, reference<JoinRelationSet>>> pairs;
+		for (auto predicate_index : op->costing_predicate_indices) {
+			auto &predicate = predicate_model.GetPredicates()[predicate_index].get();
+			auto type = predicate.GetComparisonType();
+			if (!predicate.CanBuildSelectivityDomain() || !predicate.HasValidEqualityBindings() ||
+			    (type != ExpressionType::COMPARE_EQUAL && type != ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
+				continue;
+			}
+			auto first_binding = predicate.GetEqualityBinding(true);
+			auto second_binding = predicate.GetEqualityBinding(false);
+			auto first_relation = JoinOrderUtil::GetBindingRelation(first_binding);
+			auto second_relation = JoinOrderUtil::GetBindingRelation(second_binding);
+			if (first_relation == second_relation) {
+				continue;
+			}
+			auto &pair = set_manager.Union(set_manager.GetJoinRelation(first_relation),
+			                               set_manager.GetJoinRelation(second_relation));
+			if (pair.relations[0] != first_relation) {
+				std::swap(first_binding, second_binding);
+			}
+			summaries[pair].AddEquality(groups.GetGroup(first_binding), first_binding, second_binding);
+			pairs.emplace_back(predicate, pair);
+		}
+		for (auto &entry : pairs) {
+			if (summaries.at(entry.second).HasDirectCompositeEquality()) {
+				entry.first.get().SetCompositeJoinPair(entry.second);
+			}
 		}
 	}
 }

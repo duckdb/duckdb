@@ -782,8 +782,8 @@ void UpdateSegment::RollbackUpdate(UpdateInfo &info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
 
-	if (info.N == 0) {
-		// this update info was replaced by a larger one, or has no updates
+	if (info.N == 0 || !info.HasPrev()) {
+		// this update info was replaced by a larger one, has no updates, or was never linked (the update failed)
 		return;
 	}
 	// move the data from the UpdateInfo back into the root
@@ -802,16 +802,20 @@ void UpdateSegment::RollbackUpdate(UpdateInfo &info) {
 // Cleanup Update
 //===--------------------------------------------------------------------===//
 void UpdateSegment::CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo &info) {
+	// pin both neighbours before modifying either: Pin can throw (OOM), and a half-unlinked node corrupts the chain
+	UndoBufferReference prev_pin;
+	UndoBufferReference next_pin;
 	if (info.HasPrev()) {
-		auto pin = info.prev.Pin();
-		auto &prev_info = UpdateInfo::Get(pin);
-		prev_info.next = info.next;
+		prev_pin = info.prev.Pin();
 	}
 	if (info.HasNext()) {
-		auto next = info.next;
-		auto next_pin = next.Pin();
-		auto &next_info = UpdateInfo::Get(next_pin);
-		next_info.prev = info.prev;
+		next_pin = info.next.Pin();
+	}
+	if (prev_pin.IsSet()) {
+		UpdateInfo::Get(prev_pin).next = info.next;
+	}
+	if (next_pin.IsSet()) {
+		UpdateInfo::Get(next_pin).prev = info.prev;
 	}
 }
 
@@ -1493,16 +1497,6 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 	if (count == 0) {
 		return;
 	}
-	if (statistics_update_function == UpdateStringStatistics) {
-		// for strings - we need to push all strings we are going to place here into the string heap of the segment
-		update_p.Flatten();
-		auto update_data = FlatVector::GetDataMutable<string_t>(update_p);
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i);
-			update_data[idx] = GetStringHeap().AddBlob(update_data[idx]);
-		}
-		update_p.ToUnifiedFormat(update_format);
-	}
 
 	// subsequent algorithms used by the update require row ids to be (1) sorted, and (2) unique
 	// this is usually the case for "standard" queries (e.g. UPDATE tbl SET x=bla WHERE cond)
@@ -1526,6 +1520,16 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		if (count == 0) {
 			return;
 		}
+	}
+	if (statistics_update_function == UpdateStringStatistics) {
+		// for strings - we need to push all strings we are going to place here into the string heap of the segment
+		update_p.Flatten();
+		auto update_data = FlatVector::GetDataMutable<string_t>(update_p);
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+			update_data[idx] = GetStringHeap().AddBlob(update_data[idx]);
+		}
+		update_p.ToUnifiedFormat(update_format);
 	}
 
 	InitializeUpdateInfo(vector_index);
@@ -1618,12 +1622,14 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 			auto new_pointer = new_ref.GetBufferPointer();
 			new_node.prev = node ? node->prev : root_pointer;
 			new_node.next = node ? node->next : root_info.next;
-			{
-				auto prev_pin = new_node.prev.Pin();
-				UpdateInfo::Get(prev_pin).next = new_pointer;
-			}
+			// pin both neighbours before modifying either: Pin can throw (OOM) and must not leave a half-linked node
+			auto prev_pin = new_node.prev.Pin();
+			UndoBufferReference next_pin;
 			if (new_node.next.IsSet()) {
-				auto next_pin = new_node.next.Pin();
+				next_pin = new_node.next.Pin();
+			}
+			UpdateInfo::Get(prev_pin).next = new_pointer;
+			if (next_pin.IsSet()) {
 				UpdateInfo::Get(next_pin).prev = new_pointer;
 			}
 			if (node) {

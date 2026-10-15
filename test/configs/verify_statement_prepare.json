@@ -53,6 +53,12 @@
         "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test",
         "test/sql/types/geo/geometry_parquet_pushdown.test"
       ]
+    },
+    {
+      "reason": "Syntactic errors don't invalidate transaction",
+      "paths": [
+        "test/sql/transactions/test_parser_error_transaction_invalidation.test"
+      ]
     }
   ]
 }

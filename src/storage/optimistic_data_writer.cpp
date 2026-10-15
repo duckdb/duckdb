@@ -121,6 +121,13 @@ void OptimisticWriteCollection::FinalizeFlush() {
 	unflushed_data_size = 0;
 }
 
+void OptimisticWriteCollection::ResetCollectionAccounting() {
+	prev_allocated_size = 0;
+	unflushed_data_size = 0;
+	unflushed_row_groups.clear();
+	flushed_row_groups.clear();
+}
+
 void OptimisticDataWriter::WriteUnflushedRowGroups(OptimisticWriteCollection &row_groups) {
 	auto total_row_groups = row_groups.collection->GetRowGroupCount();
 	if (row_groups.flushed_row_groups.size() == total_row_groups && row_groups.partial_block_managers.empty()) {
