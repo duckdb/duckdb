@@ -1842,7 +1842,9 @@ Asymmetric <- 'ASYMMETRIC'
 OtherOperatorExpression <- InfixOtherOperatorExpression / CustomPrefixExpression
 InfixOtherOperatorExpression <- BitwiseExpression OtherOperatorTail*
 CustomPrefixExpression <- OperatorLiteral OtherOperatorExpression
-OtherOperatorTail <- OtherOperator BitwiseExpression
+OtherOperatorTail <- AnyAllSubqueryTail / OtherOperatorExpressionTail
+AnyAllSubqueryTail <- AnyAllParsedOperator Parens(SelectStatementInternal)
+OtherOperatorExpressionTail <- OtherOperator BitwiseExpression
 OtherOperator <-
     AnyAllParsedOperator / NamedOtherOperator
 AnyAllParsedOperator <- AnyAllOperator

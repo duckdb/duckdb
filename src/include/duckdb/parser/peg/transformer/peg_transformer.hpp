@@ -2805,6 +2805,13 @@ public:
 	static void InitializeOtherOperatorTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeOtherOperatorTailTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
+	static void InitializeAnyAllSubqueryTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeAnyAllSubqueryTailTrampoline(PEGTransformer &transformer,
+	                                                                            GeneratedTransformProcess &process);
+	static void InitializeOtherOperatorExpressionTailTrampoline(PEGTransformer &transformer,
+	                                                            GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeOtherOperatorExpressionTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static void InitializeOtherOperatorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeOtherOperatorTrampoline(PEGTransformer &transformer,
 	                                                                       GeneratedTransformProcess &process);
@@ -5207,8 +5214,12 @@ public:
 	static unique_ptr<ParsedExpression>
 	TransformCustomPrefixExpression(PEGTransformer &transformer, const string &operator_literal,
 	                                unique_ptr<ParsedExpression> other_operator_expression);
-	static OtherOperatorTail TransformOtherOperatorTail(PEGTransformer &transformer, ParsedOperator other_operator,
-	                                                    unique_ptr<ParsedExpression> bitwise_expression);
+	static OtherOperatorTail TransformAnyAllSubqueryTail(PEGTransformer &transformer,
+	                                                     ParsedOperator any_all_parsed_operator,
+	                                                     unique_ptr<SelectStatement> select_statement_internal);
+	static OtherOperatorTail TransformOtherOperatorExpressionTail(PEGTransformer &transformer,
+	                                                              ParsedOperator other_operator,
+	                                                              unique_ptr<ParsedExpression> bitwise_expression);
 	static ParsedOperator TransformAnyAllParsedOperator(PEGTransformer &transformer,
 	                                                    const pair<string, bool> &any_all_operator);
 	static ParsedOperator TransformNamedOtherOperator(PEGTransformer &transformer, const string &child);
