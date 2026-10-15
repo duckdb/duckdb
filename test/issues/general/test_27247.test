@@ -39,6 +39,25 @@ SELECT count(*) FROM t WHERE h::GEOMETRY('OGC:CRS84') && 'POINT(199999 199999)':
 ----
 1
 
+# NULL and empty geometries do not match
+statement ok
+INSERT INTO t VALUES ('2', NULL, NULL), ('2', 'POINT EMPTY'::GEOMETRY('OGC:CRS84'), 'POINT EMPTY'::GEOMETRY)
+
+query II
+EXPLAIN SELECT count(*) FROM t WHERE g && 'POINT(2 2)'::GEOMETRY AND id::INT = 2
+----
+physical_plan	<!REGEX>:[\s\S]*Filter ─[\s\S]*
+
+query II
+SELECT count(*), count(g) FROM t WHERE id::INT = 2
+----
+3	2
+
+query I
+SELECT count(*) FROM t WHERE g && 'POINT(2 2)'::GEOMETRY AND id::INT = 2
+----
+1
+
 # a cast between two different CRSs is rejected when it is bound, not when it runs
 statement error
 SELECT count(*) FROM t WHERE g::GEOMETRY('OGC:CRS83') && 'POINT(2 2)'::GEOMETRY('OGC:CRS83') AND id::INT = 2

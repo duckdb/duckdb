@@ -8,6 +8,7 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/planner.hpp"
@@ -384,4 +385,14 @@ TEST_CASE("Registered casts that replace a reinterpret cast can throw", "[optimi
 		REQUIRE(StringUtil::Contains(result->GetError(), "registered geometry cast"));
 	}
 	REQUIRE_NO_FAIL(connection.Query("SELECT 42"));
+}
+
+TEST_CASE("Built-in reinterpret casts cannot throw", "[optimizer][cast]") {
+	auto timestamp = make_uniq<BoundConstantExpression>(Value::TIMESTAMP(timestamp_t(0)));
+	auto to_timestamp_tz = BoundCastExpression::AddDefaultCastToType(std::move(timestamp), LogicalType::TIMESTAMP_TZ);
+	REQUIRE(BoundCastExpression::IsCast(*to_timestamp_tz));
+	REQUIRE(!to_timestamp_tz->CanThrow());
+	auto to_timestamp = BoundCastExpression::AddDefaultCastToType(std::move(to_timestamp_tz), LogicalType::TIMESTAMP);
+	REQUIRE(BoundCastExpression::IsCast(*to_timestamp));
+	REQUIRE(!to_timestamp->CanThrow());
 }
