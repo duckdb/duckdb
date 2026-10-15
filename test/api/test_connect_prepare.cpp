@@ -66,7 +66,8 @@ TEST_CASE("Prepare statements while CONNECT-ed", "[api][connect]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t (i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("ATTACH 'routed' AS remote (TYPE connect_routing_test)"));
-	// parsed before CONNECT, so its parameter is known
+	// parsed before CONNECT, with the local grammar
+	auto parsed_insert = con.ExtractStatements("INSERT INTO t VALUES (2)");
 	auto parameterized = con.ExtractStatements("SELECT $1::INTEGER");
 	REQUIRE_NO_FAIL(con.Query("CONNECT remote"));
 	routed_queries.clear();
@@ -86,6 +87,12 @@ TEST_CASE("Prepare statements while CONNECT-ed", "[api][connect]") {
 	result = insert->Execute();
 	REQUIRE(CHECK_COLUMN(result, 0, {"INSERT INTO t VALUES (1)"}));
 	REQUIRE(routed_queries == vector<string> {"SELECT 42", "INSERT INTO t VALUES (1)", "INSERT INTO t VALUES (1)"});
+	auto parsed = con.Prepare(std::move(parsed_insert[0]));
+	REQUIRE(!parsed->HasError());
+	REQUIRE(routed_queries.size() == 3);
+	result = parsed->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {"INSERT INTO t VALUES (2)"}));
+	REQUIRE(routed_queries.size() == 4);
 
 	// parameter values cannot be routed
 	REQUIRE(insert->GetParameterCount() == 0);
@@ -96,19 +103,20 @@ TEST_CASE("Prepare statements while CONNECT-ed", "[api][connect]") {
 	auto prepared = con.Prepare(std::move(parameterized[0]));
 	REQUIRE(prepared->HasError());
 	REQUIRE(StringUtil::Contains(prepared->GetError(), "cannot be executed while CONNECT-ed"));
-	REQUIRE(routed_queries.size() == 3);
+	REQUIRE(routed_queries.size() == 4);
 
 	// DISCONNECT prepared while CONNECT-ed runs locally
 	auto disconnect = con.Prepare("DISCONNECT");
 	REQUIRE(!disconnect->HasError());
 	REQUIRE_NO_FAIL(disconnect->Execute());
 	REQUIRE(!con.context->IsConnected());
-	REQUIRE(routed_queries.size() == 3);
+	REQUIRE(routed_queries.size() == 4);
 
 	// statements prepared for the connected database do not run locally
 	REQUIRE_FAIL(select->Execute());
 	REQUIRE_FAIL(insert->Execute());
+	REQUIRE_FAIL(parsed->Execute());
 	result = con.Query("SELECT count(*) FROM t");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
-	REQUIRE(routed_queries.size() == 3);
+	REQUIRE(routed_queries.size() == 4);
 }
