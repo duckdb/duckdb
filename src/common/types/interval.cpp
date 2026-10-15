@@ -602,6 +602,59 @@ date_t Interval::Add(date_t left, interval_t right) {
 	return result;
 }
 
+bool Interval::TryAdd(date_t left, interval_t right, date_t &result) {
+	if (!left.IsFinite()) {
+		result = left;
+		return true;
+	}
+	result = left;
+	if (right.months != 0) {
+		int32_t year, month, day;
+		Date::Convert(left, year, month, day);
+		int32_t year_diff = right.months / Interval::MONTHS_PER_YEAR;
+		year += year_diff;
+		month += right.months - year_diff * Interval::MONTHS_PER_YEAR;
+		if (month > Interval::MONTHS_PER_YEAR) {
+			year++;
+			month -= Interval::MONTHS_PER_YEAR;
+		} else if (month <= 0) {
+			year--;
+			month += Interval::MONTHS_PER_YEAR;
+		}
+		if (month < 1 || month > Interval::MONTHS_PER_YEAR) {
+			return false;
+		}
+		day = MinValue<int32_t>(day, Date::MonthDays(year, month));
+		if (!Date::TryFromDate(year, month, day, result)) {
+			return false;
+		}
+	}
+	if (right.days != 0 && !TryAddOperator::Operation(result.days, right.days, result.days)) {
+		return false;
+	}
+	if (right.micros != 0 &&
+	    !TryAddOperator::Operation(result.days, int32_t(right.micros / Interval::MICROS_PER_DAY), result.days)) {
+		return false;
+	}
+	return result.IsFinite();
+}
+
+bool Interval::TryAdd(timestamp_t left, interval_t right, timestamp_t &result) {
+	if (!left.IsFinite()) {
+		result = left;
+		return true;
+	}
+	date_t date;
+	dtime_t time;
+	Timestamp::Convert(left, date, time);
+	date_t new_date;
+	if (!TryAdd(date, right, new_date)) {
+		return false;
+	}
+	auto new_time = Interval::Add(time, right, new_date);
+	return Timestamp::TryFromDatetime(new_date, new_time, result);
+}
+
 dtime_t Interval::Add(dtime_t left, interval_t right, date_t &date) {
 	int64_t diff = right.micros - ((right.micros / Interval::MICROS_PER_DAY) * Interval::MICROS_PER_DAY);
 	left += diff;
