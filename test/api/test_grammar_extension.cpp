@@ -1462,7 +1462,10 @@ TEST_CASE("Tokenizer assigns FIRST set token classes", "[api][grammar_extension]
 	REQUIRE(token_class("1e10") == MatcherTokenClass::NUMBER);
 	REQUIRE(token_class("+") == generic_operator);
 	REQUIRE(token_class("||") == generic_operator);
-	REQUIRE(token_class("(") == generic_operator);
+	for (auto punctuation : {"(", ")", "[", "]", "{", "}", ",", ":", "::", ":=", "?", "$", "#"}) {
+		INFO(punctuation);
+		REQUIRE((token_class(punctuation) & generic_operator) == 0);
+	}
 	// operators with their own precedence level are not generic operators
 	REQUIRE(token_class("<=") == MatcherTokenClass::OPERATOR);
 	REQUIRE(token_class("=") == MatcherTokenClass::OPERATOR);
@@ -1569,6 +1572,10 @@ TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][gr
 		CheckFirstSet(*grammar, any_operator, "+", true);
 		CheckFirstSet(*grammar, any_operator, "<=", true);
 		CheckFirstSet(*grammar, any_operator, "42", false);
+		for (auto punctuation : {"(", ")", "[", "]", "{", "}", ",", ":", "::", ":=", "?", "$", "#"}) {
+			CheckFirstSet(*grammar, generic_operator, punctuation, false);
+			CheckFirstSet(*grammar, any_operator, punctuation, false);
+		}
 		CheckFirstSet(*grammar, arithmetic_operator, "*", true);
 		CheckFirstSet(*grammar, arithmetic_operator, "'str'", false);
 	}
