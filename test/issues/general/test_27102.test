@@ -41,10 +41,29 @@ SELECT fmod(-6.0, 3)::VARCHAR, fmod(6.0, -3)::VARCHAR
 0.0	0.0
 
 # each argument is evaluated once
-query I
-SELECT bool_and(r >= 0 AND r < 1) FROM (SELECT fmod(random() * 1000, 1) r FROM range(10000))
+statement ok
+CREATE SEQUENCE dividends
+
+statement ok
+CREATE SEQUENCE divisors
+
+query RR
+SELECT fmod(nextval('dividends'), 4), fmod(10, nextval('divisors')) FROM range(4)
 ----
-true
+1.0	0.0
+2.0	0.0
+3.0	1.0
+0.0	2.0
+
+query II
+SELECT currval('dividends'), currval('divisors')
+----
+4	4
+
+query R
+SELECT fmod(y := 3, x := -10)
+----
+2.0
 
 # infinite divisors keep the dividend, or the divisor when the signs differ
 query RRRR
@@ -64,6 +83,16 @@ SELECT isnan(fmod(42, 0)), isnan(fmod(42::FLOAT, 0::FLOAT))
 true	true
 
 statement ok
+CREATE TABLE zero_divisors AS SELECT * FROM (VALUES (5.0::DOUBLE, 0.0::DOUBLE), (5, 2), (NULL, 0)) t(x, y)
+
+query I
+SELECT isnan(fmod(x, y)) FROM zero_divisors
+----
+true
+false
+NULL
+
+statement ok
 SET ieee_floating_point_ops=false;
 
 statement error
@@ -76,6 +105,11 @@ SELECT fmod(42::FLOAT, 0::FLOAT)
 ----
 Division by zero
 
+statement error
+SELECT fmod(x, y) FROM zero_divisors
+----
+Division by zero
+
 statement ok
 SET error_on_division_by_zero=false;
 
@@ -83,3 +117,10 @@ query RR
 SELECT fmod(42, 0), fmod(42::FLOAT, 0::FLOAT)
 ----
 NULL	NULL
+
+query R
+SELECT fmod(x, y) FROM zero_divisors
+----
+NULL
+1.0
+NULL
