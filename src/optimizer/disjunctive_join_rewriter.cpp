@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 
 namespace duckdb {
 
@@ -275,12 +276,23 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::CreateBranchJoin(const CTEI
 	auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 	join->conditions.push_back(CreateJoinCondition(branches[branch_idx], left_replacer, right_replacer));
 	for (idx_t i = 0; i < branch_idx; i++) {
-		auto comparison =
-		    JoinCondition::CreateExpression(CreateJoinCondition(branches[i], left_replacer, right_replacer));
-		// Exclude only pairs for which an earlier branch was TRUE, preserving UNKNOWN.
+		auto previous = CreateJoinCondition(branches[i], left_replacer, right_replacer);
+		vector<unique_ptr<Expression>> exclusions;
+		if (previous.GetComparisonType() == ExpressionType::COMPARE_EQUAL) {
+			// Preserve UNKNOWN, with separate NULL checks that statistics can simplify.
+			auto left_null = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+			left_null->GetChildrenMutable().push_back(previous.GetLHS().Copy());
+			exclusions.push_back(std::move(left_null));
+			auto right_null =
+			    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+			right_null->GetChildrenMutable().push_back(previous.GetRHS().Copy());
+			exclusions.push_back(std::move(right_null));
+		}
+		exclusions.push_back(BoundComparisonExpression::Create(NegateComparisonExpression(previous.GetComparisonType()),
+		                                                       std::move(previous.LeftReference()),
+		                                                       std::move(previous.RightReference())));
 		join->conditions.emplace_back(
-		    BoundComparisonExpression::Create(ExpressionType::COMPARE_DISTINCT_FROM, std::move(comparison),
-		                                      make_uniq<BoundConstantExpression>(Value::BOOLEAN(true))));
+		    BoundConjunctionExpression::Create(ExpressionType::CONJUNCTION_OR, std::move(exclusions)));
 	}
 
 	join->AddChild(std::move(left_scan));
