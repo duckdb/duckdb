@@ -220,8 +220,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	idx_t dirty_notes = 0;
 	idx_t dirty_notes_minus_comments = 0;
 	idx_t empty_lines = 0;
-	// whether the rows skipped as dirty notes hold the delimiter
 	bool dirty_notes_hold_delimiter = false;
+	idx_t max_row_columns = 0;
 	if (sniffed_column_counts.error) {
 		if (!scanner->error_handler->HasError(MAXIMUM_LINE_SIZE)) {
 			all_fail_max_line_size = false;
@@ -282,7 +282,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 				sniffed_column_counts.state_machine.dialect_options.rows_until_header = row;
 			}
 			padding_count = 0;
-			dirty_notes_hold_delimiter = num_cols > 1;
+			dirty_notes_hold_delimiter = max_row_columns > 1;
 			// we use the maximum number of num_cols that we find
 			num_cols = sniffed_column_counts[row].number_of_columns;
 			dirty_notes = row + sniffed_column_counts[row].empty_lines;
@@ -306,6 +306,9 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		} else if (num_cols >= sniffed_column_counts[row].number_of_columns) {
 			// we are missing some columns, we can parse this as long as we add padding
 			padding_count++;
+		}
+		if (!sniffed_column_counts[row].is_comment) {
+			max_row_columns = MaxValue(max_row_columns, sniffed_column_counts[row].number_of_columns);
 		}
 	}
 

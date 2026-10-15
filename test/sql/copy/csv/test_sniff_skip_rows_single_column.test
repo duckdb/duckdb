@@ -94,6 +94,23 @@ FROM read_csv('{TEST_DIR}/empty_line.csv', header = false);
 ----
 1	2
 
+# skipped rows that hold the delimiter, also as a trailing delimiter
+statement ok
+COPY (SELECT l FROM (VALUES (1, 'a;b'), (2, '1;2;3')) t(i, l) ORDER BY i) TO '{TEST_DIR}/delimiter_notes.csv' (FORMAT CSV, QUOTE '', HEADER 0);
+
+query III
+FROM read_csv('{TEST_DIR}/delimiter_notes.csv', header = false);
+----
+1	2	3
+
+statement ok
+COPY (SELECT l FROM (VALUES (1, 'report'), (2, 'note;'), (3, '1;2;')) t(i, l) ORDER BY i) TO '{TEST_DIR}/trailing_delimiter.csv' (FORMAT CSV, QUOTE '', HEADER 0);
+
+query III
+FROM read_csv('{TEST_DIR}/trailing_delimiter.csv', header = false);
+----
+1	2	NULL
+
 # with a set delimiter, rows without it are still skipped
 statement ok
 COPY (SELECT l FROM (VALUES (1, 'note'), (2, '1;2')) t(i, l) ORDER BY i) TO '{TEST_DIR}/set_delimiter.csv' (FORMAT CSV, QUOTE '', HEADER 0);
