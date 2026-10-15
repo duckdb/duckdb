@@ -22,3 +22,29 @@ query I
 SELECT sum_no_overflow(i::SMALLINT) FROM range(10) t(i)
 ----
 45
+
+# without statistics that prove it cannot overflow, it sums like the regular sum
+query II
+SELECT sum_no_overflow(x), sum(x) FROM (VALUES (9223372036854775807::BIGINT), (9223372036854775807::BIGINT)) t(x)
+----
+18446744073709551614	18446744073709551614
+
+query I
+SELECT sum_no_overflow(x) FROM (VALUES ((-9223372036854775808)::BIGINT), ((-9223372036854775808)::BIGINT)) t(x)
+----
+-18446744073709551616
+
+query I
+SELECT sum_no_overflow(x) FROM (VALUES (2147483647::INTEGER), (2147483647::INTEGER), (2147483647::INTEGER)) t(x)
+----
+6442450941
+
+query I
+SELECT finalize(sum_no_overflow(x) EXPORT_STATE) FROM (VALUES (9223372036854775807::BIGINT), (9223372036854775807::BIGINT)) t(x)
+----
+18446744073709551614
+
+query I
+SELECT sum_no_overflow(NULL::BIGINT)
+----
+NULL

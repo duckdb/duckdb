@@ -5,6 +5,7 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -324,14 +325,22 @@ AggregateFunction GetSumAggregateNoOverflowDecimal() {
 	return aggr;
 }
 
-//! Binding sum_no_overflow by name (e.g. when re-binding an exported aggregate state) delegates to the regular sum,
-//! with the no-overflow implementation swapped in as statistics propagation does
+//! Binding sum_no_overflow by name delegates to the regular sum. Re-binding an exported aggregate state passes NULL
+//! placeholders, and its states come from the no-overflow implementation that statistics propagation chose, so that
+//! implementation is kept for them. Any other input gets the regular sum, which checks for overflow
 unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	const auto parameter_type = function.GetArguments()[0];
+	bool binds_exported_state = true;
+	for (auto &argument : arguments) {
+		if (argument->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
+		    !argument->Cast<BoundConstantExpression>().GetValue().IsNull()) {
+			binds_exported_state = false;
+		}
+	}
 	auto logical = BindLogicalSum(input.GetClientContext(), arguments);
-	if (parameter_type.id() != LogicalTypeId::DECIMAL) {
+	if (binds_exported_state && parameter_type.id() != LogicalTypeId::DECIMAL) {
 		logical.first.ReplaceImplementation(GetSumAggregateNoOverflow(parameter_type.InternalType()));
 	}
 	function = std::move(logical.first);
