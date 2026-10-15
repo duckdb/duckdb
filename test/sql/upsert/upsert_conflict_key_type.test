@@ -71,6 +71,11 @@ EXECUTE upsert_t2(1.4);
 ----
 1	20
 
+# the key 2 conflicts, but the update condition is false
+query II
+EXECUTE upsert_t2(2.4);
+----
+
 # source rows that become the same key
 statement ok
 INSERT INTO t2 SELECT 3.1, 1 UNION ALL SELECT 3.2, 2 ON CONFLICT DO NOTHING;
