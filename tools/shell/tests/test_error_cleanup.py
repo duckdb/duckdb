@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import ShellTest
+
 
 def run_shell(shell, database, arguments, stdin="", init_file=None):
     return subprocess.run(
@@ -18,6 +20,7 @@ def run_shell(shell, database, arguments, stdin="", init_file=None):
         text=True,
         capture_output=True,
         timeout=30,
+        env=ShellTest(shell).get_environment(),
     )
 
 
@@ -264,7 +267,11 @@ def test_interactive_exit_saves_history(shell, tmp_path, monkeypatch, exit_comma
     process = None
     try:
         process = subprocess.Popen(
-            [shell, "-no-init", "-interactive"], stdin=slave, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            [shell, "-no-init", "-interactive"],
+            stdin=slave,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=ShellTest(shell).get_environment(),
         )
         os.close(slave)
         slave = None
@@ -316,3 +323,10 @@ def test_database_shutdown_keeps_output_open(shell, tmp_path, exit_code):
     # The pending WAL is checkpointed during database destruction, before output is closed.
     assert "Start Checkpoint" in output.read_text()
     assert_checkpointed(database)
+
+
+def test_cleanup_subprocess_ignores_agent_environment(shell, tmp_path, monkeypatch):
+    monkeypatch.setenv("AI_AGENT", "cleanup-regression")
+    result = run_shell(shell, None, ["-c", "SELECT 42 AS value;"])
+    assert result.returncode == 0, result.stderr
+    assert "agent mode" not in result.stderr
