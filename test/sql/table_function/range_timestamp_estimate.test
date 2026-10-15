@@ -1,0 +1,14 @@
+# name: test/sql/table_function/range_timestamp_estimate.test
+# description: The row count of a timestamp range is an estimate, not a maximum
+# group: [table_function]
+
+# a month counts as 30 days in the estimate, February has 28
+query I
+SELECT count(*) FROM (SELECT * FROM range(TIMESTAMP '2023-02-01', TIMESTAMP '2023-03-02', INTERVAL 1 MONTH) LIMIT 1)
+----
+1
+
+query I
+SELECT count(*) FROM (SELECT * FROM range(DATE '2023-02-01', DATE '2023-03-02', INTERVAL 1 MONTH) LIMIT 1)
+----
+1

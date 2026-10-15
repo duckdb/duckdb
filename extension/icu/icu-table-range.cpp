@@ -196,7 +196,8 @@ struct ICUTableRange {
 			return nullptr;
 		}
 		auto &bind_data = bind_data_p->Cast<ICURangeBindData>();
-		return make_uniq<NodeStatistics>(bind_data.cardinality, bind_data.cardinality);
+		// months and days have no fixed length, so the row count is an estimate and not a maximum
+		return make_uniq<NodeStatistics>(bind_data.cardinality);
 	}
 
 	template <bool GENERATE_SERIES>
