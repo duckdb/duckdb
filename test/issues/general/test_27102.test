@@ -7,7 +7,7 @@ SELECT fmod(1e16, 3.0), fmod(-1e16, 3.0), fmod(1e16, -3.0), fmod(-1e16, -3.0), f
 ----
 1.0	2.0	-2.0	-1.0	1.0	3.0
 
-# the remainder of the DOUBLE values, so a divisor that is not exact in binary leaves a remainder close to it
+# remainders use the stored DOUBLE values
 query III
 SELECT fmod(6.0, 0.2)::VARCHAR, fmod(-6.0, 0.2)::VARCHAR, fmod(1e308, 1e-308)::VARCHAR
 ----
@@ -41,10 +41,10 @@ SELECT fmod(1e16::FLOAT, 3::FLOAT), fmod(-10::FLOAT, 3::FLOAT)
 2.0	2.0
 
 # an exact zero remainder is a positive zero
-query II
-SELECT fmod(-6.0, 3)::VARCHAR, fmod(6.0, -3)::VARCHAR
+query IIII
+SELECT fmod(-6.0, 3)::VARCHAR, fmod(6.0, -3)::VARCHAR, fmod(-6::FLOAT, 3::FLOAT)::VARCHAR, fmod(6::FLOAT, -3::FLOAT)::VARCHAR
 ----
-0.0	0.0
+0.0	0.0	0.0	0.0
 
 # each argument is evaluated once
 statement ok
@@ -83,10 +83,10 @@ SELECT isnan(fmod('inf'::DOUBLE, 3)), isnan(fmod('nan'::DOUBLE, 3)), isnan(fmod(
 true	true	true
 
 # with IEEE semantics a zero divisor gives NaN
-query II
-SELECT isnan(fmod(42, 0)), isnan(fmod(42::FLOAT, 0::FLOAT))
+query III
+SELECT isnan(fmod(42, 0)), isnan(fmod(42::FLOAT, 0::FLOAT)), isnan(fmod(42, -0.0::DOUBLE))
 ----
-true	true
+true	true	true
 
 statement ok
 CREATE TABLE zero_divisors AS SELECT * FROM (VALUES (5.0::DOUBLE, 0.0::DOUBLE), (5, 2), (NULL, 0)) t(x, y)
@@ -115,6 +115,11 @@ Division by zero
 
 statement error
 SELECT fmod(42::FLOAT, 0::FLOAT)
+----
+Division by zero
+
+statement error
+SELECT fmod(42, -0.0::DOUBLE)
 ----
 Division by zero
 
