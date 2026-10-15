@@ -799,7 +799,19 @@ static bool IsLessThan(ExpressionType type) {
 //! Margins: 2h for DST ambiguity (TIMESTAMP<->TIMESTAMPTZ), 24h for time-of-day loss, 1s for rounding loss.
 static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target) {
 	if (source == target) {
-		return 0;
+		switch (source) {
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return 0;
+		default:
+			// non-temporal types with the same id can differ (e.g. UNION or DECIMAL types)
+			return -1;
+		}
 	}
 	switch (source) {
 	case LogicalTypeId::TIMESTAMP:
@@ -1135,7 +1147,6 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		return ret;
 	} else {
 		// comparison between two non-scalars
-		// only handle comparisons for now
 		if (expr.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 			return FilterResult::UNSUPPORTED;
 		}
@@ -1290,47 +1301,18 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 	return FilterResult::UNSUPPORTED;
 }
 
-/*
- * Create and add new transitive filters from a two non-scalar filter such as j > i, j >= i, j < i, and j <= i
- * It's missing to create another method to add transitive filters from scalar filters, e.g, i > 10
- */
+// Infer constant bounds from comparisons between non-scalar expressions.
 FilterResult FilterCombiner::AddTransitiveFilters(BoundFunctionExpression &comparison, bool is_root) {
 	if (!IsGreaterThan(comparison.GetExpressionType()) && !IsLessThan(comparison.GetExpressionType())) {
 		return FilterResult::UNSUPPORTED;
 	}
+	// Derived bounds must not duplicate volatile or throwing expressions.
+	if (comparison.IsVolatile() || comparison.CanThrow()) {
+		return FilterResult::UNSUPPORTED;
+	}
 	// get the LHS and RHS nodes
 	auto &left_node = GetNode(*BoundComparisonExpression::LeftMutable(comparison));
-	reference<Expression> right_node = GetNode(*BoundComparisonExpression::RightMutable(comparison));
-	// In case with filters like CAST(i) = j and i = 5 we replace the COLUMN_REF i with the constant 5
-	do {
-		if (right_node.get().GetExpressionType() != ExpressionType::OPERATOR_CAST) {
-			break;
-		}
-		auto &bound_cast_expr = right_node.get().Cast<BoundFunctionExpression>();
-		if (BoundCastExpression::Child(bound_cast_expr).GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-			break;
-		}
-		auto &col_ref = BoundCastExpression::Child(bound_cast_expr).Cast<BoundColumnRefExpression>();
-		for (auto &stored_exp : stored_expressions) {
-			const_reference<Expression> expr = stored_exp.first;
-			if (expr.get().GetExpressionType() == ExpressionType::OPERATOR_CAST) {
-				expr = BoundCastExpression::Child(right_node.get().Cast<BoundFunctionExpression>());
-			}
-			if (expr.get().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-				continue;
-			}
-			auto &st_col_ref = expr.get().Cast<BoundColumnRefExpression>();
-			if (st_col_ref.Binding() != col_ref.Binding()) {
-				continue;
-			}
-			if (bound_cast_expr.GetReturnType() != stored_exp.second->GetReturnType()) {
-				continue;
-			}
-			BoundCastExpression::ChildMutable(bound_cast_expr) = stored_exp.second->Copy();
-			right_node = GetNode(*BoundCastExpression::ChildMutable(bound_cast_expr));
-			break;
-		}
-	} while (false);
+	auto &right_node = GetNode(*BoundComparisonExpression::RightMutable(comparison));
 
 	if (left_node.Equals(right_node)) {
 		return FilterResult::UNSUPPORTED;
