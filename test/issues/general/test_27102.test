@@ -7,6 +7,12 @@ SELECT fmod(1e16, 3.0), fmod(-1e16, 3.0), fmod(1e16, -3.0), fmod(-1e16, -3.0), f
 ----
 1.0	2.0	-2.0	-1.0	1.0	3.0
 
+# the remainder of the DOUBLE values, so a divisor that is not exact in binary leaves a remainder close to it
+query III
+SELECT fmod(6.0, 0.2)::VARCHAR, fmod(-6.0, 0.2)::VARCHAR, fmod(1e308, 1e-308)::VARCHAR
+----
+0.19999999999999968	3.3306690738754696e-16	3.498445546245627e-309
+
 statement ok
 CREATE TABLE vals AS SELECT * FROM (VALUES (1e16::DOUBLE, 3), (1e16, -3), (-1e16, 3), (10, 3), (10, -3), (-10, 3), (-10, -3), (NULL, 3), (10, NULL)) t(x, y)
 
@@ -85,12 +91,19 @@ true	true
 statement ok
 CREATE TABLE zero_divisors AS SELECT * FROM (VALUES (5.0::DOUBLE, 0.0::DOUBLE), (5, 2), (NULL, 0)) t(x, y)
 
+statement ok
+CREATE TABLE float_zero_divisors AS SELECT x::FLOAT AS x, y::FLOAT AS y FROM zero_divisors
+
+foreach table zero_divisors float_zero_divisors
+
 query I
-SELECT isnan(fmod(x, y)) FROM zero_divisors
+SELECT isnan(fmod(x, y)) FROM {table}
 ----
 true
 false
 NULL
+
+endloop
 
 statement ok
 SET ieee_floating_point_ops=false;
@@ -105,10 +118,21 @@ SELECT fmod(42::FLOAT, 0::FLOAT)
 ----
 Division by zero
 
+foreach table zero_divisors float_zero_divisors
+
 statement error
-SELECT fmod(x, y) FROM zero_divisors
+SELECT fmod(x, y) FROM {table}
 ----
 Division by zero
+
+query R
+SELECT TRY(fmod(x, y)) FROM {table}
+----
+NULL
+1.0
+NULL
+
+endloop
 
 statement ok
 SET error_on_division_by_zero=false;
@@ -118,9 +142,13 @@ SELECT fmod(42, 0), fmod(42::FLOAT, 0::FLOAT)
 ----
 NULL	NULL
 
+foreach table zero_divisors float_zero_divisors
+
 query R
-SELECT fmod(x, y) FROM zero_divisors
+SELECT fmod(x, y) FROM {table}
 ----
 NULL
 1.0
 NULL
+
+endloop
