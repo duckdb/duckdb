@@ -85,6 +85,31 @@ SELECT COALESCE(NULL::TUPLE(INTEGER, DECIMAL(38,0)), row(1, 1.5::DECIMAL(38,20))
 <REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a COALESCE expression.*
 
 statement error
+SELECT COALESCE(NULL::DECIMAL(38,0)[1], [1.5::DECIMAL(38,20)]);
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a COALESCE expression: type DECIMAL\(38,20\)\[\] is being cast to DECIMAL\(38,0\)\[1\], reducing the scale from 20 to 0\..*
+
+statement error
+SELECT COALESCE(NULL::MAP(DECIMAL(38,0), INTEGER), MAP {1.5::DECIMAL(38,20): 1});
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a COALESCE expression.*
+
+statement error
+SELECT CASE WHEN true THEN {'A': 1.5::DECIMAL(38,20)} ELSE {'a': NULL::DECIMAL(38,0)} END;
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a CASE expression.*
+
+statement error
+SELECT CASE WHEN true THEN row(1.5::DECIMAL(38,20)) ELSE {'a': NULL::DECIMAL(38,0)} END;
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a CASE expression.*
+
+statement error
+SELECT CASE WHEN true THEN {'a': [1.5::DECIMAL(38,20)]} ELSE {'a': NULL::DECIMAL(38,0)[1]} END;
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a CASE expression.*
+
+statement error
 VALUES ([1.5::DECIMAL(38,20)]), (NULL::DECIMAL(38,0)[]);
 ----
 <REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a VALUES column.*
@@ -111,37 +136,59 @@ SELECT CASE WHEN true THEN {'a': 1.5::DECIMAL(38,20)} ELSE {'b': NULL::DECIMAL(3
 statement ok
 SELECT 1.5::DECIMAL(38,20) IN (NULL::DECIMAL(38,0), 2::DECIMAL(38,0));
 
-# the result does not change, and one warning is emitted per expression and query
+# the result does not change, and every expression warns once per query
 statement ok
 SET warnings_as_errors=false;
 
 statement ok
 CALL truncate_duckdb_logs();
 
-query II
-SELECT COALESCE(NULL::DECIMAL(38,0), 1.5::DECIMAL(38,20), 2.5::DECIMAL(38,20)),
-       CASE WHEN true THEN 1.5::DECIMAL(38,20) WHEN false THEN 2.5::DECIMAL(38,20) ELSE NULL::DECIMAL(38,0) END;
+query I
+SELECT COALESCE(NULL::DECIMAL(38,0), 1.5::DECIMAL(38,20), 2.5::DECIMAL(38,20));
 ----
-2	2
+2
 
 query I
-SELECT COALESCE(NULL::DECIMAL(18,0), 1.5::DECIMAL(38,24));
+SELECT count(*) > 0 AND count(*) = count(DISTINCT query_id)
+FROM duckdb_logs
+WHERE log_level = 'WARNING' AND message LIKE 'Potential loss of decimal precision while resolving a COALESCE expression%';
 ----
-1.50000000000000000000
+true
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query I
+SELECT CASE WHEN true THEN 1.5::DECIMAL(38,20) WHEN false THEN 2.5::DECIMAL(38,20) ELSE NULL::DECIMAL(38,0) END;
+----
+2
+
+query I
+SELECT count(*) > 0 AND count(*) = count(DISTINCT query_id)
+FROM duckdb_logs
+WHERE log_level = 'WARNING' AND message LIKE 'Potential loss of decimal precision while resolving a CASE expression%';
+----
+true
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query II
+SELECT COALESCE(NULL::DECIMAL(38,0), 1.5::DECIMAL(38,20)), COALESCE(NULL::DECIMAL(18,0), 1.5::DECIMAL(38,24));
+----
+2	1.50000000000000000000
+
+query I
+SELECT count(*) FILTER (WHERE message LIKE '%from 20 to 0%') = count(DISTINCT query_id)
+       AND count(*) FILTER (WHERE message LIKE '%from 24 to 20%') = count(DISTINCT query_id)
+       AND count(*) = 2 * count(DISTINCT query_id)
+       AND count(*) > 0
+FROM duckdb_logs
+WHERE log_level = 'WARNING' AND message LIKE 'Potential loss of decimal precision while resolving a COALESCE expression%';
+----
+true
 
 query I
 SELECT COALESCE(NULL::DECIMAL(38,0)[], [1.5::DECIMAL(38,20)]);
 ----
 [2]
-
-# every query that warned did so once per expression
-query IIII
-SELECT count(*) FILTER (WHERE message LIKE '%a COALESCE expression%') > 0,
-       count(*) FILTER (WHERE message LIKE '%a COALESCE expression%') = count(DISTINCT query_id) FILTER (WHERE message LIKE '%a COALESCE expression%'),
-       count(*) FILTER (WHERE message LIKE '%a CASE expression%') > 0,
-       count(*) FILTER (WHERE message LIKE '%a CASE expression%') = count(DISTINCT query_id) FILTER (WHERE message LIKE '%a CASE expression%')
-FROM duckdb_logs
-WHERE log_level = 'WARNING'
-  AND starts_with(message, 'Potential loss of decimal precision');
-----
-true	true	true	true

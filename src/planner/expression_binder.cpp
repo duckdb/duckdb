@@ -342,42 +342,63 @@ bool ExpressionBinder::IsPotentialAlias(const ColumnRefExpression &colref) {
 	return false;
 }
 
+static optional_ptr<const LogicalType> GetListOrArrayChildType(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::LIST:
+		return ListType::GetChildType(type);
+	case LogicalTypeId::ARRAY:
+		return ArrayType::GetChildType(type);
+	default:
+		return nullptr;
+	}
+}
+
 static bool IsDecimalScaleReduced(const LogicalType &source_type, const LogicalType &target_type, uint8_t &source_scale,
                                   uint8_t &target_scale) {
-	auto source_id = source_type.id();
-	auto target_id = target_type.id();
-	if (source_id == LogicalTypeId::DECIMAL && target_id == LogicalTypeId::DECIMAL) {
+	if (source_type == target_type) {
+		return false;
+	}
+	if (source_type.id() == LogicalTypeId::DECIMAL && target_type.id() == LogicalTypeId::DECIMAL) {
 		source_scale = DecimalType::GetScale(source_type);
 		target_scale = DecimalType::GetScale(target_type);
 		return source_scale > target_scale;
 	}
-	if (source_id == LogicalTypeId::LIST && target_id == LogicalTypeId::LIST) {
-		return IsDecimalScaleReduced(ListType::GetChildType(source_type), ListType::GetChildType(target_type),
-		                             source_scale, target_scale);
+	auto source_child = GetListOrArrayChildType(source_type);
+	auto target_child = GetListOrArrayChildType(target_type);
+	if (source_child && target_child) {
+		return IsDecimalScaleReduced(*source_child, *target_child, source_scale, target_scale);
 	}
-	if (source_id == LogicalTypeId::ARRAY && target_id == LogicalTypeId::ARRAY) {
-		return IsDecimalScaleReduced(ArrayType::GetChildType(source_type), ArrayType::GetChildType(target_type),
-		                             source_scale, target_scale);
-	}
-	if (source_id == LogicalTypeId::MAP && target_id == LogicalTypeId::MAP) {
+	if (source_type.id() == LogicalTypeId::MAP && target_type.id() == LogicalTypeId::MAP) {
 		return IsDecimalScaleReduced(MapType::KeyType(source_type), MapType::KeyType(target_type), source_scale,
 		                             target_scale) ||
 		       IsDecimalScaleReduced(MapType::ValueType(source_type), MapType::ValueType(target_type), source_scale,
 		                             target_scale);
 	}
-	if (StructType::IsStruct(source_type) && StructType::IsStruct(target_type)) {
-		auto &source_children = StructType::GetChildTypes(source_type);
-		auto &target_children = StructType::GetChildTypes(target_type);
-		// the common type of two named structs matches their fields by name, otherwise by position
-		bool by_name = !StructType::IsUnnamed(source_type) && !StructType::IsUnnamed(target_type);
-		for (idx_t i = 0; i < source_children.size(); i++) {
-			for (idx_t j = 0; j < target_children.size(); j++) {
-				bool same_field = by_name ? source_children[i].first == target_children[j].first : i == j;
-				if (same_field && IsDecimalScaleReduced(source_children[i].second, target_children[j].second,
-				                                        source_scale, target_scale)) {
-					return true;
-				}
+	if (!StructType::IsStruct(source_type) || !StructType::IsStruct(target_type)) {
+		return false;
+	}
+	auto &source_children = StructType::GetChildTypes(source_type);
+	auto &target_children = StructType::GetChildTypes(target_type);
+	// the common type of two named structs matches their fields by name, otherwise by position
+	if (StructType::IsUnnamed(source_type) || StructType::IsUnnamed(target_type)) {
+		for (idx_t i = 0; i < MinValue(source_children.size(), target_children.size()); i++) {
+			if (IsDecimalScaleReduced(source_children[i].second, target_children[i].second, source_scale,
+			                          target_scale)) {
+				return true;
 			}
+		}
+		return false;
+	}
+	identifier_map_t<idx_t> target_indexes;
+	for (idx_t i = 0; i < target_children.size(); i++) {
+		target_indexes.emplace(target_children[i].first, i);
+	}
+	for (auto &source_child : source_children) {
+		auto entry = target_indexes.find(source_child.first);
+		if (entry != target_indexes.end() &&
+		    IsDecimalScaleReduced(source_child.second, target_children[entry->second].second, source_scale,
+		                          target_scale)) {
+			return true;
 		}
 	}
 	return false;
