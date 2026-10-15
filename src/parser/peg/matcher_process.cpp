@@ -257,6 +257,15 @@ public:
 			child_index++;
 			child_state.reset();
 		}
+		if (!SINGLE_CHILD && state.BuildParseResult()) {
+			while (child_index < matcher.matchers.size()) {
+				auto &child = matcher.matchers[child_index].get();
+				if (!child.IsStructural() || child.first_set.MightMatch(state)) {
+					break;
+				}
+				child_index++;
+			}
+		}
 		if (child_index >= matcher.matchers.size()) {
 			return MatchStep::Complete(MatcherResult::Failure());
 		}
