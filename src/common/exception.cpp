@@ -273,7 +273,8 @@ OutOfRangeException::OutOfRangeException(const int64_t value, const PhysicalType
 }
 
 OutOfRangeException::OutOfRangeException(const double value, const PhysicalType orig_type, const PhysicalType new_type)
-    : Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " + to_string(value) +
+    : Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " +
+                                                 StringUtil::Format("%f", value) +
                                                  " can't be cast because the value is out of range "
                                                  "for the destination type " +
                                                  TypeIdToString(new_type)) {

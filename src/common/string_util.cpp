@@ -802,7 +802,7 @@ static string JSONValueToString(const string &json, JSONValue value) {
 		return to_string(value.GetSignedInteger());
 	case JSONValueType::DOUBLE:
 	case JSONValueType::RAW:
-		return to_string(value.GetDouble());
+		return StringUtil::Format("%f", value.GetDouble());
 	case JSONValueType::JSON_NULL:
 		return "null";
 	case JSONValueType::OBJECT:
