@@ -1,0 +1,38 @@
+# name: test/sql/optimizer/implicit_grouping_statistics.test
+# description: Window-generated implicit grouping sets retain aggregate semantics
+# group: [optimizer]
+
+statement ok
+CREATE TABLE grouped_input AS SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE i % 10 END AS k FROM range(1000) r(i);
+
+statement ok
+ANALYZE grouped_input;
+
+# Compare window-generated aggregates with explicit grouping, including the NULL group.
+query I
+SELECT (SELECT sum(n) FROM (SELECT count(*) OVER (PARTITION BY k) AS n FROM grouped_input) w)
+     = (SELECT sum(g.n) FROM grouped_input t JOIN
+        (SELECT k, count(*) AS n FROM grouped_input GROUP BY k) g ON t.k IS NOT DISTINCT FROM g.k);
+----
+true
+
+statement ok
+DELETE FROM grouped_input;
+
+query I
+SELECT count(*) FROM (SELECT count(*) OVER (PARTITION BY k) FROM grouped_input) w;
+----
+0
+
+query I
+SELECT count(*) FROM grouped_input;
+----
+0
+
+statement ok
+INSERT INTO grouped_input VALUES (NULL);
+
+query I
+SELECT count(*) OVER (PARTITION BY k) FROM grouped_input;
+----
+1

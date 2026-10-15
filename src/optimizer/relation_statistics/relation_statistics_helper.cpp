@@ -109,23 +109,38 @@ idx_t RelationStatisticsHelper::EstimateDistinctCardinality(const vector<Distinc
 optional<RelationStats> RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate &aggregate,
                                                                           const RelationStats &child_stats) {
 	vector<DistinctCount> cardinality_counts;
-	for (auto &grouping_set : aggregate.grouping_sets) {
-		vector<DistinctCount> set_counts;
-		for (auto group_idx : grouping_set) {
-			auto &group = aggregate.GetGroupExpression(group_idx);
-			if (group.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-				continue;
-			}
-			auto column = child_stats.GetColumnStats(group.Cast<BoundColumnRefExpression>().Binding());
-			if (!column) {
+	// Both representations must collect the same statistics for each group key.
+	auto collect_count = [&](const Expression &group, vector<DistinctCount> &counts) {
+		if (group.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			return true;
+		}
+		auto column = child_stats.GetColumnStats(group.Cast<BoundColumnRefExpression>().Binding());
+		if (!column) {
+			return false;
+		}
+		auto count = column->distinct_count;
+		count.distinct_count = MaxValue<idx_t>(count.distinct_count, 1);
+		counts.push_back(count);
+		return true;
+	};
+	if (aggregate.grouping_sets.empty()) {
+		// An absent grouping-set list denotes one set containing all group keys.
+		for (auto &group : aggregate.groups) {
+			if (!collect_count(*group, cardinality_counts)) {
 				return {};
 			}
-			auto count = column->distinct_count;
-			count.distinct_count = MaxValue<idx_t>(count.distinct_count, 1);
-			set_counts.push_back(count);
 		}
-		if (set_counts.size() > cardinality_counts.size()) {
-			cardinality_counts = std::move(set_counts);
+	} else {
+		for (auto &grouping_set : aggregate.grouping_sets) {
+			vector<DistinctCount> set_counts;
+			for (auto group_idx : grouping_set) {
+				if (!collect_count(aggregate.GetGroupExpression(group_idx), set_counts)) {
+					return {};
+				}
+			}
+			if (set_counts.size() > cardinality_counts.size()) {
+				cardinality_counts = std::move(set_counts);
+			}
 		}
 	}
 

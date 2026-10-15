@@ -92,6 +92,64 @@ TEST_CASE("Relation statistics follow projection output bindings", "[optimizer][
 	REQUIRE(stats->columns[2].distinct_count.distinct_count == 7);
 }
 
+TEST_CASE("Implicit aggregate grouping sets preserve key statistics", "[optimizer][relation_statistics]") {
+	auto bindings = LogicalOperator::GenerateColumnBindings(TableIndex(10), 2);
+	// Equivalent complete grouping sets must agree, including empty and singleton inputs.
+	for (idx_t rows : {idx_t(0), idx_t(1), idx_t(1000000)}) {
+		for (idx_t group_count = 0; group_count <= 2; group_count++) {
+			auto child_stats = CreateStats(bindings, {MinValue<idx_t>(rows, 10), MinValue<idx_t>(rows, 20)}, rows);
+			LogicalAggregate aggregate(TableIndex(20), TableIndex(21), {});
+			GroupingSet complete;
+			vector<DistinctCount> counts;
+			for (idx_t i = 0; i < group_count; i++) {
+				aggregate.groups.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, bindings[i]));
+				complete.insert(ProjectionIndex(i));
+				counts.push_back(child_stats.columns[i].distinct_count);
+			}
+			auto implicit_stats = RelationStatisticsHelper::ExtractAggregationStats(aggregate, child_stats);
+			REQUIRE(implicit_stats);
+			REQUIRE(aggregate.grouping_sets.empty());
+			REQUIRE(implicit_stats->cardinality ==
+			        (group_count ? RelationStatisticsHelper::EstimateDistinctCardinality(counts, rows) : 1));
+			aggregate.grouping_sets.push_back(std::move(complete));
+			auto explicit_stats = RelationStatisticsHelper::ExtractAggregationStats(aggregate, child_stats);
+			REQUIRE(explicit_stats);
+			REQUIRE(explicit_stats->cardinality == implicit_stats->cardinality);
+			REQUIRE(implicit_stats->MatchesBindings(aggregate.GetColumnBindings()));
+			for (idx_t i = 0; i < group_count; i++) {
+				REQUIRE(implicit_stats->columns[i].distinct_count.distinct_count ==
+				        explicit_stats->columns[i].distinct_count.distinct_count);
+				REQUIRE(implicit_stats->columns[i].distinct_count.source == DistinctCountSource::EXACT);
+			}
+		}
+	}
+}
+
+TEST_CASE("Aggregate grouping statistics retain fallback and explicit-set behavior",
+          "[optimizer][relation_statistics]") {
+	auto bindings = LogicalOperator::GenerateColumnBindings(TableIndex(10), 2);
+	auto child_stats = CreateStats(bindings, {10, 20}, 1000000);
+	LogicalAggregate aggregate(TableIndex(20), TableIndex(21), {});
+	aggregate.groups.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(42)));
+	// Unknown expression NDVs keep the existing fallback, in either representation.
+	auto fallback = RelationStatisticsHelper::ExtractAggregationStats(aggregate, child_stats);
+	REQUIRE(fallback);
+	REQUIRE(fallback->cardinality == 500000);
+	aggregate.grouping_sets.push_back({ProjectionIndex(0)});
+	REQUIRE(RelationStatisticsHelper::ExtractAggregationStats(aggregate, child_stats)->cardinality == 500000);
+	aggregate.groups[0] = make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, bindings[0]);
+	// An explicit empty set must not be interpreted as an implicit complete set.
+	aggregate.grouping_sets[0].clear();
+	REQUIRE(RelationStatisticsHelper::ExtractAggregationStats(aggregate, child_stats)->cardinality == 500000);
+	aggregate.grouping_sets.push_back({ProjectionIndex(0)});
+	REQUIRE(RelationStatisticsHelper::ExtractAggregationStats(aggregate, child_stats)->cardinality == 10);
+	aggregate.grouping_sets.clear();
+	child_stats.columns.clear();
+	REQUIRE_FALSE(RelationStatisticsHelper::ExtractAggregationStats(aggregate, child_stats));
+	aggregate.grouping_sets.push_back({ProjectionIndex(0)});
+	REQUIRE_FALSE(RelationStatisticsHelper::ExtractAggregationStats(aggregate, child_stats));
+}
+
 TEST_CASE("Aggregate group and result statistics use distinct bindings", "[optimizer][relation_statistics]") {
 	auto child_table = TableIndex(10);
 	auto child_bindings = LogicalOperator::GenerateColumnBindings(child_table, 2);
