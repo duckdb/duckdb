@@ -223,7 +223,7 @@ void OptimisticDataWriter::FinalFlush() {
 
 void OptimisticDataWriter::Rollback() {
 	if (partial_manager) {
-		partial_manager->Rollback();
+		partial_manager->ClearBlocks();
 		partial_manager.reset();
 	}
 }

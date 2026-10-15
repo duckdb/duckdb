@@ -31,12 +31,6 @@ class TypeCatalogEntry;
 
 enum class PartialBlockType { FULL_CHECKPOINT, APPEND_TO_TABLE, IN_MEMORY_CHECKPOINT };
 
-//! Regions that require zero-initialization to avoid leaking memory
-struct UninitializedRegion {
-	idx_t start;
-	idx_t end;
-};
-
 //! Interface required for packing data into partial blocks, implementing
 //! classes can be managed through the partial block manager.
 class BlockPackable {
@@ -64,17 +58,10 @@ public:
 	//! Remove all packables and the associated backing block.
 	void Clear();
 
-public:
-	template <class TARGET>
-	TARGET &Cast() {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<TARGET &>(*this);
-	}
-
 private:
 	//! Determine if we can reuse the source buffer for further packing, this saves on an allocation and copy when
-	//! starting a new partial block.
-	shared_ptr<BlockHandle> ReuseBuffer(BufferHandle &source);
+	//! starting a new partial block. If reusable, we return the backing temporary block.
+	bool CanReuseBuffer(BufferHandle &source);
 
 private:
 	//! The block manager of the partial block manager
@@ -83,9 +70,9 @@ private:
 	shared_ptr<BlockHandle> block_handle;
 	//! Type-erased buffers that will be packed in the current block.
 	vector<std::pair<reference<BlockPackable>, uint32_t>> packables;
-	//! The block id of the partial block
+	//! The reserved database block id, or INVALID_BLOCK.
 	block_id_t block_id;
-	//! Next allocation offset, and also the current allocation size
+	//! Next allocation offset, and also the current allocation size.
 	uint32_t offset = 0;
 };
 
@@ -109,9 +96,6 @@ public:
 public:
 	//! Clear remaining blocks without writing them to disk
 	void ClearBlocks();
-
-	//! Rollback all data written by this partial block manager
-	void Rollback();
 
 	//! Merge this block manager into another one
 	void Merge(PartialBlockManager &other);

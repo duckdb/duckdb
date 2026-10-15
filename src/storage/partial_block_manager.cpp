@@ -34,45 +34,45 @@ uint32_t PartialBlock::UseCount() {
 	return packables.size();
 }
 
-shared_ptr<BlockHandle> PartialBlock::ReuseBuffer(BufferHandle &source) {
+bool PartialBlock::CanReuseBuffer(BufferHandle &source) {
 	auto source_handle = source.GetBlockHandle();
 	if (source_handle->BlockId() < MAXIMUM_BLOCK) {
 		// if the buffer has a backing disk block, we might overwrite other segments in the block when growing the
 		// buffer for the partial block manager.
-		return nullptr;
+		return false;
 	}
 
 	auto &source_buffer = source.GetFileBuffer();
 	if (source_buffer.GetBufferType() != FileBufferType::MANAGED_BUFFER) {
 		// only ordinary managed storage for now
-		return nullptr;
+		return false;
 	}
 	if (!source_buffer.OwnsInternalBuffer()) {
 		// memory mapped buffer is not supported
-		return nullptr;
+		return false;
 	}
 	if (source_buffer.AllocSize() != block_manager.GetBlockAllocSize()) {
 		// allocated space should be equal to the block size so we never write outside the allocated region when writing
 		// other packables
-		return nullptr;
+		return false;
 	}
 	if (source_buffer.GetHeaderSize() != block_manager.GetBlockHeaderSize()) {
 		// prevent misinterpretation of payload bytes as header bytes and vice versa
-		return nullptr;
+		return false;
 	}
 
 	auto &source_memory = source.GetBlockHandle()->GetMemory();
 	if (!source_memory.MustWriteToTemporaryFile()) {
 		// under memory pressure we should spill in flight partial blocks, otherwise data may be lost when we want to
 		// flush buffer to the backing disk blocks.
-		return nullptr;
+		return false;
 	}
 	if (&source_memory.GetBufferManager() != &block_manager.buffer_manager) {
 		// moving buffers across managed memory pools might lead to accounting inconsistencies
-		return nullptr;
+		return false;
 	}
 
-	return source_handle;
+	return true;
 }
 
 BlockPointer PartialBlock::Store(BlockPackable &packable, BufferHandle source, uint32_t byte_size) {
@@ -86,24 +86,24 @@ BlockPointer PartialBlock::Store(BlockPackable &packable, BufferHandle source, u
 
 	const BlockPointer block_ptr(block_id, offset);
 	auto &buffer_manager = block_manager.buffer_manager;
-	BufferHandle dst;
 
+	BufferHandle dst;
 	if (block_handle) {
 		D_ASSERT(source.GetBlockHandle() != block_handle);
 		dst = buffer_manager.Pin(block_handle);
-		D_ASSERT(dst.GetFileBuffer().Size() == block_manager.GetBlockSize());
-		memcpy(dst.GetDataMutable() + offset, source.Ptr(), byte_size);
+	} else if (CanReuseBuffer(source)) {
+		dst = std::move(source);
+		block_handle = source.GetBlockHandle();
 	} else {
-		if (auto source_handle = ReuseBuffer(source)) {
-			block_handle = std::move(source_handle);
-		} else {
-			auto &source_memory = source.GetBlockHandle()->GetMemory();
-			dst = buffer_manager.Allocate(source_memory.GetMemoryTag(), &block_manager, false);
-			memcpy(dst.GetDataMutable(), source.Ptr(), byte_size);
-			block_handle = dst.GetBlockHandle();
-		}
+		auto &source_memory = source.GetBlockHandle()->GetMemory();
+		dst = buffer_manager.Allocate(source_memory.GetMemoryTag(), &block_manager, false);
+		block_handle = dst.GetBlockHandle();
 	}
 
+	if (source.IsValid()) {
+		D_ASSERT(dst.GetFileBuffer().Size() == block_manager.GetBlockSize());
+		memcpy(dst.GetDataMutable() + offset, source.Ptr(), byte_size);
+	}
 	if (unaligned_size != aligned_size) {
 		memset(dst.GetDataMutable() + unaligned_size, 0, aligned_size - unaligned_size);
 	}
@@ -124,10 +124,10 @@ void PartialBlock::Flush(QueryContext context, PartialBlockType type) {
 	}
 
 	if (type != PartialBlockType::IN_MEMORY_CHECKPOINT) {
+		auto buffer_handle = block_manager.buffer_manager.Pin(block_handle);
 		auto free_space = AvailableSpace();
 		if (free_space > 0) {
 			// zero any tail bytes to prevent leaking buffer data to disk
-			auto buffer_handle = block_manager.buffer_manager.Pin(block_handle);
 			memset(buffer_handle.GetDataMutable() + block_manager.GetBlockSize() - free_space, 0, free_space);
 		}
 
@@ -135,7 +135,8 @@ void PartialBlock::Flush(QueryContext context, PartialBlockType type) {
 		if (fetch_new_block) {
 			block_id = block_manager.GetFreeBlockId();
 		}
-		block_handle = block_manager.ConvertToPersistent(context, block_id, std::move(block_handle));
+		block_handle =
+		    block_manager.ConvertToPersistent(context, block_id, std::move(block_handle), std::move(buffer_handle));
 
 		if (fetch_new_block) {
 			for (idx_t i = 1; i < UseCount(); i++) {
@@ -343,10 +344,6 @@ BlockManager &PartialBlockManager::GetBlockManager() const {
 
 optional_ptr<ClientContext> PartialBlockManager::GetClientContext() const {
 	return context;
-}
-
-void PartialBlockManager::Rollback() {
-	ClearBlocks();
 }
 
 } // namespace duckdb
