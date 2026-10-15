@@ -15,6 +15,12 @@
 			"paths": [
 				"test/issues/general/test_24298.test"
 			]
+		},
+		{
+			"reason": "Shredding a VARIANT nested thousands of levels deep recurses past the stack before the function runs",
+			"paths": [
+				"test/sql/types/variant/variant_contains_deep.test"
+			]
 		}
 	]
 }
