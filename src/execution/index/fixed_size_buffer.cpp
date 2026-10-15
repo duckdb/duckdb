@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -97,7 +98,7 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 
 	// The buffer is in memory.
 	D_ASSERT(InMemory());
-	partial_block_manager.Write(*this, std::move(buffer_handle), allocation_size);
+	partial_block_manager.Write(*this, std::move(buffer_handle), NumericCast<uint32_t>(allocation_size));
 }
 
 void FixedSizeBuffer::LoadFromDisk() {

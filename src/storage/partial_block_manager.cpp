@@ -23,9 +23,9 @@ struct PartialBlock {
 
 public:
 	//! How much space is left in the current block for further packing.
-	idx_t AvailableSpace();
+	idx_t AvailableSpace() const;
 	//! How many packables are residing in the current block.
-	uint32_t UseCount();
+	idx_t UseCount() const;
 	//! Write data of the packable into the buffer backed by the partial block.
 	BlockPointer Store(BlockPackable &packable, BufferHandle source, uint32_t byte_size);
 	//! Flush the block to disk and zero-initialize any tail free space.
@@ -54,11 +54,11 @@ PartialBlock::PartialBlock(BlockManager &block_manager, block_id_t block_id)
     : block_manager(block_manager), block_handle(nullptr), block_id(block_id) {
 }
 
-idx_t PartialBlock::AvailableSpace() {
+idx_t PartialBlock::AvailableSpace() const {
 	return block_manager.GetBlockSize() - offset;
 }
 
-uint32_t PartialBlock::UseCount() {
+idx_t PartialBlock::UseCount() const {
 	return packables.size();
 }
 
@@ -106,6 +106,8 @@ bool PartialBlock::CanReuseBuffer(BufferHandle &source) {
 BlockPointer PartialBlock::Store(BlockPackable &packable, BufferHandle source, uint32_t byte_size) {
 	D_ASSERT(source.IsValid());
 	D_ASSERT(byte_size > 0);
+	D_ASSERT(byte_size <= source.GetFileBuffer().Size());
+	D_ASSERT(block_handle || offset == 0);
 	D_ASSERT(ValueIsAligned(offset));
 
 	const auto unaligned_size = idx_t(offset) + byte_size;
@@ -181,6 +183,11 @@ void PartialBlock::Flush(QueryContext context, PartialBlockType type) {
 }
 
 void PartialBlock::Merge(PartialBlock &other) {
+	D_ASSERT(&other != this);
+	D_ASSERT(block_handle && other.block_handle);
+	D_ASSERT(block_handle != other.block_handle);
+	D_ASSERT(other.offset <= AvailableSpace());
+
 	if (&block_manager != &other.block_manager) {
 		throw InternalException("Cannot merge partial blocks with different block managers");
 	}
@@ -218,11 +225,11 @@ PartialBlockManager::PartialBlockManager(QueryContext context, BlockManager &blo
       max_use_count(max_use_count) {
 	if (max_partial_block_size_p.IsValid()) {
 		max_partial_block_size = NumericCast<uint32_t>(max_partial_block_size_p.GetIndex());
-		return;
+	} else {
+		// Use the default maximum partial block size with a ratio of 20% free and 80% utilization.
+		max_partial_block_size = NumericCast<uint32_t>(block_manager.GetBlockSize() / 5 * 4);
 	}
-
-	// Use the default maximum partial block size with a ratio of 20% free and 80% utilization.
-	max_partial_block_size = NumericCast<uint32_t>(block_manager.GetBlockSize() / 5 * 4);
+	D_ASSERT(max_partial_block_size <= block_manager.GetBlockSize());
 }
 
 PartialBlockManager::~PartialBlockManager() = default;
