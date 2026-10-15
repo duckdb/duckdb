@@ -29,24 +29,24 @@ INSERT INTO ck VALUES (1, 1, 10), (1, 1, 20);
 foreach table pk uk
 
 query II
-EXPLAIN SELECT b FROM ${table} ORDER BY a, b DESC
+EXPLAIN SELECT b FROM {table} ORDER BY a, b DESC
 ----
 physical_plan	<REGEX>:.*b DESC.*
 
 query I
-SELECT b FROM ${table} ORDER BY a, b DESC
+SELECT b FROM {table} ORDER BY a, b DESC
 ----
 20
 10
 
 query II
-SELECT b, rank() OVER (ORDER BY a, b DESC) AS r FROM ${table} ORDER BY b
+SELECT b, rank() OVER (ORDER BY a, b DESC) AS r FROM {table} ORDER BY b
 ----
 10	2
 20	1
 
 query II
-SELECT b, row_number() OVER (PARTITION BY a, b) AS rn FROM ${table} ORDER BY b
+SELECT b, row_number() OVER (PARTITION BY a, b) AS rn FROM {table} ORDER BY b
 ----
 10	1
 20	1
