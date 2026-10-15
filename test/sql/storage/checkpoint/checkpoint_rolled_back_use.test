@@ -3,6 +3,9 @@
 # group: [checkpoint]
 
 statement ok
+ATTACH ':memory:' AS other;
+
+statement ok
 BEGIN;
 
 statement ok
@@ -30,7 +33,7 @@ SELECT * FROM checkpoint();
 does not exist
 
 statement ok
-USE memory;
+USE other;
 
 statement ok
 CHECKPOINT;
