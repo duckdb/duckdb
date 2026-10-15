@@ -574,16 +574,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	auto unique_column_names = select_node.names;
 	QueryResult::DeduplicateColumns(unique_column_names);
 	auto file_path = stmt.info->file_path;
-	if (!file_path.empty() && !FileSystem::IsRemoteFile(file_path)) {
+	if (!file_path.empty() && !FileSystem::IsRemoteFile(file_path) &&
+	    DatabaseManager::Get(context).IsAttachedDatabaseFile(context, file_path)) {
 		// writing to the file of an attached database would corrupt it
-		auto &fs = FileSystem::GetFileSystem(context);
-		auto canonical_path = fs.CanonicalizePath(file_path);
-		for (auto &db_path : DatabaseManager::Get(context).GetAttachedDatabasePaths()) {
-			auto canonical_db_path = fs.CanonicalizePath(db_path);
-			if (canonical_path == canonical_db_path || canonical_path == canonical_db_path + ".wal") {
-				throw BinderException("Cannot COPY to \"%s\": the file belongs to an attached database", file_path);
-			}
-		}
+		throw BinderException("Cannot COPY to \"%s\": the file belongs to an attached database", file_path);
 	}
 
 	ValidateCopyToOutputColumns(resolved_options, select_node.names.size());

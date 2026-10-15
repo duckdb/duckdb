@@ -30,3 +30,19 @@ SELECT sum(i) FROM ca.t;
 
 statement ok
 COPY (SELECT 1 a) TO '{TEST_DIR}/copy_not_attached.csv' (FORMAT csv);
+
+# the main database file is protected as well
+load {TEST_DIR}/copy_over_main.db
+
+statement ok
+CREATE TABLE m AS SELECT 42 i;
+
+statement error
+COPY (SELECT 1 a) TO '{TEST_DIR}/copy_over_main.db' (FORMAT csv);
+----
+<REGEX>:.*belongs to an attached database.*
+
+query I
+SELECT i FROM m;
+----
+42
