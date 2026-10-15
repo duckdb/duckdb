@@ -408,12 +408,6 @@ struct TransformStackFrame {
 	ArenaAllocator::Position process_arena_position;
 };
 
-#ifdef DEBUG
-using frame_stack_t = InspectableStack<TransformStackFrame>;
-#else
-using frame_stack_t = stack<TransformStackFrame>;
-#endif
-
 class TransformStack {
 public:
 	explicit TransformStack(PEGTransformer &transformer);
@@ -442,7 +436,7 @@ private:
 
 private:
 	PEGTransformer &transformer;
-	frame_stack_t frames;
+	vector<TransformStackFrame> frames;
 };
 
 class PEGTransformer {
