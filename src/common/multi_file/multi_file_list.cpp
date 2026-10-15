@@ -24,7 +24,8 @@ MultiFilePushdownInfo::MultiFilePushdownInfo(TableIndex table_index, const vecto
 
 // Helper method to do Filter Pushdown into a MultiFileList
 bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, MultiFilePushdownInfo &info,
-                      vector<unique_ptr<Expression>> &filters, vector<OpenFileInfo> &expanded_files) {
+                      vector<unique_ptr<Expression>> &filters, vector<OpenFileInfo> &expanded_files,
+                      vector<idx_t> &remaining_file_indexes) {
 	HivePartitioningFilterInfo filter_info;
 	for (idx_t i = 0; i < info.column_ids.size(); i++) {
 		if (IsVirtualColumn(info.column_ids[i])) {
@@ -37,7 +38,8 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, M
 	filter_info.filename_column = Identifier(options.filename_column);
 
 	auto start_files = expanded_files.size();
-	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, filter_info, info);
+	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, filter_info, info,
+	                                         remaining_file_indexes);
 
 	if (expanded_files.size() != start_files) {
 		return true;
@@ -48,7 +50,8 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, M
 
 bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, const vector<Identifier> &names,
                       const vector<LogicalType> &types, const vector<ColumnIndex> &column_indexes,
-                      const TableFilterSet &filters, vector<OpenFileInfo> &expanded_files) {
+                      const TableFilterSet &filters, vector<OpenFileInfo> &expanded_files,
+                      vector<idx_t> &remaining_file_indexes) {
 	TableIndex table_index(0);
 	ExtraOperatorInfo extra_info;
 
@@ -72,7 +75,7 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, c
 	}
 
 	// call the original PushdownInternal method
-	return PushdownInternal(context, options, info, filter_expressions, expanded_files);
+	return PushdownInternal(context, options, info, filter_expressions, expanded_files, remaining_file_indexes);
 }
 
 //===--------------------------------------------------------------------===//
@@ -196,9 +199,10 @@ unique_ptr<MultiFileList> MultiFileList::ComplexFilterPushdown(ClientContext &co
 
 	// FIXME: don't copy list until first file is filtered
 	auto file_copy = GetAllFiles();
-	auto res = PushdownInternal(context, options, info, filters, file_copy);
+	vector<idx_t> file_indexes;
+	auto res = PushdownInternal(context, options, info, filters, file_copy, file_indexes);
 	if (res) {
-		return make_uniq<SimpleMultiFileList>(std::move(file_copy));
+		return make_uniq<SimpleMultiFileList>(std::move(file_copy), GetFileIndexes(file_indexes));
 	}
 	return nullptr;
 }
@@ -218,9 +222,10 @@ MultiFileList::DynamicFilterPushdown(MultiFileDynamicPushdownInfo &dynamic_pushd
 
 	// FIXME: don't copy list until first file is filtered
 	auto file_copy = GetAllFiles();
-	auto res = PushdownInternal(context, options, names, types, column_indexes, filters, file_copy);
+	vector<idx_t> file_indexes;
+	auto res = PushdownInternal(context, options, names, types, column_indexes, filters, file_copy, file_indexes);
 	if (res) {
-		return make_uniq<SimpleMultiFileList>(std::move(file_copy));
+		return make_uniq<SimpleMultiFileList>(std::move(file_copy), GetFileIndexes(file_indexes));
 	}
 
 	return nullptr;
@@ -242,6 +247,19 @@ unique_ptr<MultiFileList> MultiFileList::Copy() const {
 	return make_uniq<SimpleMultiFileList>(GetAllFiles());
 }
 
+idx_t MultiFileList::GetFileIndex(idx_t i) const {
+	return i;
+}
+
+vector<idx_t> MultiFileList::GetFileIndexes(const vector<idx_t> &positions) const {
+	vector<idx_t> result;
+	result.reserve(positions.size());
+	for (auto &position : positions) {
+		result.push_back(GetFileIndex(position));
+	}
+	return result;
+}
+
 bool MultiFileList::FileIsAvailable(idx_t i) const {
 	return true;
 }
@@ -250,6 +268,19 @@ bool MultiFileList::FileIsAvailable(idx_t i) const {
 // SimpleMultiFileList
 //===--------------------------------------------------------------------===//
 SimpleMultiFileList::SimpleMultiFileList(vector<OpenFileInfo> paths_p) : paths(std::move(paths_p)) {
+}
+
+SimpleMultiFileList::SimpleMultiFileList(vector<OpenFileInfo> paths_p, vector<idx_t> file_indexes_p)
+    : paths(std::move(paths_p)), file_indexes(std::move(file_indexes_p)) {
+	D_ASSERT(file_indexes.size() == paths.size());
+}
+
+idx_t SimpleMultiFileList::GetFileIndex(idx_t i) const {
+	return file_indexes.empty() ? i : file_indexes[i];
+}
+
+unique_ptr<MultiFileList> SimpleMultiFileList::Copy() const {
+	return make_uniq<SimpleMultiFileList>(paths, file_indexes);
 }
 
 vector<OpenFileInfo> SimpleMultiFileList::GetAllFiles() const {

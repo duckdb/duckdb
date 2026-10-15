@@ -121,8 +121,12 @@ public:
 
 	virtual unique_ptr<NodeStatistics> GetCardinality(ClientContext &context) const;
 	virtual unique_ptr<MultiFileList> Copy() const;
+	//! The index of the i-th file in the list before filters pruned files from it
+	virtual idx_t GetFileIndex(idx_t i) const;
 
 protected:
+	//! The indexes before pruning of the files at the given positions
+	vector<idx_t> GetFileIndexes(const vector<idx_t> &positions) const;
 	//! Whether or not the file at the index is available instantly - or if this requires additional I/O
 	virtual bool FileIsAvailable(idx_t i) const;
 	//! Get the i-th expanded file
@@ -147,11 +151,15 @@ class SimpleMultiFileList : public MultiFileList {
 public:
 	//! Construct a SimpleMultiFileList from a list of already expanded files
 	explicit SimpleMultiFileList(vector<OpenFileInfo> paths);
+	//! Construct a SimpleMultiFileList from files that remain after pruning, with their indexes before pruning
+	SimpleMultiFileList(vector<OpenFileInfo> paths, vector<idx_t> file_indexes);
 
 	//! Main MultiFileList API
 	vector<OpenFileInfo> GetAllFiles() const override;
 	FileExpandResult GetExpandResult() const override;
 	idx_t GetTotalFileCount() const override;
+	idx_t GetFileIndex(idx_t i) const override;
+	unique_ptr<MultiFileList> Copy() const override;
 
 protected:
 	//! Main MultiFileList API
@@ -160,6 +168,8 @@ protected:
 protected:
 	//! The list of input paths
 	const vector<OpenFileInfo> paths;
+	//! The index of each path before pruning, empty when no files were pruned
+	const vector<idx_t> file_indexes;
 };
 
 //! Lazily expanded MultiFileList

@@ -342,7 +342,8 @@ public:
 	                                             optional_idx file_idx, MultiFileGlobalState &global_state) {
 		auto &reader = *reader_data.reader;
 		// Mark the file in the file list we are scanning here
-		reader.file_list_idx = file_idx;
+		reader.file_list_idx =
+		    file_idx.IsValid() ? optional_idx(global_state.file_list.GetFileIndex(file_idx.GetIndex())) : file_idx;
 
 		// 'reader_bind.schema' could be set explicitly by:
 		// 1. The MultiFileReader::Bind call
@@ -356,9 +357,10 @@ public:
 	                                   MultiFileGlobalState &global_state, MultiFileReaderData &reader_data,
 	                                   idx_t file_index) {
 		D_ASSERT(reader_data.file_state == MultiFileFileState::UNOPENED);
-		if (reader_data.union_data || !MultiFileReader::CanSkipFileFromFilters(
-		                                  context, reader_data.file_to_be_opened, file_index, bind_data.file_options,
-		                                  bind_data.reader_bind, global_state.column_indexes, global_state.filters)) {
+		if (reader_data.union_data ||
+		    !MultiFileReader::CanSkipFileFromFilters(
+		        context, reader_data.file_to_be_opened, global_state.file_list.GetFileIndex(file_index),
+		        bind_data.file_options, bind_data.reader_bind, global_state.column_indexes, global_state.filters)) {
 			return false;
 		}
 		reader_data.file_state = MultiFileFileState::SKIPPED;

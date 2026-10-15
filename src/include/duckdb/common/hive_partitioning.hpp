@@ -35,11 +35,12 @@ public:
 	DUCKDB_API static std::map<string, string> Parse(const string &filename);
 	//! Prunes a list of filenames based on a set of filters, can be used by TableFunctions in the
 	//! pushdown_complex_filter function to skip files with filename-based filters. Also removes the filters that always
-	//! evaluate to true.
+	//! evaluate to true. When given, remaining_file_indexes receives the index in files of each file that remains.
 	DUCKDB_API static void ApplyFiltersToFileList(ClientContext &context, vector<OpenFileInfo> &files,
 	                                              vector<unique_ptr<Expression>> &filters,
 	                                              const HivePartitioningFilterInfo &filter_info,
-	                                              MultiFilePushdownInfo &info);
+	                                              MultiFilePushdownInfo &info,
+	                                              optional_ptr<vector<idx_t>> remaining_file_indexes = nullptr);
 
 	DUCKDB_API static Value GetValue(ClientContext &context, const string &key, const string &value,
 	                                 const LogicalType &type);
