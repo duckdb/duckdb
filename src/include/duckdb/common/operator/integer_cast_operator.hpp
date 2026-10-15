@@ -132,7 +132,7 @@ struct IntegerDecimalCastOperation : IntegerCastOperation {
 		e = UnsafeNumericCast<int16_t>(exponent - state.decimal_digits);
 		store_t remainder = 0;
 		if (e < 0) {
-			if (static_cast<uint16_t>(-e) <= NumericLimits<store_t>::Digits()) {
+			if (static_cast<uint16_t>(-e) < NumericLimits<store_t>::Digits()) {
 				store_t power = 1;
 				while (e++ < 0) {
 					power *= 10;
@@ -140,6 +140,8 @@ struct IntegerDecimalCastOperation : IntegerCastOperation {
 				remainder = state.decimal % power;
 				state.decimal /= power;
 			} else {
+				// power would overflow and exceed decimal: all of decimal is fractional
+				remainder = state.decimal;
 				state.decimal = 0;
 			}
 		} else {

@@ -42,7 +42,7 @@ public:
 	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
 	//! Adds an index entry to the list of index entries, and returns it.
-	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, ConstraintCheckMode check_mode);
+	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode);
 	//! Initializes the transaction-local delete and append indexes.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
 	//! Appends a chunk to all index entries.
@@ -60,13 +60,11 @@ public:
 	void RemoveFromIndexes(DataChunk &chunk, Vector &row_ids, IndexRemovalType removal_type,
 	                       optional_idx active_checkpoint = optional_idx());
 	//! Removes an index entry from the list of index entries and release any storage the index owns.
-	void RemoveIndex(const Identifier &name);
-	//! Returns true, if the index name does not exist.
-	bool NameIsUnique(const string &name) const;
-	//! Returns true if an index with the given name exists.
-	bool Contains(const Identifier &name) const;
+	void RemoveIndex(idx_t index_oid);
 	//! Returns shared ownership of the stable logical index entry matching the name.
 	shared_ptr<IndexEntry> FindEntry(const Identifier &name) const;
+	//! Returns the entry matching the index OID.
+	shared_ptr<IndexEntry> FindEntry(const IndexEntry &index) const;
 	//! Binds unbound indexes possibly present after loading an extension.
 	void Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type = {});
 	//! Returns true, if there are no index entries.
@@ -83,6 +81,8 @@ public:
 		annotated_lock_guard lock(index_entries_lock);
 		return unbound_count != 0;
 	}
+	//! Returns true if an unbound index has buffered WAL operations.
+	bool HasBufferedReplays() const;
 	//! Returns true, if there are unique indexes.
 	bool HasUniqueIndexes() const;
 	//! Verifies all unique ART indexes that are not deferred, optionally recording conflicts.
@@ -131,8 +131,8 @@ public:
 	vector<unordered_set<column_t>> GetConflictTargetColumns(const ConflictInfo &conflict_info) const;
 	//! Get the combined column ids of the unique indexes.
 	unordered_set<column_t> GetUniqueIndexColumns() const;
-	//! Serializes the index matching the name for the write-ahead log, if it exists.
-	unique_ptr<IndexStorageInfo> SerializeToWAL(const Identifier &name, const StorageVersion version);
+	//! Serializes the index matching the OID for the write-ahead log, if it exists.
+	unique_ptr<IndexStorageInfo> SerializeToWAL(idx_t index_oid, const StorageVersion version);
 
 public:
 	//! Initialize an index_chunk from a table.

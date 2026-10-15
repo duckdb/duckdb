@@ -145,6 +145,9 @@ public:
 	void MoveFile(const string &source, const string &target) {
 		MoveFile(source, target, nullptr);
 	}
+	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file) {
+		return GetStatsIfExists(file, nullptr);
+	}
 	bool FileExists(const string &filename) {
 		return FileExists(filename, nullptr);
 	}
@@ -173,6 +176,12 @@ public:
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(filename);
 		return GetFileSystem().FileExists(filename, GetOpener());
+	}
+
+	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessFile(file.path);
+		return GetFileSystem().GetStatsIfExists(file, GetOpener());
 	}
 
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override {
@@ -276,11 +285,7 @@ protected:
 	}
 
 	unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
-	                                            optional_ptr<FileOpener> opener) override {
-		VerifyNoOpener(opener);
-		VerifyCanAccessFile(path);
-		return GetFileSystem().Glob(path, input, GetOpener());
-	}
+	                                            optional_ptr<FileOpener> opener) override;
 
 	bool SupportsGlobExtended() const override {
 		return true;
