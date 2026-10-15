@@ -159,9 +159,10 @@ private:
 
 struct ParseTypeInfo {
 	ParseTypeInfo()
-	    : validate_utf8(false), type_id(LogicalTypeId::INVALID), internal_type(PhysicalType::INVALID), scale(0),
-	      width(0) {};
-	ParseTypeInfo(const LogicalType &type, const bool validate_utf_8_p) : validate_utf8(validate_utf_8_p) {
+	    : validate_utf8(false), strict(false), type_id(LogicalTypeId::INVALID), internal_type(PhysicalType::INVALID),
+	      scale(0), width(0) {};
+	ParseTypeInfo(const LogicalType &type, const bool validate_utf_8_p, const bool strict_p = false)
+	    : validate_utf8(validate_utf_8_p), strict(strict_p) {
 		type_id = type.id();
 		internal_type = type.InternalType();
 		if (type.id() == LogicalTypeId::DECIMAL) {
@@ -171,6 +172,8 @@ struct ParseTypeInfo {
 	}
 
 	bool validate_utf8;
+	//! Whether values are cast as strictly as the sniffer casts them, for a type the sniffer detected
+	bool strict;
 	LogicalTypeId type_id;
 	PhysicalType internal_type;
 	uint8_t scale;

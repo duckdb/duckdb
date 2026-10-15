@@ -78,7 +78,9 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 				type = LogicalType::VARCHAR;
 			}
 			if (StringValueScanner::CanDirectlyCast(type, icu_loaded)) {
-				parse_types[i] = ParseTypeInfo(type, true);
+				auto &options = state_machine.options;
+				const bool sniffed = !options.columns_set && !options.WasTypeManuallySet(i);
+				parse_types[i] = ParseTypeInfo(type, true, sniffed);
 				logical_types.emplace_back(type);
 			} else {
 				parse_types[i] = ParseTypeInfo(varchar_type, type.id() == LogicalTypeId::VARCHAR || type.IsNested());
@@ -316,53 +318,54 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 		value_ptr = strip_thousands.c_str();
 		size = strip_thousands.size();
 	}
+	const bool strict = parse_types[chunk_col_id].strict;
 	switch (parse_types[chunk_col_id].type_id) {
 	case LogicalTypeId::BOOLEAN:
 		success =
-		    TryCastStringBool(value_ptr, size, static_cast<bool *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+		    TryCastStringBool(value_ptr, size, static_cast<bool *>(vector_ptr[chunk_col_id])[number_of_rows], strict);
 		break;
 	case LogicalTypeId::TINYINT:
 		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int8_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-		                               false);
+		                               strict);
 		break;
 	case LogicalTypeId::SMALLINT:
 		success = TrySimpleIntegerCast(value_ptr, size,
-		                               static_cast<int16_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+		                               static_cast<int16_t *>(vector_ptr[chunk_col_id])[number_of_rows], strict);
 		break;
 	case LogicalTypeId::INTEGER:
 		success = TrySimpleIntegerCast(value_ptr, size,
-		                               static_cast<int32_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+		                               static_cast<int32_t *>(vector_ptr[chunk_col_id])[number_of_rows], strict);
 		break;
 	case LogicalTypeId::BIGINT:
 		success = TrySimpleIntegerCast(value_ptr, size,
-		                               static_cast<int64_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+		                               static_cast<int64_t *>(vector_ptr[chunk_col_id])[number_of_rows], strict);
 		break;
 	case LogicalTypeId::HUGEINT: {
 		auto &result_value = static_cast<hugeint_t *>(vector_ptr[chunk_col_id])[number_of_rows];
 		success = TryCast::Operation<string_t, hugeint_t>(string_t(value_ptr, NumericCast<uint32_t>(size)),
-		                                                  result_value, false);
+		                                                  result_value, strict);
 		break;
 	}
 	case LogicalTypeId::UTINYINT:
 		success = TrySimpleIntegerCast<uint8_t, false>(
-		    value_ptr, size, static_cast<uint8_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+		    value_ptr, size, static_cast<uint8_t *>(vector_ptr[chunk_col_id])[number_of_rows], strict);
 		break;
 	case LogicalTypeId::USMALLINT:
 		success = TrySimpleIntegerCast<uint16_t, false>(
-		    value_ptr, size, static_cast<uint16_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+		    value_ptr, size, static_cast<uint16_t *>(vector_ptr[chunk_col_id])[number_of_rows], strict);
 		break;
 	case LogicalTypeId::UINTEGER:
 		success = TrySimpleIntegerCast<uint32_t, false>(
-		    value_ptr, size, static_cast<uint32_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+		    value_ptr, size, static_cast<uint32_t *>(vector_ptr[chunk_col_id])[number_of_rows], strict);
 		break;
 	case LogicalTypeId::UBIGINT:
 		success = TrySimpleIntegerCast<uint64_t, false>(
-		    value_ptr, size, static_cast<uint64_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+		    value_ptr, size, static_cast<uint64_t *>(vector_ptr[chunk_col_id])[number_of_rows], strict);
 		break;
 	case LogicalTypeId::UHUGEINT: {
 		auto &result_value = static_cast<uhugeint_t *>(vector_ptr[chunk_col_id])[number_of_rows];
 		success = TryCast::Operation<string_t, uhugeint_t>(string_t(value_ptr, NumericCast<uint32_t>(size)),
-		                                                   result_value, false);
+		                                                   result_value, strict);
 		break;
 	}
 	case LogicalTypeId::BIGNUM: {
@@ -385,11 +388,11 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 	case LogicalTypeId::DOUBLE:
 		success =
 		    TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[chunk_col_id])[number_of_rows],
-		                          false, state_machine.options.decimal_separator[0]);
+		                          strict, state_machine.options.decimal_separator[0]);
 		break;
 	case LogicalTypeId::FLOAT:
 		success = TryDoubleCast<float>(value_ptr, size, static_cast<float *>(vector_ptr[chunk_col_id])[number_of_rows],
-		                               false, state_machine.options.decimal_separator[0]);
+		                               strict, state_machine.options.decimal_separator[0]);
 		break;
 	case LogicalTypeId::DATE: {
 		if (!date_format.Empty()) {
@@ -400,14 +403,14 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 			bool special;
 			success = Date::TryConvertDate(value_ptr, size, pos,
 			                               static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows], special,
-			                               false) == DateCastResult::SUCCESS;
+			                               strict) == DateCastResult::SUCCESS;
 		}
 		break;
 	}
 	case LogicalTypeId::TIME: {
 		idx_t pos;
 		success = Time::TryConvertTime(value_ptr, size, pos,
-		                               static_cast<dtime_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+		                               static_cast<dtime_t *>(vector_ptr[chunk_col_id])[number_of_rows], strict);
 		break;
 	}
 	case LogicalTypeId::TIMESTAMP:
@@ -419,7 +422,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 			const bool use_offset = (parse_types[chunk_col_id].type_id == LogicalTypeId::TIMESTAMP_TZ);
 			success = Timestamp::TryConvertTimestamp(
 			              value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-			              use_offset) == TimestampCastResult::SUCCESS;
+			              use_offset, nullptr, strict) == TimestampCastResult::SUCCESS;
 		}
 		break;
 	}

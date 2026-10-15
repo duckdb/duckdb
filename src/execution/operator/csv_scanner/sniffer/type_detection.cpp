@@ -167,7 +167,7 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 	}
 	case LogicalTypeId::TINYINT: {
 		int8_t dummy_value;
-		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, false);
+		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, true);
 	}
 	case LogicalTypeId::SMALLINT: {
 		int16_t dummy_value;
