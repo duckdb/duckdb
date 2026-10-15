@@ -47,9 +47,9 @@ struct LogicalPlanSQLExportOptions {
 struct LogicalPlanSQLExportReplacement {
 	reference<LogicalOperator> op;
 	LogicalPlanSQLExportRelation relation;
-	//! By default, preserve single evaluation of the supplied relation. DEFAULT and NEVER allow the
-	//! normal CTE optimizer rules to inline it. Callers opting in must allow repeated or skipped evaluation.
-	CTEMaterialize materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+	//! Use the normal CTE optimizer rules by default. Callers requiring a materialization boundary
+	//! must select ALWAYS. DEFAULT and NEVER may allow repeated or skipped evaluation.
+	CTEMaterialize materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
 };
 
 class LogicalPlanSQLExporter {

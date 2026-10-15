@@ -736,11 +736,19 @@ TEST_CASE("Source replacement materialization is selected per boundary",
 	auto cross = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_CROSS_PRODUCT);
 	REQUIRE(cross);
 	vector<LogicalPlanSQLExportReplacement> replacements;
-	replacements.push_back({*cross->children[0], ReplacementRelation(connection, *cross->children[0],
-	                                                                 "SELECT nextval('source_calls') FROM range(3)")});
-	replacements.push_back({*cross->children[1],
-	                        ReplacementRelation(connection, *cross->children[1], "SELECT 42::BIGINT"),
-	                        CTEMaterialize::CTE_MATERIALIZE_DEFAULT});
+	replacements.push_back(
+	    {*cross->children[0],
+	     ReplacementRelation(connection, *cross->children[0], "SELECT nextval('source_calls') FROM range(3)"),
+	     CTEMaterialize::CTE_MATERIALIZE_ALWAYS});
+	replacements.push_back(
+	    {*cross->children[1], ReplacementRelation(connection, *cross->children[1], "SELECT 42::BIGINT")});
+	idx_t expected_materialized = 1;
+	SECTION("explicit single evaluation") {
+	}
+	SECTION("normal CTE rules preserve volatile evaluation") {
+		replacements[0].materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+		expected_materialized = 0;
+	}
 	auto exported = LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements);
 	REQUIRE(exported.IsSuccess());
 	auto &definitions = exported.GetValue().query->cte_map.map;
@@ -750,8 +758,8 @@ TEST_CASE("Source replacement materialization is selected per boundary",
 		materialized += entry.second->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
 		default_policy += entry.second->materialized == CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
 	}
-	REQUIRE(materialized == 1);
-	REQUIRE(default_policy == 1);
+	REQUIRE(materialized == expected_materialized);
+	REQUIRE(default_policy == 2 - expected_materialized);
 	RequireReplacementResult(connection, *plan, replacements,
 	                         "VALUES (1::BIGINT,1::BIGINT,42::BIGINT),(2,2,42),(3,3,42)");
 	auto calls = connection.Query("SELECT currval('source_calls')");
