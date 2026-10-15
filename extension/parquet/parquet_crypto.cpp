@@ -150,6 +150,9 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const V
 	const auto &keys = ParquetKeys::Get(context);
 	for (idx_t i = 0; i < StructType::GetChildCount(arg.type()); i++) {
 		auto &struct_key = child_types[i].first;
+		if ((struct_key == "footer_key" || struct_key == "footer_key_value") && children[i].IsNull()) {
+			throw BinderException("Parquet encryption_config %s cannot be NULL", struct_key);
+		}
 		if (struct_key == "footer_key") {
 			const auto footer_key_name = StringValue::Get(children[i].DefaultCastAs(LogicalType::VARCHAR));
 			if (!keys.HasKey(footer_key_name)) {
