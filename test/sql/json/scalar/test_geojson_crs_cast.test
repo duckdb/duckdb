@@ -1,0 +1,228 @@
+# name: test/sql/json/scalar/test_geojson_crs_cast.test
+# description: Registered JSON casts match CRS-qualified GEOMETRY sources and targets
+# group: [scalar]
+
+require json
+
+statement ok
+CREATE TABLE geometry_json(id INTEGER, j JSON);
+
+statement ok
+INSERT INTO geometry_json VALUES
+	(1, '{"type":"Point","coordinates":[1,2]}'),
+	(2, '"LINESTRING(0 0, 3 4)"'),
+	(3, '{"type":"Point","coordinates":[]}'),
+	(4, NULL),
+	(5, 'null');
+
+foreach crs OGC:CRS84 OGC:CRS83
+
+# Constant casts must use JSON parsing, including unquoting WKT strings.
+query TT
+SELECT '{"type":"Point","coordinates":[1,2]}'::JSON::GEOMETRY('{crs}'),
+       '"POINT(3 4)"'::JSON::GEOMETRY('{crs}');
+----
+POINT (1 2)	POINT (3 4)
+
+query TT
+SELECT 'POINT(1 2)'::GEOMETRY('{crs}')::JSON, NULL::GEOMETRY('{crs}')::JSON;
+----
+"POINT (1 2)"	NULL
+
+# Materialized columns exercise mixed GeoJSON/WKT input and SQL/JSON nulls.
+statement ok
+CREATE OR REPLACE TABLE crs_geometry AS
+SELECT id, j::GEOMETRY('{crs}') AS g FROM geometry_json;
+
+query ITI
+SELECT id, g, typeof(g) = 'GEOMETRY(''{crs}'')' FROM crs_geometry ORDER BY id;
+----
+1	POINT (1 2)	true
+2	LINESTRING (0 0, 3 4)	true
+3	POINT EMPTY	true
+4	NULL	true
+5	NULL	true
+
+query ITT
+SELECT id, g::JSON, (g::JSON)::GEOMETRY('{crs}') FROM crs_geometry ORDER BY id;
+----
+1	"POINT (1 2)"	POINT (1 2)
+2	"LINESTRING (0 0, 3 4)"	LINESTRING (0 0, 3 4)
+3	"POINT EMPTY"	POINT EMPTY
+4	NULL	NULL
+5	NULL	NULL
+
+# The registered implicit cast cost must also match qualified geometries.
+query IIII
+SELECT can_cast_implicitly(NULL::GEOMETRY, NULL::JSON),
+       can_cast_implicitly(NULL::GEOMETRY('{crs}'), NULL::JSON),
+       can_cast_implicitly(NULL::JSON, NULL::GEOMETRY),
+       can_cast_implicitly(NULL::JSON, NULL::GEOMETRY('{crs}'));
+----
+true	true	false	false
+
+query IT
+SELECT id, json_type(g) FROM crs_geometry ORDER BY id;
+----
+1	VARCHAR
+2	VARCHAR
+3	VARCHAR
+4	NULL
+5	NULL
+
+# Nested casts must bind the registered cast for each child.
+query TTTT
+SELECT ([g, NULL]::JSON[])[1],
+       (array_value(g, NULL)::JSON[2])[1],
+       ({g: g}::STRUCT(g JSON)).g,
+       (MAP {'g': g}::MAP(VARCHAR, JSON))['g']
+FROM crs_geometry WHERE id = 1;
+----
+"POINT (1 2)"	"POINT (1 2)"	"POINT (1 2)"	"POINT (1 2)"
+
+query TTTT
+SELECT ([j, NULL]::GEOMETRY('{crs}')[])[1],
+       (array_value(j, NULL)::GEOMETRY('{crs}')[2])[1],
+       ({g: j}::STRUCT(g GEOMETRY('{crs}'))).g,
+       (MAP {'g': j}::MAP(VARCHAR, GEOMETRY('{crs}')))['g']
+FROM geometry_json WHERE id = 1;
+----
+POINT (1 2)	POINT (1 2)	POINT (1 2)	POINT (1 2)
+
+query TTT
+SELECT []::GEOMETRY('{crs}')[]::JSON[],
+       NULL::GEOMETRY('{crs}')[]::JSON[],
+       [NULL]::GEOMETRY('{crs}')[]::JSON[];
+----
+[]	NULL	[NULL]
+
+query TTT
+SELECT []::JSON[]::GEOMETRY('{crs}')[],
+       NULL::JSON[]::GEOMETRY('{crs}')[],
+       [NULL]::JSON[]::GEOMETRY('{crs}')[];
+----
+[]	NULL	[NULL]
+
+# UNION member selection uses the registered implicit cost as well as the cast.
+query TT
+SELECT union_extract(g::UNION(g JSON, n INTEGER), 'g'),
+       union_extract(union_value(g := g)::UNION(g JSON, n INTEGER), 'g')
+FROM crs_geometry WHERE id = 1;
+----
+"POINT (1 2)"	"POINT (1 2)"
+
+# GeoJSON output must honor the session setting for direct and implicit casts.
+statement ok
+SET json_geometry_format='geojson';
+
+query TTT
+SELECT g::JSON, json_type(g), (g::JSON)::GEOMETRY('{crs}') FROM crs_geometry WHERE id = 1;
+----
+{"type":"Point","coordinates":[1.0,2.0]}	OBJECT	POINT (1 2)
+
+query T
+SELECT ([g, NULL]::JSON[])[1] FROM crs_geometry WHERE id = 1;
+----
+{"type":"Point","coordinates":[1.0,2.0]}
+
+statement ok
+RESET json_geometry_format;
+
+# Casts with no JSON registration still use the built-in geometry conversions.
+query TTT
+SELECT g::VARCHAR, (g::BLOB)::GEOMETRY('{crs}'), g::GEOMETRY::GEOMETRY('{crs}')
+FROM crs_geometry WHERE id = 1;
+----
+POINT (1 2)	POINT (1 2)	POINT (1 2)
+
+statement ok
+DROP TABLE crs_geometry;
+
+endloop
+
+# TRY_CAST must retain valid rows when a vector also contains invalid geometry.
+statement ok
+CREATE TABLE invalid_geometry_json(id INTEGER, j JSON);
+
+statement ok
+INSERT INTO invalid_geometry_json VALUES
+	(1, '{"type":"Point","coordinates":[1,2]}'),
+	(2, '{"type":"Point","coordinates":["x","y"]}'),
+	(3, '"POINT(3 4)"'),
+	(4, '"not WKT"'),
+	(5, '42'),
+	(6, '{}'),
+	(7, NULL),
+	(8, 'null');
+
+query IT
+SELECT id, TRY_CAST(j AS GEOMETRY('OGC:CRS84')) FROM invalid_geometry_json ORDER BY id;
+----
+1	POINT (1 2)
+2	NULL
+3	POINT (3 4)
+4	NULL
+5	NULL
+6	NULL
+7	NULL
+8	NULL
+
+statement error
+SELECT j::GEOMETRY('OGC:CRS84') FROM invalid_geometry_json WHERE id = 2;
+----
+must contain only numbers
+
+query T
+SELECT TRY_CAST(['{"type":"Point","coordinates":[1,2]}', '{}', NULL]::JSON[] AS GEOMETRY('OGC:CRS84')[]);
+----
+['POINT (1 2)', NULL, NULL]
+
+# Binding prepared statements preserves the target CRS for both values and NULLs.
+statement ok
+PREPARE json_to_crs AS SELECT g, typeof(g) FROM (SELECT $1::JSON::GEOMETRY('OGC:CRS84') AS g);
+
+query TT
+EXECUTE json_to_crs('{"type":"Point","coordinates":[5,6]}');
+----
+POINT (5 6)	GEOMETRY('OGC:CRS84')
+
+query TT
+EXECUTE json_to_crs(NULL);
+----
+NULL	GEOMETRY('OGC:CRS84')
+
+# Cross vector boundaries and filter the source before converting the selected rows.
+statement ok
+CREATE TABLE many_geometry_json AS
+SELECT i, CASE WHEN i % 3 = 0 THEN NULL
+               WHEN i % 3 = 1 THEN '{"type":"Point","coordinates":[1,2]}'::JSON
+               ELSE '"POINT(3 4)"'::JSON END AS j
+FROM range(5000) r(i);
+
+query II
+SELECT count(*), count(g)
+FROM (SELECT j::GEOMETRY('OGC:CRS84') AS g FROM many_geometry_json WHERE i % 2 = 0);
+----
+2500	1666
+
+query I
+SELECT count(*) FROM many_geometry_json
+WHERE (j::GEOMETRY('OGC:CRS84'))::JSON = '"POINT (3 4)"'::JSON;
+----
+1666
+
+# Loading JSON must not allow implicit reprojection between incompatible CRSs.
+statement error
+SELECT 'POINT(1 2)'::GEOMETRY('OGC:CRS83')::GEOMETRY('OGC:CRS84');
+----
+Cannot cast GEOMETRY with CRS 'OGC:CRS83' to GEOMETRY with different CRS 'OGC:CRS84'
+
+statement error
+SELECT TRY_CAST('POINT(1 2)'::GEOMETRY('OGC:CRS83') AS GEOMETRY('OGC:CRS84'));
+----
+Cannot cast GEOMETRY with CRS 'OGC:CRS83' to GEOMETRY with different CRS 'OGC:CRS84'
+
+statement error
+SELECT ['POINT(1 2)'::GEOMETRY('OGC:CRS83')]::GEOMETRY('OGC:CRS84')[];
+----
+Cannot cast GEOMETRY with CRS 'OGC:CRS83' to GEOMETRY with different CRS 'OGC:CRS84'
