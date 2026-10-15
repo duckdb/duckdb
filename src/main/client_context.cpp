@@ -237,8 +237,7 @@ void ClientContext::ProcessError(ErrorData &error, const string &query) const {
 	}
 }
 
-template <class T>
-unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
+void ClientContext::HandleQueryError(ErrorData &error, const string &query) {
 	bool invalidates_transaction = true;
 	if (!ErrorInvalidatesTransaction(error.Type())) {
 		// standard exceptions don't invalidate the transaction
@@ -252,6 +251,11 @@ unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
 	}
 
 	ProcessError(error, query);
+}
+
+template <class T>
+unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
+	HandleQueryError(error, query);
 	return make_uniq<T>(std::move(error));
 }
 
@@ -1033,8 +1037,7 @@ unique_ptr<QueryResult> ClientContext::Submit(const string &query, const QueryPa
 		ErrorData error(ex);
 		// a parse error has started the profiler without running a statement
 		EndQueryProfiling(error);
-		ProcessError(error, query);
-		return make_uniq<QueryResult>(std::move(error));
+		return ErrorResult<QueryResult>(std::move(error), query);
 	}
 }
 
