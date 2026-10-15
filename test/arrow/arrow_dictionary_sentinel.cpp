@@ -88,3 +88,64 @@ TEST_CASE("Arrow scan of dict-encoded int32 column with NULL sentinel", "[arrow]
 	REQUIRE(ArrowTestHelper::RunArrowComparison(
 	    con, "SELECT * FROM (VALUES (10), (20), (30), (10), (20), (30), (10), (20)) t(a)", stream));
 }
+
+// A null_count of -1 means the number of nulls is unknown - the validity bitmap must still be used, and the
+// (arbitrary) indices in null slots must not be used to read the dictionary.
+TEST_CASE("Arrow scan of dict-encoded column with an unknown null count", "[arrow]") {
+	ArrowSchema dict_schema {};
+	dict_schema.format = "i";
+	dict_schema.flags = 2; // ARROW_FLAG_NULLABLE
+	dict_schema.release = NoopReleaseSchema;
+
+	ArrowSchema col_schema {};
+	col_schema.format = "i";
+	col_schema.name = "a";
+	col_schema.flags = 2;
+	col_schema.dictionary = &dict_schema;
+	col_schema.release = NoopReleaseSchema;
+
+	ArrowSchema *col_children_schemas[1] = {&col_schema};
+	ArrowSchema record_schema {};
+	record_schema.format = "+s";
+	record_schema.n_children = 1;
+	record_schema.children = col_children_schemas;
+	record_schema.release = NoopReleaseSchema;
+
+	int32_t dict_values[] = {10, 20, 30};
+	const void *dict_array_buffers[2] = {nullptr, dict_values};
+	ArrowArray dict_array {};
+	dict_array.length = 3;
+	dict_array.n_buffers = 2;
+	dict_array.buffers = dict_array_buffers;
+	dict_array.release = NoopReleaseArray;
+
+	// row 1 is NULL, and its index points outside of the dictionary
+	int32_t indices[] = {0, 1000, 2, 1};
+	uint8_t validity[] = {0x0D};
+	const void *col_array_buffers[2] = {validity, indices};
+	ArrowArray col_array {};
+	col_array.length = 4;
+	col_array.null_count = -1;
+	col_array.n_buffers = 2;
+	col_array.buffers = col_array_buffers;
+	col_array.dictionary = &dict_array;
+	col_array.release = NoopReleaseArray;
+
+	ArrowArray *col_children_arrays[1] = {&col_array};
+	const void *record_array_buffers[1] = {nullptr};
+	ArrowArray record_array {};
+	record_array.length = 4;
+	record_array.n_buffers = 1;
+	record_array.buffers = record_array_buffers;
+	record_array.n_children = 1;
+	record_array.children = col_children_arrays;
+	record_array.release = NoopReleaseArray;
+
+	ArrowArrayStream stream {};
+	AdbcError err {};
+	REQUIRE(duckdb_adbc::BatchToArrayStream(&record_array, &record_schema, &stream, &err) == ADBC_STATUS_OK);
+
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM (VALUES (10), (NULL), (30), (20)) t(a)", stream));
+}

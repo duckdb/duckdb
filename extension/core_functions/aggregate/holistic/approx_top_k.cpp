@@ -510,6 +510,10 @@ void ApproxTopKImportState(AggregateImportInputData &input) {
 			// NULL input - leave the state empty
 			continue;
 		}
+		if (FlatVector::IsNull(fields[0], i) || FlatVector::IsNull(value_lists, i) ||
+		    FlatVector::IsNull(filter_lists, i)) {
+			throw InvalidInputException("Invalid approx_top_k state - the k, values and filter cannot be NULL");
+		}
 		auto internal_state = make_uniq<InternalApproxTopKState>();
 		auto &target = *internal_state;
 		target.Initialize(k_data[i]);
@@ -537,6 +541,9 @@ void ApproxTopKImportState(AggregateImportInputData &input) {
 			if (!inserted) {
 				throw InvalidInputException("Invalid approx_top_k state - the state values must be unique");
 			}
+			if (FlatVector::IsNull(value_fields[1], idx)) {
+				throw InvalidInputException("Invalid approx_top_k state - the state counts cannot be NULL");
+			}
 			val.count = count_data[idx];
 			if (val.count == 0) {
 				throw InvalidInputException("Invalid approx_top_k state - the state values must have a count > 0");
@@ -547,7 +554,11 @@ void ApproxTopKImportState(AggregateImportInputData &input) {
 			}
 		}
 		for (idx_t filter_idx = 0; filter_idx < filter_entries[i].length; filter_idx++) {
-			target.filter[filter_idx] = filter_data[filter_entries[i].offset + filter_idx];
+			const auto filter_entry_idx = filter_entries[i].offset + filter_idx;
+			if (FlatVector::IsNull(ListVector::GetChild(filter_lists), filter_entry_idx)) {
+				throw InvalidInputException("Invalid approx_top_k state - the filter values cannot be NULL");
+			}
+			target.filter[filter_idx] = filter_data[filter_entry_idx];
 		}
 		target.Verify();
 		state.state = internal_state.release();

@@ -1,8 +1,30 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
+#include "duckdb/parser/peg/matcher/operator_matcher.hpp"
 
 namespace duckdb {
+
+uint8_t ComputeMatcherTokenClass(TokenType type, const string &text) {
+	switch (type) {
+	case TokenType::KEYWORD:
+	case TokenType::IDENTIFIER:
+		return MatcherTokenClass::WORD;
+	case TokenType::STRING_LITERAL:
+		// string literals are also accepted in identifier positions (e.g. table and file names)
+		return MatcherTokenClass::STRING | MatcherTokenClass::WORD;
+	case TokenType::NUMBER_LITERAL:
+		return MatcherTokenClass::NUMBER;
+	case TokenType::OPERATOR:
+		if (OperatorMatcher::HasSpecialPrecedence(text)) {
+			return MatcherTokenClass::OPERATOR;
+		}
+		return MatcherTokenClass::OPERATOR | MatcherTokenClass::GENERIC_OPERATOR;
+	default:
+		// terminators and end-of-input are only matched as literals or by matchers without a FIRST set
+		return 0;
+	}
+}
 
 TokenizerBehavior::TokenizerBehavior(const string &sql, vector<MatcherToken> &tokens) : sql(sql), tokens(tokens) {
 }
@@ -15,7 +37,9 @@ bool Tokenizer::BackslashEscapesStringLiterals() const {
 }
 
 bool Tokenizer::IsQuotedIdentifierDelimiter(char character) const {
-	return character == '"';
+	// double quotes are the SQL standard delimiter; backticks are accepted as an alternative
+	// (as in several other SQL dialects), with the same doubling rule for escaping the delimiter
+	return character == '"' || character == '`';
 }
 
 void Tokenizer::HandleLastToken(TokenizerBehavior &behavior, TokenizeState state, const string &sql,
@@ -59,6 +83,15 @@ bool Tokenizer::CharacterIsInitialNumber(char c) {
 		return true;
 	}
 	return c == '.';
+}
+
+static bool NumberHasDotOrExponent(const string &sql, idx_t start, idx_t end) {
+	for (idx_t i = start; i < end; i++) {
+		if (sql[i] == '.' || sql[i] == 'e' || sql[i] == 'E') {
+			return true;
+		}
+	}
+	return false;
 }
 
 bool Tokenizer::CharacterIsSpecialStringCharacter(char c) {
@@ -414,8 +447,8 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 			last_pos = i;
 			break;
 		case TokenizeState::NUMERIC:
-			// Check for "always allowed" numeric characters
-			if (CharacterIsInitialNumber(c)) {
+			// Check for "always allowed" numeric characters - a number has at most one dot, and none in its exponent
+			if (CharacterIsInitialNumber(c) && (c != '.' || !NumberHasDotOrExponent(sql, last_pos, i))) {
 				break; // Continue tokenizing
 			}
 			// Allow underscore only when immediately followed by a digit (no consecutive underscores)

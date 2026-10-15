@@ -19,6 +19,54 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Subplan Signature/Info
 //===--------------------------------------------------------------------===//
+static vector<ColumnBinding> GetExpandedColumnBindings(LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_LIMIT:
+	case LogicalOperatorType::LOGICAL_TOP_N:
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+		return GetExpandedColumnBindings(*op.children[0]);
+	case LogicalOperatorType::LOGICAL_WINDOW:
+	case LogicalOperatorType::LOGICAL_UNNEST: {
+		auto bindings = GetExpandedColumnBindings(*op.children[0]);
+		const auto table_index = op.GetTableIndex()[0];
+		for (auto col_idx : ProjectionIndex::GetIndexes(op.expressions.size())) {
+			bindings.emplace_back(table_index, col_idx);
+		}
+		return bindings;
+	}
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = op.Cast<LogicalJoin>();
+		auto left_bindings = GetExpandedColumnBindings(*op.children[0]);
+		if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
+			return left_bindings;
+		}
+		if (join.join_type == JoinType::MARK) {
+			left_bindings.emplace_back(join.mark_index, ProjectionIndex(0));
+			return left_bindings;
+		}
+		auto right_bindings = GetExpandedColumnBindings(*op.children[1]);
+		if (join.join_type == JoinType::RIGHT_SEMI || join.join_type == JoinType::RIGHT_ANTI) {
+			return right_bindings;
+		}
+		left_bindings.insert(left_bindings.end(), right_bindings.begin(), right_bindings.end());
+		return left_bindings;
+	}
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN: {
+		auto left_bindings = GetExpandedColumnBindings(*op.children[0]);
+		auto right_bindings = GetExpandedColumnBindings(*op.children[1]);
+		left_bindings.insert(left_bindings.end(), right_bindings.begin(), right_bindings.end());
+		return left_bindings;
+	}
+	default:
+		return op.GetColumnBindings();
+	}
+}
+
 enum class ConversionType {
 	TO_CANONICAL,
 	RESTORE_ORIGINAL,
@@ -100,7 +148,7 @@ private:
 
 			// Store temporary mapping
 			for (const auto &child_op : op.children) {
-				for (const auto &child_cb : child_op->GetColumnBindings()) {
+				for (const auto &child_cb : GetExpandedColumnBindings(*child_op)) {
 					const auto &original = child_cb.table_index;
 					auto it = to_canonical_table_index.find(original);
 					if (it != to_canonical_table_index.end()) {
@@ -1106,42 +1154,6 @@ private:
 		}
 
 		return a.get();
-	}
-
-	vector<ColumnBinding> GetExpandedColumnBindings(LogicalOperator &op) {
-		switch (op.type) {
-		case LogicalOperatorType::LOGICAL_FILTER:
-		case LogicalOperatorType::LOGICAL_ORDER_BY:
-			return GetExpandedColumnBindings(*op.children[0]);
-		case LogicalOperatorType::LOGICAL_ANY_JOIN:
-		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-			auto &join = op.Cast<LogicalJoin>();
-			auto left_bindings = GetExpandedColumnBindings(*op.children[0]);
-			if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
-				return left_bindings;
-			}
-			if (join.join_type == JoinType::MARK) {
-				left_bindings.emplace_back(join.mark_index, ProjectionIndex(0));
-				return left_bindings;
-			}
-			auto right_bindings = GetExpandedColumnBindings(*op.children[1]);
-			if (join.join_type == JoinType::RIGHT_SEMI || join.join_type == JoinType::RIGHT_ANTI) {
-				return right_bindings;
-			}
-			left_bindings.insert(left_bindings.end(), right_bindings.begin(), right_bindings.end());
-			return left_bindings;
-		}
-		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-		case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN: {
-			auto left_bindings = GetExpandedColumnBindings(*op.children[0]);
-			auto right_bindings = GetExpandedColumnBindings(*op.children[1]);
-			left_bindings.insert(left_bindings.end(), right_bindings.begin(), right_bindings.end());
-			return left_bindings;
-		}
-		default:
-			return op.GetColumnBindings();
-		}
 	}
 
 	arena_vector<ColumnBinding> GetCanonicalBindings(const vector<ColumnBinding> &original_bindings) {

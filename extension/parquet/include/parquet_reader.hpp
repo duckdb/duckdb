@@ -18,6 +18,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/once_flag.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_functions.hpp"
@@ -99,6 +100,8 @@ struct ParquetReaderPrefetchConfig {
 	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.95;
 	//! How many row groups need to produce at least one surviving row (from filtering)
 	static constexpr double PREFETCH_FILTER_MINIMUM_MATCH_RATIO = 0.9;
+	//! Before observing matches, only speculate on filter columns that are cheap to read
+	static constexpr double FIRST_GROUP_PREFETCH_MAXIMUM_FILTER_SCAN = 0.05;
 };
 
 enum class ParquetPrefetchStrategy : uint8_t {
@@ -122,6 +125,21 @@ const char *EnumUtil::ToChars<ParquetPrefetchStrategyOption>(ParquetPrefetchStra
 
 template <>
 ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption>(const char *value);
+
+//! How INT96 (deprecated Impala timestamp) columns are exposed by the Parquet reader
+enum class ParquetInt96AsOption : uint8_t {
+	TIMESTAMP,    //! Read as TIMESTAMP (microsecond precision) - the default
+	TIMESTAMP_NS, //! Read as TIMESTAMP_NS, preserving the nanosecond part (out-of-range values saturate)
+	STRUCT        //! Read as STRUCT(date DATE, time TIME_NS), preserving the full range and precision
+};
+
+ParquetInt96AsOption ParquetInt96AsOptionFromString(const string &value);
+
+template <>
+const char *EnumUtil::ToChars<ParquetInt96AsOption>(ParquetInt96AsOption value);
+
+template <>
+ParquetInt96AsOption EnumUtil::FromString<ParquetInt96AsOption>(const char *value);
 
 template <>
 const char *EnumUtil::ToChars<StringColumnReader::Utf8ValidationOption>(StringColumnReader::Utf8ValidationOption value);
@@ -285,6 +303,7 @@ struct ParquetOptions {
 	ParquetPrefetchStrategyOption prefetch_strategy = ParquetPrefetchStrategyOption::AUTO;
 	StringColumnReader::Utf8ValidationOption utf8_validation_option =
 	    StringColumnReader::Utf8ValidationOption::STRICT_UTF8;
+	ParquetInt96AsOption int96_as = ParquetInt96AsOption::TIMESTAMP;
 };
 
 struct ParquetOptionsSerialization {
@@ -456,6 +475,9 @@ private:
 	idx_t GetGroupOffset(ParquetReaderScanState &state);
 	//! Group span is the distance between the min page offset and the max page offset plus the max page compressed size
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
+	FilterPropagateResult CheckRowGroupFilterStatistics(ClientContext &context, ParquetReaderScanState &state,
+	                                                    ColumnReader &column_reader, const TableFilter &filter);
+	bool DynamicFiltersExcludeRowGroup(ClientContext &context, ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ClientContext &context, ParquetReaderScanState &state, idx_t out_col_idx);
 	//! Whole-group prefetch strategy.
 	ParquetPrefetchStrategy WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
@@ -496,12 +518,12 @@ private:
 	optional_ptr<const BaseStatistics> GetVariantStats(const ParquetColumnSchema &schema) const;
 	//! Open a file handle for scanning, resolving the open flags from the prefetch mode
 	unique_ptr<CachingFileHandle> OpenScanHandle(ClientContext &context) const;
+	//! Initialize the shared scan handle, including when pre-opening it for read-ahead
+	void InitializeScanHandle(ClientContext &context) const;
 
 private:
 	unique_ptr<CachingFileHandle> file_handle;
-	//! Scan handle pre-opened by PrepareReadAhead while the file was opened, adopted by the first InitializeScan
-	mutable mutex prewarm_lock;
-	mutable unique_ptr<CachingFileHandle> prewarmed_scan_handle;
+	mutable OnceFlag scan_handle_initialized;
 	//! Scan handle shared by all scan states of this reader
 	mutable shared_ptr<CachingFileHandle> shared_scan_handle;
 	mutable annotated_mutex variant_stats_lock;

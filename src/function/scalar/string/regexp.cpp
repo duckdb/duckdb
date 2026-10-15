@@ -281,6 +281,9 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 		BinaryExecutor::Execute<string_t, string_t, string_t>(
 		    strings, patterns, result, [&](string_t input, string_t pattern) {
 			    RE2 re(CreateStringPiece(pattern), info.options);
+			    if (!re.ok()) {
+				    throw InvalidInputException(re.error());
+			    }
 			    return ExtractCaptureGroup(input, re, info.group_index, info.no_match_returns_input);
 		    });
 	}
@@ -409,6 +412,15 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 				throw InvalidInputException("Group index must be between 0 and 9!");
 			}
 			group_index = static_cast<int8_t>(group_idx);
+		}
+	}
+
+	if (constant_pattern && constant_string.find("\\C") == string::npos) {
+		auto validation_options = options;
+		validation_options.set_log_errors(false);
+		if (RE2(constant_string, validation_options).ok()) {
+			// A valid UTF-8 pattern without byte escapes cannot return a partial character.
+			bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 		}
 	}
 

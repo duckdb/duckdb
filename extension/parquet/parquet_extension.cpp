@@ -160,6 +160,7 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["binary_as_string"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
 	copy_options["file_row_number"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
 	copy_options["can_have_nan"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["int96_as"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
 	copy_options["geoparquet_version"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 	copy_options["shredding"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["write_timestamp_as_int96"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
@@ -282,6 +283,9 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			for (idx_t i = 0; i < values.size(); i++) {
 				auto &value = values[i];
 				auto key = StructType::GetChildName(kv_struct_type, i);
+				if (value.IsNull()) {
+					throw BinderException("kv_metadata value for key %s cannot be NULL", key);
+				}
 				// If the value is a blob, write the raw blob bytes
 				// otherwise, cast to string
 				if (value.type().id() == LogicalTypeId::BLOB) {
@@ -321,8 +325,8 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			bind_data->enable_bloom_filters = BooleanValue::Get(option_values[0].DefaultCastAs(LogicalType::BOOLEAN));
 		} else if (option_name == "bloom_filter_false_positive_ratio") {
 			auto val = option_values[0].GetValue<double>();
-			if (val <= 0) {
-				throw BinderException("bloom_filter_false_positive_ratio must be greater than 0");
+			if (!(val > 0 && val <= 1)) {
+				throw BinderException("bloom_filter_false_positive_ratio must be greater than 0 and at most 1");
 			}
 			bind_data->bloom_filter_false_positive_ratio = val;
 		} else if (option_name == "compression_level") {
@@ -604,6 +608,34 @@ ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption
 	}
 	if (StringUtil::Equals(value, "WHOLE_GROUP")) {
 		return ParquetPrefetchStrategyOption::WHOLE_GROUP;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template <>
+const char *EnumUtil::ToChars<ParquetInt96AsOption>(ParquetInt96AsOption value) {
+	switch (value) {
+	case ParquetInt96AsOption::TIMESTAMP:
+		return "TIMESTAMP";
+	case ParquetInt96AsOption::TIMESTAMP_NS:
+		return "TIMESTAMP_NS";
+	case ParquetInt96AsOption::STRUCT:
+		return "STRUCT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
+}
+
+template <>
+ParquetInt96AsOption EnumUtil::FromString<ParquetInt96AsOption>(const char *value) {
+	if (StringUtil::Equals(value, "TIMESTAMP")) {
+		return ParquetInt96AsOption::TIMESTAMP;
+	}
+	if (StringUtil::Equals(value, "TIMESTAMP_NS")) {
+		return ParquetInt96AsOption::TIMESTAMP_NS;
+	}
+	if (StringUtil::Equals(value, "STRUCT")) {
+		return ParquetInt96AsOption::STRUCT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

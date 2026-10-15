@@ -31,6 +31,25 @@ BaseStatistics NumericStats::CreateUnknown(LogicalType type) {
 	return result;
 }
 
+//! The type whose limits are used for the min/max of empty statistics
+static LogicalType GetEmptyStatsLimitType(const LogicalType &type) {
+	if (type.id() != LogicalTypeId::ENUM) {
+		return type;
+	}
+	// the dictionary of an ENUM can be empty or have a single entry: use the limits of the index type instead, so
+	// that the min is larger than the max until a value is added
+	switch (type.InternalType()) {
+	case PhysicalType::UINT8:
+		return LogicalType::UTINYINT;
+	case PhysicalType::UINT16:
+		return LogicalType::USMALLINT;
+	case PhysicalType::UINT32:
+		return LogicalType::UINTEGER;
+	default:
+		throw InternalException("Invalid Internal Type for ENUMs");
+	}
+}
+
 BaseStatistics NumericStats::CreateEmpty(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeEmpty();
@@ -41,10 +60,12 @@ BaseStatistics NumericStats::CreateEmpty(LogicalType type) {
 	case PhysicalType::DOUBLE:
 		InitializeEmptyFloatingPointStats<double>(result);
 		break;
-	default:
-		SetMin(result, Value::MaximumValue(result.GetType()));
-		SetMax(result, Value::MinimumValue(result.GetType()));
+	default: {
+		auto limit_type = GetEmptyStatsLimitType(result.GetType());
+		SetMin(result, Value::MaximumValue(limit_type));
+		SetMax(result, Value::MinimumValue(limit_type));
 		break;
+	}
 	}
 	return result;
 }

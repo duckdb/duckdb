@@ -5,6 +5,9 @@
     "set_parameters": [
       "type"
     ],
+    "finalize_deserialization": [
+      "result->VerifyDeserialized();"
+    ],
     "includes": [
       "duckdb/parser/expression/list.hpp"
     ],
@@ -373,6 +376,13 @@
         "type": "duckdb::Identifier"
       }
     ]
+  },
+  {
+    "class": "PatternExpression",
+    "base": "ParsedExpression",
+    "enum": "PATTERN",
+    "custom_implementation": true,
+    "custom_switch_code": "result = PatternExpression::Deserialize(deserializer);\nbreak;"
   },
   {
     "class": "PositionalReferenceExpression",
