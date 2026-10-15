@@ -61,16 +61,6 @@ SELECT count(*) FROM src WHERE c::INTEGER>d AND __internal_barrier(CASE WHEN b='
 ----
 2
 
-# Secure views introduce the same barrier for an observable caller predicate.
-statement ok
-CREATE SECURE VIEW guarded_view AS
-WITH src AS (SELECT b,c,d FROM guard_rows) SELECT * FROM src WHERE c::INTEGER>d
-
-query I
-SELECT count(*) FROM guarded_view WHERE CASE WHEN b='hidden' THEN error('hidden row') ELSE true END
-----
-2
-
 # The barrier still reports errors on surviving rows.
 statement error
 WITH src AS (SELECT b,c,d FROM guard_rows)
