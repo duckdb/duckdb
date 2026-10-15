@@ -150,6 +150,12 @@ bool DisjunctiveJoinRewriter::ShouldRewrite(const LogicalOperator &join, const u
 
 bool DisjunctiveJoinRewriter::FlattenOR(const Expression &expr, const unordered_set<TableIndex> &left_tables,
                                         const unordered_set<TableIndex> &right_tables, vector<Branch> &out) const {
+	// Bound the quadratic exclusion expansion and the cost of optimizing the generated plan.
+	static constexpr idx_t MAX_BRANCH_COUNT = 16;
+	if (out.size() >= MAX_BRANCH_COUNT) {
+		return false;
+	}
+
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
 		auto &conj = expr.Cast<BoundConjunctionExpression>();
 		for (const auto &child : conj.GetChildren()) {
