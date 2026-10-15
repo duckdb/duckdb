@@ -40,6 +40,18 @@ public:
 	shared_ptr<CompiledGrammar> compiled_grammar;
 	//! The client context the statement is parsed for (not set when parsing without a client context)
 	optional_ptr<ClientContext> context;
+
+	//! equality over every field, pointers by identity (used to detect stale cached parsers)
+	bool operator==(const ParserOptions &other) const {
+		return identifier_case_mode == other.identifier_case_mode && integer_division == other.integer_division &&
+		       regex_match_operator_semantics == other.regex_match_operator_semantics &&
+		       max_expression_depth == other.max_expression_depth && extensions == other.extensions &&
+		       parser_override_setting == other.parser_override_setting && compiled_grammar == other.compiled_grammar &&
+		       context == other.context;
+	}
+	bool operator!=(const ParserOptions &other) const {
+		return !(*this == other);
+	}
 };
 
 } // namespace duckdb
