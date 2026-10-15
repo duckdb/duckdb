@@ -16,15 +16,18 @@ TEST_CASE("Test that listing and updating extensions skip an install in progress
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 
-	// what an install writes before it moves the files in place, with the .info not written yet
+	// what an install writes before it moves the files in place, first the extension and then its .info
 	auto fs = FileSystem::CreateLocal();
 	auto directory = ExtensionHelper::ExtensionDirectory(*db.instance, *fs);
 	auto temp_path = fs->JoinPath(directory, "in_progress.duckdb_extension.tmp-0b0e7d6c-5a0e-4e76-9d1f-"
 	                                         "3c1a5e9b2f40.duckdb_extension");
 	WriteExtensionDirectoryFile(*fs, temp_path, "not an extension yet");
-	WriteExtensionDirectoryFile(*fs, temp_path + ".info", "");
 
 	auto result = con.Query("SELECT count(*) FROM duckdb_extensions() WHERE extension_name = 'in_progress'");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	WriteExtensionDirectoryFile(*fs, temp_path + ".info", "");
+	result = con.Query("SELECT count(*) FROM duckdb_extensions() WHERE extension_name = 'in_progress'");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 
 	result = con.Query("UPDATE EXTENSIONS");
