@@ -42,3 +42,37 @@ SELECT a, count(*) FROM c GROUP BY a ORDER BY a;
 ----
 1	2
 2	1
+
+# primary keys and NOT NULL unique columns cannot be NULL and do not need the NULL handling
+statement ok
+CREATE TABLE pk(i INT PRIMARY KEY, v INT);
+
+query TT
+EXPLAIN INSERT INTO pk VALUES (1, 1) ON CONFLICT DO NOTHING;
+----
+physical_plan	<!REGEX>:.*uuid.*
+
+statement ok
+CREATE TABLE nn(i INT NOT NULL UNIQUE, v INT);
+
+query TT
+EXPLAIN INSERT INTO nn VALUES (1, 1) ON CONFLICT DO NOTHING;
+----
+physical_plan	<!REGEX>:.*uuid.*
+
+statement ok
+INSERT INTO nn VALUES (1, 1), (1, 2), (2, 3) ON CONFLICT DO NOTHING;
+
+query I
+SELECT count(*) FROM nn;
+----
+2
+
+# a nullable unique column still gets it
+statement ok
+CREATE TABLE nu(i INT UNIQUE, v INT);
+
+query TT
+EXPLAIN INSERT INTO nu VALUES (1, 1) ON CONFLICT DO NOTHING;
+----
+physical_plan	<REGEX>:.*uuid.*
