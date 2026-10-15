@@ -28,6 +28,23 @@ SELECT i // j FROM integers
 ----
 Overflow in division
 
+query II
+SELECT h % -1, h % 7 FROM (VALUES ((-170141183460469231731687303715884105728)::HUGEINT), (NULL)) t(h)
+----
+0	-2
+NULL	NULL
+
+statement ok
+SET error_on_division_by_zero = false
+
+query III
+SELECT i % j, i % 0, mod(i, j) FROM integers
+----
+0	NULL	0
+-2	NULL	-2
+0	NULL	0
+NULL	NULL	NULL
+
 statement error
 SELECT (-170141183460469231731687303715884105728)::HUGEINT // (-1)::HUGEINT
 ----
