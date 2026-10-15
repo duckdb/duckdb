@@ -1,0 +1,16 @@
+# name: benchmark/micro/limit/parquet_many_patterns_limit.benchmark
+# description: LIMIT 1 over a list of many glob patterns only expands the patterns it reads
+# group: [limit]
+
+name ParquetManyPatternsLimit
+group micro
+subgroup limit
+
+load
+COPY (SELECT 42 AS i) TO '${BENCHMARK_DIR}/many_patterns.parquet';
+
+run
+SELECT * FROM read_parquet(['${BENCHMARK_DIR}/many_pattern*.parquet' FOR x IN range(100000)]) LIMIT 1;
+
+result I
+42
