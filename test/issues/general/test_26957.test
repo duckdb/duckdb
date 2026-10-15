@@ -20,6 +20,20 @@ EXECUTE myquery('[1.1, 2.1, 3.1]', 0.01);
 ----
 1
 
+query I
+EXECUTE myquery('[3, 2, 1]', 0.01);
+----
+2
+
+query I
+EXECUTE myquery(NULL, 0.01);
+----
+
+statement error
+EXECUTE myquery('[1, 2]', 0.01);
+----
+the size of the array must match the destination type
+
 statement ok
 PREPARE distance AS SELECT list(id ORDER BY id) FROM table1 WHERE array_distance($1::FLOAT[3], vec) < 1;
 

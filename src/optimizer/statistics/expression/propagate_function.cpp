@@ -224,7 +224,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 		}
 	}
 	for (auto &child : func.GetChildren()) {
-		// a parameter invalidated for a rebind at execution has no type yet, so its statistics fit no argument
+		// an invalidated parameter has no statistics until it is rebound at execution
 		if (child->GetExpressionType() == ExpressionType::VALUE_PARAMETER &&
 		    child->GetReturnType().id() == LogicalTypeId::SQLNULL) {
 			return nullptr;
