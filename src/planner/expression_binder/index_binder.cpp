@@ -23,7 +23,7 @@ IndexBinder::IndexBinder(Binder &binder, ClientContext &context, optional_ptr<Ta
     : ExpressionBinder(binder, context), table(table), info(info) {
 }
 
-unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index) {
+unique_ptr<BoundIndex> IndexBinder::BindIndex(UnboundIndex &unbound_index) {
 	auto &index_type_name = unbound_index.GetIndexType();
 	// Do we know the type of this index now?
 	auto index_type = context.db->config.GetIndexTypes().FindByName(index_type_name);
@@ -52,7 +52,9 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index)
 	try {
 		return index_type->create_instance(input);
 	} catch (std::exception &ex) {
-		// A partially constructed index releases its on-disk blocks on destruction: binding cannot be retried.
+		// A partially constructed index releases its on-disk blocks on destruction: binding cannot be retried,
+		// and the unbound index no longer owns its storage.
+		unbound_index.MarkStorageReclaimed();
 		ErrorData error(ex);
 		UnboundIndex::ThrowBindFailure(unbound_index.db, create_info.GetIndexName(), error,
 		                               "Failed to load the storage");

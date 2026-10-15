@@ -123,6 +123,10 @@ public:
 	//! Fatal only for the initial database, so one attached database cannot take down the instance.
 	[[noreturn]] static void ThrowBindFailure(AttachedDatabase &db, const Identifier &index_name,
 	                                          const ErrorData &error, const string &what);
+	//! Marks the on-disk storage as handed off or released: a failed bind must not be retried.
+	void MarkStorageReclaimed() {
+		storage_reclaimed = true;
+	}
 	bool HasBufferedReplays() const {
 		return buffered_replays.HasBufferedReplays();
 	}

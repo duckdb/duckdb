@@ -62,7 +62,11 @@ void UnboundIndex::ResetStorage() {
 
 IndexStorageInfo UnboundIndex::CopyStorageInfo() const {
 	// The checkpoint binds indexes with buffered replays before it starts, or does not run at all.
-	D_ASSERT(!HasBufferedReplays());
+	// Checkpointing anyway would persist the index without them and truncate the WAL holding their only record.
+	if (HasBufferedReplays()) {
+		throw InternalException("Cannot checkpoint index %s: it has buffered WAL operations that were not bound",
+		                        GetIndexName());
+	}
 	IndexStorageInfo result(storage_info.name);
 	result.root = storage_info.root;
 	result.options = storage_info.options;

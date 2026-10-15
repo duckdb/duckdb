@@ -846,6 +846,10 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 			continue;
 		}
 		auto error = TryBindIndexes(info, bind_context);
+		if (error.HasError() && ValidChecker::IsInvalidated(db)) {
+			// The bind invalidated the database: no checkpoint can run, so surface the cause.
+			error.Throw();
+		}
 		if (!must_bind || !error.HasError()) {
 			continue;
 		}
