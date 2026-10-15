@@ -345,6 +345,23 @@ TEST_CASE("Grammar literal IDs include category-only words and overlapping categ
 	REQUIRE_FALSE(table.Lookup("missing").IsKeyword());
 }
 
+TEST_CASE("Literal lookup preserves long grammar literals and category-only words", "[api][grammar_extension]") {
+	auto literal = string(256, 'a');
+	auto keyword = string(512, 'b');
+	auto grammar = ParsedGrammar::Parse("LiteralTest <- '" + literal + "'");
+	const auto flag = keyword_categories_t::CreateCategory(6);
+	case_insensitive_map_t<LiteralInfo> keywords;
+	keywords.emplace(keyword, LiteralInfo(0, flag));
+	GrammarLiteralTable table(grammar, keywords);
+	REQUIRE(table.Lookup(literal).LiteralId() != 0);
+	REQUIRE(table.Lookup(StringUtil::Upper(literal)) == table.Lookup(literal));
+	REQUIRE(table.Lookup(keyword).HasAnyFlags(flag));
+	REQUIRE(table.Lookup(StringUtil::Upper(keyword)) == table.Lookup(keyword));
+	REQUIRE(table.Lookup(keyword + "b") == LiteralInfo());
+	REQUIRE(table.Lookup(string(512, 'c')) == LiteralInfo());
+	REQUIRE(table.Lookup(string(65536, 'a')) == LiteralInfo());
+}
+
 TEST_CASE("Grammar literal tables preserve dialect-defined flags", "[api][grammar_extension]") {
 	auto grammar = ParsedGrammar::Parse("LiteralTest <- 'SHARED' / 'shared' / 'plain'");
 	const keyword_categories_t first_flag = keyword_categories_t::CreateCategory(6);
