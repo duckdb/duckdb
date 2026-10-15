@@ -299,7 +299,7 @@ public:
 
 	//! Match and construct the parse result
 	MatcherResult MatchParseResult(MatchState &state) const;
-	//! Create matcher-local state with state.Make<PROCESS>() for either execution driver.
+	//! Create matcher-local state with state.Make<PROCESS>() for incremental execution.
 	virtual arena_ptr<MatchProcess> StartMatch(MatchState &state) const = 0;
 	virtual bool IsAtomic() const {
 		return false;

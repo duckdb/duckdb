@@ -2686,3 +2686,156 @@ TEST_CASE("Collapsing known-empty list tails preserves child semantics", "[api][
 		}
 	}
 }
+
+static vector<string> MatchSingleStepTest(const Matcher &matcher, MatchMode mode, const string &text, bool cursor,
+                                          bool single_step) {
+	vector<MatcherToken> tokens;
+	idx_t offset = 0;
+	for (auto &word : StringUtil::Split(text, ' ')) {
+		if (!word.empty()) {
+			tokens.emplace_back(word, offset, TokenType::KEYWORD);
+		}
+		offset += word.size() + 1;
+	}
+	tokens.emplace_back("", text.size(), cursor ? TokenType::END_OF_INPUT_AUTOCOMPLETE : TokenType::END_OF_INPUT);
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	ArenaAllocator processes(Allocator::DefaultAllocator());
+	idx_t max_position = 0;
+	MatchContext context(suggestions, allocator, processes, max_position, mode);
+	MatchState state(iterator, context);
+	auto result = MatcherResult::Failure();
+	if (single_step) {
+		state.rule = matcher.GetRule();
+		auto process = matcher.StartMatch(state);
+		optional<MatcherResult> child_result;
+		while (true) {
+			auto step = process->Resume(child_result);
+			auto child = step.GetChild();
+			if (!child) {
+				result = step.GetResult();
+				break;
+			}
+			child_result = child->matcher.MatchParseResult(child->state);
+		}
+	} else {
+		result = matcher.MatchParseResult(state);
+		REQUIRE(processes.SizeInBytes() == 0);
+	}
+	vector<string> snapshot {
+	    StringUtil::Format("%d:%llu:%llu", result.IsSuccess(), state.token_iterator.Position(), max_position),
+	    result.HasParseResult() ? result.GetParseResult()->ToString() : string()};
+	for (auto &token : tokens) {
+		snapshot.push_back(StringUtil::Format("%d", static_cast<uint8_t>(token.type)));
+	}
+	for (auto &suggestion : suggestions) {
+		snapshot.push_back(StringUtil::Format("%s:%d:%d:%llu", suggestion.keyword.candidate,
+		                                      static_cast<uint8_t>(suggestion.type), suggestion.keyword.score_bonus,
+		                                      suggestion.keyword.suggestion_pos));
+	}
+	return snapshot;
+}
+
+TEST_CASE("Built-in matchers preserve the public single-step process interface", "[api][grammar_extension]") {
+	auto compiled = CompiledGrammar::Create();
+	for (auto &definition :
+	     vector<string> {"Program <- 'SELECT' 'FROM'", "Program <- ('SELECT' 'FROM') / ('WHERE' 'FROM')",
+	                     "Program <- 'SELECT' / 'FROM' / 'WHERE'", "Program <- ('SELECT' 'FROM')?",
+	                     "Program <- ('SELECT' 'FROM')+"}) {
+		auto grammar = ParsedGrammar::Parse(definition);
+		auto rules = CompileTestProgramRule(grammar);
+		MatcherAllocator allocator;
+		MatcherFactory factory(allocator, grammar, rules, compiled->GetKeywordHelper(), {});
+		auto &root = factory.CreateRootMatcher("Program").Cast<ListMatcher>();
+		vector<reference<Matcher>> matchers {root};
+		for (auto &child : root.matchers) {
+			matchers.push_back(child);
+		}
+		for (auto &matcher : matchers) {
+			for (auto mode : {MatchMode::BUILD_PARSE_RESULT, MatchMode::RECOGNIZE_ONLY}) {
+				for (auto cursor : {false, true}) {
+					for (auto &text :
+					     vector<string> {"", "SELECT", "SELECT FROM", "SELECT FROM SELECT FROM", "WHERE FROM", "X"}) {
+						CAPTURE(definition);
+						CAPTURE(text);
+						CAPTURE(cursor);
+						REQUIRE(MatchSingleStepTest(matcher, mode, text, cursor, true) ==
+						        MatchSingleStepTest(matcher, mode, text, cursor, false));
+					}
+				}
+			}
+		}
+	}
+}
+
+class ForwardingListTestMatcher final : public ListMatcher {
+public:
+	explicit ForwardingListTestMatcher(idx_t &starts_p) : starts(starts_p) {
+	}
+
+	arena_ptr<MatchProcess> StartMatch(MatchState &state) const override {
+		starts++;
+		return ListMatcher::StartMatch(state);
+	}
+
+private:
+	idx_t &starts;
+};
+
+TEST_CASE("Derived matchers can forward to built-in processes through deep heap frames", "[api][grammar_extension]") {
+	CompiledGrammarRule rule("Forwarded", nullptr);
+	MatchProcessLifetimeState lifetime;
+	lifetime.depth = 1;
+	lifetime.create_result = true;
+	NestedTestMatcher leaf(lifetime);
+	idx_t starts = 0;
+	vector<unique_ptr<ForwardingListTestMatcher>> lists;
+	for (idx_t i = 0; i < 4096; i++) {
+		auto list = make_uniq<ForwardingListTestMatcher>(starts);
+		list->SetRule(rule);
+		list->matchers.push_back(lists.empty() ? reference<Matcher>(leaf) : reference<Matcher>(*lists.back()));
+		lists.push_back(std::move(list));
+	}
+	for (auto mode : {MatchMode::BUILD_PARSE_RESULT, MatchMode::RECOGNIZE_ONLY}) {
+		vector<MatcherToken> tokens;
+		TokenIterator iterator(tokens);
+		vector<MatcherSuggestion> suggestions;
+		ParseResultAllocator allocator;
+		ArenaAllocator processes(Allocator::DefaultAllocator());
+		reference<uint64_t> guard(*processes.Make<uint64_t>(0x123456789abcdef0));
+		auto parent_bytes = processes.SizeInBytes();
+		idx_t max_position = 0;
+		MatchContext context(suggestions, allocator, processes, max_position, mode);
+		MatchState state(iterator, context);
+		MatchStack stack;
+		lifetime.throw_at_leaf = true;
+		starts = 0;
+		REQUIRE_THROWS_AS(stack.Execute({*lists.back(), state}), InvalidInputException);
+		REQUIRE(starts == lists.size());
+		REQUIRE(lifetime.active == 0);
+		REQUIRE(processes.SizeInBytes() == parent_bytes);
+		REQUIRE(guard.get() == 0x123456789abcdef0);
+
+		lifetime.throw_at_leaf = false;
+		starts = 0;
+		auto result = stack.Execute({*lists.back(), state});
+		REQUIRE(result.IsSuccess());
+		REQUIRE(starts == lists.size());
+		REQUIRE(lifetime.active == 0);
+		REQUIRE(lifetime.state_valid);
+		REQUIRE(processes.SizeInBytes() == parent_bytes);
+		REQUIRE(guard.get() == 0x123456789abcdef0);
+		REQUIRE(result.HasParseResult() == (mode == MatchMode::BUILD_PARSE_RESULT));
+		if (result.HasParseResult()) {
+			auto node = result.GetParseResult();
+			for (idx_t i = 0; i < lists.size(); i++) {
+				REQUIRE(node->GetRule().get() == &rule);
+				auto children = node->Cast<ListParseResult>().GetChildren();
+				REQUIRE(children.size() == 1);
+				node = children[0].get();
+			}
+			REQUIRE(node->Name() == "nested result");
+		}
+	}
+}
