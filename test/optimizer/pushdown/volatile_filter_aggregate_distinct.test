@@ -107,3 +107,27 @@ query II
 EXPLAIN SELECT p FROM agg GROUP BY p HAVING nextval('s1') <= 9 AND p >= 2;
 ----
 logical_opt	<REGEX>:.*nextval.*Aggregate.*Filters: p >= 2.*
+
+# a volatile filter inside a DISTINCT subquery stays below the DISTINCT when it is pulled up through a join
+
+statement ok
+CREATE TABLE halves AS SELECT 0.5::DOUBLE AS a FROM range(100);
+
+statement ok
+CREATE TABLE half AS SELECT 0.5::DOUBLE AS a;
+
+query II
+EXPLAIN SELECT count(*) FROM (SELECT DISTINCT a FROM halves WHERE random() < a) d JOIN half USING (a);
+----
+logical_opt	<REGEX>:.*Distinct.*random\(\) < a.*
+
+statement ok
+SET threads = 1;
+
+statement ok
+SELECT setseed(0.42);
+
+query I
+SELECT count(*) FROM (SELECT DISTINCT a FROM halves WHERE random() < a) d JOIN half USING (a);
+----
+1
