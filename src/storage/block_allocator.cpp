@@ -329,7 +329,7 @@ data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
 }
 
 void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) const {
-	deallocated_since_flush.fetch_add(size, std::memory_order_relaxed);
+	estimated_unflushed_memory.fetch_add(size, std::memory_order_relaxed);
 	if (!IsActive() || !IsInPool(pointer)) {
 		return allocator.FreeData(pointer, size);
 	}
@@ -368,7 +368,7 @@ void BlockAllocator::ThreadFlush(bool allocator_background_threads, idx_t thresh
 }
 
 void BlockAllocator::FlushAll(const optional_idx extra_memory) const {
-	deallocated_since_flush.store(0, std::memory_order_relaxed);
+	estimated_unflushed_memory.store(0, std::memory_order_relaxed);
 	if (IsActive() && IsEnabled() && extra_memory.IsValid()) {
 		FreeInternal(extra_memory.GetIndex());
 	}
@@ -377,21 +377,34 @@ void BlockAllocator::FlushAll(const optional_idx extra_memory) const {
 	}
 }
 
-idx_t BlockAllocator::GetDeallocatedSinceFlush() const {
-	return deallocated_since_flush.load(std::memory_order_relaxed);
+idx_t BlockAllocator::GetEstimatedUnflushedMemory() const {
+	return estimated_unflushed_memory.load(std::memory_order_relaxed);
 }
 
-bool BlockAllocator::TryFlushDeallocated(const idx_t threshold) const {
+bool BlockAllocator::TryFlushDeallocated(const idx_t threshold, const idx_t memory_limit,
+                                         const idx_t used_memory) const {
 	if (!SupportsFlush()) {
 		return false;
 	}
-	auto deallocated = deallocated_since_flush.load(std::memory_order_relaxed);
+	auto deallocated = estimated_unflushed_memory.load(std::memory_order_relaxed);
 	if (deallocated < threshold) {
 		return false;
 	}
-	// the thread that claims the accumulated amount performs the flush
-	if (!deallocated_since_flush.compare_exchange_strong(deallocated, 0, std::memory_order_relaxed)) {
+	// the thread that claims the accumulated amount checks whether a flush is needed
+	if (!estimated_unflushed_memory.compare_exchange_strong(deallocated, 0, std::memory_order_relaxed)) {
 		return false;
+	}
+	if (!IsActive()) {
+		const auto mapped_memory = allocator.GetMappedMemory();
+		if (mapped_memory.IsValid()) {
+			// Freed pages cannot occupy more than the allocator's entire mapped footprint.
+			const auto unflushed = MinValue(deallocated, mapped_memory.GetIndex());
+			if (used_memory + unflushed <= memory_limit) {
+				// Keep the upper bound in subsequent pressure checks, adding any concurrent frees.
+				estimated_unflushed_memory.fetch_add(unflushed, std::memory_order_relaxed);
+				return false;
+			}
+		}
 	}
 	FlushAll(deallocated);
 	return true;

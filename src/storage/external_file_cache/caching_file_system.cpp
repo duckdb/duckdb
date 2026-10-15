@@ -616,6 +616,12 @@ bool CachingFileHandle::TryGetNetworkThroughput(NetworkThroughputEstimate &resul
 
 void CachingFileHandle::ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location) {
 	auto handle = GetFileHandle();
+	if (handle->file_system.IsLocalFileSystem()) {
+		// Pre-fault local read buffers before the kernel fills them.
+		for (idx_t offset = 0; offset < nr_bytes; offset += 4096) {
+			buffer[offset] = 0;
+		}
+	}
 	const auto read_start = steady_clock::now();
 	handle->Read(context, buffer, nr_bytes, location);
 	auto cache_valid_until = handle->file_system.GetCacheValidUntil(*handle);

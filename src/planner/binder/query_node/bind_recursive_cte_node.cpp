@@ -42,6 +42,9 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	// names are picked from the LHS, unless aliases are explicitly specified
 	result.names = left.names;
 	for (idx_t i = 0; i < statement.aliases.size() && i < result.names.size(); i++) {
+		if (statement.aliases[i].empty()) {
+			throw BinderException("column alias cannot be empty");
+		}
 		result.names[i] = statement.aliases[i];
 	}
 
