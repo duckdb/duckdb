@@ -36,3 +36,27 @@ query I
 SELECT count(*) FROM read_parquet(['{TEST_DIR}/union_text.parquet', '{TEST_DIR}/union_bytes.parquet'], union_by_name = true) WHERE p = encode('café');
 ----
 2
+
+# the order of the files, NULL and empty values
+statement ok
+COPY (SELECT * FROM (VALUES (NULL, 4), ('', 5), ('ü', 6)) t(p, i)) TO '{TEST_DIR}/union_nulls.parquet';
+
+query III
+SELECT i, p, octet_length(p) FROM read_parquet(['{TEST_DIR}/union_bytes.parquet', '{TEST_DIR}/union_nulls.parquet'], union_by_name = true) ORDER BY i;
+----
+2	caf\xC3\xA9	5
+4	NULL	NULL
+5	(empty)	0
+6	\xC3\xBC	2
+
+# COPY into a BLOB column reads the text of the file as its bytes as well
+statement ok
+CREATE TABLE blobs (p BLOB, i INTEGER);
+
+statement ok
+COPY blobs FROM '{TEST_DIR}/union_text.parquet';
+
+query II
+SELECT p, p = encode('café') FROM blobs;
+----
+caf\xC3\xA9	true
