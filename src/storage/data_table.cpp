@@ -1222,6 +1222,10 @@ void DataTable::RevertAppendInternal(idx_t start_row) {
 
 void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
+	RevertAppendWithAppendLock(transaction, start_row, count);
+}
+
+void DataTable::RevertAppendWithAppendLock(DuckTransaction &transaction, idx_t start_row, idx_t count) {
 
 	// revert any appends to indexes
 	if (!info->indexes.Empty()) {

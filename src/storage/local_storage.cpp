@@ -4,6 +4,7 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
@@ -156,12 +157,8 @@ bool LocalTableStorage::IsBulkAppend() const {
 	return collection.GetTotalRows() >= collection.GetRowGroupSize();
 }
 
-ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
-                                             TableIndexList &index_list, const vector<LogicalType> &table_types,
-                                             row_t &start_row) {
-	// We only scan the indexed columns: mapped_column_ids lists them (sorted for a deterministic order),
-	// and the scan below produces index_chunk in that order, i.e., index_chunk.data[i] holds the data of
-	// the table's physical column mapped_column_ids[i].
+//! The indexed columns of index_list, sorted for a deterministic scan order.
+static vector<StorageIndex> GetIndexScanColumns(TableIndexList &index_list) {
 	D_ASSERT(!index_list.Empty());
 	auto indexed_columns = index_list.GetIndexedColumns();
 	vector<StorageIndex> mapped_column_ids;
@@ -169,6 +166,26 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		mapped_column_ids.emplace_back(col);
 	}
 	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
+	return mapped_column_ids;
+}
+
+//! Lets table_chunk reference the scanned indexed columns of index_chunk.
+static void ReferenceIndexedColumns(DataChunk &table_chunk, DataChunk &index_chunk,
+                                    const vector<StorageIndex> &mapped_column_ids) {
+	D_ASSERT(index_chunk.ColumnCount() == mapped_column_ids.size());
+	for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
+		auto col_id = mapped_column_ids[i].GetPrimaryIndex();
+		table_chunk.data[col_id].Reference(index_chunk.data[i]);
+	}
+}
+
+ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
+                                             TableIndexList &index_list, const vector<LogicalType> &table_types,
+                                             row_t &start_row, bool fatal_on_partial_modification) {
+	// We only scan the indexed columns: mapped_column_ids lists them (sorted for a deterministic order),
+	// and the scan below produces index_chunk in that order, i.e., index_chunk.data[i] holds the data of
+	// the table's physical column mapped_column_ids[i].
+	auto mapped_column_ids = GetIndexScanColumns(index_list);
 	auto checkpoint_id = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
 
 	// The bound expressions of the indexes (and their bound column references) are in relation to
@@ -179,13 +196,9 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 
 	ErrorData error;
 	for (auto &index_chunk : source.Chunks(transaction, mapped_column_ids)) {
-		D_ASSERT(index_chunk.ColumnCount() == mapped_column_ids.size());
-		for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
-			auto col_id = mapped_column_ids[i].GetPrimaryIndex();
-			table_chunk.data[col_id].Reference(index_chunk.data[i]);
-		}
-
-		error = index_list.Append(delete_indexes, table_chunk, start_row, index_append_mode, checkpoint_id);
+		ReferenceIndexedColumns(table_chunk, index_chunk, mapped_column_ids);
+		error = index_list.Append(delete_indexes, table_chunk, start_row, index_append_mode, checkpoint_id,
+		                          fatal_on_partial_modification);
 		if (error.HasError()) {
 			break;
 		}
@@ -206,8 +219,6 @@ void LocalTableStorage::AppendToTable(DuckTransaction &transaction, TableAppendS
 }
 
 void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state) {
-	// In this function, we might scan all table columns,
-	// as we might also append to the table itself (append_to_table).
 	auto &table = table_ref.get();
 	if (!table.HasIndexes()) {
 		// no indexes to append to
@@ -216,33 +227,55 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 	auto data_table_info = table.GetDataTableInfo();
 	auto &index_list = data_table_info->GetIndexes();
 	auto &collection = *row_groups->collection;
-	auto error = AppendToIndexes(transaction, collection, index_list, table.GetTypes(), append_state.current_row);
-	if (error.HasError()) {
-		// Revert all appended row IDs.
-		row_t current_row = append_state.row_start;
-		// Remove the data from the indexes, if any.
-		for (auto &chunk : collection.Chunks(transaction)) {
-			if (current_row >= append_state.current_row) {
-				// Finished deleting all rows from the index.
-				break;
-			}
-			// Remove the chunk.
-			try {
-				index_list.RevertAppend(chunk, current_row);
-			} catch (std::exception &ex) { // LCOV_EXCL_START
-				error = ErrorData(ex);
-				break;
-			} // LCOV_EXCL_STOP
-
-			current_row += UnsafeNumericCast<row_t>(chunk.size());
-		}
-
-#ifdef DEBUG
-		// Verify that our index memory is stable.
-		table.VerifyIndexBuffers();
-#endif
+	ErrorData error;
+	try {
+		error = AppendToIndexes(transaction, collection, index_list, table.GetTypes(), append_state.current_row, true);
+	} catch (std::exception &ex) {
+		// e.g., scanning the local collection failed: revert the chunks appended so far
+		error = ErrorData(ex);
+	}
+	if (!error.HasError()) {
+		return;
+	}
+	if (Exception::InvalidatesDatabase(error.Type())) {
+		// An index is in an unknown state: do not touch it again.
 		error.Throw();
 	}
+	// All chunks before append_state.current_row were appended to all indexes.
+	RevertIndexAppend(transaction, append_state.row_start, append_state.current_row);
+	error.Throw();
+}
+
+void LocalTableStorage::RevertIndexAppend(DuckTransaction &transaction, row_t row_start, row_t row_end) {
+	auto &table = table_ref.get();
+	if (!table.HasIndexes() || row_start >= row_end) {
+		return;
+	}
+	auto data_table_info = table.GetDataTableInfo();
+	auto &index_list = data_table_info->GetIndexes();
+	try {
+		auto mapped_column_ids = GetIndexScanColumns(index_list);
+		DataChunk table_chunk;
+		table_chunk.InitializeEmpty(table.GetTypes());
+		row_t current_row = row_start;
+		for (auto &index_chunk : row_groups->collection->Chunks(transaction, mapped_column_ids)) {
+			if (current_row >= row_end) {
+				break;
+			}
+			ReferenceIndexedColumns(table_chunk, index_chunk, mapped_column_ids);
+			index_list.RevertAppend(table_chunk, current_row);
+			current_row += UnsafeNumericCast<row_t>(index_chunk.size());
+		}
+	} catch (std::exception &ex) {
+		// The shared indexes can be partially reverted: we cannot continue.
+		throw FatalException("Failed to revert the index append of table \"%s\" during commit: %s",
+		                     table.GetTableName(), ErrorData(ex).Message());
+	}
+
+#ifdef DEBUG
+	// Verify that our index memory is stable.
+	table.VerifyIndexBuffers();
+#endif
 }
 
 PhysicalIndex LocalTableStorage::CreateOptimisticCollection(unique_ptr<OptimisticWriteCollection> collection) {
@@ -467,7 +500,7 @@ void LocalStorage::Append(LocalAppendState &state, DuckTableEntry &table_entry, 
 
 	if (!storage->append_indexes.Empty()) {
 		auto error = storage->append_indexes.Append(storage->delete_indexes, table_chunk, NumericCast<row_t>(base_id),
-		                                            storage->index_append_mode, optional_idx());
+		                                            storage->index_append_mode, optional_idx(), false);
 		if (error.HasError()) {
 			error.Throw();
 		}
@@ -493,7 +526,7 @@ void LocalStorage::LocalMerge(DataTable &table, DuckTableEntry &table_entry, Opt
 		// append data to indexes if required
 		row_t base_id = MAX_ROW_ID + NumericCast<row_t>(storage.GetCollection().GetNextRowId());
 		auto error = storage.AppendToIndexes(transaction, *collection.collection, storage.append_indexes,
-		                                     table.GetTypes(), base_id);
+		                                     table.GetTypes(), base_id, false);
 		if (error.HasError()) {
 			error.Throw();
 		}
@@ -562,6 +595,15 @@ void LocalStorage::Update(DataTable &table, DuckTableEntry &table_entry, Vector 
 	storage->GetCollection().Update(TransactionData::Unversioned(), table_entry, ids, column_ids, updates);
 }
 
+static void ThrowOnForcedFlushAppendFailure(DataTable &table) {
+	if (table.db.IsSystem() || table.db.IsTemporary()) {
+		return;
+	}
+	if (Settings::Get<DebugForceFlushAppendFailureSetting>(table.db.GetDatabase())) {
+		throw IOException("Forced flush append failure (debug_force_flush_append_failure)");
+	}
+}
+
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state) {
 	if (storage.is_dropped) {
 		storage.Rollback();
@@ -578,8 +620,9 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 
 	TableAppendState append_state;
 	table.AppendLock(transaction, append_state);
-	if (storage.IsBulkAppend() ||
-	    (append_state.row_start == 0 && storage.deleted_rows == 0 && !storage.WritesToDisk())) {
+	const bool merge_storage =
+	    storage.IsBulkAppend() || (append_state.row_start == 0 && storage.deleted_rows == 0 && !storage.WritesToDisk());
+	if (merge_storage) {
 		// bulk append (at least one full row group, no deletes): move over the storage directly.
 		// Appends to an empty table are also merged directly if the table cannot be written to
 		// disk (temporary / in-memory / read-only, e.g. WAL replay of a read-only attach) -
@@ -587,10 +630,6 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// row by row.
 		// first flush any outstanding blocks
 		storage.FlushBlocks();
-		// Append to the indexes.
-		storage.AppendToIndexes(transaction, append_state);
-		// finally move over the row groups
-		table.MergeStorage(storage.GetCollection(), commit_state);
 	} else {
 		// check if we have written data
 		// if we have, we cannot merge to disk after all
@@ -598,14 +637,57 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// this happens when rows were deleted after a bulk append, or when the optimistic writer
 		// flushed a partial row group that does not qualify as a bulk append
 		storage.Rollback();
-		// append to the indexes
-		storage.AppendToIndexes(transaction, append_state);
-		// after that is successful - append to the table
-		storage.AppendToTable(transaction, append_state);
 	}
+	// Append to the indexes. On failure, the indexes are unchanged or the database is invalidated.
+	storage.AppendToIndexes(transaction, append_state);
 	// table_entry is set through the append path (InitializeAppend/Append/LocalMerge/Alter)
 	D_ASSERT(storage.table_entry);
-	transaction.PushAppend(*storage.table_entry, NumericCast<idx_t>(append_state.row_start), append_count);
+	auto row_start = NumericCast<idx_t>(append_state.row_start);
+	// Until the append is in the undo buffer, a rollback does not revert it: we revert failures here.
+	if (merge_storage) {
+		try {
+			// move over the row groups
+			table.MergeStorage(storage.GetCollection(), commit_state);
+		} catch (std::exception &ex) {
+			// MergeStorage consumes the local row groups, so we can neither retry nor revert the index append.
+			throw FatalException("Failed to merge the appended rows into table \"%s\" during commit: %s",
+			                     table.GetTableName(), ErrorData(ex).Message());
+		}
+		try {
+			ThrowOnForcedFlushAppendFailure(table);
+			transaction.PushAppend(*storage.table_entry, row_start, append_count);
+		} catch (std::exception &ex) {
+			// The merge succeeded: all rows are in the shared table, so we revert them from there.
+			ErrorData error(ex);
+			try {
+				table.RevertAppendWithAppendLock(transaction, row_start, append_count);
+			} catch (std::exception &revert_ex) {
+				throw FatalException("Failed to revert the append to table \"%s\" during commit: %s",
+				                     table.GetTableName(), ErrorData(revert_ex).Message());
+			}
+			error.Throw();
+		}
+	} else {
+		try {
+			// append to the table
+			storage.AppendToTable(transaction, append_state);
+			ThrowOnForcedFlushAppendFailure(table);
+			transaction.PushAppend(*storage.table_entry, row_start, append_count);
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			// Revert the table append first: it frees the copied rows, which gives the index
+			// revert headroom if we failed due to memory pressure.
+			try {
+				table.RevertAppendInternal(row_start);
+			} catch (std::exception &revert_ex) {
+				throw FatalException("Failed to revert the append to table \"%s\" during commit: %s",
+				                     table.GetTableName(), ErrorData(revert_ex).Message());
+			}
+			storage.RevertIndexAppend(transaction, append_state.row_start,
+			                          append_state.row_start + NumericCast<row_t>(append_count));
+			error.Throw();
+		}
+	}
 
 #ifdef DEBUG
 	// Verify that our index memory is stable.

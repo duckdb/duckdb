@@ -99,7 +99,11 @@ public:
 	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state);
 	void AppendToTable(DuckTransaction &transaction, TableAppendState &append_state);
 	ErrorData AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
-	                          const vector<LogicalType> &table_types, row_t &start_row);
+	                          const vector<LogicalType> &table_types, row_t &start_row,
+	                          bool fatal_on_partial_modification);
+	//! Removes the rows [row_start, row_end) of this storage from the table's indexes; throws a FatalException
+	//! if that fails.
+	void RevertIndexAppend(DuckTransaction &transaction, row_t row_start, row_t row_end);
 	void AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk);
 
 	//! Create an optimistic row group collection for this table.

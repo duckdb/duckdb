@@ -801,7 +801,7 @@ void RowGroupCollection::RevertAppendInternal(idx_t new_end_idx) {
 		return;
 	}
 	auto last_segment = row_groups->GetLastSegment(l);
-	if (last_segment->GetRowEnd() <= new_end_idx) {
+	if (last_segment->GetRowEnd() < new_end_idx) {
 		return;
 	}
 	D_ASSERT(new_end_idx >= row_groups->GetBaseRowId());
@@ -816,8 +816,9 @@ void RowGroupCollection::RevertAppendInternal(idx_t new_end_idx) {
 			break;
 		}
 		// this row group - at least partially - belongs to the new set
-		if (row_end > new_end_idx) {
+		if (row_end >= new_end_idx) {
 			// this is the last row group - have to revert WITHIN it
+			// its columns can hold rows past its count if the append failed before FinalizeAppend
 			entry.GetNode().RevertAppend(new_end_idx - row_start);
 		}
 		new_total_rows += entry.GetNode().count;

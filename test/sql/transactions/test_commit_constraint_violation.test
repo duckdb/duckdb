@@ -1,0 +1,58 @@
+# name: test/sql/transactions/test_commit_constraint_violation.test
+# description: A duplicate key that is only detected at COMMIT fails the transaction without invalidating the database
+# group: [transactions]
+
+statement ok
+CREATE TABLE pk (k INTEGER PRIMARY KEY, v VARCHAR);
+
+statement ok
+INSERT INTO pk VALUES (0, 'seed');
+
+statement ok con1
+BEGIN;
+
+statement ok con2
+BEGIN;
+
+statement ok con1
+INSERT INTO pk VALUES (1, 'first');
+
+statement ok con2
+INSERT INTO pk VALUES (1, 'second'), (2, 'second');
+
+statement ok con1
+COMMIT;
+
+# The duplicate key is only detected when con2 appends to the shared index at COMMIT.
+statement error con2
+COMMIT;
+----
+<REGEX>:.*Failed to commit.*duplicate key.*
+
+# The failed commit must not invalidate the database.
+query II
+SELECT count(*), count(DISTINCT k) FROM pk;
+----
+2	2
+
+query I
+SELECT v FROM pk WHERE k = 1;
+----
+first
+
+# Key 2 was reverted at commit and must be insertable again.
+statement ok
+INSERT INTO pk VALUES (2, 'retry');
+
+statement error
+INSERT INTO pk VALUES (1, 'duplicate');
+----
+violates primary key constraint
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT count(*), max(k) FROM pk;
+----
+3	2

@@ -1,0 +1,72 @@
+# name: test/sql/transactions/test_commit_oom_index_revert.test
+# description: A COMMIT that runs out of memory after appending to the PRIMARY KEY index reverts the index append
+# group: [transactions]
+
+require no_alternative_verify
+
+require skip_reload
+
+require no_force_storage
+
+require vector_size 2048
+
+# No spilling: the commit-time append must fail once memory_limit is reached.
+statement ok
+SET temp_directory = '';
+
+statement ok
+SET threads = 1;
+
+statement ok
+CREATE TABLE pk (k INTEGER PRIMARY KEY, payload VARCHAR);
+
+statement ok
+INSERT INTO pk SELECT i, 'x' FROM range(1000) r(i);
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO pk SELECT i, repeat('y', 1000) FROM range(1000, 51000) r(i);
+
+# Local storage holds ~52MB; the index append fits, but copying ~50MB into the table does not.
+statement ok
+SET memory_limit = '90MB';
+
+statement error
+COMMIT;
+----
+could not allocate block
+
+statement ok
+SET memory_limit = '1GB';
+
+query II
+SELECT count(*), max(k) FROM pk;
+----
+1000	999
+
+# Keys of the failed transaction must not be left in the index.
+statement ok
+INSERT INTO pk VALUES (1500, 'committed');
+
+statement ok
+INSERT INTO pk SELECT i, 'z' FROM range(1000, 51000) r(i) WHERE i <> 1500;
+
+query II
+SELECT count(*), count(DISTINCT k) FROM pk;
+----
+51000	51000
+
+statement error
+INSERT INTO pk VALUES (1500, 'duplicate');
+----
+<REGEX>:Constraint Error.*Duplicate key.*
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT payload FROM pk WHERE k = 1500;
+----
+committed

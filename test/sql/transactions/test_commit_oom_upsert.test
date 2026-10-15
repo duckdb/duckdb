@@ -1,0 +1,76 @@
+# name: test/sql/transactions/test_commit_oom_upsert.test
+# description: A COMMIT of a DELETE + INSERT upsert that runs out of memory reverts the index append
+# group: [transactions]
+
+require no_alternative_verify
+
+require skip_reload
+
+require no_force_storage
+
+require vector_size 2048
+
+# No spilling: the commit-time append must fail once memory_limit is reached.
+statement ok
+SET temp_directory = '';
+
+statement ok
+SET threads = 1;
+
+statement ok
+CREATE TABLE upsert (k INTEGER PRIMARY KEY, payload VARCHAR);
+
+statement ok
+INSERT INTO upsert SELECT i, 'x' FROM range(1000) r(i);
+
+statement ok
+BEGIN;
+
+statement ok
+DELETE FROM upsert WHERE k < 10;
+
+statement ok
+INSERT INTO upsert SELECT i, repeat('y', 1000) FROM range(0, 10) r(i) UNION ALL SELECT i, repeat('y', 1000) FROM range(1000, 51000) r(i);
+
+# Local storage holds ~52MB; the index append fits, but copying ~50MB into the table does not.
+statement ok
+SET memory_limit = '90MB';
+
+statement error
+COMMIT;
+----
+could not allocate block
+
+statement ok
+SET memory_limit = '1GB';
+
+query III
+SELECT count(*), max(k), count(*) FILTER (payload = 'x') FROM upsert;
+----
+1000	999	1000
+
+# Re-inserted keys must be back to their single committed row, and new keys must not be left in the index.
+statement ok
+BEGIN;
+
+statement ok
+DELETE FROM upsert WHERE k < 10;
+
+statement ok
+INSERT INTO upsert SELECT i, 'z' FROM range(0, 10) r(i) UNION ALL SELECT i, 'z' FROM range(1000, 51000) r(i);
+
+statement ok
+COMMIT;
+
+query III
+SELECT count(*), count(DISTINCT k), count(*) FILTER (payload = 'z') FROM upsert;
+----
+51000	51000	50010
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT count(*), count(*) FILTER (payload = 'x') FROM upsert;
+----
+51000	990

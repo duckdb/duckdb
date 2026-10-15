@@ -1358,7 +1358,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 			// Deleted index entries are removed when the replay transaction commits. Duplicates can temporarily
 			// exist, similar to tuple WAL replay.
 			auto error = indexes.Append(nullptr, chunk, NumericCast<row_t>(current_row_id),
-			                            IndexAppendMode::INSERT_DUPLICATES, optional_idx());
+			                            IndexAppendMode::INSERT_DUPLICATES, optional_idx(), false);
 			if (error.HasError()) {
 				throw InternalException("Failed to append to index during ROW_GROUP_DATA WAL replay: %s",
 				                        error.Message());

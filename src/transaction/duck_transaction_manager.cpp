@@ -347,6 +347,15 @@ void DuckTransactionManager::CleanupTransactions() {
 	}
 }
 
+//! A non-initial database can be detached and reattached, so we scope its invalidation to the database.
+static void InvalidateDatabase(AttachedDatabase &db, const string &reason) {
+	if (db.IsInitialDatabase()) {
+		ValidChecker::Invalidate(db.GetDatabase(), reason);
+	} else {
+		ValidChecker::Invalidate(db, reason);
+	}
+}
+
 ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	// flush the transaction-local blocks of bulk appends before taking any commit locks (see PreFlushOptimisticBlocks)
@@ -449,12 +458,18 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	if (error.HasError()) {
 		DUCKDB_LOG(context, TransactionLogType, db, "Rollback (after failed commit)", info.commit_id);
 
+		if (Exception::InvalidatesDatabase(error.Type())) {
+			// Invalidate while we hold the commit locks, so that no checkpoint can persist the state.
+			InvalidateDatabase(db, error.RawMessage());
+		}
+
 		// COMMIT not successful: ROLLBACK.
 		checkpoint_decision = CheckpointDecision(error.Message());
 		transaction.commit_id = 0;
 
 		auto rollback_error = transaction.Rollback();
 		if (rollback_error.HasError()) {
+			InvalidateDatabase(db, rollback_error.RawMessage());
 			throw FatalException(
 			    "Failed to rollback transaction. Cannot continue operation.\nOriginal Error: %s\nRollback Error: %s",
 			    error.Message(), rollback_error.Message());

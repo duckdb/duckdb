@@ -124,30 +124,47 @@ void TableIndexList::Append(DataChunk &chunk, Vector &row_ids) {
 }
 
 ErrorData TableIndexList::Append(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start,
-                                 IndexAppendMode append_mode, optional_idx active_checkpoint) {
+                                 IndexAppendMode append_mode, optional_idx active_checkpoint,
+                                 bool fatal_on_partial_modification) {
 	Vector row_ids(LogicalType::ROW_TYPE);
 	VectorOperations::GenerateSequence(row_ids, chunk.size(), row_start, 1);
 
 	annotated_lock_guard lock(index_entries_lock);
 	vector<shared_ptr<IndexEntry>> already_appended;
+	// Reserve up front: an entry that was appended to must be recorded for the revert.
+	already_appended.reserve(index_entries.size());
 
 	ErrorData error;
 	for (const auto &entry : index_entries) {
-		shared_ptr<IndexEntry> delete_entry;
-		if (delete_indexes && entry->IsUnique()) {
-			delete_entry = delete_indexes->FindEntry(*entry);
+		try {
+			shared_ptr<IndexEntry> delete_entry;
+			if (delete_indexes && entry->IsUnique()) {
+				delete_entry = delete_indexes->FindEntry(*entry);
+			}
+			error = entry->Append(chunk, row_ids, delete_entry, append_mode, active_checkpoint,
+			                      fatal_on_partial_modification);
+		} catch (std::exception &ex) {
+			// e.g., creating a checkpoint delta failed: the entries appended so far must still be reverted
+			error = ErrorData(ex);
 		}
-		error = entry->Append(chunk, row_ids, delete_entry, append_mode, active_checkpoint);
 		if (error.HasError()) {
 			break;
 		}
 		already_appended.push_back(entry);
 	}
 
-	if (error.HasError()) {
+	if (!error.HasError() || Exception::InvalidatesDatabase(error.Type())) {
+		return error;
+	}
+	try {
 		for (auto &entry : already_appended) {
 			entry->RevertAppend(chunk, row_ids);
 		}
+	} catch (std::exception &ex) {
+		if (!fatal_on_partial_modification) {
+			throw;
+		}
+		throw FatalException("Failed to revert an index append: %s", ErrorData(ex).Message());
 	}
 	return error;
 }

@@ -1,0 +1,64 @@
+# name: test/sql/transactions/test_commit_oom_table_append.test
+# description: A COMMIT that runs out of memory while appending to a table without indexes reverts the append
+# group: [transactions]
+
+require no_alternative_verify
+
+require skip_reload
+
+require no_force_storage
+
+require vector_size 2048
+
+# No spilling: the commit-time append must fail once memory_limit is reached.
+statement ok
+SET temp_directory = '';
+
+statement ok
+SET threads = 1;
+
+statement ok
+CREATE TABLE t (k INTEGER, payload VARCHAR);
+
+statement ok
+INSERT INTO t SELECT i, 'x' FROM range(1000) r(i);
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO t SELECT i, repeat('y', 1000) FROM range(1000, 41000) r(i);
+
+# Local storage holds ~40MB, the commit needs another ~40MB to copy it into the table.
+statement ok
+SET memory_limit = '64MB';
+
+statement error
+COMMIT;
+----
+could not allocate block
+
+statement ok
+SET memory_limit = '1GB';
+
+query II
+SELECT count(*), max(k) FROM t;
+----
+1000	999
+
+# The next append must not build on the column data of the failed append.
+statement ok
+INSERT INTO t VALUES (1500, 'committed');
+
+query III
+SELECT count(*), max(k), count(*) FILTER (payload = 'committed') FROM t;
+----
+1001	1500	1
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT count(*), count(*) FILTER (payload = 'committed') FROM t;
+----
+1001	1
