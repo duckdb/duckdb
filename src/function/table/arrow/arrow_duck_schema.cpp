@@ -345,6 +345,10 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 		// storage-side conversion, not by the output type.
 		return type;
 	}
+	if (RunEndEncoded()) {
+		// the type info holds the run ends and the values, not the children of this type
+		return type;
+	}
 	// Dictionaries can exist in arbitrarily nested schemas
 	// have to reconstruct the type
 	auto id = type.id();

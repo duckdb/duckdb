@@ -115,6 +115,46 @@ struct ListColumn {
 	ArrowArray array {};
 };
 
+// Schema of a run-end encoded column whose values have the given nested format over an int32 child.
+struct NestedRunEndSchema {
+	explicit NestedRunEndSchema(const char *values_format) {
+		child_schema.format = "i";
+		child_schema.name = "item";
+		child_schema.release = ReleaseSchema;
+		values_children[0] = &child_schema;
+		values_schema.format = values_format;
+		values_schema.name = "values";
+		values_schema.n_children = 1;
+		values_schema.children = values_children;
+		values_schema.release = ReleaseSchema;
+		run_ends_schema.format = "i";
+		run_ends_schema.name = "run_ends";
+		run_ends_schema.release = ReleaseSchema;
+		schema_children[0] = &run_ends_schema;
+		schema_children[1] = &values_schema;
+		schema.format = "+r";
+		schema.name = "a";
+		schema.n_children = 2;
+		schema.children = schema_children;
+		schema.release = ReleaseSchema;
+	}
+	NestedRunEndSchema(const NestedRunEndSchema &) = delete;
+
+	ArrowSchema *values_children[1];
+	ArrowSchema *schema_children[2];
+	ArrowSchema child_schema {};
+	ArrowSchema values_schema {};
+	ArrowSchema run_ends_schema {};
+	ArrowSchema schema {};
+};
+
+// The type arrow_scan binds the column as.
+LogicalType BoundType(ClientContext &context, ArrowSchema &col_schema) {
+	ArrowTableSchema table;
+	table.AddColumn(0, ArrowType::GetArrowLogicalType(context, col_schema), "a");
+	return table.GetTypes()[0];
+}
+
 bool ScanMatches(ArrowSchema &col_schema, ArrowArray &col_array, const string &query) {
 	ArrowSchema *schema_children[1] = {&col_schema};
 	ArrowSchema record_schema {};
@@ -180,4 +220,18 @@ TEST_CASE("Arrow scan of LIST(run-end encoded) across chunks with a leading chil
 	    col.schema, col.array,
 	    "SELECT [CASE WHEN s // 1000 = 1 THEN NULL ELSE LEAST(s // 1000, 5) + 1 END::INT FOR s IN [3 + 2 * r, 4 + 2 * "
 	    "r]] FROM range(3000) t(r)"));
+}
+
+TEST_CASE("Arrow run-end encoded columns of nested values bind as the values type", "[arrow]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	arrow_run_end_encoded_test::NestedRunEndSchema fixed_size_list("+w:2");
+	REQUIRE(arrow_run_end_encoded_test::BoundType(*con.context, fixed_size_list.schema) ==
+	        LogicalType::ARRAY(LogicalType::INTEGER, 2));
+	arrow_run_end_encoded_test::NestedRunEndSchema list("+l");
+	REQUIRE(arrow_run_end_encoded_test::BoundType(*con.context, list.schema) ==
+	        LogicalType::LIST(LogicalType::INTEGER));
+	arrow_run_end_encoded_test::NestedRunEndSchema struct_values("+s");
+	REQUIRE(arrow_run_end_encoded_test::BoundType(*con.context, struct_values.schema) ==
+	        LogicalType::STRUCT({{"item", LogicalType::INTEGER}}));
 }
