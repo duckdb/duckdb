@@ -35,6 +35,9 @@ public:
 		return *tokenizer;
 	}
 	optional_ptr<const CompiledGrammarRule> GetRule(const string &rule_name) const;
+	optional_ptr<const CompiledGrammarRule> GetRule(TransformRuleId rule_id) const {
+		return transform_rules[static_cast<idx_t>(rule_id)];
+	}
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);
@@ -50,6 +53,8 @@ private:
 	unique_ptr<PEGKeywordHelper> keyword_helper;
 	unique_ptr<Tokenizer> tokenizer;
 	case_insensitive_map_t<unique_ptr<CompiledGrammarRule>> rules;
+	//! Generated transformer references resolved against this grammar's final rules.
+	vector<optional_ptr<const CompiledGrammarRule>> transform_rules;
 	const Matcher &program_matcher;
 	const Matcher &top_level_statement_matcher;
 };

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/parser/peg/transformer/transform_rule_id.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/parser/peg/ast/unpivot_name_values.hpp"
 #include "duckdb/parser/qualified_name_set.hpp"
@@ -460,6 +461,7 @@ public:
 	}
 
 	const CompiledGrammarRule &GetRule(const string &rule_name) const;
+	const CompiledGrammarRule &GetRule(TransformRuleId rule_id) const;
 
 public:
 	template <typename T>
