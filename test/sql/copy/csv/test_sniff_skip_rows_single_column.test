@@ -2,23 +2,18 @@
 # description: The sniffer does not skip the rows of a single column file for a delimiter seen only in its last row
 # group: [csv]
 
-statement ok
-COPY (SELECT l FROM (VALUES (1, 'c0'), (2, 'v0'), (3, 'a;b')) t(i, l) ORDER BY i) TO '{TEST_DIR}/semicolon.csv' (FORMAT CSV, QUOTE '', HEADER 0);
-
-query I
-SELECT c0 FROM read_csv('{TEST_DIR}/semicolon.csv');
-----
-v0
-a;b
+foreach delimiter ; |
 
 statement ok
-COPY (SELECT l FROM (VALUES (1, 'c0'), (2, 'v0'), (3, 'a|b')) t(i, l) ORDER BY i) TO '{TEST_DIR}/pipe.csv' (FORMAT CSV, QUOTE '', HEADER 0);
+COPY (SELECT l FROM (VALUES (1, 'c0'), (2, 'v0'), (3, 'a{delimiter}b')) t(i, l) ORDER BY i) TO '{TEST_DIR}/last_row.csv' (FORMAT CSV, QUOTE '', HEADER 0);
 
 query I
-SELECT c0 FROM read_csv('{TEST_DIR}/pipe.csv');
+SELECT c0 = 'a{delimiter}b' FROM read_csv('{TEST_DIR}/last_row.csv');
 ----
-v0
-a|b
+false
+true
+
+endloop
 
 statement ok
 COPY (SELECT l FROM (VALUES (1, 'c0'), (2, 'v0'), (3, 'a' || chr(9) || 'b')) t(i, l) ORDER BY i) TO '{TEST_DIR}/tab.csv' (FORMAT CSV, QUOTE '', HEADER 0);
@@ -89,3 +84,31 @@ SELECT id, name FROM read_csv('{TEST_DIR}/long_notes.csv');
 ----
 1	a
 2	b
+
+# an empty line before a single row is not a skipped row
+statement ok
+COPY (SELECT l FROM (VALUES (1, ''), (2, '1;2')) t(i, l) ORDER BY i) TO '{TEST_DIR}/empty_line.csv' (FORMAT CSV, QUOTE '', HEADER 0);
+
+query II
+FROM read_csv('{TEST_DIR}/empty_line.csv', header = false);
+----
+1	2
+
+# a set delimiter and null padding keep their rows
+statement ok
+COPY (SELECT l FROM (VALUES (1, 'note'), (2, '1;2')) t(i, l) ORDER BY i) TO '{TEST_DIR}/set_delimiter.csv' (FORMAT CSV, QUOTE '', HEADER 0);
+
+query II
+FROM read_csv('{TEST_DIR}/set_delimiter.csv', delim = ';', header = false);
+----
+1	2
+
+statement ok
+COPY (SELECT l FROM (VALUES (1, '1'), (2, '2'), (3, '3;4')) t(i, l) ORDER BY i) TO '{TEST_DIR}/null_padding.csv' (FORMAT CSV, QUOTE '', HEADER 0);
+
+query II
+FROM read_csv('{TEST_DIR}/null_padding.csv', delim = ';', header = false, null_padding = true);
+----
+1	NULL
+2	NULL
+3	4

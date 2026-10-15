@@ -220,7 +220,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	idx_t dirty_notes = 0;
 	idx_t dirty_notes_minus_comments = 0;
 	idx_t empty_lines = 0;
-	// whether the rows before the header hold the delimiter
+	// data rows skipped as dirty notes, and whether any of them holds the delimiter
+	idx_t skipped_rows = 0;
 	bool dirty_notes_hold_delimiter = false;
 	if (sniffed_column_counts.error) {
 		if (!scanner->error_handler->HasError(MAXIMUM_LINE_SIZE)) {
@@ -282,6 +283,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 				sniffed_column_counts.state_machine.dialect_options.rows_until_header = row;
 			}
 			padding_count = 0;
+			skipped_rows = row - comment_rows;
 			dirty_notes_hold_delimiter = num_cols > 1;
 			// we use the maximum number of num_cols that we find
 			num_cols = sniffed_column_counts[row].number_of_columns;
@@ -340,10 +342,11 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// If there are more than one consistent row.
 	const bool more_than_one_row = consistent_rows > 1;
 
-	// If rows without the delimiter are skipped, it shows in more than one row, or the file goes on past the sample.
-	const bool skipped_rows_are_notes = dirty_notes_minus_comments == 0 || dirty_notes_hold_delimiter ||
-	                                    more_than_one_row ||
-	                                    sniffed_column_counts.result_position == sniffed_column_counts.result_size;
+	// If data rows without the sniffed delimiter are skipped, the delimiter shows in more than one row, or the scanner
+	// did not reach the end of the file. A set delimiter, or null padding that skips no rows, is always accepted.
+	const bool skipped_rows_are_notes = skipped_rows == 0 || dirty_notes_hold_delimiter || more_than_one_row ||
+	                                    !scanner->FinishedFile() || options.null_padding ||
+	                                    options.dialect_options.state_machine_options.delimiter.IsSetByUser();
 
 	// If there are more than one column.
 	const bool more_than_one_column = num_cols > 1;
