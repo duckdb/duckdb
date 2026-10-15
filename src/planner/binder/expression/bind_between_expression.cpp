@@ -6,26 +6,8 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
-
-//! The input is only duplicated into two comparisons when it is small - duplicating large operands makes nested
-//! BETWEEN expressions grow exponentially
-static constexpr idx_t MAX_DUPLICATED_BETWEEN_NODES = 32;
-
-static bool IsSmallExpression(const Expression &expr, idx_t &node_count) {
-	if (++node_count > MAX_DUPLICATED_BETWEEN_NODES) {
-		return false;
-	}
-	bool small = true;
-	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
-		if (small && !IsSmallExpression(child, node_count)) {
-			small = false;
-		}
-	});
-	return small;
-}
 
 BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
@@ -65,10 +47,8 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	PushCollation(context, lower, input_type);
 	PushCollation(context, upper, input_type);
 
-	idx_t input_node_count = 0;
-	if (!input->IsVolatile() && !input->HasParameter() && !input->HasSubquery() &&
-	    IsSmallExpression(*input, input_node_count)) {
-		// the expression does not have side effects and can be copied: create two comparisons
+	if (input->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		// the input is a column reference and can be copied cheaply: create two comparisons
 		// the reason we do this is that individual comparisons are easier to handle in optimizers
 		// if both comparisons remain they will be folded together again into a single BETWEEN in the optimizer
 		auto left_compare = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
