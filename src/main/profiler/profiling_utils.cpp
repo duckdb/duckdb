@@ -5,8 +5,8 @@ namespace duckdb {
 
 void QueryMetrics::FinalizeMetrics(GatheredMetrics &info) {
 	info.SetMetric<MetricQuerySQL>(query_sql);
-	for (const auto &[key, ns] : string_timings) {
-		info.SetMetric(key, static_cast<double>(ns) / 1e9);
+	for (const auto &[key, timing] : string_timings) {
+		info.SetMetric(key, static_cast<double>(timing.duration) / 1e9);
 	}
 	for (const auto &[key, count] : string_counters) {
 		info.SetMetric(key, count);

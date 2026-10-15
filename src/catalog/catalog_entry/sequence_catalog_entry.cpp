@@ -6,6 +6,7 @@
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 
 #include <algorithm>
@@ -111,6 +112,22 @@ void SequenceCatalogEntry::ReplayValue(uint64_t v_usage_count, int64_t v_counter
 		data.counter = v_counter;
 		data.last_value = last_value;
 	}
+}
+
+void SequenceCatalogEntry::DeriveLastValue() {
+	lock_guard<mutex> seqlock(lock);
+	if (data.last_value || data.usage_count == 0) {
+		return;
+	}
+	int64_t last_value;
+	if (!TrySubtractOperator::Operation(data.counter, data.increment, last_value)) {
+		return;
+	}
+	// a counter that wrapped around in a cycle does not tell us the last value
+	if (last_value < data.min_value || last_value > data.max_value) {
+		return;
+	}
+	data.last_value = last_value;
 }
 
 unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
