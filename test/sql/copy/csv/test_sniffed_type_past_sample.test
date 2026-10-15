@@ -103,6 +103,44 @@ SELECT max(b) FROM read_csv('{TEST_DIR}/past_sample_two_columns.csv', sample_siz
 ----
 Could not convert string "1.5" to 'BIGINT'
 
+# positional types are given by the user for their columns only
+query I
+SELECT max(a) FROM read_csv('{TEST_DIR}/past_sample_two_columns.csv', sample_size = 2048, types = ['BIGINT'])
+----
+2
+
+statement error
+SELECT max(b) FROM read_csv('{TEST_DIR}/past_sample_two_columns.csv', sample_size = 2048, types = ['BIGINT'])
+----
+Could not convert string "1.5" to 'BIGINT'
+
+# other sniffed types
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/past_sample_decimal.csv', sample_size = 2048, auto_type_candidates = ['INTEGER', 'VARCHAR'])
+----
+Could not convert string "1.5" to 'INTEGER'
+
+statement ok
+COPY (SELECT CASE WHEN i < 2048 THEN '99999999999999999999' ELSE '1.5' END AS c0 FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_hugeint.csv' (HEADER, QUOTE '');
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/past_sample_hugeint.csv', sample_size = 2048)
+----
+Could not convert string "1.5" to 'HUGEINT'
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/past_sample_double.csv', sample_size = 2048, auto_type_candidates = ['FLOAT', 'VARCHAR'])
+----
+Could not convert string "+2.5" to 'FLOAT'
+
+statement ok
+COPY (SELECT CASE WHEN i < 2048 THEN '10:00:00' ELSE '10:00:00+02' END AS c0 FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_time.csv' (HEADER, QUOTE '');
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/past_sample_time.csv', sample_size = 2048)
+----
+Could not convert string "10:00:00+02" to 'TIME'
+
 # files that order their columns differently
 statement ok
 COPY (SELECT '1' AS a, '1' AS b FROM range(10)) TO '{TEST_DIR}/columns_ab.csv' (HEADER);
@@ -125,6 +163,11 @@ SELECT max(a), max(b) FROM read_csv(['{TEST_DIR}/columns_ab.csv', '{TEST_DIR}/co
 ----
 2	2
 
+statement error
+SELECT max(a), max(b) FROM read_csv(['{TEST_DIR}/columns_ab.csv', '{TEST_DIR}/columns_ba.csv'], types = {'a': 'BIGINT'}, sample_size = 2048, union_by_name = true)
+----
+<REGEX>:.*converting column "b".*
+
 # BIGNUM values are checked as the sniffer checks them
 statement ok
 COPY (SELECT CASE WHEN i < 2048 THEN '1' || repeat('0', 40) ELSE '1.5' END AS n FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_bignum.csv' (HEADER, QUOTE '');
@@ -133,6 +176,11 @@ statement error
 SELECT * FROM read_csv('{TEST_DIR}/past_sample_bignum.csv', sample_size = 2048)
 ----
 Could not convert string "1.5" to 'BIGNUM'
+
+query I
+SELECT max(n) FROM read_csv('{TEST_DIR}/past_sample_bignum.csv', sample_size = 2048, types = {'n': 'BIGNUM'})
+----
+10000000000000000000000000000000000000000
 
 # a comma decimal separator is refined as strictly as the first chunk is sniffed
 statement ok
