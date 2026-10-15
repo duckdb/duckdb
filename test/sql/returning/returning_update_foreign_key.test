@@ -132,6 +132,11 @@ UPDATE generated SET v = 'x' RETURNING id;
 ----
 Incorrect value for generated column
 
+statement error
+MERGE INTO generated USING (SELECT 1 AS id) src ON generated.id = src.id WHEN MATCHED THEN UPDATE SET v = 'y' RETURNING id;
+----
+Incorrect value for generated column
+
 query III
 SELECT * FROM generated;
 ----
