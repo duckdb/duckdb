@@ -237,6 +237,9 @@ bool ExtensionHelper::TryAutoLoadAvailableExtension(DatabaseInstance &instance, 
 		return true;
 	}
 	try {
+		if (!Settings::Get<AutoloadKnownExtensionsSetting>(instance)) {
+			return false;
+		}
 		auto &fs = FileSystem::GetFileSystem(instance);
 		ExtensionHelper::LoadExternalExtension(instance, fs, AutoLoadOptions(extension_name));
 		return true;

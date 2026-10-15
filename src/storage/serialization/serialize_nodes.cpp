@@ -18,6 +18,7 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/queue.hpp"
+#include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/planner/tableref/bound_pivotref.hpp"
 #include "duckdb/parser/column_definition.hpp"
@@ -434,6 +435,46 @@ Literal Literal::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
+void MatchRecognizeConfig::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(100, "partition_expressions", partition_expressions);
+	serializer.WritePropertyWithDefault<vector<OrderByNode>>(101, "order_by_expressions", order_by_expressions);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(102, "measures_expression_list", measures_expression_list);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "defines_expression_list", defines_expression_list);
+	serializer.WriteProperty<MatchRecognizeRows>(104, "rows_per_match", rows_per_match);
+	serializer.WriteProperty<MatchRecognizeAfterMatch>(105, "after_match", after_match);
+	serializer.WritePropertyWithDefault<string>(106, "after_match_variable", after_match_variable);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(107, "pattern", pattern);
+	serializer.WritePropertyWithDefault<vector<MatchRecognizeSubset>>(108, "subsets", subsets);
+	serializer.WritePropertyWithDefault<bool>(109, "define_auto", define_auto);
+}
+
+unique_ptr<MatchRecognizeConfig> MatchRecognizeConfig::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<MatchRecognizeConfig>(new MatchRecognizeConfig());
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(100, "partition_expressions", result->partition_expressions);
+	deserializer.ReadPropertyWithDefault<vector<OrderByNode>>(101, "order_by_expressions", result->order_by_expressions);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(102, "measures_expression_list", result->measures_expression_list);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "defines_expression_list", result->defines_expression_list);
+	deserializer.ReadProperty<MatchRecognizeRows>(104, "rows_per_match", result->rows_per_match);
+	deserializer.ReadProperty<MatchRecognizeAfterMatch>(105, "after_match", result->after_match);
+	deserializer.ReadPropertyWithDefault<string>(106, "after_match_variable", result->after_match_variable);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(107, "pattern", result->pattern);
+	deserializer.ReadPropertyWithDefault<vector<MatchRecognizeSubset>>(108, "subsets", result->subsets);
+	deserializer.ReadPropertyWithDefault<bool>(109, "define_auto", result->define_auto);
+	return result;
+}
+
+void MatchRecognizeSubset::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "name", name);
+	serializer.WritePropertyWithDefault<vector<string>>(101, "members", members);
+}
+
+MatchRecognizeSubset MatchRecognizeSubset::Deserialize(Deserializer &deserializer) {
+	MatchRecognizeSubset result;
+	deserializer.ReadPropertyWithDefault<string>(100, "name", result.name);
+	deserializer.ReadPropertyWithDefault<vector<string>>(101, "members", result.members);
+	return result;
+}
+
 void MultiFileColumnDefinition::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<Identifier>(100, "name", name);
 	serializer.WriteProperty<LogicalType>(101, "type", type);
@@ -466,6 +507,7 @@ void MultiFileOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<MultiFileColumnDefinition>>(110, "schema", schema);
 	serializer.WritePropertyWithDefault<bool>(111, "file_row_number", file_row_number);
 	serializer.WriteProperty<Value>(112, "column_statistics", column_statistics);
+	serializer.WritePropertyWithDefault<vector<MultiFileColumnDefinition>>(113, "bound_schema", bound_schema);
 }
 
 MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
@@ -483,6 +525,7 @@ MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<MultiFileColumnDefinition>>(110, "schema", result.schema);
 	deserializer.ReadPropertyWithDefault<bool>(111, "file_row_number", result.file_row_number);
 	deserializer.ReadProperty<Value>(112, "column_statistics", result.column_statistics);
+	deserializer.ReadPropertyWithDefault<vector<MultiFileColumnDefinition>>(113, "bound_schema", result.bound_schema);
 	return result;
 }
 

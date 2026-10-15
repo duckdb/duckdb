@@ -60,8 +60,7 @@ void TupleDataCollection::Initialize() {
 	} else {
 		scatter_functions.reserve(layout.ColumnCount());
 		gather_functions.reserve(layout.ColumnCount());
-		for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
-			auto &type = layout.GetTypes()[col_idx];
+		for (auto &type : layout.GetTypes()) {
 			scatter_functions.emplace_back(GetScatterFunction(type));
 			gather_functions.emplace_back(GetGatherFunction(type));
 		}
@@ -758,7 +757,14 @@ void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state, TupleDa
 }
 
 void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state) {
-	D_ASSERT(!segments.empty());
+	if (segments.empty()) {
+		// The collection was Reset() while an append state still referred to it, which happens when an exception
+		// (e.g. out-of-memory) unwinds a Repartition after it moved this partition's rows and before the owner
+		// re-initialised its append states. There is no segment left to store the handles in, so release them.
+		pin_state.row_handles.clear();
+		pin_state.heap_handles.clear();
+		return;
+	}
 	FinalizePinState(pin_state, *segments.back());
 }
 

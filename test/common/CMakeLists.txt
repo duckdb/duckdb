@@ -4,19 +4,26 @@ add_library_unity(
   caching_test_utils.cpp
   test_async_file_writer.cpp
   test_managed_async_task_queue.cpp
+  test_bloom_filter.cpp
   test_cast.cpp
   test_checked_integer.cpp
   test_checksum.cpp
+  test_dictionary_hash_cache.cpp
   test_column_data_allocator.cpp
   test_file_buffer_handle_group.cpp
   test_file_system.cpp
+  test_fsst.cpp
   test_gzip_file_system.cpp
   test_caching_file_system_wrapper.cpp
   test_external_file_cache.cpp
   test_hyperlog.cpp
+  test_hugeint_constexpr.cpp
   test_http_transport_manager.cpp
+  test_http_retry_budget.cpp
+  test_httplib_sigpipe.cpp
   test_literal.cpp
   test_lru_cache.cpp
+  test_minmax_n_heap.cpp
   test_numeric_utils.cpp
   test_optional_idx.cpp
   test_parse_expression.cpp
@@ -25,6 +32,7 @@ add_library_unity(
   test_parse_logical_type.cpp
   test_parser_statement.cpp
   test_parse_memory_limit_slurm.cpp
+  test_pipeline_broadcast_exchange.cpp
   test_recursive_cte_metrics.cpp
   test_scalar_executor.cpp
   test_logical_type_is_complete.cpp
@@ -46,6 +54,7 @@ add_library_unity(
   test_versioning_utils.cpp
   test_value_to_sql_string.cpp
   test_value_to_expression.cpp
+  test_variant_size.cpp
   test_musl_stack_size.cpp)
 
 set(UNITTEST_OBJECT_FILES

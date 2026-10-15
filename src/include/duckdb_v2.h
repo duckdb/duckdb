@@ -538,6 +538,12 @@ typedef enum DUCKDB_V2_ERROR {
 	//! An object exceeded its maximum permitted size.
 	DUCKDB_V2_ERROR_INPUT_OBJECT_SIZE = 2004,
 
+	/*!
+	 * The metadata asked for is known only once execution binds the statement that produces it, because the statement
+	 * expands into several. Step the result and ask again.
+	 */
+	DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED = 2005,
+
 	//! The requested resource is already in use.
 	DUCKDB_V2_ERROR_RESOURCE_IN_USE = 3001,
 
@@ -10038,8 +10044,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_iterator_next(duckdb_v2_stateme
  * Binding is read-only and does not disturb a live result: it begins no query, claims no cursor, reuses an active
  * transaction read-only, and runs alongside a paused stream. It is single-consumer like the stepping functions, so bind
  * concurrently only on a second connection. Prepare-time errors — binder, catalog, preprocessing — surface here. A
- * statement that preprocessing expands into a group (a dynamic PIVOT, or statement-expanding DDL such as ALTER ADD
- * COLUMN with a non-constant DEFAULT) cannot be bound and is rejected with ERROR_INPUT_INVALID; execute it instead.
+ * statement that expands into a group (a dynamic PIVOT, or statement-expanding DDL such as ALTER ADD COLUMN with a
+ * non-constant DEFAULT) has a schema known only at execution, and is reported with ERROR_INPUT_METADATA_DEFERRED;
+ * execute it instead.
  *
  * *out_schema and *out_parameters are set to NULL on failure.
  *
@@ -10104,8 +10111,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_add_collection(duckdb_v2_sql_st
  *
  * This gives the type before the statement-level rewrites that `duckdb_v2_statement_execute()` applies, if any. So a
  * PRAGMA reports PRAGMA even where execution rewrites it into a SELECT or a CALL.
- * `duckdb_v2_result_get_statement_type()` on the executed result reports the rewritten type. A statement the parser
- * expands into a group reports MULTI. Its parts are not visible here, and statement_bind rejects it.
+ * `duckdb_v2_result_get_statement_type()` on the executed result reports the rewritten type of a statement that
+ * rewrites into one. A statement the parser expands into a group reports MULTI, here and on its result. Its parts are
+ * not visible here, and statement_bind reports ERROR_INPUT_METADATA_DEFERRED for it.
  *
  * history:
  * - stable: v2.0.0
@@ -10825,6 +10833,11 @@ typedef struct _duckdb_v2_prepared_statement {
  * `ERROR_INPUT_INVALID` when the plan would not be reused, so a caller who wants the handle only for the speedup finds
  * out here rather than after silently taking the slow path.
  *
+ * A statement that DuckDB expands into several, such as a dynamic PIVOT, is kept as written and expanded again at each
+ * execution, in the transaction state of that execution. It runs nothing here, its plan is never reused, and its
+ * result's metadata is deferred as for `duckdb_v2_statement_execute()`. Parameters on such a statement are refused with
+ * `ERROR_INPUT_INVALID`.
+ *
  * Refuses with `ERROR_RESOURCE_IN_USE` while a statement on the connection is still running. Drain, destroy, or
  * interrupt that result first, or prepare on another connection. `*out_prepared` is set to NULL on failure.
  *
@@ -11010,11 +11023,10 @@ typedef enum DUCKDB_V2_RESULT_STEP_STATUS {
  * parameters cannot be mixed within one statement. Parameters and statement expansion are mutually exclusive: passing
  * values for a statement that preprocesses into a group is rejected with ERROR_INPUT_INVALID.
  *
- * Preprocessing can expand one statement into a group — a dynamic PIVOT, or statement-expanding DDL such as ALTER ...
- * ADD COLUMN with a non-constant DEFAULT. The group executes as one result through the same steps, and the stream
- * surfaces the first row-producing statement of the group, or the last statement when none produces rows. An expansion
- * with more than one row-producing statement cannot be streamed as a single result and reports
- * ERROR_QUERY_NOT_IMPLEMENTED; no known expansion produces one.
+ * DuckDB can expand one statement into a group: a dynamic PIVOT, or statement-expanding DDL such as ALTER ... ADD
+ * COLUMN with a non-constant DEFAULT. The group executes as one result through the same steps, and the stream surfaces
+ * the rows of the first row-producing statement of the group. A row-producing statement followed by another cannot be
+ * served as a single result and reports ERROR_QUERY_NOT_IMPLEMENTED; no known expansion produces one.
  *
  * One running statement per connection: this refuses with ERROR_RESOURCE_IN_USE while a statement on the connection is
  * still running. Drain, destroy, or interrupt that result first, or open another connection.
@@ -11211,8 +11223,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_drain(duckdb_v2_result_handle resu
  * QUERY_RESULT for statements that produce rows (SELECT, RETURNING, EXPLAIN), CHANGED_ROWS for an INSERT, UPDATE, or
  * DELETE without RETURNING, NOTHING for DDL and other statements with no row output.
  *
- * Prepare-time metadata: available from statement_execute on, except for a statement that preprocessing expands into a
- * group, where it fails with ERROR_INPUT_INVALID until stepping has prepared the row-producing fragment.
+ * Prepare-time metadata: available from statement_execute on, except for a statement that expands into a group, where
+ * it fails with ERROR_INPUT_METADATA_DEFERRED until stepping has bound the row-producing statement, or the group ended
+ * without one.
  *
  * history:
  * - stable: v2.0.0
@@ -11229,8 +11242,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_get_result_type(duckdb_v2_result_h
 /*!
  * Returns the SQL statement type that produced the result.
  *
- * Prepare-time metadata: available from statement_execute on, except for a statement that preprocessing expands into a
- * group, where it fails with ERROR_INPUT_INVALID until stepping has prepared the row-producing fragment.
+ * Prepare-time metadata: available from statement_execute on. A statement that expands into a group reports its type as
+ * written: MULTI, or PRAGMA for a pragma such as IMPORT DATABASE.
  *
  * history:
  * - stable: v2.0.0
@@ -11248,9 +11261,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_get_statement_type(duckdb_v2_resul
  * Returns the result's output schema as a single schema handle.
  *
  * Builds an owned schema of the result's column names and types into *out_schema; destroy it via schema_destroy.
- * Prepare-time metadata, available before the first step, or for an expanding statement once stepping has prepared the
- * row-producing fragment. Never empty: a non-SELECT reports a single status column, either a BIGINT changed-rows count
- * or a BOOLEAN success.
+ * Prepare-time metadata, available before the first step, or for an expanding statement once stepping has bound the
+ * row-producing statement (before that it fails with ERROR_INPUT_METADATA_DEFERRED). Never empty: a non-SELECT reports
+ * a single status column, either a BIGINT changed-rows count or a BOOLEAN success.
  *
  * This schema is the authoritative source for the column types of the chunks the result produces; vectors do not carry
  * their own type.

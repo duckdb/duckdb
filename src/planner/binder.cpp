@@ -146,6 +146,11 @@ BoundStatement Binder::Bind(QueryNode &node) {
 }
 
 BoundStatement Binder::Bind(TableRef &ref) {
+	for (auto &column_alias : ref.column_name_alias) {
+		if (column_alias.empty()) {
+			throw BinderException(ref, "column alias cannot be empty");
+		}
+	}
 	BoundStatement result;
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
@@ -177,6 +182,9 @@ BoundStatement Binder::Bind(TableRef &ref) {
 		break;
 	case TableReferenceType::DELIM_GET:
 		result = Bind(ref.Cast<DelimGetRef>());
+		break;
+	case TableReferenceType::MATCH_RECOGNIZE:
+		result = Bind(ref.Cast<MatchRecognizeRef>());
 		break;
 	case TableReferenceType::BOUND_TABLE_REF:
 		result = Bind(ref.Cast<BoundRefWrapper>());
@@ -613,12 +621,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	projection->AddChild(std::move(child_operator));
 	D_ASSERT(result.types.size() == result.names.size());
 	result.plan = std::move(projection);
-	// If an insert/delete/update statement returns data, there are sometimes issues with streaming results
-	// where the data modification doesn't take place until the streamed result is exhausted. Once a row is
-	// returned, it should be guaranteed that the row has been inserted.
-	// see https://github.com/duckdb/duckdb/issues/8310
 	auto &properties = GetStatementProperties();
-	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }

@@ -771,7 +771,15 @@ bool JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
 	// If we return strings, we cannot parse INSITU. If we ignore errors, we cannot parse INSITU either: a malformed
 	// document could extend into (and modify) the next one
 	const bool ignorable_errors = options.ignore_errors && GetFormat() == JSONFormat::NEWLINE_DELIMITED;
-	if (options.type == JSONScanType::READ_JSON_OBJECTS || ignorable_errors) {
+	// A number that does not fit is read as a raw string, which INSITU parsing null-terminates in place - at the root
+	// that overwrites the delimiter that follows the document
+	idx_t first_char = 0;
+	while (first_char < json_size && StringUtil::CharacterIsSpace(json_start[first_char])) {
+		first_char++;
+	}
+	const bool number_root = first_char < json_size &&
+	                         (StringUtil::CharacterIsDigit(json_start[first_char]) || json_start[first_char] == '-');
+	if (options.type == JSONScanType::READ_JSON_OBJECTS || ignorable_errors || number_root) {
 		doc = JSONCommon::ReadDocumentUnsafe(json_start, json_size, JSONCommon::READ_STOP_FLAG,
 		                                     scan_state.allocator.GetYYAlc(), &err);
 	} else {
@@ -877,6 +885,14 @@ void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
 	}
 	// store the buffer in the file so it can be re-used by the first reader of the file
 	if (!file_handle->IsPipe()) {
+		// a file that is much smaller than the buffer only keeps what was read - with many files (e.g. union_by_name)
+		// one full-sized buffer per file adds up to far more than the data
+		const idx_t required = read_size + YYJSON_PADDING_SIZE;
+		if (required * 2 <= buffer_capacity) {
+			auto shrunk = allocator.Allocate(required);
+			memcpy(shrunk.get(), read_buffer.get(), required);
+			read_buffer = std::move(shrunk);
+		}
 		auto_detect_data = std::move(read_buffer);
 		auto_detect_data_size = read_size;
 	} else {
