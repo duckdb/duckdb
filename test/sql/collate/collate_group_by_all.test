@@ -66,3 +66,24 @@ query I
 SELECT count(*) FROM (SELECT c, count(*) FROM u GROUP BY ALL);
 ----
 1
+
+# collated fields of a struct, with a NULL struct and a NULL field
+query II
+SELECT s, count(*) FROM (SELECT CASE WHEN id = 4 THEN NULL ELSE {'k': c0} END AS s FROM t) GROUP BY ALL ORDER BY ALL;
+----
+{'k': A}	2
+{'k': b}	1
+{'k': NULL}	1
+NULL	1
+
+# a collated type that is not a string keeps its value and type
+query III
+SELECT typeof(t), t, count(*) FROM (VALUES ('10:00:00+00'::TIMETZ)) v(t) GROUP BY ALL;
+----
+TIME WITH TIME ZONE	10:00:00+00	1
+
+# a collated NULL constant
+query II
+SELECT NULL::VARCHAR COLLATE NOCASE AS n, count(*) FROM t GROUP BY ALL;
+----
+NULL	5
