@@ -28,3 +28,21 @@ statement error
 SELECT json_transform('{}', repeat('{"a":', 50) || '"INTEGER"' || repeat('}', 50));
 ----
 Max expression depth limit of 30 exceeded
+
+# the nesting of a type written in a string adds to the nesting of the structure around it
+statement error
+SELECT json_transform('null', repeat('[', 20) || '"INTEGER' || repeat('[]', 20) || '"' || repeat(']', 20));
+----
+Max expression depth limit of 30 exceeded
+
+query I
+SELECT typeof(json_transform('null', repeat('[', 10) || '"INTEGER' || repeat('[]', 10) || '"' || repeat(']', 10)))
+	= 'INTEGER' || repeat('[]', 20);
+----
+true
+
+query III
+SELECT typeof(json_transform('null', '["MAP(VARCHAR, INTEGER[])"]')), typeof(json_transform('null', '{"a": "UNION(i INTEGER, s VARCHAR[])"}')),
+	typeof(json_transform('null', '"INTEGER[3][2]"'));
+----
+MAP(VARCHAR, INTEGER[])[]	STRUCT(a UNION(i INTEGER, s VARCHAR[]))	INTEGER[3][2]

@@ -69,7 +69,26 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 	return LogicalType::STRUCT(child_types);
 }
 
-static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context, idx_t depth) {
+//! The number of types nested in a type, which the parser limits for a type written in SQL
+static idx_t TypeNestingDepth(const LogicalType &type) {
+	switch (type.InternalType()) {
+	case PhysicalType::LIST:
+		return 1 + TypeNestingDepth(ListType::GetChildType(type));
+	case PhysicalType::ARRAY:
+		return 1 + TypeNestingDepth(ArrayType::GetChildType(type));
+	case PhysicalType::STRUCT: {
+		idx_t depth = 0;
+		for (auto &child : StructType::GetChildTypes(type)) {
+			depth = MaxValue(depth, TypeNestingDepth(child.second));
+		}
+		return 1 + depth;
+	}
+	default:
+		return 0;
+	}
+}
+
+static void CheckStructureDepth(ClientContext &context, idx_t depth) {
 	// a structure nests like a type written in SQL, so the same limit applies
 	auto max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(context);
 	if (depth >= max_expression_depth) {
@@ -77,14 +96,21 @@ static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context
 		                      "increase the maximum expression depth.",
 		                      max_expression_depth);
 	}
+}
+
+static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context, idx_t depth) {
+	CheckStructureDepth(context, depth);
 	switch (yyjson_get_tag(val)) {
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
 		return StructureStringToTypeArray(val, context, depth);
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
 		return StructureToTypeObject(val, context, depth);
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
-	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
-		return TransformStringToLogicalType(unsafe_yyjson_get_str(val), context);
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE: {
+		auto type = TransformStringToLogicalType(unsafe_yyjson_get_str(val), context);
+		CheckStructureDepth(context, depth + TypeNestingDepth(type));
+		return type;
+	}
 	default:
 		throw BinderException("invalid JSON structure");
 	}
