@@ -257,12 +257,14 @@ vector<idx_t> ExpressionHeuristics::GetInitialOrder(const TableFilterSet &table_
 	struct FilterCost {
 		idx_t index;
 		idx_t cost;
+		//! a filter that can throw runs after the others, so it does not run on the rows they remove
+		bool can_throw;
 
 		bool operator==(const FilterCost &p) const {
-			return cost == p.cost;
+			return can_throw == p.can_throw && cost == p.cost;
 		}
 		bool operator<(const FilterCost &p) const {
-			return cost < p.cost;
+			return can_throw != p.can_throw ? !can_throw : cost < p.cost;
 		}
 	};
 	vector<FilterCost> filter_costs;
@@ -271,6 +273,7 @@ vector<idx_t> ExpressionHeuristics::GetInitialOrder(const TableFilterSet &table_
 		FilterCost cost;
 		cost.index = filter_index;
 		cost.cost = Cost(entry.Filter());
+		cost.can_throw = ExpressionFilter::GetExpressionFilter(entry.Filter(), "GetInitialOrder").expr->CanThrow();
 		filter_costs.push_back(cost);
 		filter_index++;
 	}
