@@ -1,0 +1,76 @@
+# name: test/issues/general/test_26144.test
+# description: A sequence function folded while binding a prepared statement marks the database as modified
+# group: [general]
+
+statement ok
+CREATE SEQUENCE s;
+
+statement ok
+PREPARE p AS SELECT count(*) FROM range(nextval('s'));
+
+query I
+SELECT 42;
+----
+42
+
+query I
+EXECUTE p;
+----
+1
+
+statement ok
+PREPARE g AS SELECT count(*) FROM generate_series(1, nextval('s'));
+
+query I
+SELECT currval('s');
+----
+2
+
+statement ok
+BEGIN;
+
+statement ok
+PREPARE q AS SELECT count(*) FROM range(nextval('s'));
+
+statement ok
+COMMIT;
+
+query I
+SELECT currval('s');
+----
+3
+
+# a read-only transaction cannot advance the sequence
+statement ok
+BEGIN TRANSACTION READ ONLY;
+
+statement error
+PREPARE r AS SELECT count(*) FROM range(nextval('s'));
+----
+transaction is launched in read-only mode
+
+statement ok
+ROLLBACK;
+
+# currval only reads it
+statement ok
+BEGIN TRANSACTION READ ONLY;
+
+statement ok
+PREPARE c AS SELECT count(*) FROM range(currval('s'));
+
+query I
+EXECUTE c;
+----
+3
+
+statement ok
+COMMIT;
+
+statement ok
+PREPARE v AS SELECT count(*) FROM range(setval('s', 10));
+
+query I
+SELECT currval('s');
+----
+10
