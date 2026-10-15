@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/const_prefix_handle.hpp"
