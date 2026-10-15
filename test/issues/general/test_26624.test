@@ -45,9 +45,56 @@ SELECT TRY(CAST(s AS INTEGER) + 1) AS x, CAST(s AS INTEGER) + 2 AS y FROM t
 ----
 Could not convert string 'abc' to INT32
 
-# the same TRY twice is still computed once
+# the same TRY twice is still computed once, in a projection of its own
 query II
 SELECT TRY(CAST(s AS INTEGER) + 1) AS x, TRY(CAST(s AS INTEGER) + 1) AS y FROM t ORDER BY s
 ----
 43	43
 NULL	NULL
+
+query II
+EXPLAIN SELECT TRY(CAST(s AS INTEGER) + 1) AS x, TRY(CAST(s AS INTEGER) + 1) AS y FROM t
+----
+physical_plan	<REGEX>:[\s\S]*Projection ─[\s\S]*Projection ─[\s\S]*
+
+query II
+EXPLAIN SELECT TRY(CAST(s AS INTEGER) + 1) AS x, TRY(CAST(s AS INTEGER) + 2) AS y FROM t
+----
+physical_plan	<!REGEX>:[\s\S]*Projection ─[\s\S]*Projection ─[\s\S]*
+
+# the arguments of COALESCE after the first only run for the rows that are NULL so far
+statement ok
+CREATE TABLE c(s VARCHAR, i INTEGER);
+
+statement ok
+INSERT INTO c VALUES ('abc', 0), ('42', NULL);
+
+query II
+SELECT COALESCE(i, CAST(s AS INTEGER) + 1) AS a, TRY(CAST(s AS INTEGER) + 2) AS b FROM c ORDER BY s
+----
+43	44
+0	NULL
+
+query II
+SELECT TRY(CAST(s AS INTEGER) + 2) AS b, COALESCE(i, CAST(s AS INTEGER) + 1) AS a FROM c ORDER BY s
+----
+44	43
+NULL	0
+
+query II
+SELECT COALESCE(i, CAST(s AS INTEGER) + 1) AS a, CASE WHEN i IS NULL THEN CAST(s AS INTEGER) + 2 END AS b FROM c ORDER BY s
+----
+43	44
+0	NULL
+
+# the first argument of COALESCE always runs, so it is still shared
+query II
+SELECT COALESCE(CAST(i AS BIGINT) + 1, -1) AS a, CAST(i AS BIGINT) + 2 AS b FROM c ORDER BY s
+----
+-1	NULL
+1	2
+
+query II
+EXPLAIN SELECT COALESCE(CAST(i AS BIGINT) + 1, -1) AS a, CAST(i AS BIGINT) + 2 AS b FROM c
+----
+physical_plan	<REGEX>:[\s\S]*Projection ─[\s\S]*Projection ─[\s\S]*
