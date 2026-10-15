@@ -114,7 +114,7 @@ private:
 //! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
-	IndexEntry(unique_ptr<Index> index, ConstraintCheckMode check_mode);
+	IndexEntry(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Appends a chunk using delete and checkpoint indexes where required.
@@ -137,6 +137,8 @@ public:
 	Identifier GetName() const;
 	//! Returns the physical index type.
 	string GetIndexType() const;
+	//! Returns whether an unbound index has buffered WAL operations.
+	bool HasBufferedReplays() const;
 	//! Destroys the physical index.
 	void Retire();
 	//! Binds the unbound physical index without replacing it.
@@ -196,6 +198,9 @@ public:
 	void SetBindState(IndexBindState state) {
 		bind_state = state;
 	}
+	idx_t GetIndexOid() const {
+		return index_oid;
+	}
 
 private:
 	template <class>
@@ -210,6 +215,8 @@ private:
 
 private:
 	atomic<IndexBindState> bind_state;
+	//! The OID of this index.
+	const idx_t index_oid;
 	//! Phase-fair lock protecting the physical index and all delta indexes owned by this entry.
 	mutable StorageLock lock;
 	//! The physical index owned by this stable logical entry.

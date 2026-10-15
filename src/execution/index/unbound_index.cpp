@@ -5,6 +5,7 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/checkpoint/table_index_writer.hpp"
@@ -92,10 +93,9 @@ void UnboundIndex::BufferChunk(DataChunk &table_chunk, Vector &row_ids, const Bu
 	}
 	combined_chunk.data.back().Reference(row_ids);
 
-	auto &allocator = Allocator::Get(db);
 	auto &buffer = buffered_replays.GetBuffer(replay_type);
 	if (buffer == nullptr) {
-		buffer = make_uniq<ColumnDataCollection>(allocator, types);
+		buffer = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(db), types);
 	}
 	// The starting index of the buffer range is the size of the buffer.
 	const idx_t start = buffer->Count();

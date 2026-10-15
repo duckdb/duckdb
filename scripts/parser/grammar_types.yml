@@ -1,7 +1,7 @@
 # grammar_types.yml
 #
 # Maps grammar rules to their expected C++ return types, grouped by type category.
-# Used by scripts/parser/generate_transformer.py to generate typed transformer wrappers.
+# Used by scripts/parser/generate_transformer_trampoline.py to generate typed transformer wrappers.
 #
 # Structure:
 #   <CategoryName>:
@@ -46,7 +46,7 @@
 # ---------------------------------------------------------------------------
 
 additional_transform_result_types:
-  - "unique_ptr<TransformResultValue>"
+  - "arena_ptr<TransformResultValue>"
   - "vector<Identifier>"
 
 SQLStatementList:
@@ -86,7 +86,6 @@ SQLStatement:
     - ExplainableStatements
     - ExplainSelectStatement
     - ExportStatement
-    - ExpressionStatement
     - ImportStatement
     - InsertStatement
     - LoadStatement
@@ -109,6 +108,8 @@ SQLStatement:
     - UseStatement
     - VacuumStatement
     - PragmaAssignOrFunction
+    - AttachToExternalResource
+    - ConnectToExternalResource
     - ExternalResourceStatement
     - CreateExternalResourceStmt
     - RegisterExternalResourceStmt
@@ -223,6 +224,7 @@ AlterTableInfo:
   by_value: true
   rules:
     - AlterTableOptions
+    - AlterSchemaOptions
     - AddColumn
     - DropConstraint
     - DropColumn
@@ -301,9 +303,10 @@ UpdateSetInfo:
   type: "unique_ptr<UpdateSetInfo>"
   by_value: true
   rules:
+    - UpdateSetClauseList
     - UpdateSetClause
     - UpdateSetTuple
-    - UpdateSetElementList
+    - UpdateSetElement
     - UpdateMatchSetClause
     - UpdateMatchSetInfo
 
@@ -347,6 +350,7 @@ SampleOptions:
   by_value: true
   rules:
     - SampleClause
+    - SelectSampleClause
     - SampleEntry
     - SampleEntryFunction
     - SampleEntryCount
@@ -360,6 +364,7 @@ ResultModifier:
     - OffsetLimitClause
     - LimitOffsetClause
     - OffsetFetchClause
+    - FetchOffsetClause
     - FetchOnlyClause
 
 AtClause:
@@ -398,7 +403,7 @@ Expression:
     - IsDistinctFromExpression
     - ComparisonExpression
     - BetweenInLikeExpression
-    - BetweenInLikeOpExpression
+    - BetweenLikeOpExpression
     - InClause
     - InExpression
     - InContainsExpression
@@ -408,7 +413,10 @@ Expression:
     - LikeClause
     - EscapeClause
     - OtherOperatorExpression
+    - InfixOtherOperatorExpression
+    - CustomPrefixExpression
     - BitwiseExpression
+    - TildeExpression
     - AdditiveExpression
     - MultiplicativeExpression
     - ExponentiationExpression
@@ -445,8 +453,6 @@ Expression:
     - DotColumnOperator
     - SliceExpression
     - EndSliceBound
-    - EndSliceValue
-    - EndSliceMinus
     - StepSliceBound
     - SingleArrowPair
     - StarExpression
@@ -508,6 +514,7 @@ Expression:
     - NoneLiteral
     - NumberLiteral
     - TypeVariations
+    - NestedType
     - TimeType
     - NumericType
     - SimpleNumericType
@@ -639,6 +646,9 @@ ExpressionList:
     - IndirectionList
     - BoundedListExpression
     - SliceBound
+    - SliceUpperBound
+    - MinusStepSliceBound
+    - EndStepSliceBound
     - TargetList
     - PragmaParameters
     - ReturningClause
@@ -734,6 +744,8 @@ StringList:
     - ColumnList
     - NameList
     - DottedIdentifier
+    - CommentTarget
+    - CommentStringLiteralIdentifier
     - ColumnAliases
     - TriggerColumnList
     - RepositoryPublicKey
@@ -746,6 +758,14 @@ StringList:
     - OptionalParensNameList
     - ParenthesizedNameList
     - BareNameList
+
+ExternalResourceOptionsPtr:
+  type: "unique_ptr<ExternalResourceOptions>"
+  by_value: true
+  rules:
+    - ExternalResourceSource
+    - ExternalResourceCreateClause
+    - ExternalResourceReferenceClause
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
@@ -838,6 +858,8 @@ LimitPercentResult:
     - LimitLiteralPercent
     - LimitExpression
     - FetchClause
+    - FetchClauseWithoutValue
+    - FetchClauseWithValue
     - FetchValue
     - OffsetClause
     - OffsetValue
@@ -930,6 +952,7 @@ GenericCopyOption:
     - PartitionedByCopyOption
     - SpecializedOption
     - SpecializedOptionTail
+    - CopyLegacyOption
     - SingleOption
     - EncodingOption
     - ForceQuoteOption
@@ -1047,7 +1070,7 @@ String:
     - StringLiteral
     - DropOrSet
     - SequenceName
-    - DottedIdentifierString
+    - DottedColLabel
     - DotColLabel
     - ColLabel
     - UnreservedKeyword
@@ -1075,11 +1098,7 @@ String:
     - QualifiedOperator
     - QualifiedOperatorContents
     - ColIdDot
-    - AnyOp
-    - StringOperator
-    - JsonOperator
-    - InetOperator
-    - ListOperator
+    - AnyOperatorLiteral
     - BitOperator
     - Term
     - Factor
@@ -1159,6 +1178,9 @@ Bool:
     - WithNoData
     - CommitAction
     - PreserveOrDelete
+    - Generated
+    - GeneratedAlways
+    - GeneratedByDefault
     - GeneratedColumnType
     - VirtualGeneratedColumn
     - StoredGeneratedColumn
@@ -1179,6 +1201,9 @@ Bool:
     - Materialized
     - SampleUnit
     - DropBehavior
+    - TruncateOptions
+    - TruncateAliasOptions
+    - TruncateDropBehavior
     - CascadeDropBehavior
     - RestrictDropBehavior
     - AnyOrAll
@@ -1268,6 +1293,8 @@ ColumnConstraintEntry:
   by_value: true
   rules:
     - ColumnConstraint
+    - NameableColumnConstraint
+    - ColumnConstraintElement
     - NotNullConstraint
     - UniqueConstraint
     - PrimaryKeyConstraint
@@ -1583,6 +1610,7 @@ RelOptionMap:
   by_value: true
   rules:
     - WithList
+    - WithOptionList
     - RelOptionOrOids
     - RelOptionList
     - Oids
@@ -1623,8 +1651,12 @@ BinaryExpressionTail:
 
 overrides:
   # common.gram
-  ColIdType: "pair<Identifier, LogicalType>"
-  ColIdTypeList: "child_list_t<LogicalType>"
+  ColIdType:
+    type: "pair<Identifier, unique_ptr<ParsedExpression>>"
+    by_value: true
+  ColIdTypeList:
+    type: "vector<pair<Identifier, unique_ptr<ParsedExpression>>>"
+    by_value: true
   # create_index.gram
   RelOption:
     type: "pair<Identifier, unique_ptr<ParsedExpression>>"
@@ -1634,6 +1666,8 @@ overrides:
     type: "ConstraintColumnDefinition"
     by_value: true
   KeyActions: "KeyActions"
+  UpdateFirstKeyActions: "KeyActions"
+  DeleteFirstKeyActions: "KeyActions"
   GeneratedColumn:
     type: "GeneratedColumnDefinition"
     by_value: true
@@ -1650,7 +1684,28 @@ overrides:
   ComparisonExpressionTail:
     type: "ComparisonExpressionTail"
     by_value: true
-  BetweenInLikeOp:
+  IsExpressionTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsExpressionContinuation:
+    type: "vector<IsExpressionTail>"
+    by_value: true
+  IsTestTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsDistinctTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsComparisonTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsOtherOperatorTail:
+    type: "IsExpressionTail"
+    by_value: true
+  BetweenLikeOp:
+    type: "BetweenInLikeOperator"
+    by_value: true
+  InPredicate:
     type: "BetweenInLikeOperator"
     by_value: true
   OtherOperator:
@@ -1699,10 +1754,6 @@ overrides:
   NullsFirstOrLast:
     type: "OrderByNullType"
     default_initializer: "ORDER_DEFAULT"
-  # update.gram
-  UpdateSetElement:
-    type: "pair<string, unique_ptr<ParsedExpression>>"
-    by_value: true
 
 # ---------------------------------------------------------------------------
 # matcher.cpp rule overrides
@@ -1715,13 +1766,16 @@ IdentifierType:
     - AnalyzeKeyword
     - ColId
     - ColIdOrString
+    - UsingColumnName
     - ColLabelOrString
     - ColLabelIdentifier
     - StringLiteralIdentifier
     - TypeFuncName
     - IdentifierColId
+    - CopyFileNameSuffix
     - ReservedIdentifierOrStringLiteral
     - AttachAlias
+    - TargetAlias
     - CollationName
     - IndexType
     - RelOptionName
@@ -1752,6 +1806,9 @@ matcher_rule_overrides:
   ReservedIdentifier:
     matcher: reserved_identifier
     suggestion: SUGGEST_VARIABLE
+  BareColLabel:
+    matcher: identifier
+    suggestion: SUGGEST_BARE_LABEL
   CatalogName:
     matcher: identifier
     suggestion: SUGGEST_CATALOG_NAME
@@ -1820,30 +1877,78 @@ matcher_rule_overrides:
   OperatorLiteral:
     allow_type_overlap: true
     matcher: operator
+  AnyOperatorLiteral:
+    allow_type_overlap: true
+    matcher: all_operators
 
-packrat_memoized_rules:
-  - Expression
+# expression_depth_nesting_rules / expression_depth_chain_rules: see ParsedGrammar::SetExpressionDepth. While an
+# expression is transformed, every nesting rule on the transform stack counts one level and every chain rule
+# as many levels as it has repeated elements, so that max_expression_depth bounds the depth of the resulting
+# expression trees. Add a rule here when its repetitions nest the result one level each.
+expression_depth_nesting_rules:
+  - SingleExpression
+  - Type
+  - NestedType
+
+expression_depth_chain_rules:
   - LambdaArrowExpression
   - LogicalOrExpression
   - LogicalAndExpression
+  - NotExpression
+  - IsExpressionContinuation
+  - IsDistinctFromExpression
+  - ComparisonExpression
+  - BetweenInLikeExpression
+  - InfixOtherOperatorExpression
+  - BitwiseExpression
+  - TildeExpression
+  - AdditiveExpression
+  - MultiplicativeExpression
+  - ExponentiationExpression
+  - CollateExpression
+  - AtTimeZoneExpression
+  - PrefixExpression
+  - IndirectionList
+
+# collapsible_rules: see ParsedGrammar::SetTransformProcess. Every rule below has a transformer that returns its
+# operand unchanged when the rest of the rule matched nothing. Take a rule out of this list if that stops being
+# true. The flag is attached to the default transform, so an extension that replaces the transform of
+# one of these rules does not inherit it.
+collapsible_rules:
+  - Expression
+  - ColumnDefaultExpr
+  - LambdaArrowExpression
+  - LogicalOrExpression
+  - ColDefOrExpr
+  - LogicalAndExpression
+  - ColDefAndExpr
   - LogicalNotExpression
   - IsExpression
+  - IsDistinctFromExpression
   - ComparisonExpression
+  - BetweenInLikeExpression
+  - OtherOperatorExpression
+  - InfixOtherOperatorExpression
   - BitwiseExpression
   - AdditiveExpression
   - MultiplicativeExpression
   - ExponentiationExpression
-  - PrefixExpression
   - CollateExpression
   - AtTimeZoneExpression
-  - SingleExpression
+  - PrefixExpression
   - BaseExpression
-  - ParensExpression
-  - ParenthesisExpression
+  - SelectSetOpChain
+  - IntersectChain
+  - TableRef
+
+packrat_memoized_rules:
+  - Expression
+  - TableRef
   - Identifier
   - ColId
-  - ColumnReference
-  - FunctionExpression
+  - CatalogQualification
+  - SchemaQualification
+  - ReservedSchemaQualification
 
 # ---------------------------------------------------------------------------
 # excluded_rules: no transformer stub generated, no semantic value extracted
@@ -1851,6 +1956,10 @@ packrat_memoized_rules:
 # ---------------------------------------------------------------------------
 
 excluded_rules:
+  # Syntax only: the 'EXTERNAL' 'RESOURCE' keyword pair, shared by every singular form.
+  - ExternalResourceKeyword
+  # Syntax only: OVERRIDING {USER|SYSTEM} VALUE is accepted and ignored.
+  - OverridingClause
   # Suggestion-only: exists so autocomplete offers the special SHOW forms as keywords; parsing of e.g.
   # "SHOW databases" resolves through ShowSettingName (the identifier), which the transformer special-cases.
   - ShowSpecialForm
@@ -1877,8 +1986,6 @@ excluded_rules:
   - CharacterType
   - IntervalNumber
   - AtTimeZoneOperator
-  - Generated
-  - AlwaysOrByDefault
   - ConstraintNameClause
   - UsingSample
   - TableSample

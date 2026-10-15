@@ -1,12 +1,8 @@
 # Static linking on windows does not properly work due to symbol collision
-if (WIN32)
-    set(STATIC_LINK_SQLITE "DONT_LINK")
-else ()
-    set(STATIC_LINK_SQLITE "")
-endif()
 duckdb_extension_load(sqlite_scanner
-        ${STATIC_LINK_SQLITE} LOAD_TESTS
+        LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb-sqlite
-        GIT_TAG 982cb44841b847e15d44a927adf0ac17f0657f81
+        GIT_TAG 0598d6d808eb6ce2b2b98c18b9dee99933aafee4
         SUBMODULES database-connector
+        APPLY_PATCHES
         )

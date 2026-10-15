@@ -11,7 +11,7 @@ struct CheckpointBindData : public FunctionData {
 	explicit CheckpointBindData(optional_ptr<AttachedDatabase> db) : db(db) {
 	}
 
-	optional_ptr<AttachedDatabase> db;
+	mutable optional_ptr<AttachedDatabase> db;
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
@@ -49,20 +49,21 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunc
 template <bool FORCE>
 static void TemplatedCheckpointFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = data_p.bind_data->Cast<CheckpointBindData>();
-	auto &transaction_manager = TransactionManager::Get(*bind_data.db.get_mutable());
+	auto &transaction_manager = TransactionManager::Get(*bind_data.db);
 	transaction_manager.Checkpoint(context, FORCE);
 }
 
 void CheckpointFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet checkpoint("checkpoint");
 	checkpoint.AddFunction(TableFunction({}, TemplatedCheckpointFunction<false>, CheckpointBind));
-	checkpoint.AddFunction(TableFunction({LogicalType::VARCHAR}, TemplatedCheckpointFunction<false>, CheckpointBind));
+	checkpoint.AddFunction(TableFunction(FunctionSignature().AddPositionalOnly("database", LogicalType::VARCHAR),
+	                                     TemplatedCheckpointFunction<false>, CheckpointBind));
 	set.AddFunction(checkpoint);
 
 	TableFunctionSet force_checkpoint("force_checkpoint");
 	force_checkpoint.AddFunction(TableFunction({}, TemplatedCheckpointFunction<true>, CheckpointBind));
-	force_checkpoint.AddFunction(
-	    TableFunction({LogicalType::VARCHAR}, TemplatedCheckpointFunction<true>, CheckpointBind));
+	force_checkpoint.AddFunction(TableFunction(FunctionSignature().AddPositionalOnly("database", LogicalType::VARCHAR),
+	                                           TemplatedCheckpointFunction<true>, CheckpointBind));
 	set.AddFunction(force_checkpoint);
 }
 
