@@ -88,6 +88,35 @@ SELECT count(*) FROM s2.audit;
 0
 
 statement ok
+SET schema = 's1';
+
+statement ok
+CREATE TABLE u (i INTEGER);
+
+statement ok
+INSERT INTO u VALUES (1), (2);
+
+statement ok
+CREATE TRIGGER u_update AFTER UPDATE ON u FOR EACH STATEMENT INSERT INTO audit VALUES (500);
+
+statement ok
+CREATE TRIGGER u_delete AFTER DELETE ON u FOR EACH STATEMENT INSERT INTO audit VALUES (600);
+
+statement ok
+SET schema = 's2';
+
+statement ok
+UPDATE s1.u SET i = i + 1;
+
+statement ok
+DELETE FROM s1.u WHERE i = 3;
+
+query II
+SELECT (SELECT list(x ORDER BY x) FROM s1.audit WHERE x >= 500), (SELECT count(*) FROM s2.audit);
+----
+[500, 600]	0
+
+statement ok
 RESET search_path;
 
 # a trigger in an attached database writes to its own database
