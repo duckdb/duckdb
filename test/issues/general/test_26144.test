@@ -74,3 +74,41 @@ query I
 SELECT currval('s');
 ----
 10
+
+# a sequence function in a branch that does not run marks nothing
+statement ok
+BEGIN TRANSACTION READ ONLY;
+
+statement ok
+PREPARE x AS SELECT count(*) FROM range(CASE WHEN false THEN nextval('s') ELSE 2 END);
+
+statement ok
+COMMIT;
+
+# a database attached read-only cannot advance its sequence
+statement ok
+ATTACH '{TEST_DIR}/test_26144_ro.db' AS ro;
+
+statement ok
+CREATE SEQUENCE ro.s;
+
+statement ok
+DETACH ro;
+
+statement ok
+ATTACH '{TEST_DIR}/test_26144_ro.db' AS ro (READ_ONLY);
+
+statement error
+PREPARE a AS SELECT count(*) FROM range(nextval('ro.s'));
+----
+which is attached in read-only mode
+
+statement error
+PREPARE b AS SELECT count(*) FROM range(setval('ro.s', 10));
+----
+which is attached in read-only mode
+
+query I
+SELECT 42;
+----
+42

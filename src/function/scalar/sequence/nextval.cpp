@@ -17,18 +17,24 @@ namespace duckdb {
 namespace {
 
 struct CurrentSequenceValueOperator {
+	static constexpr bool WRITES = false;
+
 	static int64_t Operation(DuckTransaction &, SequenceCatalogEntry &seq, const int64_t, const bool) {
 		return seq.CurrentValue();
 	}
 };
 
 struct NextSequenceValueOperator {
+	static constexpr bool WRITES = true;
+
 	static int64_t Operation(DuckTransaction &transaction, SequenceCatalogEntry &seq, const int64_t, const bool) {
 		return seq.NextValue(transaction);
 	}
 };
 
 struct SetValValueOperator {
+	static constexpr bool WRITES = true;
+
 	static int64_t Operation(DuckTransaction &transaction, SequenceCatalogEntry &seq, const int64_t value,
 	                         const bool is_called) {
 		return seq.SetValue(transaction, value, is_called);
@@ -62,7 +68,20 @@ struct NextValLocalState : public FunctionLocalState {
 
 	DuckTransaction &transaction;
 	SequenceCatalogEntry &sequence;
+	//! Whether the database of the sequence is marked as modified
+	bool modified = false;
 };
+
+//! Mark the database modified before the sequence changes, also when the function runs while binding
+void ModifySequenceDatabase(ClientContext &context, SequenceCatalogEntry &sequence) {
+	auto &db = sequence.ParentCatalog().GetAttached();
+	if (db.IsReadOnly()) {
+		throw InvalidInputException(
+		    "Cannot change sequence \"%s\" of database \"%s\", which is attached in read-only mode", sequence.name,
+		    db.GetName());
+	}
+	MetaTransaction::Get(context).ModifyDatabase(db, DatabaseModificationType::SEQUENCE);
+}
 
 template <class T>
 bool RowIsValid(const unique_ptr<VectorIterator<T>> &entries, idx_t i) {
@@ -79,17 +98,6 @@ unique_ptr<FunctionLocalState> NextValLocalFunction(ExpressionState &state, cons
 	auto &sequence = info.sequence;
 	auto &transaction = DuckTransaction::Get(context, sequence.catalog);
 	return make_uniq<NextValLocalState>(transaction, sequence);
-}
-
-//! The database must be marked modified before the sequence changes, also when the function runs while binding
-unique_ptr<FunctionLocalState> NextValWriteLocalFunction(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                         FunctionData *bind_data) {
-	if (bind_data) {
-		auto &sequence = bind_data->Cast<NextvalBindData>().sequence;
-		MetaTransaction::Get(state.GetContext())
-		    .ModifyDatabase(sequence.ParentCatalog().GetAttached(), DatabaseModificationType::SEQUENCE);
-	}
-	return NextValLocalFunction(state, expr, bind_data);
 }
 
 template <class OP>
@@ -124,6 +132,10 @@ void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 			continue;
 		}
 
+		if (OP::WRITES && !lstate.modified) {
+			ModifySequenceDatabase(state.GetContext(), lstate.sequence);
+			lstate.modified = true;
+		}
 		int64_t value = new_val_entries ? (*new_val_entries)[i].GetValue() : 0;
 		bool is_called = is_called_entries ? (*is_called_entries)[i].GetValue() : true;
 		// get the next value from the sequence
@@ -188,7 +200,7 @@ ScalarFunction NextvalFun::GetFunction() {
 	next_val.SetSerializeCallback(Serialize);
 	next_val.SetDeserializeCallback(Deserialize);
 	next_val.SetModifiedDatabasesCallback(NextValModifiedDatabases);
-	next_val.SetInitStateCallback(NextValWriteLocalFunction);
+	next_val.SetInitStateCallback(NextValLocalFunction);
 	next_val.SetVolatile();
 	next_val.SetFallible();
 	next_val.SetRequiresOrderedExecution(true);
@@ -218,7 +230,7 @@ ScalarFunctionSet SetvalFun::GetFunctions() {
 	set_val.SetSerializeCallback(Serialize);
 	set_val.SetDeserializeCallback(Deserialize);
 	set_val.SetModifiedDatabasesCallback(NextValModifiedDatabases);
-	set_val.SetInitStateCallback(NextValWriteLocalFunction);
+	set_val.SetInitStateCallback(NextValLocalFunction);
 	set_val.SetVolatile();
 	set_val.SetFallible();
 	set_val.SetRequiresOrderedExecution(true);
