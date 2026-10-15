@@ -1477,9 +1477,171 @@ double InterpolateOperator::Operation(const double &lo, const double d, const do
 	return lo * (1.0 - d) + hi * d;
 }
 
+// Divide the scaled distance without requiring a 256-bit intermediate product.
+static uhugeint_t ScaleIntegerRatio(const uhugeint_t &distance, const uhugeint_t &numerator,
+                                    const uhugeint_t &denominator, bool &has_remainder) {
+	D_ASSERT(numerator > 0 && numerator < denominator);
+	if (distance.upper == 0 && numerator.upper == 0 && denominator.upper == 0 &&
+	    distance.lower <= NumericLimits<uint64_t>::Maximum() / numerator.lower) {
+		const auto product = distance.lower * numerator.lower;
+		has_remainder = product % denominator.lower != 0;
+		return uhugeint_t(0, product / denominator.lower);
+	}
+
+	uhugeint_t remainder;
+	if (distance.upper == 0 && numerator.upper == 0) {
+		const auto product = distance * numerator;
+		const auto result = Uhugeint::DivMod(product, denominator, remainder);
+		has_remainder = remainder != 0;
+		return result;
+	}
+	if (denominator.upper == 0) {
+		const auto quotient = Uhugeint::DivMod(distance, denominator, remainder);
+		const auto tail = Uhugeint::DivMod(remainder * numerator, denominator, remainder);
+		has_remainder = remainder != 0;
+		return quotient * numerator + tail;
+	}
+
+	idx_t bits = distance.upper == 0 ? 0 : 64;
+	for (auto word = distance.upper == 0 ? distance.lower : distance.upper; word != 0; word >>= 1) {
+		++bits;
+	}
+	uhugeint_t result = 0;
+	remainder = 0;
+	// Keep the remainder below the divisor after each doubling and addition.
+	for (idx_t bit = bits; bit > 0; --bit) {
+		result <<= 1;
+		const auto carry = (remainder.upper >> 63) != 0;
+		remainder <<= 1;
+		if (carry || remainder >= denominator) {
+			remainder -= denominator;
+			result += 1;
+		}
+		if (((distance >> (bit - 1)) & 1) != 0) {
+			const auto previous = remainder;
+			remainder += numerator;
+			if (remainder < previous || remainder >= denominator) {
+				remainder -= denominator;
+				result += 1;
+			}
+		}
+	}
+	has_remainder = remainder != 0;
+	return result;
+}
+
+uhugeint_t InterpolateOperator::IntegerOffset(const uhugeint_t &distance, const uhugeint_t &numerator,
+                                              const uhugeint_t &denominator, bool descending) {
+	D_ASSERT(denominator != 0);
+	if (numerator == 0 || distance == 0) {
+		return 0;
+	}
+	if (numerator >= denominator) {
+		return distance;
+	}
+	bool has_remainder;
+	auto offset = ScaleIntegerRatio(distance, numerator, denominator, has_remainder);
+	if (descending && has_remainder) {
+		offset += 1;
+	}
+	return offset;
+}
+
+uhugeint_t InterpolateOperator::IntegerOffset(const uhugeint_t &distance, double numerator, double denominator,
+                                              bool descending) {
+	D_ASSERT(std::isfinite(numerator) && std::isfinite(denominator) && denominator != 0);
+	if (denominator < 0) {
+		numerator = -numerator;
+		denominator = -denominator;
+	}
+	if (numerator <= 0 || distance == 0) {
+		return 0;
+	}
+	if (numerator >= denominator) {
+		return distance;
+	}
+
+	// The strict upper bound keeps both conversions within UINT64 on every platform.
+	constexpr double uint64_upper_bound = 18446744073709551616.0;
+	if (numerator < uint64_upper_bound && denominator < uint64_upper_bound) {
+		const auto num = static_cast<uint64_t>(numerator);
+		const auto den = static_cast<uint64_t>(denominator);
+		if (static_cast<double>(num) == numerator && static_cast<double>(den) == denominator) {
+			return IntegerOffset(distance, uhugeint_t(num), uhugeint_t(den), descending);
+		}
+	}
+
+	int32_t numerator_exponent;
+	int32_t denominator_exponent;
+	constexpr auto digits = std::numeric_limits<double>::digits;
+	const auto numerator_fraction = std::frexp(numerator, &numerator_exponent);
+	const auto denominator_fraction = std::frexp(denominator, &denominator_exponent);
+	const auto num = static_cast<uint64_t>(std::ldexp(numerator_fraction, digits));
+	auto den = static_cast<uint64_t>(std::ldexp(denominator_fraction, digits));
+	auto shift = denominator_exponent - numerator_exponent;
+	D_ASSERT(shift >= 0);
+	if (num >= den) {
+		den *= 2;
+		--shift;
+	}
+	D_ASSERT(shift >= 0 && num < den);
+	bool has_remainder;
+	auto offset = ScaleIntegerRatio(distance, uhugeint_t(num), uhugeint_t(den), has_remainder);
+	if (shift >= 128) {
+		return descending ? 1 : 0;
+	}
+	const auto shifted = offset >> shift;
+	has_remainder = has_remainder || (shifted << shift) != offset;
+	offset = shifted;
+	if (descending && has_remainder) {
+		offset += 1;
+	}
+	return offset;
+}
+
+static int64_t InterpolateInt64(int64_t lo, double d, int64_t hi, bool round_half_down) {
+	D_ASSERT(d >= 0 && d <= 1);
+	if (d == 0 || lo == hi) {
+		return lo;
+	}
+	if (d == 1) {
+		return hi;
+	}
+
+	// Decompose the weight exactly; the product needs at most 117 bits.
+	int32_t exponent;
+	const auto fraction = std::frexp(d, &exponent);
+	constexpr auto digits = std::numeric_limits<double>::digits;
+	const auto significand = static_cast<int64_t>(std::ldexp(fraction, digits));
+	const auto shift = digits - exponent;
+	const auto delta = hugeint_t(hi) - hugeint_t(lo);
+	const auto descending = delta < 0;
+	const auto product = (descending ? -delta : delta) * significand;
+	if (shift >= 128) {
+		return descending && !round_half_down ? lo - 1 : lo;
+	}
+
+	auto offset = product >> shift;
+	const auto remainder = product - (offset << shift);
+	if (round_half_down) {
+		const auto half = hugeint_t(1) << (shift - 1);
+		if (descending ? remainder >= half : remainder > half) {
+			offset += 1;
+		}
+	} else if (descending && remainder != 0) {
+		offset += 1;
+	}
+	return Hugeint::Cast<int64_t>(hugeint_t(lo) + (descending ? -offset : offset));
+}
+
+template <>
+int64_t InterpolateOperator::Operation(const int64_t &lo, const double d, const int64_t &hi) {
+	return Operation(lo, d, 1.0, hi);
+}
+
 template <>
 dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi) {
-	return dtime_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
+	return dtime_t(InterpolateInt64(lo.value, d, hi.value, true));
 }
 
 //! TIMETZ values are interpolated by their time normalized to UTC - the result is the normalized time at offset +00
@@ -1488,10 +1650,10 @@ dtime_tz_t InterpolateOperator::Operation(const dtime_tz_t &lo, const double d, 
 	if (lo.sort_key() == hi.sort_key()) {
 		return lo;
 	}
-	// the sort key holds the normalized time (biased by the maximum offset) in its upper bits
-	const auto lo_micros = static_cast<double>(dtime_tz_t::decode_micros(lo.sort_key()));
-	const auto hi_micros = static_cast<double>(dtime_tz_t::decode_micros(hi.sort_key()));
-	auto micros = std::llround(lo_micros * (1.0 - d) + hi_micros * d);
+	// the sort key holds the normalized time (biased by the maximum offset) in its upper bits,
+	// interpolated exactly with .5 ties going to the earlier microsecond - matching TIME
+	auto micros =
+	    InterpolateInt64(dtime_tz_t::decode_micros(lo.sort_key()), d, dtime_tz_t::decode_micros(hi.sort_key()), true);
 	micros -= int64_t(dtime_tz_t::MAX_OFFSET) * int64_t(dtime_tz_t::OFFSET_MICROS);
 	micros %= Interval::MICROS_PER_DAY;
 	if (micros < 0) {
@@ -1502,44 +1664,22 @@ dtime_tz_t InterpolateOperator::Operation(const dtime_tz_t &lo, const double d, 
 
 template <>
 timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d, const timestamp_t &hi) {
-	return timestamp_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
+	return timestamp_t(InterpolateInt64(lo.value, d, hi.value, true));
 }
 
 template <>
 hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, const hugeint_t &hi) {
-	hugeint_t delta_hugeint = hi;
-	if (Hugeint::TrySubtractInPlace(delta_hugeint, lo)) {
-		const auto delta = Hugeint::Cast<double>(delta_hugeint);
-		return lo + Hugeint::Convert(delta * d);
-	}
-
-	// if delta overflows, we fall back to original subtraction to avoid UB
-	// only happens when lo and hi are so apart that their difference can't be stored in a hugeint
-	return Hugeint::Convert(Operation(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
+	return Operation(lo, d, 1.0, hi);
 }
 
 template <>
 uhugeint_t InterpolateOperator::Operation(const uhugeint_t &lo, const double d, const uhugeint_t &hi) {
-	return Uhugeint::Convert(Operation(Uhugeint::Cast<double>(lo), d, Uhugeint::Cast<double>(hi)));
-}
-
-static interval_t MultiplyByDouble(const interval_t &i, const double &d) { // NOLINT
-	D_ASSERT(d >= 0 && d <= 1);
-	return Interval::FromMicro(std::llround(static_cast<double>(Interval::GetMicro(i)) * d));
-}
-
-inline interval_t operator+(const interval_t &lhs, const interval_t &rhs) {
-	return Interval::FromMicro(Interval::GetMicro(lhs) + Interval::GetMicro(rhs));
-}
-
-inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
-	return Interval::FromMicro(Interval::GetMicro(lhs) - Interval::GetMicro(rhs));
+	return Operation(lo, d, 1.0, hi);
 }
 
 template <>
 interval_t InterpolateOperator::Operation(const interval_t &lo, const double d, const interval_t &hi) {
-	const interval_t delta = hi - lo;
-	return lo + MultiplyByDouble(delta, d);
+	return Interval::FromMicro(InterpolateInt64(Interval::GetMicro(lo), d, Interval::GetMicro(hi), true));
 }
 
 } // namespace duckdb

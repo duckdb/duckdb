@@ -1,0 +1,87 @@
+# name: test/sql/aggregate/aggregates/test_interpolate_integer_widths.test
+# description: Exact interpolation is independent of the DECIMAL storage width
+# group: [aggregates]
+
+# The exact DOUBLE weight 0.3 is slightly less than three tenths.
+query IIII
+SELECT quantile_cont(y::DECIMAL(4,0), 0.3), quantile_cont(y::DECIMAL(9,0), 0.3),
+       quantile_cont(y::DECIMAL(18,0), 0.3), quantile_cont(y::DECIMAL(38,0), 0.3)
+FROM (VALUES (0), (10)) t(y);
+----
+2	2	2	2
+
+query IIII
+SELECT quantile_cont(y::DECIMAL(4,0), 0.3 ORDER BY y DESC),
+       quantile_cont(y::DECIMAL(9,0), 0.3 ORDER BY y DESC),
+       quantile_cont(y::DECIMAL(18,0), 0.3 ORDER BY y DESC),
+       quantile_cont(y::DECIMAL(38,0), 0.3 ORDER BY y DESC)
+FROM (VALUES (0), (10)) t(y);
+----
+7	7	7	7
+
+query IIII
+SELECT quantile_cont(y::DECIMAL(4,0), 0.3), quantile_cont(y::DECIMAL(9,0), 0.3),
+       quantile_cont(y::DECIMAL(18,0), 0.3), quantile_cont(y::DECIMAL(38,0), 0.3)
+FROM (VALUES (-10), (0)) t(y);
+----
+-8	-8	-8	-8
+
+query IIII
+SELECT quantile_cont(y::DECIMAL(4,0), 0.3 ORDER BY y DESC),
+       quantile_cont(y::DECIMAL(9,0), 0.3 ORDER BY y DESC),
+       quantile_cont(y::DECIMAL(18,0), 0.3 ORDER BY y DESC),
+       quantile_cont(y::DECIMAL(38,0), 0.3 ORDER BY y DESC)
+FROM (VALUES (-10), (0)) t(y);
+----
+-3	-3	-3	-3
+
+query TTTT
+SELECT quantile_cont(y::DECIMAL(4,1), 0.3), quantile_cont(y::DECIMAL(9,1), 0.3),
+       quantile_cont(y::DECIMAL(18,1), 0.3), quantile_cont(y::DECIMAL(38,1), 0.3)
+FROM (VALUES (-1), (0)) t(y);
+----
+-0.8	-0.8	-0.8	-0.8
+
+# Adjacent integers beyond DOUBLE's exact range retain the same median across widths.
+query II
+SELECT median(y::DECIMAL(18,0)), median(y::DECIMAL(38,0))
+FROM (VALUES (0::BIGINT), (18014398509481987::BIGINT)) t(y);
+----
+9007199254740993	9007199254740993
+
+query II
+SELECT median(y::DECIMAL(18,0)), median(y::DECIMAL(38,0))
+FROM (VALUES (0::BIGINT), (-18014398509481987::BIGINT)) t(y);
+----
+-9007199254740994	-9007199254740994
+
+# The endpoint difference exceeds signed HUGEINT, and the scaled product exceeds 128 bits.
+query III
+SELECT median(y), quantile_cont(y, 0.25), quantile_cont(y, 0.75)
+FROM (VALUES (-99999999999999999999999999999999999999::DECIMAL(38,0)),
+             (99999999999999999999999999999999999999::DECIMAL(38,0))) t(y);
+----
+0	-50000000000000000000000000000000000000	49999999999999999999999999999999999999
+
+# INTERVAL endpoints fit BIGINT microseconds, but their difference does not.
+query T
+SELECT median(y)
+FROM (VALUES (INTERVAL '-9223372036854775807 MICROSECONDS'),
+             (INTERVAL '9223372036854775807 MICROSECONDS')) t(y);
+----
+00:00:00
+
+# Half-microsecond ties on either side of zero round to the earlier microsecond.
+query I
+SELECT median(y) = INTERVAL '-1 MICROSECOND'
+FROM (VALUES (INTERVAL '-9223372036854775807 MICROSECONDS'),
+             (INTERVAL '9223372036854775806 MICROSECONDS')) t(y);
+----
+true
+
+query I
+SELECT median(y) = INTERVAL '0 MICROSECONDS'
+FROM (VALUES (INTERVAL '-9223372036854775806 MICROSECONDS'),
+             (INTERVAL '9223372036854775807 MICROSECONDS')) t(y);
+----
+true

@@ -89,7 +89,29 @@ select list_mad(x) from (values	(['294247-01-10 04:00:54.775806'::timestamp,
 query I
 select list_mad(x) from (values (['23:59:59.999999'::time, '00:00:00'::time])) tbl(x);
 ----
-12:00:00
+11:59:59.999999
+
+# List and scalar MAD agree on odd and even microsecond spans, regardless of input order.
+query III
+WITH inputs(id, times, expected) AS (
+	VALUES
+		(1, [TIME '00:00:00', TIME '23:59:59.999999', NULL], INTERVAL '11:59:59.999999'),
+		(2, [TIME '00:00:00', TIME '00:00:00.000003'], INTERVAL '1 MICROSECOND'),
+		(3, [TIME '00:00:00.000003', TIME '00:00:00'], INTERVAL '1 MICROSECOND'),
+		(4, [TIME '00:00:00', TIME '00:00:00.000002'], INTERVAL '1 MICROSECOND'),
+		(5, [NULL::TIME], NULL::INTERVAL)
+)
+SELECT id,
+	list_mad(times) IS NOT DISTINCT FROM expected,
+	list_mad(times) IS NOT DISTINCT FROM (SELECT mad(t) FROM unnest(times) AS values(t))
+FROM inputs
+ORDER BY id;
+----
+1	true	true
+2	true	true
+3	true	true
+4	true	true
+5	true	true
 
 foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz
 

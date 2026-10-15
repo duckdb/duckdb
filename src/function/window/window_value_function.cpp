@@ -1260,47 +1260,83 @@ struct WindowFillExecutor : public WindowValueExecutor {
 	                    idx_t row_idx, OperatorSinkInput &sink);
 };
 
-template <class TO, class FROM>
-static TO LossyFillCast(FROM val) {
-	return LossyNumericCast<TO, FROM>(val);
-}
+struct FillSlope {
+	FillSlope(double numerator, double denominator) : numerator(numerator), denominator(denominator) {
+	}
 
-template <>
-double LossyFillCast(hugeint_t val) {
-	double d;
-	(void)Hugeint::TryCast(val, d);
-	return d;
-}
+	FillSlope(const uhugeint_t &num, const uhugeint_t &den, bool negative)
+	    : numerator(Uhugeint::Cast<double>(num)), denominator(Uhugeint::Cast<double>(den)), exact_numerator(num),
+	      exact_denominator(den), has_exact_ratio(true) {
+		if (negative) {
+			numerator = -numerator;
+		}
+	}
 
-template <>
-double LossyFillCast(uhugeint_t val) {
-	double d;
-	(void)Hugeint::TryCast(val, d);
-	return d;
+	double numerator;
+	double denominator;
+	uhugeint_t exact_numerator = 0;
+	uhugeint_t exact_denominator = 1;
+	bool has_exact_ratio = false;
+
+	double GetValue() const {
+		return numerator / denominator;
+	}
+
+	bool IsInterpolating(double d) const {
+		if (has_exact_ratio) {
+			return numerator >= 0 && exact_numerator <= exact_denominator;
+		}
+		return !(d < 0 || d > 1);
+	}
+};
+
+template <typename T>
+static uhugeint_t FillOrderValue(const T &value) {
+	if constexpr (std::is_same_v<T, uhugeint_t>) {
+		return value;
+	} else if constexpr (std::is_same_v<T, hugeint_t>) {
+		// Flipping the sign bit maps the signed domain to an ordered unsigned domain.
+		return uhugeint_t(static_cast<uint64_t>(value.upper) ^ (uint64_t(1) << 63), value.lower);
+	} else if constexpr (std::is_unsigned_v<T>) {
+		return uhugeint_t(value);
+	} else {
+		return FillOrderValue(hugeint_t(value));
+	}
 }
 
 template <typename T>
-static double FillSlopeFunc(WindowCursor &cursor, idx_t row_idx, idx_t prev_valid, idx_t next_valid) {
-	//	Cast everything to doubles immediately so we can interpolate backwards (x < x0)
-	const auto x = LossyFillCast<double>(cursor.GetCell<T>(0, row_idx));
-	const auto x0 = LossyFillCast<double>(cursor.GetCell<T>(0, prev_valid));
-	const auto x1 = LossyFillCast<double>(cursor.GetCell<T>(0, next_valid));
+static FillSlope FillSlopeFunc(WindowCursor &cursor, idx_t row_idx, idx_t prev_valid, idx_t next_valid) {
+	if constexpr (!std::is_floating_point_v<T>) {
+		const auto x = FillOrderValue(cursor.GetCell<T>(0, row_idx));
+		const auto x0 = FillOrderValue(cursor.GetCell<T>(0, prev_valid));
+		const auto x1 = FillOrderValue(cursor.GetCell<T>(0, next_valid));
+		if (x0 == x1) {
+			return {uhugeint_t(0), uhugeint_t(1), false};
+		}
+		const auto num = x >= x0 ? x - x0 : x0 - x;
+		const auto den = x1 > x0 ? x1 - x0 : x0 - x1;
+		return {num, den, (x < x0) != (x1 < x0)};
+	} else {
+		const auto x = static_cast<double>(cursor.GetCell<T>(0, row_idx));
+		const auto x0 = static_cast<double>(cursor.GetCell<T>(0, prev_valid));
+		const auto x1 = static_cast<double>(cursor.GetCell<T>(0, next_valid));
 
-	auto den = (x1 - x0);
-	if (den == 0) {
-		// Duplicate X values, so pick the first.
-		return 0;
+		auto den = (x1 - x0);
+		if (den == 0) {
+			// Duplicate X values, so pick the first.
+			return {0, 1};
+		}
+		auto num = x - x0;
+		if (!std::isfinite(den)) {
+			const auto scale = MaxValue(std::abs(x0), std::abs(x1));
+			num = x / scale - x0 / scale;
+			den = x1 / scale - x0 / scale;
+		}
+		return {num, den};
 	}
-	auto num = x - x0;
-	if (!std::isfinite(den)) {
-		const auto scale = MaxValue(std::abs(x0), std::abs(x1));
-		num = x / scale - x0 / scale;
-		den = x1 / scale - x0 / scale;
-	}
-	return num / den;
 }
 
-typedef double (*fill_slope_t)(WindowCursor &cursor, idx_t row_idx, idx_t prev_valid, idx_t next_valid);
+typedef FillSlope (*fill_slope_t)(WindowCursor &cursor, idx_t row_idx, idx_t prev_valid, idx_t next_valid);
 
 static fill_slope_t GetFillSlopeFunction(const LogicalType &type) {
 	switch (type.InternalType()) {
@@ -1385,22 +1421,71 @@ bool TryExtrapolateOperator::Operation(const uhugeint_t &lo, const double d, con
 	       Uhugeint::TryConvert(temp, result);
 }
 
-typedef void (*fill_interpolate_t)(Vector &result, idx_t i, WindowCursor &cursor, idx_t lo, idx_t hi, double slope);
+template <typename T>
+static bool TryExtrapolateRoundedEndpoint(const T &lo, const T &hi, const FillSlope &slope, bool before_first,
+                                          T &result) {
+	const auto first = FillOrderValue(lo);
+	const auto last = FillOrderValue(hi);
+	const auto distance = first <= last ? last - first : first - last;
+	const auto excess = before_first ? slope.exact_numerator : slope.exact_numerator - slope.exact_denominator;
+	D_ASSERT(excess < slope.exact_denominator && excess < slope.exact_denominator - excess);
+	// Preserve the ties-to-even rounding of extrapolated offsets, including their integral span.
+	const auto twice_offset =
+	    InterpolateOperator::Operation<uhugeint_t>(0, excess + excess, slope.exact_denominator, distance);
+	const auto twice_ceiling =
+	    distance - InterpolateOperator::Operation<uhugeint_t>(distance, excess + excess, slope.exact_denominator, 0);
+	const auto increasing = (first <= last) != before_first;
+	auto rounded_offset = twice_offset >> 1;
+	const auto odd_offset = ((rounded_offset & 1) != 0) != (increasing && (distance & 1) != 0);
+	if ((twice_offset & 1) != 0 && (twice_offset != twice_ceiling || odd_offset)) {
+		rounded_offset += 1;
+	}
+	T offset;
+	if (!Uhugeint::TryCast(rounded_offset, offset)) {
+		return false;
+	}
+	const auto &endpoint = before_first ? lo : hi;
+	if (increasing) {
+		return TryAddOperator::Operation(endpoint, offset, result);
+	}
+	return TrySubtractOperator::Operation(endpoint, offset, result);
+}
+
+typedef void (*fill_interpolate_t)(Vector &result, idx_t i, WindowCursor &cursor, idx_t lo, idx_t hi,
+                                   const FillSlope &slope);
 
 template <typename T>
-static void FillInterpolateFunc(Vector &result, idx_t i, WindowCursor &cursor, idx_t lo, idx_t hi, double slope) {
+static void FillInterpolateFunc(Vector &result, idx_t i, WindowCursor &cursor, idx_t lo, idx_t hi,
+                                const FillSlope &slope) {
 	const auto y0 = cursor.GetCell<T>(0, lo);
 	const auto y1 = cursor.GetCell<T>(0, hi);
 	auto data = FlatVector::GetDataMutable<T>(result);
-	if (slope < 0 || slope > 1) {
-		if (TryExtrapolateOperator::Operation(y0, slope, y1, data[i])) {
+	const auto d = slope.GetValue();
+	if (!slope.IsInterpolating(d)) {
+		if constexpr (std::is_integral_v<T> || std::is_same_v<T, hugeint_t> || std::is_same_v<T, uhugeint_t>) {
+			if (slope.has_exact_ratio && (d == 1 || (d < 0 && 1 - d == 1))) {
+				if (TryExtrapolateRoundedEndpoint(y0, y1, slope, d < 0, data[i])) {
+					FlatVector::SetNull(result, i, false);
+				}
+				return;
+			}
+		}
+		if (TryExtrapolateOperator::Operation(y0, d, y1, data[i])) {
 			FlatVector::SetNull(result, i, false);
 		}
 		return;
 	}
 
 	FlatVector::SetNull(result, i, false);
-	data[i] = InterpolateOperator::Operation<T>(y0, slope, y1);
+	if constexpr (std::is_integral_v<T> || std::is_same_v<T, hugeint_t> || std::is_same_v<T, uhugeint_t>) {
+		if (slope.has_exact_ratio) {
+			data[i] = InterpolateOperator::Operation<T>(y0, slope.exact_numerator, slope.exact_denominator, y1);
+		} else {
+			data[i] = InterpolateOperator::Operation<T>(y0, slope.numerator, slope.denominator, y1);
+		}
+	} else {
+		data[i] = InterpolateOperator::Operation<T>(y0, d, y1);
+	}
 }
 
 static fill_interpolate_t GetFillInterpolateFunction(const LogicalType &type) {
