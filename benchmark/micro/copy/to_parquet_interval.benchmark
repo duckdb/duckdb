@@ -6,7 +6,7 @@ name Copy to Parquet, intervals
 group copy
 
 load
-CREATE TABLE intervals AS SELECT to_days(i % 10000) + to_microseconds(i % 7) AS iv FROM range(10000000) t(i);
+CREATE TABLE intervals AS SELECT to_days(i % 1000) + to_microseconds(i % 7) AS iv FROM range(10000000) t(i);
 
 run
 COPY intervals TO '${BENCHMARK_DIR}/intervals.parquet' (FORMAT parquet);

@@ -7,6 +7,7 @@ benchmark/micro/cast/cast_timestamp_string.benchmark
 benchmark/micro/copy/to_parquet_partition_by_few.benchmark
 benchmark/micro/copy/to_parquet_partition_by_many.benchmark
 benchmark/micro/copy/to_parquet_interval.benchmark
+benchmark/micro/copy/to_parquet_interval_equal_parts.benchmark
 benchmark/micro/copy/to_parquet_interval_representations.benchmark
 benchmark/micro/limit/parallel_limit.benchmark
 benchmark/micro/filter/parallel_complex_filter.benchmark

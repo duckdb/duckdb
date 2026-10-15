@@ -7,8 +7,9 @@ require parquet
 statement ok
 CREATE TABLE intervals AS
 SELECT [INTERVAL '32 days', INTERVAL '1 month 2 days', INTERVAL '30 days', INTERVAL '1 month',
-        INTERVAL '31 days', INTERVAL '1 month 1 day'][i % 6 + 1] AS iv
-FROM range(3000) t(i)
+        INTERVAL '31 days', INTERVAL '1 month 1 day', INTERVAL '30 days 01:00:00.5', INTERVAL '1 month 01:00:00.5',
+        NULL][i % 9 + 1] AS iv
+FROM range(4500) t(i)
 
 statement ok
 CREATE TABLE nested AS SELECT iv, [iv, iv] AS l, {'iv': iv} AS s FROM intervals
@@ -24,11 +25,14 @@ FROM read_parquet('{TEST_DIR}/interval_normalization_{version}.parquet')
 GROUP BY ALL ORDER BY ALL
 ----
 1 month	500	500	500
+1 month 01:00:00.5	500	500	500
 1 month 1 day	500	500	500
 1 month 2 days	500	500	500
 30 days	500	500	500
+30 days 01:00:00.5	500	500	500
 31 days	500	500	500
 32 days	500	500	500
+NULL	500	0	0
 
 query I
 SELECT count(*) FROM (
