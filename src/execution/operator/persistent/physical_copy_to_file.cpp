@@ -736,6 +736,8 @@ struct PartitionedCopyCollection {
 
 	PartitionedCopyCollectionSchema schema = PartitionedCopyCollectionSchema::WRITE_SCHEMA;
 	unique_ptr<ColumnDataCollection> collection;
+	//! Whether the rows are one sorted run of a hash group, which needs no further sort
+	bool single_sorted_run = false;
 };
 
 struct PartitionedCopyBatchAction {
@@ -1051,6 +1053,7 @@ struct DelayedPartitionState {
 		}
 		D_ASSERT(buffer.schema == data.schema);
 		buffer.collection->Combine(*data.collection);
+		buffer.single_sorted_run = false;
 	}
 
 	bool Ready(idx_t flush_threshold, bool force) const {
@@ -2506,6 +2509,8 @@ void PartitionedCopyHashGroup::Flush(ExecutionContext &execution_context, Interr
 		}
 
 		auto data = PartitionedCopyCollection(collection_schema, std::move(collection));
+		// the batches are consecutive ranges of the sorted hash group
+		data.single_sorted_run = true;
 		auto ready_partition = partitioned_copy.BufferOrTakeReadyPartition(flush_action.values, std::move(data), false);
 		if (ready_partition) {
 			partitioned_copy.FlushPartitionCollection(execution_context, interrupt_state, std::move(*ready_partition));
@@ -3393,8 +3398,10 @@ void PartitionedCopy::FlushPartitionCollection(ExecutionContext &execution_conte
 		DelayedPartitionFlushGuard delayed_guard(*this, flush.values);
 		if (flush.data.collection && flush.data.collection->Count() > 0) {
 			if (flush.data.schema == PartitionedCopyCollectionSchema::RAW_SCHEMA) {
-				flush.data.collection =
-				    SortPartitionCollection(execution_context, interrupt_state, std::move(flush.data.collection));
+				if (!flush.data.single_sorted_run) {
+					flush.data.collection =
+					    SortPartitionCollection(execution_context, interrupt_state, std::move(flush.data.collection));
+				}
 				flush.data.collection = ProjectToWriteColumns(std::move(flush.data.collection));
 				flush.data.schema = PartitionedCopyCollectionSchema::WRITE_SCHEMA;
 			}
