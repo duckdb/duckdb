@@ -103,6 +103,28 @@ SELECT max(b) FROM read_csv('{TEST_DIR}/past_sample_two_columns.csv', sample_siz
 ----
 Could not convert string "1.5" to 'BIGINT'
 
+# files that order their columns differently
+statement ok
+COPY (SELECT '1' AS a, '1' AS b FROM range(10)) TO '{TEST_DIR}/columns_ab.csv' (HEADER);
+
+statement ok
+COPY (SELECT CASE WHEN i < 2048 THEN '1' ELSE '1.5' END AS b, CASE WHEN i < 2048 THEN '1' ELSE '1.5' END AS a FROM range(2049) t(i)) TO '{TEST_DIR}/columns_ba.csv' (HEADER, QUOTE '');
+
+statement error
+SELECT max(a), max(b) FROM read_csv(['{TEST_DIR}/columns_ab.csv', '{TEST_DIR}/columns_ba.csv'], types = {'a': 'BIGINT'}, sample_size = 2048)
+----
+<REGEX>:.*converting column "b".*
+
+statement error
+SELECT max(a), max(b) FROM read_csv(['{TEST_DIR}/columns_ab.csv', '{TEST_DIR}/columns_ba.csv'], types = {'b': 'BIGINT'}, sample_size = 2048)
+----
+<REGEX>:.*converting column "a".*
+
+query II
+SELECT max(a), max(b) FROM read_csv(['{TEST_DIR}/columns_ab.csv', '{TEST_DIR}/columns_ba.csv'], types = {'a': 'BIGINT', 'b': 'BIGINT'}, sample_size = 2048)
+----
+2	2
+
 # BIGNUM values are checked as the sniffer checks them
 statement ok
 COPY (SELECT CASE WHEN i < 2048 THEN '1' || repeat('0', 40) ELSE '1.5' END AS n FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_bignum.csv' (HEADER, QUOTE '');
@@ -126,22 +148,23 @@ SELECT * FROM read_csv('{TEST_DIR}/past_sample_comma.csv', delim = ';', decimal_
 ----
 Could not convert string "+2,5" to 'DOUBLE'
 
-# timestamps with an offset are read as before
+# an offset is applied to a sniffed TIMESTAMP WITH TIME ZONE
 statement ok
 COPY (SELECT '2020-01-01 00:00:00+02' AS ts) TO '{TEST_DIR}/timestamp_offset.csv' (HEADER, QUOTE '');
 
-query I
-SELECT typeof(ts) FROM read_csv('{TEST_DIR}/timestamp_offset.csv')
+query II
+SELECT typeof(ts), epoch(ts) FROM read_csv('{TEST_DIR}/timestamp_offset.csv')
 ----
-TIMESTAMP WITH TIME ZONE
+TIMESTAMP WITH TIME ZONE	1577829600.0
 
 statement ok
 COPY (SELECT CASE WHEN i < 2048 THEN '2020-01-01 10:00:00' ELSE '2020-01-01 10:00:00+02' END AS ts FROM range(2049) t(i)) TO '{TEST_DIR}/past_sample_timestamp_offset.csv' (HEADER, QUOTE '');
 
-query II
-SELECT typeof(ts), count(*) FROM read_csv('{TEST_DIR}/past_sample_timestamp_offset.csv', sample_size = 2048) GROUP BY ALL
+# a TIMESTAMP value with an offset after the sample is cast as CAST does
+query III
+SELECT typeof(ts), count(*), list(DISTINCT ts) FROM read_csv('{TEST_DIR}/past_sample_timestamp_offset.csv', sample_size = 2048) GROUP BY ALL
 ----
-TIMESTAMP	2049
+TIMESTAMP	2049	['2020-01-01 10:00:00']
 
 # TINYINT is sniffed as strictly as the other integer types
 statement ok

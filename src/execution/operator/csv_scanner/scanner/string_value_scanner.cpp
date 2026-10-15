@@ -24,6 +24,18 @@ namespace duckdb {
 
 constexpr idx_t StringValueScanner::LINE_FINDER_ID;
 
+//! Whether the type of a column of the file was given by the user, instead of sniffed
+static bool TypeIsSetByUser(const CSVReaderOptions &options, const vector<string> &names, idx_t column_idx) {
+	if (options.columns_set) {
+		return true;
+	}
+	if (options.sql_types_per_column.empty()) {
+		return column_idx < options.sql_type_list.size();
+	}
+	return column_idx < names.size() &&
+	       options.sql_types_per_column.find(Identifier(names[column_idx])) != options.sql_types_per_column.end();
+}
+
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
                                      const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
                                      idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler_p,
@@ -79,10 +91,9 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 				type = LogicalType::VARCHAR;
 			}
 			if (StringValueScanner::CanDirectlyCast(type, icu_loaded)) {
-				auto &options = state_machine.options;
 				auto &projection_ids = csv_file_scan->projection_ids;
 				const auto column_idx = i < projection_ids.size() ? projection_ids[i].first : i;
-				const bool sniffed = !options.columns_set && !options.WasTypeManuallySet(column_idx);
+				const bool sniffed = !TypeIsSetByUser(state_machine.options, csv_file_scan->GetNames(), column_idx);
 				parse_types[i] = ParseTypeInfo(type, true, sniffed);
 				logical_types.emplace_back(type);
 			} else {
@@ -372,7 +383,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 		break;
 	}
 	case LogicalTypeId::BIGNUM: {
-		if (strict && !CSVSniffer::CanYouCastBignum(value_ptr, size)) {
+		if (strict && !CSVSniffer::IsBignumValue(value_ptr, size)) {
 			success = false;
 			break;
 		}

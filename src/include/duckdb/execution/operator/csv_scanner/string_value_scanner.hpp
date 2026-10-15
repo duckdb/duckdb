@@ -172,7 +172,7 @@ struct ParseTypeInfo {
 	}
 
 	bool validate_utf8;
-	//! Whether values are cast as strictly as the sniffer casts them, for a type the sniffer detected
+	//! Whether values are cast strictly, for a type the sniffer detected
 	bool strict;
 	LogicalTypeId type_id;
 	PhysicalType internal_type;
