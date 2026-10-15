@@ -175,7 +175,13 @@ LogicalNotExpression <- NotExpression? IsExpression
 NotExpression <- NotKeyword+
 NotKeyword <- 'NOT'
 # LEVEL 4
-IsExpression <- IsDistinctFromExpression IsTest*
+IsExpression <- IsDistinctFromExpression IsExpressionContinuation?
+IsExpressionContinuation <- IsTest IsExpressionTail*
+IsExpressionTail <- IsTestTail / IsDistinctTail / IsComparisonTail / IsOtherOperatorTail
+IsTestTail <- IsTest
+IsDistinctTail <- IsDistinctFromTail
+IsComparisonTail <- ComparisonExpressionTail
+IsOtherOperatorTail <- OtherOperatorTail
 IsTest <- IsLiteral / NotNull / IsNull
 IsLiteral <- 'IS' 'NOT'? IsLiteralValue
 IsLiteralValue <- TrueLiteral / FalseLiteral / NullLiteral / UnknownLiteral
@@ -185,7 +191,7 @@ NotNullKeyword <- 'NOT' 'NULL'
 NotNullOperator <- 'NOTNULL'
 IsNull <- IsNullOperator
 IsNullOperator <- 'ISNULL'
-# LEVEL 5 (Split because IsDistinctFromExpression allows post expression while IsOperator does not)
+# LEVEL 5 (IS DISTINCT FROM retains the comparison binding)
 IsDistinctFromExpression <- ComparisonExpression IsDistinctFromTail*
 IsDistinctFromTail <- IsDistinctFromOp ComparisonExpression
 IsDistinctFromOp <- 'IS' 'NOT'? 'DISTINCT' 'FROM'
@@ -207,11 +213,12 @@ OperatorGreaterThan <- '>'
 OperatorLessThanEquals <- '<='
 OperatorGreaterThanEquals <- '>='
 # LEVEL 7
-BetweenInLikeExpression <- OtherOperatorExpression BetweenInLikeOp?
-BetweenInLikeOp <- 'NOT'? BetweenInLikeOpExpression
-BetweenInLikeOpExpression <- BetweenClause / InClause / LikeClause
+BetweenInLikeExpression <- OtherOperatorExpression InPredicate* BetweenLikeOp?
+InPredicate <- 'NOT'? InClause
+BetweenLikeOp <- 'NOT'? BetweenLikeOpExpression
+BetweenLikeOpExpression <- BetweenClause / LikeClause
 LikeClause <- LikeVariations OtherOperatorExpression EscapeClause?
-EscapeClause <- 'ESCAPE' ComparisonExpression
+EscapeClause <- 'ESCAPE' OtherOperatorExpression
 
 LikeVariations <- SimilarToToken / RegexInsensitiveMatchToken / RegexMatchToken / ILikeToken / LikeToken / GlobToken / NotILikeOp / NotLikeOp / NotRegexInsensitiveMatchOp / NotSimilarToOp
 LikeToken      <- 'LIKE' / '~~'
@@ -230,31 +237,32 @@ InExpression <- InExpressionList / InSelectStatement / InContainsExpression
 InContainsExpression <- OtherOperatorExpression
 InExpressionList <- Parens(List(Expression))
 InSelectStatement <- Parens(SelectStatementInternal)
-BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
+BetweenClause <- 'BETWEEN' Asymmetric? OtherOperatorExpression 'AND' OtherOperatorExpression
+Asymmetric <- 'ASYMMETRIC'
 # LEVEL 8
-OtherOperatorExpression <- BitwiseExpression OtherOperatorTail*
+OtherOperatorExpression <- InfixOtherOperatorExpression / CustomPrefixExpression
+InfixOtherOperatorExpression <- BitwiseExpression OtherOperatorTail*
+CustomPrefixExpression <- OperatorLiteral OtherOperatorExpression
 OtherOperatorTail <- OtherOperator BitwiseExpression
 OtherOperator <-
     AnyAllParsedOperator / NamedOtherOperator
 AnyAllParsedOperator <- AnyAllOperator
 NamedOtherOperator <-
-    QualifiedOperator / InetOperator / JsonOperator / ListOperator / StringOperator / OperatorLiteral
+    QualifiedOperator / OperatorLiteral
 OperatorLiteral <- Identifier
-AnyAllOperator <- AnyOp AnyOrAll
+AnyOperatorLiteral <- Identifier
+AnyAllOperator <- AnyOperatorLiteral AnyOrAll
 AnyOrAll <- SubqueryAny / SubqueryAll
-SubqueryAny <- 'ANY'
+SubqueryAny <- 'ANY' / 'SOME'
 SubqueryAll <- 'ALL'
-InetOperator <- '>>=' / '<<='
-JsonOperator <- '->>'
-ListOperator <- '&&' / '@>' / '<@'
-StringOperator <- '^@' / '||'
 QualifiedOperator <- 'OPERATOR' Parens(QualifiedOperatorContents)
-QualifiedOperatorContents <- ColIdDot* AnyOp
-AnyOp <- '!~~*' / '>>=' / '<<=' / '->>' / '!~~' / '!~*' / '~~*' / '~~~' / '~*' / '!~' / '^@' / '||' / '&&' / '@>' / '<@' / '<=' / '>=' / '<>' / '!=' / '==' / '<<' / '>>' / '//' / '**' / '->' / '~~' / '+' / '-' / '*' / '/' / '%' / '^' / '<' / '>' / '=' / '&' / '|' / '~' / '!'
+QualifiedOperatorContents <- ColIdDot* AnyOperatorLiteral
 # LEVEL 9
-BitwiseExpression <- AdditiveExpression BitwiseExpressionTail*
-BitwiseExpressionTail <- BitOperator AdditiveExpression
+BitwiseExpression <- TildeExpression BitwiseExpressionTail*
+BitwiseExpressionTail <- BitOperator TildeExpression
 BitOperator <- '&' / '|' / '<<' / '>>'
+# LEVEL 9.5
+TildeExpression <- TildePrefixOperator* AdditiveExpression
 # LEVEL 10
 AdditiveExpression <- MultiplicativeExpression AdditiveExpressionTail*
 AdditiveExpressionTail <- Term MultiplicativeExpression
@@ -277,7 +285,7 @@ AtTimeZoneExpressionTail <- AtTimeZoneOperator PrefixExpression
 AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
 # LEVEL 15
 PrefixExpression <- PrefixOperator* BaseExpression
-PrefixOperator <- QualifiedOperator / MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
+PrefixOperator <- QualifiedOperator / MinusPrefixOperator / PlusPrefixOperator
 MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
 TildePrefixOperator <- '~'

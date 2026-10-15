@@ -20,6 +20,7 @@
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/json_document.hpp"
 
 #include <utility>
@@ -546,6 +547,9 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
+	if (!running.load(std::memory_order_relaxed)) {
+		return;
+	}
 	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
@@ -578,6 +582,9 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 }
 
 void QueryProfiler::SetBlockedTime(const double &blocked_thread_time) {
+	if (!running.load(std::memory_order_relaxed)) {
+		return;
+	}
 	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
