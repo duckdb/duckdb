@@ -451,6 +451,27 @@ TEST_CASE("decompose timetz with duckdb_from_time_tz", "[capi]") {
 	REQUIRE(time_tz.offset == -7200);
 }
 
+TEST_CASE("decompose a timestamp whose day starts below the timestamp range", "[capi]") {
+	CAPITester tester;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto res = tester.Query("SELECT make_timestamp(-9223372036854775806)");
+	REQUIRE(res->success);
+	auto chunk = res->FetchChunk(0);
+	auto data = (duckdb_timestamp *)chunk->GetData(0);
+	REQUIRE(duckdb_is_finite_timestamp(data[0]));
+
+	auto timestamp = duckdb_from_timestamp(data[0]);
+	REQUIRE(timestamp.date.year == -290308);
+	REQUIRE(timestamp.date.month == 12);
+	REQUIRE(timestamp.date.day == 21);
+	REQUIRE(timestamp.time.hour == 19);
+	REQUIRE(timestamp.time.min == 59);
+	REQUIRE(timestamp.time.sec == 5);
+	REQUIRE(timestamp.time.micros == 224194);
+}
+
 TEST_CASE("create time_tz value") {
 	duckdb_time_struct time;
 	time.hour = 4;

@@ -74,9 +74,9 @@ duckdb_time duckdb_to_time(duckdb_time_struct time) {
 }
 
 duckdb_timestamp_struct duckdb_from_timestamp(duckdb_timestamp ts) {
-	date_t date;
-	dtime_t time;
-	Timestamp::Convert(timestamp_t(ts.micros), date, time);
+	// unlike Convert, also splits the finite timestamps whose day does not start within the range
+	date_t date = Timestamp::GetDate(timestamp_t(ts.micros));
+	dtime_t time = Timestamp::GetTime(timestamp_t(ts.micros));
 
 	duckdb_date ddate;
 	ddate.days = date.days;
