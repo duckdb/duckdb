@@ -403,7 +403,8 @@ private:
 	const vector<idx_t> &partition_columns;
 };
 
-BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type) {
+BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type,
+                                  optional_ptr<BoundStatement> bound_query) {
 	if (function.plan) {
 		// plan rewrite COPY TO
 		auto result = function.plan(*this, stmt);
@@ -419,9 +420,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	// preserve SQLNULL types from table functions (e.g. JSON reader null columns)
 	// so file writers that support it can emit the correct null type (e.g. parquet UNKNOWN/NullType)
 	BoundStatement select_node;
-	if (bound_copy_query) {
-		select_node = std::move(*bound_copy_query);
-		bound_copy_query.reset();
+	if (bound_query) {
+		select_node = std::move(*bound_query);
 	} else {
 		auto node_copy = copy_info.select_statement->Copy();
 		select_node = Bind(*node_copy);
@@ -841,7 +841,11 @@ void Binder::BindCopyOptions(CopyInfo &info, const CopyFunction &function) {
 	}
 }
 
-BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
+BoundStatement Binder::Bind(CopyStatement &stmt, BoundStatement &bound_query) {
+	return Bind(stmt, CopyToType::COPY_TO_FILE, bound_query);
+}
+
+BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type, optional_ptr<BoundStatement> bound_query) {
 	BindCopyFormat(*stmt.info);
 	if (stmt.info->is_from && stmt.info->parsed_options.find("partition_path") != stmt.info->parsed_options.end()) {
 		throw InvalidInputException("Option partition_path is not supported for reading - only for writing");
@@ -968,7 +972,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	if (stmt.info->is_from) {
 		return BindCopyFrom(stmt, function);
 	} else {
-		return BindCopyTo(stmt, function, copy_to_type);
+		return BindCopyTo(stmt, function, copy_to_type, bound_query);
 	}
 }
 

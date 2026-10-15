@@ -325,14 +325,17 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 	copy_info.options["delimiter"] = {"\n"};
 	copy_info.options["header"] = {{0}};
 
+	BoundStatement result;
 	if (bound_query) {
 		// bind the rewrite on top of the query bound above, the statement keeps the parsed query
-		auto bound_select = select_node.Copy();
-		bound_select->Cast<SelectNode>().from_table =
+		auto rewrite = select_node.Copy();
+		rewrite->Cast<SelectNode>().from_table =
 		    make_uniq<BoundRefWrapper>(std::move(*bound_query), std::move(query_binder));
-		binder.bound_copy_query = make_uniq<BoundStatement>(binder.Bind(*bound_select));
+		auto bound_rewrite = binder.Bind(*rewrite);
+		result = binder.Bind(stmt, bound_rewrite);
+	} else {
+		result = binder.Bind(stmt);
 	}
-	auto result = binder.Bind(stmt);
 	if (!is_geojson) {
 		BindJSONCopyToJSONFunction(binder, result, date_format, timestamp_format);
 	}
