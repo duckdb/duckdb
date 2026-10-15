@@ -108,15 +108,6 @@ struct ThrottlingSum {
 
 // TableInOutFunction that emits one row when it finishes, also without input rows
 struct EmitOnFinish {
-	struct EmitOnFinishLocalData : public LocalTableFunctionState {
-		bool emitted = false;
-	};
-
-	static duckdb::unique_ptr<LocalTableFunctionState>
-	LocalInit(ExecutionContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *global_state) {
-		return make_uniq<EmitOnFinishLocalData>();
-	}
-
 	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
 	                                             duckdb::vector<LogicalType> &return_types,
 	                                             duckdb::vector<Identifier> &names) {
@@ -133,20 +124,15 @@ struct EmitOnFinish {
 
 	static OperatorFinalizeResultType Finalize(ExecutionContext &context, TableFunctionInput &data_p,
 	                                           DataChunk &output) {
-		auto &local_state = data_p.local_state->Cast<EmitOnFinishLocalData>();
-		if (!local_state.emitted) {
-			local_state.emitted = true;
-			output.data[0].Append(Value::INTEGER(42));
-			output.SetChildCardinality(1);
-		}
+		output.data[0].Append(Value::INTEGER(42));
+		output.SetChildCardinality(1);
 		return OperatorFinalizeResultType::FINISHED;
 	}
 
 	static void Register(Connection &con) {
 		con.BeginTransaction();
 		auto &catalog = Catalog::GetSystemCatalog(*con.context);
-		TableFunction emit_on_finish("emit_on_finish", {LogicalType::TABLE}, nullptr, EmitOnFinish::Bind, nullptr,
-		                             EmitOnFinish::LocalInit);
+		TableFunction emit_on_finish("emit_on_finish", {LogicalType::TABLE}, nullptr, EmitOnFinish::Bind);
 		emit_on_finish.in_out_function = EmitOnFinish::Function;
 		emit_on_finish.in_out_function_final = EmitOnFinish::Finalize;
 		CreateTableFunctionInfo emit_on_finish_info(emit_on_finish);

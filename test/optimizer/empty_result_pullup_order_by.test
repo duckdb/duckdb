@@ -46,3 +46,32 @@ query I
 SELECT count(*) FROM (SELECT g FROM t WHERE false ORDER BY g LIMIT 5) q, t;
 ----
 0
+
+# an empty ordered or limited side does not empty an outer or anti join
+query I
+SELECT count(*) FROM t LEFT JOIN (SELECT g FROM t WHERE false ORDER BY g LIMIT 3) q ON t.g = q.g;
+----
+10000
+
+query I
+SELECT count(*) FROM t ANTI JOIN (SELECT g FROM t WHERE false ORDER BY g) q ON t.g = q.g;
+----
+10000
+
+query I
+SELECT count(*) FROM t WHERE g NOT IN (SELECT g FROM t WHERE false ORDER BY g LIMIT 3);
+----
+10000
+
+# a CTE that writes still runs below an empty ordered and limited result
+statement ok
+CREATE TABLE log(i INTEGER);
+
+query I
+WITH ins AS (INSERT INTO log VALUES (1) RETURNING i) SELECT * FROM (SELECT i FROM ins WHERE false ORDER BY i LIMIT 1);
+----
+
+query I
+SELECT count(*) FROM log;
+----
+1
