@@ -2,6 +2,8 @@
 # description: A sequence function folded while binding a prepared statement marks the database as modified
 # group: [general]
 
+load {TEST_DIR}/test_26144.db
+
 statement ok
 CREATE SEQUENCE s;
 
@@ -75,12 +77,15 @@ SELECT currval('s');
 ----
 10
 
-# a sequence function in a branch that does not run marks nothing
+# a sequence function in a branch that does not run, or that writes no row, marks nothing
 statement ok
 BEGIN TRANSACTION READ ONLY;
 
 statement ok
 PREPARE x AS SELECT count(*) FROM range(CASE WHEN false THEN nextval('s') ELSE 2 END);
+
+statement ok
+PREPARE y AS SELECT count(*) FROM range(coalesce(setval('s', NULL), 2));
 
 statement ok
 COMMIT;
@@ -112,3 +117,14 @@ query I
 SELECT 42;
 ----
 42
+
+# the sequence advanced while binding is persisted
+statement ok
+DETACH ro;
+
+restart
+
+query I
+SELECT nextval('s');
+----
+11
