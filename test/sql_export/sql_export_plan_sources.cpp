@@ -756,7 +756,7 @@ TEST_CASE("Source replacement materialization is selected per boundary",
 	                         "VALUES (1::BIGINT,1::BIGINT,42::BIGINT),(2,2,42),(3,3,42)");
 	auto calls = connection.Query("SELECT currval('source_calls')");
 	REQUIRE_NO_FAIL(*calls);
-	REQUIRE(calls->GetValue(0, 0) == Value::BIGINT(3));
+	REQUIRE(calls->Collection().GetValue(0, 0) == Value::BIGINT(3));
 	connection.Rollback();
 }
 
