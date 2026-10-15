@@ -104,6 +104,10 @@ bool BoundCastInfo::IsNullCast() const {
 	return function == DefaultCasts::TryVectorNullCast;
 }
 
+bool BoundCastInfo::IsReinterpretCast() const {
+	return function == DefaultCasts::ReinterpretCast;
+}
+
 static bool NullTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	// cast a NULL to another type, just copy the properties and change the type
 	ConstantVector::SetNull(result, count_t(count));

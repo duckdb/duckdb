@@ -160,6 +160,8 @@ public:
 	//! Whether this is the fallback cast used when no cast exists between the types
 	//! It throws for any non-NULL value, regardless of the types involved
 	bool IsNullCast() const;
+	//! Whether this cast only changes the type of the vector, which cannot fail
+	bool IsReinterpretCast() const;
 	bool Equals(const BoundCastInfo &other) const {
 		return function == other.function && statistics == other.statistics;
 	}

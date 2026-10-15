@@ -43,6 +43,9 @@ static bool BoundCastCanThrow(const BoundCastInfo &bound_cast, const LogicalType
 	if (bound_cast.IsNopCast()) {
 		return false; // The cast does not do anything
 	}
+	if (bound_cast.IsReinterpretCast()) {
+		return false; // The cast only changes the type of the vector
+	}
 	if (bound_cast.IsNullCast()) {
 		// No cast exists between these types - it throws for every non-NULL value, unless this is a try_cast
 		return !try_cast;
