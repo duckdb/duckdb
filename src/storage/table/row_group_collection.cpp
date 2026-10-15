@@ -1028,13 +1028,9 @@ void RowGroupCollection::Update(TransactionData transaction, DuckTableEntry &tab
 void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes,
                                            Vector &row_identifiers, idx_t count, IndexRemovalType removal_type,
                                            optional_idx active_checkpoint) {
-	// Collect all Indexed columns on the table.
-	auto indexed_column_id_set = indexes.GetIndexedColumns();
-
-	// Sorted so that the fetched columns align with the ascending physical order used when
-	// referencing them into result_chunk below.
-	vector<StorageIndex> column_ids {indexed_column_id_set.begin(), indexed_column_id_set.end()};
-	sort(column_ids.begin(), column_ids.end());
+	// Collect all indexed columns on the table, sorted so that the fetched columns align with the
+	// ascending physical order used when referencing them into result_chunk below.
+	auto column_ids = indexes.GetSortedIndexedColumns();
 
 	vector<LogicalType> column_types;
 	column_types.reserve(column_ids.size());
@@ -1056,8 +1052,8 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	auto fetched_columns = vector<bool>(types.size(), false);
 	result_chunk.Initialize(GetAllocator(), types, fetched_columns);
 	// Now set all to-be-fetched columns.
-	for (auto &col : indexed_column_id_set) {
-		fetched_columns[col] = true;
+	for (auto &col : column_ids) {
+		fetched_columns[col.GetPrimaryIndex()] = true;
 	}
 
 	// Reference the necessary columns of the fetch_chunk.

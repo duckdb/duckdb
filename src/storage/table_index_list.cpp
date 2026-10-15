@@ -499,6 +499,17 @@ unordered_set<column_t> TableIndexList::GetIndexedColumns() const {
 	return column_ids;
 }
 
+vector<StorageIndex> TableIndexList::GetSortedIndexedColumns() const {
+	auto indexed_columns = GetIndexedColumns();
+	vector<StorageIndex> mapped_column_ids;
+	mapped_column_ids.reserve(indexed_columns.size());
+	for (auto &col : indexed_columns) {
+		mapped_column_ids.emplace_back(col);
+	}
+	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
+	return mapped_column_ids;
+}
+
 vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndexWriter &writer) {
 	annotated_lock_guard lock(index_entries_lock);
 
@@ -572,14 +583,7 @@ void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<L
 	// table_chunk contains all table columns.
 	// We only reference the index columns in the index chunk.
 	auto &index_list = data_table_info.GetIndexes();
-	auto indexed_columns = index_list.GetIndexedColumns();
-
-	// Store the mapped_column_ids and index_types in sorted canonical form.
-	// First sort mapped_column_ids, then populate index_types according to the sorted order.
-	for (auto &col : indexed_columns) {
-		mapped_column_ids.emplace_back(col);
-	}
-	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
+	mapped_column_ids = index_list.GetSortedIndexedColumns();
 
 	vector<LogicalType> index_types;
 	for (auto &col : mapped_column_ids) {
@@ -594,6 +598,15 @@ void TableIndexList::ReferenceIndexChunk(DataChunk &table_chunk, DataChunk &inde
 	for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
 		auto col_id = mapped_column_ids[i].GetPrimaryIndex();
 		index_chunk.data[i].Reference(table_chunk.data[col_id]);
+	}
+}
+
+void TableIndexList::ReferenceTableChunk(DataChunk &table_chunk, DataChunk &index_chunk,
+                                         const vector<StorageIndex> &mapped_column_ids) {
+	D_ASSERT(index_chunk.ColumnCount() == mapped_column_ids.size());
+	for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
+		auto col_id = mapped_column_ids[i].GetPrimaryIndex();
+		table_chunk.data[col_id].Reference(index_chunk.data[i]);
 	}
 }
 

@@ -158,35 +158,13 @@ bool LocalTableStorage::IsBulkAppend() const {
 	return collection.GetTotalRows() >= collection.GetRowGroupSize();
 }
 
-//! The indexed columns of index_list, sorted for a deterministic scan order.
-static vector<StorageIndex> GetIndexScanColumns(TableIndexList &index_list) {
-	D_ASSERT(!index_list.Empty());
-	auto indexed_columns = index_list.GetIndexedColumns();
-	vector<StorageIndex> mapped_column_ids;
-	for (auto &col : indexed_columns) {
-		mapped_column_ids.emplace_back(col);
-	}
-	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
-	return mapped_column_ids;
-}
-
-//! Lets table_chunk reference the scanned indexed columns of index_chunk.
-static void ReferenceIndexedColumns(DataChunk &table_chunk, DataChunk &index_chunk,
-                                    const vector<StorageIndex> &mapped_column_ids) {
-	D_ASSERT(index_chunk.ColumnCount() == mapped_column_ids.size());
-	for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
-		auto col_id = mapped_column_ids[i].GetPrimaryIndex();
-		table_chunk.data[col_id].Reference(index_chunk.data[i]);
-	}
-}
-
 ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
                                              TableIndexList &index_list, const vector<LogicalType> &table_types,
                                              row_t &start_row) {
 	// We only scan the indexed columns: mapped_column_ids lists them (sorted for a deterministic order),
 	// and the scan below produces index_chunk in that order, i.e., index_chunk.data[i] holds the data of
 	// the table's physical column mapped_column_ids[i].
-	auto mapped_column_ids = GetIndexScanColumns(index_list);
+	auto mapped_column_ids = index_list.GetSortedIndexedColumns();
 	auto checkpoint_id = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
 
 	// The bound expressions of the indexes (and their bound column references) are in relation to
@@ -197,7 +175,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 
 	ErrorData error;
 	for (auto &index_chunk : source.Chunks(transaction, mapped_column_ids)) {
-		ReferenceIndexedColumns(table_chunk, index_chunk, mapped_column_ids);
+		TableIndexList::ReferenceTableChunk(table_chunk, index_chunk, mapped_column_ids);
 		error = index_list.Append(delete_indexes, table_chunk, start_row, index_append_mode, checkpoint_id);
 		if (error.HasError()) {
 			break;
@@ -246,7 +224,7 @@ void LocalTableStorage::RevertIndexAppend(DuckTransaction &transaction, row_t ro
 	}
 	auto data_table_info = table.GetDataTableInfo();
 	auto &index_list = data_table_info->GetIndexes();
-	auto mapped_column_ids = GetIndexScanColumns(index_list);
+	auto mapped_column_ids = index_list.GetSortedIndexedColumns();
 	DataChunk table_chunk;
 	table_chunk.InitializeEmpty(table.GetTypes());
 	row_t current_row = row_start;
@@ -254,7 +232,7 @@ void LocalTableStorage::RevertIndexAppend(DuckTransaction &transaction, row_t ro
 		if (current_row >= row_end) {
 			break;
 		}
-		ReferenceIndexedColumns(table_chunk, index_chunk, mapped_column_ids);
+		TableIndexList::ReferenceTableChunk(table_chunk, index_chunk, mapped_column_ids);
 		index_list.RevertAppend(table_chunk, current_row);
 		current_row += UnsafeNumericCast<row_t>(index_chunk.size());
 	}
