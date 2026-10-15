@@ -61,6 +61,10 @@ static string CastExceptionText(SRC input) {
 		return "Could not convert string '" + ConvertToString::Operation<SRC>(input) + "' to " +
 		       TypeIdToString(GetTypeId<DST>());
 	}
+	if (std::is_same<SRC, bignum_t>()) {
+		return "Could not convert bignum '" + ConvertToString::Operation<SRC>(input) + "' to " +
+		       TypeIdToString(GetTypeId<DST>());
+	}
 	if (TypeIsNumber<SRC>() && TypeIsNumber<DST>()) {
 		return "Type " + TypeIdToString(GetTypeId<SRC>()) + " with value " + ConvertToString::Operation<SRC>(input) +
 		       " can't be cast because the value is out of range for the destination type " +

@@ -84,9 +84,28 @@ public:
 		auto data = blob.data.GetData();
 		bool is_negative = (data[0] & 0x80) == 0;
 
+		// The absolute value of the number, i.e., the data bytes without any leading zero bytes
+		idx_t abs_begin = Bignum::BIGNUM_HEADER_SIZE;
+		idx_t abs_end = Bignum::BIGNUM_HEADER_SIZE + data_byte_size;
+		while (abs_begin < abs_end) {
+			uint8_t byte = static_cast<uint8_t>(data[abs_begin]);
+			if (is_negative) {
+				byte = static_cast<uint8_t>(~byte);
+			}
+			if (byte != 0) {
+				break;
+			}
+			abs_begin++;
+		}
+		// The largest integer type a BIGNUM can be cast to is UHUGEINT (16 bytes), so an absolute value that does
+		// not fit in 16 bytes is out of range for every integer type
+		if (abs_end - abs_begin > sizeof(uhugeint_t)) {
+			return false;
+		}
+
 		uhugeint_t abs_value = 0;
-		for (idx_t i = 0; i < data_byte_size; ++i) {
-			uint8_t byte = static_cast<uint8_t>(data[Bignum::BIGNUM_HEADER_SIZE + i]);
+		for (idx_t i = abs_begin; i < abs_end; ++i) {
+			uint8_t byte = static_cast<uint8_t>(data[i]);
 			if (is_negative) {
 				byte = static_cast<uint8_t>(~byte);
 			}
@@ -94,13 +113,24 @@ public:
 		}
 
 		if (is_negative) {
-			if (abs_value > static_cast<uhugeint_t>(std::numeric_limits<T>::max()) + 1) {
-				throw OutOfRangeException("Negative bignum too small for type");
+			// A negative value can only be represented by a signed type
+			if (!NumericLimits<T>::IsSigned()) {
+				return false;
 			}
-			result = static_cast<T>(-static_cast<hugeint_t>(abs_value));
+			// The absolute value of the smallest value of the type is one larger than its maximum (i.e., -128 for
+			// TINYINT), and it can not be obtained by negating the value without overflowing
+			auto max_abs_value = static_cast<uhugeint_t>(NumericLimits<T>::Maximum()) + 1;
+			if (abs_value > max_abs_value) {
+				return false;
+			}
+			if (abs_value == max_abs_value) {
+				result = NumericLimits<T>::Minimum();
+			} else {
+				result = static_cast<T>(-static_cast<hugeint_t>(abs_value));
+			}
 		} else {
-			if (abs_value > static_cast<uhugeint_t>(std::numeric_limits<T>::max())) {
-				throw OutOfRangeException("Positive bignum too large for type");
+			if (abs_value > static_cast<uhugeint_t>(NumericLimits<T>::Maximum())) {
+				return false;
 			}
 			result = static_cast<T>(abs_value);
 		}
