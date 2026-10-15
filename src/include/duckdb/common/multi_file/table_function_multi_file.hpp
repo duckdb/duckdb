@@ -320,7 +320,7 @@ public:
 	}
 
 private:
-	//! Take the operator and file count of the scan this file is read for from its state
+	//! Take the operator and file list of the scan this file is read for from its state
 	void SetScanState(GlobalTableFunctionState &gstate);
 	//! The input the wrapped function is initialized with - "file_input" receives what the scan adds to it
 	TableFunctionInitInput GetInitInput(TableFunctionFileInitInput &file_input) const;

@@ -1,5 +1,5 @@
 # name: benchmark/micro/limit/parquet_many_patterns_limit.benchmark
-# description: LIMIT 1 over a list of many glob patterns only expands the patterns it reads
+# description: LIMIT 1 over a list of many glob patterns does not expand the whole list
 # group: [limit]
 
 name ParquetManyPatternsLimit

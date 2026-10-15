@@ -1,5 +1,5 @@
 # name: test/issues/general/test_26877.test
-# description: Issue 26877: a scan with a LIMIT expands only the file patterns it reads
+# description: Issue 26877: a scan with a LIMIT does not expand the whole list of file patterns
 # group: [general]
 
 require parquet
@@ -12,18 +12,22 @@ COPY (SELECT 42 AS i) TO '{TEMP_DIR}/lazy_list.parquet';
 statement ok
 COPY (SELECT 42 AS i) TO '{TEMP_DIR}/lazy_list.json';
 
-# the progress bar expands the list in proportion to the files that were read, which is not tested here
+# the progress bar and the threads of the scan expand the list in proportion to the files that were read, which is
+# not tested here
 statement ok
 SET enable_progress_bar=false;
 
+statement ok
+SET threads=4;
+
 # the LIMIT is reached long before the pattern that matches no file
 query I
-SELECT * FROM read_parquet(['{TEMP_DIR}/lazy_list*.parquet' FOR x IN range(1000)] || ['{TEMP_DIR}/missing*.parquet']) LIMIT 1
+SELECT * FROM read_parquet(['{TEMP_DIR}/lazy_list*.parquet' FOR x IN range(10000)] || ['{TEMP_DIR}/missing*.parquet']) LIMIT 1
 ----
 42
 
 query I
-SELECT * FROM read_json(['{TEMP_DIR}/lazy_list*.json' FOR x IN range(1000)] || ['{TEMP_DIR}/missing*.json']) LIMIT 1
+SELECT * FROM read_json(['{TEMP_DIR}/lazy_list*.json' FOR x IN range(10000)] || ['{TEMP_DIR}/missing*.json']) LIMIT 1
 ----
 42
 
@@ -37,3 +41,27 @@ query I
 SELECT count(*) FROM read_parquet(['{TEMP_DIR}/lazy_list*.parquet' FOR x IN range(1000)])
 ----
 1000
+
+statement error
+SELECT count(*) FROM read_json(['{TEMP_DIR}/lazy_list*.json' FOR x IN range(1000)] || ['{TEMP_DIR}/missing*.json'])
+----
+No files found that match the pattern
+
+query I
+SELECT count(*) FROM read_json(['{TEMP_DIR}/lazy_list*.json' FOR x IN range(1000)])
+----
+1000
+
+# CSV counts the files of the scan for its rejects table, so it expands every pattern
+statement ok
+COPY (SELECT 42 AS i) TO '{TEMP_DIR}/lazy_list.csv';
+
+statement error
+SELECT * FROM read_csv(['{TEMP_DIR}/lazy_list*.csv' FOR x IN range(1000)] || ['{TEMP_DIR}/missing*.csv']) LIMIT 1
+----
+No files found that match the pattern
+
+query II
+SELECT count(*), count(DISTINCT filename) FROM read_csv(['{TEMP_DIR}/lazy_list*.csv' FOR x IN range(1000)], filename = true)
+----
+1000	1
