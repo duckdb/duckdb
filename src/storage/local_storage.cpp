@@ -589,8 +589,12 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		storage.FlushBlocks();
 		// Append to the indexes.
 		storage.AppendToIndexes(transaction, append_state);
+		// mark the rows as inserted by this transaction, so they stay invisible to others until the commit stamps them
+		auto &collection = storage.GetCollection();
+		collection.CommitAppend(transaction.GetTransactionId(), NumericCast<idx_t>(MAX_ROW_ID),
+		                        collection.GetTotalRows());
 		// finally move over the row groups
-		table.MergeStorage(storage.GetCollection(), commit_state);
+		table.MergeStorage(collection, commit_state);
 	} else {
 		// check if we have written data
 		// if we have, we cannot merge to disk after all
