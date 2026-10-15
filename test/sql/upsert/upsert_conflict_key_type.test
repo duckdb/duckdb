@@ -173,6 +173,21 @@ SELECT * FROM t6
 ----
 ok	1
 
+# a composite key of an INTEGER and an ENUM casts the INTEGER part only
+statement ok
+CREATE TABLE t6b (a INTEGER, k mood, n INTEGER, PRIMARY KEY (a, k));
+
+statement ok
+INSERT INTO t6b VALUES (1, 'ok', 0);
+
+statement ok
+INSERT INTO t6b SELECT 1.4, 'ok', 1 ON CONFLICT DO UPDATE SET n = excluded.n;
+
+query III
+SELECT * FROM t6b
+----
+1	ok	1
+
 statement ok
 CREATE TYPE empty_enum AS ENUM ();
 
