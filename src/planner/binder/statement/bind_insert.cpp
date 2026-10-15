@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
@@ -537,12 +538,14 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		}
 	}
 	// cast the conflict columns to the types of the table, so they are compared as they are inserted
+	// collations are left out, as the index compares the values without them
 	auto cast_star = make_uniq<StarExpression>();
 	for (auto &distinct_on_columns : all_distinct_on_columns) {
 		for (auto &col : distinct_on_columns) {
-			auto &type = columns.GetColumn(col).Type();
+			auto type = TypeVisitor::VisitReplace(columns.GetColumn(col).Type(), [](const LogicalType &child) {
+				return StringType::GetCollation(child).empty() ? child : LogicalType::VARCHAR;
+			});
 			if (!TypeExpression::CanRepresent(type)) {
-				// a parsed cast cannot express this type
 				continue;
 			}
 			cast_star->ReplaceListMutable()[col] = make_uniq<CastExpression>(type, make_uniq<ColumnRefExpression>(col));
