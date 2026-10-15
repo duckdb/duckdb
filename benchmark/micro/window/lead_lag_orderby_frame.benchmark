@@ -1,0 +1,17 @@
+# name: benchmark/micro/window/lead_lag_orderby_frame.benchmark
+# description: LEAD and LAG with an argument ORDER BY over a frame that contains the own row
+# group: [window]
+
+load
+CREATE TABLE t AS SELECT i AS id, (i * 7919) % 1000003 AS x FROM range(1000000) t(i);
+
+run
+SELECT sum(l1), sum(l2), sum(l3)
+FROM (
+	SELECT LEAD(x ORDER BY x) OVER w AS l1, LAG(x ORDER BY x DESC) OVER w AS l2, LEAD(x ORDER BY id) OVER w AS l3
+	FROM t
+	WINDOW w AS (ORDER BY id ROWS BETWEEN 50 PRECEDING AND 50 FOLLOWING)
+)
+
+result III
+499968196187	499968196187	499999547508
