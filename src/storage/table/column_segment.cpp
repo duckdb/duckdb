@@ -19,6 +19,7 @@
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 namespace duckdb {
@@ -186,7 +187,61 @@ void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &resu
 	if (row_id < 0 || NumericCast<idx_t>(row_id) >= count) {
 		throw InternalException("ColumnSegment::FetchRow - row_id out of range for segment");
 	}
-	function.get().fetch_row(*this, state, row_id, result, result_idx);
+	function.get().fetch_row(*this, state, unsafe_array_ptr<row_t>(row_id), nullptr, result, result_idx);
+}
+
+void ColumnSegment::FetchRows(ColumnFetchState &state, const unsafe_array_ptr<row_t> &row_ids, idx_t fetch_count,
+                              Vector &result, idx_t result_offset) {
+	if (fetch_count == 0) {
+		return;
+	}
+	// Validate the whole batch before dispatching so optimized codecs keep the single-row bounds contract.
+	bool sorted = true;
+	bool strictly_increasing = true;
+	for (idx_t i = 0; i < fetch_count; i++) {
+		if (row_ids[i] < 0 || NumericCast<idx_t>(row_ids[i]) >= count) {
+			throw InternalException("ColumnSegment::FetchRows - row_id out of range for segment");
+		}
+		if (i > 0) {
+			sorted = sorted && row_ids[i] >= row_ids[i - 1];
+			strictly_increasing = strictly_increasing && row_ids[i] > row_ids[i - 1];
+		}
+	}
+	auto &compression = function.get();
+	if (compression.prefers_batch_fetch) {
+		if (strictly_increasing) {
+			compression.fetch_row(*this, state, row_ids.SubArray(0, fetch_count), nullptr, result, result_offset);
+			return;
+		}
+
+		FetchRowMapping mapping;
+		mapping.result_indexes.resize(fetch_count);
+		for (idx_t i = 0; i < fetch_count; i++) {
+			mapping.result_indexes[i] = i;
+		}
+		if (!sorted) {
+			std::sort(mapping.result_indexes.begin(), mapping.result_indexes.end(),
+			          [&](idx_t left, idx_t right) { return row_ids[left] < row_ids[right]; });
+		}
+
+		vector<row_t> unique_row_ids;
+		unique_row_ids.reserve(fetch_count);
+		mapping.offsets.reserve(fetch_count + 1);
+		for (idx_t i = 0; i < fetch_count; i++) {
+			const auto row_id = row_ids[mapping.result_indexes[i]];
+			if (unique_row_ids.empty() || row_id != unique_row_ids.back()) {
+				unique_row_ids.push_back(row_id);
+				mapping.offsets.push_back(i);
+			}
+		}
+		mapping.offsets.push_back(fetch_count);
+		compression.fetch_row(*this, state, unsafe_array_ptr<row_t>(unique_row_ids.data(), unique_row_ids.size()),
+		                      mapping, result, result_offset);
+	} else {
+		for (idx_t i = 0; i < fetch_count; i++) {
+			compression.fetch_row(*this, state, row_ids.SubArray(i, 1), nullptr, result, result_offset + i);
+		}
+	}
 }
 
 //===--------------------------------------------------------------------===//

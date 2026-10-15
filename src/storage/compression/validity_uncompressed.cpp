@@ -638,12 +638,12 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t new_count) {
 //===--------------------------------------------------------------------===//
 CompressionFunction ValidityUncompressed::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::BIT);
-	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, ValidityInitAnalyze,
-	                           ValidityAnalyze, ValidityFinalAnalyze, UncompressedFunctions::InitCompression,
-	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
-	                           ValidityInitScan, ValidityScan, ValidityScanPartial, ValidityFetchRow,
-	                           UncompressedFunctions::EmptySkip, ValidityInitSegment, ValidityInitAppend,
-	                           ValidityAppend, ValidityFinalizeAppend, ValidityRevertAppend);
+	return CompressionFunction(
+	    CompressionType::COMPRESSION_UNCOMPRESSED, data_type, ValidityInitAnalyze, ValidityAnalyze,
+	    ValidityFinalAnalyze, UncompressedFunctions::InitCompression, UncompressedFunctions::Compress,
+	    UncompressedFunctions::FinalizeCompress, ValidityInitScan, ValidityScan, ValidityScanPartial,
+	    FetchRowsFromSingle<ValidityFetchRow>, UncompressedFunctions::EmptySkip, ValidityInitSegment,
+	    ValidityInitAppend, ValidityAppend, ValidityFinalizeAppend, ValidityRevertAppend);
 }
 
 } // namespace duckdb

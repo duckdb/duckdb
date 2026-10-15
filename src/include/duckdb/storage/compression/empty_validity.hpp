@@ -30,8 +30,8 @@ public:
 public:
 	static CompressionFunction CreateFunction() {
 		CompressionFunction result(CompressionType::COMPRESSION_EMPTY, PhysicalType::BIT, nullptr, nullptr, nullptr,
-		                           InitCompression, Compress, FinalizeCompress, InitScan, Scan, ScanPartial, FetchRow,
-		                           Skip, InitSegment);
+		                           InitCompression, Compress, FinalizeCompress, InitScan, Scan, ScanPartial,
+		                           FetchRowsFromSingle<FetchRow>, Skip, InitSegment);
 		result.filter = Filter;
 		result.select = Select;
 		return result;

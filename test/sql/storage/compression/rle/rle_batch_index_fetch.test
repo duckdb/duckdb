@@ -1,0 +1,84 @@
+# name: test/sql/storage/compression/rle/rle_batch_index_fetch.test
+# description: Batch RLE index fetch across segments with NULLs and transaction updates
+# group: [rle]
+
+load {TEST_DIR}/rle_batch_index_fetch.db
+
+statement ok
+SET threads=8
+
+# Avoid the independent batch-insert ordering path while checking index-fetch results.
+statement ok
+SET preserve_insertion_order=false
+
+statement ok
+CREATE TABLE t(id BIGINT USING COMPRESSION rle, v BIGINT USING COMPRESSION rle, tag BIGINT USING COMPRESSION bitpacking)
+
+statement ok
+INSERT INTO t SELECT i//4, CASE WHEN i%17=0 THEN NULL ELSE (i//7)-12000 END, hash(i)%1000 FROM range(300000) t(i)
+
+statement ok
+CREATE INDEX tidx ON t(tag)
+
+statement ok
+CHECKPOINT
+
+statement ok
+SET index_scan_max_count=10000
+
+statement ok
+SET index_scan_percentage=0
+
+statement ok
+CREATE TEMP TABLE expected AS SELECT * FROM t WHERE tag=4
+
+statement ok
+SET index_scan_max_count=0
+
+query T
+SELECT CASE WHEN count(*)=0 THEN 'initial OK' ELSE error('initial mismatch') END FROM ((SELECT * FROM expected EXCEPT ALL SELECT * FROM t WHERE tag=4) UNION ALL (SELECT * FROM t WHERE tag=4 EXCEPT ALL SELECT * FROM expected))
+----
+initial OK
+
+statement ok
+BEGIN
+
+statement ok
+UPDATE t SET v=987654321 WHERE tag=4 AND id%3=0
+
+statement ok
+DELETE FROM t WHERE tag=4 AND id%5=0
+
+statement ok
+INSERT INTO t VALUES(900001,NULL,4),(900001,42,4)
+
+statement ok
+SET index_scan_max_count=10000
+
+statement ok
+CREATE TEMP TABLE changed AS SELECT * FROM t WHERE tag=4
+
+statement ok
+SET index_scan_max_count=0
+
+query T
+SELECT CASE WHEN count(*)=0 THEN 'updates OK' ELSE error('updates mismatch') END FROM ((SELECT * FROM changed EXCEPT ALL SELECT * FROM t WHERE tag=4) UNION ALL (SELECT * FROM t WHERE tag=4 EXCEPT ALL SELECT * FROM changed))
+----
+updates OK
+
+statement ok
+COMMIT
+
+statement ok
+SET index_scan_max_count=10000
+
+statement ok
+CREATE TEMP TABLE committed AS SELECT * FROM t WHERE tag=4
+
+statement ok
+SET index_scan_max_count=0
+
+query T
+SELECT CASE WHEN count(*)=0 THEN 'commit OK' ELSE error('commit mismatch') END FROM ((SELECT * FROM committed EXCEPT ALL SELECT * FROM t WHERE tag=4) UNION ALL (SELECT * FROM t WHERE tag=4 EXCEPT ALL SELECT * FROM committed))
+----
+commit OK
