@@ -1,0 +1,17 @@
+# name: benchmark/micro/update/update_set_null.benchmark
+# description: UPDATE that sets a third of the rows to NULL in vectors that already have updates
+# group: [update]
+
+load
+CREATE TABLE t AS SELECT i, i AS v FROM range(10000000) r(i);
+UPDATE t SET v = v + 1 WHERE i % 2 = 0;
+
+run
+UPDATE t SET v = CASE WHEN i % 3 = 0 THEN NULL ELSE v + 1 END;
+
+cleanup
+CREATE OR REPLACE TABLE t AS SELECT i, i AS v FROM range(10000000) r(i);
+UPDATE t SET v = v + 1 WHERE i % 2 = 0;
+
+result I
+10000000
