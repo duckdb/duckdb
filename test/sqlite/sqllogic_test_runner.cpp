@@ -307,6 +307,7 @@ unique_ptr<Connection> SQLLogicTestRunner::ConnectToDatabase(DuckDB &db_ref) {
 	auto result = make_uniq<Connection>(db_ref);
 	if (original_sqlite_test) {
 		result->Query("SET integer_division=true");
+		result->Query("SET error_on_division_by_zero=false");
 	}
 	result->Query("SET secret_directory='" + TestCreatePath("test_secret_dir") + "'");
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
