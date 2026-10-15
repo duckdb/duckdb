@@ -53,6 +53,42 @@ SELECT CASE WHEN d > 1 THEN d ELSE n END FROM decimals;
 ----
 <REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a CASE expression.*
 
+# a DECIMAL nested in a LIST, ARRAY, MAP or STRUCT
+statement error
+SELECT COALESCE(NULL::DECIMAL(38,0)[], [1.5::DECIMAL(38,20)]);
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a COALESCE expression: type DECIMAL\(38,20\)\[\] is being cast to DECIMAL\(38,0\)\[\], reducing the scale from 20 to 0\..*
+
+statement error
+SELECT COALESCE(NULL::DECIMAL(38,0)[2], [1.5::DECIMAL(38,20), 2.5::DECIMAL(38,20)]::DECIMAL(38,20)[2]);
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a COALESCE expression.*
+
+statement error
+SELECT COALESCE(NULL::MAP(VARCHAR, DECIMAL(38,0)), MAP {'a': 1.5::DECIMAL(38,20)});
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a COALESCE expression.*
+
+statement error
+SELECT CASE WHEN true THEN {'a': 1, 'b': 1.5::DECIMAL(38,20)} ELSE {'b': NULL::DECIMAL(38,0), 'a': 1} END;
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a CASE expression: type STRUCT\(a INTEGER, b DECIMAL\(38,20\)\) is being cast to .*, reducing the scale from 20 to 0\..*
+
+statement error
+SELECT CASE WHEN true THEN [{'a': [1.5::DECIMAL(38,20)]}] ELSE [{'a': [NULL::DECIMAL(38,0)]}] END;
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a CASE expression.*
+
+statement error
+SELECT COALESCE(NULL::TUPLE(INTEGER, DECIMAL(38,0)), row(1, 1.5::DECIMAL(38,20)));
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a COALESCE expression.*
+
+statement error
+VALUES ([1.5::DECIMAL(38,20)]), (NULL::DECIMAL(38,0)[]);
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a VALUES column.*
+
 # no warning when the common type keeps the scale
 statement ok
 SELECT COALESCE(NULL::DECIMAL(10,2), 1.5::DECIMAL(38,20));
@@ -65,6 +101,12 @@ SELECT CASE WHEN true THEN 1.5::DECIMAL(10,2) ELSE 2::INTEGER END;
 
 statement ok
 SELECT CASE WHEN true THEN 1.5::DECIMAL(38,20) END;
+
+statement ok
+SELECT COALESCE(NULL::DECIMAL(10,2)[], [1.5::DECIMAL(38,20)]);
+
+statement ok
+SELECT CASE WHEN true THEN {'a': 1.5::DECIMAL(38,20)} ELSE {'b': NULL::DECIMAL(38,0)} END;
 
 statement ok
 SELECT 1.5::DECIMAL(38,20) IN (NULL::DECIMAL(38,0), 2::DECIMAL(38,0));
@@ -87,12 +129,19 @@ SELECT COALESCE(NULL::DECIMAL(18,0), 1.5::DECIMAL(38,24));
 ----
 1.50000000000000000000
 
-query III
-SELECT count(DISTINCT query_id),
-       count(*) FILTER (WHERE message LIKE '%a COALESCE expression%'),
-       count(*) FILTER (WHERE message LIKE '%a CASE expression%')
+query I
+SELECT COALESCE(NULL::DECIMAL(38,0)[], [1.5::DECIMAL(38,20)]);
+----
+[2]
+
+# every query that warned did so once per expression
+query IIII
+SELECT count(*) FILTER (WHERE message LIKE '%a COALESCE expression%') > 0,
+       count(*) FILTER (WHERE message LIKE '%a COALESCE expression%') = count(DISTINCT query_id) FILTER (WHERE message LIKE '%a COALESCE expression%'),
+       count(*) FILTER (WHERE message LIKE '%a CASE expression%') > 0,
+       count(*) FILTER (WHERE message LIKE '%a CASE expression%') = count(DISTINCT query_id) FILTER (WHERE message LIKE '%a CASE expression%')
 FROM duckdb_logs
 WHERE log_level = 'WARNING'
   AND starts_with(message, 'Potential loss of decimal precision');
 ----
-2	2	1
+true	true	true	true
