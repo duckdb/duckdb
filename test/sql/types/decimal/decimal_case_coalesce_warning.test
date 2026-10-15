@@ -1,0 +1,98 @@
+# name: test/sql/types/decimal/decimal_case_coalesce_warning.test
+# description: Warn when CASE or COALESCE type resolution reduces a decimal scale
+# group: [decimal]
+
+statement ok
+SET enable_logging=true;
+
+statement ok
+SET warnings_as_errors=true;
+
+# DECIMAL(38,0) and DECIMAL(38,20) need 58 digits, so the common type keeps the integer digits and drops the scale
+statement error
+SELECT COALESCE(NULL::DECIMAL(38,0), 1.5::DECIMAL(38,20));
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a COALESCE expression: type DECIMAL\(38,20\) is being cast to DECIMAL\(38,0\), reducing the scale from 20 to 0\..*
+
+statement error
+SELECT COALESCE(1.5::DECIMAL(38,20), NULL::DECIMAL(38,0));
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a COALESCE expression: type DECIMAL\(38,20\) is being cast to DECIMAL\(38,0\), reducing the scale from 20 to 0\..*
+
+statement error
+SELECT ifnull(NULL::DECIMAL(38,0), 1.5::DECIMAL(38,20));
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a COALESCE expression.*
+
+statement error
+SELECT CASE WHEN true THEN 1.5::DECIMAL(38,20) ELSE NULL::DECIMAL(38,0) END;
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a CASE expression: type DECIMAL\(38,20\) is being cast to DECIMAL\(38,0\), reducing the scale from 20 to 0\..*
+
+statement error
+SELECT CASE WHEN false THEN NULL::DECIMAL(38,0) ELSE 1.5::DECIMAL(38,20) END;
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a CASE expression: type DECIMAL\(38,20\) is being cast to DECIMAL\(38,0\), reducing the scale from 20 to 0\..*
+
+# a partial reduction of the scale
+statement error
+SELECT COALESCE(NULL::DECIMAL(18,0), 1.5::DECIMAL(38,24));
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a COALESCE expression: type DECIMAL\(38,24\) is being cast to DECIMAL\(38,20\), reducing the scale from 24 to 20\..*
+
+statement ok
+CREATE TABLE decimals AS SELECT 1.5::DECIMAL(38,20) AS d, NULL::DECIMAL(38,0) AS n;
+
+statement error
+SELECT COALESCE(n, d) FROM decimals;
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a COALESCE expression.*
+
+statement error
+SELECT CASE WHEN d > 1 THEN d ELSE n END FROM decimals;
+----
+<REGEX>:Invalid Input Error: Potential loss of decimal precision while resolving a CASE expression.*
+
+# no warning when the common type keeps the scale
+statement ok
+SELECT COALESCE(NULL::DECIMAL(10,2), 1.5::DECIMAL(38,20));
+
+statement ok
+SELECT COALESCE(NULL, 1.5::DECIMAL(38,20));
+
+statement ok
+SELECT CASE WHEN true THEN 1.5::DECIMAL(10,2) ELSE 2::INTEGER END;
+
+statement ok
+SELECT CASE WHEN true THEN 1.5::DECIMAL(38,20) END;
+
+statement ok
+SELECT 1.5::DECIMAL(38,20) IN (NULL::DECIMAL(38,0), 2::DECIMAL(38,0));
+
+# the result does not change, and one warning is emitted per expression and query
+statement ok
+SET warnings_as_errors=false;
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query II
+SELECT COALESCE(NULL::DECIMAL(38,0), 1.5::DECIMAL(38,20), 2.5::DECIMAL(38,20)),
+       CASE WHEN true THEN 1.5::DECIMAL(38,20) WHEN false THEN 2.5::DECIMAL(38,20) ELSE NULL::DECIMAL(38,0) END;
+----
+2	2
+
+query I
+SELECT COALESCE(NULL::DECIMAL(18,0), 1.5::DECIMAL(38,24));
+----
+1.50000000000000000000
+
+query III
+SELECT count(DISTINCT query_id),
+       count(*) FILTER (WHERE message LIKE '%a COALESCE expression%'),
+       count(*) FILTER (WHERE message LIKE '%a CASE expression%')
+FROM duckdb_logs
+WHERE log_level = 'WARNING'
+  AND starts_with(message, 'Potential loss of decimal precision');
+----
+2	2	1

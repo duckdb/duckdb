@@ -33,12 +33,20 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 
 	// bind all the individual components of the CASE statement
 	auto result = make_uniq<BoundCaseExpression>(return_type);
+	bool warned_about_scale_reduction = false;
 	for (auto &check : checks) {
+		if (!warned_about_scale_reduction) {
+			warned_about_scale_reduction = WarnIfDecimalScaleIsReduced(context, GetExpressionReturnType(*check.second),
+			                                                           return_type, "a CASE expression");
+		}
 		BoundCaseCheck result_check;
 		result_check.when_expr =
 		    BoundCastExpression::AddCastToType(context, std::move(check.first), LogicalType::BOOLEAN);
 		result_check.then_expr = BoundCastExpression::AddCastToType(context, std::move(check.second), return_type);
 		result->CaseChecksMutable().push_back(std::move(result_check));
+	}
+	if (!warned_about_scale_reduction) {
+		WarnIfDecimalScaleIsReduced(context, GetExpressionReturnType(*else_expr), return_type, "a CASE expression");
 	}
 	result->ElseMutable() = BoundCastExpression::AddCastToType(context, std::move(else_expr), return_type);
 	return BindResult(std::move(result));

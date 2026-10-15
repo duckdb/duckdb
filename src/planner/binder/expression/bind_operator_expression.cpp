@@ -52,7 +52,12 @@ LogicalType ExpressionBinder::ResolveCoalesceType(OperatorExpression &op, vector
 	}
 
 	// cast all children to the same type
+	bool warned_about_scale_reduction = false;
 	for (auto &child : children) {
+		if (!is_in_operator && !warned_about_scale_reduction) {
+			warned_about_scale_reduction = WarnIfDecimalScaleIsReduced(context, GetExpressionReturnType(*child),
+			                                                           max_type, "a COALESCE expression");
+		}
 		child = BoundCastExpression::AddCastToType(context, std::move(child), max_type);
 		if (is_in_operator) {
 			// If it's IN/NOT_IN operator, push collation functions.
