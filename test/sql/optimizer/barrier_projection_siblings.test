@@ -44,15 +44,15 @@ statement ok
 CREATE SEQUENCE guard_sequence
 
 query I
-SELECT count(*) FROM (SELECT b,nextval('guard_sequence') AS n FROM guard_rows) src
-WHERE n BETWEEN 2 AND 3 AND __internal_barrier(CASE WHEN b='hidden' THEN error('hidden row') ELSE true END)
+SELECT count(*) FROM (SELECT b,CASE WHEN b='shown' THEN nextval('guard_sequence') ELSE 0 END AS n FROM guard_rows) src
+WHERE n>0 AND __internal_barrier(CASE WHEN b='hidden' THEN error('hidden row') ELSE true END)
 ----
 2
 
 query I
 SELECT currval('guard_sequence')
 ----
-4
+2
 
 # Explicit inlining has the same barrier ordering requirement.
 query I
