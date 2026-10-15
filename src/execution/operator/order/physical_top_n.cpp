@@ -6,6 +6,7 @@
 #include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/create_sort_key.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/filter/table_filter_function_helpers.hpp"
 
@@ -431,7 +432,7 @@ void TopNHeap::Reduce() {
 		return;
 	}
 	// we have too many values in the heap - reduce them
-	StringHeap new_sort_heap;
+	StringHeap new_sort_heap(allocator);
 	DataChunk new_heap_data;
 	new_heap_data.Initialize(allocator, payload_types, heap.size());
 
