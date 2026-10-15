@@ -15,6 +15,9 @@ statement ok
 CREATE TABLE immediate(a INTEGER PRIMARY KEY, b INTEGER);
 
 statement ok
+CREATE TABLE mixed(a INTEGER PRIMARY KEY DEFERRED, c INTEGER UNIQUE NOT NULL, b INTEGER);
+
+statement ok
 BEGIN TRANSACTION;
 
 statement ok
@@ -25,6 +28,9 @@ INSERT INTO uk VALUES (1, 10), (1, 20);
 
 statement ok
 INSERT INTO ck VALUES (1, 1, 10), (1, 1, 20);
+
+statement ok
+INSERT INTO mixed VALUES (1, 2, 10), (1, 1, 20);
 
 foreach table pk uk
 
@@ -70,6 +76,29 @@ query II
 EXPLAIN SELECT b FROM immediate ORDER BY a, b DESC
 ----
 physical_plan	<!REGEX>:.*b DESC.*
+
+# in a table with both, only the immediate key erases the keys behind it
+query II
+EXPLAIN SELECT b FROM mixed ORDER BY a, b DESC
+----
+physical_plan	<REGEX>:.*b DESC.*
+
+query I
+SELECT b FROM mixed ORDER BY a, b DESC
+----
+20
+10
+
+query II
+EXPLAIN SELECT b FROM mixed ORDER BY c, b DESC
+----
+physical_plan	<!REGEX>:.*b DESC.*
+
+query I
+SELECT b FROM mixed ORDER BY c, b DESC
+----
+20
+10
 
 statement ok
 ROLLBACK
