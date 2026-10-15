@@ -698,13 +698,13 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 				const auto n = NumericCast<idx_t>(val_idx);
 				const auto nth_index = glstate.value_tree->SelectNth(frames, n);
 				// (4) evaluate the expression provided to LEAD/LAG on this row.
-				if (nth_index.second) {
-					//	Overflow
-					FlatVector::SetNull(result, i, true);
-				} else {
+				if (!nth_index.second) {
 					cursor.CopyCell(0, nth_index.first, result, i);
+					continue;
 				}
-			} else if (has_default) {
+				//	Overflow, fewer rows than the offset are left when NULLs are ignored
+			}
+			if (has_default) {
 				leadlag_default.CopyCell(result, i);
 			} else {
 				FlatVector::SetNull(result, i, true);

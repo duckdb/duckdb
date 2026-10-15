@@ -93,3 +93,54 @@ ORDER BY id
 3	a	none	a
 4	none	none	none
 5	none	none	none
+
+# negative offsets count the other way
+query III
+SELECT
+	id,
+	LEAD(x, -1 ORDER BY x DESC, id DESC) OVER w1,
+	LAG(x, -1 ORDER BY x DESC, id DESC) OVER w1
+FROM f
+WINDOW w1 AS (ORDER BY x DESC, id ASC ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING)
+ORDER BY id
+----
+1	NULL	d
+2	NULL	c
+3	NULL	b
+4	NULL	a
+5	NULL	NULL
+
+# a default is used when no row is left after ignoring NULLs
+query III
+SELECT
+	id,
+	LEAD(v, 1, 99 ORDER BY id, v IGNORE NULLS) OVER w,
+	LAG(v, -1, 99 ORDER BY id, v IGNORE NULLS) OVER w
+FROM (VALUES (1, 10), (2, NULL)) t(id, v)
+WINDOW w AS (ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 1 FOLLOWING)
+ORDER BY id
+----
+1	99	99
+2	99	99
+
+# RANGE and GROUPS frames with peers
+statement ok
+CREATE TABLE p (id INTEGER, x INTEGER);
+
+statement ok
+INSERT INTO p VALUES (1, 1), (2, 2), (3, 2), (4, 3), (5, 5);
+
+query IIII
+SELECT
+	id,
+	LEAD(id ORDER BY x, id) OVER (ORDER BY x RANGE BETWEEN 1 FOLLOWING AND 2 FOLLOWING),
+	LAG(id ORDER BY x, id) OVER (ORDER BY x RANGE BETWEEN 1 FOLLOWING AND 2 FOLLOWING),
+	LEAD(id ORDER BY x, id) OVER (ORDER BY x GROUPS BETWEEN 1 FOLLOWING AND 1 FOLLOWING)
+FROM p
+ORDER BY id
+----
+1	2	NULL	2
+2	4	NULL	4
+3	4	NULL	4
+4	5	NULL	5
+5	NULL	NULL	NULL
