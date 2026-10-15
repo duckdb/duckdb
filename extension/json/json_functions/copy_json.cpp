@@ -230,6 +230,8 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 				csv_partition_columns.push_back(partition_column);
 			}
 			csv_copy_options["partition_by"] = std::move(csv_partition_columns);
+		} else if (option_name == "return_stats" && GetJSONCopyBoolean(binder, format, option_name, option_values)) {
+			throw NotImplementedException("RETURN_STATS is not supported for the \"%s\" copy format", copy_info.format);
 		} else if (option_name == "write_partition_columns") {
 			// Handled below by keeping the partition columns inside the JSON object. We do not forward this to the
 			// CSV writer, as that would write the (separate) partition columns as their own JSON lines.

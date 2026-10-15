@@ -1,0 +1,31 @@
+# name: test/sql/json/copy_json_return_stats.test
+# description: COPY to JSON names its own format when it rejects RETURN_STATS
+# group: [json]
+
+require json
+
+statement error
+COPY (SELECT 1 AS i) TO '{TEST_DIR}/return_stats.json' (FORMAT JSON, RETURN_STATS)
+----
+RETURN_STATS is not supported for the "JSON" copy format
+
+statement error
+COPY (SELECT 1 AS i) TO '{TEST_DIR}/return_stats.json' (RETURN_STATS)
+----
+RETURN_STATS is not supported for the "json" copy format
+
+statement ok
+CREATE TABLE t AS SELECT 1 AS i
+
+statement error
+EXPORT DATABASE '{TEST_DIR}/export_return_stats_json' (FORMAT JSON, RETURN_STATS)
+----
+RETURN_STATS is not supported for the "JSON" copy format
+
+statement ok
+COPY (SELECT 1 AS i) TO '{TEST_DIR}/return_stats.json' (FORMAT JSON, RETURN_STATS false)
+
+query I
+SELECT i FROM '{TEST_DIR}/return_stats.json'
+----
+1
