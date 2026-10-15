@@ -209,7 +209,7 @@ void RoaringFinalizeCompress(CompressionState &state_p) {
 }
 
 unique_ptr<SegmentScanState> RoaringInitScan(const QueryContext &context, ColumnSegment &segment) {
-	auto result = make_uniq<RoaringScanState>(segment);
+	auto result = make_uniq<RoaringScanState>(context, segment);
 	return std::move(result);
 }
 
@@ -267,7 +267,7 @@ void RoaringScanBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t sc
 // Fetch
 //===--------------------------------------------------------------------===//
 void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	RoaringScanState scan_state(segment);
+	RoaringScanState scan_state(state.context, segment);
 
 	idx_t internal_offset;
 	idx_t container_idx = scan_state.GetContainerIndex(static_cast<idx_t>(row_id), internal_offset);
@@ -277,7 +277,7 @@ void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_
 }
 void RoaringFetchRowBoolean(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                             idx_t result_idx) {
-	RoaringScanState scan_state(segment);
+	RoaringScanState scan_state(state.context, segment);
 
 	idx_t internal_offset;
 	idx_t container_idx = scan_state.GetContainerIndex(static_cast<idx_t>(row_id), internal_offset);
