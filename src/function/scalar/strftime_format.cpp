@@ -1404,9 +1404,16 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 	}
 	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
 	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL: {
-		auto yeardate = Date::FromDate(result_data[0], 1, 1);
+		auto year = result_data[0];
+		auto yeardate = Date::FromDate(year, 1, 1);
 		yeardate += UnsafeNumericCast<int32_t>(yearday - 1);
 		Date::Convert(yeardate, result_data[0], result_data[1], result_data[2]);
+		if (result_data[0] != year) {
+			// day 366 of a year that is not a leap year
+			error_message = "Year day out of range for the year";
+			error_position = 0;
+			return false;
+		}
 		break;
 	}
 	case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
