@@ -1252,6 +1252,7 @@ class UseGramPreviewEmitter:
                 lines.append(
                     f"\t\tauto &{arg.var_name}_repeat = {arg.var_name}_opt.GetResult().Cast<RepeatParseResult>();"
                 )
+                lines.append(f"\t\t{arg.var_name}_value.reserve({arg.var_name}_repeat.GetChildren().size());")
                 lines.append(f"\t\tfor (auto &{arg.var_name}_item : {arg.var_name}_repeat.GetChildren()) {{")
                 lines.append(
                     f"\t\t\t{arg.var_name}_value.push_back({arg.var_name}_item.get().Cast<IdentifierParseResult>().identifier);"
@@ -1264,6 +1265,7 @@ class UseGramPreviewEmitter:
                 element_cpp_type = self.direct_matcher_cpp_type(arg.rule_name)
                 lines.append(f"\tvector<{element_cpp_type}> {arg.var_name};")
                 lines.append(f"\tauto {arg.var_name}_items = ExtractParseResultsFromList({arg.parse_expr});")
+                lines.append(f"\t{arg.var_name}.reserve({arg.var_name}_items.size());")
                 lines.append(f"\tfor (auto &{arg.var_name}_item : {arg.var_name}_items) {{")
                 if self.is_identifier_matcher(arg.rule_name):
                     lines.append(
@@ -1289,6 +1291,7 @@ class UseGramPreviewEmitter:
                 child_expr = arg.result_expr_template.format(opt=f"{arg.var_name}_opt")
                 lines.append(f"\t\tvector<{element_cpp_type}> {arg.var_name}_value;")
                 lines.append(f"\t\tauto {arg.var_name}_items = ExtractParseResultsFromList({child_expr});")
+                lines.append(f"\t\t{arg.var_name}_value.reserve({arg.var_name}_items.size());")
                 lines.append(f"\t\tfor (auto &{arg.var_name}_item : {arg.var_name}_items) {{")
                 lines.append(
                     f"\t\t\tauto {arg.var_name}_item_value = "
@@ -1331,6 +1334,7 @@ class UseGramPreviewEmitter:
                 lines.append(f"\toptional<vector<{self.cpp_type(arg.rule_name)}>> {var_name} {{}};")
                 lines.append("\tif (dynamic_child_count > 0) {")
                 lines.append(f"\t\tvector<{self.cpp_type(arg.rule_name)}> {var_name}_value;")
+                lines.append(f"\t\t{var_name}_value.reserve(dynamic_child_count);")
                 loop_end = f"{arg.slot_start} + dynamic_child_count"
                 lines.append(f"\t\tfor (idx_t i = {arg.slot_start}; i < {loop_end}; i++) {{")
                 lines.append(
@@ -1346,6 +1350,7 @@ class UseGramPreviewEmitter:
                 lines.append(f"\tauto &{var_name}_opt = {arg.parse_expr}.Cast<OptionalParseResult>();")
                 lines.append(f"\tif ({var_name}_opt.HasResult()) {{")
                 lines.append(f"\t\tvector<{self.cpp_type(arg.rule_name)}> {var_name}_value;")
+                lines.append(f"\t\t{var_name}_value.reserve(dynamic_child_count);")
                 loop_end = f"{arg.slot_start} + dynamic_child_count"
                 lines.append(f"\t\tfor (idx_t i = {arg.slot_start}; i < {loop_end}; i++) {{")
                 lines.append(
@@ -1358,6 +1363,7 @@ class UseGramPreviewEmitter:
             elif isinstance(arg, RequiredRepeatStackChild):
                 var_name = arg.var_name
                 lines.append(f"\tvector<{self.cpp_type(arg.rule_name)}> {var_name};")
+                lines.append(f"\t{var_name}.reserve(dynamic_child_count);")
                 loop_end = f"{arg.slot_start} + dynamic_child_count"
                 lines.append(f"\tfor (idx_t i = {arg.slot_start}; i < {loop_end}; i++) {{")
                 lines.append(f"\t\t{var_name}.push_back(process.TakeResult<{self.cpp_type(arg.rule_name)}>(i));")
@@ -1366,6 +1372,7 @@ class UseGramPreviewEmitter:
             elif isinstance(arg, ListStackChild):
                 var_name = arg.var_name
                 lines.append(f"\tvector<{self.cpp_type(arg.rule_name)}> {var_name};")
+                lines.append(f"\t{var_name}.reserve(dynamic_child_count);")
                 loop_end = f"{arg.slot_start} + dynamic_child_count"
                 lines.append(f"\tfor (idx_t i = {arg.slot_start}; i < {loop_end}; i++) {{")
                 lines.append(f"\t\t{var_name}.push_back(process.TakeResult<{self.cpp_type(arg.rule_name)}>(i));")
