@@ -10,6 +10,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/keyword_helper/default_keyword_maps.hpp"
+#include "duckdb/parser/peg/keyword_helper/parsed_grammar_keyword_helper.hpp"
 #include "duckdb/parser/peg/matcher/identifier_matcher.hpp"
 #include "duckdb/parser/peg/matcher/choice_matcher.hpp"
 #include "duckdb/parser/peg/matcher/keyword_matcher.hpp"
@@ -723,6 +724,60 @@ public:
 private:
 	bool collapsible;
 };
+
+TEST_CASE("Generated transform rule references belong to the active compiled grammar", "[api][grammar_extension]") {
+	auto original = CompiledGrammar::DefaultGrammar();
+	OverrideAdditiveExpressionTransform extension("seven", false);
+	auto modified = CompiledGrammar::Create({extension});
+	for (idx_t i = 0; i < static_cast<idx_t>(TransformRuleId::COUNT); i++) {
+		auto id = static_cast<TransformRuleId>(i);
+		auto name = GetTransformRuleName(id);
+		REQUIRE(original->GetRule(id).get() == original->GetRule(name).get());
+		REQUIRE(modified->GetRule(id).get() == modified->GetRule(name).get());
+	}
+	auto id = TransformRuleId::ADDITIVE_EXPRESSION;
+	REQUIRE(original->GetRule(id));
+	REQUIRE(modified->GetRule(id));
+	REQUIRE(original->GetRule(id).get() != modified->GetRule(id).get());
+	REQUIRE_FALSE(modified->GetRule(id)->collapsible);
+	auto options = ParserOptions::Builtin();
+	vector<MatcherToken> tokens;
+	TokenIterator iterator(tokens);
+	ArenaAllocator arena(Allocator::DefaultAllocator());
+	PEGTransformer first(arena, iterator, options, *original);
+	PEGTransformer second(arena, iterator, options, *modified);
+	REQUIRE(&first.GetRule(id) == original->GetRule(id).get());
+	REQUIRE(&second.GetRule(id) == modified->GetRule(id).get());
+}
+
+TEST_CASE("Small grammars resolve missing generated references only when used", "[api][grammar_extension]") {
+	auto parsed = ParsedGrammar::Parse("Program <- TopLevelStatement\nTopLevelStatement <- 'SELECT'");
+	compiled_rules_map_t rules;
+	for (auto name : {"Program", "TopLevelStatement"}) {
+		auto rule = parsed.GetRule(name);
+		REQUIRE(rule);
+		rules.emplace(name, make_uniq<CompiledGrammarRule>(name, rule->transform_process));
+	}
+	auto keyword_grammar = ParsedGrammar::CreateDefault();
+	auto keywords = make_uniq<ParsedGrammarKeywordHelper>(keyword_grammar);
+	auto tokenizer = make_uniq<Tokenizer>(*keywords);
+	MatcherAllocator allocator;
+	MatcherFactory factory(allocator, parsed, rules, *keywords, {});
+	auto &program = factory.CreateRootMatcher("Program");
+	auto &top_level = factory.GetMatcher("TopLevelStatement");
+	CompiledGrammar grammar(std::move(allocator), std::move(keywords), std::move(tokenizer), std::move(rules), program,
+	                        top_level);
+	auto id = TransformRuleId::ADDITIVE_EXPRESSION;
+	REQUIRE_FALSE(grammar.GetRule(id));
+	REQUIRE_FALSE(grammar.GetRule("AdditiveExpression"));
+	auto options = ParserOptions::Builtin();
+	vector<MatcherToken> tokens;
+	TokenIterator iterator(tokens);
+	ArenaAllocator arena(Allocator::DefaultAllocator());
+	PEGTransformer transformer(arena, iterator, options, grammar);
+	REQUIRE_THROWS_AS(transformer.GetRule(id), InternalException);
+	REQUIRE_THROWS_AS(transformer.GetRule("AdditiveExpression"), InternalException);
+}
 
 TEST_CASE("Overriding a transform opts its rule out of collapsing", "[api][grammar_extension]") {
 	DuckDB db(nullptr);

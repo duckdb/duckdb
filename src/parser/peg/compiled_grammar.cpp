@@ -12,6 +12,11 @@ CompiledGrammar::CompiledGrammar(MatcherAllocator &&allocator_p, unique_ptr<PEGK
     : allocator(std::move(allocator_p)), keyword_helper(std::move(keyword_helper_p)), tokenizer(std::move(tokenizer_p)),
       rules(std::move(rules_p)), program_matcher(program_matcher),
       top_level_statement_matcher(top_level_statement_matcher) {
+	auto count = static_cast<idx_t>(TransformRuleId::COUNT);
+	transform_rules.reserve(count);
+	for (idx_t i = 0; i < count; i++) {
+		transform_rules.push_back(GetRule(GetTransformRuleName(static_cast<TransformRuleId>(i))));
+	}
 }
 
 static void ValidateParsedGrammarRoots(const ParsedGrammar &grammar) {

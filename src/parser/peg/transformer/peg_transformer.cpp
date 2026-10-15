@@ -285,6 +285,14 @@ const CompiledGrammarRule &PEGTransformer::GetRule(const string &rule_name) cons
 	return *rule;
 }
 
+const CompiledGrammarRule &PEGTransformer::GetRule(TransformRuleId rule_id) const {
+	auto rule = grammar.GetRule(rule_id);
+	if (!rule) {
+		throw InternalException("No registered data exists for rule '%s'", GetTransformRuleName(rule_id));
+	}
+	return *rule;
+}
+
 void PEGTransformer::SetResultLocation(ParseResult &parse_result, TransformResultValue &result) {
 	if (!parse_result.offset.IsValid()) {
 		return;
