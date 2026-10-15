@@ -9,7 +9,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
-#include "duckdb/execution/operator/persistent/physical_merge_into.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_operator.hpp"
@@ -21,6 +20,7 @@
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/json_document.hpp"
 
 #include <utility>
@@ -224,7 +224,11 @@ void QueryProfiler::StartExplainAnalyze() {
 
 void QueryProfiler::EndQuery() {
 	unique_lock<std::mutex> guard(lock);
-	if (!IsEnabled() || !running) {
+	if (!running) {
+		return;
+	}
+	if (!IsEnabled()) {
+		Reset();
 		return;
 	}
 
@@ -264,12 +268,16 @@ void QueryProfiler::FinalizeMetrics() {
 	FinalizeMetricsInternal();
 }
 
-void QueryProfiler::TrackBytesRead(const idx_t amount) {
-	query_metrics.UpdateBytesRead(amount);
+void QueryProfiler::TrackBytesRead(const idx_t amount, const idx_t elapsed_us) {
+	query_metrics.UpdateBytesRead(amount, elapsed_us);
 }
 
-void QueryProfiler::TrackBytesWritten(const idx_t amount) {
-	query_metrics.UpdateBytesWritten(amount);
+void QueryProfiler::TrackBytesWritten(const idx_t amount, const idx_t elapsed_us) {
+	query_metrics.UpdateBytesWritten(amount, elapsed_us);
+}
+
+void QueryProfiler::TrackBytesSpilled(const idx_t amount) {
+	query_metrics.UpdateBytesSpilled(amount);
 }
 
 void QueryProfiler::TrackTotalMemoryAllocated(const idx_t amount) {
@@ -539,6 +547,9 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
+	if (!running.load(std::memory_order_relaxed)) {
+		return;
+	}
 	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
@@ -571,12 +582,23 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 }
 
 void QueryProfiler::SetBlockedTime(const double &blocked_thread_time) {
+	if (!running.load(std::memory_order_relaxed)) {
+		return;
+	}
 	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
 
 	query_metrics.blocked_thread_time = blocked_thread_time;
+}
+
+void QueryProfiler::SetStreamingPeakBufferSize(idx_t peak_bytes) {
+	lock_guard<std::mutex> guard(lock);
+	if (!IsEnabled() || !running) {
+		return;
+	}
+	query_metrics.system_peak_streaming_buffer_size = peak_bytes;
 }
 
 string QueryProfiler::DrawPadded(const string &str, idx_t width) {
@@ -876,6 +898,7 @@ static LegacyCumulative LegacyOperatorToResultTree(const GatheredMetrics &info, 
 		result.AddValue("extra_info", it_extra->second);
 	}
 	result.AddValue("system_peak_buffer_memory", Value::UBIGINT(0));
+	result.AddValue("system_peak_streaming_buffer_size", Value::UBIGINT(0));
 	result.AddValue("system_peak_temp_dir_size", Value::UBIGINT(0));
 
 	LegacyCumulative cumulative;
@@ -927,9 +950,15 @@ unique_ptr<QueryProfileResult> QueryProfiler::ToLegacyResultTree() const {
 
 	emit("total_memory_allocated", "system.total_memory_allocated");
 	emit("total_bytes_written", "io.total_bytes_written");
+	emit("total_write_operations", "io.total_write_operations");
 	emit("total_bytes_read", "io.total_bytes_read");
+	emit("total_read_operations", "io.total_read_operations");
+	emit("total_write_time", "io.total_write_time");
+	emit("total_read_time", "io.total_read_time");
 	emit("system_peak_temp_dir_size", "system.peak_temp_dir_size");
+	emit("total_bytes_spilled", "system.total_bytes_spilled");
 	emit("system_peak_buffer_memory", "system.peak_buffer_memory");
+	emit("system_peak_streaming_buffer_size", "system.peak_streaming_buffer_size");
 
 	// rows_returned = root operator's elements_returned (rows sent to client)
 	{
@@ -1029,15 +1058,6 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 		if (cte_scan.cte_source) {
 			tree_map.insert(
 			    make_pair(reference<const PhysicalOperator>(*cte_scan.cte_source), reference<ProfilingNode>(*node)));
-		}
-	}
-	if (root_p.type == PhysicalOperatorType::MERGE_INTO) {
-		// merge actions hold their target operators outside of the children - add them to the tree explicitly
-		auto &merge_into = root_p.Cast<PhysicalMergeInto>();
-		for (auto &action : merge_into.actions) {
-			if (action->op) {
-				node->AddChild(CreateTree(*action->op, depth + 1));
-			}
 		}
 	}
 	auto children = root_p.GetChildren();

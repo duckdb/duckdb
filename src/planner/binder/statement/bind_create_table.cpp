@@ -167,6 +167,21 @@ unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const Constraint
 	return std::move(bound_constraint);
 }
 
+void Binder::VerifyConstraintCheckModeStorageVersion(const Constraint &constraint, Catalog &catalog, bool temporary) {
+	if (constraint.type != ConstraintType::UNIQUE || temporary || !catalog.IsDuckCatalog() || catalog.InMemory()) {
+		return;
+	}
+	auto &unique = constraint.Cast<UniqueConstraint>();
+	if (unique.check_mode == ConstraintCheckMode::DEFAULT) {
+		return;
+	}
+	if (StorageManager::Get(catalog).GetStorageVersion() < StorageVersion::V2_0_0) {
+		throw BinderException(
+		    "Explicit constraint check mode is only supported for storage versions v2.0.0 and higher.\n"
+		    "Use an in-memory database, or ATTACH with (STORAGE_VERSION 'v2.0.0')");
+	}
+}
+
 unique_ptr<BoundConstraint> Binder::BindUniqueConstraint(const Constraint &constraint, const Identifier &table,
                                                          const ColumnList &columns) {
 	auto &unique = constraint.Cast<UniqueConstraint>();
@@ -191,7 +206,8 @@ unique_ptr<BoundConstraint> Binder::BindUniqueConstraint(const Constraint &const
 		}
 		auto &col = columns.GetColumn(col_name);
 		if (col.Generated()) {
-			throw BinderException("cannot create a PRIMARY KEY on a generated column: %s",
+			string constraint_type = unique.IsPrimaryKey() ? "PRIMARY KEY" : "UNIQUE constraint";
+			throw BinderException("cannot create a %s on a generated column: %s", constraint_type,
 			                      SQLIdentifier(col.GetName()));
 		}
 
@@ -446,19 +462,30 @@ static void FindForeignKeyIndexes(const ColumnList &columns, const vector<Identi
 		}
 		auto &column = columns.GetColumn(name);
 		if (column.Generated()) {
-			throw BinderException("Failed to create foreign key: referenced column \"%s\" is a generated column",
+			throw BinderException("Failed to create foreign key: referenced column %s is a generated column",
 			                      column.Name());
 		}
 		indexes.push_back(column.Physical());
 	}
 }
 
+static void ThrowDeferredReferencedKey() {
+	throw BinderException(
+	    "Failed to create foreign key: the referenced PRIMARY KEY or UNIQUE constraint cannot be DEFERRED");
+}
+
 static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints,
                                           ForeignKeyConstraint &fk) {
 	// find the matching primary key constraint
 	bool found_constraint = false;
+	bool found_deferred = false;
 	// if no columns are defined, we will automatically try to bind to the primary key
 	bool find_primary_key = fk.pk_columns.empty();
+	if (!find_primary_key && fk.pk_columns.size() != fk.fk_columns.size()) {
+		throw BinderException(
+		    "Failed to create foreign key: number of referencing (%s) and referenced columns (%s) differ",
+		    StringUtil::Join(fk.fk_columns, ","), StringUtil::Join(fk.pk_columns, ","));
+	}
 	for (auto &constr : constraints) {
 		if (constr->type != ConstraintType::UNIQUE) {
 			continue;
@@ -484,25 +511,25 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 				    "Failed to create foreign key: number of referencing (%s) and referenced columns (%s) differ",
 				    fk_name_str, pk_name_str);
 			}
+			if (unique.IsDeferred()) {
+				ThrowDeferredReferencedKey();
+			}
 			fk.pk_columns = pk_names;
 			return;
 		}
-		if (pk_names.size() != fk.fk_columns.size()) {
-			// the number of referencing and referenced columns for foreign keys must be the same
+		if (pk_names != fk.pk_columns) {
 			continue;
 		}
-		bool equals = true;
-		for (idx_t i = 0; i < fk.pk_columns.size(); i++) {
-			if (fk.pk_columns[i] != pk_names[i]) {
-				equals = false;
-				break;
-			}
-		}
-		if (!equals) {
+		if (unique.IsDeferred()) {
+			// keep looking for a matching constraint that is not deferred
+			found_deferred = true;
 			continue;
 		}
 		// found match
 		return;
+	}
+	if (found_deferred) {
+		ThrowDeferredReferencedKey();
 	}
 	// no match found! examine why
 	if (!found_constraint) {
@@ -614,6 +641,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	auto &base = result->Base();
 	base.dependencies = LogicalDependencyList();
 	auto &dependencies = base.dependencies;
+	dependencies.AddDependency(schema);
 	auto &catalog = schema.ParentCatalog();
 	optional_ptr<StorageManager> storage_manager;
 	if (catalog.IsDuckCatalog() && !catalog.InMemory()) {
@@ -700,6 +728,9 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			throw BinderException("Constraints on generated columns are not supported yet");
 		}
 		bound_constraints = BindNewConstraints(base.constraints, base.GetTableName(), base.columns);
+		for (auto &constraint : base.constraints) {
+			VerifyConstraintCheckModeStorageVersion(*constraint, catalog, base.temporary);
+		}
 		if (bind_mode != AlterBindMode::SKIP_BINDING) {
 			// bind the default values
 			auto &catalog_name = schema.ParentCatalog().GetName();
@@ -725,8 +756,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	}
 #endif
 
-	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	return result;
 }
 

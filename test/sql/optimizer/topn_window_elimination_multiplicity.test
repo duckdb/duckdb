@@ -1,0 +1,123 @@
+# name: test/sql/optimizer/topn_window_elimination_multiplicity.test
+# description: Test that TopN window late materialization preserves row multiplicity
+# group: [optimizer]
+
+statement ok
+SET explain_output='optimized_only'
+
+statement ok
+CREATE TABLE l_topn_dup(id INTEGER, k INTEGER, p VARCHAR)
+
+statement ok
+CREATE TABLE r_topn_dup(k INTEGER, s INTEGER)
+
+statement ok
+INSERT INTO l_topn_dup VALUES (1, 1, 'x')
+
+statement ok
+INSERT INTO r_topn_dup VALUES (1, 30), (1, 20), (1, 10)
+
+# An inner join can produce several source rows with the same row ID from the
+# late-materialized table. All selected occurrences must be preserved.
+query II
+SELECT id, p
+FROM (
+	SELECT l_topn_dup.id, l_topn_dup.p, r_topn_dup.s
+	FROM l_topn_dup
+	JOIN r_topn_dup ON l_topn_dup.k = r_topn_dup.k
+) AS src
+QUALIFY ROW_NUMBER() OVER (ORDER BY s DESC NULLS LAST) <= 2
+ORDER BY ALL
+----
+1	x
+1	x
+
+# Partitioned TopN has the same multiplicity requirement.
+query III
+SELECT id, k, p
+FROM (
+	SELECT l_topn_dup.id, l_topn_dup.k, l_topn_dup.p, r_topn_dup.s
+	FROM l_topn_dup
+	JOIN r_topn_dup ON l_topn_dup.k = r_topn_dup.k
+) AS src
+QUALIFY ROW_NUMBER() OVER (PARTITION BY k ORDER BY s DESC NULLS LAST) <= 2
+ORDER BY ALL
+----
+1	1	x
+1	1	x
+
+# Projecting row_number already requires an inner reconstruction join and must
+# continue to associate each duplicate row ID with its position.
+query III
+SELECT id, p, row_num
+FROM (
+	SELECT l_topn_dup.id, l_topn_dup.p,
+	       ROW_NUMBER() OVER (ORDER BY r_topn_dup.s DESC NULLS LAST) AS row_num
+	FROM l_topn_dup
+	JOIN r_topn_dup ON l_topn_dup.k = r_topn_dup.k
+) AS src
+WHERE row_num <= 2
+ORDER BY ALL
+----
+1	x	1
+1	x	2
+
+# The duplicated row ID can come from either side of the source join.
+statement ok
+CREATE TABLE l_topn_dup_other(k INTEGER, s INTEGER)
+
+statement ok
+CREATE TABLE r_topn_dup_other(id INTEGER, k INTEGER, p VARCHAR)
+
+statement ok
+INSERT INTO l_topn_dup_other VALUES (1, 20), (1, 10)
+
+statement ok
+INSERT INTO r_topn_dup_other VALUES (2, 1, 'y')
+
+query II
+SELECT id, p
+FROM (
+	SELECT r_topn_dup_other.id, r_topn_dup_other.p, l_topn_dup_other.s
+	FROM l_topn_dup_other
+	JOIN r_topn_dup_other ON l_topn_dup_other.k = r_topn_dup_other.k
+) AS src
+QUALIFY ROW_NUMBER() OVER (ORDER BY s DESC NULLS LAST) <= 2
+ORDER BY ALL
+----
+2	y
+2	y
+
+# The reconstruction join is an inner join when the source can duplicate row IDs.
+query II
+EXPLAIN SELECT id, p
+FROM (
+	SELECT l_topn_dup.id, l_topn_dup.p, r_topn_dup.s
+	FROM l_topn_dup
+	JOIN r_topn_dup ON l_topn_dup.k = r_topn_dup.k
+) AS src
+QUALIFY ROW_NUMBER() OVER (ORDER BY s DESC NULLS LAST) <= 2
+----
+logical_opt	<!REGEX>:.*Join Type: SEMI.*
+
+# Scan/filter/projection paths still use the cheaper semi reconstruction join.
+statement ok
+CREATE TABLE topn_unique_rowids(id INTEGER, p VARCHAR, s INTEGER)
+
+statement ok
+INSERT INTO topn_unique_rowids VALUES (1, 'a', 30), (2, 'b', 20), (3, 'c', 10)
+
+query II
+EXPLAIN SELECT id, p
+FROM topn_unique_rowids
+QUALIFY ROW_NUMBER() OVER (ORDER BY s DESC NULLS LAST) <= 2
+----
+logical_opt	<REGEX>:.*Join Type: SEMI.*
+
+query II
+SELECT id, p
+FROM topn_unique_rowids
+QUALIFY ROW_NUMBER() OVER (ORDER BY s DESC NULLS LAST) <= 1
+ORDER BY ALL
+----
+1	a

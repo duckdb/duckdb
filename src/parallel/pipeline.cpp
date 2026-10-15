@@ -17,6 +17,7 @@
 #include "duckdb/parallel/pipeline_event.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/pipeline_schedule.hpp"
+#include "duckdb/parallel/progress_verifier.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -34,14 +35,6 @@ PipelineTask::PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
 		// Account for every task before lazy executor construction can advance the batch minimum.
 		reserved_batch_index = pipeline.RegisterNewBatchIndex();
 	}
-}
-
-bool PipelineTask::TaskBlockedOnResult() const {
-	return pipeline.IsStreamingResultPipeline() && pipeline_executor->RemainingSinkChunk();
-}
-
-const PipelineExecutor &PipelineTask::GetPipelineExecutor() const {
-	return *pipeline_executor;
 }
 
 TaskExecutionResult PipelineTask::ExecuteTask(TaskExecutionMode mode) {
@@ -88,33 +81,41 @@ ClientContext &Pipeline::GetClientContext() {
 }
 
 bool Pipeline::GetProgress(ProgressData &progress) {
+	PipelineProgress detailed_progress;
+	GetDetailedProgress(detailed_progress);
+	progress = detailed_progress.pipeline;
+	return progress.IsValid();
+}
+
+void Pipeline::GetDetailedProgress(PipelineProgress &progress) {
 	D_ASSERT(source);
 	idx_t source_cardinality = MinValue<idx_t>(source->estimated_cardinality, 1ULL << 48ULL);
 	if (source_cardinality < 1) {
 		source_cardinality = 1;
 	}
 	if (!initialized) {
-		progress.done = 0;
-		progress.total = double(source_cardinality);
-		return true;
+		progress.source.done = 0;
+		progress.source.total = double(source_cardinality);
+		progress.pipeline = progress.source;
+		return;
 	}
 	auto &client = executor.context;
 
 	auto state = GetSourceState();
 	if (state) {
-		progress = source->GetProgress(client, *state);
+		progress.source = source->GetProgress(client, *state);
 	} else {
-		progress.done = 0;
-		progress.total = double(source_cardinality);
+		progress.source.done = 0;
+		progress.source.total = double(source_cardinality);
 	}
-	progress.Normalize(double(source_cardinality));
+	progress.pipeline = progress.source;
+	progress.pipeline.Normalize(double(source_cardinality));
 	if (sink) {
 		lock_guard<mutex> guard(sink->lock);
 		if (sink->sink_state) {
-			progress = sink->GetSinkProgress(client, *sink->sink_state, progress);
+			progress.pipeline = sink->GetSinkProgress(client, *sink->sink_state, progress.pipeline);
 		}
 	}
-	return progress.IsValid();
 }
 
 void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
@@ -254,14 +255,6 @@ bool Pipeline::HasExternalInputProducer(const Pipeline &pipeline) const {
 	return false;
 }
 
-bool Pipeline::IsStreamingResultPipeline() const {
-	if (external_streaming_result_producer) {
-		return true;
-	}
-	return sink && sink->type == PhysicalOperatorType::RESULT_COLLECTOR &&
-	       sink->Cast<PhysicalResultCollector>().IsStreaming();
-}
-
 bool Pipeline::CanUseExternalInput(const OperatorPartitionInfo &source_partition_info) const {
 	if (!sink || !sink->ParallelSink() || sink->SinkOrderDependent()) {
 		return false;
@@ -369,6 +362,7 @@ void Pipeline::ResetSinkForReschedule() {
 	if (!sink->IsSink()) {
 		throw InternalException("Sink of pipeline does not have IsSink set");
 	}
+	NotifyProgressReset();
 	lock_guard<mutex> guard(sink->lock);
 	auto &client = GetClientContext();
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(client);
@@ -410,6 +404,7 @@ void Pipeline::Reset() {
 }
 
 void Pipeline::ResetForReschedule(bool reset_sink) {
+	NotifyProgressReset();
 	if (reset_sink) {
 		ResetSinkForReschedule();
 	}
@@ -439,12 +434,20 @@ void Pipeline::ResetForReschedule(bool reset_sink) {
 	initialized = true;
 }
 
+void Pipeline::NotifyProgressReset() {
+	auto progress_verifier = executor.GetProgressVerifier();
+	if (progress_verifier) {
+		progress_verifier->OnReset(*this);
+	}
+}
+
 void Pipeline::ResetSource(bool force) {
 	if (source && !source->IsSource()) {
 		throw InternalException("Source of pipeline does not have IsSource set");
 	}
 	auto source_state = GetSourceState();
 	if (force || !source_state) {
+		NotifyProgressReset();
 		auto partition_info = sink ? sink->RequiredPartitionInfo() : OperatorPartitionInfo::NoPartitionInfo();
 		SetSourceState(ToSharedSourceState(source->GetGlobalSourceState(GetClientContext(), partition_info)));
 	}
@@ -646,6 +649,50 @@ vector<weak_ptr<Pipeline>> Pipeline::GetDependencies() const {
 	return dependencies;
 }
 
+PipelineDependency::PipelineDependency(Pipeline &pipeline_p, PipelineDependencyType type_p)
+    : pipeline(pipeline_p.shared_from_this()), type(type_p) {
+}
+
+void Pipeline::AddIntraDependency(Pipeline &dependency, PipelineDependencyType type) {
+	intra_dependencies.emplace_back(dependency, type);
+}
+
+bool Pipeline::RemoveOptionalIntraDependency(const Pipeline &dependency) {
+	for (auto it = intra_dependencies.begin(); it != intra_dependencies.end(); it++) {
+		if (it->type != PipelineDependencyType::OPTIONAL_DEPENDENCY) {
+			continue;
+		}
+		auto dep = it->pipeline.lock();
+		if (dep && RefersToSameObject(*dep, dependency)) {
+			intra_dependencies.erase(it);
+			return true;
+		}
+	}
+	return false;
+}
+
+void Pipeline::InheritDependencies(const Pipeline &other) {
+	dependencies = other.dependencies;
+	intra_dependencies = other.intra_dependencies;
+}
+
+vector<shared_ptr<Pipeline>> Pipeline::GetAllDependencies() const {
+	vector<shared_ptr<Pipeline>> result;
+	for (auto &intra_dependency : intra_dependencies) {
+		auto dep = intra_dependency.pipeline.lock();
+		if (dep) {
+			result.push_back(std::move(dep));
+		}
+	}
+	for (auto &weak_dep : dependencies) {
+		auto dep = weak_dep.lock();
+		if (dep) {
+			result.push_back(std::move(dep));
+		}
+	}
+	return result;
+}
+
 string Pipeline::ToString() const {
 	TextTreeRenderer renderer;
 	return renderer.ToString(*this);
@@ -783,17 +830,15 @@ public:
 };
 
 struct RemovedOptionalPipelineDependency {
-	RemovedOptionalPipelineDependency(MetaPipeline &meta_pipeline_p, Pipeline &pipeline_p, Pipeline &dependency_p)
-	    : meta_pipeline(meta_pipeline_p), pipeline(pipeline_p), dependency(dependency_p) {
+	RemovedOptionalPipelineDependency(Pipeline &pipeline_p, Pipeline &dependency_p)
+	    : pipeline(pipeline_p), dependency(dependency_p) {
 	}
 
-	reference<MetaPipeline> meta_pipeline;
 	reference<Pipeline> pipeline;
 	reference<Pipeline> dependency;
 };
 
 static bool RemoveOptionalDependencyInCycle(const PipelineSchedule &schedule, const vector<PipelineScheduleEdge> &cycle,
-                                            const vector<shared_ptr<MetaPipeline>> &meta_pipelines,
                                             vector<RemovedOptionalPipelineDependency> &removed_dependencies) {
 	for (auto &edge : cycle) {
 		auto &pipeline_stage = schedule.stages[edge.dependent];
@@ -802,11 +847,9 @@ static bool RemoveOptionalDependencyInCycle(const PipelineSchedule &schedule, co
 		    dependency_stage.type != PipelineScheduleStageType::EXECUTE) {
 			continue;
 		}
-		for (auto &meta_pipeline : meta_pipelines) {
-			if (meta_pipeline->RemoveOptionalDependency(*pipeline_stage.pipeline, *dependency_stage.pipeline)) {
-				removed_dependencies.emplace_back(*meta_pipeline, *pipeline_stage.pipeline, *dependency_stage.pipeline);
-				return true;
-			}
+		if (MetaPipeline::RemoveOptionalDependency(*pipeline_stage.pipeline, *dependency_stage.pipeline)) {
+			removed_dependencies.emplace_back(*pipeline_stage.pipeline, *dependency_stage.pipeline);
+			return true;
 		}
 	}
 	return false;
@@ -814,7 +857,7 @@ static bool RemoveOptionalDependencyInCycle(const PipelineSchedule &schedule, co
 
 static void RestoreOptionalDependencies(vector<RemovedOptionalPipelineDependency> &dependencies) {
 	for (auto &dependency : dependencies) {
-		dependency.meta_pipeline.get().AddOptionalDependency(dependency.pipeline, dependency.dependency);
+		MetaPipeline::AddOptionalDependency(dependency.pipeline, dependency.dependency);
 	}
 	dependencies.clear();
 }
@@ -1029,7 +1072,7 @@ void PipelineBuildState::ResolveExternalInputs(const vector<shared_ptr<MetaPipel
 		if (cycle.empty()) {
 			break;
 		}
-		if (RemoveOptionalDependencyInCycle(*schedule, cycle, meta_pipelines, removed_dependencies)) {
+		if (RemoveOptionalDependencyInCycle(*schedule, cycle, removed_dependencies)) {
 			continue;
 		}
 		auto candidate = FindExternalInputCandidateInCycle(*data, cycle);

@@ -34,7 +34,7 @@ FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &inpu
 	// Handle empty prefix
 	auto prefix = StringValue::Get(constant);
 	if (prefix.empty()) {
-		return column_stats->CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE
+		return column_stats->CanHaveNull() ? FilterPropagateResult::FILTER_TRUE_OR_NULL
 		                                   : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	}
 
@@ -74,7 +74,7 @@ FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &inpu
 	    memcmp(min.c_str(), prefix.c_str(), prefix.size()) == 0 &&
 	    memcmp(max.c_str(), prefix.c_str(), prefix.size()) == 0) {
 		// NULL values produce NULL rather than true, so they prevent an always-true result
-		return column_stats->CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE
+		return column_stats->CanHaveNull() ? FilterPropagateResult::FILTER_TRUE_OR_NULL
 		                                   : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;

@@ -53,8 +53,7 @@ jobs:
 
     env:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-      ENABLE_EXTENSION_AUTOLOADING: 1
-      ENABLE_EXTENSION_AUTOINSTALL: 1
+      DUCKDB_CAPABILITIES: 'httplib loadable_extensions'
       GEN: ninja
       EXTENSION_STATIC_BUILD: 1
       DUCKDB_PLATFORM: android_${{ matrix.arch}}
@@ -93,7 +92,12 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        zip -j libduckdb-android_${{matrix.arch}}.zip build/release/src/libduckdb*.* src/include/duckdb.h src/include/duckdb_extension.h
+        zip -j libduckdb-android_${{matrix.arch}}.zip \
+          build/release/src/libduckdb*.* \
+          src/include/duckdb.h \
+          src/include/duckdb_v2.h \
+          src/include/duckdb_extension.h \
+          src/include/duckdb_extension_v2.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-android_${{matrix.arch}}.zip
 
     - uses: actions/upload-artifact@v7

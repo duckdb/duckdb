@@ -316,3 +316,9 @@ SELECT json_deep_merge(
 )
 ----
 {"columnName":"user_id","parentColumn":"accounts.id"}
+
+# Input and output order should be the same
+query T
+SELECT json_deep_merge('{"a":1,"b":2}', '{"a":null}')
+----
+{"a":1,"b":2}

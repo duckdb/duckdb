@@ -13,7 +13,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 		value_str = SQLIdentifier(use_target.Schema()) + "." + SQLIdentifier(use_target.Name());
 	}
 
-	auto value_expr = make_uniq<ConstantExpression>(Value(value_str));
+	auto value_expr = ConstantExpression::String(value_str);
 	return make_uniq<SetVariableStatement>("schema", std::move(value_expr), SetScope::AUTOMATIC);
 }
 

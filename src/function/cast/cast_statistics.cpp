@@ -165,12 +165,18 @@ static unique_ptr<BaseStatistics> StatisticsPropagateVariant(const BaseStatistic
 	}
 	// extract the typed stats
 	auto &typed_stats = VariantStats::GetTypedStats(shredded_stats);
+	unique_ptr<BaseStatistics> result;
 	if (structured_type == target) {
 		// type matches - return stats directly
-		return typed_stats.ToUnique();
+		result = typed_stats.ToUnique();
+	} else {
+		// typed stats don't match - try to cast
+		result = CastStatistics::TryPropagate(typed_stats, structured_type, target);
 	}
-	// typed stats don't match - try to cast
-	return CastStatistics::TryPropagate(typed_stats, structured_type, target);
+	if (result && input.CanHaveNull()) {
+		result->SetHasNull();
+	}
+	return result;
 }
 
 static unique_ptr<BaseStatistics> StatisticsPropagateArrayToList(const BaseStatistics &input, const LogicalType &source,

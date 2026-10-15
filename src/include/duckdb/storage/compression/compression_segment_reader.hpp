@@ -27,7 +27,7 @@ public:
 	    : data(data), size(size), position(0), context(context) {
 	}
 
-	//! Validates the block offset and returns a reader over the remaining block bytes.
+	//! Returns a reader over the recorded segment bytes, or the remaining block bytes for legacy segments.
 	static CompressionSegmentReader FromSegment(const BufferHandle &handle, const ColumnSegment &segment,
 	                                            const char *context);
 
@@ -78,6 +78,55 @@ public:
 		unsafe_array_ptr<const uint8_t> result(data + position, length);
 		position += length;
 		return result;
+	}
+
+	//! Returns a view over the preceding length bytes and moves the position backward.
+	unsafe_array_ptr<const uint8_t> ReadBytesBackward(idx_t length) {
+		CheckBackwardRead(length);
+		position -= length;
+		return unsafe_array_ptr<const uint8_t>(data + position, length);
+	}
+
+	//! Returns a view over the preceding count aligned elements and moves the position backward.
+	template <class T>
+	unsafe_array_ptr<const T> ReadArrayBackward(idx_t count) {
+		static_assert(std::is_trivially_copyable_v<T>,
+		              "ReadArrayBackward element must be a trivially copyable data type");
+		if (DUCKDB_UNLIKELY(count > position / sizeof(T))) {
+			ThrowBackwardReadOutOfBounds();
+		}
+		auto offset = position - count * sizeof(T);
+		auto result = GetArray<T>(offset, count);
+		position = offset;
+		return result;
+	}
+
+	//! Copies the next length bytes into destination and advances the position.
+	//! The caller must ensure destination has capacity for length bytes.
+	void ReadBytesInto(data_ptr_t destination, idx_t length) {
+		auto source = ReadBytes(length);
+		memcpy(destination, source.data(), length);
+	}
+
+	//! Copies the next length bytes into a fixed-size destination and advances the position.
+	template <class T, idx_t N>
+	void ReadBytesIntoArray(T (&destination)[N], idx_t length) {
+		static_assert(std::is_trivially_copyable_v<T>,
+		              "ReadBytesIntoArray element must be a trivially copyable data type");
+		if (DUCKDB_UNLIKELY(length > sizeof(destination))) {
+			ThrowDestinationTooSmall();
+		}
+		ReadBytesInto(data_ptr_cast(destination), length);
+	}
+
+	//! Copies the next count elements into a fixed-size destination and advances the position.
+	template <class T, idx_t N>
+	void ReadIntoArray(T (&destination)[N], idx_t count) {
+		static_assert(std::is_trivially_copyable_v<T>, "ReadIntoArray element must be a trivially copyable data type");
+		if (DUCKDB_UNLIKELY(count > N)) {
+			ThrowDestinationTooSmall();
+		}
+		ReadBytesInto(data_ptr_cast(destination), count * sizeof(T));
 	}
 
 	//! Returns a view over the next length bytes aligned for T and advances the position.
@@ -175,6 +224,10 @@ public:
 	//! Throws if alignment is zero or the padding exceeds the range.
 	void Align(idx_t alignment);
 
+	//! Aligns the position backward relative to this reader's origin.
+	//! Throws if alignment is zero.
+	void AlignBackward(idx_t alignment);
+
 private:
 	void CheckForwardRead(idx_t length) const {
 		if (DUCKDB_UNLIKELY(length > size - position)) {
@@ -199,12 +252,14 @@ private:
 
 	//! Keep exception construction out of bounds-checking paths.
 	[[noreturn]] static void ThrowOffsetExceedsBlockSize(const char *context);
+	[[noreturn]] static void ThrowByteSizeExceedsBlockSize(const char *context);
 	[[noreturn]] void ThrowForwardReadOutOfBounds() const;
 	[[noreturn]] void ThrowBackwardReadOutOfBounds() const;
 	[[noreturn]] void ThrowOffsetOutOfBounds() const;
 	[[noreturn]] void ThrowRangeOutOfBounds() const;
 	[[noreturn]] void ThrowArrayMisaligned() const;
 	[[noreturn]] void ThrowArrayOutOfBounds() const;
+	[[noreturn]] void ThrowDestinationTooSmall() const;
 
 private:
 	const_data_ptr_t data;

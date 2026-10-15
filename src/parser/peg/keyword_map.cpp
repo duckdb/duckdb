@@ -2,11 +2,8 @@
 #include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 
 namespace duckdb {
-void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
-	if (initialized) {
-		return;
-	};
-	initialized = true;
+DefaultKeywordMaps DuckDBKeywordHelper::InitializeKeywordMaps() {
+	DefaultKeywordMaps keyword_maps;
 
 	auto &reserved_keyword_map = keyword_maps.reserved_keyword_map;
 	auto &unreserved_keyword_map = keyword_maps.unreserved_keyword_map;
@@ -56,6 +53,7 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	reserved_keyword_map.insert("lateral");
 	reserved_keyword_map.insert("leading");
 	reserved_keyword_map.insert("limit");
+	reserved_keyword_map.insert("match_recognize");
 	reserved_keyword_map.insert("not");
 	reserved_keyword_map.insert("null");
 	reserved_keyword_map.insert("offset");
@@ -108,6 +106,7 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("assignment");
 	unreserved_keyword_map.insert("attach");
 	unreserved_keyword_map.insert("attribute");
+	unreserved_keyword_map.insert("auto");
 	unreserved_keyword_map.insert("backward");
 	unreserved_keyword_map.insert("before");
 	unreserved_keyword_map.insert("begin");
@@ -156,10 +155,12 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("defaults");
 	unreserved_keyword_map.insert("deferred");
 	unreserved_keyword_map.insert("definer");
+	unreserved_keyword_map.insert("defines");
 	unreserved_keyword_map.insert("delete");
 	unreserved_keyword_map.insert("delimiter");
 	unreserved_keyword_map.insert("delimiters");
 	unreserved_keyword_map.insert("depends");
+	unreserved_keyword_map.insert("destroy");
 	unreserved_keyword_map.insert("detach");
 	unreserved_keyword_map.insert("dictionary");
 	unreserved_keyword_map.insert("disable");
@@ -321,6 +322,7 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("ref");
 	unreserved_keyword_map.insert("referencing");
 	unreserved_keyword_map.insert("refresh");
+	unreserved_keyword_map.insert("register");
 	unreserved_keyword_map.insert("reindex");
 	unreserved_keyword_map.insert("relative");
 	unreserved_keyword_map.insert("release");
@@ -330,6 +332,7 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("replica");
 	unreserved_keyword_map.insert("reset");
 	unreserved_keyword_map.insert("resource");
+	unreserved_keyword_map.insert("resources");
 	unreserved_keyword_map.insert("respect");
 	unreserved_keyword_map.insert("restart");
 	unreserved_keyword_map.insert("restrict");
@@ -379,6 +382,7 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("strict");
 	unreserved_keyword_map.insert("strip");
 	unreserved_keyword_map.insert("subscription");
+	unreserved_keyword_map.insert("subset");
 	unreserved_keyword_map.insert("sysid");
 	unreserved_keyword_map.insert("system");
 	unreserved_keyword_map.insert("tables");
@@ -560,5 +564,6 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	typename_keyword_map.insert("try_cast");
 	typename_keyword_map.insert("unpack");
 	typename_keyword_map.insert("verbose");
+	return keyword_maps;
 }
 } // namespace duckdb

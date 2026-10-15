@@ -6,16 +6,16 @@
 
 namespace duckdb {
 
-class NumberLiteralMatcher : public Matcher {
+class NumberLiteralMatcher : public AtomicMatcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::NUMBER_LITERAL;
 
 public:
-	explicit NumberLiteralMatcher() : Matcher(TYPE) {
+	explicit NumberLiteralMatcher() : AtomicMatcher(TYPE) {
 		name = "NumberLiteral";
 	}
 
-	MatcherResult MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchAtomic(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
 			return MatcherResult::Failure();
@@ -29,7 +29,7 @@ public:
 		state.token_iterator.SetPreviousTokenType(TokenType::NUMBER_LITERAL);
 		auto result = state.AllocateParseResult<NumberParseResult>(token_text, start_offset, token_length);
 		if (result.HasParseResult()) {
-			result.GetParseResult()->name = name;
+			result.GetParseResult()->SetNameFrom(*this);
 		}
 		return result;
 	}
@@ -40,6 +40,10 @@ public:
 
 	string ToString() const override {
 		return "NUMBER_LITERAL";
+	}
+
+	void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const override {
+		first_set.class_mask = MatcherTokenClass::NUMBER;
 	}
 
 private:

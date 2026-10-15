@@ -102,6 +102,9 @@ static unique_ptr<BaseStatistics> MapExtractValueStats(ClientContext &, Function
 	auto value_copy = StructStats::GetChildStats(entry_stats, 1).Copy();
 	// missing keys return NULL
 	value_copy.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	if (!input.child_stats[0].CanHaveNoNull() || !input.child_stats[1].CanHaveNoNull()) {
+		value_copy.Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+	}
 	return value_copy.ToUnique();
 }
 
@@ -109,7 +112,8 @@ ScalarFunction MapExtractValueFun::GetFunction() {
 	auto key_type = LogicalType::TEMPLATE("K");
 	auto val_type = LogicalType::TEMPLATE("V");
 
-	ScalarFunction fun({LogicalType::MAP(key_type, val_type), key_type}, val_type, MapExtractValueFunc);
+	ScalarFunction fun({}, val_type, MapExtractValueFunc);
+	fun.GetSignature().AddParameter("map", LogicalType::MAP(key_type, val_type)).AddParameter("key", key_type);
 	fun.SetStatisticsCallback(MapExtractValueStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
@@ -119,8 +123,8 @@ ScalarFunction MapExtractFun::GetFunction() {
 	auto key_type = LogicalType::TEMPLATE("K");
 	auto val_type = LogicalType::TEMPLATE("V");
 
-	ScalarFunction fun({LogicalType::MAP(key_type, val_type), key_type}, LogicalType::LIST(val_type),
-	                   MapExtractListFunc);
+	ScalarFunction fun({}, LogicalType::LIST(val_type), MapExtractListFunc);
+	fun.GetSignature().AddParameter("map", LogicalType::MAP(key_type, val_type)).AddParameter("key", key_type);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -6,6 +7,7 @@
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"

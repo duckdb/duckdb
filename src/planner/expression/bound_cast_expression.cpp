@@ -196,6 +196,17 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 	if (source_type.IsSigned() && target_type.IsUnsigned()) {
 		return false;
 	}
+	if (source_type.IsIntegral() && target_type.IsIntegral()) {
+		// a narrowing integer cast is not invertible: a source value outside the target's range does not
+		// survive the cast, so comparing in the target type is not the same as comparing in the source type
+		auto source_size = GetTypeIdSize(source_type.InternalType());
+		auto target_size = GetTypeIdSize(target_type.InternalType());
+		if (source_type.IsUnsigned() && target_type.IsSigned()) {
+			// the sign bit costs a byte of range, so equal widths are not enough
+			return target_size > source_size;
+		}
+		return target_size >= source_size;
+	}
 	return true;
 }
 
@@ -285,6 +296,11 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	// BIGNUM has arbitrary precision, so its values do not necessarily fit in any other type, e.g. BIGNUM -> DOUBLE
 	// overflows for large values, even though BIGNUM implicitly casts to DOUBLE
 	if (source_type.id() == LogicalTypeId::BIGNUM) {
+		return true;
+	}
+	// Floating point values that are not finite (NaN, inf) cannot be represented as a BIGNUM
+	if (target_type.id() == LogicalTypeId::BIGNUM &&
+	    (source_type.id() == LogicalTypeId::FLOAT || source_type.id() == LogicalTypeId::DOUBLE)) {
 		return true;
 	}
 	// Casts of nested types are executed on the child types - recurse into them

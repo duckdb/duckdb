@@ -4,6 +4,8 @@
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -133,8 +135,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 			    distinct.distinct_on_targets.empty() ? DistinctType::DISTINCT : DistinctType::DISTINCT_ON;
 			if (distinct.distinct_on_targets.empty()) {
 				for (idx_t i = 0; i < result.names.size(); i++) {
-					distinct.distinct_on_targets.push_back(
-					    make_uniq<ConstantExpression>(Value::INTEGER(UnsafeNumericCast<int32_t>(1 + i))));
+					distinct.distinct_on_targets.push_back(ConstantExpression::Integer(NumericCast<int64_t>(1 + i)));
 				}
 			}
 			order_binder.SetQueryComponent("DISTINCT ON");
@@ -226,7 +227,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 						auto type = config.ResolveOrder(context, order_node.type);
 						auto null_order = config.ResolveNullOrder(context, type, order_node.null_order);
 						string sort_param = EnumUtil::ToString(type) + " " + EnumUtil::ToString(null_order);
-						sort_key_parameters.push_back(make_uniq<ConstantExpression>(Value(sort_param)));
+						sort_key_parameters.push_back(ConstantExpression::String(sort_param));
 					}
 					order.orders.clear();
 					auto create_sort_key =
@@ -632,12 +633,13 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 				// if there is a collation on a group x, we should group by the collated expr,
 				// but also push a first(x) aggregate in case x is selected (uncollated)
 
-				auto first_fun = FirstFunctionGetter::GetFunction(uncollated_expr->GetReturnType());
+				auto first_fun =
+				    GetBuiltinAggregateFunction(context, FirstFun::Name, {uncollated_expr->GetReturnType()});
 				vector<unique_ptr<Expression>> first_children;
 				first_children.push_back(std::move(uncollated_expr));
 
 				FunctionBinder function_binder(*this);
-				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
+				auto function = function_binder.BindAggregateFunction(std::move(first_fun), std::move(first_children));
 				function->SetAlias("__collated_group");
 
 				auto collated_idx = ColumnBinding::PushExpression(result.aggregates, std::move(function));

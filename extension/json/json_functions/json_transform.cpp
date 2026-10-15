@@ -51,6 +51,9 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 	yyjson_obj_foreach(obj, idx, max, key, val) {
 		val = yyjson_obj_iter_get_val(key);
 		string key_str(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
+		if (key_str.empty()) {
+			throw BinderException("Empty key in object in JSON structure");
+		}
 		if (names.find(key_str) != names.end()) {
 			JSONCommon::ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
 		}
@@ -1150,8 +1153,10 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetTransformFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({{"json", input_type}, {"structure", LogicalType::VARCHAR}}, LogicalType::ANY,
-	                               TransformFunction<false>, JSONTransformBind, nullptr, JSONFunctionLocalState::Init));
+	ScalarFunction fun({}, LogicalType::ANY, TransformFunction<false>, JSONTransformBind, nullptr,
+	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("json", input_type).AddParameter("structure", LogicalType::VARCHAR);
+	set.AddFunction(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetTransformFunction() {
@@ -1163,8 +1168,10 @@ ScalarFunctionSet JSONFunctions::GetTransformFunction() {
 }
 
 static void GetTransformStrictFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::ANY, TransformFunction<true>,
-	                               JSONTransformBind, nullptr, JSONFunctionLocalState::Init));
+	ScalarFunction fun({}, LogicalType::ANY, TransformFunction<true>, JSONTransformBind, nullptr,
+	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("json", input_type).AddParameter("structure", LogicalType::VARCHAR);
+	set.AddFunction(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {

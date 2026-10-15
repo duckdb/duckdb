@@ -52,7 +52,7 @@ unique_ptr<ParsedExpression> ExpandDefaultExpression(const ColumnDefinition &col
 	if (column.HasDefaultValue()) {
 		return column.DefaultValue().Copy();
 	} else {
-		return make_uniq<ConstantExpression>(Value(column.Type()));
+		return ConstantExpression::FromValue(Value(column.Type()));
 	}
 }
 
@@ -255,7 +255,7 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 	if (insert.columns.empty()) {
 		for (auto &column : column_list.Physical()) {
 			// FIXME: can these column names be aliased somehow?
-			if (conflict_columns.count(column.Oid())) {
+			if (conflict_columns.count(column.Physical().index)) {
 				continue;
 			}
 			columns.emplace_back(column.Name());
@@ -264,7 +264,7 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 		// a list of columns was explicitly supplied, only update those
 		for (auto &name : insert.columns) {
 			auto &column = column_list.GetColumn(name);
-			if (conflict_columns.count(column.Oid())) {
+			if (conflict_columns.count(column.Physical().index)) {
 				continue;
 			}
 			columns.push_back(name);
@@ -367,6 +367,11 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			if (!index.is_unique) {
 				continue;
 			}
+			if (index.check_mode == ConstraintCheckMode::DEFERRED) {
+				// Without a conflict target, every constraint is a conflict target.
+				throw BinderException("DEFERRED PRIMARY KEY or UNIQUE constraints cannot be ON CONFLICT targets, "
+				                      "specify the ON CONFLICT columns of a constraint that is not DEFERRED");
+			}
 
 			vector<unique_ptr<ParsedExpression>> and_children;
 			auto &indexed_columns = index.column_set;
@@ -441,17 +446,22 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			}
 		}
 		bool index_references_columns = false;
+		bool deferred_index_matches = false;
 		for (auto &index : storage_info.index_info) {
-			if (!index.is_unique) {
+			if (!index.is_unique || on_conflict_filter != index.column_set) {
 				continue;
 			}
-			bool index_matches = on_conflict_filter == index.column_set;
-			if (index_matches) {
-				index_references_columns = true;
-				break;
+			if (index.check_mode == ConstraintCheckMode::DEFERRED) {
+				deferred_index_matches = true;
+				continue;
 			}
+			index_references_columns = true;
+			break;
 		}
 		if (!index_references_columns) {
+			if (deferred_index_matches) {
+				throw BinderException("DEFERRED PRIMARY KEY or UNIQUE constraints cannot be ON CONFLICT targets");
+			}
 			// Same as before, this is essentially a no-op, turning this into a DO THROW instead
 			// But since this makes no logical sense, it's probably better to throw an error
 			throw BinderException("The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY "
@@ -507,7 +517,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 					if (column.HasDefaultValue()) {
 						expr = column.DefaultValue().Copy();
 					} else {
-						expr = make_uniq<ConstantExpression>(Value(column.Type()));
+						expr = ConstantExpression::FromValue(Value(column.Type()));
 					}
 				} else {
 					// column is specified - add a reference to it
@@ -620,14 +630,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		auto merge_into = GenerateMergeInto(node, table);
 		return Bind(*merge_into);
 	}
-	if (table.temporary) {
-		// Temporary inserts still need a catalog dependency so prepared statements are rebound if the table is dropped.
-		GetStatementProperties().RegisterDBRead(table.catalog, context);
-	} else {
-		// inserting into a non-temporary table: alters underlying database
-		DatabaseModificationType modification_type = DatabaseModificationType::INSERT_DATA;
-		GetStatementProperties().RegisterDBModify(table.catalog, context, modification_type);
-	}
+	GetStatementProperties().RegisterDBModify(table.catalog, context, DatabaseModificationType::INSERT_DATA);
 
 	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());
 
@@ -719,7 +722,6 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	result.plan = std::move(insert);
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

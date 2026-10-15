@@ -329,6 +329,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 			// filter is always true; it is useless to execute it
 			// erase this condition
 			filter.expressions.erase_at(i);
+			removed_expressions = true;
 			i--;
 			if (filter.expressions.empty()) {
 				// if there is a projection map, we should keep the filter
@@ -337,7 +338,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 				if (filter.projection_map.empty()) {
 					node_ptr = std::move(filter.children[0]);
 				}
-				break;
+				return std::move(node_stats);
 			}
 		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
 		           prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
@@ -346,6 +347,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 			return make_uniq<NodeStatistics>(0U, 0U);
 		}
 	}
+	SimplifyConstantOrNull(filter.expressions);
 	// the max cardinality of a filter is the cardinality of the input (i.e. no tuples get filtered)
 	return std::move(node_stats);
 }

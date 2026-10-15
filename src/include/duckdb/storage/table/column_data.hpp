@@ -22,6 +22,7 @@
 
 namespace duckdb {
 class ColumnData;
+class ExpressionFilter;
 class ColumnSegment;
 class DatabaseInstance;
 class PartialBlockManager;
@@ -217,6 +218,8 @@ public:
 
 	FilterPropagateResult CheckZonemap(optional_ptr<ClientContext> context, const StorageIndex &index,
 	                                   TableFilter &filter);
+	//! End of the last vector in [start_row, end_row) that the segment zonemaps do not reject for the filter
+	idx_t ZonemapScanEnd(optional_ptr<ClientContext> context, idx_t start_row, idx_t end_row, TableFilter &filter);
 
 	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                           const LogicalType &type,
@@ -259,6 +262,9 @@ protected:
 	idx_t GetVectorCount(idx_t vector_index) const;
 
 	static bool IsDirectNullCheckFilter(const TableFilter &filter);
+	//! Checks the filter against the statistics of one segment
+	FilterPropagateResult CheckSegmentStatistics(optional_ptr<ClientContext> context,
+	                                             SegmentNode<ColumnSegment> &segment, ExpressionFilter &expr_filter);
 	FilterPropagateResult CheckValidityZonemap(ColumnScanState &state, TableFilter &filter,
 	                                           optional_ptr<SegmentNode<ColumnSegment>> &checked_segment,
 	                                           ColumnData &validity_column);

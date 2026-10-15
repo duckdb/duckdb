@@ -1,0 +1,102 @@
+# name: test/sql/types/type_constructors.test
+# description: Test overload resolution of type constructors
+# group: [types]
+
+# DECIMAL has two constructors: a no-argument one and one taking a width and an optional scale
+
+query III
+SELECT typeof(NULL::DECIMAL), typeof(NULL::DECIMAL(10)), typeof(NULL::DECIMAL(10, 2));
+----
+DECIMAL(18,3)	DECIMAL(10,0)	DECIMAL(10,2)
+
+statement error
+SELECT NULL::DECIMAL(10, 2, 3);
+----
+<REGEX>:Binder Error.*does not accept type parameters \(INTEGER, INTEGER, INTEGER\).*
+
+statement error
+SELECT NULL::DECIMAL('ten');
+----
+<REGEX>:Binder Error.*Type \"DECIMAL\" does not accept type parameters \(VARCHAR\).*
+
+# the candidate overloads are listed in the error
+
+statement error
+SELECT NULL::DECIMAL('ten');
+----
+<REGEX>:.*Candidate definitions.*DECIMAL\(width UTINYINT, scale UTINYINT := 0\).*
+
+# a NULL modifier is rejected before the constructor runs
+
+statement error
+SELECT NULL::DECIMAL(NULL);
+----
+<REGEX>:Binder Error.*Type parameter "width" for type "DECIMAL" cannot be NULL.*
+
+# VARCHAR overloads on a collation
+
+query II
+SELECT typeof(NULL::VARCHAR), typeof(NULL::VARCHAR(10));
+----
+VARCHAR	VARCHAR
+
+statement error
+SELECT NULL::VARCHAR(10, 20);
+----
+<REGEX>:Binder Error.*does not accept type parameters \(INTEGER, INTEGER\).*
+
+# a type that takes no modifiers reports that, rather than listing an empty overload
+
+statement ok
+CREATE TYPE no_modifiers AS INTEGER;
+
+statement error
+SELECT NULL::no_modifiers(1);
+----
+<REGEX>:Binder Error.*Type "no_modifiers" does not take any type parameters.*
+
+# a constructor's own errors are reported, not swallowed by overload matching
+# (error locations are covered by type_constructor_error_location.test)
+
+statement error
+SELECT NULL::DECIMAL(99);
+----
+<REGEX>:.*DECIMAL type width must be between 1 and 38.*
+
+statement error
+SELECT NULL::MAP;
+----
+<REGEX>:.*Type "MAP" requires type parameters.*
+
+# variadic constructors
+
+query III
+SELECT typeof(NULL::STRUCT(a INT, b VARCHAR)), typeof(NULL::ENUM('x', 'y')), typeof(NULL::UNION(u INT));
+----
+STRUCT(a INTEGER, b VARCHAR)	ENUM('x', 'y')	UNION(u INTEGER)
+
+statement error
+SELECT NULL::ENUM(1, 2);
+----
+<REGEX>:Binder Error.*does not accept type parameters \(INTEGER, INTEGER\).*
+
+# every type exposes its constructors through duckdb_types()
+
+query III
+SELECT DISTINCT parameters, parameter_types, varargs FROM duckdb_types()
+WHERE type_name = 'decimal' ORDER BY 1;
+----
+[]	[]	NULL
+[width, scale]	[UTINYINT, UTINYINT]	NULL
+
+query III
+SELECT DISTINCT parameters, parameter_types, varargs FROM duckdb_types()
+WHERE type_name = 'struct';
+----
+[]	[]	TYPE
+
+query III
+SELECT DISTINCT parameters, parameter_types, varargs FROM duckdb_types()
+WHERE type_name = 'integer';
+----
+[]	[]	NULL

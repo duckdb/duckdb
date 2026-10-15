@@ -161,14 +161,14 @@ void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result
 	}
 }
 
-unique_ptr<FunctionData> ArrayOrListLengthBind(BindScalarFunctionInput &input) {
+void ArrayOrListLengthResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	if (arguments[0]->HasParameter() || arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+	auto &argument = input.GetArgument(0);
+	if (argument.HasParameter() || argument.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 
-	const auto &arg_type = arguments[0]->GetReturnType().id();
+	const auto &arg_type = argument.GetReturnType().id();
 	if (arg_type == LogicalTypeId::ARRAY) {
 		bound_function.SetFunctionCallback(ArrayLengthFunction);
 	} else if (arg_type == LogicalTypeId::LIST) {
@@ -177,8 +177,7 @@ unique_ptr<FunctionData> ArrayOrListLengthBind(BindScalarFunctionInput &input) {
 		// Unreachable
 		throw BinderException("length can only be used on arrays or lists");
 	}
-	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
-	return nullptr;
+	bound_function.GetArguments()[0] = argument.GetReturnType();
 }
 
 //------------------------------------------------------------------
@@ -230,17 +229,27 @@ void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, Vector &
 	});
 }
 
-unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(BindScalarFunctionInput &input) {
+void ArrayOrListLengthBinaryResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	if (arguments[0]->HasParameter() || arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+	auto &argument = input.GetArgument(0);
+	if (argument.HasParameter() || argument.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	auto type = arguments[0]->GetReturnType();
+	auto &type = argument.GetReturnType();
 	if (type.id() == LogicalTypeId::ARRAY) {
-		bound_function.GetArguments()[0] = type;
 		bound_function.SetFunctionCallback(ArrayLengthBinaryFunction);
+	} else if (type.id() == LogicalTypeId::LIST) {
+		bound_function.SetFunctionCallback(ListLengthBinaryFunction);
+	} else {
+		// Unreachable
+		throw BinderException("array_length can only be used on arrays or lists");
+	}
+	bound_function.GetArguments()[0] = type;
+}
 
+unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(BindScalarFunctionInput &input) {
+	auto type = input.GetBoundFunction().GetArguments()[0];
+	if (type.id() == LogicalTypeId::ARRAY) {
 		// If the input is an array, the dimensions are constant, so we can calculate them at bind time
 		vector<int64_t> dimensions;
 		while (true) {
@@ -254,73 +263,100 @@ unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(BindScalarFunctionInput &in
 		auto data = make_uniq<ArrayLengthBinaryFunctionData>();
 		data->dimensions = dimensions;
 		return std::move(data);
-
-	} else if (type.id() == LogicalTypeId::LIST) {
-		bound_function.SetFunctionCallback(ListLengthBinaryFunction);
-		bound_function.GetArguments()[0] = type;
-		return nullptr;
-	} else {
-		// Unreachable
-		throw BinderException("array_length can only be used on arrays or lists");
 	}
+	return nullptr;
 }
 
 } // namespace
 
 ScalarFunctionSet LengthFun::GetFunctions() {
 	ScalarFunctionSet length("length");
-	length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                                  ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, nullptr,
-	                                  LengthPropagateStats<true>));
-	length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
-	                                  ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
-	length.AddFunction(
-	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind));
+
+	ScalarFunction string_fun({}, LogicalType::BIGINT,
+	                          ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, nullptr,
+	                          LengthPropagateStats<true>);
+	string_fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	length.AddFunction(string_fun);
+
+	ScalarFunction bit_fun({}, LogicalType::BIGINT,
+	                       ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>);
+	bit_fun.GetSignature().AddParameter("bit", LogicalType::BIT);
+	length.AddFunction(bit_fun);
+
+	ScalarFunction list_fun({}, LogicalType::BIGINT, nullptr);
+	list_fun.SetResolveTypesCallback(ArrayOrListLengthResolveTypes);
+	list_fun.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::ANY));
+	length.AddFunction(list_fun);
+
 	return (length);
 }
 
 ScalarFunctionSet LengthGraphemeFun::GetFunctions() {
 	ScalarFunctionSet length_grapheme("length_grapheme");
-	length_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                                           ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>,
-	                                           nullptr, LengthPropagateStats<false>));
+	ScalarFunction fun({}, LogicalType::BIGINT, ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>,
+	                   nullptr, LengthPropagateStats<false>);
+	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	length_grapheme.AddFunction(fun);
 	return (length_grapheme);
 }
 
 ScalarFunctionSet ArrayLengthFun::GetFunctions() {
 	ScalarFunctionSet array_length("array_length");
-	array_length.AddFunction(
-	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind));
-	array_length.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT},
-	                                        LogicalType::BIGINT, nullptr, ArrayOrListLengthBinaryBind));
+
+	ScalarFunction unary({}, LogicalType::BIGINT, nullptr);
+	unary.SetResolveTypesCallback(ArrayOrListLengthResolveTypes);
+	unary.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::ANY));
+	array_length.AddFunction(unary);
+
+	ScalarFunction binary({}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBinaryBind);
+	binary.GetSignature()
+	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
+	    .AddParameter("dimension", LogicalType::BIGINT);
+	binary.SetResolveTypesCallback(ArrayOrListLengthBinaryResolveTypes);
+	array_length.AddFunction(binary);
+
 	array_length.SetFallible();
 	return (array_length);
 }
 
 ScalarFunction StrlenFun::GetFunction() {
-	return ScalarFunction("strlen", {LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                      ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>, nullptr,
-	                      ByteLengthPropagateStats);
+	ScalarFunction fun("strlen", {}, LogicalType::BIGINT,
+	                   ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>, nullptr,
+	                   ByteLengthPropagateStats);
+	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	return fun;
 }
 
 ScalarFunctionSet BitLengthFun::GetFunctions() {
 	ScalarFunctionSet bit_length("bit_length");
-	bit_length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                                      ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator>, nullptr,
-	                                      BitLengthPropagateStats));
-	bit_length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
-	                                      ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
+
+	ScalarFunction string_fun({}, LogicalType::BIGINT, ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator>,
+	                          nullptr, BitLengthPropagateStats);
+	string_fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	bit_length.AddFunction(string_fun);
+
+	ScalarFunction bit_fun({}, LogicalType::BIGINT,
+	                       ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>);
+	bit_fun.GetSignature().AddParameter("bit", LogicalType::BIT);
+	bit_length.AddFunction(bit_fun);
+
 	return (bit_length);
 }
 
 ScalarFunctionSet OctetLengthFun::GetFunctions() {
 	// length for BLOB type
 	ScalarFunctionSet octet_length("octet_length");
-	octet_length.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::BIGINT,
-	                                        ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>, nullptr,
-	                                        ByteLengthPropagateStats));
-	octet_length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
-	                                        ScalarFunction::UnaryFunction<string_t, int64_t, OctetLenOperator>));
+
+	ScalarFunction blob_fun({}, LogicalType::BIGINT, ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>,
+	                        nullptr, ByteLengthPropagateStats);
+	blob_fun.GetSignature().AddParameter("blob", LogicalType::BLOB);
+	octet_length.AddFunction(blob_fun);
+
+	ScalarFunction bitstring_fun({}, LogicalType::BIGINT,
+	                             ScalarFunction::UnaryFunction<string_t, int64_t, OctetLenOperator>);
+	bitstring_fun.GetSignature().AddParameter("bitstring", LogicalType::BIT);
+	octet_length.AddFunction(bitstring_fun);
+
 	return (octet_length);
 }
 

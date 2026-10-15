@@ -9160,8 +9160,8 @@ CREATE TABLE t1(a INTEGER);
 statement ok
 CREATE TABLE t2(y INTEGER);
 
-# Binder Error: correlated columns in window functions not supported
-statement error
+# correlated columns in window functions are supported
+query I
 SELECT (
 SELECT max(a) OVER ( ORDER BY (SELECT sum(a) FROM t1) )
          + min(a) OVER()

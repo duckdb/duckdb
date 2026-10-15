@@ -6,6 +6,9 @@
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -92,10 +95,10 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 	static void ExecuteFlatI64HugeintSum(const INPUT_TYPE *vals, const ClusteredAggr &clustered,
 	                                     const SelectionVector *isel, const sel_t *cluster_iter) {
 		idx_t pos = 0;
-		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
-			const auto *run_sel = clustered.group_runs[r].sel;
-			const idx_t run_count = clustered.group_runs[r].count;
+		for (auto &run : clustered.runs()) {
+			auto &state = *reinterpret_cast<STATE_TYPE *>(run.state);
+			const auto *run_sel = run.sel;
+			const idx_t run_count = run.count;
 			if (run_count == 0) {
 				continue;
 			}
@@ -141,10 +144,10 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 		input.ToUnifiedFormat(idata);
 		const auto *dict_sel = idata.sel->data();
 		auto &validity = idata.validity;
-		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
-			const auto *run_sel = clustered.group_runs[r].sel;
-			const idx_t run_count = clustered.group_runs[r].count;
+		for (auto &run : clustered.runs()) {
+			auto &state = *reinterpret_cast<STATE_TYPE *>(run.state);
+			const auto *run_sel = run.sel;
+			const idx_t run_count = run.count;
 			int64_t local64 = 0;
 			if (run_sel) {
 				for (idx_t k = 0; k < run_count; k++) {
@@ -227,6 +230,23 @@ struct HugeintSumOperation
 	}
 };
 
+//! The sum of a DECIMAL is a DECIMAL(38) - finalizing throws if the sum does not fit in it
+template <class OP>
+struct DecimalSumOperation : public OP {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		OP::template Finalize<T, STATE>(state, target, finalize_data);
+		if (!state.is_set) {
+			return;
+		}
+		const auto &max_value = Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL];
+		if (target >= max_value || target <= -max_value) {
+			throw OutOfRangeException("Overflow in SUM of DECIMAL: the result does not fit in DECIMAL(%d)",
+			                          Decimal::MAX_WIDTH_DECIMAL);
+		}
+	}
+};
+
 unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
 	throw BinderException("sum_no_overflow is for internal use only!");
 }
@@ -237,7 +257,25 @@ void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<FunctionD
 }
 
 unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
-	function.SetReturnType(deserializer.Get<const LogicalType &>());
+	auto &context = deserializer.Get<ClientContext &>();
+	auto &return_type = deserializer.Get<const LogicalType &>();
+	auto &children = deserializer.Get<const const_expression_list_t &>();
+	vector<unique_ptr<Expression>> arguments;
+	vector<LogicalType> argument_types;
+	for (auto &child : children) {
+		arguments.push_back(child.get().Copy());
+		argument_types.push_back(child.get().GetReturnType());
+	}
+	auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
+	    context, QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier("sum")));
+	FunctionBinder binder(context);
+	auto logical = binder.ResolveFunction(entry.functions.GetFunctionByArguments(context, argument_types), arguments);
+	if (logical.second || (!return_type.IsAggregateState() && logical.first.GetReturnType() != return_type)) {
+		throw SerializationException("Cannot reconstruct the logical sum signature");
+	}
+	logical.first.ReplaceImplementation(function);
+	function = std::move(logical.first);
+	function.SetReturnType(return_type);
 	return nullptr;
 }
 
@@ -246,6 +284,7 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 	case PhysicalType::INT32: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::INTEGER, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetName("sum_no_overflow");
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		function.SetBindCallback(SumNoOverflowBind);
@@ -256,6 +295,7 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 	case PhysicalType::INT64: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::BIGINT, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetName("sum_no_overflow");
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		function.SetBindCallback(SumNoOverflowBind);
@@ -269,9 +309,10 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 }
 
 AggregateFunction GetSumAggregateNoOverflowDecimal() {
-	AggregateFunction aggr({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
-	                       nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
+	AggregateFunction aggr({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                       FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
 	                       SumNoOverflowBind);
+	aggr.GetSignature().AddParameter("arg", LogicalTypeId::DECIMAL);
 	aggr.SetSerializeCallback(SumNoOverflowSerialize);
 	aggr.SetDeserializeCallback(SumNoOverflowDeserialize);
 	return aggr;
@@ -346,6 +387,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 	case PhysicalType::BOOL: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, bool, hugeint_t, IntegerSumOperation>(
 		    LogicalType::BOOLEAN, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
@@ -353,6 +395,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 	case PhysicalType::INT16: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int16_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::SMALLINT, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
@@ -362,6 +405,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int32_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::INTEGER, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
@@ -370,6 +414,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int64_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::BIGINT, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
@@ -378,6 +423,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, hugeint_t, hugeint_t, HugeintSumOperation>(
 		        LogicalType::HUGEINT, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
@@ -387,11 +433,36 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 	}
 }
 
+template <class INPUT_TYPE, class OP>
+AggregateFunction GetDecimalSumAggregate(const LogicalType &input_type) {
+	auto function =
+	    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, INPUT_TYPE, hugeint_t, DecimalSumOperation<OP>>(
+	        input_type, LogicalType::HUGEINT);
+	function.GetSignature().GetParameter(0).SetName("arg");
+	function.SetStatisticsCallback(SumPropagateStats);
+	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	return function;
+}
+
+AggregateFunction GetDecimalSumAggregate(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::INT32:
+		return GetDecimalSumAggregate<int32_t, SumToHugeintOperation>(LogicalType::INTEGER);
+	case PhysicalType::INT64:
+		return GetDecimalSumAggregate<int64_t, SumToHugeintOperation>(LogicalType::BIGINT);
+	case PhysicalType::INT128:
+		return GetDecimalSumAggregate<hugeint_t, HugeintSumOperation>(LogicalType::HUGEINT);
+	default:
+		// the sum of smaller decimals is accumulated in an int64_t, which always fits in a DECIMAL(38)
+		return GetSumAggregate(type);
+	}
+}
+
 unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto decimal_type = arguments[0]->GetReturnType();
-	function.ReplaceImplementation(GetSumAggregate(decimal_type.InternalType()));
+	function.ReplaceImplementation(GetDecimalSumAggregate(decimal_type.InternalType()));
 	function.SetName("sum");
 	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
@@ -454,9 +525,10 @@ struct BignumOperation {
 AggregateFunctionSet SumFun::GetFunctions() {
 	AggregateFunctionSet sum;
 	// decimal
-	sum.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                  BindDecimalSum));
+	AggregateFunction decimal_sum({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                              FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindDecimalSum);
+	decimal_sum.GetSignature().AddParameter("arg", LogicalTypeId::DECIMAL);
+	sum.AddFunction(decimal_sum);
 	sum.AddFunction(GetSumAggregate(PhysicalType::BOOL));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT16));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
@@ -464,9 +536,12 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	auto sum_double = AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	sum_double.GetSignature().GetParameter(0).SetName("arg");
 	sum.AddFunction(sum_double);
-	sum.AddFunction(AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
-	    LogicalType::BIGNUM, LogicalType::BIGNUM));
+	auto sum_bignum = AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
+	    LogicalType::BIGNUM, LogicalType::BIGNUM);
+	sum_bignum.GetSignature().GetParameter(0).SetName("arg");
+	sum.AddFunction(sum_bignum);
 	return sum;
 }
 
@@ -483,8 +558,10 @@ AggregateFunctionSet SumNoOverflowFun::GetFunctions() {
 }
 
 AggregateFunction KahanSumFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(LogicalType::DOUBLE,
-	                                                                                           LogicalType::DOUBLE);
+	auto fun = AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(LogicalType::DOUBLE,
+	                                                                                               LogicalType::DOUBLE);
+	fun.GetSignature().GetParameter(0).SetName("arg");
+	return fun;
 }
 
 } // namespace duckdb

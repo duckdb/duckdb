@@ -151,6 +151,8 @@ private:
 	//! Variables for scanning
 	idx_t merged_partition_count;
 	idx_t merged_partition_index;
+	//! Rows of the current partition that were added to the global progress
+	idx_t progress_scanned;
 
 	//! For scanning
 	Vector sort_key_pointers;
@@ -168,7 +170,7 @@ public:
 	      num_partitions((merger.total_count + (merger.partition_size - 1)) / merger.partition_size),
 	      iterator_state_type(GetBlockIteratorStateType(merger.external)),
 	      sort_key_type(merger.sort.key_layout->GetSortKeyType()), next_partition_idx(0), total_scanned(0),
-	      destroy_partition_idx(0) {
+	      progress_scanned(0), destroy_partition_idx(0) {
 		// Initialize partitions
 		partitions.resize(num_partitions);
 		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
@@ -277,6 +279,8 @@ public:
 	idx_t next_partition_idx;
 	vector<unique_ptr<SortedRunMergePartition>> partitions;
 	atomic<idx_t> total_scanned;
+	//! Rows scanned so far, updated per chunk (for progress)
+	atomic<idx_t> progress_scanned;
 
 	mutex destroy_lock;
 	idx_t destroy_partition_idx;
@@ -292,7 +296,8 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
     : iterator_state_type(gstate.iterator_state_type), sort_key_type(gstate.sort_key_type),
       task(SortedRunMergerTask::FINISHED), run_boundaries(gstate.num_runs),
       merged_partition_count(DConstants::INVALID_INDEX), merged_partition_index(DConstants::INVALID_INDEX),
-      sort_key_pointers(LogicalType::POINTER), sorted_run_scan_state(gstate.context, gstate.merger.sort) {
+      progress_scanned(0), sort_key_pointers(LogicalType::POINTER),
+      sorted_run_scan_state(gstate.context, gstate.merger.sort) {
 	for (const auto &run : gstate.merger.sorted_runs) {
 		auto &key_data = *run->key_data;
 		switch (iterator_state_type) {
@@ -351,10 +356,14 @@ SourceResultType SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalSta
 	case SortedRunMergerTask::SCAN_PARTITION:
 		if (chunk) {
 			ScanPartition(gstate, *chunk);
+			gstate.progress_scanned.fetch_add(chunk->size(), std::memory_order_relaxed);
+			progress_scanned += chunk->size();
 		} else {
 			MaterializePartition(gstate);
 		}
 		if (!chunk || chunk->size() == 0) {
+			gstate.progress_scanned.fetch_add(merged_partition_count - progress_scanned, std::memory_order_relaxed);
+			progress_scanned = 0;
 			gstate.DestroyScannedData();
 			gstate.partitions[partition_idx.GetIndex()]->scanned = true;
 			//	fetch_add returns the _previous_ value!
@@ -824,10 +833,15 @@ OperatorPartitionData SortedRunMerger::GetPartitionData(ExecutionContext &, Data
 ProgressData SortedRunMerger::GetProgress(ClientContext &, GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<SortedRunMergerGlobalState>();
 	ProgressData res;
-	res.done = static_cast<double>(gstate.total_scanned);
+	res.done = static_cast<double>(MinValue<idx_t>(gstate.progress_scanned, total_count));
 	res.total = static_cast<double>(total_count);
 	res.invalid = false;
 	return res;
+}
+
+bool SortedRunMerger::IsFinished(GlobalSourceState &gstate_p) const {
+	auto &gstate = gstate_p.Cast<SortedRunMergerGlobalState>();
+	return gstate.total_scanned == total_count;
 }
 
 //===--------------------------------------------------------------------===//

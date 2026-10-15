@@ -16,26 +16,31 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
 namespace duckdb {
 
-static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &context, const BindingAlias &alias,
-                                               const Identifier &column_name) {
+static unique_ptr<Expression> BindColumn(Binder &binder, ClientContext &context, const BindingAlias &alias,
+                                         const Identifier &column_name) {
 	auto expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(column_name, alias);
 	ExpressionBinder expr_binder(binder, context);
-	auto result = expr_binder.Bind(expr);
-	// store the bound column in the map, keyed by the parsed column reference placed in the join condition
-	binder.GetBoundExpressions().Insert(*expr, std::move(result));
-	return expr;
+	return expr_binder.Bind(expr);
 }
 
-static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder,
-                                                 const BindingAlias &left_alias, const BindingAlias &right_alias,
-                                                 const Identifier &column_name, ExpressionType type) {
+//! Build the bound comparison of a USING/NATURAL column. Each side is bound against its own binder,
+//! which is why the condition is built bound rather than as a parsed expression.
+static unique_ptr<Expression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder,
+                                           const BindingAlias &left_alias, const BindingAlias &right_alias,
+                                           const Identifier &column_name, ExpressionType type) {
 	ExpressionBinder expr_binder(left_binder, context);
 	auto left = BindColumn(left_binder, context, left_alias, column_name);
 	auto right = BindColumn(right_binder, context, right_alias, column_name);
-	return make_uniq<ComparisonExpression>(type, std::move(left), std::move(right));
+	ErrorData error;
+	auto condition = expr_binder.CreateBoundComparison(type, std::move(left), std::move(right), error);
+	if (!condition) {
+		error.Throw();
+	}
+	return condition;
 }
 
 bool Binder::TryFindBinding(const Identifier &using_column, const string &join_side, BindingAlias &result) {
@@ -165,7 +170,7 @@ BoundStatement Binder::BindNearestJoin(JoinRef &ref) {
 	select_node->modifiers.push_back(std::move(order_modifier));
 
 	auto limit_modifier = make_uniq<LimitModifier>();
-	limit_modifier->limit = make_uniq<ConstantExpression>(Value::BIGINT(NumericCast<int64_t>(ref.nearest_count)));
+	limit_modifier->limit = ConstantExpression::Integer(NumericCast<int64_t>(ref.nearest_count));
 	select_node->modifiers.push_back(std::move(limit_modifier));
 
 	auto select_statement = make_uniq<SelectStatement>();
@@ -175,7 +180,7 @@ BoundStatement Binder::BindNearestJoin(JoinRef &ref) {
 	lateral_join->type = ref.type;
 	lateral_join->left = std::move(ref.left);
 	lateral_join->right = make_uniq<SubqueryRef>(std::move(select_statement), std::move(target_alias));
-	lateral_join->condition = make_uniq<ConstantExpression>(Value::BOOLEAN(true));
+	lateral_join->condition = ConstantExpression::Boolean(true);
 	lateral_join->query_location = ref.query_location;
 	return Bind(*lateral_join);
 }
@@ -236,9 +241,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		}
 	}
 
-	// scope for the bound USING/NATURAL join columns seeded into the map by BindColumn
-	BoundExpressionScope using_column_scope(GetBoundExpressions());
-	vector<unique_ptr<ParsedExpression>> extra_conditions;
+	vector<unique_ptr<Expression>> extra_conditions;
 	vector<Identifier> extra_using_columns;
 	switch (ref.ref_type) {
 	case JoinRefType::NATURAL: {
@@ -362,12 +365,16 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		}
 	}
 
-	for (auto &condition : extra_conditions) {
-		if (ref.condition) {
-			ref.condition = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(ref.condition),
-			                                                 std::move(condition));
-		} else {
-			ref.condition = std::move(condition);
+	// a positional join pads the shorter side with NULLs
+	const bool full_outer = result->type == JoinType::OUTER || ref.ref_type == JoinRefType::POSITIONAL;
+	if (result->type == JoinType::LEFT || full_outer) {
+		for (auto &binding : right_binder.bind_context.GetBindingsList()) {
+			binding->SetNullExtended();
+		}
+	}
+	if (result->type == JoinType::RIGHT || full_outer) {
+		for (auto &binding : left_binder.bind_context.GetBindingsList()) {
+			binding->SetNullExtended();
 		}
 	}
 	auto right_bindings = right_binder.bind_context.GetBindingAliases();
@@ -377,6 +384,17 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	if (ref.condition) {
 		WhereBinder condition_binder(*this, context);
 		result->condition = condition_binder.Bind(ref.condition);
+	}
+	// AND the USING/NATURAL conditions onto the condition written in the query, in that order
+	for (auto &condition : extra_conditions) {
+		if (result->condition) {
+			auto conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+			conjunction->GetChildrenMutable().push_back(std::move(result->condition));
+			conjunction->GetChildrenMutable().push_back(std::move(condition));
+			result->condition = std::move(conjunction);
+		} else {
+			result->condition = std::move(condition);
+		}
 	}
 
 	// Update the correlated columns for the parent binder

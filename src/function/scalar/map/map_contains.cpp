@@ -19,8 +19,8 @@ ScalarFunction MapContainsFun::GetFunction() {
 	auto key_type = LogicalType::TEMPLATE("K");
 	auto val_type = LogicalType::TEMPLATE("V");
 
-	ScalarFunction fun("map_contains", {LogicalType::MAP(key_type, val_type), key_type}, LogicalType::BOOLEAN,
-	                   MapContainsFunction);
+	ScalarFunction fun("map_contains", {}, LogicalType::BOOLEAN, MapContainsFunction);
+	fun.GetSignature().AddParameter("map", LogicalType::MAP(key_type, val_type)).AddParameter("key", key_type);
 	return fun;
 }
 

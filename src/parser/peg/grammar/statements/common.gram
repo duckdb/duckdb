@@ -37,13 +37,9 @@ Statement <-
 	AnalyzeStatement /
 	MergeIntoStatement /
 	ConnectStatement /
-	DisconnectStatement /
-	ExpressionStatement
+	DisconnectStatement
 
 AnalyzeKeyword <- 'ANALYZE' / 'ANALYSE'
-
-ExpressionStatement <- List(ExpressionAlias)
-ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
 
 CatalogName <- Identifier
 SchemaName <- Identifier
@@ -165,7 +161,7 @@ NumericModType <- 'NUMERIC' TypeModifiers?
 
 QualifiedTypeName <- CatalogReservedSchemaTypeName / SchemaReservedTypeName / TypeNameAsQualifiedName
 TypeNameAsQualifiedName <- TypeName
-CatalogReservedSchemaTypeName <- CatalogQualification ReservedSchemaQualification ReservedTypeName
+CatalogReservedSchemaTypeName <- CatalogQualification ReservedSchemaQualification+ ReservedTypeName
 SchemaReservedTypeName <- SchemaQualification ReservedTypeName
 TypeModifiers <- Parens(List(Expression)?)
 RowType <- RowOrStruct ColIdTypeList?

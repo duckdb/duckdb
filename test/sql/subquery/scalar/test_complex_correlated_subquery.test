@@ -143,10 +143,15 @@ NULL	6
 2	9
 3	12
 
-# correlated expression inside window function not supported
-statement error
+# the window keeps the level of the subquery, where the correlated column is a constant,
+# so it ranks the single row of that subquery
+query II
 SELECT i, (SELECT row_number() OVER (ORDER BY i)) FROM integers i1 ORDER BY i;
 ----
+NULL	1
+1	1
+2	1
+3	1
 
 # independently decorrelated ANY below an outer correlated aggregate
 query IR

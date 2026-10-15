@@ -73,9 +73,10 @@ public:
 	}
 	void SetQualifiedName(QualifiedName name) {
 		qualified_name = std::move(name);
+		type = WindowToExpressionType(qualified_name.Name().GetIdentifierName());
 	}
 	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
-		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
+		SetQualifiedName(QualifiedName(std::move(catalog), std::move(schema), std::move(name)));
 	}
 	const Identifier &FunctionName() const {
 		return qualified_name.Name();
@@ -173,9 +174,9 @@ public:
 	}
 
 	template <class T, class BASE, class ORDER_NODE>
-	static string ToString(const T &entry, const string &schema, const string &function_name) {
-		// Start with function call
-		string result = schema.empty() ? function_name : schema + "." + function_name;
+	static string ToString(const T &entry, const string &qualification, const string &function_name) {
+		// Start with function call - the qualification (if any) already ends in a "."
+		string result = qualification + function_name;
 		result += "(";
 
 		if constexpr (std::is_same_v<T, WindowExpression>) {

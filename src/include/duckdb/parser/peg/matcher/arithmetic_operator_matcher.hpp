@@ -6,15 +6,15 @@
 
 namespace duckdb {
 
-class ArithmeticOperatorMatcher : public Matcher {
+class ArithmeticOperatorMatcher : public AtomicMatcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::OPERATOR;
 
 public:
-	explicit ArithmeticOperatorMatcher() : Matcher(TYPE) {
+	explicit ArithmeticOperatorMatcher() : AtomicMatcher(TYPE) {
 	}
 
-	MatcherResult MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchAtomic(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
 			return MatcherResult::Failure();
@@ -34,6 +34,10 @@ public:
 
 	string ToString() const override {
 		return "ARITHMETICOPERATOR";
+	}
+
+	void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const override {
+		first_set.class_mask = MatcherTokenClass::OPERATOR;
 	}
 
 private:
