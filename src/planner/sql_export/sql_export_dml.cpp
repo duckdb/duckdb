@@ -180,7 +180,8 @@ static LogicalPlanSQLExportResult ExportUpdateNode(LogicalUpdate &op, LogicalPla
 		set_expressions.push_back(*expression);
 	}
 	auto set_info = make_uniq<UpdateSetInfo>();
-	for (idx_t i = 0; i < op.columns.size(); i++) {
+	// the columns that are only read for RETURNING are not assigned
+	for (idx_t i = 0; i < op.columns.size() - op.returning_only_column_count; i++) {
 		auto exported = context.ExportExpression(op, set_expressions, i, expression_context, path);
 		if (exported.HasError()) {
 			return LogicalPlanSQLExportResult::Failure(exported);
@@ -274,10 +275,15 @@ static LogicalPlanSQLExportResult ExportMergeNode(LogicalMergeInto &op, LogicalP
 					    path, "merge_update", "The MERGE update action does not pair its columns and expressions")});
 				}
 				auto set_info = make_uniq<UpdateSetInfo>();
+				auto written_column_count = bound_action->columns.size() - bound_action->returning_only_column_count;
 				for (idx_t i = 0; i < bound_action->columns.size(); i++) {
 					auto value = export_input();
 					if (value.HasError()) {
 						return LogicalPlanSQLExportResult::Failure(value);
+					}
+					if (i >= written_column_count) {
+						// the columns that are only read for RETURNING are not assigned
+						continue;
 					}
 					set_info->columns.push_back(op.table.GetColumns().GetColumn(bound_action->columns[i]).Name());
 					set_info->expressions.push_back(std::move(value.GetValue()));

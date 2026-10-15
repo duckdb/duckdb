@@ -217,7 +217,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 			for (idx_t i = 0; i < l_state.written_columns.size(); i++) {
 				written_chunk.data[i].Reference(update_chunk.data[i]);
 			}
-			written_chunk.SetCardinality(update_chunk.size());
+			written_chunk.CheckCardinality(update_chunk.size());
 			table.Update(update_state, context.client, tableref, update_row_ids, l_state.written_columns,
 			             written_chunk);
 		}

@@ -33,7 +33,7 @@ public:
 	physical_index_vector_t<idx_t> column_index_map;
 	//! Whether or not an UPDATE is a DELETE + INSERT
 	bool update_is_del_and_insert = false;
-	//! The number of trailing columns that are only read for RETURNING, an in-place update does not write them
+	//! The number of trailing columns only read for the returned rows, which an in-place update does not write
 	idx_t returning_only_column_count = 0;
 
 	void Serialize(Serializer &serializer) const;

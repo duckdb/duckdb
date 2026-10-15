@@ -42,6 +42,61 @@ SELECT * FROM parent ORDER BY id;
 1	100	[a]
 2	0	[b]
 
+# the exported SQL assigns only the updated column
+query TT
+EXPLAIN (SQL) UPDATE parent SET value = 11 WHERE id = 1 RETURNING *;
+----
+sql	<REGEX>:(?s)UPDATE\s+\w+\.main\.parent\s+SET\s+"value"\s+=\s+r\d+\.c0\s+FROM\s+.*RETURNING.*
+
+query TT
+EXPLAIN (SQL) MERGE INTO parent USING (SELECT 1 AS id, 100 AS v) src ON parent.id = src.id
+WHEN MATCHED THEN UPDATE SET value = src.v RETURNING id, value;
+----
+sql	<REGEX>:(?s)MERGE\s+INTO.*WHEN\s+MATCHED\s+THEN\s+UPDATE\s+SET\s+"value"\s+=\s+r\d+\.c0\s+RETURNING.*
+
+# MERGE with several actions
+statement ok
+INSERT INTO parent VALUES (3, 30, ['c']);
+
+query III rowsort
+MERGE INTO parent USING (SELECT * FROM (VALUES (1, 101), (3, 0), (4, 40)) t(id, v)) src ON parent.id = src.id
+WHEN MATCHED AND src.v = 0 THEN DELETE
+WHEN MATCHED THEN UPDATE SET value = src.v
+WHEN NOT MATCHED THEN INSERT VALUES (src.id, src.v, NULL)
+RETURNING merge_action, id, value;
+----
+DELETE	3	30
+INSERT	4	40
+UPDATE	1	101
+
+# constraints on the updated column are still checked
+statement ok
+CREATE TABLE checked (id INTEGER PRIMARY KEY, value INTEGER NOT NULL CHECK (value > 0));
+
+statement ok
+CREATE TABLE checked_child (id INTEGER REFERENCES checked(id));
+
+statement ok
+INSERT INTO checked VALUES (1, 1);
+
+statement ok
+INSERT INTO checked_child VALUES (1);
+
+statement error
+UPDATE checked SET value = -1 RETURNING *;
+----
+CHECK constraint failed
+
+statement error
+UPDATE checked SET value = NULL RETURNING *;
+----
+NOT NULL constraint failed
+
+query II
+UPDATE checked SET value = 2 RETURNING *;
+----
+1	2
+
 # changing the key, or a LIST column, still deletes and inserts the row, which the foreign key prevents
 statement error
 UPDATE parent SET id = 3 WHERE id = 1 RETURNING *;
