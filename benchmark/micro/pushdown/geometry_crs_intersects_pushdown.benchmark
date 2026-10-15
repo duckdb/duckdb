@@ -1,0 +1,16 @@
+# name: benchmark/micro/pushdown/geometry_crs_intersects_pushdown.benchmark
+# description: && on a GEOMETRY column with a CRS prunes row groups next to a filter that can throw
+# group: [pushdown]
+
+name GeometryCRSIntersectsPushdown
+group micro
+subgroup pushdown
+
+load
+CREATE TABLE points AS SELECT (i % 10)::VARCHAR AS id, ('POINT(' || i || ' ' || i || ')')::GEOMETRY('OGC:CRS84') AS g FROM range(10000000) t(i);
+
+run
+SELECT count(*) FROM points WHERE g && 'POINT(5000005 5000005)'::GEOMETRY AND id::INT = 5;
+
+result I
+1
