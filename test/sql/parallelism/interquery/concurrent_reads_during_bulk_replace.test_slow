@@ -8,6 +8,10 @@ load {TEST_DIR}/concurrent_reads_during_bulk_replace.db
 statement ok
 SET checkpoint_threshold = '10GB';
 
+# with one thread, inserts mark their rows with the transaction id from the start
+statement ok
+SET threads = 4;
+
 statement ok
 CREATE TABLE t AS SELECT range AS id FROM range(250000);
 
@@ -16,6 +20,12 @@ CREATE TABLE s AS SELECT range AS id FROM range(250000);
 
 statement ok
 CHECKPOINT
+
+# batch inserts and parallel inserts
+foreach preserve_insertion_order true false
+
+statement ok
+SET preserve_insertion_order = ${preserve_insertion_order};
 
 concurrentloop threadid 0 2
 
@@ -44,6 +54,8 @@ query II
 SELECT count(*), count(DISTINCT id) FROM t
 ----
 250000	250000
+
+endloop
 
 endloop
 
