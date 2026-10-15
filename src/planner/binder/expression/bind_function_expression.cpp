@@ -308,7 +308,10 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		return BindFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
 	}
 	case CatalogType::MACRO_ENTRY:
-		// macro function
+		// macro function - a prepared statement must be re-bound when the macro changes
+		if (!func.ParentCatalog().IsSystemCatalog()) {
+			binder.GetStatementProperties().RegisterDBRead(func.ParentCatalog(), context);
+		}
 		return BindMacro(function, func.Cast<ScalarMacroCatalogEntry>(), depth, expr_ptr);
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
 		// an aggregate belongs to the innermost query level in which one of its arguments resolves a
