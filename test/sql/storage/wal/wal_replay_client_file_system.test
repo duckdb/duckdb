@@ -1,0 +1,51 @@
+# name: test/sql/storage/wal/wal_replay_client_file_system.test
+# description: The WAL of an attached database is replayed through the file system of the client that attaches it
+# group: [wal]
+
+require noforcestorage
+
+require no_alternative_verify
+
+require skip_reload
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB'
+
+statement ok
+ATTACH '{TEST_DIR}/wal_replay_client_file_system.db' AS db
+
+statement ok
+CREATE TABLE db.t AS SELECT 42 AS i
+
+statement ok
+DETACH db
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/wal_replay_client_file_system.db.wal')
+----
+1
+
+statement ok
+SET enable_logging = true
+
+statement ok
+SET logging_level = 'trace'
+
+statement ok
+ATTACH '{TEST_DIR}/wal_replay_client_file_system.db' AS db
+
+query I
+SELECT i FROM db.t
+----
+42
+
+# the session settings of the client, like the certificates of a remote file, reach the WAL as they reach the file
+query II
+SELECT scope, regexp_replace(message, '"path":"[^"]*/', '"path":"') AS msg
+FROM duckdb_logs
+WHERE type = 'FileSystem' AND contains(message, 'wal_replay_client_file_system.db.wal') AND contains(message, '"OPEN"')
+----
+CONNECTION	{"fs":"LocalFileSystem","path":"wal_replay_client_file_system.db.wal","op":"OPEN"}

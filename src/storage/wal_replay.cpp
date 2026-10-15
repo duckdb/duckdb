@@ -375,7 +375,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, StorageMan
 WriteAheadLogReplayer::WriteAheadLogReplayer(QueryContext context, StorageManager &storage_manager,
                                              const string &main_wal_path)
     : context(context), storage_manager(storage_manager), database(storage_manager.GetAttached()),
-      main_wal_path(main_wal_path), fs(FileSystem::Get(storage_manager.GetAttached())) {
+      main_wal_path(main_wal_path), fs(FileSystem::Get(context, storage_manager.GetAttached())) {
 }
 
 unique_ptr<WriteAheadLog> WriteAheadLogReplayer::Replay() {
