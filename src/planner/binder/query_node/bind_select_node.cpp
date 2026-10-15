@@ -759,7 +759,11 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	for (auto &group_by_all_index : group_by_all_indexes) {
 		auto &expr = result.select_list[group_by_all_index];
 		auto return_type = expr->GetReturnType();
-		auto uncollated_first = CollateGroup(*this, expr, internal_sql_types[group_by_all_index]);
+		unique_ptr<Expression> uncollated_first;
+		// the uncollated value is selected through a copy, which a subquery or a volatile expression cannot be
+		if (!expr->HasSubquery() && !expr->IsVolatile()) {
+			uncollated_first = CollateGroup(*this, expr, internal_sql_types[group_by_all_index]);
+		}
 		auto group_proj_idx = ColumnBinding::PushExpression(result.groups.group_expressions, std::move(expr));
 		if (uncollated_first) {
 			auto collated_idx = ColumnBinding::PushExpression(result.aggregates, std::move(uncollated_first));

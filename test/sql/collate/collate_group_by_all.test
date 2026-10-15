@@ -36,13 +36,25 @@ Ax	2
 bx	1
 NULL	2
 
-# a group with a subquery is collated without selecting the uncollated value, as with GROUP BY s
+# groups with a subquery or a volatile expression select their own value
 query II
-SELECT (SELECT t.c0) AS s, count(*) AS n FROM t GROUP BY ALL ORDER BY n DESC, s NULLS LAST;
+SELECT (SELECT t) AS s, count(*) FROM (VALUES ('10:00:00+00'::TIMETZ)) v(t) GROUP BY ALL;
 ----
-a	2
-NULL	2
-b	1
+10:00:00+00	1
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II
+SELECT ((nextval('seq') % 2) + i * 0)::VARCHAR COLLATE NOCASE AS k, count(*) FROM range(3) v(i) GROUP BY ALL ORDER BY k;
+----
+0	1
+1	2
+
+query I
+SELECT currval('seq');
+----
+3
 
 statement ok
 CREATE TABLE u (c VARCHAR COLLATE NOACCENT.NOCASE);
