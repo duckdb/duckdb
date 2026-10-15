@@ -14,6 +14,7 @@
 #include "parquet_bss_decoder.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 class ColumnReader;
@@ -33,6 +34,9 @@ private:
 	ColumnReader &reader;
 	ResizeableBuffer &decoded_data_buffer;
 	unique_ptr<BssDecoder> bss_decoder;
+	//! FIXED_LEN_BYTE_ARRAY pages are decoded up front into PLAIN layout. The buffer is shared so that
+	//! string readers can keep it alive for the strings that point into it (as for DELTA_BYTE_ARRAY).
+	shared_ptr<ResizeableBuffer> plain_data;
 };
 
 } // namespace duckdb
