@@ -409,7 +409,8 @@ LogicalPlanSQLExporter::ExportWithSources(ClientContext &context, LogicalOperato
 	for (auto &replacement : replacements) {
 		sources.push_back({replacement.op,
 		                   state.NextRelationAlias(Identifier("__export_source")),
-		                   {replacement.relation.query->Copy(), replacement.relation.fields}});
+		                   {replacement.relation.query->Copy(), replacement.relation.fields},
+		                   replacement.materialized});
 	}
 	auto exported = state.ExportChild(root, LogicalPlanVerificationPath(), sources);
 	if (exported.HasError()) {
@@ -424,7 +425,7 @@ LogicalPlanSQLExporter::ExportWithSources(ClientContext &context, LogicalOperato
 			info->aliases.push_back(LogicalPlanSQLExportHelpers::FieldIdentifier(i));
 		}
 		info->query_node = std::move(source.relation.query);
-		info->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+		info->materialized = source.materialized;
 		result.query->cte_map.map.insert(source.name, std::move(info));
 	}
 	for (auto &consumer : consumers.map) {
