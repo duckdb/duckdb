@@ -1,5 +1,6 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/error_data.hpp"
 
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
@@ -48,7 +49,14 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index)
 	                       create_info.GetIndexName(), create_info.column_ids, unbound_expressions, storage_info,
 	                       create_info.options);
 
-	return index_type->create_instance(input);
+	try {
+		return index_type->create_instance(input);
+	} catch (std::exception &ex) {
+		// A partially constructed index releases its on-disk blocks on destruction: binding cannot be retried.
+		ErrorData error(ex);
+		UnboundIndex::ThrowBindFailure(unbound_index.db, create_info.GetIndexName(), error,
+		                               "Failed to load the storage");
+	}
 }
 
 void IndexBinder::InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, const Identifier &schema) {

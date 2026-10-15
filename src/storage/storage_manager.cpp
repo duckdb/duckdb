@@ -766,7 +766,7 @@ unique_ptr<CheckpointWriter> SingleFileStorageManager::CreateCheckpointWriter(Qu
 	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options);
 }
 
-static vector<reference<DuckTableEntry>> GetTablesWithUnboundIndexes(AttachedDatabase &db) {
+static vector<reference<DuckTableEntry>> GetCommittedTables(AttachedDatabase &db) {
 	vector<reference<DuckTableEntry>> tables;
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
 	auto bound = VisibilityBound::AllCommitted();
@@ -777,9 +777,13 @@ static vector<reference<DuckTableEntry>> GetTablesWithUnboundIndexes(AttachedDat
 			}
 		});
 	});
+	return tables;
+}
+
+static vector<reference<DuckTableEntry>> GetTablesWithUnboundIndexes(AttachedDatabase &db) {
 	// Don't take index locks inside the catalog scan: concurrent binds take them in the opposite order.
 	vector<reference<DuckTableEntry>> result;
-	for (auto &table : tables) {
+	for (auto &table : GetCommittedTables(db)) {
 		if (table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasUnbound()) {
 			result.push_back(table);
 		}
@@ -810,21 +814,6 @@ static bool HasBufferedReplays(const vector<reference<DuckTableEntry>> &tables) 
 	return false;
 }
 
-static ErrorData BindIndexesWithBufferedReplays(ClientContext &context,
-                                                const vector<reference<DuckTableEntry>> &tables) {
-	for (auto &table : tables) {
-		auto &info = *table.get().GetStorage().GetDataTableInfo();
-		if (!info.GetIndexes().HasBufferedReplays()) {
-			continue;
-		}
-		auto error = TryBindIndexes(info, context);
-		if (error.HasError()) {
-			return error;
-		}
-	}
-	return ErrorData();
-}
-
 bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, const CheckpointOptions &options) {
 	// Without buffered replays, only explicit checkpoints bind indexes: to vacuum their tables.
 	if (!buffered_index_replays && !options.explicit_checkpoint) {
@@ -849,8 +838,17 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 	bind_context.transaction.SetReadOnly();
 
 	// Indexes with buffered replays must be bound, otherwise the checkpoint would lose these operations.
-	auto error = BindIndexesWithBufferedReplays(bind_context, tables);
-	if (error.HasError()) {
+	// Explicit checkpoints also try to bind all others, best effort: only tables with bound indexes can be vacuumed.
+	for (auto &table : tables) {
+		auto &info = *table.get().GetStorage().GetDataTableInfo();
+		const auto must_bind = info.GetIndexes().HasBufferedReplays();
+		if (!must_bind && !options.explicit_checkpoint) {
+			continue;
+		}
+		auto error = TryBindIndexes(info, bind_context);
+		if (!must_bind || !error.HasError()) {
+			continue;
+		}
 		if (options.explicit_checkpoint) {
 			throw InvalidInputException(
 			    "Cannot CHECKPOINT: an index with buffered write-ahead log operations cannot be bound: %s",
@@ -864,13 +862,6 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 		return false;
 	}
 	buffered_index_replays = false;
-
-	// Best effort: the checkpoint can only vacuum tables whose indexes are bound.
-	if (options.explicit_checkpoint) {
-		for (auto &table : tables) {
-			TryBindIndexes(*table.get().GetStorage().GetDataTableInfo(), bind_context);
-		}
-	}
 	return true;
 }
 
@@ -944,26 +935,8 @@ void SingleFileStorageManager::Destroy() {
 	if (!load_complete) {
 		return;
 	}
-	vector<reference<SchemaCatalogEntry>> schemas;
-	// we scan the set of committed schemas
-	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
-	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
-
-	vector<reference<DuckTableEntry>> tables;
-	for (auto &schema : schemas) {
-		schema.get().Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
-			if (entry.internal) {
-				return;
-			}
-			if (entry.type == CatalogType::TABLE_ENTRY) {
-				tables.push_back(entry.Cast<DuckTableEntry>());
-			}
-		});
-	}
-
-	for (auto &table : tables) {
-		auto &data_table = table.get().GetStorage();
-		data_table.Destroy();
+	for (auto &table : GetCommittedTables(db)) {
+		table.get().GetStorage().Destroy();
 	}
 }
 
