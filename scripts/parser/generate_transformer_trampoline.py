@@ -1330,7 +1330,7 @@ class UseGramPreviewEmitter:
                 raise NotImplementedError(f"unsupported finalize argument: {type(arg).__name__}")
         transform_args = ["transformer"] + arg_names
         if self.rule_types[rule_name].pass_location:
-            transform_args.append("process.parse_result.offset")
+            transform_args.append("process.parse_result.GetOffset()")
         lines.append(f"\tauto result = Transform{rule_name}({', '.join(transform_args)});")
         lines.append(f"\treturn {typed_result_expr(cpp_type, 'result', by_value)};")
         lines.append("}")

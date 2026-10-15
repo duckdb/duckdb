@@ -17920,7 +17920,7 @@ PEGTransformerFactory::FinalizeAdditiveExpressionTailTrampoline(PEGTransformer &
 	auto term = process.TakeResult<string>(0);
 	auto multiplicative_expression = process.TakeResult<unique_ptr<ParsedExpression>>(1);
 	auto result = TransformAdditiveExpressionTail(transformer, term, std::move(multiplicative_expression),
-	                                              process.parse_result.offset);
+	                                              process.parse_result.GetOffset());
 	return transformer.MakeResult<BinaryExpressionTail>(std::move(result));
 }
 
