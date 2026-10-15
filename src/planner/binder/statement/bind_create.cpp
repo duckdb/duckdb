@@ -763,6 +763,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	// Set up trigger_expanded_tables to match runtime behavior.
 	// Set up trigger_creation_table to detect recursive triggers during the validation.
 	auto validation_binder = Binder::CreateBinder(context);
+	// the body looks up names in the schema of the trigger, as when it fires
+	validation_binder->SetSearchPath(schema);
 	validation_binder->global_binder_state->trigger_expanded_tables.insert(table);
 	validation_binder->global_binder_state->trigger_creation_table = &table;
 	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.GetTriggerName();

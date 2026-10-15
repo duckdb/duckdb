@@ -140,6 +140,10 @@ void Binder::SetSearchPath(Catalog &catalog, const Identifier &schema) {
 }
 
 void Binder::SetSearchPath(const SchemaCatalogEntry &schema) {
+	if (schema.GetParentSchema()) {
+		// a search path holds top-level schemas only
+		return;
+	}
 	SetSearchPath(Catalog::GetCatalog(context, schema.ParentCatalog().GetName()), schema.name);
 }
 

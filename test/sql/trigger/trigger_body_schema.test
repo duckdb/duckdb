@@ -119,3 +119,38 @@ query II
 SELECT (SELECT count(*) FROM other.audit), (SELECT count(*) FROM memory.main.audit);
 ----
 1	0
+
+# a trigger created from another schema depends on the tables of its own schema
+statement ok
+USE memory.main;
+
+statement ok
+CREATE SCHEMA s3;
+
+statement ok
+CREATE TABLE s3.t (i INTEGER);
+
+statement ok
+CREATE TABLE s3.log (x INTEGER);
+
+statement ok
+CREATE TABLE main.log (x INTEGER);
+
+statement ok
+CREATE TRIGGER s3_after AFTER INSERT ON s3.t FOR EACH STATEMENT INSERT INTO log VALUES (3);
+
+statement ok
+INSERT INTO s3.t VALUES (1);
+
+query II
+SELECT (SELECT count(*) FROM s3.log), (SELECT count(*) FROM main.log);
+----
+1	0
+
+statement error
+DROP TABLE s3.log;
+----
+<REGEX>:.*Dependency Error.*
+
+statement ok
+DROP TABLE main.log;
