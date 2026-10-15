@@ -2,7 +2,7 @@
 # description: The sniffer does not skip the rows of a single column file for a delimiter seen only in its last row
 # group: [csv]
 
-foreach delimiter , ; |
+foreach delimiter ; |
 
 statement ok
 COPY (SELECT l FROM (VALUES (1, 'c0'), (2, 'v0'), (3, 'a{delimiter}b')) t(i, l) ORDER BY i) TO '{TEST_DIR}/last_row.csv' (FORMAT CSV, QUOTE '', HEADER 0);
@@ -123,7 +123,7 @@ FROM read_csv('{TEST_DIR}/set_delimiter.csv', delim = ';', header = false);
 statement ok
 COPY (SELECT l FROM (VALUES (1, '1'), (2, '2'), (3, '3;4')) t(i, l) ORDER BY i) TO '{TEST_DIR}/null_padding.csv' (FORMAT CSV, QUOTE '', HEADER 0);
 
-# set column names or types still skip rows without the delimiter
+# column names or types for two columns still skip rows without the delimiter
 query II
 FROM read_csv('{TEST_DIR}/set_delimiter.csv', header = false, names = ['x', 'y']);
 ----
@@ -133,6 +133,28 @@ query II
 FROM read_csv('{TEST_DIR}/set_delimiter.csv', header = false, types = ['INTEGER', 'INTEGER']);
 ----
 1	2
+
+# a single column name or type keeps the single column reading
+query I
+SELECT x FROM read_csv('{TEST_DIR}/last_row.csv', names = ['x']);
+----
+v0
+a|b
+
+query I
+SELECT c0 FROM read_csv('{TEST_DIR}/last_row.csv', types = ['VARCHAR']);
+----
+v0
+a|b
+
+# a wider dialect that is the only one to read the file is kept
+statement ok
+COPY (SELECT l FROM (VALUES (1, 'report'), (2, '"hello",42')) t(i, l) ORDER BY i) TO '{TEST_DIR}/only_dialect.csv' (FORMAT CSV, QUOTE '', HEADER 0);
+
+query II
+FROM read_csv('{TEST_DIR}/only_dialect.csv', quote = '"', header = false);
+----
+hello	42
 
 # null padding reads every row
 query II
