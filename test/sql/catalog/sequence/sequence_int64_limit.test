@@ -96,6 +96,42 @@ SELECT nextval('edge');
 ----
 reached maximum value of sequence "edge"
 
+statement ok
+CREATE SEQUENCE edge_called;
+
+query I
+SELECT setval('edge_called', 9223372036854775807);
+----
+9223372036854775807
+
+query I
+SELECT currval('edge_called');
+----
+9223372036854775807
+
+statement error
+SELECT nextval('edge_called');
+----
+reached maximum value of sequence "edge_called"
+
+statement ok
+CREATE SEQUENCE edge_called_down INCREMENT BY -1;
+
+query I
+SELECT setval('edge_called_down', -9223372036854775808);
+----
+-9223372036854775808
+
+query I
+SELECT currval('edge_called_down');
+----
+-9223372036854775808
+
+statement error
+SELECT nextval('edge_called_down');
+----
+reached minimum value of sequence "edge_called_down"
+
 # setval makes an exhausted sequence usable again
 query I
 SELECT setval('up', 9223372036854775805);

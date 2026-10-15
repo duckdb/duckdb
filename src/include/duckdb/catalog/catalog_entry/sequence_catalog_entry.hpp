@@ -70,7 +70,7 @@ public:
 	string ToSQL() const override;
 
 private:
-	//! A counter outside of the range for a sequence whose next value does not fit in an int64, if there is one
+	//! An exhaustion counter outside of the range, if the range and the storage format permit one
 	optional<int64_t> GetExhaustedCounter() const;
 
 	//! Lock for getting a value on the sequence

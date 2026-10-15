@@ -7,7 +7,6 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
-#include "duckdb/main/attached_database.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 
@@ -130,7 +129,7 @@ void SequenceCatalogEntry::ReplayValue(uint64_t v_usage_count, int64_t v_counter
 optional<int64_t> SequenceCatalogEntry::GetExhaustedCounter() const {
 	if (!temporary) {
 		// storage versions prior to v2.0.0 derive the last value from the counter, which this counter does not allow
-		auto &storage_manager = catalog.GetAttached().GetStorageManager();
+		auto &storage_manager = StorageManager::Get(catalog);
 		if (storage_manager.HasStorageVersion() &&
 		    StorageManager::IsPriorToVersion(StorageVersion::V2_0_0, storage_manager.GetStorageVersion())) {
 			return nullopt;
