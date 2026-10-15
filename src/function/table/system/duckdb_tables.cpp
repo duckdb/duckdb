@@ -4,7 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/function/table/system_catalog_pruning.hpp"
+#include "duckdb/function/table/system_catalog_scanner.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraint.hpp"
@@ -20,7 +20,7 @@ struct DuckDBTablesData : public GlobalTableFunctionState {
 
 	vector<reference<CatalogEntry>> entries;
 	idx_t offset;
-	SystemCatalogPruningStats stats;
+	SystemCatalogScannerStats stats;
 };
 
 static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, TableFunctionBindInput &input,
@@ -73,14 +73,14 @@ static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, TableFu
 	names.emplace_back("sql");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	return SystemCatalogPruning::CreateBindData(names);
+	return SystemCatalogScanner::CreateBindData(names);
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBTablesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBTablesData>();
 
 	// scan the surviving schemas for tables and collect them
-	auto schemas = SystemCatalogPruning::GetSchemas(context, input.bind_data, result->stats);
+	auto schemas = SystemCatalogScanner::GetSchemas(context, input, result->stats);
 	for (auto &schema : schemas) {
 		schema.get().Scan(context, CatalogType::TABLE_ENTRY,
 		                  [&](CatalogEntry &entry) { result->entries.push_back(entry); });
@@ -177,12 +177,12 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 }
 
 static void DuckDBTablesGetMetrics(TableFunctionGetMetricsInput &input) {
-	SystemCatalogPruning::ReportMetrics(input, input.global_state->Cast<DuckDBTablesData>().stats);
+	SystemCatalogScanner::ReportMetrics(input, input.global_state->Cast<DuckDBTablesData>().stats);
 }
 
 void DuckDBTablesFun::RegisterFunction(BuiltinFunctions &set) {
 	auto function = TableFunction("duckdb_tables", {}, DuckDBTablesFunction, DuckDBTablesBind, DuckDBTablesInit);
-	SystemCatalogPruning::RegisterPushdown(function);
+	SystemCatalogScanner::RegisterPushdown(function);
 	function.get_metrics = DuckDBTablesGetMetrics;
 	set.AddFunction(std::move(function));
 }

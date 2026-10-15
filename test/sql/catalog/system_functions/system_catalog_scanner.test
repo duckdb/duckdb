@@ -1,4 +1,4 @@
-# name: test/sql/catalog/system_functions/system_catalog_pruning.test
+# name: test/sql/catalog/system_functions/system_catalog_scanner.test
 # description: Filter pushdown into the system catalog table functions duckdb_tables()/duckdb_views()
 # group: [system_functions]
 
@@ -40,19 +40,19 @@ CREATE VIEW {db}.s2.v2 AS SELECT 2;
 endloop
 
 # ------------------------------------------------------------------------------------------------
-# 1. Direct duckdb_tables() queries: every behaviour-matrix branch, row-level
+# 1. Direct duckdb_tables() queries: every predicate shape, row-level
 # ------------------------------------------------------------------------------------------------
 
-# bare equality on schema_name (fast path)
+# equality on schema_name
 query I
 SELECT table_name FROM duckdb_tables WHERE schema_name = 's1' ORDER BY database_name, table_name;
 ----
 t1
 t1
 
-# lower() wrapper (list-and-prune, no fast path)
+# lower() wrapper, the shape SHOW TABLES emits
 query I
-SELECT table_name FROM duckdb_tables WHERE lower(schema_name) = 's1' ORDER BY database_name, table_name;
+SELECT table_name FROM duckdb_tables WHERE lower(schema_name) = lower('S1') ORDER BY database_name, table_name;
 ----
 t1
 t1
@@ -76,6 +76,19 @@ SELECT table_name FROM duckdb_tables WHERE schema_name <> 's1' AND database_name
 ----
 t2
 
+# oid columns
+query I
+SELECT table_name FROM duckdb_tables
+WHERE database_oid = (SELECT database_oid FROM duckdb_databases WHERE database_name = 'db1')
+  AND schema_oid = (SELECT oid FROM duckdb_schemas WHERE database_name = 'db1' AND schema_name = 's2');
+----
+t2
+
+# conflicting equalities: no schema can match
+query I
+SELECT table_name FROM duckdb_tables WHERE schema_name = 's1' AND schema_name = 's2';
+----
+
 # database_name = current_database()
 statement ok
 USE memory;
@@ -85,17 +98,31 @@ SELECT DISTINCT database_name FROM duckdb_tables WHERE database_name = current_d
 ----
 memory
 
-# predicate only on table_name (no catalog/schema pruning, still correct)
+# predicate only on table_name: not an identity column, applied above the scan, still correct
 query I
 SELECT schema_name FROM duckdb_tables WHERE table_name = 't1' ORDER BY database_name;
 ----
 s1
 s1
 
-# volatile predicate: no pruning, correct result (no rows match a random uuid)
+# identity and non-identity predicates together: the schema is pruned, the table_name filter still applies
+query II
+SELECT database_name, table_name FROM duckdb_tables WHERE schema_name = 's1' AND table_name = 't1' AND database_name = 'db1';
+----
+db1	t1
+
+# volatile predicate: not pushed, correct result (no rows match a random uuid)
 query I
 SELECT table_name FROM duckdb_tables WHERE schema_name = gen_random_uuid()::VARCHAR;
 ----
+
+# join filter pushdown on a non-identity column (table_oid) is ignored by the scan and checked by the join
+query I
+SELECT t.table_name FROM duckdb_tables t JOIN duckdb_columns c ON t.table_oid = c.table_oid
+WHERE t.database_name = 'db1' AND c.column_name = 'i' ORDER BY t.table_name;
+----
+t1
+t2
 
 # WITH ORDINALITY (pushdown skipped by the optimizer, still correct)
 query I
@@ -114,38 +141,67 @@ SELECT view_name FROM duckdb_views WHERE schema_name = 's1' AND NOT internal ORD
 v1
 v1
 
+# non-identity constant filter on a projection-pushdown function: re-applied above the scan
+query I
+SELECT comment FROM duckdb_views WHERE view_name = 'v1' ORDER BY database_name;
+----
+NULL
+NULL
+
+query II
+SELECT database_name, view_name FROM duckdb_views WHERE view_name = 'v2' AND schema_name = 's2' AND database_name = 'db2';
+----
+db2	v2
+
 # ------------------------------------------------------------------------------------------------
-# 3. EXPLAIN: retained predicate shows as a Catalog Filters entry
+# 3. EXPLAIN: the identity predicate is a table filter on the scan
 # ------------------------------------------------------------------------------------------------
 
 query II
 EXPLAIN SELECT table_name FROM duckdb_tables WHERE schema_name = 's1';
 ----
-physical_plan	<REGEX>:.*Catalog Filters:.*schema_name = 's1'.*
+physical_plan	<REGEX>:.*Filters:.*schema_name.*s1.*
 
-# WITH ORDINALITY: optimizer does not push the filter, so no Catalog Filters
+query II
+EXPLAIN SELECT table_name FROM duckdb_tables WHERE lower(schema_name) = 's1';
+----
+physical_plan	<REGEX>:.*Filters:.*lower\(schema_name\).*s1.*
+
+# a non-identity predicate is not a table filter on the scan
+query II
+EXPLAIN SELECT schema_name FROM duckdb_tables WHERE table_name = 't1';
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+# WITH ORDINALITY: optimizer does not push the filter
 query II
 EXPLAIN SELECT * FROM duckdb_tables() WITH ORDINALITY WHERE schema_name = 's1';
 ----
-physical_plan	<!REGEX>:.*Catalog Filters:.*
+physical_plan	<!REGEX>:.*Filters:.*
 
 # ------------------------------------------------------------------------------------------------
-# 4. EXPLAIN ANALYZE: pruning counters and the schema-lookup fast path
+# 4. EXPLAIN ANALYZE: pruning counters
 # ------------------------------------------------------------------------------------------------
 
+# s1 exists in db1 and db2 only
 query II
 EXPLAIN ANALYZE SELECT table_name FROM duckdb_tables WHERE schema_name = 's1';
 ----
-analyzed_plan	<REGEX>:.*Schema Lookup: true.*
+analyzed_plan	<REGEX>:.*Schemas Scanned: 2/.*
 
-# lower() form lists and prunes: no Schema Lookup line
 query II
 EXPLAIN ANALYZE SELECT table_name FROM duckdb_tables WHERE lower(schema_name) = 's1';
 ----
-analyzed_plan	<!REGEX>:.*Schema Lookup:.*
+analyzed_plan	<REGEX>:.*Schemas Scanned: 2/.*
+
+# catalog-level pruning: only db1 is listed
+query II
+EXPLAIN ANALYZE SELECT table_name FROM duckdb_tables WHERE database_name = 'db1' AND schema_name = 's1';
+----
+analyzed_plan	<REGEX>:.*Catalogs Scanned: 1/.*Schemas Scanned: 1/.*
 
 # ------------------------------------------------------------------------------------------------
-# 5. Prepared statement: HasParameter() skip means no pruning, but correct results
+# 5. Prepared statement: the filter is re-bound per execution
 # ------------------------------------------------------------------------------------------------
 
 statement ok
@@ -183,7 +239,7 @@ SELECT table_name FROM duckdb_tables WHERE schema_name = 's3' AND database_name 
 t3
 
 # ------------------------------------------------------------------------------------------------
-# 7. Non-existent schema: direct query returns zero rows (lookup null, nothing listed)
+# 7. Non-existent schema: zero rows
 # ------------------------------------------------------------------------------------------------
 
 query I
@@ -191,7 +247,7 @@ SELECT table_name FROM duckdb_tables WHERE schema_name = 'nope';
 ----
 
 # ------------------------------------------------------------------------------------------------
-# 8. Case-variant lookup on a case-insensitive catalog: SQL = is case-sensitive, so no rows and no fast path
+# 8. SQL = on schema_name is case-sensitive: a case variant matches nothing
 # ------------------------------------------------------------------------------------------------
 
 query I
@@ -231,7 +287,7 @@ b	tb
 C	tc
 
 # ------------------------------------------------------------------------------------------------
-# 10. Embedded single quote in the schema name round-trips through the fast-path point lookup
+# 10. Embedded single quote in the schema name
 # ------------------------------------------------------------------------------------------------
 
 statement ok
@@ -245,7 +301,23 @@ SELECT table_name FROM duckdb_tables WHERE schema_name = 'O''Brien' AND database
 ----
 t
 
-query II
-EXPLAIN ANALYZE SELECT table_name FROM duckdb_tables WHERE schema_name = 'O''Brien' AND database_name = 'db1';
+# ------------------------------------------------------------------------------------------------
+# 11. SHOW TABLES FROM goes through the same pushdown (lower() on both identity columns)
+# ------------------------------------------------------------------------------------------------
+
+query I
+SHOW TABLES FROM db1.s1;
 ----
-analyzed_plan	<REGEX>:.*Schema Lookup: true.*
+t1
+v1
+
+query I
+SHOW TABLES FROM DB1.S1;
+----
+t1
+v1
+
+query I
+SHOW TABLES FROM db1."O'Brien";
+----
+t
