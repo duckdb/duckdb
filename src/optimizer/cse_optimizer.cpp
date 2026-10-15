@@ -74,7 +74,7 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 	}
 
 	if (expr.GetExpressionType() == ExpressionType::OPERATOR_TRY) {
-		// TRY turns the errors of its child into NULL, so nothing in it may be moved out of it on its own
+		// only share what is inside TRY with occurrences outside of it, which are evaluated unconditionally
 		const auto save_short_circuit = state.short_circuited;
 		state.short_circuited = true;
 		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { CountExpressions(child, state); });

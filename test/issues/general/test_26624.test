@@ -27,6 +27,11 @@ SELECT TRY(CAST(s AS INTEGER) * 2 + CAST(s AS INTEGER)) AS x, TRY(-CAST(s AS INT
 126	-42
 NULL	NULL
 
+query II
+SELECT SUM(TRY(CAST(s AS INTEGER) + 1)), SUM(TRY(CAST(s AS INTEGER) + 2)) FROM t
+----
+43	44
+
 # TRY inside a WHERE and nested in other expressions
 query I
 SELECT s FROM t WHERE TRY(CAST(s AS INTEGER) + 1) IS NULL AND TRY(CAST(s AS INTEGER) + 2) IS NULL
@@ -86,6 +91,18 @@ SELECT COALESCE(i, CAST(s AS INTEGER) + 1) AS a, CASE WHEN i IS NULL THEN CAST(s
 ----
 43	44
 0	NULL
+
+query II
+SELECT COALESCE(i, i, CAST(s AS INTEGER) + 1) AS a, COALESCE(i, -i, CAST(s AS INTEGER) + 1) AS b FROM c ORDER BY s
+----
+43	43
+0	0
+
+query II
+SELECT TRY(COALESCE(i, CAST(s AS INTEGER) + 1) + CAST(s AS INTEGER)) AS a, COALESCE(i, CAST(s AS INTEGER) + 1) AS b FROM c ORDER BY s
+----
+85	43
+NULL	0
 
 # the first argument of COALESCE always runs, so it is still shared
 query II
