@@ -83,3 +83,18 @@ query III
 SELECT file_index, part, x FROM read_parquet('{TEST_DIR}/file_index_hive/*/*.parquet', hive_partitioning = true) JOIN selected USING (part) WHERE part >= 1
 ----
 2	2	30
+
+# rejects of scans that pruned files keep their own file ids
+statement ok
+COPY (SELECT * FROM (VALUES (0, '1'), (1, 'x'), (2, 'y')) t(part, v)) TO '{TEST_DIR}/file_index_rejects' (FORMAT CSV, PARTITION_BY (part));
+
+query II
+SELECT part, v FROM read_csv('{TEST_DIR}/file_index_rejects/*/*.csv', hive_partitioning = true, types = {'v': 'INTEGER'}, store_rejects = true) WHERE part = 1
+UNION ALL
+SELECT part, v FROM read_csv('{TEST_DIR}/file_index_rejects/part=2/*.csv', hive_partitioning = true, types = {'v': 'INTEGER'}, store_rejects = true)
+----
+
+query II
+SELECT count(*), list(parse_path(s.file_path)[-2] ORDER BY s.file_path) FROM reject_errors e JOIN reject_scans s USING (scan_id, file_id)
+----
+2	['part=1', 'part=2']
