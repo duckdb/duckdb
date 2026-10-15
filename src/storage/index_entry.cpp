@@ -83,7 +83,9 @@ ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr
 		} else {
 			error = bound_index.Append(chunk, row_ids, index_append_info);
 		}
-	} catch (std::exception &ex) {
+	} catch (ConstraintException &ex) {
+		// a conflict leaves the index unchanged; any other exception may leave a partial
+		// append behind and must propagate as a throw
 		error = ErrorData(ex);
 	}
 	return error;

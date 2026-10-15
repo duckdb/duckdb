@@ -3,6 +3,7 @@
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -208,13 +209,14 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 	if (!error.HasError()) {
 		return;
 	}
+	// a returned error means the index append removed the failing chunk's keys before returning:
+	// remove the keys of the chunks appended before it
+	RevertIndexAppend(transaction, append_state.row_start, append_state.current_row);
 	if (error.Type() == ExceptionType::CONSTRAINT) {
-		// the index append already removed the conflicting chunk's keys before returning:
-		// remove the keys of the chunks appended before it
-		RevertIndexAppend(transaction, append_state.row_start, append_state.current_row);
+		error.Throw();
 	}
-	// Other errors are not reverted here: the catch in Flush invalidates the database.
-	error.Throw();
+	// fully reverted: rethrow as a retryable commit failure
+	throw TransactionException(error.RawMessage());
 }
 
 void LocalTableStorage::RevertIndexAppend(DuckTransaction &transaction, row_t row_start, row_t row_end) {
@@ -630,9 +632,10 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		transaction.PushAppend(*storage.table_entry, NumericCast<idx_t>(append_state.row_start), append_count);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
-		// constraint conflicts revert their own changes and remain retryable; any other
-		// error may have left changes that a rollback cannot revert: invalidate the database
-		if (error.Type() == ExceptionType::CONSTRAINT) {
+		// CONSTRAINT and TRANSACTION errors are only thrown after the index append reverted
+		// its changes and remain retryable; any other error may have left changes that a
+		// rollback cannot revert: invalidate the database
+		if (error.Type() == ExceptionType::CONSTRAINT || error.Type() == ExceptionType::TRANSACTION) {
 			throw;
 		}
 		throw FatalException("Failed to flush table \"%s\" during commit: %s", table.GetTableName(),
