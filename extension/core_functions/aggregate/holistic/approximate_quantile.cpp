@@ -67,11 +67,11 @@ bool ApproxQuantileCoding::Decode(const double &source, dtime_tz_t &target) {
 	uint64_t sort_key;
 	const auto decoded = Decode<double, uint64_t>(source, sort_key);
 	if (decoded) {
-		//	We can invert the sort key because its offset was not touched.
-		auto offset = dtime_tz_t::decode_offset(sort_key);
+		//	The offset bits of an interpolated sort key are meaningless: return the normalized time at +00.
 		auto micros = dtime_tz_t::decode_micros(sort_key);
-		micros -= int64_t(dtime_tz_t::encode_offset(offset) * dtime_tz_t::OFFSET_MICROS);
-		target = dtime_tz_t(dtime_t(micros), offset);
+		micros -= int64_t(dtime_tz_t::MAX_OFFSET * dtime_tz_t::OFFSET_MICROS);
+		micros = (micros % Interval::MICROS_PER_DAY + Interval::MICROS_PER_DAY) % Interval::MICROS_PER_DAY;
+		target = dtime_tz_t(dtime_t(micros), 0);
 	} else if (source < 0) {
 		target = Value::MinimumValue(LogicalTypeId::TIME_TZ).GetValue<dtime_tz_t>();
 	} else {
