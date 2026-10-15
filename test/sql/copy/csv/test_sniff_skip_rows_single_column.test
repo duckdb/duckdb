@@ -94,7 +94,7 @@ FROM read_csv('{TEST_DIR}/empty_line.csv', header = false);
 ----
 1	2
 
-# a set delimiter and null padding keep their rows
+# with a set delimiter, rows without it are still skipped
 statement ok
 COPY (SELECT l FROM (VALUES (1, 'note'), (2, '1;2')) t(i, l) ORDER BY i) TO '{TEST_DIR}/set_delimiter.csv' (FORMAT CSV, QUOTE '', HEADER 0);
 
@@ -106,9 +106,16 @@ FROM read_csv('{TEST_DIR}/set_delimiter.csv', delim = ';', header = false);
 statement ok
 COPY (SELECT l FROM (VALUES (1, '1'), (2, '2'), (3, '3;4')) t(i, l) ORDER BY i) TO '{TEST_DIR}/null_padding.csv' (FORMAT CSV, QUOTE '', HEADER 0);
 
+# null padding reads every row
 query II
-FROM read_csv('{TEST_DIR}/null_padding.csv', delim = ';', header = false, null_padding = true);
+FROM read_csv('{TEST_DIR}/null_padding.csv', header = false, null_padding = true);
 ----
 1	NULL
 2	NULL
 3	4
+
+# a file without a final newline that ends right at the end of the sample
+query II
+SELECT count(*), count(*) FILTER (c0 = 'a;b') FROM read_csv('{DATA_DIR}/csv/single_column_sample_end.csv');
+----
+2047	1
