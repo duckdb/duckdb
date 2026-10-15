@@ -8,6 +8,12 @@ statement ok
 CREATE SEQUENCE s;
 
 statement ok
+CREATE SEQUENCE s2;
+
+statement ok
+PREPARE z AS SELECT count(*) FROM range(nextval('s2'));
+
+statement ok
 PREPARE p AS SELECT count(*) FROM range(nextval('s'));
 
 query I
@@ -85,7 +91,7 @@ statement ok
 PREPARE x AS SELECT count(*) FROM range(CASE WHEN false THEN nextval('s') ELSE 2 END);
 
 statement ok
-PREPARE y AS SELECT count(*) FROM range(coalesce(setval('s', NULL), 2));
+PREPARE y AS SELECT count(*) FROM range(coalesce(list_transform([NULL::BIGINT], lambda x: setval('s', x))[1], 2));
 
 statement ok
 COMMIT;
@@ -124,7 +130,7 @@ DETACH ro;
 
 restart
 
-query I
-SELECT nextval('s');
+query II
+SELECT nextval('s'), nextval('s2');
 ----
-11
+11	2

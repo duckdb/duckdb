@@ -68,7 +68,7 @@ struct NextValLocalState : public FunctionLocalState {
 
 	DuckTransaction &transaction;
 	SequenceCatalogEntry &sequence;
-	//! Whether the database of the sequence is marked as modified
+	//! Whether this state registered the write to the sequence
 	bool modified = false;
 };
 
