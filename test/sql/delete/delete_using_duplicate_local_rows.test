@@ -48,3 +48,26 @@ query II
 SELECT id, v FROM u ORDER BY id;
 ----
 3	3
+
+# the same row matched in multiple input chunks
+statement ok
+CREATE TABLE c(id INT PRIMARY KEY, v INT);
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO c VALUES (1,1),(2,2);
+
+query I
+DELETE FROM c USING (SELECT 2 FROM range(5000)) d(x) WHERE c.id = d.x;
+----
+1
+
+statement ok
+COMMIT;
+
+query II
+SELECT id, v FROM c ORDER BY id;
+----
+1	1
