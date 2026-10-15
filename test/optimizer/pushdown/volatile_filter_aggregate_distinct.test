@@ -80,15 +80,18 @@ SELECT currval('s6');
 statement ok
 CREATE SEQUENCE s9 START 1;
 
-query I
-SELECT count(*) FROM (SELECT DISTINCT a FROM dd) q WHERE nextval('s9') <= 2 AND random() < 2 AND a >= 1;
-----
-2
+statement ok
+CREATE SEQUENCE s11 START 1;
 
 query I
-SELECT currval('s9');
+SELECT count(*) FROM (SELECT DISTINCT a FROM dd) q WHERE nextval('s9') > 0 AND nextval('s11') > 0 AND a >= 1;
 ----
 3
+
+query II
+SELECT currval('s9'), currval('s11');
+----
+3	3
 
 statement ok
 CREATE SEQUENCE s10 START 1;
