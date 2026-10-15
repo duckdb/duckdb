@@ -174,7 +174,7 @@ duckdb::string_t StringFromTimestamp(const T &input, StringHeap &heap) {
 		picos *= 1000;
 	} else {
 		auto us = Cast::Operation<T, timestamp_us_t>(input);
-		// unlike Convert, also splits the finite timestamps whose day does not start within the range
+		// unlike Convert, this works when the day starts below the timestamp range
 		date_entry = Timestamp::GetDate(us);
 		time_entry = Timestamp::GetTime(us);
 	}

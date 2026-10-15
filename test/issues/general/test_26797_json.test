@@ -1,0 +1,10 @@
+# name: test/issues/general/test_26797_json.test
+# description: Write a finite timestamp whose day starts below the timestamp range as JSON
+# group: [general]
+
+require json
+
+query I
+SELECT make_timestamp(-9223372036854775806)::VARIANT::JSON;
+----
+"290309-12-21 (BC) 19:59:05.224194"
