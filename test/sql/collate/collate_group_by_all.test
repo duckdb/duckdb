@@ -1,0 +1,56 @@
+# name: test/sql/collate/collate_group_by_all.test
+# description: GROUP BY ALL groups collated columns like an explicit GROUP BY
+# group: [collate]
+
+statement ok
+CREATE TABLE t (id BIGINT, c0 VARCHAR COLLATE NOCASE);
+
+statement ok
+INSERT INTO t VALUES (0, 'A'), (1, 'a'), (2, 'b'), (3, NULL), (4, NULL);
+
+query II
+SELECT c0, count(*) AS n FROM t GROUP BY ALL ORDER BY n DESC, c0 NULLS LAST;
+----
+A	2
+NULL	2
+b	1
+
+query II
+SELECT c0 AS k, count(*) FROM t GROUP BY ALL ORDER BY k NULLS LAST;
+----
+A	2
+b	1
+NULL	2
+
+query III
+SELECT id > 1 AS big, c0, count(*) FROM t GROUP BY ALL ORDER BY ALL;
+----
+false	A	2
+true	b	1
+true	NULL	2
+
+query II
+SELECT c0 || 'x' AS c, count(*) FROM t GROUP BY ALL ORDER BY ALL;
+----
+Ax	2
+bx	1
+NULL	2
+
+# a group with a subquery is collated without selecting the uncollated value, as with GROUP BY s
+query II
+SELECT (SELECT t.c0) AS s, count(*) AS n FROM t GROUP BY ALL ORDER BY n DESC, s NULLS LAST;
+----
+a	2
+NULL	2
+b	1
+
+statement ok
+CREATE TABLE u (c VARCHAR COLLATE NOACCENT.NOCASE);
+
+statement ok
+INSERT INTO u VALUES ('é'), ('E'), ('e');
+
+query I
+SELECT count(*) FROM (SELECT c, count(*) FROM u GROUP BY ALL);
+----
+1

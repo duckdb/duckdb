@@ -409,6 +409,28 @@ void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const
 	}
 }
 
+//! Groups by the collated expression, and returns a first(x) aggregate that selects the uncollated value
+static unique_ptr<Expression> CollateGroup(Binder &binder, unique_ptr<Expression> &group, const LogicalType &sql_type) {
+	auto &context = binder.context;
+	if (group->HasSubquery()) {
+		// a subquery cannot be copied
+		ExpressionBinder::PushCollation(context, group, sql_type);
+		return nullptr;
+	}
+	// copy before pushing the collation, which can replace the expression
+	auto uncollated_expr = group->Copy();
+	if (!ExpressionBinder::PushCollation(context, group, sql_type)) {
+		return nullptr;
+	}
+	auto first_fun = GetBuiltinAggregateFunction(context, FirstFun::Name, {uncollated_expr->GetReturnType()});
+	vector<unique_ptr<Expression>> first_children;
+	first_children.push_back(std::move(uncollated_expr));
+	FunctionBinder function_binder(binder);
+	auto function = function_binder.BindAggregateFunction(std::move(first_fun), std::move(first_children));
+	function->SetAlias("__collated_group");
+	return std::move(function);
+}
+
 BoundStatement Binder::BindNode(SelectNode &statement) {
 	D_ASSERT(statement.from_table);
 
@@ -621,28 +643,9 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			}
 			D_ASSERT(bound_expr->GetReturnType().id() != LogicalTypeId::INVALID);
 
-			// find out whether the expression contains a subquery, it can't be copied if so
-			bool contains_subquery = bound_expr->HasSubquery();
-			// the group and the first(x) aggregate below are separate expression trees, so we need our own
-			// copy - it must be made before pushing the collation, which can replace the expression
-			unique_ptr<Expression> uncollated_expr = contains_subquery ? nullptr : bound_expr->Copy();
-
-			// push a potential collation, if necessary
-			bool requires_collation = ExpressionBinder::PushCollation(context, bound_expr, group_type);
-			if (!contains_subquery && requires_collation) {
-				// if there is a collation on a group x, we should group by the collated expr,
-				// but also push a first(x) aggregate in case x is selected (uncollated)
-
-				auto first_fun =
-				    GetBuiltinAggregateFunction(context, FirstFun::Name, {uncollated_expr->GetReturnType()});
-				vector<unique_ptr<Expression>> first_children;
-				first_children.push_back(std::move(uncollated_expr));
-
-				FunctionBinder function_binder(*this);
-				auto function = function_binder.BindAggregateFunction(std::move(first_fun), std::move(first_children));
-				function->SetAlias("__collated_group");
-
-				auto collated_idx = ColumnBinding::PushExpression(result.aggregates, std::move(function));
+			auto uncollated_first = CollateGroup(*this, bound_expr, group_type);
+			if (uncollated_first) {
+				auto collated_idx = ColumnBinding::PushExpression(result.aggregates, std::move(uncollated_first));
 				bind_state.collated_groups[ProjectionIndex(i)] = collated_idx;
 			}
 			result.groups.group_expressions.push_back(std::move(bound_expr));
@@ -755,8 +758,15 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	// push the GROUP BY ALL expressions into the group set
 	for (auto &group_by_all_index : group_by_all_indexes) {
 		auto &expr = result.select_list[group_by_all_index];
-		auto &return_type = expr->GetReturnType();
+		auto return_type = expr->GetReturnType();
+		auto uncollated_first = CollateGroup(*this, expr, internal_sql_types[group_by_all_index]);
 		auto group_proj_idx = ColumnBinding::PushExpression(result.groups.group_expressions, std::move(expr));
+		if (uncollated_first) {
+			auto collated_idx = ColumnBinding::PushExpression(result.aggregates, std::move(uncollated_first));
+			expr =
+			    make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(result.aggregate_index, collated_idx));
+			continue;
+		}
 		auto group_ref =
 		    make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(result.group_index, group_proj_idx));
 		expr = std::move(group_ref);
