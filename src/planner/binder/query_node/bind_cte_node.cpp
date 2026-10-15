@@ -121,6 +121,9 @@ void CTEBindState::Bind(CTEBinding &binding) {
 	// we need to bind it as if we were binding it during PrepareCTE
 	query_binder = Binder::CreateBinder(parent_binder.context, parent_binder);
 	query_binder->SetCanContainNulls(true);
+	if (search_schema) {
+		query_binder->SetSearchPath(*search_schema);
+	}
 
 	// we clear any expression binders that were added in the mean-time, to ensure we are not binding to any newly added
 	// correlated columns
@@ -166,6 +169,7 @@ BoundCTEData Binder::PrepareCTE(const Identifier &ctename, CommonTableExpression
 	// instead of eagerly binding the CTE here we add the CTE bind state to the list of CTE bindings
 	// the CTE is bound lazily - when referenced for the first time we perform the binding
 	result.cte_bind_state = make_shared_ptr<CTEBindState>(*this, *statement.query_node, statement.aliases);
+	result.cte_bind_state->search_schema = statement.trigger_schema;
 
 	result.child_binder = Binder::CreateBinder(context, this);
 

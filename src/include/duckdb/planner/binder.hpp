@@ -413,6 +413,8 @@ public:
 	                                           TableIndex table_index = TableIndex());
 
 	void SetSearchPath(Catalog &catalog, const Identifier &schema);
+	//! Looks up names in the schema of a catalog entry first
+	void SetSearchPath(const SchemaCatalogEntry &schema);
 
 	void BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
 	                      const string &catalog = "", const string &schema = "");

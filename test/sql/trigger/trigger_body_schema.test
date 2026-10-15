@@ -1,0 +1,121 @@
+# name: test/sql/trigger/trigger_body_schema.test
+# description: Trigger bodies look up names in the schema of the trigger, not in the schema of the statement that fires it
+# group: [trigger]
+
+require noforcestorage
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s2;
+
+statement ok
+CREATE TABLE s1.t (i INTEGER);
+
+statement ok
+CREATE TABLE s1.r (i INTEGER);
+
+statement ok
+CREATE TABLE s1.lookup (v INTEGER);
+
+statement ok
+CREATE TABLE s2.lookup (v INTEGER);
+
+statement ok
+CREATE TABLE s1.audit (x INTEGER);
+
+statement ok
+CREATE TABLE s2.audit (x INTEGER);
+
+statement ok
+INSERT INTO s1.lookup VALUES (10);
+
+statement ok
+INSERT INTO s2.lookup VALUES (20);
+
+statement ok
+SET schema = 's1';
+
+statement ok
+CREATE TRIGGER t_after AFTER INSERT ON t FOR EACH STATEMENT INSERT INTO audit SELECT v FROM lookup;
+
+statement ok
+CREATE TRIGGER t_before BEFORE INSERT ON t FOR EACH STATEMENT INSERT INTO audit VALUES (1);
+
+statement ok
+CREATE TRIGGER t_new_rows AFTER INSERT ON t REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT INSERT INTO audit SELECT i + 100 FROM new_rows;
+
+statement ok
+CREATE TRIGGER r_row AFTER INSERT ON r FOR EACH ROW INSERT INTO audit VALUES (NEW.i);
+
+statement ok
+SET schema = 's2';
+
+statement ok
+INSERT INTO s1.t VALUES (42);
+
+statement ok
+INSERT INTO s1.r VALUES (7);
+
+query I
+SELECT list(x ORDER BY x) FROM s1.audit;
+----
+[1, 7, 10, 142]
+
+query I
+SELECT count(*) FROM s2.audit;
+----
+0
+
+statement ok
+SET schema = 'main';
+
+statement ok
+SET search_path = 's2';
+
+statement ok
+INSERT INTO s1.t VALUES (43);
+
+query I
+SELECT list(x ORDER BY x) FROM s1.audit;
+----
+[1, 1, 7, 10, 10, 142, 143]
+
+query I
+SELECT count(*) FROM s2.audit;
+----
+0
+
+statement ok
+RESET search_path;
+
+# a trigger in an attached database writes to its own database
+statement ok
+ATTACH ':memory:' AS other;
+
+statement ok
+CREATE TABLE other.t (i INTEGER);
+
+statement ok
+CREATE TABLE other.audit (x INTEGER);
+
+statement ok
+CREATE TABLE memory.main.audit (x INTEGER);
+
+statement ok
+USE other;
+
+statement ok
+CREATE TRIGGER other_after AFTER INSERT ON t FOR EACH STATEMENT INSERT INTO audit VALUES (2);
+
+statement ok
+USE memory;
+
+statement ok
+INSERT INTO other.t VALUES (1);
+
+query II
+SELECT (SELECT count(*) FROM other.audit), (SELECT count(*) FROM memory.main.audit);
+----
+1	0

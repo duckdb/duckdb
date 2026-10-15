@@ -341,6 +341,7 @@ static void AddAfterTriggerCTEs(SelectNode &outer, const vector<const_reference<
 		trig_cte->query_node = trigger.trigger_action->Copy();
 		trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
 		trig_cte->is_trigger_generated = true;
+		trig_cte->trigger_schema = trigger.ParentSchema();
 
 		// Scoped to this body so sibling triggers can't see the alias.
 		auto &body_map = trig_cte->query_node->cte_map.map;
@@ -387,6 +388,7 @@ static unique_ptr<SelectNode> BuildTriggerChain(const QueryNode &node, const Tab
 		trig_cte->query_node = before_triggers[i].get().trigger_action->Copy();
 		trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
 		trig_cte->is_trigger_generated = true;
+		trig_cte->trigger_schema = before_triggers[i].get().ParentSchema();
 		outer->cte_map.map[body_cte_name] = std::move(trig_cte);
 	}
 
@@ -672,6 +674,7 @@ BoundStatement Binder::ExpandRowTriggers(QueryNode &node, vector<unique_ptr<Pars
 		auto &trigger = triggers[i].get();
 
 		auto child_binder = Binder::CreateBinder(context, this);
+		child_binder->SetSearchPath(trigger.ParentSchema());
 		auto body_copy = trigger.trigger_action->Copy();
 		auto bound_body = child_binder->Bind(*body_copy);
 

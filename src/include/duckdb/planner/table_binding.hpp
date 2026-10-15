@@ -184,6 +184,8 @@ struct CTEBindState {
 	Binder &parent_binder;
 	QueryNode &cte_def;
 	const vector<Identifier> &aliases;
+	//! The schema whose names the CTE looks up first, if any
+	optional_ptr<const SchemaCatalogEntry> search_schema;
 	idx_t active_binder_count;
 	shared_ptr<Binder> query_binder;
 	BoundStatement query;

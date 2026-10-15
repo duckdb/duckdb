@@ -139,6 +139,10 @@ void Binder::SetSearchPath(Catalog &catalog, const Identifier &schema) {
 	entry_retriever.SetSearchPath(std::move(search_path));
 }
 
+void Binder::SetSearchPath(const SchemaCatalogEntry &schema) {
+	SetSearchPath(Catalog::GetCatalog(context, schema.ParentCatalog().GetName()), schema.name);
+}
+
 BoundStatement Binder::Bind(BaseTableRef &ref) {
 	QueryErrorContext error_context(ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
