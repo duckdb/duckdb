@@ -62,8 +62,10 @@ bool ICUMakeDate::CastNsToDate(Vector &source, Vector &result, idx_t count, Cast
 		}
 		// the date only needs the microsecond instant: floor the nanoseconds so no instant moves past midnight
 		const auto nanos = input.value;
-		const auto micros = nanos >= 0 ? nanos / Interval::NANOS_PER_MICRO
-		                               : (nanos - (Interval::NANOS_PER_MICRO - 1)) / Interval::NANOS_PER_MICRO;
+		auto micros = nanos / Interval::NANOS_PER_MICRO;
+		if (nanos % Interval::NANOS_PER_MICRO < 0) {
+			micros--;
+		}
 		return Operation(calendar.get(), timestamp_tz_t(micros));
 	});
 	return true;

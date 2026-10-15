@@ -329,7 +329,7 @@ void ListVector::SetListSize(Vector &vec, idx_t size) {
 	if (child_buffer) {
 		auto vtype = child_buffer->GetVectorType();
 		if ((vtype == VectorType::FLAT_VECTOR || vtype == VectorType::CONSTANT_VECTOR) &&
-		    size > child_buffer->Capacity()) {
+		    size > child_buffer->Capacity() && size > child_buffer->Size()) {
 			list_buffer.Reserve(size);
 		}
 	}
