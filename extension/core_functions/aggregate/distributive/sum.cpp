@@ -326,8 +326,9 @@ AggregateFunction GetSumAggregateNoOverflowDecimal() {
 }
 
 //! Binding sum_no_overflow by name delegates to the regular sum. Re-binding an exported aggregate state passes NULL
-//! placeholders, and its states come from the no-overflow implementation that statistics propagation chose, so that
-//! implementation is kept for them. Any other input gets the regular sum, which checks for overflow
+//! placeholders of the argument types, and its states come from the no-overflow implementation that statistics
+//! propagation chose, so that implementation is kept for them. Any other input, a NULL literal included, gets the
+//! regular sum, which checks for overflow
 unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
@@ -335,7 +336,8 @@ unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
 	bool binds_exported_state = true;
 	for (auto &argument : arguments) {
 		if (argument->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
-		    !argument->Cast<BoundConstantExpression>().GetValue().IsNull()) {
+		    !argument->Cast<BoundConstantExpression>().GetValue().IsNull() ||
+		    argument->GetReturnType().id() == LogicalTypeId::SQLNULL) {
 			binds_exported_state = false;
 		}
 	}

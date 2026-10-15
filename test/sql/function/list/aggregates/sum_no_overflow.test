@@ -48,3 +48,14 @@ query I
 SELECT sum_no_overflow(NULL::BIGINT)
 ----
 NULL
+
+query I
+SELECT sum_no_overflow(NULL)
+----
+NULL
+
+# the states of a NULL literal and of other arguments come from the same sum
+query I
+SELECT finalize(combine(sum_no_overflow(NULL) EXPORT_STATE, sum_no_overflow(1::BIGINT) EXPORT_STATE))
+----
+1
