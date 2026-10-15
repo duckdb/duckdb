@@ -4112,7 +4112,7 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 	gstate.TryFinalizeOwnedFileState();
 	gstate.WaitForLifecycleTasks();
 
-	if (use_tmp_file) {
+	if (use_tmp_file && gstate.initialized) {
 		D_ASSERT(!per_thread_output);
 		D_ASSERT(!partition_output);
 		D_ASSERT(!file_size_bytes.IsValid());

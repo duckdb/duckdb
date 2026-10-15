@@ -39,6 +39,14 @@ copy empty_tbl to '{TEST_DIR}/empty.parquet' (WRITE_EMPTY_FILE false, RETURN_FIL
 ----
 0	[]
 
+statement ok
+copy (select 42 where 42=84) to '{TEST_DIR}/empty_tmp.parquet' (WRITE_EMPTY_FILE false, USE_TMP_FILE true)
+
+query I
+SELECT COUNT(*) FROM glob('{TEST_DIR}/*empty_tmp.parquet')
+----
+0
+
 query IIIIIII
 copy (from tbl where i = 20000) to '{TEST_DIR}/empty.parquet' (WRITE_EMPTY_FILE false, RETURN_STATS)
 ----
