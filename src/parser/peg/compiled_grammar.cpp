@@ -4,6 +4,8 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 CompiledGrammar::CompiledGrammar(MatcherAllocator &&allocator_p, unique_ptr<PEGKeywordHelper> &&keyword_helper_p,
@@ -13,14 +15,24 @@ CompiledGrammar::CompiledGrammar(MatcherAllocator &&allocator_p, unique_ptr<PEGK
       rules(std::move(rules_p)), program_matcher(program_matcher),
       top_level_statement_matcher(top_level_statement_matcher) {
 	rules_by_id.resize(static_cast<idx_t>(PEGRuleId::BUILTIN_COUNT));
+	vector<reference<CompiledGrammarRule>> runtime_rules;
 	for (auto &entry : rules) {
 		auto &rule = *entry.second;
 		rule.rule_id = PEGRuleIdFromString(rule.name);
 		if (rule.rule_id == PEGRuleId::INVALID) {
-			rule.rule_id = static_cast<PEGRuleId>(rules_by_id.size());
-			rules_by_id.emplace_back();
+			runtime_rules.push_back(rule);
+			continue;
 		}
 		rules_by_id[static_cast<idx_t>(rule.rule_id)] = rule;
+	}
+	// the rule map has no stable order, so sort by name to assign the same runtime IDs to the same rule set
+	std::sort(runtime_rules.begin(), runtime_rules.end(),
+	          [](const reference<CompiledGrammarRule> &a, const reference<CompiledGrammarRule> &b) {
+		          return StringUtil::CILessThan(a.get().name, b.get().name);
+	          });
+	for (auto &rule : runtime_rules) {
+		rule.get().rule_id = static_cast<PEGRuleId>(rules_by_id.size());
+		rules_by_id.push_back(rule.get());
 	}
 }
 

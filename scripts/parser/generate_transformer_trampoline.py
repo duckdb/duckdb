@@ -1518,23 +1518,26 @@ def replace_generated_block(content, start_block, end_block, generated_content, 
 
 
 def builtin_rule_names(all_rules):
-    # the inlined grammar also holds rules that are generated rather than written in a statement grammar file
-    # (the keyword category rules), so take the final rule list from there
+    # the inlined grammar also holds generated rules (keyword categories), so take the final rule list from there
+    # directive rules such as %whitespace are not valid enumerators and stay runtime rules
     rule_names = [rule_name for rule_name in all_rules if not rule_name.startswith("%")]
     inlined_grammar = inlined_grammar_path.read_text()
     for match in re.finditer(r"^([A-Za-z_][A-Za-z0-9_]*)(?:\([^)]*\))?\s*<-", inlined_grammar, re.MULTILINE):
         if match.group(1) not in rule_names:
             rule_names.append(match.group(1))
+    # rule IDs resolve case-insensitively, like the grammar's rule map, so case-only duplicates cannot be told apart
+    seen = {}
+    for rule_name in rule_names:
+        previous = seen.setdefault(rule_name.lower(), rule_name)
+        if previous != rule_name:
+            raise RuntimeError(f"grammar rules '{previous}' and '{rule_name}' differ only in case")
     return rule_names
 
 
 def write_rule_ids(all_rules):
     rule_names = builtin_rule_names(all_rules)
     hpp = [GENERATED_HEADER, "#pragma once\n\n", '#include "duckdb/common/common.hpp"\n\n', "namespace duckdb {\n\n"]
-    hpp.append(
-        "//! Identifies a grammar rule. Built-in rules get a generated constant; rules added at runtime get IDs\n"
-    )
-    hpp.append("//! starting at BUILTIN_COUNT.\n")
+    hpp.append("//! Identifies a grammar rule; rules added at runtime get IDs from BUILTIN_COUNT onwards\n")
     hpp.append("enum class PEGRuleId : uint32_t {\n")
     hpp.append("\tINVALID = 0,\n")
     for rule_name in rule_names:

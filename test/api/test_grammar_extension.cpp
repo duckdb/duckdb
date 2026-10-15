@@ -483,11 +483,10 @@ TEST_CASE("Transform result types use stable registered names", "[api][grammar_e
 	TypedTransformResult<RegisteredTransformResult> result({42});
 	auto copied_type_name = string(TransformResultTypeName<RegisteredTransformResult>());
 
-	// a copied name (different address, as across an extension boundary) still matches through the hash + compare
-	REQUIRE(result.GetValuePointer(copied_type_name.c_str(), TransformResultTypeNameHash(copied_type_name.c_str())) ==
-	        &result.value);
-	// a hash mismatch rejects without comparing the name
-	REQUIRE(result.GetValuePointer(copied_type_name.c_str(), 0) == nullptr);
+	// a copied name (different address, as across an extension boundary) still matches
+	REQUIRE(result.GetValuePointer(copied_type_name.c_str()) == &result.value);
+	REQUIRE(result.type_hash == TransformResultTypeNameHash(copied_type_name.c_str()));
+	REQUIRE(result.type_hash != TransformResultTypeHash<bool>());
 	REQUIRE(TryGetTransformResult<RegisteredTransformResult>(result) == &result.value);
 	REQUIRE(TryGetTransformResult<bool>(result) == nullptr);
 }
@@ -1692,6 +1691,13 @@ TEST_CASE("Runtime grammar rules get IDs past the built-in range", "[api][gramma
 	REQUIRE(value_rule->rule_id >= PEGRuleId::BUILTIN_COUNT);
 	REQUIRE(atom_rule->rule_id >= PEGRuleId::BUILTIN_COUNT);
 	REQUIRE(value_rule->rule_id != atom_rule->rule_id);
+	// runtime IDs follow the rule names, independent of the rule map's iteration order
+	REQUIRE(value_rule->rule_id > atom_rule->rule_id);
+	auto recompiled = CompiledGrammar::Create(*con.context, {"extension_test_value", "extension_test_atom"});
+	REQUIRE(recompiled->GetRule("GrammarExtensionTestValue")->rule_id == value_rule->rule_id);
+	REQUIRE(recompiled->GetRule("GrammarExtensionTestAtom")->rule_id == atom_rule->rule_id);
+	// parameterized rules are compiled like any other rule
+	REQUIRE(grammar->GetRule(PEGRuleId::List));
 	REQUIRE(grammar->GetRule(value_rule->rule_id).get() == value_rule.get());
 	REQUIRE(grammar->GetRule(atom_rule->rule_id).get() == atom_rule.get());
 	REQUIRE(PEGRuleIdToString(value_rule->rule_id) == nullptr);

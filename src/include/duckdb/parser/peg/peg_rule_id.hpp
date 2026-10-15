@@ -5,8 +5,7 @@
 
 namespace duckdb {
 
-//! Identifies a grammar rule. Built-in rules get a generated constant; rules added at runtime get IDs
-//! starting at BUILTIN_COUNT.
+//! Identifies a grammar rule; rules added at runtime get IDs from BUILTIN_COUNT onwards
 enum class PEGRuleId : uint32_t {
 	INVALID = 0,
 	AlterStatement,
