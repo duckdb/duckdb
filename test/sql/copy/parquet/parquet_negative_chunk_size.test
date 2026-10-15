@@ -7,7 +7,7 @@ require parquet
 statement error
 SELECT count(*), min(COLUMNS(*)), max(COLUMNS(*)) FROM read_parquet('data/parquet-testing/broken/neg_compressed_size.parquet');
 ----
-column chunk has a negative offset or size
+Column chunk has a negative offset or size
 
 # the metadata can still be inspected, the row group is only rejected when it is read
 statement ok

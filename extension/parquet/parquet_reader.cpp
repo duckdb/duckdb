@@ -2257,21 +2257,6 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 	return strategy;
 }
 
-void ParquetReader::ValidateRowGroup(const duckdb_parquet::RowGroup &group) const {
-	if (group.num_rows < 0) {
-		throw InvalidInputException("Failed to read Parquet file \"%s\": row group has negative number of rows",
-		                            GetFileName());
-	}
-	for (auto &column : group.columns) {
-		auto &column_meta = column.meta_data;
-		if (column_meta.data_page_offset < 0 || column_meta.dictionary_page_offset < 0 ||
-		    column_meta.index_page_offset < 0 || column_meta.total_compressed_size < 0) {
-			throw InvalidInputException(
-			    "Failed to read Parquet file \"%s\": column chunk has a negative offset or size", GetFileName());
-		}
-	}
-}
-
 ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &context, ParquetReaderScanState &state) {
 	const bool log_prefetch =
 	    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
@@ -2290,7 +2275,6 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 	state.group_offset = GetRowGroupOffset(*this, state.group_index);
 
 	auto &group = GetGroup(state);
-	ValidateRowGroup(group);
 	// several readers can read the same column chunk (e.g. two fields of one variant column), count each chunk once
 	unordered_set<idx_t> scanned_column_chunks;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
