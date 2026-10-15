@@ -526,7 +526,7 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 		if (!statement->named_param_map.empty()) {
 			throw InvalidInputException(CONNECTED_PARAMETERS_ERROR);
 		}
-		if (!IsConnectControlStatement(statement->type)) {
+		if (statement->type != StatementType::DISCONNECT_STATEMENT) {
 			// it runs on the connected database only, also when parsed before CONNECT
 			auto passthrough = make_uniq<PassthroughStatement>();
 			passthrough->query = std::move(statement->query);

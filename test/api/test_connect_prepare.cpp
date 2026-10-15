@@ -69,6 +69,7 @@ TEST_CASE("Prepare statements while CONNECT-ed", "[api][connect]") {
 	REQUIRE_NO_FAIL(con.Query("ATTACH 'routed' AS remote (TYPE connect_routing_test)"));
 	// parsed before CONNECT, with the local grammar
 	auto parsed_insert = con.ExtractStatements("INSERT INTO t VALUES (2)");
+	auto parsed_connect = con.ExtractStatements("CONNECT remote");
 	auto parameterized = con.ExtractStatements("SELECT $1::INTEGER");
 	REQUIRE_NO_FAIL(con.Query("CONNECT remote"));
 	routed_queries.clear();
@@ -113,22 +114,37 @@ TEST_CASE("Prepare statements while CONNECT-ed", "[api][connect]") {
 	auto prepared = con.Prepare(std::move(parameterized[0]));
 	REQUIRE(prepared->HasError());
 	REQUIRE(StringUtil::Contains(prepared->GetError(), "cannot be executed while CONNECT-ed"));
+	REQUIRE_FAIL(insert->Submit(values));
 	REQUIRE(routed_queries.size() == 5);
+
+	// CONNECT is routed too, however it was parsed
+	auto connect = con.Prepare("CONNECT remote");
+	REQUIRE(!connect->HasError());
+	result = connect->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {"CONNECT remote"}));
+	auto parsed_connect_prepared = con.Prepare(std::move(parsed_connect[0]));
+	REQUIRE(!parsed_connect_prepared->HasError());
+	result = parsed_connect_prepared->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {"CONNECT remote"}));
+	REQUIRE(routed_queries.size() == 7);
 
 	// DISCONNECT prepared while CONNECT-ed runs locally
 	auto disconnect = con.Prepare("DISCONNECT");
 	REQUIRE(!disconnect->HasError());
 	REQUIRE_NO_FAIL(disconnect->Execute());
 	REQUIRE(!con.context->IsConnected());
-	REQUIRE(routed_queries.size() == 5);
+	REQUIRE(routed_queries.size() == 7);
 
 	// statements prepared for the connected database do not run locally
 	REQUIRE_FAIL(select->Execute());
 	REQUIRE_FAIL(insert->Execute());
 	REQUIRE_FAIL(parsed->Execute());
+	REQUIRE_FAIL(connect->Execute());
+	REQUIRE_FAIL(parsed_connect_prepared->Execute());
+	REQUIRE(!con.context->IsConnected());
 	result = con.Query("SELECT count(*) FROM t");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
-	REQUIRE(routed_queries.size() == 5);
+	REQUIRE(routed_queries.size() == 7);
 
 	// they run on the database that is connected at execution
 	REQUIRE_NO_FAIL(con.Query("ATTACH 'routed' AS other (TYPE connect_routing_test)"));
@@ -136,7 +152,7 @@ TEST_CASE("Prepare statements while CONNECT-ed", "[api][connect]") {
 	result = select->Execute();
 	REQUIRE(CHECK_COLUMN(result, 0, {"SELECT 42"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"other"}));
-	REQUIRE(routed_queries.size() == 6);
+	REQUIRE(routed_queries.size() == 8);
 
 	// and fail once another connection detached it
 	Connection detacher(db);
@@ -144,6 +160,6 @@ TEST_CASE("Prepare statements while CONNECT-ed", "[api][connect]") {
 	result = select->Execute();
 	REQUIRE_FAIL(result);
 	REQUIRE(StringUtil::Contains(result->GetError(), "has been detached"));
-	REQUIRE(routed_queries.size() == 6);
+	REQUIRE(routed_queries.size() == 8);
 	REQUIRE_NO_FAIL(con.Query("DISCONNECT"));
 }
