@@ -552,12 +552,14 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			cast_star->ReplaceListMutable()[col] = make_uniq<CastExpression>(type, make_uniq<ColumnRefExpression>(col));
 		}
 	}
-	auto cast_node = make_uniq<SelectNode>();
-	cast_node->select_list.push_back(std::move(cast_star));
-	cast_node->from_table = std::move(source);
-	auto cast_stmt = make_uniq<SelectStatement>();
-	cast_stmt->node = std::move(cast_node);
-	source = make_uniq<SubqueryRef>(std::move(cast_stmt), "excluded");
+	if (!cast_star->ReplaceList().empty()) {
+		auto cast_node = make_uniq<SelectNode>();
+		cast_node->select_list.push_back(std::move(cast_star));
+		cast_node->from_table = std::move(source);
+		auto cast_stmt = make_uniq<SelectStatement>();
+		cast_stmt->node = std::move(cast_node);
+		source = make_uniq<SubqueryRef>(std::move(cast_stmt), "excluded");
+	}
 
 	// push DISTINCT ON(unique_columns)
 	for (auto &distinct_on_columns : all_distinct_on_columns) {
