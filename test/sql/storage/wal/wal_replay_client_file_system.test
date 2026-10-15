@@ -39,7 +39,6 @@ SELECT i FROM db.t
 ----
 42
 
-# the WAL is opened through the client's file system, so its open is logged in the connection scope
 query III
 SELECT scope, parse_filename(path), op
 FROM duckdb_logs_parsed('FileSystem')
