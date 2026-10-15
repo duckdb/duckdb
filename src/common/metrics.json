@@ -36,7 +36,7 @@
 		},
 		"total_bytes_scanned": {
 			"metric_type": "uint64",
-			"description": "Cumulative compressed size of the Parquet column chunks scanned by the query, however many bytes were read from storage to scan them. If a scan of the query does not count the bytes it scans, the bytes the query read from storage",
+			"description": "Cumulative compressed size of the Parquet column chunks scanned by the query, however many bytes were read from storage to scan them. Left out if a scan of the query does not count the bytes it scans",
 			"unit": "bytes"
 		},
 		"total_intermediate_size_bytes": {
