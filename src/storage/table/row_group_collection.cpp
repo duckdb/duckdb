@@ -819,6 +819,7 @@ void RowGroupCollection::RevertAppendInternal(idx_t new_end_idx) {
 		if (row_end >= new_end_idx) {
 			// this is the last row group - have to revert WITHIN it
 			// its columns can hold rows past its count if the append failed before FinalizeAppend
+			// at an exact boundary this can visit an untouched row group; the revert is then a no-op
 			entry.GetNode().RevertAppend(new_end_idx - row_start);
 		}
 		new_total_rows += entry.GetNode().count;

@@ -594,16 +594,8 @@ ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 	unsafe_vector<ARTKey> row_id_keys(row_count);
 	GenerateKeyVectors(arena, chunk, row_ids, keys, row_id_keys);
 
-	try {
-		return InsertKeys(arena, keys, row_id_keys, row_count, DeleteIndexInfo(info.delete_indexes), info.append_mode,
-		                  &chunk);
-	} catch (std::exception &ex) {
-		if (!info.fatal_on_partial_modification) {
-			throw;
-		}
-		// A failed insertion can leave the ART partially modified, and we cannot revert that.
-		throw FatalException("Failed to insert into ART index \"%s\": %s", name, ErrorData(ex).Message());
-	}
+	return InsertKeys(arena, keys, row_id_keys, row_count, DeleteIndexInfo(info.delete_indexes), info.append_mode,
+	                  &chunk);
 }
 
 ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,

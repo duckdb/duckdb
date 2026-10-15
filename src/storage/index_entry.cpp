@@ -35,8 +35,7 @@ void IndexEntry::Append(DataChunk &chunk, Vector &row_ids) {
 }
 
 ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr<IndexEntry> &delete_entry,
-                             IndexAppendMode append_mode, optional_idx active_checkpoint,
-                             bool fatal_on_partial_modification) {
+                             IndexAppendMode append_mode, optional_idx active_checkpoint) {
 	auto entry_lock = lock.GetExclusiveLock();
 	if (!owned_index->IsBound()) {
 		auto &unbound_index = owned_index->Cast<UnboundIndex>();
@@ -79,7 +78,6 @@ ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr
 		if (delete_index) {
 			index_append_info.delete_indexes.push_back(*delete_index);
 		}
-		index_append_info.fatal_on_partial_modification = fatal_on_partial_modification;
 		if (append_index) {
 			error = append_index->Append(chunk, row_ids, index_append_info);
 		} else {

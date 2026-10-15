@@ -1,5 +1,5 @@
 # name: test/sql/transactions/test_commit_flush_append_failure.test
-# description: A failure of the commit-time table append reverts the table and index appends
+# description: A failed commit-time flush reverts the copy-path append; a merge-path failure invalidates
 # group: [transactions]
 
 require no_force_storage
@@ -43,7 +43,17 @@ INSERT INTO pk VALUES (3, 'dup');
 ----
 violates primary key constraint
 
-# Merge path: appends to an empty in-memory table are merged directly.
+statement ok
+CHECKPOINT;
+
+query II
+SELECT count(*), max(k) FROM pk;
+----
+4	4
+
+# Merge path: appends to an empty in-memory table are merged directly. The merge consumes the
+# transaction-local rows, so a failure on this path cannot be reverted and invalidates the
+# database. This must remain the last scenario in this file.
 
 statement ok
 CREATE TABLE m (k INTEGER PRIMARY KEY, v VARCHAR);
@@ -60,61 +70,9 @@ SET debug_force_flush_append_failure = true;
 statement error
 COMMIT;
 ----
-Forced flush append failure
-
-statement ok
-SET debug_force_flush_append_failure = false;
-
-query I
-SELECT count(*) FROM m;
-----
-0
-
-statement ok
-INSERT INTO m VALUES (1, 'a'), (2, 'b');
-
-# Merge path: a bulk append of at least one full row group is also merged directly.
-
-statement ok
-BEGIN;
-
-statement ok
-INSERT INTO m SELECT i, 'x' FROM range(3, 130003) r(i);
-
-statement ok
-SET debug_force_flush_append_failure = true;
+Failed to flush table
 
 statement error
-COMMIT;
+SELECT count(*) FROM pk;
 ----
-Forced flush append failure
-
-statement ok
-SET debug_force_flush_append_failure = false;
-
-query I
-SELECT count(*) FROM m;
-----
-2
-
-# All bulk keys must be insertable again.
-statement ok
-INSERT INTO m SELECT i, 'x' FROM range(3, 130003) r(i);
-
-query II
-SELECT count(*), count(DISTINCT k) FROM m;
-----
-130002	130002
-
-statement error
-INSERT INTO m VALUES (1500, 'dup');
-----
-violates primary key constraint
-
-statement ok
-CHECKPOINT;
-
-query I
-SELECT count(*) FROM m;
-----
-130002
+<REGEX>:.*invalidated.*

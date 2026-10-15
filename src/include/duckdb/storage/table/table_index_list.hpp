@@ -49,7 +49,7 @@ public:
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Appends a table chunk with generated row IDs, using delete and checkpoint indexes where required.
 	ErrorData Append(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start,
-	                 IndexAppendMode append_mode, optional_idx active_checkpoint, bool fatal_on_partial_modification);
+	                 IndexAppendMode append_mode, optional_idx active_checkpoint);
 	//! Reverts an append to all index entries.
 	void RevertAppend(DataChunk &chunk, Vector &row_ids);
 	//! Reverts an append with generated row IDs starting at row_start.

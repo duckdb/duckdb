@@ -347,7 +347,8 @@ void DuckTransactionManager::CleanupTransactions() {
 	}
 }
 
-//! A non-initial database can be detached and reattached, so we scope its invalidation to the database.
+//! Sets the validity flag that gates this database's checkpoints, so that none can persist the state.
+//! A non-initial database has its own flag; the instance is additionally invalidated as the error propagates.
 static void InvalidateDatabase(AttachedDatabase &db, const string &reason) {
 	if (db.IsInitialDatabase()) {
 		ValidChecker::Invalidate(db.GetDatabase(), reason);

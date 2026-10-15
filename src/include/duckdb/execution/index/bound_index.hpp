@@ -47,8 +47,6 @@ public:
 public:
 	IndexAppendMode append_mode;
 	vector<reference<const BoundIndex>> delete_indexes;
-	//! Set for shared indexes: a failure while modifying the index throws a FatalException
-	bool fatal_on_partial_modification = false;
 };
 
 //! Identifies the logical purpose of a delta owned by an index entry.
