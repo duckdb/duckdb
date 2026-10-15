@@ -36,6 +36,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/parser/statement/passthrough_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
@@ -535,6 +536,13 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 		// the connected database runs the statement as written, at each execution
 		if (!statement->named_param_map.empty()) {
 			throw InvalidInputException(CONNECTED_PARAMETERS_ERROR);
+		}
+		if (!IsConnectControlStatement(statement->type)) {
+			// it runs on the connected database only, also when parsed before CONNECT
+			auto passthrough = make_uniq<PassthroughStatement>();
+			passthrough->query = std::move(statement->query);
+			passthrough->stmt_location = statement->stmt_location;
+			statement = std::move(passthrough);
 		}
 		return make_uniq<PreparedStatement>(shared_from_this(), std::move(statement));
 	}
