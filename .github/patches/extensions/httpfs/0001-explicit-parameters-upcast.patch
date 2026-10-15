@@ -1,0 +1,13 @@
+diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
+index a9740e4..fe9e222 100644
+--- a/src/http/httpfs.cpp
++++ b/src/http/httpfs.cpp
+@@ -205,7 +205,7 @@ unique_ptr<HTTPParams> HTTPFSUtil::InitializeParameters(optional_ptr<FileOpener>
+                                                         optional_ptr<FileOpenerInfo> info) {
+ 	auto result = InitializeRawParameters(*this, opener, info);
+ 	result->RefreshTransportReuseDomain();
+-	return result;
++	return std::move(result);
+ }
+ 
+ unique_ptr<HTTPFSParams> HTTPFSUtil::InitializeRawParameters(HTTPFSUtil &http_util, optional_ptr<FileOpener> opener,
