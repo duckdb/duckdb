@@ -361,12 +361,14 @@ private:
 				}
 			}
 
+			// the page index needs the bounds of every page, which the dictionary cannot provide
+			const bool stats_per_occurrence = STATS_PER_OCCURRENCE || writer.WritePageIndex();
 			for (; r < chunk_end; r++) {
 				if (!ALL_VALID && !mask.RowIsValid(r)) {
 					continue;
 				}
 				const auto &src_value = data_ptr[r];
-				if (STATS_PER_OCCURRENCE) {
+				if (stats_per_occurrence) {
 					OP::template HandleStats<SRC, TGT>(stats, OP::template Operation<SRC, TGT>(src_value));
 				}
 				const auto value_index = page_state.dictionary.GetIndex(src_value);

@@ -1433,6 +1433,28 @@ void ParquetWriter::InitializeSchemaFromPreparedRowGroup(const PreparedRowGroup 
 void ParquetWriter::Finalize() {
 	InitializeSchemaElements();
 
+	// the page index goes between the row groups and the footer: first the ColumnIndex of every column chunk, then the
+	// OffsetIndex of every column chunk (the layout parquet-mr uses), their location is recorded in the ColumnChunk
+	for (auto &page_index : page_indexes) {
+		D_ASSERT(!options.encryption_config);
+		if (!page_index.has_column_index) {
+			continue;
+		}
+		auto &column_chunk = file_meta_data.row_groups[page_index.row_group_idx].columns[page_index.column_idx];
+		column_chunk.column_index_offset = NumericCast<int64_t>(writer->GetTotalWritten());
+		column_chunk.__isset.column_index_offset = true;
+		column_chunk.column_index_length = NumericCast<int32_t>(Write(page_index.column_index));
+		column_chunk.__isset.column_index_length = true;
+	}
+	for (auto &page_index : page_indexes) {
+		auto &column_chunk = file_meta_data.row_groups[page_index.row_group_idx].columns[page_index.column_idx];
+		column_chunk.offset_index_offset = NumericCast<int64_t>(writer->GetTotalWritten());
+		column_chunk.__isset.offset_index_offset = true;
+		column_chunk.offset_index_length = NumericCast<int32_t>(Write(page_index.offset_index));
+		column_chunk.__isset.offset_index_length = true;
+	}
+	page_indexes.clear();
+
 	// dump the bloom filters right before footer, not if stuff is encrypted
 
 	for (auto &bloom_filter_entry : bloom_filters) {
@@ -1508,6 +1530,16 @@ GeoParquetFileMetadata &ParquetWriter::GetGeoParquetData() {
 		geoparquet_data = make_uniq<GeoParquetFileMetadata>(GetGeoParquetVersion());
 	}
 	return *geoparquet_data;
+}
+
+void ParquetWriter::BufferPageIndex(idx_t col_idx, ParquetPageIndexEntry page_index) {
+	if (options.encryption_config) {
+		// the page index of an encrypted file has to be encrypted as well - not supported (yet)
+		return;
+	}
+	page_index.column_idx = col_idx;
+	page_index.row_group_idx = file_meta_data.row_groups.size();
+	page_indexes.push_back(std::move(page_index));
 }
 
 void ParquetWriter::BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter) {

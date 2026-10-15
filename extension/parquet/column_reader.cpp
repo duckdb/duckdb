@@ -151,14 +151,93 @@ const ParquetReader &ColumnReader::Reader() {
 }
 
 void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
-	if (chunk) {
+	if (!chunk) {
+		return;
+	}
+	if (!offset_index) {
 		uint64_t size = chunk->meta_data.total_compressed_size;
 		if (size == 0) {
 			// nothing to prefetch
 			return;
 		}
 		transport.RegisterPrefetch(FileOffset(), size, allow_merge);
+		return;
 	}
+	// the page index tells which pages hold rows that may match: fetch the dictionary page (and anything else in
+	// front of the first data page) plus only those pages - adjacent pages are coalesced by the transport
+	auto &locations = offset_index->page_locations;
+	const auto chunk_start = FileOffset();
+	const auto first_data_page = NumericCast<idx_t>(locations[0].offset);
+	if (chunk_start < first_data_page) {
+		transport.RegisterPrefetch(chunk_start, first_data_page - chunk_start, allow_merge);
+	}
+	const auto row_group_rows = NumericCast<idx_t>(chunk->meta_data.num_values);
+	for (idx_t page_idx = 0; page_idx < locations.size(); page_idx++) {
+		const auto begin = NumericCast<idx_t>(locations[page_idx].first_row_index);
+		const auto end = page_idx + 1 < locations.size() ? NumericCast<idx_t>(locations[page_idx + 1].first_row_index)
+		                                                 : row_group_rows;
+		if (!PageIndexNeedsRows(begin, end)) {
+			continue;
+		}
+		transport.RegisterPrefetch(NumericCast<idx_t>(locations[page_idx].offset),
+		                           NumericCast<idx_t>(locations[page_idx].compressed_page_size), allow_merge);
+	}
+}
+
+void ColumnReader::InitializePageIndex(const ParquetRowGroupPageIndex &page_index) {
+	// pages of a repeated column hold several values per row, and lists are skipped by reading them: no page skipping
+	if (!chunk || MaxRepeat() != 0 || reader.parquet_options.encryption_config) {
+		return;
+	}
+	if (!page_index.HasOffsetIndex(ColumnIndex())) {
+		return;
+	}
+	offset_index = *page_index.offset_indexes[ColumnIndex()];
+	page_index_rows = page_index.row_ranges;
+}
+
+bool ColumnReader::PageIndexNeedsRows(idx_t begin, idx_t end) const {
+	D_ASSERT(page_index_rows);
+	return ParquetPageIndexUtils::PageOverlapsRowRanges(*page_index_rows, begin, end);
+}
+
+bool ColumnReader::TrySkipPagesWithOffsetIndex(idx_t skipped_so_far, idx_t &to_skip) {
+	if (!offset_index || page_rows_available != 0) {
+		// no page index, or still inside a page
+		return false;
+	}
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
+	auto &locations = offset_index->page_locations;
+	if (trans.GetLocation() < NumericCast<idx_t>(locations[0].offset)) {
+		// the dictionary page has not been read yet
+		return false;
+	}
+	// a non-repeated column has one value per row: the value count tells the row the next page starts at
+	const auto chunk_rows = NumericCast<idx_t>(chunk->meta_data.num_values);
+	const auto current_row = chunk_rows - group_rows_available + skipped_so_far;
+	const auto target_row = current_row + to_skip;
+	if (target_row >= chunk_rows) {
+		// everything that is left is skipped: move past the last page
+		auto &last = locations.back();
+		trans.SetLocation(NumericCast<idx_t>(last.offset) + NumericCast<idx_t>(last.compressed_page_size));
+		to_skip = 0;
+		return true;
+	}
+	// the last page that starts at or before the target row
+	auto it = std::upper_bound(locations.begin(), locations.end(), target_row,
+	                           [](idx_t row, const duckdb_parquet::PageLocation &location) {
+		                           return row < NumericCast<idx_t>(location.first_row_index);
+	                           });
+	D_ASSERT(it != locations.begin());
+	auto &target_page = *(it - 1);
+	const auto target_page_row = NumericCast<idx_t>(target_page.first_row_index);
+	if (target_page_row <= current_row) {
+		// the target lies in the page that starts here - read its header as usual
+		return false;
+	}
+	trans.SetLocation(NumericCast<idx_t>(target_page.offset));
+	to_skip -= target_page_row - current_row;
+	return true;
 }
 
 unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
@@ -272,6 +351,8 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_row
 		                            "data page offset (%lld)",
 		                            Reader().GetFileName(), chunk->meta_data.data_page_offset);
 	}
+	offset_index = nullptr;
+	page_index_rows = nullptr;
 	// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
 	chunk_read_offset = NumericCast<idx_t>(chunk->meta_data.data_page_offset);
 	if (chunk->meta_data.__isset.dictionary_page_offset && chunk->meta_data.dictionary_page_offset >= 4) {
@@ -1022,6 +1103,10 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 	BeginRead(nullptr, nullptr);
 
 	while (to_skip > 0) {
+		if (TrySkipPagesWithOffsetIndex(num_values - to_skip, to_skip)) {
+			// jumped over whole pages without reading them
+			continue;
+		}
 		auto skip_now = ReadPageHeaders(to_skip, nullptr, nullptr, to_skip);
 		if (page_is_filtered_out) {
 			// the page has been filtered out entirely - skip

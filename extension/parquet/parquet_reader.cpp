@@ -1971,6 +1971,194 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 	column_reader.InitializeRead(state.group_index, row_group_num_rows, group.columns, *state.thrift_file_proto);
 }
 
+void ParquetReader::PreparePageIndex(ClientContext &context, ParquetReaderScanState &state) {
+	state.page_index.Reset();
+	state.page_index_active = false;
+	state.page_index_range_idx = 0;
+
+	auto &group = GetGroup(state);
+	if (!filters || !state.use_page_index || parquet_options.encryption_config || group.num_rows <= 0 ||
+	    state.offset_in_group == NumericCast<idx_t>(group.num_rows)) {
+		// no filters to prune with, the page index is disabled, or the row group was skipped already
+		return;
+	}
+	const auto row_group_num_rows = NumericCast<idx_t>(group.num_rows);
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
+	const auto file_size = trans.GetSize();
+
+	// the filter columns whose column chunks carry a page index: plain (non-nested, non-repeated) columns only
+	struct PageIndexFilterColumn {
+		idx_t column_chunk_idx;
+		reference<ColumnReader> reader;
+		reference<const TableFilter> filter;
+	};
+	vector<PageIndexFilterColumn> filter_columns;
+	idx_t column_index_begin = NumericLimits<idx_t>::Maximum();
+	idx_t column_index_end = 0;
+	for (auto &scan_filter : state.scan_filters) {
+		auto &column_reader = state.GetColumnReader(MultiFileLocalIndex(scan_filter.filter_idx));
+		if (column_reader.IsSkipped() || column_reader.Schema().schema_type != ParquetColumnSchemaType::COLUMN ||
+		    column_reader.Type().IsNested() || column_reader.MaxRepeat() != 0 ||
+		    scan_filter.filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+			continue;
+		}
+		const auto column_chunk_idx = column_reader.ColumnIndex();
+		if (column_chunk_idx >= group.columns.size()) {
+			continue;
+		}
+		auto &column_chunk = group.columns[column_chunk_idx];
+		if (!ParquetPageIndexUtils::HasColumnIndex(column_chunk) ||
+		    !ParquetPageIndexUtils::HasOffsetIndex(column_chunk)) {
+			continue;
+		}
+		const auto begin = NumericCast<idx_t>(column_chunk.column_index_offset);
+		column_index_begin = MinValue(column_index_begin, begin);
+		column_index_end = MaxValue(column_index_end, begin + NumericCast<idx_t>(column_chunk.column_index_length));
+		filter_columns.push_back({column_chunk_idx, column_reader, scan_filter.filter});
+	}
+	if (filter_columns.empty()) {
+		return;
+	}
+
+	// the ColumnIndex of the filter columns: they are stored next to each other, so they are fetched in one read
+	if (column_index_end > file_size) {
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": metadata is corrupt. ColumnIndex lies outside the file", GetFileName());
+	}
+	trans.Prefetch(column_index_begin, column_index_end - column_index_begin);
+	vector<vector<bool>> page_may_match(filter_columns.size());
+	bool any_page_pruned = false;
+	for (idx_t i = 0; i < filter_columns.size(); i++) {
+		auto &filter_column = filter_columns[i];
+		auto &column_chunk = group.columns[filter_column.column_chunk_idx];
+		duckdb_parquet::ColumnIndex column_index;
+		ParquetPageIndexUtils::ReadColumnIndex(*state.thrift_file_proto, column_chunk, column_index);
+		if (!ParquetPageIndexUtils::ColumnIndexIsValid(column_index, column_index.null_pages.size())) {
+			continue;
+		}
+		auto &column_reader = filter_column.reader.get();
+		bool can_have_nan = parquet_options.can_have_nan;
+		if (column_chunk.__isset.meta_data && column_chunk.meta_data.__isset.statistics) {
+			can_have_nan = ParquetStatisticsUtils::CanHaveNaN(column_chunk.meta_data.statistics, can_have_nan);
+		}
+		ParquetPageIndexUtils::FilterPages(column_reader.Schema(), column_index, filter_column.filter.get(),
+		                                   can_have_nan, page_may_match[i]);
+		for (auto may_match : page_may_match[i]) {
+			any_page_pruned = any_page_pruned || !may_match;
+		}
+	}
+	if (!any_page_pruned) {
+		// every page may match: the OffsetIndex is not needed
+		trans.ClearPrefetch();
+		return;
+	}
+
+	// the OffsetIndex of every column chunk the scan reads, to turn pages into rows (filter columns) and to find the
+	// pages of those rows (all columns) - stored next to each other as well
+	unordered_set<idx_t> scanned_column_chunks;
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		state.GetColumnReader(MultiFileLocalIndex(i)).GatherColumnChunks(scanned_column_chunks);
+	}
+	idx_t offset_index_begin = NumericLimits<idx_t>::Maximum();
+	idx_t offset_index_end = 0;
+	for (auto column_chunk_idx : scanned_column_chunks) {
+		auto &column_chunk = group.columns[column_chunk_idx];
+		if (!ParquetPageIndexUtils::HasOffsetIndex(column_chunk)) {
+			continue;
+		}
+		const auto begin = NumericCast<idx_t>(column_chunk.offset_index_offset);
+		offset_index_begin = MinValue(offset_index_begin, begin);
+		offset_index_end = MaxValue(offset_index_end, begin + NumericCast<idx_t>(column_chunk.offset_index_length));
+	}
+	if (offset_index_end > file_size) {
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": metadata is corrupt. OffsetIndex lies outside the file", GetFileName());
+	}
+	trans.Prefetch(offset_index_begin, offset_index_end - offset_index_begin);
+	state.page_index.offset_indexes.resize(group.columns.size());
+	for (auto column_chunk_idx : scanned_column_chunks) {
+		auto &column_chunk = group.columns[column_chunk_idx];
+		if (!ParquetPageIndexUtils::HasOffsetIndex(column_chunk)) {
+			continue;
+		}
+		auto offset_index = make_uniq<duckdb_parquet::OffsetIndex>();
+		ParquetPageIndexUtils::ReadOffsetIndex(*state.thrift_file_proto, column_chunk, *offset_index);
+		if (!ParquetPageIndexUtils::OffsetIndexIsValid(*offset_index, row_group_num_rows, file_size)) {
+			continue;
+		}
+		state.page_index.offset_indexes[column_chunk_idx] = std::move(offset_index);
+	}
+	// the index bytes are not needed anymore
+	trans.ClearPrefetch();
+
+	// the rows that may match are the rows of the pages that may match, intersected over the filter columns
+	bool first = true;
+	vector<ParquetPageRowRange> row_ranges;
+	for (idx_t i = 0; i < filter_columns.size(); i++) {
+		auto &offset_index = state.page_index.offset_indexes[filter_columns[i].column_chunk_idx];
+		if (!offset_index || page_may_match[i].size() != offset_index->page_locations.size()) {
+			continue;
+		}
+		auto column_ranges =
+		    ParquetPageIndexUtils::PagesToRowRanges(*offset_index, page_may_match[i], row_group_num_rows);
+		row_ranges =
+		    first ? std::move(column_ranges) : ParquetPageIndexUtils::IntersectRowRanges(row_ranges, column_ranges);
+		first = false;
+	}
+	if (first) {
+		return;
+	}
+	const auto rows_kept = ParquetPageIndexUtils::RowCount(row_ranges);
+	if (rows_kept == row_group_num_rows) {
+		return;
+	}
+	if (state.op) {
+		DUCKDB_LOG(context, PhysicalOperatorLogType, *state.op, "ParquetReader", "SkipPages",
+		           {{"file", file.path},
+		            {"row_group_id", to_string(state.group_index)},
+		            {"rows_skipped", to_string(row_group_num_rows - rows_kept)},
+		            {"rows_total", to_string(row_group_num_rows)}});
+	}
+	if (row_ranges.empty()) {
+		// no page of the row group can hold a match: skip the row group
+		rows_read += row_group_num_rows - state.offset_in_group;
+		state.offset_in_group = row_group_num_rows;
+		return;
+	}
+	state.page_index.row_ranges = std::move(row_ranges);
+	state.page_index_active = true;
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		state.GetColumnReader(MultiFileLocalIndex(i)).InitializePageIndex(state.page_index);
+	}
+}
+
+idx_t ParquetReader::SkipToPageIndexRows(ParquetReaderScanState &state) {
+	const auto group_num_rows = NumericCast<idx_t>(GetGroup(state).num_rows);
+	auto &ranges = state.page_index.row_ranges;
+	auto &range_idx = state.page_index_range_idx;
+	while (range_idx < ranges.size() && ranges[range_idx].end <= state.offset_in_group) {
+		range_idx++;
+	}
+	if (range_idx == ranges.size()) {
+		// no rows that may match are left: skip the rest of the row group
+		rows_read += group_num_rows - state.offset_in_group;
+		state.offset_in_group = group_num_rows;
+		return 0;
+	}
+	auto &range = ranges[range_idx];
+	if (range.begin > state.offset_in_group) {
+		// skip the rows in front of the range in every column: with an OffsetIndex this jumps over the pages
+		const auto skip_count = range.begin - state.offset_in_group;
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			state.GetColumnReader(MultiFileLocalIndex(i)).Skip(skip_count);
+		}
+		rows_read += skip_count;
+		state.offset_in_group += skip_count;
+	}
+	// stay within the range, so that no page that was ruled out is touched
+	return MinValue<idx_t>(STANDARD_VECTOR_SIZE, range.end - state.offset_in_group);
+}
+
 idx_t ParquetReader::NumRows() const {
 	return NumericCast<idx_t>(GetFileMetadata()->num_rows);
 }
@@ -2034,6 +2222,8 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		state.file_handle = shared_scan_handle;
 	}
 	state.scan_filters.clear();
+	state.use_page_index = true;
+	context.TryGetCurrentSetting("parquet_use_page_index", state.use_page_index);
 	if (filters) {
 		state.adaptive_filter_cache.InitializeAdaptiveFilter(*filters, filter_global_indices, context.logger,
 		                                                     file.path);
@@ -2313,6 +2503,8 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 		PrepareRowGroupBuffer(context, state, col_idx);
 		state.GetColumnReader(i).GatherColumnChunks(scanned_column_chunks);
 	}
+	// the row group statistics could not rule the row group out - the page index may still rule out pages
+	PreparePageIndex(context, state);
 	uint64_t to_scan_compressed_bytes = 0;
 	for (auto column_chunk : scanned_column_chunks) {
 		to_scan_compressed_bytes += NumericCast<uint64_t>(group.columns[column_chunk].meta_data.total_compressed_size);
@@ -2563,6 +2755,10 @@ AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanStat
 		state.offset_in_group = group_num_rows;
 	}
 	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, group_num_rows - state.offset_in_group);
+	if (state.page_index_active && scan_count > 0) {
+		// read only the rows of pages that may match according to the page index
+		scan_count = SkipToPageIndexRows(state);
+	}
 	if (!state.resuming_payload) {
 		result.SetChildCardinality(scan_count);
 	}

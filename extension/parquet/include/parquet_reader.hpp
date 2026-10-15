@@ -31,6 +31,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "column_reader.hpp"
+#include "parquet_page_index.hpp"
 #include "parquet_prefetch_cost_model.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_rle_bp_decoder.hpp"
@@ -251,6 +252,15 @@ public:
 	vector<ParquetScanFilter> scan_filters;
 	//! true once the filter at this index has driven the surviving row count to zero
 	vector<bool> filter_eliminated_all_rows;
+
+	//! Whether the page index (ColumnIndex / OffsetIndex) is used to skip pages, see parquet_use_page_index
+	bool use_page_index = true;
+	//! The page index of the current row group, filled when it rules out pages
+	ParquetRowGroupPageIndex page_index;
+	//! Whether page_index.row_ranges restricts the rows the scan reads from the current row group
+	bool page_index_active = false;
+	//! The entry of page_index.row_ranges the scan is at
+	idx_t page_index_range_idx = 0;
 
 	//! (optional) pointer to the PhysicalOperator for logging
 	optional_ptr<const PhysicalOperator> op;
@@ -483,6 +493,11 @@ private:
 	                                                    ColumnReader &column_reader, const TableFilter &filter);
 	bool DynamicFiltersExcludeRowGroup(ClientContext &context, ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ClientContext &context, ParquetReaderScanState &state, idx_t out_col_idx);
+	//! Reads the page index of the row group and works out which rows may match the filters
+	void PreparePageIndex(ClientContext &context, ParquetReaderScanState &state);
+	//! Moves the scan to the next rows of the row group that may match according to the page index, skipping the
+	//! rows in between in every column reader; returns the number of rows to scan next (0 if none are left)
+	idx_t SkipToPageIndexRows(ParquetReaderScanState &state);
 	//! Whole-group prefetch strategy.
 	ParquetPrefetchStrategy WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
 	                                           const duckdb_parquet::RowGroup &group, uint64_t total_row_group_span,
