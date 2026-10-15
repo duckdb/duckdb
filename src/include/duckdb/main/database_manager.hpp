@@ -131,6 +131,8 @@ public:
 	}
 	//! Gets a list of all attached database paths
 	vector<string> GetAttachedDatabasePaths();
+	//! Whether the file at the path (or its WAL) belongs to an attached database
+	bool IsAttachedDatabaseFile(ClientContext &context, const string &path);
 
 	shared_ptr<AttachedDatabase> GetDatabaseInternal(const lock_guard<mutex> &, const Identifier &name);
 
