@@ -59,3 +59,23 @@ query I
 SELECT finalize(combine(sum_no_overflow(NULL) EXPORT_STATE, sum_no_overflow(1::BIGINT) EXPORT_STATE))
 ----
 1
+
+query I
+SELECT finalize(combine(sum_no_overflow(abs(NULL::BIGINT)) EXPORT_STATE, sum_no_overflow(1::BIGINT) EXPORT_STATE))
+----
+1
+
+query I
+SELECT finalize(combine(sum_no_overflow(abs(NULL::INTEGER)) EXPORT_STATE, sum_no_overflow(1::INTEGER) EXPORT_STATE))
+----
+1
+
+query I
+SELECT list_aggregate([9223372036854775807, 9223372036854775807]::BIGINT[], 'sum_no_overflow')
+----
+18446744073709551614
+
+query I
+SELECT sum_no_overflow(x) OVER () FROM (VALUES (9223372036854775807::BIGINT), (9223372036854775807::BIGINT)) t(x) LIMIT 1
+----
+18446744073709551614

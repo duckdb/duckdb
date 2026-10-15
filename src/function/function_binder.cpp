@@ -1660,6 +1660,7 @@ FunctionBinder::ResolveFunction(shared_ptr<const AggregateFunction> function_p,
 
 	if (bound_function.GetCallbacks().HasBindCallback()) {
 		BindAggregateFunctionInput input(context, bound_function, children, argument_names);
+		input.SetBindsExportedState(binds_exported_state);
 		bind_info = bound_function.GetCallbacks().GetBindCallback()(input);
 
 		// we may have lost some arguments in the bind

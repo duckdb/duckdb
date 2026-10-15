@@ -66,6 +66,8 @@ public:
 
 	optional_ptr<Binder> binder;
 	ClientContext &context;
+	//! Whether aggregates are bound to read the states that an earlier binding of them exported
+	bool binds_exported_state = false;
 
 public:
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,

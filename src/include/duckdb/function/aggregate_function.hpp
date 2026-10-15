@@ -72,9 +72,17 @@ public:
 	BoundAggregateFunction &GetBoundFunction() const {
 		return bound_function;
 	}
+	//! Whether the aggregate is bound to read the states that an earlier binding of it exported
+	bool BindsExportedState() const {
+		return binds_exported_state;
+	}
+	void SetBindsExportedState(bool value) {
+		binds_exported_state = value;
+	}
 
 private:
 	BoundAggregateFunction &bound_function;
+	bool binds_exported_state = false;
 };
 
 class FunctionExpression;

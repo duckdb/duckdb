@@ -249,6 +249,7 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 
 	ErrorData error;
 	FunctionBinder function_binder(context);
+	function_binder.binds_exported_state = true;
 	auto best_function = function_binder.BindFunction(aggr_entry.name, aggr_entry.functions, argument_types, error);
 	if (!best_function.IsValid()) {
 		throw BinderException("Could not re-bind exported aggregate %s: %s", function_name, error.Message());
