@@ -154,3 +154,84 @@ DROP TABLE s3.log;
 
 statement ok
 DROP TABLE main.log;
+
+# the firing statement and the trigger body each read their own schema
+statement ok
+CREATE TABLE s1.copy (v INTEGER);
+
+statement ok
+SET schema = 's1';
+
+statement ok
+CREATE TRIGGER copy_after AFTER INSERT ON copy FOR EACH STATEMENT INSERT INTO audit SELECT v + 1000 FROM lookup;
+
+statement ok
+SET schema = 's2';
+
+statement ok
+INSERT INTO s1.copy SELECT v FROM lookup;
+
+query II
+SELECT (SELECT list(v) FROM s1.copy), (SELECT max(x) FROM s1.audit);
+----
+[20]	1010
+
+# RETURNING in a trigger body looks up names in the schema of the trigger too
+statement ok
+USE memory.main;
+
+statement ok
+CREATE SCHEMA s4;
+
+statement ok
+CREATE TABLE s4.t (i INTEGER);
+
+statement ok
+CREATE TABLE s4.log (x INTEGER);
+
+statement ok
+CREATE MACRO s4.plus_one(x) AS x + 1;
+
+statement ok
+CREATE TRIGGER s4_after AFTER INSERT ON s4.t FOR EACH STATEMENT INSERT INTO log VALUES (1) RETURNING plus_one(x);
+
+statement ok
+INSERT INTO s4.t VALUES (1);
+
+query I
+SELECT count(*) FROM s4.log;
+----
+1
+
+# a trigger in a nested schema keeps the search path of the statement that fires it
+statement ok
+CREATE SCHEMA p;
+
+statement ok
+CREATE SCHEMA p.s;
+
+statement ok
+CREATE SCHEMA s;
+
+statement ok
+CREATE TABLE p.s.t (i INTEGER);
+
+statement ok
+CREATE TABLE p.s.log (x INTEGER);
+
+statement ok
+CREATE TABLE s.log (x INTEGER);
+
+statement ok
+CREATE TABLE main.log (x INTEGER);
+
+statement ok
+CREATE TRIGGER nested_after AFTER INSERT ON p.s.t FOR EACH STATEMENT INSERT INTO log VALUES (4);
+
+statement ok
+INSERT INTO p.s.t VALUES (1);
+
+query III
+SELECT (SELECT count(*) FROM p.s.log), (SELECT count(*) FROM s.log), (SELECT count(*) FROM main.log);
+----
+0	0	1

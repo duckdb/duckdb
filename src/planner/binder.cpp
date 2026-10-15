@@ -586,6 +586,8 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	vector<Identifier> names;
 
 	auto binder = Binder::CreateBinder(context);
+	// look up names as the statement does
+	binder->entry_retriever.Inherit(entry_retriever);
 
 	vector<ColumnIndex> bound_columns;
 	idx_t column_count = 0;

@@ -477,6 +477,7 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 	// vs real rowid).  bound_columns is the identity over all logical columns (generated included)
 	// because our RETURNING * child materialises every logical column in order.
 	auto returning_binder_owner = Binder::CreateBinder(context);
+	returning_binder_owner->entry_retriever.Inherit(entry_retriever);
 	vector<Identifier> col_names;
 	vector<LogicalType> col_types;
 	vector<ColumnIndex> bound_columns;
