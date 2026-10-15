@@ -632,7 +632,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		ErrorData error(ex);
 		// constraint conflicts revert their own changes and remain retryable; any other
 		// error may have left changes that a rollback cannot revert: invalidate the database
-		if (error.Type() == ExceptionType::CONSTRAINT || Exception::InvalidatesDatabase(error.Type())) {
+		if (error.Type() == ExceptionType::CONSTRAINT) {
 			throw;
 		}
 		throw FatalException("Failed to flush table \"%s\" during commit: %s", table.GetTableName(),
