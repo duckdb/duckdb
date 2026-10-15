@@ -25,7 +25,7 @@ CHECKPOINT
 foreach preserve_insertion_order true false
 
 statement ok
-SET preserve_insertion_order = ${preserve_insertion_order};
+SET preserve_insertion_order = {preserve_insertion_order};
 
 concurrentloop threadid 0 2
 
