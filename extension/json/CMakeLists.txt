@@ -16,6 +16,7 @@ set(JSON_EXTENSION_FILES
     json_enums.cpp
     json_functions.cpp
     json_scan.cpp
+    json_schema_inference.cpp
     json_serializer.cpp
     json_deserializer.cpp
     serialize_json.cpp
@@ -29,7 +30,6 @@ set(JSON_EXTENSION_FILES
     json_functions/json_pretty.cpp
     json_functions/json_table_in_out.cpp
     json_functions/json_structure.cpp
-    json_functions/json_structure_v2.cpp
     json_functions/json_transform.cpp
     json_functions/json_create.cpp
     json_functions/json_geojson.cpp
