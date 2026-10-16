@@ -267,6 +267,11 @@ protected:
 	                                  vector<unique_ptr<Expression>> children);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
+	//! Rewrite TRY over a scalar subquery into an ordinary subquery that masks execution errors, then bind it
+	BindResult BindTrySubquery(OperatorExpression &op, idx_t depth);
+	//! Push TRY onto the maskable positions of a TRY subquery select expression and collect HAS_ERROR gates
+	void RewriteTrySubqueryExpression(unique_ptr<ParsedExpression> &expr, vector<unique_ptr<ParsedExpression>> &gates,
+	                                  bool &has_aggregate);
 	BindResult BindPositionalReference(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression);
 
 	void TransformCapturedLambdaColumn(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
