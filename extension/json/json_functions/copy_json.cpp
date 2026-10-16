@@ -153,6 +153,13 @@ static void SetJSONCopyQueryColumns(LogicalCopyToFile &copy, LogicalProjection &
 static void BindJSONCopyToJSONFunction(Binder &binder, BoundStatement &bound, const string &date_format,
                                        const string &timestamp_format, bool is_geojson,
                                        const vector<Identifier> &original_column_names) {
+	// Unlike to_json, the GeoJSON writer takes the formats as regular arguments, so it needs no post-bind fixup
+	const auto fix_up_formats = !is_geojson && !(date_format.empty() && timestamp_format.empty());
+	const auto set_column_types = bound.plan && bound.plan->type == LogicalOperatorType::LOGICAL_COPY_TO_FILE &&
+	                              CopyFunctionReturnsColumnTypes(bound.plan->Cast<LogicalCopyToFile>().return_type);
+	if (!fix_up_formats && !set_column_types) {
+		return;
+	}
 	if (!bound.plan || bound.plan->type != LogicalOperatorType::LOGICAL_COPY_TO_FILE) {
 		throw InternalException("Expected JSON COPY rewrite to bind to a LogicalCopyToFile");
 	}
@@ -164,11 +171,10 @@ static void BindJSONCopyToJSONFunction(Binder &binder, BoundStatement &bound, co
 	if (projection.expressions.empty()) {
 		throw InternalException("Expected JSON COPY rewrite projection to contain a JSON payload expression");
 	}
-	if (CopyFunctionReturnsColumnTypes(copy.return_type)) {
+	if (set_column_types) {
 		SetJSONCopyQueryColumns(copy, projection, original_column_names);
 	}
-	// Unlike to_json, the GeoJSON writer takes the formats as regular arguments, so it needs no post-bind fixup
-	if (is_geojson || (date_format.empty() && timestamp_format.empty())) {
+	if (!fix_up_formats) {
 		return;
 	}
 	auto to_json = std::move(projection.expressions[0]);
