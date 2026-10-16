@@ -382,6 +382,49 @@ class ExtensionSyncTest(unittest.TestCase):
                 )
 
     @unittest.skipUnless(CMAKE, 'CMake is required for configuration integration tests')
+    def test_cmake_default_selection_survives_reconfigure(self):
+        os.environ['PATH'] = os.defpath
+        build_dir = self.root / 'default-build'
+        command = [
+            CMAKE,
+            '-S',
+            str(REPO_ROOT),
+            '-B',
+            str(build_dir),
+            '-DEXTENSION_CONFIG_BUILD=TRUE',
+        ]
+        expected = (
+            'Linked into DuckDB: extensions [core_functions, parquet, json, icu], '
+            'capabilities [httplib, loadable_extensions, local_extension_repository]'
+        )
+        for _ in range(2):
+            configured = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            self.assertEqual(configured.returncode, 0, configured.stdout)
+            self.assertIn(expected, configured.stdout)
+
+    @unittest.skipUnless(CMAKE, 'CMake is required for configuration integration tests')
+    def test_cmake_accepts_native_windows_config_path_syntax(self):
+        os.environ['PATH'] = os.defpath
+        build_dir = self.root / 'windows-path-build'
+        configured = subprocess.run(
+            [
+                CMAKE,
+                '-S',
+                str(REPO_ROOT),
+                '-B',
+                str(build_dir),
+                '-DEXTENSION_CONFIG_BUILD=TRUE',
+                r'-DDUCKDB_EXTENSION_CONFIGS=D:\a\missing.cmake',
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        self.assertNotEqual(configured.returncode, 0)
+        self.assertNotIn('Invalid character escape', configured.stdout)
+        self.assertIn('missing.cmake', configured.stdout)
+
+    @unittest.skipUnless(CMAKE, 'CMake is required for configuration integration tests')
     def test_cmake_migrates_legacy_extension_selectors(self):
         os.environ['PATH'] = os.defpath
         build_dir = self.root / 'legacy-build'

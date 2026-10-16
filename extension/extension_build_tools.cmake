@@ -853,10 +853,11 @@ set(DUCKDB_CONFIG_EXTEND "")
 set(DUCKDB_DECLARED_EXTENSION_NAMES "")
 set(DUCKDB_COLLECT_EXTENSION_DECLARATIONS TRUE)
 
-macro(duckdb_include_selection_config CONFIG_PATH)
+macro(duckdb_include_selection_config CONFIG_PATH_VARIABLE)
     set(DUCKDB_USE "")
     set(DUCKDB_EXTEND "")
-    include("${CONFIG_PATH}")
+    set(DUCKDB_SELECTION_CONFIG_PATH "${${CONFIG_PATH_VARIABLE}}")
+    include("${DUCKDB_SELECTION_CONFIG_PATH}")
     duckdb_normalize_component_list("${DUCKDB_USE}" CONFIG_USE)
     duckdb_normalize_component_list("${DUCKDB_EXTEND}" CONFIG_EXTEND)
     list(APPEND DUCKDB_CONFIG_USE ${CONFIG_USE})
@@ -866,17 +867,19 @@ endmacro()
 # Explicit project configurations take precedence over named defaults.
 foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)
     if (NOT "${DUCKDB_EXTENSION_CONFIG}" STREQUAL "")
-        duckdb_include_selection_config("${DUCKDB_EXTENSION_CONFIG}")
+        duckdb_include_selection_config(DUCKDB_EXTENSION_CONFIG)
     endif()
 endforeach()
 
 # Local extension config
-if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
-    duckdb_include_selection_config(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
+set(DUCKDB_LOCAL_EXTENSION_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake")
+if (EXISTS "${DUCKDB_LOCAL_EXTENSION_CONFIG}")
+    duckdb_include_selection_config(DUCKDB_LOCAL_EXTENSION_CONFIG)
 endif()
 
 # Load base extension config
-duckdb_include_selection_config(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config.cmake)
+set(DUCKDB_BASE_EXTENSION_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config.cmake")
+duckdb_include_selection_config(DUCKDB_BASE_EXTENSION_CONFIG)
 
 if(DUCKDB_EXTENSION_SELECTION_EXPLICIT)
     duckdb_normalize_component_list("${DUCKDB_EXPLICIT_USE}" DUCKDB_RESOLVED_USE)
