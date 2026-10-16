@@ -6,7 +6,7 @@ statement ok
 CREATE TABLE t AS SELECT * FROM (VALUES
 	(9, {'x': {'a': 1}::VARIANT}),
 	(10, {'x': {'a': 2, 'b': 'two'}::VARIANT})
-) v(id, n);
+) v(id, nested);
 
 statement ok
 CREATE VIEW s AS SELECT * FROM t;
@@ -16,7 +16,7 @@ CREATE VIEW s AS SELECT * FROM t;
 #
 
 query I
-SELECT n.x.a FROM t WHERE id = 9;
+SELECT nested.x.a FROM t WHERE id = 9;
 ----
 1
 
@@ -25,17 +25,17 @@ SELECT n.x.a FROM t WHERE id = 9;
 #
 
 query I
-SELECT n.x.a FROM (SELECT * FROM t) WHERE id = 9;
+SELECT nested.x.a FROM (SELECT * FROM t) WHERE id = 9;
 ----
 1
 
 query I
-SELECT n.x.a FROM (SELECT * FROM t WHERE id < 30) WHERE id = 9;
+SELECT nested.x.a FROM (SELECT * FROM t WHERE id < 30) WHERE id = 9;
 ----
 1
 
 query II
-SELECT n.x.a, n.x.b FROM (SELECT * FROM t WHERE id < 30) ORDER BY id;
+SELECT nested.x.a, nested.x.b FROM (SELECT * FROM t WHERE id < 30) ORDER BY id;
 ----
 1	NULL
 2	two
@@ -45,7 +45,7 @@ SELECT n.x.a, n.x.b FROM (SELECT * FROM t WHERE id < 30) ORDER BY id;
 #
 
 query I
-SELECT n.x.a FROM s WHERE id = 9;
+SELECT nested.x.a FROM s WHERE id = 9;
 ----
 1
 
@@ -54,39 +54,39 @@ SELECT n.x.a FROM s WHERE id = 9;
 #
 
 query I
-SELECT id FROM (SELECT * FROM t WHERE id < 30) WHERE n.x.a = 1;
+SELECT id FROM (SELECT * FROM t WHERE id < 30) WHERE nested.x.a = 1;
 ----
 9
 
 query I
-SELECT id FROM s WHERE n.x.b = 'two';
+SELECT id FROM s WHERE nested.x.b = 'two';
 ----
 10
 
 # Repeated projections and aliases must preserve mixed struct/variant paths.
 query II
 SELECT renamed.x.a::INTEGER, renamed.x.b::VARCHAR
-FROM (SELECT id, n AS renamed FROM (SELECT * FROM s)) ORDER BY id;
+FROM (SELECT id, nested AS renamed FROM (SELECT * FROM s)) ORDER BY id;
 ----
 1	NULL
 2	two
 
 # A whole VARIANT and its fields share the same struct prefix, in either order.
 query III
-SELECT n.x, n.x.a, n.x.b FROM s ORDER BY id;
+SELECT nested.x, nested.x.a, nested.x.b FROM s ORDER BY id;
 ----
 {'a': 1}	1	NULL
 {'a': 2, 'b': two}	2	two
 
 query III
-SELECT n.x.a, n.x.b, n.x FROM s ORDER BY id;
+SELECT nested.x.a, nested.x.b, nested.x FROM s ORDER BY id;
 ----
 1	NULL	{'a': 1}
 2	two	{'a': 2, 'b': two}
 
 # Keep the full struct when it is referenced alongside an extracted field.
 query II
-SELECT n, n.x.a FROM s ORDER BY id;
+SELECT nested, nested.x.a FROM s ORDER BY id;
 ----
 {'x': {'a': 1}}	1
 {'x': {'a': 2, 'b': two}}	2
@@ -94,7 +94,7 @@ SELECT n, n.x.a FROM s ORDER BY id;
 statement ok
 CREATE TABLE nested_variant (
 	id INTEGER,
-	n STRUCT(unused VARCHAR, inner_struct STRUCT(tag INTEGER, payload VARIANT))
+	nested STRUCT(unused VARCHAR, inner_struct STRUCT(tag INTEGER, payload VARIANT))
 );
 
 statement ok
@@ -109,8 +109,8 @@ INSERT INTO nested_variant VALUES
 
 # Multiple numeric and named steps, a pure struct sibling, and NULL at each level.
 query IIII
-SELECT id, n.inner_struct.tag, n.inner_struct.payload.obj.a::INTEGER,
-       n.inner_struct.payload.obj.b::VARCHAR
+SELECT id, nested.inner_struct.tag, nested.inner_struct.payload.obj.a::INTEGER,
+       nested.inner_struct.payload.obj.b::VARCHAR
 FROM (SELECT * FROM nested_variant) ORDER BY id;
 ----
 1	101	11	eleven
@@ -123,7 +123,7 @@ FROM (SELECT * FROM nested_variant) ORDER BY id;
 
 # A quoted key is one path component; array indexing remains a residual extract.
 query III
-SELECT id, n.inner_struct.payload['a.b']::INTEGER, n.inner_struct.payload.items[2]::INTEGER
+SELECT id, nested.inner_struct.payload['a.b']::INTEGER, nested.inner_struct.payload.items[2]::INTEGER
 FROM (SELECT * FROM nested_variant) ORDER BY id;
 ----
 1	41	32
@@ -136,14 +136,14 @@ FROM (SELECT * FROM nested_variant) ORDER BY id;
 
 # Filtering one VARIANT field must not discard a different projected field.
 query II
-SELECT id, n.inner_struct.payload.obj.b::VARCHAR
+SELECT id, nested.inner_struct.payload.obj.b::VARCHAR
 FROM (SELECT * FROM nested_variant)
-WHERE n.inner_struct.payload.obj.a::INTEGER = 11;
+WHERE nested.inner_struct.payload.obj.a::INTEGER = 11;
 ----
 1	eleven
 
 query I
-SELECT count(*) FROM (SELECT * FROM nested_variant) WHERE n.inner_struct.payload.obj.a IS NULL;
+SELECT count(*) FROM (SELECT * FROM nested_variant) WHERE nested.inner_struct.payload.obj.a IS NULL;
 ----
 5
 
@@ -153,7 +153,7 @@ statement ok
 ATTACH '{TEST_DIR}/variant_struct_field_subquery_v2.db' AS v2 (STORAGE_VERSION 'v2.0.0');
 
 statement ok
-CREATE TABLE v2.unnamed_variant AS SELECT id, row(999, n) AS u FROM nested_variant;
+CREATE TABLE v2.unnamed_variant AS SELECT id, row(999, nested) AS u FROM nested_variant;
 
 query II
 SELECT id, u[2].inner_struct.payload.obj.a::INTEGER
@@ -169,7 +169,7 @@ FROM (SELECT * FROM v2.unnamed_variant) ORDER BY id;
 
 # Casts retain their error semantics through a projection.
 query I
-SELECT TRY_CAST(n.inner_struct.payload.obj.b AS INTEGER)
+SELECT TRY_CAST(nested.inner_struct.payload.obj.b AS INTEGER)
 FROM (SELECT * FROM nested_variant) ORDER BY id;
 ----
 NULL
@@ -181,26 +181,26 @@ NULL
 NULL
 
 statement error
-SELECT n.inner_struct.payload.obj.b::INTEGER FROM (SELECT * FROM nested_variant) WHERE id = 1;
+SELECT nested.inner_struct.payload.obj.b::INTEGER FROM (SELECT * FROM nested_variant) WHERE id = 1;
 ----
 Conversion Error
 
 # Casts on the same extracted path can have different result types.
 query II
-SELECT n.inner_struct.payload.obj.a::INTEGER, n.inner_struct.payload.obj.a::VARCHAR
+SELECT nested.inner_struct.payload.obj.a::INTEGER, nested.inner_struct.payload.obj.a::VARCHAR
 FROM (SELECT * FROM nested_variant) WHERE id = 1;
 ----
 11	11
 
 # A cast inside the path can reorder fields and must retain errors in siblings.
 query I
-SELECT (n.inner_struct.payload.obj::STRUCT(b VARCHAR, a VARCHAR)).a
+SELECT (nested.inner_struct.payload.obj::STRUCT(b VARCHAR, a VARCHAR)).a
 FROM (SELECT * FROM nested_variant) WHERE id = 1;
 ----
 11
 
 statement error
-SELECT (n.inner_struct.payload.obj::STRUCT(a INTEGER, b INTEGER)).a
+SELECT (nested.inner_struct.payload.obj::STRUCT(a INTEGER, b INTEGER)).a
 FROM (SELECT * FROM nested_variant) WHERE id = 1;
 ----
 Conversion Error
@@ -208,7 +208,7 @@ Conversion Error
 # A materialized producer and two readers exercise column pruning at CTE boundaries.
 query II
 WITH c AS MATERIALIZED (SELECT * FROM nested_variant)
-SELECT l.n.inner_struct.payload.obj.a::INTEGER, r.n.inner_struct.payload.obj.b::VARCHAR
+SELECT l.nested.inner_struct.payload.obj.a::INTEGER, r.nested.inner_struct.payload.obj.b::VARCHAR
 FROM c l JOIN c r USING (id) WHERE l.id = 1;
 ----
 11	eleven
@@ -218,12 +218,12 @@ statement ok
 SET explain_output = 'physical_only';
 
 query II
-EXPLAIN SELECT n.inner_struct.tag FROM (SELECT * FROM nested_variant);
+EXPLAIN SELECT nested.inner_struct.tag FROM (SELECT * FROM nested_variant);
 ----
-physical_plan	<REGEX>:.*Projections:[\s│]*n\.inner_struct\.tag.*
+physical_plan	<REGEX>:.*Projections:[\s│]*nested\.inner_struct\.tag.*
 
 # Extracting the whole VARIANT is also a pure struct path.
 query II
-EXPLAIN SELECT n.inner_struct.payload FROM (SELECT * FROM nested_variant);
+EXPLAIN SELECT nested.inner_struct.payload FROM (SELECT * FROM nested_variant);
 ----
-physical_plan	<REGEX>:.*Projections:[\s│]*n\.inner_struct\.payload.*
+physical_plan	<REGEX>:.*Projections:[\s│]*nested\.inner_struct\.payload.*
