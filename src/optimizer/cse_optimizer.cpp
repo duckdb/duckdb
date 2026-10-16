@@ -32,6 +32,8 @@ struct CSEReplacementState {
 	vector<unique_ptr<Expression>> cached_expressions;
 	//! Short circuit argument tracking
 	bool short_circuited = false;
+	//! Whether we are inside the child of a TRY expression
+	bool inside_try = false;
 };
 
 void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
@@ -71,6 +73,13 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 			// we encountered this expression before, increment the occurrence count
 			node->second.count++;
 		}
+	}
+
+	if (expr.GetExpressionType() == ExpressionType::OPERATOR_TRY) {
+		// TRY turns errors raised while evaluating its child into NULL. Extracting a subexpression of the child into
+		// the projection below would evaluate it outside of the TRY, so errors would no longer be caught.
+		// The TRY expression as a whole can still be extracted, but nothing inside of it.
+		return;
 	}
 
 	// If we have a function that uses short circuiting, then we can only extract CSEs from the leftmost
@@ -114,7 +123,8 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 		return;
 	}
 	// check if this child is eligible for CSE elimination
-	if (state.expression_count.find(expr) != state.expression_count.end()) {
+	// expressions inside a TRY are never replaced, as that would move them outside of the TRY (see CountExpressions)
+	if (!state.inside_try && state.expression_count.find(expr) != state.expression_count.end()) {
 		auto &node = state.expression_count[expr];
 		if (node.count > 1) {
 			// this expression occurs more than once! push it into the projection
@@ -135,8 +145,14 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 	}
 	// this expression only occurs once, we can't perform CSE elimination
 	// look into the children to see if we can replace them
+	// inside a TRY we only rebind the column references to the new projection
+	const auto save_inside_try = state.inside_try;
+	if (expr.GetExpressionType() == ExpressionType::OPERATOR_TRY) {
+		state.inside_try = true;
+	}
 	ExpressionIterator::EnumerateChildren(expr,
 	                                      [&](unique_ptr<Expression> &child) { PerformCSEReplacement(child, state); });
+	state.inside_try = save_inside_try;
 }
 
 void CommonSubExpressionOptimizer::ExtractCommonSubExpressions(LogicalOperator &op) {

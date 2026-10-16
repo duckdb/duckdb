@@ -1,0 +1,71 @@
+# name: test/sql/error/test_try_cse.test
+# description: Issue #26624: common subexpression elimination must not move subexpressions out of TRY
+# group: [error]
+
+statement ok
+CREATE TABLE t (s VARCHAR);
+
+statement ok
+INSERT INTO t VALUES ('abc'), ('42'), (NULL);
+
+# a single TRY
+query I
+SELECT TRY(CAST(s AS INTEGER) + 1) AS x FROM t;
+----
+NULL
+43
+NULL
+
+# two TRYs sharing a subexpression that can throw
+query II
+SELECT TRY(CAST(s AS INTEGER) + 1) AS x, TRY(CAST(s AS INTEGER) + 2) AS y FROM t;
+----
+NULL	NULL
+43	44
+NULL	NULL
+
+# the shared subexpression is the entire child of the TRY
+query II
+SELECT TRY(CAST(s AS INTEGER)), TRY(CAST(s AS INTEGER)) + 1 FROM t;
+----
+NULL	NULL
+42	43
+NULL	NULL
+
+# nested inside other expressions within the TRY
+query II
+SELECT TRY((CAST(s AS INTEGER) * 2) + 1), TRY(abs(CAST(s AS INTEGER) * 2)) FROM t;
+----
+NULL	NULL
+85	84
+NULL	NULL
+
+# TRY inside an aggregate
+query II
+SELECT SUM(TRY(CAST(s AS INTEGER) + 1)), SUM(TRY(CAST(s AS INTEGER) + 2)) FROM t;
+----
+43	44
+
+# TRY in a GROUP BY
+query II
+SELECT TRY(CAST(s AS INTEGER) + 1) AS x, TRY(CAST(s AS INTEGER) + 2) AS y FROM t GROUP BY ALL ORDER BY ALL;
+----
+43	44
+NULL	NULL
+
+# the same expression outside of a TRY still raises the error
+statement error
+SELECT TRY(CAST(s AS INTEGER) + 1), CAST(s AS INTEGER) + 2 FROM t;
+----
+Could not convert string 'abc' to INT32
+
+# results match with the optimizer disabled
+statement ok
+SET disabled_optimizers = 'common_subexpressions';
+
+query II
+SELECT TRY(CAST(s AS INTEGER) + 1) AS x, TRY(CAST(s AS INTEGER) + 2) AS y FROM t;
+----
+NULL	NULL
+43	44
+NULL	NULL
