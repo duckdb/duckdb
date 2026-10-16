@@ -541,6 +541,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 
 void BuiltinFunctions::RegisterTableFunctions() {
 	CheckpointFunction::RegisterFunction(*this);
+	VacuumFullFunction::RegisterFunction(*this);
 	GlobTableFunction::RegisterFunction(*this);
 	RangeTableFunction::RegisterFunction(*this);
 	RepeatTableFunction::RegisterFunction(*this);
