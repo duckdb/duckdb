@@ -81,10 +81,11 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 			}
 		} break;
 		case LogicalTypeId::TUPLE: {
-			// TUPLEs are stored as unnamed STRUCTs on disk, which older engines reject - gate them to v2.0.0+
+			// TUPLEs are stored as unnamed STRUCTs on disk, which older engines reject - gate creation to v2.0.0+
+			// existing unnamed STRUCTs (deserialized as TUPLE while loading an older file) must stay attachable
 			const auto storage_version = db.GetStorageManager().GetStorageVersion();
 
-			if (storage_version < StorageVersion::V2_0_0) {
+			if (storage_version < StorageVersion::V2_0_0 && db.GetStorageManager().IsLoaded()) {
 				auto required = GetStorageVersionName(StorageVersion::V2_0_0, false);
 				auto current = GetStorageVersionName(storage_version, false);
 
