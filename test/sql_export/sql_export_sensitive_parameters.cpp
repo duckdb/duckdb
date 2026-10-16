@@ -477,6 +477,12 @@ TEST_CASE("Exported aggregate state refuses rendering a sensitive constant param
 	require_refused("EXPLAIN (SQL) SELECT get_type(getvariable('saved_state'))");
 	// a cast of a non-constant to the state type renders the parameters through the target type
 	require_refused("EXPLAIN (SQL) SELECT cast_to_type(v, getvariable('saved_state')) FROM (VALUES ('x')) t(v)");
+	// a type nested in a container renders through the constructed type witness
+	require_refused("EXPLAIN (SQL) SELECT cast_to_type(v, [getvariable('saved_state')]) FROM (VALUES (['x'])) t(v)");
+	// an outer state records the inner state type in its signature, which renders the inner parameters
+	REQUIRE_NO_FAIL(connection.Query("SET VARIABLE outer_state = (SELECT min(getvariable('saved_state')) "
+	                                 "EXPORT_STATE FROM range(2))"));
+	require_refused("EXPLAIN (SQL) SELECT getvariable('outer_state')");
 
 	// recorded indexes follow the bound layout, keyword-only arguments sit behind the positional slots
 	REQUIRE_NO_FAIL(

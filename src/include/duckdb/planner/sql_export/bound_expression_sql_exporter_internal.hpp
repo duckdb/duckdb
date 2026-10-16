@@ -65,9 +65,8 @@ public:
 
 	static bool HasNestedCollation(const LogicalType &type);
 
-	static BoundExpressionSQLExportResult PreserveCollation(const LogicalType &type,
-	                                                        BoundExpressionSQLExportResult result,
-	                                                        const LogicalPlanVerificationPath &path);
+	BoundExpressionSQLExportResult PreserveCollation(const LogicalType &type, BoundExpressionSQLExportResult result,
+	                                                 const LogicalPlanVerificationPath &path);
 
 	template <class FUNCTION>
 	static LogicalPlanVerificationFunctionIdentity DefinitionFunctionIdentity(const FUNCTION &definition,
@@ -137,9 +136,8 @@ private:
 	BoundExpressionSQLExportResult RestoreResultType(const LogicalType &type, unique_ptr<ParsedExpression> result,
 	                                                 const LogicalPlanVerificationPath &path);
 	static bool RequiresConstantConstructor(const LogicalType &type);
-	static BoundExpressionSQLExportResult CastToConstructedType(const LogicalType &type,
-	                                                            unique_ptr<ParsedExpression> child,
-	                                                            const LogicalPlanVerificationPath &path);
+	BoundExpressionSQLExportResult CastToConstructedType(const LogicalType &type, unique_ptr<ParsedExpression> child,
+	                                                     const LogicalPlanVerificationPath &path);
 	BoundExpressionSQLExportResult ExportConstant(const BoundConstantExpression &expression,
 	                                              const LogicalPlanVerificationPath &path);
 	BoundExpressionSQLExportResult ExportReference(const BoundReferenceExpression &expression,
