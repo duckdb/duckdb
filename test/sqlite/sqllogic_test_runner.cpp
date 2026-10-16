@@ -264,8 +264,16 @@ ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::str
 
 NewDatabaseConnection SQLLogicTestRunner::CreateDatabase(const string &db_path, bool load_extensions) {
 	NewDatabaseConnection result;
+	// a prefixed path (ducklake:...) loads its extension inside the DuckDB constructor, before LoadExtension can run
+	auto saved_extension_directories = config->options.extension_directories;
+	if (autoloading_mode == TestConfiguration::ExtensionAutoLoadingMode::NONE &&
+	    !ExtensionHelper::ExtractExtensionPrefixFromPath(db_path).empty()) {
+		config->options.extension_directories = {TestConfiguration::Get().GetLocalExtensionRepository()};
+	}
 	try {
 		result.db = make_uniq<DuckDB>(db_path, config.get());
+		config->options.extension_directories = saved_extension_directories;
+		result.db->instance->config.options.extension_directories = saved_extension_directories;
 		LoadStaticExtensions(*result.db);
 		ConfigureDefaultInMemoryTemporaryDirectory(*result.db, db_path);
 
@@ -275,6 +283,7 @@ NewDatabaseConnection SQLLogicTestRunner::CreateDatabase(const string &db_path, 
 			SQLLogicTestRunner::LoadExtension(*result.db, ext);
 		}
 	} catch (std::exception &ex) {
+		config->options.extension_directories = saved_extension_directories;
 		ErrorData err(ex);
 		SQLLogicTestLogger::LoadDatabaseFail(file_name, db_path, err.Message());
 		TEST_FAIL("");
