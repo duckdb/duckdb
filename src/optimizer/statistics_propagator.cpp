@@ -124,6 +124,17 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		// unnest emits its input row once per unnested entry
 		ResetAdditiveStatistics(node.children[0]->GetColumnBindings());
 		break;
+	case LogicalOperatorType::LOGICAL_TRY: {
+		result = PropagateChildren(node, node_ptr);
+		// an execution error below the TRY boundary turns the result into a NULL row
+		for (auto &binding : node.GetColumnBindings()) {
+			auto entry = statistics_map.find(binding);
+			if (entry != statistics_map.end()) {
+				entry->second->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+			}
+		}
+		break;
+	}
 	default:
 		result = PropagateChildren(node, node_ptr);
 	}

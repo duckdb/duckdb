@@ -60,8 +60,8 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 }
 
 BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t depth) {
-	if (inside_try) {
-		throw BinderException("TRY can not be used in combination with a scalar subquery");
+	if (inside_try && expr.GetSubqueryType() != SubqueryType::SCALAR) {
+		throw BinderException("TRY can not be used in combination with EXISTS/IN/ANY/ALL subqueries");
 	}
 	// bind the subquery in its own binder
 	auto subquery_binder = Binder::CreateBinder(context, binder);
@@ -72,6 +72,11 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	auto bound_node = subquery_binder->BindNode(*expr.Subquery()->node);
 	subquery_binder->FinishSubqueryBind();
 
+	if (inside_try && !subquery_binder->correlated_columns.empty()) {
+		// a correlated subquery is flattened into the plan of the outer query, so there is no boundary at which
+		// an error raised while computing the subquery could be attributed to a single outer row
+		throw BinderException("TRY can not be used in combination with a correlated scalar subquery");
+	}
 	// check the correlated columns of the subquery for correlated columns with depth > 1
 	for (idx_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {
 		CorrelatedColumnInfo corr = subquery_binder->correlated_columns[i];
@@ -131,6 +136,9 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	}
 
 	auto result = make_uniq<BoundSubqueryExpression>(return_type);
+	if (inside_try) {
+		result->SetTryBoundary();
+	}
 	if (expr.GetSubqueryType() == SubqueryType::ANY) {
 		// ANY comparison
 		// cast child and subquery child to equivalent types

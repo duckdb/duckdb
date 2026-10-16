@@ -56,6 +56,7 @@ static LogicalOperatorRepeatability ClassifyOperatorType(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
+	case LogicalOperatorType::LOGICAL_TRY:
 		return LogicalOperatorRepeatability::REPEATABLE;
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();

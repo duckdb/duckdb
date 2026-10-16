@@ -88,6 +88,13 @@ public:
 
 	bool PropagatesNullValues() const override;
 
+	bool IsTryBoundary() const {
+		return try_boundary;
+	}
+	void SetTryBoundary() {
+		try_boundary = true;
+	}
+
 private:
 	//! The binder used to bind the subquery node
 	shared_ptr<Binder> binder;
@@ -104,5 +111,7 @@ private:
 	//! The target LogicalType of the subquery result (i.e. to which type it should be casted, if child_type <>
 	//! child_target). Only used for ANY expressions.
 	vector<LogicalType> child_targets;
+	//! Whether the subquery is bound below a TRY expression and must be planned under an error boundary
+	bool try_boundary = false;
 };
 } // namespace duckdb

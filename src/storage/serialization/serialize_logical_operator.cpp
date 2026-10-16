@@ -185,6 +185,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 		result = LogicalTransaction::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_TRY:
+		result = LogicalTry::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_UNION:
 		result = LogicalSetOperation::Deserialize(deserializer);
 		break;
@@ -924,6 +927,15 @@ void LogicalTransaction::Serialize(Serializer &serializer) const {
 unique_ptr<LogicalOperator> LogicalTransaction::Deserialize(Deserializer &deserializer) {
 	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
 	auto result = duckdb::unique_ptr<LogicalTransaction>(new LogicalTransaction(std::move(info)));
+	return std::move(result);
+}
+
+void LogicalTry::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+}
+
+unique_ptr<LogicalOperator> LogicalTry::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LogicalTry>(new LogicalTry());
 	return std::move(result);
 }
 
