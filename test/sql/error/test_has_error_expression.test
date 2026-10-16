@@ -1,0 +1,123 @@
+# name: test/sql/error/test_has_error_expression.test
+# description: HAS_ERROR returns whether evaluating its argument raises an execution error
+# group: [error]
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (0), (1), (2), (NULL);
+
+# a constant expression that errors
+query I
+SELECT has_error(1 // 0)
+----
+true
+
+# a constant expression that does not error
+query I
+SELECT has_error(1 // 1)
+----
+false
+
+# evaluating to NULL is not an error
+query I
+SELECT has_error(NULL::INTEGER)
+----
+false
+
+query I
+SELECT has_error(NULL + 1)
+----
+false
+
+# per-row evaluation over a table
+query II
+SELECT i, has_error(1 // i) FROM integers ORDER BY i NULLS LAST
+----
+0	true
+1	false
+2	false
+NULL	false
+
+# cast errors are execution errors
+statement ok
+CREATE TABLE strings(s VARCHAR);
+
+statement ok
+INSERT INTO strings VALUES ('hello'), ('123'), (NULL);
+
+query II
+SELECT s, has_error(s::INTEGER) FROM strings ORDER BY s NULLS LAST
+----
+123	false
+hello	true
+NULL	false
+
+# HAS_ERROR in a WHERE clause: NULL input rows do not error and pass the filter
+query I
+SELECT i FROM integers WHERE NOT has_error(100 // i) ORDER BY i
+----
+1
+2
+NULL
+
+# HAS_ERROR as an aggregate FILTER condition
+query I
+SELECT count(*) FILTER (WHERE has_error(1 // i)) FROM integers
+----
+1
+
+# HAS_ERROR over TRY never sees an error
+query I
+SELECT has_error(try(1 // i)) FROM integers WHERE i = 0
+----
+false
+
+# TRY over HAS_ERROR is a no-op
+query I
+SELECT try(has_error(1 // i)) FROM integers WHERE i = 0
+----
+true
+
+# HAS_ERROR requires exactly one argument
+statement error
+SELECT has_error()
+----
+Wrong number of arguments provided to HAS_ERROR expression
+
+statement error
+SELECT has_error(1, 2)
+----
+Wrong number of arguments provided to HAS_ERROR expression
+
+# volatile functions are rejected, as in TRY
+statement error
+SELECT has_error(random())
+----
+HAS_ERROR can not be used in combination with a volatile function
+
+# subqueries are rejected, as in TRY: a flattened subquery evaluates in the outer plan,
+# where HAS_ERROR cannot observe its errors
+statement error
+SELECT has_error((SELECT 1 // 0))
+----
+<REGEX>:.*Binder Error.*subquery.*
+
+# aggregates are rejected, as in TRY
+statement error
+SELECT has_error(sum(i)) FROM integers
+----
+aggregates are not allowed inside the TRY expression
+
+# window functions are rejected, as in TRY
+statement error
+SELECT has_error(row_number() OVER ())
+----
+window functions are not allowed in try
+
+# non-execution errors are not caught at bind time either
+statement error
+SELECT has_error(nonexistent_column)
+----
+<REGEX>:.*Binder Error.*

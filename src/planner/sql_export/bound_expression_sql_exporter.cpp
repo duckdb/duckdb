@@ -573,6 +573,15 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportOperator(con
 		}
 		expected_type = expression.GetReturnType();
 		break;
+	case ExpressionType::OPERATOR_HAS_ERROR:
+		D_ASSERT(expression.GetChildren().size() == 1 && expression.GetChildren()[0] &&
+		         expression.GetReturnType() == LogicalType::BOOLEAN);
+		if (expression.GetChildren()[0]->IsVolatile()) {
+			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
+			    path, "has_error_volatile_child", "HAS_ERROR cannot be rebound around a volatile expression")});
+		}
+		expected_type = expression.GetChildren()[0]->GetReturnType();
+		break;
 	case ExpressionType::OPERATOR_UNPACK:
 	case ExpressionType::OPERATOR_NULLIF:
 	case ExpressionType::GROUPING_FUNCTION:
