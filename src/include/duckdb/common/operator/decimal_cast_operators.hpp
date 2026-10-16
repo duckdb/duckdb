@@ -595,7 +595,8 @@ struct DecimalCastOperation {
 					return false;
 				}
 			}
-			return true;
+			// decimals moved before the decimal point by the exponent do not count towards the digit count
+			return WithinLimit<T, NEGATIVE>(state);
 		}
 	}
 
@@ -662,6 +663,11 @@ struct DecimalCastOperation {
 		for (uint8_t i = state.decimal_count; i < state.scale; i++) {
 			state.result *= 10;
 		}
+		return WithinLimit<T, NEGATIVE>(state);
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool WithinLimit(T &state) {
 		if (NEGATIVE) {
 			return state.result > -state.limit;
 		} else {

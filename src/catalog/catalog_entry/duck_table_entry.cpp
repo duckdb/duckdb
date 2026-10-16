@@ -181,7 +181,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			auto column_indexes = unique.GetLogicalIndexes(columns);
 			if (info.indexes.empty()) {
 				auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-				storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info), index_oid);
+				storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info), index_oid,
+				                  unique.check_mode);
 				continue;
 			}
 
@@ -192,7 +193,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				index_storage_info.name = name_info.name;
 			}
 
-			storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_storage_info), index_oid);
+			storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_storage_info), index_oid,
+			                  unique.check_mode);
 			continue;
 		}
 
@@ -212,7 +214,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				if (info.indexes.empty()) {
 					auto constraint_type = IndexConstraintType::FOREIGN;
 					auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-					storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info), index_oid);
+					storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info), index_oid,
+					                  ConstraintCheckMode::DEFAULT);
 					continue;
 				}
 
@@ -224,7 +227,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				}
 
 				storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN, std::move(index_storage_info),
-				                  index_oid);
+				                  index_oid, ConstraintCheckMode::DEFAULT);
 			}
 		}
 	}
@@ -1455,6 +1458,24 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 		                              EnumUtil::ToString(info.constraint->type));
 	}
 
+	// The indexes of constraints must precede all other indexes. A concurrent CREATE INDEX is not visible as a
+	// dependency yet, but it has already registered its index with the storage.
+	idx_t constraint_index_count = 0;
+	for (const auto &constraint : GetConstraints()) {
+		if (constraint->type == ConstraintType::UNIQUE) {
+			constraint_index_count++;
+		} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
+			auto &fk = constraint->Cast<ForeignKeyConstraint>();
+			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
+			    fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+				constraint_index_count++;
+			}
+		}
+	}
+	if (storage->GetDataTableInfo()->GetIndexes().Count() > constraint_index_count) {
+		throw DependencyException("Cannot alter entry %s because there are entries that depend on it.", name);
+	}
+
 	// We create a physical table with a new constraint and a new unique index.
 	const auto binder = Binder::CreateBinder(context);
 	const auto bound_constraint =
@@ -1566,8 +1587,8 @@ optional_ptr<CatalogEntry> DuckTableEntry::GetTrigger(CatalogTransaction transac
 	return triggers->GetEntry(transaction, name);
 }
 
-void DuckTableEntry::ScanTriggersNonTransactional(const std::function<void(CatalogEntry &)> &callback) {
-	triggers->Scan(callback);
+void DuckTableEntry::ScanTriggers(VisibilityBound bound, const std::function<void(CatalogEntry &)> &callback) {
+	triggers->Scan(bound, callback);
 }
 
 bool DuckTableEntry::DropTrigger(CatalogTransaction transaction, const Identifier &name, bool cascade) {

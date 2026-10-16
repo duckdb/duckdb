@@ -30,6 +30,7 @@ blacklist = [
     "IdleFilter",
     "IdentifierConversionPolicy",
     "CreateDirectoryMode",
+    "MatchRecognizeScope",
     "RemoveDirectoryMode",
     "CopyOutputOwnership",
     "CopyOutputPublicationState",

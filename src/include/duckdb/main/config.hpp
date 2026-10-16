@@ -191,7 +191,7 @@ public:
 	}
 
 	template <class... ARGS>
-	void emplace_back(ARGS &&...args) { // NOLINT
+	void emplace_back(ARGS &&... args) { // NOLINT
 		auto scan = make_shared_ptr<ReplacementScan>(std::forward<ARGS>(args)...);
 		lock_guard<mutex> guard(lock);
 		scans.push_back(std::move(scan));
@@ -364,6 +364,11 @@ public:
 	void AddAllowedConfig(const Identifier &config_name);
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
+	//! Replace / reset the allowed directories and paths as a whole (under the lock that guards them)
+	void SetAllowedDirectories(const vector<string> &paths);
+	void SetAllowedPaths(const vector<string> &paths);
+	void ResetAllowedDirectories();
+	void ResetAllowedPaths();
 	//! Whether the given optimizer is disabled (disabled_optimizers)
 	DUCKDB_API bool IsOptimizerDisabled(OptimizerType type) const;
 	DUCKDB_API set<OptimizerType> GetDisabledOptimizers() const;

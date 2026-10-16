@@ -1,6 +1,7 @@
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 
-#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
@@ -85,70 +86,44 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 	}
 }
 
-void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, const idx_t available_segments,
-                                const idx_t segment_size, const idx_t bitmask_offset) {
+shared_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partial_block_manager,
+                                                     const idx_t available_segments, const idx_t segment_size,
+                                                     const idx_t bitmask_offset) {
 	D_ASSERT(readers == 0);
+	D_ASSERT(RequiresPersist());
 
-	// Early-out, if the block is already on disk and not in memory.
+	// We cannot persist a buffer which is not in memory.
 	if (!InMemory()) {
-		if (!OnDisk() || dirty) {
-			throw InternalException("invalid or missing buffer in FixedSizeAllocator");
-		}
-		return;
+		throw InternalException("invalid or missing buffer in FixedSizeAllocator");
 	}
 
-	// Early-out, if the buffer is already on disk and not dirty.
-	if (!dirty && OnDisk()) {
-		return;
-	}
+	const auto new_allocation_size = GetNewAllocationSize(available_segments, segment_size, bitmask_offset);
+	auto allocation = partial_block_manager.GetBlockAllocation(NumericCast<uint32_t>(new_allocation_size));
 
-	// Adjust the allocation size.
-	D_ASSERT(segment_count != 0);
-	SetAllocationSize(available_segments, segment_size, bitmask_offset);
-
-	// The buffer is in memory.
-	D_ASSERT(InMemory());
-	if (OnDisk()) {
-		// We copied it onto a new buffer when loading from disk.
-		block_manager.MarkBlockAsModified(block_pointer.block_id);
-	}
-
-	// Write the changes.
-	// First, we get a partial block allocation.
-	PartialBlockAllocation allocation =
-	    partial_block_manager.GetBlockAllocation(NumericCast<uint32_t>(allocation_size));
-	block_pointer.block_id = allocation.state.block_id;
-	block_pointer.offset = allocation.state.offset;
-
+	BlockPointer new_block_pointer(allocation.state.block_id, allocation.state.offset);
+	auto result =
+	    make_shared_ptr<FixedSizeBuffer>(block_manager, segment_count, new_allocation_size, new_block_pointer);
 	auto &buffer_manager = block_manager.buffer_manager;
 
 	if (allocation.partial_block) {
 		// There is space, so we copy to an existing partial block.
-		D_ASSERT(block_pointer.offset > 0);
+		D_ASSERT(new_block_pointer.offset > 0);
 		auto &p_block_for_index = allocation.partial_block->Cast<PartialBlockForIndex>();
 		auto dst_handle = buffer_manager.Pin(p_block_for_index.block_handle);
-		memcpy(dst_handle.GetDataMutable() + block_pointer.offset, buffer_handle.Ptr(), allocation_size);
-
+		memcpy(dst_handle.GetDataMutable() + new_block_pointer.offset, buffer_handle.Ptr(), new_allocation_size);
 	} else {
 		// No partial block available, so we create a new partial block.
-		D_ASSERT(block_handle);
-		D_ASSERT(!block_pointer.offset);
-		auto p_block_for_index = make_uniq<PartialBlockForIndex>(allocation.state, block_manager, block_handle);
+		D_ASSERT(!new_block_pointer.offset);
+		auto new_block_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, &block_manager, false);
+		memcpy(new_block_handle.GetDataMutable(), buffer_handle.Ptr(), new_allocation_size);
+		auto p_block_for_index =
+		    make_uniq<PartialBlockForIndex>(allocation.state, block_manager, new_block_handle.GetBlockHandle());
 		allocation.partial_block = std::move(p_block_for_index);
 	}
 
-	// We are done with this buffer.
-	// To use the fixed-size buffer again, we need to re-load it from disk.
-	buffer_handle.Destroy();
-
-	// Register the partial block and the block handle.
 	partial_block_manager.RegisterPartialBlock(std::move(allocation));
 
-	block_handle = block_manager.RegisterBlock(block_pointer.block_id);
-	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
-
-	// We persisted any changes, so the fixed-size buffer is no longer dirty.
-	dirty = false;
+	return result;
 }
 
 void FixedSizeBuffer::LoadFromDisk() {
@@ -247,6 +222,11 @@ void FixedSizeBuffer::SetAllocationSize(const idx_t available_segments, const id
 		return;
 	}
 
+	allocation_size = GetNewAllocationSize(available_segments, segment_size, bitmask_offset);
+}
+
+idx_t FixedSizeBuffer::GetNewAllocationSize(const idx_t available_segments, const idx_t segment_size,
+                                            const idx_t bitmask_offset) {
 	// We traverse from the back. A binary search would be faster.
 	// However, buffers are often (almost) full, so the overhead is acceptable.
 
@@ -262,7 +242,7 @@ void FixedSizeBuffer::SetAllocationSize(const idx_t available_segments, const id
 			break;
 		}
 	}
-	allocation_size = max_offset * segment_size + bitmask_offset;
+	return max_offset * segment_size + bitmask_offset;
 }
 
 SegmentHandle::SegmentHandle(FixedSizeBuffer &buffer_p, const idx_t offset) : buffer_ptr(buffer_p) {
