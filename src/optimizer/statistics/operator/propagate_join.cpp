@@ -285,6 +285,17 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 		right_bindings = join.children[1]->GetColumnBindings();
 	}
 
+	// joins that can emit a row of a side multiple times invalidate that side's additive statistics
+	bool duplicates_left = join_type == JoinType::INNER || join_type == JoinType::LEFT ||
+	                       join_type == JoinType::RIGHT || join_type == JoinType::OUTER;
+	bool duplicates_right = duplicates_left || join_type == JoinType::SINGLE;
+	if (duplicates_left) {
+		ResetAdditiveStatistics(join.children[0]->GetColumnBindings());
+	}
+	if (duplicates_right) {
+		ResetAdditiveStatistics(join.children[1]->GetColumnBindings());
+	}
+
 	// then propagate into the join conditions
 	switch (join.type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:

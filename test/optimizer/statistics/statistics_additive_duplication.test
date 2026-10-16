@@ -1,0 +1,52 @@
+# name: test/optimizer/statistics/statistics_additive_duplication.test
+# description: Row-duplicating operators invalidate additive statistics such as the total string length
+# group: [statistics]
+
+# additive statistics describe the stored row population, so an operator that emits an input row
+# more than once must reset them: struct_pack embeds the child column statistics into its result,
+# which makes a stale total string length observable through expression verification
+
+statement ok
+SET debug_verify_stats=true;
+
+statement ok
+CREATE TABLE dim AS SELECT 1::BIGINT AS k, 'Package was damaged' AS d;
+
+statement ok
+CREATE TABLE fact AS SELECT 1::BIGINT AS k, range AS amt FROM range(1000);
+
+# comparison join duplicating the single dimension row
+query I
+SELECT max(len(s.d)) FROM (SELECT struct_pack(amt := amt, d := d) AS s FROM fact, dim WHERE fact.k = dim.k);
+----
+19
+
+# cross product
+query I
+SELECT max(len(s.d)) FROM (SELECT struct_pack(d := d) AS s FROM fact CROSS JOIN dim);
+----
+19
+
+# unnest repeats its input row once per unnested entry
+query I
+SELECT max(len(s.d)) FROM (SELECT struct_pack(d := d, u := u) AS s FROM (SELECT d, unnest([x FOR x IN range(100)]) AS u FROM dim));
+----
+19
+
+# single join (scalar subquery) duplicating the inner side
+query I
+SELECT max(len(s.d)) FROM (SELECT struct_pack(d := (SELECT d FROM dim WHERE dim.k = fact.k)) AS s FROM fact);
+----
+19
+
+# non-additive statistics still propagate: the join key range prunes an impossible predicate
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+query II
+EXPLAIN SELECT struct_pack(d := d) AS s FROM fact, dim WHERE fact.k = dim.k AND dim.k > 100;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
