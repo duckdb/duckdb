@@ -12,7 +12,6 @@
 #include "json_executors.hpp"
 #include "json_functions.hpp"
 #include "yyjson.hpp"
-#include <stack>
 
 namespace duckdb {
 
@@ -142,8 +141,12 @@ struct Frame {
 
 	optional_ptr<yyjson_val> val;
 	reference<StructureNode> node;
-	optional<yyjson_arr_iter> arr_it;
-	optional<yyjson_obj_iter> obj_it;
+	//! Once initialized, the input value's container type determines the active iterator.
+	union {
+		yyjson_arr_iter arr_it;
+		yyjson_obj_iter obj_it;
+	};
+	bool initialized = false;
 };
 
 optional<Frame> HandleArrayFrame(NodeStorage &nodes, Frame &frame, yyjson_mut_doc *doc) {
@@ -153,19 +156,20 @@ optional<Frame> HandleArrayFrame(NodeStorage &nodes, Frame &frame, yyjson_mut_do
 		return nullopt;
 	}
 
-	if (!frame.arr_it) {
+	if (!frame.initialized) {
 		if (!node.MergeType(LogicalTypeId::LIST, doc)) {
 			return nullopt;
 		}
 
 		frame.arr_it = yyjson_arr_iter_with(frame.val.get());
+		frame.initialized = true;
 	}
 	auto &child = GetOrCreateArrayChild(nodes, node, doc);
 	if (child.incompatible) {
 		return nullopt;
 	}
 
-	while (optional_ptr<yyjson_val> next = yyjson_arr_iter_next(&*frame.arr_it)) {
+	while (optional_ptr<yyjson_val> next = yyjson_arr_iter_next(&frame.arr_it)) {
 		if (yyjson_is_ctn(next.get())) {
 			return Frame(next, child);
 		}
@@ -183,15 +187,16 @@ optional<Frame> HandleObjectFrame(NodeStorage &nodes, Frame &frame, yyjson_mut_d
 		return nullopt;
 	}
 
-	if (!frame.obj_it) {
+	if (!frame.initialized) {
 		if (!node.MergeType(LogicalTypeId::STRUCT, doc)) {
 			return nullopt;
 		}
 
 		frame.obj_it = yyjson_obj_iter_with(frame.val.get());
+		frame.initialized = true;
 	}
 
-	while (optional_ptr<yyjson_val> key = yyjson_obj_iter_next(&*frame.obj_it)) {
+	while (optional_ptr<yyjson_val> key = yyjson_obj_iter_next(&frame.obj_it)) {
 		auto &child = GetOrCreateObjectChild(nodes, node, *key, doc);
 		if (child.incompatible) {
 			continue;
@@ -213,36 +218,37 @@ void HandleValueFrame(Frame &frame, yyjson_mut_doc *doc) {
 
 yyjson_mut_val *ExtractStructure(yyjson_val *val, yyjson_mut_doc *doc) {
 	NodeStorage nodes;
-	std::stack<Frame> stack;
+	vector<Frame> stack;
+	stack.reserve(64);
 
 	auto &root = CreateStructureNode(nodes, doc);
-	stack.emplace(val, root);
+	stack.emplace_back(val, root);
 
 	while (!stack.empty()) {
-		auto &frame = stack.top();
+		auto &frame = stack.back();
 
 		switch (yyjson_get_tag(frame.val.get())) {
 		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE: {
 			auto child = HandleArrayFrame(nodes, frame, doc);
 			if (child) {
-				stack.push(std::move(*child));
+				stack.push_back(std::move(*child));
 			} else {
-				stack.pop();
+				stack.pop_back();
 			}
 			break;
 		}
 		case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE: {
 			auto child = HandleObjectFrame(nodes, frame, doc);
 			if (child) {
-				stack.push(std::move(*child));
+				stack.push_back(std::move(*child));
 			} else {
-				stack.pop();
+				stack.pop_back();
 			}
 			break;
 		}
 		default: {
 			HandleValueFrame(frame, doc);
-			stack.pop();
+			stack.pop_back();
 			break;
 		}
 		}
