@@ -92,29 +92,34 @@ void WindowMergeSortTreeLocalState::Sink(ExecutionContext &context, DataChunk &c
 void WindowMergeSortTreeLocalState::ExecuteSortTask(ExecutionContext &context, InterruptState &interrupt) {
 	PostIncrement<atomic<idx_t>> on_completed(window_tree.tasks_completed);
 
-	switch (build_stage) {
-	case WindowMergeSortStage::COMBINE: {
-		auto &local_sink = *window_tree.local_sinks[build_task];
-		OperatorSinkCombineInput combine {*window_tree.global_sink, local_sink, interrupt};
-		window_tree.sort->Combine(context, combine);
-		break;
-	}
-	case WindowMergeSortStage::FINALIZE: {
-		auto &sort = *window_tree.sort;
-		OperatorSinkFinalizeInput finalize {*window_tree.global_sink, interrupt};
-		sort.Finalize(context.client, finalize);
-		auto sort_global = sort.GetGlobalSourceState(context.client, *window_tree.global_sink);
-		auto sort_local = sort.GetLocalSourceState(context, *sort_global);
-		OperatorSourceInput source {*sort_global, *sort_local, interrupt};
-		sort.MaterializeColumnData(context, source);
-		window_tree.sorted = sort.GetColumnData(source);
-		break;
-	}
-	case WindowMergeSortStage::SORTED:
-		BuildLeaves();
-		break;
-	default:
-		break;
+	try {
+		switch (build_stage) {
+		case WindowMergeSortStage::COMBINE: {
+			auto &local_sink = *window_tree.local_sinks[build_task];
+			OperatorSinkCombineInput combine {*window_tree.global_sink, local_sink, interrupt};
+			window_tree.sort->Combine(context, combine);
+			break;
+		}
+		case WindowMergeSortStage::FINALIZE: {
+			auto &sort = *window_tree.sort;
+			OperatorSinkFinalizeInput finalize {*window_tree.global_sink, interrupt};
+			sort.Finalize(context.client, finalize);
+			auto sort_global = sort.GetGlobalSourceState(context.client, *window_tree.global_sink);
+			auto sort_local = sort.GetLocalSourceState(context, *sort_global);
+			OperatorSourceInput source {*sort_global, *sort_local, interrupt};
+			sort.MaterializeColumnData(context, source);
+			window_tree.sorted = sort.GetColumnData(source);
+			break;
+		}
+		case WindowMergeSortStage::SORTED:
+			BuildLeaves();
+			break;
+		default:
+			break;
+		}
+	} catch (std::exception &ex) {
+		window_tree.SetStageError(ErrorData(ex));
+		throw;
 	}
 }
 
@@ -133,6 +138,13 @@ idx_t WindowMergeSortTree::MeasurePayloadBlocks() {
 	return count;
 }
 
+void WindowMergeSortTree::SetStageError(ErrorData error) {
+	lock_guard<mutex> stage_guard(lock);
+	if (!stage_error.HasError()) {
+		stage_error = std::move(error);
+	}
+}
+
 void WindowMergeSortTree::Finished() {
 	global_sink.reset();
 	local_sinks.clear();
@@ -141,6 +153,11 @@ void WindowMergeSortTree::Finished() {
 
 bool WindowMergeSortTree::TryPrepareSortStage(WindowMergeSortTreeLocalState &lstate) {
 	lock_guard<mutex> stage_guard(lock);
+
+	if (stage_error.HasError()) {
+		// The sorted data is missing or incomplete, so stop rather than build a tree from it.
+		stage_error.Throw();
+	}
 
 	switch (build_stage.load()) {
 	case WindowMergeSortStage::INIT:

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/execution/merge_sort_tree.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 
@@ -63,6 +64,9 @@ public:
 	//! Thread-safe post-sort cleanup
 	virtual void Finished();
 
+	//! Record the first error thrown by a sort stage task
+	void SetStageError(ErrorData error);
+
 	//! Sort state machine
 	bool TryPrepareSortStage(WindowMergeSortTreeLocalState &lstate);
 	//! Build the MST in parallel from the sorted data
@@ -83,6 +87,8 @@ public:
 	unique_ptr<ColumnDataCollection> sorted;
 	//! Finalize guard
 	mutable mutex lock;
+	//! The first error thrown by a sort stage task, if any
+	ErrorData stage_error;
 	//! Local sort set
 	mutable vector<LocalSortStatePtr> local_sinks;
 	//! Finalize stage
