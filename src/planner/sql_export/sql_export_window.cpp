@@ -170,9 +170,9 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 		auto refused = SQLExportSensitiveParameters::RefuseBoundArgument(
 		    context.client_context, definition->GetSignature(), function.GetPositionalArgumentCount(),
 		    function.GetNamedArguments(), i, *expression.GetChildren()[i]);
-		if (!refused.empty()) {
+		if (refused) {
 			return BoundExpressionSQLExportResult::Failure(
-			    {SensitiveParameterIssue(path, definition->GetName(), refused)});
+			    {SensitiveParameterIssue(path, definition->GetName(), *refused)});
 		}
 	}
 

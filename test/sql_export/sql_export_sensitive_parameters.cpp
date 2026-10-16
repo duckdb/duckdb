@@ -2,6 +2,7 @@
 #include "test_helpers.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/copy_function.hpp"
@@ -16,9 +17,10 @@ using namespace duckdb;
 
 namespace logical_plan_sql_export_test {
 
-// SQL cannot register a table function or a copy format, so the sensitivity marking of their
-// parameters is only reachable through probes registered from C++. The SQL-reachable protection
-// coverage (ordinary parameterized scans keep exporting) lives in test/sql/sql_export
+// The sensitive flag only exists at C++ registration time and SQL cannot register a table function,
+// a scalar function, an aggregate or a copy format, so every refusal case needs a C++ probe.
+// The SQL-reachable protection coverage (ordinary parameterized scans keep exporting, e.g. read_csv
+// with named options) lives in test/sql/sql_export/source_invocation_results.test
 
 static unique_ptr<FunctionData> SensitiveProbeBind(ClientContext &, TableFunctionBindInput &,
                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
@@ -54,6 +56,10 @@ static void SensitiveCopyOptions(ClientContext &, CopyOptionsInput &input) {
 static void SensitiveScalarImpl(DataChunk &, ExpressionState &, Vector &result) {
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ConstantVector::SetNull(result, true);
+}
+
+static unique_ptr<ParsedExpression> SensitiveScalarUnbind(FunctionUnbindInput &input) {
+	return make_uniq<FunctionExpression>(input.expression.Function().GetQualifiedName(), std::move(input.children));
 }
 
 static OperatorResultType SensitiveProbeInOut(ExecutionContext &, TableFunctionInput &, DataChunk &, DataChunk &) {
@@ -107,6 +113,26 @@ static void RegisterSensitiveProbes(DuckDB &db) {
 	TableFunction inout_scan(Identifier("sensitive_probe_inout_scan"), inout_signature, nullptr, SensitiveProbeBind);
 	inout_scan.in_out_function = SensitiveProbeInOut;
 	loader.RegisterFunction(std::move(inout_scan));
+	// a scan whose sensitive argument is the TABLE parameter itself, reconstructed as the input subquery
+	auto table_signature = FunctionSignature().AddParameter(Identifier("input"), LogicalType::TABLE).Sensitive();
+	TableFunction table_scan(Identifier("sensitive_probe_table_input"), table_signature, nullptr, SensitiveProbeBind);
+	table_scan.in_out_function = SensitiveProbeInOut;
+	loader.RegisterFunction(std::move(table_scan));
+	// a scan whose VARIANT default hides the payload types from a coercing comparison
+	auto variant_signature =
+	    FunctionSignature()
+	        .AddParameter(Identifier("endpoint"), LogicalType::VARCHAR)
+	        .AddKeywordOnly(Identifier("level"), LogicalType::VARIANT(),
+	                        Value::DOUBLE(9007199254740992.0).DefaultCastAs(LogicalType::VARIANT()))
+	        .Sensitive();
+	TableFunction variant_scan(Identifier("sensitive_probe_variant_scan"), variant_signature, SensitiveProbeScan,
+	                           SensitiveProbeBind);
+	loader.RegisterFunction(std::move(variant_scan));
+	// a sensitive parameter with an empty declared name must still refuse
+	auto unnamed_signature = FunctionSignature().AddParameter(Identifier(), LogicalType::VARCHAR).Sensitive();
+	TableFunction unnamed_scan(Identifier("sensitive_probe_unnamed_scan"), unnamed_signature, SensitiveProbeScan,
+	                           SensitiveProbeBind);
+	loader.RegisterFunction(std::move(unnamed_scan));
 	// a volatile scalar function with a sensitive parameter, volatility retains the invocation
 	auto scalar_signature =
 	    FunctionSignature().AddParameter(Identifier("credential"), LogicalType::VARCHAR).Sensitive();
@@ -115,6 +141,24 @@ static void RegisterSensitiveProbes(DuckDB &db) {
 	                                SensitiveScalarImpl);
 	sensitive_scalar.SetVolatile();
 	loader.RegisterFunction(std::move(sensitive_scalar));
+	// the same shape with an unbind callback, whose reconstruction freedom forces a blanket refusal
+	auto unbind_signature =
+	    FunctionSignature().AddParameter(Identifier("credential"), LogicalType::VARCHAR).Sensitive();
+	unbind_signature.SetReturnType(LogicalType::BIGINT);
+	ScalarFunction unbind_scalar(Identifier("sensitive_probe_unbind_scalar"), std::move(unbind_signature),
+	                             SensitiveScalarImpl);
+	unbind_scalar.SetVolatile();
+	unbind_scalar.SetUnbindCallback(SensitiveScalarUnbind);
+	loader.RegisterFunction(std::move(unbind_scalar));
+	// a volatile scalar whose sensitive parameter has a default of a narrower type, so an omitted
+	// argument is materialized as a cast of the declared default
+	auto default_signature =
+	    FunctionSignature().AddParameter(Identifier("credential"), LogicalType::BIGINT, Value::INTEGER(7)).Sensitive();
+	default_signature.SetReturnType(LogicalType::BIGINT);
+	ScalarFunction default_scalar(Identifier("sensitive_probe_default"), std::move(default_signature),
+	                              SensitiveScalarImpl);
+	default_scalar.SetVolatile();
+	loader.RegisterFunction(std::move(default_scalar));
 	// an aggregate with a sensitive parameter, implemented as a renamed copy of the built-in "first"
 	{
 		Connection lookup(db);
@@ -132,6 +176,39 @@ static void RegisterSensitiveProbes(DuckDB &db) {
 		agg_signature.SetReturnType(sensitive_agg.GetReturnType());
 		sensitive_agg.GetSignature() = std::move(agg_signature);
 		loader.RegisterFunction(std::move(sensitive_agg));
+	}
+	// a renamed copy of string_agg whose separator is sensitive, its exported state retains the separator
+	{
+		Connection lookup(db);
+		lookup.BeginTransaction();
+		auto &string_agg_entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
+		    *lookup.context, QualifiedName("system", "main", "string_agg"));
+		auto string_agg_implementation = string_agg_entry.functions.GetFunctionByArguments(
+		    *lookup.context, {LogicalType::VARCHAR, LogicalType::VARCHAR});
+		REQUIRE(string_agg_implementation);
+		AggregateFunction sensitive_string_agg = *string_agg_implementation;
+		lookup.Rollback();
+		sensitive_string_agg.SetName(Identifier("sensitive_string_agg"));
+		sensitive_string_agg.GetSignature().GetParameter(0).SetName(Identifier("value"));
+		sensitive_string_agg.GetSignature().GetParameter(1).SetName(Identifier("separator"));
+		sensitive_string_agg.GetSignature().GetParameter(1).SetSensitive();
+		loader.RegisterFunction(std::move(sensitive_string_agg));
+	}
+	// a renamed copy of list_transform whose lambda parameter is sensitive
+	{
+		Connection lookup(db);
+		lookup.BeginTransaction();
+		auto &transform_entry = Catalog::GetEntry<ScalarFunctionCatalogEntry>(
+		    *lookup.context, QualifiedName("system", "main", "list_transform"));
+		REQUIRE(transform_entry.functions.Size() >= 1);
+		ScalarFunction sensitive_transform = *transform_entry.functions.GetFunctionByOffset(0);
+		lookup.Rollback();
+		sensitive_transform.SetName(Identifier("sensitive_transform"));
+		sensitive_transform.SetVolatile();
+		REQUIRE(sensitive_transform.GetSignature().GetParameterCount() == 2);
+		sensitive_transform.GetSignature().GetParameter(1).SetName(Identifier("transformation"));
+		sensitive_transform.GetSignature().GetParameter(1).SetSensitive();
+		loader.RegisterFunction(std::move(sensitive_transform));
 	}
 	// a copy format with a sensitive option next to a benign option
 	CopyFunction copy_probe(Identifier("sensitive_copy_probe"));
@@ -215,6 +292,31 @@ TEST_CASE("Sensitive table function parameters refuse SQL export",
 		auto exported = LogicalPlanSQLExporter::Export(*connection.context, *get);
 		RequireSensitiveParameterIssue(exported, "sensitive_probe_inout_scan", "credential");
 	}
+	SECTION("a sensitive TABLE parameter refuses the reconstructed input subquery") {
+		auto plan = OptimizeLogicalPlanExportQuery(
+		    connection, "SELECT * FROM sensitive_probe_table_input((SELECT 'swordfish' AS credential))");
+		auto get = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET);
+		REQUIRE(get);
+		auto exported = LogicalPlanSQLExporter::Export(*connection.context, *get);
+		RequireSensitiveParameterIssue(exported, "sensitive_probe_table_input", "input");
+	}
+	SECTION("identical outer types do not exempt a lossy VARIANT payload comparison") {
+		auto plan =
+		    OptimizeLogicalPlanExportQuery(connection, "SELECT * FROM sensitive_probe_variant_scan('http://endpoint', "
+		                                               "level := CAST(9007199254740993 AS VARIANT))");
+		auto get = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET);
+		REQUIRE(get);
+		auto exported = LogicalPlanSQLExporter::Export(*connection.context, *get);
+		RequireSensitiveParameterIssue(exported, "sensitive_probe_variant_scan", "level");
+	}
+	SECTION("a sensitive parameter with an empty declared name still refuses") {
+		auto plan =
+		    OptimizeLogicalPlanExportQuery(connection, "SELECT * FROM sensitive_probe_unnamed_scan('swordfish')");
+		auto get = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET);
+		REQUIRE(get);
+		auto exported = LogicalPlanSQLExporter::Export(*connection.context, *get);
+		RequireSensitiveParameterIssue(exported, "sensitive_probe_unnamed_scan", "");
+	}
 	SECTION("a sensitive typed kwargs option refuses under its canonical name") {
 		auto plan = OptimizeLogicalPlanExportQuery(
 		    connection, "SELECT * FROM sensitive_probe_options_scan('http://endpoint', token := 'credential-value')");
@@ -288,26 +390,62 @@ TEST_CASE("Sensitive scalar, aggregate and window parameters refuse SQL export",
 	require_refused("EXPLAIN (SQL) SELECT sensitive_probe_scalar(s) FROM sensitive_scalar_inputs",
 	                "sensitive_probe_scalar");
 
+	// an unbind callback reconstructs with bind-time freedom, so a sensitive declaration refuses outright
+	require_refused("EXPLAIN (SQL) SELECT sensitive_probe_unbind_scalar(s) FROM sensitive_scalar_inputs",
+	                "sensitive_probe_unbind_scalar");
+
+	// the lambda slot is a declared argument, its reconstructed body renders
+	auto lambda_refused = connection.Query("EXPLAIN (SQL) SELECT sensitive_transform([1], lambda x: 'swordfish')");
+	REQUIRE(lambda_refused->HasError());
+	REQUIRE(StringUtil::Contains(lambda_refused->GetError(), "sensitive_transform"));
+	REQUIRE(!StringUtil::Contains(lambda_refused->GetError(), "swordfish"));
+
 	// the unmarked built-in the aggregate probe copies keeps exporting
 	auto allowed = connection.Query("EXPLAIN (SQL) SELECT first('swordfish') FROM range(2)");
 	REQUIRE_NO_FAIL(*allowed);
 	REQUIRE(StringUtil::Contains(allowed->Collection().GetValue(1, 0).ToString(), "first"));
 }
 
-TEST_CASE("Ordinary parameterized scans keep exporting",
+TEST_CASE("Sensitive parameter defaults materialized by the binder keep exporting",
           "[sql_export][logical_plan_sql_export][sensitive_parameters]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
-	auto csv_path = TestCreatePath("sensitive_export_protection.csv");
-	REQUIRE_NO_FAIL(connection.Query("COPY (SELECT 1 AS i, 'x' AS s) TO '" + csv_path + "' (HEADER)"));
-	auto exported = connection.Query("EXPLAIN (SQL) SELECT * FROM read_csv('" + csv_path +
-	                                 "', header := true, delim := ',', auto_detect := true)");
-	REQUIRE_NO_FAIL(*exported);
-	auto sql = exported->Collection().GetValue(1, 0).ToString();
-	REQUIRE(StringUtil::Contains(sql, "read_csv"));
-	auto roundtrip = connection.Query(sql);
-	REQUIRE_NO_FAIL(*roundtrip);
-	REQUIRE(roundtrip->RowCount() == 1);
+	RegisterSensitiveProbes(db);
+
+	// without the optimizer the materialized default survives as a cast of the declared constant
+	REQUIRE_NO_FAIL(connection.Query("PRAGMA disable_optimizer"));
+	auto defaulted = connection.Query("EXPLAIN (SQL) SELECT sensitive_probe_default()");
+	REQUIRE_NO_FAIL(*defaulted);
+	REQUIRE(StringUtil::Contains(defaulted->Collection().GetValue(1, 0).ToString(), "sensitive_probe_default"));
+
+	auto explicit_default = connection.Query("EXPLAIN (SQL) SELECT sensitive_probe_default(7)");
+	REQUIRE_NO_FAIL(*explicit_default);
+
+	auto refused = connection.Query("EXPLAIN (SQL) SELECT sensitive_probe_default(8)");
+	REQUIRE(refused->HasError());
+	REQUIRE(StringUtil::Contains(refused->GetError(), "credential"));
+}
+
+TEST_CASE("Exported aggregate state refuses rendering a sensitive constant parameter",
+          "[sql_export][logical_plan_sql_export][sensitive_parameters]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	RegisterSensitiveProbes(db);
+
+	REQUIRE_NO_FAIL(connection.Query("SET VARIABLE saved_state = (SELECT sensitive_string_agg(v, 'swordfish') "
+	                                 "EXPORT_STATE FROM (VALUES ('x')) t(v))"));
+	auto refused = connection.Query("EXPLAIN (SQL) SELECT getvariable('saved_state')");
+	REQUIRE(refused->HasError());
+	REQUIRE(StringUtil::Contains(refused->GetError(), "sensitive_string_agg"));
+	REQUIRE(StringUtil::Contains(refused->GetError(), "separator"));
+	REQUIRE(!StringUtil::Contains(refused->GetError(), "swordfish"));
+
+	// the unmarked built-in state keeps exporting its constant parameters
+	REQUIRE_NO_FAIL(connection.Query("SET VARIABLE benign_state = (SELECT string_agg(v, ',') "
+	                                 "EXPORT_STATE FROM (VALUES ('x')) t(v))"));
+	auto allowed = connection.Query("EXPLAIN (SQL) SELECT getvariable('benign_state')");
+	REQUIRE_NO_FAIL(*allowed);
+	REQUIRE(StringUtil::Contains(allowed->Collection().GetValue(1, 0).ToString(), "to_aggregate_state"));
 }
 
 TEST_CASE("Sensitive copy options refuse COPY TO export",

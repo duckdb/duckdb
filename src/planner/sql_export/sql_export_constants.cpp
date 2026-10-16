@@ -3,6 +3,7 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
 
@@ -45,6 +46,20 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportConstant(con
 	if (!SQLExportHelpers::IsSQLValueType(return_type)) {
 		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::InternalExpressionInvariant(
 		    path, expression, "Bound constant has an unexportable type")});
+	}
+	auto client_context = context.client_context;
+	if (client_context) {
+		// an aggregate state renders the constant parameters of its original invocation
+		Identifier state_function;
+		Identifier state_parameter;
+		const bool sensitive_state = TypeVisitor::Contains(return_type, [&](const LogicalType &child) {
+			return child.IsAggregateState() && ExportAggregateFunction::StateRendersSensitiveParameter(
+			                                       *client_context, child, state_function, state_parameter);
+		});
+		if (sensitive_state) {
+			return BoundExpressionSQLExportResult::Failure(
+			    {SensitiveParameterIssue(path, state_function, state_parameter)});
+		}
 	}
 	unique_ptr<ParsedExpression> result;
 	try {
