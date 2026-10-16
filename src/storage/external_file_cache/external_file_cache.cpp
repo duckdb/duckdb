@@ -118,7 +118,8 @@ bool ExternalFileCache::ShouldCacheFile(const string &path) const {
 }
 
 vector<shared_ptr<CacheBlock>> ExternalFileCache::AcquireBlocks(CachedFile &cached_file, idx_t location, idx_t nr_bytes,
-                                                                idx_t max_block_size) {
+                                                                idx_t max_block_size,
+                                                                optional_idx expected_content_generation) {
 	D_ASSERT(nr_bytes > 0);
 	D_ASSERT(max_block_size > 0);
 	const idx_t end = location + nr_bytes;
@@ -126,6 +127,10 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::AcquireBlocks(CachedFile &cach
 	const idx_t absorb_size = max_block_size / 8;
 
 	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
+	if (expected_content_generation.IsValid() &&
+	    cached_file.content_generation != expected_content_generation.GetIndex()) {
+		return {};
+	}
 	auto &blocks = cached_file.blocks;
 	// start at the block that covers `location`, if any
 	auto it = blocks.upper_bound(location);

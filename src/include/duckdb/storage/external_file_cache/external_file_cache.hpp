@@ -80,6 +80,7 @@ public:
 		mutable annotated_mutex meta_lock;
 		//! Metadata for validating the cached blocks against the current file.
 		CacheValidationInfo validation_info DUCKDB_GUARDED_BY(meta_lock);
+		bool metadata_initialized DUCKDB_GUARDED_BY(meta_lock) = false;
 		bool can_seek DUCKDB_GUARDED_BY(meta_lock) = false;
 		bool on_disk_file DUCKDB_GUARDED_BY(meta_lock) = false;
 	};
@@ -100,7 +101,8 @@ public:
 
 	//! Get the blocks covering [location, location + nr_bytes), creating empty blocks for the missing bytes.
 	vector<shared_ptr<CacheBlock>> AcquireBlocks(CachedFile &cached_file, idx_t location, idx_t nr_bytes,
-	                                             idx_t max_block_size);
+	                                             idx_t max_block_size,
+	                                             optional_idx expected_content_generation = optional_idx());
 	//! Drop all blocks of a file, e.g. because the file changed. Readers keep the blocks they hold.
 	void DropBlocks(CachedFile &cached_file);
 	idx_t GetContentGeneration(CachedFile &cached_file);

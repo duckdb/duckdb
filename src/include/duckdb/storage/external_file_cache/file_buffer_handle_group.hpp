@@ -40,6 +40,7 @@ public:
 
 	// Return a pointer to the start of the first handle in the group.
 	// Warning: this function requires exactly one handle for zero-copy access, otherwise it will throw an exception.
+	data_ptr_t Ptr();
 	const_data_ptr_t Ptr() const;
 
 private:
