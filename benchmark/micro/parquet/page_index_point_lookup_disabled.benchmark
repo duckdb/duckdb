@@ -15,7 +15,7 @@ COPY (
 	       'payload_' || lpad(range::VARCHAR, 9, '0') AS s,
 	       (range / 7)::DOUBLE AS d
 	FROM range(10000000)
-) TO '${BENCHMARK_DIR}/page_index_point_lookup.parquet' (ROW_GROUP_SIZE 10000000, DATA_PAGE_SIZE_LIMIT 1048576);
+) TO '${BENCHMARK_DIR}/page_index_point_lookup.parquet' (ROW_GROUP_SIZE 10000000, DATA_PAGE_SIZE_LIMIT 1048576, WRITE_PAGE_INDEX true);
 SET parquet_use_page_index = false;
 
 run

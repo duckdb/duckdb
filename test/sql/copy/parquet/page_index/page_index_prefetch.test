@@ -15,7 +15,7 @@ CREATE TABLE data AS
 	FROM range(300000);
 
 statement ok
-COPY data TO '{TEST_DIR}/page_index_prefetch.parquet' (ROW_GROUP_SIZE 100000, DATA_PAGE_SIZE_LIMIT 4096);
+COPY data TO '{TEST_DIR}/page_index_prefetch.parquet' (ROW_GROUP_SIZE 100000, DATA_PAGE_SIZE_LIMIT 4096, WRITE_PAGE_INDEX true);
 
 statement ok
 SET threads = 1;

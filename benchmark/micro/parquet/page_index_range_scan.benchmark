@@ -16,7 +16,7 @@ COPY (
 	       (range / 7)::DOUBLE AS d,
 	       (range * 31) % 100003 AS w
 	FROM range(10000000)
-) TO '${BENCHMARK_DIR}/page_index_range_scan.parquet' (ROW_GROUP_SIZE 10000000, DATA_PAGE_SIZE_LIMIT 1048576);
+) TO '${BENCHMARK_DIR}/page_index_range_scan.parquet' (ROW_GROUP_SIZE 10000000, DATA_PAGE_SIZE_LIMIT 1048576, WRITE_PAGE_INDEX true);
 
 run
 SELECT count(*), sum(v), sum(w), max(s), sum(d) FROM '${BENCHMARK_DIR}/page_index_range_scan.parquet' WHERE id BETWEEN 2000000 AND 2200000

@@ -110,7 +110,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	idx_t data_page_size_limit = PrimitiveColumnWriter::DEFAULT_DATA_PAGE_SIZE_LIMIT;
 
 	bool enable_bloom_filters = true;
-	bool write_page_index = true;
+	bool write_page_index = false;
 	//! What false positive rate are we willing to accept for bloom filters
 	double bloom_filter_false_positive_ratio = 0.01;
 
