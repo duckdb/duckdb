@@ -926,6 +926,15 @@ bool ExportAggregateFunction::StateRendersSensitiveParameter(ClientContext &cont
 	vector<LogicalType> types;
 	map<idx_t, Value> constants;
 	ParseStateParameters(parameters->second, types, constants);
+	// a recorded argument type can itself describe a state, whose retained parameters the signature renders
+	for (auto &argument_type : types) {
+		if (TypeVisitor::Contains(argument_type, [&](const LogicalType &child) {
+			    return child.IsAggregateState() &&
+			           StateRendersSensitiveParameter(context, child, function_name, parameter);
+		    })) {
+			return true;
+		}
+	}
 	if (constants.empty()) {
 		return false;
 	}
