@@ -685,6 +685,8 @@ enum class PEGRuleId : uint32_t {
 	OtherOperatorExpression,
 	InfixOtherOperatorExpression,
 	OtherOperatorTail,
+	AnyAllSubqueryTail,
+	OtherOperatorExpressionTail,
 	OtherOperator,
 	AnyAllParsedOperator,
 	NamedOtherOperator,
