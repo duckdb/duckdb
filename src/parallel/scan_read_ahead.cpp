@@ -84,6 +84,10 @@ public:
 		}
 	}
 
+	string TaskType() const override {
+		return "ReadAheadIOTask";
+	}
+
 private:
 	unique_ptr<AsyncTask> task;
 	shared_ptr<ReadAheadJobCompletion> completion;
@@ -112,6 +116,10 @@ public:
 	//! The open never runs, so settle the state the scan waits on - it only ever leaves OPENING in one of these two
 	void Cancel() override {
 		cancel_fn();
+	}
+
+	string TaskType() const override {
+		return "FileOpenTask";
 	}
 
 private:
