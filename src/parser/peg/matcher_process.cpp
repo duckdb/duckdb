@@ -47,6 +47,8 @@ arena_ptr<MatchProcess> AtomicMatcher::StartMatch(MatchState &state) const {
 
 void ListMatcher::InitializeListChain() {
 	first_child_is_chainable = false;
+	prepared_chain = nullptr;
+	prepared_chain_index = 0;
 	if (!IsStructural() || suppress_suggestions || matchers.empty()) {
 		return;
 	}

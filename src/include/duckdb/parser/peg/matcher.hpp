@@ -30,6 +30,7 @@ class PEGTransformerFactory;
 class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
+struct ListMatchChain;
 class MatchProcess;
 
 enum class SuggestionState : uint8_t {
@@ -420,11 +421,17 @@ public:
 
 class MatcherAllocator {
 public:
+	DUCKDB_API MatcherAllocator();
+	DUCKDB_API MatcherAllocator(MatcherAllocator &&) noexcept;
+	DUCKDB_API MatcherAllocator &operator=(MatcherAllocator &&) noexcept;
+	DUCKDB_API ~MatcherAllocator();
+
 	Matcher &Allocate(unique_ptr<Matcher> matcher);
 	void InitializeListChains();
 
 private:
 	vector<unique_ptr<Matcher>> matchers;
+	vector<unique_ptr<ListMatchChain>> list_chains;
 };
 
 class ParseResultAllocator {
