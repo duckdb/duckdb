@@ -4,6 +4,9 @@
 
 require parquet
 
+# the page row counts and boundaries below assume the default vector size
+require vector_size 2048
+
 statement ok
 CREATE TABLE data AS
 	SELECT range AS id,
