@@ -13,6 +13,7 @@
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/bloom_index.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -675,6 +676,9 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 			g_state->state.scan_state.row_number_base = 0;
 			break;
 		}
+	}
+	if (input.filters && input.filters->FilterCount() > 0) {
+		storage.GetDataTableInfo()->BindIndexes(context, string(BloomIndex::TYPE_NAME));
 	}
 	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
 	g_state->InitializeScanInfo(input);

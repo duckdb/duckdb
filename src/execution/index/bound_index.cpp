@@ -181,6 +181,18 @@ IndexStorageInfo BoundIndex::SerializeToWAL(const StorageVersion) {
 	throw NotImplementedException("The implementation of this index WAL serialization does not exist.");
 }
 
+bool BoundIndex::CanSkipVector(column_t, idx_t, const Value &) const {
+	return false;
+}
+
+bool BoundIndex::PrepareSkip(column_t, const Value &, idx_t &, hash_t &) const {
+	return false;
+}
+
+bool BoundIndex::SkipPrepared(idx_t, idx_t, hash_t) const {
+	return false;
+}
+
 string BoundIndex::AppendRowError(DataChunk &input, idx_t index) {
 	string error;
 	for (idx_t c = 0; c < input.ColumnCount(); c++) {

@@ -1,5 +1,6 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -322,7 +323,8 @@ unordered_set<string> TableIndexList::DistinctIndexTypes() const {
 bool TableIndexList::AllIndexesBoundOfType(const string &index_type) const {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
-		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != index_type) {
+		if (entry->GetBindState() != IndexBindState::BOUND ||
+		    !StringUtil::CIEquals(entry->GetIndexType(), index_type)) {
 			return false;
 		}
 	}
@@ -397,7 +399,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 		shared_ptr<IndexEntry> index_entry;
 		for (auto &entry : index_entries) {
 			if (entry->GetBindState() != IndexBindState::BOUND &&
-			    (!index_type || entry->GetIndexType() == *index_type)) {
+			    (!index_type || StringUtil::CIEquals(entry->GetIndexType(), *index_type))) {
 				index_entry = entry;
 				break;
 			}

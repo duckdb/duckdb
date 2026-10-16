@@ -28,6 +28,7 @@ class ColumnSegment;
 class LocalTableStorage;
 class CollectionScanState;
 class Index;
+struct BloomScanProbe;
 class RowGroup;
 class RowGroupCollection;
 class UpdateSegment;
@@ -302,8 +303,11 @@ public:
 
 	//! Optional state for custom row group ordering
 	unique_ptr<RowGroupReorderer> reorderer;
+	//! Bloom equality probe reused across vectors. Released with this scan state.
+	unique_ptr<BloomScanProbe> bloom_probe;
 
 public:
+	~CollectionScanState();
 	void Initialize(const QueryContext &context_p, const vector<LogicalType> &types);
 	const vector<StorageIndex> &GetColumnIds();
 	ScanFilterInfo &GetFilterInfo();

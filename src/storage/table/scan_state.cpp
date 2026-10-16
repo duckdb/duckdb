@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/table/bloom_scan_probe.hpp"
 
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/parallel/async_result.hpp"
@@ -248,6 +249,8 @@ CollectionScanState::CollectionScanState(TableScanState &parent_p)
     : vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
       valid_sel(STANDARD_VECTOR_SIZE), random(-1), row_group(nullptr), parent(parent_p) {
 }
+
+CollectionScanState::~CollectionScanState() = default;
 
 optional_ptr<SegmentNode<RowGroup>> CollectionScanState::GetRowGroup() const {
 	return row_group;

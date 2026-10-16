@@ -13,7 +13,11 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/storage/table/index_entry.hpp"
+#include "duckdb/storage/table/bloom_scan_probe.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
@@ -803,6 +807,118 @@ bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo 
 	return true;
 }
 
+static const Expression &UnwrapFilterExpr(const Expression &expr) {
+	auto child = ExpressionFilter::GetOptionalFilterChild(expr);
+	if (!child) {
+		return expr;
+	}
+	return UnwrapFilterExpr(*child);
+}
+
+static bool BloomMissesConstant(RowGroup &row_group, idx_t granule, column_t column_id, const Value &constant) {
+	auto index_entries = row_group.GetTableInfo().GetIndexes().IndexEntries();
+	for (auto entry : index_entries) {
+		if (entry->GetBindState() != IndexBindState::BOUND) {
+			continue;
+		}
+		auto handle = entry->GetReadHandle<BoundIndex>();
+		if (handle->CanSkipVector(column_id, granule, constant)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool BloomExpressionMisses(RowGroup &row_group, idx_t granule, column_t column_id, const Expression &expr) {
+	auto &unwrapped = UnwrapFilterExpr(expr);
+	if (unwrapped.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
+	    unwrapped.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		for (auto &child : unwrapped.Cast<BoundConjunctionExpression>().GetChildren()) {
+			if (BloomExpressionMisses(row_group, granule, column_id, *child)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	if (unwrapped.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION ||
+	    !BoundComparisonExpression::IsComparison(unwrapped)) {
+		return false;
+	}
+	ExpressionType comparison_type;
+	auto constant =
+	    ExpressionFilter::TryGetColumnConstantComparison(unwrapped.Cast<BoundFunctionExpression>(), comparison_type);
+	if (!constant || comparison_type != ExpressionType::COMPARE_EQUAL || constant->GetValue().IsNull()) {
+		return false;
+	}
+	return BloomMissesConstant(row_group, granule, column_id, constant->GetValue());
+}
+
+static unique_ptr<BloomScanProbe> BuildBloomProbe(RowGroup &row_group, column_t column_id, const TableFilter &filter) {
+	auto probe = make_uniq<BloomScanProbe>();
+	probe->filter = &filter;
+	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		return probe;
+	}
+	auto &unwrapped = UnwrapFilterExpr(*filter.Cast<ExpressionFilter>().expr);
+	if (unwrapped.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
+		probe->fallback = true;
+		return probe;
+	}
+	if (unwrapped.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION ||
+	    !BoundComparisonExpression::IsComparison(unwrapped)) {
+		return probe;
+	}
+	ExpressionType comparison_type;
+	auto constant =
+	    ExpressionFilter::TryGetColumnConstantComparison(unwrapped.Cast<BoundFunctionExpression>(), comparison_type);
+	if (!constant || comparison_type != ExpressionType::COMPARE_EQUAL || constant->GetValue().IsNull()) {
+		return probe;
+	}
+
+	auto index_entries = row_group.GetTableInfo().GetIndexes().IndexEntries();
+	for (auto entry : index_entries) {
+		if (entry->GetBindState() != IndexBindState::BOUND) {
+			continue;
+		}
+		auto handle = entry->GetReadHandle<BoundIndex>();
+		idx_t column_index;
+		hash_t hash;
+		if (!handle->PrepareSkip(column_id, constant->GetValue(), column_index, hash)) {
+			continue;
+		}
+		probe->handle = make_uniq<IndexReadHandle<BoundIndex>>(std::move(handle));
+		probe->column_index = column_index;
+		probe->hash = hash;
+		probe->usable = true;
+		break;
+	}
+	return probe;
+}
+
+static bool BloomCanSkipVector(RowGroup &row_group, CollectionScanState &state, const StorageIndex &column,
+                               const TableFilter &filter) {
+	if (column.IsRowIdColumn() || column.IsRowNumberColumn() || column.HasChildren()) {
+		return false;
+	}
+	auto row_group_node = state.GetRowGroup();
+	if (!row_group_node) {
+		return false;
+	}
+	auto granule = (row_group_node->GetRowStart() + state.vector_index * STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
+	if (!state.bloom_probe || state.bloom_probe->filter != &filter) {
+		state.bloom_probe = BuildBloomProbe(row_group, column.GetPrimaryIndex(), filter);
+	}
+	auto &probe = *state.bloom_probe;
+	if (probe.fallback) {
+		return BloomExpressionMisses(row_group, granule, column.GetPrimaryIndex(),
+		                             *filter.Cast<ExpressionFilter>().expr);
+	}
+	if (!probe.usable) {
+		return false;
+	}
+	return (*probe.handle)->SkipPrepared(probe.column_index, granule, probe.hash);
+}
+
 bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	auto &filters = state.GetFilterInfo();
 	optional_idx target_vector_index_max;
@@ -814,6 +930,10 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		auto column_idx = entry.scan_column_index;
 		auto base_column_idx = entry.table_column_index;
 		auto &filter = entry.filter;
+		if (BloomCanSkipVector(*this, state, base_column_idx, filter)) {
+			NextVector(state);
+			return false;
+		}
 		auto &column_data = GetColumn(base_column_idx);
 
 		optional_ptr<SegmentNode<ColumnSegment>> current_segment;

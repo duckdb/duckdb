@@ -1,12 +1,15 @@
 #include "duckdb/execution/index/index_type.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/bloom_index.hpp"
+#include "duckdb/storage/statistics/bloom_statistics.hpp"
 
 namespace duckdb {
 
 IndexTypeSet::IndexTypeSet() {
 	// Register the ART index type by default
 	RegisterIndexType(ART::GetARTIndexType());
+	RegisterIndexType(BloomIndex::GetBloomIndexType());
 }
 
 optional_ptr<IndexType> IndexTypeSet::FindByName(const string &name) {
