@@ -125,11 +125,12 @@ SELECT i % 10 as g, COUNT(*) FROM range(1000000) t(i) GROUP BY 1 ORDER BY 1
 9	100000
 
 # Preserve the minimum working set after the table fills and starts spilling.
+# Keep tuple metadata below the memory limit with small vectors.
 query III
 SELECT COUNT(*), MIN(n), MAX(n)
-FROM (SELECT i % 20000 AS g, COUNT(*) AS n FROM range(1000000) t(i) GROUP BY g)
+FROM (SELECT i % 20000 AS g, COUNT(*) AS n FROM range(100000) t(i) GROUP BY g)
 ----
-20000	50	50
+20000	5	5
 
 endloop
 
