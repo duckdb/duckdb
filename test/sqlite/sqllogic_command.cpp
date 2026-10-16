@@ -152,8 +152,8 @@ bool CanRestart(Connection &conn) {
 		auto &temp = conn.client_data->temporary_objects;
 		auto &temp_catalog = temp->GetCatalog().Cast<DuckCatalog>();
 		vector<reference<DuckSchemaEntry>> schemas;
-		temp_catalog.ScanSchemas(
-		    [&](SchemaCatalogEntry &schema) { schemas.push_back(schema.Cast<DuckSchemaEntry>()); });
+		temp_catalog.ScanSchemas(VisibilityBound::AllCommitted(),
+		                         [&](DuckSchemaEntry &schema) { schemas.push_back(schema); });
 		if (schemas.size() != 1) {
 			return false;
 		}
@@ -164,7 +164,7 @@ bool CanRestart(Connection &conn) {
 		                                   CatalogType::MACRO_ENTRY,     CatalogType::TABLE_MACRO_ENTRY};
 		bool found_temp_object = false;
 		for (auto &catalog_type : catalog_types) {
-			temp_schema.Scan(catalog_type, [&](CatalogEntry &entry) {
+			temp_schema.Scan(catalog_type, VisibilityBound::AllCommitted(), [&](CatalogEntry &entry) {
 				if (entry.internal) {
 					return;
 				}
@@ -201,20 +201,24 @@ void Command::RestartDatabase(ExecuteContext &context, reference<Connection> &co
 
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 //! Drain a submitted query through the non-blocking consumer API, so the alternative-verify job
-//! exercises the stream end to end
+//! exercises the stream end to end. A statement that expands into several has no metadata before its result
+//! statement is bound, so the metadata is read only once a row or the end of the stream arrived
 static unique_ptr<QueryResult> DrainStream(unique_ptr<QueryResult> handle) {
-	auto statement_type = handle->GetStatementType();
-	auto properties = handle->GetStatementProperties();
-	auto names = handle->GetNames();
 	auto client_properties = handle->client_properties;
 	QueryResultStream<> stream(std::move(handle));
-	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), stream.GetTypes());
+	unique_ptr<ColumnDataCollection> collection;
 	ColumnDataAppendState append_state;
-	collection->InitializeAppend(append_state);
+	auto start_collection = [&]() {
+		collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), stream.GetTypes());
+		collection->InitializeAppend(append_state);
+	};
 	while (true) {
 		unique_ptr<DataChunk> chunk;
 		auto state = stream.TryFetch(chunk);
 		if (state == QueryResultState::READY) {
+			if (!collection) {
+				start_collection();
+			}
 			collection->Append(append_state, *chunk);
 			continue;
 		}
@@ -228,7 +232,11 @@ static unique_ptr<QueryResult> DrainStream(unique_ptr<QueryResult> handle) {
 	if (stream.HasError()) {
 		return make_uniq<QueryResult>(stream.GetErrorObject());
 	}
-	return make_uniq<QueryResult>(statement_type, properties, names, std::move(collection), client_properties);
+	if (!collection) {
+		start_collection();
+	}
+	return make_uniq<QueryResult>(stream.GetStatementType(), stream.GetStatementProperties(), stream.GetNames(),
+	                              std::move(collection), client_properties);
 }
 #endif
 
@@ -261,8 +269,8 @@ unique_ptr<QueryResult> Command::ExecuteQuery(ExecuteContext &context, reference
 		if (handle->HasError()) {
 			return handle;
 		}
-		auto &properties = handle->GetStatementProperties();
-		if (properties.return_type != StatementReturnType::QUERY_RESULT) {
+		if (handle->MetadataAvailable() &&
+		    handle->GetStatementProperties().return_type != StatementReturnType::QUERY_RESULT) {
 			handle->Complete();
 			return handle;
 		}
@@ -452,7 +460,7 @@ struct ParallelExecuteContext {
 	atomic<bool> success;
 	string error_message;
 	string error_file;
-	int error_line;
+	int error_line = 0;
 };
 
 static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
@@ -483,6 +491,13 @@ static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
 		execute_context->error_message = StringUtil::Format("Failure at %s:%d: Unknown error message",
 		                                                    execute_context->error_file, execute_context->error_line);
 		execute_context->success = false;
+	}
+	if (!execute_context->success) {
+		auto message = execute_context->error_message;
+		if (message.empty()) {
+			message = StringUtil::Format("Failure at %s:%d", execute_context->error_file, execute_context->error_line);
+		}
+		SQLLogicTestRunner::EmitError(execute_context->runner.file_name, message);
 	}
 }
 

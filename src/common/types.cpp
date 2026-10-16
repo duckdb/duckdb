@@ -1906,6 +1906,13 @@ LogicalType ArrayType::ConvertToList(const LogicalType &type) {
 		}
 		return LogicalType::STRUCT(children);
 	}
+	case LogicalTypeId::TUPLE: {
+		auto children = StructType::GetChildTypes(type);
+		for (auto &child : children) {
+			child.second = ConvertToList(child.second);
+		}
+		return LogicalType::TUPLE(children);
+	}
 	case LogicalTypeId::MAP: {
 		auto key_type = ConvertToList(MapType::KeyType(type));
 		auto value_type = ConvertToList(MapType::ValueType(type));

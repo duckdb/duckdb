@@ -61,6 +61,11 @@
 			"description": "Peak size of the temporary directory",
 			"unit": "bytes"
 		},
+		"total_bytes_spilled": {
+			"metric_type": "uint64",
+			"description": "Cumulative bytes written to the temporary (spill) directory",
+			"unit": "bytes"
+		},
 		"total_memory_allocated": {
 			"metric_type": "uint64",
 			"description": "The total memory allocated by the buffer manager",
@@ -73,10 +78,30 @@
 			"description": "The total amount of bytes read from storage",
 			"unit": "bytes"
 		},
+		"total_read_operations": {
+			"metric_type": "uint64",
+			"description": "The total number of read operations issued to storage",
+			"unit": "operations"
+		},
+		"total_read_time": {
+			"metric_type": "double",
+			"description": "The total time spent reading from storage",
+			"unit": "seconds"
+		},
 		"total_bytes_written": {
 			"metric_type": "uint64",
 			"description": "The total amount of bytes written to storage",
 			"unit": "bytes"
+		},
+		"total_write_operations": {
+			"metric_type": "uint64",
+			"description": "The total number of write operations issued to storage",
+			"unit": "operations"
+		},
+		"total_write_time": {
+			"metric_type": "double",
+			"description": "The total time spent writing to storage",
+			"unit": "seconds"
 		}
 	},
 	"storage": {
