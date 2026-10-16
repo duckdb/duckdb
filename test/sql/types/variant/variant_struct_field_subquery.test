@@ -148,16 +148,12 @@ SELECT count(*) FROM (SELECT * FROM nested_variant) WHERE nested.inner_struct.pa
 5
 
 # Unnamed struct steps use numeric indexes before entering the VARIANT.
-# TUPLE columns require v2.0.0+ storage
 statement ok
-ATTACH '{TEST_DIR}/variant_struct_field_subquery_v2.db' AS v2 (STORAGE_VERSION 'v2.0.0');
-
-statement ok
-CREATE TABLE v2.unnamed_variant AS SELECT id, row(999, nested) AS u FROM nested_variant;
+CREATE TABLE unnamed_variant AS SELECT id, row(999, nested) AS u FROM nested_variant;
 
 query II
 SELECT id, u[2].inner_struct.payload.obj.a::INTEGER
-FROM (SELECT * FROM v2.unnamed_variant) ORDER BY id;
+FROM (SELECT * FROM unnamed_variant) ORDER BY id;
 ----
 1	11
 2	22
