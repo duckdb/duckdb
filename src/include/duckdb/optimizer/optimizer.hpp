@@ -45,6 +45,7 @@ public:
 private:
 	friend class FilterStatisticsOptimizer;
 
+	void InitializeRewriteRules();
 	void RunBuiltInOptimizers();
 	void RunOptimizer(OptimizerType type, const std::function<void()> &callback);
 	void Verify(LogicalOperator &op);

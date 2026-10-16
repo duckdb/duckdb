@@ -71,6 +71,12 @@
 namespace duckdb {
 
 Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
+}
+
+void Optimizer::InitializeRewriteRules() {
+	if (!rewriter.rules.empty()) {
+		return;
+	}
 	rewriter.rules.push_back(make_uniq<ConstantOrderNormalizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<StructExtractStructPackFoldingRule>(rewriter));
@@ -244,6 +250,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	default:
 		break;
 	}
+	InitializeRewriteRules();
 	// determine which secure views may expose the statistics of their contents - this runs before any rewrites so
 	// that the filters the optimizer pushes into a view are not mistaken for the view restricting its own rows
 	LogicalSecureView::AnalyzeStatistics(*plan);
@@ -589,6 +596,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
 			OptimizerExtensionInput input {GetContext(), *this, pre_optimizer_extension.optimizer_info.get()};
 			if (pre_optimizer_extension.pre_optimize_function) {
+				InitializeRewriteRules();
 				CTEFilterPusher::ClearDependencies(*plan);
 				pre_optimizer_extension.pre_optimize_function(input, plan);
 			}
@@ -601,6 +609,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
 			OptimizerExtensionInput input {GetContext(), *this, optimizer_extension.optimizer_info.get()};
 			if (optimizer_extension.optimize_function) {
+				InitializeRewriteRules();
 				optimizer_extension.optimize_function(input, plan);
 			}
 		});
