@@ -563,8 +563,8 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			auto is_null =
 			    make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, make_uniq<ColumnRefExpression>(col));
 			if (any_key_null) {
-				any_key_null = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR,
-				                                                std::move(any_key_null), std::move(is_null));
+				any_key_null = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(any_key_null),
+				                                                std::move(is_null));
 			} else {
 				any_key_null = std::move(is_null);
 			}
