@@ -57,7 +57,7 @@ struct LogicalPlanSQLExportHelpers {
 	static LogicalPlanVerificationPath PlanExpressionPath(const LogicalPlanVerificationPath &path, idx_t ordinal);
 
 	static LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
-	ExportTypedNull(const LogicalType &type, const LogicalPlanVerificationPath &path);
+	ExportTypedNull(ClientContext &client, const LogicalType &type, const LogicalPlanVerificationPath &path);
 
 	static LogicalPlanVerificationIssue PlanUnsupportedFeature(const LogicalPlanVerificationPath &path, string feature,
 	                                                           string message);

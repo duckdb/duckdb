@@ -49,16 +49,11 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportConstant(con
 	}
 	auto client_context = context.client_context;
 	if (client_context) {
-		// an aggregate state renders the constant parameters of its original invocation
 		Identifier state_function;
 		Identifier state_parameter;
-		const bool sensitive_state = TypeVisitor::Contains(return_type, [&](const LogicalType &child) {
-			return child.IsAggregateState() && ExportAggregateFunction::StateRendersSensitiveParameter(
-			                                       *client_context, child, state_function, state_parameter);
-		});
-		if (sensitive_state) {
+		if (ValueRendersSensitiveState(*client_context, value, state_function, state_parameter)) {
 			return BoundExpressionSQLExportResult::Failure(
-			    {SensitiveParameterIssue(path, state_function, state_parameter)});
+			    {StateSensitivityIssue(path, state_function, state_parameter)});
 		}
 	}
 	unique_ptr<ParsedExpression> result;

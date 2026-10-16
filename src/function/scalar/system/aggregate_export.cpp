@@ -935,19 +935,51 @@ bool ExportAggregateFunction::StateRendersSensitiveParameter(ClientContext &cont
 	    QualifiedName(Catalog::GetSystemCatalog(context).GetName(), Identifier::DefaultSchema(), aggregate_name),
 	    OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
-		// an unknown aggregate carries no sensitivity declaration, and re-binding the state fails loudly
-		return false;
+		// the recorded name resolves exactly like to_aggregate_state rebinding does - an unresolvable
+		// producer leaves the sensitivity of its retained constants unknown
+		function_name = aggregate_name;
+		parameter = Identifier();
+		return true;
 	}
 	// the recorded name does not pin an overload, so a constant counts as sensitive if any overload declares it so
 	for (idx_t function_idx = 0; function_idx < entry->functions.Size(); function_idx++) {
 		auto &signature = entry->functions.GetFunctionByOffset(function_idx)->GetSignature();
-		for (auto &constant : constants) {
-			auto declared = SQLExportSensitiveParameters::PositionalParameter(signature, constant.first);
-			if (declared && declared->IsSensitive()) {
+		// varargs and "**kwargs" make the recorded argument indexes ambiguous
+		if (signature.GetArgs() || signature.GetKwargs()) {
+			auto sensitive = SQLExportSensitiveParameters::FirstSensitiveParameter(signature);
+			if (sensitive) {
 				function_name = aggregate_name;
-				parameter = declared->GetName();
+				parameter = *sensitive;
 				return true;
 			}
+			continue;
+		}
+		// the recorded indexes follow the bound layout: position-accepting slots, then keyword-only declarations
+		vector<reference<const FunctionParameter>> layout;
+		for (auto &declared : signature.GetParameters()) {
+			if (declared.AcceptsPosition()) {
+				layout.emplace_back(declared);
+			}
+		}
+		for (auto &declared : signature.GetParameters()) {
+			if (declared.GetKind() == FunctionParameterKind::KEYWORD_ONLY) {
+				layout.emplace_back(declared);
+			}
+		}
+		for (auto &constant : constants) {
+			if (constant.first >= layout.size()) {
+				continue;
+			}
+			auto &declared = layout[constant.first].get();
+			if (!declared.IsSensitive()) {
+				continue;
+			}
+			if (SQLExportSensitiveParameters::MatchesDeclaredDefault(context, declared, constant.second)) {
+				continue;
+			}
+			function_name = aggregate_name;
+			parameter = declared.GetName();
+			return true;
 		}
 	}
 	return false;

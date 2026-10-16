@@ -283,7 +283,10 @@ SQLSourceQueryResult LogicalPlanSQLExportHelpers::ReconstructSQLSource(ClientCon
 				if (refused) {
 					return SensitiveParameterSource(get, *refused);
 				}
-				auto exported = BoundExpressionSQLExporter::Export(BoundConstantExpression(get.parameters[i]), {});
+				BoundExpressionSQLExportContext constant_context;
+				constant_context.client_context = &context;
+				auto exported =
+				    BoundExpressionSQLExporter::Export(BoundConstantExpression(get.parameters[i]), constant_context);
 				if (exported.HasError()) {
 					return {nullptr, "positional_parameter_expression"};
 				}
@@ -299,7 +302,10 @@ SQLSourceQueryResult LogicalPlanSQLExportHelpers::ReconstructSQLSource(ClientCon
 			if (refused) {
 				return SensitiveParameterSource(get, *refused);
 			}
-			auto exported = BoundExpressionSQLExporter::Export(BoundConstantExpression(parameter.second), {});
+			BoundExpressionSQLExportContext constant_context;
+			constant_context.client_context = &context;
+			auto exported =
+			    BoundExpressionSQLExporter::Export(BoundConstantExpression(parameter.second), constant_context);
 			if (exported.HasError()) {
 				return {nullptr, "named_parameter_expression"};
 			}
