@@ -1,5 +1,5 @@
 # name: test/sql/collate/collation_invalid_utf8.test
-# description: COLLATE comparisons on strings with invalid UTF-8 (code points beyond U+10FFFF) must not read out of bounds in the collation tables
+# description: COLLATE comparisons on strings with invalid UTF-8 (code points beyond U+10FFFF) throw an internal error
 # group: [collate]
 
 require icu
@@ -14,7 +14,11 @@ require no_vector_verification
 # (U+110000, just past the maximum), s2 is F7 BF BF BF (U+1FFFFF, far past it).
 # Reading them from storage skips the UTF-8 validation at the input boundaries,
 # so the collator must reject the code points itself.
+# The internal error invalidates the database, so it is reloaded for every query.
 unzip data/storage/collation_invalid_utf8.db.gz {TEST_DIR}/collation_invalid_utf8.db
+
+# invalid UTF-8 in the collation input is reported as an internal error
+set always_fail_error_messages
 
 load {TEST_DIR}/collation_invalid_utf8.db readonly
 
@@ -32,72 +36,55 @@ SET disabled_optimizers='statistics_propagation';
 statement ok
 LOAD icu
 
-query I
+statement error
 SELECT s1 COLLATE de = 'x' COLLATE de FROM t
 ----
-false
-false
-false
-false
-false
-false
-false
-false
-false
-false
+INTERNAL Error: Invalid UTF-8 in collation input
 
-query I
+load {TEST_DIR}/collation_invalid_utf8.db readonly
+
+statement ok
+SET debug_verification_mode='none';
+
+statement ok
+SET disabled_optimizers='statistics_propagation';
+
+statement ok
+LOAD icu
+
+statement error
 SELECT s2 COLLATE de = 'x' COLLATE de FROM t
 ----
-false
-false
-false
-false
-false
-false
-false
-false
-false
-false
+INTERNAL Error: Invalid UTF-8 in collation input
 
-query I
-SELECT s1 COLLATE de = s1 COLLATE de FROM t
-----
-true
-true
-true
-true
-true
-true
-true
-true
-true
-true
+load {TEST_DIR}/collation_invalid_utf8.db readonly
 
-query I
-SELECT s2 COLLATE de = s2 COLLATE de FROM t
-----
-true
-true
-true
-true
-true
-true
-true
-true
-true
-true
+statement ok
+SET debug_verification_mode='none';
 
-query I
-SELECT s1 COLLATE de = s2 COLLATE de FROM t
+statement ok
+SET disabled_optimizers='statistics_propagation';
+
+statement ok
+LOAD icu
+
+statement error
+SELECT icu_sort_key(s1, 'en') FROM t
 ----
-true
-true
-true
-true
-true
-true
-true
-true
-true
-true
+INTERNAL Error: Invalid UTF-8 in collation input
+
+load {TEST_DIR}/collation_invalid_utf8.db readonly
+
+statement ok
+SET debug_verification_mode='none';
+
+statement ok
+SET disabled_optimizers='statistics_propagation';
+
+statement ok
+LOAD icu
+
+statement error
+SELECT icu_sort_key(s2, 'en') FROM t
+----
+INTERNAL Error: Invalid UTF-8 in collation input

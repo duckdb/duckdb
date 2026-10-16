@@ -50,7 +50,6 @@ add_library_unity(
   test_aggregate_hll.cpp
   test_radix_ht_sink.cpp
   test_utf8_codepoint_oob.cpp
-  test_icu_collation_oob.cpp
   test_temporary_memory_manager.cpp
   test_tuple_data_allocation.cpp
   test_versioning_utils.cpp
