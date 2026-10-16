@@ -43,6 +43,11 @@ public:
 	static LogicalPlanVerificationIssue UnsupportedFeature(const LogicalPlanVerificationPath &path, string feature,
 	                                                       string message);
 
+	//! Refuse rendering the invocation - the value of a sensitive parameter must not appear in generated SQL
+	static LogicalPlanVerificationIssue SensitiveParameterIssue(const LogicalPlanVerificationPath &path,
+	                                                            const Identifier &function_name,
+	                                                            const Identifier &parameter);
+
 	static LogicalPlanVerificationIssue UnsupportedFunction(const LogicalPlanVerificationPath &path,
 	                                                        LogicalPlanVerificationFunctionIdentity identity,
 	                                                        string message);
