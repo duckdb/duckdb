@@ -229,6 +229,89 @@ struct SkaExtractKey {
 	atomic<ClientInterruptState> &interrupt_state;
 };
 
+template <class SORT_KEY>
+struct SkaExtractSuffixKey : SkaExtractKey<SORT_KEY> {
+	SkaExtractSuffixKey(const SkaExtractKey<SORT_KEY> &extract_key, idx_t offset_p, uint64_t varying_bits_p)
+	    : SkaExtractKey<SORT_KEY>(extract_key), offset(offset_p), varying_bits(varying_bits_p) {
+		this->ska_sort_width = sizeof(uint64_t);
+		this->requires_next_sort = true;
+	}
+
+	static uint64_t ExtractWord(const SORT_KEY &key, idx_t offset) {
+		D_ASSERT(offset >= sizeof(uint64_t) && offset % sizeof(uint64_t) == 0);
+		if constexpr (SORT_KEY::INLINE_LENGTH > sizeof(uint64_t)) {
+			if (offset == sizeof(uint64_t)) {
+				return key.part1;
+			}
+		}
+		const auto size = key.GetSize();
+		if (offset >= size) {
+			return 0;
+		}
+		const auto ptr = key.GetData() + offset;
+		if (size - offset >= sizeof(uint64_t)) {
+			return BSwapIfLE(Load<uint64_t>(ptr));
+		}
+		uint64_t word = 0;
+		memcpy(&word, ptr, size - offset);
+		return BSwapIfLE(word);
+	}
+
+	uint64_t operator()(const SORT_KEY &key) const {
+		return ExtractWord(key, offset);
+	}
+
+	bool ByteIsSkippable(const idx_t &byte_offset) const {
+		D_ASSERT(byte_offset < sizeof(uint64_t));
+		return ((varying_bits >> ((sizeof(uint64_t) - 1 - byte_offset) * 8)) & 0xff) == 0;
+	}
+
+	idx_t offset;
+	uint64_t varying_bits;
+};
+
+template <class SORT_KEY, class ITERATOR, class MERGE>
+static void SortTiedBucket(ClientContext &context, ITERATOR begin, ITERATOR end, SkaExtractKey<SORT_KEY> &extract_key,
+                           const MERGE &merge) {
+	if constexpr (SORT_KEY::CONSTANT_SIZE) {
+		duckdb_ska_sort::detail::StdSortFallback(begin, end, extract_key, merge);
+	} else {
+		context.InterruptCheck();
+		D_ASSERT(end - begin >= 2);
+		using SUFFIX = SkaExtractSuffixKey<SORT_KEY>;
+		constexpr idx_t MAX_PREFIX_OFFSET = 256;
+		idx_t offset = sizeof(uint64_t);
+		while (offset <= MAX_PREFIX_OFFSET &&
+		       SUFFIX::ExtractWord(*begin, offset) == SUFFIX::ExtractWord(*(begin + 1), offset)) {
+			offset += sizeof(uint64_t);
+		}
+		if (offset > MAX_PREFIX_OFFSET) {
+			duckdb_ska_sort::detail::StdSortFallback(begin, end, extract_key, merge);
+			return;
+		}
+
+		// The probe only selects a candidate; every skipped word must be equal across the whole bucket.
+		auto varying_bits = SUFFIX::ExtractWord(*begin, offset) ^ SUFFIX::ExtractWord(*(begin + 1), offset);
+		idx_t scanned = 0;
+		for (auto it = begin + 2; it != end; ++it) {
+			if (++scanned % STANDARD_VECTOR_SIZE == 0) {
+				context.InterruptCheck();
+			}
+			for (idx_t candidate = sizeof(uint64_t); candidate < offset; candidate += sizeof(uint64_t)) {
+				if (SUFFIX::ExtractWord(*begin, candidate) != SUFFIX::ExtractWord(*it, candidate)) {
+					offset = candidate;
+					// Every previously visited row was equal at this earlier word.
+					varying_bits = 0;
+					break;
+				}
+			}
+			varying_bits |= SUFFIX::ExtractWord(*begin, offset) ^ SUFFIX::ExtractWord(*it, offset);
+		}
+		SUFFIX suffix(extract_key, offset, varying_bits);
+		duckdb_ska_sort::ska_sort(begin, end, suffix, merge);
+	}
+}
+
 template <SortKeyType SORT_KEY_TYPE>
 static void TemplatedSort(ClientContext &context, TupleDataCollection &key_data, const bool is_index_sort) {
 	const auto &layout = key_data.GetLayout();
@@ -254,8 +337,13 @@ static void TemplatedSort(ClientContext &context, TupleDataCollection &key_data,
 	// order, so that no merge anywhere in this sort allocates on its own (BufferedMerge never does)
 	SortMergeBuffer merge_buffer(BufferAllocator::Get(context), key_data.Count(), sizeof(SORT_KEY));
 	const BufferedMergePolicy<SORT_KEY> merge(merge_buffer);
-	const auto fallback = [&ska_extract_key, &merge](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
-		duckdb_ska_sort::ska_sort(fb_begin, fb_end, ska_extract_key, merge);
+	const auto sort_ties = [&context](BLOCK_ITERATOR b, BLOCK_ITERATOR e, SkaExtractKey<SORT_KEY> &extract_key,
+	                                  const BufferedMergePolicy<SORT_KEY> &policy) {
+		SortTiedBucket(context, b, e, extract_key, policy);
+	};
+	const auto fallback = [&ska_extract_key, &merge, &sort_ties](const BLOCK_ITERATOR &fb_begin,
+	                                                             const BLOCK_ITERATOR &fb_end) {
+		duckdb_ska_sort::ska_sort(fb_begin, fb_end, ska_extract_key, merge, sort_ties);
 	};
 	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback, merge);
 
