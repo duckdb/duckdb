@@ -34,6 +34,8 @@ public:
 	bool error_missing_key = false;
 	//! Throws an error if an object has a key we didn't know about
 	bool error_unknown_key = false;
+	//! Matches object keys to names ignoring ASCII case
+	bool case_insensitive_keys = false;
 
 	//! Whether to delay the error when transforming (e.g., when non-strict casting or reading from file)
 	bool delay_error = false;

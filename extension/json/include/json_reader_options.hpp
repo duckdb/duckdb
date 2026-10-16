@@ -121,6 +121,8 @@ struct JSONReaderOptions {
 	idx_t maximum_sample_files = 32;
 	//! Whether we auto-detect and convert JSON strings to integers
 	bool convert_strings_to_integers = false;
+	//! Whether object keys are matched to the columns ignoring ASCII case (requires "columns")
+	bool case_insensitive_keys = false;
 	//! Whether GeoJSON geometry fragments are inferred as the GEOMETRY type, and Features are unnested into
 	//! geometry + property columns. Unset means "decide from the file name" (.geojson / .geojsonl)
 	optional<bool> geojson;
