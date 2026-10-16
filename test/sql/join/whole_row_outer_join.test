@@ -194,6 +194,22 @@ SELECT count(*) FROM l LEFT JOIN r ON false;
 ----
 3
 
+# Empty projections preserve cardinality across multiple chunks and unmatched rows.
+query I
+SELECT count(*) FROM range(10000) l LEFT JOIN r ON true;
+----
+20000
+
+query I
+SELECT count(*) FROM range(10000) l LEFT JOIN (SELECT * FROM r WHERE false) r ON true;
+----
+10000
+
+query I
+SELECT count(*) FROM (SELECT * FROM l WHERE false) l LEFT JOIN r ON true;
+----
+0
+
 statement ok
 PRAGMA enable_optimizer;
 
