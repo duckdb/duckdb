@@ -160,6 +160,7 @@ bool LocalTableStorage::IsBulkAppend() const {
 ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
                                              TableIndexList &index_list, const vector<LogicalType> &table_types,
                                              row_t &start_row) {
+	D_ASSERT(!index_list.Empty());
 	// We only scan the indexed columns: mapped_column_ids lists them (sorted for a deterministic order),
 	// and the scan below produces index_chunk in that order, i.e., index_chunk.data[i] holds the data of
 	// the table's physical column mapped_column_ids[i].
@@ -206,8 +207,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, Table
 	auto &collection = *row_groups->collection;
 	auto error = AppendToIndexes(transaction, collection, index_list, table.GetTypes(), append_state.current_row);
 	if (error.HasError()) {
-		// a returned error means the index append removed the failing chunk's keys before
-		// returning: remove the keys of the chunks appended before it
+		// the failing chunk's keys were already removed; revert the chunks appended before it
 		RevertIndexAppend(transaction, append_state.row_start, append_state.current_row);
 	}
 	return error;
@@ -569,8 +569,6 @@ static void ThrowOnForcedFlushAppendFailure(DataTable &table) {
 	}
 }
 
-//! Flushes the transaction-local rows of a table into the shared table and its indexes at commit.
-//! A failure either leaves both unchanged (a retryable error) or invalidates the database.
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state) {
 	if (storage.is_dropped) {
 		storage.Rollback();
@@ -587,15 +585,14 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 
 	TableAppendState append_state;
 	table.AppendLock(transaction, append_state);
+	// A bulk append (at least one full row group, no deletes) moves the storage over directly.
+	// Appends to an empty table are also merged if the table cannot be written to disk
+	// (temporary / in-memory / read-only, e.g. WAL replay of a read-only attach) - there are
+	// no optimistically written blocks to manage, and merging avoids re-appending row by row.
 	const bool merge_storage =
 	    storage.IsBulkAppend() || (append_state.row_start == 0 && storage.deleted_rows == 0 && !storage.WritesToDisk());
 	if (merge_storage) {
-		// bulk append (at least one full row group, no deletes): move over the storage directly.
-		// Appends to an empty table are also merged directly if the table cannot be written to
-		// disk (temporary / in-memory / read-only, e.g. WAL replay of a read-only attach) -
-		// there are no optimistically written blocks to manage, and merging avoids re-appending
-		// row by row.
-		// first flush any outstanding blocks
+		// flush any outstanding blocks before merging
 		storage.FlushBlocks();
 	} else {
 		// check if we have written data
@@ -605,11 +602,9 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// flushed a partial row group that does not qualify as a bulk append
 		storage.Rollback();
 	}
-	// The code below publishes the local rows into the shared indexes and the shared table.
-	// Rollback can only undo changes recorded in the undo buffer, and the append is only
-	// recorded there once PushAppend completes. Until then, a returned error means the shared
-	// state was restored and the commit can be retried; anything thrown may have left changes
-	// that a rollback cannot revert and invalidates the database (the catch below).
+	// Rollback can only undo changes recorded in the undo buffer, which happens in PushAppend.
+	// Until then, a returned error means the shared state was restored (retryable commit failure);
+	// anything thrown may have left unrevertable changes and invalidates the database.
 	ErrorData retryable_error;
 	try {
 		retryable_error = storage.AppendToIndexes(transaction, append_state);

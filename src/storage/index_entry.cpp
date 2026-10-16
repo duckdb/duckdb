@@ -31,7 +31,10 @@ void IndexEntry::Append(DataChunk &chunk, Vector &row_ids) {
 		return;
 	}
 	auto &bound_index = owned_index->Cast<BoundIndex>();
-	bound_index.Append(chunk, row_ids);
+	auto error = bound_index.Append(chunk, row_ids);
+	if (error.HasError()) {
+		error.Throw();
+	}
 }
 
 ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr<IndexEntry> &delete_entry,
@@ -89,8 +92,7 @@ ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr
 			error = bound_index.Append(chunk, row_ids, index_append_info);
 		}
 	} catch (ConstraintException &ex) {
-		// a conflict leaves the index unchanged; any other exception may leave a partial
-		// append behind and must propagate as a throw
+		// a conflict leaves the index unchanged; any other exception may leave a partial append and must throw
 		error = ErrorData(ex);
 	}
 	return error;

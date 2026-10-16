@@ -142,7 +142,7 @@ public:
 	                                 vector<StorageIndex> &mapped_column_ids, DataTableInfo &data_table_info);
 	//! Reference the indexed columns of a table chunk.
 	static void ReferenceIndexChunk(DataChunk &table_chunk, DataChunk &index_chunk,
-	                                vector<StorageIndex> &mapped_column_ids);
+	                                const vector<StorageIndex> &mapped_column_ids);
 	//! Reference the columns of an index chunk in a table chunk; the inverse of ReferenceIndexChunk.
 	static void ReferenceTableChunk(DataChunk &table_chunk, DataChunk &index_chunk,
 	                                const vector<StorageIndex> &mapped_column_ids);

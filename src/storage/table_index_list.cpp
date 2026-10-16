@@ -501,13 +501,13 @@ unordered_set<column_t> TableIndexList::GetIndexedColumns() const {
 
 vector<StorageIndex> TableIndexList::GetSortedIndexedColumns() const {
 	auto indexed_columns = GetIndexedColumns();
-	vector<StorageIndex> mapped_column_ids;
-	mapped_column_ids.reserve(indexed_columns.size());
+	vector<StorageIndex> column_ids;
+	column_ids.reserve(indexed_columns.size());
 	for (auto &col : indexed_columns) {
-		mapped_column_ids.emplace_back(col);
+		column_ids.emplace_back(col);
 	}
-	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
-	return mapped_column_ids;
+	std::sort(column_ids.begin(), column_ids.end());
+	return column_ids;
 }
 
 vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndexWriter &writer) {
@@ -594,7 +594,8 @@ void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<L
 }
 
 void TableIndexList::ReferenceIndexChunk(DataChunk &table_chunk, DataChunk &index_chunk,
-                                         vector<StorageIndex> &mapped_column_ids) {
+                                         const vector<StorageIndex> &mapped_column_ids) {
+	D_ASSERT(index_chunk.ColumnCount() == mapped_column_ids.size());
 	for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
 		auto col_id = mapped_column_ids[i].GetPrimaryIndex();
 		index_chunk.data[i].Reference(table_chunk.data[col_id]);

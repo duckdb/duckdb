@@ -240,6 +240,8 @@ private:
 	bool synced_flushed_blocks = false;
 
 private:
+	//! Flushes the transaction-local rows of a table into the shared table and its indexes at commit.
+	//! A failure either leaves both unchanged (a retryable error) or invalidates the database.
 	void Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state);
 };
 

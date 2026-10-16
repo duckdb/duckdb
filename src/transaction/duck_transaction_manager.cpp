@@ -461,6 +461,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 		auto rollback_error = transaction.Rollback();
 		if (rollback_error.HasError()) {
+			// invalidate under the commit locks, as above
 			ValidChecker::Invalidate(db.GetDatabase(), rollback_error.RawMessage());
 			throw FatalException(
 			    "Failed to rollback transaction. Cannot continue operation.\nOriginal Error: %s\nRollback Error: %s",
