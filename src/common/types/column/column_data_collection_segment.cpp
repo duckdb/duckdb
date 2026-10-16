@@ -12,6 +12,8 @@ namespace duckdb {
 ColumnDataListChildBuffer::ColumnDataListChildBuffer(AllocatedData &&data, count_t count, idx_t type_size)
     : StandardVectorBuffer(std::move(data), count, type_size) {
 	buffer_type = VectorBufferType::SHARED_DATA_BUFFER;
+	// the validity capacity must cover all entries, even while no mask is allocated (all-valid data)
+	validity.Resize(count);
 }
 
 ColumnDataListChildBuffer::ColumnDataListChildBuffer(buffer_ptr<VectorBuffer> owner_p, count_t count, idx_t type_size)
@@ -19,10 +21,8 @@ ColumnDataListChildBuffer::ColumnDataListChildBuffer(buffer_ptr<VectorBuffer> ow
 	D_ASSERT(owner->GetBufferType() == VectorBufferType::SHARED_DATA_BUFFER);
 	D_ASSERT(owner->Size() == count);
 	buffer_type = VectorBufferType::SHARED_DATA_BUFFER;
-	auto owner_validity = owner->GetValidityMask().GetData();
-	if (owner_validity) {
-		validity.Initialize(owner_validity, count);
-	}
+	// share the owner's validity, including its capacity covering all entries
+	validity.Initialize(owner->GetValidityMask());
 }
 
 ColumnDataCollectionSegment::ColumnDataCollectionSegment(shared_ptr<ColumnDataAllocator> allocator_p,
