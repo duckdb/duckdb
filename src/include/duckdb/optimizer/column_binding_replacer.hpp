@@ -44,6 +44,9 @@ public:
 	void Add(const ReplacementBinding &replacement);
 	void Merge(const BindingReplacementGraph &replacements);
 	void AddTo(ColumnBindingReplacer &replacer) const;
+	//! Collapse the graph to single edges that resolve into the given output boundary, dropping edges that do not.
+	//! Resolution at any enclosing boundary is unaffected because operators above cannot see bindings dropped here.
+	BindingReplacementGraph ScopedToBoundary(const vector<ColumnBinding> &boundary) const;
 
 	bool Empty() const {
 		return replacement_bindings.empty();

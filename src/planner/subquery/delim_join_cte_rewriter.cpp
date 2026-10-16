@@ -1152,7 +1152,7 @@ bool GeneratedDedupRefEliminator::RewriteSubtree(unique_ptr<LogicalOperator> &op
 		if (RewriteSubtree(op->children[child_idx], preserve_selected_domain, child_replacements, child_under_aggregate,
 		                   under_evidence_side)) {
 			ColumnBindingRewrite::ApplyToChild(op, child_idx, std::move(old_child_bindings), child_replacements);
-			replacements.Merge(child_replacements);
+			replacements.Merge(child_replacements.ScopedToBoundary(op->children[child_idx]->GetColumnBindings()));
 			rewritten = true;
 		}
 	}
@@ -2453,7 +2453,7 @@ bool GeneratedDomainJoinEliminator::TryRewriteOnce(unique_ptr<LogicalOperator> &
 		if (TryRewriteOnce(child, child_replacements, child_under_aggregate, child_under_evidence_side,
 		                   child_negated_marker_filter_above)) {
 			ColumnBindingRewrite::ApplyToChild(op, child_idx, std::move(old_child_bindings), child_replacements);
-			replacements.Merge(child_replacements);
+			replacements.Merge(child_replacements.ScopedToBoundary(op->children[child_idx]->GetColumnBindings()));
 			return true;
 		}
 	}
@@ -2824,7 +2824,8 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr
 		auto child_replacements = RewriteDelimJoinsToCTEs(child, rewrite_root, child_null_rejecting_filter_above,
 		                                                  child_preserve_evidence_side);
 		ColumnBindingRewrite::ApplyToChild(plan, child_idx, std::move(old_child_bindings), child_replacements);
-		output_replacements.Merge(child_replacements);
+		// Scope to the child's output boundary: operators above cannot see bindings that no longer resolve into it
+		output_replacements.Merge(child_replacements.ScopedToBoundary(plan->children[child_idx]->GetColumnBindings()));
 	}
 	if (plan->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		auto &join = plan->Cast<LogicalComparisonJoin>();
@@ -2837,7 +2838,7 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr
 		}
 		auto materialize_replacements = MaterializeDelimJoinAsCTE(
 		    plan, rewrite_root, null_rejecting_filter_above, preserve_evidence_side, preserve_nested_evidence_side);
-		output_replacements.Merge(materialize_replacements);
+		output_replacements.Merge(materialize_replacements.ScopedToBoundary(plan->GetColumnBindings()));
 	}
 	return output_replacements;
 }
