@@ -108,10 +108,12 @@ select try(if(random() > 2.0, '123', 'abc')::TINYINT)
 ----
 TRY can not be used in combination with a volatile function
 
-statement error
+# TRY over an uncorrelated scalar subquery plans the subquery under an error boundary
+# see test/sql/subquery/scalar/test_try_subquery.test
+query I
 select try(CAST((select 'ABC') as INTEGER))
 ----
-TRY can not be used in combination with a scalar subquery
+NULL
 
 # Aggregates or plain column references are also not allowed.
 
