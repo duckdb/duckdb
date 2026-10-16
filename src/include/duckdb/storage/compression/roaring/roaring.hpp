@@ -445,7 +445,7 @@ public:
 
 protected:
 	void LoadNextRun() {
-		static_cast<READER &>(*this).LoadNextRun();
+		static_cast<READER &>(*this).LoadNextRunInternal();
 	}
 
 protected:
@@ -466,7 +466,7 @@ public:
 	void Verify() const override;
 
 protected:
-	void LoadNextRun();
+	void LoadNextRunInternal();
 
 private:
 	unsafe_array_ptr<const RunContainerRLEPair> data;
@@ -480,7 +480,7 @@ public:
 	                                unsafe_array_ptr<const uint8_t> segments, unsafe_array_ptr<const uint8_t> data);
 
 protected:
-	void LoadNextRun();
+	void LoadNextRunInternal();
 	void Verify() const override;
 
 private:
@@ -500,7 +500,7 @@ public:
 
 public:
 	void LoadNextValue() {
-		static_cast<READER &>(*this).LoadNextValue();
+		static_cast<READER &>(*this).LoadNextValueInternal();
 	}
 
 public:
@@ -568,7 +568,7 @@ public:
 	}
 
 public:
-	void LoadNextValue() {
+	void LoadNextValueInternal() {
 		if (this->array_index >= this->count) {
 			this->finished = true;
 			return;
@@ -604,7 +604,7 @@ public:
 	}
 
 public:
-	void LoadNextValue() {
+	void LoadNextValueInternal() {
 		if (this->array_index >= this->count) {
 			this->finished = true;
 			return;
