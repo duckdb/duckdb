@@ -1,10 +1,11 @@
 # name: test/sql/subquery/scalar/test_try_subquery.test
 # description: TRY over scalar subqueries is rewritten into an ordinary subquery before flattening.
-# description: Plain projections get TRY pushed onto the projected expression. Aggregate projections
-# description: gate the result on HAS_ERROR probes of the aggregate inputs, so an input error turns
-# description: the aggregated result into NULL. Errors outside these positions (WHERE, ORDER BY, the
-# description: projection above an aggregation, the one-row cardinality check) propagate deliberately.
 # group: [scalar]
+
+# Plain projections get TRY pushed onto the projected expression. Aggregate projections
+# gate the result on HAS_ERROR probes of the aggregate inputs, so an input error turns
+# the aggregated result into NULL. Errors outside these positions (WHERE, ORDER BY, the
+# projection above an aggregation, the one-row cardinality check) propagate deliberately.
 
 statement ok
 CREATE TABLE integers(i INTEGER);

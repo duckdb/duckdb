@@ -57,8 +57,7 @@ void ExpressionBinder::RewriteTrySubqueryExpression(unique_ptr<ParsedExpression>
 		case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
 			has_aggregate = true;
 			if (function.Filter()) {
-				throw BinderException(function,
-				                      "TRY over a subquery with an aggregate FILTER clause is not supported");
+				throw BinderException(function, "TRY over a subquery with an aggregate FILTER clause is not supported");
 			}
 			if (function.OrderBy() && !function.OrderBy()->orders.empty()) {
 				throw BinderException(function, "TRY over a subquery with an ordered aggregate is not supported");
@@ -87,9 +86,8 @@ void ExpressionBinder::RewriteTrySubqueryExpression(unique_ptr<ParsedExpression>
 	default:
 		break;
 	}
-	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		RewriteTrySubqueryExpression(child, gates, has_aggregate);
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { RewriteTrySubqueryExpression(child, gates, has_aggregate); });
 }
 
 //! TRY over a scalar subquery is rewritten before the subquery is bound and flattened. In the plain projection
