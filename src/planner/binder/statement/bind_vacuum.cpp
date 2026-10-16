@@ -1,3 +1,4 @@
+#include "duckdb/planner/table_binding.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/statement/vacuum_statement.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -57,7 +58,10 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 			    col.GetName());
 		}
 		non_generated_column_names.emplace_back(col_name);
-		ColumnRefExpression colref(col_name, table.name);
+		// qualify with the table's binding, whose alias is the name the statement used (a redirect may differ from
+		// the table's own name)
+		auto binding = bind_context.GetMatchingBinding(col_name);
+		ColumnRefExpression colref(col_name, binding->GetBindingAlias());
 		auto result = bind_context.BindColumn(colref, 0);
 		if (result.HasError()) {
 			result.error.Throw();

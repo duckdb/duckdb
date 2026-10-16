@@ -101,6 +101,10 @@ public:
 	void AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
 	                  const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids, TableCatalogEntry &entry,
 	                  virtual_column_map_t virtual_columns);
+	//! Adds a base table under an alias that is not derived from the entry (a table reached through a redirect)
+	void AddBaseTable(TableIndex index, BindingAlias alias, const vector<Identifier> &names,
+	                  const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids, TableCatalogEntry &entry,
+	                  virtual_column_map_t virtual_columns);
 	//! Adds a call to a table function with the given alias to the BindContext.
 	void AddTableFunction(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
 	                      const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,

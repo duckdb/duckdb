@@ -36,7 +36,6 @@ public:
 	Value comment_value;
 
 public:
-	optional_ptr<CatalogEntry> TryResolveCatalogEntry(CatalogEntryRetriever &retriever);
 	unique_ptr<AlterInfo> Copy() const override;
 	CatalogType GetCatalogType() const override;
 	string ToString() const override;

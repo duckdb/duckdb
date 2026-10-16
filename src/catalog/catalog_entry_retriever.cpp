@@ -17,6 +17,15 @@ optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(const EntryLookupInfo
 	return ReturnAndCallback(Catalog::GetEntry(*this, lookup_info, on_entry_not_found));
 }
 
+CatalogEntryLookup CatalogEntryRetriever::ResolveEntry(const EntryLookupInfo &lookup_info,
+                                                       OnEntryNotFound on_entry_not_found) {
+	auto result = Catalog::ResolveEntry(*this, lookup_info, on_entry_not_found);
+	// a redirected lookup depends on both entries: the one the name resolved to and the one that serves it
+	ReturnAndCallback(result.redirected_from);
+	ReturnAndCallback(result.entry);
+	return result;
+}
+
 LogicalType CatalogEntryRetriever::GetType(const QualifiedName &name, OnEntryNotFound on_entry_not_found) {
 	EntryLookupInfo lookup_info(CatalogType::TYPE_ENTRY, name);
 	auto result = GetEntry(lookup_info, on_entry_not_found);

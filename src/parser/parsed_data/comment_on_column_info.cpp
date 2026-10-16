@@ -1,6 +1,5 @@
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry_retriever.hpp"
 
 namespace duckdb {
 
@@ -37,18 +36,6 @@ string SetColumnCommentInfo::ToString() const {
 	result += comment_value.ToSQLString();
 	result += ";";
 	return result;
-}
-
-optional_ptr<CatalogEntry> SetColumnCommentInfo::TryResolveCatalogEntry(CatalogEntryRetriever &retriever) {
-	EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, GetQualifiedName());
-	auto entry = retriever.GetEntry(lookup_info, if_not_found);
-
-	if (entry) {
-		catalog_entry_type = entry->type;
-		return entry;
-	}
-
-	return nullptr;
 }
 
 // Note: this is a bit of a weird one: the exact type is not yet known: it can be either a view or a column this needs

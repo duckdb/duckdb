@@ -306,6 +306,9 @@ public:
 	//! exist behavior depends on OnEntryNotFound
 	DUCKDB_API static optional_ptr<CatalogEntry>
 	GetEntry(CatalogEntryRetriever &retriever, const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
+	//! GetEntry returning the whole lookup, including the entry a redirected lookup started from
+	DUCKDB_API static CatalogEntryLookup ResolveEntry(CatalogEntryRetriever &retriever,
+	                                                  const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
 	DUCKDB_API static optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const EntryLookupInfo &lookup_info,
 	                                                      OnEntryNotFound if_not_found);
 	DUCKDB_API static CatalogEntry &GetEntry(ClientContext &context, const EntryLookupInfo &lookup_info);
@@ -530,6 +533,15 @@ public:
 	    LookupEntry(CatalogEntryRetriever &retriever, const string &schema, const EntryLookupInfo &lookup_info,
 	                OnEntryNotFound if_not_found);
 
+public:
+	//! Table redirection: a catalog that lists tables another attached catalog serves (a metastore listing Iceberg
+	//! tables next to its own) returns true and sets `target` to the fully qualified name of the same table there.
+	//! A statement-level lookup that allows redirection then binds the target entry; the target is never redirected
+	//! again. The entry of this catalog keeps standing for the table in listings and must follow what statements do
+	//! to the target (a rename, a drop): until it does, the redirect leads nowhere. The default never redirects.
+	DUCKDB_API virtual bool TryRedirectEntry(ClientContext &context, TableCatalogEntry &entry,
+	                                         const EntryLookupInfo &lookup_info, QualifiedName &target);
+
 private:
 	//! Look up an entry within this catalog and handle autoloading and errors
 	optional_ptr<CatalogEntry> GetEntryInCatalog(CatalogEntryRetriever &retriever, const EntryLookupInfo &lookup_info,
@@ -537,6 +549,13 @@ private:
 	//! Lookup an entry in the schema (taken from the lookup_info), returning the entry and schema if they exist
 	virtual CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction,
 	                                                  const EntryLookupInfo &lookup_info);
+	//! Redirect a found table lookup through TryRedirectEntry of the catalog it was found in, when the lookup allows
+	//! it. A redirect that fails is returned as an error. An entry that is not redirected gets the time travel check
+	//! TryLookupEntryInternal deferred for a redirectable lookup; `time_travel_refused` is set when that fails, so
+	//! the caller can move on to its next candidate as it does for any other candidate that refuses the AT clause
+	static CatalogEntryLookup ApplyRedirect(CatalogEntryRetriever &retriever, Catalog &catalog,
+	                                        CatalogEntryLookup result, const EntryLookupInfo &lookup_info,
+	                                        bool &time_travel_refused);
 	//! Looks the entry up within this catalog only, using the schema carried in the lookup_info. Does not resolve the
 	//! catalog by name, so it is safe during WAL replay where the catalog may not yet be registered by name.
 	CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const EntryLookupInfo &lookup_info,
