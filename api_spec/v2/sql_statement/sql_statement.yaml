@@ -133,10 +133,11 @@ functions:
         type: connection
         description: The connection supplying the parser configuration.
       sql:
-        type: char
+        type: str
         indirection: 1
         const: true
-        description: Null-terminated SQL string; may contain any number of statements.
+        kind: IN
+        description: The SQL text; may contain any number of statements. Copied by the call.
       out_iterator:
         type: statement_iterator
         indirection: 1

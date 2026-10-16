@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cstring>
 #include <memory>
+#include <string_view>
 
 // The V2 extension header. By default, (client library, or extension statically linked into DuckDB) this library binds
 // duckdb_v2_* symbols at link time and only needs the header for the loader-interface types of the extension
@@ -268,7 +269,7 @@ namespace {
 }
 
 template <class F, class... ARGS>
-auto CheckedAPICall(F &&func, ARGS &&... args) -> void {
+auto CheckedAPICall(F &&func, ARGS &&...args) -> void {
 	duckdb_v2_error_info_handle err = nullptr;
 	const auto code = func(std::forward<ARGS>(args)..., &err);
 	if (code != DUCKDB_V2_ERROR_NONE) {
@@ -410,7 +411,7 @@ auto ExecutePreparedArrow(duckdb_v2_prepared_statement_handle prepared, const Pa
 // then a buffer with room for the terminator receives the text. The library
 // never allocates, so there is nothing to free.
 template <class F, class... ARGS>
-auto RenderText(F &&func, ARGS &&... args) -> std::string {
+auto RenderText(F &&func, ARGS &&...args) -> std::string {
 	idx_t length = 0;
 	CheckedAPICall(func, args..., static_cast<char *>(nullptr), static_cast<idx_t>(0), &length);
 	std::string out;
@@ -981,9 +982,10 @@ auto StatementIterator::Next() -> SqlStatement {
 	return detail::HandleFactory::Make<SqlStatement>(statement);
 }
 
-auto Connection::ParseSQL(const char *sql) -> StatementIterator {
+auto Connection::ParseSQL(const std::string_view sql) -> StatementIterator {
 	duckdb_v2_statement_iterator_handle iterator = nullptr;
-	CheckedAPICall(duckdb_v2_parse_sql, handle(), sql, &iterator);
+	auto sql_str = ToStr(sql);
+	CheckedAPICall(duckdb_v2_parse_sql, handle(), &sql_str, &iterator);
 	return detail::HandleFactory::Make<StatementIterator>(iterator);
 }
 
@@ -1009,7 +1011,7 @@ static_assert(static_cast<uint8_t>(TokenType::TERMINATOR) == DUCKDB_V2_TOKEN_TYP
 auto Connection::Tokenize(std::string_view sql) const -> TokenList {
 	duckdb_v2_token_iterator_handle iterator = nullptr;
 	auto sql_str = ToStr(sql);
-	CheckedAPICall(duckdb_v2_tokenize_sql, handle(), &sql_str, &iterator);
+	CheckedAPICall(duckdb_v2_tokenize_sql_from_connection, handle(), &sql_str, &iterator);
 	TokenList list;
 	try {
 		while (true) {
