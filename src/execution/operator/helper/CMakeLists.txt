@@ -23,7 +23,6 @@ add_library_unity(
   physical_streaming_limit.cpp
   physical_streaming_sample.cpp
   physical_transaction.cpp
-  physical_try.cpp
   physical_update_extensions.cpp
   physical_vacuum.cpp
   physical_verify_vector.cpp)

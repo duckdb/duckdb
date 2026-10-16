@@ -757,8 +757,7 @@ private:
 	};
 
 	struct StackNode {
-		explicit StackNode(unique_ptr<LogicalOperator> &op_p, bool under_try_p = false)
-		    : op(op_p), child_index(0), under_try(under_try_p || op_p->type == LogicalOperatorType::LOGICAL_TRY) {
+		explicit StackNode(unique_ptr<LogicalOperator> &op_p) : op(op_p), child_index(0) {
 		}
 
 		bool HasMoreChildren() const {
@@ -772,9 +771,6 @@ private:
 
 		unique_ptr<LogicalOperator> &op;
 		idx_t child_index;
-		//! Whether the operator is at or below a TRY error boundary. A boundary subtree executes in a nested
-		//! executor, so a subplan inside it can never be shared with the rest of the plan through a CTE.
-		bool under_try;
 	};
 
 	struct SubplanStats {
@@ -807,7 +803,7 @@ public:
 			if (current.HasMoreChildren()) {
 				auto &child = current.GetNextChild();
 				operator_infos.emplace(child, OperatorInfo(current.op, stack.size()));
-				stack.emplace_back(child, current.under_try);
+				stack.emplace_back(child);
 				continue;
 			}
 
@@ -818,9 +814,7 @@ public:
 				signature = CreatePlanSignature(current.op);
 
 				// Add to subplans (if we got actually got a signature)
-				// Subplans below a TRY boundary are not eligible: the boundary subtree executes in a nested
-				// executor that cannot scan a CTE materialized by the outer plan
-				if (signature && !current.under_try) {
+				if (signature) {
 					const auto current_op_table_index = current.op->GetTableIndex();
 					auto it = subplans.find(*signature);
 					if (it == subplans.end()) {

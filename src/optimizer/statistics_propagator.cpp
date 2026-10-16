@@ -100,17 +100,6 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		result = PropagateStatistics(node.Cast<LogicalWindow>(), node_ptr);
 		break;
-	case LogicalOperatorType::LOGICAL_TRY: {
-		result = PropagateChildren(node, node_ptr);
-		// an execution error below the TRY boundary turns the result into a NULL row
-		for (auto &binding : node.GetColumnBindings()) {
-			auto entry = statistics_map.find(binding);
-			if (entry != statistics_map.end()) {
-				entry->second->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
-			}
-		}
-		break;
-	}
 	default:
 		result = PropagateChildren(node, node_ptr);
 	}

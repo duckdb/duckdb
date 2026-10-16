@@ -53,7 +53,6 @@ add_library_unity(
   logical_update_extensions.cpp
   logical_top_n.cpp
   logical_trigger.cpp
-  logical_try.cpp
   logical_unconditional_join.cpp
   logical_unnest.cpp
   logical_update.cpp

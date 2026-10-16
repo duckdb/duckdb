@@ -52,8 +52,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "COPY_DATABASE";
 	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
 		return "SECURE_VIEW";
-	case LogicalOperatorType::LOGICAL_TRY:
-		return "TRY";
 	case LogicalOperatorType::LOGICAL_JOIN:
 		return "JOIN";
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:

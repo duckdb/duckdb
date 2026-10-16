@@ -341,12 +341,6 @@
     ]
   },
   {
-    "class": "LogicalTry",
-    "base": "LogicalOperator",
-    "enum": "LOGICAL_TRY",
-    "members": []
-  },
-  {
     "class": "LogicalColumnDataGet",
     "base": "LogicalOperator",
     "enum": "LOGICAL_CHUNK_GET",
