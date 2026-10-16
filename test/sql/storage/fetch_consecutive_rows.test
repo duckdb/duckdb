@@ -2,7 +2,7 @@
 # description: Fetching a full vector of consecutive row ids decodes it with one scan; index maintenance and row id fetches stay correct
 # group: [storage]
 
-load __TEST_DIR__/fetch_consecutive_rows.db
+load {TEST_DIR}/fetch_consecutive_rows.db
 
 statement ok
 SET GLOBAL checkpoint_threshold = '10GB';
