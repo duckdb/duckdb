@@ -368,3 +368,75 @@ ORDER BY ws_sold_year,
 LIMIT 100;
 ----
 logical_opt	<REGEX>:.*ANTI.*
+
+# ============================================================================
+# (FK + NOT NULL)
+# ============================================================================
+
+statement ok
+CREATE TABLE dim (
+  id INT PRIMARY KEY,
+  name VARCHAR
+);
+
+statement ok
+CREATE TABLE fact (
+  fid INT PRIMARY KEY,
+  dim_id INT NOT NULL REFERENCES dim(id),
+  val INT
+);
+
+statement ok
+CREATE TABLE fact_nullable (
+  fid INT PRIMARY KEY,
+  dim_id INT REFERENCES dim(id),
+  val INT
+);
+
+statement ok
+CREATE TABLE fact_no_fk (
+  fid INT PRIMARY KEY,
+  dim_id INT NOT NULL,
+  val INT
+);
+
+statement ok
+INSERT INTO dim VALUES (1, 'a'), (2, 'b'), (3, 'c');
+
+statement ok
+INSERT INTO fact VALUES (1, 1, 10), (2, 1, 20), (3, 2, 30);
+
+query II
+EXPLAIN SELECT f.fid, d.name FROM fact f LEFT JOIN dim d ON f.dim_id = d.id
+----
+logical_opt	<REGEX>:.*INNER.*
+
+query II
+EXPLAIN SELECT f.fid, d.name FROM fact_nullable f LEFT JOIN dim d ON f.dim_id = d.id
+----
+logical_opt	<!REGEX>:.*INNER.*
+
+query II
+EXPLAIN SELECT f.fid, d.name FROM fact_no_fk f LEFT JOIN dim d ON f.dim_id = d.id
+----
+logical_opt	<!REGEX>:.*INNER.*
+
+query II
+EXPLAIN SELECT d.name, f.fid FROM dim d RIGHT JOIN fact f ON d.id = f.dim_id
+----
+logical_opt	<REGEX>:.*INNER.*
+
+query II
+EXPLAIN SELECT f.fid, d.name FROM fact f FULL OUTER JOIN dim d ON f.dim_id = d.id
+----
+logical_opt	<!REGEX>:.*FULL.*
+
+query II
+EXPLAIN SELECT d.name, f.fid FROM dim d FULL OUTER JOIN fact f ON d.id = f.dim_id
+----
+logical_opt	<!REGEX>:.*FULL.*
+
+query II
+EXPLAIN SELECT f.fid, d.name FROM fact_no_fk f FULL OUTER JOIN dim d ON f.dim_id = d.id
+----
+logical_opt	<REGEX>:.*FULL.*
