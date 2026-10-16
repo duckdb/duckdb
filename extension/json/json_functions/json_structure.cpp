@@ -677,8 +677,8 @@ static void GetStructureFunctionInternal(ScalarFunctionSet &set, const LogicalTy
 ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 	ScalarFunctionSet set("json_structure");
 	GetStructureFunctionInternal(set, LogicalType::VARCHAR);
-	set.SetFallible();
 	GetStructureFunctionInternal(set, LogicalType::JSON());
+	set.SetFallible();
 	return set;
 }
 
