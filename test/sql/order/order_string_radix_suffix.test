@@ -58,3 +58,34 @@ FROM (SELECT s, row_number() OVER () AS n FROM (SELECT s FROM strings ORDER BY s
 true
 
 endloop
+
+# Multiple columns and raw BLOB suffixes must preserve the cached prefix and payload.
+foreach prefix 7 15 63 255
+
+statement ok
+CREATE OR REPLACE TABLE binary_strings AS
+SELECT i, i%2 AS g, (i*977)%4096 AS v, (i//4096)%4 AS t,
+       encode(repeat('a',{prefix})) || from_hex(lpad(hex((i*977)%4096),4,'0')) AS b
+FROM range(32768) r(i)
+ORDER BY hash(i);
+
+foreach external false true
+
+statement ok
+SET debug_force_external={external};
+
+query I
+SELECT list(i ORDER BY g DESC, b, t DESC, i) = list(i ORDER BY g DESC, v, t DESC, i)
+FROM binary_strings;
+----
+true
+
+query I
+SELECT list(b ORDER BY n) = (SELECT list(b ORDER BY v) FROM binary_strings)
+FROM (SELECT b, row_number() OVER () AS n FROM (SELECT b FROM binary_strings ORDER BY b));
+----
+true
+
+endloop
+
+endloop

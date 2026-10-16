@@ -231,8 +231,8 @@ struct SkaExtractKey {
 
 template <class SORT_KEY>
 struct SkaExtractSuffixKey : SkaExtractKey<SORT_KEY> {
-	SkaExtractSuffixKey(const SkaExtractKey<SORT_KEY> &extract_key, idx_t offset_p, uint64_t varying_bits_p)
-	    : SkaExtractKey<SORT_KEY>(extract_key), offset(offset_p), varying_bits(varying_bits_p) {
+	SkaExtractSuffixKey(const SkaExtractKey<SORT_KEY> &extract_key, uint64_t varying_bits_p)
+	    : SkaExtractKey<SORT_KEY>(extract_key), varying_bits(varying_bits_p) {
 		this->ska_sort_width = sizeof(uint64_t);
 		this->requires_next_sort = true;
 	}
@@ -271,16 +271,11 @@ struct SkaExtractSuffixKey : SkaExtractKey<SORT_KEY> {
 		              offset - SORT_KEY::INLINE_LENGTH) == 0;
 	}
 
-	uint64_t operator()(const SORT_KEY &key) const {
-		return ExtractWord(key, offset);
-	}
-
 	bool ByteIsSkippable(const idx_t &byte_offset) const {
 		D_ASSERT(byte_offset < sizeof(uint64_t));
 		return ((varying_bits >> ((sizeof(uint64_t) - 1 - byte_offset) * 8)) & 0xff) == 0;
 	}
 
-	idx_t offset;
 	uint64_t varying_bits;
 };
 
@@ -338,13 +333,32 @@ static void SortTiedBucket(ClientContext &context, ITERATOR begin, ITERATOR end,
 			if (++scanned % STANDARD_VECTOR_SIZE == 0) {
 				context.InterruptCheck();
 			}
-			if (!SUFFIX::PrefixMatches(samples[0], *it, offset)) {
+			if (it->part0 != samples[0].part0 || !SUFFIX::PrefixMatches(samples[0], *it, offset)) {
 				duckdb_ska_sort::detail::StdSortFallback(begin, end, extract_key, merge);
 				return;
 			}
 			varying_bits |= words[0] ^ SUFFIX::ExtractWord(*it, offset);
 		}
-		SUFFIX suffix(extract_key, offset, varying_bits);
+		// The common first word can cache the suffix during this synchronous refinement.
+		struct PrefixRestorer {
+			ITERATOR begin;
+			ITERATOR end;
+			uint64_t prefix;
+
+			~PrefixRestorer() {
+				for (auto it = begin; it != end; ++it) {
+					it->part0 = prefix;
+				}
+			}
+		} restore {begin, end, samples[0].part0};
+		scanned = 0;
+		for (auto it = begin; it != end; ++it) {
+			if (++scanned % STANDARD_VECTOR_SIZE == 0) {
+				context.InterruptCheck();
+			}
+			it->part0 = SUFFIX::ExtractWord(*it, offset);
+		}
+		SUFFIX suffix(extract_key, varying_bits);
 		duckdb_ska_sort::ska_sort(begin, end, suffix, merge);
 	}
 }
