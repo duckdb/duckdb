@@ -35,6 +35,7 @@ class RowGroupWriter;
 class StorageManager;
 class TableDataWriter;
 class TableStorageInfo;
+class UpdateSegment;
 struct DataTableInfo;
 struct PrefetchState;
 struct RowGroupWriteInfo;
