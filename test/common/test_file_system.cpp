@@ -696,7 +696,8 @@ TEST_CASE("Test path canonicalization with symlinks", "[file_system]") {
 	TestCreateSymlink(fs->JoinPath(real_dir, "dangling_chain"),
 	                  fs->JoinPath(fs->JoinPath(fs->GetWorkingDirectory(), real_dir), "dangling_link"), false);
 	test_cases.emplace_back("real_dir/dangling_link", "real_dir/missing_file", "follow dangling symlink");
-	test_cases.emplace_back("fake_dir/dangling_link", "real_dir/missing_file", "follow dangling symlink in symlink dir");
+	test_cases.emplace_back("fake_dir/dangling_link", "real_dir/missing_file",
+	                        "follow dangling symlink in symlink dir");
 	test_cases.emplace_back("real_dir/dangling_chain", "real_dir/missing_file", "follow chain of dangling symlinks");
 
 	// prepend everything with the test dir
