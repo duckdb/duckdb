@@ -45,7 +45,7 @@ static unique_ptr<FunctionData> PragmaMetadataInfoBind(ClientContext &context, T
 		db_name = Identifier(StringValue::Get(input.inputs[0]));
 	}
 	auto &catalog = Catalog::GetCatalog(context, db_name);
-	if (!catalog.GetAttached().HasStorageManager()) {
+	if (catalog.GetAttached().IsSystem() || catalog.GetAttached().IsTemporary()) {
 		throw BinderException("Database \"%s\" does not have storage", db_name.GetIdentifierName());
 	}
 	auto result = make_uniq<PragmaMetadataFunctionData>();
