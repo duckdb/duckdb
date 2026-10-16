@@ -168,6 +168,7 @@ protected:
 	PhysicalOperator &CreatePlan(LogicalPragma &op);
 	PhysicalOperator &CreatePlan(LogicalSample &op);
 	PhysicalOperator &CreatePlan(LogicalSecureView &op);
+	PhysicalOperator &CreatePlan(LogicalTry &op);
 	PhysicalOperator &CreatePlan(LogicalSet &op);
 	PhysicalOperator &CreatePlan(LogicalReset &op);
 	PhysicalOperator &CreatePlan(LogicalAlter &op);
