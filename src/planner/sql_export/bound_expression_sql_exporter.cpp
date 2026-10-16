@@ -93,6 +93,19 @@ LogicalPlanVerificationIssue BoundExpressionSQLExportState::UnsupportedFeature(c
 }
 
 LogicalPlanVerificationIssue
+BoundExpressionSQLExportState::SensitiveParameterIssue(const LogicalPlanVerificationPath &path,
+                                                       const Identifier &function_name, const Identifier &parameter) {
+	auto issue = UnsupportedFeature(
+	    path, "sensitive_parameter",
+	    StringUtil::Format("The invocation of \"%s\" passes a value to the sensitive parameter \"%s\", "
+	                       "which must not appear in generated SQL",
+	                       function_name.GetIdentifierName(), parameter.GetIdentifierName()));
+	issue.facts.emplace_back("function", Value(function_name.GetIdentifierName()));
+	issue.facts.emplace_back("parameter", Value(parameter.GetIdentifierName()));
+	return issue;
+}
+
+LogicalPlanVerificationIssue
 BoundExpressionSQLExportState::UnsupportedFunction(const LogicalPlanVerificationPath &path,
                                                    LogicalPlanVerificationFunctionIdentity identity, string message) {
 	return SQLExportHelpers::MakeIssue(
