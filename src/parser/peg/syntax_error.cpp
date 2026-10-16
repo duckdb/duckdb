@@ -98,8 +98,9 @@ const char *CategoryDescription(SuggestionState type) {
 	}
 }
 
-//! Run the grammar over `statement_tokens` without building a parse tree; `furthest` receives the highest
-//! token index reached. With `suggestions`, the autocomplete cursor at the end of the tokens collects them.
+//! Run the grammar over `statement_tokens`; `furthest` receives the highest token index reached.
+//! With `suggestions`, the autocomplete cursor at the end of the tokens collects them.
+//! The parse tree is built and discarded: RECOGNIZE_ONLY mode backtracks several times more on nested input.
 bool Recognize(vector<MatcherToken> &statement_tokens, const CompiledGrammar &grammar, const ParserOptions &options,
                idx_t &furthest, optional_ptr<vector<MatcherSuggestion>> suggestions = nullptr) {
 	vector<MatcherSuggestion> unused_suggestions;
@@ -109,7 +110,7 @@ bool Recognize(vector<MatcherToken> &statement_tokens, const CompiledGrammar &gr
 	ParserPackratCache packrat_cache(packrat_allocator);
 	furthest = 0;
 	MatchContext match_context(suggestions ? *suggestions : unused_suggestions, parse_result_allocator,
-	                           process_allocator, furthest, MatchMode::RECOGNIZE_ONLY, options.identifier_case_mode,
+	                           process_allocator, furthest, MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode,
 	                           &packrat_cache);
 	match_context.memoizable_suggestions = suggestions != nullptr;
 	TokenIterator token_iterator(statement_tokens);

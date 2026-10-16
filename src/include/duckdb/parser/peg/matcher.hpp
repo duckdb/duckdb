@@ -24,6 +24,8 @@
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 
+#include <map>
+
 namespace duckdb {
 class ClientContext;
 class PEGTransformerFactory;
@@ -173,6 +175,8 @@ struct MatchContext {
 	//! Ignore rule-level suggestion suppression, so the suggestions a rule adds depend only on its
 	//! position and the packrat cache stays valid while collecting them
 	bool memoizable_suggestions = false;
+	//! With memoizable_suggestions: suggestion walks already done, keyed by matcher and active label
+	std::map<std::pair<const Matcher *, const string *>, SuggestionType> walked_suggestions;
 };
 
 struct MatchState {
@@ -313,6 +317,8 @@ public:
 	}
 	virtual SuggestionType AddSuggestion(MatchState &state) const;
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
+	//! AddSuggestionInternal, with the matcher's label (if any) applied to the suggestions it adds
+	SuggestionType AddLabelledSuggestion(MatchState &state) const;
 	virtual string ToString() const = 0;
 	void Print() const;
 

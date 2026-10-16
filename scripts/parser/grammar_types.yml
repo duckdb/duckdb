@@ -1952,7 +1952,8 @@ packrat_memoized_rules:
   - ReservedSchemaQualification
 
 # rule_labels: see Matcher::SetLabel. When a syntax error lists what the parser expected at the failure point,
-# every alternative inside a labelled rule is summarised by the label instead of being spelled out.
+# every alternative inside a labelled rule is summarised by the label instead of being spelled out. Only label
+# rules that cannot match empty input and that accept a plain identifier somewhere.
 rule_labels:
   an expression:
     - Expression
