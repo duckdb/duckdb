@@ -2671,6 +2671,9 @@ public:
 	                                                    GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeIsOtherOperatorTailTrampoline(PEGTransformer &transformer,
 	                                                                             GeneratedTransformProcess &process);
+	static void InitializeIsCastTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeIsCastTailTrampoline(PEGTransformer &transformer,
+	                                                                    GeneratedTransformProcess &process);
 	static void InitializeIsTestTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeIsTestTrampoline(PEGTransformer &transformer,
 	                                                                GeneratedTransformProcess &process);
@@ -2716,6 +2719,13 @@ public:
 	                                                         GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue>
 	FinalizeComparisonExpressionTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeComparisonOperandTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeComparisonOperandTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeNotComparisonOperandTrampoline(PEGTransformer &transformer,
+	                                                     GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeNotComparisonOperandTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
 	static void InitializeComparisonOperatorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeComparisonOperatorTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
@@ -5044,7 +5054,7 @@ public:
 	static unique_ptr<DropStatement> TransformDropTableFunction(PEGTransformer &transformer,
 	                                                            const CatalogType &comment_macro_table,
 	                                                            const optional<bool> &if_exists,
-	                                                            const vector<Identifier> &table_function_name);
+	                                                            const vector<QualifiedName> &table_function_name);
 	static unique_ptr<DropStatement> TransformDropFunction(PEGTransformer &transformer, const bool &function_type_macro,
 	                                                       const optional<bool> &if_exists,
 	                                                       const vector<QualifiedName> &function_identifier);
@@ -5347,7 +5357,7 @@ public:
 	TransformColDefAndExpressionTail(PEGTransformer &transformer,
 	                                 unique_ptr<ParsedExpression> is_distinct_from_expression);
 	static unique_ptr<ParsedExpression> TransformLogicalNotExpression(PEGTransformer &transformer,
-	                                                                  optional<vector<bool>> not_expression,
+	                                                                  const optional<vector<bool>> &not_expression,
 	                                                                  unique_ptr<ParsedExpression> is_expression);
 	static vector<bool> TransformNotExpression(PEGTransformer &transformer, const vector<bool> &not_keyword);
 	static bool TransformNotKeyword(PEGTransformer &transformer);
@@ -5364,6 +5374,8 @@ public:
 	                                                  ComparisonExpressionTail comparison_expression_tail);
 	static IsExpressionTail TransformIsOtherOperatorTail(PEGTransformer &transformer,
 	                                                     OtherOperatorTail other_operator_tail);
+	static IsExpressionTail TransformIsCastTail(PEGTransformer &transformer,
+	                                            unique_ptr<ParsedExpression> cast_operator);
 	static unique_ptr<ParsedExpression> TransformIsLiteral(PEGTransformer &transformer, const bool &has_result,
 	                                                       const Value &is_literal_value);
 	static Value TransformUnknownLiteral(PEGTransformer &transformer);
@@ -5382,10 +5394,12 @@ public:
 	static unique_ptr<ParsedExpression>
 	TransformComparisonExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> between_in_like_expression,
 	                              optional<vector<ComparisonExpressionTail>> comparison_expression_tail);
-	static ComparisonExpressionTail
-	TransformComparisonExpressionTail(PEGTransformer &transformer, const ExpressionType &comparison_operator,
-	                                  optional<vector<bool>> not_expression,
-	                                  unique_ptr<ParsedExpression> between_in_like_expression);
+	static ComparisonExpressionTail TransformComparisonExpressionTail(PEGTransformer &transformer,
+	                                                                  const ExpressionType &comparison_operator,
+	                                                                  unique_ptr<ParsedExpression> comparison_operand);
+	static unique_ptr<ParsedExpression> TransformNotComparisonOperand(PEGTransformer &transformer,
+	                                                                  const vector<bool> &not_expression,
+	                                                                  unique_ptr<ParsedExpression> is_expression);
 	static ExpressionType TransformOperatorEqual(PEGTransformer &transformer);
 	static ExpressionType TransformOperatorNotEqual(PEGTransformer &transformer);
 	static ExpressionType TransformOperatorLessThan(PEGTransformer &transformer);
@@ -5396,7 +5410,8 @@ public:
 	    PEGTransformer &transformer, unique_ptr<ParsedExpression> other_operator_expression,
 	    optional<vector<BetweenInLikeOperator>> in_predicate, optional<BetweenInLikeOperator> between_like_op);
 	static BetweenInLikeOperator TransformInPredicate(PEGTransformer &transformer, const bool &has_result,
-	                                                  unique_ptr<ParsedExpression> in_clause);
+	                                                  unique_ptr<ParsedExpression> in_clause,
+	                                                  optional<vector<unique_ptr<ParsedExpression>>> cast_operator);
 	static BetweenInLikeOperator TransformBetweenLikeOp(PEGTransformer &transformer, const bool &has_result,
 	                                                    unique_ptr<ParsedExpression> between_like_op_expression);
 	static unique_ptr<ParsedExpression> TransformLikeClause(PEGTransformer &transformer, const string &like_variations,
@@ -5918,7 +5933,8 @@ public:
 	static unique_ptr<TableRef> TransformValuesRef(PEGTransformer &transformer,
 	                                               const optional<Identifier> &table_alias_colon,
 	                                               unique_ptr<SelectStatement> values_clause,
-	                                               const optional<TableAlias> &table_alias);
+	                                               const optional<TableAlias> &table_alias,
+	                                               optional<unique_ptr<SampleOptions>> sample_clause);
 	static unique_ptr<TableRef> TransformParensTableRef(PEGTransformer &transformer,
 	                                                    const optional<Identifier> &table_alias_colon,
 	                                                    unique_ptr<TableRef> table_ref,
@@ -5980,7 +5996,9 @@ public:
 	                                                     const Identifier &table_function_name);
 	static vector<FunctionArgument>
 	TransformTableFunctionArguments(PEGTransformer &transformer, optional<vector<FunctionArgument>> function_argument);
-	static FunctionArgument TransformNamedFunctionArgument(PEGTransformer &transformer, MacroParameter named_parameter);
+	static FunctionArgument TransformNamedFunctionArgument(PEGTransformer &transformer,
+	                                                       const Identifier &type_func_name,
+	                                                       unique_ptr<ParsedExpression> expression);
 	static FunctionArgument TransformPositionalFunctionArgument(PEGTransformer &transformer,
 	                                                            unique_ptr<ParsedExpression> expression);
 	static MacroParameter TransformNamedParameter(PEGTransformer &transformer, const Identifier &type_func_name,

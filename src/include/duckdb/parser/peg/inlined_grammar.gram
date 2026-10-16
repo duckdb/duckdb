@@ -1546,7 +1546,7 @@ DropEntries <-
 DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
 
 DropTable <- TableOrView IfExists? List(BaseTableName)
-DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
+DropTableFunction <- CommentMacroTable IfExists? List(QualifiedTableFunction)
 DropFunction <- FunctionTypeMacro IfExists? List(FunctionIdentifier)
 DropSchema <- 'SCHEMA' IfExists? List(QualifiedName)
 DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
@@ -1788,11 +1788,12 @@ NotKeyword <- 'NOT'
 # LEVEL 4
 IsExpression <- IsDistinctFromExpression IsExpressionContinuation?
 IsExpressionContinuation <- IsTest IsExpressionTail*
-IsExpressionTail <- IsTestTail / IsDistinctTail / IsComparisonTail / IsOtherOperatorTail
+IsExpressionTail <- IsTestTail / IsDistinctTail / IsComparisonTail / IsOtherOperatorTail / IsCastTail
 IsTestTail <- IsTest
 IsDistinctTail <- IsDistinctFromTail
 IsComparisonTail <- ComparisonExpressionTail
 IsOtherOperatorTail <- OtherOperatorTail
+IsCastTail <- CastOperator
 IsTest <- IsLiteral / NotNull / IsNull
 IsLiteral <- 'IS' 'NOT'? IsLiteralValue
 IsLiteralValue <- TrueLiteral / FalseLiteral / NullLiteral / UnknownLiteral
@@ -1808,7 +1809,10 @@ IsDistinctFromTail <- IsDistinctFromOp ComparisonExpression
 IsDistinctFromOp <- 'IS' 'NOT'? 'DISTINCT' 'FROM'
 # LEVEL 6
 ComparisonExpression <- BetweenInLikeExpression ComparisonExpressionTail*
-ComparisonExpressionTail <- ComparisonOperator NotExpression? BetweenInLikeExpression
+ComparisonExpressionTail <- ComparisonOperator ComparisonOperand
+ComparisonOperand <- NotComparisonOperand / BetweenInLikeExpression
+# NOT after a comparison operator binds everything up to the IS level: a < NOT b IS NULL is a < (NOT (b IS NULL))
+NotComparisonOperand <- NotExpression IsExpression
 ComparisonOperator <-
     OperatorEqual /
     OperatorNotEqual /
@@ -1825,7 +1829,7 @@ OperatorLessThanEquals <- '<='
 OperatorGreaterThanEquals <- '>='
 # LEVEL 7
 BetweenInLikeExpression <- OtherOperatorExpression InPredicate* BetweenLikeOp?
-InPredicate <- 'NOT'? InClause
+InPredicate <- 'NOT'? InClause CastOperator*
 BetweenLikeOp <- 'NOT'? BetweenLikeOpExpression
 BetweenLikeOpExpression <- BetweenClause / LikeClause
 LikeClause <- LikeVariations OtherOperatorExpression EscapeClause?
@@ -2247,7 +2251,7 @@ TableRef <- InnerTableRef JoinOrPivot*
 TableSubquery <- TableAliasColon? Lateral? SubqueryReference TableAlias? SampleClause?
 BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?
 TableAliasColon <- ColIdOrString ':'
-ValuesRef <- TableAliasColon? ValuesClause TableAlias?
+ValuesRef <- TableAliasColon? ValuesClause TableAlias? SampleClause?
 ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
 
 JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause / TableMatchRecognizeClause
@@ -2282,7 +2286,7 @@ WithOrdinality <- 'WITH' 'ORDINALITY'
 QualifiedTableFunction <- CatalogQualification? SchemaQualification* TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
 FunctionArgument <- NamedFunctionArgument / PositionalFunctionArgument
-NamedFunctionArgument <- NamedParameter
+NamedFunctionArgument <- TypeFuncName NamedParameterAssignment Expression
 PositionalFunctionArgument <- Expression
 NamedParameter <- TypeFuncName Type? NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
