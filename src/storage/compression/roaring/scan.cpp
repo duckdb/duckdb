@@ -190,56 +190,51 @@ void BitsetContainerScanState::Verify() const {
 	return;
 }
 
+RoaringScanState::SegmentLayout RoaringScanState::ReadLayout(const BufferHandle &handle, const ColumnSegment &segment) {
+	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "Roaring segment");
+	const auto metadata_offset = reader.Read<idx_t>();
+	// The metadata offset is relative to the end of the header.
+	auto body = reader.ReadSubReader(reader.Remaining(), "Roaring segment body");
+	body.SetPosition(metadata_offset);
+	auto metadata = body.ReadSubReader(body.Remaining(), "Roaring metadata");
+	auto data = body.GetSubReader(0, metadata_offset, "Roaring container data");
+	return {data, metadata};
+}
+
 RoaringScanState::RoaringScanState(const QueryContext &context, ColumnSegment &segment) : segment(segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	handle = buffer_manager.Pin(context, segment.GetBlockHandle());
-	auto segment_size = segment.SegmentSize();
-	auto segment_block_offset = segment.GetBlockOffset();
-	if (segment_block_offset >= segment_size) {
-		throw InternalException("invalid segment_block_offset in RoaringScanState constructor");
-	}
-
-	auto base_ptr = handle.GetDataMutable() + segment_block_offset;
+	auto layout = ReadLayout(handle, segment);
+	auto base_ptr = handle.GetDataMutable() + segment.GetBlockOffset();
 	data_ptr = base_ptr + sizeof(idx_t);
 
 	// Deserialize the container metadata for this segment
-	auto metadata_offset = Load<idx_t>(base_ptr);
-	if (metadata_offset >= segment_size) {
-		throw InternalException("invalid metadata offset in RoaringScanState constructor");
-	}
-	auto metadata_ptr = data_ptr + metadata_offset;
-
 	auto segment_count = segment.count.load();
 	auto container_count = segment_count / ROARING_CONTAINER_SIZE;
 	if (segment_count % ROARING_CONTAINER_SIZE != 0) {
 		container_count++;
 	}
-	auto available_metadata_space = segment_size - metadata_offset;
-	if (container_count > available_metadata_space) {
-		throw IOException("Corrupted Roaring segment: container count exceeds available metadata space");
-	}
-	metadata_collection.Deserialize(metadata_ptr, container_count);
+	metadata_collection.Deserialize(layout.metadata, container_count);
 	ContainerMetadataCollectionScanner scanner(metadata_collection);
+	container_metadata.reserve(container_count);
 	data_start_position.reserve(container_count);
-	idx_t position = 0;
+	auto data = layout.data;
 	for (idx_t i = 0; i < container_count; i++) {
 		auto metadata = scanner.GetNext();
 		container_metadata.push_back(metadata);
 		if (metadata.IsUncompressed()) {
-			position = AlignValue<idx_t>(position);
+			data.Align(sizeof(idx_t));
 		} else if (metadata.IsArray() && metadata.Cardinality() < COMPRESSED_ARRAY_THRESHOLD) {
-			position = AlignValue<idx_t, sizeof(uint16_t)>(position);
+			data.Align(sizeof(uint16_t));
 		} else if (metadata.IsRun() && metadata.NumberOfRuns() < COMPRESSED_RUN_THRESHOLD) {
-			position = AlignValue<idx_t, sizeof(RunContainerRLEPair)>(position);
+			data.Align(sizeof(RunContainerRLEPair));
 		}
-		data_start_position.push_back(position);
-		position += SkipVector(metadata);
+		data_start_position.push_back(data.Position());
+		auto container_size = MinValue<idx_t>(segment_count - i * ROARING_CONTAINER_SIZE, ROARING_CONTAINER_SIZE);
+		// A partial bitset still occupies complete validity words.
+		auto stored_size = AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(container_size);
+		data.Skip(metadata.GetDataSizeInBytes(stored_size));
 	}
-}
-
-idx_t RoaringScanState::SkipVector(const ContainerMetadata &metadata) {
-	// NOTE: this doesn't care about smaller containers, since only the last container can be smaller
-	return metadata.GetDataSizeInBytes(ROARING_CONTAINER_SIZE);
 }
 
 bool RoaringScanState::UseContainerStateCache(idx_t container_index, idx_t internal_offset) {
