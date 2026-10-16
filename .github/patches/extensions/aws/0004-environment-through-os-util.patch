@@ -1,16 +1,16 @@
 diff --git a/src/aws_secret.cpp b/src/aws_secret.cpp
-index a91e1b6..c689902 100644
+index ee91597..df70867 100644
 --- a/src/aws_secret.cpp
 +++ b/src/aws_secret.cpp
-@@ -8,6 +8,7 @@
- #include "duckdb/common/types/timestamp.hpp"
+@@ -10,6 +10,7 @@
  #include "duckdb/logging/logger.hpp"
+ #include "duckdb/main/database.hpp"
  #include "duckdb/main/extension/extension_loader.hpp"
 +#include "duckdb/main/os_util.hpp"
  #include "duckdb/main/settings.hpp"
  
  #include <aws/core/Aws.h>
-@@ -116,8 +117,9 @@ Aws::Config::Profile GetAwsProfile(const std::string &profile_name, const bool r
+@@ -127,8 +128,9 @@ Aws::Config::Profile GetAwsProfile(const std::string &profile_name, const bool r
  //! Generate a custom credential provider chain for authentication
  class DuckDBCustomAWSCredentialsProviderChain : public Aws::Auth::AWSCredentialsProviderChain {
  public:
@@ -22,7 +22,7 @@ index a91e1b6..c689902 100644
  	                                                 const string &external_id = "",
  	                                                 const string &web_identity_token_file = "",
  	                                                 const string &session_name = "") {
-@@ -161,11 +163,12 @@ public:
+@@ -169,11 +171,12 @@ public:
  				// constructed the same way the SDK's DefaultAWSCredentialsProviderChain does it.
  				// https://docs.aws.amazon.com/sdkref/latest/guide/feature-container-credentials.html
  				using Aws::Auth::GeneralHTTPCredentialsProvider;
@@ -39,7 +39,7 @@ index a91e1b6..c689902 100644
  				if (!container_provider->IsValid()) {
  					throw InvalidConfigurationException(
  					    "Chain value 'container' requires container credentials to be available: "
-@@ -388,16 +391,16 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
+@@ -373,16 +376,16 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
  	for (const auto &item : StringUtil::Split(chain, ';')) {
  		if (item == "container") {
  			using Aws::Auth::GeneralHTTPCredentialsProvider;
@@ -62,7 +62,7 @@ index a91e1b6..c689902 100644
  			break;
  		}
  	}
-@@ -409,9 +412,9 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
+@@ -394,9 +397,9 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
  		if (chain.empty()) {
  			throw InvalidConfigurationException("Invalid RDS secret parameters, 'CHAIN' option must be specified");
  		}
@@ -75,7 +75,7 @@ index a91e1b6..c689902 100644
  		return CreateRDSSecretWithProvider(provider, input, region);
  	}
  
-@@ -423,8 +426,8 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
+@@ -408,8 +411,8 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
  	}
  
  	if (!chain.empty()) {
@@ -86,7 +86,7 @@ index a91e1b6..c689902 100644
  		credentials = provider.GetAWSCredentials();
  	} else {
  		if (input.options.find("profile") != input.options.end()) {
-@@ -443,7 +446,8 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
+@@ -428,7 +431,8 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
  		// Then we create the credentials using an sts provider. This (should) be the default behavior of the SDK
  		// see https://docs.aws.amazon.com/sdk-for-cpp/v1/developer-guide/credproviders.html
  		chain = "config";
@@ -96,7 +96,7 @@ index a91e1b6..c689902 100644
  		credentials = provider.GetAWSCredentials();
  	}
  
-@@ -551,9 +555,10 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
+@@ -536,9 +540,10 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
  }
  
  std::shared_ptr<Aws::Auth::AWSCredentialsProvider>
@@ -110,7 +110,7 @@ index a91e1b6..c689902 100644
  	if (chain.empty()) {
  		if (!profile.empty()) {
  			return Aws::MakeShared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>("DuckDBAwsProfile",
-@@ -561,7 +566,7 @@ BuildAwsCredentialsProvider(const std::string &chain, bool require_credentials,
+@@ -546,7 +551,7 @@ BuildAwsCredentialsProvider(const std::string &chain, bool require_credentials,
  		}
  		return Aws::MakeShared<Aws::Auth::DefaultAWSCredentialsProviderChain>("DuckDBAwsDefault");
  	}
