@@ -909,8 +909,8 @@ void DataTable::InitializeLocalStorage(LocalAppendState &state, DuckTableEntry &
 	state.constraint_state = InitializeConstraintState(table, bound_constraints);
 }
 
-void DataTable::LocalAppend(LocalAppendState &state, DuckTableEntry &table_entry, ClientContext &context,
-                            DataChunk &chunk, bool unsafe) {
+void DataTable::LocalAppend(LocalAppendState &state, DuckTableEntry &, ClientContext &context, DataChunk &chunk,
+                            bool unsafe) {
 	if (chunk.size() == 0) {
 		return;
 	}
@@ -929,7 +929,7 @@ void DataTable::LocalAppend(LocalAppendState &state, DuckTableEntry &table_entry
 	}
 
 	// Append to the transaction-local data.
-	LocalStorage::Append(state, table_entry, chunk);
+	LocalStorage::Append(state, chunk);
 }
 
 void DataTable::LocalAppend(DuckTableEntry &table, ClientContext &context, DataChunk &chunk,
