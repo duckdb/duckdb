@@ -62,6 +62,12 @@ public:
 	bool IsShared() const {
 		return shared;
 	}
+	//! Whether collections using this allocator may store list children as shared out-of-band buffers.
+	//! Managed result sets must fail cleanly when accessed after the database closes, which block
+	//! storage guarantees but out-of-band shared allocations do not.
+	bool SupportsListChildSharing() const {
+		return !managed_result_set.IsValid();
+	}
 	idx_t BlockCount() const {
 		return blocks.size();
 	}
