@@ -152,3 +152,52 @@ TEST_CASE("Binding rewrites stop at child output boundaries", "[optimizer][bindi
 	REQUIRE(rewritten_expression.Binding() == binding_b1);
 	REQUIRE(rewritten_expression.GetReturnType() == LogicalType::INTEGER);
 }
+
+TEST_CASE("Binding replacement graph finds direct edges by old binding", "[optimizer][bindings]") {
+	auto binding_a = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+	auto binding_b = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+	auto binding_c = ColumnBinding(TableIndex(2), ProjectionIndex(0));
+
+	BindingReplacementGraph graph;
+	graph.Add(binding_a, binding_b);
+	graph.Add(ReplacementBinding(binding_b, binding_c, LogicalType::BIGINT));
+
+	REQUIRE(graph.Find(binding_a));
+	REQUIRE(graph.Find(binding_a)->new_binding == binding_b);
+	REQUIRE(graph.Find(binding_b)->new_binding == binding_c);
+	REQUIRE(graph.Find(binding_b)->replace_type);
+	REQUIRE_FALSE(graph.Find(binding_c));
+}
+
+TEST_CASE("Indexed column binding replacer matches sequential application", "[optimizer][bindings]") {
+	auto binding_a = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+	auto binding_b = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+	auto binding_c = ColumnBinding(TableIndex(2), ProjectionIndex(0));
+	auto binding_d = ColumnBinding(TableIndex(3), ProjectionIndex(0));
+
+	// Chain-free list: the index takes effect and single lookups match sequential application
+	ColumnBindingReplacer replacer;
+	replacer.replacement_bindings.emplace_back(binding_a, binding_c);
+	replacer.replacement_bindings.emplace_back(binding_b, binding_d, LogicalType::BIGINT);
+	replacer.BuildIndex();
+	auto binding = binding_a;
+	replacer.Replace(binding);
+	REQUIRE(binding == binding_c);
+	binding = binding_b;
+	auto type = LogicalType(LogicalType::INTEGER);
+	replacer.Replace(binding, type);
+	REQUIRE(binding == binding_d);
+	REQUIRE(type == LogicalType::BIGINT);
+	binding = binding_c;
+	replacer.Replace(binding);
+	REQUIRE(binding == binding_c);
+
+	// Chainable list: the index must not take effect, sequential application still chains a -> b -> c
+	ColumnBindingReplacer chaining;
+	chaining.replacement_bindings.emplace_back(binding_a, binding_b);
+	chaining.replacement_bindings.emplace_back(binding_b, binding_c);
+	chaining.BuildIndex();
+	binding = binding_a;
+	chaining.Replace(binding);
+	REQUIRE(binding == binding_c);
+}
