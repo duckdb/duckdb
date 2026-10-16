@@ -533,6 +533,9 @@ dtime_tz_t ICUToTimeTZ::Operation(Calendar *calendar, dtime_tz_t timetz) {
 bool ICUToTimeTZ::ToTimeTZ(Calendar *calendar, timestamp_tz_t instant, dtime_tz_t &result,
                            optional_ptr<string> error_message) {
 	if (!instant.IsFinite()) {
+		if (error_message) {
+			*error_message = "Can't get TIME of infinite TIMESTAMP";
+		}
 		return false;
 	}
 
@@ -706,6 +709,10 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 
 timestamp_tz_t ICUDateFunc::FromNaive(Calendar *calendar, timestamp_t naive) {
 	return ICUFromNaiveTimestamp::Operation(calendar, naive);
+}
+
+bool ICUDateFunc::TryFromNaive(Calendar *calendar, timestamp_t naive, timestamp_tz_t &result, string &error) {
+	return ICUFromNaiveTimestamp::TryOperation(calendar, naive, result, error);
 }
 
 void RegisterICUTimeZoneFunctions(ExtensionLoader &loader) {

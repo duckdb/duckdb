@@ -470,6 +470,10 @@ static LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, 
 		return RequiresCast(ListType::GetChildType(source_type), ListType::GetChildType(target_type));
 	}
 	if (source_type.id() == LogicalTypeId::ARRAY && target_type.id() == LogicalTypeId::ARRAY) {
+		auto target_size = ArrayType::GetSize(target_type);
+		if (target_size != 0 && target_size != ArrayType::GetSize(source_type)) {
+			return LogicalTypeComparisonResult::DIFFERENT_TYPES;
+		}
 		return RequiresCast(ArrayType::GetChildType(source_type), ArrayType::GetChildType(target_type));
 	}
 	return LogicalTypeComparisonResult::DIFFERENT_TYPES;
@@ -1125,6 +1129,8 @@ static string PushArgumentCollations(ClientContext &context, BoundSimpleFunction
 		return string();
 	case FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS:
 		return PushCollations(context, bound_function, children, CollationType::COMBINABLE_COLLATIONS);
+	case FunctionCollationHandling::PUSH_DISTINCT_COLLATIONS:
+		throw InternalException("PUSH_DISTINCT_COLLATIONS is only supported for aggregate functions");
 	default:
 		throw InternalException("Unrecognized collation handling");
 	}
@@ -1622,6 +1628,10 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(shared_ptr<const Scala
 	auto result_func = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(children),
 	                                                      std::move(bind_info), is_operator);
 
+	if (binder && result_func->Function().GetStability() == FunctionStability::CONSISTENT_WITHIN_QUERY) {
+		// the result depends on the query it is bound in, also when the bind_expression callback folds it
+		binder->SetAlwaysRequireRebind();
+	}
 	if (result_func->Function().HasBindExpressionCallback()) {
 		// if a bind_expression callback is registered - call it and emit the resulting expression
 		FunctionBindExpressionInput input(context, result_func->FunctionMutable(), result_func->BindInfoMutable().get(),
@@ -1698,6 +1708,15 @@ FunctionBinder::BindAggregateFunction(shared_ptr<const AggregateFunction> functi
                                       vector<unique_ptr<Expression>> children,
                                       vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
                                       unique_ptr<Expression> filter, AggregateType aggr_type) {
+	if (aggr_type == AggregateType::DISTINCT &&
+	    function->GetCollationHandling() == FunctionCollationHandling::PUSH_DISTINCT_COLLATIONS) {
+		for (auto &child : children) {
+			ExpressionBinder::PushCollation(context, child, child->GetReturnType());
+		}
+		for (auto &argument : keyword_args) {
+			ExpressionBinder::PushCollation(context, argument.second, argument.second->GetReturnType());
+		}
+	}
 	auto [bound_function, bind_info] = ResolveFunction(std::move(function), children, keyword_args);
 
 	return make_uniq<BoundAggregateExpression>(std::move(bound_function), std::move(children), std::move(filter),

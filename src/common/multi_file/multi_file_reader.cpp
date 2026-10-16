@@ -578,7 +578,8 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 		if (options.schema.empty()) {
 			throw BinderException("'schema' cannot be empty");
 		}
-		options.auto_detect_hive_partitioning = false;
+		// A given schema is not detected from the paths; that is decided where the schema is bound, so
+		// auto_detect_hive_partitioning keeps meaning what it says - whether the CALLER left it to us
 	} else if (key == "file_row_number") {
 		if (val.IsNull()) {
 			throw InvalidInputException("Cannot use NULL as argument for %s", key);
@@ -620,8 +621,9 @@ bool MultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vect
 		// the default MultiFileReader has no schema information of its own - the files have to be bound
 		return false;
 	}
-	if (options.union_by_name || options.hive_partitioning) {
-		throw BinderException("'schema' cannot be combined with union_by_name=true or hive_partitioning=true");
+	if (options.union_by_name) {
+		// both decide the schema of the scan, from the files and from the option respectively
+		throw BinderException("'schema' cannot be combined with union_by_name=true");
 	}
 	// the files are mapped onto the schema by field id when its columns are identified by INTEGER, by name otherwise
 	const bool by_field_id = options.schema[0].identifier.type().id() == LogicalTypeId::INTEGER;
@@ -730,9 +732,18 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 					    "name also exists. Try setting a different name: filename='<filename column name>'",
 					    options.filename_column);
 				}
+				auto hive_type = options.GetHiveLogicalType(part.first);
+				// the path does not get to change a type the schema declares
+				if (!options.schema.empty() && idx < bind_data.schema.size() &&
+				    !bind_data.schema[idx].type.EqualsIncludingCollation(hive_type)) {
+					throw BinderException("'schema' declares column \"%s\" as %s, but its hive partition type is %s - "
+					                      "set the partition type with hive_types",
+					                      bind_data.schema[idx].name.GetIdentifierName(),
+					                      bind_data.schema[idx].type.ToString(), hive_type.ToString());
+				}
 				// hive partitioning column also exists in file - override
 				hive_partitioning_index = idx;
-				return_types[idx] = options.GetHiveLogicalType(part.first);
+				return_types[idx] = hive_type;
 			} else {
 				// hive partitioning column does not exist in file - add a new column containing the key
 				hive_partitioning_index = names.size();
@@ -1330,7 +1341,8 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 		hive_types_schema.insert(make_pair(entry.first, std::move(entry.second)));
 	}
 }
-void MultiFileOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientContext &context) {
+void MultiFileOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientContext &context,
+                                                  bool detect_partitioning) {
 	if (files.GetExpandResult() == FileExpandResult::NO_FILES) {
 		return;
 	}
@@ -1344,7 +1356,7 @@ void MultiFileOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientCo
 		hive_partitioning = true;
 		auto_detect_hive_partitioning = false;
 	}
-	if (auto_detect_hive_partitioning) {
+	if (detect_partitioning && auto_detect_hive_partitioning) {
 		hive_partitioning = AutoDetectHivePartitioningInternal(files, context);
 	}
 	if (hive_partitioning && hive_types_autocast) {

@@ -615,21 +615,25 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
 			// bind the groups
 			LogicalType group_type;
+			// bound subqueries cannot be copied, so keep the parsed expression in case we need to bind it again
+			auto parsed_copy = group_expressions[i]->Copy();
 			auto bound_expr = group_binder.Bind(group_expressions[i], &group_type);
 			if (bound_expr->GetExpressionType() == ExpressionType::BOUND_EXPANDED) {
 				throw BinderException("UNNEST of struct cannot be used in GROUP BY clause");
 			}
 			D_ASSERT(bound_expr->GetReturnType().id() != LogicalTypeId::INVALID);
 
-			// find out whether the expression contains a subquery, it can't be copied if so
-			bool contains_subquery = bound_expr->HasSubquery();
 			// the group and the first(x) aggregate below are separate expression trees, so we need our own
 			// copy - it must be made before pushing the collation, which can replace the expression
+			bool contains_subquery = bound_expr->HasSubquery();
 			unique_ptr<Expression> uncollated_expr = contains_subquery ? nullptr : bound_expr->Copy();
 
 			// push a potential collation, if necessary
 			bool requires_collation = ExpressionBinder::PushCollation(context, bound_expr, group_type);
-			if (!contains_subquery && requires_collation) {
+			if (requires_collation && contains_subquery) {
+				uncollated_expr = group_binder.Bind(parsed_copy);
+			}
+			if (requires_collation) {
 				// if there is a collation on a group x, we should group by the collated expr,
 				// but also push a first(x) aggregate in case x is selected (uncollated)
 
@@ -725,15 +729,16 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		}
 		bind_state.AddRegularColumn();
 
-		if (can_group_by_all && is_window) {
-			throw BinderException("Cannot group on a window clause");
-		}
 		if (can_group_by_all && result.unnests.SelectList().size() > unnest_count) {
 			throw BinderException("Cannot group on an UNNEST or UNLIST clause");
 		}
 		if (can_group_by_all && select_binder.HasBoundColumns()) {
 			if (select_binder.BoundAggregates()) {
 				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
+			}
+			if (is_window) {
+				// a window over aggregates (e.g. sum(sum(x)) OVER ()) is fine, a window over a group is not
+				throw BinderException("Cannot group on a window clause");
 			}
 			// we are forcing aggregates, and the node has columns bound
 			// this entry becomes a group
@@ -755,8 +760,23 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	// push the GROUP BY ALL expressions into the group set
 	for (auto &group_by_all_index : group_by_all_indexes) {
 		auto &expr = result.select_list[group_by_all_index];
-		auto &return_type = expr->GetReturnType();
+		auto return_type = expr->GetReturnType();
+		// group by the collated expression, and select the uncollated value through a first(x) aggregate
+		unique_ptr<Expression> uncollated_expr = expr->HasSubquery() ? nullptr : expr->Copy();
+		bool requires_collation = ExpressionBinder::PushCollation(context, expr, return_type);
 		auto group_proj_idx = ColumnBinding::PushExpression(result.groups.group_expressions, std::move(expr));
+		if (uncollated_expr && requires_collation) {
+			auto first_fun = GetBuiltinAggregateFunction(context, FirstFun::Name, {uncollated_expr->GetReturnType()});
+			vector<unique_ptr<Expression>> first_children;
+			first_children.push_back(std::move(uncollated_expr));
+			FunctionBinder function_binder(*this);
+			auto function = function_binder.BindAggregateFunction(std::move(first_fun), std::move(first_children));
+			function->SetAlias("__collated_group");
+			auto aggregate_idx = ColumnBinding::PushExpression(result.aggregates, std::move(function));
+			expr =
+			    make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(result.aggregate_index, aggregate_idx));
+			continue;
+		}
 		auto group_ref =
 		    make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(result.group_index, group_proj_idx));
 		expr = std::move(group_ref);

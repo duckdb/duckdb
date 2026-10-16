@@ -63,12 +63,22 @@ struct SortedAggregateBindData : public FunctionData {
 	using BindInfoPtr = unique_ptr<FunctionData>;
 	using OrderBys = vector<BoundOrderByNode>;
 
-	SortedAggregateBindData(ClientContext &context, Expressions &children, BoundAggregateFunction &aggregate,
-	                        BindInfoPtr &bind_info, OrderBys &order_bys)
+	//! fixed_layout: the buffer struct and per-key columns to use instead of mapping the keys onto the arguments
+	SortedAggregateBindData(
+	    ClientContext &context, Expressions &children, BoundAggregateFunction &aggregate, BindInfoPtr &bind_info,
+	    OrderBys &order_bys,
+	    optional_ptr<const pair<LogicalType, vector<SortedAggregateStateOrder>>> fixed_layout = nullptr)
 	    : context(context), function(aggregate), bind_info(std::move(bind_info)),
 	      threshold(Settings::Get<OrderedAggregateThresholdSetting>(context)) {
 		vector<SortedAggregateStateOrder> order_spec;
-		buffered_types = MapSortedColumns(children, order_bys, order_spec);
+		if (fixed_layout) {
+			for (auto &child : StructType::GetChildTypes(fixed_layout->first)) {
+				buffered_types.emplace_back(child.second);
+			}
+			order_spec = fixed_layout->second;
+		} else {
+			buffered_types = MapSortedColumns(children, order_bys, order_spec);
+		}
 		const idx_t argument_count = children.size();
 		// the arguments are the leading buffered columns (referencing their input slot); appended sort keys follow
 		buffered_cols.resize(buffered_types.size());
@@ -86,9 +96,11 @@ struct SortedAggregateBindData : public FunctionData {
 		BuildSort(order_spec);
 	}
 
-	SortedAggregateBindData(ClientContext &context, BoundAggregateExpression &expr)
+	SortedAggregateBindData(
+	    ClientContext &context, BoundAggregateExpression &expr,
+	    optional_ptr<const pair<LogicalType, vector<SortedAggregateStateOrder>>> fixed_layout = nullptr)
 	    : SortedAggregateBindData(context, expr.GetChildrenMutable(), expr.FunctionMutable(), expr.BindInfoMutable(),
-	                              expr.GetOrderBysMutable()->orders) {
+	                              expr.GetOrderBysMutable()->orders, fixed_layout) {
 	}
 
 	SortedAggregateBindData(ClientContext &context, BoundWindowExpression &expr)
@@ -616,29 +628,34 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	auto &children = expr.GetChildrenMutable();
 	auto &order_bys = *expr.GetOrderBysMutable();
 
+	// the layout of an exported state was fixed at bind time and is part of its type - keep it, as the optimizer may
+	// have changed the expressions since (e.g. so that an ORDER BY key no longer matches the argument it matched)
+	pair<LogicalType, vector<SortedAggregateStateOrder>> export_layout;
 	if (state_export) {
+		export_layout.first = ListType::GetChildType(expr.GetReturnType());
+		auto &logical_fields = StructType::GetChildTypes(export_layout.first);
+		ExportAggregateFunction::GetSortedStateOrders(expr.GetReturnType(), export_layout.second);
+		if (export_layout.second.size() != order_bys.orders.size() || children.size() > logical_fields.size()) {
+			throw InternalException("Exported state layout of ordered aggregate \"%s\" does not match its ORDER BY",
+			                        bound_function.GetName());
+		}
 		// the statistics optimizer may have narrowed the buffered column types since the exported type was fixed at
 		// bind time (e.g. a small-range group column INTEGER->TINYINT) - cast them back so the buffer matches its
-		// declared type. The widening preserves sort order; casting reused columns to the same type keeps matching.
-		LogicalType plan_struct;
-		vector<SortedAggregateStateOrder> order_columns;
-		idx_t argument_count;
-		GetSortedAggregateStateLayout(expr, plan_struct, order_columns, argument_count);
-		auto &logical_fields = StructType::GetChildTypes(ListType::GetChildType(expr.GetReturnType()));
+		// declared type. The widening preserves sort order.
 		auto cast_to = [&](unique_ptr<Expression> &e, const LogicalType &type) {
 			if (e->GetReturnType() != type) {
 				e = BoundCastExpression::AddCastToType(context, std::move(e), type);
 			}
 		};
-		for (idx_t i = 0; i < children.size() && i < logical_fields.size(); i++) {
+		for (idx_t i = 0; i < children.size(); i++) {
 			cast_to(children[i], logical_fields[i].second);
 		}
-		for (idx_t o = 0; o < order_bys.orders.size() && o < order_columns.size(); o++) {
-			cast_to(order_bys.orders[o].expression, logical_fields[order_columns[o].column].second);
+		for (idx_t o = 0; o < order_bys.orders.size(); o++) {
+			cast_to(order_bys.orders[o].expression, logical_fields[export_layout.second[o].column].second);
 		}
 	}
 
-	auto sorted_bind = make_uniq<SortedAggregateBindData>(context, expr);
+	auto sorted_bind = make_uniq<SortedAggregateBindData>(context, expr, state_export ? &export_layout : nullptr);
 
 	if (!sorted_bind->sorted_on_args) {
 		// The arguments are the children plus the sort columns.

@@ -220,6 +220,7 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	// START GENERATED PACKRAT MEMOIZED RULES
 	//===--------------------------------------------------------------------===//
 	AddPackratMemoizedRule("Expression");
+	AddPackratMemoizedRule("TableRef");
 	AddPackratMemoizedRule("Identifier");
 	AddPackratMemoizedRule("ColId");
 	AddPackratMemoizedRule("CatalogQualification");

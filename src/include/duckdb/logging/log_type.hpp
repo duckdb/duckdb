@@ -17,6 +17,7 @@ namespace duckdb {
 struct FileHandle;
 struct BaseRequest;
 struct HTTPResponse;
+struct MetricTiming;
 class PhysicalOperator;
 enum class PhysicalOperatorType : uint8_t;
 class AttachedDatabase;
@@ -125,7 +126,8 @@ public:
 
 	static LogicalType GetLogType();
 
-	static string ConstructLogMessage(const string &metric, const Value &value);
+	static string ConstructLogMessage(const string &metric, const Value &value,
+	                                  optional_ptr<const MetricTiming> timing = nullptr);
 };
 
 class CheckpointLogType : public LogType {
