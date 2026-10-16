@@ -37,6 +37,20 @@ struct ReadSingleParquetFileData : public TableFunctionData {
 		}
 	}
 
+	unique_ptr<FunctionData> Copy() const override {
+		// the copy does not take over the reader the bind opened - its scans open the file themselves
+		auto result = make_uniq<ReadSingleParquetFileData>();
+		result->file = file;
+		result->options = options;
+		result->parquet_names = parquet_names;
+		result->parquet_types = parquet_types;
+		result->columns = columns;
+		result->metadata = metadata;
+		result->cardinality = cardinality;
+		result->projection_expressions = projection_expressions;
+		return std::move(result);
+	}
+
 	//! The reader the bind opened for this file, handed to the first scan of this bind data so that the file does
 	//! not have to be opened again. Only set when the bind data is used to read the file
 	shared_ptr<ParquetReader> TakeBindReader() const {
@@ -397,6 +411,12 @@ static virtual_column_map_t ReadSingleParquetFileVirtualColumns(ClientContext &c
 	return result;
 }
 
+//! The row number within the file identifies a row of a single file
+static vector<column_t> ReadSingleParquetFileRowIdColumns(ClientContext &context,
+                                                          optional_ptr<FunctionData> bind_data) {
+	return {MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER};
+}
+
 //! The statistics of a column of this file, read from its metadata
 static unique_ptr<BaseStatistics>
 ReadSingleParquetFileStatistics(ClientContext &context, const FunctionData *bind_data_p, column_t column_index) {
@@ -530,6 +550,7 @@ TableFunction ParquetScanFunction::GetSingleFileFunction() {
 	read_parquet.get_metrics = ReadSingleParquetFileGetMetrics;
 	read_parquet.projection_pushdown = true;
 	read_parquet.late_materialization = true;
+	read_parquet.get_row_id_columns = ReadSingleParquetFileRowIdColumns;
 	read_parquet.filter_pushdown = true;
 	read_parquet.filter_prune = true;
 	ParquetScanFunction::AddNamedParameters(read_parquet);

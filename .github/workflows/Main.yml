@@ -119,7 +119,7 @@ jobs:
           extension_allow_failure_archs=
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "${{ inputs.duckdb_commit }}" && -z "$INPUT_VERSION" ]]; then
             alpha_args=(--alpha-run-number "${{ github.run_number }}")
-            extension_allow_failure_archs="windows_amd64_mingw;linux_amd64_musl;linux_arm64_musl"
+            extension_allow_failure_archs="windows_arm64;osx_amd64;windows_amd64_mingw;linux_amd64_musl;linux_arm64_musl"
           fi
           version_output="$(python3 scripts/ci/version.py \
             --duckdb-commit "$RESOLVED_COMMIT" \
@@ -146,6 +146,8 @@ jobs:
         with:
           separator: "\n"
           safe_output: false
+          write_output_files: true
+          output_dir: .github/outputs
           files_yaml: |
             github:
               - .github/**
@@ -195,10 +197,12 @@ jobs:
             --runners '${{ steps.runners.outputs.runners }}' \
             --runner-provider '${{ steps.runners.outputs.runner_provider }}'
 
-          if [[ "${{ github.event_name }}" != "pull_request" || "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             extra_exclude_archs=
+          elif [[ "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
+            extra_exclude_archs="windows_arm64;osx_amd64"
           else
-            extra_exclude_archs=wasm_eh
+            extra_exclude_archs="windows_arm64;osx_amd64;wasm_eh"
           fi
 
           echo "extra_exclude_archs=$extra_exclude_archs" >> "$GITHUB_OUTPUT"
@@ -237,11 +241,14 @@ jobs:
 
       - name: Run prepare checks
         timeout-minutes: 10
-        env:
-          CHANGED_FORMAT_FILES: ${{ steps.changed.outputs.format_all_changed_files }}
         run: |
           python3 scripts/ci/retry.py --timeout 2m -- make -j4 prepare_tools
-          printf '%s\n' "$CHANGED_FORMAT_FILES" > "$RUNNER_TEMP/changed-format-files.txt"
+          # the file list can exceed the size limit of an environment variable
+          if [ -f .github/outputs/format_all_changed_files.txt ]; then
+            cp .github/outputs/format_all_changed_files.txt "$RUNNER_TEMP/changed-format-files.txt"
+          else
+            : > "$RUNNER_TEMP/changed-format-files.txt"
+          fi
           PYTHON=.cache/prepare-venv/bin/python \
             make test_ci generate-files extension-patch-check -j "$(nproc)" -Otarget
           PYTHON=.cache/prepare-venv/bin/python \
@@ -459,6 +466,7 @@ jobs:
       exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       allow_failure_archs: ${{ needs.prepare.outputs.extension_allow_failure_archs }}
       vcpkg_commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
+      windows_vcpkg_toolchain: cl
       reduced_ci_mode: ${{ needs.prepare.outputs.reduced_ci_mode }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
@@ -1429,7 +1437,7 @@ jobs:
           STAGED_VERSION: ${{ needs.prepare.outputs.staged_version }}
           RELEASE_STATUS_SUCCESS: ${{ steps.release-status.outputs.success || 'false' }}
           CURRENT_REF: ${{ github.ref }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          ALPHA_BRANCH: 'v2.0-cyanoptera'
         run: |
           is_release_event=false
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
@@ -1447,7 +1455,7 @@ jobs:
           fi
 
           is_default_branch=false
-          if [[ "$CURRENT_REF" == "refs/heads/$DEFAULT_BRANCH" ]]; then
+          if [[ "$CURRENT_REF" == "refs/heads/$ALPHA_BRANCH" ]]; then
             is_default_branch=true
           fi
 
@@ -1466,7 +1474,7 @@ jobs:
           echo "  run_release_dispatch=$run_release_dispatch"
           echo "  staged_version=$STAGED_VERSION"
           echo "  current_ref=$CURRENT_REF"
-          echo "  default_branch=$DEFAULT_BRANCH"
+          echo "  alpha_branch=$ALPHA_BRANCH"
           echo "  is_default_branch=$is_default_branch"
           echo "  publish_latest_alpha=$publish_latest_alpha"
 

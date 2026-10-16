@@ -18,6 +18,8 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/function/window/window_index_tree.hpp"
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <stdlib.h>
 #include <utility>
 
@@ -239,10 +241,22 @@ struct QuantileInterpolator<true> {
 			floored = Cast::Operation<hugeint_t, idx_t>((scaled_n - scaled_q) / scaling);
 			break;
 		}
-		default:
+		default: {
+			//	The target is ceil(n * q) evaluated as if exactly, matching the DECIMAL path.
+			//	A binary double for a decimal fraction is slightly off, so when n * q is mathematically an
+			//	integer (n = 10, q = 0.9) the product lands a few ulps away from it and ceil() would
+			//	pick the next element. Worse, the outcome of floor(n - n * q) depended on whether the
+			//	compiler fused the multiply and subtract into an FMA, so different call sites of this
+			//	function disagreed. Snap to the nearest integer when the product is within a few ulps
+			//	of it; the result is then independent of contraction and of the rounding of q.
 			const auto scaled_q = double(n) * q.dbl;
-			floored = LossyNumericCast<idx_t>(floor(double(n) - scaled_q));
+			const auto nearest = std::round(scaled_q);
+			const auto tolerance = double(n) * 4 * std::numeric_limits<double>::epsilon();
+			const auto ceiled = (std::fabs(scaled_q - nearest) <= tolerance) ? nearest : std::ceil(scaled_q);
+			//	0 <= q <= 1, so 0 <= ceiled <= n
+			floored = n - LossyNumericCast<idx_t>(ceiled);
 			break;
+		}
 		}
 
 		return MaxValue<idx_t>(1, n - floored) - 1;

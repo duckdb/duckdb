@@ -16,6 +16,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_delete.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_merge_into.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
@@ -342,6 +343,9 @@ static optional<LogicalPlanVerificationIssue> DMLStatementIssue(const LogicalOpe
 	case LogicalOperatorType::LOGICAL_MERGE_INTO:
 		return_chunk = op.Cast<LogicalMergeInto>().return_chunk;
 		break;
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
+		return_chunk = false;
+		break;
 	default:
 		return_chunk = op.Cast<LogicalDelete>().return_chunk;
 		break;
@@ -410,9 +414,26 @@ bool SQLExportDMLHelpers::MatchDMLBody(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_UPDATE:
 	case LogicalOperatorType::LOGICAL_DELETE:
 	case LogicalOperatorType::LOGICAL_MERGE_INTO:
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return true;
 	default:
 		return MatchReturningRoot(op) || IsIdentityProjectionOverDML(op);
+	}
+}
+
+bool SQLExportDMLHelpers::ContainsReplacedBoundary(const LogicalPlanSQLExportContext &context, LogicalOperator &op) {
+	reference<LogicalOperator> current(op);
+	while (true) {
+		if (context.FindSource(current)) {
+			return true;
+		}
+		auto &node = current.get();
+		if (node.type == LogicalOperatorType::LOGICAL_PROJECTION && node.children.size() == 1 &&
+		    MatchDMLBody(*node.children[0])) {
+			current = *node.children[0];
+			continue;
+		}
+		return false;
 	}
 }
 
@@ -422,6 +443,8 @@ bool SQLExportDMLHelpers::IsDMLNode(const QueryNode &query) {
 	case QueryNodeType::UPDATE_QUERY_NODE:
 	case QueryNodeType::DELETE_QUERY_NODE:
 	case QueryNodeType::MERGE_QUERY_NODE:
+	case QueryNodeType::COPY_QUERY_NODE:
+	case QueryNodeType::STATEMENT_NODE:
 		return true;
 	default:
 		return false;
@@ -459,6 +482,8 @@ LogicalPlanSQLExportResult SQLExportDMLHelpers::ExportBody(LogicalPlanSQLExportC
 		return ExportUpdateNode(op.Cast<LogicalUpdate>(), context, path);
 	case LogicalOperatorType::LOGICAL_MERGE_INTO:
 		return ExportMergeNode(op.Cast<LogicalMergeInto>(), context, path);
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
+		return SQLExportStatementHelpers::ExportCopyToNode(op.Cast<LogicalCopyToFile>(), context, path);
 	default:
 		return ExportDeleteNode(op.Cast<LogicalDelete>(), context, path);
 	}
