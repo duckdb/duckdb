@@ -1,0 +1,36 @@
+# name: test/sql/settings/allowed_directories_s3.test
+# description: S3 paths in allowed_directories are checked as S3 paths, not as the HTTP urls they are sent to
+# group: [settings]
+
+require httpfs
+
+require skip_reload
+
+statement ok
+SET allow_persistent_secrets=false;
+
+# plain HTTP, so that no CA certificate bundle has to be readable under the restricted configuration
+statement ok
+CREATE SECRET (TYPE s3, PROVIDER config, USE_SSL false);
+
+# bucket names cannot start with xn--, so this bucket cannot exist
+statement ok
+SET allowed_directories=['s3://xn--duckdb-impossible-bucket/'];
+
+statement ok
+SET enable_external_access=false;
+
+statement ok
+SET lock_configuration=true;
+
+# the request is allowed, and fails at S3 instead of with a permission error
+statement error
+SELECT * FROM read_csv('s3://xn--duckdb-impossible-bucket/x.csv');
+----
+<REGEX>:HTTP Error.*HTTP 404.*
+
+# a path outside the allowed directories is still refused
+statement error
+SELECT * FROM read_csv('s3://xn--duckdb-impossible-other-bucket/x.csv');
+----
+<REGEX>:Permission Error.*
