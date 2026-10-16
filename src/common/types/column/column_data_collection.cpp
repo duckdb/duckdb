@@ -835,8 +835,8 @@ static constexpr idx_t MINIMUM_SHARED_LIST_CHILD_COUNT = STANDARD_VECTOR_SIZE + 
 //! Children that arrive as a complete view of an existing shared buffer are referenced without any copy, so
 //! large list payloads that travel between collections unchanged (e.g. across recursive CTE iterations) cost
 //! O(1) per append instead of a full child copy. Returns false if the child must be copied the regular way.
-static bool TryShareListChild(ColumnDataMetaData &meta_data, Vector &child_vector,
-                              const ConsecutiveChildListInfo &info, VectorDataIndex last_child_index) {
+static bool TryShareListChild(ColumnDataMetaData &meta_data, Vector &child_vector, const ConsecutiveChildListInfo &info,
+                              VectorDataIndex last_child_index) {
 	auto &segment = meta_data.segment;
 	if (!segment.allocator->SupportsListChildSharing()) {
 		return false;
