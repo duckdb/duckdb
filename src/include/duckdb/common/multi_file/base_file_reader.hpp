@@ -106,6 +106,11 @@ public:
 	//! Function to schedule IO tasks, if Reader supports that
 	DUCKDB_API virtual AsyncResult ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                          LocalTableFunctionState &lstate);
+	//! Re-check the row group a read-ahead job prepared against the current filters before it is decoded. Read-ahead
+	//! prepares a job's row group when the job is produced, so a dynamic filter (e.g. a Top-N sink's) that arrives
+	//! before the job is decoded can prune it after the fact. Returns false when the row group is pruned
+	DUCKDB_API virtual bool RecheckRowGroupFilters(ClientContext &context, GlobalTableFunctionState &gstate,
+	                                               LocalTableFunctionState &lstate);
 	//! Scan a chunk
 	virtual AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 	                         LocalTableFunctionState &local_state, DataChunk &chunk) = 0;

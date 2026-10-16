@@ -128,6 +128,10 @@ typedef void (*table_function_finish_batch_t)(ClientContext &context, TableFunct
 typedef bool (*table_function_supports_read_ahead_t)(optional_ptr<const FunctionData> bind_data);
 //! Schedules the I/O needed by the batch a local state has claimed, so it can be loaded before it is scanned
 typedef AsyncResult (*table_function_schedule_io_t)(ClientContext &context, TableFunctionInput &input);
+//! Re-checks the batch a local state holds against the current filters before it is scanned. Read-ahead claims and
+//! schedules a batch before it is decoded, so a dynamic filter (e.g. a Top-N sink's) that arrives in between can
+//! prune it after the fact. Returns false when the batch is pruned and must not be scanned
+typedef bool (*table_function_recheck_row_group_t)(ClientContext &context, TableFunctionInput &input);
 //! Called on the read-ahead pool once the scan of this function has been initialized, before any batch is claimed.
 //! Lets the function pre-open the resources its scan needs, so that claiming a batch does no I/O
 typedef void (*table_function_prepare_read_ahead_t)(ClientContext &context, TableFunctionInput &input);
@@ -197,6 +201,7 @@ struct TableFunctionMultiFileSettings {
 	table_function_finish_batch_t finish_batch = nullptr;
 	table_function_supports_read_ahead_t supports_read_ahead = nullptr;
 	table_function_schedule_io_t schedule_io = nullptr;
+	table_function_recheck_row_group_t recheck_row_group = nullptr;
 	table_function_prepare_read_ahead_t prepare_read_ahead = nullptr;
 	table_function_combine_schema_t combine_schema = nullptr;
 	table_function_get_file_columns_t get_file_columns = nullptr;
@@ -262,6 +267,8 @@ public:
 	                 LocalTableFunctionState &lstate) override;
 	AsyncResult ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
+	bool RecheckRowGroupFilters(ClientContext &context, GlobalTableFunctionState &gstate,
+	                            LocalTableFunctionState &lstate) override;
 	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate,
 	                 DataChunk &chunk) override;
 	double GetProgressInFile(ClientContext &context) override;

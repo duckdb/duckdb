@@ -312,10 +312,13 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 	executor->ScheduleTasks(std::move(read_tasks));
 	lock_guard<mutex> guard(lock);
 	if (memory_governor) {
-		// Reserve room for the next job before admission checks the budget.
+		// TryReserveSlot takes a job's minimum charge before the budget check, so the backlog can never exceed the
+		// reservation and the governor, which grows only past it, would never grow it beyond the minimum: ask for
+		// the next job's headroom here, so the reservation grows ahead of the backlog until it reaches the cap
 		memory_governor->UpdateReservation(pending_io_bytes.load() + MINIMUM_JOB_IO_CHARGE);
 		backlog_budget = memory_governor->BackpressureBudget();
 	}
+	DUCKDB_LOG(context, ReadAheadBudgetLogType, pending_io_bytes.load(), backlog_budget.load(), active_jobs.load());
 	// producers push concurrently, so admit jobs to the queue in batch-index order
 	if (job->batch_index < next_batch_index || !pending_jobs.emplace(job->batch_index, std::move(job)).second) {
 		throw InternalException("Read-ahead jobs must have unique batch indexes, assigned densely from 0");

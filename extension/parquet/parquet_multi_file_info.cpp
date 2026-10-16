@@ -626,6 +626,45 @@ AsyncResult ParquetReader::ScheduleIO(ClientContext &context, GlobalTableFunctio
 	return ScheduleRowGroupReads(scan_state, strategy);
 }
 
+bool ParquetReader::RecheckRowGroupFilters(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                           LocalTableFunctionState &lstate_p) {
+	if (!filters) {
+		return true;
+	}
+	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
+	auto &state = lstate_p.Cast<ParquetReadLocalState>().scan_state;
+	auto &group = GetGroup(state);
+	if (group.num_rows <= 0 || state.offset_in_group >= NumericCast<idx_t>(group.num_rows)) {
+		// the row group was already consumed or skipped by the produce-time filter check
+		return true;
+	}
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto col_idx = MultiFileLocalIndex(i);
+		auto filter_entry = filters->TryGetFilterByColumnIndex(col_idx);
+		if (!filter_entry) {
+			continue;
+		}
+		auto prune_result =
+		    CheckRowGroupFilterStatistics(context, state, state.GetColumnReader(col_idx), *filter_entry);
+		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE &&
+		    prune_result != FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+			continue;
+		}
+		// a dynamic filter set since the job was produced now prunes this row group - drop it before decoding. the
+		// I/O is already done, but the decode and the downstream work are saved, and the group moves to skipped
+		state.offset_in_group = NumericCast<idx_t>(group.num_rows);
+		if (state.row_groups_read > 0) {
+			state.row_groups_read--;
+			state.row_groups_skipped++;
+		}
+		if (gstate.row_groups_scanned_unreported > 0) {
+			gstate.row_groups_scanned_unreported--;
+		}
+		return false;
+	}
+	return true;
+}
+
 void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	gstate.row_group_index = 0;
