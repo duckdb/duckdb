@@ -238,8 +238,8 @@ SQLSourceQueryResult LogicalPlanSQLExportHelpers::ReconstructSQLSource(ClientCon
 				// the argument is computed by the exported input, its value renders through that subquery
 				auto refused =
 				    SQLExportSensitiveParameters::RefusePositional(context, get.function.GetSignature(), i, nullptr);
-				if (!refused.empty()) {
-					return SensitiveParameterSource(get, refused);
+				if (refused) {
+					return SensitiveParameterSource(get, *refused);
 				}
 				parameters.push_back(make_uniq<ColumnRefExpression>(input->column_name_alias[i], input->alias));
 			}
@@ -247,6 +247,13 @@ SQLSourceQueryResult LogicalPlanSQLExportHelpers::ReconstructSQLSource(ClientCon
 			bool consumed_input = false;
 			for (idx_t i = 0; i < get.parameters.size(); i++) {
 				if (i < signature.size() && signature[i] == LogicalType::TABLE) {
+					// the TABLE argument renders as the reconstructed input subquery, the retained Value
+					// is only its placeholder
+					auto table_refused = SQLExportSensitiveParameters::RefusePositional(
+					    context, get.function.GetSignature(), i, nullptr);
+					if (table_refused) {
+						return SensitiveParameterSource(get, *table_refused);
+					}
 					const bool has_available_input = input && !consumed_input && get.projected_input.empty();
 					const bool has_input_columns = has_available_input &&
 					                               input->column_name_alias.size() >= get.input_table_types.size() &&
@@ -273,8 +280,8 @@ SQLSourceQueryResult LogicalPlanSQLExportHelpers::ReconstructSQLSource(ClientCon
 				}
 				auto refused = SQLExportSensitiveParameters::RefusePositional(context, get.function.GetSignature(), i,
 				                                                              get.parameters[i]);
-				if (!refused.empty()) {
-					return SensitiveParameterSource(get, refused);
+				if (refused) {
+					return SensitiveParameterSource(get, *refused);
 				}
 				auto exported = BoundExpressionSQLExporter::Export(BoundConstantExpression(get.parameters[i]), {});
 				if (exported.HasError()) {
@@ -289,8 +296,8 @@ SQLSourceQueryResult LogicalPlanSQLExportHelpers::ReconstructSQLSource(ClientCon
 		for (auto &parameter : get.named_parameters) {
 			auto refused = SQLExportSensitiveParameters::RefuseNamed(context, get.function.GetSignature(),
 			                                                         parameter.first, parameter.second);
-			if (!refused.empty()) {
-				return SensitiveParameterSource(get, refused);
+			if (refused) {
+				return SensitiveParameterSource(get, *refused);
 			}
 			auto exported = BoundExpressionSQLExporter::Export(BoundConstantExpression(parameter.second), {});
 			if (exported.HasError()) {

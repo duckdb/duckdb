@@ -14,6 +14,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/function/scalar/system_functions.hpp"
+#include "duckdb/planner/sql_export/sql_export_sensitive_parameters.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -907,6 +908,49 @@ unique_ptr<ParsedExpression> ExportAggregateFunction::StateToSQL(const LogicalTy
 		arguments.push_back(ConstantExpression::FromValue(orders->second));
 	}
 	return make_uniq<FunctionExpression>(QualifiedName("system", "main", "to_aggregate_state"), std::move(arguments));
+}
+
+bool ExportAggregateFunction::StateRendersSensitiveParameter(ClientContext &context, const LogicalType &type,
+                                                             Identifier &function_name, Identifier &parameter) {
+	auto info = type.GetExtensionInfo();
+	if (!type.IsAggregateState() || !info) {
+		return false;
+	}
+	auto name = info->properties.find("function_name");
+	auto parameters = info->properties.find("parameters");
+	if (name == info->properties.end() || name->second.IsNull() || name->second.type().id() != LogicalTypeId::VARCHAR ||
+	    parameters == info->properties.end() || parameters->second.IsNull() ||
+	    parameters->second.type().id() != LogicalTypeId::LIST) {
+		return false;
+	}
+	vector<LogicalType> types;
+	map<idx_t, Value> constants;
+	ParseStateParameters(parameters->second, types, constants);
+	if (constants.empty()) {
+		return false;
+	}
+	auto aggregate_name = Identifier(StringValue::Get(name->second));
+	auto entry = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
+	    context,
+	    QualifiedName(Catalog::GetSystemCatalog(context).GetName(), Identifier::DefaultSchema(), aggregate_name),
+	    OnEntryNotFound::RETURN_NULL);
+	if (!entry) {
+		// an unknown aggregate carries no sensitivity declaration, and re-binding the state fails loudly
+		return false;
+	}
+	// the recorded name does not pin an overload, so a constant counts as sensitive if any overload declares it so
+	for (idx_t function_idx = 0; function_idx < entry->functions.Size(); function_idx++) {
+		auto &signature = entry->functions.GetFunctionByOffset(function_idx)->GetSignature();
+		for (auto &constant : constants) {
+			auto declared = SQLExportSensitiveParameters::PositionalParameter(signature, constant.first);
+			if (declared && declared->IsSensitive()) {
+				function_name = aggregate_name;
+				parameter = declared->GetName();
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 void ExportAggregateFunction::GetSortedStateOrders(const LogicalType &state_type,
