@@ -15,22 +15,26 @@ namespace duckdb {
 class ClientContext;
 class Expression;
 
-//! Resolves rendered invocation arguments against sensitive parameter declarations
+//! Resolves rendered invocation arguments against sensitive parameter declarations.
+//! A set result is the name to report in the refusal, an empty result allows rendering.
 struct SQLExportSensitiveParameters {
-	//! Whether the retained value is the parameter's declared default - registration metadata, not a secret
+	//! Whether the retained value renders as the parameter's declared default - registration metadata, not a secret
 	static bool MatchesDeclaredDefault(ClientContext &context, const FunctionParameter &parameter, const Value &value);
 	//! The declared parameter that receives the positional argument at the given index
 	static optional_ptr<const FunctionParameter> PositionalParameter(const FunctionSignature &signature, idx_t index);
-	//! The name to report when the positional argument at the index must not render, empty when rendering is allowed
-	static Identifier RefusePositional(optional_ptr<ClientContext> context, const FunctionSignature &signature,
-	                                   idx_t index, optional_ptr<const Value> value);
-	//! The name to report when the named argument must not render, empty when rendering is allowed
-	static Identifier RefuseNamed(optional_ptr<ClientContext> context, const FunctionSignature &signature,
-	                              const Identifier &name, optional_ptr<const Value> value);
-	//! The name to report when the bound argument at the index of a [positional | named tail] call layout must not
-	//! render, empty when rendering is allowed
-	static Identifier RefuseBoundArgument(optional_ptr<ClientContext> context, const FunctionSignature &signature,
-	                                      idx_t positional_count, const vector<Identifier> &named_arguments,
-	                                      idx_t index, const Expression &argument);
+	//! The first sensitive declaration of the signature, including "**kwargs" and typed kwargs options
+	static optional<Identifier> FirstSensitiveParameter(const FunctionSignature &signature);
+	//! The refusal for the positional argument at the index
+	static optional<Identifier> RefusePositional(optional_ptr<ClientContext> context,
+	                                             const FunctionSignature &signature, idx_t index,
+	                                             optional_ptr<const Value> value);
+	//! The refusal for the named argument
+	static optional<Identifier> RefuseNamed(optional_ptr<ClientContext> context, const FunctionSignature &signature,
+	                                        const Identifier &name, optional_ptr<const Value> value);
+	//! The refusal for the bound argument at the index of a [positional | named tail] call layout
+	static optional<Identifier> RefuseBoundArgument(optional_ptr<ClientContext> context,
+	                                                const FunctionSignature &signature, idx_t positional_count,
+	                                                const vector<Identifier> &named_arguments, idx_t index,
+	                                                const Expression &argument);
 };
 } // namespace duckdb
