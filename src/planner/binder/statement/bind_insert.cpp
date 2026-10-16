@@ -342,6 +342,25 @@ static identifier_set_t GetConflictColumnNames(const TableStorageInfo &storage_i
 	return conflict_column_names;
 }
 
+void Binder::CheckOnConflictInsertColumns(InsertQueryNode &node, TableCatalogEntry &table) {
+	if (node.column_order != InsertColumnOrder::INSERT_BY_POSITION) {
+		return;
+	}
+	vector<LogicalIndex> named_column_map;
+	vector<LogicalType> expected_types;
+	physical_index_vector_t<idx_t> column_index_map;
+	BindInsertColumnList(table, node.columns, node.default_values, named_column_map, expected_types, column_index_map);
+	if (!node.select_statement || node.GetValuesList()) {
+		// a VALUES list is checked when its defaults are expanded
+		return;
+	}
+	auto select_copy = node.select_statement->Copy();
+	auto select_binder = Binder::CreateBinder(context, this);
+	auto bound_select = select_binder->Bind(select_copy->Cast<SelectStatement>());
+	idx_t expected_columns = node.columns.empty() ? table.GetColumns().PhysicalColumnCount() : node.columns.size();
+	CheckInsertColumnCountMismatch(expected_columns, bound_select.types.size(), !node.columns.empty(), table.name);
+}
+
 unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, TableCatalogEntry &table) {
 	D_ASSERT(node.on_conflict_info);
 
@@ -626,6 +645,8 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	}
 
 	if (node.on_conflict_info) {
+		// the MERGE INTO uses the column list only as aliases of its source, check it as a plain INSERT does
+		CheckOnConflictInsertColumns(node, table);
 		// generate a MERGE INTO statement and bind it instead
 		auto merge_into = GenerateMergeInto(node, table);
 		return Bind(*merge_into);
