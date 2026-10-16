@@ -28,7 +28,8 @@
 
 namespace duckdb {
 
-Executor::Executor(ClientContext &context) : context(context), executor_tasks(0), blocked_thread_time(0) {
+Executor::Executor(ClientContext &context, bool nested_execution)
+    : context(context), nested_execution(nested_execution), executor_tasks(0), blocked_thread_time(0) {
 }
 
 Executor::~Executor() {
@@ -243,6 +244,10 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 		this->producer = scheduler.CreateProducer();
 
 		auto verify_progress = Settings::Get<DebugVerifyProgressSetting>(context);
+		if (nested_execution) {
+			// the progress of a nested executor is never polled, so there is nothing to verify
+			verify_progress = DebugProgressVerification::NONE;
+		}
 		if (verify_progress != DebugProgressVerification::NONE) {
 			progress_verifier = make_uniq<ProgressVerifier>(context, verify_progress,
 			                                                Settings::Get<DebugVerifyProgressIgnoreSetting>(context));
@@ -258,7 +263,10 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 		root_pipeline->GetMetaPipelines(to_schedule, true, true);
 		state.ResolveExternalInputs(to_schedule);
 
-		profiler->Initialize(plan);
+		if (!nested_execution) {
+			// a nested sub-plan is part of the profiler tree of the outer query, built by the outer executor
+			profiler->Initialize(plan);
+		}
 		root_pipeline->Ready();
 
 		// ready recursive cte pipelines too
@@ -585,7 +593,11 @@ void Executor::PushError(ErrorData exception) {
 	// push the exception onto the stack
 	error_manager.PushError(std::move(exception));
 	// interrupt execution of any other pipelines that belong to this executor
-	context.interrupt_state = ClientInterruptState::INTERRUPTED;
+	// a nested executor must not interrupt the client: its owner may contain the error (e.g. a TRY boundary),
+	// and the outer query has to keep running
+	if (!nested_execution) {
+		context.interrupt_state = ClientInterruptState::INTERRUPTED;
+	}
 	for (auto &pipeline : pipelines) {
 		pipeline->FinishSourceAndPreventBlocking(context);
 		pipeline->PreventSinkBlocking();
