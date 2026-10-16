@@ -14,6 +14,7 @@
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/compression/compression_segment_reader.hpp"
 #include "duckdb/storage/compression/standard_compression_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
@@ -161,7 +162,7 @@ public:
 	void Reset();
 	// Write the metadata for the current segment
 	idx_t Serialize(data_ptr_t dest) const;
-	void Deserialize(data_ptr_t src, idx_t container_count);
+	void Deserialize(CompressionSegmentReader reader, idx_t container_count);
 
 private:
 	void AddBitsetContainer();
@@ -608,10 +609,17 @@ public:
 
 struct RoaringScanState : public SegmentScanState {
 public:
+	//! The segment layout, as on disk.
+	struct SegmentLayout {
+		CompressionSegmentReader data;
+		CompressionSegmentReader metadata;
+	};
+
+	static SegmentLayout ReadLayout(const BufferHandle &handle, const ColumnSegment &segment);
+
 	explicit RoaringScanState(const QueryContext &context, ColumnSegment &segment);
 
 public:
-	idx_t SkipVector(const ContainerMetadata &metadata);
 	bool UseContainerStateCache(idx_t container_index, idx_t internal_offset);
 	ContainerMetadata GetContainerMetadata(idx_t container_index);
 	data_ptr_t GetStartOfContainerData(idx_t container_index);
