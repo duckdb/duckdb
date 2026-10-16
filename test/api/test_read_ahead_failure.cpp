@@ -55,6 +55,13 @@ public:
 		return LocalFileSystem::FileExists(MapPath(path), opener);
 	}
 
+	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file,
+	                                        optional_ptr<FileOpener> opener = nullptr) override {
+		auto mapped_file = file;
+		mapped_file.path = MapPath(file.path);
+		return LocalFileSystem::GetStatsIfExists(mapped_file, opener);
+	}
+
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener) override {
 		if (!CanHandleFile(path)) {
 			return LocalFileSystem::Glob(path, opener);
