@@ -342,6 +342,20 @@ void DataChunk::Serialize(Serializer &serializer, bool compressed_serialization)
 	});
 }
 
+static void CheckDeserializedColumnIndex(idx_t i, idx_t column_count) {
+	if (i >= column_count) {
+		throw SerializationException("Failed to deserialize data chunk: more columns than column types %llu",
+		                             column_count);
+	}
+}
+
+static void CheckDeserializedColumnCount(idx_t columns_read, idx_t column_count) {
+	if (columns_read != column_count) {
+		throw SerializationException("Failed to deserialize data chunk: expected %llu columns but got %llu",
+		                             column_count, columns_read);
+	}
+}
+
 void DataChunk::Deserialize(Deserializer &deserializer) {
 	// read and set the row count
 	auto row_count = deserializer.ReadProperty<sel_t>(100, "rows");
@@ -354,13 +368,19 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 	});
 
 	// initialize the data chunk
-	D_ASSERT(!types.empty());
+	if (types.empty()) {
+		throw SerializationException("Failed to deserialize data chunk: expected at least one column type");
+	}
 	Initialize(Allocator::DefaultAllocator(), types, MaxValue<idx_t>(row_count, STANDARD_VECTOR_SIZE));
 
 	// read the data
+	idx_t column_count = 0;
 	deserializer.ReadList(102, "columns", [&](Deserializer::List &list, idx_t i) {
+		CheckDeserializedColumnIndex(i, data.size());
+		column_count++;
 		list.ReadObject([&](Deserializer &object) { data[i].Deserialize(object, row_count); });
 	});
+	CheckDeserializedColumnCount(column_count, data.size());
 	SetChildCardinality(row_count);
 }
 
