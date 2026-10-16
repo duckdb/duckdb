@@ -90,8 +90,8 @@ void UnboundIndex::ThrowBindFailure(const ErrorData &error, const string &reason
 	                                                "failed. Detach and reattach it before using it again. "
 	                                                "Original error: %s",
 	                                                db.GetName(), error.RawMessage()));
-	throw IOException("%s of index %s: %s. Database %s has been invalidated: detach and reattach it to retry.",
-	                  reason, GetIndexName(), error.RawMessage(), db.GetName());
+	throw IOException("%s of index %s: %s. Database %s has been invalidated: detach and reattach it to retry.", reason,
+	                  GetIndexName(), error.RawMessage(), db.GetName());
 }
 
 unique_ptr<BoundIndex> UnboundIndex::Bind(IndexBinder &binder, const vector<LogicalType> &physical_column_types) {
