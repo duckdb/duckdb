@@ -55,6 +55,14 @@ void StatisticsPropagator::ResetAdditiveStatistics(const vector<ColumnBinding> &
 	}
 }
 
+void StatisticsPropagator::ResetAdditiveVerificationStats(Expression &expr) {
+	auto &stats = expr.GetVerificationStats();
+	if (stats) {
+		stats->ResetAdditiveStatistics();
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ResetAdditiveVerificationStats(child); });
+}
+
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOperator &node,
                                                                      unique_ptr<LogicalOperator> &node_ptr) {
 	propagation_path.emplace_back(node_ptr);

@@ -213,12 +213,26 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 			break;
 		}
 	}
+
+	// join conditions can be evaluated over candidate pairs that repeat rows of either side,
+	// so their verification statistics must not carry additive totals
+	for (auto &condition : join.conditions) {
+		if (condition.IsComparison()) {
+			ResetAdditiveVerificationStats(condition.GetLHS());
+			ResetAdditiveVerificationStats(condition.GetRHS());
+		} else {
+			ResetAdditiveVerificationStats(condition.GetJoinExpression());
+		}
+	}
 }
 
 void StatisticsPropagator::PropagateStatistics(LogicalAnyJoin &join, unique_ptr<LogicalOperator> &node_ptr) {
 	// propagate the expression into the join condition
 	// note that a condition that is TRUE_OR_NULL does not always match: a NULL condition rejects the pair
 	PropagateExpression(join.condition);
+	// the condition is evaluated over candidate pairs that repeat rows of either side,
+	// so its verification statistics must not carry additive totals
+	ResetAdditiveVerificationStats(*join.condition);
 	switch (ClassifyFilter(*join.condition)) {
 	case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 		HandleJoinAlwaysMatches(join, node_ptr);

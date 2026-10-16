@@ -97,6 +97,8 @@ private:
 	void SetStatisticsNotNull(ColumnBinding binding);
 	//! Reset additive statistics of bindings whose rows an operator can emit more than once
 	void ResetAdditiveStatistics(const vector<ColumnBinding> &bindings);
+	//! Reset additive statistics in the verification statistics of an expression tree
+	void ResetAdditiveVerificationStats(Expression &expr);
 	//! Determine whether a propagated condition can be pruned
 	FilterPropagateResult ClassifyFilter(Expression &condition);
 	//! Simplify conjunctions using filter truth semantics
