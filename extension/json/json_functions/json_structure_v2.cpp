@@ -196,7 +196,11 @@ optional<Frame> HandleObjectFrame(NodeStorage &nodes, Frame &frame, yyjson_mut_d
 		if (child.incompatible) {
 			continue;
 		}
-		return Frame(yyjson_obj_iter_get_val(key.get()), child);
+		const auto val = yyjson_obj_iter_get_val(key.get());
+		if (yyjson_is_ctn(val)) {
+			return Frame(val, child);
+		}
+		child.MergeType(JSONCommon::ValTypeToLogicalTypeId(val), doc);
 	}
 	return nullopt;
 }
