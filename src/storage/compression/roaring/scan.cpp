@@ -116,7 +116,7 @@ void UncompressedRunContainerScanState::Verify() const {
 #endif
 }
 
-void UncompressedRunContainerScanState::LoadNextRun() {
+void UncompressedRunContainerScanState::LoadNextRunInternal() {
 	if (run_index >= count) {
 		finished = true;
 		return;
@@ -134,7 +134,7 @@ CompressedRunContainerScanState::CompressedRunContainerScanState(idx_t container
 	(void)this->segments;
 }
 
-void CompressedRunContainerScanState::LoadNextRun() {
+void CompressedRunContainerScanState::LoadNextRunInternal() {
 	if (run_index >= count) {
 		finished = true;
 		return;
