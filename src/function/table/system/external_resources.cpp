@@ -86,7 +86,8 @@ static void DiscoverExternalResources(ClientContext &context, const ExternalReso
                                       const set<string> &managed_handles, vector<ExternalResourceRow> &rows) {
 	// Separate internal connection (the current connection's context lock is held here), resolving the
 	// callback in the type's registration-time search path.
-	Connection con(DatabaseInstance::GetDatabase(context));
+	auto callback_con = CreateExternalResourceCallbackConnection(DatabaseInstance::GetDatabase(context), &context);
+	auto &con = *callback_con;
 	if (!type.search_path.empty()) {
 		auto set_res = con.Query("SET search_path = " + Value(type.search_path).ToSQLString());
 		if (set_res->HasError()) {
