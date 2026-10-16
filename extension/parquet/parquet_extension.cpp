@@ -107,7 +107,8 @@ struct ParquetWriteBindData : public TableFunctionData {
 	idx_t string_dictionary_page_size_limit = PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
 
 	//! The maximum uncompressed size of a data page
-	idx_t data_page_size_limit = PrimitiveColumnWriter::DEFAULT_DATA_PAGE_SIZE_LIMIT;
+	//! 0 when not set by the user: the default then depends on whether the page index is written
+	idx_t data_page_size_limit = 0;
 
 	bool enable_bloom_filters = true;
 	bool write_page_index = false;
@@ -413,7 +414,13 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	options.encryption_config = parquet_bind.encryption_config;
 	options.dictionary_size_limit = parquet_bind.dictionary_size_limit,
 	options.string_dictionary_page_size_limit = parquet_bind.string_dictionary_page_size_limit;
-	options.data_page_size_limit = parquet_bind.data_page_size_limit;
+	// pages are what the page index lets readers skip: with the index, pages follow the 1 MiB default of the other
+	// writers; without it the whole column chunk stays one page, as before
+	options.data_page_size_limit =
+	    parquet_bind.data_page_size_limit != 0
+	        ? parquet_bind.data_page_size_limit
+	        : (parquet_bind.write_page_index ? PrimitiveColumnWriter::DEFAULT_DATA_PAGE_SIZE_LIMIT
+	                                         : PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE);
 	options.enable_bloom_filters = parquet_bind.enable_bloom_filters,
 	options.write_page_index = parquet_bind.write_page_index;
 	options.bloom_filter_false_positive_ratio = parquet_bind.bloom_filter_false_positive_ratio;
