@@ -18,9 +18,9 @@ SET autoinstall_known_extensions = false;
 statement ok
 CALL enable_logging('HTTP', storage = 'memory');
 
-# INSTALL over HTTP uses core's built-in client without HTTPFS. GitHub redirects to HTTPS,
-# which this path does not follow, so installation fails without installing an extension.
-# The redirect still produces a response log with Location and allowed protocol headers.
+# INSTALL over HTTP uses core's built-in client without HTTPFS. GitHub redirects to HTTPS; the
+# installer follows the redirect, but no extension gets installed. The redirect response is logged
+# with its Location and allowed protocol headers; the response of the redirect hop has no Location.
 statement maybe
 INSTALL 'http://github.com/duckdb/duckdb';
 ----

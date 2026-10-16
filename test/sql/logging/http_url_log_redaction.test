@@ -18,8 +18,11 @@ SET autoinstall_known_extensions = false;
 statement ok
 CALL enable_logging('HTTP', storage = 'memory');
 
-# INSTALL over HTTP uses core's built-in client without HTTPFS. GitHub redirects to HTTPS
-# or rejects the request target. Redirects are not followed, so no extension is installed.
+# INSTALL over HTTP uses core's built-in client without HTTPFS. GitHub answers with a 301 to the same
+# url over HTTPS, which the installer follows, so every INSTALL logs the supplied url and the url of the
+# redirect hop (the hop is requested, but may not be logged, when HTTPS is unavailable). No extension is
+# installed either way. The redirect keeps the query of the supplied url; the fragment is never sent to
+# the server, so the hop after a url with a fragment has none. Every logged url must be redacted.
 foreach redact true false
 
 statement ok
@@ -34,7 +37,9 @@ INSTALL 'http://github.com/duckdb/duckdb';
 ----
 
 query I
-SELECT count(*) > 0 AND bool_and(request.url = 'http://github.com/duckdb/duckdb')
+SELECT count(*) > 0 AND bool_and(request.url IN (
+    'http://github.com/duckdb/duckdb',
+    'https://github.com/duckdb/duckdb'))
 FROM duckdb_logs_parsed('HTTP');
 ----
 true
@@ -48,10 +53,15 @@ INSTALL 'http://github.com/duckdb/duckdb?custom_token=dummy-token&email=dummy@ex
 ----
 
 query I
-SELECT count(*) > 0 AND bool_and(request.url = CASE WHEN {redact}
-    THEN 'http://github.com/duckdb/duckdb?redacted'
-    ELSE 'http://github.com/duckdb/duckdb?custom_token=dummy-token&email=dummy@example.com'
-END)
+SELECT count(*) > 0 AND bool_and(request.url IN (
+    CASE WHEN {redact}
+        THEN 'http://github.com/duckdb/duckdb?redacted'
+        ELSE 'http://github.com/duckdb/duckdb?custom_token=dummy-token&email=dummy@example.com'
+    END,
+    CASE WHEN {redact}
+        THEN 'https://github.com/duckdb/duckdb?redacted'
+        ELSE 'https://github.com/duckdb/duckdb?custom_token=dummy-token&email=dummy@example.com'
+    END))
 FROM duckdb_logs_parsed('HTTP');
 ----
 true
@@ -65,10 +75,12 @@ INSTALL 'http://github.com/duckdb/duckdb#dummy-token';
 ----
 
 query I
-SELECT count(*) > 0 AND bool_and(request.url = CASE WHEN {redact}
-    THEN 'http://github.com/duckdb/duckdb#redacted'
-    ELSE 'http://github.com/duckdb/duckdb#dummy-token'
-END)
+SELECT count(*) > 0 AND bool_and(request.url IN (
+    CASE WHEN {redact}
+        THEN 'http://github.com/duckdb/duckdb#redacted'
+        ELSE 'http://github.com/duckdb/duckdb#dummy-token'
+    END,
+    'https://github.com/duckdb/duckdb'))
 FROM duckdb_logs_parsed('HTTP');
 ----
 true
@@ -82,10 +94,15 @@ INSTALL 'http://github.com/duckdb/duckdb?token=dummy-token#dummy-fragment';
 ----
 
 query I
-SELECT count(*) > 0 AND bool_and(request.url = CASE WHEN {redact}
-    THEN 'http://github.com/duckdb/duckdb?redacted'
-    ELSE 'http://github.com/duckdb/duckdb?token=dummy-token#dummy-fragment'
-END)
+SELECT count(*) > 0 AND bool_and(request.url IN (
+    CASE WHEN {redact}
+        THEN 'http://github.com/duckdb/duckdb?redacted'
+        ELSE 'http://github.com/duckdb/duckdb?token=dummy-token#dummy-fragment'
+    END,
+    CASE WHEN {redact}
+        THEN 'https://github.com/duckdb/duckdb?redacted'
+        ELSE 'https://github.com/duckdb/duckdb?token=dummy-token'
+    END))
 FROM duckdb_logs_parsed('HTTP');
 ----
 true
@@ -99,10 +116,12 @@ INSTALL 'http://github.com/duckdb/duckdb#dummy-fragment?token=dummy-token';
 ----
 
 query I
-SELECT count(*) > 0 AND bool_and(request.url = CASE WHEN {redact}
-    THEN 'http://github.com/duckdb/duckdb#redacted'
-    ELSE 'http://github.com/duckdb/duckdb#dummy-fragment?token=dummy-token'
-END)
+SELECT count(*) > 0 AND bool_and(request.url IN (
+    CASE WHEN {redact}
+        THEN 'http://github.com/duckdb/duckdb#redacted'
+        ELSE 'http://github.com/duckdb/duckdb#dummy-fragment?token=dummy-token'
+    END,
+    'https://github.com/duckdb/duckdb'))
 FROM duckdb_logs_parsed('HTTP');
 ----
 true
@@ -116,7 +135,9 @@ INSTALL 'http://github.com/duckdb/duckdb@dummy';
 ----
 
 query I
-SELECT count(*) > 0 AND bool_and(request.url = 'http://github.com/duckdb/duckdb@dummy')
+SELECT count(*) > 0 AND bool_and(request.url IN (
+    'http://github.com/duckdb/duckdb@dummy',
+    'https://github.com/duckdb/duckdb@dummy'))
 FROM duckdb_logs_parsed('HTTP');
 ----
 true
@@ -130,12 +151,15 @@ INSTALL 'http://github.com/duckdb/duckdb%3Fdummy%23dummy%40dummy';
 ----
 
 query I
-SELECT count(*) > 0 AND bool_and(request.url = 'http://github.com/duckdb/duckdb%3Fdummy%23dummy%40dummy')
+SELECT count(*) > 0 AND bool_and(request.url IN (
+    'http://github.com/duckdb/duckdb%3Fdummy%23dummy%40dummy',
+    'https://github.com/duckdb/duckdb%3Fdummy%23dummy%40dummy'))
 FROM duckdb_logs_parsed('HTTP');
 ----
 true
 
-# An empty query still retains its delimiter and gets a redaction marker.
+# An empty query still retains its delimiter and gets a redaction marker. The redirect may or may not
+# keep the empty query.
 statement ok
 CALL truncate_duckdb_logs();
 
@@ -144,10 +168,16 @@ INSTALL 'http://github.com/duckdb/duckdb?';
 ----
 
 query I
-SELECT count(*) > 0 AND bool_and(request.url = CASE WHEN {redact}
-    THEN 'http://github.com/duckdb/duckdb?redacted'
-    ELSE 'http://github.com/duckdb/duckdb?'
-END)
+SELECT count(*) > 0 AND bool_and(request.url IN (
+    CASE WHEN {redact}
+        THEN 'http://github.com/duckdb/duckdb?redacted'
+        ELSE 'http://github.com/duckdb/duckdb?'
+    END,
+    CASE WHEN {redact}
+        THEN 'https://github.com/duckdb/duckdb?redacted'
+        ELSE 'https://github.com/duckdb/duckdb?'
+    END,
+    'https://github.com/duckdb/duckdb'))
 FROM duckdb_logs_parsed('HTTP');
 ----
 true

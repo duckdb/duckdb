@@ -229,9 +229,9 @@ static void VerifyCanDownloadExtension(DatabaseInstance &db, const string &url) 
 	                          url);
 }
 
-//! Perform the GET request for an extension against a single url
-static unique_ptr<HTTPResponse> RequestExtension(DatabaseInstance &db, optional_ptr<ClientContext> context,
-                                                 const string &url, const HTTPHeaders &headers) {
+//! Perform a single GET request for an extension, without following redirects
+static unique_ptr<HTTPResponse> RequestUrl(DatabaseInstance &db, optional_ptr<ClientContext> context, const string &url,
+                                           const HTTPHeaders &headers) {
 	// the official repositories are reachable even when external access is disabled, any other url must be allowed
 	// through allowed_directories or allowed_paths
 	VerifyCanDownloadExtension(db, url);
@@ -239,8 +239,9 @@ static unique_ptr<HTTPResponse> RequestExtension(DatabaseInstance &db, optional_
 	auto session = context ? manager.CreateSession(*context, url) : manager.CreateSession(db, url);
 	auto &params = session.Parameters();
 
-	// Unclear what's peculiar about extension install flow, but those two parameters are needed
-	// to avoid lengthy retry on 304
+	// redirects are followed by RequestExtension so that every url we download from passes the check above - the
+	// http client must not follow them on its own. Each url is requested exactly once, so there is nothing to keep
+	// alive.
 	params.follow_location = false;
 	params.keep_alive = false;
 	// the url was checked above, which also allows the official repositories, so skip the central check
@@ -250,6 +251,71 @@ static unique_ptr<HTTPResponse> RequestExtension(DatabaseInstance &db, optional_
 	get_request.try_request = true;
 
 	return session.Request(get_request);
+}
+
+//! Whether the response redirects a GET to the url in its Location header
+static bool IsRedirect(const HTTPResponse &response) {
+	switch (response.status) {
+	case HTTPStatusCode::MovedPermanently_301:
+	case HTTPStatusCode::Found_302:
+	case HTTPStatusCode::SeeOther_303:
+	case HTTPStatusCode::TemporaryRedirect_307:
+	case HTTPStatusCode::PermanentRedirect_308:
+		return response.HasHeader("Location");
+	default:
+		return false;
+	}
+}
+
+//! Resolve the Location header of a redirect against the url that was requested
+static string ResolveRedirectLocation(const string &url, const string &location) {
+	auto lower_location = StringUtil::Lower(location);
+	if (StringUtil::StartsWith(lower_location, "http://") || StringUtil::StartsWith(lower_location, "https://")) {
+		return location;
+	}
+	string path, proto_host_port;
+	HTTPUtil::DecomposeURL(url, path, proto_host_port);
+	if (StringUtil::StartsWith(location, "//")) {
+		// scheme-relative: keep the scheme of the current url
+		return proto_host_port.substr(0, proto_host_port.find("//")) + location;
+	}
+	// strip the query and fragment of the current path, then resolve the location against its directory
+	path = path.substr(0, path.find_first_of("?#"));
+	string base = StringUtil::StartsWith(location, "/") ? string() : path.substr(0, path.rfind('/'));
+	vector<string> segments;
+	for (auto &segment : StringUtil::Split(base + "/" + location, '/')) {
+		if (segment.empty() || segment == ".") {
+			continue;
+		}
+		if (segment == "..") {
+			if (!segments.empty()) {
+				segments.pop_back();
+			}
+			continue;
+		}
+		segments.push_back(segment);
+	}
+	return proto_host_port + "/" + StringUtil::Join(segments, "/");
+}
+
+//! Perform the GET request for an extension against a single url, following redirects
+static unique_ptr<HTTPResponse> RequestExtension(DatabaseInstance &db, optional_ptr<ClientContext> context,
+                                                 const string &url, const HTTPHeaders &headers) {
+	static constexpr idx_t MAX_REDIRECTS = 10;
+
+	string current_url = url;
+	for (idx_t redirect_count = 0;; redirect_count++) {
+		auto response = RequestUrl(db, context, current_url, headers);
+		if (!IsRedirect(*response)) {
+			return response;
+		}
+		if (redirect_count >= MAX_REDIRECTS) {
+			response->success = false;
+			response->request_error = StringUtil::Format("too many redirects, stopped at \"%s\"", current_url);
+			return response;
+		}
+		current_url = ResolveRedirectLocation(current_url, response->GetHeaderValue("Location"));
+	}
 }
 
 //! Whether a failed response means the server itself is unavailable, as opposed to e.g. the extension not existing
