@@ -1,5 +1,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -179,6 +180,15 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	// Only those children that trigger an error are not yet bound.
 	ErrorData error;
 	vector<unique_ptr<Expression>> children;
+	if (operator_type == ExpressionType::OPERATOR_TRY) {
+		D_ASSERT(op.GetChildrenMutable().size() == 1);
+		auto &try_child = op.GetChildrenMutable()[0];
+		if (try_child->GetExpressionClass() == ExpressionClass::SUBQUERY &&
+		    try_child->Cast<SubqueryExpression>().GetSubqueryType() == SubqueryType::SCALAR) {
+			// TRY directly over a scalar subquery is rewritten into an ordinary subquery
+			return BindTrySubquery(op, depth);
+		}
+	}
 	if (operator_type == ExpressionType::OPERATOR_TRY || operator_type == ExpressionType::OPERATOR_HAS_ERROR) {
 		D_ASSERT(op.GetChildrenMutable().size() == 1);
 		const auto was_inside_try = inside_try;
@@ -298,6 +308,11 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	case ExpressionType::OPERATOR_TRY:
 	case ExpressionType::OPERATOR_HAS_ERROR: {
 		auto &expr = *children[0];
+		if (operator_type == ExpressionType::OPERATOR_TRY &&
+		    expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+			// a directly nested TRY over a scalar subquery was already rewritten into an ordinary subquery
+			return BindResult(std::move(children[0]));
+		}
 		if (expr.HasSubquery()) {
 			throw BinderException("%s can not be used in combination with a scalar subquery",
 			                      ExpressionTypeToString(operator_type));
