@@ -860,7 +860,7 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 		}
 		// Keep the WAL: it is the only remaining record of the buffered operations.
 		DUCKDB_LOG_WARNING(db.GetDatabase(),
-		                   "Skipped the checkpoint of database \"%s\" and kept its write-ahead log: an index with "
+		                   "Skipped the checkpoint of database %s and kept its write-ahead log: an index with "
 		                   "buffered write-ahead log operations cannot be bound: %s",
 		                   db.GetName(), error.RawMessage());
 		return false;

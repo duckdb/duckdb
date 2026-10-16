@@ -52,12 +52,9 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(UnboundIndex &unbound_index) {
 	try {
 		return index_type->create_instance(input);
 	} catch (std::exception &ex) {
-		// A partially constructed index releases its on-disk blocks on destruction: binding cannot be retried,
-		// and the unbound index no longer owns its storage.
-		unbound_index.MarkStorageReclaimed();
+		// A partially constructed index releases its on-disk blocks on destruction: binding cannot be retried.
 		ErrorData error(ex);
-		UnboundIndex::ThrowBindFailure(unbound_index.db, create_info.GetIndexName(), error,
-		                               "Failed to load the storage");
+		unbound_index.ThrowBindFailure(error, "Failed to load the storage");
 	}
 }
 
