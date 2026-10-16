@@ -1,4 +1,6 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
+
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
@@ -192,7 +194,12 @@ shared_ptr<ArenaAllocator> GroupedAggregateHashTable::GetAggregateAllocator() {
 }
 
 GroupedAggregateHashTable::~GroupedAggregateHashTable() {
-	Destroy();
+	// destroying the states pins their blocks, which can fail when the table is torn down after an out-of-memory
+	// error - a destructor cannot throw, so the states leak in that case
+	try {
+		Destroy();
+	} catch (...) { // NOLINT
+	}
 }
 
 void GroupedAggregateHashTable::Destroy() {
@@ -213,16 +220,27 @@ void GroupedAggregateHashTable::DestroyAggregateData(PartitionedTupleData &data,
                                                      PartitionedTupleDataAppendState &append_state) {
 	// Call the destructor for each of the aggregates
 	data.FlushAppendState(append_state);
+	ErrorData first_error;
 	for (auto &data_collection : data.GetPartitions()) {
 		if (data_collection->Count() == 0) {
 			continue;
 		}
-		TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::DESTROY_AFTER_DONE, false);
-		auto &row_locations = iterator.GetChunkState().row_locations;
-		do {
-			RowOperations::DestroyStates(state.row_state, *layout_ptr, row_locations);
-		} while (iterator.Next());
+		try {
+			TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::DESTROY_AFTER_DONE, false);
+			auto &row_locations = iterator.GetChunkState().row_locations;
+			do {
+				RowOperations::DestroyStates(state.row_state, *layout_ptr, row_locations);
+			} while (iterator.Next());
+		} catch (std::exception &ex) {
+			// keep releasing the other partitions, freeing their memory may let their states be destroyed
+			if (!first_error.HasError()) {
+				first_error = ErrorData(ex);
+			}
+		}
 		data_collection->Reset();
+	}
+	if (first_error.HasError()) {
+		first_error.Throw();
 	}
 }
 
@@ -812,6 +830,9 @@ static void GroupedAggregateHashTableInnerLoop(ht_entry_t *const entries, const 
 	}
 }
 
+#if defined(__GNUC__)
+__attribute__((aligned(128)))
+#endif
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v,
                                                             Vector &addresses_v, SelectionVector &new_groups_out) {
 	D_ASSERT(state.initialized && state.owner.get() == this);
@@ -879,15 +900,10 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	const auto ht_offsets = FlatVector::GetDataMutable<uint64_t>(state.ht_offsets);
 	const auto hash_salts = FlatVector::GetDataMutable<hash_t>(state.hash_salts);
 
-	// We also compute the occupied count, which is essentially useless.
-	// However, this loop is branchless, while the main lookup loop below is not.
-	// So, by doing the lookups here, we better amortize cache misses.
-	idx_t occupied_count = 0;
 	for (idx_t r = 0; r < chunk_size; r++) {
 		const auto &hash = hashes[r].GetValue();
 		auto &ht_offset = ht_offsets[r];
 		ht_offset = ApplyBitMask(hash);
-		occupied_count += entries[ht_offset].IsOccupied(); // Lookup
 		D_ASSERT(ht_offset == hash % capacity);
 		hash_salts[r] = ht_entry_t::ExtractSalt(hash);
 	}
@@ -914,13 +930,6 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			    state.group_compare_vector, new_entry_count, need_compare_count);
 		}
 		new_group_count += new_entry_count;
-
-		if (DUCKDB_UNLIKELY(occupied_count > new_entry_count + need_compare_count)) {
-			// We use the useless occupied_count we summed above here so the variable is used,
-			// and the compiler cannot optimize away the vectorized lookups above. This should never be triggered.
-			throw InternalException("Internal validation failed in GroupedAggregateHashTable");
-		}
-		occupied_count = 0; // Have to set to 0 for next iterations
 
 		if (new_entry_count != 0) {
 			// Append everything that belongs to an empty group

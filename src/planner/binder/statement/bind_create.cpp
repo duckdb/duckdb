@@ -247,6 +247,9 @@ QualifiedName Binder::ResolveCatalog(CatalogEntryRetriever &retriever, const Qua
 QualifiedName Binder::BindTableName(CatalogEntryRetriever &retriever, const QualifiedName &name) {
 	auto resolved = ResolveCatalog(retriever, name, false);
 	auto &path = resolved.Path();
+	if (path.size() < 2) {
+		throw InternalException("Binder::BindTableName called with an empty name");
+	}
 	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
 	if (schema_path.size() <= 1) {
 		// unqualified, or qualified with a single schema level: keep the (catalog, schema, name) shape so that the
@@ -316,8 +319,7 @@ SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
 	auto &schema_obj = *Catalog::GetSchema(context, path.front(), schema_path, OnEntryNotFound::THROW_EXCEPTION);
 	D_ASSERT(schema_obj.type == CatalogType::SCHEMA_ENTRY);
-	GetStatementProperties().RegisterDBModify(schema_obj.catalog, context,
-	                                          DatabaseModificationType::CREATE_CATALOG_ENTRY);
+	GetStatementProperties().RegisterDBModify(schema_obj.catalog, context, info.GetModifications());
 	return schema_obj;
 }
 
@@ -853,7 +855,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &info = stmt.info->Cast<CreateSchemaInfo>();
 		BindCreateSchema(info);
 		properties.RegisterDBModify(Catalog::GetCatalog(context, info.SchemaCatalog()), context,
-		                            DatabaseModificationType::CREATE_CATALOG_ENTRY);
+		                            info.GetModifications());
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;
 	}
@@ -1098,7 +1100,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 
 	properties.return_type = return_type;
-	properties.result_eagerness = ResultEagerness::FORCED;
 
 	return result;
 }

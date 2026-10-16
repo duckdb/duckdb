@@ -445,6 +445,14 @@ bool VariantUtils::VariantSupportsType(const LogicalType &type) {
 	}
 }
 
+bool VariantUtils::ShreddedCastMatchesVariantCast(const LogicalType &shredded_type, const LogicalType &target) {
+	if (target.id() == LogicalTypeId::VARIANT || shredded_type == target) {
+		return true;
+	}
+	// casts to JSON serialize the VARIANT, and the VARIANT cast has no conversion to e.g. ENUM or UNION
+	return VariantSupportsType(target);
+}
+
 //===--------------------------------------------------------------------===//
 // ToVariant sources
 //===--------------------------------------------------------------------===//

@@ -142,6 +142,9 @@ void CTEBindState::Bind(CTEBinding &binding) {
 	// names are picked from the LHS, unless aliases are explicitly specified
 	names = query.names;
 	for (idx_t i = 0; i < aliases.size() && i < names.size(); i++) {
+		if (aliases[i].empty()) {
+			throw BinderException("column alias cannot be empty");
+		}
 		names[i] = aliases[i];
 	}
 

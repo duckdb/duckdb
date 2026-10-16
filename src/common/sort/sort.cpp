@@ -5,6 +5,7 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/sorting/sorted_run_merger.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/function/create_sort_key.hpp"
@@ -73,14 +74,20 @@ Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orde
 	vector<LogicalType> payload_types;
 	for (idx_t output_col_idx = 0; output_col_idx < projection_map.size(); output_col_idx++) {
 		const auto &input_col_idx = projection_map[output_col_idx];
+		const auto &input_col_type = input_types[input_col_idx];
 		const auto it = input_column_to_key.find(input_col_idx);
-		if (it != input_column_to_key.end()) {
+		//! The sort key encoding for FLOAT/DOUBLE is not injective around zero (-0.0 and 0.0 encode
+		//! identically, since they must compare equal), so re-decoding the key would turn -0.0 into 0.0.
+		//! Route such columns through the payload instead, where the original bits are preserved.
+		const bool key_encoding_is_lossy = TypeVisitor::Contains(input_col_type, LogicalTypeId::FLOAT) ||
+		                                   TypeVisitor::Contains(input_col_type, LogicalTypeId::DOUBLE);
+		if (it != input_column_to_key.end() && !key_encoding_is_lossy) {
 			// Projected column also appears as a key, just reference it
 			output_projection_columns.push_back({false, it->second, output_col_idx});
 		} else {
 			// Projected column does not appear as a key, add to payload layout
 			output_projection_columns.push_back({true, payload_types.size(), output_col_idx});
-			payload_types.push_back(input_types[input_col_idx]);
+			payload_types.push_back(input_col_type);
 			input_projection_map.push_back(input_col_idx);
 		}
 	}
@@ -157,7 +164,7 @@ public:
 		}
 
 		// Double until it fits
-		auto required = num_threads * lstate.sorted_run->SizeInBytes();
+		auto required = num_threads * lstate.sorted_run->SizeInBytesForSorting();
 		if (is_index_sort) {
 			required *= 4; // Index creation is pretty intense, so we are very conservative here
 		}
@@ -218,8 +225,8 @@ unique_ptr<GlobalSinkState> Sort::GetGlobalSinkState(ClientContext &context) con
 
 //! Returns true if the Sink call is done (either because run size is small or because run was finalized)
 static bool TryFinishSink(SortGlobalSinkState &gstate, SortLocalSinkState &lstate, unique_lock<mutex> &guard) {
-	// Check if we exceed the limit
-	const auto sorted_run_size = lstate.sorted_run->SizeInBytes();
+	// Check if we exceed the limit (sorting the run needs a merge buffer on top of the run itself)
+	const auto sorted_run_size = lstate.sorted_run->SizeInBytesForSorting();
 	if (sorted_run_size < lstate.maximum_run_size) {
 		return true; // Sink is done
 	}

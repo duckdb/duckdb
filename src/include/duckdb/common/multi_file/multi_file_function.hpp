@@ -118,6 +118,7 @@ public:
 	                                                      MultiFileOptions file_options_p,
 	                                                      unique_ptr<BaseFileReaderOptions> options_p,
 	                                                      unique_ptr<MultiFileReaderInterface> interface_p) {
+		file_options_p.ValidateBoundSchema();
 		auto &interface = *interface_p;
 
 		auto result = make_uniq<MultiFileBindData>();
@@ -155,6 +156,13 @@ public:
 		bool bound_on_first_file = true;
 		if (result->multi_file_reader->Bind(result->file_options, *result->file_list, result->types, result->names,
 		                                    result->reader_bind)) {
+			// with the 'schema' option, hive partitioning is asked for (hive_partitioning or hive_types) rather than
+			// detected; the keys' types still are. Readers that bind a schema of their own skip this
+			if (!result->file_options.schema.empty() &&
+			    (result->file_options.hive_partitioning || !result->file_options.hive_types_schema.empty())) {
+				result->file_options.AutoDetectHivePartitioning(*result->file_list, context,
+				                                                /* detect_partitioning = */ false);
+			}
 			result->multi_file_reader->BindOptions(result->file_options, *result->file_list, result->types,
 			                                       result->names, result->reader_bind);
 			bound_on_first_file = false;
@@ -1161,6 +1169,10 @@ public:
 			}
 		}
 
+		if (!bind_data.file_options.bound_schema.empty() && bind_data.IsGeneratedColumn(primary_index)) {
+			// A physical shadow's bounds do not describe the generated path. Explicit scan statistics above still do.
+			return nullptr;
+		}
 		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
 		const bool multiple_files = bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
 		if (multiple_files && !bind_data.file_options.union_by_name) {
@@ -1168,6 +1180,11 @@ public:
 			return nullptr;
 		}
 		auto result = bind_data.initial_reader->GetStatistics(context, col_name);
+		if (result && !bind_data.file_options.bound_schema.empty() &&
+		    !bind_data.MatchesPhysicalColumn(primary_index, col_name, result->GetType())) {
+			// Check the whole root before interpreting an extracted child's positional statistics.
+			return nullptr;
+		}
 		if (result && multiple_files) {
 			for (idx_t i = 1; i < bind_data.union_readers.size(); i++) {
 				auto &union_reader = *bind_data.union_readers[i];

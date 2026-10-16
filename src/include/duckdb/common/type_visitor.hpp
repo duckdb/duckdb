@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types.hpp"
 
@@ -149,7 +150,7 @@ inline bool TypeVisitor::Contains(const LogicalType &type, F &&predicate) {
 			return true;
 		}
 		auto child_count = PushChildren(current, worklist);
-		std::reverse(worklist.end() - child_count, worklist.end());
+		std::reverse(worklist.end() - NumericCast<int64_t>(child_count), worklist.end());
 	}
 	return false;
 }

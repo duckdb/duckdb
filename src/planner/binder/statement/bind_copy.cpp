@@ -106,15 +106,30 @@ identifier_map_t<CopyOption> Binder::GetFullCopyOptionsList(const CopyFunction &
 }
 
 static idx_t ParseBytesArg(const Identifier &name, Value &arg) {
-	if (arg.type().id() == LogicalTypeId::VARCHAR) {
-		return DBConfig::ParseMemoryLimit(arg.ToString());
-	}
-	auto cast_arg = arg.DefaultTryCastAs(LogicalType::UBIGINT);
-	if (!cast_arg) {
-		throw BinderException("Unable to parse bytes from \"%s\" for copy option \"%s\" ", arg.ToString(),
+	if (arg.IsNull()) {
+		throw BinderException("NULL is not supported as a valid option for COPY option \"%s\"",
 		                      StringUtil::Upper(name.GetIdentifierName()));
 	}
-	return cast_arg->GetValue<idx_t>();
+	optional_idx result;
+	if (arg.type().id() == LogicalTypeId::VARCHAR) {
+		result = DBConfig::ParseMemoryLimit(arg.ToString());
+	} else {
+		auto cast_arg = arg.DefaultTryCastAs(LogicalType::UBIGINT);
+		if (!cast_arg) {
+			throw BinderException("Unable to parse bytes from \"%s\" for copy option \"%s\" ", arg.ToString(),
+			                      StringUtil::Upper(name.GetIdentifierName()));
+		}
+		auto bytes = cast_arg->GetValue<idx_t>();
+		if (bytes != DConstants::INVALID_INDEX) {
+			result = bytes;
+		}
+	}
+	if (!result.IsValid()) {
+		// e.g. '-1' or 'none', which ParseMemoryLimit parses as unlimited
+		throw BinderException("Copy option \"%s\" must be a valid size, not \"%s\"",
+		                      StringUtil::Upper(name.GetIdentifierName()), arg.ToString());
+	}
+	return result.GetIndex();
 }
 
 struct CopyToParsedOptions {
@@ -465,7 +480,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			if (option_values.empty()) {
 				throw BinderException("BATCH_SIZE/ROW_GROUP_SIZE cannot be empty");
 			}
-			parsed_options.batch_size = option_values[0].GetValue<uint64_t>();
+			auto batch_size = option_values[0].GetValue<uint64_t>();
+			if (batch_size == DConstants::INVALID_INDEX) {
+				throw BinderException("BATCH_SIZE/ROW_GROUP_SIZE value %llu is too large", batch_size);
+			}
+			parsed_options.batch_size = batch_size;
 		} else if (option_name == "batch_size_bytes" || option_name == "row_group_size_bytes") {
 			if (option_values.empty()) {
 				throw BinderException("BATCH_SIZE_BYTES/ROW_GROUP_SIZE_BYTES cannot be empty");
@@ -483,7 +502,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			if (option_values.empty()) {
 				throw BinderException("BATCHES_PER_FILE/ROW_GROUPS_PER_FILE cannot be empty");
 			}
-			parsed_options.batches_per_file = option_values[0].GetValue<uint64_t>();
+			auto batches_per_file = option_values[0].GetValue<uint64_t>();
+			if (batches_per_file == 0 || batches_per_file == DConstants::INVALID_INDEX) {
+				throw BinderException("BATCHES_PER_FILE/ROW_GROUPS_PER_FILE must be a positive number");
+			}
+			parsed_options.batches_per_file = batches_per_file;
 		} else if (option_name == "partition_by") {
 			auto converted = ConvertVectorToValue(std::move(option_values));
 			parsed_options.partition_cols = ParseColumnsOrdered(converted, select_node.names, option_name);
@@ -778,7 +801,7 @@ void Binder::BindCopyFormat(CopyInfo &info) {
 	if (info.file_path_expression) {
 		auto inputs = BindCopyOption(context, *this, "filename", info.file_path_expression, conversion_policy);
 		if (inputs.size() != 1 || inputs[0].type().id() != LogicalTypeId::VARCHAR) {
-			throw InternalException("Unsupported parameter type for filename: expected e.g. TARGET 'file.parquet'");
+			throw BinderException("Unsupported parameter type for filename: expected e.g. TARGET 'file.parquet'");
 		}
 		if (!info.file_path.empty()) {
 			throw InternalException("Both a file path and a file path expression were provided for COPY - only one of "
@@ -954,7 +977,6 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	}
 
 	auto &properties = GetStatementProperties();
-	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	if (stmt.info->is_from) {
 		return BindCopyFrom(stmt, function);

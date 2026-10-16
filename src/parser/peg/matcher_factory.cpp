@@ -169,7 +169,7 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matc
 	if (compiled_rule.collapsible) {
 		matcher.SetCollapsible();
 	}
-	if (no_suggestion_rules.count(rule_name)) {
+	if (compiled_rule.suppress_suggestions || no_suggestion_rules.count(rule_name)) {
 		matcher.Cast<ListMatcher>().suppress_suggestions = true;
 	}
 	return matcher;
@@ -220,6 +220,7 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	// START GENERATED PACKRAT MEMOIZED RULES
 	//===--------------------------------------------------------------------===//
 	AddPackratMemoizedRule("Expression");
+	AddPackratMemoizedRule("TableRef");
 	AddPackratMemoizedRule("Identifier");
 	AddPackratMemoizedRule("ColId");
 	AddPackratMemoizedRule("CatalogQualification");
@@ -233,8 +234,6 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 		AddRuleOverride(entry.first.c_str(), std::move(entry.second));
 	}
 
-	// suppress suggestions for catch-all rules that would pollute statement-level autocomplete
-	SuppressSuggestions("ExpressionStatement");
 	// Using SHOW to describe a table/query is deprecated - parse these forms but do not autocomplete them after SHOW
 	// (only setting names and the special SHOW forms are offered). DESCRIBE/SUMMARIZE still complete tables and
 	// queries.
