@@ -1,0 +1,197 @@
+diff --git a/src/http/http_request_session.cpp b/src/http/http_request_session.cpp
+index 6dbd29c..0fb326f 100644
+--- a/src/http/http_request_session.cpp
++++ b/src/http/http_request_session.cpp
+@@ -50,11 +50,14 @@ shared_ptr<HTTPRequestSession> HTTPRequestSession::Create(optional_ptr<FileOpene
+ 	auto database = FileOpener::TryGetDatabase(opener);
+ 	if (database) {
+ 		auto transport_session = DBConfig::GetConfig(*database).GetHTTPTransportManager().CreateSession(opener, info);
++		// the file system checked the path; the URL derived from it (e.g. for s3://) need not be allowed itself
++		transport_session.Parameters().skip_external_access_check = true;
+ 		auto snapshot = make_shared_ptr<HTTPRequestSnapshot>(transport_session.Parameters().Cast<HTTPFSParams>());
+ 		return make_shared_ptr<HTTPRequestSession>(std::move(transport_session), std::move(snapshot));
+ 	}
+ 	auto &http_util = HTTPFSUtil::GetHTTPUtil(opener);
+ 	auto params = http_util.InitializeParameters(opener, info);
++	params->skip_external_access_check = true;
+ 	auto snapshot = make_shared_ptr<HTTPRequestSnapshot>(params->Cast<HTTPFSParams>());
+ 	return make_shared_ptr<HTTPRequestSession>(std::move(snapshot));
+ }
+diff --git a/src/include/http/http_request_session.hpp b/src/include/http/http_request_session.hpp
+index a662b85..d3adf6d 100644
+--- a/src/include/http/http_request_session.hpp
++++ b/src/include/http/http_request_session.hpp
+@@ -77,6 +77,7 @@ public:
+ 	                   shared_ptr<const HTTPRequestSnapshot> snapshot_p);
+ 
+ public:
++	//! For file system operations only: their requests skip DuckDB's check of the request URL
+ 	static shared_ptr<HTTPRequestSession> Create(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info);
+ 
+ public:
+diff --git a/src/include/s3/s3_url.hpp b/src/include/s3/s3_url.hpp
+index 0061da3..644f3df 100644
+--- a/src/include/s3/s3_url.hpp
++++ b/src/include/s3/s3_url.hpp
+@@ -52,6 +52,8 @@ struct S3Url {
+ 	static string Decode(const string &input);
+ 	static string Encode(const string &input, S3URLEncodeMode mode);
+ 	static void ApplyAuthQueryParameters(const string &url, S3AuthConfig &config);
++	//! Throws if the URL's query parameters set s3_endpoint, which chooses the host requests go to
++	static void RefuseEndpointQueryParameter(const string &url);
+ 	static ParsedS3Url Parse(const string &url, const S3AuthParams &params);
+ 	static string GetDisplayUrl(const string &url, const S3AuthParams &params);
+ 
+diff --git a/src/s3/s3_auth.cpp b/src/s3/s3_auth.cpp
+index 4189ba2..7ddc078 100644
+--- a/src/s3/s3_auth.cpp
++++ b/src/s3/s3_auth.cpp
+@@ -5,6 +5,7 @@
+ #include "duckdb/common/crypto/md5.hpp"
+ #include "duckdb/common/string_util.hpp"
+ #include "duckdb/common/types/blob.hpp"
++#include "duckdb/main/settings.hpp"
+ 
+ #include <cstdlib>
+ 
+@@ -80,6 +81,11 @@ bool S3AuthRequestOptions::operator==(const S3AuthRequestOptions &other) const {
+ 	       requester_pays == other.requester_pays && user_project == other.user_project;
+ }
+ 
++static bool ExternalAccessEnabled(optional_ptr<FileOpener> opener) {
++	auto db = FileOpener::TryGetDatabase(opener);
++	return !db || Settings::Get<EnableExternalAccessSetting>(*db);
++}
++
+ S3AuthParams S3AuthResolver::Resolve(optional_ptr<FileOpener> opener, FileOpenerInfo &info) {
+ 	// Without a FileOpener we cannot access settings or secrets.
+ 	if (!opener) {
+@@ -90,7 +96,12 @@ S3AuthParams S3AuthResolver::Resolve(optional_ptr<FileOpener> opener, FileOpener
+ 
+ 	auto secret_types = S3SecretConfig::SecretTypes();
+ 	S3KeyValueReader secret_reader(*opener, info, secret_types.data(), secret_types.size());
+-	return Resolve(secret_reader, info.file_path);
++	auto config = ReadConfig(secret_reader, info.file_path);
++	// allowed_directories checks the path, not the host that s3_endpoint sends a request to
++	if (!config.compatibility_mode && !ExternalAccessEnabled(opener)) {
++		S3Url::RefuseEndpointQueryParameter(info.file_path);
++	}
++	return Resolve(std::move(config), info.file_path);
+ }
+ 
+ S3AuthParams S3AuthResolver::Resolve(S3KeyValueReader &secret_reader, const string &file_path) {
+diff --git a/src/s3/s3_url.cpp b/src/s3/s3_url.cpp
+index 57ec482..c37f299 100644
+--- a/src/s3/s3_url.cpp
++++ b/src/s3/s3_url.cpp
+@@ -138,6 +138,20 @@ void S3Url::ApplyAuthQueryParameters(const string &url, S3AuthConfig &config) {
+ 	}
+ }
+ 
++void S3Url::RefuseEndpointQueryParameter(const string &url) {
++	auto question_pos = url.find_first_of('?');
++	if (question_pos == string::npos) {
++		return;
++	}
++	auto query_params = ParseQueryParameters(url.substr(question_pos + 1));
++	if (query_params.find("s3_endpoint") != query_params.end()) {
++		// the query string can hold credentials, so only the path is named
++		throw PermissionException(
++		    "Cannot use the URL parameter s3_endpoint for \"%s\" - external access is disabled by configuration",
++		    url.substr(0, question_pos));
++	}
++}
++
+ string S3Url::GetDisplayUrl(const string &url, const S3AuthParams &params) {
+ 	if (params.GetURLParams().compatibility_mode) {
+ 		return url;
+diff --git a/test/sql/httpfs/external_access_file_system.test b/test/sql/httpfs/external_access_file_system.test
+new file mode 100644
+index 0000000..4ed29be
+--- /dev/null
++++ b/test/sql/httpfs/external_access_file_system.test
+@@ -0,0 +1,84 @@
++# name: test/sql/httpfs/external_access_file_system.test
++# description: An allowed directory admits the requests httpfs makes for the paths under it
++# group: [httpfs]
++
++require httpfs
++
++statement ok
++SET allow_persistent_secrets = false;
++
++statement ok
++SET http_retries = 0;
++
++# the endpoint is a closed local port, so every request that is sent fails to connect
++statement ok
++CREATE SECRET (TYPE s3, KEY_ID 'k', SECRET 's', REGION 'us-east-1', ENDPOINT '127.0.0.1:9', URL_STYLE 'path', USE_SSL false);
++
++statement ok
++SET allowed_directories = ['s3://allowed-bucket/'];
++
++# with external access on, a URL parameter can send the request to another endpoint
++statement error
++SELECT * FROM read_csv('s3://allowed-bucket/x.csv?s3_endpoint=127.0.0.2:9');
++----
++<REGEX>:.*IO Error.*http://127\.0\.0\.2:9/allowed-bucket/x\.csv.*
++
++statement ok
++SET enable_external_access = false;
++
++statement error
++SELECT * FROM read_csv('s3://allowed-bucket/x.csv');
++----
++<REGEX>:.*IO Error.*http://127\.0\.0\.1:9/allowed-bucket/x\.csv.*
++
++statement error
++SELECT * FROM glob('s3://allowed-bucket/*.csv');
++----
++<REGEX>:.*IO Error.*http://127\.0\.0\.1:9/allowed-bucket/.*
++
++statement error
++COPY (SELECT 42 AS i) TO 's3://allowed-bucket/out.csv';
++----
++<REGEX>:.*IO Error.*s3://allowed-bucket/out\.csv.*
++
++statement error
++SELECT * FROM read_csv('s3://other-bucket/x.csv');
++----
++Permission Error: Cannot access file "s3://other-bucket/x.csv" - file system operations are disabled by configuration
++
++statement error
++SELECT * FROM glob('s3://other-bucket/*.csv');
++----
++Permission Error: Cannot access file "s3://other-bucket/*.csv"
++
++statement error
++COPY (SELECT 42 AS i) TO 's3://other-bucket/out.csv';
++----
++Permission Error: Cannot access file "s3://other-bucket/out.csv"
++
++# allowed_directories checks the path, so with external access off the URL cannot choose the endpoint
++statement error
++SELECT * FROM read_csv('s3://allowed-bucket/x.csv?s3_endpoint=127.0.0.2:9');
++----
++Permission Error: Cannot use the URL parameter s3_endpoint for "s3://allowed-bucket/x.csv" - external access is disabled by configuration
++
++statement error
++SELECT * FROM read_csv('s3://allowed-bucket/x.csv?s3_endpoint=');
++----
++Permission Error: Cannot use the URL parameter s3_endpoint for "s3://allowed-bucket/x.csv"
++
++statement error
++SELECT * FROM glob('s3://allowed-bucket/*.csv?s3_endpoint=127.0.0.2:9');
++----
++Permission Error: Cannot use the URL parameter s3_endpoint for "s3://allowed-bucket/*.csv"
++
++statement error
++COPY (SELECT 42 AS i) TO 's3://allowed-bucket/out.csv?s3_endpoint=127.0.0.2:9';
++----
++Permission Error: Cannot use the URL parameter s3_endpoint for "s3://allowed-bucket/out.csv"
++
++# other URL parameters still apply
++statement error
++SELECT * FROM read_csv('s3://allowed-bucket/x.csv?s3_region=us-west-2&s3_url_style=path&s3_use_ssl=false');
++----
++<REGEX>:.*IO Error.*http://127\.0\.0\.1:9/allowed-bucket/x\.csv.*
