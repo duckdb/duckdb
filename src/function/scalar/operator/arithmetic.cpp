@@ -1184,7 +1184,12 @@ struct BinaryNumericDivideWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (left == NumericLimits<LEFT_TYPE>::Minimum() && right == -1) {
-			throw OutOfRangeException("Overflow in division of %d / %d", left, right);
+			if constexpr (std::is_same<OP, ModuloOperator>::value) {
+				// the remainder of MIN / -1 is 0 - only the division itself overflows
+				return RESULT_TYPE(0);
+			} else {
+				throw OutOfRangeException("Overflow in division of %d / %d", left, right);
+			}
 		} else if (right == 0) {
 			if (!NULL_ON_ZERO) {
 				ThrowDivisionByZero(fun.get());
@@ -1226,7 +1231,12 @@ struct BinaryNumericDivideHugeintWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (left == NumericLimits<LEFT_TYPE>::Minimum() && right == -1) {
-			throw OutOfRangeException("Overflow in division of %s / %s", left.ToString(), right.ToString());
+			if constexpr (std::is_same<OP, ModuloOperator>::value) {
+				// the remainder of MIN / -1 is 0 - only the division itself overflows
+				return RESULT_TYPE(0);
+			} else {
+				throw OutOfRangeException("Overflow in division of %s / %s", left.ToString(), right.ToString());
+			}
 		} else if (right == 0) {
 			if (!NULL_ON_ZERO) {
 				ThrowDivisionByZero(fun.get());
