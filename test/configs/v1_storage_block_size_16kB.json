@@ -13,6 +13,14 @@
   "inherit_skip_tests": "test/configs/force_storage.json",
   "skip_tests": [
     {
+      "reason": "DECIMAL columns wider than 38 digits require storage version v2.0.0 or higher.",
+      "paths": [
+        "test/sql/types/decimal/wide_decimal_arithmetic.test",
+        "test/sql/types/decimal/wide_decimal_casts.test",
+        "test/sql/types/decimal/wide_decimal_storage.test"
+      ]
+    },
+    {
       "reason": "Explicit constraint check mode requires storage version v2.0.0 or higher.",
       "paths": [
         "test/sql/constraints/deferred/test_alter_constraint_check_mode.test",

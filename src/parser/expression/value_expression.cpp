@@ -368,7 +368,13 @@ unique_ptr<ParsedExpression> ConstantExpression::FromValue(const Value &value) {
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::BIGNUM:
+		return LiteralOrCast(Literal::Number(value.ToString()), value);
 	case LogicalTypeId::DECIMAL:
+		// wide decimals (width > 38) are bignum-backed; a numeric literal with a fractional part
+		// re-binds to DOUBLE and loses precision, so cast from the exact decimal string instead
+		if (value.type().InternalType() == PhysicalType::VARCHAR) {
+			return StringCast(value);
+		}
 		return LiteralOrCast(Literal::Number(value.ToString()), value);
 	case LogicalTypeId::BLOB: {
 		auto &bytes = StringValue::Get(value);

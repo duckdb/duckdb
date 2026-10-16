@@ -1,3 +1,5 @@
+#include "duckdb/common/bignum.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -222,6 +224,18 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 	return stats.ToUnique();
 }
 
+//! abs() of a wide decimal: negate the BIGNUM blob of negative values
+static void WideDecimalAbs(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &heap = StringVector::GetStringHeap(result);
+	UnaryExecutor::Execute<bignum_t, string_t>(args.data[0], result, [&](bignum_t a) {
+		const BignumIntermediate value(a);
+		if (value.is_negative) {
+			return value.Negate(heap);
+		}
+		return StringVector::AddStringOrBlob(result, a.data);
+	});
+}
+
 template <class OP>
 static void DecimalUnaryOpResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
@@ -235,6 +249,10 @@ static void DecimalUnaryOpResolveTypes(ResolveScalarFunctionTypesInput &input) {
 		break;
 	case PhysicalType::INT64:
 		bound_function.SetFunctionCallback(ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::BIGINT));
+		break;
+	case PhysicalType::VARCHAR:
+		// wide decimal: the unscaled value is a BIGNUM blob
+		bound_function.SetFunctionCallback(WideDecimalAbs);
 		break;
 	default:
 		bound_function.SetFunctionCallback(ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::HUGEINT));
@@ -534,6 +552,9 @@ static void GenericRoundFunctionDecimalResolveTypes(ResolveScalarFunctionTypesIn
 		case PhysicalType::INT64:
 			bound_function.SetFunctionCallback(GenericRoundFunctionDecimal<int64_t, NumericHelper, OP>);
 			break;
+		case PhysicalType::VARCHAR:
+			throw NotImplementedException("Rounding DECIMAL types wider than %d digits is not supported yet",
+			                              Decimal::MAX_WIDTH_INT128);
 		default:
 			bound_function.SetFunctionCallback(GenericRoundFunctionDecimal<hugeint_t, Hugeint, OP>);
 			break;
@@ -697,7 +718,7 @@ unique_ptr<FunctionData> ResolveDecimalRoundPrecision(BoundScalarFunction &bound
 	if (round_value < 0) {
 		target_scale = 0;
 		if (CAN_CARRY && scale == 0 && round_value >= -int32_t(width)) {
-			if (result_width < Decimal::MAX_WIDTH_DECIMAL) {
+			if (result_width < Decimal::MAX_WIDTH_INT128) {
 				result_width++;
 			} else {
 				check_overflow = true;
@@ -714,6 +735,9 @@ unique_ptr<FunctionData> ResolveDecimalRoundPrecision(BoundScalarFunction &bound
 		case PhysicalType::INT64:
 			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<int64_t, NumericHelper, NEGOP>);
 			break;
+		case PhysicalType::VARCHAR:
+			throw NotImplementedException("Rounding DECIMAL types wider than %d digits is not supported yet",
+			                              Decimal::MAX_WIDTH_INT128);
 		default:
 			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<hugeint_t, Hugeint, NEGOP>);
 			break;
@@ -738,6 +762,9 @@ unique_ptr<FunctionData> ResolveDecimalRoundPrecision(BoundScalarFunction &bound
 			case PhysicalType::INT64:
 				bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<int64_t, NumericHelper, POSOP>);
 				break;
+			case PhysicalType::VARCHAR:
+				throw NotImplementedException("Rounding DECIMAL types wider than %d digits is not supported yet",
+				                              Decimal::MAX_WIDTH_INT128);
 			default:
 				bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<hugeint_t, Hugeint, POSOP>);
 				break;
@@ -1125,8 +1152,8 @@ struct DecimalRoundNegativePrecisionOperator {
 			    UnsafeNumericCast<T>(RoundDivide<T, ROUND_POLICY>(input, divide_power_of_ten) * multiply_power_of_ten);
 			if (check_overflow) {
 				if constexpr (std::is_same_v<T, hugeint_t>) {
-					if (rounded <= -Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL] ||
-					    rounded >= Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL]) {
+					if (rounded <= -Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_INT128] ||
+					    rounded >= Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_INT128]) {
 						throw OutOfRangeException("Overflow in %s of DECIMAL(38)", ROUND_POLICY::Name);
 					}
 				}

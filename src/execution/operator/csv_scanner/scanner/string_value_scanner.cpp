@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
@@ -1835,9 +1836,11 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loade
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::DECIMAL:
 	case LogicalType::BOOLEAN:
 		return true;
+	case LogicalTypeId::DECIMAL:
+		// wide decimals are parsed through VARCHAR and the regular cast
+		return !Decimal::IsWide(DecimalType::GetWidth(type));
 	case LogicalType::TIMESTAMP_TZ:
 		// We only try to do direct cast of timestamp tz if the ICU extension is not loaded, otherwise, it needs to go
 		// through string -> timestamp_tz casting

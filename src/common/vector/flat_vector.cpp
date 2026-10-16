@@ -401,8 +401,11 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 			return Value::DECIMAL(reinterpret_cast<const int64_t *>(data_ptr)[index], width, scale);
 		case PhysicalType::INT128:
 			return Value::DECIMAL(reinterpret_cast<const hugeint_t *>(data_ptr)[index], width, scale);
+		case PhysicalType::VARCHAR:
+			// wide decimal: the unscaled value is a BIGNUM blob
+			return Value::WIDEDECIMAL(reinterpret_cast<const string_t *>(data_ptr)[index].GetString(), width, scale);
 		default:
-			throw InternalException("Physical type '%s' has a width bigger than 38, which is not supported",
+			throw InternalException("Unimplemented physical type '%s' for DECIMAL",
 			                        TypeIdToString(type.InternalType()));
 		}
 	}

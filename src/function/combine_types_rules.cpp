@@ -1,5 +1,6 @@
 #include "duckdb/function/combine_types_rule.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
 
@@ -140,13 +141,14 @@ static bool CombineEqualDecimal(LogicalTypeResolver &logical_type_resolver, cons
 	auto extra_width =
 	    MaxValue<uint8_t>(NumericCast<uint8_t>(extra_width_left), NumericCast<uint8_t>(extra_width_right));
 	auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
-	auto width = NumericCast<uint8_t>(extra_width + scale);
-	if (width > DecimalType::MaxWidth()) {
+	idx_t width = idx_t(extra_width) + scale;
+	auto max_width = Decimal::MaxCombinedWidth(DecimalType::GetWidth(left), DecimalType::GetWidth(right));
+	if (width > max_width) {
 		// if the resulting decimal does not fit, we truncate the scale
-		width = DecimalType::MaxWidth();
+		width = max_width;
 		scale = NumericCast<uint8_t>(width - extra_width);
 	}
-	result = LogicalType::DECIMAL(width, scale);
+	result = LogicalType::DECIMAL(NumericCast<uint8_t>(width), scale);
 	return true;
 }
 static bool CombineEqualList(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
@@ -347,6 +349,13 @@ static bool CombineStringLiteral(LogicalTypeResolver &, const LogicalType &left,
 	return true;
 }
 
+// BIGNUM has no implicit cast to or from FLOAT and DECIMAL; like their arithmetic, these pairs meet in DOUBLE
+static bool CombineBignumFloatOrDecimal(LogicalTypeResolver &, const LogicalType &, const LogicalType &,
+                                        LogicalType &result) {
+	result = LogicalType::DOUBLE;
+	return true;
+}
+
 static bool UnequalMatchesVariant(const LogicalType &left, const LogicalType &right) {
 	if (left.id() == right.id()) {
 		// rule only applies to unequal types
@@ -374,6 +383,13 @@ static bool UnequalMatchesEnum(const LogicalType &left, const LogicalType &right
 	return left.id() == LogicalTypeId::ENUM || right.id() == LogicalTypeId::ENUM;
 }
 
+static bool UnequalMatchesBignumFloatOrDecimal(const LogicalType &left, const LogicalType &right) {
+	auto is_pair = [](const LogicalType &a, const LogicalType &b) {
+		return a.id() == LogicalTypeId::BIGNUM && (b.id() == LogicalTypeId::FLOAT || b.id() == LogicalTypeId::DECIMAL);
+	};
+	return is_pair(left, right) || is_pair(right, left);
+}
+
 static bool UnequalMatchesStringLiteral(const LogicalType &left, const LogicalType &right) {
 	if (left.id() == right.id()) {
 		// rule only applies to unequal types
@@ -391,6 +407,7 @@ const vector<CombineTypesRule> &DefaultCombineTypesRules() {
 	    {UnequalMatchesEnum, CombineEnum},
 	    {UnequalMatchesStruct, CombineStructTypes},
 	    {UnequalMatchesStringLiteral, CombineStringLiteral},
+	    {UnequalMatchesBignumFloatOrDecimal, CombineBignumFloatOrDecimal},
 	    {EqualMatchesStringLiteral, CombineEqualStringLiteral},
 	    {EqualMatchesIntegerLiteral, CombineEqualIntegerLiteral},
 	    {EqualMatchesEnum, CombineEqualEnum},

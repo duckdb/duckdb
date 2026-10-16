@@ -313,6 +313,9 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 		    AggregateFunction::UnaryAggregate<IntervalAvgState, interval_t, interval_t, IntervalAverageOperation>(
 		        LogicalType::INTERVAL, LogicalType::INTERVAL));
 	}
+	case PhysicalType::VARCHAR:
+		throw NotImplementedException("AVG over DECIMAL types wider than %d digits is not supported yet",
+		                              Decimal::MAX_WIDTH_INT128);
 	default:
 		throw InternalException("Unimplemented average aggregate");
 	}

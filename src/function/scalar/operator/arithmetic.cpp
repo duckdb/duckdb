@@ -7,6 +7,7 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/bignum.hpp"
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/interpolate.hpp"
 #include "duckdb/common/operator/multiply.hpp"
@@ -107,6 +108,87 @@ static Value NumericStatsValue(const LogicalType &type, hugeint_t value) {
 		return Value::DECIMAL(value, DecimalType::GetWidth(type), DecimalType::GetScale(type));
 	}
 	return Value::Numeric(type, value);
+}
+
+//! The client context (if any) lets long BIGNUM multiplications and divisions check for interrupts
+static optional_ptr<ClientContext> GetBignumArithmeticContext(ExpressionState &state) {
+	return state.HasContext() ? &state.GetContext() : nullptr;
+}
+
+//===--------------------------------------------------------------------===//
+// Wide decimal arithmetic
+//===--------------------------------------------------------------------===//
+// Decimals wider than Decimal::MAX_WIDTH_INT128 store their unscaled value as a BIGNUM blob, so their arithmetic runs
+// on BignumIntermediate. The binder adds one digit of headroom to the result width of additions, so the width only has
+// to be checked when the result width was clamped to the maximum (check_overflow).
+[[noreturn]] static void ThrowWideDecimalOverflow(const char *operation, const LogicalType &result_type) {
+	throw OutOfRangeException("Overflow in %s of %s: the result does not fit the type", operation,
+	                          result_type.ToString());
+}
+
+template <bool IS_SUBTRACT, bool CHECK_WIDTH>
+static void WideDecimalAddSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &heap = StringVector::GetStringHeap(result);
+	auto &result_type = result.GetType();
+	auto width = DecimalType::GetWidth(result_type);
+	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
+	    args.data[0], args.data[1], result, [&](bignum_t a, bignum_t b) {
+		    const BignumIntermediate lhs(a);
+		    BignumIntermediate rhs(b);
+		    if (IS_SUBTRACT) {
+			    rhs.NegateInPlace();
+		    }
+		    auto sum = BignumIntermediate::Add(heap, lhs, rhs);
+		    if (IS_SUBTRACT) {
+			    rhs.NegateInPlace();
+		    }
+		    if (CHECK_WIDTH && !BignumDecimal::FitsWidth(sum, width)) {
+			    ThrowWideDecimalOverflow(IS_SUBTRACT ? "subtraction" : "addition", result_type);
+		    }
+		    return sum;
+	    });
+}
+
+template <bool CHECK_WIDTH>
+static void WideDecimalMultiply(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &heap = StringVector::GetStringHeap(result);
+	auto &result_type = result.GetType();
+	auto width = DecimalType::GetWidth(result_type);
+	BignumArithmeticState arithmetic_state(GetBignumArithmeticContext(state));
+	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
+	    args.data[0], args.data[1], result, [&](bignum_t a, bignum_t b) {
+		    const BignumIntermediate lhs(a);
+		    const BignumIntermediate rhs(b);
+		    auto product = BignumIntermediate::Multiply(heap, arithmetic_state, lhs, rhs);
+		    if (CHECK_WIDTH && !BignumDecimal::FitsWidth(product, width)) {
+			    ThrowWideDecimalOverflow("multiplication", result_type);
+		    }
+		    return product;
+	    });
+}
+
+template <bool IS_SUBTRACT>
+static scalar_function_t GetWideDecimalAddSubtract(bool check_overflow) {
+	if (check_overflow) {
+		return WideDecimalAddSubtract<IS_SUBTRACT, true>;
+	}
+	return WideDecimalAddSubtract<IS_SUBTRACT, false>;
+}
+
+static scalar_function_t GetWideDecimalMultiply(bool check_overflow) {
+	if (check_overflow) {
+		return WideDecimalMultiply<true>;
+	}
+	return WideDecimalMultiply<false>;
+}
+
+//! Picks the wide decimal implementation of a binary arithmetic operator for (de)serialization and binding
+template <class OP, bool IS_SUBTRACT>
+static scalar_function_t GetWideDecimalBinaryFunction(bool check_overflow) {
+	if (std::is_same<OP, MultiplyOperator>::value) {
+		return GetWideDecimalMultiply(check_overflow);
+	}
+	return GetWideDecimalAddSubtract<IS_SUBTRACT>(check_overflow);
 }
 
 static Value NumericStatsValue(const LogicalType &type, uint64_t value) {
@@ -323,12 +405,21 @@ unique_ptr<BaseStatistics> PropagateFloatingStats(ClientContext &context, Functi
 	return result.ToUnique();
 }
 
+//! Whether fixed-size decimal inputs may produce a result wider than Decimal::MAX_WIDTH_INT128: results only become
+//! wide (BIGNUM-backed) decimals when one of the inputs already is one, unless the wide_decimal_arithmetic setting
+//! lets fixed-size decimals grow past 38 digits
+static bool PromoteToWideDecimal(ClientContext &context) {
+	return Settings::Get<WideDecimalArithmeticSetting>(context);
+}
+
 //! Computes the result type of a decimal addition, subtraction or modulo over the given input types
 template <bool IS_MODULO>
-LogicalType DecimalArithmeticResultType(const vector<LogicalType> &input_types, bool &check_overflow) {
+LogicalType DecimalArithmeticResultType(const vector<LogicalType> &input_types, bool promote_wide,
+                                        bool &check_overflow) {
 	check_overflow = false;
 	// get the max width and scale of the input arguments
 	uint8_t max_width = 0, max_scale = 0, max_width_over_scale = 0;
+	bool any_wide = false;
 	for (auto &input_type : input_types) {
 		if (input_type.id() == LogicalTypeId::UNKNOWN) {
 			continue;
@@ -345,19 +436,21 @@ LogicalType DecimalArithmeticResultType(const vector<LogicalType> &input_types, 
 		}
 		max_scale = MaxValue<uint8_t>(scale, max_scale);
 		max_width_over_scale = MaxValue<uint8_t>(width - scale, max_width_over_scale);
+		any_wide = any_wide || Decimal::IsWide(width);
 	}
 	D_ASSERT(max_width > 0);
-	uint8_t required_width = MaxValue<uint8_t>(max_scale + max_width_over_scale, max_width);
+	idx_t required_width = MaxValue<idx_t>(idx_t(max_scale) + max_width_over_scale, max_width);
 	if (!IS_MODULO) {
 		// for addition/subtraction, we add 1 to the width to ensure we don't overflow
-		required_width = NumericCast<uint8_t>(required_width + 1);
+		required_width++;
 	}
-	if (required_width > Decimal::MAX_WIDTH_DECIMAL) {
+	const uint8_t width_limit = any_wide || promote_wide ? Decimal::MAX_WIDTH_DECIMAL : Decimal::MAX_WIDTH_INT128;
+	if (required_width > width_limit) {
 		// target width does not fit in decimal at all: truncate the scale and perform overflow detection
 		check_overflow = true;
-		required_width = Decimal::MAX_WIDTH_DECIMAL;
+		required_width = width_limit;
 	}
-	return LogicalType::DECIMAL(required_width, max_scale);
+	return LogicalType::DECIMAL(NumericCast<uint8_t>(required_width), max_scale);
 }
 
 //! Resolves the types of a decimal addition, subtraction or modulo, returns whether overflow checks are required
@@ -366,7 +459,8 @@ bool ResolveDecimalArithmeticTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	bool check_overflow;
 	auto argument_types = input.GetArgumentTypes();
-	auto result_type = DecimalArithmeticResultType<IS_MODULO>(argument_types, check_overflow);
+	auto result_type = DecimalArithmeticResultType<IS_MODULO>(
+	    argument_types, PromoteToWideDecimal(input.GetClientContext()), check_overflow);
 	// we cast all input types to the specified type
 	for (idx_t i = 0; i < argument_types.size(); i++) {
 		// first check if the cast is necessary
@@ -388,7 +482,8 @@ bool ResolveDecimalArithmeticTypes(ResolveScalarFunctionTypesInput &input) {
 template <bool IS_MODULO = false>
 unique_ptr<FunctionData> BindDecimalArithmetic(BindScalarFunctionInput &input) {
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
-	DecimalArithmeticResultType<IS_MODULO>(input.GetBoundFunction().GetLogicalArguments(), bind_data->check_overflow);
+	DecimalArithmeticResultType<IS_MODULO>(input.GetBoundFunction().GetLogicalArguments(),
+	                                       PromoteToWideDecimal(input.GetClientContext()), bind_data->check_overflow);
 	return std::move(bind_data);
 }
 
@@ -399,6 +494,11 @@ void DecimalAddSubtractResolveTypes(ResolveScalarFunctionTypesInput &input) {
 
 	// now select the physical function to execute
 	auto &result_type = bound_function.GetReturnType();
+	if (result_type.InternalType() == PhysicalType::VARCHAR) {
+		// wide decimal: no numeric statistics propagation
+		bound_function.SetFunctionCallback(GetWideDecimalAddSubtract<IS_SUBTRACT>(check_overflow));
+		return;
+	}
 	if (check_overflow) {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OPOVERFLOWCHECK>(result_type.InternalType()));
 	} else {
@@ -427,7 +527,9 @@ unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer
 	auto check_overflow = deserializer.ReadProperty<bool>(100, "check_overflow");
 	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
 	auto arguments = deserializer.ReadProperty<vector<LogicalType>>(102, "arguments");
-	if (check_overflow) {
+	if (return_type.InternalType() == PhysicalType::VARCHAR) {
+		bound_function.SetFunctionCallback(GetWideDecimalBinaryFunction<OP, IS_SUBTRACT>(check_overflow));
+	} else if (check_overflow) {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OPOVERFLOWCHECK>(return_type.InternalType()));
 	} else {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(return_type.InternalType()));
@@ -482,6 +584,17 @@ static void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &resu
 		    BignumIntermediate rhs(negated_rhs.data(), negated_rhs.size());
 		    rhs.NegateInPlace();
 		    return BignumIntermediate::Add(heap, lhs, rhs);
+	    });
+}
+
+static void BignumMultiply(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &heap = StringVector::GetStringHeap(result);
+	BignumArithmeticState arithmetic_state(GetBignumArithmeticContext(state));
+	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
+	    args.data[0], args.data[1], result, [&](bignum_t a, bignum_t b) {
+		    const BignumIntermediate lhs(a);
+		    const BignumIntermediate rhs(b);
+		    return BignumIntermediate::Multiply(heap, arithmetic_state, lhs, rhs);
 	    });
 }
 
@@ -737,7 +850,10 @@ static void DecimalNegateResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &decimal_type = input.GetArgumentType(0);
 	auto width = DecimalType::GetWidth(decimal_type);
-	if (width <= Decimal::MAX_WIDTH_INT16) {
+	if (Decimal::IsWide(width)) {
+		// wide decimal: negate the BIGNUM blob
+		bound_function.SetFunctionCallback(BignumNegate);
+	} else if (width <= Decimal::MAX_WIDTH_INT16) {
 		bound_function.SetFunctionCallback(
 		    ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::SMALLINT));
 	} else if (width <= Decimal::MAX_WIDTH_INT32) {
@@ -825,7 +941,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			function.SetFallible();
 			function.SetSerializeCallback(SerializeDecimalArithmetic);
 			function.SetDeserializeCallback(
-			    DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>);
+			    DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck, true>);
 			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 		} else if (left_type.IsIntegral()) {
@@ -1015,10 +1131,11 @@ struct MultiplyPropagateStatistics {
 };
 
 //! Computes the result type of a decimal multiplication over the given input types
-LogicalType DecimalMultiplyResultType(const vector<LogicalType> &input_types, bool &check_overflow) {
+LogicalType DecimalMultiplyResultType(const vector<LogicalType> &input_types, bool promote_wide, bool &check_overflow) {
 	check_overflow = false;
-	uint8_t result_width = 0, result_scale = 0;
+	idx_t result_width = 0, result_scale = 0;
 	uint8_t max_width = 0;
+	bool any_wide = false;
 	for (auto &input_type : input_types) {
 		if (input_type.id() == LogicalTypeId::UNKNOWN) {
 			continue;
@@ -1033,32 +1150,35 @@ LogicalType DecimalMultiplyResultType(const vector<LogicalType> &input_types, bo
 		max_width = MaxValue<uint8_t>(width, max_width);
 		result_width += width;
 		result_scale += scale;
+		any_wide = any_wide || Decimal::IsWide(width);
 	}
 	D_ASSERT(max_width > 0);
-	if (result_scale > Decimal::MAX_WIDTH_DECIMAL) {
+	const uint8_t width_limit = any_wide || promote_wide ? Decimal::MAX_WIDTH_DECIMAL : Decimal::MAX_WIDTH_INT128;
+	if (result_scale > width_limit) {
 		throw OutOfRangeException(
 		    "Needed scale %d to accurately represent the multiplication result, but this is out of range of the "
 		    "DECIMAL type. Max scale is %d; could not perform an accurate multiplication. Either add a cast to DOUBLE, "
 		    "or add an explicit cast to a decimal with a lower scale.",
-		    result_scale, Decimal::MAX_WIDTH_DECIMAL);
+		    result_scale, width_limit);
 	}
 	if (result_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64 &&
 	    result_scale < Decimal::MAX_WIDTH_INT64) {
 		check_overflow = true;
 		result_width = Decimal::MAX_WIDTH_INT64;
 	}
-	if (result_width > Decimal::MAX_WIDTH_DECIMAL) {
+	if (result_width > width_limit) {
 		check_overflow = true;
-		result_width = Decimal::MAX_WIDTH_DECIMAL;
+		result_width = width_limit;
 	}
-	return LogicalType::DECIMAL(result_width, result_scale);
+	return LogicalType::DECIMAL(NumericCast<uint8_t>(result_width), NumericCast<uint8_t>(result_scale));
 }
 
 void DecimalMultiplyResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	bool check_overflow;
 	auto argument_types = input.GetArgumentTypes();
-	auto result_type = DecimalMultiplyResultType(argument_types, check_overflow);
+	auto result_type =
+	    DecimalMultiplyResultType(argument_types, PromoteToWideDecimal(input.GetClientContext()), check_overflow);
 	auto result_width = DecimalType::GetWidth(result_type);
 	// since our scale is the summation of our input scales, we do not need to cast to the result scale
 	// however, we might need to cast to the correct internal type
@@ -1078,6 +1198,11 @@ void DecimalMultiplyResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	result_type.Verify();
 	bound_function.SetReturnType(result_type);
 	// now select the physical function to execute
+	if (result_type.InternalType() == PhysicalType::VARCHAR) {
+		// wide decimal: no numeric statistics propagation
+		bound_function.SetFunctionCallback(GetWideDecimalMultiply(check_overflow));
+		return;
+	}
 	if (check_overflow) {
 		bound_function.SetFunctionCallback(
 		    GetScalarBinaryFunction<DecimalMultiplyOverflowCheck>(result_type.InternalType()));
@@ -1091,7 +1216,8 @@ void DecimalMultiplyResolveTypes(ResolveScalarFunctionTypesInput &input) {
 //! The overflow check is derived from the types the function was called with, before they were cast
 unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
-	DecimalMultiplyResultType(input.GetBoundFunction().GetLogicalArguments(), bind_data->check_overflow);
+	DecimalMultiplyResultType(input.GetBoundFunction().GetLogicalArguments(),
+	                          PromoteToWideDecimal(input.GetClientContext()), bind_data->check_overflow);
 	return std::move(bind_data);
 }
 
@@ -1132,6 +1258,9 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	multiply.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
+	// we can multiply bignums together
+	multiply.AddFunction(
+	    ScalarFunction({LogicalType::BIGNUM, LogicalType::BIGNUM}, LogicalType::BIGNUM, BignumMultiply));
 	multiply.SetFallible();
 
 	multiply.ApplyToFunctions(NameOperatorParameters);
@@ -1377,6 +1506,41 @@ unique_ptr<BaseStatistics> PropagateIntegerDivideStats(ClientContext &context, F
 }
 
 } // namespace
+
+//===--------------------------------------------------------------------===//
+// BIGNUM division / modulo
+//===--------------------------------------------------------------------===//
+template <bool NULL_ON_ZERO, bool MODULO>
+static void BignumDivideOperation(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &heap = StringVector::GetStringHeap(result);
+	BignumArithmeticState arithmetic_state(GetBignumArithmeticContext(state));
+	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
+	    args.data[0], args.data[1], result, [&](bignum_t a, bignum_t b) -> optional<string_t> {
+		    const BignumIntermediate lhs(a);
+		    const BignumIntermediate rhs(b);
+		    string_t quotient_or_remainder;
+		    if (!BignumIntermediate::TryDivMod(heap, arithmetic_state, lhs, rhs, MODULO, quotient_or_remainder)) {
+			    if (!NULL_ON_ZERO) {
+				    ThrowDivisionByZero(state.expr);
+			    }
+			    return nullopt;
+		    }
+		    return quotient_or_remainder;
+	    });
+}
+
+template <bool MODULO>
+static unique_ptr<FunctionData> BindBignumDivide(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto null_on_zero = !Settings::Get<ErrorOnDivisionByZeroSetting>(input.GetClientContext());
+	if (null_on_zero) {
+		bound_function.SetFunctionCallback(BignumDivideOperation<true, MODULO>);
+	} else {
+		bound_function.SetFunctionCallback(BignumDivideOperation<false, MODULO>);
+	}
+	return nullptr;
+}
+
 ScalarFunctionSet OperatorFloatDivideFun::GetFunctions() {
 	ScalarFunctionSet fp_divide("/");
 	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT, nullptr,
@@ -1404,6 +1568,9 @@ ScalarFunctionSet OperatorIntegerDivideFun::GetFunctions() {
 			full_divide.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDivisionByZero<DivideOperator>));
 		}
 	}
+	// we can divide bignums by bignums
+	full_divide.AddFunction(ScalarFunction({LogicalType::BIGNUM, LogicalType::BIGNUM}, LogicalType::BIGNUM, nullptr,
+	                                       BindBignumDivide<false>));
 	full_divide.SetFallible();
 	full_divide.ApplyToFunctions(NameOperatorParameters);
 	return full_divide;
@@ -1417,6 +1584,13 @@ static void DecimalModuloResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto check_overflow = ResolveDecimalArithmeticTypes<true>(input);
 	// now select the physical function to execute
+	if (bound_function.GetReturnType().InternalType() == PhysicalType::VARCHAR) {
+		// wide decimal: the remainder is always smaller than the divisor, so it fits the result width
+		auto null_on_zero = !Settings::Get<ErrorOnDivisionByZeroSetting>(input.GetClientContext());
+		bound_function.SetFunctionCallback(null_on_zero ? BignumDivideOperation<true, true>
+		                                                : BignumDivideOperation<false, true>);
+		return;
+	}
 	if (check_overflow) {
 		// fallback to DOUBLE if the decimal type is not guaranteed to fit within the max decimal width
 		for (auto &arg : bound_function.GetArguments()) {
@@ -1462,6 +1636,9 @@ ScalarFunctionSet OperatorModuloFun::GetFunctions() {
 			modulo.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDivisionByZero<ModuloOperator>));
 		}
 	}
+	// we can take the remainder of bignums divided by bignums
+	modulo.AddFunction(ScalarFunction({LogicalType::BIGNUM, LogicalType::BIGNUM}, LogicalType::BIGNUM, nullptr,
+	                                  BindBignumDivide<true>));
 	modulo.SetFallible();
 
 	modulo.ApplyToFunctions(NameOperatorParameters);
