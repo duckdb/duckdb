@@ -249,8 +249,7 @@ static AdbcStatusCode ExecuteArrow(duckdb::PreparedStatementWrapper &prepared, D
 		duckdb::QueryParameters parameters(duckdb::make_shared_ptr<duckdb::ArrowFormat>(STANDARD_VECTOR_SIZE));
 		auto result = prepared.statement->Submit(prepared.values, parameters);
 		if (!result->HasError() && !eager &&
-		    duckdb::StreamsByDefault(prepared.statement->GetStatementType(), result->GetStatementProperties(),
-		                             reads_to_the_end)) {
+		    duckdb::StreamsByDefault(prepared.statement->GetStatementType(), *result, reads_to_the_end)) {
 			out.stream = duckdb::make_uniq<duckdb::QueryResultStream<duckdb::ArrowFormat>>(std::move(result));
 			CopySchema(out.stream->FormatState().Schema(), out.schema);
 			return ADBC_STATUS_OK;
@@ -1979,6 +1978,13 @@ AdbcStatusCode StatementExecuteSchema(struct AdbcStatement *statement, struct Ar
 
 	if (wrapper->conn_wrapper) {
 		wrapper->conn_wrapper->MaterializeStreams();
+	}
+
+	auto &prepared = *reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement);
+	if (prepared.statement && !prepared.statement->HasError() && !prepared.statement->MetadataAvailable()) {
+		SetError(error, "The result schema of this statement is known only once it is executed: it expands into "
+		                "several statements, or the types of its parameters are not known yet");
+		return ADBC_STATUS_NOT_IMPLEMENTED;
 	}
 
 	auto count = duckdb_prepared_statement_column_count(wrapper->statement);
