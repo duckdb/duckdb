@@ -84,6 +84,29 @@ DELETE FROM p WHERE id = 1;
 ----
 foreign key
 
+# Changed referenced keys must also be rejected for transaction-local rows.
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO p VALUES (5, 'E', [5]);
+
+statement ok
+INSERT INTO c1 VALUES (5);
+
+statement error
+UPDATE p SET id = 6 WHERE id = 5;
+----
+foreign key
+
+statement ok
+ROLLBACK;
+
+query I
+SELECT count(*) FROM p WHERE id = 5;
+----
+0
+
 statement ok
 DROP TABLE c2;
 

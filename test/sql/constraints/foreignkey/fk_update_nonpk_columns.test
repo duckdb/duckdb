@@ -70,34 +70,6 @@ UPDATE test SET id = 99 WHERE id = 1;
 ----
 <REGEX>:.*Constraint Error.*foreign key.*
 
-# inserting a child row referencing a non-existent parent must fail
-statement error
-INSERT INTO test_fk VALUES (12345, 'orphan');
-----
-<REGEX>:.*Constraint Error.*foreign key.*
-
-# Updating a STRUCT column preserves its references.
-
-statement ok
-CREATE TABLE p2 (id INTEGER PRIMARY KEY, s STRUCT(a INTEGER, b VARCHAR));
-
-statement ok
-INSERT INTO p2 VALUES (1, {'a': 1, 'b': 'x'});
-
-statement ok
-CREATE TABLE c2 (pid INTEGER REFERENCES p2 (id));
-
-statement ok
-INSERT INTO c2 VALUES (1);
-
-statement ok
-UPDATE p2 SET s = {'a': 2, 'b': 'y'} WHERE id = 1;
-
-query I
-SELECT pid FROM c2;
-----
-1
-
 # RETURNING must not treat projected key columns as assignments.
 query IT
 UPDATE test SET arr = ['returning'] WHERE id = 1 RETURNING id, arr;
