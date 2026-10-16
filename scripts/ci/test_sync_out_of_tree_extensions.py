@@ -151,6 +151,27 @@ class ExtensionSyncTest(unittest.TestCase):
         os.environ.update(DUCKDB_USE='aws', DUCKDB_EXTEND='httpfs')
         self.assertEqual(list(sync.collect_extensions(self.root, 'avro', '')), ['avro'])
 
+    def test_legacy_extension_lists_are_migrated(self):
+        self.make_named_configs()
+        os.environ.update(BUILD_EXTENSIONS='avro', CORE_EXTENSIONS='httpfs')
+        with contextlib.redirect_stderr(io.StringIO()) as warnings:
+            self.assertEqual(list(sync.collect_extensions(self.root)), ['avro', 'httpfs'])
+        self.assertIn("use DUCKDB_EXTEND='avro;httpfs'", warnings.getvalue())
+
+    def test_legacy_extension_lists_keep_project_config_selections(self):
+        self.make_named_configs()
+        project = self.root / 'project.cmake'
+        project.write_text('duckdb_extension_load(aws GIT_URL project-url GIT_TAG project-pin)')
+        os.environ['BUILD_EXTENSIONS'] = 'avro'
+        with contextlib.redirect_stderr(io.StringIO()):
+            extensions = sync.collect_extensions(self.root, extension_configs_arg=str(project))
+        self.assertEqual(list(extensions), ['aws', 'avro'])
+
+    def test_new_extension_lists_override_legacy_lists(self):
+        self.make_named_configs()
+        os.environ.update(BUILD_EXTENSIONS='aws', DUCKDB_EXTEND='httpfs')
+        self.assertEqual(list(sync.collect_extensions(self.root)), ['httpfs'])
+
     def test_project_config_overrides_named_revision(self):
         self.make_named_configs()
         config = self.root / 'project.cmake'
@@ -268,19 +289,52 @@ class ExtensionSyncTest(unittest.TestCase):
                     self.assertIn('-DDUCKDB_EXTENSION_CONFIGS="/project/project.cmake"', commands)
 
     @unittest.skipUnless(MAKE, 'Make is required for build command tests')
-    def test_make_rejects_legacy_selectors(self):
-        os.environ['PATH'] = os.defpath
+    def test_make_migrates_legacy_selectors(self):
+        os.environ.update(PATH=os.defpath, VCPKG_TOOLCHAIN_PATH='/unused/vcpkg.cmake')
         for selector in ['BUILD_EXTENSIONS=httpfs', 'DUCKDB_EXTENSIONS=httpfs', 'BUILD_HTTPFS=1']:
             with self.subTest(selector=selector):
-                result = subprocess.run(
+                commands = subprocess.check_output(
                     [MAKE, '-Bn', 'reldebug', selector],
                     cwd=REPO_ROOT,
                     text=True,
-                    stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                 )
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn('use DUCKDB_USE and DUCKDB_EXTEND', result.stdout)
+                self.assertIn('are deprecated; use DUCKDB_USE=', commands)
+                self.assertIn('--duckdb-extend "httpfs"', commands)
+                self.assertIn('-DDUCKDB_EXTEND="httpfs"', commands)
+
+    @unittest.skipUnless(MAKE, 'Make is required for build command tests')
+    def test_make_migrates_legacy_link_and_disable_selectors(self):
+        os.environ.update(PATH=os.defpath, VCPKG_TOOLCHAIN_PATH='/unused/vcpkg.cmake')
+        commands = subprocess.check_output(
+            [
+                MAKE,
+                '-Bn',
+                'reldebug',
+                'BUILD_EXTENSIONS=tpch;httpfs',
+                'STATICALLY_LINK_EXTENSIONS=core_functions;tpch',
+                'DUCKDB_CAPABILITIES=none',
+                'DISABLE_PARQUET=1',
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            stderr=subprocess.STDOUT,
+        )
+        self.assertIn('DUCKDB_USE=\'core_functions;tpch\'', commands)
+        self.assertIn('DUCKDB_EXTEND=\'httpfs;icu;json\'', commands)
+        self.assertIn('-DDUCKDB_USE="core_functions;tpch"', commands)
+        self.assertIn('-DDUCKDB_EXTEND="httpfs;icu;json"', commands)
+
+    @unittest.skipUnless(MAKE, 'Make is required for build command tests')
+    def test_make_warns_for_obsolete_extension_build_switches(self):
+        os.environ.update(PATH=os.defpath, VCPKG_TOOLCHAIN_PATH='/unused/vcpkg.cmake')
+        commands = subprocess.check_output(
+            [MAKE, '-Bn', 'reldebug', 'DUCKDB_NEW_EXTENSION_BUILD=0', 'USE_MERGED_VCPKG_MANIFEST=1'],
+            cwd=REPO_ROOT,
+            text=True,
+            stderr=subprocess.STDOUT,
+        )
+        self.assertIn('no longer change extension builds and can be removed', commands)
 
     @unittest.skipUnless(CMAKE, 'CMake is required for configuration integration tests')
     def test_cmake_and_sync_use_the_same_project_configuration(self):
@@ -326,6 +380,33 @@ class ExtensionSyncTest(unittest.TestCase):
                     f'sample, "{extensions["sample"]["git_tag"]}"',
                     (build_dir / 'extensions.csv').read_text(),
                 )
+
+    @unittest.skipUnless(CMAKE, 'CMake is required for configuration integration tests')
+    def test_cmake_migrates_legacy_extension_selectors(self):
+        os.environ['PATH'] = os.defpath
+        build_dir = self.root / 'legacy-build'
+        configured = subprocess.run(
+            [
+                CMAKE,
+                '-S',
+                str(REPO_ROOT),
+                '-B',
+                str(build_dir),
+                '-DEXTENSION_CONFIG_BUILD=TRUE',
+                '-DBUILD_EXTENSIONS=tpch;autocomplete',
+                '-DSTATICALLY_LINK_EXTENSIONS=core_functions;tpch',
+                '-DDUCKDB_CAPABILITIES=none',
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        self.assertEqual(configured.returncode, 0, configured.stdout)
+        self.assertIn('Legacy extension variables', configured.stdout)
+        self.assertIn("DUCKDB_USE='core_functions;tpch'", configured.stdout)
+        self.assertIn("DUCKDB_EXTEND='parquet;json;icu;autocomplete'", configured.stdout)
+        self.assertIn('Linked into DuckDB: extensions [core_functions, tpch], capabilities []', configured.stdout)
+        self.assertIn('Extensions built but not linked: [parquet, json, icu, autocomplete]', configured.stdout)
 
     @unittest.skipUnless(CMAKE, 'CMake is required for configuration integration tests')
     def test_cmake_only_registers_selected_remote_extensions(self):

@@ -497,6 +497,58 @@ def collect_extensions(
         or 'DUCKDB_USE' in os.environ
         or 'DUCKDB_EXTEND' in os.environ
     )
+    legacy_selection = False
+    if not selection_explicit:
+        legacy_variables_used = [
+            variable
+            for variable in [
+                'BUILD_EXTENSIONS',
+                'DUCKDB_EXTENSIONS',
+                'CORE_EXTENSIONS',
+                'BUILD_AUTOCOMPLETE',
+                'BUILD_ICU',
+                'BUILD_TPCH',
+                'BUILD_TPCDS',
+                'BUILD_FTS',
+                'BUILD_HTTPFS',
+                'BUILD_JSON',
+                'SKIP_EXTENSIONS',
+                'DISABLE_PARQUET',
+                'DISABLE_CORE_FUNCTIONS',
+            ]
+            if variable in os.environ
+        ]
+        raw_legacy_build = os.environ.get('DUCKDB_EXTENSIONS') or os.environ.get('BUILD_EXTENSIONS') or ''
+        raw_legacy_core = os.environ.get('CORE_EXTENSIONS', '')
+        legacy_build_names = [raw_legacy_build, raw_legacy_core]
+        for variable, name in [
+            ('BUILD_AUTOCOMPLETE', 'autocomplete'),
+            ('BUILD_ICU', 'icu'),
+            ('BUILD_TPCH', 'tpch'),
+            ('BUILD_TPCDS', 'tpcds'),
+            ('BUILD_FTS', 'fts'),
+            ('BUILD_HTTPFS', 'httpfs'),
+            ('BUILD_JSON', 'json'),
+        ]:
+            if os.environ.get(variable, '').upper() in ('1', 'ON', 'TRUE', 'YES'):
+                legacy_build_names.append(name)
+        raw_legacy_extensions = ';'.join(legacy_build_names)
+        legacy_skip_names = os.environ.get('SKIP_EXTENSIONS', '')
+        if os.environ.get('DISABLE_PARQUET', '').upper() in ('1', 'ON', 'TRUE', 'YES'):
+            legacy_skip_names += ';parquet'
+        if os.environ.get('DISABLE_CORE_FUNCTIONS', '').upper() in ('1', 'ON', 'TRUE', 'YES'):
+            legacy_skip_names += ';core_functions'
+        skipped = {name for name in re.split(r'[;,\s]+', legacy_skip_names) if name}
+        selected = [name for name in re.split(r'[;,\s]+', raw_legacy_extensions) if name and name not in skipped]
+        if selected:
+            raw_duckdb_extend = ';'.join(dict.fromkeys(selected))
+            selection_explicit = True
+            legacy_selection = True
+            print(
+                f"WARNING: Legacy extension variables {' '.join(legacy_variables_used)} are deprecated; "
+                f"use DUCKDB_EXTEND='{raw_duckdb_extend}' instead; support will be removed in DuckDB 2.1",
+                file=sys.stderr,
+            )
 
     config_extensions = {}  # name -> descriptor (first seen wins)
     config_selected_names = []
@@ -514,7 +566,9 @@ def collect_extensions(
 
     raw_extensions = ';'.join(value.strip("'\"") for value in (raw_duckdb_use, raw_duckdb_extend))
     selected_names = [name.strip("'\"") for name in re.split(r'[;,\s]+', raw_extensions) if name.strip("'\"")]
-    if not selection_explicit:
+    if legacy_selection:
+        selected_names = list(config_extensions) + selected_names
+    elif not selection_explicit:
         selected_names.extend(config_selected_names)
     selected_names = list(dict.fromkeys(selected_names))
 
