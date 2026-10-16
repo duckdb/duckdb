@@ -243,31 +243,33 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 		AddRuleOverride(entry.first.c_str(), std::move(entry.second));
 	}
 
-	// labels summarise what a rule accepts when it is listed as an alternative in a syntax error
-	const char *expression_rules[] = {"Expression",
-	                                  "LambdaArrowExpression",
-	                                  "LogicalOrExpression",
-	                                  "LogicalAndExpression",
-	                                  "LogicalNotExpression",
-	                                  "IsExpression",
-	                                  "IsDistinctFromExpression",
-	                                  "ComparisonExpression",
-	                                  "BetweenInLikeExpression",
-	                                  "OtherOperatorExpression",
-	                                  "InContainsExpression",
-	                                  "BitwiseExpression",
-	                                  "AdditiveExpression",
-	                                  "MultiplicativeExpression",
-	                                  "ExponentiationExpression",
-	                                  "CollateExpression",
-	                                  "AtTimeZoneExpression",
-	                                  "PrefixExpression",
-	                                  "BaseExpression",
-	                                  "SingleExpression"};
-	for (auto rule : expression_rules) {
-		LabelRule(rule, "an expression");
-	}
+	//===--------------------------------------------------------------------===//
+	// START GENERATED RULE LABELS
+	//===--------------------------------------------------------------------===//
+	LabelRule("Expression", "an expression");
+	LabelRule("LambdaArrowExpression", "an expression");
+	LabelRule("LogicalOrExpression", "an expression");
+	LabelRule("LogicalAndExpression", "an expression");
+	LabelRule("LogicalNotExpression", "an expression");
+	LabelRule("IsExpression", "an expression");
+	LabelRule("IsDistinctFromExpression", "an expression");
+	LabelRule("ComparisonExpression", "an expression");
+	LabelRule("BetweenInLikeExpression", "an expression");
+	LabelRule("OtherOperatorExpression", "an expression");
+	LabelRule("InContainsExpression", "an expression");
+	LabelRule("BitwiseExpression", "an expression");
+	LabelRule("AdditiveExpression", "an expression");
+	LabelRule("MultiplicativeExpression", "an expression");
+	LabelRule("ExponentiationExpression", "an expression");
+	LabelRule("CollateExpression", "an expression");
+	LabelRule("AtTimeZoneExpression", "an expression");
+	LabelRule("PrefixExpression", "an expression");
+	LabelRule("BaseExpression", "an expression");
+	LabelRule("SingleExpression", "an expression");
 	LabelRule("Type", "a type");
+	//===--------------------------------------------------------------------===//
+	// END GENERATED RULE LABELS
+	//===--------------------------------------------------------------------===//
 
 	// Using SHOW to describe a table/query is deprecated - parse these forms but do not autocomplete them after SHOW
 	// (only setting names and the special SHOW forms are offered). DESCRIBE/SUMMARIZE still complete tables and
