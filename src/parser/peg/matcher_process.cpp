@@ -56,7 +56,7 @@ public:
 		if (state_p.BuildParseResult()) {
 			results.reserve(matcher_p.matchers.size());
 		}
-		saved_suggestion_size = matcher.suppress_suggestions ? list_state.context.suggestions.size() : 0;
+		saved_suggestion_size = SuppressSuggestions() ? list_state.context.suggestions.size() : 0;
 		if (auto current = list_state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
 		}
@@ -83,7 +83,7 @@ public:
 				awaiting_child = true;
 				return MatchStep::Child({child_matcher, list_state});
 			}
-			if (matcher.suppress_suggestions) {
+			if (SuppressSuggestions()) {
 				DiscardSuggestions();
 				return MatchStep::Complete(MatcherResult::Failure());
 			}
@@ -138,8 +138,12 @@ private:
 		return collapsible;
 	}
 
+	bool SuppressSuggestions() const {
+		return matcher.suppress_suggestions && !state.context.memoizable_suggestions;
+	}
+
 	void DiscardSuggestions() {
-		if (!matcher.suppress_suggestions) {
+		if (!SuppressSuggestions()) {
 			return;
 		}
 		list_state.context.suggestions.erase(list_state.context.suggestions.begin() +
