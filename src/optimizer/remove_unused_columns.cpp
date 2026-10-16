@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -1118,6 +1119,11 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 	reference<const LogicalType> type_iter(struct_type);
 	reference<const ColumnIndex> path_iter(path);
 	while (true) {
+		if (!path_iter.get().HasPrimaryIndex()) {
+			// TODO: Reconstruct named field steps with variant_extract to support mixed STRUCT/VARIANT paths.
+			throw BinderException("Extracting VARIANT field \"%s\" through this projection is not supported",
+			                      path_iter.get().GetFieldName());
+		}
 		auto child_index = path_iter.get().GetPrimaryIndex();
 		auto &child_types = StructType::GetChildTypes(type_iter.get());
 		D_ASSERT(child_index < child_types.size());
@@ -1197,6 +1203,16 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 	proj.expressions = std::move(expressions);
 }
 
+template <class T>
+static bool OnlyStructFieldPaths(const T &paths) {
+	for (auto &path : paths) {
+		if (!path.HasPrimaryIndex() || !OnlyStructFieldPaths(path.GetChildIndexes())) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	switch (op.type) {
@@ -1262,6 +1278,10 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 			}
 			if (expr.GetReturnType().id() != LogicalTypeId::STRUCT) {
 				//! Extract pull up only supported for STRUCT currently
+				continue;
+			}
+			if (!OnlyStructFieldPaths(col.unique_paths)) {
+				//! A VARIANT field step cannot be rebuilt as a struct extract above the projection
 				continue;
 			}
 			if (col.supports_pushdown_extract == PushdownExtractSupport::DISABLED) {
