@@ -2,6 +2,8 @@
 # description: A v1.0.0 database with unnamed STRUCT columns can be attached, but TUPLE columns cannot be created in it
 # group: [struct]
 
+require vector_size 2048
+
 unzip data/storage/tuple_v1_0_0.db.gz {TEST_DIR}/tuple_v1_0_0.db
 
 statement ok

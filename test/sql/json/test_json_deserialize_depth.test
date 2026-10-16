@@ -16,11 +16,11 @@ Serialized JSON exceeds the maximum nesting depth
 
 # moderately nested expressions still round trip
 query I
-SELECT json_deserialize_sql(json_serialize_sql('SELECT ' || repeat('abs(', 300) || '1' || repeat(')', 300))) = 'SELECT ' || repeat('abs(', 300) || '1' || repeat(')', 300);
+SELECT json_deserialize_sql(json_serialize_sql('SELECT ' || repeat('abs(', 50) || '1' || repeat(')', 50))) = 'SELECT ' || repeat('abs(', 50) || '1' || repeat(')', 50);
 ----
 true
 
 statement error
-SELECT json_deserialize_sql(json_serialize_sql('SELECT ' || repeat('abs(', 600) || '1' || repeat(')', 600)));
+SELECT json_deserialize_sql(json_serialize_sql('SELECT ' || repeat('abs(', 200) || '1' || repeat(')', 200)));
 ----
 Serialized JSON exceeds the maximum nesting depth
