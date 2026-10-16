@@ -1,0 +1,246 @@
+# name: test/sql/subquery/scalar/test_try_subquery.test
+# description: TRY over uncorrelated scalar subqueries
+# group: [scalar]
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3);
+
+statement ok
+CREATE TABLE strings(s VARCHAR);
+
+statement ok
+INSERT INTO strings VALUES ('hello'), ('123');
+
+# baseline: without TRY the error raised inside the subquery aborts the query
+statement error
+SELECT (SELECT 10 // (max(i) - 3) FROM integers)
+----
+Division by zero
+
+# under TRY the subquery error becomes NULL
+query I
+SELECT TRY((SELECT 10 // (max(i) - 3) FROM integers))
+----
+NULL
+
+# a successful subquery still returns its value under TRY
+query I
+SELECT TRY((SELECT 10 // (max(i) - 1) FROM integers))
+----
+5
+
+# conversion error raised inside the subquery
+query I
+SELECT TRY((SELECT max(s)::INTEGER FROM strings))
+----
+NULL
+
+# the boundary operator is visible in the plan
+query II
+EXPLAIN SELECT TRY((SELECT 10 // (max(i) - 3) FROM integers))
+----
+physical_plan	<REGEX>:(?s).*Try.*Try Collector.*
+
+# more than one row returned by the subquery is a data-dependent runtime error, TRY converts it into NULL
+statement error
+SELECT (SELECT i FROM integers)
+----
+More than one row returned by a subquery
+
+query I
+SELECT TRY((SELECT i FROM integers))
+----
+NULL
+
+# with the compatibility setting the subquery returns a row instead of erroring, TRY passes it through
+statement ok
+SET scalar_subquery_error_on_multiple_rows=false
+
+query I
+SELECT TRY((SELECT i FROM integers ORDER BY i))
+----
+1
+
+statement ok
+RESET scalar_subquery_error_on_multiple_rows
+
+# TRY over an expression that combines a subquery with outer computation
+query I
+SELECT TRY(1 + (SELECT 10 // (max(i) - 3) FROM integers))
+----
+NULL
+
+query I
+SELECT TRY(1 + (SELECT 10 // (max(i) - 1) FROM integers))
+----
+6
+
+# nested TRY
+query I
+SELECT TRY(TRY((SELECT 10 // (max(i) - 3) FROM integers)))
+----
+NULL
+
+# a nested subquery erroring inside the TRY subquery is also caught by the boundary
+query I
+SELECT TRY((SELECT (SELECT 10 // (max(i) - 3) FROM integers)))
+----
+NULL
+
+# multiple TRY subqueries in one query
+query II
+SELECT TRY((SELECT 10 // (max(i) - 3) FROM integers)), TRY((SELECT max(i) FROM integers))
+----
+NULL	3
+
+# TRY subquery in the WHERE clause
+query I
+SELECT i FROM integers WHERE TRY((SELECT 10 // (max(i2.i) - 3) FROM integers i2)) IS NULL ORDER BY i
+----
+1
+2
+3
+
+# TRY subquery inside an aggregate argument
+query I
+SELECT count(TRY((SELECT 10 // (max(i2.i) - 3) FROM integers i2))) FROM integers
+----
+0
+
+query I
+SELECT count(TRY((SELECT max(i2.i) FROM integers i2))) FROM integers
+----
+3
+
+# TRY subquery result used in a comparison
+query I
+SELECT TRY((SELECT 10 // (max(i) - 3) FROM integers)) = 5
+----
+NULL
+
+# subqueries that exercise sorting and joins below the boundary
+query I
+SELECT TRY((SELECT i FROM integers ORDER BY i DESC LIMIT 1))
+----
+3
+
+query I
+SELECT TRY((SELECT count(*) FROM integers a JOIN integers b USING (i)))
+----
+3
+
+# error raised deep inside a larger scan pipeline below the boundary
+statement ok
+CREATE TABLE big AS SELECT range AS r FROM range(10000);
+
+query I
+SELECT TRY((SELECT max(10000 // (9999 - r)) FROM big))
+----
+NULL
+
+query I
+SELECT TRY((SELECT max(10000 // (10000 - r)) FROM big))
+----
+10000
+
+# a CTE defined inside the subquery executes below the boundary
+query I
+SELECT TRY((WITH c AS MATERIALIZED (SELECT max(i) - 3 AS x FROM integers) SELECT 10 // max(x) FROM c))
+----
+NULL
+
+# a NULL-typed subquery
+query I
+SELECT TRY((SELECT NULL))
+----
+NULL
+
+# TRY subquery as an UPDATE source
+statement ok
+CREATE TABLE update_target(a INTEGER);
+
+statement ok
+INSERT INTO update_target VALUES (42);
+
+statement ok
+UPDATE update_target SET a = TRY((SELECT 10 // (max(i) - 3) FROM integers));
+
+query I
+SELECT a FROM update_target
+----
+NULL
+
+# binder errors inside the subquery are not execution errors and are still raised
+statement error
+SELECT TRY((SELECT nonexistent_column FROM integers))
+----
+<REGEX>:.*Binder Error.*
+
+statement error
+SELECT TRY((SELECT * FROM nonexistent_table))
+----
+<REGEX>:.*nonexistent_table.*
+
+# EXISTS/IN/ANY subqueries remain rejected under TRY
+statement error
+SELECT TRY(EXISTS(SELECT 1))
+----
+TRY can not be used in combination with EXISTS/IN/ANY/ALL subqueries
+
+statement error
+SELECT TRY(1 IN (SELECT i FROM integers))
+----
+TRY can not be used in combination with EXISTS/IN/ANY/ALL subqueries
+
+# correlated scalar subqueries remain rejected under TRY: they are flattened into the outer plan,
+# so there is no boundary at which an error could be attributed to a single outer row
+statement error
+SELECT TRY((SELECT 10 // i2.i)) FROM integers i2
+----
+TRY can not be used in combination with a correlated scalar subquery
+
+# a subquery referencing a materialized CTE of the outer query is rejected
+statement error
+WITH c AS MATERIALIZED (SELECT 10 AS x) SELECT TRY((SELECT max(x) FROM c))
+----
+TRY can not be used in combination with a subquery that references a materialized or recursive CTE defined outside of the subquery
+
+# volatile subqueries remain rejected under TRY, like volatile expressions
+statement error
+SELECT TRY((SELECT random()))
+----
+TRY can not be used in combination with a volatile function
+
+# protection: scalar subqueries without TRY are planned as before
+query I
+SELECT (SELECT max(i) FROM integers)
+----
+3
+
+query I
+SELECT i FROM integers WHERE i = (SELECT min(i) FROM integers)
+----
+1
+
+# protection: correlated subqueries without TRY still flatten and execute
+query II
+SELECT i, (SELECT i2.i FROM integers i2 WHERE i2.i = i1.i) FROM integers i1 ORDER BY i
+----
+1	1
+2	2
+3	3
+
+# protection: no TRY boundary appears in the plan of a plain subquery
+query II
+EXPLAIN SELECT (SELECT max(i) FROM integers)
+----
+physical_plan	<!REGEX>:(?s).*Try.*
+
+# protection: TRY over plain expressions is unchanged
+query I
+SELECT TRY('abc'::INTEGER)
+----
+NULL
