@@ -15,12 +15,19 @@
 
 namespace duckdb {
 
-ParseIterator::ParseIterator(ClientContext &context_p, const string &sql_p) : context(context_p) {
+ParseIterator::ParseIterator(ClientContext &context_p, const string &sql_p, bool apply_invalidation_policy_p)
+    : context(context_p), apply_invalidation_policy(apply_invalidation_policy_p) {
 	try {
 		sql = Parser::NormalizeSQLString(sql_p);
 	} catch (std::exception &ex) {
-		context.ApplyInvalidationPolicy(ErrorData(ex));
+		ApplyInvalidationPolicy(ErrorData(ex));
 		throw;
+	}
+}
+
+void ParseIterator::ApplyInvalidationPolicy(const ErrorData &error) {
+	if (apply_invalidation_policy) {
+		context.ApplyInvalidationPolicy(error);
 	}
 }
 
@@ -45,7 +52,7 @@ bool ParseIterator::Peek() {
 	} catch (std::exception &ex) {
 		// The statements are parsed to be run on this connection, so a parse error counts as an error in its
 		// transaction. Rendering the error for display is left to the caller, since some render errors themselves.
-		context.ApplyInvalidationPolicy(ErrorData(ex));
+		ApplyInvalidationPolicy(ErrorData(ex));
 		throw;
 	}
 }

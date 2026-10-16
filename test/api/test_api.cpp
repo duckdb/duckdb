@@ -1094,3 +1094,21 @@ TEST_CASE("Test invalid UTF-8 while iterating statements invalidates the transac
 	auto result = con.Query("SELECT COUNT(*) FROM audit");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 }
+
+TEST_CASE("Test iterating statements without applying the invalidation policy", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE audit(i INT)"));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO audit VALUES (21)"));
+	auto iterator = con.context->IterateStatements("inser into audit_backup from audit", false);
+	REQUIRE_THROWS_WITH(iterator.Peek(), Catch::Matchers::Contains("syntax error"));
+	REQUIRE_THROWS_WITH(con.context->IterateStatements("SELECT '\xff'", false),
+	                    Catch::Matchers::Contains("Invalid UTF-8"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO audit VALUES (22)"));
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+	auto result = con.Query("SELECT COUNT(*) FROM audit");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+}

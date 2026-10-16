@@ -128,6 +128,9 @@ typedef struct {
 	(duckdb_v2_table_function_stats_info_handle info, duckdb_v2_stats_handle *stats, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_stats_get_user_data)
 	(duckdb_v2_table_function_stats_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_parse_sql_without_invalidation)
+	(duckdb_v2_connection_handle conn, const char *sql, duckdb_v2_statement_iterator_handle *out_iterator,
+	 duckdb_v2_error_info_handle *err);
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 	DUCKDB_V2_ERROR(*duckdb_v2_arena_allocate)
 	(duckdb_v2_arena_handle arena, idx_t byte_len, uint8_t **out_ptr, duckdb_v2_error_info_handle *err);
@@ -1579,6 +1582,7 @@ typedef struct {
 #define duckdb_v2_table_function_stats_get_column_index  duckdb_ext_api.duckdb_v2_table_function_stats_get_column_index
 #define duckdb_v2_table_function_stats_get_result_stats  duckdb_ext_api.duckdb_v2_table_function_stats_get_result_stats
 #define duckdb_v2_table_function_stats_get_user_data     duckdb_ext_api.duckdb_v2_table_function_stats_get_user_data
+#define duckdb_v2_parse_sql_without_invalidation         duckdb_ext_api.duckdb_v2_parse_sql_without_invalidation
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_arena_allocate duckdb_ext_api.duckdb_v2_arena_allocate
 #endif
