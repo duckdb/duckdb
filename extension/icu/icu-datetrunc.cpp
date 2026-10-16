@@ -1,6 +1,7 @@
 #include "include/icu-datetrunc.hpp"
 #include "include/icu-datefunc.hpp"
 
+#include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
@@ -9,6 +10,20 @@
 namespace duckdb {
 
 struct ICUDateTrunc : public ICUDateFunc {
+	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
+		auto part_value = input.TryGetConstant(0);
+		if (part_value && !part_value->IsNull()) {
+			DatePartSpecifier part;
+			if (TryGetDatePartSpecifier(part_value->GetValue<string>(), part) &&
+			    (part == DatePartSpecifier::DECADE || part == DatePartSpecifier::CENTURY ||
+			     part == DatePartSpecifier::MILLENNIUM)) {
+				// date_trunc is not monotone for these parts because ICU years skip year 0 at the BC/AD boundary
+				input.GetBoundFunction().SetArgProperties({});
+			}
+		}
+		return ICUDateFunc::Bind(input);
+	}
+
 	static void PreserveOffsets(Calendar *calendar) {
 		//	We have to extract _everything_ before setting anything
 		//	Otherwise ICU will clear the fStamp fields

@@ -866,8 +866,13 @@ struct SortKeyPrefixComparison {
 				break;
 			case SortKeyPrefixComparisonType::NESTED:
 				decoded.Reset();
-				lhs_width = CreateSortKeyHelpers::DecodeSortKey(lhs_key, vec, 0, modifiers);
-				rhs_width = CreateSortKeyHelpers::DecodeSortKey(rhs_key, vec, 1, modifiers);
+				//	Decode from the current column, not from the start of the whole key.
+				lhs_width = CreateSortKeyHelpers::DecodeSortKey(
+				    string_t(lhs_ptr, UnsafeNumericCast<uint32_t>(lhs_key.GetData() + lhs_key.GetSize() - lhs_ptr)),
+				    vec, 0, modifiers);
+				rhs_width = CreateSortKeyHelpers::DecodeSortKey(
+				    string_t(rhs_ptr, UnsafeNumericCast<uint32_t>(rhs_key.GetData() + rhs_key.GetSize() - rhs_ptr)),
+				    vec, 1, modifiers);
 				cmp = memcmp(lhs_ptr, rhs_ptr, MinValue<idx_t>(lhs_width, rhs_width));
 				if (!cmp) {
 					cmp = (rhs_width < lhs_width) - (lhs_width < rhs_width);
@@ -1022,14 +1027,16 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 		prefix_types.emplace_back(type);
 		SortKeyPrefixComparisonColumn col;
 		col.size = DConstants::INVALID_INDEX;
-		switch (type.id()) {
-		case LogicalTypeId::VARCHAR:
-		case LogicalTypeId::BLOB:
-			col.type = SortKeyPrefixComparisonType::VARCHAR;
+		switch (type.InternalType()) {
+		case PhysicalType::VARCHAR:
+			// only the sort keys of VARCHAR are terminated by the first null byte - the sort keys of other string
+			// types (e.g., BLOB or GEOMETRY) can contain null bytes, so we have to decode them to measure their width
+			col.type = type.id() == LogicalTypeId::VARCHAR ? SortKeyPrefixComparisonType::VARCHAR
+			                                               : SortKeyPrefixComparisonType::NESTED;
 			break;
-		case LogicalTypeId::STRUCT:
-		case LogicalTypeId::LIST:
-		case LogicalTypeId::ARRAY:
+		case PhysicalType::STRUCT:
+		case PhysicalType::LIST:
+		case PhysicalType::ARRAY:
 			col.type = SortKeyPrefixComparisonType::NESTED;
 			break;
 		default:

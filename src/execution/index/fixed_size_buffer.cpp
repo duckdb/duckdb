@@ -63,7 +63,7 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segmen
     : block_manager(block_manager), readers(0), segment_count(segment_count), allocation_size(allocation_size),
       dirty(false), vacuum(false), loaded(false), block_pointer(block_pointer) {
 	D_ASSERT(block_pointer.IsValid());
-	block_handle = block_manager.RegisterBlock(block_pointer.block_id);
+	block_handle = block_manager.RegisterBlock(block_pointer.block_id, MemoryTag::ART_INDEX);
 	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
 }
 
@@ -78,7 +78,11 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 	}
 	if (OnDisk()) {
 		// marking a block as modified decreases the reference count of multi-use blocks
-		block_manager.MarkBlockAsModified(block_pointer.block_id);
+		// this must not throw out of a destructor, e.g., if the block ids of a corrupt file overlap
+		try {
+			block_manager.MarkBlockAsModified(block_pointer.block_id);
+		} catch (...) { // NOLINT
+		}
 	}
 }
 

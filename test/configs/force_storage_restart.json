@@ -53,6 +53,7 @@
         "test/logging/offset_order_warning.test",
         "test/sql/types/decimal/decimal_values_warning.test",
         "test/sql/settings/deprecated_settings.test",
+        "test/sql/settings/pragma_assignment_deprecated.test",
         "test/sql/copy/copy_column_identifier_conversion.test",
         "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
         "test/sql/copy/parquet/parquet_prefetch_first_group_cost.test",
@@ -65,6 +66,7 @@
         "test/sql/copy/parquet/parquet_prefetch_cost_model_remote.test",
         "test/sql/copy/parquet/parquet_expression_filter_pruning.test",
         "test/sql/copy/parquet/read_ahead/readahead_depth_learning.test",
+        "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test",
         "test/sql/copy/parquet/read_ahead/readahead_io_budget.test_slow",
         "test/sql/parallelism/async_task_schedule_pool.test",
         "test/sql/storage/prefetch/async_native_scan_pool.test",
@@ -83,13 +85,6 @@
       "reason": "Parquet metadata cache doesn't survive restarts",
       "paths": [
         "test/sql/copy/parquet/parquet_glob_cache.test"
-      ]
-    },
-    {
-      "reason": "On version < v2.0.0, calling currval() before nextval() after a WAL replay is expected to error",
-      "paths": [
-        "test/sql/catalog/sequence/sequence_currval_before_nextval_not_supported.test",
-        "test/sql/catalog/sequence/sequence_currval_before_nextval_wal_not_supported.test"
       ]
     },
     {
@@ -134,6 +129,12 @@
       ]
     },
     {
+      "reason": "Test checks which blocks stay loaded between statements",
+      "paths": [
+        "test/sql/storage/test_persistent_block_memory_tags.test"
+      ]
+    },
+    {
       "reason": "Test asserts on same-process/before-checkpoint plan state (e.g. exact count before a checkpoint); force_restart checkpoints and restarts after every statement, so that intermediate state never exists.",
       "paths": [
         "test/optimizer/partition_stats_exactness.test",
@@ -147,7 +148,8 @@
         "test/sql/attach/attach_to_external_resource.test",
         "test/sql/attach/external_resource_logging.test",
         "test/sql/attach/external_resource_option_collision.test",
-        "test/sql/attach/external_resource_attach_failure.test"
+        "test/sql/attach/external_resource_attach_failure.test",
+        "test/sql/attach/external_resource_null_handle.test"
       ]
     }
   ]

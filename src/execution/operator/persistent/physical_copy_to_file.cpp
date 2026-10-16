@@ -488,6 +488,7 @@ public:
 	    DUCKDB_EXCLUDES(lock);
 	FileStateHandle FinalizeFileStateLocked(FileStateHandle file_state) DUCKDB_REQUIRES(lock);
 	void FinalizeFileState(FileStateHandle file_state) DUCKDB_EXCLUDES(lock);
+	void AbandonFileState(FileStateHandle file_state) noexcept DUCKDB_EXCLUDES(lock);
 
 	FileStateHandle TryFinalizeOwnedFileStateLocked() DUCKDB_REQUIRES(lock);
 	void TryFinalizeOwnedFileState() DUCKDB_EXCLUDES(lock);
@@ -551,6 +552,7 @@ class PartitionedCopyLocalState;
 class CopyToFileLocalState : public LocalSinkState {
 public:
 	CopyToFileLocalState(const PhysicalCopyToFile &op_p, ExecutionContext &context_p, CopyToFileGlobalState &gstate_p);
+	~CopyToFileLocalState() override;
 
 public:
 	const PhysicalCopyToFile &op;
@@ -634,7 +636,7 @@ public:
 
 	PartitionWriteInfo &Get() const {
 		D_ASSERT(write_info);
-		return *write_info.get_mutable();
+		return *write_info;
 	}
 
 	PartitionWriteInfo &operator*() const {
@@ -649,7 +651,7 @@ public:
 
 private:
 	optional_ptr<PartitionWriteManager> manager;
-	optional_ptr<PartitionWriteInfo> write_info;
+	mutable optional_ptr<PartitionWriteInfo> write_info;
 };
 
 class PartitionWriteManager {
@@ -766,8 +768,21 @@ struct PartitionedCopyFlushAction {
 
 struct PartitionedCopyBatchState {
 private:
+	//! Partition values can be NULL, so they are compared with IS NOT DISTINCT FROM semantics
+	static bool PartitionValuesEqual(const vector<Value> &left, const vector<Value> &right) {
+		if (left.size() != right.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < left.size(); i++) {
+			if (!Value::NotDistinctFrom(left[i], right[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	void SetValues(vector<Value> values_p) {
-		D_ASSERT(!values || *values == values_p);
+		D_ASSERT(!values || PartitionValuesEqual(*values, values_p));
 		if (!values) {
 			values = std::move(values_p);
 		}
@@ -3793,6 +3808,19 @@ void CopyToFileGlobalState::FinalizeFileState(FileStateHandle file_state) {
 	}
 }
 
+void CopyToFileGlobalState::AbandonFileState(FileStateHandle file_state) noexcept {
+	try {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		auto state = file_state.GetFileStatePtr();
+		auto prepare_state = prepare_global_state.load(std::memory_order_acquire);
+		if (state && prepare_state && RefersToSameObject(*prepare_state.get(), *state.get())) {
+			// concurrent prepares still use this state - keep it alive until the global state is destroyed
+			prepare_global_state_owned = std::move(file_state);
+		}
+	} catch (...) {
+	}
+}
+
 FileStateHandle CopyToFileGlobalState::TryFinalizeOwnedFileStateLocked() {
 	if (prepare_global_state_owned) {
 		prepare_global_state.store(nullptr, std::memory_order_release);
@@ -3823,6 +3851,12 @@ void CopyToFileGlobalState::MarkSuccessful() noexcept {
 //===--------------------------------------------------------------------===//
 // Copy Local State
 //===--------------------------------------------------------------------===//
+CopyToFileLocalState::~CopyToFileLocalState() {
+	if (global_file_state) {
+		gstate.AbandonFileState(std::move(global_file_state));
+	}
+}
+
 CopyToFileLocalState::CopyToFileLocalState(const PhysicalCopyToFile &op_p, ExecutionContext &context_p,
                                            CopyToFileGlobalState &gstate_p)
     : op(op_p), context(context_p), gstate(gstate_p) {

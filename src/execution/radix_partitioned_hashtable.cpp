@@ -139,7 +139,8 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
 	auto tuples_per_block = block_alloc_size / radix_ht.GetLayout().GetRowWidth();
 	idx_t ht_count =
 	    LossyNumericCast<idx_t>(static_cast<double>(config.sink_capacity) / GroupedAggregateHashTable::LOAD_FACTOR);
-	auto num_partitions = RadixPartitioning::NumberOfPartitions(config.GetMaximumSinkRadixBits());
+	auto num_partitions =
+	    RadixPartitioning::NumberOfPartitions(MaxValue(config.GetRadixBits(), config.GetMaximumSinkRadixBits()));
 	auto count_per_partition = ht_count / num_partitions;
 	auto blocks_per_partition = (count_per_partition + tuples_per_block) / tuples_per_block;
 	if (!radix_ht.GetLayout().AllConstant()) {
@@ -554,12 +555,16 @@ void UpdateSinkReservation(ClientContext &context, RadixHTGlobalSinkState &gstat
 	}
 	auto &temporary_memory_state = *gstate.temporary_memory_state;
 	const auto aggregate_allocator_size = ht.GetAggregateAllocator()->AllocationSize();
+	// Account for tuple metadata and the headroom deducted by GetThreadLimit.
+	const auto minimum_reservation =
+	    (gstate.minimum_reservation + gstate.number_of_threads * gstate.block_alloc_size) / 8 * 10;
 	temporary_memory_state.SetMinimumReservation(aggregate_allocator_size * gstate.number_of_threads +
-	                                             gstate.minimum_reservation);
+	                                             minimum_reservation);
 	const auto remaining_size =
 	    MaxValue<idx_t>(gstate.number_of_threads * total_size, temporary_memory_state.GetRemainingSize());
+	const auto reservation_limit = MaxValue(gstate.memory_limit, minimum_reservation);
 	// Repeated pressure checks must not keep doubling an unsatisfied reservation.
-	const auto requested_size = remaining_size > gstate.memory_limit / 2 ? gstate.memory_limit : 2 * remaining_size;
+	const auto requested_size = remaining_size > reservation_limit / 2 ? reservation_limit : 2 * remaining_size;
 	temporary_memory_state.SetRemainingSizeAndUpdateReservation(context, requested_size);
 }
 

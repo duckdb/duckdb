@@ -303,9 +303,10 @@ UpdateSetInfo:
   type: "unique_ptr<UpdateSetInfo>"
   by_value: true
   rules:
+    - UpdateSetClauseList
     - UpdateSetClause
     - UpdateSetTuple
-    - UpdateSetElementList
+    - UpdateSetElement
     - UpdateMatchSetClause
     - UpdateMatchSetInfo
 
@@ -349,6 +350,7 @@ SampleOptions:
   by_value: true
   rules:
     - SampleClause
+    - SelectSampleClause
     - SampleEntry
     - SampleEntryFunction
     - SampleEntryCount
@@ -391,6 +393,8 @@ Expression:
     - ColDefAndExpressionTail
     - LogicalNotExpression
     - IsExpression
+    - ComparisonOperand
+    - NotComparisonOperand
     - IsTest
     - IsLiteral
     - NotNull
@@ -451,8 +455,6 @@ Expression:
     - DotColumnOperator
     - SliceExpression
     - EndSliceBound
-    - EndSliceValue
-    - EndSliceMinus
     - StepSliceBound
     - SingleArrowPair
     - StarExpression
@@ -514,6 +516,7 @@ Expression:
     - NoneLiteral
     - NumberLiteral
     - TypeVariations
+    - NestedType
     - TimeType
     - NumericType
     - SimpleNumericType
@@ -645,6 +648,9 @@ ExpressionList:
     - IndirectionList
     - BoundedListExpression
     - SliceBound
+    - SliceUpperBound
+    - MinusStepSliceBound
+    - EndStepSliceBound
     - TargetList
     - PragmaParameters
     - ReturningClause
@@ -948,6 +954,7 @@ GenericCopyOption:
     - PartitionedByCopyOption
     - SpecializedOption
     - SpecializedOptionTail
+    - CopyLegacyOption
     - SingleOption
     - EncodingOption
     - ForceQuoteOption
@@ -1196,6 +1203,9 @@ Bool:
     - Materialized
     - SampleUnit
     - DropBehavior
+    - TruncateOptions
+    - TruncateAliasOptions
+    - TruncateDropBehavior
     - CascadeDropBehavior
     - RestrictDropBehavior
     - AnyOrAll
@@ -1643,8 +1653,12 @@ BinaryExpressionTail:
 
 overrides:
   # common.gram
-  ColIdType: "pair<Identifier, LogicalType>"
-  ColIdTypeList: "child_list_t<LogicalType>"
+  ColIdType:
+    type: "pair<Identifier, unique_ptr<ParsedExpression>>"
+    by_value: true
+  ColIdTypeList:
+    type: "vector<pair<Identifier, unique_ptr<ParsedExpression>>>"
+    by_value: true
   # create_index.gram
   RelOption:
     type: "pair<Identifier, unique_ptr<ParsedExpression>>"
@@ -1665,7 +1679,7 @@ overrides:
   # expression.gram
   NotExpression:
     type: "vector<bool>"
-    by_value: true
+    by_value: false
   IsDistinctFromTail:
     type: "IsDistinctFromTail"
     by_value: true
@@ -1688,6 +1702,9 @@ overrides:
     type: "IsExpressionTail"
     by_value: true
   IsOtherOperatorTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsCastTail:
     type: "IsExpressionTail"
     by_value: true
   BetweenLikeOp:
@@ -1742,10 +1759,6 @@ overrides:
   NullsFirstOrLast:
     type: "OrderByNullType"
     default_initializer: "ORDER_DEFAULT"
-  # update.gram
-  UpdateSetElement:
-    type: "pair<string, unique_ptr<ParsedExpression>>"
-    by_value: true
 
 # ---------------------------------------------------------------------------
 # matcher.cpp rule overrides
@@ -1798,6 +1811,9 @@ matcher_rule_overrides:
   ReservedIdentifier:
     matcher: reserved_identifier
     suggestion: SUGGEST_VARIABLE
+  BareColLabel:
+    matcher: identifier
+    suggestion: SUGGEST_BARE_LABEL
   CatalogName:
     matcher: identifier
     suggestion: SUGGEST_CATALOG_NAME
@@ -1877,11 +1893,11 @@ matcher_rule_overrides:
 expression_depth_nesting_rules:
   - SingleExpression
   - Type
+  - NestedType
+  - SubqueryReference
 
 expression_depth_chain_rules:
   - LambdaArrowExpression
-  - LogicalOrExpression
-  - LogicalAndExpression
   - NotExpression
   - IsExpressionContinuation
   - IsDistinctFromExpression
@@ -1931,6 +1947,7 @@ collapsible_rules:
 
 packrat_memoized_rules:
   - Expression
+  - TableRef
   - Identifier
   - ColId
   - CatalogQualification
@@ -1945,6 +1962,8 @@ packrat_memoized_rules:
 excluded_rules:
   # Syntax only: the 'EXTERNAL' 'RESOURCE' keyword pair, shared by every singular form.
   - ExternalResourceKeyword
+  # Syntax only: OVERRIDING {USER|SYSTEM} VALUE is accepted and ignored.
+  - OverridingClause
   # Suggestion-only: exists so autocomplete offers the special SHOW forms as keywords; parsing of e.g.
   # "SHOW databases" resolves through ShowSettingName (the identifier), which the transformer special-cases.
   - ShowSpecialForm

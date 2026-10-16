@@ -125,6 +125,8 @@ public:
 	DUCKDB_API static Allocator &DefaultAllocator();
 	DUCKDB_API static shared_ptr<Allocator> &DefaultAllocatorReference();
 
+	//! Total mapped allocator memory, if supported by this allocator.
+	optional_idx GetMappedMemory() const;
 	static bool SupportsFlush();
 	static optional_idx DecayDelay();
 	static void ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count);

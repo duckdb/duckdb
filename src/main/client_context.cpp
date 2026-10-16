@@ -1106,7 +1106,16 @@ void ClientContext::InterruptCheck() const {
 		throw InterruptException();
 	}
 	// Only check timeout every N calls to avoid expensive steady_clock::now() syscall
-	if (query_deadline.IsValid() && ++timeout_check_counter % TIMEOUT_CHECK_INTERVAL == 0 && QueryDeadlinePassed()) {
+	if (query_deadline.IsValid() && ++timeout_check_counter % TIMEOUT_CHECK_INTERVAL == 0) {
+		BlockingInterruptCheck();
+	}
+}
+
+void ClientContext::BlockingInterruptCheck() const {
+	if (IsInterrupted()) {
+		throw InterruptException();
+	}
+	if (QueryDeadlinePassed()) {
 		throw InterruptException(QUERY_DEADLINE_ERROR);
 	}
 }
@@ -1469,6 +1478,7 @@ ParserOptions ClientContext::GetParserOptions() {
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
 	options.compiled_grammar = CompiledGrammar::Get(*this);
+	options.context = *this;
 	return options;
 }
 
