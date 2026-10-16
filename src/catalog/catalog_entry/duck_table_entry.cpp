@@ -1458,6 +1458,24 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 		                              EnumUtil::ToString(info.constraint->type));
 	}
 
+	// The indexes of constraints must precede all other indexes. A concurrent CREATE INDEX is not visible as a
+	// dependency yet, but it has already registered its index with the storage.
+	idx_t constraint_index_count = 0;
+	for (const auto &constraint : GetConstraints()) {
+		if (constraint->type == ConstraintType::UNIQUE) {
+			constraint_index_count++;
+		} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
+			auto &fk = constraint->Cast<ForeignKeyConstraint>();
+			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
+			    fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+				constraint_index_count++;
+			}
+		}
+	}
+	if (storage->GetDataTableInfo()->GetIndexes().Count() > constraint_index_count) {
+		throw DependencyException("Cannot alter entry %s because there are entries that depend on it.", name);
+	}
+
 	// We create a physical table with a new constraint and a new unique index.
 	const auto binder = Binder::CreateBinder(context);
 	const auto bound_constraint =

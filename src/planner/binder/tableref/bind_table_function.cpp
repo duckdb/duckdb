@@ -429,6 +429,9 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();
+		if (!func_catalog.ParentCatalog().IsSystemCatalog()) {
+			GetStatementProperties().RegisterDBRead(func_catalog.ParentCatalog(), context);
+		}
 		auto query_node = BindTableMacro(fexpr, macro_func, 0);
 		D_ASSERT(query_node);
 

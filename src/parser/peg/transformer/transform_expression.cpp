@@ -1216,6 +1216,9 @@ PEGTransformerFactory::TransformLikeClause(PEGTransformer &transformer, const st
 		throw ParserException(
 		    "ESCAPE clause is not supported with case-insensitive regular expression match operators");
 	}
+	if (is_regex_operator && escape_clause) {
+		throw ParserException("ESCAPE clause is not supported with SIMILAR TO and regular expression match operators");
+	}
 	if (escape_clause) {
 		if (like_variation == "~~") {
 			like_variation = "like_escape";

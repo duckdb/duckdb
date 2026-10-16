@@ -1889,6 +1889,7 @@ expression_depth_nesting_rules:
   - SingleExpression
   - Type
   - NestedType
+  - SubqueryReference
 
 expression_depth_chain_rules:
   - LambdaArrowExpression

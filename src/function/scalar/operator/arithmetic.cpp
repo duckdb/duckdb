@@ -1477,9 +1477,18 @@ double InterpolateOperator::Operation(const double &lo, const double d, const do
 	return lo * (1.0 - d) + hi * d;
 }
 
+//! Interpolates between two integers without going through a double for the values themselves
+static int64_t InterpolateInt64(const int64_t lo, const double d, const int64_t hi) {
+	int64_t delta;
+	if (!TrySubtractOperator::Operation(hi, lo, delta)) {
+		return std::llround(static_cast<double>(lo) * (1.0 - d) + static_cast<double>(hi) * d);
+	}
+	return lo + std::llround(static_cast<double>(delta) * d);
+}
+
 template <>
 dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi) {
-	return dtime_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
+	return dtime_t(InterpolateInt64(lo.value, d, hi.value));
 }
 
 //! TIMETZ values are interpolated by their time normalized to UTC - the result is the normalized time at offset +00
@@ -1502,7 +1511,7 @@ dtime_tz_t InterpolateOperator::Operation(const dtime_tz_t &lo, const double d, 
 
 template <>
 timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d, const timestamp_t &hi) {
-	return timestamp_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
+	return timestamp_t(InterpolateInt64(lo.value, d, hi.value));
 }
 
 template <>

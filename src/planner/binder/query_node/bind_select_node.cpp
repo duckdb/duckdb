@@ -759,8 +759,23 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	// push the GROUP BY ALL expressions into the group set
 	for (auto &group_by_all_index : group_by_all_indexes) {
 		auto &expr = result.select_list[group_by_all_index];
-		auto &return_type = expr->GetReturnType();
+		auto return_type = expr->GetReturnType();
+		// group by the collated expression, and select the uncollated value through a first(x) aggregate
+		unique_ptr<Expression> uncollated_expr = expr->HasSubquery() ? nullptr : expr->Copy();
+		bool requires_collation = ExpressionBinder::PushCollation(context, expr, return_type);
 		auto group_proj_idx = ColumnBinding::PushExpression(result.groups.group_expressions, std::move(expr));
+		if (uncollated_expr && requires_collation) {
+			auto first_fun = GetBuiltinAggregateFunction(context, FirstFun::Name, {uncollated_expr->GetReturnType()});
+			vector<unique_ptr<Expression>> first_children;
+			first_children.push_back(std::move(uncollated_expr));
+			FunctionBinder function_binder(*this);
+			auto function = function_binder.BindAggregateFunction(std::move(first_fun), std::move(first_children));
+			function->SetAlias("__collated_group");
+			auto aggregate_idx = ColumnBinding::PushExpression(result.aggregates, std::move(function));
+			expr =
+			    make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(result.aggregate_index, aggregate_idx));
+			continue;
+		}
 		auto group_ref =
 		    make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(result.group_index, group_proj_idx));
 		expr = std::move(group_ref);
