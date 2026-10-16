@@ -20,6 +20,7 @@ namespace {
 //===--------------------------------------------------------------------===//
 // Structure nodes
 //===--------------------------------------------------------------------===//
+//! A structure node represents a subtree of the global schema.
 struct StructureNode {
 	explicit StructureNode(yyjson_mut_val &value_p) : value(value_p) {
 	}
@@ -27,8 +28,12 @@ struct StructureNode {
 	bool MergeType(LogicalTypeId type_p, yyjson_mut_doc *doc);
 
 	reference<yyjson_mut_val> value;
+	//! The type associated with the structure node, default to INVALID before discovery.
 	LogicalTypeId type = LogicalTypeId::INVALID;
+	//! Tracks if the structure node contains incompatible types, if it does we can short circuit on subsequent visits.
 	bool incompatible = false;
+
+	//! References so we can continue traversal of an object/array after finishing a child.
 	optional_ptr<StructureNode> array_child;
 	json_key_map_t<reference<StructureNode>> key_map;
 
@@ -134,7 +139,7 @@ StructureNode &GetOrCreateObjectChild(NodeStorage &nodes, StructureNode &node, y
 //===--------------------------------------------------------------------===//
 // Traversal
 //===--------------------------------------------------------------------===//
-//! Each frame tracks one input value; multiple frames can reuse the same schema node.
+//! Each frame tracks one input value; multiple frames can reuse the same structure node.
 struct Frame {
 	Frame(optional_ptr<yyjson_val> val_p, StructureNode &node_p) : val(val_p), node(node_p) {
 	}
@@ -169,6 +174,7 @@ optional<Frame> HandleArrayFrame(NodeStorage &nodes, Frame &frame, yyjson_mut_do
 		return nullopt;
 	}
 
+	// prevent frame bookkeeping for scalar values
 	while (optional_ptr<yyjson_val> next = yyjson_arr_iter_next(&frame.arr_it)) {
 		if (yyjson_is_ctn(next.get())) {
 			return Frame(next, child);
@@ -196,6 +202,7 @@ optional<Frame> HandleObjectFrame(NodeStorage &nodes, Frame &frame, yyjson_mut_d
 		frame.initialized = true;
 	}
 
+	// prevent frame bookkeeping for scalar values
 	while (optional_ptr<yyjson_val> key = yyjson_obj_iter_next(&frame.obj_it)) {
 		auto &child = GetOrCreateObjectChild(nodes, node, *key, doc);
 		if (child.incompatible) {
