@@ -902,6 +902,8 @@ void DataTable::InitializeLocalStorage(LocalAppendState &state, DuckTableEntry &
 		                           GetTableName(), TableModification());
 	}
 
+	// The transaction-local indexes are created with the local storage, and only for indexes that are bound
+	info->BindIndexes(context);
 	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.InitializeStorage(state, *this, table);
 	state.constraint_state = InitializeConstraintState(table, bound_constraints);

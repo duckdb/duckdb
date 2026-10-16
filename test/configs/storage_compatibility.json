@@ -42,6 +42,12 @@
       ]
     },
     {
+      "reason": "Views over read_parquet with a renamed STRUCT schema cannot be bound by older versions.",
+      "paths": [
+        "test/parquet/parquet_schema_renamed_struct_filter.test"
+      ]
+    },
+    {
       "reason": "Stringification too slow",
       "paths": [
         "test/sql/types/bignum/test_bignum_sum.test"
@@ -50,6 +56,7 @@
     {
       "reason": "Time (NS) not supported (new type).",
       "paths": [
+        "test/sql/optimizer/expression/test_time_ns_cast_comparison.test",
         "test/fuzzer/duckfuzz/arg_minmax_by_decimal.test",
         "test/fuzzer/duckfuzz/array_distance.test",
         "test/fuzzer/duckfuzz/array_hash.test",

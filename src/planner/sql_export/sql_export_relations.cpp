@@ -233,6 +233,9 @@ ExportOrderModifier(LogicalOperator &op, LogicalPlanSQLExportContext &context, c
 		if (expression.HasError()) {
 			return Result::Failure(expression);
 		}
+		if (SQLExportHelpers::IsConstantOrderKey(*order.expression, *expression.GetValue())) {
+			continue;
+		}
 		modifier->orders.emplace_back(
 		    order.type, order.null_order,
 		    SQLExportHelpers::OrderExpression(SemanticExpressionType(*order.expression, expression_context),
@@ -261,6 +264,10 @@ static LogicalPlanSQLExportResult ExportOrderedRelation(LogicalOperator &op, Log
 	auto modifier = ExportOrderModifier(op, context, path, orders, expression_context, 0);
 	if (modifier.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(modifier);
+	}
+	if (modifier.GetValue()->orders.empty()) {
+		LogicalPlanSQLExportHelpers::SetChildScope(*select, std::move(child.GetValue()), plain);
+		return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 	}
 	select->modifiers.push_back(std::move(modifier.GetValue()));
 	if (!plain && LogicalPlanSQLExportHelpers::ComposeOrder(op, child.GetValue(), *select, expression_context, path)) {
@@ -469,7 +476,9 @@ LogicalPlanSQLExportResult LogicalDistinct::ToSQL(LogicalPlanSQLExportContext &c
 		if (order.HasError()) {
 			return LogicalPlanSQLExportResult::Failure(order);
 		}
-		select->modifiers.push_back(std::move(order.GetValue()));
+		if (!order.GetValue()->orders.empty()) {
+			select->modifiers.push_back(std::move(order.GetValue()));
+		}
 	}
 	select->from_table = LogicalPlanSQLExportHelpers::CreateSubquery(std::move(child.GetValue()));
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});

@@ -35,6 +35,12 @@
       ]
     },
     {
+      "reason": "Requires httpfs to be unloaded, but this config loads it statically.",
+      "paths": [
+        "test/extension/install_httpfs_https_repository.test"
+      ]
+    },
+    {
       "reason": "TODO",
       "paths": [
         "test/extension/test_tags.test",

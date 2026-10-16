@@ -36,6 +36,15 @@ static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry 
 		}
 	}
 	if (all_scalar) {
+		for (idx_t function_idx = 0; function_idx < table_function.functions.Size(); function_idx++) {
+			const auto &function = *table_function.functions.GetFunctionByOffset(function_idx);
+			for (auto &param : function.GetSignature().GetParameters()) {
+				if (param.GetType().id() == LogicalTypeId::TABLE) {
+					throw BinderException("Table function %s requires a subquery as its TABLE parameter",
+					                      table_function.name);
+				}
+			}
+		}
 		return TableFunctionBindType::STANDARD_TABLE_FUNCTION;
 	}
 	// if we have non-scalar parameters - we need to look at the function definition to decide how to bind
@@ -420,6 +429,9 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();
+		if (!func_catalog.ParentCatalog().IsSystemCatalog()) {
+			GetStatementProperties().RegisterDBRead(func_catalog.ParentCatalog(), context);
+		}
 		auto query_node = BindTableMacro(fexpr, macro_func, 0);
 		D_ASSERT(query_node);
 
