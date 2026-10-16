@@ -548,7 +548,9 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	column_chunk.meta_data.total_uncompressed_size = UnsafeNumericCast<int64_t>(total_uncompressed_size);
 	state.row_group.total_byte_size += column_chunk.meta_data.total_uncompressed_size;
 
-	if (write_page_index && state.pages_start_at_rows && !page_index.offset_index.page_locations.empty()) {
+	// a chunk with a single page carries no page index: the footer statistics already describe that page, and the
+	// index would only add bytes to small files
+	if (write_page_index && state.pages_start_at_rows && page_index.offset_index.page_locations.size() > 1) {
 		FinalizePageIndex(state, page_index);
 		writer.BufferPageIndex(state.col_idx, std::move(page_index));
 	}
