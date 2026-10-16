@@ -106,8 +106,14 @@ FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInforma
 FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
 	//	LookUpConjunctions(expr.get());
 	// try to push the filter into the combiner
-	auto result = AddFilter(*expr);
+	bool evaluation_failed = false;
+	auto result = AddFilter(*expr, evaluation_failed);
 	if (result == FilterResult::UNSUPPORTED) {
+		if (evaluation_failed) {
+			// throwing constant filters go last so that they never run on rows the other filters remove
+			deferred_filters.push_back(std::move(expr));
+			return FilterResult::SUCCESS;
+		}
 		// unsupported filter, push into remaining filters
 		remaining_filters.push_back(std::move(expr));
 		return FilterResult::SUCCESS;
@@ -234,6 +240,10 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 			}
 		}
 	}
+	for (auto &filter : deferred_filters) {
+		callback(std::move(filter));
+	}
+	deferred_filters.clear();
 	stored_expressions.clear();
 	equivalence_set_map.clear();
 	constant_values.clear();
@@ -1178,7 +1188,7 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 	return FilterResult::SUCCESS;
 }
 
-FilterResult FilterCombiner::AddFilter(Expression &expr) {
+FilterResult FilterCombiner::AddFilter(Expression &expr, bool &evaluation_failed) {
 	if (expr.HasParameter()) {
 		return FilterResult::UNSUPPORTED;
 	}
@@ -1186,6 +1196,7 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 		// scalar condition, evaluate it
 		Value result;
 		if (!ExpressionExecutor::TryEvaluateScalar(context, expr, result)) {
+			evaluation_failed = true;
 			return FilterResult::UNSUPPORTED;
 		}
 		result = result.DefaultCastAs(LogicalType::BOOLEAN);

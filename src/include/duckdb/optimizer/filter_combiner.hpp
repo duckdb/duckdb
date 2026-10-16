@@ -62,7 +62,7 @@ public:
 	FilterPushdownResult TryPushdownGenericExpression(LogicalGet &get, Expression &expr);
 
 private:
-	FilterResult AddFilter(Expression &expr);
+	FilterResult AddFilter(Expression &expr, bool &evaluation_failed);
 	FilterResult AddBoundComparisonFilter(Expression &expr);
 	FilterResult AddTransitiveFilters(BoundFunctionExpression &comparison, bool is_root = true);
 	unique_ptr<Expression> FindTransitiveFilter(const Expression &expr);
@@ -90,6 +90,7 @@ private:
 
 private:
 	vector<unique_ptr<Expression>> remaining_filters;
+	vector<unique_ptr<Expression>> deferred_filters;
 
 	expression_map_t<unique_ptr<Expression>> stored_expressions;
 	expression_map_t<idx_t> equivalence_set_map;
