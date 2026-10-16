@@ -5,17 +5,17 @@
 statement error
 SELECT list_resize([1,2,3]::VARIANT, 5);
 ----
-Binder Error: list_resize can only operate on LISTs
+Binder Error: "list_resize" can only operate on LISTs
 
 statement error
 SELECT list_resize([1]::VARIANT, 2, 0);
 ----
-Binder Error: list_resize can only operate on LISTs
+Binder Error: "list_resize" can only operate on LISTs
 
 statement error
 SELECT array_resize([1,2,3]::VARIANT, 5);
 ----
-Binder Error: list_resize can only operate on LISTs
+Binder Error: "array_resize" can only operate on LISTs
 
 query I
 SELECT list_resize([1,2,3], 5);
