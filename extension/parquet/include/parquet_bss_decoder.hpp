@@ -53,6 +53,28 @@ public:
 		value_offset_ += batch_size;
 	}
 
+	//! Decode values whose width is only known at runtime (FIXED_LEN_BYTE_ARRAY).
+	//! The output has the PLAIN layout: consecutive type_size-byte values.
+	void GetBatch(data_ptr_t values_target_ptr, uint32_t batch_size, idx_t type_size) {
+		if (type_size == 0 || buffer_.len % type_size != 0) {
+			duckdb::stringstream error;
+			error << "Data buffer size for the BYTE_STREAM_SPLIT encoding (" << buffer_.len
+			      << ") should be a multiple of the type size (" << type_size << ")";
+			throw std::runtime_error(error.str());
+		}
+		uint32_t num_buffer_values = buffer_.len / type_size;
+
+		buffer_.available((value_offset_ + batch_size) * type_size);
+
+		for (idx_t byte_offset = 0; byte_offset < type_size; ++byte_offset) {
+			data_ptr_t input_bytes = buffer_.ptr + byte_offset * num_buffer_values + value_offset_;
+			for (uint32_t i = 0; i < batch_size; ++i) {
+				values_target_ptr[byte_offset + i * type_size] = *(input_bytes + i);
+			}
+		}
+		value_offset_ += batch_size;
+	}
+
 private:
 	ByteBuffer buffer_;
 	uint32_t value_offset_;
