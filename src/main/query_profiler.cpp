@@ -243,6 +243,8 @@ void QueryProfiler::EndQuery() {
 	}
 
 	is_explain_analyze = false;
+	// a query that failed before it was planned has no tree to print; its profile still replaces the saved one
+	const bool has_plan = root != nullptr;
 
 	// To log is inexpensive, whether to log or not depends on whether logging is active
 	ToLogInternal();
@@ -251,14 +253,14 @@ void QueryProfiler::EndQuery() {
 
 	if (emit_output) {
 		auto save_location = GetSaveLocation();
-		if (save_location.empty()) {
+		if (!save_location.empty()) {
+			string tree = ToString();
+			WriteToFile(save_location.c_str(), tree);
+		} else if (has_plan) {
 			// print directly through the renderer's print sink
 			auto renderer = GetRenderer();
 			PrintProfilerOutput(renderer.get());
 			Printer::Print("\n");
-		} else {
-			string tree = ToString();
-			WriteToFile(save_location.c_str(), tree);
 		}
 	}
 }

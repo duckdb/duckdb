@@ -27,7 +27,8 @@
     {
       "reason": "Statement verification temporarily disables profiling for its internal EXPLAIN",
       "paths": [
-        "test/sql/pragma/profiling/test_custom_profiling_using_groups.test"
+        "test/sql/pragma/profiling/test_custom_profiling_using_groups.test",
+        "test/sql/profiling/test_failed_query_profile.test"
       ]
     },
     {
