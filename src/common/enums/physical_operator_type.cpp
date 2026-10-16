@@ -135,10 +135,6 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "RECURSIVE_KEY_JOIN";
 	case PhysicalOperatorType::MERGE_ACTION_SOURCE:
 		return "MERGE_ACTION_SOURCE";
-	case PhysicalOperatorType::TRY:
-		return "TRY";
-	case PhysicalOperatorType::TRY_COLLECTOR:
-		return "TRY_COLLECTOR";
 	case PhysicalOperatorType::DROP:
 		return "DROP";
 	case PhysicalOperatorType::PRAGMA:

@@ -211,36 +211,6 @@ static bool IsMultiColumnComparison(const BoundSubqueryExpression &expr) {
 	return false;
 }
 
-//! A TRY boundary executes the subquery plan in a nested executor, which cannot resolve references to CTEs that are
-//! materialized by the plan of the outer query. Such references are rejected here, before the plan is wrapped.
-static void VerifyTryBoundaryPlan(const LogicalOperator &op, unordered_set<TableIndex> &cte_indexes) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
-	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
-		cte_indexes.insert(op.Cast<LogicalCTE>().table_index);
-		break;
-	case LogicalOperatorType::LOGICAL_CTE_REF:
-		if (cte_indexes.find(op.Cast<LogicalCTERef>().cte_index) == cte_indexes.end()) {
-			throw BinderException(
-			    "TRY can not be used in combination with a subquery that references a materialized or "
-			    "recursive CTE defined outside of the subquery");
-		}
-		break;
-	default:
-		break;
-	}
-	for (auto &child : op.children) {
-		VerifyTryBoundaryPlan(*child, cte_indexes);
-	}
-}
-
-//! Wrap the plan of an uncorrelated scalar subquery below a TRY expression in an error boundary.
-static unique_ptr<LogicalOperator> WrapInTryBoundary(unique_ptr<LogicalOperator> plan) {
-	unordered_set<TableIndex> cte_indexes;
-	VerifyTryBoundaryPlan(*plan, cte_indexes);
-	return make_uniq<LogicalTry>(std::move(plan));
-}
-
 static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubqueryExpression &expr,
                                                        unique_ptr<LogicalOperator> &root,
                                                        unique_ptr<LogicalOperator> plan) {
@@ -298,9 +268,6 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		D_ASSERT(bindings.size() == 1);
 		if (expr.GetReturnType().id() != LogicalTypeId::SQLNULL && PlanReturnsExactlyOneRow(*plan)) {
 			auto result = make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.GetReturnType(), bindings[0]);
-			if (expr.IsTryBoundary()) {
-				plan = WrapInTryBoundary(std::move(plan));
-			}
 			root = LogicalCrossProduct::Create(std::move(root), std::move(plan));
 			return std::move(result);
 		}
@@ -365,10 +332,6 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 			plan = std::move(proj);
 
 			aggr_index = proj_index;
-		}
-
-		if (expr.IsTryBoundary()) {
-			plan = WrapInTryBoundary(std::move(plan));
 		}
 
 		// in the uncorrelated case, we add the value to the main query through a cross product
