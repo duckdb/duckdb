@@ -307,6 +307,7 @@ unique_ptr<Connection> SQLLogicTestRunner::ConnectToDatabase(DuckDB &db_ref) {
 	auto result = make_uniq<Connection>(db_ref);
 	if (original_sqlite_test) {
 		result->Query("SET integer_division=true");
+		result->Query("SET error_on_division_by_zero=false");
 	}
 	result->Query("SET secret_directory='" + TestCreatePath("test_secret_dir") + "'");
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
@@ -1339,6 +1340,7 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 			auto sleep_duration = std::stoull(token.parameters[0]);
 			auto sleep_unit = SleepCommand::ParseUnit(token.parameters[1]);
 			auto command = make_uniq<SleepCommand>(*this, sleep_duration, sleep_unit);
+			command->conditions = std::move(conditions);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_UNZIP) {
 			if (token.parameters.size() != 1 && token.parameters.size() != 2) {

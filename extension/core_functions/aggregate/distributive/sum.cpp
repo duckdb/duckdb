@@ -247,8 +247,17 @@ struct DecimalSumOperation : public OP {
 	}
 };
 
-unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
-	throw BinderException("sum_no_overflow is for internal use only!");
+//! Binds the regular sum that sum_no_overflow is a specialized implementation of
+pair<BoundAggregateFunction, unique_ptr<FunctionData>> BindLogicalSum(ClientContext &context,
+                                                                      vector<unique_ptr<Expression>> &arguments) {
+	vector<LogicalType> argument_types;
+	for (auto &argument : arguments) {
+		argument_types.push_back(argument->GetReturnType());
+	}
+	auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
+	    context, QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier("sum")));
+	FunctionBinder binder(context);
+	return binder.ResolveFunction(entry.functions.GetFunctionByArguments(context, argument_types), arguments);
 }
 
 void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -261,15 +270,10 @@ unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, Bo
 	auto &return_type = deserializer.Get<const LogicalType &>();
 	auto &children = deserializer.Get<const const_expression_list_t &>();
 	vector<unique_ptr<Expression>> arguments;
-	vector<LogicalType> argument_types;
 	for (auto &child : children) {
 		arguments.push_back(child.get().Copy());
-		argument_types.push_back(child.get().GetReturnType());
 	}
-	auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
-	    context, QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier("sum")));
-	FunctionBinder binder(context);
-	auto logical = binder.ResolveFunction(entry.functions.GetFunctionByArguments(context, argument_types), arguments);
+	auto logical = BindLogicalSum(context, arguments);
 	if (logical.second || (!return_type.IsAggregateState() && logical.first.GetReturnType() != return_type)) {
 		throw SerializationException("Cannot reconstruct the logical sum signature");
 	}
@@ -278,6 +282,8 @@ unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, Bo
 	function.SetReturnType(return_type);
 	return nullptr;
 }
+
+unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input);
 
 AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 	switch (type) {
@@ -316,6 +322,20 @@ AggregateFunction GetSumAggregateNoOverflowDecimal() {
 	aggr.SetSerializeCallback(SumNoOverflowSerialize);
 	aggr.SetDeserializeCallback(SumNoOverflowDeserialize);
 	return aggr;
+}
+
+//! Binding sum_no_overflow by name (e.g. when re-binding an exported aggregate state) delegates to the regular sum,
+//! with the no-overflow implementation swapped in as statistics propagation does
+unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	const auto parameter_type = function.GetArguments()[0];
+	auto logical = BindLogicalSum(input.GetClientContext(), arguments);
+	if (parameter_type.id() != LogicalTypeId::DECIMAL) {
+		logical.first.ReplaceImplementation(GetSumAggregateNoOverflow(parameter_type.InternalType()));
+	}
+	function = std::move(logical.first);
+	return std::move(logical.second);
 }
 
 unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggregateExpression &expr,

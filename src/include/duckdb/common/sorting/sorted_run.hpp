@@ -58,6 +58,8 @@ public:
 	idx_t Count() const;
 	//! Size of this sorted run
 	idx_t SizeInBytes() const;
+	//! Size of this sorted run plus the merge buffer that Finalize allocates to sort it
+	idx_t SizeInBytesForSorting() const;
 
 private:
 	mutex merger_global_state_lock;

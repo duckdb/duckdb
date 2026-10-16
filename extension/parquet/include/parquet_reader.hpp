@@ -475,6 +475,9 @@ private:
 	idx_t GetGroupOffset(ParquetReaderScanState &state);
 	//! Group span is the distance between the min page offset and the max page offset plus the max page compressed size
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
+	FilterPropagateResult CheckRowGroupFilterStatistics(ClientContext &context, ParquetReaderScanState &state,
+	                                                    ColumnReader &column_reader, const TableFilter &filter);
+	bool DynamicFiltersExcludeRowGroup(ClientContext &context, ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ClientContext &context, ParquetReaderScanState &state, idx_t out_col_idx);
 	//! Whole-group prefetch strategy.
 	ParquetPrefetchStrategy WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
