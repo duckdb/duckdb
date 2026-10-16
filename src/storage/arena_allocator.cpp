@@ -58,6 +58,16 @@ ArenaAllocator::ArenaAllocator(Allocator &allocator, idx_t initial_capacity)
 }
 
 ArenaAllocator::~ArenaAllocator() {
+	DestroyObjects();
+}
+
+void ArenaAllocator::DestroyObjects(optional_ptr<Destructor> until) {
+	while (destructors.get() != until.get()) {
+		D_ASSERT(destructors);
+		auto entry = destructors;
+		destructors = entry->previous;
+		entry->destroy(*entry);
+	}
 }
 
 void ArenaAllocator::AllocateNewBlock(idx_t min_size) {
@@ -135,6 +145,7 @@ data_ptr_t ArenaAllocator::ReallocateAligned(data_ptr_t pointer, idx_t old_size,
 
 ArenaAllocator::Position ArenaAllocator::GetPosition() const {
 	Position result;
+	result.destructor = destructors;
 	if (head) {
 		result.chunk = head.get();
 		result.current_position = head->current_position;
@@ -143,6 +154,7 @@ ArenaAllocator::Position ArenaAllocator::GetPosition() const {
 }
 
 void ArenaAllocator::Rewind(const Position &position) {
+	DestroyObjects(position.destructor);
 	if (!position.chunk) {
 		// nothing was allocated when the position was taken
 		FreeAll();
@@ -170,6 +182,7 @@ void ArenaAllocator::FreeAll() {
 }
 
 void ArenaAllocator::Reset() {
+	DestroyObjects();
 	if (head) {
 		// destroy all chunks except the current one
 		if (head->next) {
@@ -188,6 +201,7 @@ void ArenaAllocator::Reset() {
 }
 
 void ArenaAllocator::Destroy() {
+	DestroyObjects();
 	head = nullptr;
 	tail = nullptr;
 	allocated_size = 0;
@@ -195,10 +209,13 @@ void ArenaAllocator::Destroy() {
 
 void ArenaAllocator::Move(ArenaAllocator &other) {
 	D_ASSERT(!other.head);
+	D_ASSERT(!other.destructors);
 	other.tail = tail;
 	other.head = std::move(head);
 	other.initial_capacity = initial_capacity;
 	other.allocated_size = allocated_size;
+	other.destructors = destructors;
+	destructors = nullptr;
 	Destroy();
 }
 

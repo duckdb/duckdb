@@ -4,6 +4,7 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parallel/task_executor.hpp"
@@ -245,6 +246,28 @@ TEST_CASE("Allocation cache reuses whole allocations and releases them with its 
 		REQUIRE(live_bytes.load() == backing_before + SIZE);
 	}
 	REQUIRE(live_bytes.load() == 0);
+}
+
+TEST_CASE("Allocation cache can reuse arena storage after container destruction", "[api][allocation_cache]") {
+	constexpr idx_t SIZE = 512 * 1024;
+	DBConfig config;
+	config.options.maximum_threads = 1;
+	config.options.async_threads = 0;
+	config.block_allocator = make_uniq<BlockAllocator>(Allocator::DefaultAllocator(), 256 * 1024, 0, 0);
+	DuckDB db(nullptr, &config);
+	auto &allocator = BufferManager::GetBufferManager(*db.instance).GetBufferAllocator();
+	for (idx_t i = 0; i < 10; i++) {
+		{
+			ArenaAllocator arena(allocator, SIZE / 2);
+			auto &values = *arena.MakeWithDestructor<arena_vector<uint64_t>>(arena);
+			values.reserve(1024);
+			values.push_back(42);
+		}
+		auto data = allocator.Allocate(SIZE);
+		memset(data.get(), 42, SIZE);
+		REQUIRE(data.get()[0] == 42);
+		REQUIRE(data.get()[SIZE - 1] == 42);
+	}
 }
 
 #if defined(__linux__)
@@ -855,7 +878,7 @@ TEST_CASE("HugeAllocation moves retain the originating buffer manager", "[api][h
 	REQUIRE(second_manager.GetUsedMemory() == second_memory);
 }
 
-TEST_CASE("BufferAllocator rolls back failed ordinary and huge backing operations", "[api][huge_route]") {
+TEST_CASE("BufferAllocator accounts for ordinary and huge backing operations", "[api][huge_route]") {
 	constexpr idx_t SIZE = 8 * 1024 * 1024 + 4096;
 	atomic<idx_t> live_bytes {0};
 	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
@@ -891,12 +914,31 @@ TEST_CASE("BufferAllocator rolls back failed ordinary and huge backing operation
 			REQUIRE(pointer[SIZE - 1] == 84);
 		}
 		control.fail_reallocate = false;
-		REQUIRE_NO_FAIL(connection.Query("SET memory_limit='12MiB'"));
-		REQUIRE_THROWS_AS(owner.ReallocateData(pointer, SIZE, 2 * SIZE), OutOfMemoryException);
-		REQUIRE(manager.GetUsedMemory() == initial_memory + SIZE);
-		REQUIRE(pointer[0] == 42);
 		owned.Reset();
 		REQUIRE(manager.GetUsedMemory() == initial_memory);
+	}
+	SECTION("Ordinary reallocation can grow and shrink above the memory limit") {
+		REQUIRE_NO_FAIL(connection.Query("SET memory_limit='12MiB'"));
+		auto current_size = SIZE;
+		auto free_allocation = [&](data_ptr_t pointer) {
+			allocator.FreeData(pointer, current_size);
+		};
+		unique_ptr<data_t, decltype(free_allocation)> owned(allocator.AllocateData(SIZE), free_allocation);
+		owned.get()[0] = 42;
+		owned.get()[SIZE / 2 - 1] = 84;
+		for (auto new_size : {SIZE * 2, SIZE + SIZE / 2, SIZE / 2}) {
+			auto pointer = allocator.ReallocateData(owned.get(), current_size, new_size);
+			owned.release();
+			owned.reset(pointer);
+			current_size = new_size;
+			CHECK(manager.GetUsedMemory() == initial_memory + current_size);
+			CHECK(live_bytes.load() == current_size);
+			CHECK(owned.get()[0] == 42);
+			CHECK(owned.get()[SIZE / 2 - 1] == 84);
+		}
+		owned.reset();
+		REQUIRE(manager.GetUsedMemory() == initial_memory);
+		REQUIRE(live_bytes.load() == 0);
 		REQUIRE_NO_FAIL(connection.Query("RESET memory_limit"));
 	}
 	SECTION("Huge replacement") {

@@ -832,13 +832,11 @@ data_ptr_t BufferAllocatorData::Reallocate(data_ptr_t pointer, idx_t old_size, i
 	if (old_size == size) {
 		return pointer;
 	}
-	auto reservation =
-	    manager.EvictBlocksOrThrow(QueryContext(), MemoryTag::ALLOCATOR, size > old_size ? size - old_size : 0, nullptr,
-	                               "failed to reallocate data to %s%s", StringUtil::BytesToHumanReadableString(size));
 	auto result = BlockAllocator::Get(manager.db).ReallocateData(pointer, old_size, size);
-	if (size < old_size) {
-		Release(old_size - size);
-	}
+	// Reallocation only adjusts accounting, and backing failure must leave the old reservation intact.
+	BufferPoolReservation reservation(MemoryTag::ALLOCATOR, manager.GetBufferPool());
+	reservation.size = old_size;
+	reservation.Resize(size);
 	reservation.size = 0;
 	return result;
 }

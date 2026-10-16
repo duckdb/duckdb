@@ -814,22 +814,68 @@ TEST_CASE("Concurrent uncached reads keep their buffers until the last consumer"
 }
 #endif
 
-TEST_CASE("Read buffer capacity rounding falls back when only the requested size fits",
-          "[caching][read_buffer_reuse]") {
-	DuckDB db;
+TEST_CASE("Uncached reads fit alongside other pinned buffers", "[caching][read_buffer_reuse]") {
+	DBConfig config;
+	config.options.maximum_threads = 1;
+	config.options.async_threads = 0;
+	DuckDB db(nullptr, &config);
 	Connection con(db);
 	auto &manager = BufferManager::GetBufferManager(*con.context);
-	manager.SetMemoryLimit(64 * 1024 * 1024);
-	auto pinned = manager.Allocate(MemoryTag::BASE_TABLE, 61 * 1024 * 1024 + 768 * 1024);
+	BufferHandle pinned;
+	idx_t read_count = 1;
+	SECTION("Only the requested read size fits") {
+		manager.SetMemoryLimit(64 * 1024 * 1024);
+		pinned = manager.Allocate(MemoryTag::BASE_TABLE, 61 * 1024 * 1024 + 768 * 1024);
+	}
+	SECTION("Two reads must fit at the same time") {
+		manager.SetMemoryLimit(8 * 1024 * 1024);
+		pinned = manager.Allocate(MemoryTag::BASE_TABLE, 3 * 1024 * 1024);
+		read_count = 2;
+	}
 	LocalFileSystem file_system;
 	CachingFileSystem cfs(file_system, *db.instance);
 	const idx_t size = 2 * 1024 * 1024 + 1;
 	string content(size, 'x');
-	TestFileGuard test_file("uncached_read_rounding_pressure.bin", content);
+	TestFileGuard test_file("uncached_read_pressure.bin", content);
 	auto handle = cfs.OpenFile(*con.context, OpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
-	// The 4MiB capacity does not fit beside the pin, but the requested 2MiB+1 bytes do.
+	vector<FileBufferHandleGroup> groups;
+	for (idx_t i = 0; i < read_count; i++) {
+		groups.push_back(handle->Read(size, 0));
+	}
+	for (auto &group : groups) {
+		REQUIRE(group.GetHandles().size() == 1);
+		REQUIRE(group.GetHandles()[0].length == size);
+		REQUIRE(memcmp(group.Ptr(), content.data(), size) == 0);
+	}
+}
+
+TEST_CASE("Uncached read rounding leaves headroom for concurrent readers", "[caching][read_buffer_reuse]") {
+	DBConfig config;
+	config.options.maximum_threads = 1;
+	config.options.async_threads = 0;
+	const idx_t size = 2 * 1024 * 1024 + 1;
+	idx_t memory_limit = 16 * 1024 * 1024;
+	idx_t expected_capacity = 4 * 1024 * 1024;
+	SECTION("Round when memory is plentiful") {
+	}
+#ifndef DUCKDB_NO_THREADS
+	SECTION("Keep exact sizes when each worker has little memory") {
+		config.options.maximum_threads = 4;
+		expected_capacity = BufferManager::GetAllocSize(size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
+	}
+#endif
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	auto &manager = BufferManager::GetBufferManager(*con.context);
+	manager.SetMemoryLimit(memory_limit);
+	LocalFileSystem file_system;
+	CachingFileSystem cfs(file_system, *db.instance);
+	string content(size, 'x');
+	TestFileGuard test_file("uncached_read_rounding.bin", content);
+	auto handle = cfs.OpenFile(*con.context, OpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 	auto group = handle->Read(size, 0);
 	REQUIRE(group.GetHandles().size() == 1);
+	REQUIRE(group.GetHandles()[0].handle.GetBlockHandle()->GetMemory().GetMemoryUsage() == expected_capacity);
 	REQUIRE(group.GetHandles()[0].length == size);
 	REQUIRE(memcmp(group.Ptr(), content.data(), size) == 0);
 }

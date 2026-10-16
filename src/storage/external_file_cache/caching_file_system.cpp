@@ -12,6 +12,7 @@
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache_util.hpp"
@@ -28,12 +29,20 @@ BufferHandle AllocateUncachedReadBuffer(BufferManager &buffer_manager, idx_t siz
 	BufferHandle buffer;
 	const auto header_size = Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	if (size >= 256ULL * 1024 && size <= 64ULL * 1024 * 1024 - header_size) {
-		// Reserve the full capacity while keeping the requested I/O range unchanged.
 		const auto capacity = NextPowerOfTwo(size + header_size);
-		try {
-			buffer = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, capacity - header_size);
-		} catch (const OutOfMemoryException &) {
-			// Retry the exact size if only the rounding exceeds the memory limit.
+		const auto limit = buffer_manager.GetMaxMemory();
+		const auto used = buffer_manager.GetBufferPool().GetUsedMemory(false);
+		const auto available = limit - MinValue(limit, used);
+		auto &scheduler = TaskScheduler::GetScheduler(buffer_manager.GetDatabase());
+		const auto workers = MaxValue<idx_t>(1, scheduler.NumberOfThreads() + scheduler.NumberOfAsyncThreads());
+		// Leave room for a second read per worker before rounding pinned buffers.
+		// Changes to rounding should be tested with ClickBench on Parquet on a 192-core machine.
+		if (capacity <= available / workers / 2) {
+			try {
+				buffer = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, capacity - header_size);
+			} catch (const OutOfMemoryException &) {
+				// Concurrent allocations may have consumed the headroom.
+			}
 		}
 	}
 	if (!buffer.IsValid()) {

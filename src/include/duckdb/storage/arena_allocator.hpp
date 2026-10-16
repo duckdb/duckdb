@@ -12,6 +12,9 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/string.hpp"
 #include "duckdb/common/arena_containers/arena_ptr.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+
+#include <type_traits>
 
 namespace duckdb {
 
@@ -27,6 +30,26 @@ struct ArenaChunk {
 };
 
 class ArenaAllocator {
+private:
+	struct Destructor {
+		optional_ptr<Destructor> previous;
+		void (*destroy)(Destructor &);
+	};
+
+	template <class T>
+	struct ManagedObject : Destructor {
+		template <class... ARGS>
+		explicit ManagedObject(ARGS &&... args) : value(std::forward<ARGS>(args)...) {
+			this->destroy = Destroy;
+		}
+
+		static void Destroy(Destructor &entry) {
+			static_cast<ManagedObject &>(entry).~ManagedObject();
+		}
+
+		T value;
+	};
+
 public:
 	static constexpr const idx_t ARENA_ALLOCATOR_INITIAL_CAPACITY = 2048;
 	static constexpr const idx_t ARENA_ALLOCATOR_MAX_CAPACITY = 1ULL << 24ULL; // 16MB
@@ -64,6 +87,10 @@ public:
 	struct Position {
 		ArenaChunk *chunk = nullptr;
 		idx_t current_position = 0;
+
+	private:
+		friend class ArenaAllocator;
+		optional_ptr<Destructor> destructor;
 	};
 	//! Returns the current position of the arena
 	DUCKDB_API Position GetPosition() const;
@@ -102,6 +129,16 @@ public:
 		return new (mem) T(std::forward<ARGS>(args)...);
 	}
 
+	//! Owns the object's destructor as well as its storage, until the arena is rewound, reset or destroyed.
+	template <class T, class... ARGS>
+	T *MakeWithDestructor(ARGS &&... args) {
+		static_assert(std::is_nothrow_destructible<T>::value, "Arena-owned destructors must not throw");
+		auto object = Make<ManagedObject<T>>(std::forward<ARGS>(args)...);
+		object->previous = destructors;
+		destructors = object;
+		return &object->value;
+	}
+
 	template <class T, class... ARGS>
 	arena_ptr<T> MakePtr(ARGS &&... args) {
 		return arena_ptr<T>(Make<T>(std::forward<ARGS>(args)...));
@@ -133,6 +170,7 @@ public:
 
 private:
 	void AllocateNewBlock(idx_t min_size);
+	void DestroyObjects(optional_ptr<Destructor> until = nullptr);
 
 private:
 	//! Internal allocator that is used by the arena allocator
@@ -144,6 +182,8 @@ private:
 	Allocator arena_allocator;
 	//! The total allocated size
 	idx_t allocated_size = 0;
+	//! Destructors run before any arena storage is released, in reverse construction order.
+	optional_ptr<Destructor> destructors;
 };
 
 } // namespace duckdb
