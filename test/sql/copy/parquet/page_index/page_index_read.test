@@ -21,7 +21,7 @@ CREATE TABLE data AS
 
 # one row group, BIGINT pages of 512 rows: 196 pages for 100000 rows
 statement ok
-COPY data TO '{TEST_DIR}/page_index_read.parquet' (ROW_GROUP_SIZE 100000, DATA_PAGE_SIZE_LIMIT 4096);
+COPY data TO '{TEST_DIR}/page_index_read.parquet' (ROW_GROUP_SIZE 100000, DATA_PAGE_SIZE_LIMIT 4096, WRITE_PAGE_INDEX true);
 
 # the log entries of a query are flushed by disable_logging, so every check disables and re-enables logging
 statement ok
@@ -437,7 +437,7 @@ CALL enable_logging('PhysicalOperator');
 # several row groups (of 20480 rows, a multiple of the vector size): row groups are skipped by their statistics,
 # pages within the remaining one
 statement ok
-COPY data TO '{TEST_DIR}/page_index_read_groups.parquet' (ROW_GROUP_SIZE 20000, DATA_PAGE_SIZE_LIMIT 4096);
+COPY data TO '{TEST_DIR}/page_index_read_groups.parquet' (ROW_GROUP_SIZE 20000, DATA_PAGE_SIZE_LIMIT 4096, WRITE_PAGE_INDEX true);
 
 query II
 SELECT id, s FROM '{TEST_DIR}/page_index_read_groups.parquet' WHERE id = 55555
@@ -468,7 +468,7 @@ CALL enable_logging('PhysicalOperator');
 
 # a floating point column with NaN values has no ColumnIndex: no page skipping, correct results
 statement ok
-COPY (SELECT range AS id, CASE WHEN range = 1500 THEN 'nan'::DOUBLE ELSE range::DOUBLE END AS d FROM range(3000)) TO '{TEST_DIR}/page_index_read_nan.parquet' (ROW_GROUP_SIZE 3000, DATA_PAGE_SIZE_LIMIT 4096);
+COPY (SELECT range AS id, CASE WHEN range = 1500 THEN 'nan'::DOUBLE ELSE range::DOUBLE END AS d FROM range(3000)) TO '{TEST_DIR}/page_index_read_nan.parquet' (ROW_GROUP_SIZE 3000, DATA_PAGE_SIZE_LIMIT 4096, WRITE_PAGE_INDEX true);
 
 query II
 SELECT count(*), max(id) FROM '{TEST_DIR}/page_index_read_nan.parquet' WHERE d > 2998.0
@@ -512,7 +512,7 @@ CREATE TABLE typed AS
 	FROM range(100000);
 
 statement ok
-COPY typed TO '{TEST_DIR}/page_index_read_typed.parquet' (ROW_GROUP_SIZE 100000, DATA_PAGE_SIZE_LIMIT 4096);
+COPY typed TO '{TEST_DIR}/page_index_read_typed.parquet' (ROW_GROUP_SIZE 100000, DATA_PAGE_SIZE_LIMIT 4096, WRITE_PAGE_INDEX true);
 
 statement ok
 CALL enable_logging('PhysicalOperator');
@@ -562,7 +562,7 @@ statement ok
 SET threads = 8;
 
 statement ok
-COPY data TO '{TEST_DIR}/page_index_read_threads.parquet' (ROW_GROUP_SIZE 5000, DATA_PAGE_SIZE_LIMIT 4096);
+COPY data TO '{TEST_DIR}/page_index_read_threads.parquet' (ROW_GROUP_SIZE 5000, DATA_PAGE_SIZE_LIMIT 4096, WRITE_PAGE_INDEX true);
 
 query I
 SELECT count(*) FROM (
@@ -587,9 +587,9 @@ true
 statement ok
 SET threads = 1;
 
-# a file without a page index is unaffected
+# a file without a page index (the default) is unaffected
 statement ok
-COPY data TO '{TEST_DIR}/page_index_read_none.parquet' (ROW_GROUP_SIZE 100000, DATA_PAGE_SIZE_LIMIT 4096, WRITE_PAGE_INDEX false);
+COPY data TO '{TEST_DIR}/page_index_read_none.parquet' (ROW_GROUP_SIZE 100000, DATA_PAGE_SIZE_LIMIT 4096);
 
 query IIIII
 SELECT id, v, s, arr, st FROM '{TEST_DIR}/page_index_read_none.parquet' WHERE id = 77777
