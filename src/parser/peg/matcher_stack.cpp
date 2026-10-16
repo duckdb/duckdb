@@ -23,6 +23,11 @@ optional<MatcherResult> PackratMatchState::TryLoadCachedResult(const Matcher &ma
 	D_ASSERT(IsEnabled(matcher, state));
 	auto token_index = state.token_iterator.Position();
 	auto cached_result = state.context.packrat_cache->Lookup(matcher, token_index);
+	auto &cursor = state.context.suggestion_cursor;
+	if (cached_result && cursor.IsValid() && cached_result->max_token_index_seen >= cursor.GetIndex()) {
+		// the cached run reached the cursor and may have registered suggestions - evaluate again
+		cached_result = nullptr;
+	}
 	if (!cached_result) {
 		token_index_before = token_index;
 		max_token_index_before = state.GetMaxTokenIndex();

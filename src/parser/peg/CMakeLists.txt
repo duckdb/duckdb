@@ -16,7 +16,8 @@ add_library_unity(
   parser_packrat.cpp
   peg_parser.cpp
   parsed_grammar.cpp
-  sql_formatter.cpp)
+  sql_formatter.cpp
+  syntax_error.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_parser_peg>
     PARENT_SCOPE)

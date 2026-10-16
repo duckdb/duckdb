@@ -144,6 +144,8 @@ struct MatcherSuggestion {
 	AutoCompleteCandidate keyword;
 	SuggestionState type;
 	char extra_char = '\0';
+	//! Label of the enclosing labelled rule (e.g. "an expression"), if the suggestion was added inside one
+	optional_ptr<const string> label;
 };
 
 struct MatchContext {
@@ -165,6 +167,10 @@ struct MatchContext {
 	ParserPackratCache *packrat_cache;
 	MatchMode mode;
 	bool use_heap_based_parser;
+	//! Label of the labelled rule currently being walked for suggestions, if any
+	optional_ptr<const string> active_label;
+	//! Index of the autocomplete cursor token; packrat entries that reached it are not reused
+	optional_idx suggestion_cursor;
 };
 
 struct MatchState {
@@ -293,6 +299,13 @@ public:
 		rule = rule_p;
 		name = rule_p.name;
 	}
+	//! A short description of what the matcher accepts, used to summarise it in syntax errors
+	void SetLabel(string label_p) {
+		label = std::move(label_p);
+	}
+	const string &GetLabel() const {
+		return label;
+	}
 	optional_ptr<const CompiledGrammarRule> GetRule() const {
 		return rule;
 	}
@@ -331,6 +344,7 @@ protected:
 	friend class MatcherAllocator;
 	MatcherType type;
 	string name;
+	string label;
 	optional_idx packrat_id;
 	bool packrat_memoized = false;
 	optional_ptr<const CompiledGrammarRule> rule;

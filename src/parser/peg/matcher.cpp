@@ -64,7 +64,14 @@ SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 		return SuggestionType::MANDATORY;
 	}
 	added_suggestions.insert(*this);
-	return AddSuggestionInternal(state);
+	if (label.empty() || state.context.active_label) {
+		return AddSuggestionInternal(state);
+	}
+	// suggestions added inside a labelled rule are summarised by its label
+	state.context.active_label = label;
+	auto result = AddSuggestionInternal(state);
+	state.context.active_label = nullptr;
+	return result;
 }
 
 string Matcher::GetName() const {
@@ -79,6 +86,7 @@ void Matcher::Print() const {
 }
 
 void MatchState::AddSuggestion(MatcherSuggestion suggestion) {
+	suggestion.label = context.active_label;
 	context.suggestions.push_back(std::move(suggestion));
 }
 

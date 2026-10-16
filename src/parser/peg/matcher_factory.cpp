@@ -146,6 +146,10 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matc
 	if (no_suggestion_rules.count(rule_name)) {
 		matcher.Cast<ListMatcher>().suppress_suggestions = true;
 	}
+	auto label_entry = rule_labels.find(rule_name);
+	if (label_entry != rule_labels.end()) {
+		matcher.SetLabel(label_entry->second);
+	}
 	return matcher;
 }
 
@@ -175,6 +179,13 @@ void MatcherFactory::AddPackratMemoizedRule(const char *name) {
 
 void MatcherFactory::SuppressSuggestions(const char *name) {
 	no_suggestion_rules.insert(name);
+}
+
+void MatcherFactory::LabelRule(const char *name, const char *label) {
+	if (!grammar.GetRule(name)) {
+		throw InternalException("Cannot label grammar rule '%s': no such rule", name);
+	}
+	rule_labels.emplace(name, label);
 }
 
 MatcherFactory::MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p, CompiledGrammar &compiled_p,
@@ -221,6 +232,32 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	for (auto &entry : terminal_rule_overrides) {
 		AddRuleOverride(entry.first.c_str(), std::move(entry.second));
 	}
+
+	// labels summarise what a rule accepts when it is listed as an alternative in a syntax error
+	const char *expression_rules[] = {"Expression",
+	                                  "LambdaArrowExpression",
+	                                  "LogicalOrExpression",
+	                                  "LogicalAndExpression",
+	                                  "LogicalNotExpression",
+	                                  "IsExpression",
+	                                  "IsDistinctFromExpression",
+	                                  "ComparisonExpression",
+	                                  "BetweenInLikeExpression",
+	                                  "OtherOperatorExpression",
+	                                  "InContainsExpression",
+	                                  "BitwiseExpression",
+	                                  "AdditiveExpression",
+	                                  "MultiplicativeExpression",
+	                                  "ExponentiationExpression",
+	                                  "CollateExpression",
+	                                  "AtTimeZoneExpression",
+	                                  "PrefixExpression",
+	                                  "BaseExpression",
+	                                  "SingleExpression"};
+	for (auto rule : expression_rules) {
+		LabelRule(rule, "an expression");
+	}
+	LabelRule("Type", "a type");
 
 	// suppress suggestions for catch-all rules that would pollute statement-level autocomplete
 	SuppressSuggestions("ExpressionStatement");
