@@ -256,16 +256,33 @@ FROM parquet_page_index('{TEST_DIR}/page_index_nan.parquet') WHERE path_in_schem
 ----
 6	true	true
 
-# a column without any value gets a single page that is flagged as a null page without bounds
+# a column chunk with a single page carries no page index (the footer statistics describe that page already):
+# a column without any value always fits in one page, the id column next to it has six
 statement ok
 COPY (SELECT range AS id, NULL::INTEGER AS nn FROM range(3000)) TO '{TEST_DIR}/page_index_all_null.parquet' (ROW_GROUP_SIZE 3000, DATA_PAGE_SIZE_LIMIT 4096);
 
-query IIIIIII
-SELECT count(*), bool_and(null_page), bool_and(min_value IS NULL AND max_value IS NULL), sum(null_count), sum(num_rows),
-       any_value(boundary_order), (SELECT column_index_offset IS NOT NULL FROM parquet_metadata('{TEST_DIR}/page_index_all_null.parquet') WHERE path_in_schema = 'nn')
-FROM parquet_page_index('{TEST_DIR}/page_index_all_null.parquet') WHERE path_in_schema = 'nn'
+query III
+SELECT path_in_schema, column_index_offset IS NOT NULL, offset_index_offset IS NOT NULL
+FROM parquet_metadata('{TEST_DIR}/page_index_all_null.parquet') ORDER BY column_id
 ----
-1	true	true	3000	3000	ASCENDING	true
+id	true	true
+nn	false	false
+
+query II
+SELECT path_in_schema, count(*) FROM parquet_page_index('{TEST_DIR}/page_index_all_null.parquet') GROUP BY path_in_schema
+----
+id	6
+
+# with the default page size, a default row group of a BIGINT column is one page and gets no index either
+statement ok
+COPY (SELECT range AS id, repeat('x', 100) || range AS s FROM range(122880)) TO '{TEST_DIR}/page_index_default_layout.parquet';
+
+query III
+SELECT path_in_schema, column_index_offset IS NOT NULL, (SELECT count(*) > 1 FROM parquet_page_index('{TEST_DIR}/page_index_default_layout.parquet') p WHERE p.path_in_schema = m.path_in_schema)
+FROM parquet_metadata('{TEST_DIR}/page_index_default_layout.parquet') m ORDER BY column_id
+----
+id	false	false
+s	true	true
 
 # several row groups: every row group has its own index
 statement ok
