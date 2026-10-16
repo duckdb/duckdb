@@ -114,37 +114,32 @@ static unique_ptr<Expression> JSONCopyBoundFormatConstant(const string &format) 
 //! and the names are the fields of its struct_pack, or the query's names when partitioning already looked them up.
 static void SetJSONCopyQueryColumns(LogicalCopyToFile &copy, LogicalProjection &projection,
                                     const vector<Identifier> &original_column_names) {
-	if (projection.children.size() != 1) {
-		throw InternalException("Expected JSON COPY rewrite projection to have the query as its only child");
-	}
-	projection.children[0]->ResolveOperatorTypes();
-	auto query_types = projection.children[0]->types;
+	// The rewrite binds the query as the only child of its projection
+	D_ASSERT(projection.children.size() == 1);
+	auto &query = *projection.children[0];
+	query.ResolveOperatorTypes();
+	auto query_types = query.types;
 	vector<Identifier> query_names;
 	if (!original_column_names.empty()) {
 		// With PARTITION_BY, the partition columns can be left out of the struct_pack
 		query_names = original_column_names;
 	} else {
-		auto &payload = projection.expressions[0];
-		if (payload->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION ||
-		    payload->Cast<BoundFunctionExpression>().GetChildren().empty()) {
-			throw InternalException("Expected JSON COPY payload expression to be a function of a struct_pack");
-		}
+		// The payload is to_json, or the GeoJSON writer, with the struct_pack of every column as its first argument
+		auto &payload = projection.expressions[0]->Cast<BoundFunctionExpression>();
+		D_ASSERT(!payload.GetChildren().empty());
 		// Binding the payload can cast the struct_pack, e.g., to turn a VARIANT field into JSON
-		const Expression *struct_pack = payload->Cast<BoundFunctionExpression>().GetChildren()[0].get();
+		const Expression *struct_pack = payload.GetChildren()[0].get();
 		while (BoundCastExpression::IsCast(*struct_pack)) {
 			struct_pack = &BoundCastExpression::Child(struct_pack->Cast<BoundFunctionExpression>());
 		}
-		if (struct_pack->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION ||
-		    struct_pack->Cast<BoundFunctionExpression>().Function().GetName() != "struct_pack") {
-			throw InternalException("Expected JSON COPY payload expression to be a function of a struct_pack");
-		}
-		for (auto &field : struct_pack->Cast<BoundFunctionExpression>().GetChildren()) {
+		auto &struct_pack_function = struct_pack->Cast<BoundFunctionExpression>();
+		D_ASSERT(struct_pack_function.Function().GetName() == "struct_pack");
+		for (auto &field : struct_pack_function.GetChildren()) {
 			query_names.push_back(field->GetAlias());
 		}
 	}
-	if (query_names.size() != query_types.size()) {
-		throw InternalException("Expected JSON COPY rewrite to have a name for every column of the query");
-	}
+	// Every column of the query is named, by the struct_pack or by the partition lookup
+	D_ASSERT(query_names.size() == query_types.size());
 	QueryResult::DeduplicateColumns(query_names);
 	copy.query_names = std::move(query_names);
 	copy.query_types = std::move(query_types);
