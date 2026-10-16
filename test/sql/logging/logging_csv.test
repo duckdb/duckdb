@@ -203,4 +203,62 @@ SELECT 1;
 query I
 SELECT message FROM read_csv('{TEMP_DIR}/logging_csv_log_delim.csv', delim=';');
 ----
-SELECT 1
+SELECT 1;
+
+statement ok
+CALL disable_logging();
+
+# Messages containing the delimiter are quoted, also after changing the delimiter
+statement ok
+CALL enable_logging(sink='file', sink_config={'path': '{TEMP_DIR}/logging_csv_log_delim_quote.csv', 'delim': ','});
+
+statement ok
+SELECT write_log('a,b');
+
+statement ok
+CALL enable_logging(sink='file', sink_config={'path': '{TEMP_DIR}/logging_csv_log_delim_quote_semicolon.csv', 'delim': ';'});
+
+statement ok
+SELECT write_log('c;d');
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT message FROM read_csv('{TEMP_DIR}/logging_csv_log_delim_quote.csv', delim=',') WHERE message LIKE 'a%';
+----
+a,b
+
+query I
+SELECT message FROM read_csv('{TEMP_DIR}/logging_csv_log_delim_quote_semicolon.csv', delim=';') WHERE message LIKE 'c%';
+----
+c;d
+
+# Changing only the path after the file sink has written switches to the new file
+statement ok
+CALL enable_logging(sink='file', sink_config={'path': '{TEMP_DIR}/logging_csv_path_switch_1.csv', 'delim': ','});
+
+statement ok
+SELECT write_log('one');
+
+statement ok
+CALL flush_logs();
+
+statement ok
+CALL enable_logging(sink='file', sink_config={'path': '{TEMP_DIR}/logging_csv_path_switch_2.csv'});
+
+statement ok
+SELECT write_log('two');
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT message FROM read_csv('{TEMP_DIR}/logging_csv_path_switch_1.csv') WHERE message IN ('one', 'two');
+----
+one
+
+query I
+SELECT message FROM read_csv('{TEMP_DIR}/logging_csv_path_switch_2.csv') WHERE message IN ('one', 'two');
+----
+two

@@ -10,7 +10,6 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/logging/logging.hpp"
-#include "duckdb/logging/log_format_writer.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types.hpp"
@@ -28,11 +27,8 @@ class ColumnDataCollection;
 struct ColumnDataScanState;
 class MemoryStream;
 struct LogSinkConfig;
-class CSVWriter;
-struct CSVWriterState;
 class BufferedFileWriter;
-struct CSVWriterOptions;
-struct CSVReaderOptions;
+class LogFormatWriter;
 
 //! Logging sink can store entries normalized or denormalized. This enum describes what a single table/file/etc
 //! contains
@@ -196,7 +192,8 @@ private:
 	};
 
 	StdOutWriteStream stdout_stream;
-	unique_ptr<CSVFormatWriter> writer; // single writer, ALL_LOGS table only
+	//! Writes the ALL_LOGS table only, declared after the stream it writes to
+	unique_ptr<LogFormatWriter> writer;
 };
 
 class FileLogSink : public BufferingLogSink {
@@ -217,7 +214,7 @@ protected:
 	void UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) override;
 
 private:
-	// Lazily creates file_writer + LogFormatWriter for `table`, if not already done.
+	// Lazily opens the file for `table` and binds its format writer to it, if not already done.
 	void Initialize(LoggingTargetTable table);
 	void InitializeFile(DatabaseInstance &db, LoggingTargetTable table);
 	static unique_ptr<BufferedFileWriter> InitializeFileWriter(DatabaseInstance &db, const string &path);
@@ -228,14 +225,13 @@ private:
 	DatabaseInstance &db;
 
 	struct TableWriter {
-		unique_ptr<CSVFormatWriter> writer;
 		unique_ptr<BufferedFileWriter> file_writer;
+		//! Writes to file_writer, so it is declared after it
+		unique_ptr<LogFormatWriter> writer;
 		string path;
 		bool initialized = false;
 	};
 	map<LoggingTargetTable, TableWriter> tables;
-	//! Format writer config (e.g. delim), also applied to the format writers that are created later
-	case_insensitive_map_t<Value> format_config;
 
 	string base_path;
 };

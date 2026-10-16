@@ -17,20 +17,13 @@
 
 namespace duckdb {
 
-CSVFormatWriter::CSVFormatWriter(WriteStream &stream, LoggingTargetTable table_p, vector<Identifier> column_names_p,
-                                 const string &delimiter, CSVNewLineMode newline_mode)
-    : table(table_p), column_names(std::move(column_names_p)) {
-	writer = make_uniq<CSVWriter>(stream, column_names, false);
-
-	reader_options = CSVReaderOptions();
+CSVFormatWriter::CSVFormatWriter(LoggingTargetTable table_p, const string &delimiter, CSVNewLineMode newline_mode)
+    : table(table_p), column_names(LogSink::GetColumnNames(table_p)) {
 	reader_options.dialect_options.state_machine_options.escape = '"';
 	reader_options.dialect_options.state_machine_options.quote = '"';
-	reader_options.dialect_options.state_machine_options.delimiter = CSVOption<string>(delimiter);
-
 	writer_options = make_uniq<CSVWriterOptions>(reader_options);
 	writer_options->newline_writing_mode = newline_mode;
-
-	ApplyOptions(reader_options, *writer_options);
+	SetDelimiter(delimiter);
 	ResetCastChunk(STANDARD_VECTOR_SIZE);
 }
 
@@ -56,41 +49,61 @@ void CSVFormatWriter::ExecuteCast(DataChunk &chunk) {
 	cast_chunk->CheckCardinality(count);
 }
 
+void CSVFormatWriter::Initialize(WriteStream &stream, bool write_header) {
+	writer = make_uniq<CSVWriter>(stream, column_names, false);
+	ApplyOptions();
+	writer->options.dialect_options.header = {write_header, true};
+	writer->Initialize();
+	writer->SetWrittenAnything(true);
+}
+
 void CSVFormatWriter::WriteChunk(DataChunk &chunk) {
+	D_ASSERT(writer);
 	ExecuteCast(chunk);
 	writer->WriteChunk(*cast_chunk);
 	writer->Flush();
 	cast_chunk->Reset();
 }
 
-void CSVFormatWriter::Truncate() {
+void CSVFormatWriter::Reset() {
+	D_ASSERT(writer);
 	writer->Reset(nullptr);
 	writer->options.dialect_options.header = CSVOption<bool>(true);
 	writer->Initialize(true);
 }
 
-void CSVFormatWriter::Initialize(bool write_header) {
-	ApplyOptions(reader_options, *writer_options);
-	writer->options.dialect_options.header = {write_header, true};
-	writer->Initialize();
-	writer->SetWrittenAnything(true);
+void CSVFormatWriter::SetDelimiter(const string &delimiter) {
+	if (delimiter.empty()) {
+		throw InvalidInputException("The 'delim' option of a CSV log sink cannot be empty");
+	}
+	reader_options.dialect_options.state_machine_options.delimiter = CSVOption<string>(delimiter);
+	// the quoting rules depend on the delimiter, so the writer options are derived again
+	auto newline_mode = writer_options->newline_writing_mode;
+	writer_options = make_uniq<CSVWriterOptions>(reader_options);
+	writer_options->newline_writing_mode = newline_mode;
+	ApplyOptions();
 }
 
-void CSVFormatWriter::ApplyOptions(const CSVReaderOptions &reader_options_p, const CSVWriterOptions &writer_options_p) {
-	writer->options = reader_options_p;
-	writer->writer_options = writer_options_p;
+void CSVFormatWriter::ApplyOptions() {
+	if (!writer) {
+		return;
+	}
+	auto header = writer->options.dialect_options.header;
+	writer->options = reader_options;
+	writer->options.dialect_options.header = header;
+	writer->writer_options = *writer_options;
 	writer->options.name_list = column_names;
 	writer->options.force_quote = vector<bool>(column_names.size(), false);
 }
 
-void CSVFormatWriter::UpdateConfig(const case_insensitive_map_t<Value> &config) {
-	for (const auto &it : config) {
-		if (StringUtil::Lower(it.first) == "delim") {
-			reader_options.dialect_options.state_machine_options.delimiter = CSVOption<string>(it.second.ToString());
-		}
+bool CSVFormatWriter::UpdateConfig(case_insensitive_map_t<Value> &config) {
+	auto entry = config.find("delim");
+	if (entry == config.end()) {
+		return false;
 	}
-
-	ApplyOptions(reader_options, *writer_options);
+	SetDelimiter(entry->second.ToString());
+	config.erase(entry);
+	return true;
 }
 
 } // namespace duckdb

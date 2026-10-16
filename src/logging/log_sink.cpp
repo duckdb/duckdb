@@ -144,9 +144,8 @@ void StdOutLogSink::StdOutWriteStream::WriteData(const_data_ptr_t buffer, idx_t 
 }
 
 StdOutLogSink::StdOutLogSink(DatabaseInstance &db) : BufferingLogSink(db, 1, /*normalize=*/false) {
-	auto target_table = LoggingTargetTable::ALL_LOGS;
-	auto column_names = GetColumnNames(target_table);
-	writer = make_uniq<CSVFormatWriter>(stdout_stream, target_table, column_names, "\t", CSVNewLineMode::WRITE_AFTER);
+	writer = make_uniq<CSVFormatWriter>(LoggingTargetTable::ALL_LOGS, "\t", CSVNewLineMode::WRITE_AFTER);
+	writer->Initialize(stdout_stream, false);
 }
 
 StdOutLogSink::~StdOutLogSink() {
@@ -158,28 +157,16 @@ void StdOutLogSink::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
 
 void StdOutLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
 	auto config_copy = config;
-
-	vector<string> to_remove;
-	for (const auto &it : config_copy) {
-		auto key = StringUtil::Lower(it.first);
-		if (key == "delim") {
-			writer->UpdateConfig({it});
-			to_remove.push_back(it.first);
-		}
-	}
-
-	for (const auto &it : to_remove) {
-		config_copy.erase(it);
-	}
-
+	writer->UpdateConfig(config_copy);
 	BufferingLogSink::UpdateConfigInternal(db, config_copy);
 }
 
 FileLogSink::FileLogSink(DatabaseInstance &db_p)
     : BufferingLogSink(db_p, STANDARD_VECTOR_SIZE, /*normalize=*/true), db(db_p) {
-	tables[LoggingTargetTable::ALL_LOGS] = TableWriter();
-	tables[LoggingTargetTable::LOG_CONTEXTS] = TableWriter();
-	tables[LoggingTargetTable::LOG_ENTRIES] = TableWriter();
+	for (auto table :
+	     {LoggingTargetTable::ALL_LOGS, LoggingTargetTable::LOG_CONTEXTS, LoggingTargetTable::LOG_ENTRIES}) {
+		tables[table].writer = make_uniq<CSVFormatWriter>(table, ",", CSVNewLineMode::WRITE_BEFORE);
+	}
 }
 
 FileLogSink::~FileLogSink() {
@@ -197,23 +184,14 @@ void FileLogSink::Initialize(LoggingTargetTable table) {
 
 void FileLogSink::InitializeFile(DatabaseInstance &db, LoggingTargetTable table) {
 	auto &table_writer = tables[table];
-	// the format writer writes to the file writer, so it goes first
-	table_writer.writer.reset();
+	// close the old file before opening it again, the format writer doesn't use it until it is bound to the new one
 	table_writer.file_writer.reset();
 	table_writer.file_writer = InitializeFileWriter(db, table_writer.path);
 
-	auto file_writer = table_writer.file_writer.get();
-
-	auto column_names = GetColumnNames(table);
-	auto format_writer =
-	    make_uniq<CSVFormatWriter>(*file_writer, table, column_names, ",", CSVNewLineMode::WRITE_BEFORE);
-	format_writer->UpdateConfig(format_config);
-
-	bool should_write_header = file_writer->handle->GetFileSize() == 0;
-	format_writer->Initialize(should_write_header);
-
-	table_writer.writer = std::move(format_writer);
-	file_writer->Sync();
+	auto &file_writer = *table_writer.file_writer;
+	bool should_write_header = file_writer.handle->GetFileSize() == 0;
+	table_writer.writer->Initialize(file_writer, should_write_header);
+	file_writer.Sync();
 	table_writer.initialized = true;
 }
 
@@ -264,11 +242,6 @@ void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_ma
 			normalize_set_explicitly = true;
 			normalize_contexts_new_value = it.second.GetValue<bool>();
 			to_remove.push_back(it.first);
-		} else if (key == "delim") {
-			// the files are reinitialized, so the new format writers pick this up
-			format_config[it.first] = it.second;
-			require_reinitializing_files = true;
-			to_remove.push_back(it.first);
 		}
 	}
 
@@ -288,6 +261,15 @@ void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_ma
 		FlushAllInternal();
 	}
 
+	// the format writers consume their own options, and the files are reinitialized when one is changed
+	case_insensitive_map_t<Value> remaining_config;
+	for (auto &it : tables) {
+		remaining_config = config_copy;
+		require_reinitializing_files |= it.second.writer->UpdateConfig(remaining_config);
+	}
+	config_copy = std::move(remaining_config);
+
+	require_reinitializing_files |= initialized && !new_path.empty() && new_path != base_path;
 	require_reinitializing_files |= normalize_contexts != normalize_contexts_new_value;
 	normalize_contexts = normalize_contexts_new_value;
 
@@ -397,7 +379,7 @@ void FileLogSink::Truncate() {
 			continue;
 		}
 		file_writer->Truncate(0);
-		it.second.writer->Truncate();
+		it.second.writer->Reset();
 	}
 }
 

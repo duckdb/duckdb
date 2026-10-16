@@ -29,6 +29,15 @@ def test_logging_custom_delim(shell):
     newline = "\r\n" if os.name == "nt" else "\n"
     result.check_stdout(f"QueryLog,INFO,SELECT 1 as a;{newline}┌───────┐")
 
+def test_logging_custom_delim_quotes_message(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CALL enable_logging('', sink='stdout', sink_config={'delim':','})")
+        .statement("SELECT write_log('a,b')")
+    )
+    result = test.run()
+    result.check_stdout(',INFO,"a,b"')
+
 def test_logging_shell_pretty(shell):
     # INFO/TRACE logs render as a compact single line "LEVEL:type   <elapsed>  <message>" via
     # the shell log sink. '.highlight off' makes the output deterministic (no ANSI). The elapsed
