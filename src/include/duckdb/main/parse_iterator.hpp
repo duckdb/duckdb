@@ -14,7 +14,6 @@
 
 namespace duckdb {
 class ClientContext;
-class Parser;
 class SQLStatement;
 class TokenIterator;
 
@@ -67,9 +66,6 @@ private:
 	//! The bound context, used for parser options / metrics / override extensions.
 	ClientContext &context;
 	string sql;
-	//! Parser instance kept alive across Peek calls so its PEG matcher / transformer caches
-	//! stay warm. Constructed lazily on the first Peek, rebuilt when the parser options change.
-	unique_ptr<Parser> parser;
 	//! Tokenized view of `sql` and its current position. Populated once on the first Peek.
 	unique_ptr<TokenIterator> token_iterator;
 	//! Single-statement buffer holding the result of the most recent Peek. Cleared by
