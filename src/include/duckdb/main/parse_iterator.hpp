@@ -60,6 +60,7 @@ public:
 	DUCKDB_API ClientContext &GetClientContext();
 
 private:
+	bool PeekInternal();
 	//! Tokenize the full input once (grammar-free); no-op if already tokenized.
 	void EnsureTokenized();
 

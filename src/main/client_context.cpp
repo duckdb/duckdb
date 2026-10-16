@@ -237,7 +237,7 @@ void ClientContext::ProcessError(ErrorData &error, const string &query) const {
 	}
 }
 
-void ClientContext::HandleQueryError(ErrorData &error, const string &query) {
+void ClientContext::ApplyInvalidationPolicy(const ErrorData &error) {
 	bool invalidates_transaction = true;
 	if (!ErrorInvalidatesTransaction(error.Type())) {
 		// standard exceptions don't invalidate the transaction
@@ -249,13 +249,12 @@ void ClientContext::HandleQueryError(ErrorData &error, const string &query) {
 	if (invalidates_transaction && HasActiveTransaction()) {
 		ValidChecker::Invalidate(ActiveTransaction(), error.RawMessage());
 	}
-
-	ProcessError(error, query);
 }
 
 template <class T>
 unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
-	HandleQueryError(error, query);
+	ApplyInvalidationPolicy(error);
+	ProcessError(error, query);
 	return make_uniq<T>(std::move(error));
 }
 
