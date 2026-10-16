@@ -63,7 +63,7 @@ public:
 	ColumnBindingReplacer();
 
 public:
-	//! Update each operator of the plan
+	//! Update each operator of the plan, recursing directly into children without resolving projection maps
 	void VisitOperator(LogicalOperator &op) override;
 	//! Update bindings owned by this operator without visiting its children
 	virtual void VisitOperatorBindings(LogicalOperator &op);

@@ -8,6 +8,7 @@
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/sorting/sort.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
+#include "duckdb/common/sorting/buffered_merge.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 
 #include "vergesort.h"
@@ -247,10 +248,16 @@ static void TemplatedSort(ClientContext &context, TupleDataCollection &key_data,
 	auto ska_extract_key =
 	    SkaExtractKey<SORT_KEY>(requires_next_sort, ska_sort_width, sort_skippable_bytes, context.interrupt_state);
 
-	const auto fallback = [ska_extract_key](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
-		duckdb_ska_sort::ska_sort(fb_begin, fb_end, ska_extract_key);
+	// vergesort merges the sorted runs it finds with a temporary buffer of up to half the keys - allocate that
+	// buffer through the buffer allocator instead of letting std::inplace_merge take it from operator new. The same
+	// buffer serves the merges of the nested vergesort that ska_sort runs over the buckets its radix passes cannot
+	// order, so that no merge anywhere in this sort allocates on its own (BufferedMerge never does)
+	SortMergeBuffer merge_buffer(BufferAllocator::Get(context), key_data.Count(), sizeof(SORT_KEY));
+	const BufferedMergePolicy<SORT_KEY> merge(merge_buffer);
+	const auto fallback = [&ska_extract_key, &merge](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
+		duckdb_ska_sort::ska_sort(fb_begin, fb_end, ska_extract_key, merge);
 	};
-	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback);
+	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback, merge);
 
 	context.InterruptCheck();
 }
@@ -445,6 +452,11 @@ idx_t SortedRun::SizeInBytes() const {
 		size += payload_data->SizeInBytes();
 	}
 	return size;
+}
+
+idx_t SortedRun::SizeInBytesForSorting() const {
+	// the fixed-size sort keys are the rows of the key layout, so the row width is the key size the merge buffer uses
+	return SizeInBytes() + SortMergeBuffer::MaximumSize(key_data->Count(), key_data->GetLayout().GetRowWidth());
 }
 
 } // namespace duckdb

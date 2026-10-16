@@ -11,7 +11,8 @@
       "reason": "Parameters don't work here",
       "paths": [
         "test/sql/collate/test_collate_orderby_column_number.test",
-        "test/sql/projection/select_star_like.test"
+        "test/sql/projection/select_star_like.test",
+        "test/sql/projection/select_star_similar_to_full_match.test"
       ]
     },
     {

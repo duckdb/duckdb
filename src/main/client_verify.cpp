@@ -74,7 +74,7 @@ static void ReplaceStatement(unique_ptr<SQLStatement> &statement, unique_ptr<SQL
 }
 
 void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQLStatement> &statement,
-                                          QueryParameters query_parameters) {
+                                          QueryParameters query_parameters, bool allow_nested_statements) {
 	auto verification = Settings::Get<DebugVerifyStatementSetting>(*this);
 	if (verification == DebugStatementVerification::COPY_STATEMENT) {
 		if (statement->type == StatementType::LOGICAL_PLAN_STATEMENT) {
@@ -178,7 +178,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 			throw InternalException("Unsupported type for serialization verification");
 		}
 	} else if (verification == DebugStatementVerification::PREPARED_STATEMENT) {
-		if (statement->type != StatementType::SELECT_STATEMENT) {
+		if (!allow_nested_statements || statement->type != StatementType::SELECT_STATEMENT) {
 			// only supported for SELECT (for now?)
 			return;
 		}
@@ -241,7 +241,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 	           verification == DebugStatementVerification::EXPLAIN_SQL ||
 	           verification == DebugStatementVerification::EXPLAIN_SQL_STRICT) {
 		const bool export_sql = verification != DebugStatementVerification::EXPLAIN_STATEMENT;
-		if (export_sql && statement->type != StatementType::SELECT_STATEMENT) {
+		if (!allow_nested_statements || (export_sql && statement->type != StatementType::SELECT_STATEMENT)) {
 			return;
 		}
 		if (statement->type == StatementType::EXPLAIN_STATEMENT) {

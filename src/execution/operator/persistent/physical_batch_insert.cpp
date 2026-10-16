@@ -335,12 +335,12 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
 		auto &catalog = schema->catalog;
-		auto created_table = catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), *info);
+		auto created_table = catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema, *info);
 		table = &created_table->Cast<DuckTableEntry>();
 	} else {
 		D_ASSERT(insert_table);
 		D_ASSERT(insert_table->IsDuckTable());
-		table = insert_table.get_mutable();
+		table = insert_table;
 	}
 	// heuristic - we start off by allocating 4MB of cache space per column
 	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN = 4ULL * 1024ULL * 1024ULL;

@@ -450,6 +450,10 @@ timestamp_t Timestamp::FromEpochMsPossiblyInfinite(int64_t ms) {
 	if (!TryMultiplyOperator::Operation(ms, Interval::MICROS_PER_MSEC, result)) {
 		throw ConversionException("Could not convert Timestamp(MS) to Timestamp(US)");
 	}
+	// the first midnight of Timestamp::MIN_YEAR - smaller values are not valid timestamps
+	if (result < -9223372022400000000LL) {
+		throw ConversionException("Could not convert Timestamp(MS) to Timestamp(US)");
+	}
 	return timestamp_t(result);
 }
 

@@ -5,7 +5,11 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/valid_checker.hpp"
+#include "duckdb/parser/statement/logical_plan_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/planner.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/storage/metadata/metadata_manager.hpp"
 #include "duckdb/storage/storage_info.hpp"
@@ -42,12 +46,16 @@ TEST_CASE("Test ExtractStatements with an explicit transaction", "[api]") {
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(a INT)"));
 
-	// The ALTER expands into multiple statements, which must not be wrapped in their own transaction
+	// The ALTER expands into several statements when it runs, inside the user's transaction
 	auto stmts = con.ExtractStatements("BEGIN; ALTER TABLE t ADD COLUMN c INT DEFAULT 1 NOT NULL; COMMIT;");
-	REQUIRE(stmts.size() == 6);
+	REQUIRE(stmts.size() == 3);
+	REQUIRE(stmts[1]->type == StatementType::MULTI_STATEMENT);
 	for (auto &stmt : stmts) {
 		REQUIRE_NO_FAIL(con.Query(std::move(stmt)));
 	}
+	REQUIRE(!con.context->transaction.HasActiveTransaction());
+	auto result = con.Query("SELECT column_name FROM duckdb_columns() WHERE table_name = 't' ORDER BY column_index");
+	REQUIRE(CHECK_COLUMN(result, 0, {"a", "c"}));
 }
 
 TEST_CASE("Test using connection after database is gone", "[api]") {
@@ -255,17 +263,24 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	const string failing_query =
 	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);";
 
-	// a second stream invalidates the first
+	// a second stream is refused while the first is open
 	auto stream = OpenStream(con, "SELECT 42;");
+	auto refused = con.Submit("SELECT 42;");
+	REQUIRE(refused->HasError());
+	REQUIRE(refused->GetErrorType() == ExceptionType::RESOURCE_IN_USE);
+	result2 = DrainStream(*stream);
+	REQUIRE(CHECK_COLUMN(result2, 0, {42}));
 	auto stream2 = OpenStream(con, "SELECT 42;");
-	REQUIRE_THROWS(stream->Fetch());
 	result2 = DrainStream(*stream2);
 	REQUIRE(CHECK_COLUMN(result2, 0, {42}));
 
-	// stream followed by a retained result
+	// a retained result is refused while a stream is open, and taken once the stream is closed
 	stream = OpenStream(con, "SELECT 42;");
 	result2 = con.Query("SELECT 42;");
-	REQUIRE_THROWS(stream->Fetch());
+	REQUIRE(result2->HasError());
+	REQUIRE(result2->GetErrorType() == ExceptionType::RESOURCE_IN_USE);
+	stream->Close();
+	result2 = con.Query("SELECT 42;");
 	REQUIRE(CHECK_COLUMN(result2, 0, {42}));
 
 	// error in binding
@@ -312,13 +327,12 @@ TEST_CASE("Test fetch API", "[api]") {
 	auto materialized_result = con.Query("select a from test");
 	REQUIRE(CHECK_COLUMN(materialized_result, 0, {42}));
 
-	// override the open stream
-	auto stream = OpenStream(con, "SELECT a from test");
-	stream = OpenStream(con, "SELECT a from test");
-	stream = OpenStream(con, "SELECT a from test");
-	stream = OpenStream(con, "SELECT a from test");
-	result = DrainStream(*stream);
-	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	// one stream at a time: each drained stream frees the connection for the next
+	for (idx_t i = 0; i < 4; i++) {
+		auto stream = OpenStream(con, "SELECT a from test");
+		result = DrainStream(*stream);
+		REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	}
 }
 
 TEST_CASE("Test fetch API not to completion", "[api]") {
@@ -357,21 +371,25 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 	// fetch should not fail
 	chunk = stream->Fetch();
 	REQUIRE(chunk);
-	// new queries on the connection should not fail either
+	// new queries on the connection should not fail either, once the stream has ended
+	REQUIRE(!stream->Fetch());
 	REQUIRE_NO_FAIL(conn->Query("SELECT 42"));
 
-	// override the open stream
+	// a second stream is refused while the first is open
 	db = make_uniq<DuckDB>(nullptr);
 	conn = make_uniq<Connection>(*db);
 	auto stream1 = OpenStream(*conn, "SELECT 42");
-	auto stream2 = OpenStream(*conn, "SELECT 84");
 	REQUIRE(!stream1->HasError());
-	REQUIRE(!stream2->HasError());
+	auto refused = conn->Submit("SELECT 84");
+	REQUIRE(refused->HasError());
+	REQUIRE(refused->GetErrorType() == ExceptionType::RESOURCE_IN_USE);
 
-	// stream1 should be closed now
-	REQUIRE_THROWS(stream1->Fetch());
-	// stream2 should work
+	// stream1 is untouched
+	REQUIRE(stream1->Fetch());
+	stream1->Close();
+	auto stream2 = OpenStream(*conn, "SELECT 84");
 	REQUIRE(stream2->Fetch());
+	stream2->Close();
 
 	// a retained result stays readable after another query starts
 	auto materialized = conn->Query("SELECT 42");
@@ -835,6 +853,43 @@ TEST_CASE("Test a logical execute still has types after an optimization pass", "
 	REQUIRE((query_plan->type == LogicalOperatorType::LOGICAL_EXECUTE));
 	REQUIRE((query_plan->types.size() == 1));
 	REQUIRE((query_plan->types[0].id() == LogicalTypeId::INTEGER));
+}
+
+static bool HasFlippedDelimJoin(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN && op.Cast<LogicalComparisonJoin>().delim_flipped) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (HasFlippedDelimJoin(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+TEST_CASE("Test executing an optimized plan with a flipped delim join", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
+
+	REQUIRE_NO_FAIL(con.Query("SET delim_join_as_cte = false"));
+	con.BeginTransaction();
+	Parser parser(*con.context);
+	parser.ParseQuery(
+	    "SELECT a.i, b.i, x FROM integers a, integers b JOIN LATERAL (VALUES (a.i)) ss(x) ON (true) ORDER BY ALL");
+	Planner planner(*con.context);
+	planner.CreatePlan(std::move(parser.statements[0]));
+	Optimizer optimizer(*planner.binder, *con.context);
+	auto plan = optimizer.Optimize(std::move(planner.plan));
+	con.Commit();
+	REQUIRE(HasFlippedDelimJoin(*plan));
+	REQUIRE_NO_FAIL(con.Query("SET delim_join_as_cte = true"));
+
+	REQUIRE_NO_FAIL(con.Query("PRAGMA disable_optimizer"));
+	auto result = con.Query(make_uniq<LogicalPlanStatement>(std::move(plan)));
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->RowCount() == 16);
 }
 
 TEST_CASE("Test SqlStatement::ToString for UPDATE, INSERT, DELETE statements with alias of RETURNING clause", "[api]") {

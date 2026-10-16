@@ -219,7 +219,7 @@ char *StrfTimeFormat::WritePadded3(char *target, uint32_t value) const {
 	}
 }
 
-// write a value in the range of 0..999999... padded to the given number of digits
+// write a year padded to 4 digits if it is within [0, 9999], or in full (with its sign) otherwise
 char *StrfTimeFormat::WriteYear(char *target, int32_t year) const {
 	if (year >= 0 && year <= 9999) {
 		return WritePadded(target, UnsafeNumericCast<uint32_t>(year), 4);
@@ -234,8 +234,10 @@ char *StrfTimeFormat::WriteYear(char *target, int32_t year) const {
 	return target + len;
 }
 
+// write a value in the range of 0..999999... padded to the given number of digits
 char *StrfTimeFormat::WritePadded(char *target, uint32_t value, size_t padding) const {
 	D_ASSERT(padding > 1);
+	auto end = target + padding;
 	if (padding % 2) {
 		uint32_t decimals = value % 1000u;
 		WritePadded3(target + padding - 3, decimals);
@@ -247,7 +249,7 @@ char *StrfTimeFormat::WritePadded(char *target, uint32_t value, size_t padding) 
 		WritePadded2(target + padding - 2 * (i + 1), decimals);
 		value /= 100;
 	}
-	return target + padding;
+	return end;
 }
 
 bool StrfTimeFormat::IsDateSpecifier(StrTimeSpecifier specifier) {
