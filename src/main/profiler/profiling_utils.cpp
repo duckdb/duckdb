@@ -27,7 +27,7 @@ void QueryMetrics::FinalizeMetrics(GatheredMetrics &info) {
 
 QueryMetrics::QueryMetrics()
     : bytes_read(0), read_operations(0), read_time_us(0), bytes_written(0), write_operations(0), write_time_us(0),
-      bytes_spilled(0), total_memory_allocated(0) {
+      bytes_spilled(0), bytes_scanned(0), total_memory_allocated(0) {
 	Reset();
 }
 
