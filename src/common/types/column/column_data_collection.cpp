@@ -844,6 +844,11 @@ static bool TryShareListChild(ColumnDataMetaData &meta_data, Vector &child_vecto
 	if (info.needs_slicing || child_vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		return false;
 	}
+	if (last_child_index.IsValid() && segment.GetVectorData(last_child_index).count != STANDARD_VECTOR_SIZE) {
+		// a shared entry after a partially filled entry would leave reusable space in the middle of the
+		// chain, and later appends into that space would break the child offset order
+		return false;
+	}
 	auto &child_type = child_vector.GetType();
 	const auto internal_type = child_type.InternalType();
 	if (!TypeIsConstantSize(internal_type)) {
