@@ -30,18 +30,36 @@ SELECT r.v = (SELECT v + 1 FROM sequence_before) FROM (VALUES (1)) l(i) LEFT JOI
 ----
 true
 
-# Binding a cast must not make a different parsed expression match a grouping key.
+# PREPARE preserves literal grouping matches; parameters remain distinct expressions.
+statement ok
+PREPARE literal_groups AS SELECT r.cast_b, count(*) FROM (VALUES (1)) l(i) LEFT JOIN grouped_constants r USING (i) GROUP BY GROUPING SETS ((r.i, 0::INTEGER), (r.i));
+
 query II rowsort
-SELECT r.b, count(*) FROM (VALUES (1)) l(i) LEFT JOIN grouped_constants r USING (i) GROUP BY GROUPING SETS ((r.i, 0::INTEGER), (r.i));
+EXECUTE literal_groups;
+----
+true	1
+NULL	1
+
+statement ok
+PREPARE parameter_groups AS SELECT r.cast_b, count(*) FROM (VALUES ($1)) l(i) LEFT JOIN grouped_constants r USING (i) GROUP BY GROUPING SETS ((r.i, $2::INTEGER), (r.i));
+
+query II rowsort
+EXECUTE parameter_groups(1, 0);
 ----
 true	1
 true	1
 
 query II rowsort
-SELECT r.cast_b, count(*) FROM (VALUES (1)) l(i) LEFT JOIN grouped_constants r USING (i) GROUP BY GROUPING SETS ((r.i, 0::INTEGER), (r.i));
+EXECUTE parameter_groups(1, 1);
 ----
 true	1
-NULL	1
+true	1
+
+statement ok
+DEALLOCATE literal_groups;
+
+statement ok
+DEALLOCATE parameter_groups;
 
 query II
 SELECT r.n, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN grouped_constants r USING (i);
