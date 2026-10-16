@@ -103,7 +103,10 @@
         "test/sql/timezone/test_icu_calendar_japanese.test",
         "test/sql/timezone/test_icu_datetime_sweep.test",
         "test/sql/optimizer/constant_function_zonemap_pruning.test",
-        "test/sql/sql_export/call_values.test"
+        "test/sql/sql_export/call_values.test",
+        "test/sql/match_recognize/test_match_recognize_cursors.test",
+        "test/sql/match_recognize/test_match_recognize_composition.test",
+        "test/sql/index/art/storage/test_art_checkpoint_retains_clean_buffers.test"
       ]
     }
   ]
