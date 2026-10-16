@@ -1,0 +1,70 @@
+# name: test/sql/index/bloom/test_bloom_equality.test
+# description: Bloom equality skip stays exact across insert, delete, and checkpoint
+# group: [bloom]
+
+load {TEST_DIR}/test_bloom_equality.db
+
+statement ok
+CREATE TABLE t (a BIGINT, b INTEGER);
+
+statement ok
+INSERT INTO t SELECT i, i % 7 FROM range(10000) t(i);
+
+statement ok
+CREATE INDEX t_a_bloom ON t USING bloom (a);
+
+query I
+SELECT count(*) FROM t WHERE a = 777;
+----
+1
+
+query I
+SELECT b FROM t WHERE a = 777;
+----
+0
+
+query I
+SELECT count(*) FROM t WHERE a = 777 AND b = 0;
+----
+1
+
+query I
+SELECT count(*) FROM t WHERE a = -1;
+----
+0
+
+statement ok
+INSERT INTO t VALUES (777, 1), (NULL, 2);
+
+query I
+SELECT count(*) FROM t WHERE a = 777;
+----
+2
+
+query I
+SELECT count(*) FROM t WHERE a IS NULL;
+----
+1
+
+statement ok
+DELETE FROM t WHERE a = 777 AND b = 1;
+
+query I
+SELECT count(*) FROM t WHERE a = 777;
+----
+1
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT count(*) FROM t WHERE a = 777;
+----
+1
+
+query I
+SELECT count(*) FROM t WHERE a IS NULL;
+----
+1

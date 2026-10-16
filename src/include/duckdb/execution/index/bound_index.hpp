@@ -14,6 +14,7 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/storage/index.hpp"
@@ -203,6 +204,10 @@ public:
 	//! Throw a constraint violation exception
 	virtual string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                             DataChunk &input) const DUCKDB_EXCLUDES(lock) = 0;
+
+	virtual bool CanSkipVector(column_t column_id, idx_t granule, const Value &constant) const;
+	virtual bool PrepareSkip(column_t column_id, const Value &constant, idx_t &column_index, hash_t &hash) const;
+	virtual bool SkipPrepared(idx_t column_index, idx_t granule, hash_t hash) const;
 
 	//! Replay index insert and delete operations buffered during WAL replay.
 	//! table_types has the physical types of the table in the order they appear, not logical (no generated columns).
