@@ -14,6 +14,7 @@
 
 namespace duckdb {
 class ClientContext;
+class ErrorData;
 class Parser;
 class SQLStatement;
 class TokenIterator;
@@ -32,8 +33,10 @@ class TokenIterator;
 class ParseIterator {
 public:
 	//! Peel parse-facing statements out of a SQL string (PEG / parser_override). The context is
-	//! bound for the lifetime of the iterator and must outlive it.
-	DUCKDB_API ParseIterator(ClientContext &context, const string &sql);
+	//! bound for the lifetime of the iterator and must outlive it. A parse error invalidates the
+	//! active transaction as the invalidation policy says, unless apply_invalidation_policy is false,
+	//! which is meant for callers that only inspect the statements instead of running them.
+	DUCKDB_API ParseIterator(ClientContext &context, const string &sql, bool apply_invalidation_policy = true);
 	DUCKDB_API ~ParseIterator();
 
 	ParseIterator(const ParseIterator &) = delete;
@@ -60,6 +63,8 @@ public:
 	DUCKDB_API ClientContext &GetClientContext();
 
 private:
+	bool PeekInternal();
+	void ApplyInvalidationPolicy(const ErrorData &error);
 	//! Tokenize the full input once (grammar-free); no-op if already tokenized.
 	void EnsureTokenized();
 
@@ -67,6 +72,7 @@ private:
 	//! The bound context, used for parser options / metrics / override extensions.
 	ClientContext &context;
 	string sql;
+	bool apply_invalidation_policy;
 	//! Parser instance kept alive across Peek calls so its PEG matcher / transformer caches
 	//! stay warm. Constructed lazily on the first Peek.
 	unique_ptr<Parser> parser;

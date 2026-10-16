@@ -1338,6 +1338,9 @@ typedef struct {
 	(duckdb_v2_sql_statement_handle statement, const duckdb_v2_identifier_t *name,
 	 duckdb_v2_column_data_collection_handle collection, const duckdb_v2_identifier_t *column_names, idx_t column_count,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_parse_sql_without_invalidation)
+	(duckdb_v2_connection_handle conn, const char *sql, duckdb_v2_statement_iterator_handle *out_iterator,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_multi_file_function)
 	(duckdb_v2_connection_handle conn, duckdb_v2_multi_file_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_set_statistics_callback)
@@ -2018,6 +2021,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_file_system_path_move = duckdb_v2_file_system_path_move;
 	result.duckdb_v2_file_system_path_remove = duckdb_v2_file_system_path_remove;
 	result.duckdb_v2_statement_add_collection = duckdb_v2_statement_add_collection;
+	result.duckdb_v2_parse_sql_without_invalidation = duckdb_v2_parse_sql_without_invalidation;
 	result.duckdb_v2_connection_register_multi_file_function = duckdb_v2_connection_register_multi_file_function;
 	result.duckdb_v2_copy_to_set_statistics_callback = duckdb_v2_copy_to_set_statistics_callback;
 	result.duckdb_v2_copy_to_statistics_get_bind_data = duckdb_v2_copy_to_statistics_get_bind_data;

@@ -251,8 +251,9 @@ public:
 	DUCKDB_API void RegisterFunction(CreateFunctionInfo &info);
 
 	//! Iterate the user statements of a script as parsed. The submission of each one expands it, so a statement that
-	//! the engine rewrites into several is still one statement here
-	DUCKDB_API StatementIterator IterateStatements(const string &query);
+	//! the engine rewrites into several is still one statement here. Pass false for apply_invalidation_policy when only
+	//! inspecting the statements, so that a parse error leaves the active transaction usable.
+	DUCKDB_API StatementIterator IterateStatements(const string &query, bool apply_invalidation_policy = true);
 
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
@@ -310,6 +311,9 @@ public:
 
 	//! Process an error for display to the user
 	DUCKDB_API void ProcessError(ErrorData &error, const string &query) const;
+	//! Invalidates the active transaction (or for fatal errors the database) when the current invalidation policy says
+	//! this error type should
+	DUCKDB_API void ApplyInvalidationPolicy(const ErrorData &error);
 
 	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 

@@ -256,6 +256,53 @@ TEST_CASE("V2: a parse error terminates iteration", "[capi_v2][sql_statement]") 
 }
 
 // ===========================================================================
+// A parse error invalidates the active transaction as the invalidation policy
+// says, like it does for a query that is run directly.
+// ===========================================================================
+
+TEST_CASE("V2: a parse error invalidates the transaction", "[capi_v2][sql_statement]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "SET current_transaction_invalidation_policy='ALL_ERRORS_INVALIDATE_TRANSACTION'");
+	ExecSQL(fx.conn, "CREATE TABLE audit(i INT)");
+
+	ExecSQL(fx.conn, "BEGIN");
+	ExecSQL(fx.conn, "INSERT INTO audit VALUES (21)");
+	duckdb_v2_statement_iterator_handle iter = nullptr;
+	REQUIRE(duckdb_v2_parse_sql(fx.conn, "inser into audit_backup from audit", &iter, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_sql_statement_handle stmt = nullptr;
+	REQUIRE(duckdb_v2_statement_iterator_next(iter, &stmt, nullptr) == DUCKDB_V2_ERROR_QUERY_PARSER);
+	duckdb_v2_statement_iterator_destroy(&iter);
+	REQUIRE(RunSql(fx.conn, "INSERT INTO audit VALUES (22)") != DUCKDB_V2_ERROR_NONE);
+	ExecSQL(fx.conn, "ABORT");
+
+	duckdb_v2_result_handle r = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT * FROM audit", &r) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(r) == 0);
+	duckdb_v2_result_destroy(&r);
+}
+
+TEST_CASE("V2: a parse error without invalidation leaves the transaction usable", "[capi_v2][sql_statement]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE TABLE audit(i INT)");
+
+	ExecSQL(fx.conn, "BEGIN");
+	ExecSQL(fx.conn, "INSERT INTO audit VALUES (21)");
+	duckdb_v2_statement_iterator_handle iter = nullptr;
+	REQUIRE(duckdb_v2_parse_sql_without_invalidation(fx.conn, "inser into audit_backup from audit", &iter, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_sql_statement_handle stmt = nullptr;
+	REQUIRE(duckdb_v2_statement_iterator_next(iter, &stmt, nullptr) == DUCKDB_V2_ERROR_QUERY_PARSER);
+	duckdb_v2_statement_iterator_destroy(&iter);
+	ExecSQL(fx.conn, "INSERT INTO audit VALUES (22)");
+	ExecSQL(fx.conn, "COMMIT");
+
+	duckdb_v2_result_handle r = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT * FROM audit", &r) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(r) == 2);
+	duckdb_v2_result_destroy(&r);
+}
+
+// ===========================================================================
 // No-statement input yields an immediately exhausted iterator.
 // ===========================================================================
 
