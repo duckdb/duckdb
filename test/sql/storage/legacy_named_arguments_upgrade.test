@@ -2,6 +2,9 @@
 # description: Views and macros with undeclared argument names stored by v1.x keep working after a storage upgrade
 # group: [storage]
 
+# the database file was written with the default vector size
+require vector_size 2048
+
 # legacy_named_arguments_v1.db was written by v1.5.6 with views/macros that pass names the functions do not declare,
 # and with a view/macro that call struct_pack, which binds by name
 statement ok
