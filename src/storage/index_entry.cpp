@@ -31,7 +31,10 @@ void IndexEntry::Append(DataChunk &chunk, Vector &row_ids) {
 		return;
 	}
 	auto &bound_index = owned_index->Cast<BoundIndex>();
-	bound_index.Append(chunk, row_ids);
+	auto error = bound_index.Append(chunk, row_ids);
+	if (error.HasError()) {
+		error.Throw();
+	}
 }
 
 ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr<IndexEntry> &delete_entry,
@@ -61,7 +64,6 @@ ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr
 		}
 	}
 
-	ErrorData error;
 	try {
 		if (lookup_main_index) {
 			IndexAppendInfo lookup_append_info;
@@ -73,7 +75,13 @@ ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr
 			}
 			bound_index.VerifyAppend(chunk, lookup_append_info, optional_ptr<ConflictManager>());
 		}
+	} catch (std::exception &ex) {
+		// the lookup is read-only: nothing was inserted yet
+		return ErrorData(ex);
+	}
 
+	ErrorData error;
+	try {
 		IndexAppendInfo index_append_info(append_mode, nullptr);
 		if (delete_index) {
 			index_append_info.delete_indexes.push_back(*delete_index);
@@ -83,7 +91,8 @@ ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr
 		} else {
 			error = bound_index.Append(chunk, row_ids, index_append_info);
 		}
-	} catch (std::exception &ex) {
+	} catch (ConstraintException &ex) {
+		// a conflict leaves the index unchanged; any other exception may leave a partial append and must throw
 		error = ErrorData(ex);
 	}
 	return error;

@@ -127,6 +127,8 @@ public:
 	vector<shared_ptr<const IndexStorageInfo>> Checkpoint(TableIndexWriter &writer);
 	//! Returns the physical table columns referenced by any index.
 	unordered_set<column_t> GetIndexedColumns() const;
+	//! Returns the indexed columns, sorted for a deterministic scan order.
+	vector<StorageIndex> GetSortedIndexedColumns() const;
 	//! Returns the column sets of unique indexes matching the conflict target.
 	vector<unordered_set<column_t>> GetConflictTargetColumns(const ConflictInfo &conflict_info) const;
 	//! Get the combined column ids of the unique indexes.
@@ -140,7 +142,10 @@ public:
 	                                 vector<StorageIndex> &mapped_column_ids, DataTableInfo &data_table_info);
 	//! Reference the indexed columns of a table chunk.
 	static void ReferenceIndexChunk(DataChunk &table_chunk, DataChunk &index_chunk,
-	                                vector<StorageIndex> &mapped_column_ids);
+	                                const vector<StorageIndex> &mapped_column_ids);
+	//! Reference the columns of an index chunk in a table chunk; the inverse of ReferenceIndexChunk.
+	static void ReferenceTableChunk(DataChunk &table_chunk, DataChunk &index_chunk,
+	                                const vector<StorageIndex> &mapped_column_ids);
 
 private:
 	template <class>
