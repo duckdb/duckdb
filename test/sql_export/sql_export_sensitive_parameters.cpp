@@ -30,7 +30,7 @@ static unique_ptr<FunctionData> SensitiveProbeBind(ClientContext &, TableFunctio
 }
 
 static void SensitiveProbeScan(ClientContext &, TableFunctionInput &, DataChunk &output) {
-	output.SetCardinality(0);
+	output.SetChildCardinality(0);
 }
 
 static unique_ptr<FunctionData> SensitiveCopyBind(ClientContext &, CopyFunctionBindInput &, const vector<Identifier> &,
