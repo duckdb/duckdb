@@ -79,3 +79,29 @@ SELECT stats(d) FROM l SEMI JOIN r ON l.d = r.d LIMIT 1;
 ----
 <REGEX>:.*'total_string_length': 3.*
 
+# multiple grouping sets emit a group key once per set that contains it
+
+statement ok
+CREATE TABLE grouped_strings(d VARCHAR);
+
+statement ok
+INSERT INTO grouped_strings VALUES ('a'), ('bb');
+
+query I
+SELECT struct_pack(d := d) FROM (SELECT d FROM grouped_strings GROUP BY GROUPING SETS ((d), (d)) ORDER BY d) q;
+----
+{'d': a}
+{'d': a}
+{'d': bb}
+{'d': bb}
+
+query I
+SELECT stats(d) FROM (SELECT d FROM grouped_strings GROUP BY GROUPING SETS ((d), (d))) q LIMIT 1;
+----
+<!REGEX>:.*total_string_length.*
+
+# a single grouping set emits each group at most once and keeps its additive totals
+query I
+SELECT stats(d) FROM (SELECT d FROM grouped_strings GROUP BY d) q LIMIT 1;
+----
+<REGEX>:.*'total_string_length': 3.*
