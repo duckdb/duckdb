@@ -460,6 +460,14 @@
         "struct": "ForceVariantShredding"
     },
     {
+        "name": "debug_force_wal_fsync_failure",
+        "description": "DEBUG SETTING: makes every WAL fsync fail, used for testing durability error handling",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false",
+        "is_debug": true
+    },
+    {
         "name": "debug_local_file_system_delay_ms",
         "description": "Time to sleep before local file system open/read/write operations.",
         "type": "UBIGINT",
@@ -576,6 +584,14 @@
         "type": "ENUM<DebugVectorVerification>",
         "default_scope": "global",
         "default_value": "NONE",
+        "is_debug": true
+    },
+    {
+        "name": "debug_wal_fsync_sleep_ms",
+        "description": "DEBUG SETTING: time to sleep during each WAL fsync, emulating high-latency durable storage",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0",
         "is_debug": true
     },
     {
@@ -1183,6 +1199,13 @@
         "scope": "global",
         "struct": "LoggingStorage",
         "custom_implementation": true
+    },
+    {
+        "name": "match_recognize_max_states",
+        "description": "The maximum number of pattern states MATCH_RECOGNIZE explores for a single match, before it refuses the pattern (0 = no limit). A match is never refused below what matching the pattern without backtracking would take.",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "1000000"
     },
     {
         "name": "max_execution_time",

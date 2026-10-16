@@ -45,7 +45,23 @@
         "test/sql/storage/test_eviction_queue_dead_nodes_underflow.test",
         "test/sql/copy/parquet/parquet_prefetch_tracked_memory.test",
         "test/sql/join/hash_join/hash_join_dict_surviving.test",
-        "test/sql/filter/filter_cache_dictionary.test"
+        "test/sql/filter/filter_cache_dictionary.test",
+        "test/optimizer/row_number_virtual_column.test",
+        "test/issues/general/test_24936.test",
+        "test/issues/general/test_1881.test",
+        "test/sql/join/inner/test_dense_prefix_range_filter.test",
+        "test/sql/aggregate/aggregates/mode_rewrite_memory.test",
+        "test/sql/aggregate/group/test_group_by_skip_lookups.test",
+        "test/sql/subquery/any_all/test_multi_column_mark_join_nulls.test",
+        "test/sql/storage/optimistic_write/optimistic_write_unique_index_wal_replay.test",
+        "test/sql/parallelism/intraquery/test_transaction_local_parallelism.test",
+        "test/sql/delete/test_parallel_delete_transaction_local.test",
+        "test/sql/index/art/nodes/test_art_prefix_transform_deprecated_create.test",
+        "test/sql/topn/topn_dynamic_filter_cast.test",
+        "test/sql/progress/test_verify_progress.test",
+        "test/sql/copy/partitioned/partitioned_write_backpressure.test",
+        "test/sql/copy/parquet/read_ahead/readahead_memory_limit.test",
+        "test/sql/copy/parquet/parquet_write_repeated_lists.test"
       ]
     },
     {

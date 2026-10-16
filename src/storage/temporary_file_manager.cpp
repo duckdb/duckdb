@@ -645,18 +645,19 @@ To get usage information of the temp_directory, use 'CALL duckdb_temporary_files
 }
 
 void TemporaryFileManager::IncreaseSizeOnDisk(idx_t bytes) {
-	auto current_size_on_disk = GetTotalUsedSpaceInBytes();
-	if (current_size_on_disk + bytes > max_swap_space) {
-		auto used = StringUtil::BytesToHumanReadableString(current_size_on_disk);
-		auto max = StringUtil::BytesToHumanReadableString(max_swap_space);
-		auto data_size = StringUtil::BytesToHumanReadableString(bytes);
-		throw OutOfMemoryException(R"(failed to offload data block of size %s (%s/%s used).
+	auto current_size_on_disk = size_on_disk.load();
+	do {
+		if (current_size_on_disk + bytes > max_swap_space) {
+			auto used = StringUtil::BytesToHumanReadableString(current_size_on_disk);
+			auto max = StringUtil::BytesToHumanReadableString(max_swap_space);
+			auto data_size = StringUtil::BytesToHumanReadableString(bytes);
+			throw OutOfMemoryException(R"(failed to offload data block of size %s (%s/%s used).
 This limit was set by the 'max_temp_directory_size' setting.
 By default, this setting utilizes the available disk space on the drive where the 'temp_directory' is located.
 You can adjust this setting, by using (for example) PRAGMA max_temp_directory_size='10GiB')",
-		                           data_size, used, max);
-	}
-	size_on_disk += bytes;
+			                           data_size, used, max);
+		}
+	} while (!size_on_disk.compare_exchange_weak(current_size_on_disk, current_size_on_disk + bytes));
 }
 
 void TemporaryFileManager::DecreaseSizeOnDisk(idx_t bytes) {

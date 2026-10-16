@@ -14,6 +14,7 @@
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -317,13 +318,10 @@ PEGTransformerFactory::FinalizeSimpleSelectTrampoline(PEGTransformer &transforme
 }
 
 FunctionArgument PEGTransformerFactory::TransformNamedFunctionArgument(PEGTransformer &transformer,
-                                                                       MacroParameter named_parameter) {
-	if (named_parameter.type != LogicalType::UNKNOWN) {
-		throw ParserException("Named argument \"%s\" of a function call cannot have a type",
-		                      named_parameter.name.GetIdentifierName());
-	}
-	named_parameter.expression->SetAlias(named_parameter.name);
-	return FunctionArgument(named_parameter.name, std::move(named_parameter.expression));
+                                                                       const Identifier &type_func_name,
+                                                                       unique_ptr<ParsedExpression> expression) {
+	expression->SetAlias(type_func_name);
+	return FunctionArgument(type_func_name, std::move(expression));
 }
 
 FunctionArgument PEGTransformerFactory::TransformPositionalFunctionArgument(PEGTransformer &transformer,
@@ -422,6 +420,10 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTableRefTrampolin
 		} else if (transform_join_or_pivot->type == TableReferenceType::PIVOT) {
 			auto &pivot_ref = transform_join_or_pivot->Cast<PivotRef>();
 			pivot_ref.source = std::move(inner_table_ref);
+			inner_table_ref = std::move(transform_join_or_pivot);
+		} else if (transform_join_or_pivot->type == TableReferenceType::MATCH_RECOGNIZE) {
+			auto &match_recognize_ref = transform_join_or_pivot->Cast<MatchRecognizeRef>();
+			match_recognize_ref.input = std::move(inner_table_ref);
 			inner_table_ref = std::move(transform_join_or_pivot);
 		} else {
 			throw NotImplementedException("Unsupported TableRef type encountered: %s",
@@ -774,6 +776,9 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(
     PEGTransformer &transformer, const optional<bool> &lateral, const QualifiedName &qualified_table_function,
     vector<FunctionArgument> table_function_arguments, const optional<bool> &with_ordinality,
     const optional<TableAlias> &table_alias, optional<unique_ptr<SampleOptions>> sample_clause) {
+	if (lateral.value_or(false) && sample_clause) {
+		throw ParserException("TABLESAMPLE cannot be applied to a LATERAL table function");
+	}
 	auto result = make_uniq<TableFunctionRef>();
 
 	result->with_ordinality =
@@ -931,6 +936,7 @@ vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(GroupByExp
 		for (auto &child_expr : group_by_expr.children) {
 			auto child_sets = GroupByExpressionUnfolding(child_expr, map, result);
 			result_sets.insert(result_sets.end(), child_sets.begin(), child_sets.end());
+			CheckGroupingSetMax(result_sets.size());
 		}
 	} else if (group_by_expr.type == GroupByExpressionInfoType::CUBE ||
 	           group_by_expr.type == GroupByExpressionInfoType::ROLLUP) {
@@ -1360,6 +1366,9 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableSubquery(PEGTransforme
 	if (table_alias_colon && table_alias) {
 		throw ParserException("Table reference %s cannot have two aliases", subquery_reference->ToString());
 	}
+	if (lateral.value_or(false) && sample_clause) {
+		throw ParserException("TABLESAMPLE cannot be applied to a LATERAL subquery");
+	}
 	if (table_alias_colon) {
 		subquery_reference->alias = *table_alias_colon;
 	}
@@ -1406,7 +1415,8 @@ Identifier PEGTransformerFactory::TransformTableAliasColon(PEGTransformer &trans
 unique_ptr<TableRef> PEGTransformerFactory::TransformValuesRef(PEGTransformer &transformer,
                                                                const optional<Identifier> &table_alias_colon,
                                                                unique_ptr<SelectStatement> values_clause,
-                                                               const optional<TableAlias> &table_alias) {
+                                                               const optional<TableAlias> &table_alias,
+                                                               optional<unique_ptr<SampleOptions>> sample_clause) {
 	if (table_alias_colon && table_alias) {
 		throw ParserException("Table reference cannot have two aliases");
 	}
@@ -1417,6 +1427,9 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformValuesRef(PEGTransformer &t
 	if (table_alias) {
 		subquery_ref->alias = table_alias->name;
 		subquery_ref->column_name_alias = table_alias->column_name_alias;
+	}
+	if (sample_clause) {
+		subquery_ref->sample = std::move(*sample_clause);
 	}
 	return std::move(subquery_ref);
 }

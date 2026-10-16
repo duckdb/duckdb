@@ -34,6 +34,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
@@ -331,6 +332,31 @@ static bool BuildSideHasMultipleSources(const PhysicalOperator &op) {
 	return false;
 }
 
+//! Whether a column of the build side may arrive as a dictionary for some chunks only, e.g. when a projection computes
+//! it (CASE) or when it is a probe column of a hash join below. Its row-store slot can then not be narrowed
+static bool BuildColumnIsComputed(const PhysicalOperator &op, idx_t column_idx) {
+	switch (op.type) {
+	case PhysicalOperatorType::PROJECTION: {
+		auto &select_list = op.Cast<PhysicalProjection>().select_list;
+		if (column_idx >= select_list.size()) {
+			return true;
+		}
+		auto &expr = *select_list[column_idx];
+		if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF) {
+			return true;
+		}
+		return BuildColumnIsComputed(op.children[0].get(), expr.Cast<BoundReferenceExpression>().Index());
+	}
+	case PhysicalOperatorType::FILTER:
+		return BuildColumnIsComputed(op.children[0].get(), column_idx);
+	case PhysicalOperatorType::HASH_JOIN:
+		// a probe column is forwarded as it arrives, but read back from the row store when the probe side spills
+		return column_idx < op.Cast<PhysicalHashJoin>().lhs_output_columns.col_idxs.size();
+	default:
+		return false;
+	}
+}
+
 //! Synchronisation state for the first-chunk publication of the TupleDataLayout: the canonical layout
 //! shared by all per-thread JHTs, plus the per-column decision on whether to narrow the row-store slot.
 struct LayoutGate {
@@ -425,6 +451,9 @@ public:
 		can_use_perfect_hash = use_perfect_hash;
 		// Multiple build producers can change dictionaries after the layout has been published.
 		build_side_multi_source = BuildSideHasMultipleSources(op.children[1].get());
+		for (auto &column_idx : op.payload_columns.col_idxs) {
+			computed_build_columns.push_back(BuildColumnIsComputed(op.children[1].get(), column_idx));
+		}
 		// For external hash join
 		external = Settings::Get<DebugForceExternalSetting>(context);
 		// Set probe types
@@ -525,6 +554,12 @@ public:
 	//! The number of active local states
 	atomic<idx_t> active_local_states;
 
+	//! The memory available to the hash table: the reservation minus what partitioning the probe side requires
+	idx_t GetMaxExternalHTSize() const {
+		const auto reservation = temporary_memory_state->GetReservation();
+		return reservation > probe_side_requirement ? reservation - probe_side_requirement : 0;
+	}
+
 	//! Whether we are doing an external + some sizes
 	bool external;
 	idx_t total_size;
@@ -558,6 +593,8 @@ public:
 	//! True iff the build subtree funnels multiple producer pipelines into this sink (UNION ALL /
 	//! recursive CTE); disables dict-surviving because the first-chunk layout election is unsound there.
 	bool build_side_multi_source = false;
+	//! Per payload column: whether a projection on the build side computes it (see BuildColumnIsComputed)
+	vector<bool> computed_build_columns;
 };
 
 unique_ptr<JoinFilterLocalState> JoinFilterPushdownInfo::GetLocalState(JoinFilterGlobalState &gstate) const {
@@ -721,6 +758,9 @@ void HashJoinGlobalSinkState::PublishLayoutIfFirst(HashJoinLocalSinkState &lstat
 			DictSurvivingInfo info;
 			info.columns.resize(build_types.size());
 			for (idx_t col = 0; col < MinValue<idx_t>(build_types.size(), payload_chunk.ColumnCount()); col++) {
+				if (col < computed_build_columns.size() && computed_build_columns[col]) {
+					continue;
+				}
 				auto &incoming = payload_chunk.data[col];
 				const auto index_width = lstate.hash_table->GetDictSurvivingIndexWidth(col, incoming);
 				if (index_width != 0) {
@@ -1419,9 +1459,7 @@ public:
 
 		FinalizeExternalRuntimeFilters(sink.context, op, sink);
 
-		D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
-		sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
-		                                         sink.probe_side_requirement);
+		sink.hash_table->PrepareExternalFinalize(sink.GetMaxExternalHTSize());
 		sink.ScheduleFinalize(*pipeline, *this);
 	}
 };
@@ -2017,8 +2055,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		    (max_partition_ht_size + sink.probe_side_requirement) > sink.temporary_memory_state->GetReservation()) {
 			// We have to repartition
 			const auto radix_bits_before = ht.GetRadixBits();
-			ht.SetRepartitionRadixBits(sink.temporary_memory_state->GetReservation(), sink.max_partition_size,
-			                           sink.max_partition_count);
+			ht.SetRepartitionRadixBits(sink.GetMaxExternalHTSize(), sink.max_partition_size, sink.max_partition_count);
 			DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalHashJoin", "Repartition",
 			           {{"partitions_before", to_string(RadixPartitioning::NumberOfPartitions(radix_bits_before))},
 			            {"partitions_after", to_string(RadixPartitioning::NumberOfPartitions(ht.GetRadixBits()))}});
@@ -2032,9 +2069,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			sink.local_hash_tables.clear();
 			sink.owned_local_hash_tables.clear();
 			FinalizeExternalRuntimeFilters(context, *this, sink);
-			D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
-			sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
-			                                         sink.probe_side_requirement);
+			sink.hash_table->PrepareExternalFinalize(sink.GetMaxExternalHTSize());
 			sink.ScheduleFinalize(pipeline, event);
 		}
 		sink.finalized = true;
@@ -2534,9 +2569,7 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	                                                                                    sink.probe_side_requirement);
 
 	// Try to put the next partitions in the block collection of the HT
-	D_ASSERT(!sink.external || sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
-	if (!sink.external ||
-	    !ht.PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() - sink.probe_side_requirement)) {
+	if (!sink.external || !ht.PrepareExternalFinalize(sink.GetMaxExternalHTSize())) {
 		global_stage = HashJoinSourceStage::DONE;
 		sink.temporary_memory_state->SetZero();
 		return;
