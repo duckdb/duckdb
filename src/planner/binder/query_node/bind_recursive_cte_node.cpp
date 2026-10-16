@@ -42,6 +42,9 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	// names are picked from the LHS, unless aliases are explicitly specified
 	result.names = left.names;
 	for (idx_t i = 0; i < statement.aliases.size() && i < result.names.size(); i++) {
+		if (statement.aliases[i].empty()) {
+			throw BinderException("column alias cannot be empty");
+		}
 		result.names[i] = statement.aliases[i];
 	}
 
@@ -101,10 +104,11 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			QueryErrorContext error_context(expr->GetQueryLocation());
 
-			EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY,
-			                                QualifiedName(func_expr.FunctionName()), error_context);
-			auto entry = GetCatalogEntry(func_expr.GetQualifiedName().Catalog(), Identifier::DefaultSchema(),
-			                             function_lookup, OnEntryNotFound::RETURN_NULL);
+			auto function_name = func_expr.GetQualifiedName();
+			BindSchemaOrCatalog(function_name);
+			EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, BindTableName(function_name),
+			                                error_context);
+			auto entry = GetCatalogEntry(function_lookup, OnEntryNotFound::RETURN_NULL);
 
 			if (!entry || entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 				throw BinderException(

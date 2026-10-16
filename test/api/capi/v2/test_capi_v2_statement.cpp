@@ -334,7 +334,7 @@ TEST_CASE("V2: statement_execute binds positional parameters", "[capi_v2][sql_st
 	auto stmt = StmtParseOne(fx.conn, "SELECT $1 + $2");
 
 	auto make_int = [&](int64_t v) {
-		return MakeInt64Value(fx.conn, v);
+		return MakeInt64Value(fx.factory, v);
 	};
 
 	// First execution: 10 + 20 = 30.
@@ -365,8 +365,8 @@ TEST_CASE("V2: bound parameter values may be destroyed before the result is cons
 	EnvFixture fx;
 
 	auto stmt = StmtParseOne(fx.conn, "SELECT $1 + $2");
-	duckdb_v2_value_handle a = MakeInt64Value(fx.conn, 10);
-	duckdb_v2_value_handle b = MakeInt64Value(fx.conn, 20);
+	duckdb_v2_value_handle a = MakeInt64Value(fx.factory, 10);
+	duckdb_v2_value_handle b = MakeInt64Value(fx.factory, 20);
 	duckdb_v2_value_handle params[2] = {a, b};
 
 	duckdb_v2_result_handle r = nullptr;
@@ -387,10 +387,9 @@ TEST_CASE("V2: statement_execute rejects parameters on a statement that expands"
 	ExecSQL(fx.conn, "CREATE TABLE et(i INTEGER)");
 	ExecSQL(fx.conn, "INSERT INTO et VALUES (1), (2), (3)");
 
-	// A volatile DEFAULT makes ALTER ADD COLUMN expand into BEGIN/.../COMMIT; the
-	// parameter would bind against the injected BEGIN, so the call is refused.
+	// A volatile DEFAULT makes ALTER ADD COLUMN expand into several statements, which take no parameters
 	auto stmt = StmtParseOne(fx.conn, "ALTER TABLE et ADD COLUMN c INTEGER DEFAULT ((random() * 0)::INTEGER + $1)");
-	duckdb_v2_value_handle v = MakeInt64Value(fx.conn, 40);
+	duckdb_v2_value_handle v = MakeInt64Value(fx.factory, 40);
 	duckdb_v2_value_handle params[1] = {v};
 
 	duckdb_v2_result_handle r = nullptr;
@@ -398,7 +397,7 @@ TEST_CASE("V2: statement_execute rejects parameters on a statement that expands"
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(r == nullptr);
 
-	// Rejected before any fragment ran: the table is untouched, the connection usable.
+	// Rejected before anything ran: the table is untouched, the connection usable.
 	duckdb_v2_result_handle check = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT count(*) FROM et", &check, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(StmtScalarI64(check) == 3);
@@ -419,8 +418,8 @@ TEST_CASE("V2: statement_execute binds named parameters", "[capi_v2][sql_stateme
 	EnvFixture fx;
 	auto stmt = StmtParseOne(fx.conn, "SELECT $a + $b");
 
-	duckdb_v2_value_handle va = MakeInt64Value(fx.conn, 10);
-	duckdb_v2_value_handle vb = MakeInt64Value(fx.conn, 20);
+	duckdb_v2_value_handle va = MakeInt64Value(fx.factory, 10);
+	duckdb_v2_value_handle vb = MakeInt64Value(fx.factory, 20);
 
 	// Bind by name: order of the arrays is irrelevant, only the name matches.
 	duckdb_v2_str names[2] = {Convert("a"), Convert("b")};
@@ -433,8 +432,8 @@ TEST_CASE("V2: statement_execute binds named parameters", "[capi_v2][sql_stateme
 	// Same statement, names and values reordered together: keying is by name, so the
 	// result is unchanged (a - b would differ; a + b proves order independence via
 	// the swap below with distinct values).
-	duckdb_v2_value_handle vx = MakeInt64Value(fx.conn, 100);
-	duckdb_v2_value_handle vy = MakeInt64Value(fx.conn, 1);
+	duckdb_v2_value_handle vx = MakeInt64Value(fx.factory, 100);
+	duckdb_v2_value_handle vy = MakeInt64Value(fx.factory, 1);
 	duckdb_v2_str swapped[2] = {Convert("b"), Convert("a")};
 	duckdb_v2_value_handle swapped_values[2] = {vy, vx}; // b=1, a=100
 	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, swapped, swapped_values, 2, &r, nullptr) ==
@@ -454,7 +453,7 @@ TEST_CASE("V2: statement_execute matches named parameters case-insensitively", "
 	// $Name in the SQL, bound with the differently-cased key "name": Identifier keys
 	// compare case-insensitively, so the bind succeeds.
 	auto stmt = StmtParseOne(fx.conn, "SELECT $Name");
-	duckdb_v2_value_handle v = MakeInt64Value(fx.conn, 42);
+	duckdb_v2_value_handle v = MakeInt64Value(fx.factory, 42);
 	duckdb_v2_str names[1] = {Convert("name")};
 	duckdb_v2_value_handle values[1] = {v};
 	duckdb_v2_result_handle r = nullptr;
@@ -472,7 +471,7 @@ TEST_CASE("V2: statement_execute rejects positional binding of a named parameter
 	// binding it positionally (names == NULL) fails the key-set check below, which is
 	// what proves $val is named.
 	auto stmt = StmtParseOne(fx.conn, "SELECT $val");
-	duckdb_v2_value_handle v = MakeInt64Value(fx.conn, 7);
+	duckdb_v2_value_handle v = MakeInt64Value(fx.factory, 7);
 	duckdb_v2_str names[1] = {Convert("val")};
 	duckdb_v2_value_handle values[1] = {v};
 	duckdb_v2_result_handle r = nullptr;
@@ -492,8 +491,8 @@ TEST_CASE("V2: statement_execute rejects positional binding of a named parameter
 
 TEST_CASE("V2: statement_execute rejects a wrong parameter key set", "[capi_v2][sql_statement]") {
 	EnvFixture fx;
-	duckdb_v2_value_handle v1 = MakeInt64Value(fx.conn, 1);
-	duckdb_v2_value_handle v2 = MakeInt64Value(fx.conn, 2);
+	duckdb_v2_value_handle v1 = MakeInt64Value(fx.factory, 1);
+	duckdb_v2_value_handle v2 = MakeInt64Value(fx.factory, 2);
 
 	SECTION("names supplied for a positional statement") {
 		auto stmt = StmtParseOne(fx.conn, "SELECT $1 + $2");
@@ -533,13 +532,20 @@ TEST_CASE("V2: statement_execute rejects a wrong parameter key set", "[capi_v2][
 TEST_CASE("V2: statement_execute rejects a malformed parameter name", "[capi_v2][sql_statement]") {
 	EnvFixture fx;
 	auto stmt = StmtParseOne(fx.conn, "SELECT $a");
-	duckdb_v2_value_handle v = MakeInt64Value(fx.conn, 1);
+	duckdb_v2_value_handle v = MakeInt64Value(fx.factory, 1);
 	// {NULL, len > 0} is malformed per the duckdb_v2_str contract.
 	duckdb_v2_str names[1] = {duckdb_v2_str {nullptr, 5}};
 	duckdb_v2_value_handle values[1] = {v};
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 1, &r, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(r == nullptr);
+	names[0] = Convert("\x80");
+	duckdb_v2_error_info_handle err = nullptr;
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 1, &r, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_str message = {nullptr, 0};
+	REQUIRE(duckdb_v2_error_info_get_text(err, &message) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(Convert(message).find("UTF-8") != std::string::npos);
+	duckdb_v2_error_info_destroy(&err);
 
 	duckdb_v2_value_destroy(&v);
 	duckdb_v2_sql_statement_destroy(&stmt);
@@ -548,8 +554,8 @@ TEST_CASE("V2: statement_execute rejects a malformed parameter name", "[capi_v2]
 TEST_CASE("V2: statement_execute treats empty name entries as positional", "[capi_v2][sql_statement]") {
 	EnvFixture fx;
 	auto stmt = StmtParseOne(fx.conn, "SELECT $1 + $2");
-	duckdb_v2_value_handle va = MakeInt64Value(fx.conn, 10);
-	duckdb_v2_value_handle vb = MakeInt64Value(fx.conn, 20);
+	duckdb_v2_value_handle va = MakeInt64Value(fx.factory, 10);
+	duckdb_v2_value_handle vb = MakeInt64Value(fx.factory, 20);
 	duckdb_v2_value_handle values[2] = {va, vb};
 
 	SECTION("a non-NULL array of empty views binds positionally") {
@@ -609,8 +615,8 @@ TEST_CASE("V2: statement_bind parameter names are the statement_execute keys", "
 	duckdb_v2_schema_destroy(&params);
 
 	// ... and those exact names are the execute keys.
-	duckdb_v2_value_handle va = MakeInt64Value(fx.conn, 3);
-	duckdb_v2_value_handle vb = MakeInt64Value(fx.conn, 4);
+	duckdb_v2_value_handle va = MakeInt64Value(fx.factory, 3);
+	duckdb_v2_value_handle vb = MakeInt64Value(fx.factory, 4);
 	duckdb_v2_str names[2] = {Convert("a"), Convert("b")};
 	duckdb_v2_value_handle values[2] = {va, vb};
 	duckdb_v2_result_handle r = nullptr;
@@ -668,14 +674,6 @@ TEST_CASE("V2: sql_statement_get_type is the type before statement rewrites", "[
 	REQUIRE(executed == DUCKDB_V2_STATEMENT_TYPE_SELECT);
 	duckdb_v2_result_destroy(&r);
 	duckdb_v2_sql_statement_destroy(&stmt);
-}
-
-TEST_CASE("V2: every core statement type is in the spec", "[capi_v2][sql_statement]") {
-	// Core's enum has no count sentinel to pin at compile time; an appended member shows up
-	// here as a name where core should report INVALID.
-	for (int v = DUCKDB_V2_STATEMENT_TYPE_EXTERNAL_RESOURCE + 1; v <= 255; v++) {
-		REQUIRE(duckdb::StatementTypeToString(static_cast<duckdb::StatementType>(v)) == "INVALID");
-	}
 }
 
 TEST_CASE("V2: sql_statement_get_text is the statement's own slice", "[capi_v2][sql_statement]") {

@@ -62,8 +62,8 @@ BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTable
 
 	// Then the database-wide ones, including the built-in file scans
 	if (!replacement_function) {
-		for (const auto &scan : DBConfig::GetConfig(context).replacement_scans) {
-			if (auto result = scan.function(context, input, scan.data.get())) {
+		for (const auto &scan : DBConfig::GetConfig(context).replacement_scans.Snapshot()) {
+			if (auto result = scan->function(context, input, scan->data.get())) {
 				replacement_function = std::move(result);
 				break;
 			}
@@ -213,9 +213,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// Try autoloading an extension, then retry the replacement scan bind
-		auto full_path = ReplacementScan::GetFullPath(ref.GetQualifiedName().Catalog().GetIdentifierName(),
-		                                              ref.GetQualifiedName().Schema().GetIdentifierName(),
-		                                              ref.Table().GetIdentifierName());
+		auto full_path = ReplacementScan::GetFullPath(ref.GetQualifiedName());
 		auto extension_loaded = TryLoadExtensionForReplacementScan(context, full_path);
 		if (extension_loaded) {
 			replacement_scan_bind_result = BindWithReplacementScan(context, ref);
@@ -285,8 +283,11 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			virtual_columns = table.GetVirtualColumns();
 		}
 		auto logical_get =
-		    make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data), std::move(return_types),
-		                          std::move(return_names), std::move(virtual_columns));
+		    make_uniq<LogicalGet>(table_index, BoundTableFunction(scan_function), std::move(bind_data),
+		                          std::move(return_types), std::move(return_names), std::move(virtual_columns));
+		if (entry_at_clause) {
+			logical_get->at_clause = make_uniq<BoundAtClause>(entry_at_clause->Unit(), entry_at_clause->GetValue());
+		}
 		auto table_entry = logical_get->GetTable();
 		auto &col_ids = logical_get->GetMutableColumnIds();
 		if (!table_entry) {
@@ -303,6 +304,11 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents
 		auto &view_catalog_entry = table_or_view->Cast<ViewCatalogEntry>();
+		if (!view_catalog_entry.ParentCatalog().IsSystemCatalog()) {
+			GetStatementProperties().RegisterDBRead(view_catalog_entry.ParentCatalog(), context);
+		}
+		// expanding nested views can take a long time, allow the query to be interrupted
+		context.InterruptCheck();
 		// We need to use a new binder for the view that doesn't reference any CTEs
 		// defined for this binder so there are no collisions between the CTEs defined
 		// for the view and for the current query
@@ -344,8 +350,10 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		auto root_index = bound_child.plan->GetRootIndex();
 		if (view_catalog_entry.security_type == ViewSecurityType::SECURE_VIEW) {
 			// wrap the plan of a secure view - this prevents the optimizer from pushing into the view
-			bound_child.plan =
-			    make_uniq<LogicalSecureView>(view_catalog_entry.name.GetIdentifierName(), std::move(bound_child.plan));
+			bound_child.plan = make_uniq<LogicalSecureView>(
+			    view_catalog_entry.name.GetIdentifierName(),
+			    view_catalog_entry.ParentSchema().GetQualifiedName(view_catalog_entry.name), bound_child.types,
+			    entry_at_clause, std::move(bound_child.plan));
 		}
 		bind_context.AddView(root_index, subquery.alias, subquery, bound_child, view_catalog_entry);
 		return bound_child;

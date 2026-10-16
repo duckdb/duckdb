@@ -42,7 +42,8 @@ struct FlattenedQuantileValues : FunctionLocalState {
 			// (re-)allocate the cached chunk
 			values.capacity = NextPowerOfTwo(required_capacity);
 			values.chunk.Destroy();
-			values.chunk.Initialize(Allocator::DefaultAllocator(), {type}, values.capacity);
+			// the flattened group can be the whole input, so it is allocated through the (tracked) base allocator
+			values.chunk.Initialize(finalize_data.input.allocator.GetUnderlyingAllocator(), {type}, values.capacity);
 		} else {
 			// re-use the allocated chunk - resetting clears the string heap of the previously flattened state
 			values.chunk.Reset();
@@ -393,6 +394,8 @@ AggregateStateLayout QuantileStateLayout(AggregateLayoutInput &input) {
 	}
 	layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
 	layout.field = BuildStateField<STATE_FIELD>();
+	// NULL inputs are never buffered, so the finalize assumes all values are valid
+	layout.field.reject_null_elements = true;
 	AggregateStateField::PopulateListFunctions(layout.type, layout.field);
 	if (function.GetArguments().size() == 2) {
 		// the quantile parameter must be a constant at bind time (BindQuantile folds it into the bind data) -

@@ -166,7 +166,10 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matc
 	if (packrat_memoized_rules.count(rule_name)) {
 		matcher.SetPackratMemoized();
 	}
-	if (no_suggestion_rules.count(rule_name)) {
+	if (compiled_rule.collapsible) {
+		matcher.SetCollapsible();
+	}
+	if (compiled_rule.suppress_suggestions || no_suggestion_rules.count(rule_name)) {
 		matcher.Cast<ListMatcher>().suppress_suggestions = true;
 	}
 	return matcher;
@@ -217,27 +220,12 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	// START GENERATED PACKRAT MEMOIZED RULES
 	//===--------------------------------------------------------------------===//
 	AddPackratMemoizedRule("Expression");
-	AddPackratMemoizedRule("LambdaArrowExpression");
-	AddPackratMemoizedRule("LogicalOrExpression");
-	AddPackratMemoizedRule("LogicalAndExpression");
-	AddPackratMemoizedRule("LogicalNotExpression");
-	AddPackratMemoizedRule("IsExpression");
-	AddPackratMemoizedRule("ComparisonExpression");
-	AddPackratMemoizedRule("BitwiseExpression");
-	AddPackratMemoizedRule("AdditiveExpression");
-	AddPackratMemoizedRule("MultiplicativeExpression");
-	AddPackratMemoizedRule("ExponentiationExpression");
-	AddPackratMemoizedRule("PrefixExpression");
-	AddPackratMemoizedRule("CollateExpression");
-	AddPackratMemoizedRule("AtTimeZoneExpression");
-	AddPackratMemoizedRule("SingleExpression");
-	AddPackratMemoizedRule("BaseExpression");
-	AddPackratMemoizedRule("ParensExpression");
-	AddPackratMemoizedRule("ParenthesisExpression");
+	AddPackratMemoizedRule("TableRef");
 	AddPackratMemoizedRule("Identifier");
 	AddPackratMemoizedRule("ColId");
-	AddPackratMemoizedRule("ColumnReference");
-	AddPackratMemoizedRule("FunctionExpression");
+	AddPackratMemoizedRule("CatalogQualification");
+	AddPackratMemoizedRule("SchemaQualification");
+	AddPackratMemoizedRule("ReservedSchemaQualification");
 	//===--------------------------------------------------------------------===//
 	// END GENERATED PACKRAT MEMOIZED RULES
 	//===--------------------------------------------------------------------===//
@@ -246,8 +234,6 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 		AddRuleOverride(entry.first.c_str(), std::move(entry.second));
 	}
 
-	// suppress suggestions for catch-all rules that would pollute statement-level autocomplete
-	SuppressSuggestions("ExpressionStatement");
 	// Using SHOW to describe a table/query is deprecated - parse these forms but do not autocomplete them after SHOW
 	// (only setting names and the special SHOW forms are offered). DESCRIBE/SUMMARIZE still complete tables and
 	// queries.
@@ -284,37 +270,44 @@ unique_ptr<KeywordMatcher> MatcherFactory::CreateKeyword(const string &keyword, 
 	return make_uniq<CompiledKeywordMatcher>(keyword, info, keyword_helper);
 }
 
+template <class T, class... ARGS>
+static unique_ptr<T> MakeStructural(ARGS &&... args) {
+	auto result = make_uniq<T>(std::forward<ARGS>(args)...);
+	result->SetStructural();
+	return result;
+}
+
 unique_ptr<ListMatcher> MatcherFactory::CreateList() const {
-	return make_uniq<ListMatcher>();
+	return MakeStructural<ListMatcher>();
 }
 
 unique_ptr<ChoiceMatcher> MatcherFactory::CreateChoice(vector<reference<Matcher>> &&matchers) const {
-	auto table = keyword_helper.GetLiteralTable();
-	if (table && matchers.size() > 1) {
+	auto &table = keyword_helper.GetLiteralTable();
+	if (matchers.size() > 1) {
 		unordered_map<uint32_t, idx_t> literal_children;
 		for (idx_t i = 0; i < matchers.size(); i++) {
 			auto &matcher = matchers[i].get();
 			if (matcher.Type() != MatcherType::KEYWORD) {
-				return make_uniq<ChoiceMatcher>(std::move(matchers));
+				return MakeStructural<ChoiceMatcher>(std::move(matchers));
 			}
-			auto literal = matcher.Cast<KeywordMatcher>().GetDispatchLiteral(*table);
+			auto literal = matcher.Cast<KeywordMatcher>().GetDispatchLiteral(table);
 			if (!literal.IsValid()) {
-				return make_uniq<ChoiceMatcher>(std::move(matchers));
+				return MakeStructural<ChoiceMatcher>(std::move(matchers));
 			}
 			// Preserve the first alternative when spellings share an ID.
 			literal_children.emplace(static_cast<uint32_t>(literal.GetIndex()), i);
 		}
-		return make_uniq<LiteralChoiceMatcher>(std::move(matchers), *table, std::move(literal_children));
+		return MakeStructural<LiteralChoiceMatcher>(std::move(matchers), table, std::move(literal_children));
 	}
-	return make_uniq<ChoiceMatcher>(std::move(matchers));
+	return MakeStructural<ChoiceMatcher>(std::move(matchers));
 }
 
 unique_ptr<OptionalMatcher> MatcherFactory::CreateOptional(Matcher &matcher) const {
-	return make_uniq<OptionalMatcher>(matcher);
+	return MakeStructural<OptionalMatcher>(matcher);
 }
 
 unique_ptr<RepeatMatcher> MatcherFactory::CreateRepeat(Matcher &matcher) const {
-	return make_uniq<RepeatMatcher>(matcher);
+	return MakeStructural<RepeatMatcher>(matcher);
 }
 
 KeywordMatcher &MatcherFactory::Keyword(const string &keyword) const {

@@ -21,15 +21,15 @@ bool StatisticsPropagator::HandleJoinNeverMatches(LogicalJoin &join, unique_ptr<
 		// semi or inner join on false; entire node can be pruned
 		ReplaceWithEmptyResult(node_ptr);
 		return true;
+
+		// If the filter is always false or Null, the join output is exactly one of its sides:
+		// promote that side together with its projection map so the output layout stays unchanged.
 	case JoinType::RIGHT_ANTI:
-	case JoinType::ANTI: {
-		if (join.join_type == JoinType::RIGHT_ANTI) {
-			std::swap(join.children[0], join.children[1]);
-		}
-		// If the filter is always false or Null, just return the left child.
-		node_ptr = std::move(join.children[0]);
+		node_ptr = LogicalJoin::PromoteJoinSide(std::move(join.children[1]), std::move(join.right_projection_map));
 		return true;
-	}
+	case JoinType::ANTI:
+		node_ptr = LogicalJoin::PromoteJoinSide(std::move(join.children[0]), std::move(join.left_projection_map));
+		return true;
 	case JoinType::LEFT:
 		// anti/left outer join: replace right side with empty node
 		ReplaceWithEmptyResult(join.children[1]);
@@ -46,13 +46,32 @@ bool StatisticsPropagator::HandleJoinNeverMatches(LogicalJoin &join, unique_ptr<
 	}
 }
 
+//! Appends the columns of a join side that the join emits to the projection map of its replacement
+static void AddProjectedColumns(vector<ProjectionIndex> &result, const vector<ProjectionIndex> &projection_map,
+                                idx_t column_count, idx_t offset) {
+	if (projection_map.empty()) {
+		for (idx_t column_idx = 0; column_idx < column_count; column_idx++) {
+			result.emplace_back(offset + column_idx);
+		}
+		return;
+	}
+	for (auto &column_idx : projection_map) {
+		result.emplace_back(offset + column_idx.GetIndex());
+	}
+}
+
 bool StatisticsPropagator::HandleJoinAlwaysMatches(LogicalJoin &join, unique_ptr<LogicalOperator> &node_ptr) {
 	switch (join.join_type) {
 	case JoinType::RIGHT_SEMI:
 	case JoinType::SEMI: {
+		auto &emitted_projection_map =
+		    join.join_type == JoinType::RIGHT_SEMI ? join.right_projection_map : join.left_projection_map;
 		if (join.join_type == JoinType::RIGHT_SEMI) {
 			std::swap(join.children[0], join.children[1]);
 		}
+		// the cross product also emits the columns of the other side: project them out again
+		vector<ProjectionIndex> projection_map;
+		AddProjectedColumns(projection_map, emitted_projection_map, join.children[0]->GetColumnBindings().size(), 0);
 		// when the right child has no data, return an empty set
 		// cannot just return the left child because if the right child has no cardinality
 		// then the whole result should be empty.
@@ -63,14 +82,21 @@ bool StatisticsPropagator::HandleJoinAlwaysMatches(LogicalJoin &join, unique_ptr
 		limit->AddChild(std::move(join.children[1]));
 		auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
 		cross_product->SetEstimatedCardinality(join.estimated_cardinality);
-		node_ptr = std::move(cross_product);
+		node_ptr = LogicalJoin::PromoteJoinSide(std::move(cross_product), std::move(projection_map));
 		return true;
 	}
 	case JoinType::INNER: {
-		// inner, replace with cross product
+		// inner, replace with cross product - keeping the columns that the join emits
+		vector<ProjectionIndex> projection_map;
+		if (!join.left_projection_map.empty() || !join.right_projection_map.empty()) {
+			auto left_count = join.children[0]->GetColumnBindings().size();
+			AddProjectedColumns(projection_map, join.left_projection_map, left_count, 0);
+			AddProjectedColumns(projection_map, join.right_projection_map, join.children[1]->GetColumnBindings().size(),
+			                    left_count);
+		}
 		auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(join.children[1]));
 		cross_product->SetEstimatedCardinality(join.estimated_cardinality);
-		node_ptr = std::move(cross_product);
+		node_ptr = LogicalJoin::PromoteJoinSide(std::move(cross_product), std::move(projection_map));
 		return true;
 	}
 	default:
@@ -213,8 +239,12 @@ void StatisticsPropagator::MultiplyCardinalities(unique_ptr<NodeStatistics> &sta
 		return;
 	}
 	stats->estimated_cardinality = MaxValue<idx_t>(stats->estimated_cardinality, new_stats.estimated_cardinality);
-	auto new_max = Hugeint::Multiply(NumericCast<int64_t>(stats->max_cardinality),
-	                                 NumericCast<int64_t>(new_stats.max_cardinality));
+	hugeint_t new_max;
+	if (!Hugeint::TryMultiply(Hugeint::Convert(stats->max_cardinality), Hugeint::Convert(new_stats.max_cardinality),
+	                          new_max)) {
+		stats = nullptr;
+		return;
+	}
 	if (new_max < NumericLimits<int64_t>::Maximum()) {
 		int64_t result;
 		if (!Hugeint::TryCast<int64_t>(new_max, result)) {
@@ -348,6 +378,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalPosi
 void StatisticsPropagator::CreateFilterFromJoinStats(unique_ptr<LogicalOperator> &child, unique_ptr<Expression> &expr,
                                                      const BaseStatistics &stats_before,
                                                      const BaseStatistics &stats_after) {
+	// Defer join-derived filters until after join ordering.
+	if (mode != StatisticsPropagationMode::FULL) {
+		return;
+	}
 	// Only do this for integral colref's that have stats
 	if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF || !expr->GetReturnType().IsIntegral() ||
 	    !NumericStats::HasMinMax(stats_before) || !NumericStats::HasMinMax(stats_after)) {

@@ -1,3 +1,4 @@
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -216,7 +217,8 @@ BoundStatement Binder::BindDescribeTable(ShowRef &ref) {
 	} else {
 		sql = PragmaShow(ref.GetTableName().GetIdentifierName());
 	}
-	auto select = CreateViewInfo::ParseSelect(sql);
+	auto parser = Parser::GetBuiltinParser();
+	auto select = CreateViewInfo::ParseSelect(parser, sql);
 	auto subquery = make_uniq<SubqueryRef>(std::move(select));
 	return Bind(*subquery);
 }
@@ -273,6 +275,9 @@ static void WarnShowDescribesQuery(ClientContext &context) {
 BoundStatement Binder::BindShow(ShowRef &ref) {
 	BoundStatement result;
 	if (ref.GetTableName().empty()) {
+		if (!ref.query) {
+			throw BinderException("SHOW requires a setting name, a table name or a query");
+		}
 		// "SHOW (SELECT ...)": describe the columns of the query. Deprecated in favor of DESCRIBE, and not affected
 		// by show_behavior (a parenthesized query is neither a setting nor a named table).
 		WarnShowDescribesQuery(context);

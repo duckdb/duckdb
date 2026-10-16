@@ -2,6 +2,7 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/interpolate.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/function/window/window_aggregator.hpp"
 #include "duckdb/function/window/window_collection.hpp"
@@ -149,8 +150,15 @@ public:
 
 	WindowValueStreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
 	    : wexpr(wexpr), vec(GetFirstValue(client, input, wexpr), count_t(STANDARD_VECTOR_SIZE)),
-	      sel(STANDARD_VECTOR_SIZE), eval(client), arg(wexpr.GetChildren()[0]->GetReturnType()) {
+	      sel(STANDARD_VECTOR_SIZE), eval(client) {
 		eval.AddExpression(*wexpr.GetChildren()[0]);
+		arg_chunk.Initialize(client, {wexpr.GetChildren()[0]->GetReturnType()});
+	}
+
+	Vector &EvalArg(DataChunk &input) {
+		arg_chunk.Reset();
+		eval.Execute(input, arg_chunk);
+		return arg_chunk.data[0];
 	}
 
 	const BoundWindowExpression &wexpr;
@@ -160,8 +168,8 @@ public:
 	SelectionVector sel;
 	//! An executor for computing the argument
 	ExpressionExecutor eval;
-	//! A reusable argument vector
-	Vector arg;
+	//! A reusable argument chunk
+	DataChunk arg_chunk;
 };
 
 //===--------------------------------------------------------------------===//
@@ -179,6 +187,9 @@ struct WindowValueExecutor {
 	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
 
 	//! Streaming APIs
+	static bool ArgumentIsStreamable(const BoundWindowExpression &wexpr) {
+		return !wexpr.IsVolatile();
+	}
 	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
 	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowValueStreamingState>(client, input, wexpr);
@@ -361,6 +372,9 @@ public:
 				return false;
 			}
 			offset = bigint_value->GetValue<int64_t>();
+			if (offset == NumericLimits<int64_t>::Minimum()) {
+				return false;
+			}
 		}
 
 		//	We can only support LEAD and LAG values within one standard vector
@@ -528,6 +542,9 @@ public:
 			if (!WindowLeadLagStreamingState::ComputeOffset(client, wexpr, offset)) {
 				return false;
 			}
+			if (offset < 0 && !ArgumentIsStreamable(wexpr)) {
+				return false;
+			}
 
 			return UnsafeNumericCast<idx_t>(std::abs(offset)) < max_delta;
 		}
@@ -612,6 +629,19 @@ unique_ptr<LocalSinkState> WindowLeadLagExecutor::GetLocal(ExecutionContext &con
 	return make_uniq<WindowLeadLagLocalState>(context, glstate);
 }
 
+//! The index of the row at the offset - saturated if it does not fit, as it is outside the partition anyway
+static int64_t LeadLagIndex(ExpressionType type, int64_t row_idx, int64_t offset) {
+	int64_t result;
+	if (type == ExpressionType::WINDOW_LEAD) {
+		if (!TryAddOperator::Operation(row_idx, offset, result)) {
+			result = offset < 0 ? NumericLimits<int64_t>::Minimum() : NumericLimits<int64_t>::Maximum();
+		}
+	} else if (!TrySubtractOperator::Operation(row_idx, offset, result)) {
+		result = offset < 0 ? NumericLimits<int64_t>::Maximum() : NumericLimits<int64_t>::Minimum();
+	}
+	return result;
+}
+
 void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
                                     idx_t row_idx, OperatorSinkInput &sink) {
 	auto &glstate = sink.global_state.Cast<WindowLeadLagGlobalState>();
@@ -652,12 +682,7 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 			frame = FrameBounds(frame_begin[i], MaxValue(frame_end[i], frame_begin[i]));
 			const auto own_row = glstate.row_tree->Rank(frame.start, frame.end, row_idx) - 1;
 			// (2) adjust the row number by adding or subtracting an offset
-			auto val_idx = NumericCast<int64_t>(own_row);
-			if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
-				val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
-			} else {
-				val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
-			}
+			const auto val_idx = LeadLagIndex(wexpr.GetExpressionType(), NumericCast<int64_t>(own_row), offset);
 			const auto frame_width = NumericCast<int64_t>(frame.end - frame.start);
 			if (val_idx >= 0 && val_idx < frame_width) {
 				// (3) find the row at that offset
@@ -711,12 +736,7 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 			}
 			offset = leadlag_offset.GetCell<int64_t>(i);
 		}
-		int64_t val_idx = (int64_t)row_idx;
-		if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
-			val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
-		} else {
-			val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
-		}
+		auto val_idx = LeadLagIndex(wexpr.GetExpressionType(), NumericCast<int64_t>(row_idx), offset);
 
 		idx_t delta = 0;
 		if (val_idx < (int64_t)row_idx) {
@@ -783,6 +803,9 @@ struct WindowFirstValueExecutor : public WindowValueExecutor {
 
 	//! Streaming APIs
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		if (!ArgumentIsStreamable(wexpr)) {
+			return false;
+		}
 		if (wexpr.IgnoreNulls()) {
 			// We can stream first values ignoring NULLs if they are "running totals"
 			return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
@@ -809,9 +832,7 @@ void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &
 	// then look for a non-NULL value and update it
 	if (wexpr.IgnoreNulls() && ConstantVector::IsNull(sstate.vec)) {
 		//	Find the first non-NULL value
-		auto &executor = sstate.eval;
-		auto &arg = sstate.arg;
-		executor.ExecuteExpression(input, arg);
+		auto &arg = sstate.EvalArg(input);
 		UnifiedVectorFormat unified;
 		arg.ToUnifiedFormat(unified);
 		const auto &validity = unified.validity;
@@ -914,6 +935,9 @@ struct WindowLastValueExecutor : public WindowValueExecutor {
 
 	//! Streaming APIs
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		if (!ArgumentIsStreamable(wexpr)) {
+			return false;
+		}
 		// We can stream last values if they are "running totals"
 		return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
 		       wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
@@ -931,8 +955,7 @@ void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &i
 	auto &executor = sstate.eval;
 	if (wexpr.IgnoreNulls()) {
 		auto &prev = sstate.vec;
-		auto &arg = sstate.arg;
-		executor.ExecuteExpression(input, arg);
+		auto &arg = sstate.EvalArg(input);
 		UnifiedVectorFormat unified;
 		arg.ToUnifiedFormat(unified);
 		const auto &validity = unified.validity;
@@ -943,7 +966,7 @@ void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &i
 			Vector copy(wexpr.GetChildren()[0]->GetReturnType());
 			VectorOperations::Copy(arg, copy, count, 0, 0);
 			//	Overwrite the previous non-NULL value if the first one is NULL
-			if (!validity.RowIsValidUnsafe(0)) {
+			if (!validity.RowIsValidUnsafe(unified.sel->get_index(0))) {
 				VectorOperations::Copy(prev, copy, 1, 0, 0);
 			}
 			//	Select appropriate the non-NULL values to copy over
@@ -1078,6 +1101,9 @@ struct WindowNthValueExecutor : public WindowValueExecutor {
 
 	//! Streaming APIs
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		if (!ArgumentIsStreamable(wexpr)) {
+			return false;
+		}
 		// We can only stream Nth Value if N is positive constant.
 		idx_t nth_index;
 		if (!WindowNthValueStreamingState::ComputeNthIndex(client, wexpr, nth_index)) {
@@ -1112,7 +1138,7 @@ void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChu
 		return;
 	}
 
-	eval.ExecuteExpression(input, arg);
+	auto &arg = EvalArg(input);
 
 	UnifiedVectorFormat unified;
 	arg.ToUnifiedFormat(unified);
@@ -1312,7 +1338,10 @@ struct TryExtrapolateOperator {
 	template <typename T>
 	static bool Operation(const T &lo, const double d, const T &hi, T &result) {
 		if (lo > hi) {
-			return Operation<T>(hi, -d, lo, result);
+			//	Swap the endpoints to keep the offset positive.
+			//	The slope in the exchanged frame is (1 - d), not (-d):
+			//	lo + d*(hi - lo) == hi + (1 - d)*(lo - hi)
+			return Operation<T>(hi, 1 - d, lo, result);
 		}
 		const auto delta = LossyNumericCast<double>(hi) - LossyNumericCast<double>(lo);
 		T offset;
@@ -1372,6 +1401,20 @@ static void FillInterpolateFunc(Vector &result, idx_t i, WindowCursor &cursor, i
 	}
 
 	FlatVector::SetNull(result, i, false);
+	if constexpr (std::is_integral<T>::value) {
+		//	The interpolated value lies between the two values, but the double result can round past them
+		const auto lo = MinValue(y0, y1);
+		const auto hi = MaxValue(y0, y1);
+		const auto interpolated = static_cast<double>(y0) + (static_cast<double>(y1) - static_cast<double>(y0)) * slope;
+		if (interpolated <= static_cast<double>(lo)) {
+			data[i] = lo;
+		} else if (interpolated >= static_cast<double>(hi)) {
+			data[i] = hi;
+		} else {
+			data[i] = static_cast<T>(interpolated);
+		}
+		return;
+	}
 	data[i] = InterpolateOperator::Operation<T>(y0, slope, y1);
 }
 
@@ -1403,6 +1446,76 @@ static fill_interpolate_t GetFillInterpolateFunction(const LogicalType &type) {
 		return FillInterpolateFunc<double>;
 	default:
 		throw InternalException("Unsupported FILL interpolation type.");
+	}
+}
+
+//	Interpolation and extrapolation only check the physical type for overflow,
+//	so the results still need to be checked against the range of the logical type
+typedef bool (*fill_validate_t)(Vector &result, idx_t i, const LogicalType &type);
+
+template <int64_t MAX_VALUE>
+static bool FillValidateTime(Vector &result, idx_t i, const LogicalType &type) {
+	const auto value = FlatVector::GetData<int64_t>(result)[i];
+	return value >= 0 && value <= MAX_VALUE;
+}
+
+template <typename T>
+static bool FillValidateDecimal(Vector &result, idx_t i, const LogicalType &type) {
+	const auto value = FlatVector::GetData<T>(result)[i];
+	T limit;
+	if (!TryCast::Operation(Hugeint::POWERS_OF_TEN[DecimalType::GetWidth(type)], limit)) {
+		return true;
+	}
+	return value < limit && value > -limit;
+}
+
+template <typename T>
+static bool FillValidateFinite(Vector &result, idx_t i, const LogicalType &type) {
+	return Value::IsFinite(FlatVector::GetData<T>(result)[i]);
+}
+
+template <int64_t FACTOR>
+static bool FillValidateScaledTimestamp(Vector &result, idx_t i, const LogicalType &type) {
+	//	the value must be representable in microseconds
+	int64_t micros;
+	if (!TryMultiplyOperator::Operation(FlatVector::GetData<int64_t>(result)[i], FACTOR, micros)) {
+		return false;
+	}
+	return Value::IsFinite(timestamp_t(micros));
+}
+
+static fill_validate_t GetFillValidateFunction(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::TIME:
+		return FillValidateTime<Interval::MICROS_PER_DAY>;
+	case LogicalTypeId::TIME_NS:
+		return FillValidateTime<Interval::MICROS_PER_DAY * Interval::NANOS_PER_MICRO>;
+	case LogicalTypeId::DATE:
+		return FillValidateFinite<date_t>;
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return FillValidateFinite<timestamp_t>;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return FillValidateScaledTimestamp<Interval::MICROS_PER_SEC>;
+	case LogicalTypeId::TIMESTAMP_MS:
+		return FillValidateScaledTimestamp<Interval::MICROS_PER_MSEC>;
+	case LogicalTypeId::DECIMAL:
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return FillValidateDecimal<int16_t>;
+		case PhysicalType::INT32:
+			return FillValidateDecimal<int32_t>;
+		case PhysicalType::INT64:
+			return FillValidateDecimal<int64_t>;
+		case PhysicalType::INT128:
+			return FillValidateDecimal<hugeint_t>;
+		default:
+			throw InternalException("Unsupported FILL decimal type.");
+		}
+	default:
+		return nullptr;
 	}
 }
 
@@ -1521,7 +1634,8 @@ void WindowFillExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpres
 	if (arg_order_idx.empty()) {
 		//	We use the range ordering, even if it has not been defined
 		if (executor.range_idx == DConstants::INVALID_INDEX) {
-			D_ASSERT(wexpr.OrderBy().size() == 1);
+			// the first ordering - also when it is shared with an argument ordering that is a prefix of the orderings
+			D_ASSERT(!wexpr.OrderBy().empty());
 			//	We don't need the validity mask because we have also requested the valid range for the ordering.
 			executor.range_idx = shared.RegisterCollection(wexpr.OrderBy()[0].expression, false);
 		}
@@ -1643,7 +1757,15 @@ void WindowFillExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 	idx_t next_valid = DConstants::INVALID_INDEX;
 
 	const auto &wexpr = gfstate.executor.wexpr;
-	auto interpolate_func = GetFillInterpolateFunction(wexpr.GetChildren()[0]->GetReturnType());
+	const auto &fill_type = wexpr.GetChildren()[0]->GetReturnType();
+	auto interpolate_func = GetFillInterpolateFunction(fill_type);
+	auto validate_func = GetFillValidateFunction(fill_type);
+	auto interpolate = [&](idx_t i, idx_t lo, idx_t hi, double slope) {
+		interpolate_func(result, i, cursor, lo, hi, slope);
+		if (validate_func && FlatVector::Validity(result).RowIsValid(i) && !validate_func(result, i, fill_type)) {
+			FlatVector::SetNull(result, i, true);
+		}
+	};
 	auto value_func = GetFillValueFunction(wexpr.GetChildren()[0]->GetReturnType());
 
 	//	Secondary sort - use the MSTs
@@ -1754,7 +1876,7 @@ void WindowFillExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 			//	Two values, so interpolate
 			//	y = y0 + (y1 - y0) / (x1 - x0) * (x - x0)
 			const auto slope = slope_func(order_cursor, row_idx, prev_valid, next_valid);
-			interpolate_func(result, i, cursor, prev_valid, next_valid, slope);
+			interpolate(i, prev_valid, next_valid, slope);
 		}
 		return;
 	}
@@ -1862,7 +1984,7 @@ void WindowFillExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 		//	Two values, so interpolate
 		//	y = y0 + (y1 - y0) / (x1 - x0) * (x - x0)
 		const auto slope = slope_func(order_cursor, row_idx, prev_valid, next_valid);
-		interpolate_func(result, i, cursor, prev_valid, next_valid, slope);
+		interpolate(i, prev_valid, next_valid, slope);
 	}
 }
 

@@ -20,14 +20,22 @@
 
 namespace duckdb {
 
-Connection::Connection(DatabaseInstance &database)
+Connection::Connection(DatabaseInstance &database) : Connection(database, ConnectionType::USER) {
+}
+
+Connection::Connection(DatabaseInstance &database, ConnectionType connection_type)
     : context(make_shared_ptr<ClientContext>(database.shared_from_this())) {
+	context->connection_type = connection_type;
 	auto &connection_manager = ConnectionManager::Get(database);
 	connection_manager.AssignConnectionId(*this);
 	connection_manager.AddConnection(*context);
 }
 
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
+}
+
+Connection Connection::CreateInternal(DatabaseInstance &database) {
+	return Connection(database, ConnectionType::INTERNAL);
 }
 
 Connection::Connection(Connection &&other) noexcept {
@@ -82,10 +90,12 @@ unique_ptr<QueryResult> Connection::Query(const string &query) {
 	return context->Query(query, QueryParameters());
 }
 
-unique_ptr<QueryResult> Connection::Query(unique_ptr<SQLStatement> statement, QueryResultMemoryType memory_type) {
-	QueryParameters query_parameters;
-	query_parameters.memory_type = memory_type;
-	return context->Query(std::move(statement), query_parameters);
+unique_ptr<QueryResult> Connection::Query(unique_ptr<SQLStatement> statement, shared_ptr<ResultFormat> format) {
+	return context->Query(std::move(statement), std::move(format));
+}
+
+unique_ptr<QueryResult> Connection::Query(const string &query, shared_ptr<ResultFormat> format) {
+	return context->Query(query, std::move(format));
 }
 
 unique_ptr<QueryResult> Connection::Submit(const string &query, const QueryParameters &query_parameters) {
@@ -95,6 +105,14 @@ unique_ptr<QueryResult> Connection::Submit(const string &query, const QueryParam
 unique_ptr<QueryResult> Connection::Submit(unique_ptr<SQLStatement> statement,
                                            const QueryParameters &query_parameters) {
 	return context->Submit(std::move(statement), query_parameters);
+}
+
+unique_ptr<QueryResult> Connection::Submit(const string &query, shared_ptr<ResultFormat> format) {
+	return context->Submit(query, std::move(format));
+}
+
+unique_ptr<QueryResult> Connection::Submit(unique_ptr<SQLStatement> statement, shared_ptr<ResultFormat> format) {
+	return context->Submit(std::move(statement), std::move(format));
 }
 
 unique_ptr<QueryResult> Connection::Submit(const string &query, identifier_map_t<BoundParameterData> &named_values,
@@ -141,8 +159,6 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 	auto named_params = ConvertParamListToMap(values);
 	QueryParameters parameters;
 	parameters.statement_args = named_params;
-	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
-	parameters.result_eagerness = ResultEagerness::FORCED;
 	return context->Query(query, parameters);
 }
 
@@ -160,15 +176,17 @@ unique_ptr<TableDescription> Connection::TableInfo(const Identifier &table_name)
 }
 
 vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &query) {
-	// Eager convenience over the lazy ClientContext::ExtractStatements iterator: drain the
-	// engine-facing statements into a vector.
 	auto &client_context = *context;
-	auto iterator = client_context.IterateStatements(query);
 	vector<unique_ptr<SQLStatement>> result;
-	while (iterator.Peek()) {
-		if (auto statement = iterator.GetStatement()) {
-			result.push_back(std::move(statement));
+	try {
+		auto iterator = client_context.IterateStatements(query);
+		while (iterator.Peek()) {
+			result.push_back(iterator.GetStatement());
 		}
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		client_context.ProcessError(error, query);
+		error.Throw();
 	}
 	return result;
 }
@@ -236,6 +254,13 @@ shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector
 	return make_shared_ptr<TableFunctionRelation>(context, fname, values, named_parameters);
 }
 
+shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values,
+                                               const named_parameter_map_t &named_parameters,
+                                               shared_ptr<TableFunctionInfo> bind_info) {
+	return make_shared_ptr<TableFunctionRelation>(context, fname, values, named_parameters, nullptr, true,
+	                                              std::move(bind_info));
+}
+
 shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values) {
 	return make_shared_ptr<TableFunctionRelation>(context, fname, values);
 }
@@ -283,7 +308,7 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 	named_parameter_map_t options;
 	child_list_t<Value> column_list;
 	for (auto &column : columns) {
-		auto col_list = Parser::ParseColumnList(column, context->GetParserOptions());
+		auto col_list = Parser(*context).ParseColumnList(column);
 		if (col_list.LogicalColumnCount() != 1) {
 			throw ParserException("Expected a single column definition");
 		}

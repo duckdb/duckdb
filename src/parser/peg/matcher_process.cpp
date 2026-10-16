@@ -21,8 +21,10 @@ optional<MatchInput> MatchStep::GetChild() {
 
 MatcherResult MatchStep::GetResult() const {
 	D_ASSERT(!child);
-	D_ASSERT(result);
-	return result.value();
+	if (!result) {
+		throw InternalException("Completed match step has no result");
+	}
+	return *result;
 }
 
 class AtomicMatchProcess : public MatchProcess {
@@ -50,7 +52,10 @@ arena_ptr<MatchProcess> AtomicMatcher::StartMatch(MatchState &state) const {
 class ListMatchProcess : public MatchProcess {
 public:
 	ListMatchProcess(const ListMatcher &matcher_p, MatchState &state_p)
-	    : matcher(matcher_p), state(state_p), list_state(state_p) {
+	    : matcher(matcher_p), state(state_p), list_state(state_p), results(state_p.context.process_allocator) {
+		if (state_p.BuildParseResult()) {
+			results.reserve(matcher_p.matchers.size());
+		}
 		saved_suggestion_size = matcher.suppress_suggestions ? list_state.context.suggestions.size() : 0;
 		if (auto current = list_state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
@@ -66,22 +71,23 @@ public:
 				return MatchStep::Complete(MatcherResult::Failure());
 			}
 			if (child_result->HasParseResult()) {
-				results.push_back(*child_result->GetParseResult());
+				results.emplace_back(*child_result->GetParseResult());
 			}
 			child_index++;
 		}
 		while (child_index < matcher.matchers.size()) {
+			auto &child_matcher = matcher.matchers[child_index].get();
 			auto current = list_state.token_iterator.Current();
 			bool at_autocomplete_cursor = current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
 			if (!at_autocomplete_cursor) {
 				awaiting_child = true;
-				return MatchStep::Child({matcher.matchers[child_index].get(), list_state});
+				return MatchStep::Child({child_matcher, list_state});
 			}
 			if (matcher.suppress_suggestions) {
 				DiscardSuggestions();
 				return MatchStep::Complete(MatcherResult::Failure());
 			}
-			if (matcher.matchers[child_index].get().AddSuggestion(list_state) == SuggestionType::OPTIONAL) {
+			if (child_matcher.AddSuggestion(list_state) == SuggestionType::OPTIONAL) {
 				child_index++;
 				continue;
 			}
@@ -90,12 +96,48 @@ public:
 		}
 		state.token_iterator.SetPosition(list_state.token_iterator);
 		DiscardSuggestions();
-		auto list_name = matcher.HasName() ? matcher.GetName() : string();
-		return MatchStep::Complete(
-		    state.AllocateParseResult<ListParseResult>(std::move(results), std::move(list_name), start_offset));
+		if (matcher.IsCollapsible()) {
+			auto collapsible = FindCollapsibleResult();
+			if (collapsible) {
+				collapsible->collapsed = true;
+				return MatchStep::Complete(MatcherResult::Success(collapsible));
+			}
+		}
+		auto named_matcher = matcher.HasName() ? &matcher : nullptr;
+		return MatchStep::Complete(state.AllocateParseResult<ListParseResult>(
+		    state.context.allocator.MakeChildren(results), named_matcher, start_offset));
 	}
 
 private:
+	//! The child that can stand in for this rule's own result, or nullptr when the rule has to build one
+	optional_ptr<ParseResult> FindCollapsibleResult() const {
+		optional_ptr<ParseResult> collapsible;
+		for (auto &child : results) {
+			auto &child_result = child.get();
+			// an optional that matched nothing carries no value, so it does not stop the rule from collapsing
+			if (child_result.type == ParseResultType::OPTIONAL &&
+			    !child_result.Cast<OptionalParseResult>().HasResult()) {
+				continue;
+			}
+
+			// a second child with a result means the rule combines them rather than forwarding one of them
+			if (collapsible) {
+				return nullptr;
+			}
+
+			collapsible = child_result;
+		}
+
+		// only results that carry a rule of their own are collapsible into this one, since the result is
+		// transformed by that rule
+		if (collapsible && !collapsible->GetRule()) {
+			return nullptr;
+		}
+
+		// null when no child produced a result, so a rule that matched empty still gets a result of its own
+		return collapsible;
+	}
+
 	void DiscardSuggestions() {
 		if (!matcher.suppress_suggestions) {
 			return;
@@ -109,7 +151,7 @@ private:
 	const ListMatcher &matcher;
 	MatchState &state;
 	MatchState list_state;
-	vector<reference<ParseResult>> results;
+	arena_vector<reference<ParseResult>> results;
 	idx_t child_index = 0;
 	idx_t saved_suggestion_size = 0;
 	optional_idx start_offset;
@@ -134,9 +176,11 @@ public:
 		D_ASSERT(awaiting_child == child_result.has_value());
 		if (child_result) {
 			awaiting_child = false;
-			D_ASSERT(child_state);
+			if (!child_state) {
+				throw InternalException("Choice matcher child state is missing");
+			}
 			if (child_result->IsSuccess()) {
-				state.token_iterator.SetPosition(child_state.value().token_iterator);
+				state.token_iterator.SetPosition(child_state->token_iterator);
 				if (!child_result->HasParseResult()) {
 					return MatchStep::Complete(MatcherResult::Success());
 				}
@@ -219,7 +263,7 @@ arena_ptr<MatchProcess> OptionalMatcher::StartMatch(MatchState &state) const {
 class RepeatMatchProcess : public MatchProcess {
 public:
 	RepeatMatchProcess(const RepeatMatcher &matcher_p, MatchState &state_p)
-	    : matcher(matcher_p), state(state_p), repeat_state(state_p) {
+	    : matcher(matcher_p), state(state_p), repeat_state(state_p), results(state_p.context.process_allocator) {
 		if (auto current = repeat_state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
 		}
@@ -237,7 +281,7 @@ public:
 			}
 			matched_once = true;
 			if (child_result->HasParseResult()) {
-				results.push_back(*child_result->GetParseResult());
+				results.emplace_back(*child_result->GetParseResult());
 			}
 			state.token_iterator.SetPosition(repeat_state.token_iterator);
 			auto current = repeat_state.token_iterator.Current();
@@ -252,14 +296,15 @@ public:
 
 private:
 	MatcherResult CreateResult() {
-		return state.AllocateParseResult<RepeatParseResult>(std::move(results), start_offset);
+		return state.AllocateParseResult<RepeatParseResult>(state.context.allocator.MakeChildren(results),
+		                                                    start_offset);
 	}
 
 private:
 	const RepeatMatcher &matcher;
 	MatchState &state;
 	MatchState repeat_state;
-	vector<reference<ParseResult>> results;
+	arena_vector<reference<ParseResult>> results;
 	bool matched_once = false;
 	optional_idx start_offset;
 	bool awaiting_child = false;

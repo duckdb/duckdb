@@ -50,6 +50,9 @@ struct GroupingSetLevel {
 
 } // namespace
 
+//! The maximum number of grouping sets that are rewritten into separate aggregates
+static constexpr idx_t MAX_REWRITE_GROUPING_SETS = 1024;
+
 static bool CanRewriteAggregate(const BoundAggregateExpression &aggregate) {
 	if (aggregate.IsDistinct() || aggregate.GetOrderBys()) {
 		// DISTINCT / ORDER BY aggregates cannot be computed by combining states of a finer aggregation
@@ -192,9 +195,9 @@ bool GroupingSetsOptimizer::TryExpandGroupingSets(unique_ptr<LogicalOperator> &o
 	}
 
 	auto cte_name = Identifier(StringUtil::Format("__grouping_sets_input_cte_%llu", cte_index.index));
-	result = make_uniq<LogicalMaterializedCTE>(std::move(cte_name), cte_index, input_types.size(),
-	                                           std::move(op->children[0]), std::move(result),
-	                                           CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	auto input = LogicalProjection::CreateIdentity(optimizer.binder.GenerateTableIndex(), std::move(op->children[0]));
+	result = make_uniq<LogicalMaterializedCTE>(std::move(cte_name), cte_index, input_types.size(), std::move(input),
+	                                           std::move(result), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	if (aggr.has_estimated_cardinality) {
 		result->SetEstimatedCardinality(aggr.estimated_cardinality);
 	}
@@ -248,6 +251,10 @@ bool GroupingSetsOptimizer::TryRewriteGroupingSets(unique_ptr<LogicalOperator> &
 		if (!CanRewriteAggregate(expr->Cast<BoundAggregateExpression>())) {
 			can_cascade = false;
 		}
+	}
+	if (aggr.grouping_sets.size() > MAX_REWRITE_GROUPING_SETS) {
+		// the rewritten plan nests a materialized CTE per grouping set - leave large grouping sets to the aggregate
+		return false;
 	}
 	vector<GroupingSetLevel> levels;
 	if (!can_cascade || !FindCascade(aggr.grouping_sets, levels)) {

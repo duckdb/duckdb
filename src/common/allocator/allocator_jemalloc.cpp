@@ -75,6 +75,23 @@ optional_idx Allocator::DecayDelay() {
 	return NumericCast<idx_t>(DUCKDB_JEMALLOC_DECAY);
 }
 
+optional_idx Allocator::GetMappedMemory() const {
+	if (allocate_function != DefaultAllocate || free_function != DefaultFree ||
+	    reallocate_function != DefaultReallocate) {
+		return optional_idx();
+	}
+	uint64_t epoch = 1;
+	if (duckdb_je_mallctl("epoch", nullptr, nullptr, &epoch, sizeof(epoch)) != 0) {
+		return optional_idx();
+	}
+	size_t mapped = 0;
+	size_t mapped_size = sizeof(mapped);
+	if (duckdb_je_mallctl("stats.mapped", &mapped, &mapped_size, nullptr, 0) != 0) {
+		return optional_idx();
+	}
+	return optional_idx(mapped);
+}
+
 bool Allocator::SupportsFlush() {
 	return true;
 }

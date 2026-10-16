@@ -2,7 +2,6 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/parser/peg/keyword_helper/default_keyword_maps.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
 
 namespace duckdb {
@@ -14,7 +13,8 @@ static uint64_t NextLiteralTableId() {
 	return result;
 }
 
-GrammarLiteralTable::GrammarLiteralTable(const ParsedGrammar &grammar, const DefaultKeywordMaps &keyword_maps)
+GrammarLiteralTable::GrammarLiteralTable(const ParsedGrammar &grammar,
+                                         const case_insensitive_map_t<LiteralInfo> &keywords)
     : cache_id(NextLiteralTableId()) {
 	vector<reference<const PEGExpression>> pending;
 	for (auto &entry : grammar.rules) {
@@ -30,20 +30,12 @@ GrammarLiteralTable::GrammarLiteralTable(const ParsedGrammar &grammar, const Def
 			pending.push_back(child);
 		}
 	}
-	RegisterCategory(keyword_maps.reserved_keyword_map, PEGKeywordCategory::KEYWORD_RESERVED);
-	RegisterCategory(keyword_maps.unreserved_keyword_map, PEGKeywordCategory::KEYWORD_UNRESERVED);
-	RegisterCategory(keyword_maps.colname_keyword_map, PEGKeywordCategory::KEYWORD_COL_NAME);
-	RegisterCategory(keyword_maps.typefunc_keyword_map, PEGKeywordCategory::KEYWORD_TYPE_FUNC);
-	RegisterCategory(keyword_maps.typename_keyword_map, PEGKeywordCategory::KEYWORD_TYPE_NAME);
-}
-
-void GrammarLiteralTable::RegisterCategory(const case_insensitive_set_t &words, PEGKeywordCategory category) {
-	for (auto &word : words) {
-		Register(word, category);
+	for (auto &entry : keywords) {
+		Register(entry.first, entry.second.CategoryFlags());
 	}
 }
 
-void GrammarLiteralTable::Register(const string &text, PEGKeywordCategory category) {
+void GrammarLiteralTable::Register(const string &text, keyword_categories_t categories) {
 	auto entry = literals.find(text);
 	if (entry == literals.end()) {
 		if (literals.size() >= LiteralInfo::MAX_LITERAL_ID) {
@@ -52,7 +44,7 @@ void GrammarLiteralTable::Register(const string &text, PEGKeywordCategory catego
 		auto id = static_cast<uint16_t>(literals.size() + 1);
 		entry = literals.emplace(text, LiteralInfo(id)).first;
 	}
-	entry->second.AddCategory(category);
+	entry->second.AddCategories(categories);
 }
 
 } // namespace duckdb
