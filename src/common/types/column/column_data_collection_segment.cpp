@@ -9,6 +9,22 @@
 
 namespace duckdb {
 
+ColumnDataListChildBuffer::ColumnDataListChildBuffer(AllocatedData &&data, count_t count, idx_t type_size)
+    : StandardVectorBuffer(std::move(data), count, type_size) {
+	buffer_type = VectorBufferType::SHARED_DATA_BUFFER;
+	// the validity capacity must cover all entries, even while no mask is allocated (all-valid data)
+	validity.Resize(count);
+}
+
+ColumnDataListChildBuffer::ColumnDataListChildBuffer(buffer_ptr<VectorBuffer> owner_p, count_t count, idx_t type_size)
+    : StandardVectorBuffer(owner_p->GetData(), count, type_size), owner(std::move(owner_p)) {
+	D_ASSERT(owner->GetBufferType() == VectorBufferType::SHARED_DATA_BUFFER);
+	D_ASSERT(owner->Size() == count);
+	buffer_type = VectorBufferType::SHARED_DATA_BUFFER;
+	// share the owner's validity, including its capacity covering all entries
+	validity.Initialize(owner->GetValidityMask());
+}
+
 ColumnDataCollectionSegment::ColumnDataCollectionSegment(shared_ptr<ColumnDataAllocator> allocator_p,
                                                          vector<LogicalType> types_p)
     : allocator(std::move(allocator_p)), total_allocated(0), last_chunk_total_allocated(0), types(std::move(types_p)),
@@ -22,7 +38,40 @@ void ColumnDataCollectionSegment::Reset() {
 	chunk_data.clear();
 	vector_data.clear();
 	child_indices.clear();
+	shared_child_buffers.clear();
+	shared_child_allocation_size = 0;
 	heap->GetAllocator().Reset();
+}
+
+idx_t ColumnDataCollectionSegment::GetVectorCount(VectorDataIndex index) {
+	auto &vdata = GetVectorData(index);
+	if (vdata.is_shared_list_child) {
+		return GetSharedListChild(vdata)->Size();
+	}
+	return vdata.count;
+}
+
+VectorDataIndex ColumnDataCollectionSegment::AddSharedListChild(buffer_ptr<VectorBuffer> buffer,
+                                                                VectorDataIndex prev_index) {
+	D_ASSERT(buffer && buffer->GetBufferType() == VectorBufferType::SHARED_DATA_BUFFER);
+	VectorMetaData meta_data;
+	meta_data.block_id = 0;
+	meta_data.offset = NumericCast<uint32_t>(shared_child_buffers.size());
+	// mark the entry full so later appends continue on a fresh entry instead of writing into shared data
+	meta_data.count = STANDARD_VECTOR_SIZE;
+	meta_data.is_shared_list_child = true;
+	// buffers are commonly referenced many times in a row - avoid repeated accounting for those
+	if (shared_child_buffers.empty() || shared_child_buffers.back().get() != buffer.get()) {
+		shared_child_allocation_size += buffer->GetAllocationSize();
+	}
+	shared_child_buffers.push_back(std::move(buffer));
+
+	VectorDataIndex index(vector_data.size());
+	vector_data.push_back(std::move(meta_data));
+	if (prev_index.IsValid()) {
+		GetVectorData(prev_index).next_data = index;
+	}
+	return index;
 }
 
 idx_t ColumnDataCollectionSegment::GetDataSize(idx_t type_size) {
@@ -190,10 +239,17 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	auto type_size = GetTypeIdSize(internal_type);
 	auto &vdata = GetVectorData(vector_index);
 
-	auto base_ptr = allocator->GetDataPointer(state, vdata.block_id, vdata.offset);
-	auto validity_data = GetValidityPointer(base_ptr, type_size, vdata.count);
 	if (!vdata.next_data.IsValid() && state.properties != ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
+		if (vdata.is_shared_list_child) {
+			// a complete shared list child: reference the shared buffer through a scan-local view
+			auto &shared_buffer = GetSharedListChild(vdata);
+			auto shared_count = shared_buffer->Size();
+			result.SetBuffer(make_buffer<ColumnDataListChildBuffer>(shared_buffer, count_t(shared_count), type_size));
+			return shared_count;
+		}
 		// no next data, we can do a zero-copy read of this vector
+		auto base_ptr = allocator->GetDataPointer(state, vdata.block_id, vdata.offset);
+		auto validity_data = GetValidityPointer(base_ptr, type_size, vdata.count);
 		if (TypeHasData(result.GetType())) {
 			FlatVector::SetData(result, base_ptr, count_t(vdata.count));
 		}
@@ -208,9 +264,13 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	idx_t vector_count = 0;
 	auto next_index = vector_index;
 	while (next_index.IsValid()) {
-		auto &current_vdata = GetVectorData(next_index);
-		vector_count += current_vdata.count;
-		next_index = current_vdata.next_data;
+		vector_count += GetVectorCount(next_index);
+		next_index = GetVectorData(next_index).next_data;
+	}
+	// never materialize into a shared buffer - it may still be referenced by other owners
+	auto &result_buffer = result.GetBufferRef();
+	if (result_buffer && result_buffer->GetBufferType() == VectorBufferType::SHARED_DATA_BUFFER) {
+		result.SetBuffer(make_buffer<StandardVectorBuffer>(capacity_t(vector_count), type_size));
 	}
 	// resize the result vector
 	result.Reserve(vector_count);
@@ -221,8 +281,19 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	idx_t current_offset = 0;
 	while (next_index.IsValid()) {
 		auto &current_vdata = GetVectorData(next_index);
-		base_ptr = allocator->GetDataPointer(state, current_vdata.block_id, current_vdata.offset);
-		validity_data = GetValidityPointer(base_ptr, type_size, current_vdata.count);
+		if (current_vdata.is_shared_list_child) {
+			auto &shared_buffer = GetSharedListChild(current_vdata);
+			auto shared_count = shared_buffer->Size();
+			if (type_size > 0) {
+				memcpy(target_data + current_offset * type_size, shared_buffer->GetData(), shared_count * type_size);
+			}
+			target_validity.SliceInPlace(shared_buffer->GetValidityMask(), current_offset, 0, shared_count);
+			current_offset += shared_count;
+			next_index = current_vdata.next_data;
+			continue;
+		}
+		auto base_ptr = allocator->GetDataPointer(state, current_vdata.block_id, current_vdata.offset);
+		auto validity_data = GetValidityPointer(base_ptr, type_size, current_vdata.count);
 		if (type_size > 0) {
 			memcpy(target_data + current_offset * type_size, base_ptr, current_vdata.count * type_size);
 		}
@@ -306,12 +377,12 @@ idx_t ColumnDataCollectionSegment::ChunkCount() const {
 
 idx_t ColumnDataCollectionSegment::SizeInBytes() const {
 	D_ASSERT(!allocator->IsShared());
-	return allocator->SizeInBytes() + heap->SizeInBytes();
+	return allocator->SizeInBytes() + heap->SizeInBytes() + shared_child_allocation_size;
 }
 
 idx_t ColumnDataCollectionSegment::AllocationSize() const {
 	D_ASSERT(!allocator->IsShared());
-	return allocator->AllocationSize() + heap->AllocationSize();
+	return allocator->AllocationSize() + heap->AllocationSize() + shared_child_allocation_size;
 }
 
 idx_t ColumnDataCollectionSegment::GetChunkAllocationSize(const idx_t chunk_idx) const {
