@@ -1,0 +1,40 @@
+# name: test/sql/copy/parquet/parquet_hive_lateral_unnest_pushdown.test
+# description: Push outer filters through lateral UNNEST into a partitioned Parquet scan
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (
+    SELECT * FROM (VALUES
+        (1, 'a', [10, 20]),
+        (2, 'a', []::INTEGER[]),
+        (3, 'a', NULL::INTEGER[]),
+        (4, 'b', [30]),
+        (5, 'b', [NULL, 40])
+    ) t(i, part, xs)
+) TO '{TEST_DIR}/hive_lateral_unnest' (FORMAT parquet, PARTITION_BY(part))
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/hive_lateral_unnest/*/*.parquet', hive_partitioning=true) p,
+     UNNEST(xs) u(v)
+WHERE part = 'a'
+----
+2
+
+query II
+EXPLAIN SELECT count(*)
+FROM read_parquet('{TEST_DIR}/hive_lateral_unnest/*/*.parquet', hive_partitioning=true) p,
+     UNNEST(xs) u(v)
+WHERE part = 'a'
+----
+physical_plan	<REGEX>:.*File Filters:.*part = 'a'.*Scanning Files: 1/2.*
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/hive_lateral_unnest/*/*.parquet', hive_partitioning=true) p,
+     UNNEST(xs) u(v)
+WHERE part = 'b' AND v IS NULL
+----
+1
