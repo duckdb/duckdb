@@ -2,7 +2,8 @@
 # description: Views and macros with undeclared argument names stored by v1.x keep working after a storage upgrade
 # group: [storage]
 
-# legacy_named_arguments_v1.db was written by v1.5.6 with views/macros that pass names the functions do not declare
+# legacy_named_arguments_v1.db was written by v1.5.6 with views/macros that pass names the functions do not declare,
+# and with a view/macro that call struct_pack, which binds by name
 statement ok
 ATTACH 'test/sql/storage/legacy_named_arguments_v1.db' AS legacy (READ_ONLY);
 
@@ -52,3 +53,18 @@ query I
 SELECT m_add(-3)
 ----
 3
+
+# functions that bind by name keep their names
+query I
+SELECT s FROM v_struct_pack ORDER BY s.a
+----
+{'a': 0, 'b': 1}
+{'a': 1, 'b': 2}
+{'a': 2, 'b': 3}
+{'a': 3, 'b': 4}
+{'a': 4, 'b': 5}
+
+query I
+SELECT m_struct(42)
+----
+{'k': 42}
