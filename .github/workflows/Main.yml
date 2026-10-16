@@ -474,6 +474,7 @@ jobs:
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
       runners: ${{ needs.prepare.outputs.runners }}
+      prebuilt_source: workflow
 
  extensions-deploy:
     name: Deploy extensions
