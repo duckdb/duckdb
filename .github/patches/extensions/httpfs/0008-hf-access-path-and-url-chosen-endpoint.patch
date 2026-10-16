@@ -1,0 +1,213 @@
+diff --git a/src/hffs.cpp b/src/hffs.cpp
+index 5bb4faf..4a837f4 100644
+--- a/src/hffs.cpp
++++ b/src/hffs.cpp
+@@ -341,6 +341,8 @@ unique_ptr<HTTPFileHandle> HuggingFaceFileSystem::CreateHandle(const OpenFileInf
+ }
+ 
+ void HuggingFaceFileSystem::SetParams(HTTPFSParams &params, const string &path, optional_ptr<FileOpener> opener) {
++	// the file access settings apply to the hf path, not to the HTTP url it is sent to
++	params.access_path = path;
+ 	auto secret_manager = FileOpener::TryGetSecretManager(opener);
+ 	auto transaction = FileOpener::TryGetCatalogTransaction(opener);
+ 	if (secret_manager && transaction) {
+diff --git a/src/include/s3/s3_auth.hpp b/src/include/s3/s3_auth.hpp
+index d501526..46e67d0 100644
+--- a/src/include/s3/s3_auth.hpp
++++ b/src/include/s3/s3_auth.hpp
+@@ -49,6 +49,8 @@ struct S3AuthURLParams {
+ 	S3EndpointMode endpoint_mode = S3EndpointMode::AUTOMATIC;
+ 	S3URLStyle style = S3URLStyle::VIRTUAL_HOSTED;
+ 	bool compatibility_mode = false;
++	//! The URL's s3_endpoint parameter chose the host, instead of the configuration
++	bool endpoint_from_url = false;
+ 
+ 	bool operator==(const S3AuthURLParams &other) const;
+ };
+@@ -86,6 +88,7 @@ struct S3AuthConfig {
+ 	string url_style;
+ 	bool use_ssl = true;
+ 	bool compatibility_mode = false;
++	bool endpoint_from_url = false;
+ 
+ 	//! Request headers
+ 	S3AuthRequestOptions request_options;
+diff --git a/src/s3/s3_auth.cpp b/src/s3/s3_auth.cpp
+index 4189ba2..616920e 100644
+--- a/src/s3/s3_auth.cpp
++++ b/src/s3/s3_auth.cpp
+@@ -72,7 +72,7 @@ bool S3AuthCredentials::operator==(const S3AuthCredentials &other) const {
+ 
+ bool S3AuthURLParams::operator==(const S3AuthURLParams &other) const {
+ 	return endpoint == other.endpoint && endpoint_mode == other.endpoint_mode && style == other.style &&
+-	       compatibility_mode == other.compatibility_mode;
++	       compatibility_mode == other.compatibility_mode && endpoint_from_url == other.endpoint_from_url;
+ }
+ 
+ bool S3AuthRequestOptions::operator==(const S3AuthRequestOptions &other) const {
+@@ -224,7 +224,8 @@ S3AuthParams S3AuthResolver::Resolve(S3AuthConfig config, const string &file_pat
+ 	S3AuthParams result;
+ 	result.provider = S3Provider::Resolve(std::move(config.route), endpoint);
+ 	result.credentials = std::move(credentials);
+-	result.url = {std::move(endpoint), config.endpoint_mode, style, config.compatibility_mode};
++	result.url = {std::move(endpoint), config.endpoint_mode, style, config.compatibility_mode,
++	              config.endpoint_from_url};
+ 	result.request_options = std::move(request_options);
+ 	result.refresh_identity = {config.use_ssl};
+ 	if (result.request_options.sse_customer_key) {
+diff --git a/src/s3/s3_request.cpp b/src/s3/s3_request.cpp
+index f78aafc..ab167ea 100644
+--- a/src/s3/s3_request.cpp
++++ b/src/s3/s3_request.cpp
+@@ -535,8 +535,10 @@ S3RequestData S3RequestExecutor::CreateRequestData(EncryptionUtil &encryption_ut
+ 	result.captured = captured;
+ 	auto session_request = snapshot.CreateRequest();
+ 	result.http_params = std::move(session_request.params);
+-	// the file access settings apply to the S3 path, not to the HTTP url it is sent to
+-	result.http_params->access_path = spec.url;
++	// the file access settings apply to the S3 path, unless the url itself chose the host it is sent to
++	if (!result.auth_params.GetURLParams().endpoint_from_url) {
++		result.http_params->access_path = spec.url;
++	}
+ 	auto parsed_s3_url = S3Url::Parse(spec.url, result.auth_params);
+ 	auto &version = spec.object_version.IsSet() ? spec.object_version : parsed_s3_url.GetObjectVersion();
+ 	if (version.IsSet() && spec.operation != S3RequestOperation::HEAD_OBJECT &&
+diff --git a/src/s3/s3_url.cpp b/src/s3/s3_url.cpp
+index 57ec482..a02bec2 100644
+--- a/src/s3/s3_url.cpp
++++ b/src/s3/s3_url.cpp
+@@ -75,6 +75,7 @@ void S3Url::ReadQueryParams(const string &url_query_param, S3AuthConfig &config)
+ 	string endpoint;
+ 	if (GetQueryParam("s3_endpoint", endpoint, query_params)) {
+ 		config.endpoint = std::move(endpoint);
++		config.endpoint_from_url = true;
+ 		auto trimmed_endpoint = config.endpoint;
+ 		StringUtil::Trim(trimmed_endpoint);
+ 		config.endpoint_mode = trimmed_endpoint.empty() ? S3EndpointMode::AUTOMATIC : S3EndpointMode::EXPLICIT;
+diff --git a/test/sql/httpfs/external_access_file_system.test b/test/sql/httpfs/external_access_file_system.test
+new file mode 100644
+index 0000000..16080c9
+--- /dev/null
++++ b/test/sql/httpfs/external_access_file_system.test
+@@ -0,0 +1,121 @@
++# name: test/sql/httpfs/external_access_file_system.test
++# description: An allowed directory admits the requests httpfs makes for the paths under it
++# group: [httpfs]
++
++require httpfs
++
++statement ok
++SET allow_persistent_secrets = false;
++
++statement ok
++SET http_retries = 0;
++
++# the endpoint is a closed local port, so every request that is sent fails to connect
++statement ok
++CREATE SECRET (TYPE s3, KEY_ID 'k', SECRET 's', REGION 'us-east-1', ENDPOINT '127.0.0.1:9', URL_STYLE 'path', USE_SSL false);
++
++statement ok
++SET allowed_directories = ['s3://allowed-bucket/', 'http://127.0.0.1:10/', 'hf://datasets/allowed-user/allowed-dataset/'];
++
++# with external access on, a URL parameter can send the request to another endpoint
++statement error
++SELECT * FROM read_csv('s3://allowed-bucket/x.csv?s3_endpoint=127.0.0.1:11');
++----
++<REGEX>:.*IO Error.*http://127\.0\.0\.1:11/allowed-bucket/x\.csv.*
++
++statement ok
++SET enable_external_access = false;
++
++statement error
++SELECT * FROM read_csv('s3://allowed-bucket/x.csv');
++----
++<REGEX>:.*IO Error.*http://127\.0\.0\.1:9/allowed-bucket/x\.csv.*
++
++statement error
++SELECT * FROM glob('s3://allowed-bucket/*.csv');
++----
++<REGEX>:.*IO Error.*http://127\.0\.0\.1:9/allowed-bucket/.*
++
++statement error
++COPY (SELECT 42 AS i) TO 's3://allowed-bucket/out.csv';
++----
++<REGEX>:.*IO Error.*s3://allowed-bucket/out\.csv.*
++
++statement error
++SELECT * FROM read_csv('s3://other-bucket/x.csv');
++----
++Permission Error: Cannot access file "s3://other-bucket/x.csv" - file system operations are disabled by configuration
++
++statement error
++SELECT * FROM glob('s3://other-bucket/*.csv');
++----
++Permission Error: Cannot access file "s3://other-bucket/*.csv"
++
++statement error
++COPY (SELECT 42 AS i) TO 's3://other-bucket/out.csv';
++----
++Permission Error: Cannot access file "s3://other-bucket/out.csv"
++
++# when the URL chooses the endpoint, the request is checked as the url it is sent to, not as the S3 path
++statement error
++SELECT * FROM read_csv('s3://allowed-bucket/x.csv?s3_endpoint=127.0.0.1:11');
++----
++Permission Error: Cannot access "http://127.0.0.1:11/allowed-bucket/x.csv" - file system operations are disabled by configuration
++
++statement error
++SELECT * FROM read_csv('s3://allowed-bucket/x.csv?s3_endpoint=');
++----
++<REGEX>:Permission Error: Cannot access "http://s3[^"]*amazonaws\.com/allowed-bucket/x\.csv".*
++
++statement error
++SELECT * FROM glob('s3://allowed-bucket/*.csv?s3_endpoint=127.0.0.1:11');
++----
++<REGEX>:Permission Error: Cannot access "http://127\.0\.0\.1:11/allowed-bucket/.*
++
++statement error
++COPY (SELECT 42 AS i) TO 's3://allowed-bucket/out.csv?s3_endpoint=127.0.0.1:11';
++----
++<REGEX>:Permission Error: Cannot access "http://127\.0\.0\.1:11/allowed-bucket/out\.csv.*
++
++# an endpoint chosen by the URL is admitted when that url is allowed itself
++statement error
++SELECT * FROM read_csv('s3://allowed-bucket/x.csv?s3_endpoint=127.0.0.1:10');
++----
++<REGEX>:.*IO Error.*http://127\.0\.0\.1:10/allowed-bucket/x\.csv.*
++
++# other URL parameters still apply
++statement error
++SELECT * FROM read_csv('s3://allowed-bucket/x.csv?s3_region=us-west-2&s3_url_style=path&s3_use_ssl=false');
++----
++<REGEX>:.*IO Error.*http://127\.0\.0\.1:9/allowed-bucket/x\.csv.*
++
++# hf:// paths are sent to huggingface.co: the proxy is a closed local port, so the requests fail to connect
++statement ok
++SET http_proxy = '127.0.0.1:9';
++
++# no CA certificate bundle is readable under the restricted configuration, for either client
++statement ok
++SET enable_server_cert_verification = false;
++
++statement ok
++SET enable_curl_server_cert_verification = false;
++
++statement error
++SELECT * FROM read_csv('hf://datasets/allowed-user/allowed-dataset/x.csv');
++----
++<REGEX>:.*IO Error.*https://huggingface\.co/datasets/allowed-user/allowed-dataset/resolve/main/x\.csv.*
++
++statement error
++SELECT * FROM glob('hf://datasets/allowed-user/allowed-dataset/*.csv');
++----
++<REGEX>:.*IO Error.*https://huggingface\.co/api/datasets/allowed-user/allowed-dataset/tree/main.*
++
++statement error
++SELECT * FROM read_csv('hf://datasets/other-user/other-dataset/x.csv');
++----
++Permission Error: Cannot access file "hf://datasets/other-user/other-dataset/x.csv"
++
++statement error
++SELECT * FROM glob('hf://datasets/other-user/other-dataset/*.csv');
++----
++Permission Error: Cannot access file "hf://datasets/other-user/other-dataset/*.csv"
