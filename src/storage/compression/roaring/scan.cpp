@@ -39,7 +39,8 @@ uint16_t ContainerSegmentScan::operator++(int) {
 
 //! RunContainer
 
-RunContainerScanState::RunContainerScanState(idx_t container_index, idx_t container_size, idx_t count)
+template <class READER>
+RunContainerScanState<READER>::RunContainerScanState(idx_t container_index, idx_t container_size, idx_t count)
     : ContainerScanState(container_index, container_size), count(count) {
 }
 
@@ -49,7 +50,8 @@ UncompressedRunContainerScanState::UncompressedRunContainerScanState(idx_t conta
     : RunContainerScanState(container_index, container_size, count), data(data) {
 }
 
-void RunContainerScanState::ScanPartial(ValidityMask &result_mask, idx_t result_offset, idx_t to_scan) {
+template <class READER>
+void RunContainerScanState<READER>::ScanPartial(ValidityMask &result_mask, idx_t result_offset, idx_t to_scan) {
 	// This method assumes that the validity mask starts off as having all bits set for the entries that are being
 	// scanned.
 
@@ -86,7 +88,8 @@ void RunContainerScanState::ScanPartial(ValidityMask &result_mask, idx_t result_
 	scanned_count += to_scan;
 }
 
-void RunContainerScanState::Skip(idx_t to_skip) {
+template <class READER>
+void RunContainerScanState<READER>::Skip(idx_t to_skip) {
 	idx_t end = scanned_count + to_skip;
 	if (!run_index) {
 		LoadNextRun();
@@ -166,6 +169,9 @@ void CompressedRunContainerScanState::Verify() const {
 	}
 #endif
 }
+
+template struct RunContainerScanState<UncompressedRunContainerScanState>;
+template struct RunContainerScanState<CompressedRunContainerScanState>;
 
 //! BitsetContainer
 

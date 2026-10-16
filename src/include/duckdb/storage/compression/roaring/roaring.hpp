@@ -434,6 +434,7 @@ private:
 
 //! RUN Container
 
+template <class READER>
 struct RunContainerScanState : public ContainerScanState {
 public:
 	RunContainerScanState(idx_t container_index, idx_t container_size, idx_t count);
@@ -443,7 +444,9 @@ public:
 	void Skip(idx_t to_skip) override;
 
 protected:
-	virtual void LoadNextRun() = 0;
+	void LoadNextRun() {
+		static_cast<READER &>(*this).LoadNextRun();
+	}
 
 protected:
 	RunContainerRLEPair run;
@@ -452,7 +455,9 @@ protected:
 	idx_t count;
 };
 
-struct UncompressedRunContainerScanState : public RunContainerScanState {
+struct UncompressedRunContainerScanState : public RunContainerScanState<UncompressedRunContainerScanState> {
+	friend struct RunContainerScanState<UncompressedRunContainerScanState>;
+
 public:
 	UncompressedRunContainerScanState(idx_t container_index, idx_t container_size, idx_t count,
 	                                  unsafe_array_ptr<const RunContainerRLEPair> data);
@@ -461,19 +466,21 @@ public:
 	void Verify() const override;
 
 protected:
-	void LoadNextRun() override;
+	void LoadNextRun();
 
 private:
 	unsafe_array_ptr<const RunContainerRLEPair> data;
 };
 
-struct CompressedRunContainerScanState : public RunContainerScanState {
+struct CompressedRunContainerScanState : public RunContainerScanState<CompressedRunContainerScanState> {
+	friend struct RunContainerScanState<CompressedRunContainerScanState>;
+
 public:
 	CompressedRunContainerScanState(idx_t container_index, idx_t container_size, idx_t count,
 	                                unsafe_array_ptr<const uint8_t> segments, unsafe_array_ptr<const uint8_t> data);
 
 protected:
-	void LoadNextRun() override;
+	void LoadNextRun();
 	void Verify() const override;
 
 private:
@@ -484,7 +491,7 @@ private:
 
 //! ARRAY Container
 
-template <bool INVERTED>
+template <bool INVERTED, class READER>
 struct ArrayContainerScanState : public ContainerScanState {
 public:
 	ArrayContainerScanState(idx_t container_index, idx_t container_size, idx_t count)
@@ -492,7 +499,9 @@ public:
 	}
 
 public:
-	virtual void LoadNextValue() = 0;
+	void LoadNextValue() {
+		static_cast<READER &>(*this).LoadNextValue();
+	}
 
 public:
 	void ScanPartial(ValidityMask &result_mask, idx_t result_offset, idx_t to_scan) override {
@@ -548,15 +557,18 @@ protected:
 };
 
 template <bool INVERTED>
-struct UncompressedArrayContainerScanState : public ArrayContainerScanState<INVERTED> {
+struct UncompressedArrayContainerScanState
+    : public ArrayContainerScanState<INVERTED, UncompressedArrayContainerScanState<INVERTED>> {
 public:
 	UncompressedArrayContainerScanState(idx_t container_index, idx_t container_size, idx_t count,
 	                                    unsafe_array_ptr<const uint16_t> data)
-	    : ArrayContainerScanState<INVERTED>(container_index, container_size, count), data(data) {
+	    : ArrayContainerScanState<INVERTED, UncompressedArrayContainerScanState<INVERTED>>(container_index,
+	                                                                                       container_size, count),
+	      data(data) {
 	}
 
 public:
-	void LoadNextValue() override {
+	void LoadNextValue() {
 		if (this->array_index >= this->count) {
 			this->finished = true;
 			return;
@@ -580,17 +592,19 @@ private:
 };
 
 template <bool INVERTED>
-struct CompressedArrayContainerScanState : public ArrayContainerScanState<INVERTED> {
+struct CompressedArrayContainerScanState
+    : public ArrayContainerScanState<INVERTED, CompressedArrayContainerScanState<INVERTED>> {
 public:
 	CompressedArrayContainerScanState(idx_t container_index, idx_t container_size, idx_t count,
 	                                  unsafe_array_ptr<const uint8_t> segments, unsafe_array_ptr<const uint8_t> data)
-	    : ArrayContainerScanState<INVERTED>(container_index, container_size, count), data(data), segments(segments),
-	      segment(segments) {
+	    : ArrayContainerScanState<INVERTED, CompressedArrayContainerScanState<INVERTED>>(container_index,
+	                                                                                     container_size, count),
+	      data(data), segments(segments), segment(segments) {
 		D_ASSERT(count >= COMPRESSED_ARRAY_THRESHOLD);
 	}
 
 public:
-	void LoadNextValue() override {
+	void LoadNextValue() {
 		if (this->array_index >= this->count) {
 			this->finished = true;
 			return;
