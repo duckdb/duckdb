@@ -1,0 +1,192 @@
+# name: test/sql/storage/fetch_consecutive_rows.test
+# description: Fetching a full vector of consecutive row ids decodes it with one scan; index maintenance and row id fetches stay correct
+# group: [storage]
+
+load __TEST_DIR__/fetch_consecutive_rows.db
+
+statement ok
+SET GLOBAL checkpoint_threshold = '10GB';
+
+# Keys over several row groups: a delta-encoded integer, strings past the inline length and past the
+# overflow limit, and NULLs in a non-key column.
+statement ok
+CREATE TABLE t (id BIGINT PRIMARY KEY, s VARCHAR UNIQUE, d DATE, v INTEGER);
+
+statement ok
+CREATE MACRO fill(lo, hi) AS TABLE
+SELECT i, CASE WHEN i % 1000 = 0 THEN repeat('x', 5000) || i ELSE 'string_value_' || i END,
+       DATE '2026-01-01' + (i % 365)::INTEGER, CASE WHEN i % 7 = 0 THEN NULL ELSE i END
+FROM range(lo, hi) r(i);
+
+statement ok
+INSERT INTO t SELECT * FROM fill(0, 300000);
+
+# Uncheckpointed data: delete everything, then every key must be insertable again.
+statement ok
+BEGIN;
+
+statement ok
+DELETE FROM t;
+
+statement ok
+COMMIT;
+
+statement ok
+INSERT INTO t SELECT * FROM fill(0, 300000);
+
+query I
+SELECT count(*) FROM t;
+----
+300000
+
+statement error
+INSERT INTO t VALUES (5, 'dup', NULL, NULL);
+----
+Duplicate key
+
+# Checkpointed (compressed) data, with another transaction open during the commit: the removed keys go
+# through deleted_rows_in_use and the deferred cleanup.
+statement ok
+CHECKPOINT;
+
+statement ok con2
+BEGIN;
+
+query I con2
+SELECT count(*) FROM t;
+----
+300000
+
+statement ok con1
+DELETE FROM t;
+
+query I con2
+SELECT count(*) FROM t;
+----
+300000
+
+statement ok con2
+COMMIT;
+
+statement ok con1
+INSERT INTO t SELECT * FROM fill(0, 300000);
+
+query I con1
+SELECT count(*) FROM t;
+----
+300000
+
+statement ok con1
+CHECKPOINT;
+
+# A contiguous range across row groups.
+statement ok con1
+DELETE FROM t WHERE id BETWEEN 1000 AND 200000;
+
+statement error con1
+INSERT INTO t VALUES (5, 'dup', NULL, NULL);
+----
+Duplicate key
+
+statement ok con1
+INSERT INTO t SELECT * FROM fill(1000, 200001);
+
+query I con1
+SELECT count(*) FROM t;
+----
+300000
+
+statement ok con1
+CHECKPOINT;
+
+# Several runs per vector: every vector loses its rows in runs of 32.
+statement ok con1
+DELETE FROM t WHERE id % 64 < 32;
+
+statement error con1
+INSERT INTO t VALUES (40, 'dup', NULL, NULL);
+----
+Duplicate key
+
+statement ok con1
+INSERT INTO t SELECT * FROM fill(0, 300000) WHERE i % 64 < 32;
+
+query I con1
+SELECT count(*) FROM t;
+----
+300000
+
+statement ok con1
+CHECKPOINT;
+
+# An UPDATE of the key runs as delete plus insert and fetches whole vectors of every column by row id,
+# including a column with an uncommitted in-place update, which has to take the per-row path.
+statement ok con1
+BEGIN;
+
+statement ok con1
+UPDATE t SET v = -1 WHERE id BETWEEN 100 AND 2100;
+
+statement ok con1
+UPDATE t SET id = id + 1000000;
+
+query II con1
+SELECT count(*) FILTER (WHERE v = -1),
+       count(*) FILTER (WHERE s = CASE WHEN (id - 1000000) % 1000 = 0 THEN repeat('x', 5000) || (id - 1000000)
+                                       ELSE 'string_value_' || (id - 1000000) END)
+FROM t;
+----
+2001	300000
+
+statement ok con1
+ROLLBACK;
+
+# A rolled back delete leaves the index intact.
+statement ok con1
+BEGIN;
+
+statement ok con1
+DELETE FROM t;
+
+statement ok con1
+ROLLBACK;
+
+statement error con1
+INSERT INTO t VALUES (299999, 'dup', NULL, NULL);
+----
+Duplicate key
+
+query I con1
+SELECT count(*) FROM t WHERE s = repeat('x', 5000) || 123000;
+----
+1
+
+# Arrays fetch their child values through ColumnData::ScanRange: point lookups use the index, and an UPDATE of
+# the key fetches whole vectors of the array columns.
+statement ok con1
+CREATE TABLE arr (id BIGINT PRIMARY KEY, a INTEGER[3], s VARCHAR[2]);
+
+statement ok con1
+INSERT INTO arr SELECT i, CASE WHEN i % 10 = 0 THEN NULL ELSE [i, i + 1, NULL] END, ['string_value_' || i, NULL]
+FROM range(10000) r(i);
+
+statement ok con1
+CHECKPOINT;
+
+query III con1
+SELECT id, a, s FROM arr WHERE id = 1234;
+----
+1234	[1234, 1235, NULL]	[string_value_1234, NULL]
+
+query III con1
+SELECT id, a, s FROM arr WHERE id = 1230;
+----
+1230	NULL	[string_value_1230, NULL]
+
+statement ok con1
+UPDATE arr SET id = id + 100000;
+
+query III con1
+SELECT count(*), count(a), sum(a[1]) FROM arr WHERE s[1] = 'string_value_' || (id - 100000);
+----
+10000	9000	45000000

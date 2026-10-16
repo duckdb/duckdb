@@ -7,6 +7,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
@@ -429,6 +430,16 @@ idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t scan_c
 	// ScanCount can only be used if there are no updates
 	D_ASSERT(!HasUpdates());
 	return ScanVector(state, result, scan_count, ScanVectorType::SCAN_FLAT_VECTOR, result_offset);
+}
+
+void ColumnData::ScanRange(const QueryContext &context, idx_t row_idx, idx_t count, Vector &result,
+                           idx_t result_offset) {
+	ColumnScanState scan_state(nullptr);
+	scan_state.Initialize(context, type, nullptr);
+	InitializeScanWithOffset(scan_state, row_idx);
+	Vector scanned(type, count);
+	ScanCount(scan_state, scanned, count);
+	VectorOperations::Copy(scanned, result, count, 0, result_offset);
 }
 
 void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
