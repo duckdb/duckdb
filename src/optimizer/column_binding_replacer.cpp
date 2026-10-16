@@ -328,6 +328,28 @@ static bool TryResolveToOutput(ColumnBinding binding, const column_binding_set_t
 	return true;
 }
 
+BindingReplacementGraph BindingReplacementGraph::ScopedToBoundary(const vector<ColumnBinding> &boundary) const {
+	column_binding_set_t boundary_bindings(boundary.begin(), boundary.end());
+	BindingReplacementGraph result;
+	for (auto &replacement : replacement_bindings) {
+		// Resolve from the edge target so that edges departing from a boundary binding keep their continuation
+		ReplacementBinding resolved(replacement.old_binding, replacement.old_binding);
+		if (!TryResolveToOutput(replacement.new_binding, boundary_bindings, *this, resolved)) {
+			continue;
+		}
+		resolved.old_binding = replacement.old_binding;
+		if (replacement.replace_type && !resolved.replace_type) {
+			resolved.replace_type = true;
+			resolved.new_type = replacement.new_type;
+		}
+		if (resolved.old_binding == resolved.new_binding) {
+			continue;
+		}
+		result.Add(resolved);
+	}
+	return result;
+}
+
 static vector<ReplacementBinding> ScopeToOutput(const vector<ColumnBinding> &new_output,
                                                 const BindingReplacementGraph &replacements) {
 	column_binding_set_t new_bindings(new_output.begin(), new_output.end());
