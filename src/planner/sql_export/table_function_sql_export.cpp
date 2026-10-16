@@ -1,4 +1,7 @@
 #include "duckdb/planner/sql_export/logical_plan_sql_exporter_internal.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -177,6 +180,50 @@ static unique_ptr<ParsedExpression> TableFunctionColumn(const LogicalGet &get, c
 	return std::move(column);
 }
 
+//! Whether the retained value is the parameter's declared default - that value is registration metadata, not a secret
+static bool MatchesDeclaredDefault(ClientContext &context, const FunctionParameter &parameter, const Value &value) {
+	if (!parameter.HasDefaultValue()) {
+		return false;
+	}
+	auto default_value =
+	    FunctionBinder::CastToParameterType(context, *parameter.GetDefaultValue(), parameter.GetType());
+	return ValueOperations::NotDistinctFrom(value, default_value);
+}
+
+//! The declared parameter that receives the positional argument at the given index
+static optional_ptr<const FunctionParameter> PositionalParameter(const FunctionSignature &signature, idx_t index) {
+	idx_t position = 0;
+	for (auto &parameter : signature.GetParameters()) {
+		if (parameter.GetKind() == FunctionParameterKind::VAR_POSITIONAL) {
+			return &parameter;
+		}
+		if (!parameter.AcceptsPosition()) {
+			continue;
+		}
+		if (position == index) {
+			return &parameter;
+		}
+		position++;
+	}
+	return nullptr;
+}
+
+//! Refuse rendering the invocation - the value of a sensitive parameter must not appear in generated SQL
+static SQLSourceQueryResult SensitiveParameterSource(const LogicalGet &get, const Identifier &parameter_name) {
+	auto function_name = get.function.GetName().GetIdentifierName();
+	auto issue = LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
+	    LogicalPlanVerificationPath(), "sensitive_parameter",
+	    StringUtil::Format("The invocation of \"%s\" passes a value to the sensitive parameter \"%s\", "
+	                       "which must not appear in generated SQL",
+	                       function_name, parameter_name.GetIdentifierName()));
+	issue.facts.emplace_back("function", Value(function_name));
+	issue.facts.emplace_back("parameter", Value(parameter_name.GetIdentifierName()));
+	SQLSourceQueryResult result;
+	result.unsupported_reason = "sensitive_parameter";
+	result.issue = std::move(issue);
+	return result;
+}
+
 SQLSourceQueryResult LogicalPlanSQLExportHelpers::ReconstructSQLSource(ClientContext &context, const LogicalGet &get,
                                                                        unique_ptr<TableRef> input,
                                                                        const Identifier &relation_alias,
@@ -247,6 +294,11 @@ SQLSourceQueryResult LogicalPlanSQLExportHelpers::ReconstructSQLSource(ClientCon
 					consumed_input = true;
 					continue;
 				}
+				auto declared = PositionalParameter(get.function.GetSignature(), i);
+				if (declared && declared->IsSensitive() &&
+				    !MatchesDeclaredDefault(context, *declared, get.parameters[i])) {
+					return SensitiveParameterSource(get, declared->GetName());
+				}
 				auto exported = BoundExpressionSQLExporter::Export(BoundConstantExpression(get.parameters[i]), {});
 				if (exported.HasError()) {
 					return {nullptr, "positional_parameter_expression"};
@@ -258,6 +310,26 @@ SQLSourceQueryResult LogicalPlanSQLExportHelpers::ReconstructSQLSource(ClientCon
 			}
 		}
 		for (auto &parameter : get.named_parameters) {
+			const auto &function_signature = get.function.GetSignature();
+			auto parameter_index = function_signature.GetParameterIndexByName(parameter.first);
+			if (parameter_index.IsValid()) {
+				auto &declared = function_signature.GetParameter(parameter_index.GetIndex());
+				if (declared.IsSensitive() && !MatchesDeclaredDefault(context, declared, parameter.second)) {
+					return SensitiveParameterSource(get, declared.GetName());
+				}
+			} else {
+				auto kwargs = function_signature.GetKwargs();
+				if (kwargs && kwargs->IsSensitive()) {
+					return SensitiveParameterSource(get, parameter.first);
+				}
+				auto typed_kwargs = function_signature.GetTypedKwargs();
+				if (typed_kwargs) {
+					auto option = typed_kwargs->Find(parameter.first);
+					if (option && option->sensitive) {
+						return SensitiveParameterSource(get, option->name);
+					}
+				}
+			}
 			auto exported = BoundExpressionSQLExporter::Export(BoundConstantExpression(parameter.second), {});
 			if (exported.HasError()) {
 				return {nullptr, "named_parameter_expression"};
