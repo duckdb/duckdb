@@ -2839,3 +2839,70 @@ TEST_CASE("Derived matchers can forward to built-in processes through deep heap 
 		}
 	}
 }
+
+TEST_CASE("Packrat cache preserves entries across indexed and fallback growth", "[api][grammar_extension]") {
+	MatcherAllocator matchers;
+	auto &first = matchers.Allocate(make_uniq<NumberLiteralMatcher>());
+	auto &second = matchers.Allocate(make_uniq<NumberLiteralMatcher>());
+	first.SetPackratMemoized();
+	second.SetPackratMemoized();
+	ArenaAllocator arena(Allocator::DefaultAllocator());
+	ParserPackratCache cache(arena, 100, 1100);
+	IdentifierParseResult result("cached", optional_idx(123), optional_idx(6));
+	ParserPackratEntry original;
+	original.success = true;
+	original.token_index_after = NumericLimits<idx_t>::Maximum();
+	original.max_token_index_seen = NumericLimits<idx_t>::Maximum() - 1;
+	original.result = &result;
+	cache.Store(first, 100, original);
+	auto pinned = cache.Lookup(first, 100);
+	REQUIRE(pinned);
+
+	ParserPackratEntry failure;
+	failure.token_index_after = 101;
+	failure.max_token_index_seen = 102;
+	cache.Store(second, 100, failure);
+	for (idx_t position = 0; position < 2200; position++) {
+		cache.Store(first, position, failure);
+	}
+	cache.Store(first, NumericLimits<idx_t>::Maximum(), failure);
+	auto retained = cache.Lookup(first, 100);
+	REQUIRE(retained.get() == pinned.get());
+	REQUIRE(retained->success);
+	REQUIRE(retained->token_index_after == original.token_index_after);
+	REQUIRE(retained->max_token_index_seen == original.max_token_index_seen);
+	REQUIRE(retained->result.get() == &result);
+	for (auto position : {idx_t(0), idx_t(99), idx_t(1099), idx_t(1100), NumericLimits<idx_t>::Maximum()}) {
+		auto entry = cache.Lookup(first, position);
+		REQUIRE(entry);
+		REQUIRE_FALSE(entry->success);
+		REQUIRE(entry->token_index_after == failure.token_index_after);
+		REQUIRE(entry->max_token_index_seen == failure.max_token_index_seen);
+		REQUIRE_FALSE(entry->result);
+	}
+	auto other_matcher = cache.Lookup(second, 100);
+	REQUIRE(other_matcher);
+	REQUIRE_FALSE(other_matcher->success);
+	REQUIRE_FALSE(cache.Lookup(second, 101));
+}
+
+TEST_CASE("Packrat cache accepts empty and reversed index ranges", "[api][grammar_extension]") {
+	MatcherAllocator matchers;
+	auto &matcher = matchers.Allocate(make_uniq<NumberLiteralMatcher>());
+	matcher.SetPackratMemoized();
+	for (auto range : {pair<idx_t, idx_t> {0, 0}, pair<idx_t, idx_t> {100, 100}, pair<idx_t, idx_t> {200, 100}}) {
+		ArenaAllocator arena(Allocator::DefaultAllocator());
+		ParserPackratCache cache(arena, range.first, range.second);
+		ParserPackratEntry value;
+		value.success = true;
+		value.token_index_after = NumericLimits<idx_t>::Maximum();
+		for (auto position : {idx_t(0), idx_t(100), idx_t(200), NumericLimits<idx_t>::Maximum()}) {
+			REQUIRE_FALSE(cache.Lookup(matcher, position));
+			cache.Store(matcher, position, value);
+			auto entry = cache.Lookup(matcher, position);
+			REQUIRE(entry);
+			REQUIRE(entry->success);
+			REQUIRE(entry->token_index_after == value.token_index_after);
+		}
+	}
+}
