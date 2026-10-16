@@ -64,14 +64,21 @@ optional<Identifier> SQLExportSensitiveParameters::FirstSensitiveParameter(const
 	return {};
 }
 
+//! A cast around the exempted constant must only reveal the declared parameter type itself
+static bool CastTargetIsDeclaredType(optional_ptr<const LogicalType> cast_target, const FunctionParameter &declared) {
+	return !cast_target || *cast_target == declared.GetType();
+}
+
 optional<Identifier> SQLExportSensitiveParameters::RefusePositional(optional_ptr<ClientContext> context,
                                                                     const FunctionSignature &signature, idx_t index,
-                                                                    optional_ptr<const Value> value) {
+                                                                    optional_ptr<const Value> value,
+                                                                    optional_ptr<const LogicalType> cast_target) {
 	auto declared = PositionalParameter(signature, index);
 	if (!declared || !declared->IsSensitive()) {
 		return {};
 	}
-	if (context && value && MatchesDeclaredDefault(*context, *declared, *value)) {
+	if (context && value && CastTargetIsDeclaredType(cast_target, *declared) &&
+	    MatchesDeclaredDefault(*context, *declared, *value)) {
 		return {};
 	}
 	return declared->GetName();
@@ -79,15 +86,16 @@ optional<Identifier> SQLExportSensitiveParameters::RefusePositional(optional_ptr
 
 optional<Identifier> SQLExportSensitiveParameters::RefuseNamed(optional_ptr<ClientContext> context,
                                                                const FunctionSignature &signature,
-                                                               const Identifier &name,
-                                                               optional_ptr<const Value> value) {
+                                                               const Identifier &name, optional_ptr<const Value> value,
+                                                               optional_ptr<const LogicalType> cast_target) {
 	auto parameter_index = signature.GetParameterIndexByName(name);
 	if (parameter_index.IsValid()) {
 		auto &declared = signature.GetParameter(parameter_index.GetIndex());
 		if (!declared.IsSensitive()) {
 			return {};
 		}
-		if (context && value && MatchesDeclaredDefault(*context, declared, *value)) {
+		if (context && value && CastTargetIsDeclaredType(cast_target, declared) &&
+		    MatchesDeclaredDefault(*context, declared, *value)) {
 			return {};
 		}
 		return declared.GetName();
@@ -111,23 +119,28 @@ optional<Identifier> SQLExportSensitiveParameters::RefuseBoundArgument(optional_
                                                                        idx_t positional_count,
                                                                        const vector<Identifier> &named_arguments,
                                                                        idx_t index, const Expression &argument) {
-	// a default the binder materialized may be wrapped in casts to the parameter type
-	reference<const Expression> unwrapped(argument);
-	while (BoundCastExpression::IsCast(unwrapped.get())) {
-		unwrapped = BoundCastExpression::Child(unwrapped.get().Cast<BoundFunctionExpression>());
-	}
 	optional_ptr<const Value> value;
-	if (unwrapped.get().GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		value = &unwrapped.get().Cast<BoundConstantExpression>().GetValue();
+	optional_ptr<const LogicalType> cast_target;
+	if (argument.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		value = &argument.Cast<BoundConstantExpression>().GetValue();
+	} else if (BoundCastExpression::IsCast(argument) &&
+	           !BoundCastExpression::IsTryCast(argument.Cast<BoundFunctionExpression>())) {
+		// the binder materializes an omitted default as a single cast of the declared constant to the
+		// parameter type - deeper or differently targeted cast chains render their own material
+		auto &child = BoundCastExpression::Child(argument.Cast<BoundFunctionExpression>());
+		if (child.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+			value = &child.Cast<BoundConstantExpression>().GetValue();
+			cast_target = &argument.GetReturnType();
+		}
 	}
 	if (named_arguments.empty() || index < positional_count) {
-		return RefusePositional(context, signature, index, value);
+		return RefusePositional(context, signature, index, value, cast_target);
 	}
 	auto named_index = index - positional_count;
 	if (named_index >= named_arguments.size()) {
 		return {};
 	}
-	return RefuseNamed(context, signature, named_arguments[named_index], value);
+	return RefuseNamed(context, signature, named_arguments[named_index], value, cast_target);
 }
 
 } // namespace duckdb

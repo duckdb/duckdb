@@ -48,6 +48,17 @@ public:
 	                                                            const Identifier &function_name,
 	                                                            const Identifier &parameter);
 
+	//! Refuse rendering an aggregate state whose retained constant parameters must not appear in generated SQL.
+	//! An empty parameter reports constants whose declarations could not be resolved.
+	static LogicalPlanVerificationIssue StateSensitivityIssue(const LogicalPlanVerificationPath &path,
+	                                                          const Identifier &function_name,
+	                                                          const Identifier &parameter);
+
+	//! Whether rendering the value would emit a sensitive retained constant of an aggregate state,
+	//! through the value's own type or through a TYPE value's payload type
+	static bool ValueRendersSensitiveState(ClientContext &client, const Value &value, Identifier &function_name,
+	                                       Identifier &parameter);
+
 	static LogicalPlanVerificationIssue UnsupportedFunction(const LogicalPlanVerificationPath &path,
 	                                                        LogicalPlanVerificationFunctionIdentity identity,
 	                                                        string message);

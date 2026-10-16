@@ -177,7 +177,7 @@ static void RegisterSensitiveProbes(DuckDB &db) {
 		sensitive_agg.GetSignature() = std::move(agg_signature);
 		loader.RegisterFunction(std::move(sensitive_agg));
 	}
-	// a renamed copy of string_agg whose separator is sensitive, its exported state retains the separator
+	// renamed copies of string_agg whose separator is sensitive, their exported states retain the separator
 	{
 		Connection lookup(db);
 		lookup.BeginTransaction();
@@ -185,14 +185,35 @@ static void RegisterSensitiveProbes(DuckDB &db) {
 		    *lookup.context, QualifiedName("system", "main", "string_agg"));
 		auto string_agg_implementation = string_agg_entry.functions.GetFunctionByArguments(
 		    *lookup.context, {LogicalType::VARCHAR, LogicalType::VARCHAR});
-		REQUIRE(string_agg_implementation);
-		AggregateFunction sensitive_string_agg = *string_agg_implementation;
 		lookup.Rollback();
+		REQUIRE(string_agg_implementation);
+		// the positional separator
+		AggregateFunction sensitive_string_agg = *string_agg_implementation;
 		sensitive_string_agg.SetName(Identifier("sensitive_string_agg"));
 		sensitive_string_agg.GetSignature().GetParameter(0).SetName(Identifier("value"));
 		sensitive_string_agg.GetSignature().GetParameter(1).SetName(Identifier("separator"));
 		sensitive_string_agg.GetSignature().GetParameter(1).SetSensitive();
 		loader.RegisterFunction(std::move(sensitive_string_agg));
+		// the separator as a keyword-only parameter, recorded behind the positional slots
+		AggregateFunction keyword_agg = *string_agg_implementation;
+		keyword_agg.SetName(Identifier("sensitive_keyword_agg"));
+		auto keyword_signature = FunctionSignature()
+		                             .AddParameter(Identifier("value"), LogicalType::VARCHAR)
+		                             .AddKeywordOnly(Identifier("separator"), LogicalType::VARCHAR)
+		                             .Sensitive();
+		keyword_signature.SetReturnType(keyword_agg.GetReturnType());
+		keyword_agg.GetSignature() = std::move(keyword_signature);
+		loader.RegisterFunction(std::move(keyword_agg));
+		// the separator with a declared default, whose materialized value is registration metadata
+		AggregateFunction default_agg = *string_agg_implementation;
+		default_agg.SetName(Identifier("sensitive_default_agg"));
+		auto default_agg_signature = FunctionSignature()
+		                                 .AddParameter(Identifier("value"), LogicalType::VARCHAR)
+		                                 .AddParameter(Identifier("separator"), LogicalType::VARCHAR, Value(","))
+		                                 .Sensitive();
+		default_agg_signature.SetReturnType(default_agg.GetReturnType());
+		default_agg.GetSignature() = std::move(default_agg_signature);
+		loader.RegisterFunction(std::move(default_agg));
 	}
 	// a renamed copy of list_transform whose lambda parameter is sensitive
 	{
@@ -424,6 +445,15 @@ TEST_CASE("Sensitive parameter defaults materialized by the binder keep exportin
 	auto refused = connection.Query("EXPLAIN (SQL) SELECT sensitive_probe_default(8)");
 	REQUIRE(refused->HasError());
 	REQUIRE(StringUtil::Contains(refused->GetError(), "credential"));
+
+	// a single explicit cast of the default to the declared type renders nothing but registration metadata
+	auto cast_default = connection.Query("EXPLAIN (SQL) SELECT sensitive_probe_default(CAST(7 AS BIGINT))");
+	REQUIRE_NO_FAIL(*cast_default);
+
+	// deeper cast chains render their own material and may change the value, so they refuse
+	auto chained = connection.Query("EXPLAIN (SQL) SELECT sensitive_probe_default(CAST(CAST(7 AS BOOLEAN) AS BIGINT))");
+	REQUIRE(chained->HasError());
+	REQUIRE(StringUtil::Contains(chained->GetError(), "credential"));
 }
 
 TEST_CASE("Exported aggregate state refuses rendering a sensitive constant parameter",
@@ -434,11 +464,32 @@ TEST_CASE("Exported aggregate state refuses rendering a sensitive constant param
 
 	REQUIRE_NO_FAIL(connection.Query("SET VARIABLE saved_state = (SELECT sensitive_string_agg(v, 'swordfish') "
 	                                 "EXPORT_STATE FROM (VALUES ('x')) t(v))"));
-	auto refused = connection.Query("EXPLAIN (SQL) SELECT getvariable('saved_state')");
-	REQUIRE(refused->HasError());
-	REQUIRE(StringUtil::Contains(refused->GetError(), "sensitive_string_agg"));
-	REQUIRE(StringUtil::Contains(refused->GetError(), "separator"));
-	REQUIRE(!StringUtil::Contains(refused->GetError(), "swordfish"));
+	auto require_refused = [&](const string &query) {
+		auto refused = connection.Query(query);
+		REQUIRE(refused->HasError());
+		REQUIRE(StringUtil::Contains(refused->GetError(), "separator"));
+		REQUIRE(!StringUtil::Contains(refused->GetError(), "swordfish"));
+	};
+	require_refused("EXPLAIN (SQL) SELECT getvariable('saved_state')");
+	// empty-result propagation preserves the state type and its typed NULL still renders the parameters
+	require_refused("EXPLAIN (SQL) SELECT getvariable('saved_state') WHERE false");
+	// a TYPE value renders its payload type
+	require_refused("EXPLAIN (SQL) SELECT get_type(getvariable('saved_state'))");
+	// a cast of a non-constant to the state type renders the parameters through the target type
+	require_refused("EXPLAIN (SQL) SELECT cast_to_type(v, getvariable('saved_state')) FROM (VALUES ('x')) t(v)");
+
+	// recorded indexes follow the bound layout, keyword-only arguments sit behind the positional slots
+	REQUIRE_NO_FAIL(
+	    connection.Query("SET VARIABLE keyword_state = (SELECT sensitive_keyword_agg(v, separator := 'swordfish') "
+	                     "EXPORT_STATE FROM (VALUES ('x')) t(v))"));
+	require_refused("EXPLAIN (SQL) SELECT getvariable('keyword_state')");
+
+	// a recorded constant equal to the declared default is registration metadata and keeps exporting
+	REQUIRE_NO_FAIL(connection.Query("SET VARIABLE default_state = (SELECT sensitive_default_agg(v) "
+	                                 "EXPORT_STATE FROM (VALUES ('x')) t(v))"));
+	auto default_state = connection.Query("EXPLAIN (SQL) SELECT getvariable('default_state')");
+	REQUIRE_NO_FAIL(*default_state);
+	REQUIRE(StringUtil::Contains(default_state->Collection().GetValue(1, 0).ToString(), "to_aggregate_state"));
 
 	// the unmarked built-in state keeps exporting its constant parameters
 	REQUIRE_NO_FAIL(connection.Query("SET VARIABLE benign_state = (SELECT string_agg(v, ',') "
