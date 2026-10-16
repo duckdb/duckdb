@@ -1361,6 +1361,18 @@ void RowGroup::Update(TransactionData transaction, DuckTableEntry &table_entry, 
 		D_ASSERT(ids[i] >= row_t(row_group_start) && ids[i] < row_t(row_group_start + this->count));
 	}
 #endif
+	if (transaction.transaction) {
+		auto vector_idx = (UnsafeNumericCast<idx_t>(ids[offset]) - row_group_start) / STANDARD_VECTOR_SIZE;
+		auto vector_start = UnsafeNumericCast<row_t>(row_group_start + vector_idx * STANDARD_VECTOR_SIZE);
+		auto &version_info = GetOrCreateVersionInfo();
+		if (!version_info.HasUpdatedRows(transaction.GetTransactionId())) {
+			// the undo entry comes first, so that a rollback finds every row the transaction marks
+			transaction.transaction->PushUpdateRows(version_info);
+		}
+		// mark the rows before updating them: an update conflicts with any write of a row the transaction does not see
+		auto lowest_visibility_bound = transaction.transaction->GetTransactionManager().LowestVisibilityBound();
+		version_info.UpdateRows(vector_idx, transaction, ids + offset, count, vector_start, lowest_visibility_bound);
+	}
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
 		auto &col_data = GetColumn(column.index);
@@ -2166,8 +2178,8 @@ void RowGroup::Verify() {
 #endif
 }
 
-idx_t RowGroup::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count) {
-	return GetOrCreateVersionInfo().DeleteRows(vector_idx, transaction_id, rows, count);
+idx_t RowGroup::DeleteRows(idx_t vector_idx, TransactionData transaction, row_t rows[], idx_t count) {
+	return GetOrCreateVersionInfo().DeleteRows(vector_idx, transaction, rows, count);
 }
 
 void VersionDeleteState::Delete(row_t row_id) {
@@ -2190,7 +2202,7 @@ void VersionDeleteState::Flush() {
 	// it is possible for delete statements to delete the same tuple multiple times when combined with a USING clause
 	// in the current_info->Delete, we check which tuples are actually deleted (excluding duplicate deletions)
 	// this is returned in the actual_delete_count
-	auto actual_delete_count = info.DeleteRows(current_chunk, transaction.GetTransactionId(), rows, count);
+	auto actual_delete_count = info.DeleteRows(current_chunk, transaction, rows, count);
 	delete_count += actual_delete_count;
 	if (transaction.transaction && actual_delete_count > 0) {
 		// now push the delete into the undo buffer, but only if any deletes were actually performed

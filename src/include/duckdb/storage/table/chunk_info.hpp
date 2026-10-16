@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/bitset.hpp"
 
 namespace duckdb {
 class RowGroup;
@@ -51,6 +52,12 @@ enum class VersionCompressionResult : uint8_t {
 //! ARRAY    - per-row delete ids materialized in deleted_data
 enum class DeleteIdState : uint8_t { CONSTANT, MASKED, ARRAY };
 
+//! The rows of a vector that a transaction updated: writer is its transaction id, or its commit id once committed
+struct WriterRows {
+	transaction_t writer;
+	bitset<STANDARD_VECTOR_SIZE> rows;
+};
+
 class ChunkVectorInfo {
 public:
 	explicit ChunkVectorInfo(FixedSizeAllocator &allocator, idx_t start, transaction_t insert_id = 0);
@@ -78,8 +85,14 @@ public:
 	//! In case we delete rows that were already deleted
 	//! Note that "rows" is written to to reflect the row ids that were actually deleted
 	//! i.e. after calling this function, rows will hold [0..actual_delete_count] row ids of the actually deleted tuples
-	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
+	//! Throws if one of the rows was deleted by another transaction or updated by one that the transaction does not see
+	idx_t Delete(TransactionData transaction, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, const DeleteInfo &info);
+	//! Makes the transaction the last writer of the rows (ids[i] - offset), throwing on a conflict like Delete
+	void Update(TransactionData transaction, const row_t ids[], idx_t count, row_t offset,
+	            VisibilityBound lowest_visibility_bound);
+	//! Renames the last writer old_id to new_id on commit, revert, or rollback (to 0, which removes it)
+	void ReplaceUpdateWriter(transaction_t old_id, transaction_t new_id);
 
 	//! Attempts to compress the per-row insert/delete ids into constants. Ids that precede
 	//! lowest_visibility_bound look the same to every active and future transaction, so they can collapse
@@ -119,6 +132,8 @@ private:
 	void CompressDeleteToMask(transaction_t mask_id);
 	//! MASKED -> ARRAY: re-materialize the per-row delete array from the bitmask
 	void DecompressDeleteMask();
+	//! Whether any of the rows (ids[i] - offset) was deleted by another transaction or updated by an unseen one
+	bool HasConflictingWrite(TransactionData transaction, const row_t ids[], idx_t count, row_t offset) const;
 
 private:
 	FixedSizeAllocator &allocator;
@@ -146,6 +161,8 @@ private:
 	//! until a further delete re-arms it). CompressVersionIds returns the cached SETTLED without
 	//! re-scanning the ids while this is false.
 	bool recheck_compression = true;
+	//! The writers of the rows that a transaction might not see yet (if any), to detect conflicting writes
+	unique_ptr<vector<WriterRows>> row_writers;
 };
 
 } // namespace duckdb

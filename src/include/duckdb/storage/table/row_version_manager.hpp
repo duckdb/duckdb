@@ -10,6 +10,7 @@
 
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 #include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
@@ -38,8 +39,15 @@ public:
 	void RevertAppend(idx_t new_count);
 	void CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t row_group_start, idx_t count);
 
-	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
+	idx_t DeleteRows(idx_t vector_idx, TransactionData transaction, row_t rows[], idx_t count);
 	void CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info);
+	//! Whether the transaction marked rows of this row group as updated (and has an undo entry for them)
+	bool HasUpdatedRows(transaction_t transaction_id);
+	//! Marks the rows (ids[i] - offset) of the vector as updated by the transaction (see ChunkVectorInfo::Update)
+	void UpdateRows(idx_t vector_idx, TransactionData transaction, const row_t ids[], idx_t count, row_t offset,
+	                VisibilityBound lowest_visibility_bound);
+	//! Replaces the update writer old_id of all rows by new_id (see ChunkVectorInfo::ReplaceUpdateWriter)
+	void ReplaceUpdateWriter(transaction_t old_id, transaction_t new_id);
 
 	//! Attempts to compress the per-row insert/delete ids of each vector into constants. Ids that precede
 	//! lowest_visibility_bound look the same to every active and future transaction, so they can collapse.
@@ -59,6 +67,8 @@ private:
 	mutex version_lock;
 	FixedSizeAllocator allocator;
 	vector<unique_ptr<ChunkVectorInfo>> vector_info;
+	//! The transactions with an undo entry for updating rows of this row group, until they commit or roll back
+	unordered_set<transaction_t> updating_transactions;
 	//! The newest and the oldest delete commit that has not been written by a checkpoint yet
 	optional_idx newest_uncheckpointed_delete_commit;
 	optional_idx oldest_uncheckpointed_delete_commit;
