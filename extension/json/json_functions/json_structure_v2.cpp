@@ -165,11 +165,15 @@ optional<Frame> HandleArrayFrame(NodeStorage &nodes, Frame &frame, yyjson_mut_do
 		return nullopt;
 	}
 
-	optional_ptr<yyjson_val> next = yyjson_arr_iter_next(&*frame.arr_it);
-	if (!next) {
-		return nullopt;
+	while (optional_ptr<yyjson_val> next = yyjson_arr_iter_next(&*frame.arr_it)) {
+		if (yyjson_is_ctn(next.get())) {
+			return Frame(next, child);
+		}
+		if (!child.MergeType(JSONCommon::ValTypeToLogicalTypeId(next.get()), doc)) {
+			return nullopt;
+		}
 	}
-	return Frame(next, child);
+	return nullopt;
 }
 
 optional<Frame> HandleObjectFrame(NodeStorage &nodes, Frame &frame, yyjson_mut_doc *doc) {

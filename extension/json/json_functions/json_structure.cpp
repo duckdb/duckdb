@@ -2,7 +2,6 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/logical_type_info.hpp"
-#include "json_executors.hpp"
 #include "json_geojson.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
@@ -692,7 +691,7 @@ static double CalculateMapAndStructSimilarity(const LogicalType &map_type, const
 	for (const auto &struct_child_type : struct_child_types) {
 		const auto similarity =
 		    swapped ? CalculateTypeSimilarity(struct_child_type.second, map_value_type, max_depth, depth + 1)
-		            : CalculateTypeSimilarity(map_value_type, struct_child_type.second, max_depth, depth + 1);
+			        : CalculateTypeSimilarity(map_value_type, struct_child_type.second, max_depth, depth + 1);
 		if (similarity < 0) {
 			return similarity;
 		}
