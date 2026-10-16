@@ -28,6 +28,7 @@ using duckdb_parquet::Encoding;
 using duckdb_parquet::PageType;
 
 constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE;
+constexpr const idx_t PrimitiveColumnWriter::DEFAULT_DATA_PAGE_SIZE_LIMIT;
 constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
 
 class ParquetPagePayloadBuffer : public AsyncWriteBuffer {

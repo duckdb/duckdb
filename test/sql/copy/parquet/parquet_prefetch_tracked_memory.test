@@ -15,8 +15,9 @@ require no_alternative_verify
 statement ok
 set threads=1;
 
+# the margins assume pages of up to 100MB (decoding one needs a 100MB buffer), so the page size limit is pinned
 statement ok
-copy (select range i from range(64000000)) to '{TEST_DIR}/prefetch_tracked_big.parquet' (ROW_GROUP_SIZE 64000000);
+copy (select range i from range(64000000)) to '{TEST_DIR}/prefetch_tracked_big.parquet' (ROW_GROUP_SIZE 64000000, DATA_PAGE_SIZE_LIMIT 104857600);
 
 # prefetch pins the full ~256MB row group span on top of the decode memory, so it OOMs where sync reads fit
 statement ok

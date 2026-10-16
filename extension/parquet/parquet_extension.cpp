@@ -107,7 +107,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	idx_t string_dictionary_page_size_limit = PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
 
 	//! The maximum uncompressed size of a data page
-	idx_t data_page_size_limit = PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE;
+	idx_t data_page_size_limit = PrimitiveColumnWriter::DEFAULT_DATA_PAGE_SIZE_LIMIT;
 
 	bool enable_bloom_filters = true;
 	bool write_page_index = true;
