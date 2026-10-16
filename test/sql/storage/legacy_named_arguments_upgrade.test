@@ -1,0 +1,54 @@
+# name: test/sql/storage/legacy_named_arguments_upgrade.test
+# description: Views and macros with undeclared argument names stored by v1.x keep working after a storage upgrade
+# group: [storage]
+
+# legacy_named_arguments_v1.db was written by v1.5.6 with views/macros that pass names the functions do not declare
+statement ok
+ATTACH 'test/sql/storage/legacy_named_arguments_v1.db' AS legacy (READ_ONLY);
+
+statement ok
+ATTACH '{TEST_DIR}/legacy_named_arguments_upgrade.db' AS upgraded (STORAGE_VERSION 'v2.0.0');
+
+statement ok
+COPY FROM DATABASE legacy TO upgraded;
+
+statement ok
+DETACH upgraded
+
+statement ok
+DETACH legacy
+
+statement ok
+ATTACH '{TEST_DIR}/legacy_named_arguments_upgrade.db' AS upgraded;
+
+statement ok
+USE upgraded
+
+query I
+FROM v_sum_x
+----
+10
+
+query I
+FROM v_sum_arg
+----
+10
+
+query I
+FROM v_lag
+----
+NULL
+0
+1
+2
+3
+
+query I
+SELECT m_sum(c) FROM t LIMIT 1
+----
+10
+
+query I
+SELECT m_add(-3)
+----
+3
