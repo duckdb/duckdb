@@ -73,9 +73,27 @@ SELECT count(*) FROM l ANTI JOIN r ON struct_pack(d := l.d, n := r.n) = struct_p
 ----
 0
 
-# the output of a SEMI join emits each surviving row at most once and keeps its additive totals
+# side-local struct operands classify as a comparison join and reset through the comparison arm
 query I
-SELECT stats(d) FROM l SEMI JOIN r ON l.d = r.d LIMIT 1;
+SELECT count(*) FROM l SEMI JOIN r ON struct_pack(d := l.d, n := l.n) <> struct_pack(d := r.d, n := r.n);
+----
+2
+
+query I
+SELECT count(*) FROM l ANTI JOIN r ON struct_pack(d := l.d, n := l.n) <> struct_pack(d := r.d, n := r.n);
+----
+0
+
+# a mixed-side struct residual next to an equality key resets inside a comparison join
+query I
+SELECT count(*) FROM l SEMI JOIN r ON l.n = r.n AND struct_pack(d := l.d, n := r.n) = struct_pack(d := r.d, n := l.n);
+----
+2
+
+# the output of a SEMI join emits each surviving row at most once and keeps its additive totals,
+# joining on the numeric key so the string stays out of merged join-key statistics
+query I
+SELECT stats(d) FROM l SEMI JOIN r ON l.n = r.n LIMIT 1;
 ----
 <REGEX>:.*'total_string_length': 3.*
 
