@@ -15,7 +15,6 @@
 
 namespace duckdb {
 class AggregateFunction;
-class BoundFunctionExpression;
 class ClientContext;
 class Expression;
 class ScalarFunction;
@@ -37,12 +36,11 @@ shared_ptr<const AggregateFunction> TryGetBuiltinAggregateFunction(ClientContext
 shared_ptr<const WindowFunction> GetBuiltinWindowFunction(ClientContext &context, const Identifier &name,
                                                           const vector<LogicalType> &arguments);
 
-//! Look up a built-in scalar function as GetBuiltinScalarFunction does, and bind it to the given children
-//! The result can be any expression, e.g. a constant if the function was folded during binding
-unique_ptr<Expression> BindBuiltinScalarExpression(ClientContext &context, const Identifier &name,
-                                                   vector<unique_ptr<Expression>> children);
-//! As BindBuiltinScalarExpression, but throws if the result is not a BoundFunctionExpression
-unique_ptr<BoundFunctionExpression> BindBuiltinScalarFunction(ClientContext &context, const Identifier &name,
-                                                              vector<unique_ptr<Expression>> children);
+//! Look up a built-in scalar function as GetBuiltinScalarFunction does, and bind it to the given children.
+//! The call is bound like one written in SQL, so the result is whatever the bind produces and not necessarily a
+//! BoundFunctionExpression: the bind can fold the call into a constant (e.g. a call with a NULL constant argument),
+//! and a function's bind_expression callback can replace it with a different expression altogether
+unique_ptr<Expression> BindBuiltinScalarFunction(ClientContext &context, const Identifier &name,
+                                                 vector<unique_ptr<Expression>> children);
 
 } // namespace duckdb
