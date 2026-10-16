@@ -91,8 +91,9 @@ public:
 	//! We limit the uncompressed page size to 100MB
 	//! The max size in Parquet is 2GB, but we choose a more conservative limit
 	static constexpr const idx_t MAX_UNCOMPRESSED_PAGE_SIZE = 104857600ULL;
-	//! The default uncompressed page size: 1 MiB, like parquet-mr (Spark), Arrow and parquet-rs. Pages are the unit
-	//! readers skip with the page index, so a column chunk is split into several pages.
+	//! The default uncompressed page size when the page index is written: 1 MiB, like parquet-mr (Spark), Arrow and
+	//! parquet-rs. Pages are the unit readers skip with the page index, so a column chunk is split into several pages.
+	//! Without the page index the default stays MAX_UNCOMPRESSED_PAGE_SIZE: one page per column chunk.
 	static constexpr const idx_t DEFAULT_DATA_PAGE_SIZE_LIMIT = 1048576ULL;
 	//! Dictionary pages must be below 2GB. Unlike data pages, there's only one dictionary page.
 	//! For this reason we go with a much higher, but still a conservative upper bound of 1GB;

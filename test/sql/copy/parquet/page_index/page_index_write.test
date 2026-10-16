@@ -274,7 +274,8 @@ SELECT path_in_schema, count(*) FROM parquet_page_index('{TEST_DIR}/page_index_a
 ----
 id	6
 
-# with the default page size, a default row group of a BIGINT column is one page and gets no index either
+# with the page index, pages default to 1 MiB: a default row group of a BIGINT column is still one page and gets no
+# index, the wide string column gets several pages
 statement ok
 COPY (SELECT range AS id, repeat('x', 100) || range AS s FROM range(122880)) TO '{TEST_DIR}/page_index_default_layout.parquet' (WRITE_PAGE_INDEX true);
 
@@ -284,6 +285,16 @@ FROM parquet_metadata('{TEST_DIR}/page_index_default_layout.parquet') m ORDER BY
 ----
 id	false	false
 s	true	true
+
+# without the page index, pages keep their old default of one page per column chunk: pinning that page size with the
+# index gives the string column a single page, which gets no index
+statement ok
+COPY (SELECT range AS id, repeat('x', 100) || range AS s FROM range(122880)) TO '{TEST_DIR}/page_index_default_layout_big_pages.parquet' (WRITE_PAGE_INDEX true, DATA_PAGE_SIZE_LIMIT 104857600);
+
+query I
+SELECT count(*) FROM parquet_page_index('{TEST_DIR}/page_index_default_layout_big_pages.parquet')
+----
+0
 
 # several row groups: every row group has its own index
 statement ok
