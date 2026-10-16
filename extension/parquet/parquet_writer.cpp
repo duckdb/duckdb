@@ -1433,28 +1433,6 @@ void ParquetWriter::InitializeSchemaFromPreparedRowGroup(const PreparedRowGroup 
 void ParquetWriter::Finalize() {
 	InitializeSchemaElements();
 
-	// the page index goes between the row groups and the footer: first the ColumnIndex of every column chunk, then the
-	// OffsetIndex of every column chunk (the layout parquet-mr uses), their location is recorded in the ColumnChunk
-	for (auto &page_index : page_indexes) {
-		D_ASSERT(!options.encryption_config);
-		if (!page_index.has_column_index) {
-			continue;
-		}
-		auto &column_chunk = file_meta_data.row_groups[page_index.row_group_idx].columns[page_index.column_idx];
-		column_chunk.column_index_offset = NumericCast<int64_t>(writer->GetTotalWritten());
-		column_chunk.__isset.column_index_offset = true;
-		column_chunk.column_index_length = NumericCast<int32_t>(Write(page_index.column_index));
-		column_chunk.__isset.column_index_length = true;
-	}
-	for (auto &page_index : page_indexes) {
-		auto &column_chunk = file_meta_data.row_groups[page_index.row_group_idx].columns[page_index.column_idx];
-		column_chunk.offset_index_offset = NumericCast<int64_t>(writer->GetTotalWritten());
-		column_chunk.__isset.offset_index_offset = true;
-		column_chunk.offset_index_length = NumericCast<int32_t>(Write(page_index.offset_index));
-		column_chunk.__isset.offset_index_length = true;
-	}
-	page_indexes.clear();
-
 	// dump the bloom filters right before footer, not if stuff is encrypted
 
 	for (auto &bloom_filter_entry : bloom_filters) {
@@ -1482,6 +1460,29 @@ void ParquetWriter::Finalize() {
 		column_chunk.meta_data.bloom_filter_length =
 		    NumericCast<int32_t>(bloom_filter_header_size + bloom_filter_bytes->len);
 	}
+
+	// the page index goes right in front of the footer, after the bloom filters, so that it is part of the tail of the
+	// file a reader fetches together with the footer: first the ColumnIndex of every column chunk, then the
+	// OffsetIndex of every column chunk, their location is recorded in the ColumnChunk
+	for (auto &page_index : page_indexes) {
+		D_ASSERT(!options.encryption_config);
+		if (!page_index.has_column_index) {
+			continue;
+		}
+		auto &column_chunk = file_meta_data.row_groups[page_index.row_group_idx].columns[page_index.column_idx];
+		column_chunk.column_index_offset = NumericCast<int64_t>(writer->GetTotalWritten());
+		column_chunk.__isset.column_index_offset = true;
+		column_chunk.column_index_length = NumericCast<int32_t>(Write(page_index.column_index));
+		column_chunk.__isset.column_index_length = true;
+	}
+	for (auto &page_index : page_indexes) {
+		auto &column_chunk = file_meta_data.row_groups[page_index.row_group_idx].columns[page_index.column_idx];
+		column_chunk.offset_index_offset = NumericCast<int64_t>(writer->GetTotalWritten());
+		column_chunk.__isset.offset_index_offset = true;
+		column_chunk.offset_index_length = NumericCast<int32_t>(Write(page_index.offset_index));
+		column_chunk.__isset.offset_index_length = true;
+	}
+	page_indexes.clear();
 
 	const auto metadata_start_offset = writer->GetTotalWritten();
 	if (options.encryption_config) {

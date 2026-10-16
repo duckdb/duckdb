@@ -4,6 +4,9 @@
 
 require parquet
 
+# the page row counts and boundaries below assume the default vector size
+require vector_size 2048
+
 # three row groups of 100000 rows, BIGINT pages of 512 rows, a dictionary-encoded payload with ~2500-row pages
 statement ok
 CREATE TABLE data AS

@@ -15,8 +15,9 @@ copy (
     range % 10000 l_suppkey,
     range % 7 l_linenumber,
     from range(6_000_000)
-) to '{TEST_DIR}/test_efc_lineitem.parquet' (row_group_size 6_000_000);
+) to '{TEST_DIR}/test_efc_lineitem.parquet' (row_group_size 6_000_000, data_page_size_limit 104857600);
 
+# the byte counts below are calibrated for one page per column chunk, so the page size limit is pinned
 # this is empty since we didn't query anything yet
 # throughout this file we round the bytes to whole MBs due to small differences between OSs somehow
 query II

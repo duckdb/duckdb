@@ -4,6 +4,9 @@
 
 require parquet
 
+# the page row counts and boundaries below assume the default vector size
+require vector_size 2048
+
 statement ok
 CREATE TABLE data AS
 	SELECT range AS id,
@@ -195,6 +198,15 @@ FROM (
 )
 ----
 0
+
+# the page index follows the bloom filters, right in front of the footer, so the tail read that fetches the footer
+# brings it along
+query II
+SELECT bool_and(column_index_offset > bloom_filter_offset + bloom_filter_length) FILTER (bloom_filter_offset IS NOT NULL),
+       count(*) FILTER (bloom_filter_offset IS NOT NULL) > 0
+FROM parquet_metadata('{TEST_DIR}/page_index_on.parquet')
+----
+true	true
 
 # dictionary encoded strings get per-page bounds as well (the dictionary only has the chunk-wide bounds)
 query IIII

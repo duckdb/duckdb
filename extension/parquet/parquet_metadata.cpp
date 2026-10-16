@@ -1102,7 +1102,7 @@ void ParquetPageIndexProcessor::InitializeInternal(ClientContext &context, Parqu
 			if (ParquetPageIndexUtils::HasColumnIndex(column)) {
 				ParquetPageIndexUtils::ReadColumnIndex(protocol, column, chunk.column_index);
 				chunk.has_column_index = true;
-				chunk.page_count = MaxValue(chunk.page_count, chunk.column_index.null_pages.size());
+				chunk.page_count = MaxValue<idx_t>(chunk.page_count, chunk.column_index.null_pages.size());
 			}
 			if (chunk.page_count == 0) {
 				continue;
