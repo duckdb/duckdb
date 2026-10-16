@@ -119,14 +119,110 @@ CMAKE_VARS_BUILD ?=
 CMAKE_LLVM_VARS ?=
 UNSAFE_NUMERIC_CAST ?=
 
-LEGACY_EXTENSION_VARIABLES := BUILD_EXTENSIONS DUCKDB_EXTENSIONS CORE_EXTENSIONS BUILD_AUTOCOMPLETE BUILD_ICU \
-	BUILD_TPCH BUILD_TPCDS BUILD_FTS BUILD_HTTPFS BUILD_JSON BUILD_ALL_EXT BUILD_ALL_IT_EXT BUILD_ALL_OOT_EXT \
-	DUCKDB_NEW_EXTENSION_BUILD USE_MERGED_VCPKG_MANIFEST LINK_CORE_EXTENSIONS STATICALLY_LINK_EXTENSIONS \
-	DUCKDB_CAPABILITIES SKIP_EXTENSIONS DISABLE_PARQUET DISABLE_CORE_FUNCTIONS DISABLE_BUILTIN_EXTENSIONS \
-	DISABLE_EXTENSION_LOAD DISABLE_BUILTIN_HTTPLIB
-$(foreach legacy_var,$(LEGACY_EXTENSION_VARIABLES),\
-	$(if $(filter undefined,$(origin $(legacy_var))),,\
-		$(error $(legacy_var) was removed; use DUCKDB_USE and DUCKDB_EXTEND)))
+empty :=
+space := $(empty) $(empty)
+normalize_extension_list = $(strip $(subst ;,$(space),$(1)))
+extension_list = $(subst $(space),;,$(strip $(1)))
+true_values := 1 ON on TRUE true YES yes
+
+# Compatibility for the extension selectors used before DUCKDB_USE/DUCKDB_EXTEND. Keep this until DuckDB 2.1.
+LEGACY_EXTENSION_SELECTION_VARIABLES := BUILD_EXTENSIONS DUCKDB_EXTENSIONS CORE_EXTENSIONS BUILD_AUTOCOMPLETE \
+	BUILD_ICU BUILD_TPCH BUILD_TPCDS BUILD_FTS BUILD_HTTPFS BUILD_JSON LINK_CORE_EXTENSIONS \
+	STATICALLY_LINK_EXTENSIONS DUCKDB_CAPABILITIES SKIP_EXTENSIONS DISABLE_PARQUET DISABLE_CORE_FUNCTIONS \
+	DISABLE_BUILTIN_EXTENSIONS DISABLE_EXTENSION_LOAD DISABLE_BUILTIN_HTTPLIB
+LEGACY_EXTENSION_SELECTION_VARIABLES_USED := $(strip $(foreach legacy_var,$(LEGACY_EXTENSION_SELECTION_VARIABLES),\
+	$(if $(filter undefined,$(origin $(legacy_var))),,$(legacy_var))))
+
+LEGACY_BUILD_EXTENSIONS := $(call normalize_extension_list,$(BUILD_EXTENSIONS))
+ifneq ($(strip $(DUCKDB_EXTENSIONS)),)
+	LEGACY_BUILD_EXTENSIONS := $(call normalize_extension_list,$(DUCKDB_EXTENSIONS))
+endif
+LEGACY_BUILD_EXTENSIONS += $(call normalize_extension_list,$(CORE_EXTENSIONS))
+LEGACY_BUILD_EXTENSIONS += $(if $(filter $(true_values),$(BUILD_AUTOCOMPLETE)),autocomplete)
+LEGACY_BUILD_EXTENSIONS += $(if $(filter $(true_values),$(BUILD_ICU)),icu)
+LEGACY_BUILD_EXTENSIONS += $(if $(filter $(true_values),$(BUILD_TPCH)),tpch)
+LEGACY_BUILD_EXTENSIONS += $(if $(filter $(true_values),$(BUILD_TPCDS)),tpcds)
+LEGACY_BUILD_EXTENSIONS += $(if $(filter $(true_values),$(BUILD_FTS)),fts)
+LEGACY_BUILD_EXTENSIONS += $(if $(filter $(true_values),$(BUILD_HTTPFS)),httpfs)
+LEGACY_BUILD_EXTENSIONS += $(if $(filter $(true_values),$(BUILD_JSON)),json)
+LEGACY_BUILD_EXTENSIONS := $(sort $(LEGACY_BUILD_EXTENSIONS))
+
+LEGACY_SKIP_EXTENSIONS := $(call normalize_extension_list,$(SKIP_EXTENSIONS))
+LEGACY_SKIP_EXTENSIONS += $(if $(filter $(true_values),$(DISABLE_PARQUET)),parquet)
+LEGACY_SKIP_EXTENSIONS += $(if $(filter $(true_values),$(DISABLE_CORE_FUNCTIONS)),core_functions)
+LEGACY_SKIP_EXTENSIONS := $(sort $(LEGACY_SKIP_EXTENSIONS))
+
+LEGACY_EXTENSION_USE := core_functions parquet json icu
+ifneq ($(strip $(STATICALLY_LINK_EXTENSIONS)),)
+	LEGACY_EXTENSION_USE := $(filter-out none,$(call normalize_extension_list,$(STATICALLY_LINK_EXTENSIONS)))
+else ifneq ($(filter $(true_values),$(DISABLE_BUILTIN_EXTENSIONS)),)
+	LEGACY_EXTENSION_USE := core_functions
+else ifneq ($(filter $(true_values),$(LINK_CORE_EXTENSIONS)),)
+	LEGACY_EXTENSION_USE += $(LEGACY_BUILD_EXTENSIONS)
+endif
+LEGACY_CAPABILITY_USE := httplib loadable_extensions local_extension_repository
+ifneq ($(strip $(DUCKDB_CAPABILITIES)),)
+	LEGACY_CAPABILITY_USE := $(filter-out none,$(call normalize_extension_list,$(DUCKDB_CAPABILITIES)))
+endif
+ifneq ($(filter $(true_values),$(DISABLE_EXTENSION_LOAD)),)
+	LEGACY_CAPABILITY_USE := $(filter-out httplib loadable_extensions,$(LEGACY_CAPABILITY_USE))
+endif
+ifneq ($(filter $(true_values),$(DISABLE_BUILTIN_HTTPLIB)),)
+	LEGACY_CAPABILITY_USE := $(filter-out httplib,$(LEGACY_CAPABILITY_USE))
+endif
+LEGACY_EXTENSION_USE := $(filter-out $(LEGACY_SKIP_EXTENSIONS),$(sort $(LEGACY_EXTENSION_USE)))
+LEGACY_CAPABILITY_USE := $(filter-out $(LEGACY_SKIP_EXTENSIONS),$(sort $(LEGACY_CAPABILITY_USE)))
+LEGACY_EXTENSION_EXTEND := $(filter-out $(LEGACY_SKIP_EXTENSIONS) $(LEGACY_EXTENSION_USE),\
+	$(sort core_functions parquet json icu $(LEGACY_BUILD_EXTENSIONS)))
+LEGACY_EXTENSION_SELECTION_ACTIVE := $(strip $(LEGACY_BUILD_EXTENSIONS) $(LEGACY_SKIP_EXTENSIONS) \
+	$(STATICALLY_LINK_EXTENSIONS) $(DUCKDB_CAPABILITIES) \
+	$(filter $(true_values),$(LINK_CORE_EXTENSIONS) $(DISABLE_BUILTIN_EXTENSIONS) \
+		$(DISABLE_EXTENSION_LOAD) $(DISABLE_BUILTIN_HTTPLIB)))
+
+ifneq ($(filter jemalloc,$(LEGACY_BUILD_EXTENSIONS)),)
+	BUILD_JEMALLOC ?= 1
+	LEGACY_EXTENSION_EXTEND := $(filter-out jemalloc,$(LEGACY_EXTENSION_EXTEND))
+endif
+ifneq ($(filter jemalloc,$(LEGACY_SKIP_EXTENSIONS)),)
+	BUILD_JEMALLOC ?= 0
+endif
+
+ifneq ($(strip $(LEGACY_EXTENSION_SELECTION_VARIABLES_USED)),)
+ifneq ($(LEGACY_EXTENSION_SELECTION_ACTIVE),)
+ifneq ($(filter-out undefined,$(origin DUCKDB_USE) $(origin DUCKDB_EXTEND)),)
+$(warning Legacy extension variables $(LEGACY_EXTENSION_SELECTION_VARIABLES_USED) are deprecated and ignored because DUCKDB_USE or DUCKDB_EXTEND is set; support will be removed in DuckDB 2.1)
+else
+	DUCKDB_USE := $(call extension_list,$(LEGACY_EXTENSION_USE) $(LEGACY_CAPABILITY_USE))
+	DUCKDB_EXTEND := $(call extension_list,$(LEGACY_EXTENSION_EXTEND))
+$(warning Legacy extension variables $(LEGACY_EXTENSION_SELECTION_VARIABLES_USED) are deprecated; use DUCKDB_USE='$(DUCKDB_USE)' DUCKDB_EXTEND='$(DUCKDB_EXTEND)' instead; support will be removed in DuckDB 2.1)
+endif
+else
+$(warning Legacy extension variables $(LEGACY_EXTENSION_SELECTION_VARIABLES_USED) are deprecated and have no effect with their current values; support will be removed in DuckDB 2.1)
+endif
+endif
+
+ifneq ($(filter $(true_values),$(BUILD_ALL_EXT)),)
+	EXTENSION_CONFIGS := .github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/rust_based_extensions.cmake
+else ifneq ($(filter $(true_values),$(BUILD_ALL_IT_EXT)),)
+	EXTENSION_CONFIGS := .github/config/in_tree_extensions.cmake
+else ifneq ($(filter $(true_values),$(BUILD_ALL_OOT_EXT)),)
+	EXTENSION_CONFIGS := .github/config/out_of_tree_extensions.cmake
+endif
+LEGACY_BUILD_ALL_VARIABLES_USED := $(strip $(foreach legacy_var,BUILD_ALL_EXT BUILD_ALL_IT_EXT BUILD_ALL_OOT_EXT,\
+	$(if $(filter undefined,$(origin $(legacy_var))),,$(legacy_var))))
+ifneq ($(strip $(LEGACY_BUILD_ALL_VARIABLES_USED)),)
+ifneq ($(filter $(true_values),$(BUILD_ALL_EXT) $(BUILD_ALL_IT_EXT) $(BUILD_ALL_OOT_EXT)),)
+$(warning Legacy extension variables $(LEGACY_BUILD_ALL_VARIABLES_USED) are deprecated; use EXTENSION_CONFIGS='$(EXTENSION_CONFIGS)' instead; support will be removed in DuckDB 2.1)
+else
+$(warning Legacy extension variables $(LEGACY_BUILD_ALL_VARIABLES_USED) are deprecated and have no effect with their current values; support will be removed in DuckDB 2.1)
+endif
+endif
+
+LEGACY_UNSUPPORTED_EXTENSION_VARIABLES_USED := $(strip $(foreach legacy_var,DUCKDB_NEW_EXTENSION_BUILD USE_MERGED_VCPKG_MANIFEST,\
+	$(if $(filter undefined,$(origin $(legacy_var))),,$(legacy_var))))
+ifneq ($(strip $(LEGACY_UNSUPPORTED_EXTENSION_VARIABLES_USED)),)
+$(warning $(LEGACY_UNSUPPORTED_EXTENSION_VARIABLES_USED) no longer change extension builds and can be removed; support will be removed in DuckDB 2.1)
+endif
 ifdef DUCKDB_VERSION
         COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DDUCKDB_EXPLICIT_VERSION="${DUCKDB_VERSION}"
 else ifdef OVERRIDE_GIT_DESCRIBE
