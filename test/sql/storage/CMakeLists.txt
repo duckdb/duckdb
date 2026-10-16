@@ -7,6 +7,7 @@ add_library_unity(
   test_storage.cpp
   test_database_size.cpp
   wal_checkpoint_marker.cpp
+  wal_checkpoint_unknown_index_type.cpp
   wal_prescan.cpp
   wal_torn_write.cpp)
 set(UNITTEST_OBJECT_FILES
