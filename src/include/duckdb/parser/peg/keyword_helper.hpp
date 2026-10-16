@@ -9,27 +9,32 @@
 #pragma once
 
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/parser/peg/grammar_literal_table.hpp"
 #include "duckdb/parser/simplified_token.hpp"
+#include "duckdb/parser/peg/literal_info.hpp"
 
 namespace duckdb {
 
-enum class PEGKeywordCategory : uint8_t {
-	KEYWORD_NONE,
-	KEYWORD_UNRESERVED,
-	KEYWORD_RESERVED,
-	KEYWORD_TYPE_FUNC,
-	KEYWORD_COL_NAME,
-	KEYWORD_TYPE_NAME
-};
+class GrammarLiteralTable;
+
+enum class SuggestionState : uint8_t;
 
 class PEGKeywordHelper {
 public:
 	virtual ~PEGKeywordHelper() = default;
 
 public:
-	virtual bool KeywordCategoryType(const string &text, PEGKeywordCategory type) const = 0;
-	virtual bool IsKeyword(const string &text) const = 0;
+	LiteralInfo LookupKeyword(const string &text) const {
+		return GetLiteralTable().Lookup(text);
+	}
+	bool IsKeyword(const string &text) const {
+		return LookupKeyword(text).IsKeyword();
+	}
+	//! Opaque flags accepted in this identifier position, computed when creating a matcher.
+	virtual keyword_categories_t GetIdentifierMask(SuggestionState type) const = 0;
 	virtual vector<ParserKeyword> KeywordList() const = 0;
+	//! Every helper provides an immutable table containing its literals and keyword flags.
+	virtual const GrammarLiteralTable &GetLiteralTable() const = 0;
 };
 
 } // namespace duckdb

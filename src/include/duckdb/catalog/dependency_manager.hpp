@@ -119,6 +119,9 @@ public:
 	static MangledEntryName MangleName(const CatalogEntryInfo &info);
 	static MangledEntryName MangleName(const CatalogEntry &entry);
 	static CatalogEntryInfo GetLookupProperties(const CatalogEntry &entry);
+	//! The drop error for an entry with dependents, for catalogs that track their own dependents.
+	DUCKDB_API static string FormatDropError(const CatalogEntry &object,
+	                                         const vector<reference<CatalogEntry>> &dependents);
 	//! Navigate the given schema path (outermost first) and return the deepest schema in it. Returns nullptr for an
 	//! empty path (the entry lives in the catalog root) or if a schema along the path does not exist.
 	optional_ptr<SchemaCatalogEntry> NavigateSchemaPath(CatalogTransaction transaction,

@@ -257,7 +257,9 @@ TEST_CASE("Test multiple log sinks", "[logging]") {
 	REQUIRE_NO_FAIL(con.Query("select write_log('BOTH DISABLED');"));
 	REQUIRE(sink_b->log_store.count("BOTH DISABLED") == 0);
 
-	REQUIRE_THROWS_WITH(log_manager.EnableLogSink("sink_c"), Catch::Matchers::Contains("is not registered"));
+	// enabling an unknown name creates an in-memory sink for it
+	log_manager.EnableLogSink("sink_c");
+	REQUIRE(log_manager.GetRegisteredLogSink("sink_c"));
 	REQUIRE_THROWS_WITH(log_manager.DisableLogSink("sink_a"), Catch::Matchers::Contains("is not enabled"));
 }
 
@@ -320,7 +322,7 @@ TEST_CASE("Test deprecated logging_storage setting and shell_log_storage sink na
 	// same through enable_logging
 	REQUIRE_NO_FAIL(con.Query("set logging_sink='warning_sink';"));
 	warning_sink->log_store.clear();
-	REQUIRE_NO_FAIL(con.Query("call enable_logging(storage = 'shell_log_storage');"));
+	REQUIRE_NO_FAIL(con.Query("call enable_logging(sink = 'shell_log_storage');"));
 	REQUIRE(ContainsMessage(warning_sink->log_store, "'shell_log_storage' has been renamed to 'shell_log_sink'"));
 	REQUIRE(log_manager.GetConfig().storage == "shell_log_sink");
 }

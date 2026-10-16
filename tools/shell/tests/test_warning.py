@@ -10,7 +10,7 @@ def test_trace(shell, tmp_path):
 
     test = (
         ShellTest(shell)
-        .statement("CALL enable_logging('FileSystem', level = 'trace', storage = 'shell_log_sink');")
+        .statement("CALL enable_logging('FileSystem', level = 'trace', sink = 'shell_log_sink');")
         .statement(f"copy (select 1 as a) to 'temp_file'")
     )
     result = test.run()
@@ -21,7 +21,7 @@ def test_trace(shell, tmp_path):
 # def test_debug(shell):
 #     test = (
 #         ShellTest(shell)
-#         .statement("CALL enable_logging(level = 'debug', storage = 'shell_log_sink');")
+#         .statement("CALL enable_logging(level = 'debug', sink = 'shell_log_sink');")
 #         .statement("SELECT 42;")
 #     )
 #
@@ -36,7 +36,7 @@ def test_info(shell):
 
     test = (
         ShellTest(shell)
-        .statement("CALL enable_logging(level = 'info', storage = 'shell_log_sink');")
+        .statement("CALL enable_logging(level = 'info', sink = 'shell_log_sink');")
         .statement("LOAD HTTP;")
     )
 
@@ -80,7 +80,7 @@ def test_multiple_warnings(shell):
 
 
 def test_changing_logging_settings(shell, tmp_path):
-    test = ShellTest(shell).statement("CALL enable_logging(storage = 'file', storage_config = {'path': 'hello'});")
+    test = ShellTest(shell).statement("CALL enable_logging(sink = 'file', sink_config = {'path': 'hello'});")
 
     result = test.run()
     print(result.stderr)
@@ -89,7 +89,7 @@ def test_changing_logging_settings(shell, tmp_path):
 
 
 def test_deprecated_shell_log_storage(shell):
-    test = ShellTest(shell).statement("CALL enable_logging(level = 'info', storage = 'shell_log_storage');")
+    test = ShellTest(shell).statement("CALL enable_logging(level = 'info', sink = 'shell_log_storage');")
 
     result = test.run()
     result.check_stdout("WARNING:")
@@ -100,7 +100,7 @@ def test_enable_shell_log_sink(shell):
     # with logs going to memory, CLI warnings are no longer printed
     test = (
         ShellTest(shell)
-        .statement("CALL enable_logging(level = 'warning', storage = 'memory');")
+        .statement("CALL enable_logging(level = 'warning', sink = 'memory');")
         .statement("SET logging_storage = 'memory';")
     )
     result = test.run()
@@ -109,7 +109,7 @@ def test_enable_shell_log_sink(shell):
     # enabling the shell sink prints them again, while they still go to memory
     test = (
         ShellTest(shell)
-        .statement("CALL enable_logging(level = 'warning', storage = 'memory');")
+        .statement("CALL enable_logging(level = 'warning', sink = 'memory');")
         .statement("CALL enable_log_sink('shell_log_sink');")
         .statement("SET logging_storage = 'memory';")
         .statement("SELECT count(*) FROM duckdb_logs WHERE message LIKE 'the logging_storage setting is deprecated%';")

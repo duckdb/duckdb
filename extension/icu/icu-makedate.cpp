@@ -51,7 +51,25 @@ bool ICUMakeDate::CastToDate(Vector &source, Vector &result, idx_t count, CastPa
 	return true;
 }
 
-BoundCastInfo ICUMakeDate::BindCastToDate(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+bool ICUMakeDate::CastNsToDate(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	auto &cast_data = parameters.cast_data->Cast<CastData>();
+	auto &info = cast_data.info->Cast<BindData>();
+	CalendarPtr calendar(info.calendar->Copy());
+
+	UnaryExecutor::Execute<timestamp_tz_ns_t, date_t>(source, result, count, [&](timestamp_tz_ns_t input) {
+		if (!input.IsFinite()) {
+			return Timestamp::GetDate(timestamp_t(input.value));
+		}
+		// the date only needs the microsecond instant: floor the nanoseconds so no instant moves past midnight
+		const auto nanos = input.value;
+		const auto micros = nanos >= 0 ? nanos / Interval::NANOS_PER_MICRO
+		                               : (nanos - (Interval::NANOS_PER_MICRO - 1)) / Interval::NANOS_PER_MICRO;
+		return Operation(calendar.get(), timestamp_tz_t(micros));
+	});
+	return true;
+}
+
+static unique_ptr<ICUDateFunc::CastData> BindCastToDateData(BindCastInput &input) {
 	if (!input.context) {
 		throw InternalException("Missing context for TIMESTAMPTZ to DATE cast.");
 	}
@@ -59,14 +77,21 @@ BoundCastInfo ICUMakeDate::BindCastToDate(BindCastInput &input, const LogicalTyp
 		throw BinderException("Casting from TIMESTAMP WITH TIME ZONE to DATE without an explicit time zone "
 		                      "has been disabled  - use \"AT TIME ZONE ...\"");
 	}
+	return make_uniq<ICUDateFunc::CastData>(make_uniq<ICUDateFunc::BindData>(*input.context));
+}
 
-	auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
+BoundCastInfo ICUMakeDate::BindCastToDate(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+	return BoundCastInfo(CastToDate, BindCastToDateData(input));
+}
 
-	return BoundCastInfo(CastToDate, std::move(cast_data));
+BoundCastInfo ICUMakeDate::BindCastNsToDate(BindCastInput &input, const LogicalType &source,
+                                            const LogicalType &target) {
+	return BoundCastInfo(CastNsToDate, BindCastToDateData(input));
 }
 
 void ICUMakeDate::AddCasts(ExtensionLoader &loader) {
 	loader.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::DATE, BindCastToDate);
+	loader.RegisterCastFunction(LogicalType::TIMESTAMP_TZ_NS, LogicalType::DATE, BindCastNsToDate);
 }
 
 struct ICUMakeTimestampTZFunc : public ICUDateFunc {

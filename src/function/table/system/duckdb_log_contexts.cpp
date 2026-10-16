@@ -16,8 +16,6 @@ struct DuckDBLogContextData : public GlobalTableFunctionState {
 		scan_state = log_sink->CreateScanState(LoggingTargetTable::LOG_CONTEXTS);
 		log_sink->InitializeScan(*scan_state);
 	}
-	DuckDBLogContextData() : log_sink(nullptr) {
-	}
 
 	//! The log sink we are scanning
 	shared_ptr<LogSink> log_sink;
@@ -57,22 +55,17 @@ static unique_ptr<FunctionData> DuckDBLogContextBind(ClientContext &context, Tab
 
 unique_ptr<GlobalTableFunctionState> DuckDBLogContextInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<DuckDBLogContextBindData>();
-	auto log_sink = DuckDBLogFun::GetLogSink(context, bind_data.sink_name);
-	if (log_sink->CanScan(LoggingTargetTable::LOG_CONTEXTS)) {
-		return make_uniq<DuckDBLogContextData>(std::move(log_sink));
-	}
-	return make_uniq<DuckDBLogContextData>();
+	auto log_sink = LogManager::Get(context).GetScannableLogSink(bind_data.sink_name, LoggingTargetTable::LOG_CONTEXTS);
+	return make_uniq<DuckDBLogContextData>(std::move(log_sink));
 }
 
 void DuckDBLogContextFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBLogContextData>();
-	if (data.log_sink) {
-		data.log_sink->Scan(*data.scan_state, output);
-	}
+	data.log_sink->Scan(*data.scan_state, output);
 }
 
 static unique_ptr<TableRef> DuckDBLogContextsBindReplace(ClientContext &context, TableFunctionBindInput &input) {
-	auto log_sink = DuckDBLogFun::GetLogSink(context, DuckDBLogFun::GetSinkName(input));
+	auto log_sink = LogManager::Get(context).GetLogSink(DuckDBLogFun::GetSinkName(input));
 
 	// Attempt to let the sink BindReplace the scan function
 	return log_sink->BindReplace(context, input, LoggingTargetTable::LOG_CONTEXTS);
@@ -82,7 +75,8 @@ void DuckDBLogContextFun::RegisterFunction(BuiltinFunctions &set) {
 	auto fun =
 	    TableFunction("duckdb_log_contexts", {}, DuckDBLogContextFunction, DuckDBLogContextBind, DuckDBLogContextInit);
 	fun.bind_replace = DuckDBLogContextsBindReplace;
-	fun.named_parameters["sink"] = LogicalType::VARCHAR;
+	fun.GetSignature().WithTypedKwargs("options",
+	                                   [](TypedKwargs &options) { options.Add("sink", LogicalType::VARCHAR); });
 	set.AddFunction(fun);
 }
 

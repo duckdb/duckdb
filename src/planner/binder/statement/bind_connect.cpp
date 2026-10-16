@@ -29,10 +29,14 @@ BoundStatement Binder::Bind(ConnectStatement &stmt) {
 		stmt.info->parsed_options.clear();
 	}
 
+	// Bind the external resource clause (ATTACH/CONNECT TO EXTERNAL RESOURCE ...): resolve the type + create params.
+	if (stmt.info->external_resource) {
+		BindExternalResource(*stmt.info->external_resource);
+	}
+
 	result.plan = make_uniq<LogicalConnect>(std::move(stmt.info));
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }
@@ -45,7 +49,6 @@ BoundStatement Binder::Bind(DisconnectStatement &stmt) {
 	result.plan = make_uniq<LogicalDisconnect>(std::move(stmt.info));
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

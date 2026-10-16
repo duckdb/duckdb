@@ -11,9 +11,10 @@
 #include "duckdb/common/enums/constraint_check_mode.hpp"
 #include "duckdb/common/enums/index_removal_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 #include "duckdb/storage/index.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 
 #include <functional>
@@ -25,6 +26,7 @@ class ConflictManager;
 class IndexEntry;
 class IndexBinder;
 class TableIndexList;
+class TableIndexWriter;
 struct IndexStorageInfo;
 
 //! IndexBindState transitions index binding phases and marks entries whose physical index has been destroyed.
@@ -112,7 +114,7 @@ private:
 //! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
-	IndexEntry(unique_ptr<Index> index, ConstraintCheckMode check_mode);
+	IndexEntry(unique_ptr<Index> index, idx_t index_oid, ConstraintCheckMode check_mode);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Appends a chunk using delete and checkpoint indexes where required.
@@ -135,6 +137,8 @@ public:
 	Identifier GetName() const;
 	//! Returns the physical index type.
 	string GetIndexType() const;
+	//! Returns whether an unbound index has buffered WAL operations.
+	bool HasBufferedReplays() const;
 	//! Destroys the physical index.
 	void Retire();
 	//! Binds the unbound physical index without replacing it.
@@ -164,10 +168,12 @@ public:
 	IndexInfo GetStorageInfo() const;
 	//! Returns the in-memory size of the physical index, or zero if it is unbound.
 	idx_t GetInMemorySize() const;
-	//! Serializes the physical index for a checkpoint.
-	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options);
+	//! Persist the index through the index writer and optionally returns a shadow index.
+	IndexCheckpointResult Checkpoint(TableIndexWriter &writer);
+	//! Install a shadow index in place of the current live index.
+	void InstallShadow(unique_ptr<BoundIndex> shadow_index);
 	//! Serializes the bound physical index for the write-ahead log.
-	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options);
+	IndexStorageInfo SerializeToWAL(const StorageVersion version);
 	//! Merges checkpoint deltas into the bound physical index and marks the checkpoint as written.
 	void MergeCheckpointDeltas(optional_idx checkpoint_id);
 	//! Adds the required transaction-local delete and append indexes.
@@ -192,6 +198,9 @@ public:
 	void SetBindState(IndexBindState state) {
 		bind_state = state;
 	}
+	idx_t GetIndexOid() const {
+		return index_oid;
+	}
 
 private:
 	template <class>
@@ -201,7 +210,13 @@ private:
 	void InitializeLocalIndexesInternal(TableIndexList &delete_indexes,
 	                                    optional_ptr<TableIndexList> append_indexes) const;
 
+	//! Replace the physical index, this assumes an exclusive lock on the index is being held.
+	void InstallShadowInternal(unique_ptr<BoundIndex> shadow_index);
+
+private:
 	atomic<IndexBindState> bind_state;
+	//! The OID of this index.
+	const idx_t index_oid;
 	//! Phase-fair lock protecting the physical index and all delta indexes owned by this entry.
 	mutable StorageLock lock;
 	//! The physical index owned by this stable logical entry.

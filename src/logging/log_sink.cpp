@@ -80,6 +80,9 @@ bool LogSink::Scan(LogSinkScanState &state, DataChunk &result) const {
 void LogSink::InitializeScan(LogSinkScanState &state) const {
 	throw NotImplementedException("Not implemented for this LogSink: InitializeScanEntries");
 }
+optional_idx LogSink::GetScanRowCount(LoggingTargetTable table) const {
+	return optional_idx();
+}
 void LogSink::Truncate() {
 	throw NotImplementedException("Not implemented for this LogSink: TruncateLogSink");
 }
@@ -313,7 +316,7 @@ unique_ptr<TableRef> FileLogSink::BindReplaceInternal(ClientContext &context, Ta
 	string sub_query_string =
 	    StringUtil::Format("%s FROM read_csv_auto(%s, columns={%s})", select_clause, SQLString(path), csv_columns);
 
-	Parser parser(context.GetParserOptions());
+	Parser parser(context);
 	parser.ParseQuery(sub_query_string);
 	auto select_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
 
@@ -633,6 +636,11 @@ bool InMemoryLogSink::Scan(LogSinkScanState &state, DataChunk &result) const {
 	unique_lock<mutex> lck(lock);
 	auto &in_mem_scan_state = state.Cast<InMemoryLogSinkScanState>();
 	return GetBuffer(in_mem_scan_state.table).Scan(in_mem_scan_state.scan_state, result);
+}
+
+optional_idx InMemoryLogSink::GetScanRowCount(LoggingTargetTable table) const {
+	unique_lock<mutex> lck(lock);
+	return GetBuffer(table).Count();
 }
 
 void InMemoryLogSink::InitializeScan(LogSinkScanState &state) const {

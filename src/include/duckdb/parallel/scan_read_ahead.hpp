@@ -154,11 +154,17 @@ public:
 	void PushError(ErrorData error);
 
 	//! Schedule a file-open closure on the async pool, opening files ahead of decoding
-	void ScheduleFileOpen(std::function<void()> open_fn);
+	//! cancel_fn runs instead when the open is retired without running, and must settle whatever a scan waits on
+	void ScheduleFileOpen(std::function<void()> open_fn, std::function<void()> cancel_fn);
 	//! Whether another file-open may be scheduled without exceeding the open-ahead window
 	bool CanScheduleOpen() const;
-	//! Run one queued async task inline, throwing any recorded async error; returns false when none is queued
+	//! Run one queued async task inline, returns false when none is queued
 	bool TryRunPendingTask();
+	//! Throw the first error recorded on the async executor, if there is one
+	void ThrowIfError();
+	//! Cancel the tasks that have not started yet and wait for the ones that are running. The scheduled closures
+	//! reference the scan they were scheduled for, so they must not outlive it
+	void CancelAndDrain();
 
 private:
 	//! Settles the reservation taken by TryReserveSlot
@@ -168,6 +174,7 @@ private:
 		~ProducerReservation() {
 			if (!committed) {
 				read_ahead.ReleaseSlot();
+				read_ahead.pending_io_bytes -= MINIMUM_JOB_IO_CHARGE;
 			}
 			--read_ahead.active_producers;
 		}
@@ -195,10 +202,12 @@ private:
 	bool TryReserveSlot();
 	//! Schedule the job's I/O and admit the job to the queue
 	void PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<AsyncTask>> io_tasks);
-	//! Throw if any read-ahead thread or task pushed an error
-	void ThrowIfError();
 	//! Release a read-ahead slot
 	void ReleaseSlot();
+
+private:
+	//! Minimum budget charge per job, beyond its scheduled I/O a job carries scan-state overhead (decode buffers)
+	static constexpr idx_t MINIMUM_JOB_IO_CHARGE = 16ULL * 1024 * 1024;
 
 private:
 	ClientContext &context;
@@ -219,7 +228,7 @@ private:
 	idx_t next_batch_index = 0;
 	//! Jobs scheduled ahead of decoding
 	atomic<idx_t> active_jobs {0};
-	//! Bytes of scheduled I/O that has not completed yet, released once the claimed job's I/O finished
+	//! Budget charge of the reserved producer slots and scheduled jobs, released per job in WaitForJob
 	atomic<idx_t> pending_io_bytes {0};
 	atomic<bool> done {false};
 	//! Threads that reserved a slot but have not pushed their job yet

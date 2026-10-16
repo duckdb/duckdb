@@ -17,11 +17,8 @@ on:
       run_slow_tests:
         default: false
         type: boolean
-      runner_linux_x64:
-        default: ubuntu-latest
-        type: string
-      runner_linux_small:
-        default: ubuntu-latest
+      runners:
+        required: true
         type: string
       runner_provider:
         required: true
@@ -48,7 +45,7 @@ env:
 jobs:
   linux-base:
     name: Linux Base
-    runs-on: ${{ inputs.runner_linux_x64 }}
+    runs-on: ${{ fromJSON(inputs.runners).linux_x64 }}
     container:
       image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     env:
@@ -69,18 +66,23 @@ jobs:
         uses: duckdb/duckdb-ci/build-duckdb@main
         env:
           EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/linux_release_extensions.cmake'
-          ENABLE_EXTENSION_AUTOLOADING: 1
-          ENABLE_EXTENSION_AUTOINSTALL: 1
+          DUCKDB_CAPABILITIES: 'httplib loadable_extensions'
           BUILD_BENCHMARK: 1
           BUILD_JEMALLOC: 1
           FORCE_WARN_UNUSED: 1
           DISABLE_SANITIZER: 1
         with:
           build: python3 scripts/ci/retry.py -- make release
-          bundle: make release-artifact
-          upload-name: linux-release-build
-          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          bundle: make release-artifact RELEASE_ARTIFACT_TARBALL=build/linux-release-build.tar.gz
+          vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
           save-cache: ${{ inputs.save_cache }}
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ inputs.build_current_release }}
+        with:
+          path: build/linux-release-build.tar.gz
+          if-no-files-found: error
+          archive: false
 
       - name: Select base ref
         run: |
@@ -113,6 +115,13 @@ jobs:
           git checkout --detach "${BASE_REF}"
           git submodule update --init --recursive
 
+      - name: Upload base TPC-DS answers
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-base-tpcds-answers
+          path: extension/tpcds/dsdgen/answers
+          if-no-files-found: error
+
       - name: Build base release
         uses: duckdb/duckdb-ci/build-duckdb@main
         env:
@@ -124,14 +133,14 @@ jobs:
           build: python3 scripts/ci/retry.py -- make release
           bundle: make release-artifact
           upload-name: linux-base-build
-          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
           save-cache: ${{ inputs.save_cache }}
 
   regression-bench:
     name: Bench ${{ matrix.name }}
     needs:
       - linux-base
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner || fromJSON(inputs.runners).linux_small }}
     container:
       image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     strategy:
@@ -142,6 +151,8 @@ jobs:
             benchmark: .github/regression/ingestion.csv
           - name: Micro
             benchmark: .github/regression/micro.csv
+          - name: Parser
+            benchmark: .github/regression/parser.csv
           - name: H2OAI
             benchmark: .github/regression/h2oai.csv
           - name: IMDB
@@ -150,6 +161,7 @@ jobs:
             benchmark: .github/regression/csv.csv
           - name: RealNest
             benchmark: .github/regression/realnest.csv
+            runner: ubuntu-24.04 # Needs more memory until the buffer-managed result fix is in the base build.
             data_setup: |
               mkdir -p duckdb_benchmark_data
               python3 scripts/ci/retry.py -- wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
@@ -166,13 +178,13 @@ jobs:
       - name: Download current release artifact
         uses: actions/download-artifact@v8
         with:
-          name: linux-release-build
+          name: linux-release-build.tar.gz
           path: build/current
 
       - name: Extract current release artifact
         run: |
           rm -rf build/current/release
-          tar -xzf build/current/release-artifact.tar.gz -C build/current
+          tar -xzf build/current/linux-release-build.tar.gz -C build/current
 
       - name: Download base artifact
         uses: actions/download-artifact@v8
@@ -197,6 +209,7 @@ jobs:
             --benchmarks "${{ matrix.benchmark }}" \
             --verbose \
             --early-stop \
+            --memory-limit 7GiB \
             --threads 2
 
   regression-bench-tpc:
@@ -204,7 +217,7 @@ jobs:
     if: ${{ github.repository_owner == 'duckdb' }}
     needs:
       - linux-base
-    runs-on: namespace-profile-linux-small
+    runs-on: ${{ fromJSON(inputs.runners).linux_small }}
     container:
       image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     strategy:
@@ -219,6 +232,7 @@ jobs:
             benchmarks: .github/regression/tpcds_sf10.csv
             threads: 4
             sf: 10
+            extra_args: --old-tpcds-answers build/base/tpcds-answers
           - name: TPCH-PARQUET SF1
             benchmarks: .github/regression/tpch_parquet.csv
             threads: 2
@@ -228,19 +242,19 @@ jobs:
       - name: "Checkout"
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          runner_provider: namespace
+          runner_provider: ${{ inputs.runner_provider }}
           ref: ${{ env.GIT_REF }}
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
         with:
-          name: linux-release-build
+          name: linux-release-build.tar.gz
           path: build/current
 
       - name: Extract current release artifact
         run: |
           rm -rf build/current/release
-          tar -xzf build/current/release-artifact.tar.gz -C build/current
+          tar -xzf build/current/linux-release-build.tar.gz -C build/current
 
       - name: Download base artifact
         uses: actions/download-artifact@v8
@@ -253,15 +267,24 @@ jobs:
           rm -rf build/base/release
           tar -xzf build/base/release-artifact.tar.gz -C build/base
 
+      - name: Download base TPC-DS answers
+        if: ${{ matrix.name == 'TPCDS SF10' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: linux-base-tpcds-answers
+          path: build/base/tpcds-answers
+
       - name: Run regression benchmark
         run: |
           python scripts/regression/test_runner.py \
             --old build/base/release/benchmark/benchmark_runner \
             --new build/current/release/benchmark/benchmark_runner \
             --benchmarks ${{ matrix.benchmarks }} \
+            ${{ matrix.extra_args }} \
             --verbose \
             --early-stop \
             --disable-timeout \
+            --memory-limit 7GiB \
             --benchmark-argument sf=${{ matrix.sf }} \
             --threads ${{ matrix.threads }}
 
@@ -270,7 +293,7 @@ jobs:
     if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
     needs:
       - linux-base
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(inputs.runners).linux_small }}
     container:
       image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
 
@@ -291,13 +314,13 @@ jobs:
       - name: Download current release artifact
         uses: actions/download-artifact@v8
         with:
-          name: linux-release-build
+          name: linux-release-build.tar.gz
           path: build/current
 
       - name: Extract current release artifact
         run: |
           rm -rf build/current/release
-          tar -xzf build/current/release-artifact.tar.gz -C build/current
+          tar -xzf build/current/linux-release-build.tar.gz -C build/current
 
       - name: Download base artifact
         uses: actions/download-artifact@v8
@@ -312,13 +335,20 @@ jobs:
 
       - name: Run regression benchmark
         run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --early-stop --threads 2
+          python scripts/regression/test_runner.py \
+            --old build/base/release/benchmark/benchmark_runner \
+            --new build/current/release/benchmark/benchmark_runner \
+            --benchmarks benchmark/fivetran/benchmark_list.csv \
+            --verbose \
+            --early-stop \
+            --memory-limit 7GiB \
+            --threads 2
 
   regression-test-storage:
     name: Storage Size Regression Test
     needs:
       - linux-base
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(inputs.runners).linux_small }}
     container:
       image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
 
@@ -330,13 +360,13 @@ jobs:
       - name: Download current release artifact
         uses: actions/download-artifact@v8
         with:
-          name: linux-release-build
+          name: linux-release-build.tar.gz
           path: build/current
 
       - name: Extract current release artifact
         run: |
           rm -rf build/current/release
-          tar -xzf build/current/release-artifact.tar.gz -C build/current
+          tar -xzf build/current/linux-release-build.tar.gz -C build/current
 
       - name: Download base artifact
         uses: actions/download-artifact@v8
@@ -357,7 +387,7 @@ jobs:
     name: Regression test binary size
     needs:
       - linux-base
-    runs-on: ${{ inputs.runner_linux_small }}
+    runs-on: ${{ fromJSON(inputs.runners).linux_small }}
     container:
       image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     env:
@@ -373,13 +403,13 @@ jobs:
       - name: Download current release artifact
         uses: actions/download-artifact@v8
         with:
-          name: linux-release-build
+          name: linux-release-build.tar.gz
           path: build/current
 
       - name: Extract current release artifact
         run: |
           rm -rf build/current/release
-          tar -xzf build/current/release-artifact.tar.gz -C build/current
+          tar -xzf build/current/linux-release-build.tar.gz -C build/current
 
       - name: Download base artifact
         uses: actions/download-artifact@v8
@@ -392,9 +422,9 @@ jobs:
           rm -rf build/base/release
           tar -xzf build/base/release-artifact.tar.gz -C build/base
 
-      - name: Regression Test Extension binary size
+      - name: Regression Test binary size
         run: |
-          python scripts/regression_test_extension_size.py --old build/base/release/repository --new build/current/release/repository --expect json,parquet,tpch,tpcds
+          python scripts/regression_test_extension_size.py --old build/base/release --new build/current/release --expect cli,json,parquet,tpch,tpcds
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost
@@ -412,13 +442,13 @@ jobs:
       - name: Download current release artifact
         uses: actions/download-artifact@v8
         with:
-          name: linux-release-build
+          name: linux-release-build.tar.gz
           path: build/current
 
       - name: Extract current release artifact
         run: |
           rm -rf build/current/release
-          tar -xzf build/current/release-artifact.tar.gz -C build/current
+          tar -xzf build/current/linux-release-build.tar.gz -C build/current
 
       - name: Download base artifact
         uses: actions/download-artifact@v8

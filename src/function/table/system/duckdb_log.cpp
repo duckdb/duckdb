@@ -13,13 +13,15 @@ struct DuckDBLogData : public GlobalTableFunctionState {
 	explicit DuckDBLogData(shared_ptr<LogSink> log_sink_p) : log_sink(std::move(log_sink_p)) {
 		scan_state = log_sink->CreateScanState(LoggingTargetTable::LOG_ENTRIES);
 		log_sink->InitializeScan(*scan_state);
-	}
-	DuckDBLogData() : log_sink(nullptr) {
+		total_rows = log_sink->GetScanRowCount(LoggingTargetTable::LOG_ENTRIES);
 	}
 
 	//! The log sink we are scanning
 	shared_ptr<LogSink> log_sink;
 	unique_ptr<LogSinkScanState> scan_state;
+	//! The number of log entries when the scan started, if known (for progress)
+	optional_idx total_rows;
+	atomic<idx_t> scanned_rows {0};
 };
 
 struct DuckDBLogBindData : public TableFunctionData {
@@ -39,18 +41,6 @@ string DuckDBLogFun::GetSinkName(TableFunctionBindInput &input) {
 		throw InvalidInputException("sink cannot be NULL");
 	}
 	return sink_setting->second.GetValue<string>();
-}
-
-shared_ptr<LogSink> DuckDBLogFun::GetLogSink(ClientContext &context, const string &sink_name) {
-	auto &log_manager = LogManager::Get(context);
-	if (sink_name.empty()) {
-		return log_manager.GetLogSink();
-	}
-	auto log_sink = log_manager.GetRegisteredLogSink(sink_name);
-	if (!log_sink) {
-		throw InvalidInputException("Log sink '%s' is not registered", sink_name);
-	}
-	return log_sink;
 }
 
 static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunctionBindInput &input,
@@ -75,23 +65,36 @@ static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunct
 
 unique_ptr<GlobalTableFunctionState> DuckDBLogInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<DuckDBLogBindData>();
-	auto log_sink = DuckDBLogFun::GetLogSink(context, bind_data.sink_name);
-	if (log_sink->CanScan(LoggingTargetTable::LOG_ENTRIES)) {
-		return make_uniq<DuckDBLogData>(std::move(log_sink));
-	}
-	return make_uniq<DuckDBLogData>();
+	auto log_sink = LogManager::Get(context).GetScannableLogSink(bind_data.sink_name, LoggingTargetTable::LOG_ENTRIES);
+	return make_uniq<DuckDBLogData>(std::move(log_sink));
 }
 
 void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBLogData>();
-	if (data.log_sink) {
-		data.log_sink->Scan(*data.scan_state, output);
+	data.log_sink->Scan(*data.scan_state, output);
+	data.scanned_rows.fetch_add(output.size(), std::memory_order_relaxed);
+}
+
+static double DuckDBLogProgress(ClientContext &context, const FunctionData *bind_data,
+                                const GlobalTableFunctionState *global_state) {
+	auto &data = global_state->Cast<DuckDBLogData>();
+	if (!data.log_sink) {
+		return 100.0;
 	}
+	if (!data.total_rows.IsValid()) {
+		return -1;
+	}
+	auto total_rows = data.total_rows.GetIndex();
+	if (total_rows == 0) {
+		return 100.0;
+	}
+	// log entries that are added while scanning are not part of the total
+	return MinValue<double>(100.0 * static_cast<double>(data.scanned_rows) / static_cast<double>(total_rows), 100.0);
 }
 
 unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	auto sink_name = DuckDBLogFun::GetSinkName(input);
-	auto log_sink = DuckDBLogFun::GetLogSink(context, sink_name);
+	auto log_sink = LogManager::Get(context).GetLogSink(sink_name);
 
 	bool denormalized_table = false;
 	auto denormalized_table_setting = input.named_parameters.find("denormalized_table");
@@ -122,7 +125,7 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 	                          " FROM (SELECT row_number() OVER () AS rowid, * FROM duckdb_logs(" +
 	                          sink_parameter + ")) as l JOIN duckdb_log_contexts(" + sink_parameter +
 	                          ") as c ON l.context_id=c.context_id order by timestamp, l.rowid;";
-	Parser parser(context.GetParserOptions());
+	Parser parser(context);
 	parser.ParseQuery(sub_query_string);
 	auto select_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
 
@@ -132,8 +135,10 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 void DuckDBLogFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction logs_fun("duckdb_logs", {}, DuckDBLogFunction, DuckDBLogBind, DuckDBLogInit);
 	logs_fun.bind_replace = DuckDBLogBindReplace;
-	logs_fun.named_parameters["denormalized_table"] = LogicalType::BOOLEAN;
-	logs_fun.named_parameters["sink"] = LogicalType::VARCHAR;
+	logs_fun.table_scan_progress = DuckDBLogProgress;
+	logs_fun.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("denormalized_table", LogicalType::BOOLEAN).Add("sink", LogicalType::VARCHAR);
+	});
 	set.AddFunction(logs_fun);
 }
 
