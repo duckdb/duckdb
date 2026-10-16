@@ -42,6 +42,7 @@ class MetricsManager;
 class ExternalFileCache;
 class ResultSetManager;
 struct ParserCache;
+class QueryResult;
 
 class DatabaseInstance : public enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
@@ -83,6 +84,10 @@ public:
 
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
 	DUCKDB_API static const DatabaseInstance &GetDatabase(const ClientContext &context);
+
+	//! Opens a transient connection on this instance, runs a single SQL string, and returns its result. This is the
+	//! one place extensions should run SQL, so the heavy execution path can later be served through the C API vtable.
+	DUCKDB_API unique_ptr<QueryResult> CreateAConnectionAndQuery(const string &sql);
 
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);
 
