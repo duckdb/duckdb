@@ -51,7 +51,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op, Physi
 		cast_copy.use_tmp_file = op.use_tmp_file;
 		cast_copy.children.push_back(plan);
 		cast_copy.return_type = op.return_type;
-		cast_copy.return_column_types = op.return_column_types;
 		cast_copy.query_names = op.query_names;
 		cast_copy.query_types = op.query_types;
 		cast_copy.write_empty_file = op.write_empty_file;
@@ -79,7 +78,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op, Physi
 	cast_copy.file_size_bytes = op.file_size_bytes;
 
 	cast_copy.return_type = op.return_type;
-	cast_copy.return_column_types = op.return_column_types;
 	cast_copy.query_names = op.query_names;
 	cast_copy.query_types = op.query_types;
 	cast_copy.partition_output = op.partition_output;

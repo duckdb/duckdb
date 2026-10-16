@@ -135,7 +135,7 @@ public:
 		if (op.function.initialize_operator) {
 			op.function.initialize_operator(*global_state, op);
 		}
-		if (op.return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
+		if (GetCopyFunctionBaseReturnType(op.return_type) == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
 			written_file_info = make_uniq<CopyToFileInfo>(op.file_path);
 			written_file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
 			op.function.copy_to_get_written_statistics(context, *op.bind_data, *global_state,
@@ -710,7 +710,8 @@ SourceResultType PhysicalBatchCopyToFile::GetDataInternal(ExecutionContext &cont
                                                           OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
 	auto fp = use_tmp_file ? PhysicalCopyToFile::GetNonTmpFile(context.client, file_path) : file_path;
-	switch (return_type) {
+	auto return_column_types = CopyFunctionReturnsColumnTypes(return_type);
+	switch (GetCopyFunctionBaseReturnType(return_type)) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
 		break;
