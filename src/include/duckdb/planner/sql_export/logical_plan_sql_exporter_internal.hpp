@@ -42,6 +42,8 @@ using LogicalPlanSQLFieldResult = LogicalPlanVerificationResult<vector<LogicalPl
 struct SQLSourceQueryResult {
 	unique_ptr<QueryNode> query;
 	string unsupported_reason;
+	//! A structured diagnostic carrying more than the reason slug - the caller fills in the path
+	optional<LogicalPlanVerificationIssue> issue;
 };
 
 //! Helpers shared by the logical operators' SQL reconstruction

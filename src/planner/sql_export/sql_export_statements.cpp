@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/sql_identifier.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/query_node/copy_query_node.hpp"
@@ -99,6 +100,25 @@ LogicalPlanSQLExportResult SQLExportStatementHelpers::ExportCopyToNode(LogicalCo
 	info->is_format_auto_detected = false;
 	info->file_path = op.file_path;
 	// format-specific options stay in the bound info, sink options re-emit from the operator's resolved state
+	if (op.function.copy_options) {
+		identifier_map_t<CopyOption> registered_options;
+		CopyOptionsInput options_input(registered_options);
+		op.function.copy_options(context.GetClientContext(), options_input);
+		for (auto &entry : op.copy_info->options) {
+			auto registered = registered_options.find(entry.first);
+			if (registered == registered_options.end() || !registered->second.sensitive) {
+				continue;
+			}
+			auto issue = UnsupportedStatement(
+			    path, "sensitive_parameter",
+			    StringUtil::Format("The COPY to format \"%s\" passes a value to the sensitive option \"%s\", "
+			                       "which must not appear in generated SQL",
+			                       op.function.name.GetIdentifierName(), entry.first.GetIdentifierName()));
+			issue.facts.emplace_back("function", Value(op.function.name.GetIdentifierName()));
+			issue.facts.emplace_back("parameter", Value(entry.first.GetIdentifierName()));
+			return LogicalPlanSQLExportResult::Failure({std::move(issue)});
+		}
+	}
 	for (auto &entry : op.copy_info->options) {
 		info->options[entry.first] = entry.second;
 	}
