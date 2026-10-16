@@ -1432,6 +1432,7 @@ bool GeneratedDedupRefEliminator::PreserveJoinAsSemi(unique_ptr<LogicalOperator>
 
 	ColumnBindingReplacer replacer;
 	replacement_bindings.AddTo(replacer);
+	replacer.BuildIndex();
 	replacer.stop_operator = join.get();
 	replacer.VisitOperator(rewrite_root);
 	ReplaceOperatorBindings(rewrite_root, dedup_ref->output_bindings, generated_output_replacements, join.get());
@@ -1552,6 +1553,7 @@ bool GeneratedDedupRefEliminator::PreserveFilterCrossProductAsSemi(unique_ptr<Lo
 	filter_op = std::move(replacement_op);
 	ColumnBindingReplacer replacer;
 	replacement_bindings.AddTo(replacer);
+	replacer.BuildIndex();
 	replacer.stop_operator = filter_op.get();
 	replacer.VisitOperator(rewrite_root);
 	ReplaceOperatorBindings(rewrite_root, dedup_ref->output_bindings, generated_output_replacements, filter_op.get());
@@ -1691,6 +1693,7 @@ bool GeneratedDedupRefEliminator::RemoveJoin(unique_ptr<LogicalOperator> &join, 
 
 	ColumnBindingReplacer replacer;
 	replacement_bindings.AddTo(replacer);
+	replacer.BuildIndex();
 	replacer.VisitOperator(rewrite_root);
 	ReplaceOperatorBindings(rewrite_root, dedup_ref->output_bindings, generated_output_replacements);
 	replacements.Merge(replacement_bindings);
@@ -1812,6 +1815,7 @@ bool GeneratedDedupRefEliminator::RemoveFilterCrossProduct(unique_ptr<LogicalOpe
 
 	ColumnBindingReplacer replacer;
 	replacement_bindings.AddTo(replacer);
+	replacer.BuildIndex();
 	replacer.VisitOperator(rewrite_root);
 	replacements.Merge(replacement_bindings);
 	return true;
@@ -2284,6 +2288,7 @@ bool GeneratedDomainJoinEliminator::RemoveGeneratedDedupJoin(unique_ptr<LogicalO
 
 	ColumnBindingReplacer column_replacer;
 	replacement_bindings.AddTo(column_replacer);
+	column_replacer.BuildIndex();
 	column_replacer.VisitOperator(*rewrite_root);
 	ReplaceOperatorBindings(*rewrite_root, dedup_ref->output_bindings, generated_output_replacements);
 	replacements.Merge(replacement_bindings);
@@ -2716,6 +2721,7 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 		auto projection_replacements = CreateConstructedBindingReplacements(old_left_bindings, projected_left_bindings);
 		CorrelatedColumnBindingReplacer projection_replacer;
 		projection_replacements.AddTo(projection_replacer);
+		projection_replacer.BuildIndex();
 		projection_replacer.stop_operator = plan->children[1];
 		projection_replacer.VisitOperator(*plan);
 		output_replacements.Merge(projection_replacements);
@@ -2746,6 +2752,7 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 	plan->children[0] = std::move(left_cte_ref);
 	ColumnBindingReplacer replacer;
 	binding_replacements.AddTo(replacer);
+	replacer.BuildIndex();
 	replacer.stop_operator = plan->children[1];
 	replacer.VisitOperator(*plan);
 
