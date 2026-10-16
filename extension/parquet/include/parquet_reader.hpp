@@ -495,6 +495,9 @@ private:
 	void PrepareRowGroupBuffer(ClientContext &context, ParquetReaderScanState &state, idx_t out_col_idx);
 	//! Reads the page index of the row group and works out which rows may match the filters
 	void PreparePageIndex(ClientContext &context, ParquetReaderScanState &state);
+	//! Fetches the bytes of the page index that the row group needs: the page index of the whole file when it is
+	//! small (one read serves every row group and thread through the file cache), else the given range
+	void PrefetchPageIndex(ThriftFileTransport &transport, idx_t begin, idx_t end) const;
 	//! Moves the scan to the next rows of the row group that may match according to the page index, skipping the
 	//! rows in between in every column reader; returns the number of rows to scan next (0 if none are left)
 	idx_t SkipToPageIndexRows(ParquetReaderScanState &state);
@@ -543,6 +546,10 @@ private:
 private:
 	unique_ptr<CachingFileHandle> file_handle;
 	mutable OnceFlag scan_handle_initialized;
+	//! The byte range of the file that holds the page indexes of every row group (0 if there is none), computed once
+	mutable OnceFlag page_index_span_computed;
+	mutable idx_t page_index_span_begin = 0;
+	mutable idx_t page_index_span_end = 0;
 	//! Scan handle shared by all scan states of this reader
 	mutable shared_ptr<CachingFileHandle> shared_scan_handle;
 	mutable annotated_mutex variant_stats_lock;

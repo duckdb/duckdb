@@ -1971,6 +1971,41 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 	column_reader.InitializeRead(state.group_index, row_group_num_rows, group.columns, *state.thrift_file_proto);
 }
 
+//! Page indexes up to this size are fetched in one read (ColumnIndexes and OffsetIndexes together)
+static constexpr idx_t PAGE_INDEX_SINGLE_READ_LIMIT = 1048576;
+
+void ParquetReader::PrefetchPageIndex(ThriftFileTransport &transport, idx_t begin, idx_t end) const {
+	CallOnce(page_index_span_computed, [&] {
+		idx_t span_begin = NumericLimits<idx_t>::Maximum();
+		idx_t span_end = 0;
+		for (auto &row_group : GetFileMetadata()->row_groups) {
+			for (auto &column_chunk : row_group.columns) {
+				if (ParquetPageIndexUtils::HasColumnIndex(column_chunk)) {
+					const auto index_begin = NumericCast<idx_t>(column_chunk.column_index_offset);
+					span_begin = MinValue(span_begin, index_begin);
+					span_end = MaxValue(span_end, index_begin + NumericCast<idx_t>(column_chunk.column_index_length));
+				}
+				if (ParquetPageIndexUtils::HasOffsetIndex(column_chunk)) {
+					const auto index_begin = NumericCast<idx_t>(column_chunk.offset_index_offset);
+					span_begin = MinValue(span_begin, index_begin);
+					span_end = MaxValue(span_end, index_begin + NumericCast<idx_t>(column_chunk.offset_index_length));
+				}
+			}
+		}
+		if (span_end > span_begin && span_end <= transport.GetSize()) {
+			page_index_span_begin = span_begin;
+			page_index_span_end = span_end;
+		}
+	});
+	if (page_index_span_end > page_index_span_begin &&
+	    page_index_span_end - page_index_span_begin <= PAGE_INDEX_SINGLE_READ_LIMIT && begin >= page_index_span_begin &&
+	    end <= page_index_span_end) {
+		transport.Prefetch(page_index_span_begin, page_index_span_end - page_index_span_begin);
+		return;
+	}
+	transport.Prefetch(begin, end - begin);
+}
+
 void ParquetReader::PreparePageIndex(ClientContext &context, ParquetReaderScanState &state) {
 	state.page_index.Reset();
 	state.page_index_active = false;
@@ -2020,12 +2055,38 @@ void ParquetReader::PreparePageIndex(ClientContext &context, ParquetReaderScanSt
 		return;
 	}
 
-	// the ColumnIndex of the filter columns: they are stored next to each other, so they are fetched in one read
-	if (column_index_end > file_size) {
-		throw InvalidInputException(
-		    "Failed to read file \"%s\": metadata is corrupt. ColumnIndex lies outside the file", GetFileName());
+	// the OffsetIndex of every column chunk the scan reads, to turn pages into rows (filter columns) and to find the
+	// pages of those rows (all columns) - they are stored next to each other as well, right after the ColumnIndexes
+	unordered_set<idx_t> scanned_column_chunks;
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		state.GetColumnReader(MultiFileLocalIndex(i)).GatherColumnChunks(scanned_column_chunks);
 	}
-	trans.Prefetch(column_index_begin, column_index_end - column_index_begin);
+	idx_t offset_index_begin = NumericLimits<idx_t>::Maximum();
+	idx_t offset_index_end = 0;
+	for (auto column_chunk_idx : scanned_column_chunks) {
+		auto &column_chunk = group.columns[column_chunk_idx];
+		if (!ParquetPageIndexUtils::HasOffsetIndex(column_chunk)) {
+			continue;
+		}
+		const auto begin = NumericCast<idx_t>(column_chunk.offset_index_offset);
+		offset_index_begin = MinValue(offset_index_begin, begin);
+		offset_index_end = MaxValue(offset_index_end, begin + NumericCast<idx_t>(column_chunk.offset_index_length));
+	}
+	if (column_index_end > file_size || offset_index_end > file_size) {
+		throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Page index lies outside the file",
+		                            GetFileName());
+	}
+
+	// the ColumnIndex of the filter columns is fetched in one read; when the whole page index of the row group is
+	// small, the OffsetIndexes come along in that read (a remote request costs more than the few extra bytes)
+	const auto index_begin = MinValue(column_index_begin, offset_index_begin);
+	const auto index_end = MaxValue(column_index_end, offset_index_end);
+	const bool fetch_indexes_together = index_end - index_begin <= PAGE_INDEX_SINGLE_READ_LIMIT;
+	if (fetch_indexes_together) {
+		PrefetchPageIndex(trans, index_begin, index_end);
+	} else {
+		PrefetchPageIndex(trans, column_index_begin, column_index_end);
+	}
 	vector<vector<bool>> page_may_match(filter_columns.size());
 	bool any_page_pruned = false;
 	for (idx_t i = 0; i < filter_columns.size(); i++) {
@@ -2053,28 +2114,9 @@ void ParquetReader::PreparePageIndex(ClientContext &context, ParquetReaderScanSt
 		return;
 	}
 
-	// the OffsetIndex of every column chunk the scan reads, to turn pages into rows (filter columns) and to find the
-	// pages of those rows (all columns) - stored next to each other as well
-	unordered_set<idx_t> scanned_column_chunks;
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		state.GetColumnReader(MultiFileLocalIndex(i)).GatherColumnChunks(scanned_column_chunks);
+	if (!fetch_indexes_together) {
+		PrefetchPageIndex(trans, offset_index_begin, offset_index_end);
 	}
-	idx_t offset_index_begin = NumericLimits<idx_t>::Maximum();
-	idx_t offset_index_end = 0;
-	for (auto column_chunk_idx : scanned_column_chunks) {
-		auto &column_chunk = group.columns[column_chunk_idx];
-		if (!ParquetPageIndexUtils::HasOffsetIndex(column_chunk)) {
-			continue;
-		}
-		const auto begin = NumericCast<idx_t>(column_chunk.offset_index_offset);
-		offset_index_begin = MinValue(offset_index_begin, begin);
-		offset_index_end = MaxValue(offset_index_end, begin + NumericCast<idx_t>(column_chunk.offset_index_length));
-	}
-	if (offset_index_end > file_size) {
-		throw InvalidInputException(
-		    "Failed to read file \"%s\": metadata is corrupt. OffsetIndex lies outside the file", GetFileName());
-	}
-	trans.Prefetch(offset_index_begin, offset_index_end - offset_index_begin);
 	state.page_index.offset_indexes.resize(group.columns.size());
 	for (auto column_chunk_idx : scanned_column_chunks) {
 		auto &column_chunk = group.columns[column_chunk_idx];
