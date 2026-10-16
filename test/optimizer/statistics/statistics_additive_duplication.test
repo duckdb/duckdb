@@ -50,3 +50,32 @@ query II
 EXPLAIN SELECT struct_pack(d := d) AS s FROM fact, dim WHERE fact.k = dim.k AND dim.k > 100;
 ----
 logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# SEMI and ANTI join conditions are evaluated over candidate pairs that repeat rows of
+# either side, even though the join output emits each surviving row at most once
+
+statement ok
+CREATE TABLE l(d VARCHAR, n BIGINT);
+
+statement ok
+INSERT INTO l VALUES ('a', 1), ('bb', 2);
+
+statement ok
+CREATE TABLE r AS SELECT CASE WHEN i % 2 = 0 THEN 'a' ELSE 'bb' END AS d, i % 2 + 1 AS n FROM range(1000) t(i);
+
+query I
+SELECT count(*) FROM l SEMI JOIN r ON struct_pack(d := l.d, n := r.n) = struct_pack(d := r.d, n := l.n);
+----
+2
+
+query I
+SELECT count(*) FROM l ANTI JOIN r ON struct_pack(d := l.d, n := r.n) = struct_pack(d := r.d, n := l.n);
+----
+0
+
+# the output of a SEMI join emits each surviving row at most once and keeps its additive totals
+query I
+SELECT stats(d) FROM l SEMI JOIN r ON l.d = r.d LIMIT 1;
+----
+<REGEX>:.*'total_string_length': 3.*
+
