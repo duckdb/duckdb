@@ -45,7 +45,9 @@ public:
 	static constexpr idx_t WAIT_TIME = 20;
 
 public:
-	explicit Executor(ClientContext &context);
+	//! A nested executor runs a sub-plan of an already executing query (e.g. the plan below a TRY boundary).
+	//! It keeps its own error state, but leaves the query-wide profiler state to the outer executor.
+	explicit Executor(ClientContext &context, bool nested_execution = false);
 	~Executor();
 
 	ClientContext &context;
@@ -174,6 +176,8 @@ private:
 private:
 	optional_ptr<PhysicalOperator> physical_plan;
 	unique_ptr<PhysicalOperator> owned_plan;
+	//! Whether this executor runs a sub-plan nested inside another executing query
+	bool nested_execution;
 
 	mutex executor_lock;
 	//! All pipelines of the query plan
