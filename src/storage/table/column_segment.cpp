@@ -151,11 +151,16 @@ void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &resul
 }
 
 void ColumnSegment::Select(ColumnScanState &state, idx_t scan_count, Vector &result, const SelectionVector &sel,
-                           idx_t sel_count) {
+                           idx_t sel_count, idx_t result_offset, ScanVectorType scan_type) {
 	if (!function.get().select) {
 		throw InternalException("ColumnSegment::Select not implemented for this compression method");
 	}
-	function.get().select(*this, state, scan_count, result, sel, sel_count);
+	if (scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR) {
+		D_ASSERT(result_offset == 0);
+	} else {
+		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+	}
+	function.get().select(*this, state, scan_count, result, sel, sel_count, result_offset, scan_type);
 }
 
 void ColumnSegment::Filter(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel,
@@ -490,8 +495,8 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 		chunk.data.emplace_back(Vector::Ref(vector));
 		chunk.SetChildCardinality(scan_count);
 		SelectionVector identity_sel;
-		optional_ptr<SelectionVector> current_sel = &sel;
-		if (!sel.IsSet()) {
+		optional_ptr<SelectionVector> current_sel = sel.IsSet() ? &sel : nullptr;
+		if (!sel.IsSet() && (vector.GetType().IsNested() || approved_tuple_count != scan_count)) {
 			identity_sel = SelectionVector::Incremental(approved_tuple_count);
 			current_sel = &identity_sel;
 		}

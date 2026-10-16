@@ -5,11 +5,6 @@
 statement ok
 CREATE TABLE t(a INTEGER, x INTEGER);
 
-foreach heap true false
-
-statement ok
-SET heap_based_parser={heap};
-
 # misspelled keyword at the failure position
 statement error
 SELECT * FROM t WHERE x = 1 GRUOP BY x
@@ -204,4 +199,3 @@ SELECT a FORM t
 ----
 <REGEX>:.*LINE 1: SELECT a FORM t\n {17}\^\^\^\^.*
 
-endloop

@@ -1,3 +1,4 @@
+#include "duckdb/common/operator/add.hpp"
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -47,7 +48,9 @@ struct KurtosisOperation {
 		if (source.n == 0) {
 			return;
 		}
-		target.n += source.n;
+		if (!TryAddOperator::Operation(target.n, source.n, target.n)) {
+			throw OutOfRangeException("Overflow in aggregate state combine");
+		}
 		target.sum += source.sum;
 		target.sum_sqr += source.sum_sqr;
 		target.sum_cub += source.sum_cub;
@@ -103,6 +106,7 @@ AggregateFunction KurtosisFun::GetFunction() {
 	auto result =
 	    AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation<KurtosisFlagBiasCorrection>>(
 	        LogicalType::DOUBLE, LogicalType::DOUBLE);
+	result.GetSignature().GetParameter(0).SetName("x");
 	result.SetFallible();
 	return result;
 }
@@ -111,6 +115,7 @@ AggregateFunction KurtosisPopFun::GetFunction() {
 	auto result = AggregateFunction::UnaryAggregate<KurtosisState, double, double,
 	                                                KurtosisOperation<KurtosisFlagNoBiasCorrection>>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	result.GetSignature().GetParameter(0).SetName("x");
 	result.SetFallible();
 	return result;
 }

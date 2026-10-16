@@ -8,6 +8,9 @@ add_library_unity(
   autocomplete_core.cpp
   keyword_map.cpp
   matcher.cpp
+  matcher_first_set.cpp
+  operator_matcher.cpp
+  dialect_extension.cpp
   matcher_process.cpp
   matcher_stack.cpp
   compiled_grammar.cpp
@@ -16,6 +19,7 @@ add_library_unity(
   parser_packrat.cpp
   peg_parser.cpp
   parsed_grammar.cpp
+  passthrough_dialect.cpp
   sql_formatter.cpp
   syntax_error.cpp)
 set(ALL_OBJECT_FILES

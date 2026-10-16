@@ -144,7 +144,12 @@ struct ICUCalendarSub : public ICUDateFunc {
 
 	template <typename TA>
 	static ScalarFunction GetFunction(const LogicalTypeId &type) {
-		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateSubFunction<TA>, Bind);
+		ScalarFunction fun({}, LogicalType::BIGINT, ICUDateSubFunction<TA>, Bind);
+		fun.GetSignature()
+		    .AddParameter("part", LogicalType::VARCHAR)
+		    .AddParameter("startdate", type)
+		    .AddParameter("enddate", type);
+		return fun;
 	}
 
 	static void AddFunctions(const Identifier &name, ExtensionLoader &loader) {
@@ -204,6 +209,20 @@ ICUDateFunc::part_sub_t ICUDateFunc::SubtractFactory(DatePartSpecifier type) {
 // MS-SQL differences can be computed using ICU by truncating both arguments
 // to the desired part precision and then applying ICU subtraction/difference
 struct ICUCalendarDiff : public ICUDateFunc {
+	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
+		auto part_value = input.TryGetConstant(0);
+		if (part_value && !part_value->IsNull()) {
+			DatePartSpecifier part;
+			if (TryGetDatePartSpecifier(part_value->GetValue<string>(), part) &&
+			    (part == DatePartSpecifier::DECADE || part == DatePartSpecifier::CENTURY ||
+			     part == DatePartSpecifier::MILLENNIUM)) {
+				// date_diff is not monotone for these parts because ICU years skip year 0 at the BC/AD boundary
+				input.GetBoundFunction().SetArgProperties({});
+			}
+		}
+		return ICUDateFunc::Bind(input);
+	}
+
 	static int64_t DifferenceEra(Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		SetTime(calendar, start_date);
 		const auto start_era = ExtractField(calendar, CAL_ERA);
@@ -308,7 +327,12 @@ struct ICUCalendarDiff : public ICUDateFunc {
 
 	template <typename TA>
 	static ScalarFunction GetFunction(const LogicalTypeId &type) {
-		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateDiffFunction<TA>, Bind);
+		ScalarFunction fun({}, LogicalType::BIGINT, ICUDateDiffFunction<TA>, Bind);
+		fun.GetSignature()
+		    .AddParameter("part", LogicalType::VARCHAR)
+		    .AddParameter("startdate", type)
+		    .AddParameter("enddate", type);
+		return fun;
 	}
 
 	static void AddFunctions(const Identifier &name, ExtensionLoader &loader) {

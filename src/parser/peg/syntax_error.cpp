@@ -21,6 +21,8 @@ struct ExpectedTokens {
 	vector<string> categories;
 	//! Labels of whole sub-grammars that were accepted (e.g. "an expression").
 	vector<string> labels;
+	//! Keyword categories the identifier positions here accept, as IdentifierMatcher sees them.
+	keyword_categories_t identifier_mask;
 
 	bool AcceptsIdentifiers() const {
 		return !categories.empty() || !labels.empty();
@@ -81,6 +83,7 @@ const char *CategoryDescription(SuggestionState type) {
 	case SuggestionState::SUGGEST_DIRECTORY:
 		return "a directory";
 	case SuggestionState::SUGGEST_VARIABLE:
+	case SuggestionState::SUGGEST_BARE_LABEL:
 		return "an identifier";
 	case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
 		return "a function name";
@@ -102,14 +105,13 @@ bool Recognize(vector<MatcherToken> &statement_tokens, const CompiledGrammar &gr
 	vector<MatcherSuggestion> unused_suggestions;
 	ParseResultAllocator parse_result_allocator;
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
-	ParserPackratCache packrat_cache;
+	ArenaAllocator packrat_allocator(Allocator::DefaultAllocator());
+	ParserPackratCache packrat_cache(packrat_allocator);
 	furthest = 0;
 	MatchContext match_context(suggestions ? *suggestions : unused_suggestions, parse_result_allocator,
 	                           process_allocator, furthest, MatchMode::RECOGNIZE_ONLY, options.identifier_case_mode,
-	                           options.heap_based_parser, &packrat_cache);
-	if (suggestions) {
-		match_context.suggestion_cursor = statement_tokens.size() - 1;
-	}
+	                           &packrat_cache);
+	match_context.memoizable_suggestions = suggestions != nullptr;
 	TokenIterator token_iterator(statement_tokens);
 	MatchState state(token_iterator, match_context);
 	return grammar.TopLevelStatementMatcher().MatchParseResult(state).IsSuccess();
@@ -154,7 +156,11 @@ ExpectedTokens ComputeExpectedTokens(const TokenIterator &tokens, idx_t statemen
 			list.push_back(entry);
 		}
 	};
+	auto &keyword_helper = grammar.GetKeywordHelper();
 	for (auto &suggestion : suggestions) {
+		if (suggestion.type != SuggestionState::SUGGEST_KEYWORD) {
+			result.identifier_mask |= keyword_helper.GetIdentifierMask(suggestion.type);
+		}
 		if (suggestion.label) {
 			add_unique(result.labels, *suggestion.label);
 			continue;
@@ -176,10 +182,9 @@ ExpectedTokens ComputeExpectedTokens(const TokenIterator &tokens, idx_t statemen
 	return result;
 }
 
-//! Where an identifier is accepted, a non-reserved keyword is accepted as one - it is no alternative worth naming.
+//! A keyword the identifier positions here accept as an identifier is no alternative worth naming.
 bool IsRedundantKeyword(const string &keyword, const ExpectedTokens &expected, const PEGKeywordHelper &keyword_helper) {
-	return IsWordKeyword(keyword) && expected.AcceptsIdentifiers() &&
-	       !keyword_helper.KeywordCategoryType(keyword, PEGKeywordCategory::KEYWORD_RESERVED);
+	return IsWordKeyword(keyword) && keyword_helper.LookupKeyword(keyword).HasAnyFlags(expected.identifier_mask);
 }
 
 //! Expected keywords that `token_text` could be a misspelling of, closest first.

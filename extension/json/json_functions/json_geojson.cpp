@@ -500,8 +500,8 @@ static void GeomFromGeoJSONFunction(DataChunk &args, ExpressionState &state, Vec
 
 ScalarFunctionSet JSONFunctions::GetAsGeoJSONFunction() {
 	ScalarFunctionSet set("st_asgeojson");
-	ScalarFunction fun({LogicalType::GEOMETRY()}, LogicalType::JSON(), AsGeoJSONFunction, nullptr, nullptr,
-	                   JSONFunctionLocalState::Init);
+	ScalarFunction fun({}, LogicalType::JSON(), AsGeoJSONFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("geom", LogicalType::GEOMETRY());
 	fun.SetFallible();
 	set.AddFunction(fun);
 	return set;
@@ -510,8 +510,9 @@ ScalarFunctionSet JSONFunctions::GetAsGeoJSONFunction() {
 ScalarFunctionSet JSONFunctions::GetGeomFromGeoJSONFunction() {
 	ScalarFunctionSet set("st_geomfromgeojson");
 	for (const auto &input_type : vector<LogicalType> {LogicalType::VARCHAR, LogicalType::JSON()}) {
-		ScalarFunction fun({input_type}, LogicalType::GEOMETRY(), GeomFromGeoJSONFunction, nullptr, nullptr,
+		ScalarFunction fun({}, LogicalType::GEOMETRY(), GeomFromGeoJSONFunction, nullptr, nullptr,
 		                   JSONFunctionLocalState::Init);
+		fun.GetSignature().AddParameter("geojson", input_type);
 		fun.SetFallible();
 		set.AddFunction(fun);
 	}
