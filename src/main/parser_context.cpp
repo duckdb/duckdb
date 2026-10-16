@@ -5,6 +5,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
+#include "duckdb/parser/grammar_extension.hpp"
 #include "duckdb/parser/peg/passthrough_dialect.hpp"
 
 namespace duckdb {
@@ -39,15 +40,7 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Get(ClientContext &context) {
 
 shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context,
                                                     const vector<string> &active_extensions) {
-	vector<reference<GrammarExtension>> selected_extensions;
-	auto &callback_manager = ExtensionCallbackManager::Get(context);
-	for (auto &name : active_extensions) {
-		auto grammar_extension = callback_manager.FindGrammarExtension(name);
-		if (grammar_extension) {
-			selected_extensions.emplace_back(*grammar_extension);
-		}
-	}
-	return Create(selected_extensions);
+	return context.db->GetParserCache().GetMatcher(context, active_extensions);
 }
 
 ParserCache::ParserCache() {
@@ -70,6 +63,39 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher() {
 		matcher = std::move(new_matcher);
 	}
 	return matcher;
+}
+
+shared_ptr<CompiledGrammar> ParserCache::GetMatcher(const ClientContext &context,
+                                                    const vector<string> &active_extensions) {
+	vector<reference<GrammarExtension>> selected_extensions;
+	vector<string> extension_names;
+	auto &callback_manager = ExtensionCallbackManager::Get(context);
+	for (auto &name : active_extensions) {
+		auto grammar_extension = callback_manager.FindGrammarExtension(name);
+		if (grammar_extension) {
+			selected_extensions.emplace_back(*grammar_extension);
+			extension_names.push_back(grammar_extension->Name());
+		}
+	}
+	// compile while holding the lock, so concurrent first uses of the same extensions only compile once
+	lock_guard<std::mutex> lock(extension_mutex);
+	for (idx_t i = 0; i < extension_matchers.size(); i++) {
+		if (extension_matchers[i].first == extension_names) {
+			// move the entry to the back, which holds the most recently used grammar
+			auto entry = std::move(extension_matchers[i]);
+			extension_matchers.erase(extension_matchers.begin() + NumericCast<int64_t>(i));
+			extension_matchers.push_back(std::move(entry));
+			return extension_matchers.back().second;
+		}
+	}
+	// compile before evicting, so a grammar that fails to compile does not evict a valid one
+	auto new_matcher = CompiledGrammar::Create(selected_extensions);
+	if (extension_matchers.size() >= MAX_CACHED_EXTENSION_MATCHERS) {
+		// connections that still use the evicted grammar keep their own reference to it
+		extension_matchers.erase(extension_matchers.begin());
+	}
+	extension_matchers.emplace_back(std::move(extension_names), std::move(new_matcher));
+	return extension_matchers.back().second;
 }
 
 shared_ptr<CompiledGrammar> ParserCache::GetPassthroughMatcher(const ClientContext &context) {

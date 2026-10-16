@@ -593,6 +593,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 				throw IOException("TIME_MICROS converted type can only be set for value of Type::INT64");
 			}
 		case ConvertedType::INTERVAL:
+			if (s_ele.type != Type::FIXED_LEN_BYTE_ARRAY || s_ele.type_length != 12) {
+				throw DataCorruptionException(
+				    "INTERVAL converted type can only be set for value of Type::FIXED_LEN_BYTE_ARRAY of length 12");
+			}
 			return LogicalType::INTERVAL;
 		case ConvertedType::JSON:
 			return LogicalType::JSON();
@@ -1041,11 +1045,20 @@ static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnS
 	return true;
 }
 
+//! The maximum nesting depth of a Parquet schema - deeper schemas would overflow the stack while being read
+static constexpr idx_t MAX_PARQUET_SCHEMA_DEPTH = 500;
+
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                         idx_t &next_schema_idx, idx_t &next_file_idx,
                                                         ClientContext &context) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
+	if (depth > MAX_PARQUET_SCHEMA_DEPTH) {
+		throw InvalidInputException(
+		    "Malformed Parquet schema in file \"%s\": the schema is nested more than %llu levels "
+		    "deep",
+		    file.path, MAX_PARQUET_SCHEMA_DEPTH);
+	}
 	if (next_schema_idx >= file_meta_data->schema.size()) {
 		throw InvalidInputException("Malformed Parquet schema in file \"%s\": invalid schema index %d", file.path,
 		                            next_schema_idx);
@@ -1144,6 +1157,24 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		bool is_variant = s_ele.__isset.logicalType && s_ele.logicalType.__isset.VARIANT == true;
 		if (!is_variant && parquet_options.variant_legacy_encoding && IsVariantType(s_ele, child_schemas)) {
 			is_variant = true;
+		}
+		if (is_variant) {
+			// the VARIANT reader reads the 'metadata' and 'value' columns as binary
+			for (auto &child_schema : child_schemas) {
+				if (child_schema.name != "metadata" && child_schema.name != "value") {
+					continue;
+				}
+				// a logical type annotation (e.g. GEOMETRY) would make the column reader produce another type
+				const auto is_binary =
+				    child_schema.type.id() == LogicalTypeId::BLOB || child_schema.type.id() == LogicalTypeId::VARCHAR;
+				if (!child_schema.children.empty() || child_schema.parquet_type != duckdb_parquet::Type::BYTE_ARRAY ||
+				    !is_binary || child_schema.schema_type != ParquetColumnSchemaType::COLUMN) {
+					throw DataCorruptionException(
+					    "Failed to read Parquet file \"%s\": the '%s' column of VARIANT column \"%s\" "
+					    "must be a binary BYTE_ARRAY column",
+					    file.path, child_schema.name, s_ele.name);
+				}
+			}
 		}
 
 		if (!is_map_kv && this_idx > 0) {
@@ -1770,6 +1801,55 @@ ColumnReader &ParquetReaderScanState::GetColumnReader(idx_t i) {
 	return *column_readers[i];
 }
 
+FilterPropagateResult ParquetReader::CheckRowGroupFilterStatistics(ClientContext &context,
+                                                                   ParquetReaderScanState &state,
+                                                                   ColumnReader &column_reader,
+                                                                   const TableFilter &filter) {
+	auto &group = GetGroup(state);
+	auto schema_column_index = column_reader.ColumnIndex();
+	auto prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	bool is_generated_column = schema_column_index >= group.columns.size();
+	bool is_expression = column_reader.Schema().schema_type == ParquetColumnSchemaType::EXPRESSION;
+	auto stats = column_reader.Stats(state.group_index, group.columns);
+	if (stats) {
+		bool has_min_max = false;
+		if (!is_generated_column) {
+			has_min_max = group.columns[schema_column_index].meta_data.statistics.__isset.min_value &&
+			              group.columns[schema_column_index].meta_data.statistics.__isset.max_value;
+		}
+		if (!is_expression && !is_generated_column && has_min_max &&
+		    (column_reader.Type().id() == LogicalTypeId::FLOAT || column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
+		    ParquetStatisticsUtils::CanHaveNaN(group.columns[schema_column_index].meta_data.statistics,
+		                                       parquet_options.can_have_nan)) {
+			// floating point columns can have NaN values in addition to the min/max bounds defined in the file
+			// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
+			// based on nan
+			prune_result = CheckParquetFloatFilter(context, column_reader,
+			                                       group.columns[schema_column_index].meta_data.statistics, filter);
+		} else {
+			auto &expr_filter =
+			    ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::CheckRowGroupFilterStatistics");
+			prune_result = expr_filter.CheckStatistics(context, *stats);
+		}
+	}
+	return prune_result;
+}
+
+bool ParquetReader::DynamicFiltersExcludeRowGroup(ClientContext &context, ParquetReaderScanState &state) {
+	for (auto &scan_filter : state.scan_filters) {
+		if (!ExpressionFilter::GetOptionalDynamicFilterData(scan_filter.filter)) {
+			continue;
+		}
+		auto &column_reader = state.GetColumnReader(MultiFileLocalIndex(scan_filter.filter_idx));
+		auto prune_result = CheckRowGroupFilterStatistics(context, state, column_reader, scan_filter.filter);
+		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+		    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderScanState &state, idx_t i) {
 	auto &group = GetGroup(state);
 	auto col_idx = MultiFileLocalIndex(i);
@@ -1794,33 +1874,7 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 		if (filter_entry) {
 			auto &filter = *filter_entry;
 
-			auto schema_column_index = column_reader.ColumnIndex();
-			auto prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-			bool is_generated_column = schema_column_index >= group.columns.size();
-			bool is_expression = column_reader.Schema().schema_type == ParquetColumnSchemaType::EXPRESSION;
-			auto stats = column_reader.Stats(state.group_index, group.columns);
-			if (stats) {
-				bool has_min_max = false;
-				if (!is_generated_column) {
-					has_min_max = group.columns[schema_column_index].meta_data.statistics.__isset.min_value &&
-					              group.columns[schema_column_index].meta_data.statistics.__isset.max_value;
-				}
-				if (!is_expression && !is_generated_column && has_min_max &&
-				    (column_reader.Type().id() == LogicalTypeId::FLOAT ||
-				     column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
-				    ParquetStatisticsUtils::CanHaveNaN(group.columns[schema_column_index].meta_data.statistics,
-				                                       parquet_options.can_have_nan)) {
-					// floating point columns can have NaN values in addition to the min/max bounds defined in the file
-					// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
-					// based on nan
-					prune_result = CheckParquetFloatFilter(
-					    context, column_reader, group.columns[schema_column_index].meta_data.statistics, filter);
-				} else {
-					auto &expr_filter =
-					    ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::PrepareRowGroupBuffer");
-					prune_result = expr_filter.CheckStatistics(context, *stats);
-				}
-			}
+			auto prune_result = CheckRowGroupFilterStatistics(context, state, column_reader, filter);
 			// check the bloom filter if present
 			auto bloom_source = TryGetBloomFilterSource(column_reader);
 			if (bloom_source) {
@@ -1904,9 +1958,11 @@ unique_ptr<CachingFileHandle> ParquetReader::OpenScanHandle(ClientContext &conte
 
 void ParquetReader::PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &) {
 	// pre-open the scan handle while the file is opened, so the first InitializeScan skips its file-open
-	auto handle = OpenScanHandle(context);
-	lock_guard<mutex> guard(prewarm_lock);
-	prewarmed_scan_handle = std::move(handle);
+	InitializeScanHandle(context);
+}
+
+void ParquetReader::InitializeScanHandle(ClientContext &context) const {
+	CallOnce(scan_handle_initialized, [&] { shared_scan_handle = OpenScanHandle(context); });
 }
 
 void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const {
@@ -1919,14 +1975,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		state.prefetch_mode = ShouldAndCanPrefetch(context, *file_handle);
 		// all scan states share one handle (opened with parallel access), so open handles and
 		// connections scale with the number of readers instead of the number of row-group jobs
-		lock_guard<mutex> guard(prewarm_lock);
-		if (!shared_scan_handle) {
-			if (prewarmed_scan_handle) {
-				shared_scan_handle = std::move(prewarmed_scan_handle);
-			} else {
-				shared_scan_handle = OpenScanHandle(context);
-			}
-		}
+		InitializeScanHandle(context);
 		state.file_handle = shared_scan_handle;
 	}
 	state.scan_filters.clear();
@@ -2250,10 +2299,27 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 				if (filters) {
 					if (state.prefetch_metrics.row_groups_executed == 0) {
 						filters_look_unselective = true;
-					} else if (static_cast<double>(state.prefetch_metrics.row_groups_with_matches) /
-					               static_cast<double>(state.prefetch_metrics.row_groups_executed) >
-					           ParquetReaderPrefetchConfig::PREFETCH_FILTER_MINIMUM_MATCH_RATIO) {
-						filters_look_unselective = true;
+						if (scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
+							unordered_set<idx_t> filter_column_chunks;
+							for (auto &scan_filter : state.scan_filters) {
+								state.GetColumnReader(scan_filter.filter_idx.GetIndex())
+								    .GatherColumnChunks(filter_column_chunks);
+							}
+							uint64_t filter_compressed_bytes = 0;
+							for (auto column_chunk : filter_column_chunks) {
+								filter_compressed_bytes +=
+								    NumericCast<uint64_t>(group.columns[column_chunk].meta_data.total_compressed_size);
+							}
+							filters_look_unselective =
+							    filter_column_chunks.empty() ||
+							    static_cast<double>(filter_compressed_bytes) /
+							            static_cast<double>(total_row_group_span) >
+							        ParquetReaderPrefetchConfig::FIRST_GROUP_PREFETCH_MAXIMUM_FILTER_SCAN;
+						}
+					} else {
+						filters_look_unselective = static_cast<double>(state.prefetch_metrics.row_groups_with_matches) /
+						                               static_cast<double>(state.prefetch_metrics.row_groups_executed) >
+						                           ParquetReaderPrefetchConfig::PREFETCH_FILTER_MINIMUM_MATCH_RATIO;
 					}
 				}
 
@@ -2433,6 +2499,11 @@ AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanStat
 	const bool log_prefetch =
 	    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
 	const idx_t group_num_rows = GetGroup(state).num_rows;
+	// Queued row groups may predate the current dynamic filter. Do not revisit a partially decoded chunk.
+	if (state.offset_in_group == 0 && !state.resuming_payload && DynamicFiltersExcludeRowGroup(context, state)) {
+		rows_read += group_num_rows;
+		state.offset_in_group = group_num_rows;
+	}
 	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, group_num_rows - state.offset_in_group);
 	if (!state.resuming_payload) {
 		result.SetChildCardinality(scan_count);

@@ -153,6 +153,10 @@ static unique_ptr<BaseStatistics> StatisticsPropagateVariant(const BaseStatistic
 		// only try this for non-nested
 		return nullptr;
 	}
+	if (input.GetStatsType() != StatisticsType::VARIANT_STATS) {
+		// e.g. the unknown statistics of a prepared statement parameter
+		return nullptr;
+	}
 	if (!VariantStats::IsShredded(input)) {
 		// not shredded
 		return nullptr;

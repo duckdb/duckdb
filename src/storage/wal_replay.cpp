@@ -88,15 +88,22 @@ public:
 class WriteAheadLogDeserializer {
 public:
 	WriteAheadLogDeserializer(ReplayState &state_p, BufferedFileReader &stream_p, bool deserialize_only = false)
-	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), data(nullptr),
-	      stream(nullptr, 0), deserializer(stream_p), deserialize_only(deserialize_only) {
+	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), stream(nullptr, 0),
+	      deserializer(stream_p), deserialize_only(deserialize_only) {
 		deserializer.Set<Catalog &>(catalog);
 	}
-	WriteAheadLogDeserializer(ReplayState &state_p, unique_ptr<data_t[]> data_p, idx_t size,
-	                          bool deserialize_only = false)
+	WriteAheadLogDeserializer(ReplayState &state_p, AllocatedData data_p, idx_t size, bool deserialize_only = false)
 	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), data(std::move(data_p)),
 	      stream(data.get(), size), deserializer(stream), deserialize_only(deserialize_only) {
 		deserializer.Set<Catalog &>(catalog);
+	}
+
+	//! WAL entries are read into memory in full, so the buffer is tracked by the buffer manager
+	static AllocatedData AllocateEntryBuffer(ReplayState &state_p, idx_t size) {
+		if (size == 0) {
+			throw SerializationException("Corrupt WAL file: found an empty entry");
+		}
+		return BufferAllocator::Get(state_p.db).Allocate(size);
 	}
 
 	static WriteAheadLogDeserializer GetEntryDeserializer(ReplayState &state_p, BufferedFileReader &stream,
@@ -121,7 +128,7 @@ public:
 			}
 
 			// allocate a buffer and read data into the buffer
-			auto buffer = unique_ptr<data_t[]>(new data_t[size]);
+			auto buffer = AllocateEntryBuffer(state_p, size);
 			stream.ReadData(buffer.get(), size);
 
 			// compute and verify the checksum
@@ -181,8 +188,8 @@ public:
 			}
 
 			//! Allocate a decryption buffer
-			auto buffer = unique_ptr<data_t[]>(new data_t[ciphertext_size]);
-			auto out_buffer = unique_ptr<data_t[]>(new data_t[size]);
+			auto buffer = AllocateEntryBuffer(state_p, ciphertext_size);
+			auto out_buffer = AllocateEntryBuffer(state_p, size);
 
 			stream.ReadData(buffer.get(), ciphertext_size);
 			encryption_state->Process(buffer.get(), ciphertext_size, buffer.get(), ciphertext_size);
@@ -246,7 +253,7 @@ protected:
 	void ReplayEntry(WALType wal_type);
 	bool CanSkipPayload(WALType wal_type) const {
 		// Unframed WAL v1 entries must still be deserialized; Replay* guards suppress their side effects.
-		if (!deserialize_only || !data) {
+		if (!deserialize_only || !data.get()) {
 			return false;
 		}
 		D_ASSERT(state.wal_version == 2 || state.wal_version == 3);
@@ -327,7 +334,7 @@ private:
 	AttachedDatabase &db;
 	ClientContext &context;
 	Catalog &catalog;
-	unique_ptr<data_t[]> data;
+	AllocatedData data;
 	MemoryStream stream;
 	BinaryDeserializer deserializer;
 	bool deserialize_only;
@@ -629,7 +636,8 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	// If there are no committed transactions in the WAL, rollback and truncate.
 	if (last_wal_flush_end == 0) {
 		con.Rollback();
-		return make_uniq<WriteAheadLog>(storage_manager, wal_path, 0, WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE);
+		return make_uniq<WriteAheadLog>(storage_manager, wal_path, idx_t(0),
+		                                WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE);
 	}
 
 	// we need to recover from the WAL: actually set up the replay state
@@ -1168,6 +1176,11 @@ void WriteAheadLogDeserializer::ReplaySequenceValue() {
 	// fetch the sequence from the catalog
 	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(context, ReplayEntryName(catalog, entry.qualified_name));
 	seq.ReplayValue(entry.usage_count, entry.counter, entry.last_value);
+	auto &storage_manager = db.GetStorageManager();
+	if (storage_manager.HasStorageVersion() &&
+	    StorageManager::IsPriorToVersion(StorageVersion::V2_0_0, storage_manager.GetStorageVersion())) {
+		seq.DeriveLastValue();
+	}
 }
 
 //===--------------------------------------------------------------------===//

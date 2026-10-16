@@ -18,7 +18,8 @@ LinesPerBoundary::LinesPerBoundary(idx_t boundary_idx_p, idx_t lines_in_batch_p)
     : boundary_idx(boundary_idx_p), lines_in_batch(lines_in_batch_p) {
 }
 
-CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p) : ignore_errors(ignore_errors_p) {
+CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p, bool store_ignored_errors_p)
+    : ignore_errors(ignore_errors_p), store_ignored_errors(store_ignored_errors_p) {
 }
 
 void CSVErrorHandler::ThrowError(const CSVError &csv_error) {
@@ -62,8 +63,15 @@ void CSVErrorHandler::ThrowError(const CSVError &csv_error) {
 
 void CSVErrorHandler::Error(const CSVError &csv_error, bool force_error) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	if (!force_error && (ignore_errors || (PrintLineNumber(csv_error) && !CanGetLine(csv_error.GetBoundaryIndex())))) {
-		// We store this error, we can't throw it now, or we are ignoring it
+	if (!force_error && ignore_errors) {
+		// We are ignoring this error - it is only kept if something (e.g. the rejects table) will read it
+		if (store_ignored_errors) {
+			errors.push_back(csv_error);
+		}
+		return;
+	}
+	if (!force_error && PrintLineNumber(csv_error) && !CanGetLine(csv_error.GetBoundaryIndex())) {
+		// We store this error, we can't throw it now
 		errors.push_back(csv_error);
 		return;
 	}

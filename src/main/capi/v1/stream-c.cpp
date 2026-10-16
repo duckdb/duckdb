@@ -6,11 +6,8 @@ duckdb_data_chunk duckdb_stream_fetch_chunk(duckdb_result result) {
 	if (!result.internal_data) {
 		return nullptr;
 	}
-	auto &result_data = *((duckdb::DuckDBResultData *)result.internal_data);
-	if (!result_data.IsStreaming()) {
-		// We can only fetch from a streaming result
-		return nullptr;
-	}
+	// A streaming entry point hands out a retained result for a statement it does not stream, and its rows are read
+	// here too, since this is the reader its caller was told to use
 	return duckdb_fetch_chunk(result);
 }
 

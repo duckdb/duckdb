@@ -212,6 +212,11 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 				                            type->create_function);
 			}
 			handle = RequireResourceMap(result->Collection().GetRows().GetValue(0, 0), type->create_function, "handle");
+			if (handle.IsNull()) {
+				// the handle identifies the resource for status and teardown - without one it can never be destroyed
+				throw InvalidInputException("create_external_resource: create function \"%s\" returned a NULL handle",
+				                            type->create_function);
+			}
 			LogExternalResourceOperation(context, bind_data.type_name, bind_data.resource_name, "create", string(),
 			                             NoExtraInfo());
 		} catch (std::exception &ex) {
