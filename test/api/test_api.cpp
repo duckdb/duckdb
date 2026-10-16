@@ -5,6 +5,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/valid_checker.hpp"
+#include "duckdb/main/statement_iterator.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/storage/metadata/metadata_manager.hpp"
@@ -1018,5 +1019,37 @@ TEST_CASE("Test a parser error in Submit invalidates the transaction", "[api]") 
 	REQUIRE_NO_FAIL(con.Query("ABORT"));
 
 	result = con.Query("SELECT COUNT(*) FROM audit");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+}
+
+TEST_CASE("Test a parser error while iterating statements invalidates the transaction", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE audit(i INT)"));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	auto iterator = con.context->IterateStatements("INSERT INTO audit VALUES (21); inser into audit_backup from audit");
+	REQUIRE(iterator.Peek());
+	REQUIRE_NO_FAIL(con.Query(iterator.GetStatementForExecution()));
+	REQUIRE_THROWS_WITH(iterator.Peek(), Catch::Matchers::Contains("syntax error"));
+	REQUIRE_FAIL(con.Query("INSERT INTO audit VALUES (22)"));
+	REQUIRE_NO_FAIL(con.Query("ABORT"));
+
+	auto result = con.Query("SELECT COUNT(*) FROM audit");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+}
+
+TEST_CASE("Test invalid UTF-8 while iterating statements invalidates the transaction", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE audit(i INT)"));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO audit VALUES (21)"));
+	REQUIRE_THROWS_WITH(con.context->IterateStatements("SELECT '\xff'"), Catch::Matchers::Contains("Invalid UTF-8"));
+	REQUIRE_FAIL(con.Query("INSERT INTO audit VALUES (22)"));
+	REQUIRE_NO_FAIL(con.Query("ABORT"));
+
+	auto result = con.Query("SELECT COUNT(*) FROM audit");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 }

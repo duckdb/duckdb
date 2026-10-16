@@ -185,7 +185,7 @@ vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &que
 		}
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
-		client_context.HandleQueryError(error, query);
+		client_context.ProcessError(error, query);
 		error.Throw();
 	}
 	return result;

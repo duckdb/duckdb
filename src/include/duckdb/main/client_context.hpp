@@ -308,9 +308,9 @@ public:
 
 	//! Process an error for display to the user
 	DUCKDB_API void ProcessError(ErrorData &error, const string &query) const;
-	//! Handles an error like Query() does: processes it for display, and invalidates the active transaction (or for
-	//! fatal errors the database) when the current invalidation policy says this error type should
-	DUCKDB_API void HandleQueryError(ErrorData &error, const string &query);
+	//! Invalidates the active transaction (or for fatal errors the database) when the current invalidation policy says
+	//! this error type should
+	DUCKDB_API void ApplyInvalidationPolicy(const ErrorData &error);
 
 	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 

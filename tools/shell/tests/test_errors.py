@@ -97,3 +97,15 @@ def test_unterminated_quote(shell):
     )
     result = test.run()
     result.check_stderr('I\'m an error')
+
+def test_parser_error_invalidates_transaction(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE TABLE audit(i INT);")
+        .statement("BEGIN;")
+        .statement("INSERT INTO audit VALUES (21);")
+        .statement("inser into audit_backup from audit;")
+        .statement("INSERT INTO audit VALUES (22);")
+    )
+    result = test.run()
+    result.check_stderr('Current transaction is aborted')

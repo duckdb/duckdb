@@ -137,13 +137,13 @@ DUCKDB_V2_ERROR duckdb_v2_statement_iterator_next(duckdb_v2_statement_iterator_h
 		} catch (const std::exception &ex) {
 			// A parse error surfaces here, when iteration reaches the failing
 			// statement, not up front. It terminates iteration (a following next()
-			// reports clean exhaustion, not the error again). Like the eager query
-			// path, it invalidates the active transaction as the invalidation policy
-			// says, and the rendered shape honors errors_as_json (JSON, else
-			// LINE/caret). It's then re-thrown to route back through WithErrorHandler.
+			// reports clean exhaustion, not the error again). Route it through the
+			// engine's public ProcessError like the eager query path so the rendered
+			// shape honors errors_as_json (JSON, else LINE/caret), then re-throw to
+			// route back through WithErrorHandler.
 			wrapper->finished = true;
 			duckdb::ErrorData error(ex);
-			wrapper->context->HandleQueryError(error, wrapper->query);
+			wrapper->context->ProcessError(error, wrapper->query);
 			error.Throw();
 		}
 		*out_statement = Convert(statement.release());
