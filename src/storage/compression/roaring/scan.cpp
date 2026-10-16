@@ -13,8 +13,7 @@ namespace roaring {
 // Scan
 //===--------------------------------------------------------------------===//
 
-ContainerSegmentScan::ContainerSegmentScan(data_ptr_t data)
-    : segments(reinterpret_cast<uint8_t *>(data)), index(0), count(0) {
+ContainerSegmentScan::ContainerSegmentScan(unsafe_array_ptr<const uint8_t> data) : segments(data), index(0), count(0) {
 }
 
 // Returns the base of the current segment, forwarding the index if the segment is depleted of values
@@ -40,9 +39,14 @@ uint16_t ContainerSegmentScan::operator++(int) {
 
 //! RunContainer
 
-RunContainerScanState::RunContainerScanState(idx_t container_index, idx_t container_size, idx_t count,
-                                             data_ptr_t data_p)
-    : ContainerScanState(container_index, container_size), count(count), data(data_p) {
+RunContainerScanState::RunContainerScanState(idx_t container_index, idx_t container_size, idx_t count)
+    : ContainerScanState(container_index, container_size), count(count) {
+}
+
+UncompressedRunContainerScanState::UncompressedRunContainerScanState(idx_t container_index, idx_t container_size,
+                                                                     idx_t count,
+                                                                     unsafe_array_ptr<const RunContainerRLEPair> data)
+    : RunContainerScanState(container_index, container_size, count), data(data) {
 }
 
 void RunContainerScanState::ScanPartial(ValidityMask &result_mask, idx_t result_offset, idx_t to_scan) {
@@ -98,29 +102,30 @@ void RunContainerScanState::Skip(idx_t to_skip) {
 	scanned_count = end;
 }
 
-void RunContainerScanState::Verify() const {
+void UncompressedRunContainerScanState::Verify() const {
 #ifdef DEBUG
 	uint16_t index = 0;
 	for (idx_t i = 0; i < count; i++) {
-		auto run = reinterpret_cast<RunContainerRLEPair *>(data)[i];
+		auto run = data[i];
 		D_ASSERT(run.start >= index);
 		index = run.start + 1 + run.length;
 	}
 #endif
 }
 
-void RunContainerScanState::LoadNextRun() {
+void UncompressedRunContainerScanState::LoadNextRun() {
 	if (run_index >= count) {
 		finished = true;
 		return;
 	}
-	run = reinterpret_cast<RunContainerRLEPair *>(data)[run_index];
+	run = data[run_index];
 	run_index++;
 }
 
 CompressedRunContainerScanState::CompressedRunContainerScanState(idx_t container_index, idx_t container_size,
-                                                                 idx_t count, data_ptr_t segments, data_ptr_t data)
-    : RunContainerScanState(container_index, container_size, count, data), segments(segments), segment(segments) {
+                                                                 idx_t count, unsafe_array_ptr<const uint8_t> segments,
+                                                                 unsafe_array_ptr<const uint8_t> data)
+    : RunContainerScanState(container_index, container_size, count), data(data), segments(segments), segment(segments) {
 	D_ASSERT(count >= COMPRESSED_RUN_THRESHOLD);
 	//! Used by Verify, have to use it to avoid a compiler warning/error
 	(void)this->segments;
@@ -132,10 +137,10 @@ void CompressedRunContainerScanState::LoadNextRun() {
 		return;
 	}
 	uint16_t start = segment++;
-	start += reinterpret_cast<uint8_t *>(data)[(run_index * 2) + 0];
+	start += data[(run_index * 2) + 0];
 
 	uint16_t end = segment++;
-	end += reinterpret_cast<uint8_t *>(data)[(run_index * 2) + 1];
+	end += data[(run_index * 2) + 1];
 
 	D_ASSERT(end > start);
 	run = RunContainerRLEPair {start, static_cast<uint16_t>(end - 1 - start)};
@@ -149,11 +154,11 @@ void CompressedRunContainerScanState::Verify() const {
 	for (idx_t i = 0; i < count; i++) {
 		// Get the start index of the run
 		uint16_t start = verify_segment++;
-		start += reinterpret_cast<uint8_t *>(data)[(i * 2) + 0];
+		start += data[(i * 2) + 0];
 
 		// Get the end index of the run
 		uint16_t end = verify_segment++;
-		end += reinterpret_cast<uint8_t *>(data)[(i * 2) + 1];
+		end += data[(i * 2) + 1];
 
 		D_ASSERT(!i || start >= index);
 		D_ASSERT(end > start);
@@ -164,10 +169,9 @@ void CompressedRunContainerScanState::Verify() const {
 
 //! BitsetContainer
 
-BitsetContainerScanState::BitsetContainerScanState(idx_t container_index, idx_t container_size, validity_t *bitset)
-    : ContainerScanState(container_index, container_size),
-      bitset(bitset,
-             container_size / ValidityMask::BITS_PER_VALUE + (container_size % ValidityMask::BITS_PER_VALUE != 0)) {
+BitsetContainerScanState::BitsetContainerScanState(idx_t container_index, idx_t container_size,
+                                                   unsafe_array_ptr<const validity_t> bitset)
+    : ContainerScanState(container_index, container_size), bitset(bitset) {
 }
 
 void BitsetContainerScanState::ScanPartial(ValidityMask &result_mask, idx_t result_offset, idx_t to_scan) {
@@ -201,13 +205,9 @@ RoaringScanState::SegmentLayout RoaringScanState::ReadLayout(const BufferHandle 
 	return {data, metadata};
 }
 
-RoaringScanState::RoaringScanState(const QueryContext &context, ColumnSegment &segment) : segment(segment) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-	handle = buffer_manager.Pin(context, segment.GetBlockHandle());
-	auto layout = ReadLayout(handle, segment);
-	auto base_ptr = handle.GetDataMutable() + segment.GetBlockOffset();
-	data_ptr = base_ptr + sizeof(idx_t);
-
+RoaringScanState::RoaringScanState(const QueryContext &context, ColumnSegment &segment)
+    : handle(BufferManager::GetBufferManager(segment.GetDatabase()).Pin(context, segment.GetBlockHandle())),
+      segment(segment), layout(ReadLayout(handle, segment)) {
 	// Deserialize the container metadata for this segment
 	auto segment_count = segment.count.load();
 	auto container_count = segment_count / ROARING_CONTAINER_SIZE;
@@ -257,8 +257,11 @@ ContainerMetadata RoaringScanState::GetContainerMetadata(idx_t container_index) 
 	return container_metadata[container_index];
 }
 
-data_ptr_t RoaringScanState::GetStartOfContainerData(idx_t container_index) {
-	return data_ptr + data_start_position[container_index];
+CompressionSegmentReader RoaringScanState::GetContainerReader(idx_t container_index, idx_t container_size) {
+	auto metadata = GetContainerMetadata(container_index);
+	auto stored_size = AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(container_size);
+	return layout.data.GetSubReader(data_start_position[container_index], metadata.GetDataSizeInBytes(stored_size),
+	                                "Roaring container");
 }
 
 ContainerScanState &RoaringScanState::LoadContainer(idx_t container_index, idx_t internal_offset) {
@@ -266,47 +269,49 @@ ContainerScanState &RoaringScanState::LoadContainer(idx_t container_index, idx_t
 		return *current_container;
 	}
 	auto metadata = GetContainerMetadata(container_index);
-	auto data_ptr = GetStartOfContainerData(container_index);
 
 	auto segment_count = segment.count.load();
 	auto start_of_container = container_index * ROARING_CONTAINER_SIZE;
 	auto container_size = MinValue<idx_t>(segment_count - start_of_container, ROARING_CONTAINER_SIZE);
+	auto reader = GetContainerReader(container_index, container_size);
 	if (metadata.IsUncompressed()) {
-		current_container = make_uniq<BitsetContainerScanState>(container_index, container_size,
-		                                                        reinterpret_cast<validity_t *>(data_ptr));
+		auto word_count =
+		    container_size / ValidityMask::BITS_PER_VALUE + (container_size % ValidityMask::BITS_PER_VALUE != 0);
+		auto bitset = reader.GetArray<validity_t>(0, word_count);
+		current_container = make_uniq<BitsetContainerScanState>(container_index, container_size, bitset);
 	} else if (metadata.IsRun()) {
 		D_ASSERT(metadata.IsInverted());
 		auto number_of_runs = metadata.NumberOfRuns();
 		if (number_of_runs >= COMPRESSED_RUN_THRESHOLD) {
-			auto segments = data_ptr;
-			data_ptr = segments + COMPRESSED_SEGMENT_COUNT;
+			auto segments = reader.ReadBytes(COMPRESSED_SEGMENT_COUNT);
+			auto data = reader.ReadBytes(number_of_runs * 2);
 			current_container = make_uniq<CompressedRunContainerScanState>(container_index, container_size,
-			                                                               number_of_runs, segments, data_ptr);
+			                                                               number_of_runs, segments, data);
 		} else {
-			D_ASSERT(AlignPointer<sizeof(RunContainerRLEPair)>(data_ptr) == data_ptr);
+			auto data = reader.GetArray<RunContainerRLEPair>(0, number_of_runs);
 			current_container =
-			    make_uniq<RunContainerScanState>(container_index, container_size, number_of_runs, data_ptr);
+			    make_uniq<UncompressedRunContainerScanState>(container_index, container_size, number_of_runs, data);
 		}
 	} else {
 		auto cardinality = metadata.Cardinality();
 		if (cardinality >= COMPRESSED_ARRAY_THRESHOLD) {
-			auto segments = data_ptr;
-			data_ptr = segments + COMPRESSED_SEGMENT_COUNT;
+			auto segments = reader.ReadBytes(COMPRESSED_SEGMENT_COUNT);
+			auto data = reader.ReadBytes(cardinality);
 			if (metadata.IsInverted()) {
-				current_container = make_uniq<CompressedArrayContainerScanState<NULLS>>(
-				    container_index, container_size, cardinality, segments, data_ptr);
+				current_container = make_uniq<CompressedArrayContainerScanState<NULLS>>(container_index, container_size,
+				                                                                        cardinality, segments, data);
 			} else {
 				current_container = make_uniq<CompressedArrayContainerScanState<NON_NULLS>>(
-				    container_index, container_size, cardinality, segments, data_ptr);
+				    container_index, container_size, cardinality, segments, data);
 			}
 		} else {
-			D_ASSERT(AlignPointer<sizeof(uint16_t)>(data_ptr) == data_ptr);
+			auto data = reader.GetArray<uint16_t>(0, cardinality);
 			if (metadata.IsInverted()) {
-				current_container =
-				    make_uniq<ArrayContainerScanState<NULLS>>(container_index, container_size, cardinality, data_ptr);
+				current_container = make_uniq<UncompressedArrayContainerScanState<NULLS>>(
+				    container_index, container_size, cardinality, data);
 			} else {
-				current_container = make_uniq<ArrayContainerScanState<NON_NULLS>>(container_index, container_size,
-				                                                                  cardinality, data_ptr);
+				current_container = make_uniq<UncompressedArrayContainerScanState<NON_NULLS>>(
+				    container_index, container_size, cardinality, data);
 			}
 		}
 	}
