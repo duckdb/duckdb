@@ -356,6 +356,17 @@ COPY (SELECT DATE '2024-01-01' + range::INTEGER AS dt, range::DECIMAL(4,1) AS v 
 ----
 2	<REGEX>:.*dt=20240101.*dt=20240102.*	[{'name': dt, 'type': DATE}, {'name': v, 'type': 'DECIMAL(4,1)'}]
 
+# DATEFORMAT and TIMESTAMPFORMAT without PARTITION_BY: the columns describe the query, and the formats still apply
+query II
+COPY (SELECT DATE '2024-01-02' AS dt, TIMESTAMP '2024-01-02 03:04:05' AS ts, 1.5::DECIMAL(4,1) AS v) TO '{TEST_DIR}/return_column_types_json_formats.json' (FORMAT JSON, DATEFORMAT '%Y%m%d', TIMESTAMPFORMAT '%Y/%m/%d %H', RETURN_COLUMN_TYPES);
+----
+1	[{'name': dt, 'type': DATE}, {'name': ts, 'type': TIMESTAMP}, {'name': v, 'type': 'DECIMAL(4,1)'}]
+
+query III
+SELECT dt, ts, v FROM read_json('{TEST_DIR}/return_column_types_json_formats.json', columns := {'dt': 'VARCHAR', 'ts': 'VARCHAR', 'v': 'DOUBLE'});
+----
+20240102	2024/01/02 03	1.5
+
 # Duplicate names are described as JSON writes them
 query II
 COPY (SELECT 1 AS a, 'x' AS a, 3 AS a_1) TO '{TEST_DIR}/return_column_types_duplicates.json' (RETURN_COLUMN_TYPES);
@@ -367,3 +378,9 @@ query II
 COPY (SELECT 1 AS id, 'POINT (1 2)'::GEOMETRY AS geom, 1.5::DECIMAL(4,1) AS v) TO '{TEST_DIR}/return_column_types.geojson' (FORMAT GEOJSON, RETURN_COLUMN_TYPES);
 ----
 1	[{'name': id, 'type': INTEGER}, {'name': geom, 'type': GEOMETRY}, {'name': v, 'type': 'DECIMAL(4,1)'}]
+
+# GeoJSON with PARTITION_BY describes the partition column in its place in the query
+query III
+COPY (SELECT range::INTEGER AS id, 'POINT (1 2)'::GEOMETRY AS geom, range % 2 AS p FROM range(2)) TO '{TEST_DIR}/return_column_types_geojson_partitioned' (FORMAT GEOJSON, PARTITION_BY (p), RETURN_FILES, RETURN_COLUMN_TYPES);
+----
+2	<REGEX>:.*p=0.*p=1.*	[{'name': id, 'type': INTEGER}, {'name': geom, 'type': GEOMETRY}, {'name': p, 'type': BIGINT}]
