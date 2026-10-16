@@ -257,6 +257,20 @@ struct SkaExtractSuffixKey : SkaExtractKey<SORT_KEY> {
 		return BSwapIfLE(word);
 	}
 
+	static bool PrefixMatches(const SORT_KEY &reference, const SORT_KEY &key, idx_t offset) {
+		if constexpr (SORT_KEY::INLINE_LENGTH > sizeof(uint64_t)) {
+			if (offset > sizeof(uint64_t) && reference.part1 != key.part1) {
+				return false;
+			}
+		}
+		if (offset <= SORT_KEY::INLINE_LENGTH) {
+			return true;
+		}
+		return reference.GetSize() >= offset && key.GetSize() >= offset &&
+		       memcmp(reference.GetData() + SORT_KEY::INLINE_LENGTH, key.GetData() + SORT_KEY::INLINE_LENGTH,
+		              offset - SORT_KEY::INLINE_LENGTH) == 0;
+	}
+
 	uint64_t operator()(const SORT_KEY &key) const {
 		return ExtractWord(key, offset);
 	}
@@ -279,33 +293,56 @@ static void SortTiedBucket(ClientContext &context, ITERATOR begin, ITERATOR end,
 		context.InterruptCheck();
 		D_ASSERT(end - begin >= 2);
 		using SUFFIX = SkaExtractSuffixKey<SORT_KEY>;
+		constexpr idx_t MIN_RADIX_COUNT = 1024;
+		constexpr idx_t SAMPLE_COUNT = 16;
 		constexpr idx_t MAX_PREFIX_OFFSET = 256;
+		const auto count = NumericCast<idx_t>(end - begin);
+		if (count < MIN_RADIX_COUNT) {
+			duckdb_ska_sort::detail::StdSortFallback(begin, end, extract_key, merge);
+			return;
+		}
+
+		SORT_KEY samples[SAMPLE_COUNT];
+		const auto stride = (count - 1) / (SAMPLE_COUNT - 1);
+		for (idx_t i = 0; i < SAMPLE_COUNT; i++) {
+			samples[i] = *(begin + (i == SAMPLE_COUNT - 1 ? count - 1 : i * stride));
+		}
+		uint64_t words[SAMPLE_COUNT];
+		uint64_t varying_bits = 0;
 		idx_t offset = sizeof(uint64_t);
-		while (offset <= MAX_PREFIX_OFFSET &&
-		       SUFFIX::ExtractWord(*begin, offset) == SUFFIX::ExtractWord(*(begin + 1), offset)) {
+		while (offset <= MAX_PREFIX_OFFSET) {
+			varying_bits = 0;
+			for (idx_t i = 0; i < SAMPLE_COUNT; i++) {
+				words[i] = SUFFIX::ExtractWord(samples[i], offset);
+				varying_bits |= words[0] ^ words[i];
+			}
+			if (varying_bits != 0) {
+				break;
+			}
 			offset += sizeof(uint64_t);
 		}
 		if (offset > MAX_PREFIX_OFFSET) {
 			duckdb_ska_sort::detail::StdSortFallback(begin, end, extract_key, merge);
 			return;
 		}
+		for (const auto word : words) {
+			if (NumericCast<idx_t>(std::count(words, words + SAMPLE_COUNT, word)) >= SAMPLE_COUNT / 4) {
+				duckdb_ska_sort::detail::StdSortFallback(begin, end, extract_key, merge);
+				return;
+			}
+		}
 
 		// The probe only selects a candidate; every skipped word must be equal across the whole bucket.
-		auto varying_bits = SUFFIX::ExtractWord(*begin, offset) ^ SUFFIX::ExtractWord(*(begin + 1), offset);
 		idx_t scanned = 0;
-		for (auto it = begin + 2; it != end; ++it) {
+		for (auto it = begin + 1; it != end; ++it) {
 			if (++scanned % STANDARD_VECTOR_SIZE == 0) {
 				context.InterruptCheck();
 			}
-			for (idx_t candidate = sizeof(uint64_t); candidate < offset; candidate += sizeof(uint64_t)) {
-				if (SUFFIX::ExtractWord(*begin, candidate) != SUFFIX::ExtractWord(*it, candidate)) {
-					offset = candidate;
-					// Every previously visited row was equal at this earlier word.
-					varying_bits = 0;
-					break;
-				}
+			if (!SUFFIX::PrefixMatches(samples[0], *it, offset)) {
+				duckdb_ska_sort::detail::StdSortFallback(begin, end, extract_key, merge);
+				return;
 			}
-			varying_bits |= SUFFIX::ExtractWord(*begin, offset) ^ SUFFIX::ExtractWord(*it, offset);
+			varying_bits |= words[0] ^ SUFFIX::ExtractWord(*it, offset);
 		}
 		SUFFIX suffix(extract_key, offset, varying_bits);
 		duckdb_ska_sort::ska_sort(begin, end, suffix, merge);
