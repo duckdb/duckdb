@@ -865,8 +865,11 @@ static bool FoldConstantArgument(ClientContext &context, unique_ptr<Expression> 
 	if (child->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA || !child->IsFoldable()) {
 		return false;
 	}
+	// a nested result with many elements is not NULL and is not worth materializing as a Value to find that out: it
+	// is left in place, like an argument that cannot be evaluated
 	Value result;
-	if (!ExpressionExecutor::TryEvaluateScalar(context, *child, result)) {
+	if (!ExpressionExecutor::TryEvaluateScalar(context, *child, result,
+	                                           ExpressionExecutor::MAX_FOLDED_NESTED_ELEMENTS)) {
 		// the argument cannot be evaluated: leave it in place so that the error surfaces at execution
 		return false;
 	}
