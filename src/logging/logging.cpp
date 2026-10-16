@@ -1,4 +1,4 @@
-#include "duckdb/logging/log_storage.hpp"
+#include "duckdb/logging/log_sink.hpp"
 #include "duckdb/logging/logger.hpp"
 
 namespace duckdb {
@@ -18,6 +18,10 @@ bool LogConfig::IsConsistent() const {
 		return !enabled_log_types.empty() && disabled_log_types.empty();
 	}
 	return false;
+}
+
+bool LogConfig::IsBuiltInLogSink(const string &sink_name) {
+	return sink_name == IN_MEMORY_STORAGE_NAME || sink_name == STDOUT_STORAGE_NAME || sink_name == FILE_STORAGE_NAME;
 }
 
 LogConfig::LogConfig(bool enabled, LogLevel level_p, LogMode mode_p,
