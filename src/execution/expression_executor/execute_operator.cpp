@@ -224,6 +224,50 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		if (count == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
+	} else if (expression_type == ExpressionType::OPERATOR_HAS_ERROR) {
+		auto &child_state = *state->child_states[0];
+		Vector probe_result(expr.GetChildren()[0]->GetReturnType());
+		try {
+			Execute(*expr.GetChildren()[0], &child_state, sel, count, probe_result);
+			// the child evaluated without an error for every row
+			result.Reference(Value::BOOLEAN(false), count_t(count));
+			return;
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			if (!Exception::IsExecutionError(error.Type())) {
+				throw;
+			}
+		}
+
+		// On error, evaluate per row to find the rows that trigger it
+		SelectionVector selvec(1);
+		DataChunk intermediate;
+		intermediate.Initialize(GetAllocator(), {probe_result.GetType()}, STANDARD_VECTOR_SIZE);
+		auto writer = FlatVector::Writer<bool>(result, count);
+		for (idx_t i = 0; i < count; i++) {
+			intermediate.Reset();
+			intermediate.SetChildCardinality(1);
+
+			// Make sure to clear any dictionary states in the child expression, so that it actually
+			// gets executed anew for every row
+			child_state.ResetDictionaryStates();
+
+			selvec.set_index(0, sel ? sel->get_index(i) : i);
+			bool has_error = false;
+			try {
+				Execute(*expr.GetChildren()[0], &child_state, &selvec, 1, intermediate.data[0]);
+			} catch (std::exception &ex) {
+				ErrorData error(ex);
+				if (!Exception::IsExecutionError(error.Type())) {
+					throw;
+				}
+				has_error = true;
+			}
+			writer.WriteValue(has_error);
+		}
+		if (count == 1) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
 	} else if (expr.GetChildren().size() == 1) {
 		state->intermediate_chunk.Reset();
 		auto &child = state->intermediate_chunk.data[0];
