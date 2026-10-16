@@ -11,8 +11,31 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/types/column/column_data_allocator.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
+
+//! Immutable, contiguous storage for the complete child data of large lists.
+//! Instead of fragmenting a large list child over vector-sized block regions, a collection can store it as one
+//! shared allocation. Scans hand out views of the allocation and appends that receive a complete view back
+//! reference the allocation again, so a payload that passes through operators unchanged is never copied.
+class ColumnDataListChildBuffer : public StandardVectorBuffer {
+public:
+	//! An owning buffer holding 'count' entries of a fixed-size type
+	ColumnDataListChildBuffer(AllocatedData &&data, count_t count, idx_t type_size);
+	//! A scan-local view of an owning buffer, kept alive through shared ownership
+	ColumnDataListChildBuffer(buffer_ptr<VectorBuffer> owner, count_t count, idx_t type_size);
+
+	//! The owning buffer ('self' must be the buffer_ptr holding this buffer)
+	const buffer_ptr<VectorBuffer> &GetOwner(const buffer_ptr<VectorBuffer> &self) const {
+		D_ASSERT(self.get() == this);
+		return owner ? owner : self;
+	}
+
+private:
+	//! The owning buffer referenced by a view, unset for owning buffers
+	buffer_ptr<VectorBuffer> owner;
+};
 
 struct VectorChildIndex {
 	explicit VectorChildIndex(idx_t index = DConstants::INVALID_INDEX) : index(index) {
@@ -59,6 +82,10 @@ struct VectorMetaData {
 	uint32_t offset;
 	//! The number of entries present in this vector
 	uint16_t count;
+	//! Whether this entry references a shared list child buffer instead of block storage
+	//! For such entries 'offset' indexes the segment's shared child buffers, and 'count' is set to
+	//! STANDARD_VECTOR_SIZE so append paths treat the entry as full instead of writing into shared data
+	bool is_shared_list_child = false;
 	//! Meta data about string pointers
 	vector<SwizzleMetaData> swizzle_data;
 
@@ -108,6 +135,10 @@ public:
 	vector<VectorDataIndex> child_indices;
 	//! The string heap for the column data collection (only used for IN_MEMORY_ALLOCATOR)
 	shared_ptr<StringHeap> heap;
+	//! Shared list child buffers referenced by vector data entries
+	vector<buffer_ptr<VectorBuffer>> shared_child_buffers;
+	//! Allocation size of the distinct shared list child buffers
+	idx_t shared_child_allocation_size = 0;
 
 public:
 	//! Reset this segment for reuse, clearing all metadata while keeping allocated buffers
@@ -139,6 +170,16 @@ public:
 		D_ASSERT(index.index < vector_data.size());
 		return vector_data[index.index];
 	}
+
+	//! The number of entries in a vector data entry, resolving shared list children
+	idx_t GetVectorCount(VectorDataIndex index);
+	//! The shared buffer referenced by a shared list child entry
+	const buffer_ptr<VectorBuffer> &GetSharedListChild(const VectorMetaData &vdata) const {
+		D_ASSERT(vdata.is_shared_list_child && vdata.offset < shared_child_buffers.size());
+		return shared_child_buffers[vdata.offset];
+	}
+	//! Add a vector data entry referencing a shared list child buffer
+	VectorDataIndex AddSharedListChild(buffer_ptr<VectorBuffer> buffer, VectorDataIndex prev_index);
 
 	idx_t ChunkCount() const;
 	//! Get the total *used* size (not cached)
