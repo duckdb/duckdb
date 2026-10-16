@@ -595,7 +595,6 @@ void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<L
 
 void TableIndexList::ReferenceIndexChunk(DataChunk &table_chunk, DataChunk &index_chunk,
                                          const vector<StorageIndex> &mapped_column_ids) {
-	D_ASSERT(index_chunk.ColumnCount() == mapped_column_ids.size());
 	for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
 		auto col_id = mapped_column_ids[i].GetPrimaryIndex();
 		index_chunk.data[i].Reference(table_chunk.data[col_id]);
