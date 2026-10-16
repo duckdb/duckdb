@@ -158,6 +158,20 @@ SELECT TRY((SELECT NULL))
 ----
 NULL
 
+# an empty subquery yields NULL without an error, exactly as without TRY
+query I
+SELECT TRY((SELECT max(i) FROM integers WHERE 1=0))
+----
+NULL
+
+# an uncorrelated TRY subquery nested inside a correlated subquery survives flattening of the outer subquery
+query II
+SELECT i, (SELECT TRY((SELECT 10 // (max(i3.i) - 3) FROM integers i3)) FROM integers i2 WHERE i2.i = i1.i) AS v FROM integers i1 ORDER BY i
+----
+1	NULL
+2	NULL
+3	NULL
+
 # TRY subquery as an UPDATE source
 statement ok
 CREATE TABLE update_target(a INTEGER);
@@ -238,6 +252,12 @@ query II
 EXPLAIN SELECT (SELECT max(i) FROM integers)
 ----
 physical_plan	<!REGEX>:(?s).*Try.*
+
+# protection: common subplans of plain subqueries are still extracted into a shared CTE
+query II
+EXPLAIN SELECT (SELECT 10 // (max(i) - 1) FROM integers) AS a, (SELECT max(i) FROM integers) AS b
+----
+physical_plan	<REGEX>:(?s).*common_subplan.*
 
 # protection: TRY over plain expressions is unchanged
 query I
