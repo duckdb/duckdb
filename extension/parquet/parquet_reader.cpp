@@ -42,6 +42,7 @@
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/limits.hpp"
@@ -1997,9 +1998,13 @@ void ParquetReader::PrefetchPageIndex(ThriftFileTransport &transport, idx_t begi
 			page_index_span_end = span_end;
 		}
 	});
-	if (page_index_span_end > page_index_span_begin &&
-	    page_index_span_end - page_index_span_begin <= PAGE_INDEX_SINGLE_READ_LIMIT && begin >= page_index_span_begin &&
-	    end <= page_index_span_end) {
+	// remote reads are cached by the file handle, so one read of the whole index serves every row group and thread;
+	// local reads are not, so they stay small
+	const bool fetch_whole_index = !transport.GetCachingFileHandle().OnDiskFile() &&
+	                               page_index_span_end > page_index_span_begin &&
+	                               page_index_span_end - page_index_span_begin <= PAGE_INDEX_SINGLE_READ_LIMIT &&
+	                               begin >= page_index_span_begin && end <= page_index_span_end;
+	if (fetch_whole_index) {
 		transport.Prefetch(page_index_span_begin, page_index_span_end - page_index_span_begin);
 		return;
 	}
@@ -2010,7 +2015,24 @@ void ParquetReader::PreparePageIndex(ClientContext &context, ParquetReaderScanSt
 	state.page_index.Reset();
 	state.page_index_active = false;
 	state.page_index_range_idx = 0;
+	state.page_index_rows_kept = 0;
+	try {
+		PreparePageIndexInternal(context, state);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		if (error.Type() == ExceptionType::INTERNAL) {
+			throw;
+		}
+		// a page index that cannot be read or evaluated is ignored: the row group is read as if it had none
+		auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
+		trans.ClearPrefetch();
+		state.page_index.Reset();
+		state.page_index_active = false;
+		state.page_index_rows_kept = 0;
+	}
+}
 
+void ParquetReader::PreparePageIndexInternal(ClientContext &context, ParquetReaderScanState &state) {
 	auto &group = GetGroup(state);
 	if (!filters || !state.use_page_index || parquet_options.encryption_config || group.num_rows <= 0 ||
 	    state.offset_in_group == NumericCast<idx_t>(group.num_rows)) {
@@ -2169,6 +2191,7 @@ void ParquetReader::PreparePageIndex(ClientContext &context, ParquetReaderScanSt
 	}
 	state.page_index.row_ranges = std::move(row_ranges);
 	state.page_index_active = true;
+	state.page_index_rows_kept = rows_kept;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		state.GetColumnReader(MultiFileLocalIndex(i)).InitializePageIndex(state.page_index);
 	}
@@ -2586,6 +2609,10 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 			// whole group and column wise prefetch fetch eagerly, filter prefetch fetches lazily
 			if (parquet_options.prefetch_strategy == ParquetPrefetchStrategyOption::WHOLE_GROUP) {
 				strategy = WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
+			} else if (state.page_index_active &&
+			           state.page_index_rows_kept * 2 <= NumericCast<idx_t>(group.num_rows)) {
+				// the page index rules out at least half of the rows: fetch only the pages that may hold the rest
+				strategy = ColumnWisePrefetch(state, trans, group, false, log_prefetch);
 			} else {
 				bool filters_look_unselective = false;
 				if (filters) {

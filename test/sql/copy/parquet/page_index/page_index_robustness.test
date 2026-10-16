@@ -1,0 +1,111 @@
+# name: test/sql/copy/parquet/page_index/page_index_robustness.test
+# description: Corrupt page indexes: fall back to reading without them, or fail loudly, never return wrong rows
+# group: [page_index]
+
+require parquet
+
+# corrupt_base.parquet: 3000 rows (id, v = id % 7), id in six pages of 512 rows; the corrupt files are made from it by
+# data/parquet-testing/page_index/corrupt_page_index.py
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+# the intact file prunes pages
+query II
+SELECT count(*), sum(v) = (SELECT sum(r % 7) FROM range(600, 701) t(r)) FROM 'data/parquet-testing/page_index/corrupt_base.parquet' WHERE id BETWEEN 600 AND 700
+----
+101	true
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT sum(info['rows_skipped']::BIGINT) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class = 'ParquetReader' AND event = 'SkipPages'
+----
+2488
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+# a ColumnIndex whose min value has the wrong length for its type is ignored, the file is read without it
+query II
+SELECT count(*), sum(v) = (SELECT sum(r % 7) FROM range(600, 701) t(r)) FROM 'data/parquet-testing/page_index/corrupt_min_length.parquet' WHERE id BETWEEN 600 AND 700
+----
+101	true
+
+query II
+SELECT count(*), sum(v) FROM 'data/parquet-testing/page_index/corrupt_min_length.parquet' WHERE id = 77
+----
+1	0
+
+# an OffsetIndex whose first row indexes do not increase is ignored as well
+query II
+SELECT count(*), sum(v) = (SELECT sum(r % 7) FROM range(600, 701) t(r)) FROM 'data/parquet-testing/page_index/corrupt_non_monotonic.parquet' WHERE id BETWEEN 600 AND 700
+----
+101	true
+
+query I
+SELECT count(*) FROM 'data/parquet-testing/page_index/corrupt_non_monotonic.parquet' WHERE id > 2900
+----
+99
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class = 'ParquetReader' AND event = 'SkipPages'
+----
+0
+
+# an OffsetIndex that is well-formed but wrong (page 1 claims to start at row 300 instead of 512) is caught when the
+# page header is read: the page holds 512 values where the index promises 724 rows
+statement error
+SELECT count(*) FROM 'data/parquet-testing/page_index/corrupt_first_row_index.parquet' WHERE id BETWEEN 290 AND 310
+----
+OffsetIndex
+
+statement error
+SELECT count(*) FROM 'data/parquet-testing/page_index/corrupt_first_row_index.parquet' WHERE id = 400
+----
+OffsetIndex
+
+# without the page index the same file reads fine
+statement ok
+SET parquet_use_page_index = false;
+
+query II
+SELECT count(*), sum(v) = (SELECT sum(r % 7) FROM range(290, 311) t(r)) FROM 'data/parquet-testing/page_index/corrupt_first_row_index.parquet' WHERE id BETWEEN 290 AND 310
+----
+21	true
+
+statement ok
+SET parquet_use_page_index = true;
+
+# the metadata function shows what the corrupt files claim
+query III
+SELECT page_id, first_row_index, num_rows FROM parquet_page_index('data/parquet-testing/page_index/corrupt_first_row_index.parquet') WHERE column_id = 0 AND page_id <= 2 ORDER BY page_id
+----
+0	0	300
+1	300	724
+2	1024	512
+
+query II
+SELECT page_id, first_row_index FROM parquet_page_index('data/parquet-testing/page_index/corrupt_non_monotonic.parquet') WHERE column_id = 0 AND page_id <= 3 ORDER BY page_id
+----
+0	0
+1	512
+2	100
+3	1536
+
+# every corrupt file still returns the full data
+foreach file corrupt_min_length corrupt_non_monotonic corrupt_first_row_index
+
+query III
+SELECT count(*), sum(id), sum(v) = (SELECT sum(r % 7) FROM range(3000) t(r)) FROM 'data/parquet-testing/page_index/${file}.parquet'
+----
+3000	4498500	true
+
+endloop

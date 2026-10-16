@@ -409,6 +409,8 @@ private:
 	bool PageIndexNeedsRows(idx_t begin, idx_t end) const;
 	//! Skips pages using the OffsetIndex instead of reading their headers; returns false when no page can be skipped
 	bool TrySkipPagesWithOffsetIndex(idx_t skipped_so_far, idx_t &to_skip);
+	//! Throws when the row count the OffsetIndex gives for the page at this location disagrees with its header
+	void VerifyPageAgainstOffsetIndex(idx_t header_location, const PageHeader &page_hdr);
 
 	shared_ptr<ResizeableBuffer> block;
 

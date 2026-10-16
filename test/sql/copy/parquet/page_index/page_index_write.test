@@ -141,7 +141,14 @@ SELECT any_value(boundary_order) FROM parquet_page_index('{TEST_DIR}/page_index_
 ----
 ASCENDING
 
-# nested columns: the list elements are two values per row, the OffsetIndex still counts rows
+# nested columns: the list elements are two values per row, the OffsetIndex still counts rows; the pages of list
+# values begin at row boundaries (a list never spans pages, so they begin at vector boundaries)
+query III
+SELECT count(*) > 1, bool_and(first_row_index % 2048 = 0), bool_and(num_rows % 2048 = 0 OR first_row_index + num_rows = 50000)
+FROM parquet_page_index('{TEST_DIR}/page_index_write.parquet') WHERE path_in_schema = 'arr, list, element'
+----
+true	true	true
+
 query IIII
 SELECT path_in_schema, sum(num_rows), min(min_value::INTEGER), max(max_value::INTEGER)
 FROM parquet_page_index('{TEST_DIR}/page_index_write.parquet')

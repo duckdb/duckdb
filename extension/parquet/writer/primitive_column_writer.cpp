@@ -126,6 +126,17 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 		page_info.estimated_page_size += GetRowSize(vector, vector_index, state) * vcount;
 	} else {
 		for (idx_t i = 0; i < vcount; i++) {
+			if (i == 0 && !vector_can_span_multiple_pages) {
+				// a vector that cannot span multiple pages (the values of lists) starts on a new page when the current
+				// page is full, so that every page begins at a row boundary
+				auto &page_info = page_info_ref.get();
+				if (page_info.row_count > 0 && page_info.estimated_page_size >= page_size_limit) {
+					PageInformation new_info;
+					new_info.offset = page_info.offset + page_info.row_count;
+					state.page_info.push_back(new_info);
+					page_info_ref = state.page_info.back();
+				}
+			}
 			auto &page_info = page_info_ref.get();
 			page_info.row_count++;
 			if (check_parent_empty && parent->is_empty[parent_index + i]) {
@@ -134,8 +145,7 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 			}
 			if (validity.RowIsValid(vector_index)) {
 				page_info.estimated_page_size += GetRowSize(vector, vector_index, state);
-				// a vector that cannot span multiple pages stays on the page it started on
-				if (page_info.estimated_page_size >= page_size_limit && (vector_can_span_multiple_pages || i == 0)) {
+				if (page_info.estimated_page_size >= page_size_limit && vector_can_span_multiple_pages) {
 					PageInformation new_info;
 					new_info.offset = page_info.offset + page_info.row_count;
 					state.page_info.push_back(new_info);
@@ -197,6 +207,10 @@ void PrimitiveColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 				write_info.num_rows = 0;
 				for (idx_t i = page_info.offset; i < page_info.offset + page_info.row_count; i++) {
 					write_info.num_rows += state.repetition_levels[i] == 0;
+				}
+				if (state.repetition_levels[page_info.offset] != 0) {
+					// the OffsetIndex requires pages to begin at row boundaries
+					state.pages_start_at_rows = false;
 				}
 			}
 			if (MaxDefine() > 0) {
@@ -534,7 +548,7 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	column_chunk.meta_data.total_uncompressed_size = UnsafeNumericCast<int64_t>(total_uncompressed_size);
 	state.row_group.total_byte_size += column_chunk.meta_data.total_uncompressed_size;
 
-	if (write_page_index && !page_index.offset_index.page_locations.empty()) {
+	if (write_page_index && state.pages_start_at_rows && !page_index.offset_index.page_locations.empty()) {
 		FinalizePageIndex(state, page_index);
 		writer.BufferPageIndex(state.col_idx, std::move(page_index));
 	}

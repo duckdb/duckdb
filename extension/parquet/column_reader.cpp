@@ -196,6 +196,30 @@ void ColumnReader::InitializePageIndex(const ParquetRowGroupPageIndex &page_inde
 	page_index_rows = page_index.row_ranges;
 }
 
+void ColumnReader::VerifyPageAgainstOffsetIndex(idx_t header_location, const PageHeader &page_hdr) {
+	// the page index is only used for non-repeated columns, whose pages hold one value per row
+	auto &locations = offset_index->page_locations;
+	auto it = std::lower_bound(locations.begin(), locations.end(), header_location,
+	                           [](const duckdb_parquet::PageLocation &location, idx_t offset) {
+		                           return NumericCast<idx_t>(location.offset) < offset;
+	                           });
+	if (it == locations.end() || NumericCast<idx_t>(it->offset) != header_location) {
+		return;
+	}
+	const auto page_idx = NumericCast<idx_t>(it - locations.begin());
+	const auto index_rows =
+	    ParquetPageIndexUtils::PageRowCount(*offset_index, page_idx, NumericCast<idx_t>(chunk->meta_data.num_values));
+	const auto page_values = page_hdr.type == PageType::DATA_PAGE
+	                             ? NumericCast<idx_t>(page_hdr.data_page_header.num_values)
+	                             : NumericCast<idx_t>(page_hdr.data_page_header_v2.num_values);
+	if (page_values != index_rows) {
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": the OffsetIndex of column \"%s\" is corrupt. Page %llu "
+		    "should hold %llu rows according to the index, but holds %llu values",
+		    Reader().GetFileName(), Schema().name, page_idx, index_rows, page_values);
+	}
+}
+
 bool ColumnReader::PageIndexNeedsRows(idx_t begin, idx_t end) const {
 	D_ASSERT(page_index_rows);
 	return ParquetPageIndexUtils::PageOverlapsRowRanges(*page_index_rows, begin, end);
@@ -208,9 +232,13 @@ bool ColumnReader::TrySkipPagesWithOffsetIndex(idx_t skipped_so_far, idx_t &to_s
 	}
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 	auto &locations = offset_index->page_locations;
-	if (trans.GetLocation() < NumericCast<idx_t>(locations[0].offset)) {
-		// the dictionary page has not been read yet
-		return false;
+	while (trans.GetLocation() < NumericCast<idx_t>(locations[0].offset)) {
+		// read the dictionary page (and anything else in front of the first data page) before jumping
+		PrepareRead(nullptr, nullptr, 0);
+		if (page_rows_available != 0) {
+			// a data page where the OffsetIndex has none: leave the page index alone
+			return false;
+		}
 	}
 	// a non-repeated column has one value per row: the value count tells the row the next page starts at
 	const auto chunk_rows = NumericCast<idx_t>(chunk->meta_data.num_values);
@@ -452,6 +480,7 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 	block.reset();
 	PageHeader page_hdr;
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
+	const auto header_location = trans.GetLocation();
 
 	if (trans.HasPrefetch()) {
 		// Already has some data prefetched, let's not mess with it
@@ -468,6 +497,10 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 	// some basic sanity check
 	if (page_hdr.compressed_page_size < 0 || page_hdr.uncompressed_page_size < 0) {
 		throw InvalidInputException("Failed to read file \"%s\": Page sizes must be >= 0", Reader().GetFileName());
+	}
+
+	if (offset_index && (page_hdr.type == PageType::DATA_PAGE || page_hdr.type == PageType::DATA_PAGE_V2)) {
+		VerifyPageAgainstOffsetIndex(header_location, page_hdr);
 	}
 
 	if (PageIsFilteredOut(page_hdr, filter)) {

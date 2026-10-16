@@ -76,6 +76,8 @@ public:
 	vector<PageWriteInformation> write_info;
 	unique_ptr<ColumnWriterStatistics> stats_state;
 	idx_t current_page = 0;
+	//! Whether every data page starts at a row boundary, which the page index requires
+	bool pages_start_at_rows = true;
 
 	unique_ptr<ParquetBloomFilter> bloom_filter;
 };

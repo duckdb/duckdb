@@ -299,8 +299,10 @@ public:
 			    make_uniq<ParquetBloomFilter>(bloom_filter_entries, writer.BloomFilterFalsePositiveRatio());
 		}
 
+		// the chunk statistics are the merged page statistics when the page index is written
+		const bool stats_from_dictionary = !STATS_PER_OCCURRENCE && !writer.WritePageIndex();
 		state.dictionary.IterateValues([&](const SRC &src_value, const TGT &tgt_value) {
-			if (!STATS_PER_OCCURRENCE) {
+			if (stats_from_dictionary) {
 				// update the statistics
 				OP::template HandleStats<SRC, TGT>(stats, tgt_value);
 			}
