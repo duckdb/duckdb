@@ -25,7 +25,7 @@ restart
 
 # the temporary macro is gone, so binding the index fails
 statement error
-SELECT count(*) FROM t WHERE k = 'a';
+INSERT INTO t VALUES ('z');
 ----
 tnorm
 
@@ -76,7 +76,7 @@ DELETE FROM t WHERE k = 'a';
 restart
 
 statement error
-SELECT count(*) FROM t WHERE k = 'b';
+INSERT INTO t VALUES ('z');
 ----
 tnorm
 
