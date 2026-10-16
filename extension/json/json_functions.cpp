@@ -169,7 +169,7 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 
 	// Create functions
 	functions.push_back(GetArrayFunction());
-	functions.push_back(GetObjectFunction());
+	AddAliases({"json_object", "json_build_object"}, GetObjectFunction(), functions);
 	AddAliases({"to_json", "json_quote"}, GetToJSONFunction(), functions);
 	functions.push_back(ScalarFunctionSet(GetJSONCopyToJSONFunction()));
 	functions.push_back(ScalarFunctionSet(GetJSONCopyToGeoJSONFunction()));
