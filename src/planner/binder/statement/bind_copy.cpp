@@ -185,11 +185,8 @@ struct CopyToParsedOptions {
 	}
 
 	CopyFunctionReturnType ReturnType() const {
-		return return_type.value_or(CopyFunctionReturnType::CHANGED_ROWS);
-	}
-
-	bool ReturnColumnTypes() const {
-		return return_column_types.value_or(false);
+		auto result = return_type.value_or(CopyFunctionReturnType::CHANGED_ROWS);
+		return return_column_types.value_or(false) ? GetCopyFunctionReturnTypeWithColumnTypes(result) : result;
 	}
 
 	void SetFilenamePattern(const string &pattern) {
@@ -234,7 +231,6 @@ struct CopyToResolvedOptions {
 	bool hive_file_pattern = true;
 	PreserveOrderType preserve_order = PreserveOrderType::AUTOMATIC;
 	CopyFunctionReturnType return_type = CopyFunctionReturnType::CHANGED_ROWS;
-	bool return_column_types = false;
 	//! Unbound, as it is bound against the partition columns
 	unique_ptr<ParsedExpression> partition_path;
 
@@ -293,7 +289,6 @@ static CopyToResolvedOptions ResolveCopyToOptions(ClientContext &context, const 
 	result.hive_file_pattern = options.HiveFilePattern();
 	result.preserve_order = options.PreserveOrder();
 	result.return_type = options.ReturnType();
-	result.return_column_types = options.ReturnColumnTypes();
 	result.partition_path = std::move(options.partition_path);
 	return result;
 }
@@ -344,7 +339,7 @@ static void ValidateCopyToOptionCombinations(const CopyToParsedOptions &options,
 			throw BinderException("Can't combine HIVE_FILE_PATTERN and PARTITION_PATH for COPY");
 		}
 	}
-	if (options.ReturnType() == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS &&
+	if (GetCopyFunctionBaseReturnType(options.ReturnType()) == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS &&
 	    !function.copy_to_get_written_statistics) {
 		throw NotImplementedException("RETURN_STATS is not supported for the \"%s\" copy format", format);
 	}
@@ -550,9 +545,13 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 
 	// RETURN_COLUMN_TYPES describes the query before the copy function can change its types (e.g., CSV casts every
 	// column to VARCHAR), with the names the copy writes
-	auto query_names = select_node.names;
-	QueryResult::DeduplicateColumns(query_names);
-	auto query_types = select_node.types;
+	vector<Identifier> query_names;
+	vector<LogicalType> query_types;
+	if (CopyFunctionReturnsColumnTypes(resolved_options.return_type)) {
+		query_names = select_node.names;
+		QueryResult::DeduplicateColumns(query_names);
+		query_types = select_node.types;
+	}
 	// Allow the copy function to intercept the select list and types and push a new projection on top of the plan
 	if (function.copy_to_select) {
 		auto bindings = select_node.plan->GetColumnBindings();
@@ -632,11 +631,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	copy->partition_columns = std::move(resolved_options.partition_cols);
 	copy->write_empty_file = resolved_options.write_empty_file;
 	copy->return_type = resolved_options.return_type;
-	copy->return_column_types = resolved_options.return_column_types;
-	if (copy->return_column_types) {
-		copy->query_names = std::move(query_names);
-		copy->query_types = std::move(query_types);
-	}
+	copy->query_names = std::move(query_names);
+	copy->query_types = std::move(query_types);
 	copy->preserve_order = resolved_options.preserve_order;
 	copy->hive_file_pattern = resolved_options.hive_file_pattern;
 	copy->order_columns = std::move(resolved_options.order_columns);
@@ -650,12 +646,13 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	auto &properties = GetStatementProperties();
 	switch (copy->return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
-		// The columns column turns the row count into a query result, as RETURN_FILES does
-		properties.return_type =
-		    copy->return_column_types ? StatementReturnType::QUERY_RESULT : StatementReturnType::CHANGED_ROWS;
+		properties.return_type = StatementReturnType::CHANGED_ROWS;
 		break;
 	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST:
 	case CopyFunctionReturnType::WRITTEN_FILE_STATISTICS:
+	case CopyFunctionReturnType::CHANGED_ROWS_AND_COLUMN_TYPES:
+	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST_AND_COLUMN_TYPES:
+	case CopyFunctionReturnType::WRITTEN_FILE_STATISTICS_AND_COLUMN_TYPES:
 		properties.return_type = StatementReturnType::QUERY_RESULT;
 		break;
 	default:
@@ -670,10 +667,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	BoundStatement result;
 	result.names = GetCopyFunctionReturnNames(copy->return_type);
 	result.types = GetCopyFunctionReturnLogicalTypes(copy->return_type);
-	if (copy->return_column_types) {
-		result.names.emplace_back("columns");
-		result.types.push_back(GetCopyColumnTypesLogicalType());
-	}
 	result.plan = std::move(copy);
 
 	return result;

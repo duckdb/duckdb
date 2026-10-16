@@ -1572,19 +1572,22 @@ const StringUtil::EnumStringLiteral *GetCopyFunctionReturnTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS), "CHANGED_ROWS" },
 		{ static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST), "CHANGED_ROWS_AND_FILE_LIST" },
-		{ static_cast<uint32_t>(CopyFunctionReturnType::WRITTEN_FILE_STATISTICS), "WRITTEN_FILE_STATISTICS" }
+		{ static_cast<uint32_t>(CopyFunctionReturnType::WRITTEN_FILE_STATISTICS), "WRITTEN_FILE_STATISTICS" },
+		{ static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS_AND_COLUMN_TYPES), "CHANGED_ROWS_AND_COLUMN_TYPES" },
+		{ static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST_AND_COLUMN_TYPES), "CHANGED_ROWS_AND_FILE_LIST_AND_COLUMN_TYPES" },
+		{ static_cast<uint32_t>(CopyFunctionReturnType::WRITTEN_FILE_STATISTICS_AND_COLUMN_TYPES), "WRITTEN_FILE_STATISTICS_AND_COLUMN_TYPES" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType value) {
-	return StringUtil::EnumToString(GetCopyFunctionReturnTypeValues(), 3, "CopyFunctionReturnType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCopyFunctionReturnTypeValues(), 6, "CopyFunctionReturnType", static_cast<uint32_t>(value));
 }
 
 template<>
 CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *value) {
-	return static_cast<CopyFunctionReturnType>(StringUtil::StringToEnum(GetCopyFunctionReturnTypeValues(), 3, "CopyFunctionReturnType", value));
+	return static_cast<CopyFunctionReturnType>(StringUtil::StringToEnum(GetCopyFunctionReturnTypeValues(), 6, "CopyFunctionReturnType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCopyOverwriteModeValues() {

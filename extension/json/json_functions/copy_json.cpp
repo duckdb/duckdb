@@ -7,11 +7,10 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/common/helper.hpp"
@@ -110,11 +109,50 @@ static unique_ptr<Expression> JSONCopyBoundFormatConstant(const string &format) 
 	return make_uniq<BoundConstantExpression>(Value(format));
 }
 
-static void BindJSONCopyToJSONFunction(Binder &binder, BoundStatement &bound, const string &date_format,
-                                       const string &timestamp_format) {
-	if (date_format.empty() && timestamp_format.empty()) {
-		return;
+//! Sets the names and types of the copied query for RETURN_COLUMN_TYPES. The binder described the rewrite, which writes
+//! one JSON column, so they are replaced here: the types are the output of the query below the rewrite's projection,
+//! and the names are the fields of its struct_pack, or the query's names when partitioning already looked them up.
+static void SetJSONCopyQueryColumns(LogicalCopyToFile &copy, LogicalProjection &projection,
+                                    const vector<Identifier> &original_column_names) {
+	if (projection.children.size() != 1) {
+		throw InternalException("Expected JSON COPY rewrite projection to have the query as its only child");
 	}
+	projection.children[0]->ResolveOperatorTypes();
+	auto query_types = projection.children[0]->types;
+	vector<Identifier> query_names;
+	if (!original_column_names.empty()) {
+		// With PARTITION_BY, the partition columns can be left out of the struct_pack
+		query_names = original_column_names;
+	} else {
+		auto &payload = projection.expressions[0];
+		if (payload->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION ||
+		    payload->Cast<BoundFunctionExpression>().GetChildren().empty()) {
+			throw InternalException("Expected JSON COPY payload expression to be a function of a struct_pack");
+		}
+		// Binding the payload can cast the struct_pack, e.g., to turn a VARIANT field into JSON
+		const Expression *struct_pack = payload->Cast<BoundFunctionExpression>().GetChildren()[0].get();
+		while (BoundCastExpression::IsCast(*struct_pack)) {
+			struct_pack = &BoundCastExpression::Child(struct_pack->Cast<BoundFunctionExpression>());
+		}
+		if (struct_pack->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION ||
+		    struct_pack->Cast<BoundFunctionExpression>().Function().GetName() != "struct_pack") {
+			throw InternalException("Expected JSON COPY payload expression to be a function of a struct_pack");
+		}
+		for (auto &field : struct_pack->Cast<BoundFunctionExpression>().GetChildren()) {
+			query_names.push_back(field->GetAlias());
+		}
+	}
+	if (query_names.size() != query_types.size()) {
+		throw InternalException("Expected JSON COPY rewrite to have a name for every column of the query");
+	}
+	QueryResult::DeduplicateColumns(query_names);
+	copy.query_names = std::move(query_names);
+	copy.query_types = std::move(query_types);
+}
+
+static void BindJSONCopyToJSONFunction(Binder &binder, BoundStatement &bound, const string &date_format,
+                                       const string &timestamp_format, bool is_geojson,
+                                       const vector<Identifier> &original_column_names) {
 	if (!bound.plan || bound.plan->type != LogicalOperatorType::LOGICAL_COPY_TO_FILE) {
 		throw InternalException("Expected JSON COPY rewrite to bind to a LogicalCopyToFile");
 	}
@@ -126,7 +164,13 @@ static void BindJSONCopyToJSONFunction(Binder &binder, BoundStatement &bound, co
 	if (projection.expressions.empty()) {
 		throw InternalException("Expected JSON COPY rewrite projection to contain a JSON payload expression");
 	}
-
+	if (CopyFunctionReturnsColumnTypes(copy.return_type)) {
+		SetJSONCopyQueryColumns(copy, projection, original_column_names);
+	}
+	// Unlike to_json, the GeoJSON writer takes the formats as regular arguments, so it needs no post-bind fixup
+	if (is_geojson || (date_format.empty() && timestamp_format.empty())) {
+		return;
+	}
 	auto to_json = std::move(projection.expressions[0]);
 	if (to_json->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		throw InternalException("Expected JSON COPY payload expression to be a bound function");
@@ -146,50 +190,15 @@ static void BindJSONCopyToJSONFunction(Binder &binder, BoundStatement &bound, co
 	projection.ResolveOperatorTypes();
 }
 
-//! RETURN_COLUMN_TYPES describes the query being copied, not the to_json column the rewrite writes. Every column of the
-//! query is referenced in the rewrite's projection, by struct_pack or as a partition column, so its name and type are
-//! taken from there rather than from binding the query again, which would repeat the side effects of binding it.
-static void SetJSONCopyQueryColumns(BoundStatement &bound) {
-	auto &copy = bound.plan->Cast<LogicalCopyToFile>();
-	if (copy.children.empty() || copy.children[0]->type != LogicalOperatorType::LOGICAL_PROJECTION) {
-		throw InternalException("Expected JSON COPY rewrite to bind a top-level projection");
-	}
-	auto &projection = copy.children[0]->Cast<LogicalProjection>();
-	vector<optional_ptr<const BoundColumnRefExpression>> query_columns;
-	for (auto &expression : projection.expressions) {
-		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-		    *expression, [&](const BoundColumnRefExpression &column_ref) {
-			    auto column_index = column_ref.Binding().column_index.GetIndex();
-			    if (column_index >= query_columns.size()) {
-				    query_columns.resize(column_index + 1);
-			    }
-			    query_columns[column_index] = &column_ref;
-		    });
-	}
-	vector<Identifier> query_names;
-	vector<LogicalType> query_types;
-	for (auto &column : query_columns) {
-		if (!column) {
-			throw InternalException("Expected JSON COPY rewrite to reference every column of the query");
-		}
-		query_names.push_back(column->GetAlias());
-		query_types.push_back(column->GetReturnType());
-	}
-	QueryResult::DeduplicateColumns(query_names);
-	copy.query_names = std::move(query_names);
-	copy.query_types = std::move(query_types);
-}
-
 static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt, const JSONCopyToFormat format) {
 	static const identifier_set_t SUPPORTED_BASE_OPTIONS {
-	    "compression",      "encoding",         "use_tmp_file",   "overwrite_or_ignore", "overwrite",
-	    "append",           "filename_pattern", "file_extension", "per_thread_output",   "file_size_bytes",
-	    "partition_by",     "return_files",     "preserve_order", "return_stats",        "write_partition_columns",
-	    "write_empty_file", "hive_file_pattern"};
+	    "compression",      "encoding",          "use_tmp_file",       "overwrite_or_ignore", "overwrite",
+	    "append",           "filename_pattern",  "file_extension",     "per_thread_output",   "file_size_bytes",
+	    "partition_by",     "return_files",      "preserve_order",     "return_stats",        "write_partition_columns",
+	    "write_empty_file", "hive_file_pattern", "return_column_types"};
 
 	auto &copy_info = *stmt.info;
 
-	bool return_column_types = false;
 	// Parse the options, creating options for the CSV writer while doing so
 	string date_format;
 	string timestamp_format;
@@ -272,9 +281,6 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 			// Handled below by keeping the partition columns inside the JSON object. We do not forward this to the
 			// CSV writer, as that would write the (separate) partition columns as their own JSON lines.
 			write_partition_columns = GetJSONCopyBoolean(binder, format, option_name, option_values);
-		} else if (option_name == "return_column_types") {
-			return_column_types = GetJSONCopyBoolean(binder, format, option_name, option_values);
-			csv_copy_options.insert(kv);
 		} else if (SUPPORTED_BASE_OPTIONS.find(option_name) != SUPPORTED_BASE_OPTIONS.end()) {
 			if (!option_values.empty() && option_values.back().IsNull()) {
 				ThrowJSONCopyNullException(format, option_name);
@@ -326,7 +332,6 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 	auto struct_pack = make_uniq<FunctionExpression>("struct_pack", std::move(struct_pack_args));
 
 	if (is_geojson) {
-		// Unlike to_json, the GeoJSON writer takes the formats as regular arguments, so it needs no post-bind fixup
 		vector<unique_ptr<ParsedExpression>> geojson_args;
 		geojson_args.push_back(std::move(struct_pack));
 		geojson_args.push_back(
@@ -361,12 +366,7 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 	copy_info.options["header"] = {{0}};
 
 	auto result = binder.Bind(stmt);
-	if (return_column_types) {
-		SetJSONCopyQueryColumns(result);
-	}
-	if (!is_geojson) {
-		BindJSONCopyToJSONFunction(binder, result, date_format, timestamp_format);
-	}
+	BindJSONCopyToJSONFunction(binder, result, date_format, timestamp_format, is_geojson, original_column_names);
 	return result;
 }
 

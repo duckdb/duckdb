@@ -48,7 +48,6 @@ public:
 	optional_idx file_size_bytes;
 	bool rotate;
 	CopyFunctionReturnType return_type;
-	bool return_column_types = false;
 
 	bool partition_output;
 	bool write_partition_columns;
@@ -82,9 +81,6 @@ public:
 protected:
 	void ResolveTypes() override {
 		types = GetCopyFunctionReturnLogicalTypes(return_type);
-		if (return_column_types) {
-			types.push_back(GetCopyColumnTypesLogicalType());
-		}
 	}
 };
 } // namespace duckdb
