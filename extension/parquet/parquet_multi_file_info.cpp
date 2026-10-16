@@ -644,7 +644,8 @@ bool ParquetReader::RecheckRowGroupFilters(ClientContext &context, GlobalTableFu
 		if (!filter_entry) {
 			continue;
 		}
-		auto prune_result = CheckRowGroupStatsPrune(context, state, state.GetColumnReader(col_idx), *filter_entry);
+		auto prune_result =
+		    CheckRowGroupFilterStatistics(context, state, state.GetColumnReader(col_idx), *filter_entry);
 		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE &&
 		    prune_result != FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			continue;

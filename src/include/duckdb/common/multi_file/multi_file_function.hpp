@@ -156,6 +156,13 @@ public:
 		bool bound_on_first_file = true;
 		if (result->multi_file_reader->Bind(result->file_options, *result->file_list, result->types, result->names,
 		                                    result->reader_bind)) {
+			// with the 'schema' option, hive partitioning is asked for (hive_partitioning or hive_types) rather than
+			// detected; the keys' types still are. Readers that bind a schema of their own skip this
+			if (!result->file_options.schema.empty() &&
+			    (result->file_options.hive_partitioning || !result->file_options.hive_types_schema.empty())) {
+				result->file_options.AutoDetectHivePartitioning(*result->file_list, context,
+				                                                /* detect_partitioning = */ false);
+			}
 			result->multi_file_reader->BindOptions(result->file_options, *result->file_list, result->types,
 			                                       result->names, result->reader_bind);
 			bound_on_first_file = false;

@@ -460,7 +460,7 @@ struct ParallelExecuteContext {
 	atomic<bool> success;
 	string error_message;
 	string error_file;
-	int error_line;
+	int error_line = 0;
 };
 
 static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
@@ -491,6 +491,13 @@ static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
 		execute_context->error_message = StringUtil::Format("Failure at %s:%d: Unknown error message",
 		                                                    execute_context->error_file, execute_context->error_line);
 		execute_context->success = false;
+	}
+	if (!execute_context->success) {
+		auto message = execute_context->error_message;
+		if (message.empty()) {
+			message = StringUtil::Format("Failure at %s:%d", execute_context->error_file, execute_context->error_line);
+		}
+		SQLLogicTestRunner::EmitError(execute_context->runner.file_name, message);
 	}
 }
 
