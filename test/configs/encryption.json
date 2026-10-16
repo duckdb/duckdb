@@ -11,11 +11,33 @@
   ],
   "skip_tests": [
     {
+      "reason": "Explicit constraint check mode requires storage version v2.0.0 or higher.",
+      "paths": [
+        "test/sql/constraints/deferred/test_alter_constraint_check_mode.test",
+        "test/sql/constraints/deferred/test_deferred_alter.test",
+        "test/sql/constraints/deferred/test_deferred_checkpoint.test_slow",
+        "test/sql/constraints/deferred/test_deferred_compatibility.test",
+        "test/sql/constraints/deferred/test_deferred_delete_reinsert.test",
+        "test/sql/constraints/deferred/test_deferred_large.test_slow",
+        "test/sql/constraints/deferred/test_deferred_metadata.test",
+        "test/sql/constraints/deferred/test_deferred_statements.test",
+        "test/sql/constraints/deferred/test_deferred_syntax.test",
+        "test/sql/constraints/deferred/test_deferred_trigger.test",
+        "test/sql/constraints/deferred/test_deferred_unique_pk.test"
+      ]
+    },
+    {
       "reason": "Requires in-memory storage: persistent blocks can be evicted without a temporary directory.",
       "paths": [
         "test/sql/storage/evict_unpinned_without_temp_directory.test",
         "test/sql/transactions/test_commit_cleanup_oom.test",
         "test/sql/transactions/test_commit_cleanup_oom_index_retry.test"
+      ]
+    },
+    {
+      "reason": "Requires httpfs to be unloaded, but this config loads it statically.",
+      "paths": [
+        "test/extension/install_httpfs_https_repository.test"
       ]
     },
     {

@@ -144,6 +144,7 @@ optional_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalCo
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOTEQUAL:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 			break;
 		default:
 			//	Unsupported NLJ comparison
@@ -359,6 +360,11 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 			auto result = PlanAsOfLoopJoin(op, left, right, join_cardinality);
 			if (result) {
 				return *result;
+			}
+			if (has_predicate) {
+				//	PhysicalAsOfJoin only evaluates the comparisons
+				throw NotImplementedException("Unsupported ASOF JOIN: the join predicate cannot be evaluated together "
+				                              "with these join conditions");
 			}
 		}
 
