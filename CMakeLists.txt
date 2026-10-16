@@ -897,12 +897,14 @@ elseif(DEFINED ENV{DUCKDB_EXTEND})
 else()
   set(DUCKDB_EXPLICIT_EXTEND "")
 endif()
-set(DUCKDB_USE
-    "${DUCKDB_EXPLICIT_USE}"
-    CACHE STRING "Extensions and capabilities to build and link")
-set(DUCKDB_EXTEND
-    "${DUCKDB_EXPLICIT_EXTEND}"
-    CACHE STRING "Extensions to build without linking")
+if(DUCKDB_EXTENSION_SELECTION_EXPLICIT)
+  set(DUCKDB_USE
+      "${DUCKDB_EXPLICIT_USE}"
+      CACHE STRING "Extensions and capabilities to build and link")
+  set(DUCKDB_EXTEND
+      "${DUCKDB_EXPLICIT_EXTEND}"
+      CACHE STRING "Extensions to build without linking")
+endif()
 if(DUCKDB_LEGACY_EXTENSION_SELECTION_MIGRATED)
   # Do not let the generated cache entries mask updated legacy variables on the
   # next CMake run.

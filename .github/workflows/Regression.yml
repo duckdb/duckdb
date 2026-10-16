@@ -126,6 +126,7 @@ jobs:
         env:
           BUILD_BENCHMARK: 1
           BUILD_JEMALLOC: 1
+          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
           DUCKDB_USE: "core_functions;icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs;httplib;loadable_extensions;local_extension_repository"
           DISABLE_SANITIZER: 1
         with:
