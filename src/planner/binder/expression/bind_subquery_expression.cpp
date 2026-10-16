@@ -61,7 +61,13 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 
 BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t depth) {
 	if (inside_try) {
-		throw BinderException("TRY can not be used in combination with a scalar subquery");
+		if (expr.GetSubqueryType() != SubqueryType::SCALAR) {
+			throw BinderException("TRY can not be used in combination with EXISTS/IN/ANY/ALL subqueries");
+		}
+		// TRY directly over a scalar subquery is rewritten before binding, so this subquery sits deeper
+		// inside the TRY argument, where its errors cannot be masked
+		throw BinderException(
+		    "TRY over a scalar subquery is only supported when the subquery is the direct argument of TRY");
 	}
 	// bind the subquery in its own binder
 	auto subquery_binder = Binder::CreateBinder(context, binder);

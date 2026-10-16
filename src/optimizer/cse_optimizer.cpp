@@ -87,6 +87,19 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 		state.short_circuited = save_short_circuit;
 		break;
 	}
+	case ExpressionClass::BOUND_OPERATOR: {
+		const auto expression_type = expr.GetExpressionType();
+		if (expression_type == ExpressionType::OPERATOR_TRY || expression_type == ExpressionType::OPERATOR_HAS_ERROR) {
+			// an expression below an error capture must not be hoisted into a projection outside of it
+			const auto save_short_circuit = state.short_circuited;
+			state.short_circuited = true;
+			ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { CountExpressions(child, state); });
+			state.short_circuited = save_short_circuit;
+			break;
+		}
+		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { CountExpressions(child, state); });
+		break;
+	}
 	default:
 		// recursively count the children
 		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { CountExpressions(child, state); });
