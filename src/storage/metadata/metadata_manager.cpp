@@ -203,7 +203,7 @@ void MetadataManager::AddAndRegisterBlock(unique_lock<mutex> &block_lock, Metada
 		throw InternalException("AddAndRegisterBlock called with a transient block id");
 	}
 	block_lock.unlock();
-	block.block = block_manager.RegisterBlock(block.block_id);
+	block.block = block_manager.RegisterBlock(block.block_id, MemoryTag::METADATA);
 	block_lock.lock();
 	AddBlock(block_lock, std::move(block), true);
 }

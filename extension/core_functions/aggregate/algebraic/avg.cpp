@@ -239,8 +239,9 @@ struct IntervalAverageOperation : public BaseSumOperation<AverageSetOperation, I
 			target.days += months_remainder / count;
 			days_remainder += months_remainder % count;
 
-			days_remainder *= Interval::MICROS_PER_DAY;
-			micros_remainder += days_remainder / count;
+			// the remainder in micros can exceed int64 for large counts, but divided by the count it is below two days
+			const auto shifted_days = hugeint_t(days_remainder) * hugeint_t(Interval::MICROS_PER_DAY);
+			micros_remainder += Hugeint::Cast<int64_t>(shifted_days / hugeint_t(count));
 			target.micros += micros_remainder;
 		}
 	}
