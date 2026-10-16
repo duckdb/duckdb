@@ -119,9 +119,9 @@ public:
 	//! but all columns required by this index must be populated.
 	void BufferChunk(DataChunk &table_chunk, Vector &row_ids, BufferedIndexReplay replay_type);
 	unique_ptr<BoundIndex> Bind(IndexBinder &binder, const vector<LogicalType> &physical_column_types);
-	//! Marks the storage as reclaimed, invalidates the index's database, and throws: the bind cannot be retried.
-	//! Fatal only for the initial database, so one attached database cannot take down the instance.
-	[[noreturn]] void ThrowBindFailure(const ErrorData &error, const string &what);
+	//! Marks the storage as reclaimed, invalidates, and throws: the bind cannot be retried. A failure in the initial
+	//! database invalidates the whole instance; one in an attached database invalidates only that database.
+	[[noreturn]] void ThrowBindFailure(const ErrorData &error, const string &reason);
 	bool HasBufferedReplays() const {
 		return buffered_replays.HasBufferedReplays();
 	}

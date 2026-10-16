@@ -76,7 +76,7 @@ IndexStorageInfo UnboundIndex::CopyStorageInfo() const {
 	return result;
 }
 
-void UnboundIndex::ThrowBindFailure(const ErrorData &error, const string &what) {
+void UnboundIndex::ThrowBindFailure(const ErrorData &error, const string &reason) {
 	// The failed bind released or handed off the on-disk storage: it cannot be retried.
 	storage_reclaimed = true;
 	if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
@@ -84,14 +84,14 @@ void UnboundIndex::ThrowBindFailure(const ErrorData &error, const string &what) 
 	}
 	if (db.IsInitialDatabase()) {
 		ValidChecker::Invalidate(db.GetDatabase(), error.RawMessage());
-		throw FatalException("%s of index %s: %s", what, GetIndexName(), error.RawMessage());
+		throw FatalException("%s of index %s: %s", reason, GetIndexName(), error.RawMessage());
 	}
 	ValidChecker::Invalidate(db, StringUtil::Format("Database %s has been invalidated because binding an index "
 	                                                "failed. Detach and reattach it before using it again. "
 	                                                "Original error: %s",
 	                                                db.GetName(), error.RawMessage()));
-	throw IOException("%s of index %s: %s. Database %s has been invalidated: detach and reattach it to retry.", what,
-	                  GetIndexName(), error.RawMessage(), db.GetName());
+	throw IOException("%s of index %s: %s. Database %s has been invalidated: detach and reattach it to retry.",
+	                  reason, GetIndexName(), error.RawMessage(), db.GetName());
 }
 
 unique_ptr<BoundIndex> UnboundIndex::Bind(IndexBinder &binder, const vector<LogicalType> &physical_column_types) {
