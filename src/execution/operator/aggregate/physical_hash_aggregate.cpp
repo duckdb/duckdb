@@ -248,6 +248,27 @@ public:
 		finished = false;
 		GlobalSinkState::Reset(context);
 	}
+
+	void AdjustRescheduledWorkers(ClientContext &context, idx_t scheduled_workers) override {
+		for (idx_t grouping_idx = 0; grouping_idx < op.groupings.size(); grouping_idx++) {
+			auto &grouping = op.groupings[grouping_idx];
+			auto &grouping_state = grouping_states[grouping_idx];
+			grouping.table_data.AdjustScheduledWorkers(context, *grouping_state.table_state, scheduled_workers);
+			if (!grouping.HasDistinct()) {
+				continue;
+			}
+			auto &distinct_data = *grouping.distinct_data;
+			auto &distinct_state = *grouping_state.distinct_state;
+			for (idx_t table_idx = 0; table_idx < distinct_data.radix_tables.size(); table_idx++) {
+				auto &radix_table = distinct_data.radix_tables[table_idx];
+				if (!radix_table) {
+					continue;
+				}
+				radix_table->AdjustScheduledWorkers(context, *distinct_state.radix_states[table_idx],
+				                                    scheduled_workers);
+			}
+		}
+	}
 };
 
 class HashAggregateLocalSinkState : public LocalSinkState {

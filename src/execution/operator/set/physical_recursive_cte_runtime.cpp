@@ -136,6 +136,39 @@ static RecursiveCTEParallelism GetRecursiveParallelism(const RecursiveCTEState &
 	return RecursiveCTEParallelism(worker_count);
 }
 
+//! Combined worker bound of all producer pipelines that feed one sink
+struct RecursiveSinkWorkerBound {
+	idx_t worker_bound = 0;
+	idx_t producer_count = 0;
+};
+
+//! A sink with a single producer learns the exact worker count here, before any of its data flows
+static void AdjustRecursiveSinkWorkers(Pipeline &pipeline, idx_t max_threads) {
+	auto sink = pipeline.GetSink();
+	if (!sink || !sink->sink_state || !sink->sink_state->reschedule_single_producer) {
+		return;
+	}
+	sink->sink_state->AdjustRescheduledWorkers(pipeline.executor.context, max_threads);
+}
+
+//! Conservative upper bound on the workers the schedule can assign to one producer pipeline.
+//! Only sources whose contents are already final for this iteration may refine the epoch limit.
+static idx_t GetRecursiveProducerWorkerBound(Pipeline &pipeline, idx_t worker_limit) {
+	auto source = pipeline.GetSource();
+	if (!source || (source->type != PhysicalOperatorType::RECURSIVE_CTE_SCAN &&
+	                source->type != PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN)) {
+		return worker_limit;
+	}
+	auto &scan = source->Cast<PhysicalColumnDataScan>();
+	if (!scan.collection) {
+		return worker_limit;
+	}
+	// The scan hands out batches of at least STANDARD_VECTOR_SIZE rows, so this bounds its MaxThreads
+	const auto count = scan.collection->Count();
+	const auto scan_batches = MaxValue<idx_t>(count / STANDARD_VECTOR_SIZE + (count % STANDARD_VECTOR_SIZE != 0), 1);
+	return MinValue(worker_limit, scan_batches);
+}
+
 static idx_t GetRecursivePipelineMaxThreads(Pipeline &pipeline, idx_t worker_limit) {
 	auto max_threads = pipeline.GetMaxThreads();
 	if (max_threads < 1) {
@@ -273,6 +306,7 @@ public:
 			state.GetMetrics().RecordTasks(max_threads);
 			state.GetEpochMetrics().RecordPipelineWorkers(max_threads);
 		}
+		AdjustRecursiveSinkWorkers(*pipeline, max_threads);
 		state.GetScheduler().PrepareExecutors(*pipeline, max_threads);
 		auto &executors = state.GetScheduler().GetExecutors(*pipeline);
 		D_ASSERT(executors.size() >= max_threads);
@@ -839,6 +873,7 @@ static void ExecuteRecursiveInlinePlan(RecursiveCTEState &state, Executor &execu
 				break;
 			}
 			D_ASSERT(max_threads == 1);
+			AdjustRecursiveSinkWorkers(pipeline, max_threads);
 			state.GetScheduler().PrepareExecutors(pipeline, max_threads);
 			auto &executors = state.GetScheduler().GetExecutors(pipeline);
 			D_ASSERT(executors.size() >= max_threads);
@@ -922,14 +957,15 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		}
 	}
 
-	// Reset sink state from the main thread so recursive iterations can reuse or recreate
-	// pipeline-local global sinks without tearing down the rest of the runtime state graph.
-	// Invariant builds have independent source work and keep the full worker limit, while the
-	// recursive pipelines are bounded by this iteration's scheduled parallelism. From the second
-	// iteration on, the previous iteration's source state refines the limit to a per-pipeline
-	// estimate of the workers the schedule assigns once the source has been reset.
+	// Establish a conservative per-sink worker bound before any sink state is mutated: several
+	// producer pipelines can share one sink, so the bound is the maximum over all of its producers.
+	// A producer's bound defaults to its epoch worker limit, where invariant meta pipelines keep the
+	// configured thread count because their source work is independent of the recursive frontier.
+	// Frontier and recurring-table contents are final for this iteration at this point, so a producer
+	// scanning them refines its bound to that scan's parallelism. Any other source, such as a
+	// materialized CTE that this iteration refills, stays at the epoch limit.
 	const auto configured_threads = TaskScheduler::GetScheduler(executor.context).NumberOfThreads();
-	const auto have_cached_executors = allow_reuse && gstate.GetScheduler().HasExecutorEntries();
+	reference_map_t<const PhysicalOperator, RecursiveSinkWorkerBound> sink_worker_bounds;
 	for (auto &meta_pipeline : active_meta_pipelines) {
 		const auto is_invariant = invariant_meta_pipelines.find(*meta_pipeline) != invariant_meta_pipelines.end();
 		const auto worker_limit = is_invariant ? configured_threads : parallelism.MaxWorkerCount();
@@ -938,9 +974,25 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		for (auto &pipeline : pipelines) {
 			auto sink = pipeline->GetSink();
 			if (sink.get() != this) {
-				const auto scheduled_workers =
-				    have_cached_executors ? GetRecursivePipelineMaxThreads(*pipeline, worker_limit) : worker_limit;
-				pipeline->ResetSinkForReschedule(scheduled_workers);
+				auto &sink_bound = sink_worker_bounds[*sink];
+				sink_bound.worker_bound =
+				    MaxValue(sink_bound.worker_bound, GetRecursiveProducerWorkerBound(*pipeline, worker_limit));
+				sink_bound.producer_count++;
+			}
+		}
+	}
+
+	// Reset sink state from the main thread so recursive iterations can reuse or recreate
+	// pipeline-local global sinks without tearing down the rest of the runtime state graph. A sink
+	// with a single producer additionally learns the exact worker count at schedule time.
+	for (auto &meta_pipeline : active_meta_pipelines) {
+		vector<shared_ptr<Pipeline>> pipelines;
+		meta_pipeline->GetPipelines(pipelines, false);
+		for (auto &pipeline : pipelines) {
+			auto sink = pipeline->GetSink();
+			if (sink.get() != this) {
+				auto &sink_bound = sink_worker_bounds[*sink];
+				pipeline->ResetSinkForReschedule(sink_bound.worker_bound, sink_bound.producer_count == 1);
 			}
 		}
 	}

@@ -382,6 +382,20 @@ void RadixPartitionedHashTable::ResetGlobalSinkState(ClientContext &context, Glo
 	gstate.max_partition_size = 0;
 }
 
+void RadixPartitionedHashTable::AdjustScheduledWorkers(ClientContext &context, GlobalSinkState &gstate_p,
+                                                       const idx_t scheduled_workers) const {
+	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
+	const annotated_lock_guard<annotated_mutex> guard {gstate.lock};
+	if (gstate.active_threads != 0 || gstate.any_combined || gstate.uncombined_data || gstate.external) {
+		// data already flowed into this sink, so the configuration can no longer be replaced
+		return;
+	}
+	gstate.config.ResetForNewIteration(scheduled_workers);
+	gstate.minimum_reservation = gstate.CalculateMinimumReservation(gstate.config.GetRadixBits());
+	gstate.temporary_memory_state->SetMinimumReservation(gstate.minimum_reservation);
+	gstate.temporary_memory_state->SetRemainingSizeAndUpdateReservation(context, gstate.minimum_reservation);
+}
+
 void RadixPartitionedHashTable::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,
                                                     LocalSinkState &lstate_p) const {
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();

@@ -358,7 +358,7 @@ void Pipeline::ResetSink() {
 	}
 }
 
-void Pipeline::ResetSinkForReschedule(idx_t scheduled_workers) {
+void Pipeline::ResetSinkForReschedule(idx_t scheduled_workers, bool single_producer) {
 	if (!sink) {
 		return;
 	}
@@ -371,10 +371,13 @@ void Pipeline::ResetSinkForReschedule(idx_t scheduled_workers) {
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(client);
 	if (allow_reuse && sink->sink_state && sink->sink_state->SupportsReuse()) {
 		sink->sink_state->reschedule_worker_limit = scheduled_workers;
+		sink->sink_state->reschedule_single_producer = single_producer;
 		sink->sink_state->Reset(client);
 		return;
 	}
 	sink->sink_state = sink->GetGlobalSinkState(client);
+	sink->sink_state->reschedule_worker_limit = scheduled_workers;
+	sink->sink_state->reschedule_single_producer = single_producer;
 }
 
 void Pipeline::PrepareFinalize() {
@@ -410,7 +413,7 @@ void Pipeline::Reset() {
 void Pipeline::ResetForReschedule(bool reset_sink) {
 	NotifyProgressReset();
 	if (reset_sink) {
-		ResetSinkForReschedule(TaskScheduler::GetScheduler(executor.context).NumberOfThreads());
+		ResetSinkForReschedule(TaskScheduler::GetScheduler(executor.context).NumberOfThreads(), false);
 	}
 	auto &client = GetClientContext();
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(client);
