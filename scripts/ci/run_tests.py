@@ -1685,6 +1685,7 @@ def run_batch(config: TestRunnerConfig, batch):
                 if require_skip_lines:
                     failed = True
                     message = "error: detected require-based skipped tests: " + require_skip_lines[0]
+
                     allow_retry = False
     except OSError as exc:
         failed = True
