@@ -114,6 +114,60 @@ FROM caller;
 ----
 42	4920
 
+# A correlated materialized CTE definition inside the subquery resolves its delimiter scans against
+# the join that owns them, keeping the one-row domain provably small.
+query II
+EXPLAIN SELECT o.key, (
+	WITH t AS MATERIALIZED (SELECT o.key AS k)
+	SELECT (
+		SELECT sum((
+			SELECT sum(f.v)
+			FROM fact f
+			WHERE f.k = t2.k AND f.k = o.key
+		)) + t1.k
+		FROM t t2
+	)
+	FROM t t1
+)
+FROM (VALUES (42::BIGINT)) o(key);
+----
+physical_plan	<REGEX>:[\s\S]*SEMI[\s\S]*
+
+query II
+SELECT o.key, (
+	WITH t AS MATERIALIZED (SELECT o.key AS k)
+	SELECT (
+		SELECT sum((
+			SELECT sum(f.v)
+			FROM fact f
+			WHERE f.k = t2.k AND f.k = o.key
+		)) + t1.k
+		FROM t t2
+	)
+	FROM t t1
+)
+FROM (VALUES (42::BIGINT)) o(key);
+----
+42	4962
+
+# Protection: the same correlated CTE shape over an unbounded caller keeps the full aggregate.
+query II
+EXPLAIN SELECT o.key, (
+	WITH t AS MATERIALIZED (SELECT o.key AS k)
+	SELECT (
+		SELECT sum((
+			SELECT sum(f.v)
+			FROM fact f
+			WHERE f.k = t2.k AND f.k = o.key
+		)) + t1.k
+		FROM t t2
+	)
+	FROM t t1
+)
+FROM outer_keys o;
+----
+physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
+
 # Protection: an unfiltered table domain is not provably small, the reduction join is removed and the
 # base table is aggregated once (no semi join in the plan, as before the fix).
 query II

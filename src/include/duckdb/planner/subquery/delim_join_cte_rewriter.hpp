@@ -16,6 +16,16 @@ namespace duckdb {
 class LogicalComparisonJoin;
 class LogicalCTE;
 
+//! A materialized CTE definition and the delimiter-join stack depth at which it was registered
+struct EnclosingCTE {
+	EnclosingCTE(LogicalCTE &cte, idx_t delim_depth) : cte(cte), delim_depth(delim_depth) {
+	}
+
+	reference<LogicalCTE> cte;
+	//! Number of delimiter joins enclosing the definition, used to resolve its delimiter scans
+	idx_t delim_depth;
+};
+
 //! Rewrites fully decorrelated DelimJoins into materialized CTEs.
 class DelimJoinCTERewriter {
 public:
@@ -42,7 +52,7 @@ private:
 	//! Delim joins on whose RHS the current rewrite operates, used to resolve the domains of outer delim scans
 	vector<reference<LogicalComparisonJoin>> enclosing_delim_joins;
 	//! Materialized CTEs in whose consumer side the current rewrite operates, used to resolve CTE references
-	vector<reference<LogicalCTE>> enclosing_ctes;
+	vector<EnclosingCTE> enclosing_ctes;
 };
 
 } // namespace duckdb

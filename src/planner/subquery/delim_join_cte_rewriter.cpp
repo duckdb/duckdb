@@ -879,7 +879,7 @@ static bool JoinRHSIsDeduplicated(LogicalComparisonJoin &join) {
 class DomainCardinalityAnalyzer {
 public:
 	DomainCardinalityAnalyzer(vector<reference<LogicalComparisonJoin>> enclosing_delim_joins_p,
-	                          vector<reference<LogicalCTE>> known_ctes_p)
+	                          vector<EnclosingCTE> known_ctes_p)
 	    : enclosing_delim_joins(std::move(enclosing_delim_joins_p)), known_ctes(std::move(known_ctes_p)) {
 	}
 
@@ -937,13 +937,18 @@ private:
 		return bound;
 	}
 
-	optional_ptr<LogicalCTE> ResolveCTE(TableIndex cte_index) const {
-		for (auto &cte : known_ctes) {
-			if (cte.get().table_index == cte_index) {
-				return cte.get();
+	optional_ptr<const EnclosingCTE> ResolveCTE(TableIndex cte_index) const {
+		for (auto &entry : known_ctes) {
+			if (entry.cte.get().table_index == cte_index) {
+				return entry;
 			}
 		}
 		return nullptr;
+	}
+
+	static bool IsMaterializedDefinition(optional_ptr<const EnclosingCTE> entry) {
+		return entry && !entry->cte.get().children.empty() &&
+		       entry->cte.get().type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE;
 	}
 
 	//! A pinned column carries one constant plus at most a NULL from outer-join extension, two values per column
@@ -1006,7 +1011,7 @@ private:
 		if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 			// Register the definition before walking consumers so that CTE references can resolve it
 			CollectPinnedBindings(*op.children[0], enclosing_depth, pinned);
-			known_ctes.push_back(op.Cast<LogicalCTE>());
+			known_ctes.emplace_back(op.Cast<LogicalCTE>(), enclosing_depth);
 			CollectPinnedBindings(*op.children[1], enclosing_depth, pinned);
 			return;
 		}
@@ -1057,17 +1062,20 @@ private:
 		}
 		case LogicalOperatorType::LOGICAL_CTE_REF: {
 			auto &cteref = op.Cast<LogicalCTERef>();
-			auto cte = ResolveCTE(cteref.cte_index);
-			if (!cte || cte->children.empty() || cte->type != LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			auto entry = ResolveCTE(cteref.cte_index);
+			if (!IsMaterializedDefinition(entry)) {
 				break;
 			}
 			if (std::find(active_ctes.begin(), active_ctes.end(), cteref.cte_index) != active_ctes.end()) {
 				break;
 			}
+			// The definition's delimiter scans resolve against the joins enclosing it, not the consumer
+			auto &cte = entry->cte.get();
+			auto definition_depth = entry->delim_depth;
 			active_ctes.push_back(cteref.cte_index);
-			CollectPinnedBindings(*cte->children[0], enclosing_depth, pinned);
+			CollectPinnedBindings(*cte.children[0], definition_depth, pinned);
 			active_ctes.pop_back();
-			auto definition_bindings = cte->children[0]->GetColumnBindings();
+			auto definition_bindings = cte.children[0]->GetColumnBindings();
 			auto column_count = MinValue(definition_bindings.size(), cteref.chunk_types.size());
 			for (idx_t i = 0; i < column_count; i++) {
 				if (pinned.count(definition_bindings[i]) > 0) {
@@ -1141,19 +1149,22 @@ private:
 			return Bound(*op.children[0], limit, enclosing_depth);
 		case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 			// Consumers can reference this CTE, register it before bounding the consumer side
-			known_ctes.push_back(op.Cast<LogicalCTE>());
+			known_ctes.emplace_back(op.Cast<LogicalCTE>(), enclosing_depth);
 			return Bound(*op.children[1], limit, enclosing_depth);
 		case LogicalOperatorType::LOGICAL_CTE_REF: {
 			auto &cteref = op.Cast<LogicalCTERef>();
-			auto cte = ResolveCTE(cteref.cte_index);
-			if (!cte || cte->children.empty() || cte->type != LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			auto entry = ResolveCTE(cteref.cte_index);
+			if (!IsMaterializedDefinition(entry)) {
 				return optional_idx();
 			}
 			if (std::find(active_ctes.begin(), active_ctes.end(), cteref.cte_index) != active_ctes.end()) {
 				return optional_idx();
 			}
+			// The definition's delimiter scans resolve against the joins enclosing it, not the consumer
+			auto &cte = entry->cte.get();
+			auto definition_depth = entry->delim_depth;
 			active_ctes.push_back(cteref.cte_index);
-			auto result = Bound(*cte->children[0], limit, enclosing_depth);
+			auto result = Bound(*cte.children[0], limit, definition_depth);
 			active_ctes.pop_back();
 			return result;
 		}
@@ -1227,13 +1238,13 @@ private:
 
 private:
 	vector<reference<LogicalComparisonJoin>> enclosing_delim_joins;
-	vector<reference<LogicalCTE>> known_ctes;
+	vector<EnclosingCTE> known_ctes;
 	vector<TableIndex> active_ctes;
 };
 
 static bool DelimiterDomainIsProvablySmall(LogicalComparisonJoin &delim_join,
                                            const vector<reference<LogicalComparisonJoin>> &enclosing_delim_joins,
-                                           const vector<reference<LogicalCTE>> &known_ctes) {
+                                           const vector<EnclosingCTE> &known_ctes) {
 	DomainCardinalityAnalyzer analyzer(enclosing_delim_joins, known_ctes);
 	if (analyzer.IsBoundedBy(*delim_join.children[0], DELIM_DOMAIN_PRESERVE_LIMIT)) {
 		return true;
@@ -1382,7 +1393,7 @@ public:
 	                            TableIndex dedup_cte_index, idx_t dedup_ref_count, LogicalOperator &rewrite_root,
 	                            bool preserve_evidence_side, bool preserve_nested_evidence_side,
 	                            const vector<reference<LogicalComparisonJoin>> &enclosing_delim_joins,
-	                            const vector<reference<LogicalCTE>> &enclosing_ctes);
+	                            const vector<EnclosingCTE> &enclosing_ctes);
 
 	idx_t Remove();
 
@@ -1416,14 +1427,14 @@ private:
 	bool preserve_evidence_side;
 	bool preserve_nested_evidence_side;
 	const vector<reference<LogicalComparisonJoin>> &enclosing_delim_joins;
-	const vector<reference<LogicalCTE>> &enclosing_ctes;
+	const vector<EnclosingCTE> &enclosing_ctes;
 };
 
 GeneratedDedupRefEliminator::GeneratedDedupRefEliminator(
     ClientContext &context, unique_ptr<LogicalOperator> &delim_join_op, TableIndex dedup_cte_index,
     idx_t dedup_ref_count, LogicalOperator &rewrite_root, bool preserve_evidence_side,
     bool preserve_nested_evidence_side, const vector<reference<LogicalComparisonJoin>> &enclosing_delim_joins,
-    const vector<reference<LogicalCTE>> &enclosing_ctes)
+    const vector<EnclosingCTE> &enclosing_ctes)
     : context(context), delim_join_op(delim_join_op), delim_join(delim_join_op->Cast<LogicalComparisonJoin>()),
       dedup_cte_index(dedup_cte_index), dedup_ref_count(dedup_ref_count), rewrite_root(rewrite_root),
       preserve_evidence_side(preserve_evidence_side), preserve_nested_evidence_side(preserve_nested_evidence_side),
@@ -2382,7 +2393,12 @@ bool GeneratedDomainJoinEliminator::CTEIsProvablySmall(TableIndex cte_index) con
 	if (!cte || cte->children.empty()) {
 		return false;
 	}
-	DomainCardinalityAnalyzer analyzer({}, ctes);
+	vector<EnclosingCTE> known_ctes;
+	known_ctes.reserve(ctes.size());
+	for (auto &known_cte : ctes) {
+		known_ctes.emplace_back(known_cte.get(), 0);
+	}
+	DomainCardinalityAnalyzer analyzer({}, std::move(known_ctes));
 	return analyzer.IsBoundedBy(*cte->children[0], DELIM_DOMAIN_PRESERVE_LIMIT);
 }
 
@@ -3225,7 +3241,7 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr
 		// The consumer side of a materialized CTE can reference the enclosing definition, track it while descending
 		const bool is_cte_consumer = plan->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE && child_idx == 1;
 		if (is_cte_consumer) {
-			enclosing_ctes.push_back(plan->Cast<LogicalCTE>());
+			enclosing_ctes.emplace_back(plan->Cast<LogicalCTE>(), enclosing_delim_joins.size());
 		}
 		auto child_replacements = RewriteDelimJoinsToCTEs(child, rewrite_root, child_null_rejecting_filter_above,
 		                                                  child_preserve_evidence_side);
