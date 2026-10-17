@@ -76,3 +76,73 @@ WITH RECURSIVE walk(k, v) AS (
 SELECT count(*), max(k), max(v) FROM walk;
 ----
 51	50	50
+
+# a per-iteration runtime bloom filter: the probe side is a base-table scan, the build keys shift
+# every iteration, and the filter is rebuilt, sealed, and published to the scan each round
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side';
+
+statement ok
+CREATE TABLE lookup AS SELECT i * 102959::BIGINT AS k, i AS payload FROM range(200000) t(i);
+
+query II
+WITH RECURSIVE w(n, k, s) AS (
+    SELECT 0 AS n, i * 102959::BIGINT AS k, 0::BIGINT AS s FROM range(3000) t(i)
+    UNION ALL
+    SELECT w.n + 1, (l.k + 102959::BIGINT * 977) % (102959::BIGINT * 200000), w.s + l.payload
+    FROM lookup l JOIN w ON l.k = w.k
+    WHERE w.n < 25
+)
+SELECT count(*), sum(s) FROM w;
+----
+78000	9082612500
+
+statement ok
+RESET disabled_optimizers;
+
+# a build side that alternates between empty and nonempty across iterations, so the recycled local
+# shell flips between the unpublished state and a freshly published layout
+query III
+WITH RECURSIVE t(n, v) AS (
+    SELECT 0, 0::BIGINT
+    UNION ALL
+    SELECT t.n + 1, t.v + coalesce(b.x, 100)
+    FROM t LEFT JOIN (SELECT n2 % 97 AS x FROM (SELECT t2.n AS n2 FROM t t2) WHERE n2 % 2 = 1) b ON b.x = t.n % 97
+    WHERE t.n < 60
+)
+SELECT count(*), max(n), max(v) FROM t;
+----
+61	60	3900
+
+# a NULL-bearing mark join whose build set switches between NULL and non-NULL per iteration
+query II
+WITH RECURSIVE m(n, v) AS (
+    SELECT 0, 1::BIGINT
+    UNION ALL
+    SELECT m.n + 1,
+           CASE WHEN m.v + 1 NOT IN (SELECT CASE WHEN x % 3 = 0 THEN NULL ELSE x END FROM (SELECT m2.v AS x FROM m m2))
+                THEN m.v + 2 ELSE m.v + 1 END
+    FROM m WHERE m.n < 50
+)
+SELECT count(*), max(v) FROM m;
+----
+51	76
+
+# a parallel producer and a singleton producer share one grouped-aggregate sink: the sink restart
+# must use the combined bound over all producers rather than the last producer's
+query III
+WITH RECURSIVE r(round, g, v) AS (
+    SELECT 0 AS round, i AS g, i::BIGINT AS v FROM range(50000) t(i)
+    UNION ALL
+    SELECT u.round + 1, u.g2 % 50000, max(u.v)
+    FROM (
+        SELECT round, (g * 31 + 7) AS g2, v FROM r
+        UNION ALL
+        SELECT 3, 1, 1::BIGINT FROM (SELECT max(round) AS mr FROM r) WHERE mr < 2
+    ) u
+    WHERE u.round < 4
+    GROUP BY u.round + 1, u.g2 % 50000
+)
+SELECT count(*), max(v), min(v) FROM r;
+----
+250001	49999	0
