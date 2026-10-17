@@ -31,7 +31,7 @@ struct RadixHTConfig {
 public:
 	explicit RadixHTConfig(RadixHTGlobalSinkState &sink);
 
-	void ResetForNewIteration();
+	void ResetForNewIteration(idx_t scheduled_workers);
 	void SetRadixBits(const idx_t &radix_bits_p);
 	bool SetRadixBitsToExternal();
 	idx_t GetRadixBits() const;
@@ -39,7 +39,7 @@ public:
 
 private:
 	void SetRadixBitsInternal(idx_t radix_bits_p, bool external);
-	idx_t InitialSinkRadixBits() const;
+	idx_t InitialSinkRadixBits(idx_t num_threads) const;
 	idx_t ExternalRadixBits(bool dynamic) const;
 	idx_t MaximumSinkRadixBits() const;
 	idx_t SinkCapacity() const;

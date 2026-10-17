@@ -82,6 +82,8 @@ public:
 	}
 
 	SinkFinalizeType state;
+	//! Upper bound on the workers the next rescheduled execution runs with, set before Reset is called
+	optional_idx reschedule_worker_limit;
 
 	virtual bool SupportsReuse() const {
 		return false;

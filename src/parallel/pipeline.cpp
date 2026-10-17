@@ -133,7 +133,10 @@ bool Pipeline::TryGetMaxThreads(idx_t &max_threads) {
 		return false;
 	}
 	auto source_state = GetSourceState();
-	D_ASSERT(source_state);
+	if (!source_state) {
+		// the source state was never initialized, e.g. a recursive pipeline before its first iteration
+		return false;
+	}
 	max_threads = source_state->MaxThreads();
 
 	for (auto &op_ref : operators) {
@@ -355,7 +358,7 @@ void Pipeline::ResetSink() {
 	}
 }
 
-void Pipeline::ResetSinkForReschedule() {
+void Pipeline::ResetSinkForReschedule(idx_t scheduled_workers) {
 	if (!sink) {
 		return;
 	}
@@ -367,6 +370,7 @@ void Pipeline::ResetSinkForReschedule() {
 	auto &client = GetClientContext();
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(client);
 	if (allow_reuse && sink->sink_state && sink->sink_state->SupportsReuse()) {
+		sink->sink_state->reschedule_worker_limit = scheduled_workers;
 		sink->sink_state->Reset(client);
 		return;
 	}
@@ -406,7 +410,7 @@ void Pipeline::Reset() {
 void Pipeline::ResetForReschedule(bool reset_sink) {
 	NotifyProgressReset();
 	if (reset_sink) {
-		ResetSinkForReschedule();
+		ResetSinkForReschedule(TaskScheduler::GetScheduler(executor.context).NumberOfThreads());
 	}
 	auto &client = GetClientContext();
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(client);

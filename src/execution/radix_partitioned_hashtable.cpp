@@ -195,13 +195,15 @@ void RadixHTGlobalSinkState::Destroy() {
 
 RadixHTConfig::RadixHTConfig(RadixHTGlobalSinkState &sink_p)
     : sink(sink_p), row_width(sink.radix_ht.GetLayout().GetRowWidth()), sink_capacity(SinkCapacity()),
-      sink_radix_bits(InitialSinkRadixBits()), maximum_sink_radix_bits(MaximumSinkRadixBits()) {
+      sink_radix_bits(InitialSinkRadixBits(sink.number_of_threads)), maximum_sink_radix_bits(MaximumSinkRadixBits()) {
 }
 
-void RadixHTConfig::ResetForNewIteration() {
-	// Recursive iterations mostly carry small frontiers: start from a single partition instead of the
-	// thread-count-sized default. SetRadixBits grows the configuration again when an iteration is large.
-	sink_radix_bits = 0;
+void RadixHTConfig::ResetForNewIteration(const idx_t scheduled_workers) {
+	// Recursive iterations mostly run few workers over small frontiers: size the restart from the
+	// workers the scheduler actually assigns instead of the thread-count-sized default, down to a
+	// single partition for serial iterations. SetRadixBits grows the configuration again when an
+	// iteration carries enough data.
+	sink_radix_bits = InitialSinkRadixBits(MaxValue<idx_t>(scheduled_workers, 1));
 }
 
 void RadixHTConfig::SetRadixBits(const idx_t &radix_bits_p) {
@@ -243,8 +245,8 @@ void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external
 	sink_radix_bits = radix_bits;
 }
 
-idx_t RadixHTConfig::InitialSinkRadixBits() const {
-	return MinValue(RadixPartitioning::RadixBitsOfPowerOfTwo(NextPowerOfTwo(sink.number_of_threads)),
+idx_t RadixHTConfig::InitialSinkRadixBits(const idx_t num_threads) const {
+	return MinValue(RadixPartitioning::RadixBitsOfPowerOfTwo(NextPowerOfTwo(num_threads)),
 	                MAXIMUM_INITIAL_SINK_RADIX_BITS);
 }
 
@@ -258,7 +260,8 @@ idx_t RadixHTConfig::ExternalRadixBits(const bool dynamic) const {
 	const auto max_partitions = memory_limit / sink.number_of_threads / sink.block_alloc_size / 4;
 
 	// Compute number of bits, rounded down, at least as much as initial bits
-	const auto bits = MaxValue(RadixPartitioning::RadixBits(max_partitions) - 1, InitialSinkRadixBits());
+	const auto bits =
+	    MaxValue(RadixPartitioning::RadixBits(max_partitions) - 1, InitialSinkRadixBits(sink.number_of_threads));
 
 	// Avoid returning 0 or underflowed bits
 	if (max_partitions == 0 || bits == 0) {
@@ -271,7 +274,7 @@ idx_t RadixHTConfig::ExternalRadixBits(const bool dynamic) const {
 
 idx_t RadixHTConfig::MaximumSinkRadixBits() const {
 	if (sink.number_of_threads <= GROW_STRATEGY_THREAD_THRESHOLD) {
-		return InitialSinkRadixBits(); // Don't repartition unless we go external
+		return InitialSinkRadixBits(sink.number_of_threads); // Don't repartition unless we go external
 	}
 	// If rows are very wide we have to reduce the number of partitions, otherwise cache misses get out of hand
 	idx_t bits = DConstants::INVALID_INDEX;
@@ -349,10 +352,11 @@ unique_ptr<LocalSinkState> RadixPartitionedHashTable::GetLocalSinkState(Executio
 	return make_uniq<RadixHTLocalSinkState>(context.client, *this);
 }
 
-void RadixPartitionedHashTable::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &gstate_p) const {
+void RadixPartitionedHashTable::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &gstate_p,
+                                                     const idx_t scheduled_workers) const {
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
 	gstate.Destroy();
-	gstate.config.ResetForNewIteration();
+	gstate.config.ResetForNewIteration(scheduled_workers);
 	// The partition count dropped, so shrink the reservation floor along with it. This also undoes the
 	// scaling that SetRadixBitsInternal applied if a previous iteration went external.
 	gstate.minimum_reservation = gstate.CalculateMinimumReservation(gstate.config.GetRadixBits());

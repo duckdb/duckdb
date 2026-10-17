@@ -224,10 +224,14 @@ public:
 	}
 
 	void Reset(ClientContext &context) override {
+		// The recursive runtime announces how many workers the next iteration schedules at most
+		const auto scheduled_workers = reschedule_worker_limit.IsValid()
+		                                   ? reschedule_worker_limit.GetIndex()
+		                                   : TaskScheduler::GetScheduler(context).NumberOfThreads();
 		for (idx_t grouping_idx = 0; grouping_idx < op.groupings.size(); grouping_idx++) {
 			auto &grouping = op.groupings[grouping_idx];
 			auto &grouping_state = grouping_states[grouping_idx];
-			grouping.table_data.ResetGlobalSinkState(context, *grouping_state.table_state);
+			grouping.table_data.ResetGlobalSinkState(context, *grouping_state.table_state, scheduled_workers);
 			if (!grouping.HasDistinct()) {
 				continue;
 			}
@@ -238,7 +242,7 @@ public:
 				if (!radix_table) {
 					continue;
 				}
-				radix_table->ResetGlobalSinkState(context, *distinct_state.radix_states[table_idx]);
+				radix_table->ResetGlobalSinkState(context, *distinct_state.radix_states[table_idx], scheduled_workers);
 			}
 		}
 		finished = false;

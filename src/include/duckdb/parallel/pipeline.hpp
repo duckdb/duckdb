@@ -144,7 +144,7 @@ public:
 	void Ready();
 	void Reset();
 	void ResetSink();
-	void ResetSinkForReschedule();
+	void ResetSinkForReschedule(idx_t scheduled_workers);
 	void ResetForReschedule(bool reset_sink);
 	void ResetSource(bool force);
 	void PrepareExternalInput();
