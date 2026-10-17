@@ -636,7 +636,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 		auto &logical_fields = StructType::GetChildTypes(export_layout.first);
 		ExportAggregateFunction::GetSortedStateOrders(expr.GetReturnType(), export_layout.second);
 		if (export_layout.second.size() != order_bys.orders.size() || children.size() > logical_fields.size()) {
-			throw InternalException("Exported state layout of ordered aggregate \"%s\" does not match its ORDER BY",
+			throw InternalException("Exported state layout of ordered aggregate %s does not match its ORDER BY",
 			                        bound_function.GetName());
 		}
 		// the statistics optimizer may have narrowed the buffered column types since the exported type was fixed at
