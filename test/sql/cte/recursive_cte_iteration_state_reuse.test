@@ -1,0 +1,78 @@
+# name: test/sql/cte/recursive_cte_iteration_state_reuse.test
+# description: Recursive CTEs reuse aggregate and join sink state across iterations
+# group: [cte]
+
+# many small iterations with a grouped aggregate, a join, and an anti-join in the recursive term:
+# the aggregate sink restarts from a single partition and the join shells are recycled per iteration
+query II
+WITH RECURSIVE memo(k, v) AS (
+    SELECT i::BIGINT AS k, i::BIGINT AS v FROM range(32) t(i)
+    UNION
+    (
+      WITH agg AS (
+          SELECT k % 8 AS g, max(v) AS mv, count(*) AS c
+          FROM memo
+          GROUP BY k % 8
+      )
+      SELECT f.k + 32 AS k, max(f.v % 100000 + a.mv % 100000) AS v
+      FROM memo f
+      JOIN agg a ON f.k % 8 = a.g
+      WHERE f.k + 32 < 64 * 32
+        AND NOT EXISTS (SELECT 1 FROM agg a2 WHERE a2.g = (f.k + 1) % 8 AND a2.mv > f.v + 1e15)
+      GROUP BY f.k + 32
+    )
+)
+SELECT count(*), max(v) FROM memo;
+----
+2048	199808
+
+# the same shape as a USING KEY recursive CTE with a recurring-table anti-join
+query II
+WITH RECURSIVE memo(k, v) USING KEY (k, max(v)) AS (
+    SELECT i::BIGINT AS k, i::BIGINT AS v FROM range(32) t(i)
+    UNION
+    (
+      WITH agg AS (
+          SELECT k % 8 AS g, max(v) AS mv, count(*) AS c
+          FROM memo
+          GROUP BY k % 8
+      )
+      SELECT f.k + 32 AS k, max(f.v % 100000 + a.mv % 100000) AS v
+      FROM memo f
+      JOIN agg a ON f.k % 8 = a.g
+      WHERE f.k + 32 < 64 * 32
+        AND NOT EXISTS (SELECT 1 FROM recurring.memo r WHERE r.k = f.k + 32)
+      GROUP BY f.k + 32
+    )
+)
+SELECT count(*), max(v) FROM memo;
+----
+2048	199808
+
+# large frontiers per iteration: the aggregate sink must grow its partitioning again after the reset
+query III
+WITH RECURSIVE big(round, g, v) AS (
+    SELECT 0 AS round, i % 100000 AS g, i::BIGINT AS v FROM range(400000) t(i)
+    UNION ALL
+    SELECT round + 1, (g * 37 + 11) % 99991 AS g2, max(v)
+    FROM big
+    WHERE round < 3
+    GROUP BY round, g2
+)
+SELECT count(*), max(v), min(v) FROM big;
+----
+699973	399999	0
+
+# a join whose build side is empty in every iteration: the local hash table shell is kept as-is
+query III
+WITH RECURSIVE walk(k, v) AS (
+    SELECT 0::BIGINT, 0::BIGINT
+    UNION ALL
+    SELECT w.k + 1, w.v + coalesce(e.x, 1)
+    FROM walk w
+    LEFT JOIN (SELECT g AS x FROM (SELECT k % 8 AS g FROM walk) t WHERE g > 100) e ON e.x = w.k
+    WHERE w.k < 50
+)
+SELECT count(*), max(k), max(v) FROM walk;
+----
+51	50	50
