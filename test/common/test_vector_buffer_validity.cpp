@@ -1,5 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 
 using namespace duckdb; // NOLINT
@@ -36,5 +38,43 @@ TEST_CASE("StandardVectorBuffer validity capacity covers all entries", "[vector_
 		REQUIRE(buffer.GetValidityMask().CannotHaveNull());
 		REQUIRE(buffer.GetValidityMask().GetAllocationSize() == 0);
 		REQUIRE(buffer.GetValidityMask().RowIsValid(count - 1));
+	}
+}
+
+TEST_CASE("Constant slices keep a single physical validity entry", "[vector_buffer]") {
+	const idx_t count = 2 * STANDARD_VECTOR_SIZE + 7;
+	// the mask of a constant covers one physical entry: at most the default capacity, never the logical count
+	const idx_t max_capacity = STANDARD_VECTOR_SIZE;
+	const idx_t max_allocation = ValidityMask::EntryCount(max_capacity) * sizeof(validity_t);
+
+	SECTION("NULL constants allocate no logical-count bitmap") {
+		const duckdb::vector<LogicalType> types {LogicalType::BIGINT, LogicalType::VARCHAR,
+		                                         LogicalType::LIST(LogicalType::BIGINT)};
+		for (auto &type : types) {
+			Vector source(Value(type), count_t(1ULL));
+			Vector sliced(source, 0, count);
+			REQUIRE(sliced.GetVectorType() == VectorType::CONSTANT_VECTOR);
+			REQUIRE(sliced.size() == count);
+			auto &mask = sliced.Buffer().GetValidityMask();
+			REQUIRE(mask.Capacity() <= max_capacity);
+			REQUIRE(mask.GetAllocationSize() <= max_allocation);
+			REQUIRE(ConstantVector::IsNull(sliced));
+			REQUIRE(sliced.GetValue(count - 1).IsNull());
+		}
+	}
+	SECTION("non-NULL constants select physical row zero at any logical row") {
+		const duckdb::vector<Value> values {Value::BIGINT(42), Value("constant slice"),
+		                                    Value::LIST(LogicalType::BIGINT, {Value::BIGINT(1), Value::BIGINT(2)})};
+		for (auto &value : values) {
+			Vector source(value, count_t(1ULL));
+			Vector sliced(source, 0, count);
+			REQUIRE(sliced.GetVectorType() == VectorType::CONSTANT_VECTOR);
+			REQUIRE(sliced.size() == count);
+			auto &mask = sliced.Buffer().GetValidityMask();
+			REQUIRE(mask.Capacity() <= max_capacity);
+			// a non-NULL constant keeps its mask unallocated
+			REQUIRE(mask.GetAllocationSize() == 0);
+			REQUIRE(sliced.GetValue(count - 1) == value);
+		}
 	}
 }

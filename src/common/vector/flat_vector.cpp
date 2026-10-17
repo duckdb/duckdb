@@ -105,9 +105,11 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 }
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
-	auto result = make_buffer<StandardVectorBuffer>(data_ptr, count, type_size);
+	// a constant has one physical entry - the logical count is tracked separately from the physical capacity
+	auto result = make_buffer<StandardVectorBuffer>(data_ptr, count_t(1ULL), type_size);
 	result->GetValidityMask().Set(0, validity.RowIsValid(0));
 	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	result->SetVectorSize(count);
 	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
 	return result;
 }
