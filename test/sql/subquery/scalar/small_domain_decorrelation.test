@@ -269,6 +269,38 @@ FROM (
 ----
 physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
 
+# Protection: an empty grouping set still emits its row on empty input, the aggregate bound is the
+# per-set sum 0 + 1 rather than the product 0 * 2, so the 4096-key caller is not provably small.
+query II
+EXPLAIN SELECT q.key, (SELECT sum(f.v) FROM fact f WHERE f.k = q.key)
+FROM (
+	SELECT row_number() OVER () AS key
+	FROM (SELECT k, count(*) FROM (SELECT 1 AS k LIMIT 0) v(k) GROUP BY GROUPING SETS ((k), ())) g
+	CROSS JOIN (SELECT i FROM range(64) t(i) LIMIT 64) a
+	CROSS JOIN (SELECT i FROM range(64) t(i) LIMIT 64) b
+) q;
+----
+physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
+
+# A small grouped domain over explicit grouping sets stays preserved, the per-set sum is 1 + 1.
+query II
+EXPLAIN SELECT q.key, (SELECT sum(f.v) FROM fact f WHERE f.k = q.key)
+FROM (
+	SELECT k AS key FROM (VALUES (42::BIGINT)) v(k) GROUP BY GROUPING SETS ((k), ())
+) q;
+----
+physical_plan	<REGEX>:[\s\S]*SEMI[\s\S]*
+
+query II
+SELECT q.key, (SELECT sum(f.v) FROM fact f WHERE f.k = q.key) AS r
+FROM (
+	SELECT k AS key FROM (VALUES (42::BIGINT)) v(k) GROUP BY GROUPING SETS ((k), ())
+) q
+ORDER BY key;
+----
+42	4920
+NULL	NULL
+
 # Result identity between the small-domain plan and the full-domain plan.
 query III
 SELECT count(*), count(r), sum(r) FROM (
