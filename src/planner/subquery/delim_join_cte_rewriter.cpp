@@ -818,6 +818,442 @@ static bool FindAndReplaceBindings(vector<ColumnBinding> &traced_bindings,
 	return true;
 }
 
+//! Delimiter domains that are provably at most one vector of rows are preserved as semi-join reductions
+static constexpr idx_t DELIM_DOMAIN_PRESERVE_LIMIT = STANDARD_VECTOR_SIZE;
+
+static bool JoinRHSIsDeduplicated(LogicalComparisonJoin &join) {
+	vector<ColumnBinding> join_bindings;
+	for (const auto &cond : join.conditions) {
+		if (!IsEqualityJoinCondition(cond)) {
+			return false;
+		}
+		if (!cond.IsComparison() || cond.GetRHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			return false;
+		}
+		auto &colref = cond.GetRHS().Cast<BoundColumnRefExpression>();
+		join_bindings.emplace_back(colref.Binding());
+	}
+
+	reference<LogicalOperator> current_op = *join.children[1];
+	while (current_op.get().type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		if (current_op.get().children.size() != 1) {
+			return false;
+		}
+
+		switch (current_op.get().type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+			if (!FindAndReplaceBindings(join_bindings, current_op.get().expressions,
+			                            current_op.get().GetColumnBindings())) {
+				return false;
+			}
+			break;
+		case LogicalOperatorType::LOGICAL_FILTER:
+			break;
+		default:
+			return false;
+		}
+		current_op = *current_op.get().children[0];
+	}
+
+	auto &aggr = current_op.get().Cast<LogicalAggregate>();
+	if (!aggr.grouping_functions.empty()) {
+		return false;
+	}
+	// Multiple grouping sets can emit duplicate group tuples, only a single set proves uniqueness
+	if (aggr.grouping_sets.size() > 1) {
+		return false;
+	}
+
+	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
+		if (std::find(join_bindings.begin(), join_bindings.end(),
+		              ColumnBinding(aggr.group_index, ProjectionIndex(group_idx))) == join_bindings.end()) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+//! Computes structural upper bounds on operator cardinalities to detect delimiter domains that are small by
+//! construction (e.g. a VALUES list, an ungrouped aggregate, or correlation columns pinned by constant equality)
+class DomainCardinalityAnalyzer {
+public:
+	DomainCardinalityAnalyzer(vector<reference<LogicalComparisonJoin>> enclosing_delim_joins_p,
+	                          vector<EnclosingCTE> known_ctes_p)
+	    : enclosing_delim_joins(std::move(enclosing_delim_joins_p)), known_ctes(std::move(known_ctes_p)) {
+	}
+
+	bool IsBoundedBy(LogicalOperator &op, idx_t limit) {
+		auto bound = Bound(op, limit, enclosing_delim_joins.size());
+		return bound.IsValid() && bound.GetIndex() <= limit;
+	}
+
+	//! Whether every given column expression over the operator's output is pinned to a single constant
+	bool ColumnsArePinned(LogicalOperator &op, const vector<unique_ptr<Expression>> &columns, idx_t limit) {
+		if (columns.empty() || !PinnedDistinctBound(columns.size(), limit).IsValid()) {
+			return false;
+		}
+		column_binding_set_t pinned;
+		CollectPinnedBindings(op, enclosing_delim_joins.size(), pinned);
+		for (auto &column : columns) {
+			if (!ExpressionIsPinned(*column, pinned)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+private:
+	//! Returns an invalid index whenever the bound would exceed the limit, so arithmetic cannot overflow
+	static optional_idx Clamp(idx_t bound, idx_t limit) {
+		if (bound > limit) {
+			return optional_idx();
+		}
+		return bound;
+	}
+
+	static optional_idx MultiplyBounds(optional_idx lhs, optional_idx rhs, idx_t limit) {
+		if (!lhs.IsValid() || !rhs.IsValid()) {
+			return optional_idx();
+		}
+		return Clamp(lhs.GetIndex() * rhs.GetIndex(), limit);
+	}
+
+	static optional_idx AddBounds(optional_idx lhs, optional_idx rhs, idx_t limit) {
+		if (!lhs.IsValid() || !rhs.IsValid()) {
+			return optional_idx();
+		}
+		return Clamp(lhs.GetIndex() + rhs.GetIndex(), limit);
+	}
+
+	//! Sums the per-set group bounds, an empty grouping set emits one row even on empty input
+	static optional_idx SumGroupingSetBounds(const LogicalAggregate &aggr, optional_idx group_bound, idx_t limit) {
+		auto set_count = MaxValue<idx_t>(aggr.grouping_sets.size(), 1);
+		optional_idx bound = 0;
+		for (idx_t set_idx = 0; set_idx < set_count; set_idx++) {
+			auto empty_set = set_idx < aggr.grouping_sets.size() && aggr.grouping_sets[set_idx].empty();
+			bound = AddBounds(bound, empty_set ? optional_idx(1) : group_bound, limit);
+		}
+		return bound;
+	}
+
+	optional_ptr<const EnclosingCTE> ResolveCTE(TableIndex cte_index) const {
+		for (auto &entry : known_ctes) {
+			if (entry.cte.get().table_index == cte_index) {
+				return entry;
+			}
+		}
+		return nullptr;
+	}
+
+	static bool IsMaterializedDefinition(optional_ptr<const EnclosingCTE> entry) {
+		return entry && !entry->cte.get().children.empty() &&
+		       entry->cte.get().type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE;
+	}
+
+	//! A pinned column carries one constant plus at most a NULL from outer-join extension, two values per column
+	static optional_idx PinnedDistinctBound(idx_t column_count, idx_t limit) {
+		idx_t bound = 1;
+		for (idx_t i = 0; i < column_count; i++) {
+			if (bound > limit) {
+				return optional_idx();
+			}
+			bound *= 2;
+		}
+		return Clamp(bound, limit);
+	}
+
+	static void CollectPinnedFilterExpression(Expression &expr, column_binding_set_t &pinned) {
+		if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+			ExpressionIterator::EnumerateChildren(
+			    expr, [&](Expression &child) { CollectPinnedFilterExpression(child, pinned); });
+			return;
+		}
+		if (!BoundComparisonExpression::IsComparison(expr)) {
+			return;
+		}
+		if (expr.GetExpressionType() != ExpressionType::COMPARE_EQUAL &&
+		    expr.GetExpressionType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			return;
+		}
+		auto &comparison = expr.Cast<BoundFunctionExpression>();
+		auto &lhs = BoundComparisonExpression::Left(comparison);
+		auto &rhs = BoundComparisonExpression::Right(comparison);
+		optional_ptr<const Expression> column;
+		if (lhs.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF && rhs.IsFoldable()) {
+			column = lhs;
+		} else if (rhs.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF && lhs.IsFoldable()) {
+			column = rhs;
+		}
+		if (!column) {
+			return;
+		}
+		auto &colref = column->Cast<BoundColumnRefExpression>();
+		if (colref.Depth() == 0) {
+			pinned.insert(colref.Binding());
+		}
+	}
+
+	static bool ExpressionIsPinned(const Expression &expr, const column_binding_set_t &pinned) {
+		if (expr.IsFoldable()) {
+			return true;
+		}
+		if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			return false;
+		}
+		auto &colref = expr.Cast<BoundColumnRefExpression>();
+		return colref.Depth() == 0 && pinned.count(colref.Binding()) > 0;
+	}
+
+	//! Collects bindings that are provably restricted to a single constant within the subtree. Bindings are
+	//! immutable above their origin, outer joins can only extend them with NULL.
+	void CollectPinnedBindings(LogicalOperator &op, idx_t enclosing_depth, column_binding_set_t &pinned) {
+		if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			// Register the definition before walking consumers so that CTE references can resolve it
+			CollectPinnedBindings(*op.children[0], enclosing_depth, pinned);
+			known_ctes.emplace_back(op.Cast<LogicalCTE>(), enclosing_depth);
+			CollectPinnedBindings(*op.children[1], enclosing_depth, pinned);
+			return;
+		}
+		for (auto &child : op.children) {
+			CollectPinnedBindings(*child, enclosing_depth, pinned);
+		}
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_FILTER: {
+			auto &filter = op.Cast<LogicalFilter>();
+			for (auto &expr : filter.expressions) {
+				CollectPinnedFilterExpression(*expr, pinned);
+			}
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_PROJECTION: {
+			auto bindings = op.GetColumnBindings();
+			for (idx_t i = 0; i < op.expressions.size(); i++) {
+				if (ExpressionIsPinned(*op.expressions[i], pinned)) {
+					pinned.insert(bindings[i]);
+				}
+			}
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+			auto &aggr = op.Cast<LogicalAggregate>();
+			for (idx_t i = 0; i < aggr.groups.size(); i++) {
+				if (ExpressionIsPinned(*aggr.groups[i], pinned)) {
+					pinned.insert(ColumnBinding(aggr.group_index, ProjectionIndex(i)));
+				}
+			}
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_DELIM_GET: {
+			if (enclosing_depth == 0) {
+				break;
+			}
+			auto &enclosing = enclosing_delim_joins[enclosing_depth - 1].get();
+			column_binding_set_t enclosing_pinned;
+			CollectPinnedBindings(*enclosing.children[0], enclosing_depth - 1, enclosing_pinned);
+			auto &delim_get = op.Cast<LogicalDelimGet>();
+			auto column_count = MinValue(enclosing.duplicate_eliminated_columns.size(), delim_get.chunk_types.size());
+			for (idx_t i = 0; i < column_count; i++) {
+				if (ExpressionIsPinned(*enclosing.duplicate_eliminated_columns[i], enclosing_pinned)) {
+					pinned.insert(ColumnBinding(delim_get.table_index, ProjectionIndex(i)));
+				}
+			}
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_CTE_REF: {
+			auto &cteref = op.Cast<LogicalCTERef>();
+			auto entry = ResolveCTE(cteref.cte_index);
+			if (!IsMaterializedDefinition(entry)) {
+				break;
+			}
+			if (std::find(active_ctes.begin(), active_ctes.end(), cteref.cte_index) != active_ctes.end()) {
+				break;
+			}
+			// The definition's delimiter scans resolve against the joins enclosing it, not the consumer
+			auto &cte = entry->cte.get();
+			auto definition_depth = entry->delim_depth;
+			active_ctes.push_back(cteref.cte_index);
+			CollectPinnedBindings(*cte.children[0], definition_depth, pinned);
+			active_ctes.pop_back();
+			auto definition_bindings = cte.children[0]->GetColumnBindings();
+			auto column_count = MinValue(definition_bindings.size(), cteref.chunk_types.size());
+			for (idx_t i = 0; i < column_count; i++) {
+				if (pinned.count(definition_bindings[i]) > 0) {
+					pinned.insert(ColumnBinding(cteref.table_index, ProjectionIndex(i)));
+				}
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	optional_idx Bound(LogicalOperator &op, idx_t limit, idx_t enclosing_depth) {
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+			return 1;
+		case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
+			return 0;
+		case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
+			// Each expression list is evaluated once per input row
+			auto list_bound = Clamp(op.Cast<LogicalExpressionGet>().expressions.size(), limit);
+			if (op.children.empty()) {
+				return list_bound;
+			}
+			return MultiplyBounds(list_bound, Bound(*op.children[0], limit, enclosing_depth), limit);
+		}
+		case LogicalOperatorType::LOGICAL_DELIM_GET: {
+			// A delim scan produces the duplicate-eliminated domain of the nearest enclosing delim join's LHS
+			if (enclosing_depth == 0) {
+				return optional_idx();
+			}
+			auto &enclosing = enclosing_delim_joins[enclosing_depth - 1].get();
+			return Bound(*enclosing.children[0], limit, enclosing_depth - 1);
+		}
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+			auto &aggr = op.Cast<LogicalAggregate>();
+			if (aggr.groups.empty()) {
+				// Each of the (possibly multiple) empty grouping sets emits one aggregate row
+				return Clamp(MaxValue<idx_t>(aggr.grouping_sets.size(), 1), limit);
+			}
+			auto bound = SumGroupingSetBounds(aggr, Bound(*op.children[0], limit, enclosing_depth), limit);
+			if (bound.IsValid()) {
+				return bound;
+			}
+			// Group columns pinned to constants bound the group count even over unbounded inputs
+			column_binding_set_t pinned;
+			CollectPinnedBindings(*op.children[0], enclosing_depth, pinned);
+			for (auto &group : aggr.groups) {
+				if (!ExpressionIsPinned(*group, pinned)) {
+					return optional_idx();
+				}
+			}
+			return SumGroupingSetBounds(aggr, PinnedDistinctBound(aggr.groups.size(), limit), limit);
+		}
+		case LogicalOperatorType::LOGICAL_LIMIT: {
+			auto &limit_op = op.Cast<LogicalLimit>();
+			if (limit_op.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+				return Clamp(limit_op.limit_val.GetConstantValue(), limit);
+			}
+			return Bound(*op.children[0], limit, enclosing_depth);
+		}
+		case LogicalOperatorType::LOGICAL_TOP_N:
+			return Clamp(op.Cast<LogicalTopN>().limit, limit);
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+		case LogicalOperatorType::LOGICAL_FILTER:
+		case LogicalOperatorType::LOGICAL_DISTINCT:
+		case LogicalOperatorType::LOGICAL_ORDER_BY:
+		case LogicalOperatorType::LOGICAL_WINDOW:
+		case LogicalOperatorType::LOGICAL_SAMPLE:
+			return Bound(*op.children[0], limit, enclosing_depth);
+		case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+			// Consumers can reference this CTE, register it before bounding the consumer side
+			known_ctes.emplace_back(op.Cast<LogicalCTE>(), enclosing_depth);
+			return Bound(*op.children[1], limit, enclosing_depth);
+		case LogicalOperatorType::LOGICAL_CTE_REF: {
+			auto &cteref = op.Cast<LogicalCTERef>();
+			auto entry = ResolveCTE(cteref.cte_index);
+			if (!IsMaterializedDefinition(entry)) {
+				return optional_idx();
+			}
+			if (std::find(active_ctes.begin(), active_ctes.end(), cteref.cte_index) != active_ctes.end()) {
+				return optional_idx();
+			}
+			// The definition's delimiter scans resolve against the joins enclosing it, not the consumer
+			auto &cte = entry->cte.get();
+			auto definition_depth = entry->delim_depth;
+			active_ctes.push_back(cteref.cte_index);
+			auto result = Bound(*cte.children[0], limit, definition_depth);
+			active_ctes.pop_back();
+			return result;
+		}
+		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+			return MultiplyBounds(Bound(*op.children[0], limit, enclosing_depth),
+			                      Bound(*op.children[1], limit, enclosing_depth), limit);
+		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+		case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
+			auto &join = op.Cast<LogicalJoin>();
+			switch (join.join_type) {
+			case JoinType::SEMI:
+			case JoinType::ANTI:
+			case JoinType::MARK:
+			case JoinType::SINGLE:
+				return Bound(*op.children[0], limit, enclosing_depth);
+			case JoinType::RIGHT_SEMI:
+			case JoinType::RIGHT_ANTI:
+				return Bound(*op.children[1], limit, enclosing_depth);
+			case JoinType::INNER:
+			case JoinType::LEFT: {
+				if ((op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+				     op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) &&
+				    JoinRHSIsDeduplicated(op.Cast<LogicalComparisonJoin>())) {
+					// Each LHS row matches at most one row of the deduplicated RHS
+					return Bound(*op.children[0], limit, enclosing_depth);
+				}
+				auto lhs_bound = Bound(*op.children[0], limit, enclosing_depth);
+				auto rhs_bound = Bound(*op.children[1], limit, enclosing_depth);
+				if (join.join_type == JoinType::LEFT && rhs_bound.IsValid()) {
+					// A LEFT join preserves every LHS row even over an empty RHS
+					rhs_bound = MaxValue<idx_t>(rhs_bound.GetIndex(), 1);
+				}
+				return MultiplyBounds(lhs_bound, rhs_bound, limit);
+			}
+			case JoinType::RIGHT: {
+				auto lhs_bound = Bound(*op.children[0], limit, enclosing_depth);
+				auto rhs_bound = Bound(*op.children[1], limit, enclosing_depth);
+				if (lhs_bound.IsValid()) {
+					// A RIGHT join preserves every RHS row even over an empty LHS
+					lhs_bound = MaxValue<idx_t>(lhs_bound.GetIndex(), 1);
+				}
+				return MultiplyBounds(lhs_bound, rhs_bound, limit);
+			}
+			case JoinType::OUTER: {
+				auto lhs_bound = Bound(*op.children[0], limit, enclosing_depth);
+				auto rhs_bound = Bound(*op.children[1], limit, enclosing_depth);
+				return AddBounds(MultiplyBounds(lhs_bound, rhs_bound, limit), AddBounds(lhs_bound, rhs_bound, limit),
+				                 limit);
+			}
+			default:
+				return optional_idx();
+			}
+		}
+		case LogicalOperatorType::LOGICAL_UNION: {
+			// The planner produces n-ary unions, accumulate every child
+			optional_idx union_bound = 0;
+			for (auto &child : op.children) {
+				union_bound = AddBounds(union_bound, Bound(*child, limit, enclosing_depth), limit);
+			}
+			return union_bound;
+		}
+		case LogicalOperatorType::LOGICAL_INTERSECT:
+		case LogicalOperatorType::LOGICAL_EXCEPT:
+			return Bound(*op.children[0], limit, enclosing_depth);
+		default:
+			return optional_idx();
+		}
+	}
+
+private:
+	vector<reference<LogicalComparisonJoin>> enclosing_delim_joins;
+	vector<EnclosingCTE> known_ctes;
+	vector<TableIndex> active_ctes;
+};
+
+static bool DelimiterDomainIsProvablySmall(LogicalComparisonJoin &delim_join,
+                                           const vector<reference<LogicalComparisonJoin>> &enclosing_delim_joins,
+                                           const vector<EnclosingCTE> &known_ctes) {
+	DomainCardinalityAnalyzer analyzer(enclosing_delim_joins, known_ctes);
+	if (analyzer.IsBoundedBy(*delim_join.children[0], DELIM_DOMAIN_PRESERVE_LIMIT)) {
+		return true;
+	}
+	// Correlation columns pinned by constant equality bound the domain even when the LHS row count does not
+	return analyzer.ColumnsArePinned(*delim_join.children[0], delim_join.duplicate_eliminated_columns,
+	                                 DELIM_DOMAIN_PRESERVE_LIMIT);
+}
+
 class ExpressionBindingReplacer : public LogicalOperatorVisitor {
 public:
 	ExpressionBindingReplacer(const vector<ColumnBinding> &bindings, const vector<unique_ptr<Expression>> &expressions)
@@ -955,7 +1391,9 @@ class GeneratedDedupRefEliminator {
 public:
 	GeneratedDedupRefEliminator(ClientContext &context, unique_ptr<LogicalOperator> &delim_join_op,
 	                            TableIndex dedup_cte_index, idx_t dedup_ref_count, LogicalOperator &rewrite_root,
-	                            bool preserve_evidence_side, bool preserve_nested_evidence_side);
+	                            bool preserve_evidence_side, bool preserve_nested_evidence_side,
+	                            const vector<reference<LogicalComparisonJoin>> &enclosing_delim_joins,
+	                            const vector<EnclosingCTE> &enclosing_ctes);
 
 	idx_t Remove();
 
@@ -988,16 +1426,19 @@ private:
 	LogicalOperator &rewrite_root;
 	bool preserve_evidence_side;
 	bool preserve_nested_evidence_side;
+	const vector<reference<LogicalComparisonJoin>> &enclosing_delim_joins;
+	const vector<EnclosingCTE> &enclosing_ctes;
 };
 
-GeneratedDedupRefEliminator::GeneratedDedupRefEliminator(ClientContext &context,
-                                                         unique_ptr<LogicalOperator> &delim_join_op,
-                                                         TableIndex dedup_cte_index, idx_t dedup_ref_count,
-                                                         LogicalOperator &rewrite_root, bool preserve_evidence_side,
-                                                         bool preserve_nested_evidence_side)
+GeneratedDedupRefEliminator::GeneratedDedupRefEliminator(
+    ClientContext &context, unique_ptr<LogicalOperator> &delim_join_op, TableIndex dedup_cte_index,
+    idx_t dedup_ref_count, LogicalOperator &rewrite_root, bool preserve_evidence_side,
+    bool preserve_nested_evidence_side, const vector<reference<LogicalComparisonJoin>> &enclosing_delim_joins,
+    const vector<EnclosingCTE> &enclosing_ctes)
     : context(context), delim_join_op(delim_join_op), delim_join(delim_join_op->Cast<LogicalComparisonJoin>()),
       dedup_cte_index(dedup_cte_index), dedup_ref_count(dedup_ref_count), rewrite_root(rewrite_root),
-      preserve_evidence_side(preserve_evidence_side), preserve_nested_evidence_side(preserve_nested_evidence_side) {
+      preserve_evidence_side(preserve_evidence_side), preserve_nested_evidence_side(preserve_nested_evidence_side),
+      enclosing_delim_joins(enclosing_delim_joins), enclosing_ctes(enclosing_ctes) {
 }
 
 unique_ptr<GeneratedDedupRef> GeneratedDedupRefEliminator::GetGeneratedDedupRef(LogicalOperator &op,
@@ -1820,7 +2261,8 @@ bool GeneratedDedupRefEliminator::RemoveFilterCrossProduct(unique_ptr<LogicalOpe
 idx_t GeneratedDedupRefEliminator::Remove() {
 	set<TableIndex> marker_indexes;
 	auto preserve_selected_domain = HasDelimiterDomainSelection(*delim_join.children[0], marker_indexes, false,
-	                                                            delim_join.duplicate_eliminated_columns);
+	                                                            delim_join.duplicate_eliminated_columns) ||
+	                                DelimiterDomainIsProvablySmall(delim_join, enclosing_delim_joins, enclosing_ctes);
 	auto selected_evidence_side = preserve_selected_domain && preserve_evidence_side &&
 	                              HasEvidenceSide(delim_join.join_type) &&
 	                              (!ContainsSubqueryJoin(*delim_join.children[0]) ||
@@ -1867,6 +2309,8 @@ private:
 	bool CTEHasSelection(TableIndex cte_index, vector<TableIndex> &seen_ctes) const;
 	bool OperatorHasSelection(LogicalOperator &op, vector<TableIndex> &seen_ctes) const;
 	bool GeneratedDedupRefHasSelection(const GeneratedDedupRef &dedup_ref) const;
+	bool CTEIsProvablySmall(TableIndex cte_index) const;
+	bool GeneratedDedupRefIsPreserved(const GeneratedDedupRef &dedup_ref) const;
 
 	optional_idx FindOutputBinding(Expression &expr, const vector<ColumnBinding> &bindings) const;
 	bool ContainsRecursiveCTERef(LogicalOperator &op) const;
@@ -1942,6 +2386,28 @@ bool GeneratedDomainJoinEliminator::GeneratedDedupRefHasSelection(const Generate
 	}
 	vector<TableIndex> seen_ctes;
 	return CTEHasSelection(dedup_ref.cte_ref->cte_index, seen_ctes);
+}
+
+bool GeneratedDomainJoinEliminator::CTEIsProvablySmall(TableIndex cte_index) const {
+	auto cte = FindCTE(cte_index);
+	if (!cte || cte->children.empty()) {
+		return false;
+	}
+	vector<EnclosingCTE> known_ctes;
+	known_ctes.reserve(ctes.size());
+	for (auto &known_cte : ctes) {
+		known_ctes.emplace_back(known_cte.get(), 0);
+	}
+	DomainCardinalityAnalyzer analyzer({}, std::move(known_ctes));
+	return analyzer.IsBoundedBy(*cte->children[0], DELIM_DOMAIN_PRESERVE_LIMIT);
+}
+
+bool GeneratedDomainJoinEliminator::GeneratedDedupRefIsPreserved(const GeneratedDedupRef &dedup_ref) const {
+	if (!dedup_ref.cte_ref) {
+		return false;
+	}
+	// Selected or provably small domains below aggregates or existence checks are part of the physical reduction
+	return GeneratedDedupRefHasSelection(dedup_ref) || CTEIsProvablySmall(dedup_ref.cte_ref->cte_index);
 }
 
 unique_ptr<GeneratedDedupRef> GeneratedDomainJoinEliminator::GetGeneratedDedupRef(LogicalOperator &op,
@@ -2186,9 +2652,9 @@ bool GeneratedDomainJoinEliminator::RemoveGeneratedDedupJoin(unique_ptr<LogicalO
 	if (!dedup_ref) {
 		return false;
 	}
-	if ((under_aggregate || under_evidence_side) && GeneratedDedupRefHasSelection(*dedup_ref)) {
-		// The first CTE rewrite can preserve selected domains below aggregates or existence checks as regular joins.
-		// Do not substitute that selected generated CTE away in the cleanup pass.
+	if ((under_aggregate || under_evidence_side) && GeneratedDedupRefIsPreserved(*dedup_ref)) {
+		// The first CTE rewrite can preserve selected or provably small domains below aggregates or existence checks
+		// as regular joins. Do not substitute that preserved generated CTE away in the cleanup pass.
 		return false;
 	}
 
@@ -2321,9 +2787,10 @@ bool GeneratedDomainJoinEliminator::RemoveGeneratedDomainJoin(unique_ptr<Logical
 	if (!generated_ref || !domain_ref) {
 		return false;
 	}
-	if ((under_aggregate || under_evidence_side) && (domain_ref->has_selection || !domain_ref->filters.empty())) {
-		// Same invariant as above: selected domains below aggregates or existence checks are part of the physical
-		// reduction.
+	if ((under_aggregate || under_evidence_side) &&
+	    (domain_ref->has_selection || !domain_ref->filters.empty() || GeneratedDedupRefIsPreserved(*generated_ref))) {
+		// Same invariant as above: selected or provably small domains below aggregates or existence checks are part
+		// of the physical reduction.
 		return false;
 	}
 
@@ -2478,56 +2945,7 @@ bool GeneratedDomainJoinEliminator::Rewrite() {
 }
 
 static bool SingleJoinRHSIsDeduplicated(LogicalComparisonJoin &join) {
-	if (join.join_type != JoinType::SINGLE) {
-		return false;
-	}
-
-	vector<ColumnBinding> join_bindings;
-	for (const auto &cond : join.conditions) {
-		if (!IsEqualityJoinCondition(cond)) {
-			return false;
-		}
-		if (!cond.IsComparison() || cond.GetRHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-			return false;
-		}
-		auto &colref = cond.GetRHS().Cast<BoundColumnRefExpression>();
-		join_bindings.emplace_back(colref.Binding());
-	}
-
-	reference<LogicalOperator> current_op = *join.children[1];
-	while (current_op.get().type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-		if (current_op.get().children.size() != 1) {
-			return false;
-		}
-
-		switch (current_op.get().type) {
-		case LogicalOperatorType::LOGICAL_PROJECTION:
-			if (!FindAndReplaceBindings(join_bindings, current_op.get().expressions,
-			                            current_op.get().GetColumnBindings())) {
-				return false;
-			}
-			break;
-		case LogicalOperatorType::LOGICAL_FILTER:
-			break;
-		default:
-			return false;
-		}
-		current_op = *current_op.get().children[0];
-	}
-
-	auto &aggr = current_op.get().Cast<LogicalAggregate>();
-	if (!aggr.grouping_functions.empty()) {
-		return false;
-	}
-
-	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
-		if (std::find(join_bindings.begin(), join_bindings.end(),
-		              ColumnBinding(aggr.group_index, ProjectionIndex(group_idx))) == join_bindings.end()) {
-			return false;
-		}
-	}
-
-	return true;
+	return join.join_type == JoinType::SINGLE && JoinRHSIsDeduplicated(join);
 }
 
 static bool HasPartitionedRecursiveReferences(LogicalOperator &op, const LogicalRecursiveCTE &cte) {
@@ -2656,7 +3074,8 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 		auto cte_deliminator_timer =
 		    QueryProfiler::Get(binder.context).StartTimerInternal(CTE_DELIMINATOR_PROFILER_KEY);
 		GeneratedDedupRefEliminator eliminator(binder.context, plan, dedup_cte_index, dedup_ref_count, rewrite_root,
-		                                       preserve_evidence_side, preserve_nested_evidence_side);
+		                                       preserve_evidence_side, preserve_nested_evidence_side,
+		                                       enclosing_delim_joins, enclosing_ctes);
 		dedup_ref_count = eliminator.Remove();
 		auto &join = plan->Cast<LogicalComparisonJoin>();
 		if (SingleJoinRHSIsDeduplicated(join)) {
@@ -2814,8 +3233,24 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr
 			child_null_rejecting_filter_above = FilterNullRejectsDelimJoinRHS(filter, delim_join);
 			child_preserve_evidence_side = FilterNegatesDelimJoinMarker(filter, delim_join);
 		}
+		// Delim scans below a delim join's RHS reference that join's domain, track it while descending
+		const bool is_delim_join_rhs = plan->type == LogicalOperatorType::LOGICAL_DELIM_JOIN && child_idx == 1;
+		if (is_delim_join_rhs) {
+			enclosing_delim_joins.push_back(plan->Cast<LogicalComparisonJoin>());
+		}
+		// The consumer side of a materialized CTE can reference the enclosing definition, track it while descending
+		const bool is_cte_consumer = plan->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE && child_idx == 1;
+		if (is_cte_consumer) {
+			enclosing_ctes.emplace_back(plan->Cast<LogicalCTE>(), enclosing_delim_joins.size());
+		}
 		auto child_replacements = RewriteDelimJoinsToCTEs(child, rewrite_root, child_null_rejecting_filter_above,
 		                                                  child_preserve_evidence_side);
+		if (is_cte_consumer) {
+			enclosing_ctes.pop_back();
+		}
+		if (is_delim_join_rhs) {
+			enclosing_delim_joins.pop_back();
+		}
 		ColumnBindingRewrite::ApplyToChild(plan, child_idx, std::move(old_child_bindings), child_replacements);
 		output_replacements.Merge(child_replacements);
 	}
