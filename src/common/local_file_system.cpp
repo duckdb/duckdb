@@ -2240,16 +2240,14 @@ LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, File
 	}
 	if (!splits.empty() && splits[0].path == "~") {
 		// starts with home directory
-		auto home_directory = fs.GetHomeDirectory(opener);
-		if (!home_directory.empty()) {
-			absolute_path = true;
-			splits[0].path = home_directory;
-			D_ASSERT(path[0] == '~');
-			if (!fs.HasGlob(path)) {
-				expanded_files = fs.FetchFileWithoutGlob(home_directory + path.substr(1), opener, absolute_path);
-				finished = true;
-				return;
-			}
+		auto home_directory = fs.ExpandPath("~", opener);
+		absolute_path = true;
+		splits[0].path = home_directory;
+		D_ASSERT(path[0] == '~');
+		if (!fs.HasGlob(path)) {
+			expanded_files = fs.FetchFileWithoutGlob(home_directory + path.substr(1), opener, absolute_path);
+			finished = true;
+			return;
 		}
 	}
 	// Check if the path has a glob at all

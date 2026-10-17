@@ -1,6 +1,7 @@
 #include "timezone.hpp"
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/os_util.hpp"
 #include "grego.hpp"
 
 #include <climits>
@@ -513,20 +514,8 @@ static unique_ptr<TimeZone> TryCreateWindowsDefault() {
 }
 #endif
 
-unique_ptr<TimeZone> TimeZone::TryCreateDefault() {
-	// an explicitly configured zone takes priority over the host configuration
-	const auto tz_env = std::getenv("TZ");
-	if (tz_env) {
-		string tz_id(tz_env);
-		// the zone can be prefixed with a colon to force it to be interpreted as a name
-		if (!tz_id.empty() && tz_id[0] == ':') {
-			tz_id = tz_id.substr(1);
-		}
-		auto result = TryCreate(tz_id);
-		if (result) {
-			return result;
-		}
-	}
+//! The time zone of the host, or nullptr if it cannot be determined
+static unique_ptr<TimeZone> TryCreateHostTimeZone() {
 #ifdef _WIN32
 	auto windows_zone = TryCreateWindowsDefault();
 	if (windows_zone) {
@@ -540,7 +529,7 @@ unique_ptr<TimeZone> TimeZone::TryCreateDefault() {
 		string path(buffer, idx_t(length));
 		const auto pos = path.find("zoneinfo/");
 		if (pos != string::npos) {
-			auto result = TryCreate(path.substr(pos + 9));
+			auto result = TimeZone::TryCreate(path.substr(pos + 9));
 			if (result) {
 				return result;
 			}
@@ -548,6 +537,22 @@ unique_ptr<TimeZone> TimeZone::TryCreateDefault() {
 	}
 #endif
 	return nullptr;
+}
+
+unique_ptr<TimeZone> TimeZone::TryCreateDefault() {
+	// an explicitly configured zone takes priority over the host configuration
+	string tz_id;
+	if (OSUtil::GetConfigurationEnv("TZ", tz_id)) {
+		// the zone can be prefixed with a colon to force it to be interpreted as a name
+		if (!tz_id.empty() && tz_id[0] == ':') {
+			tz_id = tz_id.substr(1);
+		}
+		auto result = TryCreate(tz_id);
+		if (result) {
+			return result;
+		}
+	}
+	return TryCreateHostTimeZone();
 }
 
 } // namespace datetime
