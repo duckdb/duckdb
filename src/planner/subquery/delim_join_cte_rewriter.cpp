@@ -926,6 +926,17 @@ private:
 		return Clamp(lhs.GetIndex() + rhs.GetIndex(), limit);
 	}
 
+	//! Sums the per-set group bounds, an empty grouping set emits one row even on empty input
+	static optional_idx SumGroupingSetBounds(const LogicalAggregate &aggr, optional_idx group_bound, idx_t limit) {
+		auto set_count = MaxValue<idx_t>(aggr.grouping_sets.size(), 1);
+		optional_idx bound = 0;
+		for (idx_t set_idx = 0; set_idx < set_count; set_idx++) {
+			auto empty_set = set_idx < aggr.grouping_sets.size() && aggr.grouping_sets[set_idx].empty();
+			bound = AddBounds(bound, empty_set ? optional_idx(1) : group_bound, limit);
+		}
+		return bound;
+	}
+
 	optional_ptr<LogicalCTE> ResolveCTE(TableIndex cte_index) const {
 		for (auto &cte : known_ctes) {
 			if (cte.get().table_index == cte_index) {
@@ -1095,11 +1106,10 @@ private:
 		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 			auto &aggr = op.Cast<LogicalAggregate>();
 			if (aggr.groups.empty()) {
-				return 1;
+				// Each of the (possibly multiple) empty grouping sets emits one aggregate row
+				return Clamp(MaxValue<idx_t>(aggr.grouping_sets.size(), 1), limit);
 			}
-			auto grouping_set_bound = Clamp(MaxValue<idx_t>(aggr.grouping_sets.size(), 1), limit);
-			auto child_bound = Bound(*op.children[0], limit, enclosing_depth);
-			auto bound = MultiplyBounds(child_bound, grouping_set_bound, limit);
+			auto bound = SumGroupingSetBounds(aggr, Bound(*op.children[0], limit, enclosing_depth), limit);
 			if (bound.IsValid()) {
 				return bound;
 			}
@@ -1111,7 +1121,7 @@ private:
 					return optional_idx();
 				}
 			}
-			return MultiplyBounds(PinnedDistinctBound(aggr.groups.size(), limit), grouping_set_bound, limit);
+			return SumGroupingSetBounds(aggr, PinnedDistinctBound(aggr.groups.size(), limit), limit);
 		}
 		case LogicalOperatorType::LOGICAL_LIMIT: {
 			auto &limit_op = op.Cast<LogicalLimit>();

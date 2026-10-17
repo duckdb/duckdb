@@ -162,6 +162,21 @@ FROM (
 ----
 physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
 
+# Protection: an aggregate with multiple empty grouping sets emits one row per set, not one row overall.
+query II
+EXPLAIN SELECT q.key, (SELECT sum(f.v) FROM fact f WHERE f.k = q.key)
+FROM (
+	SELECT row_number() OVER () AS key
+	FROM (
+		SELECT count(*)
+		FROM (VALUES (1)) v(k)
+		GROUP BY GROUPING SETS ((), ())
+	) g
+	CROSS JOIN (SELECT i FROM range(2048) t(i) LIMIT 2048) b
+) q;
+----
+physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
+
 # Result identity between the small-domain plan and the full-domain plan.
 query III
 SELECT count(*), count(r), sum(r) FROM (
