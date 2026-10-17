@@ -1,0 +1,125 @@
+# name: test/sql/subquery/scalar/small_domain_decorrelation.test
+# description: Preserve semi-join reductions for delimiter domains that are small by construction
+# group: [scalar]
+
+# Plan assertions use the original planner metadata; the shapes below rely on the CTE deliminator being active.
+statement ok
+SET enable_optimizer=true;
+
+statement ok
+SET disabled_optimizers='';
+
+statement ok
+CREATE TABLE fact AS SELECT i % 100 AS k, i AS v FROM range(1000) t(i);
+
+statement ok
+CREATE TABLE outer_keys AS SELECT i AS key FROM range(100) t(i);
+
+# A scalar subquery with internal correlated aggregating subqueries, evaluated for a handful of keys.
+# Key 1 only has odd values (sum guard filters everything, NULL), key 42 only even values, key 400 is absent.
+query II
+SELECT key, (
+	SELECT CASE WHEN cnt > 0 THEN s ELSE 0 END
+	FROM (SELECT (SELECT count(*) FROM fact WHERE k = key) AS cnt,
+	             (SELECT sum(v) FROM fact WHERE k = key AND v % 2 = 0) AS s)
+) AS r
+FROM (VALUES (1::BIGINT), (42::BIGINT), (400::BIGINT)) t(key)
+ORDER BY key;
+----
+1	NULL
+42	4920
+400	0
+
+# The same expression evaluated through a one-row table scan must produce identical results.
+query II
+SELECT key, (
+	SELECT CASE WHEN cnt > 0 THEN s ELSE 0 END
+	FROM (SELECT (SELECT count(*) FROM fact WHERE k = key) AS cnt,
+	             (SELECT sum(v) FROM fact WHERE k = key AND v % 2 = 0) AS s)
+) AS r
+FROM outer_keys WHERE key = 42;
+----
+42	4920
+
+# A VALUES domain is small by construction: the base-table aggregates must stay behind semi-join
+# reductions against the deduplicated domain instead of aggregating the whole base table.
+query II
+EXPLAIN SELECT key, (
+	SELECT CASE WHEN cnt > 0 THEN s ELSE 0 END
+	FROM (SELECT (SELECT count(*) FROM fact WHERE k = key) AS cnt,
+	             (SELECT sum(v) FROM fact WHERE k = key AND v % 2 = 0) AS s)
+) AS r
+FROM (VALUES (42::BIGINT)) t(key);
+----
+physical_plan	<REGEX>:[\s\S]*SEMI[\s\S]*
+
+# A single uncorrelated call (one caller row without a base table) keeps the reduction as well.
+query II
+EXPLAIN SELECT (
+	SELECT CASE WHEN cnt > 0 THEN s ELSE 0 END
+	FROM (SELECT (SELECT count(*) FROM fact WHERE k = key) AS cnt,
+	             (SELECT sum(v) FROM fact WHERE k = key AND v % 2 = 0) AS s)
+) AS r
+FROM (SELECT 42::BIGINT AS key) t;
+----
+physical_plan	<REGEX>:[\s\S]*SEMI[\s\S]*
+
+# A filtered one-row caller set: the selection sits above the nested delimiter domains and must be
+# visible through the outer delim scan.
+query II
+EXPLAIN SELECT key, (
+	SELECT CASE WHEN cnt > 0 THEN s ELSE 0 END
+	FROM (SELECT (SELECT count(*) FROM fact WHERE k = key) AS cnt,
+	             (SELECT sum(v) FROM fact WHERE k = key AND v % 2 = 0) AS s)
+) AS r
+FROM outer_keys WHERE key = 42;
+----
+physical_plan	<REGEX>:[\s\S]*SEMI[\s\S]*
+
+# Protection: an unfiltered table domain is not provably small, the reduction join is removed and the
+# base table is aggregated once (no semi join in the plan, as before the fix).
+query II
+EXPLAIN SELECT key, (
+	SELECT CASE WHEN cnt > 0 THEN s ELSE 0 END
+	FROM (SELECT (SELECT count(*) FROM fact WHERE k = key) AS cnt,
+	             (SELECT sum(v) FROM fact WHERE k = key AND v % 2 = 0) AS s)
+) AS r
+FROM outer_keys;
+----
+physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
+
+# Protection: a table function domain has no structural cardinality bound either.
+query II
+EXPLAIN SELECT key, (
+	SELECT CASE WHEN cnt > 0 THEN s ELSE 0 END
+	FROM (SELECT (SELECT count(*) FROM fact WHERE k = key) AS cnt,
+	             (SELECT sum(v) FROM fact WHERE k = key AND v % 2 = 0) AS s)
+) AS r
+FROM range(5000) t(key);
+----
+physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
+
+# Result identity between the small-domain plan and the full-domain plan.
+query III
+SELECT count(*), count(r), sum(r) FROM (
+	SELECT key, (
+		SELECT CASE WHEN cnt > 0 THEN s ELSE 0 END
+		FROM (SELECT (SELECT count(*) FROM fact WHERE k = key) AS cnt,
+		             (SELECT sum(v) FROM fact WHERE k = key AND v % 2 = 0) AS s)
+	) AS r
+	FROM outer_keys
+);
+----
+100	50	249500
+
+query III
+SELECT count(*), count(r), sum(r) FROM (
+	SELECT key, (
+		SELECT CASE WHEN cnt > 0 THEN s ELSE 0 END
+		FROM (SELECT (SELECT count(*) FROM fact WHERE k = key) AS cnt,
+		             (SELECT sum(v) FROM fact WHERE k = key AND v % 2 = 0) AS s)
+	) AS r
+	FROM (VALUES (41::BIGINT), (42::BIGINT)) t(key)
+);
+----
+2	1	4920
