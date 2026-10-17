@@ -138,6 +138,30 @@ FROM (
 ----
 physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
 
+# Protection: a LEFT join preserves its LHS rows over an empty RHS, the bound must not collapse to zero.
+query II
+EXPLAIN SELECT q.key, (SELECT sum(f.v) FROM fact f WHERE f.k = q.key)
+FROM (
+	SELECT a.i * 1024 + b.i AS key
+	FROM (SELECT i FROM range(1024) t(i) LIMIT 1024) a
+	LEFT JOIN (SELECT 0::BIGINT AS z LIMIT 0) e ON a.i = e.z
+	CROSS JOIN (SELECT i FROM range(1024) t(i) LIMIT 1024) b
+) q;
+----
+physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
+
+# Protection: the mirrored RIGHT join preserves its RHS rows over an empty LHS.
+query II
+EXPLAIN SELECT q.key, (SELECT sum(f.v) FROM fact f WHERE f.k = q.key)
+FROM (
+	SELECT a.i * 1024 + b.i AS key
+	FROM (SELECT 0::BIGINT AS z LIMIT 0) e
+	RIGHT JOIN (SELECT i FROM range(1024) t(i) LIMIT 1024) a ON a.i = e.z
+	CROSS JOIN (SELECT i FROM range(1024) t(i) LIMIT 1024) b
+) q;
+----
+physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
+
 # Result identity between the small-domain plan and the full-domain plan.
 query III
 SELECT count(*), count(r), sum(r) FROM (

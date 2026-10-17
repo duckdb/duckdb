@@ -1172,12 +1172,23 @@ private:
 					// Each LHS row matches at most one row of the deduplicated RHS
 					return Bound(*op.children[0], limit, enclosing_depth);
 				}
-				return MultiplyBounds(Bound(*op.children[0], limit, enclosing_depth),
-				                      Bound(*op.children[1], limit, enclosing_depth), limit);
+				auto lhs_bound = Bound(*op.children[0], limit, enclosing_depth);
+				auto rhs_bound = Bound(*op.children[1], limit, enclosing_depth);
+				if (join.join_type == JoinType::LEFT && rhs_bound.IsValid()) {
+					// A LEFT join preserves every LHS row even over an empty RHS
+					rhs_bound = MaxValue<idx_t>(rhs_bound.GetIndex(), 1);
+				}
+				return MultiplyBounds(lhs_bound, rhs_bound, limit);
 			}
-			case JoinType::RIGHT:
-				return MultiplyBounds(Bound(*op.children[0], limit, enclosing_depth),
-				                      Bound(*op.children[1], limit, enclosing_depth), limit);
+			case JoinType::RIGHT: {
+				auto lhs_bound = Bound(*op.children[0], limit, enclosing_depth);
+				auto rhs_bound = Bound(*op.children[1], limit, enclosing_depth);
+				if (lhs_bound.IsValid()) {
+					// A RIGHT join preserves every RHS row even over an empty LHS
+					lhs_bound = MaxValue<idx_t>(lhs_bound.GetIndex(), 1);
+				}
+				return MultiplyBounds(lhs_bound, rhs_bound, limit);
+			}
 			case JoinType::OUTER: {
 				auto lhs_bound = Bound(*op.children[0], limit, enclosing_depth);
 				auto rhs_bound = Bound(*op.children[1], limit, enclosing_depth);
