@@ -210,7 +210,8 @@ TEST_CASE("Pipeline sink thread limits cannot raise source or operator caps", "[
 	struct Limits {
 		idx_t source, op, sink, expected, sink_input;
 	};
-	const Limits cases[] = {{1, 8, 8, 1, 1}, {8, 2, 8, 2, 2}, {8, 8, 3, 3, 8}, {0, 8, 8, 0, 0}, {8, 8, 0, 0, 8}};
+	const Limits cases[] = {{1, 8, 8, 1, 1}, {8, 2, 8, 2, 2}, {8, 8, 3, 3, 8},
+	                        {0, 8, 8, 0, 0}, {8, 8, 0, 0, 8}, {16, 16, 16, 8, 8}};
 	for (const auto &limits : cases) {
 		CAPTURE(limits.source, limits.op, limits.sink);
 		PhysicalPlan plan(Allocator::Get(*con.context));
