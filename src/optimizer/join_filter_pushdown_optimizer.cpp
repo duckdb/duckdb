@@ -4,7 +4,7 @@
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/optimizer/builtin_function_lookup.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -233,10 +233,17 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 		}
 		get.ResolveOperatorTypes();
 		const auto bindings = get.GetColumnBindings();
+		vector<JoinFilterPushdownColumn> accepted_columns;
 		for (auto &filter : columns) {
 			if (filter.probe_column_index.table_index != get.table_index) {
 				// the filter does not apply to the probe side here - bail-out
 				return;
+			}
+			if (get.function.supports_pushdown_type) {
+				auto column_id = get.GetColumnIndex(filter.probe_column_index).GetPrimaryIndex();
+				if (!get.function.supports_pushdown_type(*get.bind_data, column_id)) {
+					continue;
+				}
 			}
 			// add storage type to columns
 			for (idx_t i = 0; i < bindings.size(); i++) {
@@ -254,8 +261,12 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 			    reconstructed_type.id() == LogicalTypeId::VARIANT) {
 				return;
 			}
+			accepted_columns.push_back(std::move(filter));
 		}
-		targets.emplace_back(get, std::move(columns));
+		if (accepted_columns.empty()) {
+			return;
+		}
+		targets.emplace_back(get, std::move(accepted_columns));
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
@@ -368,6 +379,9 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		JoinFilterPushdownFilter get_filter;
 		get_filter.dynamic_filters = get.dynamic_filters;
 		get_filter.columns = std::move(target.columns);
+		if (get.has_estimated_cardinality) {
+			get_filter.estimated_scan_cardinality = get.estimated_cardinality;
+		}
 		pushdown_info->probe_info.push_back(std::move(get_filter));
 	}
 

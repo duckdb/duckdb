@@ -914,6 +914,26 @@ TEST_CASE("AsyncWriteQueue drains positional requests on multiple async threads"
 	REQUIRE(saw_second);
 }
 
+TEST_CASE("AsyncWriteQueue schedules a small prefix before a large pending request", "[async_write_queue]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 3);
+	BlockingAsyncWriteTarget target;
+	AsyncWriteQueue queue(*con->context, target);
+
+	auto write_size = AsyncWriteConfig::TASK_BYTE_BUDGET + 1;
+	queue.Submit(AsyncWriteRequest(make_uniq<StringAsyncWriteBuffer>(string(write_size, 'a')), 0));
+	queue.Submit(AsyncWriteRequest(make_uniq<StringAsyncWriteBuffer>("header"), write_size));
+	queue.Submit(AsyncWriteRequest(make_uniq<StringAsyncWriteBuffer>(string(write_size, 'b')), write_size + 6));
+
+	auto saw_three_writes = target.WaitForEnteredWrites(3);
+	target.ReleaseWrites();
+	queue.Close();
+
+	REQUIRE(saw_three_writes);
+	REQUIRE(target.MaxActiveWrites() == 3);
+	REQUIRE(target.write_sizes.size() == 3);
+}
+
 TEST_CASE("ManagedAsyncWriteQueue accepts non-contiguous positional writes", "[async_write_queue]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
@@ -1571,6 +1591,42 @@ TEST_CASE("AsyncFileWriter waits for remote coalesce threshold before first drai
 	REQUIRE(ReadFile(path) == first + second);
 	REQUIRE(fs.write_sizes.size() == 1);
 	REQUIRE(fs.write_sizes[0] == AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD);
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter schedules a large remote write behind a small prefix", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 4);
+	ConcurrentSequentialWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_remote_prefix_large.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string prefix = "header";
+	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
+	string tail = "footer";
+	AsyncFileWriter writer(*con->context, fs, path);
+	{
+		auto batch_guard = writer.StartBatch();
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(prefix));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(prefix));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(tail));
+		batch_guard.Finish();
+	}
+
+	auto saw_four_backend_writes = fs.WaitForBackendWrites(4);
+	auto admitted_offsets = fs.AdmittedOffsets();
+	fs.ReleaseAllWrites();
+	writer.Close();
+
+	REQUIRE(saw_four_backend_writes);
+	REQUIRE(admitted_offsets ==
+	        vector<idx_t> {0, prefix.size(), prefix.size() + first.size(), 2 * prefix.size() + first.size()});
+	REQUIRE(ReadFile(path) == prefix + first + prefix + second + tail);
 	fs.RemoveFile(path);
 }
 

@@ -61,7 +61,7 @@ index e35f303..ed3b259 100644
 \ No newline at end of file
 +} // namespace duckdb
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
-index ff55d44..7072db7 100644
+index 4c7b6d1..402abf4 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
 +++ b/src/spatial/index/rtree/rtree_index.cpp
 @@ -9,6 +9,7 @@
@@ -71,9 +71,9 @@ index ff55d44..7072db7 100644
 +#include "duckdb/storage/checkpoint/table_index_writer.hpp"
  #include "duckdb/storage/table/scan_state.hpp"
  #include "duckdb/main/database.hpp"
- #include "spatial/spatial_types.hpp"
-@@ -235,32 +236,18 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &row_vec) {
- 	ConvertToEntries(box_vec, row_vec, count, [&](const RTreeEntry &entry) { tree->Delete(entry); });
+ #include "duckdb/transaction/duck_transaction.hpp"
+@@ -318,32 +319,18 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &row_vec) {
+ 	last_commit_before_delete = DuckTransactionManager::Get(db).GetLastCommit();
  }
  
 -IndexStorageInfo RTreeIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
@@ -112,10 +112,10 @@ index ff55d44..7072db7 100644
  	IndexStorageInfo info;
  	info.name = name;
 diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
-index dc2335d..20928b2 100644
+index 133c3e0..ad14d95 100644
 --- a/src/spatial/index/rtree/rtree_index.hpp
 +++ b/src/spatial/index/rtree/rtree_index.hpp
-@@ -55,9 +55,9 @@ public:
+@@ -70,9 +70,9 @@ public:
  	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
  
  	//! Serializes RTree memory to disk and returns the index storage information.

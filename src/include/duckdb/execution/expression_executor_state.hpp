@@ -74,6 +74,8 @@ public:
 
 public:
 	unique_ptr<FunctionLocalState> local_state;
+	//! The buffers of all-constant arguments, which can be shared with the input and have to get their size back
+	vector<buffer_ptr<VectorBuffer>> constant_argument_buffers;
 
 private:
 	//! The column index of the "unary" input column that may be a dictionary vector

@@ -215,8 +215,7 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 		TokenIterator token_iterator(tokens);
 		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
 		MatchContext match_context(suggestions, parse_allocator, process_allocator, max_token_index,
-		                           MatchMode::RECOGNIZE_ONLY, IdentifierCaseMode::PRESERVE_CASE,
-		                           parameters.use_heap_based_parser);
+		                           MatchMode::RECOGNIZE_ONLY, IdentifierCaseMode::PRESERVE_CASE);
 		MatchState state(token_iterator, match_context);
 		compiled_grammar->ProgramMatcher().MatchParseResult(state);
 	}
@@ -230,6 +229,7 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 		vector<AutoCompleteCandidate> new_suggestions;
 		switch (suggestion.type) {
 		case SuggestionState::SUGGEST_VARIABLE:
+		case SuggestionState::SUGGEST_BARE_LABEL:
 			// variables have no suggestions available
 			break;
 		case SuggestionState::SUGGEST_KEYWORD:

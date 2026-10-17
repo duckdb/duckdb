@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/profiling_coverage.hpp"
 #include "duckdb/common/deque.hpp"
@@ -114,7 +115,7 @@ public:
 	//! Add to a metric counter (profiling-only).
 	DUCKDB_API void AddToMetricCounter(const string &key, idx_t amount);
 	//! Add parser time measured before the per-statement profiler was started.
-	void AddParserTime(const Profiler &parser_timer);
+	void AddParserTime(const Profiler &parser_timer, timestamp_t start_time, timestamp_t end_time);
 
 	//! Set an arbitrary metric value (profiling-only; no-op when profiling is disabled).
 	DUCKDB_API void SetMetric(const string &key, Value new_value);
@@ -183,11 +184,19 @@ private:
 	//! disabled case. Only used on the terminal-print paths.
 	void PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
 
+public:
+	//! Provides access to the root of the query tree, but ensures there are no concurrent modifications
+	//! This can be useful when implementing continuous profiling or making customizations
+	DUCKDB_API void GetRootUnderLock(const std::function<void(optional_ptr<ProfilingNode>)> &callback) {
+		lock_guard<std::mutex> guard(lock);
+		callback(root.get());
+	}
+
 private:
 	ClientContext &context;
 
-	//! Whether or not the query profiler is running
-	bool running;
+	//! Atomic so inactive flushes can skip acquiring the profiler lock.
+	atomic<bool> running;
 	//! The lock used for accessing the global query profiler or flushing information to it from a thread
 	mutable std::mutex lock;
 

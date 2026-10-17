@@ -53,9 +53,6 @@
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift_tools.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -83,6 +80,11 @@ struct ParquetMetadataFilePaths {
 
 struct ParquetMetaDataBindData : public TableFunctionData {
 	unique_ptr<ParquetMetadataFilePaths> file_paths;
+
+	//! The file list is consumed by the first execution
+	bool SupportStatementCache() const override {
+		return false;
+	}
 };
 
 struct ParquetBloomProbeBindData : public ParquetMetaDataBindData {
@@ -361,6 +363,9 @@ void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::META_DATA>
 	    {"encoding", LogicalType::VARCHAR},
 	    {"count", LogicalType::INTEGER},
 	})));
+
+	names.emplace_back("stats_nan_count");
+	return_types.emplace_back(LogicalType::BIGINT);
 }
 
 static Value ConvertParquetStats(const LogicalType &type, const ParquetColumnSchema &schema_ele, bool stats_is_set,
@@ -556,6 +561,8 @@ void ParquetRowGroupMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 
 	// encoding_stats, LogicalType::LIST(LogicalType::STRUCT(...))
 	output[31].get().Append(ConvertParquetEncodingStats(col_meta));
+	// stats_nan_count
+	output[32].get().Append(ParquetElementBigint(stats.nan_count, stats.__isset.nan_count));
 }
 
 //===--------------------------------------------------------------------===//
@@ -564,8 +571,12 @@ void ParquetRowGroupMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 
 class ParquetSchemaProcessor : public ParquetMetadataFileProcessor {
 public:
+	void InitializeInternal(ClientContext &context, ParquetReader &reader) override;
 	idx_t TotalRowCount(ParquetReader &reader) override;
 	void ReadRow(vector<reference<Vector>> &output, idx_t row_idx, ParquetReader &reader) override;
+
+private:
+	vector<Value> element_types;
 };
 
 template <>
@@ -666,6 +677,25 @@ static Value ParquetLogicalTypeToString(const duckdb_parquet::LogicalType &type,
 	return Value();
 }
 
+static void CollectElementTypes(const ParquetColumnSchema &schema, vector<Value> &element_types) {
+	// a group collapsed into its only child has the type of that child
+	for (auto &index : {schema.parent_schema_index, schema.schema_index}) {
+		if (index.IsValid() && index.GetIndex() < element_types.size() && element_types[index.GetIndex()].IsNull()) {
+			element_types[index.GetIndex()] = Value(schema.type.ToString());
+		}
+	}
+	for (auto &child : schema.children) {
+		CollectElementTypes(child, element_types);
+	}
+}
+
+void ParquetSchemaProcessor::InitializeInternal(ClientContext &context, ParquetReader &reader) {
+	element_types.assign(reader.GetFileMetadata()->schema.size(), Value());
+	for (auto &column : reader.root_schema->children) {
+		CollectElementTypes(column, element_types);
+	}
+}
+
 idx_t ParquetSchemaProcessor::TotalRowCount(ParquetReader &reader) {
 	return reader.GetFileMetadata()->schema.size();
 }
@@ -697,12 +727,7 @@ void ParquetSchemaProcessor::ReadRow(vector<reference<Vector>> &output, idx_t ro
 	// logical_type
 	output[10].get().Append(ParquetLogicalTypeToString(column.logicalType, column.__isset.logicalType));
 	// duckdb_type
-	ParquetColumnSchema column_schema;
-	Value duckdb_type;
-	if (column.__isset.type) {
-		duckdb_type = reader.DeriveLogicalType(column, column_schema).ToString();
-	}
-	output[11].get().Append(duckdb_type);
+	output[11].get().Append(element_types[row_idx]);
 	// column_id
 	output[12].get().Append(Value::BIGINT(UnsafeNumericCast<int64_t>(row_idx)));
 }
@@ -886,11 +911,8 @@ void ParquetBloomProbeProcessor::InitializeInternal(ClientContext &context, Parq
 	protocol = make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 	allocator = &BufferAllocator::Get(context);
 	auto column_type = reader.GetColumns()[probe_column_idx.GetIndex()].type;
-	auto comparison = BoundComparisonExpression::Create(
-	    ExpressionType::COMPARE_EQUAL,
-	    make_uniq<BoundReferenceExpression>(Identifier(probe_column_name), column_type, 0),
-	    make_uniq<BoundConstantExpression>(probe_constant.CastAs(context, column_type)));
-	filter = make_uniq<ExpressionFilter>(std::move(comparison));
+	filter = ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_EQUAL,
+	                                                  probe_constant.CastAs(context, column_type));
 	auto &column_schema = reader.root_schema->children[probe_column_idx.GetIndex()];
 	hash_strategy =
 	    ParquetStatisticsUtils::GetBloomFilterHashStrategy(column_schema, reader.GetIntervalBloomFilterVersion());
@@ -1174,7 +1196,8 @@ double ParquetMetaDataOperator::Progress(ClientContext &context, const FunctionD
 }
 
 ParquetMetaDataFunction::ParquetMetaDataFunction()
-    : TableFunction("parquet_metadata", {LogicalType::VARCHAR}, ParquetMetaDataOperator::Function,
+    : TableFunction("parquet_metadata", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+                    ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::META_DATA>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::META_DATA>) {
@@ -1183,7 +1206,8 @@ ParquetMetaDataFunction::ParquetMetaDataFunction()
 }
 
 ParquetSchemaFunction::ParquetSchemaFunction()
-    : TableFunction("parquet_schema", {LogicalType::VARCHAR}, ParquetMetaDataOperator::Function,
+    : TableFunction("parquet_schema", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+                    ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::SCHEMA>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::SCHEMA>) {
@@ -1192,7 +1216,8 @@ ParquetSchemaFunction::ParquetSchemaFunction()
 }
 
 ParquetKeyValueMetadataFunction::ParquetKeyValueMetadataFunction()
-    : TableFunction("parquet_kv_metadata", {LogicalType::VARCHAR}, ParquetMetaDataOperator::Function,
+    : TableFunction("parquet_kv_metadata", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+                    ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::KEY_VALUE_META_DATA>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::KEY_VALUE_META_DATA>) {
@@ -1201,7 +1226,8 @@ ParquetKeyValueMetadataFunction::ParquetKeyValueMetadataFunction()
 }
 
 ParquetFileMetadataFunction::ParquetFileMetadataFunction()
-    : TableFunction("parquet_file_metadata", {LogicalType::VARCHAR}, ParquetMetaDataOperator::Function,
+    : TableFunction("parquet_file_metadata", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+                    ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::FILE_META_DATA>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::FILE_META_DATA>) {
@@ -1210,7 +1236,11 @@ ParquetFileMetadataFunction::ParquetFileMetadataFunction()
 }
 
 ParquetBloomProbeFunction::ParquetBloomProbeFunction()
-    : TableFunction("parquet_bloom_probe", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::ANY},
+    : TableFunction("parquet_bloom_probe",
+                    FunctionSignature()
+                        .AddPositionalOnly("path", LogicalType::VARCHAR)
+                        .AddPositionalOnly("column_name", LogicalType::VARCHAR)
+                        .AddPositionalOnly("value", LogicalType::ANY),
                     ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::BLOOM_PROBE>,
                     ParquetMetaDataOperator::InitGlobal,
@@ -1220,7 +1250,8 @@ ParquetBloomProbeFunction::ParquetBloomProbeFunction()
 }
 
 ParquetFullMetadataFunction::ParquetFullMetadataFunction()
-    : TableFunction("parquet_full_metadata", {LogicalType::VARCHAR}, ParquetMetaDataOperator::Function,
+    : TableFunction("parquet_full_metadata", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+                    ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::FULL_METADATA>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::FULL_METADATA>) {

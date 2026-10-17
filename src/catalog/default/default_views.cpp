@@ -1,3 +1,4 @@
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/catalog/default/default_views.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -236,7 +237,8 @@ static unique_ptr<CreateViewInfo> GetDefaultView(ClientContext &context, const I
 			result->temporary = true;
 			result->internal = true;
 
-			return CreateViewInfo::FromSelect(context, std::move(result));
+			auto parser = Parser::GetBuiltinParser();
+			return CreateViewInfo::FromSelect(parser, std::move(result));
 		}
 	}
 	return nullptr;

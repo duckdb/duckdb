@@ -136,19 +136,28 @@ struct ReadAheadBuffer {
 	}
 
 	// Returns the relevant read head
-	ReadHead *GetReadHead(idx_t pos) {
+	ReadHead *GetReadHead(idx_t pos, idx_t len = 1) {
+		optional_ptr<ReadHead> unfetched_head;
 		for (auto &read_head : read_heads) {
-			if (pos >= read_head->location && pos < read_head->GetEnd()) {
-				return read_head.get();
+			if (pos >= read_head->location && pos < read_head->GetEnd() && len <= read_head->GetEnd() - pos) {
+				// Filter and payload ranges can overlap: reuse fetched bytes before fetching another range.
+				if (read_head->data_isset) {
+					return read_head.get();
+				}
+				if (!unfetched_head) {
+					unfetched_head = read_head.get();
+				}
 			}
 		}
-		return nullptr;
+		return unfetched_head.get();
 	}
 
 	// Prefetch all read heads
 	void Prefetch() {
 		for (auto &read_head : read_heads) {
-			read_head->Fetch(file_handle);
+			if (!read_head->data_isset) {
+				read_head->Fetch(file_handle);
+			}
 		}
 	}
 };
@@ -173,7 +182,7 @@ public:
 	}
 
 	uint32_t read(uint8_t *buf, uint32_t len) {
-		auto prefetch_buffer = ra_buffer.GetReadHead(location);
+		auto prefetch_buffer = ra_buffer.GetReadHead(location, len);
 		if (prefetch_buffer != nullptr && location - prefetch_buffer->location + len <= prefetch_buffer->size) {
 			D_ASSERT(location - prefetch_buffer->location + len <= prefetch_buffer->size);
 
@@ -189,7 +198,7 @@ public:
 				return len;
 			}
 			Prefetch(location, MinValue<uint64_t>(PREFETCH_FALLBACK_BUFFERSIZE, file_size - location));
-			auto prefetch_buffer_fallback = ra_buffer.GetReadHead(location);
+			auto prefetch_buffer_fallback = ra_buffer.GetReadHead(location, len);
 			if (!prefetch_buffer_fallback ||
 			    location - prefetch_buffer_fallback->location + len > prefetch_buffer_fallback->size) {
 				file_handle.GetFileHandle()->Read(context, buf, len, location);
