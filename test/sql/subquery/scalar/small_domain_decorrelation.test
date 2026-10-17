@@ -271,13 +271,25 @@ physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
 
 # Protection: an empty grouping set still emits its row on empty input, the aggregate bound is the
 # per-set sum 0 + 1 rather than the product 0 * 2, so the 4096-key caller is not provably small.
+# Twelve two-row factors keep every factor bound within the smallest vector-size threshold, so the
+# repaired sum saturates left to right while the old false zero would stay zero at every size.
 query II
 EXPLAIN SELECT q.key, (SELECT sum(f.v) FROM fact f WHERE f.k = q.key)
 FROM (
 	SELECT row_number() OVER () AS key
 	FROM (SELECT k, count(*) FROM (SELECT 1 AS k LIMIT 0) v(k) GROUP BY GROUPING SETS ((k), ())) g
-	CROSS JOIN (SELECT i FROM range(64) t(i) LIMIT 64) a
-	CROSS JOIN (SELECT i FROM range(64) t(i) LIMIT 64) b
+	CROSS JOIN (VALUES (0), (1)) f01(i)
+	CROSS JOIN (VALUES (0), (1)) f02(i)
+	CROSS JOIN (VALUES (0), (1)) f03(i)
+	CROSS JOIN (VALUES (0), (1)) f04(i)
+	CROSS JOIN (VALUES (0), (1)) f05(i)
+	CROSS JOIN (VALUES (0), (1)) f06(i)
+	CROSS JOIN (VALUES (0), (1)) f07(i)
+	CROSS JOIN (VALUES (0), (1)) f08(i)
+	CROSS JOIN (VALUES (0), (1)) f09(i)
+	CROSS JOIN (VALUES (0), (1)) f10(i)
+	CROSS JOIN (VALUES (0), (1)) f11(i)
+	CROSS JOIN (VALUES (0), (1)) f12(i)
 ) q;
 ----
 physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
