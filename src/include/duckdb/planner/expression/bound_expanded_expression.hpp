@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-//! BoundExpression is an intermediate dummy expression used by the binder.
+//! BoundExpandedExpression is an intermediate dummy expression used by the binder.
 //! It holds a set of expressions that will be "expanded" in the select list of a query
 class BoundExpandedExpression : public Expression {
 public:

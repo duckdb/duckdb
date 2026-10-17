@@ -353,3 +353,45 @@ query I
 SELECT count(*) FROM stats_filter_nullable WHERE (i * 0 = 0) OR ((i + 1) > 1000000);
 ----
 9000
+
+# struct_pack always constructs a non-NULL parent, even when a child is NULL.
+statement ok
+ATTACH '{TEST_DIR}/struct_pack_pruning.duckdb' AS struct_pack_db (ROW_GROUP_SIZE 2048)
+
+statement ok
+CREATE TABLE struct_pack_db.inputs AS
+SELECT CASE WHEN i % 2 = 0 THEN i ELSE NULL END AS i,
+       CASE WHEN i % 2 = 0 THEN {'a': i} ELSE NULL END AS s
+FROM range(6144) tbl(i)
+
+query I
+SELECT count(*) FROM struct_pack_db.inputs WHERE struct_pack(x := i) IS NULL;
+----
+0
+
+statement ok
+RESET enable_profiling;
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*) FROM struct_pack_db.inputs WHERE struct_pack(x := i) IS NULL;
+----
+analyzed_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*) FROM struct_pack_db.inputs WHERE struct_concat(s, {'b': 1}) IS NULL;
+----
+analyzed_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*) FROM struct_pack_db.inputs WHERE struct_insert(s, b := 1) IS NULL;
+----
+analyzed_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*) FROM struct_pack_db.inputs WHERE struct_update(s, b := 1) IS NULL;
+----
+analyzed_plan	<REGEX>:.*EMPTY_RESULT.*

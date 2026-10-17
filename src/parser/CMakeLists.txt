@@ -16,6 +16,7 @@ add_library_unity(
   constraint.cpp
   expression_util.cpp
   keyword_helper.cpp
+  literal.cpp
   parsed_expression.cpp
   parsed_expression_iterator.cpp
   parser.cpp
@@ -23,6 +24,7 @@ add_library_unity(
   query_error_context.cpp
   query_node.cpp
   result_modifier.cpp
+  token_iterator.cpp
   tableref.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_parser>

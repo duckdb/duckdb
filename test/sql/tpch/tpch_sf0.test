@@ -29,3 +29,8 @@ PRAGMA tpch(32908301298)
 statement error
 PRAGMA tpch(1.1)
 ----
+
+statement error
+PRAGMA tpch(NULL)
+----
+<REGEX>:.*Cannot use NULL as argument for the TPC-H query number.*

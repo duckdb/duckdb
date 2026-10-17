@@ -9,7 +9,9 @@
     {
       "reason": "Cannot install extensions without a local filesystem",
       "paths": [
-        "test/extension/install_extension_httpfs.test"
+        "test/extension/install_extension_httpfs.test",
+        "test/sql/logging/http_response_log_redaction.test",
+        "test/sql/logging/http_url_log_redaction.test"
       ]
     },
     {
@@ -28,6 +30,12 @@
       "reason": "COPY TO local paths requires LocalFileSystem during binding/planning",
       "paths": [
         "test/sql/json/test_json_copy_serialize_plan.test"
+      ]
+    },
+    {
+      "reason": "Writes and reads a local profiling JSON file.",
+      "paths": [
+        "test/sql/optimizer/nested_null_segment_pruning.test"
       ]
     }
   ]

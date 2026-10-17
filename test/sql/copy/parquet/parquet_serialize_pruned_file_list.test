@@ -1,0 +1,53 @@
+# name: test/sql/copy/parquet/parquet_serialize_pruned_file_list.test
+# description: A scan whose files were all pruned away by a hive filter must survive plan serialization
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (SELECT 1 AS id, 7 AS part) TO '{TEST_DIR}/prune_all' (FORMAT parquet, PARTITION_BY (part))
+
+statement ok
+SET debug_verify_serializer=true
+
+# the filter prunes the only file, leaving an empty file list to serialize
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/prune_all/part=7/*.parquet') WHERE part = 999
+----
+0
+
+query II
+SELECT id, part FROM read_parquet('{TEST_DIR}/prune_all/part=7/*.parquet') WHERE part = 999
+----
+
+# the schema still has to survive the round trip when nothing is pruned
+query II
+SELECT id, part FROM read_parquet('{TEST_DIR}/prune_all/part=7/*.parquet') WHERE part = 7
+----
+1	7
+
+# a glob that genuinely matches no files is still an error
+statement error
+SELECT count(*) FROM read_parquet('{TEST_DIR}/prune_all/does_not_exist*.parquet')
+----
+<REGEX>:.*No files found that match the pattern.*
+
+# explicit schemas are part of the serialized Parquet scan options
+statement ok
+COPY (SELECT 'duckdb'::VARCHAR AS s, 42::INTEGER AS i)
+TO '{TEST_DIR}/serialize_options.parquet' (FORMAT parquet)
+
+query II
+SELECT i, typeof(i) FROM read_parquet('{TEST_DIR}/serialize_options.parquet',
+    schema=map{'i': {'name': 'i', 'type': 'BIGINT', 'default_value': NULL}})
+----
+42	BIGINT
+
+# strlen is pushed into the Parquet reader as a projection expression
+query I
+SELECT strlen(s) FROM read_parquet('{TEST_DIR}/serialize_options.parquet')
+----
+6
+
+statement ok
+SET debug_verify_serializer=false

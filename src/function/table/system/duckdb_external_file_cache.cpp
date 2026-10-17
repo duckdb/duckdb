@@ -1,4 +1,5 @@
 #include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 
 namespace duckdb {
@@ -9,6 +10,8 @@ struct DuckDBExternalFileCacheData : public GlobalTableFunctionState {
 
 	vector<CachedFileInformation> entries;
 	idx_t offset;
+	//! The offset, published once per chunk (for progress)
+	atomic<idx_t> progress_offset {0};
 };
 
 static unique_ptr<FunctionData> DuckDBExternalFileCacheBind(ClientContext &context, TableFunctionBindInput &input,
@@ -24,6 +27,9 @@ static unique_ptr<FunctionData> DuckDBExternalFileCacheBind(ClientContext &conte
 	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("loaded");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
+	names.emplace_back("spilled");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
 	return nullptr;
@@ -54,6 +60,8 @@ void DuckDBExternalFileCacheFunction(ClientContext &context, TableFunctionInput 
 	auto &location = output.data[2];
 	// loaded, BOOLEAN
 	auto &loaded = output.data[3];
+	// spilled, BOOLEAN
+	auto &spilled = output.data[4];
 
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
@@ -61,13 +69,27 @@ void DuckDBExternalFileCacheFunction(ClientContext &context, TableFunctionInput 
 		nr_bytes.Append(Value::BIGINT(NumericCast<int64_t>(entry.nr_bytes)));
 		location.Append(Value::BIGINT(NumericCast<int64_t>(entry.location)));
 		loaded.Append(Value::BOOLEAN(entry.loaded));
+		spilled.Append(Value::BOOLEAN(entry.spilled));
 		count++;
 	}
+	data.progress_offset.store(data.offset, std::memory_order_relaxed);
+}
+
+static double DuckDBExternalFileCacheProgress(ClientContext &context, const FunctionData *bind_data,
+                                              const GlobalTableFunctionState *global_state) {
+	auto &data = global_state->Cast<DuckDBExternalFileCacheData>();
+	if (data.entries.empty()) {
+		return 100.0;
+	}
+	auto offset = data.progress_offset.load(std::memory_order_relaxed);
+	return 100.0 * static_cast<double>(offset) / static_cast<double>(data.entries.size());
 }
 
 void DuckDBExternalFileCacheFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_external_file_cache", {}, DuckDBExternalFileCacheFunction,
-	                              DuckDBExternalFileCacheBind, DuckDBExternalFileCacheInit));
+	TableFunction function("duckdb_external_file_cache", {}, DuckDBExternalFileCacheFunction,
+	                       DuckDBExternalFileCacheBind, DuckDBExternalFileCacheInit);
+	function.table_scan_progress = DuckDBExternalFileCacheProgress;
+	set.AddFunction(function);
 }
 
 } // namespace duckdb

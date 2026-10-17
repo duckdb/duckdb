@@ -1,0 +1,76 @@
+# name: test/optimizer/in_clause_rewriter_join.test
+# description: Keep large IN clauses visible to the IN clause rewriter
+# group: [optimizer]
+
+statement ok
+CREATE TABLE in_left(i INTEGER, j INTEGER);
+
+statement ok
+CREATE TABLE in_right(i INTEGER);
+
+statement ok
+INSERT INTO in_left VALUES (1, 1), (2, 8), (11, 8);
+
+statement ok
+INSERT INTO in_right VALUES (1), (2), (11);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+# A large IN clause nested in a cross-table predicate is rewritten to a MARK join
+query II
+EXPLAIN SELECT *
+FROM in_left, in_right
+WHERE in_left.i = in_right.i
+  AND (in_left.j IN (1, 2, 3, 4, 5, 6) OR in_right.i > 10);
+----
+logical_opt	<REGEX>:.*MARK.*
+
+# Small IN clauses stay in the comparison join residual predicate
+query II
+EXPLAIN SELECT *
+FROM in_left, in_right
+WHERE in_left.i = in_right.i
+  AND (in_left.j IN (1, 2, 3) OR in_right.i > 10);
+----
+logical_opt	<!REGEX>:.*MARK.*
+
+# A non-rewritable outer IN clause does not hide a nested rewritable IN clause
+query II
+EXPLAIN SELECT *
+FROM in_left, in_right
+WHERE (CASE WHEN in_left.j IN (1, 2, 3, 4, 5, 6)
+	THEN in_left.i ELSE 0 END)
+	IN (in_right.i, 10, 20, 30, 40, 50);
+----
+logical_opt	<REGEX>:.*MARK.*
+
+query III
+SELECT *
+FROM in_left, in_right
+WHERE in_left.i = in_right.i
+  AND (in_left.j IN (1, 2, 3, 4, 5, 6) OR in_right.i > 10)
+ORDER BY ALL;
+----
+1	1	1
+11	8	11
+
+foreach do '' 'in_clause'
+
+statement ok
+SET disabled_optimizers = {do};
+
+query III
+SELECT *
+FROM in_left, in_right
+WHERE (CASE WHEN in_left.j IN (1, 2, 3, 4, 5, 6)
+	THEN in_left.i ELSE 0 END)
+	IN (in_right.i, 10, 20, 30, 40, 50)
+ORDER BY ALL;
+----
+1	1	1
+
+endloop
+
+statement ok
+SET disabled_optimizers = '';

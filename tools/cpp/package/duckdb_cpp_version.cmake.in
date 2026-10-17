@@ -1,0 +1,3 @@
+# Stamped by scripts/package_cpp_api.py at artifact assembly time.
+set(DUCKDB_CPP_VERSION "@DUCKDB_CPP_VERSION@")
+set(DUCKDB_CPP_DEFAULT_DUCKDB_VERSION "@DUCKDB_CPP_FLOOR@")

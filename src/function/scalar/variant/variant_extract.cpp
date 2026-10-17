@@ -50,7 +50,12 @@ static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &co
 		return nullptr;
 	}
 
-	return VariantStats::WrapExtractedFieldAsVariant(variant_stats, *found_stats);
+	auto result = VariantStats::WrapExtractedFieldAsVariant(variant_stats, *found_stats);
+	if (info.component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
+		// Element statistics do not account for NULLs from out-of-bounds array indexes.
+		result->SetHasNull();
+	}
+	return result;
 }
 
 static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &input) {
@@ -60,19 +65,20 @@ static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &inpu
 		throw BinderException("'variant_extract' expects two arguments, VARIANT column and VARCHAR path");
 	}
 	const auto &path = *arguments[1];
-	if (path.GetReturnType().id() != LogicalTypeId::VARCHAR && path.GetReturnType().id() != LogicalTypeId::UINTEGER) {
-		throw BinderException("'variant_extract' expects the second argument to be of type VARCHAR or UINTEGER, not %s",
-		                      path.GetReturnType().ToString());
+	if (path.GetReturnType().id() != LogicalTypeId::VARCHAR && !path.GetReturnType().IsIntegral()) {
+		throw BinderException(
+		    "'variant_extract' expects the second argument to be of type VARCHAR or any integer type, not %s",
+		    path.GetReturnType().ToString());
 	}
 
 	auto constant_arg = input.GetNonNullConstant(1);
 
 	if (constant_arg.type().id() == LogicalTypeId::VARCHAR) {
 		return make_uniq<VariantExtractBindData>(constant_arg.GetValue<string>());
-	} else if (constant_arg.type().id() == LogicalTypeId::UINTEGER) {
+	} else if (constant_arg.type().IsIntegral()) {
 		return make_uniq<VariantExtractBindData>(constant_arg.GetValue<uint32_t>());
 	} else {
-		throw InternalException("Constant-folded argument was not of type UINTEGER or VARCHAR");
+		throw InternalException("Constant-folded argument was not of type VARCHAR or any integer type");
 	}
 }
 
@@ -112,7 +118,15 @@ static bool TryShreddedExtractRecursive(const Vector &input, const vector<Varian
 	}
 	// first entry is "typed_value"
 	auto &typed_entries = StructVector::GetEntries(input);
+	if (typed_entries.empty()) {
+		// An empty shredded STRUCT has no typed_value child.
+		return false;
+	}
 	auto &typed_value = typed_entries[0];
+	if (typed_value.GetType().id() != LogicalTypeId::STRUCT) {
+		// A shredded wrapper can also contain a primitive or an array.
+		return false;
+	}
 
 	// find the type in the struct type
 	auto &child_types = StructType::GetChildTypes(typed_value.GetType());
@@ -290,10 +304,11 @@ ScalarFunctionSet VariantExtractFun::GetFunctions() {
 	                               VariantExtractPropagateStats);
 
 	variant_extract.GetSignature().AddParameter("input_variant", variant_type);
-	variant_extract.GetSignature().AddParameter("path", LogicalType::VARCHAR);
+	variant_extract.GetSignature().AddParameter("field", LogicalType::VARCHAR);
 	fun_set.AddFunction(variant_extract);
 
 	variant_extract.GetSignature().GetParameter(1).SetType(LogicalType::UINTEGER);
+	variant_extract.GetSignature().GetParameter(1).SetName("index");
 	fun_set.AddFunction(variant_extract);
 	return fun_set;
 }

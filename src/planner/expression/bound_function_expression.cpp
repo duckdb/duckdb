@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
@@ -6,8 +7,17 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/lambda_functions.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
+
+static optional_ptr<const Expression> GetLambdaExpression(const BoundFunctionExpression &expr) {
+	if (!expr.Function().HasBindLambdaCallback()) {
+		return nullptr;
+	}
+	D_ASSERT(expr.BindInfo());
+	return expr.BindInfo()->Cast<LambdaFunctionData>().GetLambdaExpression();
+}
 
 BoundFunctionExpression::BoundFunctionExpression(BoundScalarFunction bound_function,
                                                  vector<unique_ptr<Expression>> arguments,
@@ -26,33 +36,46 @@ ExpressionType BoundFunctionExpression::GetFunctionExpressionType(const BoundSca
 	return bound_function.GetExpressionType(input);
 }
 
+bool BoundFunctionExpression::RequiresOrderedExecution() const {
+	if (function.RequiresOrderedExecution()) {
+		return true;
+	}
+	bool has_value = false;
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {
+		if (child.GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
+			return;
+		}
+		auto &child_function = child.Cast<BoundFunctionExpression>().Function();
+		has_value |= child_function.RequiresOrderedExecution();
+	});
+	return has_value;
+}
+
 bool BoundFunctionExpression::IsVolatile() const {
-	return function.GetStability() == FunctionStability::VOLATILE ? true : Expression::IsVolatile();
+	auto lambda_expr = GetLambdaExpression(*this);
+	return function.GetStability() == FunctionStability::VOLATILE || (lambda_expr && lambda_expr->IsVolatile()) ||
+	       Expression::IsVolatile();
 }
 
 bool BoundFunctionExpression::IsConsistent() const {
-	return function.GetStability() != FunctionStability::CONSISTENT ? false : Expression::IsConsistent();
+	auto lambda_expr = GetLambdaExpression(*this);
+	return function.GetStability() == FunctionStability::CONSISTENT && (!lambda_expr || lambda_expr->IsConsistent()) &&
+	       Expression::IsConsistent();
 }
 
 bool BoundFunctionExpression::IsFoldable() const {
 	// functions with side effects cannot be folded: they have to be executed once for every row
-	if (function.HasBindLambdaCallback()) {
-		// This is a lambda function
-		D_ASSERT(bind_info);
-		auto &lambda_bind_data = bind_info->Cast<LambdaFunctionData>();
-		auto lambda_expr = lambda_bind_data.GetLambdaExpression();
-		if (lambda_expr && lambda_expr->IsVolatile()) {
-			return false;
-		}
+	auto lambda_expr = GetLambdaExpression(*this);
+	if (lambda_expr && lambda_expr->IsVolatile()) {
+		return false;
 	}
 	return function.GetStability() == FunctionStability::VOLATILE ? false : Expression::IsFoldable();
 }
 
 bool BoundFunctionExpression::CanThrow() const {
-	if (function.GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
-		return true;
-	}
-	return Expression::CanThrow();
+	auto lambda_expr = GetLambdaExpression(*this);
+	return function.GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR ||
+	       (lambda_expr && lambda_expr->CanThrow()) || Expression::CanThrow();
 }
 
 string BoundFunctionExpression::ToString() const {
@@ -130,6 +153,7 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() const {
 
 void BoundFunctionExpression::Verify() const {
 	D_ASSERT(!function.GetName().empty());
+	D_ASSERT(function.GetDefinition());
 }
 
 void BoundFunctionExpression::Serialize(Serializer &serializer) const {
@@ -137,6 +161,9 @@ void BoundFunctionExpression::Serialize(Serializer &serializer) const {
 		// serialize legacy expression for backwards compatibility
 		FunctionToStringInput input(function, bind_info.get(), children);
 		auto legacy_expr = function.GetLegacySerializeCallback()(input);
+		legacy_expr->SetReturnType(return_type);
+		legacy_expr->SetAlias(alias);
+		legacy_expr->SetQueryLocation(query_location);
 		legacy_expr->Serialize(serializer);
 		return;
 	}
@@ -148,6 +175,34 @@ void BoundFunctionExpression::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(202, "is_operator", is_operator);
 }
 
+namespace {
+
+//! Plans serialized before the lambda expression was kept in the children do not contain it. Recover it from
+//! the bind data, so that the children line up with the function's arguments either way.
+void RestoreErasedLambdaChild(const BoundScalarFunction &function, optional_ptr<FunctionData> bind_info,
+                              vector<unique_ptr<Expression>> &children) {
+	if (!function.HasBindLambdaCallback() || !bind_info) {
+		return;
+	}
+	auto &arguments = function.GetArguments();
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		if (arguments[i].id() != LogicalTypeId::LAMBDA) {
+			continue;
+		}
+		if (i < children.size() && children[i]->GetReturnType().id() == LogicalTypeId::LAMBDA) {
+			// the lambda is already where it belongs
+			return;
+		}
+		auto lambda_child = bind_info->Cast<LambdaFunctionData>().RecoverLambdaChild();
+		if (lambda_child && i <= children.size()) {
+			children.insert(children.begin() + NumericCast<int64_t>(i), std::move(lambda_child));
+		}
+		return;
+	}
+}
+
+} // namespace
+
 unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
@@ -157,6 +212,8 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 
 	auto is_operator = deserializer.ReadProperty<bool>(202, "is_operator");
 
+	RestoreErasedLambdaChild(entry.first, entry.second.get(), children);
+
 	if (entry.first.HasBindExpressionCallback()) {
 		// bind the function expression
 		auto &context = deserializer.Get<ClientContext &>();
@@ -164,7 +221,10 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 		// replace the function expression with the bound expression
 		auto bound_expression = entry.first.GetBindExpressionCallback()(bind_input);
 		if (bound_expression) {
-			return bound_expression;
+			if (bound_expression->GetReturnType() != return_type) {
+				return BoundCastExpression::AddCastToType(context, std::move(bound_expression), return_type);
+			}
+			return Expression::PreserveReturnType(return_type, std::move(bound_expression));
 		}
 		// Otherwise, fall through and continue on normally
 	}
@@ -176,7 +236,7 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 		auto &context = deserializer.Get<ClientContext &>();
 		return BoundCastExpression::AddCastToType(context, std::move(result), return_type);
 	}
-	return std::move(result);
+	return Expression::PreserveReturnType(return_type, std::move(result));
 }
 
 } // namespace duckdb

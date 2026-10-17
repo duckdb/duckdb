@@ -14,6 +14,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 
 namespace duckdb {
 
@@ -84,7 +85,7 @@ private:
 	void AddReplacementAliases(const BindingReplacementGraph &replacements);
 	Binder &binder;
 	column_binding_map_t<ColumnBinding> correlated_aliases;
-	column_binding_map_t<idx_t> replacement_map;
+	column_binding_map_t<CorrelatedAggregateReplacement> replacement_map;
 	const CorrelatedColumns &correlated_columns;
 	vector<LogicalType> delim_types;
 
@@ -96,8 +97,9 @@ private:
 	                             bool include_names) const;
 	void AddDelimColumnsToGroup(LogicalAggregate &aggr, const vector<ColumnBinding> &state) const;
 	void AddCorrelatedFirstAggregates(LogicalAggregate &aggr, const vector<ColumnBinding> &state) const;
+	vector<optional_idx> GetCTERefCorrelatedPositions(const LogicalCTERef &cteref) const;
 	void AddCTERefJoinConditions(LogicalComparisonJoin &join, const LogicalCTERef &cteref,
-	                             const vector<ColumnBinding> &state) const;
+	                             const vector<optional_idx> &positions, const vector<ColumnBinding> &state) const;
 	void AddCorrelatedJoinConditions(LogicalJoin &join, const vector<ColumnBinding> &left_state,
 	                                 const vector<ColumnBinding> &right_state) const;
 	vector<ColumnBinding> CreateDelimCrossProduct(unique_ptr<LogicalOperator> &plan,

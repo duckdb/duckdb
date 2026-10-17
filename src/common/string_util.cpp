@@ -158,6 +158,19 @@ idx_t StringUtil::GetCommonPrefixSize(const string &left, const string &right) {
 	return prefix_size;
 }
 
+bool StringUtil::FindNextPrefix(string &prefix) {
+	for (idx_t idx = prefix.size(); idx > 0; idx--) {
+		auto byte = static_cast<uint8_t>(prefix[idx - 1]);
+		if (byte == 0xFF) {
+			continue;
+		}
+		prefix[idx - 1] = static_cast<char>(byte + 1);
+		prefix.resize(idx);
+		return true;
+	}
+	return false;
+}
+
 string StringUtil::Repeat(const string &str, idx_t n) {
 	std::ostringstream os;
 	for (idx_t i = 0; i < n; i++) {
@@ -209,6 +222,26 @@ inline string TakePossiblyQuotedItem(const string &str, idx_t &index, char delim
 }
 
 } // namespace string_util_internal
+
+bool StringUtil::TryParseQuotedString(const string &str, idx_t &pos, string &result, char quote) {
+	if (pos >= str.size() || str[pos] != quote) {
+		return false;
+	}
+	string value;
+	for (idx_t i = pos + 1; i < str.size(); i++) {
+		if (str[i] != quote) {
+			value += str[i];
+		} else if (i + 1 < str.size() && str[i + 1] == quote) {
+			value += quote;
+			i++;
+		} else {
+			pos = i + 1;
+			result = std::move(value);
+			return true;
+		}
+	}
+	return false;
+}
 
 vector<string> StringUtil::SplitWithQuote(const string &str, char delimiter, char quote) {
 	vector<string> entries;
@@ -379,11 +412,13 @@ string StringUtil::TryParseFormattedBytes(const string &arg, idx_t &result) {
 	constexpr double max_value = static_cast<double>(NumericLimits<idx_t>::Maximum());
 	const double double_multiplier = static_cast<double>(multiplier);
 
-	if (limit > (max_value / double_multiplier)) {
+	// double(idx_max) rounds up to 2^64, so the product itself has to be strictly below it
+	const double bytes = double_multiplier * limit;
+	if (!(bytes < max_value)) {
 		return "Memory value out of range: value is too large";
 	}
 
-	result = LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	result = LossyNumericCast<idx_t>(bytes);
 	return string();
 }
 
@@ -398,7 +433,8 @@ idx_t StringUtil::ParseFormattedBytes(const string &arg) {
 
 string StringUtil::Upper(const string &str) {
 	string copy(str);
-	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::toupper(c); });
+	transform(copy.begin(), copy.end(), copy.begin(),
+	          [](unsigned char c) { return StringUtil::CharacterToUpper(static_cast<char>(c)); });
 	return (copy);
 }
 
@@ -445,7 +481,8 @@ uint64_t StringUtil::CIHash(const string &str) {
 uint64_t StringUtil::CIHash(const char *str, idx_t size) {
 	uint32_t hash = 0;
 	for (idx_t i = 0; i < size; i++) {
-		hash += static_cast<uint32_t>(StringUtil::CharacterToLower(static_cast<char>(str[i])));
+		// convert through uint8_t so the hash is identical on platforms with signed and unsigned char
+		hash += static_cast<uint32_t>(static_cast<uint8_t>(StringUtil::CharacterToLower(static_cast<char>(str[i]))));
 		hash += hash << 10;
 		hash ^= hash >> 6;
 	}
@@ -479,21 +516,27 @@ bool StringUtil::CIStartsWith(const string &str, const string &prefix) {
 	return CIEquals(str.c_str(), prefix.size(), prefix.c_str(), prefix.size());
 }
 
+bool StringUtil::CIEndsWith(const string &str, const string &suffix) {
+	if (suffix.size() > str.size()) {
+		return false;
+	}
+	return CIEquals(str.c_str() + str.size() - suffix.size(), suffix.size(), suffix.c_str(), suffix.size());
+}
+
 bool StringUtil::CILessThan(const string &s1, const string &s2) {
 	const auto charmap = ASCII_TO_UPPER_MAP;
 
-	unsigned char u1 {}, u2 {};
-
-	idx_t length = MinValue<idx_t>(s1.length(), s2.length());
-	length += s1.length() != s2.length();
+	// compare the common prefix byte-by-byte (treating an embedded NUL as a regular byte)
+	const idx_t length = MinValue<idx_t>(s1.length(), s2.length());
 	for (idx_t i = 0; i < length; i++) {
-		u1 = (unsigned char)s1[i];
-		u2 = (unsigned char)s2[i];
-		if (charmap[u1] != charmap[u2]) {
-			break;
+		const auto u1 = charmap[(unsigned char)s1[i]];
+		const auto u2 = charmap[(unsigned char)s2[i]];
+		if (u1 != u2) {
+			return u1 < u2;
 		}
 	}
-	return (charmap[u1] - charmap[u2]) < 0;
+	// the prefixes are equal - the shorter string sorts first
+	return s1.length() < s2.length();
 }
 
 idx_t StringUtil::CIFind(const vector<Identifier> &vector, const Identifier &search_string) {
@@ -554,13 +597,36 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 	if (from.empty()) {
 		throw InternalException("Invalid argument to StringUtil::Replace - empty FROM");
 	}
+	if (source.empty() || from == to) {
+		return source;
+	}
+
+	const auto from_length = from.length();
+	const auto to_length = to.length();
+
+	idx_t match_count = 0;
 	idx_t start_pos = 0;
 	while ((start_pos = source.find(from, start_pos)) != string::npos) {
-		source.replace(start_pos, from.length(), to);
-		start_pos += to.length(); // In case 'to' contains 'from', like
-		                          // replacing 'x' with 'yx'
+		match_count++;
+		start_pos += from_length;
 	}
-	return source;
+	if (match_count == 0) {
+		return source;
+	}
+
+	string result;
+	result.reserve(source.length() - match_count * from_length + match_count * to_length);
+
+	idx_t last_pos = 0;
+	start_pos = 0;
+	while ((start_pos = source.find(from, start_pos)) != string::npos) {
+		result.append(source, last_pos, start_pos - last_pos);
+		result += to;
+		start_pos += from_length;
+		last_pos = start_pos;
+	}
+	result.append(source, last_pos, string::npos);
+	return result;
 }
 
 vector<string> StringUtil::TopNStrings(vector<pair<string, double>> scores, idx_t n, double threshold) {
@@ -873,6 +939,14 @@ string StringUtil::GetFilePath(const string &file_path) {
 	}
 
 	return file_path.substr(0, pos + 1);
+}
+
+string StringUtil::ReplaceFileName(const string &file_path, const string &file_name) {
+	auto pos = file_path.find_last_of("/\\");
+	if (pos == string::npos) {
+		return file_name;
+	}
+	return file_path.substr(0, pos + 1) + file_name;
 }
 
 struct URLEncodeLength {

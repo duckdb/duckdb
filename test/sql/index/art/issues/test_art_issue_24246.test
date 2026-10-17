@@ -1,0 +1,69 @@
+# name: test/sql/index/art/issues/test_art_issue_24246.test
+# description: Index scans map physical column IDs past generated columns correctly
+# group: [issues]
+
+# An index after a generated column must not be mistaken for the preceding
+# logical column.
+statement ok
+CREATE TABLE indexed_strings(a INTEGER, g AS (a + b), b INTEGER, c INTEGER UNIQUE)
+
+statement ok
+INSERT INTO indexed_strings(a, b, c) VALUES (1, 10, 100001), (2, 42, 100002)
+
+query I
+SELECT a FROM indexed_strings WHERE b = 10 ORDER BY a
+----
+1
+
+query I
+SELECT a FROM indexed_strings WHERE b = 42 ORDER BY a
+----
+2
+
+query I
+SELECT a FROM indexed_strings WHERE b >= 42 ORDER BY a
+----
+2
+
+# The index remains usable for its actual column.
+query II
+EXPLAIN ANALYZE SELECT a FROM indexed_strings WHERE c = 100002
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT a FROM indexed_strings WHERE c = 100002
+----
+2
+
+# Original issue reproducer: updating the indexed column through an UPSERT
+# must not change how filters on the preceding physical column are planned.
+statement ok
+CREATE TABLE up(
+    a INTEGER PRIMARY KEY,
+    g INTEGER AS (a + b),
+    b INTEGER DEFAULT 10,
+    c INTEGER UNIQUE
+)
+
+statement ok
+INSERT INTO up(a, c) SELECT i, i + 100000 FROM range(0, 64) r(i)
+
+statement ok
+INSERT INTO up(a, b, c) VALUES (1, 42, 200001)
+ON CONFLICT(a) DO UPDATE SET b = excluded.b, c = excluded.c
+
+query I
+SELECT count(*) FROM up WHERE b = 10
+----
+63
+
+query I
+SELECT count(*) FROM up WHERE b = 42
+----
+1
+
+query I
+SELECT count(*) FROM up WHERE b >= 42
+----
+1

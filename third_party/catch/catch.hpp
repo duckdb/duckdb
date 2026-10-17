@@ -24,9 +24,9 @@ namespace duckdb_base_std {
 } // namespace duckdb_base_std
 #endif
 // optional support for printing stacktraces on a crash -- using the backtrace support in DuckDB
-#ifdef DUCKDB_DEBUG_STACKTRACE
+#if defined(DUCKDB_DEBUG_STACKTRACE) || defined(DUCKDB_UNITTEST_CRASH_STACKTRACE)
 #include "duckdb/common/exception.hpp"
-#define CATCH_STACKTRACE(X) duckdb::Exception::FormatStackTrace(X).c_str()
+#define CATCH_STACKTRACE(X) duckdb::Exception::FormatStackTrace(X)
 #endif
 
 #define CATCH_VERSION_MAJOR 2
@@ -10878,7 +10878,8 @@ namespace {
     //! Signals fatal error message to the run context
     void reportFatal( char const * message ) {
 #ifdef CATCH_STACKTRACE
-        message = (const char*) CATCH_STACKTRACE(message); //enrich error message with a stacktrace
+        auto messageWithStacktrace = CATCH_STACKTRACE(message);
+        message = messageWithStacktrace.c_str();
 #endif
         Catch::getCurrentContext().getResultCapture()->handleFatalErrorCondition( message );
     }
@@ -11001,7 +11002,7 @@ namespace Catch {
             sigaction(signalDefs[i].id, &oldSigActions[i], nullptr);
         }
         // Return the old stack
-#ifndef CATCH_STACKTRACE
+#if !defined(CATCH_STACKTRACE) || !defined(__APPLE__)
         sigaltstack(&oldSigStack, nullptr); // sigaltstack prevents catch-stacktrace to work (on MacOS)
 #endif
     }
@@ -11042,7 +11043,7 @@ namespace Catch {
         sigStack.ss_sp = altStackMem;
         sigStack.ss_size = altStackSize;
         sigStack.ss_flags = 0;
-#ifndef CATCH_STACKTRACE
+#if !defined(CATCH_STACKTRACE) || !defined(__APPLE__)
         sigaltstack(&sigStack, &oldSigStack); // sigaltstack prevents catch-stacktrace to work (on MacOS)
 #endif
         struct sigaction sa = { };

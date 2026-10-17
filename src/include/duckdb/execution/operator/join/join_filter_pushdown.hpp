@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/projection_index.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/optimizer/runtime_filter_cast.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -31,17 +32,6 @@ enum class JoinFilterPushdownMode : uint8_t {
 	RECONSTRUCT_EXPRESSION,
 	//! Only storage-domain filters are safe; BF/PRF reconstruction on raw scan values is not
 	STORAGE_ONLY
-};
-
-enum class RuntimeFilterCastMode : uint8_t { DEFAULT_CAST, TRY_CAST };
-
-struct RuntimeFilterCastStep {
-	RuntimeFilterCastStep(LogicalType target_type_p, RuntimeFilterCastMode mode_p)
-	    : target_type(std::move(target_type_p)), mode(mode_p) {
-	}
-
-	LogicalType target_type;
-	RuntimeFilterCastMode mode;
 };
 
 struct JoinFilterPushdownColumn {
@@ -87,6 +77,8 @@ struct JoinFilterPushdownFilter {
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 	//! The columns for which we should generate filters
 	vector<JoinFilterPushdownColumn> columns;
+	//! Target scan estimate for filter costing when intervening operators reduce the probe cardinality.
+	idx_t estimated_scan_cardinality = 0;
 };
 
 struct PushdownFilterTarget {
@@ -142,10 +134,12 @@ private:
 	                                  idx_t max_bits, JoinFilterGlobalState &gstate) const;
 
 	bool CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const;
-	bool CanUseBloomFilter(const ClientContext &context, const PhysicalComparisonJoin &op, const ExpressionType &cmp,
+	bool CanUseBloomFilter(const JoinFilterPushdownFilter &info, const ClientContext &context,
+	                       const PhysicalComparisonJoin &op, const ExpressionType &cmp,
 	                       optional_ptr<JoinHashTable> ht = nullptr) const;
-	bool CanUsePrefixRangeFilter(const ClientContext &context, const PhysicalComparisonJoin &op,
-	                             optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const;
+	bool CanUsePrefixRangeFilter(const JoinFilterPushdownFilter &info, const ClientContext &context,
+	                             const PhysicalComparisonJoin &op, optional_ptr<JoinHashTable> ht,
+	                             const ExpressionType &cmp) const;
 };
 
 } // namespace duckdb

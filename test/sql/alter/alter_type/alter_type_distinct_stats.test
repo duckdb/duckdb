@@ -1,0 +1,24 @@
+# name: test/sql/alter/alter_type/alter_type_distinct_stats.test
+# description: ALTER COLUMN SET DATA TYPE must carry the distinct count statistics over to the new column
+# group: [alter_type]
+
+# 2000 distinct values in a pseudo-random order
+statement ok
+CREATE TABLE c AS SELECT hash(range) % 2000 AS v FROM range(100000);
+
+statement ok
+ALTER TABLE c ALTER COLUMN v SET DATA TYPE VARCHAR USING v::VARCHAR;
+
+query I
+SELECT s.approx_unique BETWEEN 1000 AND 10000 FROM (SELECT stats(v) s FROM c LIMIT 1);
+----
+true
+
+# appended rows must extend the distinct count instead of replacing it
+statement ok
+INSERT INTO c SELECT (hash(range) % 2000)::VARCHAR FROM range(100);
+
+query I
+SELECT s.approx_unique BETWEEN 1000 AND 10000 FROM (SELECT stats(v) s FROM c LIMIT 1);
+----
+true

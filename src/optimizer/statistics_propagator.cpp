@@ -10,20 +10,25 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_secure_view.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
 
 namespace duckdb {
 
-StatisticsPropagator::StatisticsPropagator(Optimizer &optimizer_p, LogicalOperator &root_p)
-    : optimizer(optimizer_p), context(optimizer.context), root(&root_p) {
+StatisticsPropagator::StatisticsPropagator(Optimizer &optimizer_p, unique_ptr<LogicalOperator> &root_p,
+                                           StatisticsPropagationMode mode_p)
+    : optimizer(optimizer_p), context(optimizer.context), mode(mode_p), root(root_p) {
 	root->ResolveOperatorTypes();
 }
 
@@ -41,6 +46,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateChildren(LogicalOperat
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOperator &node,
                                                                      unique_ptr<LogicalOperator> &node_ptr) {
+	propagation_path.emplace_back(node_ptr);
 	unique_ptr<NodeStatistics> result;
 	switch (node.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
@@ -52,6 +58,12 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		result = PropagateStatistics(node.Cast<LogicalCrossProduct>(), node_ptr);
 		break;
+	case LogicalOperatorType::LOGICAL_CTE_REF:
+		result = PropagateStatistics(node.Cast<LogicalCTERef>(), node_ptr);
+		break;
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		result = PropagateStatistics(node.Cast<LogicalMaterializedCTE>(), node_ptr);
+		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		result = PropagateStatistics(node.Cast<LogicalFilter>(), node_ptr);
 		break;
@@ -61,12 +73,18 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		result = PropagateStatistics(node.Cast<LogicalProjection>(), node_ptr);
 		break;
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
+		result = PropagateStatistics(node.Cast<LogicalSecureView>(), node_ptr);
+		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		result = PropagateStatistics(node.Cast<LogicalJoin>(), node_ptr);
+		break;
+	case LogicalOperatorType::LOGICAL_LIMIT:
+		result = PropagateStatistics(node.Cast<LogicalLimit>(), node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
 		result = PropagateStatistics(node.Cast<LogicalPositionalJoin>(), node_ptr);
@@ -86,12 +104,14 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		result = PropagateChildren(node, node_ptr);
 	}
 
-	if (!optimizer.OptimizerDisabled(OptimizerType::COMPRESSED_MATERIALIZATION)) {
+	if (mode == StatisticsPropagationMode::FULL &&
+	    !optimizer.OptimizerDisabled(OptimizerType::COMPRESSED_MATERIALIZATION)) {
 		// compress data based on statistics for materializing operators
-		CompressedMaterialization compressed_materialization(optimizer, *root, statistics_map);
+		CompressedMaterialization compressed_materialization(optimizer, *root, propagation_path, statistics_map);
 		compressed_materialization.Compress(node_ptr);
 	}
 
+	propagation_path.pop_back();
 	return result;
 }
 
@@ -143,7 +163,11 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(unique_ptr<Expression> &expr) {
+#ifdef D_ASSERT_IS_ENABLED
+	auto return_type = expr->GetReturnType();
+#endif
 	auto stats = PropagateExpression(*expr, expr);
+	D_ASSERT(expr->GetReturnType() != return_type || expr->GetReturnType().EqualsIncludingCollation(return_type));
 	if (Settings::Get<DebugVerifyStatsSetting>(context) && stats) {
 		expr->SetVerificationStats(stats->ToUnique());
 	}

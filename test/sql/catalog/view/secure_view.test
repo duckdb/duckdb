@@ -1,0 +1,138 @@
+# name: test/sql/catalog/view/secure_view.test
+# description: Test CREATE SECURE VIEW
+# group: [view]
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE SECURE VIEW v1 AS SELECT * FROM integers;
+
+# secure views behave exactly like regular views
+query II
+SELECT * FROM v1 WHERE i = 2
+----
+2	20
+
+query I
+SELECT SUM(j) FROM v1
+----
+60
+
+query II
+SELECT * FROM v1 ORDER BY i DESC LIMIT 1
+----
+3	30
+
+# column aliases
+statement ok
+CREATE SECURE VIEW v2(a, b) AS SELECT i, j FROM integers;
+
+query II
+SELECT * FROM v2 WHERE a = 1
+----
+1	10
+
+# secure views can be stacked - both on top of each other and on top of regular views
+statement ok
+CREATE VIEW v3 AS SELECT * FROM v1;
+
+statement ok
+CREATE SECURE VIEW v4 AS SELECT * FROM v3 WHERE i > 1;
+
+query II
+SELECT * FROM v4 WHERE j = 30
+----
+3	30
+
+# CREATE OR REPLACE / IF NOT EXISTS / TEMP
+statement ok
+CREATE OR REPLACE SECURE VIEW v1 AS SELECT i FROM integers;
+
+query I
+SELECT * FROM v1 ORDER BY i
+----
+1
+2
+3
+
+statement ok
+CREATE SECURE VIEW IF NOT EXISTS v1 AS SELECT 42
+
+query I
+SELECT * FROM v1 ORDER BY i
+----
+1
+2
+3
+
+statement ok
+CREATE TEMP SECURE VIEW tv AS SELECT * FROM integers
+
+query II
+SELECT * FROM tv WHERE i = 1
+----
+1	10
+
+# secure recursive views
+statement ok
+CREATE SECURE RECURSIVE VIEW rv(n) AS SELECT 1 UNION ALL SELECT n + 1 FROM rv WHERE n < 3
+
+query I
+SELECT * FROM rv ORDER BY n
+----
+1
+2
+3
+
+# joins, aggregates, correlated subqueries and lateral joins over secure views
+statement ok
+CREATE TABLE other(i INTEGER, k INTEGER);
+
+statement ok
+INSERT INTO other VALUES (1, 100), (3, 300);
+
+query III
+SELECT v2.a, v2.b, other.k FROM v2 JOIN other ON v2.a = other.i ORDER BY 1
+----
+1	10	100
+3	30	300
+
+query II
+SELECT i, (SELECT SUM(b) FROM v2 WHERE v2.a = other.i) FROM other ORDER BY 1
+----
+1	10
+3	30
+
+query III
+SELECT other.i, other.k, l.b FROM other, LATERAL (SELECT b FROM v2 WHERE v2.a = other.i) l ORDER BY 1
+----
+1	100	10
+3	300	30
+
+# secure views are visible as such in the catalog
+query I
+SELECT sql FROM duckdb_views() WHERE view_name = 'v2'
+----
+CREATE SECURE VIEW v2 (a, b) AS SELECT i, j FROM integers;
+
+# SECURE is not a reserved keyword
+statement ok
+CREATE TABLE secure(secure INTEGER);
+
+statement ok
+SELECT secure FROM secure;
+
+# SECURE is only accepted for views
+statement error
+CREATE SECURE TABLE t2(i INTEGER)
+----
+<REGEX>:Parser Error.*
+
+statement error
+CREATE SECURE SCHEMA s2
+----
+<REGEX>:Parser Error.*

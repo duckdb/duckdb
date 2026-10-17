@@ -40,11 +40,13 @@ select * from '{TEST_DIR}/points.parquet' where g && 'POLYGON((0 0, 100 0, 100 1
 statement ok
 set disabled_optimizers = '';
 
-# If the polygon is large enough to cover all points, no filtering should occur
+# Even if the polygon is large enough to cover all points, the filter has to be kept: parquet does not
+# record whether the column contains empty geometries, and those never intersect anything even though they
+# contribute nothing to the bounding box
 query II
 explain select * from '{TEST_DIR}/points.parquet' where g && 'POLYGON((0 0, 2000 0, 2000 2000, 0 2000, 0 0))';
 ----
-physical_plan	<!REGEX>:.*Filters:.*
+physical_plan	<REGEX>:.*Filters:.*
 
 
 # If the polygon is does not intersect any points, no filtering should occur either

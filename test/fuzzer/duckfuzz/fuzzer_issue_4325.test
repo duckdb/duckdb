@@ -5,4 +5,10 @@
 statement error
 SELECT NULL FROM (VALUES (0, 1, 2, 3, 4)) AS _("0", "1", "2", "3", "4") INNER JOIN (SELECT NULL LIMIT rank_dense() OVER (PARTITION BY #4, NULL, NULL, NULL ROWS BETWEEN c83 PRECEDING AND CURRENT ROW)) USING (c19)
 ----
-cannot contain window functions
+<REGEX>:.*Binder Error.*
+
+# a binder that does not handle windows reports that, rather than failing as unimplemented
+statement error
+SELECT * FROM (SELECT NULL LIMIT rank_dense() OVER ())
+----
+<REGEX>:.*Window functions are not supported here.*

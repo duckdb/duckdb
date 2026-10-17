@@ -1,0 +1,44 @@
+# name: test/sql/copy/parquet/writer/parquet_write_data_page_size.test
+# description: Test the data_page_size_limit COPY option
+# group: [writer]
+
+require parquet
+
+# write with a small data page size limit, forcing many data pages
+statement ok
+copy (select range i, 'val_' || (range % 400) s from range(100_000)) to '{TEST_DIR}/small_pages.parquet' (format parquet, data_page_size_limit 4096, compression uncompressed);
+
+# round-trip: contents must be identical
+query II
+select count(*), sum(i) from '{TEST_DIR}/small_pages.parquet';
+----
+100000	4999950000
+
+query I
+select count(*) from '{TEST_DIR}/small_pages.parquet' where s <> 'val_' || (i % 400);
+----
+0
+
+# same data with the default (100MB) limit, i.e., a single page per column chunk
+statement ok
+copy (select range i, 'val_' || (range % 400) s from range(100_000)) to '{TEST_DIR}/big_pages.parquet' (format parquet, compression uncompressed);
+
+# more pages means more page headers, so the same uncompressed data must occupy more bytes
+query I
+select small.total_size > big.total_size
+from (select sum(total_compressed_size) total_size from parquet_metadata('{TEST_DIR}/small_pages.parquet')) small,
+     (select sum(total_compressed_size) total_size from parquet_metadata('{TEST_DIR}/big_pages.parquet')) big;
+----
+true
+
+# cannot be 0
+statement error
+copy (select 42) to '{TEST_DIR}/zero.parquet' (format parquet, data_page_size_limit 0);
+----
+Binder Error
+
+# cannot exceed the 100MB maximum
+statement error
+copy (select 42) to '{TEST_DIR}/too_big.parquet' (format parquet, data_page_size_limit 104857601);
+----
+Binder Error

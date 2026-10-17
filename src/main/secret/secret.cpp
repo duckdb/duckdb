@@ -101,11 +101,46 @@ void KeyValueSecret::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(202, "redact_keys", list);
 }
 
+void KeyValueSecret::ReadSecretMap(Deserializer &deserializer, identifier_tree_t<Value> &result) {
+	deserializer.ReadObject(201, "secret_map", [&](Deserializer &map) {
+		auto stored_type = map.ReadProperty<LogicalType>(100, "type");
+		// Before DuckDB 1.1.3, secrets declared VARCHAR values even when storing other types.
+		if (stored_type.id() != LogicalTypeId::MAP || !stored_type.HasParameters() ||
+		    MapType::KeyType(stored_type) != LogicalType::VARCHAR) {
+			throw SerializationException("Secret map must be a MAP with VARCHAR keys");
+		}
+		if (map.ReadProperty<bool>(101, "is_null")) {
+			throw SerializationException("Secret map cannot be NULL");
+		}
+
+		map.Set<const LogicalType &>(ListType::GetChildType(stored_type));
+		map.ReadObject(102, "value", [&](Deserializer &obj) {
+			obj.ReadList(100, "children", [&](Deserializer::List &list, idx_t i) {
+				// Before DuckDB 1.2.0, entries carried their actual value types, even when the map declared VARCHAR.
+				// Deserialize them separately so their payloads still undergo normal Value validation.
+				auto entry = list.ReadElement<Value>();
+				if (entry.IsNull() || entry.type().id() != LogicalTypeId::STRUCT) {
+					throw SerializationException("Secret map entry must be a non-NULL struct");
+				}
+				const auto &children = StructValue::GetChildren(entry);
+				if (children.size() != 2) {
+					throw SerializationException("Secret map entry must have two fields");
+				}
+				if (children[0].IsNull() || children[0].type() != LogicalType::VARCHAR) {
+					throw SerializationException("Secret map key must be a non-NULL VARCHAR");
+				}
+				result[Identifier(StringValue::Get(children[0]))] = children[1];
+			});
+		});
+		map.Unset<LogicalType>();
+	});
+}
+
 Value KeyValueSecret::TryGetValue(const Identifier &key, bool error_on_missing) const {
 	auto lookup = secret_map.find(key);
 	if (lookup == secret_map.end()) {
 		if (error_on_missing) {
-			throw InternalException("Failed to fetch key '%s' from secret '%s' of type '%s'", key, name, type);
+			throw InternalException("Failed to fetch key %s from secret %s of type %s", key, name, type);
 		}
 		return Value();
 	}
@@ -159,7 +194,7 @@ void KeyValueSecretReader::Initialize(const char **secret_types, idx_t secret_ty
 	}
 
 	if (secret_match.HasMatch()) {
-		secret = dynamic_cast<const KeyValueSecret &>(secret_match.GetSecret());
+		secret = secret_match.GetSecret().Cast<KeyValueSecret>();
 		secret_entry = std::move(secret_match.secret_entry);
 	}
 }
@@ -184,16 +219,16 @@ KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<Fi
 KeyValueSecretReader::~KeyValueSecretReader() {
 }
 
-SettingLookupResult KeyValueSecretReader::TryGetSecretKey(const string &secret_key, Value &result) {
-	if (secret && secret->TryGetValue(Identifier(secret_key), result)) {
+SettingLookupResult KeyValueSecretReader::TryGetSecretKey(const Identifier &secret_key, Value &result) {
+	if (secret && secret->TryGetValue(secret_key, result)) {
 		return SettingLookupResult(SettingScope::SECRET);
 	}
 	return SettingLookupResult();
 }
 
-SettingLookupResult KeyValueSecretReader::TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name,
-                                                                   Value &result) {
-	if (secret && secret->TryGetValue(Identifier(secret_key), result)) {
+SettingLookupResult KeyValueSecretReader::TryGetSecretKeyOrSetting(const Identifier &secret_key,
+                                                                   const Identifier &setting_name, Value &result) {
+	if (secret && secret->TryGetValue(secret_key, result)) {
 		return SettingLookupResult(SettingScope::SECRET);
 	}
 	if (context) {
@@ -208,7 +243,7 @@ SettingLookupResult KeyValueSecretReader::TryGetSecretKeyOrSetting(const string 
 	return SettingLookupResult();
 }
 
-Value KeyValueSecretReader::GetSecretKey(const string &secret_key) {
+Value KeyValueSecretReader::GetSecretKey(const Identifier &secret_key) {
 	Value result;
 	if (TryGetSecretKey(secret_key, result)) {
 		return result;
@@ -216,7 +251,7 @@ Value KeyValueSecretReader::GetSecretKey(const string &secret_key) {
 	ThrowNotFoundError(secret_key);
 }
 
-Value KeyValueSecretReader::GetSecretKeyOrSetting(const string &secret_key, const string &setting_name) {
+Value KeyValueSecretReader::GetSecretKeyOrSetting(const Identifier &secret_key, const Identifier &setting_name) {
 	Value result;
 	if (TryGetSecretKeyOrSetting(secret_key, setting_name, result)) {
 		return result;
@@ -224,8 +259,8 @@ Value KeyValueSecretReader::GetSecretKeyOrSetting(const string &secret_key, cons
 	ThrowNotFoundError(secret_key, setting_name);
 }
 
-void KeyValueSecretReader::ThrowNotFoundError(const string &secret_key) {
-	string base_message = "Failed to fetch required secret key '%s' from secret";
+void KeyValueSecretReader::ThrowNotFoundError(const Identifier &secret_key) {
+	string base_message = "Failed to fetch required secret key %s from secret";
 
 	if (!secret) {
 		string secret_scope = path;
@@ -234,11 +269,11 @@ void KeyValueSecretReader::ThrowNotFoundError(const string &secret_key) {
 		                                    secret_scope_hint_message);
 	}
 
-	throw InvalidConfigurationException(base_message + " '%s'.", secret_key, secret->GetName());
+	throw InvalidConfigurationException(base_message + " %s.", secret_key, secret->GetName());
 }
 
-void KeyValueSecretReader::ThrowNotFoundError(const string &secret_key, const string &setting_name) {
-	string base_message = "Failed to fetch a parameter from either the secret key '%s' or the setting '%s'";
+void KeyValueSecretReader::ThrowNotFoundError(const Identifier &secret_key, const Identifier &setting_name) {
+	string base_message = "Failed to fetch a parameter from either the secret key %s or the setting %s";
 
 	if (!secret) {
 		string secret_scope = path;
@@ -248,7 +283,7 @@ void KeyValueSecretReader::ThrowNotFoundError(const string &secret_key, const st
 	}
 
 	throw InvalidConfigurationException(base_message +
-	                                        ": secret '%s' did not contain the key, also the setting was not found.",
+	                                        ": secret %s did not contain the key, also the setting was not found.",
 	                                    secret_key, setting_name, secret->GetName());
 }
 

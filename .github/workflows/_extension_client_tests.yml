@@ -4,9 +4,16 @@ name: Client Tests
 on:
   workflow_call:
     inputs:
+      duckdb_commit:
+        required: true
+        type: string
       duckdb_version:
         required: true
         type: string
+
+env:
+  DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
+  DUCKDB_VERSION: ${{ inputs.duckdb_version }}
 
 jobs:
   python:
@@ -28,7 +35,7 @@ jobs:
       - name: Checkout DuckDB to version
         run: |
           cd duckdb
-          git checkout ${{ inputs.duckdb_version }}
+          git checkout "${DUCKDB_COMMIT}"
 
       - uses: actions/setup-python@v6
         with:

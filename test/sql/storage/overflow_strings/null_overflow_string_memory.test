@@ -1,0 +1,56 @@
+# name: test/sql/storage/overflow_strings/null_overflow_string_memory.test
+# description: Scanning an uncompressed VARCHAR column with NULLs interleaved with an overflow string must not allocate O(vector_size * string_size) memory
+# group: [overflow_strings]
+
+# the memory limit below is calibrated for the default 256KB block size
+require block_size 262144
+
+load {TEST_DIR}/null_overflow_string_memory.db
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+statement ok
+SET threads=1
+
+# one 2MB overflow string at row 0, every other row NULL
+statement ok
+CREATE TABLE t AS
+SELECT CASE WHEN i = 0 THEN repeat('x', 2*1024*1024) ELSE NULL END AS v
+FROM range(50000) tbl(i);
+
+statement ok
+CHECKPOINT
+
+# the column must be stored uncompressed with an out-of-line overflow string
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE segment_type='VARCHAR' AND compression != 'Uncompressed';
+----
+
+query I
+SELECT EXISTS (SELECT * FROM pragma_storage_info('t', include_segment_info=true) WHERE contains(segment_info, 'Overflow String'));
+----
+true
+
+# reopen fresh so the scan reads the overflow block cold from disk
+restart
+
+statement ok
+SET threads=1
+
+# disable spilling so the memory limit actually bites (OVERFLOW_STRINGS is non-spillable regardless)
+statement ok
+PRAGMA temp_directory=''
+
+statement ok
+PRAGMA max_temp_directory_size='0B'
+
+# a single 2MB value needs a few MB to scan; the bug re-reads the 2MB overflow string once per
+# trailing NULL, needing ~STANDARD_VECTOR_SIZE (2048) * 2MB ~= 4GB, so it OOMs under this limit
+statement ok
+SET memory_limit='512MB'
+
+query I
+SELECT sum(length(v)) FROM t;
+----
+2097152

@@ -1,0 +1,114 @@
+module: function properties
+# Shared, generic function property channel. Used by the function families
+# (scalar, aggregate, ...) via their set_property functions to configure
+# metadata that influences planning and execution. Properties are expressed as
+# a (key, value) pair of named enum values rather than typed booleans so that
+# boolean-like properties can grow additional values later without breaking the
+# ABI.
+#
+# Numbering scheme. Identifiers are laid out as 0xGGKKVV, mirroring the C++
+# FunctionProperties inheritance hierarchy:
+#   * GG (bits 16-23): function-type group / super-range. The COMMON group holds
+#     the properties shared by every function type (the base class); each other
+#     group reserves a range for properties specific to that function type:
+#       0x01 COMMON     (applies to all function types)
+#       0x02 SCALAR     (reserved)
+#       0x03 AGGREGATE
+#       0x04 WINDOW     (reserved)
+#       0x05 TABLE      (reserved)
+#       0x06 COPY       (reserved)
+#   * KK (bits 8-15): key index within the group. A KEY id is `0xGGKK00`.
+#   * VV (bits 0-7): value index within the key. A VALUE id is `0xGGKKVV`.
+# Therefore:
+#   * value V belongs to key K        iff `(V & 0xFFFF00) == K`
+#   * a key/value belongs to group G  iff `(id & 0xFF0000) == G`
+# A key is valid for a given function iff its group is COMMON or the function
+# family's own group. Existing numeric values are stable; only append new
+# keys/values.
+enums:
+  FUNCTION_PROPERTY_KEY:
+    description: |
+      Identifies a configurable function property. Pass one of these to
+      `[[scalar_function_set_property]]` or `[[aggregate_function_set_property]]` together with a
+      matching `[[FUNCTION_PROPERTY_VALUE]]`. The high byte is the function-type
+      group: COMMON (`0x01xxxx`) keys apply to all function types, while
+      group-specific keys (e.g. aggregate `0x03xxxx`) are only valid for that
+      function type and are rejected with an error otherwise.
+    values:
+      # COMMON group (0x01xxxx)
+      FUNCTION_PROPERTY_STABILITY:
+        value: 0x010000
+        description: "How stable/deterministic the function's result is across rows and queries. Accepts the `FUNCTION_PROPERTY_STABILITY_*` values. Defaults to `CONSISTENT`."
+      FUNCTION_PROPERTY_NULL_HANDLING:
+        value: 0x010100
+        description: "Whether the function handles NULL inputs itself. Accepts the `FUNCTION_PROPERTY_NULL_HANDLING_*` values. Defaults to `DEFAULT` (NULL in, NULL out)."
+      FUNCTION_PROPERTY_FALLIBILITY:
+        value: 0x010200
+        description: "Whether the function can raise a runtime error. Accepts the `FUNCTION_PROPERTY_FALLIBILITY_*` values. Functions created through this API default to `FALLIBLE`, since their callbacks can report errors."
+      FUNCTION_PROPERTY_COLLATION_HANDLING:
+        value: 0x010300
+        description: "How the function interacts with collations on its arguments. Accepts the `FUNCTION_PROPERTY_COLLATION_HANDLING_*` values. Defaults to `PROPAGATE`."
+      # AGGREGATE group (0x03xxxx)
+      FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT:
+        value: 0x030000
+        description: "Aggregate only. Whether the aggregate's result depends on the order in which rows are aggregated. Accepts the `FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT_*` values. Defaults to `YES`."
+      FUNCTION_PROPERTY_AGG_DISTINCT_DEPENDENT:
+        value: 0x030100
+        description: "Aggregate only. Whether the aggregate's result is affected by a DISTINCT modifier. Accepts the `FUNCTION_PROPERTY_AGG_DISTINCT_DEPENDENT_*` values. Defaults to `YES`."
+  FUNCTION_PROPERTY_VALUE:
+    description: |
+      A value for a `[[FUNCTION_PROPERTY_KEY]]`. Each key owns a 256-value block: a
+      value `V` is valid for key `K` iff `(V & 0xFFFF00) == K`, and shares the
+      key's function-type group (`V & 0xFF0000`) in its high byte. Passing a
+      value that does not match the key is rejected with an error. Boolean-like
+      properties are expressed as named values so that additional values can be
+      added later without breaking the ABI.
+    values:
+      # FUNCTION_PROPERTY_STABILITY (0x010000)
+      FUNCTION_PROPERTY_STABILITY_CONSISTENT:
+        value: 0x010000
+        description: "The function always returns the same result given the same input."
+      FUNCTION_PROPERTY_STABILITY_VOLATILE:
+        value: 0x010001
+        description: "The result may differ per row (e.g. random())."
+      FUNCTION_PROPERTY_STABILITY_CONSISTENT_WITHIN_QUERY:
+        value: 0x010002
+        description: "The result is stable within a single query/transaction but may change across queries (e.g. now())."
+      # FUNCTION_PROPERTY_NULL_HANDLING (0x010100)
+      FUNCTION_PROPERTY_NULL_HANDLING_DEFAULT:
+        value: 0x010100
+        description: "Default NULL handling: if any argument is NULL the result is NULL and the function is not invoked for that row."
+      FUNCTION_PROPERTY_NULL_HANDLING_SPECIAL:
+        value: 0x010101
+        description: "The function handles NULL inputs itself and is invoked even when arguments are NULL."
+      # FUNCTION_PROPERTY_FALLIBILITY (0x010200)
+      FUNCTION_PROPERTY_FALLIBILITY_INFALLIBLE:
+        value: 0x010200
+        description: "The function never raises a runtime error. Declaring this promises that the callbacks never report an error; an error reported anyway becomes an internal error."
+      FUNCTION_PROPERTY_FALLIBILITY_FALLIBLE:
+        value: 0x010201
+        description: "The function may raise a runtime error for some inputs."
+      # FUNCTION_PROPERTY_COLLATION_HANDLING (0x010300)
+      FUNCTION_PROPERTY_COLLATION_HANDLING_PROPAGATE:
+        value: 0x010300
+        description: "The function combines collations from its inputs and propagates them to its result (default)."
+      FUNCTION_PROPERTY_COLLATION_HANDLING_PUSH_COMBINABLE:
+        value: 0x010301
+        description: "Combinable collations are executed on the input arguments before the function runs."
+      FUNCTION_PROPERTY_COLLATION_HANDLING_IGNORE:
+        value: 0x010302
+        description: "Collations are ignored by the function."
+      # FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT (0x030000)
+      FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT_YES:
+        value: 0x030000
+        description: "The aggregate's result depends on the order in which rows are aggregated (default)."
+      FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT_NO:
+        value: 0x030001
+        description: "The aggregate's result does not depend on input order."
+      # FUNCTION_PROPERTY_AGG_DISTINCT_DEPENDENT (0x030100)
+      FUNCTION_PROPERTY_AGG_DISTINCT_DEPENDENT_YES:
+        value: 0x030100
+        description: "The aggregate's result is affected by a DISTINCT modifier (default)."
+      FUNCTION_PROPERTY_AGG_DISTINCT_DEPENDENT_NO:
+        value: 0x030101
+        description: "The aggregate's result is not affected by a DISTINCT modifier."

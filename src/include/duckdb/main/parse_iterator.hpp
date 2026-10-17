@@ -16,7 +16,7 @@ namespace duckdb {
 class ClientContext;
 class Parser;
 class SQLStatement;
-struct MatcherToken;
+class TokenIterator;
 
 //! Iterator over the parse-facing statements of a multi-statement query.
 //!
@@ -70,11 +70,8 @@ private:
 	//! Parser instance kept alive across Peek calls so its PEG matcher / transformer caches
 	//! stay warm. Constructed lazily on the first Peek.
 	unique_ptr<Parser> parser;
-	//! Tokenized view of `sql`. Populated once on the first Peek and walked thereafter via
-	//! `token_cursor`, avoiding O(N²) re-tokenization across N statements.
-	unique_ptr<vector<MatcherToken>> tokens;
-	//! Index into `tokens` at which the next match starts.
-	idx_t token_cursor = 0;
+	//! Tokenized view of `sql` and its current position. Populated once on the first Peek.
+	unique_ptr<TokenIterator> token_iterator;
 	//! Single-statement buffer holding the result of the most recent Peek. Cleared by
 	//! GetStatement.
 	unique_ptr<SQLStatement> current_statement;

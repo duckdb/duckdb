@@ -119,10 +119,10 @@ select * from test;
 statement error
 ALTER TABLE test ADD COLUMN s.a.not_key INTEGER
 ----
-Binder Error: Column a is not a struct - ALTER TABLE can only add fields to structs
+Binder Error: Column "a" is not a struct - ALTER TABLE can only add fields to structs
 
 # attempt to add the 'key' field to a map
 statement error
 ALTER TABLE test ADD COLUMN s.a.key INTEGER
 ----
-Binder Error: Column a is not a struct - ALTER TABLE can only add fields to structs
+Binder Error: Column "a" is not a struct - ALTER TABLE can only add fields to structs

@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/schema/physical_create_index.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
@@ -7,9 +9,13 @@
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/execution/index/index_type.hpp"
 
 namespace duckdb {
@@ -89,9 +95,8 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	lstate.key_chunk.ReferenceColumns(chunk, indexed_columns);
 	lstate.row_chunk.ReferenceColumns(chunk, rowid_column);
 
-	// Check for NULLs, if we are creating a PRIMARY KEY.
-	// FIXME: Later, we want to ensure that we skip the NULL check for any non-PK alter.
-	if (alter_table_info) {
+	// PRIMARY KEY columns cannot be NULL. UNIQUE allows NULLs.
+	if (alter_table_info && info->constraint_type == IndexConstraintType::PRIMARY) {
 		for (idx_t i = 0; i < lstate.key_chunk.ColumnCount(); i++) {
 			if (VectorOperations::HasNull(lstate.key_chunk.data[i])) {
 				throw ConstraintException("NOT NULL constraint failed: %s", info->GetIndexName());
@@ -142,13 +147,19 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	auto &schema = table.schema;
 	info->column_ids = storage_ids;
 
+	// Read local storage before ALTER moves it; CREATE UNIQUE INDEX also needs it for the delete index.
+	auto &local_storage = LocalStorage::Get(context, storage.db);
+	auto local_table_storage = local_storage.GetStorage(storage);
+
+	auto check_mode = ConstraintCheckMode::DEFAULT;
+	idx_t index_oid = DConstants::INVALID_INDEX;
 	if (!alter_table_info) {
 		// Ensure that the index does not yet exist in the catalog.
 		auto entry =
 		    schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, info->GetIndexName());
 		if (entry) {
 			if (info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
-				throw CatalogException("Index with name \"%s\" already exists!", info->GetIndexName());
+				throw CatalogException("Index with name %s already exists!", info->GetIndexName());
 			}
 			// IF NOT EXISTS on existing index. We are done.
 			return SinkFinalizeType::READY;
@@ -158,23 +169,30 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		D_ASSERT(index_entry);
 		auto &index = index_entry->Cast<DuckIndexEntry>();
 		index.initial_index_size = bound_index->GetInMemorySize();
-
+		index_oid = index.oid;
 	} else {
-		// Ensure that there are no other indexes with that name on this table.
-		auto &indexes = storage.GetDataTableInfo()->GetIndexes();
-		for (auto &index : indexes.Indexes()) {
-			if (index.GetIndexName() == info->GetIndexName()) {
-				throw CatalogException("an index with that name already exists for this table: %s",
-				                       info->GetIndexName());
+		// PRIMARY KEY columns cannot be NULL.
+		if (info->constraint_type == IndexConstraintType::PRIMARY) {
+			for (const auto &column_id : storage_ids) {
+				BoundNotNullConstraint not_null {PhysicalIndex(column_id)};
+				local_storage.VerifyNewConstraint(storage, not_null);
 			}
 		}
+		auto &constraint_info = alter_table_info->Cast<AddConstraintInfo>();
+		check_mode = constraint_info.constraint->Cast<UniqueConstraint>().check_mode;
+		index_oid = DatabaseManager::Get(context).NextOid();
+		constraint_info.constraint->SetBackingIndexOid(index_oid);
 
 		auto &catalog = Catalog::GetCatalog(context, info->GetQualifiedName().Catalog());
 		catalog.Alter(context, *alter_table_info);
 	}
 
 	// Add the index to the storage.
-	storage.AddIndex(std::move(bound_index));
+	auto index_entry = storage.GetDataTableInfo()->GetIndexes().AddIndex(std::move(bound_index), index_oid, check_mode);
+	if (local_table_storage) {
+		// Existing transaction-local rows are verified when committing, so we only add a delete index.
+		index_entry->InitializeLocalDeleteIndex(local_table_storage->delete_indexes);
+	}
 
 	return SinkFinalizeType::READY;
 }

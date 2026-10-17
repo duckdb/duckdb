@@ -3,12 +3,14 @@ add_library_unity(
   OBJECT
   propagate_aggregate.cpp
   propagate_cross_product.cpp
+  propagate_cte.cpp
   propagate_filter.cpp
   propagate_get.cpp
   propagate_limit.cpp
   propagate_join.cpp
   propagate_order.cpp
   propagate_projection.cpp
+  propagate_secure_view.cpp
   propagate_set_operation.cpp
   propagate_window.cpp)
 set(ALL_OBJECT_FILES

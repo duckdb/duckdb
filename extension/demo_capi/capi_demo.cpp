@@ -5,8 +5,6 @@ DUCKDB_EXTENSION_ENTRYPOINT(duckdb_connection connection, duckdb_extension_info 
 	// Register a demo function
 	RegisterAddNumbersFunction(connection);
 
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
-	// Test using the unstable API
 	duckdb_arrow result;
 	auto api_result = duckdb_query_arrow(connection, "SELECT 1 as a", &result);
 
@@ -16,7 +14,6 @@ DUCKDB_EXTENSION_ENTRYPOINT(duckdb_connection connection, duckdb_extension_info 
 	}
 
 	duckdb_destroy_arrow(&result);
-#endif
 
 	// Return true to indicate successful initialization
 	return true;

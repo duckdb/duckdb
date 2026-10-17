@@ -50,6 +50,7 @@ class LogicalRecursiveCTE;
 class LogicalMaterializedCTE;
 class LogicalSetOperation;
 class LogicalSample;
+class LogicalSecureView;
 class LogicalAlter;
 class LogicalAttach;
 class LogicalConnect;

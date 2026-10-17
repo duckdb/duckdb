@@ -9,11 +9,8 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/limits.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "duckdb/common/optional_idx.hpp"
-#include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/query_context.hpp"
 
 namespace duckdb {
@@ -143,6 +140,7 @@ enum class StorageVersion : uint64_t {
     V1_5_3 = 68,
     V1_5_4 = 68,
     V1_5_5 = 68,
+    V1_5_6 = 68,
     V2_0_0 = 69,
     LATEST = 69,
     DEPRECATED = 999,
@@ -179,6 +177,7 @@ enum class SerializationVersionDeprecated : uint64_t {
     V1_5_3 = 7,
     V1_5_4 = 7,
     V1_5_5 = 7,
+    V1_5_6 = 7,
     V2_0_0 = 8,
     LATEST = 8,
     INVALID = UINT64_MAX

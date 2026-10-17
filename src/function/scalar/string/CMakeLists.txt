@@ -5,6 +5,7 @@ add_library_unity(
   caseconvert.cpp
   concat.cpp
   concat_ws.cpp
+  hive_partition_component.cpp
   length.cpp
   like.cpp
   md5.cpp
@@ -18,6 +19,7 @@ add_library_unity(
   sha1.cpp
   sha256.cpp
   strip_accents.cpp
+  string_common.cpp
   string_split.cpp
   string_slice.cpp
   suffix.cpp

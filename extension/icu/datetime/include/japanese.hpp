@@ -35,9 +35,6 @@ public:
 	const char *GetType() const override {
 		return "japanese";
 	}
-	bool IsEra0CountingBackward() const override {
-		return false;
-	}
 	unique_ptr<Calendar> Copy() const override {
 		return unique_ptr<Calendar>(new JapaneseCalendar(*this));
 	}

@@ -29,6 +29,7 @@ struct CachedFileInformation {
 	idx_t nr_bytes;
 	idx_t location;
 	bool loaded;
+	bool spilled;
 };
 
 struct EvictionQueueInformation {

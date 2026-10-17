@@ -14,6 +14,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "json_functions.hpp"
+#include "yyjson_memory.hpp"
 
 namespace duckdb {
 

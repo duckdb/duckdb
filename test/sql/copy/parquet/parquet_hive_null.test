@@ -104,3 +104,79 @@ query I
 select count(*) from glob('{TEST_DIR}/hive-null-write-test/a=__HIVE_DEFAULT_PARTITION__/b=__HIVE_DEFAULT_PARTITION__/*.parquet');
 ----
 1
+
+# Test that a literal '__HIVE_DEFAULT_PARTITION__' value does not collide with the NULL partition directory
+statement ok
+CREATE TABLE test_hive_default_collision AS
+SELECT *
+FROM (VALUES ('__HIVE_DEFAULT_PARTITION__', 1), (NULL, 2), ('ok', 3)) v(p, id);
+
+statement ok
+COPY test_hive_default_collision TO '{TEST_DIR}/hive-default-collision'
+(FORMAT PARQUET, PARTITION_BY (p), OVERWRITE);
+
+query III
+SELECT (p IS NULL)::INTEGER AS is_null, p, id
+FROM parquet_scan('{TEST_DIR}/hive-default-collision/**/*.parquet', hive_partitioning=1)
+ORDER BY id
+----
+0	__HIVE_DEFAULT_PARTITION__	1
+1	NULL	2
+0	ok	3
+
+# the literal value is escaped so that it gets a directory of its own
+query I
+select count(*) from glob('{TEST_DIR}/hive-default-collision/p=%5F_HIVE_DEFAULT_PARTITION__/*.parquet');
+----
+1
+
+query I
+select count(*) from glob('{TEST_DIR}/hive-default-collision/p=__HIVE_DEFAULT_PARTITION__/*.parquet');
+----
+1
+
+# the same collision on a multi-column partition
+statement ok
+CREATE TABLE test_hive_default_collision_multi AS
+SELECT *
+FROM (VALUES ('__HIVE_DEFAULT_PARTITION__', 'x', 1), (NULL, 'x', 2), (NULL, NULL, 3)) v(a, b, id);
+
+statement ok
+COPY test_hive_default_collision_multi TO '{TEST_DIR}/hive-default-collision-multi'
+(FORMAT PARQUET, PARTITION_BY (a, b), OVERWRITE);
+
+query IIII
+SELECT (a IS NULL)::INTEGER AS a_is_null, a, b, id
+FROM parquet_scan('{TEST_DIR}/hive-default-collision-multi/**/*.parquet', hive_partitioning=1)
+ORDER BY id
+----
+0	__HIVE_DEFAULT_PARTITION__	x	1
+1	NULL	x	2
+1	NULL	NULL	3
+
+# a value that only differs in case still collides on a case-insensitive file system
+statement ok
+COPY (
+    SELECT * FROM (
+        VALUES ('__hive_default_partition__', 1), (NULL, 2)
+    ) v(p, id)
+) TO '{TEST_DIR}/hive-default-collision-case'
+(FORMAT PARQUET, PARTITION_BY (p), OVERWRITE);
+
+query III
+SELECT (p IS NULL)::INTEGER AS is_null, p, id
+FROM read_parquet('{TEST_DIR}/hive-default-collision-case/**/*.parquet', hive_partitioning=true)
+ORDER BY id
+----
+0	__hive_default_partition__	1
+1	NULL	2
+
+query I
+select count(*) from glob('{TEST_DIR}/hive-default-collision-case/p=%5F_hive_default_partition__/*.parquet');
+----
+1
+
+query I
+select count(*) from glob('{TEST_DIR}/hive-default-collision-case/p=__HIVE_DEFAULT_PARTITION__/*.parquet');
+----
+1

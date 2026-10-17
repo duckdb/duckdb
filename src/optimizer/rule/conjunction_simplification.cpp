@@ -45,8 +45,14 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 	}
 	constant_value = constant_value.DefaultCastAs(LogicalType::BOOLEAN);
 	if (constant_value.IsNull()) {
-		// we can't simplify conjunctions with a constant NULL
-		return nullptr;
+		// FALSE and NULL have the same effect in filters and joins
+		if (conjunction.GetExpressionType() != ExpressionType::CONJUNCTION_OR || !is_root ||
+		    (op.type != LogicalOperatorType::LOGICAL_FILTER && op.type != LogicalOperatorType::LOGICAL_ANY_JOIN)) {
+			return nullptr;
+		}
+		// Continue until every NULL is removed
+		changes_made = true;
+		return RemoveExpression(conjunction, constant_expr);
 	}
 	if (conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		if (!BooleanValue::Get(constant_value)) {

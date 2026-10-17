@@ -10,12 +10,14 @@
 
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 
 namespace duckdb {
 class BlockMemory;
 class Allocator;
+class AsyncTask;
 class BufferPool;
 class TemporaryMemoryManager;
 class AttachedDatabase;
@@ -65,6 +67,9 @@ public:
 	//! Pre-fetch a series of blocks.
 	//! Using this function is a performance suggestion.
 	virtual void Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) = 0;
+	//! Creates one async task per contiguous run of blocks needing load
+	virtual vector<unique_ptr<AsyncTask>> CreatePrefetchTasks(QueryContext context,
+	                                                          vector<shared_ptr<BlockHandle>> &handles);
 	//! Unpin a block handle.
 	virtual void Unpin(shared_ptr<BlockHandle> &handle) = 0;
 

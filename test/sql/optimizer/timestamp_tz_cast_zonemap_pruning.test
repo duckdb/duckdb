@@ -1,0 +1,65 @@
+# name: test/sql/optimizer/timestamp_tz_cast_zonemap_pruning.test
+# description: TZ <-> plain timestamp casts must not propagate zonemap stats; TZ <-> TZ casts still prune
+# group: [optimizer]
+
+require icu
+
+statement ok
+ATTACH '{TEST_DIR}/ts_tz_cast_prune.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+# all tables are created under the default UTC time zone -> 5 row groups of 2048 rows each
+
+# plain wall-clock data: 2000-01-01 00:00:00 .. 02:50:39 in 1-second steps
+statement ok
+CREATE TABLE ts_us AS SELECT TIMESTAMP '2000-01-01' + to_seconds(range) AS ts FROM range(10240);
+
+# UTC instants: 1970-01-01 00:00:00+00 .. 02:50:39+00 in 1-second steps
+statement ok
+CREATE TABLE ts_tz AS SELECT to_timestamp(range) AS ts FROM range(10240);
+
+# UTC instants: 2000-01-01 00:00:00+00 .. 02:50:39+00 in 1-second steps
+statement ok
+CREATE TABLE ts_tz_ns AS SELECT (TIMESTAMP '2000-01-01' + to_seconds(range))::TIMESTAMPTZ_NS AS ts FROM range(10240);
+
+# a fixed non-UTC time zone: PST is UTC-8 with no DST transitions near the data range
+statement ok
+SET TimeZone = 'America/Los_Angeles';
+
+# TZ -> TZ casts are pure unit conversions between UTC instants: pruning still works
+# even though the session time zone is not UTC
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM ts_tz_ns WHERE ts::TIMESTAMPTZ > TIMESTAMPTZ '2000-01-01 02:50:00+00';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM ts_tz_ns WHERE ts::TIMESTAMPTZ > TIMESTAMPTZ '2000-01-01 02:50:00+00';
+----
+39
+
+query I
+SELECT count(*) FROM ts_us WHERE ts > TIMESTAMPTZ '2000-01-01 08:30:00+00';
+----
+8439
+
+# no pruning is possible for session-time-zone-dependent casts
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM ts_us WHERE ts > TIMESTAMPTZ '2000-01-01 08:30:00+00';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 5 / 5.*
+
+# the reverse direction: casting a TIMESTAMPTZ column to plain TIMESTAMP renders the instant
+# in the session time zone (-8h), so every instant renders to a wall time on 1969-12-31 and
+# all rows match. Statically cast bounds would keep only the first row group.
+query I
+SELECT count(*) FROM ts_tz WHERE ts::TIMESTAMP < TIMESTAMP '1970-01-01 00:30:00';
+----
+10240
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM ts_tz WHERE ts::TIMESTAMP < TIMESTAMP '1970-01-01 00:30:00';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 5 / 5.*

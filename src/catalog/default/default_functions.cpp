@@ -124,10 +124,8 @@ static const DefaultMacro internal_macros[] = {
     {"pg_catalog", "pg_size_pretty", "(bytes) AS format_bytes(bytes)"},
     {"pg_catalog", "pg_sleep", "(seconds) AS sleep_ms(CAST(seconds * 1000 AS BIGINT))"},
 
-    {DEFAULT_SCHEMA, "round_even",
-     "(x, n) AS CASE ((abs(x) * power(10, n+1)) % 10) WHEN 5 THEN round(x/2, n) * 2 ELSE round(x, n) END"},
-    {DEFAULT_SCHEMA, "roundbankers", "(x, n) AS round_even(x, n)"},
     {DEFAULT_SCHEMA, "nullif", "(a, b) AS CASE WHEN a=b THEN NULL ELSE a END"},
+    {DEFAULT_SCHEMA, "if", "(a, b, c) AS CASE WHEN a THEN b ELSE c END"},
     {DEFAULT_SCHEMA, "assert_true",
      "(condition) AS CASE WHEN condition THEN NULL ELSE error('Assertion failed') END, "
      "(condition, message) AS CASE WHEN condition THEN NULL ELSE "
@@ -229,16 +227,11 @@ static const DefaultMacro internal_macros[] = {
     {nullptr, nullptr, nullptr}};
 
 unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(const DefaultMacro &default_macro) {
-	return CreateInternalMacroInfo(default_macro, ParserOptions());
-}
-
-unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(const DefaultMacro &default_macro,
-                                                                              ParserOptions options) {
+	auto parser = Parser::GetBuiltinParser();
 	auto bind_info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
 	// Build a full CREATE MACRO statement and let the parser handle parameters, types, and defaults.
 	// macro_definition may contain multiple comma-separated overloads, e.g. "(x) AS x, (x, y) AS x+y".
 	auto sql = StringUtil::Format("CREATE MACRO __dummy__%s", default_macro.macro_definition);
-	Parser parser(options);
 	parser.ParseQuery(sql);
 	D_ASSERT(parser.statements.size() == 1);
 	D_ASSERT(parser.statements[0]->type == StatementType::CREATE_STATEMENT);
@@ -266,13 +259,12 @@ static bool DefaultFunctionMatches(const DefaultMacro &macro, const Identifier &
 	return macro.schema == schema && macro.name == name;
 }
 
-static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const Identifier &input_schema, const Identifier &input_name,
-                                                         ParserOptions options) {
+static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const Identifier &input_schema, const Identifier &input_name) {
 	auto &schema = input_schema;
 	auto &name = input_name;
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
 		if (DefaultFunctionMatches(internal_macros[index], schema, name)) {
-			return DefaultFunctionGenerator::CreateInternalMacroInfo(internal_macros[index], options);
+			return DefaultFunctionGenerator::CreateInternalMacroInfo(internal_macros[index]);
 		}
 	}
 	return nullptr;
@@ -284,9 +276,7 @@ DefaultFunctionGenerator::DefaultFunctionGenerator(Catalog &catalog, SchemaCatal
 
 unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientContext &context,
                                                                       const Identifier &entry_name) {
-	ParserOptions options;
-	options.parser_cache = &context.db->GetParserCache();
-	auto info = GetDefaultFunction(schema.name, entry_name, options);
+	auto info = GetDefaultFunction(schema.name, entry_name);
 	if (info) {
 		return make_uniq_base<CatalogEntry, ScalarMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());
 	}

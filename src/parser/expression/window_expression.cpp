@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
@@ -94,34 +95,9 @@ void WindowExpression::SetFunctionName(const string &function_name_p) {
 }
 
 string WindowExpression::ToString() const {
-	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, qualified_name.Schema().GetIdentifierName(),
-	                                                                 qualified_name.Name().GetIdentifierName());
-}
-
-bool WindowExpression::HasBoundedParts() const {
-	for (auto &child : arguments) {
-		if (child.GetExpression().GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
-			return true;
-		}
-	}
-	for (auto &partition : partitions) {
-		if ((*partition).GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
-			return true;
-		}
-	}
-
-	for (auto &o : orders) {
-		if ((*o.expression).GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
-			return true;
-		}
-	}
-
-	for (auto &o : arg_orders) {
-		if ((*o.expression).GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
-			return true;
-		}
-	}
-	return false;
+	// the name of the function can be a keyword, which only reads back as a name if it is quoted
+	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, qualified_name.QualificationToString(),
+	                                                                 SQLIdentifier::ToString(qualified_name.Name()));
 }
 
 void WindowExpression::Serialize(Serializer &serializer) const {
@@ -162,6 +138,11 @@ void WindowExpression::Serialize(Serializer &serializer) const {
 
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<vector<FunctionArgument>>(218, "arguments", arguments);
+	}
+
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || qualified_name.Path().size() > 3) {
+		// the catalog/schema properties above cannot represent a nested schema path
+		serializer.WriteProperty<QualifiedName>(219, "qualified_name", qualified_name);
 	}
 }
 
@@ -204,6 +185,12 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deseria
 	// New children deserialization
 	if (children.empty()) {
 		deserializer.ReadPropertyWithDefault<vector<FunctionArgument>>(218, "arguments", result->arguments);
+	}
+
+	auto qualified_name =
+	    deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(219, "qualified_name", QualifiedName());
+	if (!qualified_name.Path().empty()) {
+		result->SetQualifiedName(std::move(qualified_name));
 	}
 
 	return std::move(result);

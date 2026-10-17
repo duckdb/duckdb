@@ -38,7 +38,7 @@ CREATE TABLE a AS SELECT LIST_EXTRACT(["{colname}"], 1) col FROM all_types;
 query I
 SELECT COUNT(*) FROM a JOIN all_types ON (a.col=all_types."{colname}");
 ----
-1
+2
 
 query I
 SELECT COUNT(*) 
@@ -61,7 +61,7 @@ CREATE TABLE a AS SELECT LIST_EXTRACT(["{colname}"], 1) col FROM all_types;
 query I
 SELECT COUNT(*) FROM a JOIN all_types ON (a.col=all_types."{colname}");
 ----
-0
+2
 
 query I
 SELECT COUNT(*) 

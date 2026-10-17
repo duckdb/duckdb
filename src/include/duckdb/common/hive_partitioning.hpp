@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/open_file_info.hpp"
 #include "duckdb/original/std/sstream.hpp"
@@ -18,12 +19,17 @@ namespace duckdb {
 struct MultiFilePushdownInfo;
 
 struct HivePartitioningFilterInfo {
-	unordered_map<string, column_t> column_map;
+	identifier_map_t<column_t> column_map;
+	Identifier filename_column;
 	bool hive_enabled;
 	bool filename_enabled;
 };
 
 class HivePartitioning {
+public:
+	//! The directory name that is written for a NULL partition value
+	static constexpr const char *DEFAULT_PARTITION_NAME = "__HIVE_DEFAULT_PARTITION__";
+
 public:
 	//! Parse a filename that follows the hive partitioning scheme
 	DUCKDB_API static std::map<string, string> Parse(const string &filename);
@@ -39,6 +45,8 @@ public:
 	                                 const LogicalType &type);
 	//! Escape a hive partition key or value using URL encoding
 	DUCKDB_API static string Escape(const string &input);
+	//! Escape a non-NULL hive partition value, avoiding a collision with the NULL partition directory
+	DUCKDB_API static string EscapeValue(const string &input);
 	//! Unescape a hive partition key or value encoded using URL encoding
 	DUCKDB_API static string Unescape(const string &input);
 	//! Whether the value is a null marker when detecting Hive partition types

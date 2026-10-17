@@ -1,5 +1,7 @@
 #include "duckdb/optimizer/rule/list_comprehension_rewrite.hpp"
 
+#include "duckdb/planner/expression/bound_lambda_expression.hpp"
+
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/assert.hpp"
@@ -39,14 +41,6 @@ bool IsTargetListFunction(ClientContext &context, const BoundFunctionExpression 
 
 bool IsStructPack(const BoundFunctionExpression &expr) {
 	return expr.Function().GetName() == "struct_pack";
-}
-
-optional_ptr<Expression> UnwrapCasts(optional_ptr<Expression> expr) {
-	while (BoundCastExpression::IsCast(*expr)) {
-		auto &cast_expr = expr->Cast<BoundFunctionExpression>();
-		expr = BoundCastExpression::ChildMutable(cast_expr).get();
-	}
-	return expr;
 }
 
 optional_ptr<Expression> FindStructPackChildByName(BoundFunctionExpression &struct_pack, const string &name) {
@@ -93,8 +87,16 @@ void RemoveIndexInputSlot(unique_ptr<Expression> &expr) {
 	                                                });
 }
 
-bool MatchesStructFieldProjection(Expression &expr, const string &field_name) {
-	auto base = UnwrapCasts(expr);
+bool MatchesStructFieldProjection(Expression &expr, const string &field_name, bool allow_boolean_cast = false) {
+	optional_ptr<Expression> base = expr;
+	if (allow_boolean_cast && BoundCastExpression::IsCast(*base) && base->GetReturnType() == LogicalType::BOOLEAN) {
+		auto &cast_expr = base->Cast<BoundFunctionExpression>();
+		if (BoundCastExpression::IsTryCast(cast_expr)) {
+			return false;
+		}
+		// The rewritten filter recreates this single BOOLEAN cast.
+		base = BoundCastExpression::ChildMutable(cast_expr).get();
+	}
 	if (base->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return false;
 	}
@@ -103,7 +105,7 @@ bool MatchesStructFieldProjection(Expression &expr, const string &field_name) {
 		return false;
 	}
 
-	auto struct_arg = UnwrapCasts(*extract_expr.GetChildren()[0]);
+	auto &struct_arg = extract_expr.GetChildren()[0];
 	if (struct_arg->GetExpressionClass() != ExpressionClass::BOUND_REF) {
 		return false;
 	}
@@ -112,7 +114,7 @@ bool MatchesStructFieldProjection(Expression &expr, const string &field_name) {
 		return false;
 	}
 
-	auto field_arg = UnwrapCasts(*extract_expr.GetChildren()[1]);
+	auto &field_arg = extract_expr.GetChildren()[1];
 	if (field_arg->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 		return false;
 	}
@@ -137,10 +139,39 @@ struct ListComprehensionMatch {
 vector<unique_ptr<Expression>> CopyCapturedChildren(BoundFunctionExpression &inner_apply) {
 	vector<unique_ptr<Expression>> captured_children;
 	captured_children.reserve(inner_apply.GetChildren().empty() ? 0 : inner_apply.GetChildren().size() - 1);
+	// skip the list and the lambda placeholder - everything after them is a capture
 	for (idx_t i = 1; i < inner_apply.GetChildren().size(); i++) {
+		if (inner_apply.GetChildren()[i]->GetReturnType().id() == LogicalTypeId::LAMBDA) {
+			continue;
+		}
 		captured_children.push_back(inner_apply.GetChildren()[i]->Copy());
 	}
 	return captured_children;
+}
+
+//! Builds the lambda child that accompanies a rewritten list function. The bind data keeps its own copy
+//! of the body, this is the copy that stays in the expression tree
+unique_ptr<Expression> MakeLambdaChild(const Expression &lambda_body, const bool has_index,
+                                       vector<Identifier> parameter_names) {
+	const idx_t parameter_count = has_index ? 2 : 1;
+	auto lambda = make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA, lambda_body.Copy(),
+	                                               parameter_count);
+	// carry the original names over, so that the rewritten lambda still prints like the one the user wrote
+	if (parameter_names.size() > parameter_count) {
+		parameter_names.resize(parameter_count);
+	}
+	lambda->SetParameterNames(std::move(parameter_names));
+	return std::move(lambda);
+}
+
+//! Returns the parameter names of the lambda child of a bound list function, if it has one
+vector<Identifier> GetLambdaParameterNames(const BoundFunctionExpression &expr) {
+	for (auto &child : expr.GetChildren()) {
+		if (child->GetReturnType().id() == LogicalTypeId::LAMBDA) {
+			return child->Cast<BoundLambdaExpression>().ParameterNames();
+		}
+	}
+	return vector<Identifier>();
 }
 
 unique_ptr<ListComprehensionMatch> MatchListComprehensionRewrite(ClientContext &context,
@@ -167,7 +198,7 @@ unique_ptr<ListComprehensionMatch> MatchListComprehensionRewrite(ClientContext &
 	if (!list_filter_bind.lambda_expr || !root_bind.lambda_expr) {
 		return nullptr;
 	}
-	if (!MatchesStructFieldProjection(*list_filter_bind.lambda_expr, "filter") ||
+	if (!MatchesStructFieldProjection(*list_filter_bind.lambda_expr, "filter", true) ||
 	    !MatchesStructFieldProjection(*root_bind.lambda_expr, "result")) {
 		return nullptr;
 	}
@@ -185,7 +216,7 @@ unique_ptr<ListComprehensionMatch> MatchListComprehensionRewrite(ClientContext &
 	if (!inner_bind.lambda_expr) {
 		return nullptr;
 	}
-	auto inner_base = UnwrapCasts(*inner_bind.lambda_expr);
+	auto &inner_base = inner_bind.lambda_expr;
 	if (inner_base->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return nullptr;
 	}
@@ -224,6 +255,8 @@ unique_ptr<Expression> BuildListComprehensionRewrite(ClientContext &context, Lis
 	auto &filter_expr = *match.filter_expr;
 	auto &result_expr = *match.result_expr;
 
+	auto lambda_parameter_names = GetLambdaParameterNames(inner_apply);
+
 	// Build list_filter(list, lambda filter_expr)
 	vector<unique_ptr<Expression>> filter_children;
 	filter_children.reserve(inner_apply.GetChildren().size());
@@ -236,6 +269,13 @@ unique_ptr<Expression> BuildListComprehensionRewrite(ClientContext &context, Lis
 	if (filter_lambda->GetReturnType() != LogicalType::BOOLEAN) {
 		filter_lambda = BoundCastExpression::AddCastToType(context, std::move(filter_lambda), LogicalType::BOOLEAN);
 	}
+	// the moved-over children still carry inner_apply's lambda - replace it with the filter's own lambda
+	for (auto &filter_child : filter_children) {
+		if (filter_child->GetReturnType().id() == LogicalTypeId::LAMBDA) {
+			filter_child = MakeLambdaChild(*filter_lambda, inner_bind.has_index, lambda_parameter_names);
+			break;
+		}
+	}
 	auto filter_bind_info =
 	    make_uniq<ListLambdaBindData>(filter_return_type, std::move(filter_lambda), inner_bind.has_index);
 
@@ -246,19 +286,22 @@ unique_ptr<Expression> BuildListComprehensionRewrite(ClientContext &context, Lis
 	                                                     std::move(filter_bind_info), list_filter_expr.IsOperator());
 
 	// Build list_apply(list_filter(...), lambda result_expr)
-	vector<unique_ptr<Expression>> apply_children;
-	apply_children.reserve(inner_apply.GetChildren().size());
-	apply_children.push_back(std::move(new_filter));
-	for (auto &captured_child : match.captured_children) {
-		apply_children.push_back(std::move(captured_child));
-	}
-
 	auto apply_return_type = LogicalType::LIST(result_expr.GetReturnType());
 	auto apply_lambda = result_expr.Copy();
 	if (inner_bind.has_index) {
 		// The apply function included an index but it was not used. Adapt references to exclude index
 		RemoveIndexInputSlot(apply_lambda);
 	}
+
+	vector<unique_ptr<Expression>> apply_children;
+	apply_children.reserve(inner_apply.GetChildren().size());
+	apply_children.push_back(std::move(new_filter));
+	// the lambda keeps its argument position, the captures follow it
+	apply_children.push_back(MakeLambdaChild(*apply_lambda, false, std::move(lambda_parameter_names)));
+	for (auto &captured_child : match.captured_children) {
+		apply_children.push_back(std::move(captured_child));
+	}
+
 	auto apply_bind_info = make_uniq<ListLambdaBindData>(apply_return_type, std::move(apply_lambda));
 	return make_uniq<BoundFunctionExpression>(root.Function(), std::move(apply_children), std::move(apply_bind_info),
 	                                          root.IsOperator());

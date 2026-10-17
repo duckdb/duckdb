@@ -19,8 +19,13 @@ template <class T>
 void AlpFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	AlpScanState<T> scan_state(segment);
-	scan_state.Skip(segment, UnsafeNumericCast<idx_t>(row_id));
+	D_ASSERT(row_id >= 0);
+	auto row_index = NumericCast<idx_t>(row_id);
+	D_ASSERT(row_index < segment.count);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
+	AlpScanState<T> scan_state(std::move(handle), segment);
+	scan_state.Skip(segment, row_index);
 	auto result_data = FlatVector::GetDataMutableUnsafe<EXACT_TYPE>(result);
 	result_data[result_idx] = (EXACT_TYPE)0;
 

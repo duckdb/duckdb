@@ -73,8 +73,8 @@ ExpressionType ComparisonGetExpressionType(FunctionToStringInput &input) {
 
 template <ExpressionType TYPE>
 static ScalarFunction GetComparisonFunctionInternal(const string &name) {
-	ScalarFunction comparison_fun(Identifier(name), {LogicalType::ANY, LogicalType::ANY}, LogicalType::BOOLEAN,
-	                              ComparisonFunction<TYPE>);
+	ScalarFunction comparison_fun(Identifier(name), {}, LogicalType::BOOLEAN, ComparisonFunction<TYPE>);
+	comparison_fun.GetSignature().AddParameter("left", LogicalType::ANY).AddParameter("right", LogicalType::ANY);
 	comparison_fun.SetGetExpressionTypeCallback(ComparisonGetExpressionType<TYPE>);
 	if constexpr (TYPE == ExpressionType::COMPARE_DISTINCT_FROM || TYPE == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 		comparison_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
@@ -196,12 +196,10 @@ unique_ptr<Expression> &BoundComparisonExpression::RightMutable(BoundFunctionExp
 
 void BoundComparisonExpression::SetType(BoundFunctionExpression &comparison_expr, ExpressionType new_type) {
 	auto arguments = comparison_expr.FunctionMutable().GetArguments();
-	auto original_arguments = comparison_expr.FunctionMutable().GetOriginalArguments();
 
 	comparison_expr.SetExpressionTypeUnsafe(new_type);
 	comparison_expr.FunctionMutable() = BoundScalarFunction(GetComparisonFunction(new_type));
 	comparison_expr.FunctionMutable().GetArguments() = std::move(arguments);
-	comparison_expr.FunctionMutable().GetOriginalArguments() = std::move(original_arguments);
 	comparison_expr.BindInfoMutable().reset();
 	comparison_expr.IsOperatorMutable() = true;
 }

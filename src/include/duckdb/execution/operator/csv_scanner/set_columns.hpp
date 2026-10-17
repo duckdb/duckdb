@@ -13,12 +13,12 @@ namespace duckdb {
 //! This represents the data related to columns that have been set by the user
 //! e.g., from a copy command
 struct SetColumns {
-	SetColumns(const vector<LogicalType> *types_p, const vector<string> *names_p);
+	SetColumns(const vector<LogicalType> *types_p, const vector<Identifier> *names_p);
 	SetColumns();
 	//! Return Types that were detected
 	const vector<LogicalType> *types = nullptr;
 	//! Column Names that were detected
-	const vector<string> *names = nullptr;
+	const vector<Identifier> *names = nullptr;
 	//! If columns are set
 	bool IsSet() const;
 	//! How many columns

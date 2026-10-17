@@ -137,3 +137,19 @@ query I
 SELECT path_join(A, B, C, B, A) FROM (SELECT A:'a', B: 'b', C: 'c');
 ----
 a/b/c/b/a
+
+# file:// URI with an authority but no trailing path
+query I
+SELECT path_join('file://localhost');
+----
+file://localhost/
+
+query I
+SELECT path_join('file://localhost', 'a/b');
+----
+file://localhost/a/b
+
+statement error
+SELECT path_join('file://otherhost');
+----
+only supports localhost authority

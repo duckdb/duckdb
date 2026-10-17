@@ -72,14 +72,14 @@ public:
 	                                        optional_idx source_min_batch_index);
 	//! Completes the current batch of an externally-fed pipeline
 	PipelineExecuteResult FinishBatchExternal(optional_idx source_min_batch_index);
+	//! Propagates a minimum batch index change through an externally-fed pipeline
+	PipelineExecuteResult UpdateMinBatchIndexExternal(optional_idx source_min_batch_index);
 	//! Finalizes an externally-fed pipeline executor after the producer is exhausted
 	PipelineExecuteResult FinishExternal(optional_idx source_min_batch_index);
 
 	//! Called after depleting the source: finalizes the execution of this pipeline executor
 	//! This should only be called once per PipelineExecutor.
 	PipelineExecuteResult PushFinalize();
-
-	bool RemainingSinkChunk() const;
 
 	//! Initializes a chunk with the types that will flow out of the chunk
 	void InitializeChunk(DataChunk &chunk);
@@ -103,6 +103,11 @@ public:
 private:
 	enum class PipelineInputChunkMode : uint8_t { PUSH_INPUT, RESUME_INPUT };
 	enum class SourceFinishNotificationState : uint8_t { PENDING, SENT };
+	enum class PendingBatchAdvanceState : uint8_t { NONE, NEXT_BATCH, MINIMUM_UPDATE };
+	struct SourceFetchResult {
+		SourceResultType result = SourceResultType::BLOCKED;
+		SourceBatchIndexState batch_index_state = SourceBatchIndexState::UNCHANGED;
+	};
 
 	//! The pipeline to process
 	Pipeline &pipeline;
@@ -158,6 +163,7 @@ private:
 	//! This flag is set when the pipeline gets interrupted by NextBatch -> NextBatch should be called again and the
 	//! source_chunk should be sent through the pipeline
 	bool next_batch_blocked = false;
+	PendingBatchAdvanceState pending_batch_advance_state = PendingBatchAdvanceState::NONE;
 
 	//! Current operator being flushed
 	idx_t flushing_idx;
@@ -167,6 +173,8 @@ private:
 	bool has_executed = false;
 	//! Whether an externally-fed sink has observed its initial batch
 	bool external_batch_initialized = false;
+	//! Rows of the last source chunk that have not been reported to the progress verifier yet
+	idx_t unsampled_progress_rows = 0;
 
 private:
 	void StartOperator(PhysicalOperator &op);
@@ -174,7 +182,9 @@ private:
 
 	//! Reset the operator index to the first operator
 	void GoToSource(idx_t &current_idx, idx_t initial_idx);
-	SourceResultType FetchFromSource(DataChunk &result);
+	SourceFetchResult FetchFromSource(DataChunk &result);
+	//! Reports the last source chunk to the progress verifier (if any), once it has been fully processed
+	void SampleProgress();
 
 	void FinishProcessing(int32_t operator_idx = -1);
 	void NotifySourceFinished();
@@ -183,6 +193,7 @@ private:
 	//! Wrappers for sink/source calls to respective operators
 	SourceResultType GetData(DataChunk &chunk, OperatorSourceInput &input);
 	SinkResultType Sink(DataChunk &chunk, OperatorSinkInput &input);
+	SinkNextBatchType UpdateMinBatchIndex();
 
 	OperatorResultType ExecutePushInternal(DataChunk &input, ExecutionBudget &chunk_budget, idx_t initial_idx = 0);
 	PipelineExecuteResult PushInputChunk(DataChunk &input, ExecutionBudget &chunk_budget, PipelineInputChunkMode mode);
@@ -192,10 +203,11 @@ private:
 	OperatorResultType Execute(DataChunk &input, DataChunk &result, idx_t initial_index = 0);
 
 	//! Notifies the sink that a new batch has started
-	SinkNextBatchType NextBatch(DataChunk &source_chunk, const bool have_more_output);
+	SinkNextBatchType NextBatch(DataChunk &source_chunk, const SourceFetchResult &source_result);
 	SinkNextBatchType NextBatch(OperatorPartitionData next_data, bool force = false,
 	                            optional_idx external_min_batch_index = optional_idx());
 	OperatorPartitionData ToPipelinePartitionData(const OperatorPartitionData &source_data) const;
+	idx_t MapExternalMinBatchIndex(optional_idx source_min_batch_index) const;
 
 	//! Tries to flush all state from intermediate operators. Will return true if all state is flushed, false in the
 	//! case of a blocked sink.
@@ -213,6 +225,7 @@ private:
 	int debug_blocked_source_count = 0;
 	int debug_blocked_combine_count = 0;
 	int debug_blocked_next_batch_count = 0;
+	int debug_blocked_min_batch_count = 0;
 	//! Number of times the Sink/Source will block before actually returning data
 	int debug_blocked_target_count = 1;
 #endif

@@ -1,0 +1,23 @@
+# name: test/optimizer/constant_or_null_value_arg.test
+# description: Optimizer-generated constant_or_null() must not duplicate the value argument
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t(x INTEGER)
+
+# arithmetic_simplification rewrites x*0 -> constant_or_null(0, x). The one-arg
+# ConstantOrNull(child, value) overload must NOT push `value` into children before
+# delegating to the vector overload (which inserts value itself); otherwise the
+# plan carries constant_or_null(0, 0, x) instead of constant_or_null(0, x).
+
+# regression guard: the duplicated value form must NOT appear
+query II
+EXPLAIN SELECT count(*) FROM t WHERE x * 0 = 1
+----
+physical_plan	<!REGEX>:.*constant_or_null\(0, 0,.*
+
+# the non-duplicated form (value once, then child) must appear
+query II
+EXPLAIN SELECT count(*) FROM t WHERE x * 0 = 1
+----
+physical_plan	<REGEX>:.*constant_or_null\(0, x\).*

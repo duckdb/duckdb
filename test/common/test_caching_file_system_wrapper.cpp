@@ -96,8 +96,11 @@ public:
 		return true;
 	}
 
-	string GetVersionTag(FileHandle &handle) override {
-		return StringUtil::Format("%lld:%lld", GetFileSize(handle), GetLastModifiedTime(handle).value);
+	FileMetadata Stats(FileHandle &handle) override {
+		auto metadata = LocalFileSystem::Stats(handle);
+		metadata.version_tag =
+		    StringUtil::Format("%lld:%lld", metadata.file_size, metadata.last_modification_time.value);
+		return metadata;
 	}
 };
 
@@ -139,12 +142,11 @@ public:
 		return "NoMetadataFileSystem";
 	}
 
-	timestamp_t GetLastModifiedTime(FileHandle &handle) override {
-		return FileMetadata {}.last_modification_time;
-	}
-
-	string GetVersionTag(FileHandle &handle) override {
-		return "";
+	FileMetadata Stats(FileHandle &handle) override {
+		auto metadata = LocalFileSystem::Stats(handle);
+		metadata.last_modification_time = FileMetadata {}.last_modification_time;
+		metadata.version_tag.clear();
+		return metadata;
 	}
 
 	bool CanHandleFile(const string &path) override {
@@ -729,7 +731,7 @@ TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 
-	const idx_t BLOCK_SIZE = db_instance.GetExternalFileCache().GetCacheBlockSize(TestDirectoryPath());
+	const idx_t BLOCK_SIZE = db_instance.GetExternalFileCache().GetCacheMaxBlockSize(TestDirectoryPath());
 	const idx_t EXTRA = 100;
 	const idx_t FILE_SIZE = BLOCK_SIZE + EXTRA;
 
@@ -863,7 +865,7 @@ TEST_CASE("Fully cached read skips doesn't open file", "[file_system][caching]")
 	auto counting_fs = make_uniq<CountingFileSystem>();
 	auto *counting_fs_ptr = counting_fs.get();
 
-	const idx_t BLOCK_SIZE = db_instance.GetExternalFileCache().GetCacheBlockSize(TestDirectoryPath());
+	const idx_t BLOCK_SIZE = db_instance.GetExternalFileCache().GetCacheMaxBlockSize(TestDirectoryPath());
 	const idx_t FILE_SIZE = BLOCK_SIZE;
 
 	string content(FILE_SIZE, 'X');

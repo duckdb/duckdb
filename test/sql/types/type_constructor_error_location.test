@@ -1,0 +1,33 @@
+# name: test/sql/types/type_constructor_error_location.test
+# description: Test reporting error location of type constructors
+# group: [types]
+
+# a parameter the constructor rejects points at that parameter
+statement error
+SELECT NULL::DECIMAL(3, 4)
+----
+^
+
+# a parameter rejected by the signature points at that parameter
+statement error
+SELECT NULL::DECIMAL(NULL)
+----
+^
+
+# an error about the type as a whole points at the type
+statement error
+SELECT NULL::MAP
+----
+^
+
+# no matching definition points at the type
+statement error
+SELECT NULL::DECIMAL(1, 2, 3)
+----
+^
+
+# a vararg member points at the member
+statement error
+SELECT NULL::STRUCT(a INT, a INT)
+----
+^

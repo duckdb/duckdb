@@ -17,6 +17,7 @@
 #include "duckdb/common/exception/catalog_exception.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/query_error_context.hpp"
@@ -32,6 +33,7 @@ struct CreateSchemaInfo;
 struct DropInfo;
 struct BoundCreateTableInfo;
 struct AlterTableInfo;
+struct AlterSchemaInfo;
 struct CreateTableFunctionInfo;
 struct CreateCopyFunctionInfo;
 struct CreatePragmaFunctionInfo;
@@ -81,6 +83,7 @@ class LogicalUpdate;
 class CreateStatement;
 class CatalogEntryRetriever;
 class QueryNode;
+class SQLStatement;
 
 //! Per-capability opt-in for remote catalogs. Each value gates a specific dispatch path or
 //! engine-wide accommodation:
@@ -89,11 +92,14 @@ class QueryNode;
 //!    counts attached remote catalogs).
 //!  - EXECUTE_QUERY_NODE: `RemoteExecute(QueryNode)` is implemented; the RemotePushdownOptimizer
 //!    may push down structured queries to this catalog.
+//!  - EXECUTE_STATEMENT: `RemoteExecute(SQLStatement)` is implemented; the RemotePushdownOptimizer
+//!    may push down non-query statements (DDL) to this catalog.
 //!  - CONNECT: `RemoteExecute(string)` is implemented; the CONNECT chokepoint may route raw SQL
 //!    to this catalog.
 enum class RemoteCapability : uint8_t {
 	IS_REMOTE,
 	EXECUTE_QUERY_NODE,
+	EXECUTE_STATEMENT,
 	CONNECT,
 };
 
@@ -238,6 +244,17 @@ public:
 	DUCKDB_API virtual optional_ptr<SchemaCatalogEntry> LookupSchema(CatalogTransaction transaction,
 	                                                                 const EntryLookupInfo &schema_lookup,
 	                                                                 OnEntryNotFound if_not_found) = 0;
+
+	//! Whether schema strings can denote nested paths as well as literal schema names.
+	virtual bool SupportsNestedSchemas() const {
+		return false;
+	}
+	//! Resolve a string schema argument, preferring an existing nested entry over a literal dotted schema.
+	DUCKDB_API QualifiedName ResolveEntryName(ClientContext &context, const string &schema_arg,
+	                                          const string &entry_name, CatalogType type = CatalogType::TABLE_ENTRY,
+	                                          optional_ptr<BoundAtClause> at_clause = nullptr);
+	//! Resolve a string schema argument, with the same literal-name fallback as ResolveEntryName.
+	DUCKDB_API SchemaCatalogEntry &ResolveSchema(ClientContext &context, const string &schema_arg);
 
 	//! Returns the schema object with the specified name, or throws an exception if it does not exist
 	DUCKDB_API SchemaCatalogEntry &GetSchema(ClientContext &context, const EntryLookupInfo &schema_lookup);
@@ -390,15 +407,21 @@ public:
 		return string();
 	}
 	virtual ErrorData SupportsCreateTable(BoundCreateTableInfo &info);
+	virtual ErrorData SupportsCreateSchema(CreateSchemaInfo &info);
+	//! Alter a schema of this catalog (e.g. ALTER SCHEMA ... SET/RESET (<options>))
+	virtual void AlterSchema(CatalogTransaction transaction, SchemaCatalogEntry &schema, AlterSchemaInfo &info);
 
 	virtual bool Supports(RemoteCapability capability) const {
 		return false;
 	}
 	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node);
+	//! Execute a full (non-query) statement remotely - the returned table ref yields the statement's result
+	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<SQLStatement> statement);
 	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, const string &sql);
 	virtual bool SupportsPushdown(const ParsedExpression &expression);
 	virtual bool SupportsPushdown(const TableRef &ref);
 	virtual bool SupportsPushdown(const QueryNode &node);
+	virtual bool SupportsPushdown(const SQLStatement &statement);
 	//! User-facing short identifier for this catalog (e.g. shown in the CLI prompt when CONNECT-ed).
 	//! Defaults to the AttachedDatabase name (the AS alias). Remote catalogs override to expose
 	//! backend-specific information — the URI for quack, host:port/dbname for postgres, etc.
@@ -409,8 +432,10 @@ public:
 		return CatalogLookupBehavior::STANDARD;
 	}
 
-	//! Returns the default schema of the catalog
-	virtual Identifier GetDefaultSchema() const;
+	//! Returns the default schema of the catalog, or nullopt if the catalog has no default schema.
+	//! Catalogs without a default schema are never probed with an implicit schema for unqualified lookups.
+	//! A returned value is always non-empty - an empty Identifier means "unspecified" elsewhere in the catalog.
+	virtual optional<Identifier> GetDefaultSchema() const;
 
 	//! The default table is used for `SELECT * FROM <catalog_name>;`
 	//! FIXME: these should be virtual methods
@@ -471,18 +496,23 @@ public:
 
 	virtual void Verify();
 
-	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const string &name);
+	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const Identifier &name);
 
 	//! Autoload the extension required for `configuration_name` or throw a CatalogException
-	static String AutoloadExtensionByConfigName(ClientContext &context, const String &configuration_name);
+	static String AutoloadExtensionByConfigName(ClientContext &context, const Identifier &configuration_name);
 	//! Autoload the extension required for `function_name` or throw a CatalogException
-	static bool AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name);
+	static bool AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const Identifier &entry_name);
 	DUCKDB_API static bool TryAutoLoad(ClientContext &context, const string &extension_name) noexcept;
 
 	//! Called when the catalog is detached
 	DUCKDB_API virtual void OnDetach(ClientContext &context);
 
 protected:
+	//! Resolve a bound schema path, preserving time travel and error context at every level.
+	DUCKDB_API optional_ptr<SchemaCatalogEntry>
+	LookupSchemaPath(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup, OnEntryNotFound if_not_found,
+	                 const std::function<optional_ptr<CatalogEntry>(const EntryLookupInfo &)> &lookup_root);
+
 	//! Reference to the database
 	AttachedDatabase &db;
 
@@ -501,6 +531,9 @@ public:
 	                OnEntryNotFound if_not_found);
 
 private:
+	//! Look up an entry within this catalog and handle autoloading and errors
+	optional_ptr<CatalogEntry> GetEntryInCatalog(CatalogEntryRetriever &retriever, const EntryLookupInfo &lookup_info,
+	                                             OnEntryNotFound if_not_found);
 	//! Lookup an entry in the schema (taken from the lookup_info), returning the entry and schema if they exist
 	virtual CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction,
 	                                                  const EntryLookupInfo &lookup_info);

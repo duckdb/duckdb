@@ -27,6 +27,14 @@ public:
 		return "ZStdFileSystem";
 	}
 
+	FileCompressionType GetCompressionType() override {
+		return FileCompressionType::ZSTD;
+	}
+
+	bool CanHandleFile(const string &fpath) override {
+		return IsFileCompressed(fpath, FileCompressionType::ZSTD);
+	}
+
 	unique_ptr<StreamWrapper> CreateStream() override;
 	idx_t InBufferSize() override;
 	idx_t OutBufferSize() override;

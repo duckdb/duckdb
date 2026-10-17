@@ -60,6 +60,122 @@ SELECT trigger_name, for_each, columns FROM duckdb_triggers() WHERE trigger_name
 ----
 upd_trigger	STATEMENT	[id]
 
+# ALTER TABLE RENAME COLUMN must propagate to the UPDATE OF list, and survive WAL replay
+statement ok
+USE triggerdb;
+
+# -- multi-column UPDATE OF: renaming columns one at a time updates the stored list --
+statement ok
+CREATE TABLE t3 (a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+CREATE TABLE audit3 (x INTEGER);
+
+statement ok
+CREATE TRIGGER multi_col_trigger AFTER UPDATE OF b, c ON t3 INSERT INTO audit3 VALUES (1);
+
+# Renaming b (in trigger) updates the trigger's column list
+statement ok
+ALTER TABLE t3 RENAME COLUMN b TO b2;
+
+query TT
+SELECT trigger_name, columns FROM duckdb_triggers() WHERE trigger_name = 'multi_col_trigger';
+----
+multi_col_trigger	[b2, c]
+
+# Renaming c (in trigger) also updates it
+statement ok
+ALTER TABLE t3 RENAME COLUMN c TO c2;
+
+query TT
+SELECT trigger_name, columns FROM duckdb_triggers() WHERE trigger_name = 'multi_col_trigger';
+----
+multi_col_trigger	[b2, c2]
+
+# Renaming a column not in the trigger leaves the list unchanged
+statement ok
+ALTER TABLE t3 RENAME COLUMN a TO a2;
+
+query TT
+SELECT trigger_name, columns FROM duckdb_triggers() WHERE trigger_name = 'multi_col_trigger';
+----
+multi_col_trigger	[b2, c2]
+
+# Multi-column list survives WAL replay
+statement ok
+USE memory;
+
+statement ok
+DETACH triggerdb;
+
+statement ok
+ATTACH '{TEST_DIR}/create_trigger_wal.db' AS triggerdb;
+
+statement ok
+USE triggerdb;
+
+query TT
+SELECT trigger_name, columns FROM duckdb_triggers() WHERE trigger_name = 'multi_col_trigger';
+----
+multi_col_trigger	[b2, c2]
+
+statement ok
+CREATE TABLE t2 (i INTEGER, j INTEGER);
+
+statement ok
+CREATE TABLE audit2 (x INTEGER);
+
+statement ok
+CREATE TRIGGER rename_trigger AFTER UPDATE OF j ON t2 INSERT INTO audit2 VALUES (1);
+
+statement ok
+INSERT INTO t2 VALUES (0, 0);
+
+statement ok
+ALTER TABLE t2 RENAME COLUMN j TO k;
+
+query TT
+SELECT trigger_name, columns FROM duckdb_triggers() WHERE trigger_name = 'rename_trigger';
+----
+rename_trigger	[k]
+
+# Detach without checkpoint so the rename is replayed from the WAL
+statement ok
+USE memory;
+
+statement ok
+DETACH triggerdb;
+
+statement ok
+ATTACH '{TEST_DIR}/create_trigger_wal.db' AS triggerdb;
+
+statement ok
+USE triggerdb;
+
+# The renamed UPDATE OF column must survive replay
+query TT
+SELECT trigger_name, columns FROM duckdb_triggers() WHERE trigger_name = 'rename_trigger';
+----
+rename_trigger	[k]
+
+# The trigger must still fire when the renamed column is updated
+statement ok
+UPDATE t2 SET k = 1;
+
+query I
+SELECT COUNT(*) FROM audit2;
+----
+1
+
+# Updating a column outside the OF list must not fire it
+statement ok
+UPDATE t2 SET i = 5;
+
+query I
+SELECT COUNT(*) FROM audit2;
+----
+1
+
 statement ok
 USE memory;
 

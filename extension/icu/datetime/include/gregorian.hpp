@@ -39,9 +39,6 @@ public:
 	const char *GetType() const override {
 		return "gregorian";
 	}
-	bool IsEra0CountingBackward() const override {
-		return true;
-	}
 	unique_ptr<Calendar> Copy() const override {
 		return unique_ptr<Calendar>(new GregorianCalendar(*this));
 	}
@@ -85,9 +82,6 @@ public:
 
 	const char *GetType() const override {
 		return "buddhist";
-	}
-	bool IsEra0CountingBackward() const override {
-		return false;
 	}
 	unique_ptr<Calendar> Copy() const override {
 		return unique_ptr<Calendar>(new BuddhistCalendar(*this));
@@ -140,9 +134,6 @@ public:
 
 	const char *GetType() const override {
 		return "iso8601";
-	}
-	bool IsEra0CountingBackward() const override {
-		return false;
 	}
 	unique_ptr<Calendar> Copy() const override {
 		return unique_ptr<Calendar>(new ISO8601Calendar(*this));

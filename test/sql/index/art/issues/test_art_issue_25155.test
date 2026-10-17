@@ -1,0 +1,35 @@
+# name: test/sql/index/art/issues/test_art_issue_25155.test
+# description: Issue #25155 - IN with distinct comparisons returns incorrect index scan results
+# group: [issues]
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+CREATE TABLE t(a INTEGER, p INTEGER);
+
+statement ok
+INSERT INTO t VALUES (1, 10), (3, 30);
+
+statement ok
+CREATE INDEX t_a ON t(a);
+
+query II
+EXPLAIN ANALYZE SELECT p FROM t WHERE a IN (1, 3) AND a IS NOT DISTINCT FROM 1;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT p FROM t WHERE a IN (1, 3) AND a IS NOT DISTINCT FROM 1 ORDER BY p;
+----
+10
+
+query II
+EXPLAIN ANALYZE SELECT p FROM t WHERE a IN (1, 3) AND a IS DISTINCT FROM 1;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT p FROM t WHERE a IN (1, 3) AND a IS DISTINCT FROM 1 ORDER BY p;
+----
+30

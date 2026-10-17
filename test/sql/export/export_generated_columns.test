@@ -30,7 +30,7 @@ INSERT INTO tbl VALUES(5);
 statement error
 INSERT INTO tbl VALUES(2,3)
 ----
-<REGEX>:.*Binder Error: table tbl has 1 columns.*
+<REGEX>:.*Binder Error: table "tbl" has 1 columns.*
 
 # 'x' can not be removed, as 'gen_x' depends on it
 statement error
@@ -57,7 +57,7 @@ SELECT * FROM tbl
 statement error
 INSERT INTO tbl VALUES(2,3)
 ----
-<REGEX>:.*Binder Error: table tbl has 1 columns.*
+<REGEX>:.*Binder Error: table "tbl" has 1 columns.*
 
 statement error
 drop macro my_macro;

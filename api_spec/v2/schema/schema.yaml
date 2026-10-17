@@ -1,0 +1,88 @@
+module: schema
+# An ordered list of (name, type) fields: a row schema. This is the one schema
+# type across the V2 API, describing a bound statement's output (result
+# columns) and input (parameters), a result's columns, and Arrow conversion.
+# Field names may repeat or be empty, and the list itself may be empty.
+#
+# Lifetime: schema_get_field borrows the field name and type, both valid only
+# until the schema is destroyed. The bind verbs produce a schema the caller
+# owns and destroys.
+handles:
+  schema:
+    description: |
+      An owned, ordered list of (name, type) fields. Read with schema_get_count
+      and schema_get_field. Destroy via schema_destroy.
+    cleanup_with: schema_destroy
+
+functions:
+  schema_get_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: "Returns the number of fields in a schema."
+    role: getter
+    belongs_to: schema
+    parameters:
+      schema:
+        type: schema
+        description: "The schema."
+      out_count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: "Receives the field count."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR
+  schema_get_field:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Borrows the name and type of the field at the given index.
+
+      out_name and out_type are valid only until the schema is destroyed, and
+      out_type must not be destroyed. An out-of-range index is rejected with
+      ERROR_INPUT_INVALID.
+    role: getter
+    belongs_to: schema
+    parameters:
+      schema:
+        type: schema
+        description: "The schema."
+      index:
+        type: idx
+        description: "Zero-based field index."
+      out_name:
+        type: identifier
+        indirection: 1
+        kind: OUT_BORROW
+        description: "Receives a borrowed view of the field name. Valid until the schema is destroyed."
+      out_type:
+        type: logical_type
+        indirection: 1
+        kind: OUT_BORROW
+        description: "Receives a borrowed field type. Valid until the schema is destroyed; do not destroy it."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR
+  schema_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Destroys a schema handle.
+
+      Frees the handle along with the names and types it owns. On success the
+      slot is set to null. Safe to call on an already-null slot.
+    role: destructor
+    belongs_to: schema
+    parameters:
+      schema:
+        type: schema
+        indirection: 1
+        description: "The schema handle to destroy."
+    return_type: ERROR

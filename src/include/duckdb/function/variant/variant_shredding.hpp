@@ -5,7 +5,7 @@
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 
 namespace duckdb {
@@ -106,7 +106,7 @@ public:
 public:
 	bool ValueIsShredded(UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index);
 	void SetShredded(uint32_t row, uint32_t values_index, uint32_t result_idx);
-	case_insensitive_string_set_t ObjectFields();
+	unordered_set<string> ObjectFields() const;
 	virtual const unordered_set<VariantLogicalType> &GetVariantTypes() = 0;
 
 public:

@@ -1,6 +1,7 @@
 add_library(
   duckdb_vector_operations OBJECT
   boolean_operators.cpp
+  scalar_executor.cpp
   vector_cast.cpp
   comparison_operators.cpp
   vector_copy.cpp

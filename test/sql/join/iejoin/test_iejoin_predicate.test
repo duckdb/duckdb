@@ -135,3 +135,13 @@ NULL	6
 NULL	7
 NULL	8
 NULL	9
+
+# Test tail chunk reset
+statement ok
+SELECT count(*) 
+FROM range(1000) r(i), 
+     range(1000) d(j) 
+WHERE d.j >= r.i-1 
+ AND d.j <= r.i+1 
+ AND d.j%3 >= r.i%3 
+ AND d.j%3 <= r.i%3;

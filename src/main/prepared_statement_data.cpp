@@ -155,13 +155,14 @@ void PreparedStatementData::Bind(ClientContext &context, const identifier_map_t<
 		    allow_user_variables && PreparedStatement::AllowsUserVariableFallback(it.first);
 		auto parameter_value = GetParameterValue(context, values, it.first, can_read_user_variable);
 		D_ASSERT(it.second);
-		auto value = parameter_value.GetValue();
-		if (!value.DefaultTryCastAs(it.second->return_type)) {
+		const auto &value = parameter_value.GetValue();
+		auto cast_value = value.DefaultTryCastAs(it.second->return_type);
+		if (!cast_value) {
 			throw BinderException(
 			    "Type mismatch for binding parameter with identifier %s, expected type %s but got type %s", identifier,
 			    it.second->return_type.ToString().c_str(), value.type().ToString().c_str());
 		}
-		it.second->SetValue(std::move(value));
+		it.second->SetValue(std::move(*cast_value));
 	}
 }
 

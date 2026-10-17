@@ -50,6 +50,11 @@ EXTENSION_DEPENDENCIES = {
     'ducklake': [
         'parquet',
     ],
+    'glue': [
+        'avro',
+        'json',
+        'parquet',
+    ],
     'iceberg': [
         'avro',
         'parquet',
@@ -313,16 +318,12 @@ class ParsedEntries:
 def check_prerequisites():
     if not os.path.isfile(DUCKDB_PATH):
         log(f"{DUCKDB_PATH} not found")
-        log(
-            "please run 'GENERATE_EXTENSION_ENTRIES=1 BUILD_ALL_EXT=1 make release', you might have to manually add DONT_LINK to all extension_configs"
-        )
+        log("please run 'GENERATE_EXTENSION_ENTRIES=1 BUILD_ALL_EXT=1 make release'")
         exit(1)
     if len(args.extensions) == 0 and not os.path.isfile(EXTENSIONS_PATH):
         log(f"{EXTENSIONS_PATH} not found and --extensions it not set")
         log("Either:")
-        log(
-            "* run 'GENERATE_EXTENSION_ENTRIES=1 BUILD_ALL_EXT=1 make release', you might have to manually add DONT_LINK to all extension_configs"
-        )
+        log("* run 'GENERATE_EXTENSION_ENTRIES=1 BUILD_ALL_EXT=1 make release'")
         log("* Specify a comma separated list of extensions using --extensions")
         exit(1)
     if not os.path.isdir(args.extension_repository):
@@ -800,6 +801,7 @@ struct ExtensionFunctionOverloadEntry {
 static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
     {"parquet", "parquet"},
     {"json", "json"},
+    {"geojson", "json"},
     {"avro", "avro"},
     {"iceberg", "iceberg"}
 }; // END_OF_EXTENSION_COPY_FUNCTIONS
@@ -810,6 +812,12 @@ static constexpr ExtensionEntry EXTENSION_TYPES[] = {
     {"json", "json"},
     {"inet", "inet"},
 }; // END_OF_EXTENSION_TYPES
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_STORAGE_EXTENSIONS[] = {
+    {"arn", "aws"},
+}; // END_OF_EXTENSION_STORAGE_EXTENSIONS
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -852,6 +860,8 @@ static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
     {".json", "json"},
     {".jsonl", "json"},
     {".ndjson", "json"},
+    {".geojson", "json"},
+    {".geojsonl", "json"},
     {".shp", "spatial"},
     {".gpkg", "spatial"},
     {".fgb", "spatial"},
@@ -889,6 +899,13 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {{"s3/config", "h
                                                                 {"postgres/config", "postgres_scanner"}
 }; // EXTENSION_SECRET_PROVIDERS
 
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_LOG_TYPES[] = {
+    {"DeltaKernel", "delta"}, {"DuckLakeMetadata", "ducklake"},         {"HTTPFSInfo", "httpfs"},
+    {"Iceberg", "iceberg"},   {"PostgresQueryLog", "postgres_scanner"}, {"Quack", "quack"},
+}; // END_OF_EXTENSION_LOG_TYPES
+
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "autocomplete",
     "avro",
@@ -905,6 +922,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "icu",
     "inet",
     "json",
+    "legacy_parser",
     "motherduck",
     "mysql_scanner",
     "parquet",

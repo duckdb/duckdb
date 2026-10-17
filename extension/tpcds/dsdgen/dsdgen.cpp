@@ -3,6 +3,7 @@
 #include "append_info-c.hpp"
 #include "dsdgen_helpers.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_executor.hpp"
@@ -18,6 +19,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <thread>
 
 using namespace duckdb;
@@ -28,6 +30,7 @@ static constexpr idx_t DSDGEN_MIN_ROW_BATCH_SIZE = 10000;
 static constexpr idx_t DSDGEN_MAX_ROW_BATCH_SIZE = 100000;
 static constexpr idx_t DSDGEN_TARGET_CHUNK_ROWS = 2 * DEFAULT_ROW_GROUP_SIZE;
 static constexpr idx_t DSDGEN_PROGRESS_UNIT_SCALE = 100;
+static constexpr idx_t DSDGEN_MAX_SCALE_FACTOR = 100000;
 static constexpr idx_t DSDGEN_PARALLEL_SPLIT_MIN_ROWS = 1000000;
 static constexpr idx_t DSDGEN_MIN_PARALLEL_TASK_ROWS = DSDGEN_MIN_ROW_BATCH_SIZE;
 // TPC-DS worker initialization creates large per-thread caches, so fanout is bounded.
@@ -462,9 +465,18 @@ public:
 	TPCDSDSDGenGenerator(ClientContext &context, double scale, const Identifier &catalog_name,
 	                     const Identifier &schema, string suffix)
 	    : context(context), scale(scale), catalog_name(catalog_name), schema(schema), suffix(std::move(suffix)) {
+		if (Value::IsNan(scale)) {
+			throw InvalidInputException("DSDGen requires a valid scale factor");
+		}
+
 		if (scale <= 0) {
 			Finish();
 			return;
+		}
+
+		if (scale > DSDGEN_MAX_SCALE_FACTOR) {
+			throw InvalidInputException("DSDGen does not support a scale factor exceeding %d.",
+			                            DSDGEN_MAX_SCALE_FACTOR);
 		}
 
 #ifdef DEBUG
@@ -622,9 +634,6 @@ private:
 				parallel_work_offset++;
 			}
 			executor.WorkOnTasks();
-			if (executor.HasError()) {
-				executor.ThrowError();
-			}
 			for (idx_t appender_idx = 0; appender_idx < new_appenders.size(); appender_idx++) {
 				auto work_item_idx = parallel_work_offset - new_appenders.size() + appender_idx;
 				finished_appenders.push_back(make_uniq<FinishedDSDGenAppender>(
@@ -843,6 +852,50 @@ string DSDGenWrapper::GetQuery(int query) {
 		throw SyntaxException("Out of range TPC-DS query number %d", query);
 	}
 	return TPCDS_QUERIES[query - 1];
+}
+
+//! Q9 compares store_sales counts against thresholds that qgen draws from a range proportional to the store_sales
+//! row count, i.e. to the scale factor; scale the stored SF 1 thresholds so the CASE branches keep their selectivity
+static string ScaleQ9Thresholds(const string &query, double sf) {
+	string result;
+	idx_t pos = 0;
+	idx_t scaled_count = 0;
+	while (pos < query.size()) {
+		auto start = query.find(") > ", pos);
+		if (start == string::npos) {
+			break;
+		}
+		start += 4;
+		auto end = start;
+		int64_t threshold = 0;
+		while (end < query.size() && StringUtil::CharacterIsDigit(query[end])) {
+			threshold = threshold * 10 + (query[end] - '0');
+			end++;
+		}
+		result += query.substr(pos, start - pos);
+		pos = end;
+		if (end == start || query.compare(end, 5, " THEN") != 0) {
+			result += query.substr(start, end - start);
+			continue;
+		}
+		auto scaled = MaxValue<int64_t>(1, static_cast<int64_t>(std::llround(static_cast<double>(threshold) * sf)));
+		result += to_string(scaled);
+		scaled_count++;
+	}
+	result += query.substr(pos);
+	D_ASSERT(scaled_count == 5);
+	return result;
+}
+
+string DSDGenWrapper::GetQuery(int query, double sf) {
+	if (Value::IsNan(sf) || sf <= 0 || sf > DSDGEN_MAX_SCALE_FACTOR) {
+		throw InvalidInputException("TPC-DS queries require a scale factor between 0 and %d", DSDGEN_MAX_SCALE_FACTOR);
+	}
+	auto result = GetQuery(query);
+	if (query != 9) {
+		return result;
+	}
+	return ScaleQ9Thresholds(result, sf);
 }
 
 string DSDGenWrapper::GetAnswer(double sf, int query) {

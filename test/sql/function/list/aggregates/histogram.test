@@ -43,6 +43,12 @@ select list_histogram(name) from names;
 ----
 {Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr.=1, hannes=2, mark=1, pedro=3}
 
+# floating-point buckets use SQL equality, including NaN equality
+query T
+SELECT list_histogram([1.0, 'nan'::DOUBLE, 'nan'::DOUBLE, 1.0])::VARCHAR;
+----
+{1.0=2, nan=2}
+
 # incorrect usage
 statement error
 select list_histogram()

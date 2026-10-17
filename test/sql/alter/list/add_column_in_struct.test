@@ -64,4 +64,4 @@ SELECT * FROM test;
 statement error
 ALTER TABLE test ADD COLUMN s.a.not_element INTEGER
 ----
-<REGEX>:Binder Error.*Column a is not a struct - ALTER TABLE can only add fields to structs.*
+<REGEX>:Binder Error.*Column "a" is not a struct - ALTER TABLE can only add fields to structs.*

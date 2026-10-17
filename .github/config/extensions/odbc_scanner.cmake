@@ -1,7 +1,7 @@
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(odbc_scanner
-            DONT_LINK
             GIT_URL https://github.com/duckdb/odbc-scanner
-            GIT_TAG 2f70a4b34c7b5aba795caa3300b208806cde24c9
+            GIT_TAG a33698df40f95cc3eb339703dcb085497eabfca3
+            APPLY_PATCHES
             )
 endif()

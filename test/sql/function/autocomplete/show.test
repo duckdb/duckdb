@@ -1,5 +1,5 @@
 # name: test/sql/function/autocomplete/show.test
-# description: Test sql_auto_complete
+# description: Test sql_auto_complete for SHOW / DESCRIBE
 # group: [autocomplete]
 
 require autocomplete
@@ -12,10 +12,11 @@ DESCRIBE 	0
 statement ok
 CREATE TABLE my_table(my_column INTEGER);
 
+# DESCRIBE completes table names
 query II
-SELECT suggestion, suggestion_start FROM sql_auto_complete('SHOW my_') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('DESCRIBE my_') LIMIT 1;
 ----
-my_table	5
+my_table	9
 
 statement ok
 CREATE SCHEMA my_schema;
@@ -23,12 +24,90 @@ CREATE SCHEMA my_schema;
 statement ok
 CREATE TABLE my_schema.table_in_schema(my_column INTEGER)
 
+# DESCRIBE completes schema-qualified names
 query II
-SELECT suggestion, suggestion_start FROM sql_auto_complete('SHOW my_s') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('DESCRIBE my_s') LIMIT 1;
 ----
-my_schema.	5
+my_schema.	9
 
 query II
 SELECT suggestion, suggestion_start FROM sql_auto_complete('DESCRIBE my_schema.t') LIMIT 1;
 ----
 table_in_schema	19
+
+# SHOW completes setting names
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SHOW thr') LIMIT 1;
+----
+threads	5
+
+# SHOW completes the special MySQL-inherited forms. These are keyword completions, so (like "DESCRIBE " above) each
+# suggestion carries a trailing space.
+query I
+SELECT count(*) FROM sql_auto_complete('SHOW data') WHERE suggestion = 'databases ';
+----
+1
+
+query I
+SELECT count(*) FROM sql_auto_complete('SHOW sch') WHERE suggestion = 'schemas ';
+----
+1
+
+query I
+SELECT count(*) FROM sql_auto_complete('SHOW vari') WHERE suggestion = 'variables ';
+----
+1
+
+query I
+SELECT count(*) FROM sql_auto_complete('SHOW tab') WHERE suggestion = 'tables ';
+----
+1
+
+# SHOW does NOT complete arbitrary table names (using SHOW to describe a table is deprecated)
+statement ok
+CREATE TABLE thermostat(id INTEGER);
+
+query I
+SELECT count(*) FROM sql_auto_complete('SHOW therm') WHERE suggestion = 'thermostat';
+----
+0
+
+# ... but the "threads" setting is still suggested for the same prefix
+query I
+SELECT count(*) FROM sql_auto_complete('SHOW thr') WHERE suggestion = 'threads';
+----
+1
+
+# Only SHOW completes settings: DESCRIBE/DESC/SUMMARIZE describe a table and must not suggest the "threads" setting
+query I
+SELECT count(*) FROM sql_auto_complete('DESCRIBE thr') WHERE suggestion = 'threads';
+----
+0
+
+query I
+SELECT count(*) FROM sql_auto_complete('SUMMARIZE thr') WHERE suggestion = 'threads';
+----
+0
+
+# ... and DESCRIBE still completes the table for that prefix
+query I
+SELECT count(*) FROM sql_auto_complete('DESCRIBE therm') WHERE suggestion = 'thermostat';
+----
+1
+
+# Using SHOW to describe a query "(SELECT ...)" is deprecated, so SHOW does not autocomplete the "(" that opens it
+query I
+SELECT count(*) FROM sql_auto_complete('SHOW ') WHERE suggestion = '(';
+----
+0
+
+# ... but DESCRIBE/SUMMARIZE do complete the query form
+query I
+SELECT count(*) FROM sql_auto_complete('DESCRIBE ') WHERE suggestion = '(';
+----
+1
+
+query I
+SELECT count(*) FROM sql_auto_complete('SUMMARIZE ') WHERE suggestion = '(';
+----
+1

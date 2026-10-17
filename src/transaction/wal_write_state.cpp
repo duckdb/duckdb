@@ -49,8 +49,12 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 
 	switch (parent.type) {
 	case CatalogType::TRIGGER_ENTRY:
-		// Triggers do not support ALTER — always a CREATE
 		D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY);
+		if (entry.type == parent.type) {
+			// Column-rename propagation from the owning ALTER TABLE — the ALTER_INFO record
+			// already covers this on replay; writing a second CREATE_TRIGGER would be redundant.
+			return;
+		}
 		log.WriteCreateTrigger(parent.Cast<TriggerCatalogEntry>());
 		break;
 	case CatalogType::TABLE_ENTRY:
@@ -288,7 +292,8 @@ void WALWriteState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = reinterpret_cast<UpdateInfo *>(data);
-		if (!info->segment->column_data.GetTableInfo().IsTemporary()) {
+		// update infos without updates were replaced by a larger update info
+		if (info->N > 0 && !info->segment->column_data.GetTableInfo().IsTemporary()) {
 			WriteUpdate(*info);
 		}
 		break;

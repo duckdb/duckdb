@@ -4,20 +4,20 @@
 
 namespace duckdb {
 
-void Node256::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
-	NodeHandle<Node256> handle(art, node);
-	auto &n = handle.Get();
+void Node256::InsertChild(ART &art, NodePtr &node_ptr, const uint8_t byte, const NodePtr child_ptr) {
+	NodeHandle handle(art, node_ptr);
+	auto &n = handle.Get<Node256>();
 	n.count++;
-	n.children[byte] = child;
+	n.children[byte] = child_ptr;
 }
 
-void Node256::DeleteChild(ART &art, Node &node, const uint8_t byte) {
+void Node256::DeleteChild(ART &art, NodePtr &node_ptr, const uint8_t byte) {
 	{
-		NodeHandle<Node256> handle(art, node);
-		auto &n = handle.Get();
+		NodeHandle handle(art, node_ptr);
+		auto &n = handle.Get<Node256>();
 
 		// Free the child and decrease the count.
-		Node::FreeTree(art, n.children[byte]);
+		NodePtr::FreeTree(art, n.children[byte]);
 		n.count--;
 
 		if (n.count > SHRINK_THRESHOLD) {
@@ -26,18 +26,18 @@ void Node256::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 	}
 
 	// Shrink to Node48.
-	auto node256 = node;
-	Node48::ShrinkNode256(art, node, node256);
+	auto node256_ptr = node_ptr;
+	Node48::ShrinkNode256(art, node_ptr, node256_ptr);
 }
 
-void Node256::GrowNode48(ART &art, Node &node256, Node &node48) {
+void Node256::GrowNode48(ART &art, NodePtr &node256_ptr, NodePtr &node48_ptr) {
 	{
-		NodeHandle<Node48> n48_handle(art, node48);
-		auto &n48 = n48_handle.Get();
+		NodeHandle n48_handle(art, node48_ptr);
+		auto &n48 = n48_handle.Get<Node48>();
 
-		auto n256_handle = New(art, node256);
-		auto &n256 = n256_handle.Get();
-		node256.SetGateStatus(node48.GetGateStatus());
+		auto n256_handle = New(art, node256_ptr);
+		auto &n256 = n256_handle.Get<Node256>();
+		node256_ptr.SetGateStatus(node48_ptr.GetGateStatus());
 
 		n256.count = n48.count;
 		for (uint16_t i = 0; i < CAPACITY; i++) {
@@ -46,7 +46,7 @@ void Node256::GrowNode48(ART &art, Node &node256, Node &node48) {
 			}
 		}
 	}
-	Node::FreeNode(art, node48);
+	NodePtr::FreeNode(art, node48_ptr);
 }
 
 } // namespace duckdb

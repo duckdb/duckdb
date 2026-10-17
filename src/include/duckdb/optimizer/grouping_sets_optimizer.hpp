@@ -19,7 +19,7 @@ class Optimizer;
 //! use one branch per grouping set over a shared materialized input.
 class GroupingSetsOptimizer : public LogicalOperatorVisitor {
 public:
-	explicit GroupingSetsOptimizer(Optimizer &optimizer);
+	explicit GroupingSetsOptimizer(Optimizer &optimizer, bool mandatory_aggregate_lowering = false);
 
 	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
 
@@ -30,6 +30,7 @@ private:
 
 private:
 	Optimizer &optimizer;
+	bool mandatory_aggregate_lowering;
 	column_binding_map_t<ColumnBinding> replacement_map;
 };
 } // namespace duckdb

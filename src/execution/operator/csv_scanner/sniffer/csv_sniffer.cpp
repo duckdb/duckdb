@@ -80,7 +80,7 @@ void CSVSniffer::SetResultOptions() const {
 AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 	if (set_columns.IsSet()) {
 		// Nothing to see here
-		return AdaptiveSnifferResult(*set_columns.types, StringsToIdentifiers(*set_columns.names), true);
+		return AdaptiveSnifferResult(*set_columns.types, *set_columns.names, true);
 	}
 	// Return Types detected
 	vector<LogicalType> return_types;
@@ -106,8 +106,10 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 	// Parse chunk and read csv with info candidate
 	auto &data_chunk = scanner->ParseChunk().ToChunk();
 	idx_t start_row = 0;
-	if (sniffed_column_counts.result_position == 2) {
-		// If equal to two, we will only use the second row for type checking
+	const bool should_skip_header =
+	    !options.dialect_options.header.IsSetByUser() || options.dialect_options.header.GetValue();
+	if (sniffed_column_counts.result_position > 1 && should_skip_header) {
+		// Skip the potential header when detecting types
 		start_row = 1;
 	}
 
@@ -140,7 +142,7 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 		}
 		detected_types.push_back(d_type);
 	}
-	return {detected_types, StringsToIdentifiers(names), sniffed_column_counts.result_position > 1};
+	return {detected_types, names, sniffed_column_counts.result_position > 1};
 }
 
 SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
@@ -149,7 +151,7 @@ SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
 	// Check if we are happy with the result or if we need to do more sniffing
 	if (!error_handler->AnyErrors() && !detection_error_handler->AnyErrors()) {
 		// If we got no errors, we also run full if schemas do not match.
-		if (!set_columns.IsSet() && !file_options.AnySet()) {
+		if (!set_columns.IsSet()) {
 			string error;
 			run_full = !file_schema.SchemasMatch(error, min_sniff_res, options.file_path, true);
 		}
@@ -253,9 +255,9 @@ SnifferResult CSVSniffer::SniffCSV(const bool force_match) {
 	}
 	options.was_type_manually_set = manually_set;
 	if (set_columns.IsSet()) {
-		return SnifferResult(*set_columns.types, StringsToIdentifiers(*set_columns.names));
+		return SnifferResult(*set_columns.types, *set_columns.names);
 	}
-	return SnifferResult(detected_types, StringsToIdentifiers(names));
+	return SnifferResult(detected_types, names);
 }
 
 } // namespace duckdb

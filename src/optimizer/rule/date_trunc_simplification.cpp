@@ -13,6 +13,7 @@
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
+#include "duckdb/common/types/date.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/function_binder.hpp"
 
@@ -35,6 +36,27 @@ DateTruncSimplificationRule::DateTruncSimplificationRule(ExpressionRewriter &rew
 	op->policy = SetMatcher::Policy::UNORDERED;
 
 	root = std::move(op);
+}
+
+static bool TruncatesYearsTowardsZero(const BoundConstantExpression &date_part) {
+	DatePartSpecifier part;
+	if (!TryGetDatePartSpecifier(StringValue::Get(date_part.GetValue()), part)) {
+		return true;
+	}
+	return part == DatePartSpecifier::DECADE || part == DatePartSpecifier::CENTURY ||
+	       part == DatePartSpecifier::MILLENNIUM;
+}
+
+static bool IsAfterFirstYear(const Value &value) {
+	if (value.IsNull()) {
+		return true;
+	}
+	auto date_value = value.DefaultTryCastAs(LogicalType::DATE);
+	if (!date_value || date_value->IsNull()) {
+		return false;
+	}
+	// leave a margin for time zones
+	return Date::ExtractYear(date_value->GetValue<date_t>()) > 1;
 }
 
 unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
@@ -61,6 +83,22 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 	ExpressionType rhs_comparison_type = comparison_type;
 	if (!col_is_lhs) {
 		rhs_comparison_type = FlipComparisonExpression(comparison_type);
+	}
+
+	auto &column_side = col_is_lhs ? left : right;
+	auto &constant_side = col_is_lhs ? right : left;
+
+	// date_trunc preserves temporal infinities, so only remove the function call.
+	if (IsInfinity(rhs.GetValue())) {
+		ReplaceDateTruncWithColumn(column_side, constant_side, column_part);
+		changes_made = true;
+		return nullptr;
+	}
+
+	// Truncating to decades, centuries or millennia does not round years before the common era towards the past
+	// (e.g. 150 BC truncates to 100 BC), so the rewrite below is only valid for constants after that
+	if (TruncatesYearsTowardsZero(date_part) && !IsAfterFirstYear(rhs.GetValue())) {
+		return nullptr;
 	}
 
 	// Check whether trunc(date_part, constant_rhs) = constant_rhs.
@@ -103,7 +141,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 					if (rhs_comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 						return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
 					}
-					return ExpressionRewriter::ConstantOrNull(column_part.Copy(), Value::BOOLEAN(false));
+					return ExpressionRewriter::ConstantOrNull(GetContext(), column_part.Copy(), Value::BOOLEAN(false));
 				}
 
 				auto trunc = CreateTrunc(date_part, rhs, column_part.GetReturnType());
@@ -176,7 +214,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 					if (rhs_comparison_type == ExpressionType::COMPARE_DISTINCT_FROM) {
 						return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
 					}
-					return ExpressionRewriter::ConstantOrNull(column_part.Copy(), Value::BOOLEAN(true));
+					return ExpressionRewriter::ConstantOrNull(GetContext(), column_part.Copy(), Value::BOOLEAN(true));
 				}
 
 				auto trunc = CreateTrunc(date_part, rhs, column_part.GetReturnType());
@@ -229,29 +267,12 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 					return nullptr; // Something went wrong---don't do the optimization.
 				}
 
-				if (col_is_lhs) {
-					left = column_part.Copy();
-					right = std::move(trunc);
-				} else {
-					right = column_part.Copy();
-					left = std::move(trunc);
-				}
+				column_side = column_part.Copy();
+				constant_side = std::move(trunc);
 			} else {
 				// If the RHS is already truncated (i.e.  date_trunc(part, rhs) = rhs), then we can use
 				// it as-is.
-				if (col_is_lhs) {
-					left = column_part.Copy();
-					// Determine whether the RHS needs to be casted.
-					if (rhs.GetReturnType().id() != left->GetReturnType().id()) {
-						right = CastAndEvaluate(std::move(right), left->GetReturnType());
-					}
-				} else {
-					right = column_part.Copy();
-					// Determine whether the RHS needs to be casted.
-					if (rhs.GetReturnType().id() != right->GetReturnType().id()) {
-						left = CastAndEvaluate(std::move(left), right->GetReturnType());
-					}
-				}
+				ReplaceDateTruncWithColumn(column_side, constant_side, column_part);
 			}
 
 			changes_made = true;
@@ -271,13 +292,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 				return nullptr; // Something went wrong---don't do the optimization.
 			}
 
-			if (col_is_lhs) {
-				left = column_part.Copy();
-				right = std::move(trunc);
-			} else {
-				right = column_part.Copy();
-				left = std::move(trunc);
-			}
+			column_side = column_part.Copy();
+			constant_side = std::move(trunc);
 
 			// > needs to become >=, and <= needs to become <.
 			if (rhs_comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
@@ -447,6 +463,32 @@ bool DateTruncSimplificationRule::DateIsTruncated(const BoundConstantExpression 
 	}
 
 	return (result == trunc_result);
+}
+
+bool DateTruncSimplificationRule::IsInfinity(const Value &value) {
+	if (value.IsNull()) {
+		return false;
+	}
+	switch (value.type().id()) {
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return value == Value::Infinity(value.type()) || value == Value::NegativeInfinity(value.type());
+	default:
+		return false;
+	}
+}
+
+void DateTruncSimplificationRule::ReplaceDateTruncWithColumn(unique_ptr<Expression> &column_side,
+                                                             unique_ptr<Expression> &constant_side,
+                                                             const BoundColumnRefExpression &column_part) {
+	column_side = column_part.Copy();
+	if (constant_side->GetReturnType().id() != column_side->GetReturnType().id()) {
+		constant_side = CastAndEvaluate(std::move(constant_side), column_side->GetReturnType());
+	}
 }
 
 unique_ptr<Expression> DateTruncSimplificationRule::CastAndEvaluate(unique_ptr<Expression> rhs,

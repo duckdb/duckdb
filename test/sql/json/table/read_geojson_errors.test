@@ -1,0 +1,50 @@
+# name: test/sql/json/table/read_geojson_errors.test
+# description: Error handling when reading malformed GeoJSON
+# group: [table]
+
+require json
+
+# A geometry whose coordinates are not numbers cannot be read
+statement error
+SELECT ST_AsText(geometry) FROM read_json('data/json/geojson/malformed.geojsonl');
+----
+<REGEX>:.*must contain only numbers.*
+
+# ignore_errors turns the bad row into NULL
+query I
+SELECT ST_AsText(geometry) FROM read_json('data/json/geojson/malformed.geojsonl', ignore_errors=true);
+----
+POINT (1 2)
+NULL
+POINT (5 6)
+
+# The same, with the type given explicitly
+statement error
+SELECT ST_AsText(geometry) FROM read_json('data/json/geojson/malformed.geojsonl', records='false', columns={geometry: 'GEOMETRY'});
+----
+<REGEX>:.*must contain only numbers.*
+
+query I
+SELECT ST_AsText(geometry) FROM read_json('data/json/geojson/malformed.geojsonl', records='false', ignore_errors=true, columns={geometry: 'GEOMETRY'});
+----
+POINT (1 2)
+NULL
+POINT (5 6)
+
+# A geometry nested too shallowly
+statement ok
+COPY (SELECT '{"g":{"type":"Polygon","coordinates":[1,2]}}' AS c) TO '{TEST_DIR}/shallow.geojsonl' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+statement error
+SELECT g FROM read_json('{TEST_DIR}/shallow.geojsonl');
+----
+<REGEX>:.*nested too shallowly.*
+
+# A WKT string in a GEOMETRY column that is not valid WKT
+statement ok
+COPY (SELECT '{"g":"NOT WKT"}' AS c) TO '{TEST_DIR}/badwkt.ndjson' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+statement error
+SELECT g FROM read_json('{TEST_DIR}/badwkt.ndjson', columns={g: 'GEOMETRY'});
+----
+<REGEX>:.*

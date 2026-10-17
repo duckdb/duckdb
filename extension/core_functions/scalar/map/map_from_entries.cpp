@@ -2,7 +2,6 @@
 #include "core_functions/scalar/map_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 
@@ -21,7 +20,8 @@ ScalarFunction MapFromEntriesFun::GetFunction() {
 	auto map_type = LogicalType::MAP(key_type, val_type);
 	auto row_type = LogicalType::TUPLE({key_type, val_type});
 
-	ScalarFunction fun({LogicalType::LIST(row_type)}, map_type, MapFromEntriesFunction);
+	ScalarFunction fun({}, map_type, MapFromEntriesFunction);
+	fun.GetSignature().AddParameter("map", LogicalType::LIST(row_type));
 	fun.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
 
 	fun.SetFallible();

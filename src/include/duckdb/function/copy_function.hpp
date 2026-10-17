@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
@@ -154,7 +155,7 @@ typedef void (*copy_to_serialize_t)(Serializer &serializer, const FunctionData &
 typedef unique_ptr<FunctionData> (*copy_to_deserialize_t)(Deserializer &deserializer, CopyFunction &function);
 
 typedef unique_ptr<FunctionData> (*copy_from_bind_t)(ClientContext &context, CopyFromFunctionBindInput &info,
-                                                     vector<string> &expected_names,
+                                                     vector<Identifier> &expected_names,
                                                      vector<LogicalType> &expected_types);
 typedef CopyFunctionExecutionMode (*copy_to_execution_mode_t)(bool preserve_insertion_order, bool supports_batch_index);
 
@@ -168,7 +169,7 @@ typedef optional_idx (*copy_default_batch_size_t)();
 typedef optional_idx (*copy_default_batch_size_bytes_t)();
 typedef idx_t (*copy_file_size_bytes_t)(GlobalFunctionData &gstate);
 
-typedef idx_t (*copy_desired_batch_size_t)(ClientContext &context, FunctionData &bind_data);
+typedef optional_idx (*copy_desired_batch_size_t)(ClientContext &context, FunctionData &bind_data);
 
 typedef void (*copy_to_get_written_statistics_t)(ClientContext &context, FunctionData &bind_data,
                                                  GlobalFunctionData &gstate, CopyFunctionFileStatistics &statistics);

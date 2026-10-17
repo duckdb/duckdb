@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/function/function_set_base.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -17,92 +18,29 @@
 
 namespace duckdb {
 
-template <class T>
-class FunctionSet {
-public:
-	explicit FunctionSet(Identifier name) : name(std::move(name)) { // NOLINT
-	}
-
-	//! The name of the function set
-	Identifier name;
-
-public:
-	void SetName(Identifier name_p) {
-		name = std::move(name_p);
-	}
-	//! The set of functions.
-	vector<T> functions;
-
-public:
-	void AddFunction(T function) {
-		functions.push_back(std::move(function));
-	}
-	idx_t Size() {
-		return functions.size();
-	}
-
-	const T &GetFunctionByOffset(idx_t offset) const {
-		D_ASSERT(offset < functions.size());
-		return functions[offset];
-	}
-
-	bool MergeFunctionSet(FunctionSet<T> new_functions, bool override = false) {
-		D_ASSERT(!new_functions.functions.empty());
-		for (auto &new_func : new_functions.functions) {
-			bool overwritten = false;
-			for (auto &func : functions) {
-				if (new_func.Equal(func)) {
-					// function overload already exists
-					if (override) {
-						// override it
-						overwritten = true;
-						func = new_func;
-					} else {
-						// throw an error
-						return false;
-					}
-					break;
-				}
-			}
-			if (!overwritten) {
-				functions.push_back(new_func);
-			}
-		}
-		return true;
-	}
-};
-
 class ScalarFunctionSet : public FunctionSet<ScalarFunction> {
 public:
 	DUCKDB_API explicit ScalarFunctionSet();
 	DUCKDB_API explicit ScalarFunctionSet(Identifier name);
 	DUCKDB_API explicit ScalarFunctionSet(ScalarFunction fun);
 
-	DUCKDB_API const ScalarFunction &GetFunctionByArguments(ClientContext &context,
-	                                                        const vector<LogicalType> &arguments);
+	DUCKDB_API shared_ptr<const ScalarFunction> GetFunctionByArguments(ClientContext &context,
+	                                                                   const vector<LogicalType> &arguments);
 
 	//! Mark every overload in the set as fallible (can throw runtime errors)
 	void SetFallible() {
-		for (auto &fun : functions) {
-			fun.SetFallible();
-		}
+		ApplyToFunctions([](ScalarFunction &fun) { fun.SetFallible(); });
 	}
 
 	//! Apply the same per-arg property to every overload in the set.
 	void SetArgProperties(idx_t arg_idx, ArgProperties props) {
-		for (auto &fun : functions) {
-			fun.SetArgProperties(arg_idx, props);
-		}
+		ApplyToFunctions([&](ScalarFunction &fun) { fun.SetArgProperties(arg_idx, props); });
 	}
 	void SetArgProperties(const vector<ArgProperties> &props) {
-		for (auto &fun : functions) {
-			fun.SetArgProperties(props);
-		}
+		ApplyToFunctions([&](ScalarFunction &fun) { fun.SetArgProperties(props); });
 	}
 	void SetUnaryArgProperties(ArgProperties props) {
-		for (auto &fun : functions) {
-			fun.SetUnaryArgProperties(props);
-		}
+		ApplyToFunctions([&](ScalarFunction &fun) { fun.SetUnaryArgProperties(props); });
 	}
 };
 
@@ -112,8 +50,8 @@ public:
 	DUCKDB_API explicit AggregateFunctionSet(Identifier name);
 	DUCKDB_API explicit AggregateFunctionSet(AggregateFunction fun);
 
-	DUCKDB_API const AggregateFunction &GetFunctionByArguments(ClientContext &context,
-	                                                           const vector<LogicalType> &arguments);
+	DUCKDB_API shared_ptr<const AggregateFunction> GetFunctionByArguments(ClientContext &context,
+	                                                                      const vector<LogicalType> &arguments);
 };
 
 class WindowFunctionSet : public FunctionSet<WindowFunction> {
@@ -122,8 +60,8 @@ public:
 	DUCKDB_API explicit WindowFunctionSet(Identifier name);
 	DUCKDB_API explicit WindowFunctionSet(WindowFunction fun);
 
-	DUCKDB_API const WindowFunction &GetFunctionByArguments(ClientContext &context,
-	                                                        const vector<LogicalType> &arguments);
+	DUCKDB_API shared_ptr<const WindowFunction> GetFunctionByArguments(ClientContext &context,
+	                                                                   const vector<LogicalType> &arguments);
 };
 
 class TableFunctionSet : public FunctionSet<TableFunction> {
@@ -131,8 +69,8 @@ public:
 	DUCKDB_API explicit TableFunctionSet(Identifier name);
 	DUCKDB_API explicit TableFunctionSet(TableFunction fun);
 
-	DUCKDB_API const TableFunction &GetFunctionByArguments(ClientContext &context,
-	                                                       const vector<LogicalType> &arguments);
+	DUCKDB_API shared_ptr<const TableFunction> GetFunctionByArguments(ClientContext &context,
+	                                                                  const vector<LogicalType> &arguments);
 };
 
 class PragmaFunctionSet : public FunctionSet<PragmaFunction> {

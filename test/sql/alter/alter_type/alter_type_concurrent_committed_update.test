@@ -1,0 +1,39 @@
+# name: test/sql/alter/alter_type/alter_type_concurrent_committed_update.test
+# description: ALTER TYPE must not discard a committed update its own snapshot cannot see
+# group: [alter_type]
+
+statement ok con1
+CREATE TABLE t(id INTEGER, v INTEGER)
+
+statement ok con1
+INSERT INTO t VALUES (1, 0)
+
+# con2 takes its snapshot before the update commits
+statement ok con2
+BEGIN TRANSACTION
+
+query I con2
+SELECT v FROM t
+----
+0
+
+statement ok con1
+UPDATE t SET v = 7
+
+# the retype rewrites the column, and the new column does not inherit the old column's update
+# segments - so a rewrite that resolved values at con2's snapshot would drop the committed update
+statement ok con2
+ALTER TABLE t ALTER COLUMN v SET DATA TYPE BIGINT
+
+statement ok con2
+COMMIT
+
+query I con1
+SELECT v FROM t
+----
+7
+
+query I con1
+SELECT typeof(v) FROM t
+----
+BIGINT

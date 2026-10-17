@@ -32,6 +32,9 @@ private:
 	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
 
 	optional_ptr<ColumnAliasBinder> column_alias_binder;
+
+public:
+	bool ClaimsAlias(ColumnRefExpression &colref) override;
 };
 
 } // namespace duckdb

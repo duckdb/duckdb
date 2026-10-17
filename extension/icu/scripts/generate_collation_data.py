@@ -365,7 +365,7 @@ QUATERNARY = 3
 IDENTICAL = 4
 
 # bidi marks appear in the rules of right-to-left scripts to make them readable
-BIDI_MARKS = "\u200E\u200F\u061C"
+BIDI_MARKS = "\u200e\u200f\u061c"
 
 STRENGTH_OF_RELATION = {"<": PRIMARY, "<<": SECONDARY, "<<<": TERTIARY, "<<<<": QUATERNARY, "=": IDENTICAL}
 

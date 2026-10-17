@@ -61,8 +61,24 @@ SELECT i FROM integers LIMIT 4 OFFSET 2
 3
 4
 
-# limit value > 8192: no pushdown
+# limit value >= 8192: no pushdown
 query II
-EXPLAIN SELECT i FROM integers LIMIT 8192
+EXPLAIN SELECT i + 1 FROM range(8193) t(i) LIMIT 8192
 ----
 logical_opt	<REGEX>:.*LIMIT.*PROJECTION.*
+
+statement ok
+CREATE SEQUENCE s START 1
+
+query II
+EXPLAIN SELECT nextval('s') AS v FROM integers LIMIT 1 OFFSET 1
+----
+logical_opt	<REGEX>:.*LIMIT.*PROJECTION.*
+
+statement ok
+CREATE TABLE offset_result AS SELECT nextval('s') AS v FROM integers LIMIT 1 OFFSET 1
+
+query I
+SELECT v FROM offset_result
+----
+2

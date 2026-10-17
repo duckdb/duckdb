@@ -67,3 +67,20 @@ ORDER BY id;
 1	0.0	0.0
 2	0.0	0.0
 3	0.0	0.0
+
+# Argument ordering that is only a prefix of the window ordering must not split peers
+query III
+SELECT
+	id,
+	k,
+	cume_dist(ORDER BY k) OVER w AS cd,
+FROM (VALUES (1, 1), (2, 1), (3, 2)) tbl(id, k)
+WINDOW w AS (
+	ORDER BY k, id
+	ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+)
+ORDER BY id
+----
+1	1	0.6666666666666666
+2	1	0.6666666666666666
+3	2	1.0

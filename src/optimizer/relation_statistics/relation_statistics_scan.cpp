@@ -133,7 +133,7 @@ DistinctCount RelationStatisticsHelper::GetDistinctCount(LogicalGet &get, Client
 
 RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientContext &context) {
 	RelationStats result;
-	auto base_table_cardinality = get.EstimateCardinality(context);
+	auto base_table_cardinality = get.EstimateSourceCardinality(context);
 	auto cardinality_after_filters = base_table_cardinality;
 	result.table_name = get.GetTable() ? get.GetTable()->name : Identifier(get.GetName());
 
@@ -143,6 +143,11 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			auto &column_index = get.GetColumnIndex(entry.GetIndex());
 			auto column_statistics = GetColumnStatistics(get, context, column_index);
 			if (column_statistics) {
+				auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "ExtractGetStats");
+				if (filter.column_indexes.size() <= 1 &&
+				    filter.CheckStatistics(context, *column_statistics) == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+					continue;
+				}
 				cardinality_after_filters =
 				    MinValue(cardinality_after_filters,
 				             InspectTableFilter(base_table_cardinality, entry.Filter(), *column_statistics));
@@ -238,6 +243,16 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const Tabl
 	auto cardinality_after_filters = cardinality;
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RelationStatisticsHelper::InspectTableFilter");
 	auto &expr = *expr_filter.expr;
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &function = expr.Cast<BoundFunctionExpression>();
+		if (function.Function().GetName() == "!~~" && !base_stats.CanHaveNull()) {
+			if (cardinality == 0) {
+				return 0;
+			}
+			return MaxValue<idx_t>(
+			    LossyNumericCast<idx_t>(static_cast<double>(cardinality) * (1.0 - DEFAULT_SELECTIVITY)), 1);
+		}
+	}
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
 		for (auto &child : conjunction.GetChildren()) {

@@ -24,13 +24,13 @@ INSERT INTO test VALUES
 statement error
 ALTER TABLE test DROP COLUMN s.key
 ----
-Catalog Error: Cannot drop field 'key' from column 's' - it's not a struct
+Catalog Error: Cannot drop field "key" from column "s" - it's not a struct
 
 # attempt to drop 'value' from the map
 statement error
 ALTER TABLE test DROP COLUMN s.value
 ----
-Catalog Error: Cannot drop field 'value' from column 's' - it's not a struct
+Catalog Error: Cannot drop field "value" from column "s" - it's not a struct
 
 
 # drop a column from the struct inside the 'value'

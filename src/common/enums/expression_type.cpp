@@ -123,6 +123,14 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "COMPARE_NOT_BETWEEN";
 	case ExpressionType::VALUE_DEFAULT:
 		return "VALUE_DEFAULT";
+	case ExpressionType::ALTERNATION:
+		return "ALTERNATION";
+	case ExpressionType::CONCATENATION:
+		return "CONCATENATION";
+	case ExpressionType::QUANTIFIER:
+		return "QUANTIFIER";
+	case ExpressionType::ANCHOR:
+		return "ANCHOR";
 	case ExpressionType::BOUND_REF:
 		return "BOUND_REF";
 	case ExpressionType::BOUND_COLUMN_REF:
@@ -224,6 +232,8 @@ string ExpressionClassToString(ExpressionClass type) {
 		return "BOUND_OPERATOR";
 	case ExpressionClass::BOUND_PARAMETER:
 		return "BOUND_PARAMETER";
+	case ExpressionClass::PATTERN:
+		return "PATTERN";
 	case ExpressionClass::BOUND_REF:
 		return "BOUND_REF";
 	case ExpressionClass::BOUND_SUBQUERY:
@@ -236,8 +246,6 @@ string ExpressionClassToString(ExpressionClass type) {
 		return "BOUND_UNNEST";
 	case ExpressionClass::BOUND_LAMBDA:
 		return "BOUND_LAMBDA";
-	case ExpressionClass::BOUND_EXPRESSION:
-		return "BOUND_EXPRESSION";
 	case ExpressionClass::BOUND_EXPANDED:
 		return "BOUND_EXPANDED";
 	default:

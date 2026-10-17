@@ -1,0 +1,22 @@
+# name: test/sql/index/art/scan/test_art_scan_filter_column.test
+# description: Do not use an index when its column is scanned but not filtered
+# group: [scan]
+
+statement ok
+CREATE TABLE t(a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO t VALUES (1, 10), (2, 20)
+
+statement ok
+CREATE INDEX i ON t(b)
+
+query II
+EXPLAIN ANALYZE SELECT b FROM t WHERE a = 1
+----
+analyzed_plan	<REGEX>:.*Type: Sequential Scan.*
+
+query I
+SELECT b FROM t WHERE a = 1
+----
+10

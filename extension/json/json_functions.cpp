@@ -63,9 +63,19 @@ bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
 	return constant == other.constant && path == other.path && len == other.len && path_type == other.path_type;
 }
 
+//! An integral path is an array index, other paths are cast to VARCHAR
+void JSONReadFunctionData::ResolveTypes(ResolveScalarFunctionTypesInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	D_ASSERT(bound_function.GetArguments().size() == 2);
+	if (input.GetArgumentType(1).IsIntegral()) {
+		bound_function.GetArguments()[1] = LogicalType::BIGINT;
+	} else {
+		bound_function.GetArguments()[1] = LogicalType::VARCHAR;
+	}
+}
+
 unique_ptr<FunctionData> JSONReadFunctionData::Bind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.GetArguments().size() == 2);
 	bool constant = false;
 	string path;
@@ -75,11 +85,6 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(BindScalarFunctionInput &inp
 	if (path_val && !path_val->IsNull()) {
 		constant = true;
 		path_type = CheckPath(*path_val, path, len);
-	}
-	if (arguments[1]->GetReturnType().IsIntegral()) {
-		bound_function.GetArguments()[1] = LogicalType::BIGINT;
-	} else {
-		bound_function.GetArguments()[1] = LogicalType::VARCHAR;
 	}
 	if (path_type == JSONCommon::JSONPathType::WILDCARD) {
 		bound_function.SetReturnType(LogicalType::LIST(bound_function.GetReturnType()));
@@ -167,6 +172,7 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetObjectFunction());
 	AddAliases({"to_json", "json_quote"}, GetToJSONFunction(), functions);
 	functions.push_back(ScalarFunctionSet(GetJSONCopyToJSONFunction()));
+	functions.push_back(ScalarFunctionSet(GetJSONCopyToGeoJSONFunction()));
 	functions.push_back(GetArrayToJSONFunction());
 	functions.push_back(GetRowToJSONFunction());
 	functions.push_back(GetMergePatchFunction());
@@ -175,6 +181,8 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 
 	// Structure/Transform
 	functions.push_back(GetStructureFunction());
+	functions.push_back(GetAsGeoJSONFunction());
+	functions.push_back(GetGeomFromGeoJSONFunction());
 	AddAliases({"json_transform", "from_json"}, GetTransformFunction(), functions);
 	AddAliases({"json_transform_strict", "from_json_strict"}, GetTransformStrictFunction(), functions);
 
@@ -220,6 +228,7 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 	functions.push_back(GetReadNDJSONFunction());
 	functions.push_back(GetReadJSONAutoFunction());
 	functions.push_back(GetReadNDJSONAutoFunction());
+	functions.push_back(GetReadSingleJSONFileFunction());
 
 	// Table in-out
 	functions.push_back(GetJSONEachFunction());
@@ -234,12 +243,12 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, ReplacementScanInput &input,
                                                         optional_ptr<ReplacementScanData> data) {
 	auto table_name = ReplacementScan::GetFullPath(input);
-	if (!ReplacementScan::CanReplace(table_name, {"json", "jsonl", "ndjson"})) {
+	if (!ReplacementScan::CanReplace(table_name, {"json", "jsonl", "ndjson", "geojson", "geojsonl"})) {
 		return nullptr;
 	}
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	children.push_back(ConstantExpression::String(table_name));
 	table_function->function = make_uniq<FunctionExpression>("read_json_auto", std::move(children));
 
 	if (!FileSystem::HasGlob(table_name)) {

@@ -22,9 +22,11 @@
 #include "duckdb/storage/checkpoint/checkpoint_options.hpp"
 
 namespace duckdb {
+class AsyncTask;
 class AttachedDatabase;
 class BlockManager;
 class ColumnData;
+class ColumnStatistics;
 class DatabaseInstance;
 class DataTable;
 class DuckTableEntry;
@@ -49,6 +51,7 @@ class TableFilterSet;
 struct ColumnFetchState;
 struct PrefetchState;
 struct RowGroupAppendState;
+struct SuballocationBlock;
 class MetadataManager;
 class RowVersionManager;
 class CommitDropState;
@@ -93,6 +96,31 @@ struct RowGroupWriteData {
 	optional_idx write_count;
 };
 
+//! The version info of a row group, shared with the row groups a checkpoint or an ALTER copies it into
+class RowGroupVersionInfo {
+public:
+	explicit RowGroupVersionInfo(vector<MetaBlockPointer> deletes_pointers = {});
+
+	//! Loads the persisted deletes if necessary
+	optional_ptr<RowVersionManager> Get(BlockManager &block_manager);
+	//! Does not load persisted deletes
+	optional_ptr<RowVersionManager> GetIfLoaded() const {
+		return version_info.load();
+	}
+	shared_ptr<RowVersionManager> GetOrCreate(BlockManager &block_manager);
+	bool HasUnloadedDeletes() const;
+	const vector<MetaBlockPointer> &GetDeletesPointers() const {
+		return deletes_pointers;
+	}
+
+private:
+	mutex lock;
+	vector<MetaBlockPointer> deletes_pointers;
+	atomic<bool> deletes_is_loaded;
+	shared_ptr<RowVersionManager> owned_version_info;
+	atomic<optional_ptr<RowVersionManager>> version_info;
+};
+
 class RowGroup : public SegmentBase<RowGroup> {
 public:
 	friend class ColumnData;
@@ -107,9 +135,7 @@ private:
 	//! The RowGroupCollection this row-group is a part of
 	reference<RowGroupCollection> collection;
 	//! The version info of the row_group (inserted and deleted tuple info)
-	atomic<optional_ptr<RowVersionManager>> version_info;
-	//! The owned version info of the row_group (inserted and deleted tuple info)
-	shared_ptr<RowVersionManager> owned_version_info;
+	shared_ptr<RowGroupVersionInfo> version_info;
 	//! The column data of the row_group (mutable because `const` can lazily load)
 	mutable vector<shared_ptr<ColumnData>> columns;
 
@@ -130,9 +156,10 @@ public:
 
 	unique_ptr<RowGroup> AlterType(RowGroupCollection &collection, const LogicalType &target_type, idx_t changed_idx,
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
-	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk, TransactionData transaction);
+	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk, TransactionData transaction,
+	                               ColumnStatistics &changed_stats);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
-	                               ExpressionExecutor &executor);
+	                               ExpressionExecutor &executor, ColumnStatistics &new_column_stats);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
 	//! Accumulates this row group's on-disk blocks into the drop state.
@@ -143,11 +170,14 @@ public:
 	void CommitDrop();
 
 	void InitializeEmpty(const vector<LogicalType> &types, ColumnDataType data_type);
-	bool HasChanges() const;
+	bool HasChanges(VisibilityBound bound) const;
 
 	//! Initialize a scan over this row_group
 	bool InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node);
-	bool InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset);
+	bool InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset,
+	                              bool initialize_columns = true);
+	//! Initializes the column scans of the assignment set up by InitializeScanWithOffset
+	void InitializeColumnScans(CollectionScanState &state);
 	//! Checks the given set of table filters against the row-group statistics. Returns false if the entire row group
 	//! can be skipped.
 	bool CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters, idx_t row_start);
@@ -157,7 +187,11 @@ public:
 	void Scan(ScanOptions options, CollectionScanState &state, DataChunk &result);
 	void Scan(CollectionScanState &state, DataChunk &result, TableScanType type);
 	//! Synchronously prefetches the blocks required to scan the next row_count rows
-	void PrefetchScanIO(CollectionScanState &state, idx_t row_count);
+	void PrefetchScanIO(CollectionScanState &state, idx_t row_count) const;
+	//! Collects the async I/O tasks required to scan the next row_count rows, without performing any I/O
+	vector<unique_ptr<AsyncTask>> CollectScanIOTasks(CollectionScanState &state, idx_t row_count) const;
+	//! Rows of the remaining assignment worth prefetching, trailing vectors the zonemaps reject are left out
+	idx_t PrefetchRowCount(CollectionScanState &state);
 	//! Prepares the next eligible vector in the assigned range, idempotent, returns false when none remain
 	bool PrepareScan(ScanOptions options, CollectionScanState &state);
 	//! Processes the vector prepared by PrepareScan, clearing the prepared state when the vector is finished
@@ -181,7 +215,7 @@ public:
 	//! Revert a previous append made by RowGroup::AppendVersionInfo
 	void RevertAppend(idx_t new_count);
 	//! Clean up append states that can either be compressed or deleted
-	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
+	void CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count);
 
 	//! Delete the given set of rows in the version manager
 	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *row_ids, idx_t count,
@@ -196,6 +230,8 @@ public:
 	idx_t GetCommittedRowCount();
 	//! Returns the number of rows visible to the given transaction
 	idx_t GetVisibleRowCount(TransactionData transaction);
+	//! Count visible rows in a scan assignment starting at a vector boundary
+	idx_t GetVisibleRowCount(TransactionData transaction, idx_t start_vector, idx_t scan_count);
 	bool CanReuseMetadata(RowGroupWriter &writer) const;
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
 	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats,
@@ -204,6 +240,8 @@ public:
 	PersistentRowGroupData SerializeRowGroupInfo(idx_t row_group_start) const;
 
 	static void InitializeAppend(SegmentNode<RowGroup> &row_group, RowGroupAppendState &append_state);
+	//! Continue a finalized append in a new row group, retaining unused transient block space
+	static void InitializeNextAppend(SegmentNode<RowGroup> &row_group, RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 	void FinalizeAppend(RowGroupAppendState &append_state);
 
@@ -245,10 +283,10 @@ public:
 	idx_t GetColumnCount() const;
 
 	vector<MetaBlockPointer> CheckpointDeletes(RowGroupWriter &writer);
-	//! Attempts to compress the version information of the row group
-	//! Per-row insert/delete ids that behave identically for all transactions with a start time of at least
-	//! lowest_active_start (i.e. all active and future transactions) are compressed into constants
-	void CompressVersionInfo(transaction_t lowest_active_start);
+	//! Attempts to compress the version information of the row group. Insert and delete ids that precede
+	//! lowest_visibility_bound look the same to every active and future transaction, so they can be
+	//! collapsed into constants
+	void CompressVersionInfo(VisibilityBound lowest_visibility_bound);
 
 	//! Direct accessors, fall outside of general use but can be useful to some extensions
 	ColumnData &GetRawColumnData(const StorageIndex &c) const;
@@ -256,7 +294,7 @@ public:
 
 private:
 	//! Registers prefetch candidates for the next row_count rows, returns false when prefetching is not supported
-	bool RegisterScanIO(CollectionScanState &state, idx_t row_count, PrefetchState &prefetch_state);
+	bool RegisterScanIO(CollectionScanState &state, idx_t row_count, PrefetchState &prefetch_state) const;
 	//! Shared scan-state setup for InitializeScan and InitializeScanWithOffset
 	bool InitializeScanInternal(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset);
 	//! Advances the scan past the current vector, clearing the prepared state
@@ -265,8 +303,6 @@ private:
 	optional_ptr<RowVersionManager> GetVersionInfo();
 	optional_ptr<RowVersionManager> GetVersionInfoIfLoaded() const;
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoPtr();
-	shared_ptr<RowVersionManager> GetOrCreateVersionInfoInternal();
-	void SetVersionInfo(shared_ptr<RowVersionManager> version);
 
 	ColumnData &GetColumn(storage_t c) const;
 	void LoadColumn(storage_t c) const;
@@ -289,13 +325,13 @@ private:
 	vector<MetaBlockPointer> column_pointers;
 	//! Whether or not each column is loaded (mutable because `const` can lazy load)
 	mutable unique_ptr<atomic<bool>[]> is_loaded;
-	vector<MetaBlockPointer> deletes_pointers;
 	bool has_metadata_blocks = false;
 	vector<idx_t> extra_metadata_blocks;
 	bool has_per_column_metadata_blocks = false;
 	PerColumnMetadataBlocks per_column_metadata_blocks;
-	atomic<bool> deletes_is_loaded;
 	atomic<idx_t> allocation_size;
+	//! Append cursor, retained between appends and moved when appending to the next row group
+	unique_ptr<SuballocationBlock> transient;
 	//! The row id column data (mutable because `const` can lazy load)
 	mutable unique_ptr<ColumnData> row_id_column_data;
 	//! Whether or not `row_id_column_data` is loaded (mutable because `const` can lazy load)

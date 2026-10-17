@@ -24,13 +24,13 @@ INSERT INTO test VALUES
 statement error
 ALTER TABLE test RENAME COLUMN s.key to anything
 ----
-Catalog Error: Cannot rename field 'key' from column 's' - can only rename fields inside a struct
+Catalog Error: Cannot rename field "key" from column "s" - can only rename fields inside a struct
 
 # attempt to rename 'value'
 statement error
 ALTER TABLE test RENAME COLUMN s.value to anything
 ----
-Catalog Error: Cannot rename field 'value' from column 's' - can only rename fields inside a struct
+Catalog Error: Cannot rename field "value" from column "s" - can only rename fields inside a struct
 
 
 # rename a column from the struct inside the 'value'

@@ -34,3 +34,18 @@ statement error
 COPY (SELECT -interval '1 day') TO '{TEST_DIR}/intervals.parquet'
 ----
 <REGEX>:.*IO Error.*do not support negative intervals.*
+
+# Store complete days from a large microseconds component in Parquet's days field.
+statement ok
+COPY (SELECT INTERVAL '580063 hours 44 minutes 54 seconds' AS i) TO '{TEST_DIR}/large_interval.parquet'
+
+query IIIIII
+SELECT i = INTERVAL '580063 hours 44 minutes 54 seconds',
+       datepart('month', i),
+       datepart('day', i),
+       datepart('hour', i),
+       datepart('minute', i),
+       datepart('second', i)
+FROM '{TEST_DIR}/large_interval.parquet'
+----
+true	0	24169	7	44	54

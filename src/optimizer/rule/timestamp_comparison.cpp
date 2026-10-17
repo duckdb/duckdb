@@ -53,6 +53,15 @@ static optional_ptr<BoundFunctionExpression> GetTimestampCast(Expression &expr) 
 	return &cast_expr;
 }
 
+static Value DateToTimestampValue(date_t date, dtime_t time) {
+	if (date == date_t::infinity()) {
+		return Value::TIMESTAMP(timestamp_t::infinity());
+	} else if (date == date_t::ninfinity()) {
+		return Value::TIMESTAMP(timestamp_t::ninfinity());
+	}
+	return Value::TIMESTAMP(date, time);
+}
+
 unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                   bool &changes_made, bool is_root) {
 	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
@@ -82,8 +91,16 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 		auto no_seconds = dtime_t(0);
 
 		// original date as timestamp with no seconds
-		auto original_val_ts = Value::TIMESTAMP(original_val, no_seconds);
+		auto original_val_ts = DateToTimestampValue(original_val, no_seconds);
 		auto original_val_for_comparison = make_uniq<BoundConstantExpression>(original_val_ts);
+
+		if (!original_val.IsFinite()) {
+			auto column_copy = cast_columnref->Copy();
+			auto eq_expr = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, std::move(column_copy),
+			                                                 std::move(original_val_for_comparison));
+			new_expr->GetChildrenMutable().push_back(std::move(eq_expr));
+			return std::move(new_expr);
+		}
 
 		// add one day and validate the new date
 		// code is inspired by AddOperator::Operation(date_t left, int32_t right). The function wasn't used directly

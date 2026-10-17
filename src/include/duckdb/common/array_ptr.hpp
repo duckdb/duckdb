@@ -12,6 +12,8 @@
 #include "duckdb/common/likely.hpp"
 #include "duckdb/common/memory_safety.hpp"
 
+#include <type_traits>
+
 namespace duckdb {
 
 template <class DATA_TYPE>
@@ -71,6 +73,16 @@ private:
 #endif
 	}
 
+	static inline void AssertSubArrayInBounds(idx_t offset, idx_t sub_count, idx_t size) {
+#if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
+		return;
+#else
+		if (DUCKDB_UNLIKELY(offset > size || sub_count > size - offset)) {
+			ThrowArrayPtrSubArrayOutOfBounds(offset, sub_count, size);
+		}
+#endif
+	}
+
 public:
 	array_ptr(DATA_TYPE *ptr_p, idx_t count) : ptr(ptr_p), count(count) {
 		if (MemorySafety<SAFE>::ENABLED) {
@@ -78,6 +90,18 @@ public:
 		}
 	}
 	explicit array_ptr(DATA_TYPE &ref) : ptr(&ref), count(1) {
+	}
+	template <class OTHER_TYPE, class = std::enable_if_t<std::is_convertible_v<OTHER_TYPE (*)[], DATA_TYPE (*)[]>>>
+	array_ptr(const array_ptr<OTHER_TYPE, SAFE> &other) // NOLINT: allow implicit conversion to a compatible array_ptr
+	    : ptr(other.data()), count(other.size()) {
+	}
+
+	//! Returns an array_ptr over [offset, offset + sub_count).
+	array_ptr<DATA_TYPE, SAFE> SubArray(idx_t offset, idx_t sub_count) const {
+		if (MemorySafety<SAFE>::ENABLED) {
+			AssertSubArrayInBounds(offset, sub_count, count);
+		}
+		return array_ptr<DATA_TYPE, SAFE>(ptr + offset, sub_count);
 	}
 
 	const DATA_TYPE &operator[](idx_t idx) const {
@@ -97,7 +121,12 @@ public:
 	idx_t size() const { // NOLINT: match std naming style
 		return count;
 	}
-
+	bool empty() const { // NOLINT: match std naming style
+		return count == 0;
+	}
+	DATA_TYPE *data() const { // NOLINT: match std naming style
+		return ptr;
+	}
 	array_ptr_iterator<DATA_TYPE> begin() { // NOLINT: match std naming style
 		return array_ptr_iterator<DATA_TYPE>(ptr, 0, count);
 	}

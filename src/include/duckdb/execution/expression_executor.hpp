@@ -106,6 +106,8 @@ protected:
 	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundFunctionExpression &expr,
 	                                                   ExpressionExecutorState &state);
+	static unique_ptr<ExpressionState> InitializeState(const BoundLambdaExpression &expr,
+	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundOperatorExpression &expr,
 	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundParameterExpression &expr,
@@ -121,6 +123,8 @@ protected:
 	void Execute(const BoundConstantExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 	void Execute(const BoundFunctionExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
+	             Vector &result);
+	void Execute(const BoundLambdaExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 	void Execute(const BoundOperatorExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
@@ -140,6 +144,8 @@ protected:
 	             idx_t count, SelectionVector *true_sel, SelectionVector *false_sel);
 	idx_t Select(const BoundFunctionExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             SelectionVector *true_sel, SelectionVector *false_sel);
+	idx_t Select(const BoundOperatorExpression &expr, ExpressionState &state, optional_ptr<const SelectionVector> sel,
+	             idx_t count, optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel);
 
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(const Expression &expr, Vector &result, idx_t count);

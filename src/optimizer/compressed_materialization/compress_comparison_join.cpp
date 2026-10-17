@@ -1,5 +1,5 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
-#include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/function/cast/cast_statistics.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -75,7 +75,7 @@ unique_ptr<BaseStatistics> CompressedMaterialization::CastVariantJoinKeyStats(co
 	if (key_info.shredded_type == target_type) {
 		return key_info.typed_stats->ToUnique();
 	}
-	return StatisticsPropagator::TryPropagateCast(*key_info.typed_stats, key_info.shredded_type, target_type);
+	return CastStatistics::TryPropagate(*key_info.typed_stats, key_info.shredded_type, target_type);
 }
 
 unique_ptr<Expression> CompressedMaterialization::CreateVariantJoinKeyCast(unique_ptr<Expression> input,

@@ -29,7 +29,7 @@ SELECT * FROM read_csv_auto ('{TEST_DIR}/csv_file.csv', auto_type_candidates=['B
 statement error
 SELECT * FROM read_csv_auto ('{TEST_DIR}/csv_file.csv', auto_type_candidates=['MAP']);
 ----
-Binder Error: MAP type requires exactly two type modifiers: key type and value type
+<REGEX>:Binder Error.*Type \"MAP\" requires type parameters.*
 
 query TTT
 SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('{TEST_DIR}/csv_file.csv', auto_type_candidates=['BIGINT', 'DOUBLE', 'VARCHAR']);

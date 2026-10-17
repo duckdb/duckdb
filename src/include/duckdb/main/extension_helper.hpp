@@ -26,7 +26,6 @@ enum class ExtensionLoadResult : uint8_t { LOADED_EXTENSION = 0, EXTENSION_UNKNO
 struct DefaultExtension {
 	const char *name;
 	const char *description;
-	bool statically_loaded;
 };
 
 struct ExtensionAlias {
@@ -38,6 +37,10 @@ struct ExtensionInitResult {
 	string filename;
 	string filebase;
 	ExtensionABIType abi_type = ExtensionABIType::UNKNOWN;
+
+	// (only for ExtensionABIType::C_STRUCT) the CAPI version from the metadata footer. Its major selects which C API
+	// family the extension targets, and therefore which entrypoint is called
+	string duckdb_capi_version;
 
 	// The deserialized install from the `<ext>.duckdb_extension.info` file
 	unique_ptr<ExtensionInstallInfo> install_info;
@@ -96,25 +99,34 @@ struct ExtensionInstallOptions {
 class ExtensionHelper {
 public:
 	static void LoadAllExtensions(DuckDB &db);
-	static vector<string> LoadedExtensionTestPaths();
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
+	//! Publishes the extensions linked into this binary, as collected by LinkedExtensionRegistry, onto the config
+	static void RegisterLinkedExtensions(DBConfig &config);
 
 	//! Install an extension
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension,
 	                                                         ExtensionInstallOptions &options);
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(DatabaseInstance &db, FileSystem &fs,
 	                                                         const string &extension, ExtensionInstallOptions &options);
-	//! Load an extension
+	//! Load an extension. `context`, where available, is lent to a V2 C API extension's entrypoint; without one the
+	//! loader opens an internal connection for the duration of the load instead.
 	static void LoadExternalExtension(ClientContext &context, const ExtensionLoadOptions &options);
-	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options);
+	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options,
+	                                  optional_ptr<ClientContext> context = nullptr);
 
 	//! Autoload an extension (depending on config, potentially a nop. Throws when installation fails)
 	static void AutoLoadExtension(ClientContext &context, const string &extension_name);
 	static void AutoLoadExtension(DatabaseInstance &db, const string &extension_name);
+	//! Autoload the extension a remote path requires
+	DUCKDB_API static void AutoLoadExtensionForPath(DatabaseInstance &db, const string &path,
+	                                                const string &path_kind = "File");
 
 	//! Autoload an extension (depending on config, potentially a nop. Returns false on failure)
 	DUCKDB_API static bool TryAutoLoadExtension(DatabaseInstance &db, const string &extension_name) noexcept;
 	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept;
+	//! Where automatic installs go: autoinstall_extension_repository, else custom_extension_repository, else
+	//! DBConfigOptions::default_autoinstall_repository, else the core repository
+	DUCKDB_API static ExtensionRepository GetAutoinstallRepository(DatabaseInstance &db);
 
 	//! Autoload an extension, only if available locally
 	DUCKDB_API static bool TryAutoLoadAvailableExtension(DatabaseInstance &instance,
@@ -134,14 +146,19 @@ public:
 	static vector<string> GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
 
 	// Check signature of an Extension stored as FileHandle
-	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
-	                                    const bool allow_community_extensions);
-	// Check signature of an Extension, represented by a buffer and total_buffer_length, and a signature to be added
-	static bool CheckExtensionBufferSignature(const char *buffer, idx_t buffer_length, const string &signature,
-	                                          const bool allow_community_extensions);
+	static bool CheckExtensionSignature(DatabaseInstance &db, FileHandle &handle,
+	                                    ParsedExtensionMetaData &parsed_metadata,
+	                                    ExtensionRepositoryType repository_type, const string &repository_name);
+	// Check signature of an Extension, represented by a buffer and total_buffer_length, and a signature to be added.
+	// When a key matches, its fingerprint is written to signature_key_fingerprint (if provided)
+	static bool CheckExtensionBufferSignature(DatabaseInstance &db, const char *buffer, idx_t buffer_length,
+	                                          const string &signature, ExtensionRepositoryType repository_type,
+	                                          const string &repository_name,
+	                                          optional_ptr<string> signature_key_fingerprint = nullptr);
 	// Check signature of an Extension, represented by a buffer and total_buffer_length
-	static bool CheckExtensionBufferSignature(const char *buffer, idx_t total_buffer_length,
-	                                          const bool allow_community_extensions);
+	static bool CheckExtensionBufferSignature(DatabaseInstance &db, const char *buffer, idx_t total_buffer_length,
+	                                          ExtensionRepositoryType repository_type, const string &repository_name,
+	                                          optional_ptr<string> signature_key_fingerprint = nullptr);
 	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata) noexcept;
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 
@@ -160,8 +177,19 @@ public:
 	static idx_t ExtensionAliasCount();
 	static ExtensionAlias GetInternalExtensionAlias(idx_t index);
 
-	//! Get public signing keys for extension signing
+	//! Get the built-in public signing keys for extension signing
 	static const vector<string> GetPublicKeys(bool allow_community_extension = false);
+	//! Get the public keys that are trusted to sign extensions that originate from the given repository. Only the keys
+	//! of that repository are returned: the core keys, the community keys and the key of every user provided
+	//! repository are managed separately, so a leak of any of them only affects that single repository
+	static vector<string> GetTrustedPublicKeys(DatabaseInstance &db, ExtensionRepositoryType repository_type,
+	                                           const string &repository_name);
+
+	//! The origin whose signing keys a load trusts: an explicit FROM trusts the named origin, an autoload (core_only)
+	//! trusts the core keys only, and a plain bare LOAD trusts the core keys plus the community keys for a community
+	//! extension - never a user-provided repository's own keys
+	static ExtensionRepositoryType ResolveTrustedSignatureOrigin(bool has_from_clause, bool core_only,
+	                                                             ExtensionRepositoryType recorded_origin);
 
 	// Returns extension name, or empty string if not a replacement open path
 	static string ExtractExtensionPrefixFromPath(const string &path);
@@ -178,13 +206,11 @@ public:
 	//! Lookup a name + type in an ExtensionFunctionEntry list
 	template <size_t N>
 	static vector<pair<string, CatalogType>>
-	FindExtensionInFunctionEntries(const string &name, const ExtensionFunctionEntry (&entries)[N]) {
-		auto lcase = StringUtil::Lower(name);
-
+	FindExtensionInFunctionEntries(const Identifier &name, const ExtensionFunctionEntry (&entries)[N]) {
 		vector<pair<string, CatalogType>> result;
 		for (idx_t i = 0; i < N; i++) {
 			auto &element = entries[i];
-			if (element.name == lcase) {
+			if (element.name == name) {
 				result.push_back(make_pair(element.extension, element.type));
 			}
 		}
@@ -206,13 +232,11 @@ public:
 
 	//! Lookup a name in an ExtensionEntry list
 	template <idx_t N>
-	static string FindExtensionInEntries(const string &name, const ExtensionEntry (&entries)[N]) {
-		auto lcase = StringUtil::Lower(name);
-
+	static string FindExtensionInEntries(const Identifier &name, const ExtensionEntry (&entries)[N]) {
 		auto it =
-		    std::find_if(entries, entries + N, [&](const ExtensionEntry &element) { return element.name == lcase; });
+		    std::find_if(entries, entries + N, [&](const ExtensionEntry &element) { return element.name == name; });
 
-		if (it != entries + N && it->name == lcase) {
+		if (it != entries + N) {
 			return it->extension;
 		}
 		return "";
@@ -220,20 +244,19 @@ public:
 
 	//! Lookup a name in an extension entry and try to autoload it
 	template <idx_t N>
-	static void TryAutoloadFromEntry(DatabaseInstance &db, const string &entry, const ExtensionEntry (&entries)[N]) {
-#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
+	static void TryAutoloadFromEntry(DatabaseInstance &db, const Identifier &entry,
+	                                 const ExtensionEntry (&entries)[N]) {
 		if (Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
 			auto extension_name = ExtensionHelper::FindExtensionInEntries(entry, entries);
-			if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
+			if (ExtensionHelper::CanAutoloadExtension(db, extension_name)) {
 				ExtensionHelper::AutoLoadExtension(db, extension_name);
 			}
 		}
-#endif
 	}
 
 	//! Whether an extension can be autoloaded (i.e. it's registered as an autoloadable extension in
 	//! extension_entries.hpp)
-	static bool CanAutoloadExtension(const string &ext_name);
+	static bool CanAutoloadExtension(DatabaseInstance &db, const string &ext_name);
 
 	//! Utility functions for creating meaningful error messages regarding missing extensions
 	static string WrapAutoLoadExtensionErrorMsg(ClientContext &context, const string &base_error,
@@ -258,13 +281,16 @@ private:
 	static const vector<string> PathComponents();
 	static vector<string> DefaultExtensionFolders(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);
-	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension);
+	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
+	                                       const string &repository_name = string(), bool core_only = false);
 	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                           ExtensionInitResult &result, string &error);
+	                           const string &repository_name, bool core_only, ExtensionInitResult &result,
+	                           string &error);
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
 	static void LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                                          ExtensionActiveLoad &info);
+	                                          const string &repository_name, bool core_only, ExtensionActiveLoad &info,
+	                                          optional_ptr<ClientContext> context);
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);

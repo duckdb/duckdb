@@ -140,6 +140,16 @@ FROM
 ----
 1.2	1.2
 
+# p=0.0 with DESC ordering picks the largest value; negative zero must still read as descending
+query II
+SELECT
+    percentile_cont(0.0) WITHIN GROUP (ORDER BY x DESC),
+    quantile_cont(x, [0.0] ORDER BY x DESC),
+FROM
+    (VALUES (1), (2), (3), (4), (5)) _(x);
+----
+5.0	[5.0]
+
 # empty input
 query R
 SELECT quantile_cont(r, 0.1) FROM quantile WHERE 1=0

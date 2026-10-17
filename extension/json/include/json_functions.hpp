@@ -9,7 +9,9 @@
 #pragma once
 
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/main/setting_info.hpp"
 #include "json_common.hpp"
+#include "yyjson_memory.hpp"
 
 namespace duckdb {
 
@@ -30,6 +32,7 @@ public:
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
 	static JSONCommon::JSONPathType CheckPath(const Value &path_val, string &path, idx_t &len);
+	static void ResolveTypes(ResolveScalarFunctionTypesInput &input);
 	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input);
 
 public:
@@ -79,12 +82,17 @@ public:
 	static vector<TableFunctionSet> GetTableFunctions();
 	static unique_ptr<TableRef> ReadJSONReplacement(ClientContext &context, ReplacementScanInput &input,
 	                                                optional_ptr<ReplacementScanData> data);
-	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
+	static TableFunction GetJSONTableFunction(Identifier name, shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();
 	static ScalarFunction GetJSONCopyToJSONFunction();
+	static ScalarFunction GetJSONCopyToGeoJSONFunction();
+	static CopyFunction GetGeoJSONCopyFunction();
 	static unique_ptr<Expression> CreateJSONCopyToJSONExpression(ClientContext &context, unique_ptr<Expression> payload,
 	                                                             unique_ptr<Expression> date_format,
 	                                                             unique_ptr<Expression> timestamp_format);
+	//! Validation callback for the json_geometry_format setting, so an invalid value is rejected by SET rather
+	//! than by every subsequent conversion
+	static void ValidateGeometryFormat(ClientContext &context, SetScope scope, Value &parameter);
 	static void RegisterSimpleCastFunctions(ExtensionLoader &loader);
 	static void RegisterJSONCreateCastFunctions(ExtensionLoader &loader);
 	static void RegisterJSONTransformCastFunctions(ExtensionLoader &loader);
@@ -106,6 +114,9 @@ private:
 	static ScalarFunctionSet GetStructureFunction();
 	static ScalarFunctionSet GetTransformFunction();
 	static ScalarFunctionSet GetTransformStrictFunction();
+
+	static ScalarFunctionSet GetAsGeoJSONFunction();
+	static ScalarFunctionSet GetGeomFromGeoJSONFunction();
 
 	static ScalarFunctionSet GetArrayLengthFunction();
 	static ScalarFunctionSet GetContainsFunction();
@@ -146,6 +157,8 @@ private:
 	static TableFunctionSet GetReadNDJSONFunction();
 	static TableFunctionSet GetReadJSONAutoFunction();
 	static TableFunctionSet GetReadNDJSONAutoFunction();
+	static TableFunction GetReadSingleJSONFileTableFunction(shared_ptr<JSONScanInfo> function_info);
+	static TableFunctionSet GetReadSingleJSONFileFunction();
 
 	static TableFunctionSet GetJSONEachFunction();
 	static TableFunctionSet GetJSONTreeFunction();

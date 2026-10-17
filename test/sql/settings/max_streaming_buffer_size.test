@@ -1,0 +1,28 @@
+# name: test/sql/settings/max_streaming_buffer_size.test
+# description: max_streaming_buffer_size and its streaming_buffer_size alias resolve to one option
+# group: [settings]
+
+statement ok
+SET max_streaming_buffer_size='2MiB'
+
+query II
+SELECT current_setting('max_streaming_buffer_size'), current_setting('streaming_buffer_size')
+----
+2.0 MiB	2.0 MiB
+
+# The alias writes the same backing option
+statement ok
+SET streaming_buffer_size='4.0MiB'
+
+query II
+SELECT current_setting('max_streaming_buffer_size'), current_setting('streaming_buffer_size')
+----
+4.0 MiB	4.0 MiB
+
+statement ok
+RESET streaming_buffer_size
+
+query I
+SELECT current_setting('max_streaming_buffer_size')
+----
+10.0 MiB

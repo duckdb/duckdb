@@ -13,6 +13,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/query_context.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
@@ -69,6 +70,8 @@ public:
 	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
 	//! Read and record time
 	DUCKDB_API void ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location);
+	//! Whether responses observed by this handle prohibit sharing cached data (e.g., HTTP no-store/Vary)
+	DUCKDB_API bool IsCacheReuseProhibited();
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
 	DUCKDB_API idx_t GetFileSize();
@@ -87,14 +90,22 @@ private:
 	bool StripForceFullDownloadIfPresent();
 	//! Refresh the cached file if the global cache state has changed.
 	shared_ptr<CachedFile> EnsureCachedFileCurrent();
+	//! Whether validation metadata permits using cached blocks.
+	bool CanUseCache();
+	//! Read without caching, splitting large reads of cacheable files into parallel reads of at most a block.
+	void ReadUncached(data_ptr_t buffer, idx_t nr_bytes, idx_t location);
+	//! Reconcile cached blocks with validation metadata observed while reading them.
+	void ReconcileCacheAfterRead(CachedFile &cached_file);
 	//! Record a timed read of a local file into the throughput estimate
 	void RecordReadThroughput(double total_seconds, idx_t bytes);
 
 private:
 	QueryContext context;
 
-	//! The client caching file system that was used to create this CachingFileHandle
-	CachingFileSystem &caching_file_system;
+	//! The client file system, held directly because the caching file system can be destroyed before this handle
+	FileSystem &file_system;
+	//! The DatabaseInstance
+	DatabaseInstance &db;
 	//! The DB external file cache
 	ExternalFileCache &external_file_cache;
 	//! For opening the file (possibly with extra info)
@@ -112,9 +123,8 @@ private:
 	annotated_mutex file_handle_mutex;
 	//! File handle for the internal filesystem.
 	shared_ptr<FileHandle> file_handle;
-	//! Last modified time and version tag (if FileHandle is opened)
-	timestamp_t last_modified;
-	string version_tag;
+	//! Metadata snapshot taken with a single Stats call when the file handle is opened.
+	CacheValidationInfo validation_info;
 
 	//! Current position (if non-seeking reads)
 	idx_t position;
@@ -138,10 +148,11 @@ public:
 public:
 	DUCKDB_API static CachingFileSystem Get(ClientContext &context);
 
-	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
+	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, const FileOpenFlags &flags,
 	                                                  optional_ptr<FileOpener> opener = nullptr);
 	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(QueryContext context, const OpenFileInfo &path,
-	                                                  FileOpenFlags flags, optional_ptr<FileOpener> opener = nullptr);
+	                                                  const FileOpenFlags &flags,
+	                                                  optional_ptr<FileOpener> opener = nullptr);
 
 private:
 	//! The Client FileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)

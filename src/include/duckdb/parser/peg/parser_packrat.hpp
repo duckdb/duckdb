@@ -10,10 +10,10 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/arena_containers/arena_unordered_map.hpp"
 
 namespace duckdb {
 class Matcher;
-struct MatchState;
 class ParseResult;
 
 struct ParserPackratKey {
@@ -38,13 +38,14 @@ struct ParserPackratEntry {
 
 class ParserPackratCache {
 public:
-	ParserPackratCache();
+	explicit ParserPackratCache(ArenaAllocator &arena);
 	~ParserPackratCache();
 
-	optional_ptr<ParseResult> Match(const Matcher &matcher, MatchState &state);
+	optional_ptr<const ParserPackratEntry> Lookup(const Matcher &matcher, idx_t token_index) const;
+	void Store(const Matcher &matcher, idx_t token_index, ParserPackratEntry entry);
 
 private:
-	unordered_map<ParserPackratKey, ParserPackratEntry, ParserPackratKeyHash> entries;
+	arena_unordered_map<ParserPackratKey, ParserPackratEntry, ParserPackratKeyHash> entries;
 };
 
 } // namespace duckdb

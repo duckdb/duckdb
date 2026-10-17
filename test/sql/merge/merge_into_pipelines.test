@@ -1,0 +1,88 @@
+# name: test/sql/merge/merge_into_pipelines.test
+# description: Test that MERGE INTO actions are expanded into the query plan
+# group: [merge]
+
+statement ok
+CREATE TABLE stock(item_id INTEGER, balance INTEGER);
+
+statement ok
+INSERT INTO stock VALUES (10, 2200), (20, 1900);
+
+statement ok
+CREATE TABLE buy(item_id INTEGER, volume INTEGER);
+
+statement ok
+INSERT INTO buy VALUES (10, 1000), (30, 300);
+
+# the operators that the merge into pushes data into are part of the plan
+query II
+EXPLAIN MERGE INTO stock USING buy ON stock.item_id = buy.item_id
+WHEN MATCHED THEN UPDATE SET balance = balance + buy.volume
+WHEN NOT MATCHED THEN INSERT VALUES (buy.item_id, buy.volume)
+----
+physical_plan	<REGEX>:.*Merge.Action.Source.*
+
+query II
+EXPLAIN MERGE INTO stock USING buy ON stock.item_id = buy.item_id
+WHEN MATCHED THEN UPDATE SET balance = balance + buy.volume
+WHEN NOT MATCHED THEN INSERT VALUES (buy.item_id, buy.volume)
+----
+physical_plan	<REGEX>:.*Update.*
+
+query II
+EXPLAIN MERGE INTO stock USING buy ON stock.item_id = buy.item_id
+WHEN MATCHED THEN UPDATE SET balance = balance + buy.volume
+WHEN NOT MATCHED THEN INSERT VALUES (buy.item_id, buy.volume)
+----
+physical_plan	<REGEX>:.*Insert.*
+
+# the actions are executed as part of the pipelines - and show up in EXPLAIN ANALYZE
+query II
+EXPLAIN ANALYZE MERGE INTO stock USING buy ON stock.item_id = buy.item_id
+WHEN MATCHED THEN UPDATE SET balance = balance + buy.volume
+WHEN NOT MATCHED THEN INSERT VALUES (buy.item_id, buy.volume)
+----
+analyzed_plan	<REGEX>:.*Merge.Action.Source.*
+
+query II rowsort
+SELECT * FROM stock
+----
+10	3200
+20	1900
+30	300
+
+# actions that do not have an operator are executed by the merge into itself
+query II
+EXPLAIN MERGE INTO stock USING buy ON stock.item_id = buy.item_id
+WHEN MATCHED THEN DO NOTHING
+----
+physical_plan	<REGEX>:.*Merge.Into.*
+
+statement ok
+MERGE INTO stock USING buy ON stock.item_id = buy.item_id
+WHEN MATCHED THEN DO NOTHING
+
+# RETURNING - the actions emit their own rows
+query II
+EXPLAIN MERGE INTO stock USING buy ON stock.item_id = buy.item_id
+WHEN MATCHED THEN UPDATE SET balance = balance + buy.volume
+WHEN NOT MATCHED THEN INSERT VALUES (buy.item_id, buy.volume)
+RETURNING merge_action, *
+----
+physical_plan	<REGEX>:.*Merge.Action.Source.*
+
+query III rowsort
+MERGE INTO stock USING buy ON stock.item_id = buy.item_id
+WHEN MATCHED THEN UPDATE SET balance = balance + buy.volume
+WHEN NOT MATCHED THEN INSERT VALUES (buy.item_id, buy.volume)
+RETURNING merge_action, *
+----
+UPDATE	10	4200
+UPDATE	30	600
+
+# merge into with only actions that emit no rows and RETURNING
+query II
+MERGE INTO stock USING buy ON stock.item_id = buy.item_id
+WHEN MATCHED THEN DO NOTHING
+RETURNING *
+----

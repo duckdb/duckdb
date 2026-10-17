@@ -24,3 +24,25 @@ ORDER BY 2
 9	8	2	1
 6	9	4	2
 3	10	8	3
+
+# Future-only and past-only frames with argument ordering for NTILE and ROW_NUMBER
+query IIII
+SELECT
+  id,
+  NTILE(2 ORDER BY y) OVER (
+    ORDER BY y
+    ROWS BETWEEN 1 FOLLOWING AND 1 FOLLOWING
+  ) AS ntile_following,
+  NTILE(2 ORDER BY y) OVER (
+    ORDER BY y
+    ROWS BETWEEN 1 PRECEDING AND 1 PRECEDING
+  ) AS ntile_preceding,
+  ROW_NUMBER(ORDER BY y) OVER (
+    ORDER BY y
+    ROWS BETWEEN 1 FOLLOWING AND 1 FOLLOWING
+  ) AS row_following
+FROM (VALUES (1, 1), (2, 2)) AS t(id, y)
+ORDER BY id;
+----
+1	1	NULL	1
+2	NULL	1	1

@@ -63,7 +63,7 @@ public:
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 
 private:
-	//! Column index set by the binder, used to generate the final BoundExpression
+	//! Column index set by the binder, used to generate the final BoundReferenceExpression
 	ColumnBinding binding;
 	//! The index of the lambda parameter in the lambda bindings vector
 	idx_t lambda_idx;
