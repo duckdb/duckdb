@@ -43,12 +43,27 @@ FROM outer_keys WHERE key = 42;
 
 # A VALUES domain is small by construction: the base-table aggregates must stay behind semi-join
 # reductions against the deduplicated domain instead of aggregating the whole base table.
+# Both the COUNT branch and the SUM branch must each keep their own reduction, two semi joins in total.
 query II
 EXPLAIN SELECT key, (
 	SELECT CASE WHEN cnt > 0 THEN s ELSE 0 END
 	FROM (SELECT (SELECT count(*) FROM fact WHERE k = key) AS cnt,
 	             (SELECT sum(v) FROM fact WHERE k = key AND v % 2 = 0) AS s)
 ) AS r
+FROM (VALUES (42::BIGINT)) t(key);
+----
+physical_plan	<REGEX>:[\s\S]*SEMI[\s\S]*SEMI[\s\S]*
+
+# The COUNT branch keeps its reduction when evaluated on its own.
+query II
+EXPLAIN SELECT key, (SELECT count(*) FROM fact WHERE k = key) AS cnt
+FROM (VALUES (42::BIGINT)) t(key);
+----
+physical_plan	<REGEX>:[\s\S]*SEMI[\s\S]*
+
+# The SUM branch keeps its reduction when evaluated on its own.
+query II
+EXPLAIN SELECT key, (SELECT sum(v) FROM fact WHERE k = key AND v % 2 = 0) AS s
 FROM (VALUES (42::BIGINT)) t(key);
 ----
 physical_plan	<REGEX>:[\s\S]*SEMI[\s\S]*
@@ -62,7 +77,7 @@ EXPLAIN SELECT (
 ) AS r
 FROM (SELECT 42::BIGINT AS key) t;
 ----
-physical_plan	<REGEX>:[\s\S]*SEMI[\s\S]*
+physical_plan	<REGEX>:[\s\S]*SEMI[\s\S]*SEMI[\s\S]*
 
 # A filtered one-row caller set: the selection sits above the nested delimiter domains and must be
 # visible through the outer delim scan.
@@ -74,7 +89,7 @@ EXPLAIN SELECT key, (
 ) AS r
 FROM outer_keys WHERE key = 42;
 ----
-physical_plan	<REGEX>:[\s\S]*SEMI[\s\S]*
+physical_plan	<REGEX>:[\s\S]*SEMI[\s\S]*SEMI[\s\S]*
 
 # A one-row enclosing materialized CTE definition is visible to the preservation decision.
 query II
