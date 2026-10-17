@@ -57,6 +57,7 @@ protected:
 	void AddKeywordOverride(const char *name, KeywordInfo keyword_info);
 	void AddRuleOverride(const char *name, unique_ptr<Matcher> &&matcher_p);
 	void AddPackratMemoizedRule(const char *name);
+	void AddSecondTokenLookaheadRule(const char *name);
 	void SuppressSuggestions(const char *name);
 	Matcher &CreateMatcher(string_t rule_name);
 	Matcher &CreateMatcher(string_t rule_name, vector<reference<Matcher>> &parameters);
@@ -79,6 +80,7 @@ private:
 	case_insensitive_map_t<KeywordInfo> keyword_overrides;
 	string_set_t no_suggestion_rules;
 	string_set_t packrat_memoized_rules;
+	string_set_t second_token_lookahead_rules;
 };
 
 } // namespace duckdb

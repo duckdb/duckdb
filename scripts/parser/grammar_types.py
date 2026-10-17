@@ -203,6 +203,11 @@ def load_expression_depth_rules(types_file, known_rules=None):
     )
 
 
+def load_second_token_lookahead_rules(types_file, known_rules=None):
+    """Load second_token_lookahead_rules from grammar_types.yml."""
+    return load_rule_name_list(types_file, "second_token_lookahead_rules", known_rules)
+
+
 def load_collapsible_rules(types_file, known_rules=None):
     """Load collapsible_rules from grammar_types.yml."""
     return load_rule_name_list(types_file, "collapsible_rules", known_rules)

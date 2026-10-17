@@ -52,10 +52,7 @@ arena_ptr<MatchProcess> AtomicMatcher::StartMatch(MatchState &state) const {
 class ListMatchProcess : public MatchProcess {
 public:
 	ListMatchProcess(const ListMatcher &matcher_p, MatchState &state_p)
-	    : matcher(matcher_p), state(state_p), list_state(state_p), results(state_p.context.process_allocator) {
-		if (state_p.BuildParseResult()) {
-			results.reserve(matcher_p.matchers.size());
-		}
+	    : matcher(matcher_p), state(state_p), list_state(state_p) {
 		saved_suggestion_size = matcher.suppress_suggestions ? list_state.context.suggestions.size() : 0;
 		if (auto current = list_state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
@@ -71,7 +68,12 @@ public:
 				return MatchStep::Complete(MatcherResult::Failure());
 			}
 			if (child_result->HasParseResult()) {
-				results.emplace_back(*child_result->GetParseResult());
+				// most lists fail at their first element, so the children are only allocated once one matches
+				if (!results) {
+					results = state.context.allocator.AllocateChildren(matcher.matchers.size());
+				}
+				new (results + result_count) reference<ParseResult>(*child_result->GetParseResult());
+				result_count++;
 			}
 			child_index++;
 		}
@@ -104,16 +106,19 @@ public:
 			}
 		}
 		auto named_matcher = matcher.HasName() ? &matcher : nullptr;
+		if (!results) {
+			results = state.context.allocator.AllocateChildren(0);
+		}
 		return MatchStep::Complete(state.AllocateParseResult<ListParseResult>(
-		    state.context.allocator.MakeChildren(results), named_matcher, start_offset));
+		    unsafe_array_ptr<reference<ParseResult>>(results, result_count), named_matcher, start_offset));
 	}
 
 private:
 	//! The child that can stand in for this rule's own result, or nullptr when the rule has to build one
 	optional_ptr<ParseResult> FindCollapsibleResult() const {
 		optional_ptr<ParseResult> collapsible;
-		for (auto &child : results) {
-			auto &child_result = child.get();
+		for (idx_t i = 0; i < result_count; i++) {
+			auto &child_result = results[i].get();
 			// an optional that matched nothing carries no value, so it does not stop the rule from collapsing
 			if (child_result.type == ParseResultType::OPTIONAL &&
 			    !child_result.Cast<OptionalParseResult>().HasResult()) {
@@ -151,7 +156,9 @@ private:
 	const ListMatcher &matcher;
 	MatchState &state;
 	MatchState list_state;
-	arena_vector<reference<ParseResult>> results;
+	//! the children matched so far, in room for every element of the list
+	reference<ParseResult> *results = nullptr;
+	idx_t result_count = 0;
 	idx_t child_index = 0;
 	idx_t saved_suggestion_size = 0;
 	optional_idx start_offset;

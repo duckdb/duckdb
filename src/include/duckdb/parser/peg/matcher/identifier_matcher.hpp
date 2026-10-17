@@ -20,7 +20,7 @@ public:
 		return c == '"' || c == '`';
 	}
 
-	bool IsQuoted(const string &text) const {
+	static bool IsQuoted(const string &text) {
 		if (text.size() < 2) {
 			return false;
 		}
@@ -41,12 +41,10 @@ public:
 		return false;
 	}
 
-	bool IsIdentifier(const string &text) const {
+	//! Whether every identifier matcher accepts the token text, keywords aside: a quoted identifier or a word
+	static bool IsIdentifierToken(const string &text) {
 		if (text.empty()) {
 			return false;
-		}
-		if (IsSingleQuoted(text) && SupportsStringLiteral()) {
-			return true;
 		}
 		if (IsQuoted(text)) {
 			return true;
@@ -59,6 +57,13 @@ public:
 			return false;
 		}
 		return Tokenizer::CharacterIsKeyword(text[0]);
+	}
+
+	bool IsIdentifier(const string &text) const {
+		if (!text.empty() && IsSingleQuoted(text) && SupportsStringLiteral()) {
+			return true;
+		}
+		return IsIdentifierToken(text);
 	}
 
 	MatcherResult MatchAtomic(MatchState &state) const override {

@@ -16,6 +16,12 @@ uint8_t ComputeMatcherTokenClass(TokenType type, const string &text) {
 	case TokenType::NUMBER_LITERAL:
 		return MatcherTokenClass::NUMBER;
 	case TokenType::OPERATOR:
+		for (auto c : text) {
+			if (!Tokenizer::CharacterIsOperator(c)) {
+				// punctuation such as ',' or '(' is only matched as a literal, never by an operator matcher
+				return 0;
+			}
+		}
 		if (OperatorMatcher::HasSpecialPrecedence(text)) {
 			return MatcherTokenClass::OPERATOR;
 		}
