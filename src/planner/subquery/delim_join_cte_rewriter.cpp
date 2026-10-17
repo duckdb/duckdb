@@ -859,6 +859,10 @@ static bool JoinRHSIsDeduplicated(LogicalComparisonJoin &join) {
 	if (!aggr.grouping_functions.empty()) {
 		return false;
 	}
+	// Multiple grouping sets can emit duplicate group tuples, only a single set proves uniqueness
+	if (aggr.grouping_sets.size() > 1) {
+		return false;
+	}
 
 	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
 		if (std::find(join_bindings.begin(), join_bindings.end(),
