@@ -30,7 +30,7 @@ TEST_CASE("StandardVectorBuffer validity capacity covers all entries", "[vector_
 	}
 	SECTION("owned allocation larger than the count") {
 		// the mask must cover the allocation-derived capacity, not just the count
-		const idx_t small_count = 42;
+		const idx_t small_count = STANDARD_VECTOR_SIZE / 2;
 		auto data = Allocator::DefaultAllocator().Allocate(count * type_size);
 		StandardVectorBuffer buffer(std::move(data), count_t(small_count), type_size);
 		REQUIRE(buffer.Capacity() == count);
