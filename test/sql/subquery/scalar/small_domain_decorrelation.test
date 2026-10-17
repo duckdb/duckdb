@@ -99,6 +99,17 @@ FROM range(5000) t(key);
 ----
 physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
 
+# Protection: unions are n-ary, a large third branch makes the domain unbounded.
+query II
+EXPLAIN SELECT q.key, (SELECT sum(f.v) FROM fact f WHERE f.k = q.key)
+FROM (
+	SELECT -1::BIGINT AS key
+	UNION ALL SELECT -2::BIGINT
+	UNION ALL SELECT i FROM range(100000) t(i)
+) q;
+----
+physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
+
 # Result identity between the small-domain plan and the full-domain plan.
 query III
 SELECT count(*), count(r), sum(r) FROM (

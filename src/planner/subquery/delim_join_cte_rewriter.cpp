@@ -1178,9 +1178,14 @@ private:
 				return optional_idx();
 			}
 		}
-		case LogicalOperatorType::LOGICAL_UNION:
-			return AddBounds(Bound(*op.children[0], limit, enclosing_depth),
-			                 Bound(*op.children[1], limit, enclosing_depth), limit);
+		case LogicalOperatorType::LOGICAL_UNION: {
+			// The planner produces n-ary unions, accumulate every child
+			optional_idx union_bound = 0;
+			for (auto &child : op.children) {
+				union_bound = AddBounds(union_bound, Bound(*child, limit, enclosing_depth), limit);
+			}
+			return union_bound;
+		}
 		case LogicalOperatorType::LOGICAL_INTERSECT:
 		case LogicalOperatorType::LOGICAL_EXCEPT:
 			return Bound(*op.children[0], limit, enclosing_depth);
