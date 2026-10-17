@@ -31,7 +31,7 @@ struct RadixHTConfig {
 public:
 	explicit RadixHTConfig(RadixHTGlobalSinkState &sink);
 
-	void Reset();
+	void ResetForNewIteration();
 	void SetRadixBits(const idx_t &radix_bits_p);
 	bool SetRadixBitsToExternal();
 	idx_t GetRadixBits() const;
@@ -95,6 +95,8 @@ public:
 	//! Destroys aggregate states (if multi-scan)
 	~RadixHTGlobalSinkState() override;
 	void Destroy();
+	//! Minimum reservation to sink into HTs partitioned by the given radix bits
+	idx_t CalculateMinimumReservation(idx_t radix_bits) const;
 
 public:
 	idx_t GetThreadLimit() const {
