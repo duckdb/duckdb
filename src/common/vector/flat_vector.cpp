@@ -25,6 +25,8 @@ StandardVectorBuffer::StandardVectorBuffer(capacity_t capacity, idx_t type_size_
 StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p, count_t count, idx_t type_size_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count), data_ptr(data_ptr_p),
       type_size(type_size_p), capacity(count) {
+	// the validity capacity must cover all entries, even while no mask is allocated (all-valid data)
+	validity.Resize(capacity);
 }
 StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p, count_t count, idx_t type_size_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count), data_ptr(data_p.get()),
@@ -32,6 +34,8 @@ StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p, count_t count
 	if (count > capacity) {
 		throw InternalException("Count is out of range for capacity");
 	}
+	// the validity capacity must cover all entries, even while no mask is allocated (all-valid data)
+	validity.Resize(capacity);
 }
 
 void StandardVectorBuffer::SetVectorType(VectorType new_vector_type) {
@@ -207,7 +211,6 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::FlattenSliceInternal(const Logica
 	auto result = CreateBuffer(std::move(new_data), count_t(count));
 	// copy validity using sel
 	auto &result_validity = result->GetValidityMask();
-	result_validity.Resize(allocated_count);
 	result_validity.CopySel(validity, sel, 0, 0, count);
 	return result;
 }
