@@ -110,6 +110,17 @@ FROM (
 ----
 physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
 
+# Protection: a correlated VALUES list is evaluated once per delimiter row, its bound follows the
+# unbounded outer domain rather than the expression-list size.
+query II
+EXPLAIN SELECT o.key, (
+	SELECT sum((SELECT sum(f.v) FROM fact f WHERE f.k = t.x))
+	FROM (VALUES (o.key)) t(x)
+)
+FROM outer_keys o;
+----
+physical_plan	<!REGEX>:[\s\S]*SEMI[\s\S]*
+
 # Result identity between the small-domain plan and the full-domain plan.
 query III
 SELECT count(*), count(r), sum(r) FROM (

@@ -1072,8 +1072,14 @@ private:
 			return 1;
 		case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
 			return 0;
-		case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
-			return Clamp(op.Cast<LogicalExpressionGet>().expressions.size(), limit);
+		case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
+			// Each expression list is evaluated once per input row
+			auto list_bound = Clamp(op.Cast<LogicalExpressionGet>().expressions.size(), limit);
+			if (op.children.empty()) {
+				return list_bound;
+			}
+			return MultiplyBounds(list_bound, Bound(*op.children[0], limit, enclosing_depth), limit);
+		}
 		case LogicalOperatorType::LOGICAL_DELIM_GET: {
 			// A delim scan produces the duplicate-eliminated domain of the nearest enclosing delim join's LHS
 			if (enclosing_depth == 0) {
