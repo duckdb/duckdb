@@ -13,6 +13,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
+class LogicalComparisonJoin;
 
 //! Rewrites fully decorrelated DelimJoins into materialized CTEs.
 class DelimJoinCTERewriter {
@@ -37,6 +38,8 @@ private:
 	set<TableIndex> marker_indexes;
 	set<TableIndex> preserve_marker_indexes;
 	set<TableIndex> preserve_nested_marker_indexes;
+	//! Delim joins on whose RHS the current rewrite operates, used to resolve the domains of outer delim scans
+	vector<reference<LogicalComparisonJoin>> enclosing_delim_joins;
 };
 
 } // namespace duckdb
