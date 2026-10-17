@@ -76,6 +76,29 @@ FROM outer_keys WHERE key = 42;
 ----
 physical_plan	<REGEX>:[\s\S]*SEMI[\s\S]*
 
+# A one-row enclosing materialized CTE definition is visible to the preservation decision.
+query II
+EXPLAIN WITH caller AS MATERIALIZED (SELECT 42::BIGINT AS key)
+SELECT caller.key, (
+	SELECT CASE WHEN cnt > 0 THEN s ELSE 0 END
+	FROM (SELECT (SELECT count(*) FROM fact WHERE k = key) AS cnt,
+	             (SELECT sum(v) FROM fact WHERE k = key AND v % 2 = 0) AS s)
+) AS r
+FROM caller;
+----
+physical_plan	<REGEX>:[\s\S]*SEMI[\s\S]*SEMI[\s\S]*
+
+query II
+WITH caller AS MATERIALIZED (SELECT 42::BIGINT AS key)
+SELECT caller.key, (
+	SELECT CASE WHEN cnt > 0 THEN s ELSE 0 END
+	FROM (SELECT (SELECT count(*) FROM fact WHERE k = key) AS cnt,
+	             (SELECT sum(v) FROM fact WHERE k = key AND v % 2 = 0) AS s)
+) AS r
+FROM caller;
+----
+42	4920
+
 # Protection: an unfiltered table domain is not provably small, the reduction join is removed and the
 # base table is aggregated once (no semi join in the plan, as before the fix).
 query II

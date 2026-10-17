@@ -1232,8 +1232,9 @@ private:
 };
 
 static bool DelimiterDomainIsProvablySmall(LogicalComparisonJoin &delim_join,
-                                           const vector<reference<LogicalComparisonJoin>> &enclosing_delim_joins) {
-	DomainCardinalityAnalyzer analyzer(enclosing_delim_joins, {});
+                                           const vector<reference<LogicalComparisonJoin>> &enclosing_delim_joins,
+                                           const vector<reference<LogicalCTE>> &known_ctes) {
+	DomainCardinalityAnalyzer analyzer(enclosing_delim_joins, known_ctes);
 	if (analyzer.IsBoundedBy(*delim_join.children[0], DELIM_DOMAIN_PRESERVE_LIMIT)) {
 		return true;
 	}
@@ -1380,7 +1381,8 @@ public:
 	GeneratedDedupRefEliminator(ClientContext &context, unique_ptr<LogicalOperator> &delim_join_op,
 	                            TableIndex dedup_cte_index, idx_t dedup_ref_count, LogicalOperator &rewrite_root,
 	                            bool preserve_evidence_side, bool preserve_nested_evidence_side,
-	                            const vector<reference<LogicalComparisonJoin>> &enclosing_delim_joins);
+	                            const vector<reference<LogicalComparisonJoin>> &enclosing_delim_joins,
+	                            const vector<reference<LogicalCTE>> &enclosing_ctes);
 
 	idx_t Remove();
 
@@ -1414,16 +1416,18 @@ private:
 	bool preserve_evidence_side;
 	bool preserve_nested_evidence_side;
 	const vector<reference<LogicalComparisonJoin>> &enclosing_delim_joins;
+	const vector<reference<LogicalCTE>> &enclosing_ctes;
 };
 
 GeneratedDedupRefEliminator::GeneratedDedupRefEliminator(
     ClientContext &context, unique_ptr<LogicalOperator> &delim_join_op, TableIndex dedup_cte_index,
     idx_t dedup_ref_count, LogicalOperator &rewrite_root, bool preserve_evidence_side,
-    bool preserve_nested_evidence_side, const vector<reference<LogicalComparisonJoin>> &enclosing_delim_joins)
+    bool preserve_nested_evidence_side, const vector<reference<LogicalComparisonJoin>> &enclosing_delim_joins,
+    const vector<reference<LogicalCTE>> &enclosing_ctes)
     : context(context), delim_join_op(delim_join_op), delim_join(delim_join_op->Cast<LogicalComparisonJoin>()),
       dedup_cte_index(dedup_cte_index), dedup_ref_count(dedup_ref_count), rewrite_root(rewrite_root),
       preserve_evidence_side(preserve_evidence_side), preserve_nested_evidence_side(preserve_nested_evidence_side),
-      enclosing_delim_joins(enclosing_delim_joins) {
+      enclosing_delim_joins(enclosing_delim_joins), enclosing_ctes(enclosing_ctes) {
 }
 
 unique_ptr<GeneratedDedupRef> GeneratedDedupRefEliminator::GetGeneratedDedupRef(LogicalOperator &op,
@@ -2247,7 +2251,7 @@ idx_t GeneratedDedupRefEliminator::Remove() {
 	set<TableIndex> marker_indexes;
 	auto preserve_selected_domain = HasDelimiterDomainSelection(*delim_join.children[0], marker_indexes, false,
 	                                                            delim_join.duplicate_eliminated_columns) ||
-	                                DelimiterDomainIsProvablySmall(delim_join, enclosing_delim_joins);
+	                                DelimiterDomainIsProvablySmall(delim_join, enclosing_delim_joins, enclosing_ctes);
 	auto selected_evidence_side = preserve_selected_domain && preserve_evidence_side &&
 	                              HasEvidenceSide(delim_join.join_type) &&
 	                              (!ContainsSubqueryJoin(*delim_join.children[0]) ||
@@ -3055,7 +3059,7 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 		    QueryProfiler::Get(binder.context).StartTimerInternal(CTE_DELIMINATOR_PROFILER_KEY);
 		GeneratedDedupRefEliminator eliminator(binder.context, plan, dedup_cte_index, dedup_ref_count, rewrite_root,
 		                                       preserve_evidence_side, preserve_nested_evidence_side,
-		                                       enclosing_delim_joins);
+		                                       enclosing_delim_joins, enclosing_ctes);
 		dedup_ref_count = eliminator.Remove();
 		auto &join = plan->Cast<LogicalComparisonJoin>();
 		if (SingleJoinRHSIsDeduplicated(join)) {
@@ -3218,8 +3222,16 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr
 		if (is_delim_join_rhs) {
 			enclosing_delim_joins.push_back(plan->Cast<LogicalComparisonJoin>());
 		}
+		// The consumer side of a materialized CTE can reference the enclosing definition, track it while descending
+		const bool is_cte_consumer = plan->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE && child_idx == 1;
+		if (is_cte_consumer) {
+			enclosing_ctes.push_back(plan->Cast<LogicalCTE>());
+		}
 		auto child_replacements = RewriteDelimJoinsToCTEs(child, rewrite_root, child_null_rejecting_filter_above,
 		                                                  child_preserve_evidence_side);
+		if (is_cte_consumer) {
+			enclosing_ctes.pop_back();
+		}
 		if (is_delim_join_rhs) {
 			enclosing_delim_joins.pop_back();
 		}

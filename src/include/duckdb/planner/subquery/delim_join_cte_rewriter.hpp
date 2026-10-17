@@ -14,6 +14,7 @@
 
 namespace duckdb {
 class LogicalComparisonJoin;
+class LogicalCTE;
 
 //! Rewrites fully decorrelated DelimJoins into materialized CTEs.
 class DelimJoinCTERewriter {
@@ -40,6 +41,8 @@ private:
 	set<TableIndex> preserve_nested_marker_indexes;
 	//! Delim joins on whose RHS the current rewrite operates, used to resolve the domains of outer delim scans
 	vector<reference<LogicalComparisonJoin>> enclosing_delim_joins;
+	//! Materialized CTEs in whose consumer side the current rewrite operates, used to resolve CTE references
+	vector<reference<LogicalCTE>> enclosing_ctes;
 };
 
 } // namespace duckdb
