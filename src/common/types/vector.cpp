@@ -313,6 +313,10 @@ void Vector::AddHeapReference(const Vector &other) {
 }
 
 void Vector::Reserve(idx_t to_reserve_p) {
+	if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// a constant holds one physical entry regardless of its logical size
+		return;
+	}
 	auto reserve_size = VectorBuffer::GetReserveSize(to_reserve_p);
 	if (!buffer) {
 		Initialize(VectorDataInitialization::UNINITIALIZED, reserve_size);
