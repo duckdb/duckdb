@@ -4,17 +4,17 @@
 
 statement ok
 CREATE TABLE big AS
-	SELECT i AS id, i % 1000 AS k
+	SELECT i AS id, i % 1000 AS bk
 	FROM range(100000) t(i);
 
 statement ok
 CREATE TABLE mid AS
-	SELECT i AS k
+	SELECT i AS mk
 	FROM range(10000) t(i);
 
 statement ok
 CREATE TABLE tiny AS
-	SELECT i AS k
+	SELECT i AS tk
 	FROM range(10) t(i);
 
 # a filter on a table connected to the big table through an IS NOT DISTINCT FROM
@@ -23,18 +23,18 @@ query II
 EXPLAIN
 SELECT count(*)
 FROM big b
-JOIN mid m ON b.k IS NOT DISTINCT FROM m.k
-JOIN tiny t ON m.k = t.k
-WHERE t.k = 7;
+JOIN mid m ON b.bk IS NOT DISTINCT FROM m.mk
+JOIN tiny t ON m.mk = t.tk
+WHERE t.tk = 7;
 ----
-physical_plan	<REGEX>:(?s).*Table: .*\.big.*Filters: k = 7.*
+physical_plan	<REGEX>:(?s).*Filters: bk = 7.*
 
 query I
 SELECT count(*)
 FROM big b
-JOIN mid m ON b.k IS NOT DISTINCT FROM m.k
-JOIN tiny t ON m.k = t.k
-WHERE t.k = 7;
+JOIN mid m ON b.bk IS NOT DISTINCT FROM m.mk
+JOIN tiny t ON m.mk = t.tk
+WHERE t.tk = 7;
 ----
 100
 
@@ -44,18 +44,18 @@ query II
 EXPLAIN
 SELECT count(*)
 FROM big b
-JOIN mid m ON b.k = m.k
-JOIN tiny t ON m.k IS NOT DISTINCT FROM t.k
-WHERE t.k = 7;
+JOIN mid m ON b.bk = m.mk
+JOIN tiny t ON m.mk IS NOT DISTINCT FROM t.tk
+WHERE t.tk = 7;
 ----
-physical_plan	<REGEX>:(?s).*Table: .*\.big.*Filters: k = 7.*
+physical_plan	<REGEX>:(?s).*Filters: bk = 7.*
 
 query I
 SELECT count(*)
 FROM big b
-JOIN mid m ON b.k = m.k
-JOIN tiny t ON m.k IS NOT DISTINCT FROM t.k
-WHERE t.k = 7;
+JOIN mid m ON b.bk = m.mk
+JOIN tiny t ON m.mk IS NOT DISTINCT FROM t.tk
+WHERE t.tk = 7;
 ----
 100
 
