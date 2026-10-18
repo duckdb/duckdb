@@ -552,6 +552,9 @@ AggregateStateLayout SortedAggregateGetStateType(AggregateLayoutInput &input) {
 	layout.total_state_size = AlignValue<idx_t>(sizeof(SortedAggregateState));
 	layout.field = BuildStateField<StateListType<StateReturnType>>();
 	AggregateStateField::PopulateListFunctions(layout.type, layout.field);
+	// an empty buffer is an empty group: export it as a non-NULL empty list so finalize runs the wrapped
+	// aggregate's empty-group finalize (e.g. count -> 0) instead of returning NULL on a NULL state
+	layout.field.list_empty_as_empty = true;
 	return layout;
 }
 
