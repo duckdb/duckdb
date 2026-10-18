@@ -94,37 +94,17 @@ WHERE (x + y) IS NOT DISTINCT FROM NULL;
 1
 
 statement ok
-CREATE TABLE ndf_mixed_a (a INTEGER);
-
-statement ok
-INSERT INTO ndf_mixed_a VALUES (1), (NULL), (2);
-
-statement ok
-CREATE TABLE ndf_mixed_b (b INTEGER);
-
-statement ok
-INSERT INTO ndf_mixed_b VALUES (1), (NULL), (3);
-
-statement ok
-CREATE TABLE ndf_mixed_c (c INTEGER);
-
-statement ok
-INSERT INTO ndf_mixed_c VALUES (1), (NULL), (2);
-
-statement ok
-CREATE TABLE ndf_mixed_d (d INTEGER);
-
-statement ok
-INSERT INTO ndf_mixed_d VALUES (1), (NULL), (2);
+CREATE TABLE ndf_mixed AS
+	SELECT * FROM (VALUES (1, 1, 1, 1), (NULL, NULL, NULL, NULL), (2, 3, 2, 2)) t(a, b, c, d);
 
 # multi-hop chain: a NDF b, b = c, c NDF d - the equality in the middle forces
 # all members non-NULL, only the (1, 1, 1, 1) row survives
 query I
 SELECT count(*)
-FROM ndf_mixed_a a
-JOIN ndf_mixed_b b ON a.a IS NOT DISTINCT FROM b.b
-JOIN ndf_mixed_c c ON b.b = c.c
-JOIN ndf_mixed_d d ON c.c IS NOT DISTINCT FROM d.d;
+FROM ndf_mixed t1
+JOIN ndf_mixed t2 ON t1.a IS NOT DISTINCT FROM t2.b
+JOIN ndf_mixed t3 ON t2.b = t3.c
+JOIN ndf_mixed t4 ON t3.c IS NOT DISTINCT FROM t4.d;
 ----
 1
 
