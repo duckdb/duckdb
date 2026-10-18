@@ -93,10 +93,7 @@ DUCKDB_V2_ERROR duckdb_v2_connection_get_query_metrics(duckdb_v2_connection_hand
 	*metrics = nullptr;
 	return WithErrorHandler(err, [&]() {
 		auto &context = *Convert(conn)->context;
-		if (GetBusySlot(context)->owner.load() != nullptr) {
-			throw duckdb::ResourceInUseException(
-			    "connection has a live result; drain or destroy it before taking a snapshot of the query metrics");
-		}
+		context.VerifyNoOpenResult();
 		auto snapshot = duckdb::make_uniq<CV2QueryMetrics>();
 		snapshot->root.name = "QUERY";
 		duckdb::QueryProfiler::Get(context).GetFinalizedProfileUnderLock(
