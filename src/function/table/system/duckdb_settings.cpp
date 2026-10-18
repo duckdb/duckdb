@@ -30,10 +30,10 @@ struct DuckDBSettingsBindData : public TableFunctionData {
 	bool debug = false;
 	bool deprecated = false;
 	//! Ignore the debug and deprecated filters
-	bool all = false;
+	bool include_all = false;
 
 	bool Includes(bool is_debug, bool is_deprecated) const {
-		return all || (debug == is_debug && deprecated == is_deprecated);
+		return include_all || (debug == is_debug && deprecated == is_deprecated);
 	}
 };
 
@@ -61,7 +61,7 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 	return_types.emplace_back(LogicalType::VARIANT());
 
 	auto result = make_uniq<DuckDBSettingsBindData>();
-	for (auto name : {"debug", "deprecated", "all"}) {
+	for (auto name : {"debug", "deprecated", "include_all"}) {
 		auto it = input.named_parameters.find(name);
 		if (it != input.named_parameters.end() && it->second.IsNull()) {
 			throw InvalidInputException("Cannot use NULL as argument for %s", name);
@@ -75,12 +75,12 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 		result->deprecated = it->second.GetValue<bool>();
 	}
 
-	if (auto it = input.named_parameters.find("all"); it != input.named_parameters.end()) {
-		result->all = it->second.GetValue<bool>();
+	if (auto it = input.named_parameters.find("include_all"); it != input.named_parameters.end()) {
+		result->include_all = it->second.GetValue<bool>();
 	}
 	auto &params = input.named_parameters;
-	if (result->all && (params.find("debug") != params.end() || params.find("deprecated") != params.end())) {
-		throw InvalidInputException("Cannot combine all := true with the debug or deprecated filters");
+	if (result->include_all && (params.find("debug") != params.end() || params.find("deprecated") != params.end())) {
+		throw InvalidInputException("Cannot combine include_all := true with the debug or deprecated filters");
 	}
 
 	return std::move(result);
@@ -199,7 +199,7 @@ void DuckDBSettingsFun::RegisterFunction(BuiltinFunctions &set) {
 	settings_fun.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
 		options.Add("debug", LogicalType::BOOLEAN)
 		    .Add("deprecated", LogicalType::BOOLEAN)
-		    .Add("all", LogicalType::BOOLEAN);
+		    .Add("include_all", LogicalType::BOOLEAN);
 	});
 	set.AddFunction(settings_fun);
 }
