@@ -501,6 +501,10 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 	}
 	auto &column_ref = func.GetChildren()[0]->Cast<BoundColumnRefExpression>();
 	auto &constant_value_expr = func.GetChildren()[1]->Cast<BoundConstantExpression>();
+	if (constant_value_expr.GetValue().IsNull()) {
+		// prefix(col, NULL) is NULL and filters out every row - leave the filter in place, do not push it down
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
 	auto prefix_string = StringValue::Get(constant_value_expr.GetValue());
 	if (prefix_string.empty()) {
 		// empty prefix - skip
@@ -620,6 +624,20 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
+static bool TryPushdownDenseInFilter(TableFilterSet &table_filters, const BoundColumnRefExpression &column,
+                                     vector<Value> &values) {
+	if (values.empty() || !FilterCombiner::IsDenseRange(values)) {
+		return false;
+	}
+	// IsDenseRange sorts the values and only accepts consecutive integers.
+	auto lower_bound = CreateComparisonExpression(column, ExpressionType::COMPARE_GREATERTHANOREQUALTO, values.front());
+	auto upper_bound =
+	    CreateComparisonExpression(column, ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(values.back()));
+	table_filters.PushFilter(column.Binding().column_index, make_uniq<ExpressionFilter>(std::move(lower_bound)));
+	table_filters.PushFilter(column.Binding().column_index, make_uniq<ExpressionFilter>(std::move(upper_bound)));
+	return true;
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_filters,
                                                          const vector<ColumnIndex> &column_ids, Expression &expr) {
 	if (expr.GetExpressionType() != ExpressionType::COMPARE_IN) {
@@ -671,15 +689,7 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 		D_ASSERT(!const_value_expr.GetValue().IsNull());
 		in_list.push_back(const_value_expr.GetValue());
 	}
-	if (type.IsIntegral() && IsDenseRange(in_list)) {
-		// dense range! turn this into x >= min AND x <= max
-		// IsDenseRange sorts in_list, so the front element is the min and the back element is the max
-		auto lower_bound = CreateComparisonExpression(
-		    *func.GetChildren()[0], ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(in_list.front()));
-		auto upper_bound = CreateComparisonExpression(*func.GetChildren()[0], ExpressionType::COMPARE_LESSTHANOREQUALTO,
-		                                              std::move(in_list.back()));
-		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(lower_bound)));
-		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(upper_bound)));
+	if (TryPushdownDenseInFilter(table_filters, column_ref, in_list)) {
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
 	// if this is not a dense range we can push an optional filter for zone-map pruning
@@ -704,6 +714,9 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 	}
 	ProjectionIndex proj_id;
 	LogicalType col_type = LogicalType::INVALID;
+	optional_ptr<const BoundColumnRefExpression> equality_column;
+	vector<Value> equality_values;
+	bool only_equalities = true;
 	for (idx_t i = 0; i < conj.GetChildren().size(); i++) {
 		auto &child = conj.GetChildren()[i];
 		if (!BoundComparisonExpression::IsComparison(*child)) {
@@ -736,6 +749,11 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 		}
 
 		auto comparison_type = invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
+		only_equalities &= comparison_type == ExpressionType::COMPARE_EQUAL;
+		if (comparison_type == ExpressionType::COMPARE_EQUAL && !const_val->GetValue().IsNull()) {
+			equality_column = column_ref;
+			equality_values.push_back(const_val->GetValue());
+		}
 		if (const_val->GetValue().IsNull()) {
 			switch (comparison_type) {
 			case ExpressionType::COMPARE_DISTINCT_FROM: {
@@ -760,6 +778,10 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 			    CreateComparisonExpression(*column_ref, comparison_type, const_val->GetValue()));
 		}
 	}
+	if (only_equalities && equality_column &&
+	    TryPushdownDenseInFilter(table_filters, *equality_column, equality_values)) {
+		return FilterPushdownResult::PUSHED_DOWN_FULLY;
+	}
 	table_filters.PushFilter(proj_id, CreateOptionalExpressionFilter(std::move(conj_filter), col_type));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
@@ -777,7 +799,19 @@ static bool IsLessThan(ExpressionType type) {
 //! Margins: 2h for DST ambiguity (TIMESTAMP<->TIMESTAMPTZ), 24h for time-of-day loss, 1s for rounding loss.
 static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target) {
 	if (source == target) {
-		return 0;
+		switch (source) {
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return 0;
+		default:
+			// non-temporal types with the same id can differ (e.g. UNION or DECIMAL types)
+			return -1;
+		}
 	}
 	switch (source) {
 	case LogicalTypeId::TIMESTAMP:
@@ -1113,7 +1147,6 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		return ret;
 	} else {
 		// comparison between two non-scalars
-		// only handle comparisons for now
 		if (expr.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 			return FilterResult::UNSUPPORTED;
 		}
@@ -1268,47 +1301,18 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 	return FilterResult::UNSUPPORTED;
 }
 
-/*
- * Create and add new transitive filters from a two non-scalar filter such as j > i, j >= i, j < i, and j <= i
- * It's missing to create another method to add transitive filters from scalar filters, e.g, i > 10
- */
+// Infer constant bounds from comparisons between non-scalar expressions.
 FilterResult FilterCombiner::AddTransitiveFilters(BoundFunctionExpression &comparison, bool is_root) {
 	if (!IsGreaterThan(comparison.GetExpressionType()) && !IsLessThan(comparison.GetExpressionType())) {
 		return FilterResult::UNSUPPORTED;
 	}
+	// Derived bounds must not duplicate volatile or throwing expressions.
+	if (comparison.IsVolatile() || comparison.CanThrow()) {
+		return FilterResult::UNSUPPORTED;
+	}
 	// get the LHS and RHS nodes
 	auto &left_node = GetNode(*BoundComparisonExpression::LeftMutable(comparison));
-	reference<Expression> right_node = GetNode(*BoundComparisonExpression::RightMutable(comparison));
-	// In case with filters like CAST(i) = j and i = 5 we replace the COLUMN_REF i with the constant 5
-	do {
-		if (right_node.get().GetExpressionType() != ExpressionType::OPERATOR_CAST) {
-			break;
-		}
-		auto &bound_cast_expr = right_node.get().Cast<BoundFunctionExpression>();
-		if (BoundCastExpression::Child(bound_cast_expr).GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-			break;
-		}
-		auto &col_ref = BoundCastExpression::Child(bound_cast_expr).Cast<BoundColumnRefExpression>();
-		for (auto &stored_exp : stored_expressions) {
-			const_reference<Expression> expr = stored_exp.first;
-			if (expr.get().GetExpressionType() == ExpressionType::OPERATOR_CAST) {
-				expr = BoundCastExpression::Child(right_node.get().Cast<BoundFunctionExpression>());
-			}
-			if (expr.get().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-				continue;
-			}
-			auto &st_col_ref = expr.get().Cast<BoundColumnRefExpression>();
-			if (st_col_ref.Binding() != col_ref.Binding()) {
-				continue;
-			}
-			if (bound_cast_expr.GetReturnType() != stored_exp.second->GetReturnType()) {
-				continue;
-			}
-			BoundCastExpression::ChildMutable(bound_cast_expr) = stored_exp.second->Copy();
-			right_node = GetNode(*BoundCastExpression::ChildMutable(bound_cast_expr));
-			break;
-		}
-	} while (false);
+	auto &right_node = GetNode(*BoundComparisonExpression::RightMutable(comparison));
 
 	if (left_node.Equals(right_node)) {
 		return FilterResult::UNSUPPORTED;

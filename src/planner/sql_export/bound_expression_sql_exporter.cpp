@@ -118,11 +118,7 @@ BoundExpressionSQLExportState::PreserveCollation(const LogicalType &type, BoundE
 			result.GetValue() = make_uniq<CollateExpression>(std::move(collation), std::move(result.GetValue()));
 		}
 	} else if (BoundExpressionSQLExportState::HasNestedCollation(type)) {
-		auto issue = BoundExpressionSQLExportState::UnsupportedFeature(
-		    path, "nested_result_collation", "Nested result collations require a typed SQL representation");
-		issue.facts.emplace_back("logical_type", Value(type.ToString()));
-		issue.facts.emplace_back("varchar_collations", Value(SQLExportHelpers::TypeCollationSignature(type)));
-		return BoundExpressionSQLExportResult::Failure({std::move(issue)});
+		return CastToConstructedType(type, std::move(result.GetValue()), path);
 	}
 	return result;
 }
@@ -146,7 +142,9 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::Export(const Expre
 	auto result = ExportInternal(expression, path);
 	const bool preserves_collation = expression.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT ||
 	                                 (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
-	                                  expression.GetReturnType().id() != LogicalTypeId::VARCHAR);
+	                                  expression.GetReturnType().id() != LogicalTypeId::VARCHAR) ||
+	                                 (expression.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE &&
+	                                  expression.GetReturnType().IsAggregateState());
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF || preserves_collation) {
 		return result;
 	}
@@ -402,9 +400,11 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const B
 			    path, "aggregate_state_try_cast",
 			    "Aggregate state TRY_CAST or custom casts require a SQL representation")});
 		}
-		auto result = ExportAggregateFunction::StateToSQL(
-		    expression.GetReturnType(),
-		    BoundExpressionSQLExportState::SQLCast(storage_type, std::move(child.GetValue())));
+		auto storage = RestoreResultType(storage_type, std::move(child.GetValue()), path);
+		if (storage.HasError()) {
+			return storage;
+		}
+		auto result = ExportAggregateFunction::StateToSQL(expression.GetReturnType(), std::move(storage.GetValue()));
 		if (!result) {
 			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
 			    path, "aggregate_state_parameters", "Aggregate state SQL parameters are not representable")});
@@ -435,12 +435,24 @@ BoundExpressionSQLExportState::ExportComparison(const BoundFunctionExpression &e
 	D_ASSERT(!expression.BindInfo());
 	D_ASSERT(ChildrenAreConsistentWithArguments(expression.GetChildren(), expression.Function().GetArguments()));
 	D_ASSERT(expression.GetReturnType() == expression.Function().GetReturnType());
-	D_ASSERT(expression.GetChildren()[0]->GetReturnType() == expression.GetChildren()[1]->GetReturnType());
+	auto &left_type = expression.GetChildren()[0]->GetReturnType();
+	auto &right_type = expression.GetChildren()[1]->GetReturnType();
+	// the regex range filter compares VARCHAR values with BLOB bounds, as the bounds need not be valid UTF-8
+	const bool varchar_blob = (left_type.id() == LogicalTypeId::VARCHAR && right_type.id() == LogicalTypeId::BLOB) ||
+	                          (left_type.id() == LogicalTypeId::BLOB && right_type.id() == LogicalTypeId::VARCHAR);
+	D_ASSERT(left_type == right_type || varchar_blob);
 	vector<unique_ptr<ParsedExpression>> children;
 	vector<LogicalPlanVerificationIssue> issues;
 	ExportChildren(expression.GetChildren(), path, children, issues);
 	if (!issues.empty()) {
 		return BoundExpressionSQLExportResult::Failure(std::move(issues));
+	}
+	if (varchar_blob) {
+		// encode reinterprets the VARCHAR bytes as a BLOB, so the bytes are compared as before
+		auto &varchar_child = left_type.id() == LogicalTypeId::VARCHAR ? children[0] : children[1];
+		vector<unique_ptr<ParsedExpression>> arguments;
+		arguments.push_back(std::move(varchar_child));
+		varchar_child = SQLExportHelpers::SystemFunction("encode", std::move(arguments));
 	}
 	return BoundExpressionSQLExportResult::Success(make_uniq<ComparisonExpression>(
 	    expression.GetExpressionType(), std::move(children[0]), std::move(children[1])));

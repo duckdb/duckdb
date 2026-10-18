@@ -902,6 +902,8 @@ void DataTable::InitializeLocalStorage(LocalAppendState &state, DuckTableEntry &
 		                           GetTableName(), TableModification());
 	}
 
+	// The transaction-local indexes are created with the local storage, and only for indexes that are bound
+	info->BindIndexes(context);
 	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.InitializeStorage(state, *this, table);
 	state.constraint_state = InitializeConstraintState(table, bound_constraints);
@@ -1584,7 +1586,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	writer.SetRowGroupCount(info->CheckpointRowGroupCount(writer.GetCheckpointOptions()));
 	// checkpoint each individual row group
 	TableStatistics global_stats;
-	row_groups->Checkpoint(writer, global_stats);
+	const auto has_new_stats = row_groups->Checkpoint(writer, global_stats);
 	row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	if (writer.GetRebuildIndexes()) {
 		MetricsTimer timer;
@@ -1602,7 +1604,9 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	//   table pointer
 	//   index data
 	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
-	row_groups->SetStats(global_stats);
+	if (has_new_stats) {
+		row_groups->SetStats(global_stats);
+	}
 }
 
 void DataTable::CommitDropColumn(const idx_t column_index, CommitDropState &drop_state) {

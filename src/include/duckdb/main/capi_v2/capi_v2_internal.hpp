@@ -714,6 +714,14 @@ inline auto Convert(CV2Schema *schema) -> duckdb_v2_schema_handle {
 auto NullArgumentError(duckdb_v2_error_info_handle *err, const char *function, const char *argument) noexcept
     -> DUCKDB_V2_ERROR;
 
+//! Raised for metadata asked for before execution bound the statement that produces it. Reported as
+//! ERROR_INPUT_METADATA_DEFERRED
+class MetadataDeferredException : public InvalidInputException {
+public:
+	explicit MetadataDeferredException(const string &msg) : InvalidInputException(msg) {
+	}
+};
+
 // Classify the exception currently being handled into a V2 error code and detail strings. Must be called from inside
 // a catch block. Never throws: if rendering the detail itself fails, it degrades to a bare code with empty detail
 // (RESOURCE_OUT_OF_MEMORY on allocation failure). Defined in capi_v2.cpp.
@@ -834,13 +842,11 @@ DUCKDB_V2_ERROR WithErrorHandler(duckdb_v2_error_info_handle *err, T callback) n
 //----------------------------------------------------------------------------------------------------------------------
 
 struct ConnectionBusySlotV2 : public ClientContextState {
-	std::atomic<void *> owner {nullptr};
-	// True once the consumer called `connection_interrupt` for the active result.
-	// This flag is how we distinguish a consumer cancellation (-> CANCELLED status) from an DuckDB-initiated interrupt
-	// that shares the INTERRUPT exception type, e.g. a `max_execution_time` timeout (-> error).
-	// The DuckDB's internal interrupt_state is not suitable for this, it is set to stop sibling tasks on any error.
-	// Reset when a new query claims the slot.
-	std::atomic<bool> cancel_requested {false};
+	// The number of `connection_interrupt` calls. A result records it when its statement starts, and an INTERRUPT
+	// error is a consumer cancellation (-> CANCELLED status) only if it moved since: a DuckDB-initiated interrupt,
+	// e.g. a `max_execution_time` timeout, shares the INTERRUPT exception type (-> error). The DuckDB's internal
+	// interrupt_state is not suitable for this, it is set to stop sibling tasks on any error.
+	std::atomic<idx_t> cancel_requests {0};
 };
 
 inline shared_ptr<ConnectionBusySlotV2> GetBusySlot(ClientContext &context) {

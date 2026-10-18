@@ -19,6 +19,12 @@
       ]
     },
     {
+      "reason": "Requires httpfs to be unloaded, but this config loads it statically.",
+      "paths": [
+        "test/extension/install_httpfs_https_repository.test"
+      ]
+    },
+    {
       "reason": "TODO",
       "paths": [
         "test/extension/test_tags.test",
@@ -137,13 +143,20 @@
       "reason": "Stored aggregate-state and TUPLE columns require v2.0.0 storage.",
       "paths": [
         "test/sql/sql_export/empty_aggregate_state.test",
-        "test/sql/sql_export/mark_condition_shapes.test"
+        "test/sql/sql_export/mark_condition_shapes.test",
+        "test/sql/types/variant/variant_struct_field_subquery.test"
       ]
     },
     {
       "reason": "Nested schemas require storage version v2.0.0 but encrypted databases use an older default storage version",
       "paths": [
         "test/sql/alter/alter_schema_set_schema_options.test"
+      ]
+    },
+    {
+      "reason": "Persisting loses the sign of zero for FLOAT/DOUBLE, unrelated bug, see issue #25580",
+      "paths": [
+        "test/sql/order/order_by_negative_zero.test"
       ]
     }
   ]

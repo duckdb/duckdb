@@ -33,6 +33,9 @@ PEGTransformerFactory::TransformCreateStatement(PEGTransformer &transformer, con
 		}
 		conflict_policy = OnCreateConflict::REPLACE_ON_CONFLICT;
 	}
+	if (temporary && *temporary == SecretPersistType::PERSISTENT && result->info->type != CatalogType::SECRET_ENTRY) {
+		throw ParserException("PERSISTENT is only supported for CREATE SECRET");
+	}
 	if (result->info->type == CatalogType::SECRET_ENTRY) {
 		auto &secret_info = result->info->Cast<CreateSecretInfo>();
 		secret_info.persist_type = temporary ? *temporary : SecretPersistType::DEFAULT;
@@ -224,8 +227,7 @@ string PEGTransformerFactory::TransformDotColLabel(PEGTransformer &transformer, 
 
 ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
     PEGTransformer &transformer, const Identifier &identifier, const optional<LogicalType> &type,
-    optional<GeneratedColumnDefinition> generated_column, const bool &has_result,
-    optional<vector<ColumnConstraintEntry>> column_constraint) {
+    optional<GeneratedColumnDefinition> generated_column, optional<vector<ColumnConstraintEntry>> column_constraint) {
 	auto qualified_name = QualifiedName(identifier);
 	bool has_type = type.has_value();
 	bool has_generated = generated_column && generated_column->expr != nullptr;
@@ -467,6 +469,13 @@ ColumnConstraintEntry PEGTransformerFactory::TransformUniqueConstraint(PEGTransf
 	entry.constraint_name = "UniqueConstraint";
 	entry.constraint_type_info = make_pair(false, ConstraintType::UNIQUE);
 	return entry;
+}
+
+// Column constraint names are parsed but not stored
+ColumnConstraintEntry PEGTransformerFactory::TransformNameableColumnConstraint(PEGTransformer &transformer,
+                                                                               const bool &has_result,
+                                                                               ColumnConstraintEntry child) {
+	return child;
 }
 
 bool PEGTransformerFactory::TransformNullConstraint(PEGTransformer &transformer) {

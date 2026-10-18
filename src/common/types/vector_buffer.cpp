@@ -338,11 +338,17 @@ void VectorBuffer::Copy(const Vector &source_p, const SelectionVector &source_se
 			finished = true;
 			break;
 		default: {
-			// for exotic types we flatten followed by copying
+			// for exotic types we flatten followed by copying - only the copied rows are flattened, as e.g. list
+			// functions copy the children of every list at a different offset, and the selection vector might only
+			// cover the copied rows
+			D_ASSERT(source_count >= source_offset + copy_count);
+			SelectionVector range_sel(copy_count);
+			for (idx_t i = 0; i < copy_count; i++) {
+				range_sel.set_index(i, sel.get_index(source_offset + i));
+			}
 			Vector flattened_vector(Vector::Ref(source));
-			flattened_vector.Flatten(sel, source_offset + source_count);
-			Copy(flattened_vector, *FlatVector::IncrementalSelectionVector(), source_count, source_offset,
-			     target_offset, copy_count);
+			flattened_vector.Flatten(range_sel, copy_count);
+			Copy(flattened_vector, *FlatVector::IncrementalSelectionVector(), copy_count, 0, target_offset, copy_count);
 			return;
 		}
 		}

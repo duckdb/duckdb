@@ -335,15 +335,32 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 	}
 	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_NS: {
-		if (stats.size() != sizeof(int64_t)) {
-			throw InvalidInputException("Incorrect stats size for type TIMESTAMP_NS");
+		timestamp_ns_t timestamp_value;
+		if (schema_ele.type_info == ParquetExtraTypeInfo::IMPALA_TIMESTAMP) {
+			if (stats.size() != sizeof(Int96)) {
+				throw InvalidInputException("Incorrect stats size for type TIMESTAMP_NS");
+			}
+			timestamp_value = ImpalaTimestampToTimestampNS(Load<Int96>(stats_data));
+		} else {
+			if (stats.size() != sizeof(int64_t)) {
+				throw InvalidInputException("Incorrect stats size for type TIMESTAMP_NS");
+			}
+			auto val = Load<int64_t>(stats_data);
+			switch (schema_ele.type_info) {
+			case ParquetExtraTypeInfo::UNIT_MS:
+				timestamp_value = ParquetTimestampMsToTimestampNs(val);
+				break;
+			case ParquetExtraTypeInfo::UNIT_NS:
+				timestamp_value = ParquetTimestampNsToTimestampNs(val);
+				break;
+			case ParquetExtraTypeInfo::UNIT_MICROS:
+			default:
+				timestamp_value = ParquetTimestampUsToTimestampNs(val);
+				break;
+			}
 		}
-		if (schema_ele.type_info != ParquetExtraTypeInfo::UNIT_NS) {
-			throw InternalException("TIMESTAMP_NS requires nanosecond type info");
-		}
-		auto timestamp_value = ParquetTimestampNsToTimestampNs(Load<int64_t>(stats_data));
 		if (type.id() == LogicalTypeId::TIMESTAMP_TZ_NS) {
-			return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(timestamp_value));
+			return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(timestamp_value.value));
 		}
 		return Value::TIMESTAMPNS(timestamp_value);
 	}
@@ -651,7 +668,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 
 		//! Convert the root 'value' -> 'untyped_value_index'
 		auto &value = schema.children[1];
-		D_ASSERT(value.name == "value");
+		if (schema.children[0].name != "metadata" || value.name != "value") {
+			return nullptr;
+		}
 		auto value_stats = ParquetStatisticsUtils::TransformColumnStatistics(value, columns, can_have_nan);
 		//! Best-effort: nodes whose stats can't be converted are left UNKNOWN (not fully shredded) rather
 		//! than discarding the statistics for the entire variant column

@@ -898,6 +898,9 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 		if (unseen_schemas.size() >= max_schema_count) {
 			break;
 		}
+		if (database->GetVisibility() == AttachVisibility::HIDDEN) {
+			continue;
+		}
 		auto &catalog = database->GetCatalog();
 		auto current_schemas = catalog.GetSchemas(context);
 		for (auto &current_schema : current_schemas) {

@@ -55,6 +55,8 @@ terminal_rule_overrides_t ParsedGrammar::BuildTerminalRuleOverrides(const PEGKey
 	                        make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE, keyword_helper));
 	AddTerminalRuleOverride(overrides, "ReservedIdentifier",
 	                        make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE, keyword_helper));
+	AddTerminalRuleOverride(overrides, "BareColLabel",
+	                        make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_BARE_LABEL, keyword_helper));
 	AddTerminalRuleOverride(overrides, "CatalogName",
 	                        make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_CATALOG_NAME, keyword_helper));
 	AddTerminalRuleOverride(overrides, "SchemaName",
@@ -131,7 +133,8 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Create(const vector<reference<Gramm
 	compiled_rules_map_t rules;
 	for (auto &entry : grammar.rules) {
 		auto &rule = *entry.second;
-		rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, rule.transform_process, rule.collapsible));
+		rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, rule.transform_process, rule.collapsible,
+		                                                        rule.expression_depth, rule.suppress_suggestions));
 	}
 
 	MatcherAllocator allocator;

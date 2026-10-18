@@ -59,9 +59,11 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	if (bound->GetReturnType() == LogicalType::SQLNULL) {
 		throw BinderException(error_context, "Window RANGE expressions cannot be NULL");
 	}
+	// the function binder casts the operands and folds a constant offset to its value. The origin recognizes a
+	// constant offset in the bound call by value, so keep a copy of it - any other offset stays in place
+	unique_ptr<Expression> offset_copy = origin && bound->IsFoldable() ? bound->Copy() : nullptr;
+	optional_ptr<const Expression> offset = offset_copy ? offset_copy.get() : bound.get();
 	children.emplace_back(std::move(bound));
-	optional_ptr<const Expression> order_input = children[0].get();
-	optional_ptr<const Expression> offset_input = children[1].get();
 
 	FunctionBinder function_binder(context);
 	auto function =
@@ -72,7 +74,7 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 		throw BinderException(error_context, "Invalid type for Window RANGE expression");
 	}
 	if (origin) {
-		*origin = WindowRangeBoundary::Capture(*function, order_input, offset_input);
+		*origin = WindowRangeBoundary::Capture(*function, *bound_order, *offset);
 	}
 	bound = std::move(function);
 	return bound->GetReturnType();
@@ -139,11 +141,18 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	}
 	vector<unique_ptr<Expression>> bound_partitions;
 	for (auto &child : window.PartitionsMutable()) {
-		bound_partitions.push_back(BindChild(child, depth, error));
+		auto bound_partition = BindChild(child, depth, error);
+		if (!error.HasError() && bound_partition->IsVolatile()) {
+			throw BinderException(error_context, "PARTITION BY window expressions cannot be volatile");
+		}
+		bound_partitions.push_back(std::move(bound_partition));
 	}
 	vector<unique_ptr<Expression>> bound_orders;
 	for (auto &order : window.OrderByMutable()) {
 		auto bound_order = BindChild(order.expression, depth, error);
+		if (!error.HasError() && bound_order->IsVolatile()) {
+			throw BinderException(error_context, "ORDER BY window expressions cannot be volatile");
+		}
 
 		//	If the frame is a RANGE frame and the type is a time,
 		//	then we have to convert the time to a timestamp to avoid wrapping.
@@ -224,7 +233,9 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 
 		// bind the aggregate
 		FunctionBinder function_binder(binder);
-		auto window_bound_aggregate = function_binder.BindAggregateFunction(func, std::move(arguments), error, nullptr);
+		auto window_bound_aggregate = function_binder.BindAggregateFunction(
+		    func, std::move(arguments), error, nullptr,
+		    window.Distinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
 		// No function found, throw an error
 		if (!window_bound_aggregate) {
 			error.AddQueryLocation(window);
@@ -368,7 +379,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		}
 
 		// Cast all three to match
-		optional_ptr<const Expression> original_order = bound_order.get();
+		auto &original_order = *bound_order;
 		bound_order = BoundCastExpression::AddCastToType(context, std::move(bound_order), order_type);
 		if (!WindowRangeCast::Capture(*bound_order, original_order, result->SQLRangeOrderCastsMutable())) {
 			result->SQLRangeStartBoundaryMutable().reset();
@@ -398,12 +409,12 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	result->StartExprMutable() = CastWindowExpression(std::move(bound_start), start_type);
 	result->EndExprMutable() = CastWindowExpression(std::move(bound_end), end_type);
 	if (result->SQLRangeStartBoundary() &&
-	    !WindowRangeCast::Capture(*result->StartExpr(), original_start,
+	    !WindowRangeCast::Capture(*result->StartExpr(), *original_start,
 	                              result->SQLRangeStartBoundaryMutable()->result_casts)) {
 		result->SQLRangeStartBoundaryMutable().reset();
 	}
 	if (result->SQLRangeEndBoundary() &&
-	    !WindowRangeCast::Capture(*result->EndExpr(), original_end,
+	    !WindowRangeCast::Capture(*result->EndExpr(), *original_end,
 	                              result->SQLRangeEndBoundaryMutable()->result_casts)) {
 		result->SQLRangeEndBoundaryMutable().reset();
 	}

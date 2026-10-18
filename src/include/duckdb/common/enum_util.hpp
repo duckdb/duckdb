@@ -222,6 +222,8 @@ enum class ExponentType : uint8_t;
 
 enum class ExpressionClass : uint8_t;
 
+enum class ExpressionDepthKind : uint8_t;
+
 enum class ExpressionTailType : uint8_t;
 
 enum class ExpressionType : uint8_t;
@@ -289,6 +291,8 @@ enum class GroupByExpressionInfoType : uint8_t;
 enum class HLLStorageType : uint8_t;
 
 enum class HTTPClientCachePolicy : uint8_t;
+
+enum class HTTPRetryOutcomeOwner : uint8_t;
 
 enum class HTTPStatusCode : uint16_t;
 
@@ -495,8 +499,6 @@ enum class RenderMode : uint8_t;
 enum class RequestSizing : uint8_t;
 
 enum class RequestType : uint8_t;
-
-enum class ResultEagerness : uint8_t;
 
 enum class ResultLifetime : uint8_t;
 
@@ -955,6 +957,9 @@ template<>
 const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value);
 
 template<>
+const char* EnumUtil::ToChars<ExpressionDepthKind>(ExpressionDepthKind value);
+
+template<>
 const char* EnumUtil::ToChars<ExpressionTailType>(ExpressionTailType value);
 
 template<>
@@ -1055,6 +1060,9 @@ const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
 
 template<>
 const char* EnumUtil::ToChars<HTTPClientCachePolicy>(HTTPClientCachePolicy value);
+
+template<>
+const char* EnumUtil::ToChars<HTTPRetryOutcomeOwner>(HTTPRetryOutcomeOwner value);
 
 template<>
 const char* EnumUtil::ToChars<HTTPStatusCode>(HTTPStatusCode value);
@@ -1364,9 +1372,6 @@ const char* EnumUtil::ToChars<RequestSizing>(RequestSizing value);
 
 template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
-
-template<>
-const char* EnumUtil::ToChars<ResultEagerness>(ResultEagerness value);
 
 template<>
 const char* EnumUtil::ToChars<ResultLifetime>(ResultLifetime value);
@@ -1910,6 +1915,9 @@ template<>
 ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value);
 
 template<>
+ExpressionDepthKind EnumUtil::FromString<ExpressionDepthKind>(const char *value);
+
+template<>
 ExpressionTailType EnumUtil::FromString<ExpressionTailType>(const char *value);
 
 template<>
@@ -2010,6 +2018,9 @@ HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
 
 template<>
 HTTPClientCachePolicy EnumUtil::FromString<HTTPClientCachePolicy>(const char *value);
+
+template<>
+HTTPRetryOutcomeOwner EnumUtil::FromString<HTTPRetryOutcomeOwner>(const char *value);
 
 template<>
 HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value);
@@ -2319,9 +2330,6 @@ RequestSizing EnumUtil::FromString<RequestSizing>(const char *value);
 
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);
-
-template<>
-ResultEagerness EnumUtil::FromString<ResultEagerness>(const char *value);
 
 template<>
 ResultLifetime EnumUtil::FromString<ResultLifetime>(const char *value);
