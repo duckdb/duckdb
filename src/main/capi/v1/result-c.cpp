@@ -296,7 +296,7 @@ duckdb_state deprecated_duckdb_translate_column(QueryResult &result, duckdb_colu
 	return DuckDBSuccess;
 }
 
-duckdb_state DuckDBTranslateStreamResult(unique_ptr<QueryResultStream> stream_p, duckdb_result *out) {
+duckdb_state DuckDBTranslateStreamResult(unique_ptr<QueryResultStream<>> stream_p, duckdb_result *out) {
 	D_ASSERT(stream_p);
 	auto &stream = *stream_p;
 	if (!out) {
@@ -348,7 +348,7 @@ duckdb_state DuckDBTranslateResult(unique_ptr<QueryResult> result_p, duckdb_resu
 }
 
 //! Drain a stream into a retained result, for the random-access deprecated result set
-static unique_ptr<QueryResult> DrainStreamIntoResult(QueryResultStream &stream) {
+static unique_ptr<QueryResult> DrainStreamIntoResult(QueryResultStream<> &stream) {
 	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), stream.GetTypes());
 	ColumnDataAppendState append_state;
 	collection->InitializeAppend(append_state);
@@ -416,7 +416,7 @@ bool DeprecatedMaterializeResult(duckdb_result *result) {
 	if (result->deprecated_row_count > 0 &&
 	    materialized.GetStatementProperties().return_type == StatementReturnType::CHANGED_ROWS) {
 		// update total changes
-		auto row_changes = materialized.GetValue(0, 0);
+		auto row_changes = materialized.Collection().GetValue(0, 0);
 		if (!row_changes.IsNull()) {
 			auto cast_row_changes = row_changes.DefaultTryCastAs(LogicalType::BIGINT);
 			if (cast_row_changes) {
@@ -557,7 +557,7 @@ idx_t duckdb_rows_changed(duckdb_result *result) {
 		// CHANGED_ROWS should return exactly one row
 		return 0;
 	}
-	return materialized.GetValue(0, 0).GetValue<uint64_t>();
+	return materialized.Collection().GetValue(0, 0).GetValue<uint64_t>();
 }
 
 void *duckdb_column_data(duckdb_result *result, idx_t col) {

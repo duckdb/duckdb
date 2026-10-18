@@ -113,8 +113,17 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 
 	switch (serialization_type) {
 	// This allows us to skip looking up the secret type for deserialization altogether
-	case SecretSerializationType::KEY_VALUE_SECRET:
-		return KeyValueSecret::Deserialize<KeyValueSecret>(deserializer, BaseSecret(scope, type, provider, name));
+	case SecretSerializationType::KEY_VALUE_SECRET: {
+		auto result =
+		    KeyValueSecret::Deserialize<KeyValueSecret>(deserializer, BaseSecret(scope, type, provider, name));
+		if (type == "http") {
+			// Preserve stored keys and apply current HTTP redaction rules to older secrets.
+			const auto keys = CreateHTTPSecretFunctions::GetRedactedKeys();
+			auto &secret = result->Cast<KeyValueSecret>();
+			secret.redact_keys.insert(keys.begin(), keys.end());
+		}
+		return result;
+	}
 	// Continues below: we need to do a type lookup to find the secret deserialize method
 	case SecretSerializationType::CUSTOM:
 		break;
@@ -542,8 +551,8 @@ vector<SecretEntry> SecretManager::AllSecrets(CatalogTransaction transaction) {
 	}
 
 	// Add results from all backends to the result set
-	for (const auto &backend : secret_storages) {
-		auto backend_result = backend.second->AllSecrets(&transaction);
+	for (const auto &backend : GetSecretStorages()) {
+		auto backend_result = backend.get().AllSecrets(&transaction);
 		for (const auto &it : backend_result) {
 			result.push_back(it);
 		}

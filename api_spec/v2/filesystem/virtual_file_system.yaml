@@ -200,6 +200,9 @@ callbacks:
         description: Borrowed opaque handle to this claim operation. Valid only for the duration of the callback.
       path:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The path to decide on. Borrowed for the duration of the callback.
       claim:
         type: bool
@@ -235,6 +238,9 @@ callbacks:
         description: Borrowed opaque handle to this file open operation. Valid only for the duration of the callback.
       path:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The path of the file to open. Borrowed for the duration of the callback.
       flags:
         type: FILE_FLAG
@@ -517,6 +523,9 @@ callbacks:
         description: Borrowed opaque handle to this stat operation. Valid only for the duration of the callback.
       path:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The path to report on. Borrowed for the duration of the callback.
       metadata:
         type: file_metadata
@@ -549,6 +558,9 @@ callbacks:
         description: Borrowed opaque handle to this list operation. Valid only for the duration of the callback.
       path:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The directory to list. Borrowed for the duration of the callback.
       list_info:
         type: file_listing
@@ -580,6 +592,9 @@ callbacks:
         description: Borrowed opaque handle to this glob operation. Valid only for the duration of the callback.
       pattern:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The pattern to expand. Borrowed for the duration of the callback.
       list_info:
         type: file_listing
@@ -606,6 +621,9 @@ callbacks:
         description: Borrowed opaque handle to this remove file operation. Valid only for the duration of the callback.
       path:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The path of the file to remove. Borrowed for the duration of the callback.
       err:
         type: error_info
@@ -628,6 +646,9 @@ callbacks:
         description: Borrowed opaque handle to this create directory operation. Valid only for the duration of the callback.
       path:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The path of the directory to create. Borrowed for the duration of the callback.
       err:
         type: error_info
@@ -651,6 +672,9 @@ callbacks:
         description: Borrowed opaque handle to this remove directory operation. Valid only for the duration of the callback.
       path:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The path of the directory to remove. Borrowed for the duration of the callback.
       err:
         type: error_info
@@ -674,9 +698,15 @@ callbacks:
         description: Borrowed opaque handle to this move operation. Valid only for the duration of the callback.
       source:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The path of the file to move. Borrowed for the duration of the callback.
       target:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The path to move it to. Borrowed for the duration of the callback.
       err:
         type: error_info
@@ -693,7 +723,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   vfs_create_with_connection:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Creates a new virtual file system that will be registered on the connection's database.
 
@@ -719,7 +749,7 @@ functions:
 
   vfs_create_with_extension:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Creates a new virtual file system that will be registered on the loading extension's database.
 
@@ -748,7 +778,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   vfs_set_name:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the name of the virtual file system.
 
@@ -761,6 +791,9 @@ functions:
         description: The file system to set the name of.
       name:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The name to set. Borrowed and copied.
       err:
         type: error_info
@@ -770,7 +803,7 @@ functions:
 
   vfs_add_prefix:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Claims every path starting with a prefix for the virtual file system.
 
@@ -788,6 +821,9 @@ functions:
         description: The file system to add the prefix to.
       prefix:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The prefix to claim. Borrowed and copied.
       err:
         type: error_info
@@ -797,7 +833,7 @@ functions:
 
   vfs_set_user_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets arbitrary user data on the virtual file system.
 
@@ -825,7 +861,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   vfs_set_claim_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "claim" callback of the virtual file system.
 
@@ -846,7 +882,7 @@ functions:
 
   vfs_set_file_open_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the "open" callback of the virtual file system.
 
@@ -867,7 +903,7 @@ functions:
 
   vfs_set_file_close_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "close" callback of the virtual file system.
 
@@ -888,7 +924,7 @@ functions:
 
   vfs_set_file_abort_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "abort" callback of the virtual file system.
 
@@ -912,7 +948,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   vfs_set_file_read_at_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the "read at" callback of the virtual file system.
 
@@ -933,7 +969,7 @@ functions:
 
   vfs_set_file_write_at_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "write at" callback of the virtual file system.
 
@@ -955,7 +991,7 @@ functions:
 
   vfs_set_file_stat_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional file "stat" callback of the virtual file system.
 
@@ -977,7 +1013,7 @@ functions:
 
   vfs_set_file_sync_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "sync" callback of the virtual file system.
 
@@ -997,7 +1033,7 @@ functions:
 
   vfs_set_file_truncate_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "truncate" callback of the virtual file system.
 
@@ -1020,7 +1056,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   vfs_set_stat_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional file system "stat" callback of the virtual file system.
 
@@ -1043,7 +1079,7 @@ functions:
 
   vfs_set_list_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "list" callback of the virtual file system.
 
@@ -1063,7 +1099,7 @@ functions:
 
   vfs_set_glob_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "glob" callback of the virtual file system.
 
@@ -1084,7 +1120,7 @@ functions:
 
   vfs_set_remove_file_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "remove file" callback of the virtual file system.
 
@@ -1105,7 +1141,7 @@ functions:
 
   vfs_set_create_directory_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "create directory" callback of the virtual file system.
 
@@ -1126,7 +1162,7 @@ functions:
 
   vfs_set_remove_directory_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "remove directory" callback of the virtual file system.
 
@@ -1147,7 +1183,7 @@ functions:
 
   vfs_set_move_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "move" callback of the virtual file system.
 
@@ -1171,7 +1207,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   vfs_file_open_set_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Attaches the per-file state of the file being opened.
 
@@ -1197,7 +1233,7 @@ functions:
 
   vfs_file_open_set_property:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Reports a property of the file being opened.
 
@@ -1225,7 +1261,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   vfs_info_get_user_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: Retrieves the user data set via `[[vfs_set_user_data]]`.
     parameters:
       info:
@@ -1244,13 +1280,13 @@ functions:
 
   vfs_info_get_file_system:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Borrows the file system of the database this file system is registered on, to delegate to whichever file
       system claims another path.
 
       It carries the database's settings and secrets but no query state, so a callback that has a context available
-      should prefer `[[file_system_get_from_context]]`, which carries both. A request for a path this file system
+      should prefer `[[context_get_file_system]]`, which carries both. A request for a path this file system
       claims routes back into its own callbacks. It is borrowed, valid for as long as the registered file system is,
       and must not be destroyed.
     parameters:
@@ -1270,7 +1306,7 @@ functions:
 
   vfs_info_try_get_context:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Retrieves the context of the query performing the operation, if there is one.
 
@@ -1298,7 +1334,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   vfs_register:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Registers the virtual file system, making the paths it claims readable and writable by the engine.
 
@@ -1327,7 +1363,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   vfs_destroy:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
+      - [ "unstable", "v2.0.0", "2026-09-16" ]
     description: |
       Destroys the virtual file system builder, releasing its resources.
 

@@ -176,7 +176,7 @@ public:
 	//! The streaming evaluation function
 	window_stream_function_t stream = nullptr;
 
-	//! Serialization specialization. Not yet implemented
+	//! Serialization of the bind data. Both have to be set for a bound plan to round-trip.
 	window_serialize_t serialize = nullptr;
 	window_deserialize_t deserialize = nullptr;
 };
@@ -283,7 +283,7 @@ public: // Callbacks
 	auto GetStreamingDataCallback() const -> window_stream_function_t { return callbacks.stream; }
 	auto SetStreamingDataCallback(window_stream_function_t callback) -> void { callbacks.stream = callback; }
 
-	auto HasSerializationCallbacks() const -> bool { return false; } // TODO: implement this
+	auto HasSerializationCallbacks() const -> bool { return callbacks.serialize != nullptr && callbacks.deserialize != nullptr; }
 	auto SetSerializeCallback(window_serialize_t callback) -> void { callbacks.serialize = callback; }
 	auto SetDeserializeCallback(window_deserialize_t callback) -> void { callbacks.deserialize = callback; }
 	auto GetSerializeCallback() const -> window_serialize_t { return callbacks.serialize; }
@@ -377,6 +377,26 @@ public:
 	//! Only null in a moved-from bound function.
 	const shared_ptr<const WindowFunction> &GetDefinition() const {
 		return definition;
+	}
+	//! The number of arguments that were received by the standard and positional-only parameters, they come first
+	idx_t GetStandardArgumentCount() const {
+		return BoundSimpleFunction::GetStandardArgumentCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by "*args", they directly follow the standard parameters
+	idx_t GetVarArgsCount() const {
+		return BoundSimpleFunction::GetVarArgsCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by the keyword-only parameters, they follow "*args"
+	idx_t GetKeywordOnlyArgumentCount() const {
+		return BoundSimpleFunction::GetKeywordOnlyArgumentCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by "**kwargs", they are the last arguments
+	idx_t GetKwargsCount() const {
+		return BoundSimpleFunction::GetKwargsCount(definition->GetSignature());
+	}
+	//! The kind of the parameter that received the argument at the given index
+	FunctionParameterKind GetArgumentParameterKind(idx_t argument_index) const {
+		return BoundSimpleFunction::GetArgumentParameterKind(definition->GetSignature(), argument_index);
 	}
 	const vector<LogicalType> &GetLogicalArguments() const {
 		return logical_arguments;

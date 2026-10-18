@@ -16,6 +16,7 @@
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/main/extension_manager.hpp"
+#include "duckdb_static_extension.h"
 
 namespace duckdb {
 class LocalDatabaseFileSystem;
@@ -134,6 +135,25 @@ private:
 	invoke_ext_capi_v2_fun_t invoke_capi_v2;
 };
 
+//! A describe function for an extension class, so that loading it by class goes through the same path as linked
+//! extensions.
+template <class T>
+struct StaticExtensionDescriber {
+	static void Entry(ExtensionLoader &loader) {
+		T extension;
+		extension.Load(loader);
+	}
+	static int32_t Describe(duckdb_extension_descriptor *descriptor) {
+		static const std::string name = T().Name();
+		static const std::string version = T().Version();
+		descriptor->version = 1;
+		descriptor->name = name.c_str();
+		descriptor->extension_version = version.c_str();
+		descriptor->entry_cpp = reinterpret_cast<void (*)(void)>(&Entry);
+		return 0;
+	}
+};
+
 //! The database object. This object holds the catalog and all the
 //! database-specific meta information.
 class DuckDB {
@@ -153,32 +173,16 @@ public:
 	shared_ptr<DatabaseInstance> instance;
 
 public:
-	// Load a statically loaded extension by its class
+	// Load a statically linked extension by its class, through a describe function generated for it
 	template <class T>
 	void LoadStaticExtension() {
-		T extension;
-		auto &manager = ExtensionManager::Get(*instance);
-		auto load_info = manager.BeginLoad({extension.Name()});
-		if (!load_info) {
-			// already loaded - return
-			return;
-		}
-
-		// Instantiate a new loader
-		ExtensionLoader loader(*load_info);
-
-		// Call the Load method of the extension
-		extension.Load(loader);
-
-		// Finalize the loading process
-		loader.FinalizeLoad();
-
-		ExtensionInstallInfo install_info;
-		install_info.mode = ExtensionInstallMode::STATICALLY_LINKED;
-		install_info.version = extension.Version();
-		load_info->FinishLoad(install_info);
+		LoadStaticExtension(&StaticExtensionDescriber<T>::Describe);
 	}
+	// Load the statically linked extension a describe function describes into this database
+	DUCKDB_API void LoadStaticExtension(duckdb_extension_describe_t describe);
 
+	// Function pointer type for the C++ extension entrypoint, <name>_duckdb_cpp_init
+	typedef void (*ext_init_cpp_fun_t)(ExtensionLoader &loader);
 	// Function pointer type for the C API extension init function
 	typedef bool (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
 	// Load a statically compiled C API extension by calling its init function directly (no vtable needed)

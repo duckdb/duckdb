@@ -323,8 +323,7 @@ void RegisterMem(const Connection &conn, MemStore &store) {
 } // namespace
 
 TEST_CASE("Stable C++ API: a virtual file system serves read_csv and glob", "[cpp_api][vfs]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	MemStore store;
 	store.files["mem://data/a.csv"] = CSV_A;
@@ -346,8 +345,7 @@ TEST_CASE("Stable C++ API: a virtual file system serves read_csv and glob", "[cp
 }
 
 TEST_CASE("Stable C++ API: a virtual file system takes COPY TO and the consumer path operations", "[cpp_api][vfs]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	MemStore store;
 	RegisterMem(conn, store);
@@ -384,21 +382,19 @@ TEST_CASE("Stable C++ API: a virtual file system takes COPY TO and the consumer 
 	}
 
 	fs.Move("mem://out/x.csv", "mem://out/y.csv");
-	REQUIRE(fs.Glob("mem://out/*.csv").GetEntryPath(0) == "mem://out/y.csv");
+	REQUIRE(fs.Glob("mem://out/*.csv") == std::vector<std::string> {"mem://out/y.csv"});
 	fs.CreateDirectory("mem://out/sub");
 	REQUIRE(fs.Stat("mem://out/sub")->GetType() == FileType::DIRECTORY);
-	fs.RemoveFile("mem://out/y.csv");
-	// The callback's "not found" reaches the consumer as the typed exception, carrying its text.
-	REQUIRE_THROWS_AS(fs.RemoveFile("mem://out/y.csv"), FileNotFoundException);
-	REQUIRE_THROWS_WITH(fs.RemoveFile("mem://out/y.csv"), Catch::Contains("mem: no such file"));
+	REQUIRE(fs.Remove("mem://out/y.csv"));
+	// The callback's "not found" means there was nothing to remove.
+	REQUIRE_FALSE(fs.Remove("mem://out/y.csv"));
 	fs.RemoveDirectory("mem://out");
 	REQUIRE(store.files.empty());
 	REQUIRE(store.dirs.empty());
 }
 
 TEST_CASE("Stable C++ API: virtual file system callback errors and open values", "[cpp_api][vfs]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	MemStore store;
 	store.files["mem://v.txt"] = "x";
@@ -413,7 +409,7 @@ TEST_CASE("Stable C++ API: virtual file system callback errors and open values",
 
 	// Values attached to an open reach the callback; without one the lookup comes back empty.
 	auto metadata = FileMetadata::Create();
-	metadata.SetValue("mem_hint", Value::Create(conn, static_cast<int32_t>(42)));
+	metadata.SetValue("mem_hint", Value::Create(conn.GetFactory(), static_cast<int32_t>(42)));
 	{
 		auto file = fs.OpenFile("mem://v.txt", {FileFlags::READ}, metadata);
 		REQUIRE(store.last_open_value == "42");
@@ -425,8 +421,7 @@ TEST_CASE("Stable C++ API: virtual file system callback errors and open values",
 }
 
 TEST_CASE("Stable C++ API: virtual file system registration is validated", "[cpp_api][vfs]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	MemStore store;
 
