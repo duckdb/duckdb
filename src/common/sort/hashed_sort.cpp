@@ -376,7 +376,7 @@ HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, co
 	}
 }
 
-void HashedSort::Synchronize(const GlobalSinkState &source, GlobalSinkState &target) const {
+void HashedSort::Synchronize(ClientContext &client, const GlobalSinkState &source, GlobalSinkState &target) const {
 	auto &src = source.Cast<HashedSortGlobalSinkState>();
 	auto &tgt = target.Cast<HashedSortGlobalSinkState>();
 	tgt.SyncPartitioning(src);
@@ -510,19 +510,10 @@ static void PackDirectColumnData(HashedSortGroup &hash_group) {
 	}
 
 	auto result = std::move(fragments[0]);
-	ColumnDataAppendState append_state;
-	result->InitializeAppend(append_state);
-	DataChunk chunk;
-	result->InitializeScanChunk(chunk);
 
 	// Downstream source tasks address hash groups by packed chunk index.
 	for (idx_t fragment_idx = 1; fragment_idx < fragments.size(); fragment_idx++) {
-		auto &fragment = *fragments[fragment_idx];
-		ColumnDataScanState scan_state;
-		fragment.InitializeScan(scan_state);
-		while (fragment.Scan(scan_state, chunk)) {
-			result->Append(append_state, chunk);
-		}
+		result->Append(*fragments[fragment_idx]);
 	}
 
 	D_ASSERT(result->Count() == hash_group.count);

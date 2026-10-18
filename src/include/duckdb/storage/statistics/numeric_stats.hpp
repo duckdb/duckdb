@@ -15,6 +15,9 @@
 #include "duckdb/storage/statistics/numeric_stats_union.hpp"
 #include "duckdb/common/array_ptr.hpp"
 
+#include <cmath>
+#include <type_traits>
+
 namespace duckdb {
 class BaseStatistics;
 struct SelectionVector;
@@ -87,6 +90,16 @@ struct NumericStats {
 	static inline void UpdateValue(T new_value, T &min, T &max) {
 		min = LessThan::Operation(new_value, min) ? new_value : min;
 		max = GreaterThan::Operation(new_value, max) ? new_value : max;
+		if constexpr (std::is_floating_point_v<T>) {
+			// -0.0 == 0.0: prefer -0.0 as min and 0.0 as max so IsConstant can detect mixed zeros
+			if (new_value == T(0)) {
+				if (std::signbit(new_value)) {
+					min = min == T(0) ? new_value : min;
+				} else {
+					max = max == T(0) ? new_value : max;
+				}
+			}
+		}
 	}
 	template <class T>
 	static inline void Update(NumericStatsData &nstats, T new_value) {

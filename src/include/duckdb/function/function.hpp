@@ -56,10 +56,14 @@ enum class FunctionStability : uint8_t { CONSISTENT = 0, VOLATILE = 1, CONSISTEN
 //! PROPAGATE_COLLATIONS        -> this function combines collation from its inputs and emits them again (default)
 //! PUSH_COMBINABLE_COLLATIONS  -> combinable collations are executed for the input arguments
 //! IGNORE_COLLATIONS           -> collations are completely ignored by the function
+//! PUSH_DISTINCT_COLLATIONS    -> aggregate DISTINCT arguments are replaced by their comparison keys
+//!                               Only valid for aggregates that can consume keys instead of original values.
+//!                               Ordinary (non-DISTINCT) calls keep their original arguments.
 enum class FunctionCollationHandling : uint8_t {
 	PROPAGATE_COLLATIONS = 0,
 	PUSH_COMBINABLE_COLLATIONS = 1,
-	IGNORE_COLLATIONS = 2
+	IGNORE_COLLATIONS = 2,
+	PUSH_DISTINCT_COLLATIONS = 3
 };
 
 struct FunctionData {
@@ -116,6 +120,8 @@ struct FunctionLocalState {
 struct FunctionParameters {
 	vector<Value> values;
 	named_argument_map_t named_parameters;
+	//! The pragma function the parameters were bound for
+	optional_ptr<const PragmaFunction> function;
 };
 
 //! How a parameter receives its arguments, mirroring Python's parameter kinds, in the order a signature declares them
@@ -654,6 +660,10 @@ public:
 	DUCKDB_API auto GetKeywordOnlyArgumentCount(const FunctionSignature &signature) const -> idx_t;
 	DUCKDB_API auto GetKwargsCount(const FunctionSignature &signature) const -> idx_t;
 
+	//! Records the arguments of a call with constant arguments, as the function binder placed them for `signature`
+	DUCKDB_API void SetCallArguments(const FunctionSignature &signature, const vector<Value> &parameters,
+	                                 const named_argument_map_t &named_parameters);
+
 protected:
 	DUCKDB_API auto GetArgumentParameterKind(const FunctionSignature &signature, idx_t argument_index) const
 	    -> FunctionParameterKind;
@@ -706,10 +716,11 @@ public:
 	}
 
 	//! Try to get the constant value of an argument.
-	//! Never throws: returns none if the argument...
+	//! Returns none if the argument...
 	//! - is not constant (unresolved parameter or a non-foldable expression)
 	//! - index is out of range
 	//! - was not found when looking up by name
+	//! - raises an evaluation error (internal errors still propagate)
 	//! Use this when a non-constant argument should fall back to the runtime value instead of being an error.
 	DUCKDB_API optional<Value> TryGetConstant(idx_t arg_idx) const;
 	DUCKDB_API optional<Value> TryGetConstant(const Identifier &name) const;

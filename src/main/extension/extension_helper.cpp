@@ -237,6 +237,9 @@ bool ExtensionHelper::TryAutoLoadAvailableExtension(DatabaseInstance &instance, 
 		return true;
 	}
 	try {
+		if (!Settings::Get<AutoloadKnownExtensionsSetting>(instance)) {
+			return false;
+		}
 		auto &fs = FileSystem::GetFileSystem(instance);
 		ExtensionHelper::LoadExternalExtension(instance, fs, AutoLoadOptions(extension_name));
 		return true;
@@ -396,6 +399,18 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 		ErrorData error(e);
 		throw AutoloadException(extension_name, error.RawMessage());
 	}
+}
+
+void ExtensionHelper::AutoLoadExtensionForPath(DatabaseInstance &db, const string &path, const string &path_kind) {
+	string extension_name;
+	if (!FileSystem::IsRemoteFile(path, extension_name) || db.ExtensionIsLoaded(extension_name)) {
+		return;
+	}
+	if (!CanAutoloadExtension(db, extension_name) || !Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
+		auto error_message = path_kind + " " + path + " requires the extension " + extension_name + " to be loaded";
+		throw MissingExtensionException(AddExtensionInstallHintToErrorMsg(db, error_message, extension_name));
+	}
+	AutoLoadExtension(db, extension_name);
 }
 
 // typos:off

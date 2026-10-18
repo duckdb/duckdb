@@ -32,7 +32,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   stats_can_have_null:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-10-02" ]
+      - [ "unstable", "v2.0.0", "2026-10-02" ]
     description: |
       Returns whether the values described can include NULL.
 
@@ -54,7 +54,7 @@ functions:
 
   stats_can_have_valid:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-10-02" ]
+      - [ "unstable", "v2.0.0", "2026-10-02" ]
     description: |
       Returns whether the values described can include a valid, non-NULL value.
 
@@ -77,7 +77,7 @@ functions:
 
   stats_set_can_have_null:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-10-02" ]
+      - [ "unstable", "v2.0.0", "2026-10-02" ]
     description: |
       Sets whether the values described can include NULL.
 
@@ -99,7 +99,7 @@ functions:
 
   stats_set_can_have_valid:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-10-02" ]
+      - [ "unstable", "v2.0.0", "2026-10-02" ]
     description: |
       Sets whether the values described can include a valid, non-NULL value.
 

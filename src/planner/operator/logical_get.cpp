@@ -43,12 +43,11 @@ static void MapLegacyTableFilterKeys(LogicalGet &get) {
 	auto &column_ids = get.GetColumnIds();
 	vector<pair<ProjectionIndex, unique_ptr<TableFilter>>> filters;
 	for (auto &entry : get.table_filters) {
-		auto table_column = entry.GetIndex().GetIndex();
+		auto table_column = entry.GetIndex().GetIndexUnsafe();
 		optional_idx projection_index;
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto &column_index = column_ids[i];
-			if (column_index.HasPrimaryIndex() && !column_index.IsPushdownExtract() &&
-			    column_index.GetPrimaryIndex() == table_column) {
+			if (column_index.HasPrimaryIndex() && column_index.GetPrimaryIndex() == table_column) {
 				projection_index = i;
 				break;
 			}
@@ -77,10 +76,10 @@ LogicalGet::LogicalGet(TableIndex table_index, BoundTableFunction function, uniq
 }
 
 optional_ptr<TableCatalogEntry> LogicalGet::GetTable() const {
-	if (!function.get_bind_info) {
+	if (!function.get_table_entry) {
 		return nullptr;
 	}
-	return function.get_bind_info(bind_data.get()).table;
+	return function.get_table_entry(bind_data.get());
 }
 
 InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
@@ -306,7 +305,13 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 	if (has_estimated_cardinality) {
 		return estimated_cardinality;
 	}
-	if (function.cardinality) {
+	return EstimateSourceCardinality(context);
+}
+
+idx_t LogicalGet::EstimateSourceCardinality(ClientContext &context) {
+	// planning a LogicalGet consumes its bind data - the callbacks that require it must not be called,
+	// while callbacks that accept a null bind data (e.g. the range functions) return no estimate anyway
+	if (function.cardinality && bind_data) {
 		auto node_stats = function.cardinality(context, bind_data.get());
 		if (node_stats && node_stats->has_estimated_cardinality) {
 			return node_stats->estimated_cardinality;

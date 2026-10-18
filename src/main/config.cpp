@@ -106,6 +106,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(CurrentTransactionInvalidationPolicySetting),
     DUCKDB_SETTING(CustomExtensionRepositorySetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
+    DUCKDB_GLOBAL(DebugAbortOnWalFailureSetting),
     DUCKDB_SETTING(DebugAsofIejoinSetting),
     DUCKDB_SETTING_CALLBACK(DebugCheckpointAbortSetting),
     DUCKDB_SETTING(DebugCheckpointScanSleepMsSetting),
@@ -123,6 +124,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugForceNoCrossProductSetting),
     DUCKDB_SETTING(ForceUpdateToDelAndInsertSetting),
     DUCKDB_GLOBAL(ForceVariantShredding),
+    DUCKDB_SETTING(DebugForceWalFsyncFailureSetting),
     DUCKDB_SETTING(DebugLocalFileSystemDelayMsSetting),
     DUCKDB_GLOBAL(DebugOrderVerificationSetting),
     DUCKDB_SETTING_CALLBACK(DebugPhysicalTableScanExecutionStrategySetting),
@@ -138,6 +140,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(DebugVerifyStatementSetting),
     DUCKDB_SETTING(DebugVerifyStatsSetting),
     DUCKDB_SETTING_CALLBACK(DebugVerifyVectorSetting),
+    DUCKDB_SETTING(DebugWalFsyncSleepMsSetting),
     DUCKDB_SETTING_CALLBACK(DebugWindowModeSetting),
     DUCKDB_SETTING_CALLBACK(DefaultBlockSizeSetting),
     DUCKDB_SETTING_CALLBACK(DefaultCollationSetting),
@@ -179,6 +182,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(ExternalFileCacheLocalMaxBlockSizeSetting),
     DUCKDB_SETTING_CALLBACK(ExternalFileCacheRemoteMaxBlockSizeSetting),
     DUCKDB_SETTING_CALLBACK(ExternalFileCacheRemoteMinBlockSizeSetting),
+    DUCKDB_SETTING_CALLBACK(ExternalFileCacheRequestSizingSetting),
     DUCKDB_SETTING(ExternalFileCacheSpillSetting),
     DUCKDB_SETTING_CALLBACK(ExternalThreadsSetting),
     DUCKDB_SETTING(FileSearchPathSetting),
@@ -207,6 +211,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(LoggingLevel),
     DUCKDB_GLOBAL(LoggingMode),
     DUCKDB_GLOBAL(LoggingStorage),
+    DUCKDB_SETTING(MatchRecognizeMaxStatesSetting),
     DUCKDB_SETTING(MaxExecutionTimeSetting),
     DUCKDB_SETTING(MaxExpressionDepthSetting),
     DUCKDB_GLOBAL(MaxMemorySetting),
@@ -236,6 +241,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ProfilingRendererSettingsSetting),
     DUCKDB_LOCAL(ProgressBarTimeSetting),
     DUCKDB_SETTING_CALLBACK(ReadAheadDepthSetting),
+    DUCKDB_SETTING(RedactHttpLogsSetting),
     DUCKDB_SETTING_CALLBACK(RegexMatchOperatorSemanticsSetting),
     DUCKDB_SETTING(ScalarSubqueryErrorOnMultipleRowsSetting),
     DUCKDB_SETTING(SchedulerProcessPartialSetting),
@@ -546,6 +552,24 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 	return type_id;
 }
 
+ExtensionOptionInfo::~ExtensionOptionInfo() {
+}
+
+SetScope ExtensionOption::ResolveScope(const Identifier &name, SetScope scope) const {
+	if (scope == SetScope::AUTOMATIC) {
+		scope = default_scope;
+	}
+	if (scope == SetScope::GLOBAL && !supports_global) {
+		throw InvalidInputException(
+		    "Setting \"%s\" cannot be set as a global variable - it can only be set per session", name);
+	}
+	if (scope == SetScope::SESSION && !supports_session) {
+		throw InvalidInputException("Setting \"%s\" cannot be set as a session variable - it can only be set globally",
+		                            name);
+	}
+	return scope;
+}
+
 bool DBConfig::HasExtensionOption(const Identifier &name) const {
 	return user_settings.HasExtensionOption(name);
 }
@@ -557,8 +581,12 @@ bool DBConfig::TryGetExtensionOption(const Identifier &name, ExtensionOption &re
 void DBConfig::AddExtensionOption(const Identifier &name, string description, LogicalType parameter,
                                   const Value &default_value, set_option_callback_t function, SetScope default_scope,
                                   bool is_debug, bool is_deprecated) {
-	ExtensionOption extension_option(std::move(description), std::move(parameter), function, default_value,
-	                                 default_scope, is_debug, is_deprecated);
+	AddExtensionOption(name, ExtensionOption(std::move(description), std::move(parameter), function, default_value,
+	                                         default_scope, is_debug, is_deprecated));
+}
+
+void DBConfig::AddExtensionOption(const Identifier &name, ExtensionOption extension_option) {
+	auto default_value = extension_option.default_value;
 	auto setting_index = user_settings.AddExtensionOption(name, std::move(extension_option));
 	// copy over unrecognized options, if they match the new extension option
 	auto iter = options.unrecognized_options.find(name);
@@ -716,10 +744,10 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 	return available_memory;
 }
 
-idx_t DBConfig::ParseMemoryLimit(const string &arg) {
+optional_idx DBConfig::ParseMemoryLimit(const string &arg) {
 	if (arg[0] == '-' || arg == "null" || arg == "none") {
-		// infinite
-		return NumericLimits<idx_t>::Maximum();
+		// unlimited
+		return optional_idx();
 	}
 
 	idx_t result;
@@ -727,13 +755,19 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 
 	if (!error.empty()) {
 		if (error == "Memory cannot be negative") {
-			result = DConstants::INVALID_INDEX;
-		} else {
-			throw ParserException(error);
+			return optional_idx();
 		}
+		throw ParserException(error);
 	}
-
+	if (result == DConstants::INVALID_INDEX) {
+		return optional_idx();
+	}
 	return result;
+}
+
+idx_t DBConfig::ParseMemoryLimitOrMaximum(const string &arg) {
+	auto limit = ParseMemoryLimit(arg);
+	return limit.IsValid() ? limit.GetIndex() : NumericLimits<idx_t>::Maximum();
 }
 
 optional_idx DBConfig::ParseMemoryLimitSlurm(const string &arg) {
@@ -891,8 +925,8 @@ const ExtensionCallbackManager &DBConfig::GetCallbackManager() const {
 	return *callback_manager;
 }
 
-string DBConfig::SanitizeAllowedPath(const string &path_p) const {
-	auto result = file_system->CanonicalizePath(path_p);
+string DBConfig::SanitizeAllowedPath(const string &path_p, optional_ptr<FileOpener> opener) const {
+	auto result = file_system->CanonicalizePath(FileSystem::ExpandPath(path_p, opener));
 	// allowed_directories/allowed_path always uses forward slashes regardless of the OS
 	auto path_sep = file_system->PathSeparator(path_p);
 	if (path_sep != "/") {
@@ -945,6 +979,56 @@ void DBConfig::AddAllowedDirectory(const string &path) {
 	options.allowed_directories.insert(allowed_directory);
 }
 
+bool DBConfig::IsOptimizerDisabled(OptimizerType type) const {
+	lock_guard<mutex> guard(disabled_optimizers_lock);
+	return options.disabled_optimizers.find(type) != options.disabled_optimizers.end();
+}
+
+set<OptimizerType> DBConfig::GetDisabledOptimizers() const {
+	lock_guard<mutex> guard(disabled_optimizers_lock);
+	return options.disabled_optimizers;
+}
+
+void DBConfig::SetDisabledOptimizers(set<OptimizerType> disabled_optimizers) {
+	lock_guard<mutex> guard(disabled_optimizers_lock);
+	options.disabled_optimizers = std::move(disabled_optimizers);
+}
+
+void DBConfig::SetAllowedDirectories(const vector<string> &paths) {
+	decltype(options.allowed_directories) new_directories;
+	for (auto &path : paths) {
+		auto allowed_directory = SanitizeAllowedPath(path);
+		if (allowed_directory.empty()) {
+			throw InvalidInputException("Cannot provide an empty string for allowed_directory");
+		}
+		if (!StringUtil::EndsWith(allowed_directory, "/")) {
+			allowed_directory += "/";
+		}
+		new_directories.insert(std::move(allowed_directory));
+	}
+	lock_guard<mutex> guard(allowed_paths_lock);
+	options.allowed_directories = std::move(new_directories);
+}
+
+void DBConfig::SetAllowedPaths(const vector<string> &paths) {
+	decltype(options.allowed_paths) new_paths;
+	for (auto &path : paths) {
+		new_paths.insert(SanitizeAllowedPath(path));
+	}
+	lock_guard<mutex> guard(allowed_paths_lock);
+	options.allowed_paths = std::move(new_paths);
+}
+
+void DBConfig::ResetAllowedDirectories() {
+	lock_guard<mutex> guard(allowed_paths_lock);
+	options.allowed_directories = DBConfigOptions().allowed_directories;
+}
+
+void DBConfig::ResetAllowedPaths() {
+	lock_guard<mutex> guard(allowed_paths_lock);
+	options.allowed_paths = DBConfigOptions().allowed_paths;
+}
+
 void DBConfig::AddAllowedPath(const string &path) {
 	auto allowed_path = SanitizeAllowedPath(path);
 	lock_guard<mutex> guard(allowed_paths_lock);
@@ -968,12 +1052,12 @@ vector<string> DBConfig::GetAllowedPaths() const {
 	return vector<string>(options.allowed_paths.begin(), options.allowed_paths.end());
 }
 
-bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
+bool DBConfig::CanAccessFile(const string &input_path, FileType type, optional_ptr<FileOpener> opener) {
 	if (Settings::Get<EnableExternalAccessSetting>(*this)) {
 		// all external access is allowed
 		return true;
 	}
-	string path = SanitizeAllowedPath(input_path);
+	string path = SanitizeAllowedPath(input_path, opener);
 
 	lock_guard<mutex> guard(allowed_paths_lock);
 	if (options.allowed_paths.count(path) > 0) {

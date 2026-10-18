@@ -80,6 +80,8 @@ enum class PrintOutput { STDOUT, STDERR };
 
 enum class InputMode { STANDARD, FILE, DUCKDB_RC };
 
+enum class OutputCommand { OUTPUT, ONCE, EXCEL };
+
 enum class LargeNumberRendering { NONE = 0, FOOTER = 1, ALL = 2, DEFAULT = 3 };
 
 /*
@@ -254,6 +256,8 @@ public:
 	string agent_name;
 	//! The environment variable that switched agent mode on (e.g. "CLAUDECODE"), empty when forced with -agent
 	string agent_marker;
+	//! Whether DUCKDB_AGENT_MODE forced agent mode on or off (no -agent / -no-agent was given)
+	bool agent_mode_from_environment = false;
 	//! Whether an output mode was given on the command line (-csv, -json, ...): detected agent mode then stays off
 	bool output_mode_flag = false;
 	//! Whether the exit hint (see PrintExitHint) went out already
@@ -335,7 +339,7 @@ public:
 	bool SetOutputMode(const string &mode, const char *tbl_name);
 	bool ImportData(const vector<string> &args);
 	bool OpenDatabase(const vector<string> &args);
-	bool SetOutputFile(const vector<string> &args, char output_mode);
+	bool SetOutputFile(const vector<string> &args, OutputCommand output_command);
 	bool ReadFromFile(const string &file);
 	bool DisplaySchemas(const vector<string> &args);
 	MetadataResult DisplayEntries(const vector<string> &args, char type);

@@ -26,9 +26,9 @@
 
 namespace duckdb {
 
-StatisticsPropagator::StatisticsPropagator(Optimizer &optimizer_p, LogicalOperator &root_p,
+StatisticsPropagator::StatisticsPropagator(Optimizer &optimizer_p, unique_ptr<LogicalOperator> &root_p,
                                            StatisticsPropagationMode mode_p)
-    : optimizer(optimizer_p), context(optimizer.context), mode(mode_p), root(&root_p) {
+    : optimizer(optimizer_p), context(optimizer.context), mode(mode_p), root(root_p) {
 	root->ResolveOperatorTypes();
 }
 
@@ -46,9 +46,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateChildren(LogicalOperat
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOperator &node,
                                                                      unique_ptr<LogicalOperator> &node_ptr) {
-	// propagation may replace node_ptr (e.g. a LIMIT that exceeds the child cardinality is removed), which
-	// destroys "node" - remember whether it was the root so that "root" can be re-pointed afterwards
-	const bool node_is_root = root.get() == &node;
+	propagation_path.emplace_back(node_ptr);
 	unique_ptr<NodeStatistics> result;
 	switch (node.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
@@ -106,17 +104,14 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		result = PropagateChildren(node, node_ptr);
 	}
 
-	if (node_is_root) {
-		root = node_ptr.get();
-	}
-
 	if (mode == StatisticsPropagationMode::FULL &&
 	    !optimizer.OptimizerDisabled(OptimizerType::COMPRESSED_MATERIALIZATION)) {
 		// compress data based on statistics for materializing operators
-		CompressedMaterialization compressed_materialization(optimizer, *root, statistics_map);
+		CompressedMaterialization compressed_materialization(optimizer, *root, propagation_path, statistics_map);
 		compressed_materialization.Compress(node_ptr);
 	}
 
+	propagation_path.pop_back();
 	return result;
 }
 

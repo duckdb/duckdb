@@ -146,6 +146,8 @@ public:
 
 	//! Split the input string along a quote. Note that any escaping is NOT supported.
 	DUCKDB_API static vector<string> SplitWithQuote(const string &str, char delimiter = ',', char quote = '"');
+	//! Read one quoted token with doubled-quote escaping. On failure, leave pos and result unchanged.
+	DUCKDB_API static bool TryParseQuotedString(const string &str, idx_t &pos, string &result, char quote = '"');
 
 	//! Join multiple strings into one string. Components are concatenated by the given separator
 	DUCKDB_API static string Join(const vector<string> &input, const string &separator);
@@ -196,7 +198,7 @@ public:
 	//! Join multiple items of container with given size, transformed to string
 	//! using function, into one string using the given separator
 	template <typename C, typename S, typename FUNC>
-	static string Join(const C &input, S count, const string &separator, FUNC f) {
+	static string Join(const C &input, S count, const string &separator, const FUNC &f) {
 		// The result
 		std::string result;
 
@@ -362,6 +364,9 @@ public:
 	DUCKDB_API static string GetFileExtension(const string &file_name);
 	DUCKDB_API static string GetFileStem(const string &file_name);
 	DUCKDB_API static string GetFilePath(const string &file_path);
+	//! Replace the file name of a path, keeping its directory part as written (also for files directly below a
+	//! scheme root, where splitting into GetFilePath and JoinPath would not round-trip: "opfs://a" -> "opfs://b")
+	DUCKDB_API static string ReplaceFileName(const string &file_path, const string &file_name);
 
 	struct EnumStringLiteral {
 		uint32_t number;

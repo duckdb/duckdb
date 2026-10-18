@@ -27,6 +27,7 @@ if(ENABLE_EXTENSION_LOAD)
   add_library(duckdb_loadable_extensions STATIC extension_install_dynamic.cpp
                                                 extension_load_dynamic.cpp)
   target_link_libraries(duckdb_loadable_extensions duckdb_static)
+  duckdb_make_native_lto_archive(duckdb_loadable_extensions)
   install(
     TARGETS duckdb_loadable_extensions
     EXPORT "${DUCKDB_EXPORT_SET}"

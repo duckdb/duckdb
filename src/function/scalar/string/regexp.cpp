@@ -21,6 +21,7 @@ namespace duckdb {
 using regexp_util::CreateStringPiece;
 using regexp_util::ParseRegexOptions;
 using regexp_util::TryParseConstantPattern;
+using regexp_util::VerifyUTF8Result;
 
 // Zero-copy slice of capture group `group_index` from `input`'s buffer; caller must call
 // StringVector::AddHeapReference(result, source) first.
@@ -33,7 +34,9 @@ static inline string_t ExtractCaptureGroup(const string_t &input, const RE2 &re,
 	duckdb_re2::StringPiece submatch[10];
 	const int nsubmatch = group_index + 1;
 	if (re.Match(in_piece, 0, in_piece.size(), duckdb_re2::RE2::UNANCHORED, submatch, nsubmatch)) {
-		return string_t(submatch[group_index].data(), UnsafeNumericCast<uint32_t>(submatch[group_index].size()));
+		auto &group = submatch[group_index];
+		VerifyUTF8Result(group.data(), group.size());
+		return string_t(group.data(), UnsafeNumericCast<uint32_t>(group.size()));
 	}
 	return no_match_returns_input ? input : string_t(nullptr, 0);
 }
@@ -207,6 +210,7 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 			    } else {
 				    RE2::Replace(&sstring, lstate.constant_pattern, replace_piece);
 			    }
+			    VerifyUTF8Result(sstring.c_str(), sstring.size());
 			    return heap.AddString(sstring);
 		    });
 	} else {
@@ -227,6 +231,7 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 			    } else {
 				    RE2::Replace(&sstring, re, replace_piece);
 			    }
+			    VerifyUTF8Result(sstring.c_str(), sstring.size());
 			    return heap.AddString(sstring);
 		    });
 	}
@@ -276,6 +281,9 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 		BinaryExecutor::Execute<string_t, string_t, string_t>(
 		    strings, patterns, result, [&](string_t input, string_t pattern) {
 			    RE2 re(CreateStringPiece(pattern), info.options);
+			    if (!re.ok()) {
+				    throw InvalidInputException(re.error());
+			    }
 			    return ExtractCaptureGroup(input, re, info.group_index, info.no_match_returns_input);
 		    });
 	}
@@ -325,6 +333,9 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 				auto &child_entry = child_entries[col];
 				ConstantVector::SetNull(child_entry, false);
 				auto &extracted = ws[col];
+				if (match) {
+					VerifyUTF8Result(extracted.data(), extracted.size());
+				}
 				auto cdata = ConstantVector::GetData<string_t>(child_entry);
 				cdata[0] = string_t(extracted.data(), UnsafeNumericCast<uint32_t>(match ? extracted.size() : 0));
 			}
@@ -351,6 +362,9 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 				auto &child_entry = child_entries[col];
 				auto cdata = FlatVector::GetDataMutable<string_t>(child_entry);
 				auto &extracted = ws[col];
+				if (match) {
+					VerifyUTF8Result(extracted.data(), extracted.size());
+				}
 				cdata[entry.GetIndex()] =
 				    string_t(extracted.data(), UnsafeNumericCast<uint32_t>(match ? extracted.size() : 0));
 			}
@@ -398,6 +412,15 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 				throw InvalidInputException("Group index must be between 0 and 9!");
 			}
 			group_index = static_cast<int8_t>(group_idx);
+		}
+	}
+
+	if (constant_pattern && constant_string.find("\\C") == string::npos) {
+		auto validation_options = options;
+		validation_options.set_log_errors(false);
+		if (RE2(constant_string, validation_options).ok()) {
+			// A valid UTF-8 pattern without byte escapes cannot return a partial character.
+			bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 		}
 	}
 
@@ -488,6 +511,8 @@ ScalarFunctionSet RegexpExtractFun::GetFunctions() {
 	                                              {"options", LogicalType::VARCHAR}},
 	                                             LogicalType::VARCHAR, RegexExtractStructFunction, RegexExtractBind,
 	                                             RegexInitLocalState));
+	// throws when \C splits a character
+	regexp_extract.SetFallible();
 	return (regexp_extract);
 }
 

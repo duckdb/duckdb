@@ -23,6 +23,7 @@ class ColumnDataRowCollection;
 
 //! The ColumnDataCollection represents a set of (buffer-managed) data stored in columnar format
 //! It is efficient to read and scan
+//! A collection with no columns still stores row counts.
 class ColumnDataCollection {
 public:
 	//! Constructs an in-memory column data collection from an allocator
@@ -108,6 +109,8 @@ public:
 
 	//! Append a DataChunk directly to this ColumnDataCollection - calls InitializeAppend and Append internally
 	DUCKDB_API void Append(DataChunk &new_chunk);
+	//! Appends a copy of another ColumnDataCollection to this
+	DUCKDB_API void Append(const ColumnDataCollection &other);
 
 	//! Appends the other ColumnDataCollection to this, destroying the other data collection
 	DUCKDB_API void Combine(ColumnDataCollection &other);
