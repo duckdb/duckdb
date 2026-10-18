@@ -149,7 +149,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   aggregate_function_create:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Creates a new aggregate function through a factory.
 
@@ -181,7 +181,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   aggregate_function_set_name:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Sets the name of the aggregate function.
 
@@ -206,7 +206,7 @@ functions:
 
   aggregate_function_get_docs:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-10-09" ]
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
     description: |
       Returns the documentation of the function so it can be filled in.
 
@@ -232,7 +232,7 @@ functions:
 
   aggregate_function_get_signature:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Returns the function's signature so it can be configured.
 
@@ -259,7 +259,7 @@ functions:
 
   aggregate_function_set_user_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Sets arbitrary user data on the aggregate function.
 
@@ -283,7 +283,7 @@ functions:
 
   aggregate_function_set_property:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-31" ]
+      - [ "unstable", "v2.0.0", "2026-08-31" ]
     description: |
       Sets a property on the aggregate function.
 
@@ -309,7 +309,7 @@ functions:
 
   aggregate_function_set_bind_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Sets the optional bind callback of the aggregate function.
 
@@ -332,7 +332,7 @@ functions:
 
   aggregate_function_set_size_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Sets the size callback of the aggregate function.
 
@@ -354,7 +354,7 @@ functions:
 
   aggregate_function_set_init_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Sets the init callback of the aggregate function.
 
@@ -375,7 +375,7 @@ functions:
 
   aggregate_function_set_update_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Sets the update callback of the aggregate function.
 
@@ -397,7 +397,7 @@ functions:
 
   aggregate_function_set_combine_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Sets the combine callback of the aggregate function.
 
@@ -418,7 +418,7 @@ functions:
 
   aggregate_function_set_finalize_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Sets the finalize callback of the aggregate function.
 
@@ -439,7 +439,7 @@ functions:
 
   aggregate_function_set_destroy_callback:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Sets the destroy callback for the aggregate function. Optional: only
       needed when aggregate states own resources that must be released. The
@@ -463,7 +463,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   aggregate_function_bind_set_return_type:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Sets the concrete return type of the call site being bound.
 
@@ -488,7 +488,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   aggregate_function_size_get_user_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: Retrieves the user data set via `[[aggregate_function_set_user_data]]`.
     parameters:
       info:
@@ -507,7 +507,7 @@ functions:
 
   aggregate_function_size_get_bind_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: Retrieves the bind data set by the function's bind callback.
     parameters:
       info:
@@ -526,7 +526,7 @@ functions:
 
   aggregate_function_size_set_state_size:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Sets the size of a single aggregate state, in bytes. The size callback
       must set this; DuckDB uses it to allocate state memory.
@@ -548,7 +548,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   aggregate_function_init_get_user_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: Retrieves the user data set via `[[aggregate_function_set_user_data]]`.
     parameters:
       info:
@@ -567,7 +567,7 @@ functions:
 
   aggregate_function_init_get_bind_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: Retrieves the bind data set by the function's bind callback.
     parameters:
       info:
@@ -586,7 +586,7 @@ functions:
 
   aggregate_function_init_get_state_count:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Returns how many aggregate states this invocation must initialize.
       This is the length of the array returned by
@@ -608,7 +608,7 @@ functions:
 
   aggregate_function_init_get_states:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Returns the array of aggregate states to initialize, one pointer per
       state. Each state points to uninitialized memory of the size reported by
@@ -634,7 +634,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   aggregate_function_update_get_user_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: Retrieves the user data set via `[[aggregate_function_set_user_data]]`.
     parameters:
       info:
@@ -653,7 +653,7 @@ functions:
 
   aggregate_function_update_get_bind_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: Retrieves the bind data set by the function's bind callback.
     parameters:
       info:
@@ -672,7 +672,7 @@ functions:
 
   aggregate_function_update_get_row_count:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Returns how many input rows this invocation carries. This is the length
       of the argument vectors and of the state array: row i of every argument
@@ -694,7 +694,7 @@ functions:
 
   aggregate_function_update_get_arg_count:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Returns how many argument vectors this invocation carries, split into the four parts of the argument list.
 
@@ -733,7 +733,7 @@ functions:
 
   aggregate_function_update_get_arg:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Retrieves the argument vector at the given index.
 
@@ -760,7 +760,7 @@ functions:
 
   aggregate_function_update_get_states:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Returns the array of aggregate states to update, one pointer per input
       row: row i of every argument vector must be aggregated into state i.
@@ -785,7 +785,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   aggregate_function_combine_get_user_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: Retrieves the user data set via `[[aggregate_function_set_user_data]]`.
     parameters:
       info:
@@ -804,7 +804,7 @@ functions:
 
   aggregate_function_combine_get_bind_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: Retrieves the bind data set by the function's bind callback.
     parameters:
       info:
@@ -823,7 +823,7 @@ functions:
 
   aggregate_function_combine_get_state_count:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Returns how many source/target state pairs this invocation must combine.
       This is the length of both the sources and the targets array.
@@ -844,7 +844,7 @@ functions:
 
   aggregate_function_combine_get_sources:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Returns the array of source aggregate states, one pointer per pair.
       Source i must be combined into target i; the source must not be
@@ -866,7 +866,7 @@ functions:
 
   aggregate_function_combine_get_targets:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Returns the array of target aggregate states, one pointer per pair.
       Source i must be combined into target i.
@@ -890,7 +890,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   aggregate_function_finalize_get_user_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: Retrieves the user data set via `[[aggregate_function_set_user_data]]`.
     parameters:
       info:
@@ -909,7 +909,7 @@ functions:
 
   aggregate_function_finalize_get_bind_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: Retrieves the bind data set by the function's bind callback.
     parameters:
       info:
@@ -928,7 +928,7 @@ functions:
 
   aggregate_function_finalize_get_state_count:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Returns how many aggregate states this invocation must finalize. This is
       the length of the state array and the number of rows to write to the
@@ -950,7 +950,7 @@ functions:
 
   aggregate_function_finalize_get_states:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Returns the array of aggregate states to finalize, one pointer per
       state. State i must be finalized into result row offset + i.
@@ -971,7 +971,7 @@ functions:
 
   aggregate_function_finalize_get_result:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Retrieves the result vector the finalize callback must write into.
 
@@ -995,7 +995,7 @@ functions:
 
   aggregate_function_finalize_get_result_offset:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Returns the offset in the result vector at which to start writing:
       state i must be finalized into result row offset + i.
@@ -1019,7 +1019,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   aggregate_function_destroy_get_user_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: Retrieves the user data set via `[[aggregate_function_set_user_data]]`.
     parameters:
       info:
@@ -1038,7 +1038,7 @@ functions:
 
   aggregate_function_destroy_get_bind_data:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: Retrieves the bind data set by the function's bind callback.
     parameters:
       info:
@@ -1057,7 +1057,7 @@ functions:
 
   aggregate_function_destroy_get_state_count:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Returns how many aggregate states this invocation must destroy. This is
       the length of the state array.
@@ -1078,7 +1078,7 @@ functions:
 
   aggregate_function_destroy_get_states:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Returns the array of aggregate states to destroy, one pointer per state.
       The callback must release any resources the states own.
@@ -1102,7 +1102,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   connection_register_aggregate_function:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Registers the aggregate function, making it available for use in SQL queries.
 
@@ -1130,7 +1130,7 @@ functions:
 
   extension_register_aggregate_function:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Registers the aggregate function, making it available for use in SQL queries.
 
@@ -1160,7 +1160,7 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   aggregate_function_destroy:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
+      - [ "unstable", "v2.0.0", "2026-08-28" ]
     description: |
       Destroys the aggregate function, releasing its resources.
 
