@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import os
+import json
 import shlex
 import sys
 import tempfile
 import textwrap
+import threading
 import unittest
 from io import BytesIO, StringIO, TextIOWrapper
 from unittest import mock
@@ -34,6 +36,201 @@ def strip_ansi_lines(lines: list[str]) -> list[str]:
 
 
 class RunTestsScriptTest(unittest.TestCase):
+    def run_timeout_fixture(self, modes, *args):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            helper = root / "child.py"
+            helper.write_text(
+                textwrap.dedent(
+                    """\
+                    import json, os, signal, sys, time
+                    from pathlib import Path
+
+                    root = Path(__file__).parent
+                    name = Path(sys.argv[1]).read_text().strip()
+                    mode = Path(name).stem
+                    attempts = root / (mode + ".attempts")
+                    attempt = int(attempts.read_text()) + 1 if attempts.exists() else 1
+                    attempts.write_text(str(attempt))
+
+                    def event(kind, status="ok"):
+                        value = {"event": kind, "name": name, "status": status}
+                        if kind == "begin" and mode != "old":
+                            value["version"] = 2
+                        if status == "skip-requirement":
+                            value["data"] = "require missing"
+                        print("[TEST_EVENT] " + json.dumps(value), file=sys.stderr, flush=True)
+
+                    def hang():
+                        time.sleep(60)
+
+                    if mode == "startup":
+                        hang()
+                    event("begin")
+                    if mode == "initialization":
+                        hang()
+                    event("execution-begin")
+                    if mode in ("slow", "old"):
+                        hang()
+                    if mode == "malformed":
+                        print('[TEST_EVENT] {"event":', file=sys.stderr, flush=True)
+                        hang()
+                    if mode == "wrong_name":
+                        event("begin")
+                        hang()
+                    if mode == "worker_error":
+                        event("error", "error")
+                        hang()
+                    if mode in ("cleanup", "caught_error_cleanup", "after_end"):
+                        event("execution-complete", "error" if mode == "caught_error_cleanup" else "ok")
+                        if mode == "after_end":
+                            event("end")
+                        hang()
+                    if mode in ("wrong_result", "wrong_result_hang") or (
+                        mode in ("flaky", "failure_then_timeout") and attempt == 1
+                    ):
+                        print("Error: Wrong result in query!", file=sys.stderr, flush=True)
+                        if mode.endswith("_hang"):
+                            hang()
+                        sys.exit(1)
+                    if mode == "failure_then_timeout":
+                        hang()
+                    if mode == "assert_hang":
+                        print("Assertion failed: value != nullptr", file=sys.stderr, flush=True)
+                        hang()
+                    if mode == "signal":
+                        os.kill(os.getpid(), signal.SIGTERM)
+                    status = "skip-requirement" if mode == "skip" else "ok"
+                    event("execution-complete", status)
+                    event("end", status)
+                    """
+                )
+            )
+            test_list = root / "tests"
+            test_list.write_text("".join(f"test/sql/{mode}.test\n" for mode in modes))
+            summary = root / "summary.md"
+            with mock.patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(summary), "GITHUB_SHA": "test-revision"}):
+                proc = start_runner(
+                    [
+                        "--test-list",
+                        str(test_list),
+                        "--workers",
+                        "1",
+                        "--batch-size",
+                        "1",
+                        "--batch-timeout",
+                        "0.5",
+                        "--max-retries",
+                        "0",
+                        "--timeout-policy",
+                        "warn",
+                        "--test-command",
+                        f"{shlex.quote(sys.executable)} {shlex.quote(str(helper))} {{test_list}}",
+                        "unused-binary",
+                        *args,
+                    ]
+                )
+            attempts = {path.stem: int(path.read_text()) for path in root.glob("*.attempts")}
+            return proc, attempts, summary.read_text() if summary.exists() else ""
+
+    def test_timeout_warning_continues_and_reports_exact_counts(self):
+        proc, attempts, summary = self.run_timeout_fixture(["slow", "pass", "skip"])
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(attempts, {"slow": 1, "pass": 1, "skip": 1})
+        self.assertIn("1 passed, 1 skipped, 1 timed out", proc.stdout)
+        self.assertNotIn("all tests passed", proc.stdout)
+        self.assertIn("reproduce: unused-binary test/sql/slow.test", proc.stdout)
+        self.assertIn("test-revision", summary)
+        self.assertIn("`test/sql/slow.test`", summary)
+
+    def test_default_timeout_policy_still_fails(self):
+        proc, _, summary = self.run_timeout_fixture(["slow"], "--timeout-policy", "fail")
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("0 passed, 1 failed", proc.stdout)
+        self.assertEqual(summary, "")
+        self.assertEqual(run_tests.parse_args([]).timeout_policy, "fail")
+
+    def test_timeout_warning_does_not_hide_other_failures(self):
+        proc, attempts, _ = self.run_timeout_fixture(["slow", "wrong_result", "pass"])
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertEqual(len(attempts), 3)
+        self.assertIn("1 passed, 1 failed, 0 skipped, 1 timed out", proc.stdout)
+        self.assertIn("reproduce all failed tests:", proc.stdout)
+
+    def test_timeout_warning_requires_active_body_without_errors(self):
+        for mode in (
+            "startup",
+            "initialization",
+            "old",
+            "malformed",
+            "wrong_name",
+            "cleanup",
+            "caught_error_cleanup",
+            "after_end",
+            "wrong_result_hang",
+            "assert_hang",
+            "signal",
+            "worker_error",
+        ):
+            with self.subTest(mode=mode):
+                proc, _, summary = self.run_timeout_fixture([mode])
+                self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+                self.assertIn("0 passed, 1 failed", proc.stdout)
+                self.assertEqual(summary, "")
+
+    def test_timeout_warning_preserves_retry_budget_for_failures(self):
+        proc, attempts, _ = self.run_timeout_fixture(["slow", "flaky"], "--retry", "1", "--max-retries", "1")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(attempts, {"slow": 1, "flaky": 2})
+        self.assertIn("retrying failed test test/sql/flaky.test", proc.stdout)
+        self.assertIn("1 passed, 0 skipped, 1 timed out", proc.stdout)
+
+    def test_timeout_on_retry_does_not_hide_original_failure(self):
+        proc, attempts, summary = self.run_timeout_fixture(
+            ["failure_then_timeout"], "--retry", "1", "--max-retries", "1"
+        )
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertEqual(attempts, {"failure_then_timeout": 2})
+        self.assertEqual(summary, "")
+
+    def test_timeout_warning_counts_multiple_workers(self):
+        proc, attempts, _ = self.run_timeout_fixture(["slow", "pass", "skip"], "--workers", "3")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(len(attempts), 3)
+        self.assertIn("1 passed, 1 skipped, 1 timed out", proc.stdout)
+
+    def test_timeout_warning_does_not_count_unlaunched_tests_as_passed(self):
+        proc, attempts, _ = self.run_timeout_fixture(["wrong_result", "pass"], "--fail-fast")
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertEqual(attempts, {"wrong_result": 1})
+        self.assertIn("0 passed, 1 failed, 0 skipped, 1 not run", proc.stdout)
+
+    def test_timeout_warning_rejects_multi_test_batches(self):
+        proc, attempts, _ = self.run_timeout_fixture(["slow"], "--batch-size", "2")
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("requires --batch-size 1", proc.stdout)
+        self.assertEqual(attempts, {})
+
+    def test_timeout_warning_rejects_stabilization(self):
+        for args in (["--stabilize-tests"], ["--changed-tests", "unused-test-list"]):
+            with self.subTest(args=args):
+                proc, attempts, _ = self.run_timeout_fixture(["slow"], *args)
+                self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+                self.assertIn("cannot be combined with test stabilization", proc.stdout)
+                self.assertEqual(attempts, {})
+
+    def test_cancellation_is_not_a_timeout_warning(self):
+        timer = threading.Timer(0.2, run_tests.STOP_REQUESTED.set)
+        timer.start()
+        try:
+            proc, _, summary = self.run_timeout_fixture(["slow"], "--batch-timeout", "30")
+            self.assertEqual(proc.returncode, 130, proc.stdout + proc.stderr)
+            self.assertEqual(summary, "")
+        finally:
+            timer.cancel()
+            timer.join()
+            run_tests.STOP_REQUESTED.clear()
+
     def test_line_buffering_escapes_unicode_for_non_utf8_streams(self):
         stdout_buffer = BytesIO()
         stderr_buffer = BytesIO()
