@@ -6913,7 +6913,7 @@ public:
 
 	private:
 		OpenInput(void *info, void *open_info, std::string_view path, std::vector<FileFlags> flags, void *metadata)
-		    : Info(info), open_info(open_info), path(path), flags(std::move(flags)), metadata(metadata) {
+		    : Info(info), open_info(open_info), metadata(metadata), path(path), flags(std::move(flags)) {
 		}
 
 		void *open_info;
