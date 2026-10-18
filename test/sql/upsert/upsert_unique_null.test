@@ -32,3 +32,95 @@ select * from tbl;
 1	3
 NULL	5
 NULL	5
+
+# NULL keys within the same batch do not conflict with each other
+statement ok
+create or replace table tbl (id integer, val integer unique);
+
+statement ok
+insert into tbl VALUES (1, NULL), (2, NULL) ON CONFLICT (val) DO NOTHING;
+
+statement ok
+insert into tbl VALUES (3, NULL), (4, NULL), (5, 1), (6, 1) ON CONFLICT DO NOTHING;
+
+statement ok
+insert into tbl VALUES (7, NULL), (8, NULL) ON CONFLICT (val) DO UPDATE SET id = 42;
+
+query II
+select * from tbl order by id;
+----
+1	NULL
+2	NULL
+3	NULL
+4	NULL
+5	1
+7	NULL
+8	NULL
+
+# composite keys with a NULL component do not conflict
+statement ok
+create or replace table tbl (a integer, b integer, c integer, unique (a, b));
+
+statement ok
+insert into tbl VALUES (1, NULL, 1), (1, NULL, 2), (1, 1, 3), (1, 1, 4) ON CONFLICT (a, b) DO NOTHING;
+
+query III
+select * from tbl order by c;
+----
+1	NULL	1
+1	NULL	2
+1	1	3
+
+# DO UPDATE with both matching rows and NULL keys in the same batch
+statement ok
+create or replace table tbl (id integer, val integer unique);
+
+statement ok
+insert into tbl VALUES (1, 1), (2, NULL);
+
+statement ok
+insert into tbl VALUES (3, 1), (4, NULL), (5, NULL) ON CONFLICT (val) DO UPDATE SET id = excluded.id;
+
+query II
+select * from tbl order by id;
+----
+2	NULL
+3	1
+4	NULL
+5	NULL
+
+# multiple unique constraints without a conflict target
+statement ok
+create or replace table tbl (id integer primary key, val integer unique);
+
+statement ok
+insert into tbl VALUES (1, NULL), (1, NULL), (2, NULL), (3, 5), (3, 5) ON CONFLICT DO NOTHING;
+
+query II
+select * from tbl order by id;
+----
+1	NULL
+2	NULL
+3	5
+
+# larger source from a query with its own CTE
+statement ok
+create or replace table tbl (id integer, val integer unique);
+
+statement ok
+with src as (select i as id, case when i % 10 = 0 then null else i % 1000 end as val from range(100000) t(i))
+insert into tbl select * from src ON CONFLICT DO NOTHING;
+
+query II
+select count(*), count(val) from tbl;
+----
+10900	900
+
+# NOT NULL conflict columns do not need to separate NULL keys
+statement ok
+create or replace table tbl (id integer primary key, val integer);
+
+query II
+explain insert into tbl VALUES (1, 1) ON CONFLICT DO NOTHING;
+----
+physical_plan	<!REGEX>:.*CTE.*
