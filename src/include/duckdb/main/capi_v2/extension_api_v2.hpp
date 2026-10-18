@@ -1383,6 +1383,10 @@ typedef struct {
 	(duckdb_v2_factory_handle factory, duckdb_v2_vector_handle source, duckdb_v2_vector_handle target,
 	 DUCKDB_V2_CAST_MODE mode, bool *out_converted, duckdb_v2_error_info_handle *cast_err,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_enable_profiling)
+	(duckdb_v2_connection_handle conn, bool enabled, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_query_metrics)
+	(duckdb_v2_connection_handle conn, duckdb_v2_query_metrics_handle *metrics, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_set_file_extension)
 	(duckdb_v2_copy_function_handle function, const duckdb_v2_str *extension, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_data_chunk_clear)(duckdb_v2_data_chunk_handle chunk, duckdb_v2_error_info_handle *err);
@@ -1395,6 +1399,27 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_file_system_path_remove)
 	(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *path, bool *out_removed,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_query_metrics_destroy)(duckdb_v2_query_metrics_handle *metrics);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_get_root)
+	(duckdb_v2_query_metrics_handle metrics, duckdb_v2_query_metrics_node_handle *node,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_child)
+	(duckdb_v2_query_metrics_node_handle node, idx_t index, duckdb_v2_query_metrics_node_handle *child,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_child_count)
+	(duckdb_v2_query_metrics_node_handle node, idx_t *count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_metric)
+	(duckdb_v2_query_metrics_node_handle node, const duckdb_v2_str *name, duckdb_v2_value_handle *value, bool *present,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_metric_count)
+	(duckdb_v2_query_metrics_node_handle node, idx_t *count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_metric_name)
+	(duckdb_v2_query_metrics_node_handle node, idx_t index, duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_metric_value)
+	(duckdb_v2_query_metrics_node_handle node, idx_t index, duckdb_v2_value_handle *value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_query_metrics_node_get_name)
+	(duckdb_v2_query_metrics_node_handle node, duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_statement_add_collection)
 	(duckdb_v2_sql_statement_handle statement, const duckdb_v2_identifier_t *name,
 	 duckdb_v2_column_data_collection_handle collection, const duckdb_v2_identifier_t *column_names, idx_t column_count,
@@ -2042,11 +2067,22 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_macro_function_set_body = duckdb_v2_macro_function_set_body;
 	result.duckdb_v2_macro_function_set_name = duckdb_v2_macro_function_set_name;
 	result.duckdb_v2_vector_cast = duckdb_v2_vector_cast;
+	result.duckdb_v2_connection_enable_profiling = duckdb_v2_connection_enable_profiling;
+	result.duckdb_v2_connection_get_query_metrics = duckdb_v2_connection_get_query_metrics;
 	result.duckdb_v2_copy_function_set_file_extension = duckdb_v2_copy_function_set_file_extension;
 	result.duckdb_v2_data_chunk_clear = duckdb_v2_data_chunk_clear;
 	result.duckdb_v2_file_system_path_glob = duckdb_v2_file_system_path_glob;
 	result.duckdb_v2_file_system_path_move = duckdb_v2_file_system_path_move;
 	result.duckdb_v2_file_system_path_remove = duckdb_v2_file_system_path_remove;
+	result.duckdb_v2_query_metrics_destroy = duckdb_v2_query_metrics_destroy;
+	result.duckdb_v2_query_metrics_get_root = duckdb_v2_query_metrics_get_root;
+	result.duckdb_v2_query_metrics_node_get_child = duckdb_v2_query_metrics_node_get_child;
+	result.duckdb_v2_query_metrics_node_get_child_count = duckdb_v2_query_metrics_node_get_child_count;
+	result.duckdb_v2_query_metrics_node_get_metric = duckdb_v2_query_metrics_node_get_metric;
+	result.duckdb_v2_query_metrics_node_get_metric_count = duckdb_v2_query_metrics_node_get_metric_count;
+	result.duckdb_v2_query_metrics_node_get_metric_name = duckdb_v2_query_metrics_node_get_metric_name;
+	result.duckdb_v2_query_metrics_node_get_metric_value = duckdb_v2_query_metrics_node_get_metric_value;
+	result.duckdb_v2_query_metrics_node_get_name = duckdb_v2_query_metrics_node_get_name;
 	result.duckdb_v2_statement_add_collection = duckdb_v2_statement_add_collection;
 	return result;
 }

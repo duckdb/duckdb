@@ -4408,6 +4408,263 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_destroy(duckdb_v2_qname_handle *nam
 /* --- Struct definitions for qname --- */
 
 /* ============================================================================
+ * MODULE: query metrics
+ * ============================================================================ */
+
+/* --- Enums for query metrics --- */
+
+/* --- Struct forward declarations for query metrics --- */
+
+/* --- Types for query metrics --- */
+
+/*!
+ * An owned snapshot of the metrics of a query. Taken with `duckdb_v2_connection_get_query_metrics()`, read from its
+ * root node via `duckdb_v2_query_metrics_get_root()`, and destroyed with `duckdb_v2_query_metrics_destroy()`. Later
+ * queries do not update it.
+ */
+typedef struct _duckdb_v2_query_metrics {
+	void *internal_ptr;
+} * duckdb_v2_query_metrics_handle;
+
+/*!
+ * A borrowed opaque handle to one node of a query metrics snapshot, valid for as long as the snapshot is. Read its name
+ * with `duckdb_v2_query_metrics_node_get_name()`, its metrics with `duckdb_v2_query_metrics_node_get_metric()` or by
+ * index, and its children with `duckdb_v2_query_metrics_node_get_child()`.
+ */
+typedef struct _duckdb_v2_query_metrics_node {
+	void *internal_ptr;
+} * duckdb_v2_query_metrics_node_handle;
+
+/* --- Constants for query metrics --- */
+
+/* --- Function pointer typedefs for query metrics --- */
+
+/* --- Functions for query metrics --- */
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Takes a snapshot of the metrics of the last query the connection finished.
+ *
+ * The snapshot is owned by the caller and does not change afterwards. It holds the metrics DuckDB's profiling
+ * configuration gathered: without profiling enabled, the root node carries no metrics and has no children. A snapshot
+ * is not promised to be complete; any metric, and any operator node, may be missing.
+ *
+ * Fails with `ERROR_RESOURCE_IN_USE` while a query is running on the connection, i.e. while a result of it has not yet
+ * been drained or destroyed.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection to take the snapshot of.
+ * @param metrics On success, receives the owned snapshot. Destroy via `duckdb_v2_query_metrics_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_query_metrics(duckdb_v2_connection_handle conn,
+                                                                    duckdb_v2_query_metrics_handle *metrics,
+                                                                    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Enables or disables profiling for the queries the connection runs from now on.
+ *
+ * While profiling is enabled, DuckDB gathers the metrics `duckdb_v2_connection_get_query_metrics()` reports. Profiling
+ * also prints the profile of every query, as configured by the `enable_profiling` and `profiling_output` options, which
+ * by default print a query tree to the standard output: set `enable_profiling` to `no_output` to only gather the
+ * metrics. Disabling profiling stops both.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param conn The connection to enable or disable profiling for.
+ * @param enabled Whether to enable profiling.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_enable_profiling(duckdb_v2_connection_handle conn, bool enabled,
+                                                                   duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Borrows the root node of the snapshot, which describes the query as a whole. Its children, if any, describe the
+ * operators that executed the query.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param metrics The snapshot.
+ * @param node Receives the borrowed root node. Valid until the snapshot is destroyed.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_metrics_get_root(duckdb_v2_query_metrics_handle metrics,
+                                                              duckdb_v2_query_metrics_node_handle *node,
+                                                              duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Borrows the name of the node: `QUERY` for the root node, and the name of the operator, e.g. `TABLE_SCAN`, for the
+ * other nodes.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param node The node.
+ * @param name Receives a borrowed view of the name. Valid until the snapshot is destroyed.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_metrics_node_get_name(duckdb_v2_query_metrics_node_handle node,
+                                                                   duckdb_v2_str *name,
+                                                                   duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Returns the number of children of the node. Valid indices for `duckdb_v2_query_metrics_node_get_child()` are [0,
+ * count).
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param node The node.
+ * @param count Receives the number of children.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_metrics_node_get_child_count(duckdb_v2_query_metrics_node_handle node,
+                                                                          idx_t *count,
+                                                                          duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Borrows the child of the node at index. An out-of-range index is rejected with `ERROR_INPUT_OUT_OF_RANGE`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param node The node.
+ * @param index Zero-based child index.
+ * @param child Receives the borrowed child. Valid until the snapshot is destroyed.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_metrics_node_get_child(duckdb_v2_query_metrics_node_handle node,
+                                                                    idx_t index,
+                                                                    duckdb_v2_query_metrics_node_handle *child,
+                                                                    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Returns the number of metrics the node carries. Valid indices for `duckdb_v2_query_metrics_node_get_metric_name()`
+ * and `duckdb_v2_query_metrics_node_get_metric_value()` are [0, count); the order of the metrics is unspecified.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param node The node.
+ * @param count Receives the number of metrics.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_metrics_node_get_metric_count(duckdb_v2_query_metrics_node_handle node,
+                                                                           idx_t *count,
+                                                                           duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Borrows the name of the metric at index, e.g. `query.total_time`. An out-of-range index is rejected with
+ * `ERROR_INPUT_OUT_OF_RANGE`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param node The node.
+ * @param index Zero-based metric index.
+ * @param name Receives a borrowed view of the name. Valid until the snapshot is destroyed.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_metrics_node_get_metric_name(duckdb_v2_query_metrics_node_handle node,
+                                                                          idx_t index, duckdb_v2_str *name,
+                                                                          duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Returns the value of the metric at index, a number such as a UBIGINT count or a DOUBLE duration. An out-of-range
+ * index is rejected with `ERROR_INPUT_OUT_OF_RANGE`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param node The node.
+ * @param index Zero-based metric index.
+ * @param value Receives the owned value. Destroy via `duckdb_v2_value_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_metrics_node_get_metric_value(duckdb_v2_query_metrics_node_handle node,
+                                                                           idx_t index, duckdb_v2_value_handle *value,
+                                                                           duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Looks up a metric of the node by name, e.g. `query.total_time`. When the node does not carry it, `present` receives
+ * false and `value` receives null.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param node The node.
+ * @param name The name of the metric, matched exactly. Borrowed for the call only.
+ * @param value Receives the owned value, if present. Destroy via `duckdb_v2_value_destroy()`.
+ * @param present Receives whether the node carries the metric.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_metrics_node_get_metric(duckdb_v2_query_metrics_node_handle node,
+                                                                     const duckdb_v2_str *name,
+                                                                     duckdb_v2_value_handle *value, bool *present,
+                                                                     duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Destroys the snapshot, releasing its resources and invalidating the nodes borrowed from it.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param metrics The snapshot to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_metrics_destroy(duckdb_v2_query_metrics_handle *metrics);
+#endif
+
+/* --- Struct definitions for query metrics --- */
+
+/* ============================================================================
  * MODULE: schema
  * ============================================================================ */
 
