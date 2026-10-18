@@ -1,0 +1,22 @@
+# name: test/sql/copy/csv/sniff_csv_skip_overflow.test
+# description: sniff_csv skip beyond the UINTEGER range must raise a catchable error, not an InternalException that invalidates the database
+# group: [csv]
+
+statement ok
+COPY (SELECT * FROM (VALUES ('Vendor','Test',NULL,NULL),('Start','06/02/2024',NULL,NULL),('A','B','C','D'),('1','2','3','4'),('5','6','7','8'))) TO '{TEST_DIR}/skip_overflow.csv' (FORMAT csv, DELIMITER E'\t', HEADER false);
+
+# a skip value that does not fit in UINTEGER must be a catchable error
+statement error
+FROM sniff_csv('{TEST_DIR}/skip_overflow.csv', skip=9223372036854775807);
+----
+<REGEX>:.*(Invalid Input|out of range|skip).*
+
+# the database must still be usable afterwards
+query I
+SELECT 42;
+----
+42
+
+# an in-range skip still sniffs normally
+statement ok
+FROM sniff_csv('{TEST_DIR}/skip_overflow.csv', skip=2);
