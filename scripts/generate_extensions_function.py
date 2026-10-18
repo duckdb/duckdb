@@ -418,10 +418,12 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
 
 
 def get_settings(load="") -> Set[str]:
+    # Include debug and deprecated settings, they still need to trigger autoloading
     GET_SETTINGS_QUERY = """
-        select distinct
-            name
-        from duckdb_settings();
+        select name from duckdb_settings()
+        union select name from duckdb_settings(debug := true)
+        union select name from duckdb_settings(deprecated := true)
+        union select name from duckdb_settings(debug := true, deprecated := true);
     """
     settings = get_query(GET_SETTINGS_QUERY, load)
     res = set()
