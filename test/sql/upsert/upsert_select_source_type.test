@@ -1,0 +1,86 @@
+# name: test/sql/upsert/upsert_select_source_type.test
+# description: Conflicts of a SELECT source are detected in the type of the key column
+# group: [upsert]
+
+# VARCHAR key, INTEGER source
+statement ok
+CREATE TABLE t1 (k VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO t1 VALUES ('a');
+
+statement ok
+INSERT INTO t1 SELECT 1 ON CONFLICT DO NOTHING;
+
+statement ok
+INSERT INTO t1 SELECT 1 ON CONFLICT DO NOTHING;
+
+query I
+SELECT k FROM t1 ORDER BY k
+----
+1
+a
+
+# INTEGER key, DECIMAL source
+statement ok
+CREATE TABLE t2 (k INT PRIMARY KEY, n INT);
+
+statement ok
+INSERT INTO t2 VALUES (1, 0);
+
+statement ok
+INSERT OR IGNORE INTO t2 SELECT 1.4, 7;
+
+statement ok
+INSERT OR IGNORE INTO t2 BY NAME SELECT 7 AS n, 1.4 AS k;
+
+statement ok
+INSERT OR IGNORE INTO t2 (k) SELECT 1.4;
+
+query II
+FROM t2
+----
+1	0
+
+statement ok
+INSERT INTO t2 SELECT 1.4, 7 ON CONFLICT (k) DO UPDATE SET n = excluded.n;
+
+statement ok
+INSERT OR REPLACE INTO t2 SELECT 2.3, 8;
+
+query II
+FROM t2 ORDER BY k
+----
+1	7
+2	8
+
+# multiple source rows that map to the same key
+statement ok
+INSERT INTO t2 SELECT 3.1, 1 UNION ALL SELECT 3.2, 2 ON CONFLICT DO UPDATE SET n = excluded.n;
+
+query I
+SELECT count(*) FROM t2 WHERE k = 3
+----
+1
+
+# VARCHAR key, DOUBLE source
+statement ok
+CREATE TABLE t3 (k VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO t3 VALUES ('2');
+
+statement ok
+INSERT INTO t3 SELECT 2.0::DOUBLE ON CONFLICT DO NOTHING;
+
+query I
+SELECT k FROM t3 ORDER BY k
+----
+2
+2.0
+
+# key column missing from a BY NAME source
+statement error
+INSERT INTO t2 BY NAME SELECT 7 AS n ON CONFLICT DO NOTHING;
+----
+<REGEX>:Binder Error:.*not found.*
