@@ -207,8 +207,7 @@ void CreateTables(Connection &conn) {
 } // namespace
 
 TEST_CASE("Stable C++API: scalar stats callback narrows the result", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	CreateTables(conn);
 
@@ -249,8 +248,7 @@ TEST_CASE("Stable C++API: scalar stats callback narrows the result", "[cpp_api]"
 }
 
 TEST_CASE("Stable C++API: aggregate stats callback narrows the result", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	CreateTables(conn);
 
@@ -275,8 +273,7 @@ TEST_CASE("Stable C++API: aggregate stats callback narrows the result", "[cpp_ap
 }
 
 TEST_CASE("Stable C++API: table stats callback narrows a column", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	StatsMode all_null;
