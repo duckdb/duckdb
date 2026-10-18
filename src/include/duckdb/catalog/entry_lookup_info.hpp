@@ -48,6 +48,13 @@ public:
 	const Identifier &GetSchema() const;
 	const QueryErrorContext &GetErrorContext() const;
 	const optional_ptr<BoundAtClause> GetAtClause() const;
+	//! Whether a catalog may redirect this lookup to another catalog (Catalog::TryRedirectEntry). Off by default:
+	//! only the binder's statement-level table lookups turn it on. A redirect target that redirects again is
+	//! followed, up to MAX_REDIRECT_HOPS: redirections that do not end by then are an error
+	bool AllowRedirect() const;
+	void SetAllowRedirect(bool allow_redirect);
+
+	static constexpr idx_t MAX_REDIRECT_HOPS = 8;
 
 	//! Build a schema lookup from a (possibly nested) schema path ([outermost..innermost]); the innermost component is
 	//! the schema name and the preceding components are its parent schemas
@@ -58,6 +65,7 @@ private:
 	QualifiedName name;
 	optional_ptr<BoundAtClause> at_clause;
 	QueryErrorContext error_context;
+	bool allow_redirect = false;
 };
 
 //! Return value of Catalog::LookupEntry
@@ -65,6 +73,10 @@ struct CatalogEntryLookup {
 	optional_ptr<SchemaCatalogEntry> schema;
 	optional_ptr<CatalogEntry> entry;
 	ErrorData error;
+	//! The entry the lookup found before it was redirected (Catalog::TryRedirectEntry), if it was
+	optional_ptr<CatalogEntry> redirected_from;
+	//! The entries a chain of redirects passed through between redirected_from and entry, in order
+	vector<reference<CatalogEntry>> redirected_through;
 
 	DUCKDB_API bool Found() const {
 		return entry;

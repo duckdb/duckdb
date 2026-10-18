@@ -43,7 +43,8 @@ namespace duckdb {
 void VerifyNotExcluded(const ParsedExpression &root_expr);
 
 unique_ptr<BoundStatement> Binder::TryExpandTriggers(QueryNode &node, TableCatalogEntry &table,
-                                                     TriggerEventType event_type) {
+                                                     TriggerEventType event_type,
+                                                     optional_ptr<CatalogEntry> redirected_from) {
 	D_ASSERT(node.type == QueryNodeType::INSERT_QUERY_NODE || node.type == QueryNodeType::UPDATE_QUERY_NODE ||
 	         node.type == QueryNodeType::DELETE_QUERY_NODE);
 	auto &expanded_tables = global_binder_state->trigger_expanded_tables;
@@ -96,7 +97,7 @@ unique_ptr<BoundStatement> Binder::TryExpandTriggers(QueryNode &node, TableCatal
 		}
 	}
 	expanded_tables.insert(table);
-	auto bound = ExpandTriggers(node, table, before_triggers, after_triggers);
+	auto bound = ExpandTriggers(node, table, before_triggers, after_triggers, redirected_from);
 
 	// Only track this table as expanded for the duration of its own subtree in the trigger chain.
 	expanded_tables.erase(table);
@@ -417,7 +418,8 @@ static unique_ptr<SelectNode> BuildTriggerChain(const QueryNode &node, const Tab
 
 BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
                                       const vector<const_reference<TriggerCatalogEntry>> &before_triggers,
-                                      const vector<const_reference<TriggerCatalogEntry>> &after_triggers) {
+                                      const vector<const_reference<TriggerCatalogEntry>> &after_triggers,
+                                      optional_ptr<CatalogEntry> redirected_from) {
 	D_ASSERT(!before_triggers.empty() || !after_triggers.empty());
 	D_ASSERT(node.type == QueryNodeType::INSERT_QUERY_NODE || node.type == QueryNodeType::UPDATE_QUERY_NODE ||
 	         node.type == QueryNodeType::DELETE_QUERY_NODE);
@@ -486,7 +488,8 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 		logical_count++;
 	}
 	returning_binder_owner->bind_context.AddBaseTable(base_index, GetReturningAlias(node), col_names, col_types,
-	                                                  bound_columns, table, std::move(virtual_columns));
+	                                                  bound_columns, table, std::move(virtual_columns),
+	                                                  redirected_from);
 	ReturningBinder returning_binder(*returning_binder_owner, context);
 
 	vector<unique_ptr<ParsedExpression>> expanded_returning;

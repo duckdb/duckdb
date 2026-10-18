@@ -753,6 +753,15 @@ void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const 
 
 void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
+                               TableCatalogEntry &entry, virtual_column_map_t virtual_columns,
+                               optional_ptr<CatalogEntry> named_entry) {
+	auto &naming = named_entry ? named_entry->Cast<StandardEntry>() : entry.Cast<StandardEntry>();
+	AddBinding(make_uniq<TableBinding>(TableBinding::GetAlias(alias, naming), types, names, bound_column_ids, &entry,
+	                                   index, std::move(virtual_columns)));
+}
+
+void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
+                               const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                const Identifier &table_name) {
 	virtual_column_map_t virtual_columns;
 	AddBinding(make_uniq<TableBinding>(alias.empty() ? table_name : alias, types, names, bound_column_ids, nullptr,

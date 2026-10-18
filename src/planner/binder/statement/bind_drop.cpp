@@ -25,8 +25,16 @@ void Binder::BindDropTrigger(DropStatement &stmt, StatementProperties &propertie
 	// resolve the (possibly nested) catalog/schema qualification of the base table
 	base_table_ref.SetQualifiedName(BindTableName(base_table_ref.GetQualifiedName()));
 	// IF EXISTS only guards the trigger, not the table (PostgreSQL-compatible behavior).
-	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, base_table_ref.GetQualifiedName());
-	// the trigger lives in the same (possibly nested) schema as its base table
+	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, base_table_ref.GetQualifiedName());
+	auto resolved = ResolveTable(table_lookup, OnEntryNotFound::THROW_EXCEPTION);
+	if (resolved.entry->type != CatalogType::TABLE_ENTRY) {
+		throw CatalogException("%s is not an %s", base_table_ref.Table().GetIdentifierName(), TableCatalogEntry::Name);
+	}
+	auto &table_entry = resolved.entry->Cast<TableCatalogEntry>();
+	CheckRedirectedModify(resolved.redirected_from, StatementType::DROP_STATEMENT);
+	// the trigger lives in the same (possibly nested) schema as its base table, which execution looks up by the
+	// table's own name
+	base_table_ref.SetQualifiedName(table_entry.ParentSchema().GetQualifiedName(table_entry.name));
 	stmt.info->SetQualifiedName(table_entry.ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
 	properties.RegisterDBModify(table_entry.ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);
 }
@@ -87,6 +95,11 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 				// Unable to find table macro, try again with original OnEntryNotFound to ensure we throw if necessary
 				entry = Catalog::GetEntry(context, macro_entry_lookup, stmt.info->if_not_found);
 			}
+		} else if (stmt.info->type == CatalogType::TABLE_ENTRY) {
+			EntryLookupInfo entry_lookup(stmt.info->type, stmt.info->GetQualifiedName());
+			auto resolved = ResolveTable(entry_lookup, stmt.info->if_not_found);
+			CheckRedirectedModify(resolved.redirected_from, StatementType::DROP_STATEMENT);
+			entry = resolved.entry;
 		} else {
 			EntryLookupInfo entry_lookup(stmt.info->type, stmt.info->GetQualifiedName());
 			entry = Catalog::GetEntry(context, entry_lookup, stmt.info->if_not_found);
@@ -97,8 +110,8 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		if (entry->internal) {
 			throw CatalogException("Cannot drop internal catalog entry %s!", entry->name);
 		}
-		// keep the entry's full (possibly nested) schema path so execution navigates the same schema
-		stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
+		// execution navigates the entry's own (possibly nested) schema and name
+		stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(entry->name));
 		properties.RegisterDBModify(entry->ParentCatalog(), context, stmt.info->GetModifications());
 		break;
 	}

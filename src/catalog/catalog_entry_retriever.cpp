@@ -14,7 +14,20 @@ namespace duckdb {
 
 optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(const EntryLookupInfo &lookup_info,
                                                            OnEntryNotFound on_entry_not_found) {
-	return ReturnAndCallback(Catalog::GetEntry(*this, lookup_info, on_entry_not_found));
+	return ResolveEntry(lookup_info, on_entry_not_found).entry;
+}
+
+CatalogEntryLookup CatalogEntryRetriever::ResolveEntry(const EntryLookupInfo &lookup_info,
+                                                       OnEntryNotFound on_entry_not_found) {
+	auto result = Catalog::ResolveEntry(*this, lookup_info, on_entry_not_found);
+	// a redirected lookup depends on every entry of the chain: the one the name resolved to, the ones it passed
+	// through and the one that serves it
+	ReturnAndCallback(result.redirected_from);
+	for (auto &entry : result.redirected_through) {
+		ReturnAndCallback(&entry.get());
+	}
+	ReturnAndCallback(result.entry);
+	return result;
 }
 
 LogicalType CatalogEntryRetriever::GetType(const QualifiedName &name, OnEntryNotFound on_entry_not_found) {

@@ -172,7 +172,8 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	}
 	auto &table = *table_ptr;
 
-	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::UPDATE_EVENT)) {
+	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::UPDATE_EVENT,
+	                                      GetRedirectSource(bound_table_get.table_index))) {
 		return std::move(*expanded);
 	}
 
@@ -190,6 +191,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 		get = &root->Cast<LogicalGet>();
 	}
 
+	CheckRedirectedModify(GetRedirectSource(get->table_index), StatementType::UPDATE_STATEMENT);
 	GetStatementProperties().RegisterDBModify(table.catalog, context, DatabaseModificationType::UPDATE_DATA);
 	auto update = make_uniq<LogicalUpdate>(table);
 
@@ -252,7 +254,8 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 		unique_ptr<LogicalOperator> update_as_logicaloperator = std::move(update);
 
 		auto returning_result = BindReturning(std::move(node.returning_list), table, node.table->alias,
-		                                      update_table_index, std::move(update_as_logicaloperator));
+		                                      update_table_index, std::move(update_as_logicaloperator),
+		                                      virtual_column_map_t(), GetRedirectSource(get->table_index));
 		if (capture_old) {
 			// Expose the captured OLD physical columns as extra output columns of the base CTE, under the reserved
 			// names computed once by trigger expansion (threaded via binder state), so the trigger's OLD transition

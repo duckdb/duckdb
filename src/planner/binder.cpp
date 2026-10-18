@@ -32,6 +32,7 @@
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
 #include <algorithm>
@@ -250,6 +251,53 @@ void Binder::AddBoundTableMacro(CatalogEntry &table_macro) {
 
 TableIndex Binder::GenerateTableIndex() {
 	return TableIndex(global_binder_state->bound_tables++);
+}
+
+CatalogEntryLookup Binder::ResolveTable(EntryLookupInfo lookup_info, OnEntryNotFound if_not_found,
+                                        bool allow_redirect) {
+	lookup_info.SetAllowRedirect(allow_redirect);
+	auto result = entry_retriever.ResolveEntry(lookup_info, if_not_found);
+	if (result.redirected_from) {
+		// the statement depends on every catalog that redirected the name as much as on the one serving the table
+		auto &properties = GetStatementProperties();
+		properties.RegisterDBRead(result.redirected_from->ParentCatalog(), context);
+		for (auto &entry : result.redirected_through) {
+			properties.RegisterDBRead(entry.get().ParentCatalog(), context);
+		}
+	}
+	return result;
+}
+
+optional_ptr<CatalogEntry> Binder::GetRedirectSource(TableIndex index) const {
+	auto entry = redirect_sources.find(index.index);
+	if (entry == redirect_sources.end()) {
+		return nullptr;
+	}
+	return &entry->second.get();
+}
+
+void Binder::CheckRedirectedModify(optional_ptr<CatalogEntry> redirected_from, StatementType statement_type) {
+	if (!redirected_from) {
+		return;
+	}
+	auto &db = redirected_from->ParentCatalog().GetAttached();
+	if (db.IsReadOnly()) {
+		throw InvalidInputException(
+		    "Cannot execute statement of type \"%s\" on database %s which is attached in read-only mode!",
+		    StatementTypeToString(statement_type), db.GetName());
+	}
+}
+
+void Binder::CheckRedirectedCreate(optional_ptr<CatalogEntry> redirected_from, const CatalogEntry &target,
+                                   const string &what) {
+	if (!redirected_from) {
+		return;
+	}
+	throw BinderException("Cannot create %s on table \"%s\" of catalog \"%s\": the table is redirected to catalog "
+	                      "\"%s\", create it there",
+	                      what, redirected_from->name.GetIdentifierName(),
+	                      redirected_from->ParentCatalog().GetName().GetIdentifierName(),
+	                      target.ParentCatalog().GetName().GetIdentifierName());
 }
 
 StatementProperties &Binder::GetStatementProperties() {
@@ -581,7 +629,8 @@ void Binder::BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, v
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
                                      const Identifier &alias, TableIndex update_table_index,
-                                     unique_ptr<LogicalOperator> child_operator, virtual_column_map_t virtual_columns) {
+                                     unique_ptr<LogicalOperator> child_operator, virtual_column_map_t virtual_columns,
+                                     optional_ptr<CatalogEntry> redirected_from) {
 	vector<LogicalType> types;
 	vector<Identifier> names;
 
@@ -599,7 +648,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	}
 
 	binder->bind_context.AddBaseTable(update_table_index, alias, names, types, bound_columns, table,
-	                                  std::move(virtual_columns));
+	                                  std::move(virtual_columns), redirected_from);
 	ReturningBinder returning_binder(*binder, context);
 
 	vector<unique_ptr<Expression>> projection_expressions;

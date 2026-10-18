@@ -284,6 +284,8 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 			}
 		}
 	}
+	auto target_redirect_source = target_binder->GetRedirectSource(bound_table.plan->Cast<LogicalGet>().table_index);
+	CheckRedirectedModify(target_redirect_source, StatementType::MERGE_INTO_STATEMENT);
 	GetStatementProperties().RegisterDBModify(table.catalog, context, modification);
 
 	// bind the source
@@ -471,7 +473,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		virtual_column_map_t virtual_columns;
 		virtual_columns.insert(make_pair(VIRTUAL_COLUMN_START, TableColumn("merge_action", LogicalType::VARCHAR)));
 		return BindReturning(std::move(node.returning_list), table, table_alias, merge_table_index,
-		                     std::move(index_as_logicaloperator), std::move(virtual_columns));
+		                     std::move(index_as_logicaloperator), std::move(virtual_columns), target_redirect_source);
 	}
 
 	BoundStatement result;

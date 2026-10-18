@@ -676,6 +676,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		throw BinderException("CREATE TRIGGER requires a base table");
 	}
 	auto &table = *table_ptr;
+	CheckRedirectedCreate(GetRedirectSource(get.table_index), table, "a trigger");
 	// Dropping the trigger's own table must not require CASCADE. If the trigger body also references this table,
 	// the body-reference dependency below merges in ALTER-blocking flags.
 	create_trigger_info.dependencies.AddDependency(table, DependencyDependentFlags());
@@ -929,6 +930,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		}
 
 		auto &table = *table_ptr;
+		CheckRedirectedCreate(GetRedirectSource(get.table_index), table, "an index");
 		if (table.temporary) {
 			stmt.info->temporary = true;
 		}

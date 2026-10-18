@@ -35,6 +35,13 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/planner/tableref/bound_at_clause.hpp"
+#include "duckdb/catalog/entry_lookup_info.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 
 using namespace duckdb; // NOLINT
 
@@ -1291,10 +1298,128 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 }
 
 //===--------------------------------------------------------------------===//
+// Table redirection (Catalog::TryRedirectEntry)
+//===--------------------------------------------------------------------===//
+// Test catalogs for Catalog::TryRedirectEntry.
+//
+// `ATTACH ... (TYPE table_redirect_test, TARGET ..)` is a DuckDB catalog that redirects every table named redirect_* to
+// the catalog named by its TARGET option, under the schema named by TARGET_SCHEMA (the same schema by default) and
+// the table name between TARGET_PREFIX and TARGET_SUFFIX (both empty by default). It does not support time travel.
+//
+// `TYPE table_redirect_target` is a DuckDB catalog that claims to support time travel and ignores the AT clause, so a
+// test can tell a redirected AT (...) apart from one the redirecting catalog refuses; AT (VERSION => 0) is a version
+// at which none of its tables existed.
+namespace {
+
+class RedirectingCatalog : public DuckCatalog {
+public:
+	RedirectingCatalog(AttachedDatabase &db, string target_p, string target_schema_p, string target_prefix_p,
+	                   string target_suffix_p)
+	    : DuckCatalog(db), target(std::move(target_p)), target_schema(std::move(target_schema_p)),
+	      target_prefix(std::move(target_prefix_p)), target_suffix(std::move(target_suffix_p)) {
+	}
+
+	bool TryRedirectEntry(ClientContext &context, TableCatalogEntry &entry, const EntryLookupInfo &lookup_info,
+	                      QualifiedName &target_name) override {
+		if (!StringUtil::StartsWith(entry.name.GetIdentifierName(), "redirect_")) {
+			return false;
+		}
+		auto schema = target_schema.empty() ? entry.ParentSchema().name : Identifier(target_schema);
+		target_name = QualifiedName(Identifier(target), std::move(schema),
+		                            Identifier(target_prefix + entry.name.GetIdentifierName() + target_suffix));
+		return true;
+	}
+
+private:
+	string target;
+	string target_schema;
+	string target_prefix;
+	string target_suffix;
+};
+
+class TimeTravelCatalog : public DuckCatalog {
+public:
+	explicit TimeTravelCatalog(AttachedDatabase &db) : DuckCatalog(db) {
+	}
+
+	bool SupportsTimeTravel() const override {
+		return true;
+	}
+
+private:
+	CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction,
+	                                          const EntryLookupInfo &lookup_info) override {
+		// the schema qualification is everything up to the entry name, as in the default lookup
+		auto &full_path = lookup_info.GetQualifiedName().Path();
+		vector<Identifier> schema_path(full_path.begin(), full_path.end() - 1);
+		auto schema = LookupSchema(transaction, EntryLookupInfo::SchemaLookup(lookup_info, std::move(schema_path)),
+		                           OnEntryNotFound::RETURN_NULL);
+		if (!schema) {
+			return {nullptr, nullptr, ErrorData()};
+		}
+		auto at_clause = lookup_info.GetAtClause();
+		if (at_clause && at_clause->Unit() == "version" && at_clause->GetValue().GetValue<int64_t>() == 0) {
+			return {schema, nullptr, ErrorData()};
+		}
+		return {schema, schema->LookupEntry(transaction, lookup_info), ErrorData()};
+	}
+};
+
+// Take an option of ours out of the attach options: the storage manager of a DuckDB catalog rejects unknown ones
+string TakeOption(AttachOptions &options, const string &name) {
+	auto entry = options.options.find(name);
+	if (entry == options.options.end()) {
+		return string();
+	}
+	auto value = entry->second.ToString();
+	options.options.erase(entry);
+	return value;
+}
+
+unique_ptr<TransactionManager> CreateTransactionManager(optional_ptr<StorageExtensionInfo>, AttachedDatabase &db,
+                                                        Catalog &) {
+	return make_uniq<DuckTransactionManager>(db);
+}
+
+struct RedirectStorageExtension : StorageExtension {
+	RedirectStorageExtension() {
+		attach = [](optional_ptr<StorageExtensionInfo>, ClientContext &, AttachedDatabase &db, const string &,
+		            AttachInfo &, AttachOptions &options) -> unique_ptr<Catalog> {
+			auto target = TakeOption(options, "target");
+			auto target_schema = TakeOption(options, "target_schema");
+			auto target_prefix = TakeOption(options, "target_prefix");
+			auto target_suffix = TakeOption(options, "target_suffix");
+			if (target.empty()) {
+				throw InvalidInputException("table_redirect_test requires a TARGET option");
+			}
+			return make_uniq_base<Catalog, RedirectingCatalog>(db, std::move(target), std::move(target_schema),
+			                                                   std::move(target_prefix), std::move(target_suffix));
+		};
+		create_transaction_manager = CreateTransactionManager;
+	}
+};
+
+struct TimeTravelStorageExtension : StorageExtension {
+	TimeTravelStorageExtension() {
+		attach = [](optional_ptr<StorageExtensionInfo>, ClientContext &, AttachedDatabase &db, const string &,
+		            AttachInfo &, AttachOptions &) -> unique_ptr<Catalog> {
+			return make_uniq_base<Catalog, TimeTravelCatalog>(db);
+		};
+		create_transaction_manager = CreateTransactionManager;
+	}
+};
+
+} // namespace
+
+//===--------------------------------------------------------------------===//
 // Extension load + setup
 //===--------------------------------------------------------------------===//
 extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
+	auto &redirect_config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+	StorageExtension::Register(redirect_config, "table_redirect_test", make_shared_ptr<RedirectStorageExtension>());
+	StorageExtension::Register(redirect_config, "table_redirect_target", make_shared_ptr<TimeTravelStorageExtension>());
+
 	CreateScalarFunctionInfo hello_alias_info(
 	    ScalarFunction("test_alias_hello", {}, LogicalType::VARCHAR, TestAliasHello));
 
