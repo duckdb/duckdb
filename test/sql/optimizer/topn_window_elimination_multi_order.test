@@ -27,6 +27,17 @@ EXPLAIN SELECT g, p FROM t QUALIFY row_number() OVER (PARTITION BY g ORDER BY a 
 ----
 logical_opt	<!REGEX>:.*WINDOW.*
 
+# Payloads that cannot be NULL use arg_min, a single payload column keeps the nulls-last variant
+query II
+EXPLAIN SELECT * FROM t QUALIFY row_number() OVER (PARTITION BY g ORDER BY a DESC, b DESC) <= 2
+----
+logical_opt	<REGEX>:.*arg_min\(.*create_sort_key.*
+
+query II
+EXPLAIN SELECT g, p FROM t QUALIFY row_number() OVER (PARTITION BY g ORDER BY a DESC, b DESC) <= 2
+----
+logical_opt	<REGEX>:.*arg_min_nulls_last\(.*create_sort_key.*
+
 # A single ORDER BY column keeps aggregating the column directly
 query II
 EXPLAIN SELECT g, p FROM t QUALIFY row_number() OVER (PARTITION BY g ORDER BY a DESC) = 1

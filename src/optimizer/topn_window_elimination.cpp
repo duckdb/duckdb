@@ -927,6 +927,10 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 	// result of a decorrelated LATERAL join) can have narrowed them to non-NULL although the input of the window
 	// contains NULLs. They cannot tell whether the window input can be NULL, so keep the NULL-preserving variants.
 	params.can_be_null = true;
+	if (window_expr.OrderBy().size() > 1 && aggregate_payload.size() != 1) {
+		// A sort key is never NULL, and neither is a struct packed payload, a row id or the key copied as the payload
+		params.can_be_null = false;
+	}
 
 	return params;
 }
