@@ -90,8 +90,8 @@ duckdb_v2_logical_type_handle MakeTypeInCallback(duckdb_v2_context_handle contex
 	return type;
 }
 
-// Drain a failing query and return its error code and message.
-DUCKDB_V2_ERROR QueryError(duckdb_v2_connection_handle conn, const char *sql, std::string &message) {
+// Requires the query to fail; returns its message and optionally its error code.
+std::string QueryError(duckdb_v2_connection_handle conn, const char *sql, DUCKDB_V2_ERROR *code = nullptr) {
 	duckdb_v2_result_handle result = nullptr;
 	duckdb_v2_error_info_handle err = nullptr;
 	auto rc = Query(conn, sql, &result, &err);
@@ -111,6 +111,7 @@ DUCKDB_V2_ERROR QueryError(duckdb_v2_connection_handle conn, const char *sql, st
 		}
 	}
 	duckdb_v2_result_destroy(&result);
+	std::string message;
 	if (rc != DUCKDB_V2_ERROR_NONE && err) {
 		duckdb_v2_str text = {nullptr, 0};
 		duckdb_v2_error_info_get_text(err, &text);
@@ -118,12 +119,9 @@ DUCKDB_V2_ERROR QueryError(duckdb_v2_connection_handle conn, const char *sql, st
 	}
 	duckdb_v2_error_info_destroy(&err);
 	REQUIRE(rc != DUCKDB_V2_ERROR_NONE);
-	return rc;
-}
-
-std::string QueryError(duckdb_v2_connection_handle conn, const char *sql) {
-	std::string message;
-	QueryError(conn, sql, message);
+	if (code) {
+		*code = rc;
+	}
 	return message;
 }
 
@@ -1038,23 +1036,13 @@ void ProjInitLocalCb(duckdb_v2_table_function_init_local_info_handle info, duckd
 	}
 }
 
-void ProjExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle,
-                duckdb_v2_error_info_handle *err) {
-	void *global_ptr = nullptr;
-	duckdb_v2_data_chunk_handle chunk = nullptr;
+// Fills every output column with declared_index * 100 + row position, proving the column mapping.
+void WriteDeclaredColumns(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_data_chunk_handle chunk,
+                          idx_t position, idx_t rows, duckdb_v2_error_info_handle *err) {
 	idx_t count = 0;
-	if (duckdb_v2_table_function_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_table_function_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE ||
-	    duckdb_v2_table_function_exec_get_column_count(info, &count, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_table_function_exec_get_column_count(info, &count, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
-	auto &global = *static_cast<ProjGlobal *>(global_ptr);
-	// Batches are capped by the vector size so the probe also serves builds with a tiny STANDARD_VECTOR_SIZE.
-	idx_t rows = PROJ_ROWS - global.position;
-	if (rows > STANDARD_VECTOR_SIZE) {
-		rows = STANDARD_VECTOR_SIZE;
-	}
-
 	for (idx_t i = 0; i < count; i++) {
 		idx_t column = 0;
 		duckdb_v2_vector_handle vec = nullptr;
@@ -1065,12 +1053,29 @@ void ProjExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_contex
 			return;
 		}
 		for (idx_t row = 0; row < rows; row++) {
-			static_cast<int64_t *>(raw)[row] = static_cast<int64_t>(column * 100 + global.position + row);
+			static_cast<int64_t *>(raw)[row] = static_cast<int64_t>(column * 100 + position + row);
 		}
 		if (i == 0) {
 			duckdb_v2_vector_set_size(vec, rows, err);
 		}
 	}
+}
+
+void ProjExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle,
+                duckdb_v2_error_info_handle *err) {
+	void *global_ptr = nullptr;
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	if (duckdb_v2_table_function_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_table_function_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto &global = *static_cast<ProjGlobal *>(global_ptr);
+	// Batches are capped by the vector size so the probe also serves builds with a tiny STANDARD_VECTOR_SIZE.
+	idx_t rows = PROJ_ROWS - global.position;
+	if (rows > STANDARD_VECTOR_SIZE) {
+		rows = STANDARD_VECTOR_SIZE;
+	}
+	WriteDeclaredColumns(info, chunk, global.position, rows, err);
 	global.position += rows;
 }
 
@@ -1162,11 +1167,12 @@ void ClaimBindCb(duckdb_v2_function_bind_info_handle info, duckdb_v2_table_funct
 	if (!bigint) {
 		return;
 	}
-	auto name_str = TableIdent("i");
-	rc = duckdb_v2_table_function_bind_add_result_column(result, &name_str, bigint, err);
-	if (rc == DUCKDB_V2_ERROR_NONE) {
-		auto second_name = TableIdent("j");
-		rc = duckdb_v2_table_function_bind_add_result_column(result, &second_name, bigint, err);
+	for (auto name : {"i", "j"}) {
+		auto name_str = TableIdent(name);
+		rc = duckdb_v2_table_function_bind_add_result_column(result, &name_str, bigint, err);
+		if (rc != DUCKDB_V2_ERROR_NONE) {
+			break;
+		}
 	}
 	duckdb_v2_logical_type_destroy(&bigint);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
@@ -1176,8 +1182,9 @@ void ClaimBindCb(duckdb_v2_function_bind_info_handle info, duckdb_v2_table_funct
 	duckdb_v2_function_bind_set_bind_data(info, &bind_data, err);
 }
 
-void ClaimPushdownCb(duckdb_v2_table_function_filter_pushdown_info_handle info, duckdb_v2_context_handle,
-                     duckdb_v2_error_info_handle *err) {
+// Claims "i < constant" predicates; an exact claim also stops the scan at the bound instead of overshooting it.
+void ClaimLessThan(duckdb_v2_table_function_filter_pushdown_info_handle info, duckdb_v2_error_info_handle *err,
+                   bool exact) {
 	void *user_ptr = nullptr;
 	void *bind_ptr = nullptr;
 	idx_t count = 0;
@@ -1232,29 +1239,29 @@ void ClaimPushdownCb(duckdb_v2_table_function_filter_pushdown_info_handle info, 
 			continue;
 		}
 		bind.bound = bind.bound < 0 ? bound : std::min(bind.bound, bound);
+		if (exact) {
+			bind.count = std::min(bind.count, bind.bound);
+		}
 		if (duckdb_v2_table_function_filter_pushdown_accept(info, i, err) != DUCKDB_V2_ERROR_NONE) {
 			return;
 		}
 	}
 }
 
+void ClaimPushdownCb(duckdb_v2_table_function_filter_pushdown_info_handle info, duckdb_v2_context_handle,
+                     duckdb_v2_error_info_handle *err) {
+	ClaimLessThan(info, err, false);
+}
+
+void ExactClaimPushdownCb(duckdb_v2_table_function_filter_pushdown_info_handle info, duckdb_v2_context_handle,
+                          duckdb_v2_error_info_handle *err) {
+	ClaimLessThan(info, err, true);
+}
+
 void ClaimInitGlobalCb(duckdb_v2_table_function_init_global_info_handle info, duckdb_v2_context_handle,
                        duckdb_v2_error_info_handle *err) {
 	duckdb_v2_opaque state = {new ClaimGlobal {0}, DeleteClaimGlobal, nullptr};
 	duckdb_v2_table_function_init_global_set_global_state(info, &state, err);
-}
-
-void ExactClaimPushdownCb(duckdb_v2_table_function_filter_pushdown_info_handle info, duckdb_v2_context_handle context,
-                          duckdb_v2_error_info_handle *err) {
-	ClaimPushdownCb(info, context, err);
-	void *ptr = nullptr;
-	if (duckdb_v2_table_function_filter_pushdown_get_bind_data(info, &ptr, err) != DUCKDB_V2_ERROR_NONE) {
-		return;
-	}
-	auto &bind = *static_cast<ClaimBind *>(ptr);
-	if (bind.bound >= 0) {
-		bind.count = std::min(bind.count, bind.bound);
-	}
 }
 
 bool claim_accept_enabled = true;
@@ -1280,11 +1287,6 @@ void ClaimExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_conte
 	auto &bind = *static_cast<ClaimBind *>(bind_ptr);
 	auto &global = *static_cast<ClaimGlobal *>(global_ptr);
 
-	idx_t column_count = 0;
-	if (duckdb_v2_table_function_exec_get_column_count(info, &column_count, err) != DUCKDB_V2_ERROR_NONE) {
-		return;
-	}
-
 	// Two rows past a claimed bound: they surface only if the engine dropped the predicate.
 	auto limit = bind.bound < 0 ? bind.count : bind.bound + 2;
 	if (limit > bind.count) {
@@ -1296,21 +1298,7 @@ void ClaimExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_conte
 	if (produced < 0) {
 		produced = 0;
 	}
-	for (idx_t col = 0; col < column_count; col++) {
-		idx_t declared = 0;
-		duckdb_v2_vector_handle vec = nullptr;
-		void *raw = nullptr;
-		if (duckdb_v2_table_function_exec_get_column_index(info, col, &declared, err) != DUCKDB_V2_ERROR_NONE ||
-		    duckdb_v2_data_chunk_get_vector(chunk, col, &vec, err) != DUCKDB_V2_ERROR_NONE ||
-		    duckdb_v2_vector_get_data_mutable(vec, &raw, err) != DUCKDB_V2_ERROR_NONE) {
-			return;
-		}
-		auto *out = static_cast<int64_t *>(raw);
-		for (int64_t i = 0; i < produced; i++) {
-			out[i] = static_cast<int64_t>(declared * 100) + global.position + i;
-		}
-		duckdb_v2_vector_set_size(vec, static_cast<idx_t>(produced), err);
-	}
+	WriteDeclaredColumns(info, chunk, static_cast<idx_t>(global.position), static_cast<idx_t>(produced), err);
 	global.position += produced;
 }
 
@@ -1383,9 +1371,10 @@ TEST_CASE("V2 table: scans without filter pushdown survive serialization", "[cap
 	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_table_function_destroy(&function);
 	schema_rebound = false;
-	std::string error;
-	REQUIRE(QueryError(fx.conn, "SELECT i FROM changing_schema()", error) == DUCKDB_V2_ERROR_DATABASE_SERIALIZATION);
+	DUCKDB_V2_ERROR code = DUCKDB_V2_ERROR_NONE;
+	auto error = QueryError(fx.conn, "SELECT i FROM changing_schema()", &code);
 	CAPTURE(error);
+	REQUIRE(code == DUCKDB_V2_ERROR_DATABASE_SERIALIZATION);
 	REQUIRE(error.find("Table function \"changing_schema\" returned a different schema when rebinding") !=
 	        std::string::npos);
 }
@@ -1419,14 +1408,13 @@ TEST_CASE("V2 table: accepted filters survive plan serialization", "[capi_v2][ta
 		                            "FROM exact_claim(10) WHERE i < 3 ORDER BY i") == Cells {0, 2, 1, 1, 2, 2});
 	}
 	SECTION("common subplans distinguish consumed bounds") {
-		ExecSQL(fx.conn, "SET disabled_optimizers='common_subplan'");
-		REQUIRE(QueryCells(fx.conn,
-		                   "SELECT sum(i)::BIGINT FROM exact_claim(10) WHERE i < 3 "
-		                   "UNION ALL SELECT sum(i)::BIGINT FROM exact_claim(10) WHERE i < 5") == Cells {3, 10});
-		ExecSQL(fx.conn, "SET disabled_optimizers=''");
-		REQUIRE(QueryCells(fx.conn,
-		                   "SELECT sum(i)::BIGINT FROM exact_claim(10) WHERE i < 3 "
-		                   "UNION ALL SELECT sum(i)::BIGINT FROM exact_claim(10) WHERE i < 5") == Cells {3, 10});
+		for (auto setting : {"SET disabled_optimizers='common_subplan'", "SET disabled_optimizers=''"}) {
+			CAPTURE(setting);
+			ExecSQL(fx.conn, setting);
+			REQUIRE(QueryCells(fx.conn,
+			                   "SELECT sum(i)::BIGINT FROM exact_claim(10) WHERE i < 3 "
+			                   "UNION ALL SELECT sum(i)::BIGINT FROM exact_claim(10) WHERE i < 5") == Cells {3, 10});
+		}
 	}
 	SECTION("serializer verification after optimization") {
 		ExecSQL(fx.conn, "SET debug_verify_serializer=true");
@@ -1448,9 +1436,9 @@ TEST_CASE("V2 table: accepted filters survive plan serialization", "[capi_v2][ta
 		RegisterClaim(fx, "one_shot_claim", OneShotClaimPushdownCb, projection_pushdown);
 		claim_accept_enabled = true;
 		ExecSQL(fx.conn, "SET debug_verify_serializer=true");
-		std::string error;
-		REQUIRE(QueryError(fx.conn, "SELECT i FROM one_shot_claim(10) WHERE i < 3", error) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
+		DUCKDB_V2_ERROR code = DUCKDB_V2_ERROR_NONE;
+		auto error = QueryError(fx.conn, "SELECT i FROM one_shot_claim(10) WHERE i < 3", &code);
+		REQUIRE(code == DUCKDB_V2_ERROR_INPUT_INVALID);
 		REQUIRE(error.find("did not accept a previously accepted predicate") != std::string::npos);
 	}
 }

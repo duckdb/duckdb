@@ -37,8 +37,9 @@ struct CV2TableAcceptedFilterBatch {
 	}
 };
 
-//! Bound call-site state: opaque data, invocation, result schema and accepted-filter replay log.
-//! The registered function owns the borrowed function info and outlives every bound call site.
+//! The bind data of a bound call site. Besides the user's own bind data it carries a borrowed pointer back to the
+//! function info: the progress hook only receives the bind data, so it is its only route to the callbacks. The
+//! registered function owns the info and outlives every call site bound against it.
 class CV2TableFunctionData final : public FunctionData {
 public:
 	shared_ptr<CV2UserData> handle;
@@ -54,8 +55,8 @@ public:
 	//! Retained here because function data is deserialized before LogicalGet's invocation parameters.
 	vector<Value> parameters;
 	named_argument_map_t named_parameters;
-	//! Shared batches retain the pre-pruning column mapping and are not modified after recording.
-	vector<shared_ptr<CV2TableAcceptedFilterBatch>> accepted_filters;
+	//! Accepted predicates with their pre-pruning column mapping, replayed on rebind.
+	vector<shared_ptr<const CV2TableAcceptedFilterBatch>> accepted_filters;
 
 	auto Copy() const -> unique_ptr<FunctionData> override {
 		return make_uniq<CV2TableFunctionData>(*this);
@@ -710,8 +711,8 @@ static auto CV2TableOfferFilters(ClientContext &context, const CV2TableFunctionD
 	return std::move(args.out_handled);
 }
 
-//! The optimizer offers predicates it would otherwise evaluate above the scan; accepted ones are removed,
-//! and the engine keeps applying the rest. Accepted predicates are replayed on fresh bind data after serialization.
+//! The optimizer hands over the predicates it would otherwise evaluate above the scan; whatever the callback accepts
+//! is removed from the list, and the engine keeps applying the rest itself.
 static auto CV2TableFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
                                    vector<unique_ptr<Expression>> &filters) -> void {
 	if (filters.empty()) {
@@ -762,7 +763,7 @@ static auto CV2TableDeserialize(Deserializer &deserializer, BoundTableFunction &
 	auto column_types = deserializer.ReadProperty<vector<LogicalType>>(102, "column_types");
 	auto column_names = deserializer.ReadProperty<vector<Identifier>>(103, "column_names");
 	auto accepted_filters =
-	    deserializer.ReadProperty<vector<shared_ptr<CV2TableAcceptedFilterBatch>>>(104, "accepted_filters");
+	    deserializer.ReadProperty<vector<shared_ptr<const CV2TableAcceptedFilterBatch>>>(104, "accepted_filters");
 	auto &context = deserializer.Get<ClientContext &>();
 	vector<LogicalType> input_types, return_types;
 	vector<Identifier> input_names, return_names;
