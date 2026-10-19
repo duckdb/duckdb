@@ -165,7 +165,7 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 				}
 				column_count_scanners.emplace_back(
 				    make_uniq<ColumnCountScanner>(buffer_manager, std::move(sniffing_state_machine),
-				                                  detection_error_handler, CSVReaderOptions::sniff_size));
+					                              detection_error_handler, CSVReaderOptions::sniff_size));
 			}
 		}
 	}
@@ -350,9 +350,14 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 
 	const bool comments_are_acceptable = AreCommentsAcceptable(sniffed_column_counts, num_cols, options);
 
+	const auto sniffed_quote =
+	    sniffed_column_counts.state_machine.dialect_options.state_machine_options.quote.GetValue();
+	// Only treat quoting as a preference signal when it is meaningful: either the default
+	// double quote was used, or the quoted fields contained escapes. Quoting values that
+	// contain no delimiter, newline or escape is ambiguous; the default dialect should
+	// win over it, so that single quotes inside values survive a COPY round trip.
 	const bool quoted =
-	    scanner->ever_quoted &&
-	    sniffed_column_counts.state_machine.dialect_options.state_machine_options.quote.GetValue() != '\0';
+	    scanner->ever_quoted && sniffed_quote != '\0' && (sniffed_quote == '\"' || scanner->ever_escaped);
 
 	// For our columns to match, we either don't have them manually set, or they match in value with the sniffed value
 	const bool columns_match_set =
@@ -542,7 +547,8 @@ void CSVSniffer::RefineCandidates() {
 		bool ever_quoted = false;
 		for (idx_t i = 0; i < successful_candidates.size(); i++) {
 			unique_ptr<ColumnCountScanner> cc_best_candidate = std::move(successful_candidates[i]);
-			if (cc_best_candidate->ever_quoted) {
+			const auto candidate_quote = cc_best_candidate->state_machine->state_machine_options.quote.GetValue();
+			if (cc_best_candidate->ever_quoted && (candidate_quote == '\"' || cc_best_candidate->ever_escaped)) {
 				if (cc_best_candidate->ever_escaped) {
 					// It can't be better than this
 					candidates.clear();
