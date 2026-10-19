@@ -154,6 +154,8 @@ public:
 
 	//! Whether this scope groups by the given expression, i.e. whether a reference to it resolves to a group
 	virtual bool MatchesGroup(ParsedExpression &expr);
+	//! Whether this scope groups by anything at all, i.e. whether `MatchesGroup` can ever match
+	virtual bool HasGroups();
 
 	//! Whether the name matches a select-list alias of this scope. Such a scope owns the name even
 	//! though qualification cannot resolve it, and it is the one that reports any error.

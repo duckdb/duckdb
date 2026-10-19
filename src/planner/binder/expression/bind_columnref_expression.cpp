@@ -48,6 +48,10 @@ bool ExpressionBinder::MatchesGroup(ParsedExpression &expr) {
 	return false;
 }
 
+bool ExpressionBinder::HasGroups() {
+	return false;
+}
+
 bool ExpressionBinder::ClaimsAlias(ColumnRefExpression &colref) {
 	return false;
 }

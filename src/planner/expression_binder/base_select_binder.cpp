@@ -48,8 +48,12 @@ bool BaseSelectBinder::ClaimsAlias(ColumnRefExpression &colref) {
 	return alias_map.find(colref.ColumnNames().back()) != alias_map.end();
 }
 
+bool BaseSelectBinder::HasGroups() {
+	return !node.bind_state.group_map.empty() || !node.bind_state.group_alias_map.empty();
+}
+
 bool BaseSelectBinder::MatchesGroup(ParsedExpression &expr) {
-	if (node.bind_state.group_map.empty() && node.bind_state.group_alias_map.empty()) {
+	if (!HasGroups()) {
 		return false;
 	}
 	// the groups are keyed by the qualified form, so qualify against this scope before matching
