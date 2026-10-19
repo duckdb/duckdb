@@ -188,16 +188,42 @@ SELECT * FROM
 ----
 <REGEX>:.*Expected one of:.*a table name.*
 
-# no hint when the alternatives are too many to be useful
+# a comma repairs the statement even where an alias would be accepted
 statement error
 SELECT 1 2
 ----
-<!REGEX>:.*Expected.*
+Missing ","
+
+# an operator keyword would also parse here (AND, LIKE), but the comma is what is reported
+statement error
+INSERT INTO t VALUES ('Bob' 6, 3)
+----
+syntax error at or near "6"
+Missing ","
 
 statement error
-SELECT 1 2
+CREATE TABLE t2(i INTEGER j INTEGER)
+----
+Missing ","
+
+# the comma is missing before the word that was taken as an alias
+statement error
+SELECT a x::INTEGER FROM t
+----
+syntax error at or near "x"
+Missing ","
+
+# two keywords repair this (AND, OR), so nothing is guessed
+statement error
+SELECT * FROM t WHERE a = 1 x = 2
 ----
 <!REGEX>:.*Missing.*
+
+# no hint when the alternatives are too many to be useful
+statement error
+SELECT 1 FROM t WHERE a = 1 2
+----
+<!REGEX>:.*Expected.*
 
 # errors in later statements of a multi-statement query
 statement error

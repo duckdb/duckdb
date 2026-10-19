@@ -27,6 +27,9 @@ struct ExpectedTokens {
 	bool AcceptsIdentifiers() const {
 		return !categories.empty() || !labels.empty();
 	}
+	bool HasKeyword(const string &keyword) const {
+		return std::find(keywords.begin(), keywords.end(), keyword) != keywords.end();
+	}
 };
 
 bool IsEndOfInput(const MatcherToken &token) {
@@ -253,42 +256,79 @@ string KeywordCorrectionHint(const TokenIterator &tokens, idx_t statement_start,
 	return string();
 }
 
-bool IsRepairCandidate(const string &keyword) {
-	return IsWordKeyword(keyword) || keyword == "," || keyword == ")" || keyword == "]" || keyword == "}";
+//! A token whose insertion repairs the statement, and the index it belongs before.
+struct MissingToken {
+	string text;
+	idx_t index = 0;
+};
+
+//! Whether inserting `text` before token `index` makes the whole statement parse.
+bool InsertionRepairs(const TokenIterator &tokens, idx_t statement_start, idx_t index, const string &text,
+                      const CompiledGrammar &grammar, const ParserOptions &options) {
+	auto repaired = EditedStatement(tokens, statement_start, index, text, false);
+	idx_t furthest;
+	return Recognize(repaired, grammar, options, furthest);
 }
 
-//! Expected tokens whose insertion at the failure point makes the whole statement parse.
-vector<string> FindMissingTokens(const TokenIterator &tokens, idx_t statement_start, idx_t error_index,
-                                 const ExpectedTokens &expected, const CompiledGrammar &grammar,
-                                 const ParserOptions &options) {
+//! The missing token at the failure point, if one can be named with confidence.
+//! `previous_expected` describes the position one token earlier, where a comma may also be missing.
+optional_idx FindMissingToken(const TokenIterator &tokens, idx_t statement_start, idx_t error_index,
+                              const ExpectedTokens &expected, const ExpectedTokens &previous_expected,
+                              const CompiledGrammar &grammar, const ParserOptions &options, MissingToken &result) {
 	// each candidate costs one parse of the statement
 	static constexpr idx_t MAX_REPAIR_CANDIDATES = 32;
+	// A forgotten comma or closing bracket is by far the most common cause, and the grammar usually also accepts
+	// an operator keyword there (AND, OR, LIKE) that is rarely what was meant - so punctuation is tried first.
+	const char *punctuations[] = {",", ")", "]", "}"};
+	for (auto punctuation : punctuations) {
+		if (expected.AcceptsIdentifiers() && punctuation != punctuations[0]) {
+			// where an identifier would also fit, only a comma is a safe guess
+			break;
+		}
+		if (expected.HasKeyword(punctuation) &&
+		    InsertionRepairs(tokens, statement_start, error_index, punctuation, grammar, options)) {
+			result = {punctuation, error_index};
+			return result.index;
+		}
+	}
+	// a comma may be missing one token earlier, when the previous word was taken as an alias
+	if (error_index > statement_start) {
+		auto &previous = tokens.GetToken(error_index - 1);
+		if (IsWordToken(previous) && !grammar.GetKeywordHelper().IsKeyword(previous.text) &&
+		    previous_expected.HasKeyword(",") &&
+		    InsertionRepairs(tokens, statement_start, error_index - 1, ",", grammar, options)) {
+			result = {",", error_index - 1};
+			return result.index;
+		}
+	}
 	if (expected.AcceptsIdentifiers()) {
 		// a missing identifier cannot be guessed, and a keyword that happens to parse (LIMIT ALL) is rarely meant
-		return {};
+		return optional_idx();
 	}
 	vector<string> candidates;
 	for (auto &keyword : expected.keywords) {
-		if (IsRepairCandidate(keyword)) {
+		if (IsWordKeyword(keyword)) {
 			candidates.push_back(keyword);
 		}
 	}
 	if (candidates.empty() || candidates.size() > MAX_REPAIR_CANDIDATES) {
-		return {};
+		return optional_idx();
 	}
-	vector<string> result;
+	vector<string> repairs;
 	for (auto &candidate : candidates) {
-		if (result.size() > 1) {
-			// the caller only acts on a unique repair
+		if (repairs.size() > 1) {
+			// only a unique keyword repair is reported
 			break;
 		}
-		auto repaired = EditedStatement(tokens, statement_start, error_index, candidate, false);
-		idx_t furthest;
-		if (Recognize(repaired, grammar, options, furthest)) {
-			result.push_back(candidate);
+		if (InsertionRepairs(tokens, statement_start, error_index, candidate, grammar, options)) {
+			repairs.push_back(candidate);
 		}
 	}
-	return result;
+	if (repairs.size() != 1) {
+		return optional_idx();
+	}
+	result = {repairs[0], error_index};
+	return result.index;
 }
 
 string DescribeExpected(const ExpectedTokens &expected, const PEGKeywordHelper &keyword_helper) {
@@ -341,28 +381,44 @@ ParserException PEGSyntaxError::Create(const TokenIterator &tokens, idx_t statem
 	if (compute_hints) {
 		expected = ComputeExpectedTokens(tokens, statement_start, error_index, grammar, options);
 	}
+	// what fits one token earlier - computed on demand, a misspelled keyword or a missing comma often hides there
+	ExpectedTokens previous_expected;
+	bool have_previous_expected = false;
+	auto get_previous_expected = [&]() -> const ExpectedTokens & {
+		if (!have_previous_expected) {
+			previous_expected = ComputeExpectedTokens(tokens, statement_start, error_index - 1, grammar, options);
+			have_previous_expected = true;
+		}
+		return previous_expected;
+	};
+	const bool previous_is_word = error_index > statement_start && IsWordToken(tokens.GetToken(error_index - 1)) &&
+	                              !grammar.GetKeywordHelper().IsKeyword(tokens.GetToken(error_index - 1).text);
+
 	idx_t report_index = error_index;
 	string hint;
 	if (compute_hints && !at_end && IsWordToken(error_token)) {
 		hint = KeywordCorrectionHint(tokens, statement_start, error_index, error_index, expected, grammar, options);
 	}
-	if (compute_hints && hint.empty() && error_index > statement_start) {
+	if (compute_hints && hint.empty() && previous_is_word) {
 		// a misspelled keyword is often swallowed as an alias, so the failure surfaces one token late
-		auto &previous = tokens.GetToken(error_index - 1);
-		if (IsWordToken(previous) && !grammar.GetKeywordHelper().IsKeyword(previous.text)) {
-			auto previous_expected = ComputeExpectedTokens(tokens, statement_start, error_index - 1, grammar, options);
-			hint = KeywordCorrectionHint(tokens, statement_start, error_index - 1, error_index, previous_expected,
-			                             grammar, options);
-			if (!hint.empty()) {
-				report_index = error_index - 1;
-				at_end = false;
-			}
+		hint = KeywordCorrectionHint(tokens, statement_start, error_index - 1, error_index, get_previous_expected(),
+		                             grammar, options);
+		if (!hint.empty()) {
+			report_index = error_index - 1;
+			at_end = false;
 		}
 	}
 	if (compute_hints && hint.empty()) {
-		auto missing = FindMissingTokens(tokens, statement_start, error_index, expected, grammar, options);
-		if (missing.size() == 1) {
-			hint = "Missing \"" + missing[0] + "\"";
+		MissingToken missing;
+		auto missing_index =
+		    FindMissingToken(tokens, statement_start, error_index, expected,
+		                     previous_is_word ? get_previous_expected() : ExpectedTokens(), grammar, options, missing);
+		if (missing_index.IsValid()) {
+			hint = "Missing \"" + missing.text + "\"";
+			if (missing.index != error_index) {
+				report_index = missing.index;
+				at_end = false;
+			}
 		}
 	}
 	if (hint.empty()) {
