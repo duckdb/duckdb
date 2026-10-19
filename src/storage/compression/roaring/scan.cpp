@@ -39,6 +39,10 @@ uint16_t ContainerSegmentScan::operator++(int) {
 
 //! RunContainer
 
+[[noreturn]] static void ThrowRoaringInvalidRun() {
+	throw DataCorruptionException("Corrupted Roaring segment: invalid run bounds or ordering");
+}
+
 template <class READER>
 RunContainerScanState<READER>::RunContainerScanState(idx_t container_index, idx_t container_size, idx_t count)
     : ContainerScanState(container_index, container_size), count(count) {
@@ -121,7 +125,15 @@ void UncompressedRunContainerScanState::LoadNextRunInternal() {
 		finished = true;
 		return;
 	}
+	const idx_t previous_end = run_index ? run.start + 1 + run.length : 0;
 	run = data[run_index];
+	const idx_t end = run.start + 1 + run.length;
+
+	// Finalization can make the last run end at container_size + 1.
+	const auto max_end = container_size + (run_index + 1 == count);
+	if (run.start < previous_end || run.start >= container_size || end > max_end) {
+		ThrowRoaringInvalidRun();
+	}
 	run_index++;
 }
 
@@ -145,7 +157,10 @@ void CompressedRunContainerScanState::LoadNextRunInternal() {
 	uint16_t end = segment++;
 	end += data[(run_index * 2) + 1];
 
-	D_ASSERT(end > start);
+	const idx_t previous_end = run_index ? run.start + 1 + run.length : 0;
+	if (end <= start || end > container_size || start < previous_end) {
+		ThrowRoaringInvalidRun();
+	}
 	run = RunContainerRLEPair {start, static_cast<uint16_t>(end - 1 - start)};
 	run_index++;
 }
