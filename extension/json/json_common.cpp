@@ -55,13 +55,15 @@ public:
 	}
 
 	inline bool IsWildCard() {
-		return key == "*";
+		// a quoted "*" is a regular key
+		return !quoted && key == "*";
 	}
 
 public:
 	idx_t chars_read;
 	bool recursive;
 	string key;
+	bool quoted = false;
 };
 
 static inline JSONKeyReadResult ReadString(const char *ptr, const char *const end, const bool escaped) {
@@ -170,6 +172,7 @@ static inline JSONKeyReadResult ReadKey(const char *ptr, const char *const end) 
 	}
 	if (escaped) {
 		result.chars_read += 2; // Account for surrounding quotes
+		result.quoted = true;
 	}
 	if (recursive) {
 		result.chars_read += 1;
