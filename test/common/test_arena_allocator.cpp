@@ -1,105 +1,102 @@
 #include "catch.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
-#include "duckdb/common/exception.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
+
+#include <cstring>
 
 using namespace duckdb;
 
-namespace {
-
-struct ArenaLifetimeObject {
-	ArenaLifetimeObject(ArenaAllocator &arena, vector<idx_t> &destroyed, bool &valid, idx_t id, bool fail = false)
-	    : destroyed(destroyed), valid(valid), id(id), values(arena) {
-		values.reserve(4096);
-		values.push_back(id);
-		if (fail) {
-			throw InvalidInputException("Construction failed");
-		}
-	}
-
-	~ArenaLifetimeObject() {
-		valid = valid && values[0] == id;
-		destroyed.push_back(id);
-	}
-
-	vector<idx_t> &destroyed;
-	bool &valid;
-	idx_t id;
-	arena_vector<idx_t> values;
-};
-
-} // namespace
-
-TEST_CASE("Arena-owned destructors run before storage is released", "[arena_allocator]") {
-	vector<idx_t> destroyed;
-	destroyed.reserve(16);
-	bool valid = true;
-	{
-		ArenaAllocator arena(Allocator::DefaultAllocator(), 64);
-		arena.MakeWithDestructor<ArenaLifetimeObject>(arena, destroyed, valid, 1);
-		arena.MakeWithDestructor<ArenaLifetimeObject>(arena, destroyed, valid, 2);
-		REQUIRE(destroyed.empty());
-		SECTION("destruction") {
-		}
-		SECTION("reset retains reusable storage") {
-			arena.Reset();
-			REQUIRE(destroyed == vector<idx_t> {2, 1});
-			auto head = arena.GetHead();
-			REQUIRE(head);
-			memset(arena.Allocate(head->maximum_size), 42, head->maximum_size);
-			REQUIRE(arena.GetHead() == head);
-		}
-		SECTION("free all") {
-			arena.FreeAll();
-			REQUIRE(arena.IsEmpty());
-		}
-		SECTION("destroy") {
-			arena.Destroy();
-			REQUIRE(arena.IsEmpty());
-		}
-		SECTION("move transfers destruction") {
-			ArenaAllocator moved(Allocator::DefaultAllocator());
-			arena.Move(moved);
-			arena.Destroy();
-			REQUIRE(destroyed.empty());
-		}
-	}
-	REQUIRE(valid);
-	REQUIRE(destroyed == vector<idx_t> {2, 1});
+TEST_CASE("Arena reset preserves the bounds of an unaligned chunk", "[arena_allocator]") {
+	ArenaAllocator arena(Allocator::DefaultAllocator(), 1);
+	arena.Allocate(1);
+	auto head = arena.GetHead();
+	arena.AlignNext();
+	arena.Reset();
+	auto data = arena.Allocate(head->maximum_size);
+	memset(data, 42, head->maximum_size);
+	REQUIRE(data[0] == 42);
+	REQUIRE(data[head->maximum_size - 1] == 42);
+#ifdef DUCKDB_ARENA_ALLOCATOR_ASAN
+	REQUIRE(__asan_address_is_poisoned(data + head->maximum_size));
+#endif
 }
 
-TEST_CASE("Arena rewind only destroys objects after its saved position", "[arena_allocator]") {
-	vector<idx_t> destroyed;
-	destroyed.reserve(16);
-	bool valid = true;
+TEST_CASE("Arena reset reuses storage from discarded containers", "[arena_allocator]") {
 	ArenaAllocator arena(Allocator::DefaultAllocator(), 64);
-	const auto empty = arena.GetPosition();
-	auto first = arena.MakeWithDestructor<ArenaLifetimeObject>(arena, destroyed, valid, 1);
-	const auto position = arena.GetPosition();
-	arena.MakeWithDestructor<ArenaLifetimeObject>(arena, destroyed, valid, 2);
-	arena.Rewind(position);
-	REQUIRE(destroyed == vector<idx_t> {2});
-	REQUIRE(first->values[0] == 1);
-	REQUIRE(arena.GetPosition().chunk == position.chunk);
-	REQUIRE(arena.GetPosition().current_position == position.current_position);
-	arena.MakeWithDestructor<ArenaLifetimeObject>(arena, destroyed, valid, 3);
-	arena.Rewind(empty);
-	REQUIRE(arena.IsEmpty());
-	REQUIRE(valid);
-	REQUIRE(destroyed == vector<idx_t> {2, 3, 1});
+	auto values = arena.Make<arena_vector<uint64_t>>(arena);
+	values->reserve(4096);
+	values->push_back(42);
+	auto head = arena.GetHead();
+	REQUIRE(head->prev == nullptr);
+	REQUIRE(head->next);
+	arena.Reset();
+	REQUIRE(arena.GetHead() == head);
+	REQUIRE_FALSE(head->next);
+	auto data = arena.Allocate(head->maximum_size);
+	memset(data, 42, head->maximum_size);
+	REQUIRE(data[0] == 42);
+	REQUIRE(data[head->maximum_size - 1] == 42);
 }
 
-TEST_CASE("Arena-owned destruction survives exceptions", "[arena_allocator]") {
-	vector<idx_t> destroyed;
-	destroyed.reserve(16);
-	bool valid = true;
-	try {
-		ArenaAllocator arena(Allocator::DefaultAllocator());
-		arena.MakeWithDestructor<ArenaLifetimeObject>(arena, destroyed, valid, 1);
-		arena.MakeWithDestructor<ArenaLifetimeObject>(arena, destroyed, valid, 2, true);
-		FAIL("Construction should have failed");
-	} catch (const InvalidInputException &) {
+TEST_CASE("Arena rewind reuses discarded storage and preserves live containers", "[arena_allocator]") {
+	ArenaAllocator arena(Allocator::DefaultAllocator());
+	auto live = arena.MakePtr<arena_vector<uint64_t>>(arena);
+	live->reserve(16);
+	live->push_back(42);
+	// Save an unaligned position to exercise the boundary with retained storage.
+	memset(arena.Allocate(3), 84, 3);
+	const auto position = arena.GetPosition();
+#ifdef DUCKDB_ARENA_ALLOCATOR_ASAN
+	const auto poisoned = __asan_address_is_poisoned(live->data() + 1);
+#endif
+	auto discarded = arena.Make<arena_vector<uint64_t>>(arena);
+	SECTION("within one chunk") {
+		discarded->reserve(32);
+		REQUIRE(arena.GetHead() == position.chunk);
 	}
-	REQUIRE(valid);
-	REQUIRE(destroyed == vector<idx_t> {1});
+	SECTION("across chunks") {
+		discarded->reserve(4096);
+		REQUIRE(arena.GetHead() != position.chunk);
+	}
+	discarded->push_back(13);
+	arena.Rewind(position);
+	REQUIRE(arena.GetHead() == position.chunk);
+	REQUIRE(arena.GetPosition().current_position == position.current_position);
+	const auto size = position.chunk->maximum_size - position.current_position;
+	memset(arena.Allocate(size), 13, size);
+#ifdef DUCKDB_ARENA_ALLOCATOR_ASAN
+	REQUIRE(__asan_address_is_poisoned(live->data() + 1) == poisoned);
+#endif
+	REQUIRE((*live)[0] == 42);
+	live->push_back(84);
+	REQUIRE((*live)[1] == 84);
+}
+
+TEST_CASE("Arena tail shrinking makes discarded capacity reusable", "[arena_allocator]") {
+	ArenaAllocator arena(Allocator::DefaultAllocator());
+	auto values = arena.Make<arena_vector<uint64_t>>(arena);
+	values->reserve(128);
+	values->push_back(42);
+	const auto buffer = data_ptr_cast(values->data());
+	const auto old_size = values->capacity() * sizeof(uint64_t);
+	const auto keep_size = sizeof(uint64_t);
+	bool regrow = false;
+	SECTION("shrink head") {
+		arena.ShrinkHead(old_size - keep_size);
+	}
+	SECTION("reallocate smaller") {
+		REQUIRE(arena.Reallocate(buffer, old_size, keep_size) == buffer);
+	}
+	SECTION("reallocate smaller then grow in place") {
+		REQUIRE(arena.Reallocate(buffer, old_size, keep_size) == buffer);
+		regrow = true;
+	}
+	if (regrow) {
+		REQUIRE(arena.Reallocate(buffer, keep_size, old_size) == buffer);
+	} else {
+		REQUIRE(arena.Allocate(old_size - keep_size) == buffer + keep_size);
+	}
+	REQUIRE(*reinterpret_cast<uint64_t *>(buffer) == 42);
+	memset(buffer + keep_size, 84, old_size - keep_size);
+	REQUIRE(buffer[old_size - 1] == 84);
 }

@@ -12,15 +12,36 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/string.hpp"
 #include "duckdb/common/arena_containers/arena_ptr.hpp"
-#include "duckdb/common/optional_ptr.hpp"
 
-#include <type_traits>
+#if defined(__SANITIZE_ADDRESS__)
+#define DUCKDB_ARENA_ALLOCATOR_ASAN
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define DUCKDB_ARENA_ALLOCATOR_ASAN
+#endif
+#endif
+
+#ifdef DUCKDB_ARENA_ALLOCATOR_ASAN
+#include <sanitizer/asan_interface.h>
+#endif
 
 namespace duckdb {
 
 struct ArenaChunk {
 	ArenaChunk(Allocator &allocator, idx_t size);
 	~ArenaChunk();
+
+	void ResetPosition(idx_t position) {
+		D_ASSERT(position <= current_position);
+#ifdef DUCKDB_ARENA_ALLOCATOR_ASAN
+		// Discarded arena containers can leave their unused capacity poisoned.
+		const auto end = MinValue(current_position, maximum_size);
+		if (position < end) {
+			__asan_unpoison_memory_region(data.get() + position, end - position);
+		}
+#endif
+		current_position = position;
+	}
 
 	AllocatedData data;
 	idx_t current_position;
@@ -30,26 +51,6 @@ struct ArenaChunk {
 };
 
 class ArenaAllocator {
-private:
-	struct Destructor {
-		optional_ptr<Destructor> previous;
-		void (*destroy)(Destructor &);
-	};
-
-	template <class T>
-	struct ManagedObject : Destructor {
-		template <class... ARGS>
-		explicit ManagedObject(ARGS &&... args) : value(std::forward<ARGS>(args)...) {
-			this->destroy = Destroy;
-		}
-
-		static void Destroy(Destructor &entry) {
-			static_cast<ManagedObject &>(entry).~ManagedObject();
-		}
-
-		T value;
-	};
-
 public:
 	static constexpr const idx_t ARENA_ALLOCATOR_INITIAL_CAPACITY = 2048;
 	static constexpr const idx_t ARENA_ALLOCATOR_MAX_CAPACITY = 1ULL << 24ULL; // 16MB
@@ -80,17 +81,13 @@ public:
 	//! Note that we can ONLY safely call this method if Allocate has been called previously with a size >= shrink_size
 	DUCKDB_API void ShrinkHead(idx_t shrink_size) const {
 		D_ASSERT(head && head->current_position >= shrink_size);
-		head->current_position -= shrink_size;
+		head->ResetPosition(head->current_position - shrink_size);
 	}
 
 	//! A position in the arena - everything allocated after it was taken can be released again with Rewind
 	struct Position {
 		ArenaChunk *chunk = nullptr;
 		idx_t current_position = 0;
-
-	private:
-		friend class ArenaAllocator;
-		optional_ptr<Destructor> destructor;
 	};
 	//! Returns the current position of the arena
 	DUCKDB_API Position GetPosition() const;
@@ -129,16 +126,6 @@ public:
 		return new (mem) T(std::forward<ARGS>(args)...);
 	}
 
-	//! Owns the object's destructor as well as its storage, until the arena is rewound, reset or destroyed.
-	template <class T, class... ARGS>
-	T *MakeWithDestructor(ARGS &&... args) {
-		static_assert(std::is_nothrow_destructible<T>::value, "Arena-owned destructors must not throw");
-		auto object = Make<ManagedObject<T>>(std::forward<ARGS>(args)...);
-		object->previous = destructors;
-		destructors = object;
-		return &object->value;
-	}
-
 	template <class T, class... ARGS>
 	arena_ptr<T> MakePtr(ARGS &&... args) {
 		return arena_ptr<T>(Make<T>(std::forward<ARGS>(args)...));
@@ -170,7 +157,6 @@ public:
 
 private:
 	void AllocateNewBlock(idx_t min_size);
-	void DestroyObjects(optional_ptr<Destructor> until = nullptr);
 
 private:
 	//! Internal allocator that is used by the arena allocator
@@ -182,8 +168,6 @@ private:
 	Allocator arena_allocator;
 	//! The total allocated size
 	idx_t allocated_size = 0;
-	//! Destructors run before any arena storage is released, in reverse construction order.
-	optional_ptr<Destructor> destructors;
 };
 
 } // namespace duckdb

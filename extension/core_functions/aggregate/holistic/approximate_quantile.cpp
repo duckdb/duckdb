@@ -158,7 +158,7 @@ struct ApproxQuantileOperation {
 		if (!state.h) {
 			// the digest and its buffers live in the aggregate's arena, so an aborted query does not leak them
 			auto &allocator = unary_input.input.allocator;
-			state.h = allocator.MakeWithDestructor<duckdb_tdigest::TDigest>(allocator, 100);
+			state.h = allocator.Make<duckdb_tdigest::TDigest>(allocator, 100);
 		}
 		state.h->add(val);
 		state.pos++;
@@ -172,7 +172,7 @@ struct ApproxQuantileOperation {
 		D_ASSERT(source.h);
 		if (!target.h) {
 			auto &allocator = aggr_input_data.allocator;
-			target.h = allocator.MakeWithDestructor<duckdb_tdigest::TDigest>(allocator, 100);
+			target.h = allocator.Make<duckdb_tdigest::TDigest>(allocator, 100);
 		}
 		if (!TryAddOperator::Operation(target.pos, source.pos, target.pos)) {
 			throw OutOfRangeException("Overflow in aggregate state combine");
@@ -334,7 +334,7 @@ void ApproxQuantileImportState(AggregateImportInputData &input) {
 		if (Value::IsNan(min_entry.GetValue()) || Value::IsNan(max_entry.GetValue())) {
 			throw InvalidInputException("Invalid approx_quantile state - min and max cannot be NaN");
 		}
-		auto digest = input.allocator.MakeWithDestructor<duckdb_tdigest::TDigest>(
+		auto digest = input.allocator.Make<duckdb_tdigest::TDigest>(
 		    std::move(centroids), duckdb::arena_vector<duckdb_tdigest::Centroid>(input.allocator), 100, 0, 0);
 		digest->setMinMax(min_entry.GetValue(), max_entry.GetValue());
 		state.pos = count_entry.GetValue();

@@ -248,8 +248,14 @@ TEST_CASE("Allocation cache reuses whole allocations and releases them with its 
 	REQUIRE(live_bytes.load() == 0);
 }
 
-TEST_CASE("Allocation cache can reuse arena storage after container destruction", "[api][allocation_cache]") {
+TEST_CASE("Allocation cache can reuse arena storage without container destruction", "[api][allocation_cache]") {
 	constexpr idx_t SIZE = 512 * 1024;
+	bool pinned = true;
+#if defined(__linux__)
+	AllocationCacheTestAffinity affinity;
+	const auto cpus = affinity.CPUs();
+	pinned = !cpus.empty() && affinity.Pin(cpus[0]);
+#endif
 	DBConfig config;
 	config.options.maximum_threads = 1;
 	config.options.async_threads = 0;
@@ -257,13 +263,39 @@ TEST_CASE("Allocation cache can reuse arena storage after container destruction"
 	DuckDB db(nullptr, &config);
 	auto &allocator = BufferManager::GetBufferManager(*db.instance).GetBufferAllocator();
 	for (idx_t i = 0; i < 10; i++) {
+		data_ptr_t retired;
 		{
 			ArenaAllocator arena(allocator, SIZE / 2);
-			auto &values = *arena.MakeWithDestructor<arena_vector<uint64_t>>(arena);
+			const auto empty = arena.GetPosition();
+			auto &values = *arena.Make<arena_vector<uint64_t>>(arena);
 			values.reserve(1024);
 			values.push_back(42);
+			retired = arena.GetHead()->data.get();
+			SECTION("destruction") {
+			}
+			SECTION("free all") {
+				arena.FreeAll();
+			}
+			SECTION("destroy") {
+				arena.Destroy();
+			}
+			SECTION("rewind to empty") {
+				arena.Rewind(empty);
+			}
+			SECTION("reset releases older chunks") {
+				arena.Allocate(SIZE);
+				REQUIRE(arena.GetHead()->data.get() != retired);
+				arena.Reset();
+			}
+			SECTION("move transfers storage") {
+				ArenaAllocator moved(allocator);
+				arena.Move(moved);
+			}
 		}
 		auto data = allocator.Allocate(SIZE);
+		if (pinned) {
+			REQUIRE(data.get() == retired);
+		}
 		memset(data.get(), 42, SIZE);
 		REQUIRE(data.get()[0] == 42);
 		REQUIRE(data.get()[SIZE - 1] == 42);

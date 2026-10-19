@@ -13,6 +13,7 @@ ArenaChunk::ArenaChunk(Allocator &allocator, idx_t size) : current_position(0), 
 	data = allocator.Allocate(size);
 }
 ArenaChunk::~ArenaChunk() {
+	ResetPosition(0);
 	if (next) {
 		auto current_next = std::move(next);
 		while (current_next) {
@@ -58,16 +59,6 @@ ArenaAllocator::ArenaAllocator(Allocator &allocator, idx_t initial_capacity)
 }
 
 ArenaAllocator::~ArenaAllocator() {
-	DestroyObjects();
-}
-
-void ArenaAllocator::DestroyObjects(optional_ptr<Destructor> until) {
-	while (destructors.get() != until.get()) {
-		D_ASSERT(destructors);
-		auto entry = destructors;
-		destructors = entry->previous;
-		entry->destroy(*entry);
-	}
 }
 
 void ArenaAllocator::AllocateNewBlock(idx_t min_size) {
@@ -116,7 +107,11 @@ data_ptr_t ArenaAllocator::Reallocate(data_ptr_t pointer, idx_t old_size, idx_t 
 	if (pointer == head_ptr &&
 	    (size < old_size || current_position + diff <= NumericCast<int64_t>(head->maximum_size))) {
 		// passed pointer is the head pointer, and the diff fits on the current chunk
-		head->current_position = NumericCast<idx_t>(current_position + diff);
+		if (size < old_size) {
+			head->ResetPosition(NumericCast<idx_t>(current_position + diff));
+		} else {
+			head->current_position = NumericCast<idx_t>(current_position + diff);
+		}
 		return pointer;
 	} else {
 		// allocate new memory
@@ -145,7 +140,6 @@ data_ptr_t ArenaAllocator::ReallocateAligned(data_ptr_t pointer, idx_t old_size,
 
 ArenaAllocator::Position ArenaAllocator::GetPosition() const {
 	Position result;
-	result.destructor = destructors;
 	if (head) {
 		result.chunk = head.get();
 		result.current_position = head->current_position;
@@ -154,7 +148,6 @@ ArenaAllocator::Position ArenaAllocator::GetPosition() const {
 }
 
 void ArenaAllocator::Rewind(const Position &position) {
-	DestroyObjects(position.destructor);
 	if (!position.chunk) {
 		// nothing was allocated when the position was taken
 		FreeAll();
@@ -169,7 +162,7 @@ void ArenaAllocator::Rewind(const Position &position) {
 		head->prev = nullptr;
 	}
 	D_ASSERT(position.current_position <= head->current_position);
-	head->current_position = position.current_position;
+	head->ResetPosition(position.current_position);
 }
 
 void ArenaAllocator::FreeAll() {
@@ -182,7 +175,6 @@ void ArenaAllocator::FreeAll() {
 }
 
 void ArenaAllocator::Reset() {
-	DestroyObjects();
 	if (head) {
 		// destroy all chunks except the current one
 		if (head->next) {
@@ -194,14 +186,13 @@ void ArenaAllocator::Reset() {
 		tail = head.get();
 
 		// reset the head
-		head->current_position = 0;
+		head->ResetPosition(0);
 		head->prev = nullptr;
 	}
 	allocated_size = 0;
 }
 
 void ArenaAllocator::Destroy() {
-	DestroyObjects();
 	head = nullptr;
 	tail = nullptr;
 	allocated_size = 0;
@@ -209,13 +200,10 @@ void ArenaAllocator::Destroy() {
 
 void ArenaAllocator::Move(ArenaAllocator &other) {
 	D_ASSERT(!other.head);
-	D_ASSERT(!other.destructors);
 	other.tail = tail;
 	other.head = std::move(head);
 	other.initial_capacity = initial_capacity;
 	other.allocated_size = allocated_size;
-	other.destructors = destructors;
-	destructors = nullptr;
 	Destroy();
 }
 
