@@ -1247,7 +1247,22 @@
     "includes": [
       "duckdb/parser/literal.hpp"
     ],
-    "custom_implementation": true
+    "members": [
+      {
+        "id": 100,
+        "name": "kind",
+        "type": "LiteralKind"
+      },
+      {
+        "id": 101,
+        "name": "text",
+        "type": "string"
+      }
+    ],
+    "methods": {
+      "Verify": []
+    },
+    "pointer_type": "none"
   },
   {
     "class": "interval_t",

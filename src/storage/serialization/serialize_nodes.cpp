@@ -431,6 +431,7 @@ Literal Literal::Deserialize(Deserializer &deserializer) {
 	Literal result;
 	deserializer.ReadProperty<LiteralKind>(100, "kind", result.kind);
 	deserializer.ReadPropertyWithDefault<string>(101, "text", result.text);
+	result.Verify();
 	return result;
 }
 
