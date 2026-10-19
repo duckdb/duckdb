@@ -1605,8 +1605,9 @@ ExplainableStatements <-
     SetStatement /
     ResetStatement
 
-ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral GenericCopyOptionList?
+ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral ExportOptions?
 ExportSource <- CatalogName 'TO'
+ExportOptions <- GenericCopyOptionList / SpecializedOptionList
 ImportStatement <- 'IMPORT' 'DATABASE' StringLiteral
 
 ColumnReference <- NestedSchemaTableColumnName / CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName / NestedColumnName

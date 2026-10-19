@@ -780,6 +780,7 @@ GenericCopyOptionList:
     - CopyOptions
     - CopyOptionList
     - SpecializedOptionList
+    - ExportOptions
     - ExplainOptionList
 
 WindowBoundaryExpressionList:

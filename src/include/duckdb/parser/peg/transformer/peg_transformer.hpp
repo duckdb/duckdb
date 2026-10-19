@@ -2200,6 +2200,9 @@ public:
 	static void InitializeExportSourceTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeExportSourceTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
+	static void InitializeExportOptionsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeExportOptionsTrampoline(PEGTransformer &transformer,
+	                                                                       GeneratedTransformProcess &process);
 	static void InitializeImportStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeImportStatementTrampoline(PEGTransformer &transformer,
 	                                                                         GeneratedTransformProcess &process);
@@ -5102,10 +5105,10 @@ public:
 	static Identifier TransformExplainOptionName(PEGTransformer &transformer, ParseResult &choice_result);
 	static unique_ptr<SQLStatement>
 	TransformExplainSelectStatement(PEGTransformer &transformer, unique_ptr<SelectStatement> select_statement_internal);
-	static unique_ptr<SQLStatement>
-	TransformExportStatement(PEGTransformer &transformer, const optional<string> &export_source,
-	                         const string &string_literal,
-	                         const optional<vector<GenericCopyOption>> &generic_copy_option_list);
+	static unique_ptr<SQLStatement> TransformExportStatement(PEGTransformer &transformer,
+	                                                         const optional<string> &export_source,
+	                                                         const string &string_literal,
+	                                                         const optional<vector<GenericCopyOption>> &export_options);
 	static string TransformExportSource(PEGTransformer &transformer, const Identifier &catalog_name);
 	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer, const string &string_literal);
 	static unique_ptr<ParsedExpression> TransformColumnReference(PEGTransformer &transformer,
