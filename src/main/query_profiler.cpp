@@ -1008,6 +1008,17 @@ QueryProfileResult &QueryProfiler::GetResult() {
 	return *result_tree;
 }
 
+void QueryProfiler::GetFinalizedProfileUnderLock(
+    const std::function<void(optional_ptr<const GatheredMetrics>, optional_ptr<const ProfilingNode>)> &callback) const {
+	lock_guard<std::mutex> guard(lock);
+	// a profile left over from before profiling was disabled is stale, and a running one is not finalized yet
+	if (!IsEnabled() || running || !metrics_finalized) {
+		callback(nullptr, nullptr);
+		return;
+	}
+	callback(metrics.get(), root.get());
+}
+
 bool QueryProfiler::HasRoot() const {
 	return root != nullptr;
 }

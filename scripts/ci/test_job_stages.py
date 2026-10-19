@@ -173,7 +173,7 @@ class JobStagesTest(unittest.TestCase):
             self.assertTrue(workflow_dispatch_selection.optimized_release)
             self.assertEqual(
                 workflow_dispatch_selection.extension_opt_in_archs,
-                "windows_arm64;linux_amd64_musl;linux_arm64_musl",
+                "windows_arm64;osx_amd64;linux_amd64_musl;linux_arm64_musl",
             )
             self.assertEqual(len(workflow_dispatch_selection.linux_release_matrix), 4)
             self.assertEqual(

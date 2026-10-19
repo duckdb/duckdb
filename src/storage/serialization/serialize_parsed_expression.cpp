@@ -228,17 +228,6 @@ unique_ptr<ParsedExpression> LambdaRefExpression::Deserialize(Deserializer &dese
 	return std::move(result);
 }
 
-void OperatorExpression::Serialize(Serializer &serializer) const {
-	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "children", children);
-}
-
-unique_ptr<ParsedExpression> OperatorExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<OperatorExpression>(new OperatorExpression(deserializer.Get<ExpressionType>()));
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "children", result->children);
-	return std::move(result);
-}
-
 void ParameterExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<duckdb::Identifier>(200, "identifier", identifier);
