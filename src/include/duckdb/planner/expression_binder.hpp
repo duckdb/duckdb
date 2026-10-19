@@ -39,6 +39,9 @@ class CatalogEntry;
 class SimpleFunction;
 class HavingBinder;
 class ColumnAliasBinder;
+class LogicalOperator;
+class LogicalProjection;
+class LogicalAggregate;
 
 struct DummyBinding;
 struct SelectBindState;
@@ -267,11 +270,13 @@ protected:
 	                                  vector<unique_ptr<Expression>> children);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
-	//! Rewrite TRY over a scalar subquery into an ordinary subquery that masks execution errors, then bind it
+	//! Bind TRY over a scalar subquery as an ordinary subquery, then lower the TRY onto its bound plan
 	BindResult BindTrySubquery(OperatorExpression &op, idx_t depth);
-	//! Push TRY onto the maskable positions of a TRY subquery select expression and collect HAS_ERROR gates
-	void RewriteTrySubqueryExpression(unique_ptr<ParsedExpression> &expr, vector<unique_ptr<ParsedExpression>> &gates,
-	                                  bool &has_aggregate);
+	//! Lower TRY onto the maskable positions of a bound subquery plan, before the subquery is flattened
+	void LowerTrySubquery(const OperatorExpression &op, LogicalOperator &root);
+	//! Wrap the inputs of the gated aggregates in TRY and gate the projected expression on HAS_ERROR probes
+	void GateTryAggregates(const OperatorExpression &op, LogicalProjection &projection, idx_t projection_idx,
+	                       LogicalAggregate &aggregate, const vector<idx_t> &aggregate_positions);
 	BindResult BindPositionalReference(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression);
 
 	void TransformCapturedLambdaColumn(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,

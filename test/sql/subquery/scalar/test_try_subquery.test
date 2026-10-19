@@ -1,11 +1,12 @@
 # name: test/sql/subquery/scalar/test_try_subquery.test
-# description: TRY over scalar subqueries is rewritten into an ordinary subquery before flattening.
+# description: TRY over scalar subqueries binds the subquery normally and lowers TRY onto the bound plan.
 # group: [scalar]
 
 # Plain projections get TRY pushed onto the projected expression. Aggregate projections
 # gate the result on HAS_ERROR probes of the aggregate inputs, so an input error turns
 # the aggregated result into NULL. Errors outside these positions (WHERE, ORDER BY, the
-# projection above an aggregation, the one-row cardinality check) propagate deliberately.
+# projection above an aggregation, nested subqueries, the one-row cardinality check)
+# propagate deliberately.
 
 statement ok
 CREATE TABLE integers(i INTEGER);
@@ -213,6 +214,18 @@ SELECT TRY((SELECT max(10 // i) FROM integers GROUP BY i % 2))
 ----
 More than one row returned by a subquery
 
+# a select item that is a group expression is computed by the grouping, outside the
+# maskable positions, so its errors propagate like WHERE or ORDER BY errors
+statement error
+SELECT TRY((SELECT 10 // (x - 1) FROM (VALUES (1)) t(x) GROUP BY ALL))
+----
+Division by zero
+
+query I
+SELECT TRY((SELECT 10 // (x - 1) FROM (VALUES (3)) t(x) GROUP BY ALL))
+----
+5
+
 # nested TRY over a scalar subquery
 query I
 SELECT TRY(TRY((SELECT max(10 // (i - 3)) FROM integers)))
@@ -224,6 +237,29 @@ query I
 SELECT TRY((SELECT (SELECT max(10 // (i - 3)) FROM integers)))
 ----
 NULL
+
+# nested subqueries inside a larger select item are flattened before TRY is lowered;
+# the surrounding expression is maskable, errors inside the nested subquery propagate
+query I
+SELECT TRY((SELECT (SELECT 1) + 1))
+----
+2
+
+query I
+SELECT TRY((SELECT (SELECT 3) // 0))
+----
+NULL
+
+statement error
+SELECT TRY((SELECT (SELECT 10 // (i - 3) FROM integers WHERE i = 3) + 1))
+----
+Division by zero
+
+# EXISTS nested inside the select item binds normally
+query I
+SELECT TRY((SELECT EXISTS(SELECT 1)))
+----
+true
 
 # multiple TRY subqueries in one query
 query II
@@ -357,12 +393,18 @@ SELECT TRY((SELECT random()))
 ----
 TRY can not be used in combination with a volatile function
 
-# unsupported shapes are rejected with a binder error
+# a star expression is expanded during binding, so TRY lowers onto the expanded select item
+query I
+SELECT TRY((SELECT * FROM integers WHERE i = 2))
+----
+2
+
 statement error
 SELECT TRY((SELECT * FROM integers))
 ----
-TRY over a subquery with a star expression in its select list is not supported
+More than one row returned by a subquery
 
+# unsupported shapes are rejected with a binder error
 statement error
 SELECT TRY((SELECT 1, 2))
 ----
@@ -389,22 +431,138 @@ SELECT TRY((SELECT string_agg(i::VARCHAR, ',' ORDER BY i) FROM integers))
 TRY over a subquery with an ordered aggregate is not supported
 
 statement error
-SELECT TRY((SELECT max(i + (SELECT 1)) FROM integers))
-----
-TRY over a subquery with a subquery in an aggregate argument is not supported
-
-statement error
 SELECT TRY((SELECT unnest([1])))
 ----
 TRY over a subquery with UNNEST in its select list is not supported
 
+# a nested subquery in an aggregate argument is flattened below the aggregate; the surrounding
+# argument expression is maskable, errors inside the nested subquery propagate
+query I
+SELECT TRY((SELECT max(i + (SELECT 1)) FROM integers))
+----
+4
+
+query I
+SELECT TRY((SELECT max(10 // (i - (SELECT 3))) FROM integers))
+----
+NULL
+
+statement error
+SELECT TRY((SELECT max(i + (SELECT min(10 // (i2.i - 3)) FROM integers i2)) FROM integers))
+----
+Division by zero
+
+# a macro is expanded during binding, so TRY lowers onto the expansion
 statement ok
 CREATE MACRO plus_one(a) AS a + 1;
 
-statement error
+query I
 SELECT TRY((SELECT plus_one(i) FROM integers WHERE i = 1))
 ----
-TRY over a subquery with a macro in its select list is not supported
+2
+
+statement ok
+CREATE MACRO div_shift(a) AS 10 // (a - 3);
+
+query I
+SELECT TRY((SELECT div_shift(i) FROM integers WHERE i = 3))
+----
+NULL
+
+# a macro expanding to an aggregate is classified after expansion
+statement ok
+CREATE MACRO agg_div(c) AS max(10 // (c - 3));
+
+query I
+SELECT TRY((SELECT agg_div(i) FROM integers))
+----
+NULL
+
+# regression: a dot call in the subquery select list resolves in the subquery scope,
+# exactly as without TRY
+query I
+SELECT TRY((SELECT s.upper() FROM (VALUES ('inner')) a(s))) FROM (VALUES ('outer')) b(s)
+----
+INNER
+
+query I
+SELECT (SELECT s.upper() FROM (VALUES ('inner')) a(s)) FROM (VALUES ('outer')) b(s)
+----
+INNER
+
+query I
+SELECT TRY((SELECT s.upper() || b.s FROM (VALUES ('inner')) a(s))) FROM (VALUES ('outer')) b(s)
+----
+INNERouter
+
+# regression: an aggregate owned by the outer query is not pulled into the subquery gate
+query I
+SELECT TRY((SELECT max(i) + max(o.x) FROM (VALUES (10)) q(i))) FROM (VALUES (1), (2)) o(x)
+----
+12
+
+query I
+SELECT (SELECT max(i) + max(o.x) FROM (VALUES (10)) q(i)) FROM (VALUES (1), (2)) o(x)
+----
+12
+
+# an error in the subquery-owned aggregate input still masks the mixed-scope result
+query I
+SELECT TRY((SELECT max(10 // (i - 10)) + max(o.x) FROM (VALUES (10)) q(i))) FROM (VALUES (1), (2)) o(x)
+----
+NULL
+
+# regression: literal arguments keep their coercion through overload resolution
+query I
+SELECT TRY((SELECT bool_and('true')))
+----
+true
+
+query I
+SELECT TRY((SELECT bool_and('true') FROM (VALUES (1)) t(x) WHERE x = o.x)) FROM (VALUES (1)) o(x)
+----
+true
+
+# an aggregate shared between the select item and HAVING is bound once; an input error
+# masks the whole result through the gate
+query I
+SELECT TRY((SELECT max(10 // (i - 3)) FROM integers HAVING max(10 // (i - 3)) IS NOT NULL))
+----
+NULL
+
+# an aggregate only referenced by HAVING is outside the maskable positions and propagates
+statement error
+SELECT TRY((SELECT max(i) FROM integers HAVING min(10 // (i - 3)) < 100))
+----
+Division by zero
+
+# count(*) combined with a gated aggregate
+query I
+SELECT TRY((SELECT count(*) + max(10 // (i - 3)) FROM integers))
+----
+NULL
+
+query I
+SELECT TRY((SELECT count(*) + max(10 // i) FROM integers))
+----
+13
+
+# the prune projection above an ORDER BY is followed down to the computing projection
+query I
+SELECT TRY((SELECT 10 // (i - 1) FROM integers WHERE i = 1 ORDER BY i))
+----
+NULL
+
+query I
+SELECT TRY((SELECT DISTINCT 10 // (i - 1) FROM integers WHERE i = 1))
+----
+NULL
+
+# volatile aggregate inputs remain rejected
+statement error
+SELECT TRY((SELECT max(random()) FROM integers))
+----
+TRY can not be used in combination with a volatile function
 
 # protection: scalar subqueries without TRY are planned as before
 query I
