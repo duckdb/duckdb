@@ -17,7 +17,7 @@ out of range
 statement error
 SELECT date_trunc('year', TIMESTAMPTZ '290309-12-22 (BC) 00:00:00+00')
 ----
-overflows timestamp range
+out of range
 
 statement error
 SELECT time_bucket(INTERVAL '1 year', TIMESTAMPTZ '290309-12-22 (BC) 00:00:00+00')

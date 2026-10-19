@@ -93,8 +93,7 @@ TimestampCastResult Timestamp::TryConvertTimestampTZ(const char *str, idx_t len,
 		} else if (Timestamp::TryParseUTCOffset(str, pos, len, hh, mm, ss)) {
 			const int64_t delta =
 			    hh * Interval::MICROS_PER_HOUR + mm * Interval::MICROS_PER_MINUTE + ss * Interval::MICROS_PER_SEC;
-			if (use_offset &&
-			    (!TrySubtractOperator::Operation(result.value, delta, result.value) || !IsValid(result))) {
+			if (use_offset && !TrySubtractOperator::Operation(result.value, delta, result.value)) {
 				return TimestampCastResult::ERROR_RANGE;
 			}
 			has_offset = true;
@@ -382,7 +381,7 @@ bool Timestamp::TryFromDatetime(date_t date, dtime_t time, timestamp_t &result) 
 	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, time.value, result.value)) {
 		return false;
 	}
-	return IsValid(result);
+	return result.IsFinite();
 }
 
 bool Timestamp::TryFromDatetime(date_t date, dtime_tz_t timetz, timestamp_t &result) {
@@ -394,7 +393,7 @@ bool Timestamp::TryFromDatetime(date_t date, dtime_tz_t timetz, timestamp_t &res
 	if (!TryAddOperator::Operation(result.value, -offset, result.value)) {
 		return false;
 	}
-	return IsValid(result);
+	return result.IsFinite();
 }
 
 timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
@@ -435,7 +434,7 @@ timestamp_t Timestamp::FromEpochSecondsPossiblyInfinite(int64_t sec) {
 		return input;
 	}
 	int64_t result;
-	if (!TryMultiplyOperator::Operation(sec, Interval::MICROS_PER_SEC, result) || !IsValid(timestamp_t(result))) {
+	if (!TryMultiplyOperator::Operation(sec, Interval::MICROS_PER_SEC, result)) {
 		throw ConversionException("Could not convert Timestamp(S) to Timestamp(US)");
 	}
 	return timestamp_t(result);
@@ -448,7 +447,11 @@ timestamp_t Timestamp::FromEpochSeconds(int64_t sec) {
 
 timestamp_t Timestamp::FromEpochMsPossiblyInfinite(int64_t ms) {
 	int64_t result;
-	if (!TryMultiplyOperator::Operation(ms, Interval::MICROS_PER_MSEC, result) || !IsValid(timestamp_t(result))) {
+	if (!TryMultiplyOperator::Operation(ms, Interval::MICROS_PER_MSEC, result)) {
+		throw ConversionException("Could not convert Timestamp(MS) to Timestamp(US)");
+	}
+	// the first midnight of Timestamp::MIN_YEAR - smaller values are not valid timestamps
+	if (result < -9223372022400000000LL) {
 		throw ConversionException("Could not convert Timestamp(MS) to Timestamp(US)");
 	}
 	return timestamp_t(result);
@@ -460,11 +463,7 @@ timestamp_t Timestamp::FromEpochMs(int64_t ms) {
 }
 
 timestamp_t Timestamp::FromEpochMicroSeconds(int64_t micros) {
-	const timestamp_t result(micros);
-	if (result.IsFinite() && !IsValid(result)) {
-		throw ConversionException("Timestamp microseconds out of range: %ld", micros);
-	}
-	return result;
+	return timestamp_t(micros);
 }
 
 timestamp_t Timestamp::FromEpochNanoSecondsPossiblyInfinite(int64_t ns) {

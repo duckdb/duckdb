@@ -687,44 +687,6 @@ TEST_CASE("Test append timestamp in C API", "[capi]") {
 	tester.Cleanup();
 }
 
-TEST_CASE("Test append a timestamp below the timestamp range in C API", "[capi]") {
-	CAPITester tester;
-	duckdb::unique_ptr<CAPIResult> result;
-	REQUIRE(tester.OpenDatabase(nullptr));
-
-	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE test (t TIMESTAMP, s TIMESTAMP_S)"));
-	duckdb_appender appender;
-	REQUIRE(duckdb_appender_create(tester.connection, nullptr, "test", &appender) == DuckDBSuccess);
-
-	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
-	REQUIRE(duckdb_append_timestamp(appender, duckdb_timestamp {-9223372022400000001}) == DuckDBError);
-	TestAppenderError(appender, DUCKDB_ERROR_CONVERSION, "Timestamp microseconds out of range: -9223372022400000001");
-
-	// the first midnight of the range and infinity are valid, a TIMESTAMP_S value is stored as given
-	REQUIRE(duckdb_append_timestamp(appender, duckdb_timestamp {-9223372022400000000}) == DuckDBSuccess);
-	auto seconds = duckdb_create_timestamp_s(duckdb_timestamp_s {-9223372022401});
-	REQUIRE(duckdb_append_value(appender, seconds) == DuckDBSuccess);
-	duckdb_destroy_value(&seconds);
-	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
-
-	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
-	REQUIRE(duckdb_append_timestamp(appender, duckdb_timestamp {NumericLimits<int64_t>::Maximum()}) == DuckDBSuccess);
-	REQUIRE(duckdb_append_null(appender) == DuckDBSuccess);
-	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
-	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
-
-	result = tester.Query("SELECT t::VARCHAR FROM test");
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->Fetch<string>(0, 0) == "290309-12-22 (BC) 00:00:00");
-	REQUIRE(result->Fetch<string>(0, 1) == "infinity");
-
-	// a TIMESTAMP_S below the TIMESTAMP range cannot be cast to it
-	result = tester.Query("SELECT epoch_us(s::TIMESTAMP) FROM test");
-	REQUIRE_FAIL(result);
-	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Could not convert Timestamp to higher precision"));
-	tester.Cleanup();
-}
-
 TEST_CASE("Test append duckdb_value values in C API", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;

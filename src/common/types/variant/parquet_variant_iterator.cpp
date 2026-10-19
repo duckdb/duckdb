@@ -515,15 +515,6 @@ T ParquetVariantNode::GetData() const {
 		}
 		return LoadChecked<T>(payload, binary_end);
 	}
-	case VariantPrimitiveType::TIMESTAMP_MICROS:
-	case VariantPrimitiveType::TIMESTAMP_NTZ_MICROS: {
-		const timestamp_t timestamp(LoadChecked<int64_t>(payload, binary_end));
-		if (timestamp.IsFinite() && !Timestamp::IsValid(timestamp)) {
-			throw IOException("Corrupted VARIANT 'value' buffer, TIMESTAMP value (%d) is out of range",
-			                  timestamp.value);
-		}
-		return LoadChecked<T>(payload, binary_end);
-	}
 	default:
 		//! Fixed-width primitives are stored in the canonical little-endian layout
 		return LoadChecked<T>(payload, binary_end);

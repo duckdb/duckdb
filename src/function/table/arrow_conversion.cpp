@@ -523,17 +523,15 @@ static void UUIDConversion(Vector &vector, const ArrowArray &array, idx_t chunk_
 	}
 }
 
-template <class T>
 static void TimestampTZConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset, int64_t nested_offset,
                                   int64_t parent_offset, idx_t size, int64_t conversion) {
-	auto tgt_ptr = FlatVector::GetDataMutable<T>(vector);
+	auto tgt_ptr = FlatVector::GetDataMutable<timestamp_t>(vector);
 	auto &validity_mask = FlatVector::ValidityMutable(vector);
 	ArrowAlignedBufferData<int64_t> src_ptr(
 	    array, 1, GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset), size);
 	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
-			if (!TryMultiplyOperator::Operation(src_ptr[row], conversion, tgt_ptr[row].value) ||
-			    !Timestamp::IsValid(tgt_ptr[row])) {
+			if (!TryMultiplyOperator::Operation(src_ptr[row], conversion, tgt_ptr[row].value)) {
 				throw ConversionException("Could not convert TimestampTZ to Microsecond");
 			}
 		}
@@ -542,8 +540,7 @@ static void TimestampTZConversion(Vector &vector, ArrowArray &array, idx_t chunk
 			if (!validity_mask.RowIsValid(row)) {
 				continue;
 			}
-			if (!TryMultiplyOperator::Operation(src_ptr[row], conversion, tgt_ptr[row].value) ||
-			    !Timestamp::IsValid(tgt_ptr[row])) {
+			if (!TryMultiplyOperator::Operation(src_ptr[row], conversion, tgt_ptr[row].value)) {
 				throw ConversionException("Could not convert TimestampTZ to Microsecond");
 			}
 		}
@@ -1084,13 +1081,13 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		auto precision = datetime_info.GetDateTimeType();
 		switch (precision) {
 		case ArrowDateTimeType::SECONDS: {
-			TimestampTZConversion<timestamp_t>(vector, array, chunk_offset, nested_offset,
-			                                   NumericCast<int64_t>(parent_offset), size, Interval::MICROS_PER_SEC);
+			TimestampTZConversion(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset), size,
+			                      Interval::MICROS_PER_SEC);
 			break;
 		}
 		case ArrowDateTimeType::MILLISECONDS: {
-			TimestampTZConversion<timestamp_t>(vector, array, chunk_offset, nested_offset,
-			                                   NumericCast<int64_t>(parent_offset), size, Interval::MICROS_PER_MSEC);
+			TimestampTZConversion(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset), size,
+			                      Interval::MICROS_PER_MSEC);
 			break;
 		}
 		case ArrowDateTimeType::MICROSECONDS: {
@@ -1117,16 +1114,16 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		auto precision = datetime_info.GetDateTimeType();
 		switch (precision) {
 		case ArrowDateTimeType::SECONDS:
-			TimestampTZConversion<timestamp_ns_t>(vector, array, chunk_offset, nested_offset,
-			                                      NumericCast<int64_t>(parent_offset), size, Interval::NANOS_PER_SEC);
+			TimestampTZConversion(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset), size,
+			                      Interval::NANOS_PER_SEC);
 			break;
 		case ArrowDateTimeType::MILLISECONDS:
-			TimestampTZConversion<timestamp_ns_t>(vector, array, chunk_offset, nested_offset,
-			                                      NumericCast<int64_t>(parent_offset), size, Interval::NANOS_PER_MSEC);
+			TimestampTZConversion(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset), size,
+			                      Interval::NANOS_PER_MSEC);
 			break;
 		case ArrowDateTimeType::MICROSECONDS:
-			TimestampTZConversion<timestamp_ns_t>(vector, array, chunk_offset, nested_offset,
-			                                      NumericCast<int64_t>(parent_offset), size, Interval::NANOS_PER_MICRO);
+			TimestampTZConversion(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset), size,
+			                      Interval::NANOS_PER_MICRO);
 			break;
 		case ArrowDateTimeType::NANOSECONDS:
 			DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset, size);

@@ -80,30 +80,3 @@ SELECT k, fill(v) OVER (ORDER BY k) FROM (VALUES (0, TIME '01:00:00'), (1, NULL)
 1	02:00:00
 2	03:00:00
 3	04:00:00
-
-# extrapolation below the first midnight of the timestamp range
-foreach type TIMESTAMP TIMESTAMPTZ TIMESTAMP_S TIMESTAMP_MS
-
-query II
-SELECT k, epoch_us(fill(v) OVER (ORDER BY k)) FROM (VALUES (0, '290309-12-22 (BC) 00:00:01+00'::{type}), (1, '290309-12-22 (BC) 00:00:00+00'::{type}), (2, NULL)) t(k, v) ORDER BY k
-----
-0	-9223372022399000000
-1	-9223372022400000000
-2	NULL
-
-endloop
-
-# an extrapolation onto the first midnight is kept, and TIMESTAMP_NS keeps every finite value
-query II
-SELECT k, epoch_us(fill(v) OVER (ORDER BY k)) FROM (VALUES (0, make_timestamp(-9223372022400000000 + 4096)), (1, make_timestamp(-9223372022400000000 + 2048)), (2, NULL)) t(k, v) ORDER BY k
-----
-0	-9223372022399995904
-1	-9223372022399997952
-2	-9223372022400000000
-
-query II
-SELECT k, epoch_ns(fill(v) OVER (ORDER BY k)) FROM (VALUES (0, make_timestamp_ns(-9223372036854771712)), (1, make_timestamp_ns(-9223372036854773760)), (2, NULL)) t(k, v) ORDER BY k
-----
-0	-9223372036854771712
-1	-9223372036854773760
-2	-9223372036854775808

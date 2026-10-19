@@ -108,10 +108,10 @@ struct MakeTimestampOperator {
 	template <typename T, typename RESULT_TYPE>
 	static RESULT_TYPE Operation(T value) {
 		const auto result = RESULT_TYPE(value);
-		if (!Timestamp::IsValid(result)) {
+		if (!result.IsFinite()) {
 			throw ConversionException("Timestamp microseconds out of range: %ld", value);
 		}
-		return result;
+		return RESULT_TYPE(value);
 	}
 };
 

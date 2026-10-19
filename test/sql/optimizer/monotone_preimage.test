@@ -169,10 +169,10 @@ SELECT count(*) FROM ets WHERE year(t) = 2005;
 8760
 
 # ---------------------------------------------------------------------------
-# bounds on the edge of the TIMESTAMP domain.  The rewrite searches every int64 except the two infinity
-# sentinels, but the values below the first midnight of year -290308 (290309 BC) are not valid timestamps
-# and cannot be rendered: EXPLAIN / EXPLAIN ANALYZE of a preimage that reached the bottom of the domain
-# failed with "Date out of range in timestamp conversion".
+# bounds on the edge of the TIMESTAMP domain.  Every int64 except the two infinity sentinels is a valid
+# timestamp (make_timestamp accepts all of them), but the values between INT64_MIN and the first midnight
+# of year -290308 (290309 BC) have no date/time form and cannot be rendered: EXPLAIN / EXPLAIN ANALYZE of a
+# preimage that reached the bottom of the domain failed with "Date out of range in timestamp conversion".
 # A bound on the domain edge is therefore written as a strict comparison against the adjacent sentinel
 # (t > '-infinity', t < 'infinity'), which renders and keeps every finite row; a bound strictly inside the
 # unrenderable band leaves f(t) in place.
@@ -212,52 +212,53 @@ SELECT count(*) FROM ets WHERE epoch(t) < 9223372036854775807;
 ----
 200000
 
-# the smallest finite timestamp, the first midnight of the range, is a valid row that the rewrite must keep
+# the smallest finite timestamp (INT64_MIN + 2, right above the -infinity sentinel) is a valid row that the
+# rewrite must keep, even though it cannot be printed
 statement ok
 CREATE TABLE ts_min(t TIMESTAMP);
 
 statement ok
-INSERT INTO ts_min VALUES (make_timestamp(-9223372022400000000));
+INSERT INTO ts_min VALUES (make_timestamp(-9223372036854775806));
 
 query I
 SELECT count(*) FROM ts_min WHERE epoch(t) > -9223372036854775807;
 ----
 1
 
-# both ends of the timestamp range, ±infinity and NULL
+# both ends of the finite domain, the first renderable timestamp, ±infinity and NULL
 statement ok
 CREATE TABLE edge(t TIMESTAMP);
 
 statement ok
 INSERT INTO edge VALUES
-  ('290309-12-22 (BC) 00:00:00'), ('2000-01-01'), (make_timestamp(9223372036854775806)), ('-infinity'), ('infinity'),
-  (NULL);
+  (make_timestamp(-9223372036854775806)), ('290309-12-22 (BC) 00:00:00'), ('2000-01-01'),
+  (make_timestamp(9223372036854775806)), ('-infinity'), ('infinity'), (NULL);
 
 query I
 SELECT count(*) FROM edge WHERE epoch(t) > -9223372036854775807;
 ----
-3
+4
 
 query I
 SELECT count(*) FROM edge WHERE epoch(t) < 9223372036854775807;
 ----
-3
+4
 
 query I
 SELECT count(*) FROM edge WHERE year(t) > -1000000000;
 ----
-3
+4
 
 # epoch_us is the identity on the internal value: bounds land exactly on the domain edges...
 query I
 SELECT count(*) FROM edge WHERE epoch_us(t) >= -9223372036854775806;
 ----
-3
+4
 
 query I
 SELECT count(*) FROM edge WHERE epoch_us(t) <= 9223372036854775806;
 ----
-3
+4
 
 query II
 EXPLAIN SELECT count(*) FROM edge WHERE epoch_us(t) <= 9223372036854775806;
@@ -273,12 +274,12 @@ SELECT count(*) FROM edge WHERE epoch_us(t) > -9223372036854775806;
 query I
 SELECT count(*) FROM edge WHERE epoch_us(t) < -9223372036854775805;
 ----
-0
+1
 
 query I
 SELECT count(*) FROM edge WHERE epoch_us(t) = -9223372036854775806;
 ----
-0
+1
 
 query II
 EXPLAIN SELECT count(*) FROM edge WHERE epoch_us(t) > -9223372036854775806;

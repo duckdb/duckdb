@@ -1496,12 +1496,12 @@ static bool FillValidateFinite(Vector &result, idx_t i, const LogicalType &type)
 
 template <int64_t FACTOR>
 static bool FillValidateScaledTimestamp(Vector &result, idx_t i, const LogicalType &type) {
-	//	the value must be a valid timestamp in microseconds
+	//	the value must be representable in microseconds
 	int64_t micros;
 	if (!TryMultiplyOperator::Operation(FlatVector::GetData<int64_t>(result)[i], FACTOR, micros)) {
 		return false;
 	}
-	return Timestamp::IsValid(timestamp_t(micros));
+	return Value::IsFinite(timestamp_t(micros));
 }
 
 static fill_validate_t GetFillValidateFunction(const LogicalType &type) {
@@ -1514,7 +1514,6 @@ static fill_validate_t GetFillValidateFunction(const LogicalType &type) {
 		return FillValidateFinite<date_t>;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return FillValidateScaledTimestamp<1>;
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		return FillValidateFinite<timestamp_t>;

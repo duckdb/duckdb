@@ -51,8 +51,10 @@ static bool GetFiniteDomain(const LogicalType &type, int64_t &lo, int64_t &hi, b
 		return true;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		// everything except the ±infinity sentinels, which keeps the never-true sentinels (hi+1 / lo-1) of the
-		// bisection away from INT64_MIN/MAX. Values below Timestamp::MIN_MICROS do not render, see IsRenderableBound.
+		// every non-sentinel int64 is a valid, comparable timestamp (make_timestamp accepts all of them), so the
+		// finite domain is everything except the ±infinity sentinels; that also keeps the never-true sentinels
+		// (hi+1 / lo-1) of the bisection away from INT64_MIN/MAX.  Not all of these values render, though: see
+		// IsRenderableBound.
 		lo = timestamp_t::ninfinity().value + 1;
 		hi = timestamp_t::infinity().value - 1;
 		has_infinity = true;
@@ -146,7 +148,8 @@ static int64_t LastTruePrefix(PRED pred, int64_t lo, int64_t hi, bool &ok) {
 }
 
 //! Whether a bound with internal representation `bound` can be rendered (Expression::ToString, EXPLAIN).
-//! TIMESTAMP values below Timestamp::MIN_MICROS are not valid timestamps and have no date/time form.
+//! TIMESTAMP values between INT64_MIN and the first midnight of Timestamp::MIN_YEAR are valid and comparable
+//! (make_timestamp accepts them) but have no date/time form: Timestamp::Convert overflows on them.
 static bool IsRenderableBound(const LogicalType &col_type, int64_t bound) {
 	switch (col_type.id()) {
 	case LogicalTypeId::TIMESTAMP:

@@ -298,7 +298,7 @@ void BaseAppender::Append(dtime_t value) {
 
 template <>
 void BaseAppender::Append(timestamp_t value) {
-	AppendValueInternal<timestamp_t>(Timestamp::FromEpochMicroSeconds(value.value));
+	AppendValueInternal<timestamp_t>(value);
 }
 
 template <>
