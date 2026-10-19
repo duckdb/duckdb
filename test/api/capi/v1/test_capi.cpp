@@ -462,6 +462,50 @@ TEST_CASE("Timestamps below the timestamp range cannot be created through the C 
 	        "Conversion Error: Timestamp microseconds out of range: -9223372036854775806");
 }
 
+TEST_CASE("decompose the ends of the timestamp range with duckdb_from_timestamp", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto result = tester.Query("SELECT make_timestamp(-9223372022400000000), make_timestamp(9223372036854775806), "
+	                           "'infinity'::TIMESTAMP, '-infinity'::TIMESTAMP, 'infinity'::DATE, '-infinity'::DATE");
+	REQUIRE_NO_FAIL(*result);
+	auto chunk = result->FetchChunk(0);
+	auto timestamp = [&](idx_t col) {
+		return duckdb_from_timestamp(static_cast<duckdb_timestamp *>(chunk->GetData(col))[0]);
+	};
+
+	auto first = timestamp(0);
+	REQUIRE(first.date.year == -290308);
+	REQUIRE(first.date.month == 12);
+	REQUIRE(first.date.day == 22);
+	REQUIRE(first.time.hour == 0);
+	REQUIRE(first.time.min == 0);
+	REQUIRE(first.time.sec == 0);
+	REQUIRE(first.time.micros == 0);
+
+	auto last = timestamp(1);
+	REQUIRE(last.date.year == 294247);
+	REQUIRE(last.date.month == 1);
+	REQUIRE(last.date.day == 10);
+	REQUIRE(last.time.hour == 4);
+	REQUIRE(last.time.min == 0);
+	REQUIRE(last.time.sec == 54);
+	REQUIRE(last.time.micros == 775806);
+
+	// infinite timestamps get the parts of the infinite dates at midnight
+	for (idx_t col = 2; col < 4; col++) {
+		auto infinite = timestamp(col);
+		auto date = duckdb_from_date(static_cast<duckdb_date *>(chunk->GetData(col + 2))[0]);
+		REQUIRE(infinite.date.year == date.year);
+		REQUIRE(infinite.date.month == date.month);
+		REQUIRE(infinite.date.day == date.day);
+		REQUIRE(infinite.time.hour == 0);
+		REQUIRE(infinite.time.min == 0);
+		REQUIRE(infinite.time.sec == 0);
+		REQUIRE(infinite.time.micros == 0);
+	}
+}
+
 TEST_CASE("create time_tz value") {
 	duckdb_time_struct time;
 	time.hour = 4;
