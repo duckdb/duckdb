@@ -36,11 +36,11 @@ class ParseIterator {
 public:
 	//! Peel parse-facing statements out of a SQL string (PEG / parser_override). The context is
 	//! bound for the lifetime of the iterator and must outlive it. With apply_invalidation_policy,
-	//! a parse error invalidates the active transaction as the invalidation policy says. Without it,
-	//! a parse error leaves the transaction untouched, for callers that only inspect the statements
-	//! or that handle the error through ErrorResult themselves. A caller that holds the context lock
-	//! while using the iterator passes it as held_lock, otherwise the iterator takes the lock itself
-	//! to apply the policy.
+	//! a parse error invalidates the active transaction according to the transaction invalidation
+	//! policy. Without it, a parse error leaves the transaction untouched, for callers that only
+	//! inspect the statements or that handle the error through ErrorResult themselves. A caller that
+	//! holds the context lock while using the iterator passes it as held_lock, otherwise the iterator
+	//! takes the lock itself to apply the policy.
 	DUCKDB_API ParseIterator(ClientContext &context, const string &sql, bool apply_invalidation_policy = true,
 	                         optional_ptr<ClientContextLock> held_lock = nullptr);
 	DUCKDB_API ~ParseIterator();
