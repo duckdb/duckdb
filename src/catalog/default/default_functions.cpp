@@ -135,6 +135,8 @@ static const DefaultMacro internal_macros[] = {
      "THEN replace(x[2:-2], '\"\"', '\"') ELSE lower(trim(x)) END)"},
     {"pg_catalog", "array_lower", "(arr, dim) AS CASE WHEN array_length(arr, dim) > 0 THEN 1 END"},
     {"pg_catalog", "array_upper", "(arr, dim) AS nullif(array_length(arr, dim), 0)"},
+    // The built-in scalar lives in main. This macro is only used as pg_catalog.string_to_array.
+    {"pg_catalog", "string_to_array", "(s, delim) AS string_split(s, delim)"},
 
     {DEFAULT_SCHEMA, "nullif", "(a, b) AS CASE WHEN a=b THEN NULL ELSE a END"},
     {DEFAULT_SCHEMA, "if", "(a, b, c) AS CASE WHEN a THEN b ELSE c END"},
