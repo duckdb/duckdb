@@ -28,12 +28,12 @@ SELECT i, TRY(list_reduce(lst, lambda x, y: x + y)) FROM t ORDER BY i;
 statement error
 SELECT list_reduce([]::INTEGER[], lambda x, y: x + y);
 ----
-Invalid Input Error: Cannot perform list_reduce on an empty input list
+Parameter Not Allowed Error: Cannot perform list_reduce on an empty input list
 
 statement error
 SELECT i, list_reduce(lst, lambda x, y: x + y) FROM t ORDER BY i;
 ----
-Invalid Input Error: Cannot perform list_reduce on an empty input list
+Parameter Not Allowed Error: Cannot perform list_reduce on an empty input list
 
 # an initial value avoids the error
 query I
