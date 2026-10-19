@@ -1,0 +1,130 @@
+diff --git a/test/sql/add_files/add_files_json_without_extension.test b/test/sql/add_files/add_files_json_without_extension.test
+index 52ddedf3..78ab119b 100644
+--- a/test/sql/add_files/add_files_json_without_extension.test
++++ b/test/sql/add_files/add_files_json_without_extension.test
+@@ -22,7 +22,7 @@ statement ok
+ CREATE TABLE dl.t (BLOCK_NUMBER INTEGER)
+ 
+ statement ok
+-CALL ducklake_add_data_files('dl', 't', 'duckdb/data/parquet-testing/json_convertedtype.parquet',
++CALL ducklake_add_data_files('dl', 't', '{BUILD_DIR}/../../data/parquet-testing/json_convertedtype.parquet',
+     ignore_extra_columns => true)
+ 
+ query II
+@@ -34,7 +34,7 @@ statement ok
+ CREATE TABLE dl.json_as_varchar (field1 VARCHAR, field2 VARCHAR)
+ 
+ statement error
+-CALL ducklake_add_data_files('dl', 'json_as_varchar', 'duckdb/data/parquet-testing/parquet_with_json.parquet')
++CALL ducklake_add_data_files('dl', 'json_as_varchar', '{BUILD_DIR}/../../data/parquet-testing/parquet_with_json.parquet')
+ ----
+ Expected VARCHAR, found type JSON
+ 
+diff --git a/test/sql/add_files/add_files_legacy_parquet_types.test b/test/sql/add_files/add_files_legacy_parquet_types.test
+index 359bd1c0..9b3e90ee 100644
+--- a/test/sql/add_files/add_files_legacy_parquet_types.test
++++ b/test/sql/add_files/add_files_legacy_parquet_types.test
+@@ -23,7 +23,7 @@ statement ok
+ CREATE TABLE int96(id INTEGER, timestamp_col TIMESTAMP)
+ 
+ statement ok
+-CALL ducklake_add_data_files('ducklake', 'int96', 'duckdb/data/parquet-testing/arrow/alltypes_plain.parquet', ignore_extra_columns => true)
++CALL ducklake_add_data_files('ducklake', 'int96', '{BUILD_DIR}/../../data/parquet-testing/arrow/alltypes_plain.parquet', ignore_extra_columns => true)
+ 
+ query II
+ SELECT id, timestamp_col FROM int96 ORDER BY id
+@@ -42,7 +42,7 @@ statement ok
+ CREATE TABLE micros(BLOCK_NUMBER INTEGER, BLOCK_TIMESTAMP TIMESTAMP)
+ 
+ statement ok
+-CALL ducklake_add_data_files('ducklake', 'micros', 'duckdb/data/parquet-testing/json_convertedtype.parquet', ignore_extra_columns => true)
++CALL ducklake_add_data_files('ducklake', 'micros', '{BUILD_DIR}/../../data/parquet-testing/json_convertedtype.parquet', ignore_extra_columns => true)
+ 
+ query III
+ SELECT min(BLOCK_TIMESTAMP), max(BLOCK_TIMESTAMP), count(*) FROM micros
+@@ -54,7 +54,7 @@ statement ok
+ CREATE TABLE millis(bill_billing_period_start_date TIMESTAMP)
+ 
+ statement ok
+-CALL ducklake_add_data_files('ducklake', 'millis', 'duckdb/data/parquet-testing/aws1.snappy.parquet', ignore_extra_columns => true)
++CALL ducklake_add_data_files('ducklake', 'millis', '{BUILD_DIR}/../../data/parquet-testing/aws1.snappy.parquet', ignore_extra_columns => true)
+ 
+ query III
+ SELECT min(bill_billing_period_start_date), max(bill_billing_period_start_date), count(*) FROM millis
+@@ -66,7 +66,7 @@ statement ok
+ CREATE TABLE fixed(data BLOB)
+ 
+ statement ok
+-CALL ducklake_add_data_files('ducklake', 'fixed', 'duckdb/data/parquet-testing/fixed.parquet')
++CALL ducklake_add_data_files('ducklake', 'fixed', '{BUILD_DIR}/../../data/parquet-testing/fixed.parquet')
+ 
+ query I
+ SELECT data FROM fixed
+@@ -94,7 +94,7 @@ statement ok
+ CREATE TABLE times(col1 VARCHAR, col2 VARCHAR)
+ 
+ statement error
+-CALL ducklake_add_data_files('ducklake', 'times', 'duckdb/data/parquet-testing/timetz_4byte_stats.parquet')
++CALL ducklake_add_data_files('ducklake', 'times', '{BUILD_DIR}/../../data/parquet-testing/timetz_4byte_stats.parquet')
+ ----
+ Expected VARCHAR, found type TIME
+ 
+diff --git a/test/sql/add_files/add_files_repeated_columns.test b/test/sql/add_files/add_files_repeated_columns.test
+index b91722c4..a50b8709 100644
+--- a/test/sql/add_files/add_files_repeated_columns.test
++++ b/test/sql/add_files/add_files_repeated_columns.test
+@@ -20,13 +20,13 @@ statement ok
+ CREATE TABLE dl.leaves (stringArray VARCHAR[], intArray INTEGER[], doubleArray DOUBLE[])
+ 
+ statement ok
+-CALL ducklake_add_data_files('dl', 'leaves', 'duckdb/data/parquet-testing/bug2557.parquet')
++CALL ducklake_add_data_files('dl', 'leaves', '{BUILD_DIR}/../../data/parquet-testing/bug2557.parquet')
+ 
+ query I
+ SELECT count(*) FROM (
+-	(FROM dl.leaves EXCEPT ALL FROM 'duckdb/data/parquet-testing/bug2557.parquet')
++	(FROM dl.leaves EXCEPT ALL FROM '{BUILD_DIR}/../../data/parquet-testing/bug2557.parquet')
+ 	UNION ALL
+-	(FROM 'duckdb/data/parquet-testing/bug2557.parquet' EXCEPT ALL FROM dl.leaves)
++	(FROM '{BUILD_DIR}/../../data/parquet-testing/bug2557.parquet' EXCEPT ALL FROM dl.leaves)
+ )
+ ----
+ 0
+@@ -35,7 +35,7 @@ statement ok
+ CREATE TABLE dl.json_leaf (TX_JSON JSON[])
+ 
+ statement ok
+-CALL ducklake_add_data_files('dl', 'json_leaf', 'duckdb/data/parquet-testing/json_convertedtype.parquet', ignore_extra_columns => true)
++CALL ducklake_add_data_files('dl', 'json_leaf', '{BUILD_DIR}/../../data/parquet-testing/json_convertedtype.parquet', ignore_extra_columns => true)
+ 
+ query II
+ SELECT count(*), sum(len(TX_JSON)) FROM dl.json_leaf
+@@ -44,16 +44,16 @@ SELECT count(*), sum(len(TX_JSON)) FROM dl.json_leaf
+ 
+ # a repeated group
+ statement ok
+-CREATE TABLE dl.repeated_group AS FROM 'duckdb/data/parquet-testing/enum.parquet' LIMIT 0
++CREATE TABLE dl.repeated_group AS FROM '{BUILD_DIR}/../../data/parquet-testing/enum.parquet' LIMIT 0
+ 
+ statement ok
+-CALL ducklake_add_data_files('dl', 'repeated_group', 'duckdb/data/parquet-testing/enum.parquet')
++CALL ducklake_add_data_files('dl', 'repeated_group', '{BUILD_DIR}/../../data/parquet-testing/enum.parquet')
+ 
+ query I
+ SELECT count(*) FROM (
+-	(FROM dl.repeated_group EXCEPT ALL FROM 'duckdb/data/parquet-testing/enum.parquet')
++	(FROM dl.repeated_group EXCEPT ALL FROM '{BUILD_DIR}/../../data/parquet-testing/enum.parquet')
+ 	UNION ALL
+-	(FROM 'duckdb/data/parquet-testing/enum.parquet' EXCEPT ALL FROM dl.repeated_group)
++	(FROM '{BUILD_DIR}/../../data/parquet-testing/enum.parquet' EXCEPT ALL FROM dl.repeated_group)
+ )
+ ----
+ 0
+@@ -140,6 +140,6 @@ statement ok
+ CREATE TABLE dl.wrong_element (intArray VARCHAR[])
+ 
+ statement error
+-CALL ducklake_add_data_files('dl', 'wrong_element', 'duckdb/data/parquet-testing/bug2557.parquet', ignore_extra_columns => true)
++CALL ducklake_add_data_files('dl', 'wrong_element', '{BUILD_DIR}/../../data/parquet-testing/bug2557.parquet', ignore_extra_columns => true)
+ ----
+ Expected VARCHAR, found type INTEGER
