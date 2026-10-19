@@ -2144,9 +2144,10 @@ TEST_CASE("Tokenizer assigns FIRST set token classes", "[api][grammar_extension]
 	const uint8_t generic_operator = MatcherTokenClass::OPERATOR | MatcherTokenClass::GENERIC_OPERATOR;
 	const uint8_t string_literal = MatcherTokenClass::STRING | MatcherTokenClass::WORD;
 
+	const uint8_t identifier = MatcherTokenClass::WORD | MatcherTokenClass::IDENTIFIER;
 	REQUIRE(token_class("select") == MatcherTokenClass::WORD);
-	REQUIRE(token_class("some_column") == MatcherTokenClass::WORD);
-	REQUIRE(token_class("\"quoted name\"") == MatcherTokenClass::WORD);
+	REQUIRE(token_class("some_column") == identifier);
+	REQUIRE(token_class("\"quoted name\"") == identifier);
 	// string literals are accepted in identifier positions
 	REQUIRE(token_class("'str'") == string_literal);
 	REQUIRE(token_class("E'str'") == string_literal);
@@ -2154,6 +2155,9 @@ TEST_CASE("Tokenizer assigns FIRST set token classes", "[api][grammar_extension]
 	REQUIRE(token_class("42") == MatcherTokenClass::NUMBER);
 	REQUIRE(token_class(".5") == MatcherTokenClass::NUMBER);
 	REQUIRE(token_class("1e10") == MatcherTokenClass::NUMBER);
+	// malformed numbers are matched by nothing
+	REQUIRE(token_class("1.2.3") == 0);
+	REQUIRE(token_class("1e5e5") == 0);
 	REQUIRE(token_class("+") == generic_operator);
 	REQUIRE(token_class("||") == generic_operator);
 	for (auto punctuation : {"(", ")", "[", "]", "{", "}", ",", ":", "::", ":=", "?", "$", "#"}) {
@@ -2196,6 +2200,114 @@ static void CheckFirstSet(const CompiledGrammar &grammar, const Matcher &matcher
 	}
 }
 
+//! A matcher that describes its FIRST set but not how many tokens it consumes
+class FirstOnlyKeywordTestMatcher final : public KeywordMatcher {
+public:
+	FirstOnlyKeywordTestMatcher(const string &word, const GrammarLiteralTable &table)
+	    : KeywordMatcher(word, KeywordInfo()), literal(table.Lookup(word).LiteralId()) {
+	}
+	void InitializeFirstSet(MatcherFirstSet &first, const GrammarLiteralTable &table) const override {
+		first.AddLiteral(literal);
+	}
+
+private:
+	idx_t literal;
+};
+
+TEST_CASE("Lookahead sets reject matchers that cannot continue with the second token", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto grammar = CompiledGrammar::Get(*con.context);
+	auto &helper = grammar->GetKeywordHelper();
+	auto &table = helper.GetLiteralTable();
+
+	// keyword matchers created by the factory are matched by literal id
+	auto keyword_grammar = ParsedGrammar::Parse("Program <- '.' ','");
+	auto keyword_rules = CompileTestProgramRule(keyword_grammar);
+	MatcherAllocator matcher_allocator;
+	MatcherFactory factory(matcher_allocator, keyword_grammar, keyword_rules, helper, {});
+	auto &keywords = factory.CreateRootMatcher("Program").Cast<ListMatcher>().matchers;
+	auto &dot = keywords[0].get();
+	auto &comma = keywords[1].get();
+	IdentifierMatcher identifier(SuggestionState::SUGGEST_COLUMN_NAME, helper);
+	NumberLiteralMatcher number;
+	StringLiteralMatcher string_literal;
+	FirstOnlyKeywordTestMatcher first_only("SELECT", table);
+	// IDENTIFIER '.'
+	ListMatcher qualified({identifier, dot});
+	// IDENTIFIER '.' / IDENTIFIER
+	ChoiceMatcher name({qualified, identifier});
+	// NUMBER? IDENTIFIER '.'
+	OptionalMatcher optional_number(number);
+	ListMatcher optional_prefix({optional_number, qualified});
+	// IDENTIFIER ','*
+	RepeatMatcher commas(comma);
+	OptionalMatcher optional_commas(commas);
+	ListMatcher trailing({identifier, optional_commas});
+	// 'SELECT' NUMBER with a first-only leading matcher
+	ListMatcher first_only_list({first_only, number});
+	ChoiceMatcher root({name, optional_prefix, trailing, first_only_list, string_literal});
+	for (auto matcher : vector<reference<Matcher>> {qualified, name, optional_number, optional_prefix, commas,
+	                                                optional_commas, trailing, first_only_list, root}) {
+		matcher.get().SetStructural();
+	}
+	ComputeFirstSets(root, table);
+
+	SECTION("Sequences need their second token") {
+		CheckFirstSet(*grammar, qualified, "foo . bar", true);
+		CheckFirstSet(*grammar, qualified, "foo , bar", false);
+		CheckFirstSet(*grammar, qualified, "foo", false);
+		CheckFirstSet(*grammar, qualified, "42 . bar", false);
+	}
+	SECTION("One-token alternatives accept any second token") {
+		CheckFirstSet(*grammar, name, "foo , bar", true);
+		CheckFirstSet(*grammar, name, "foo", true);
+		CheckFirstSet(*grammar, trailing, "foo , ,", true);
+		CheckFirstSet(*grammar, trailing, "foo 42", true);
+		CheckFirstSet(*grammar, string_literal, "'a' 'b'", true);
+		CheckFirstSet(*grammar, string_literal, "'a' 42", true);
+	}
+	SECTION("Nullable prefixes shift the second token") {
+		CheckFirstSet(*grammar, optional_prefix, "42 foo . bar", true);
+		CheckFirstSet(*grammar, optional_prefix, "42 foo , bar", true);
+		CheckFirstSet(*grammar, optional_prefix, "foo . bar", true);
+		CheckFirstSet(*grammar, optional_prefix, "foo , bar", false);
+		CheckFirstSet(*grammar, optional_prefix, "42 , bar", false);
+	}
+	SECTION("Matchers that only describe FIRST may consume any number of tokens") {
+		REQUIRE(first_only.first_set.one.any);
+		REQUIRE(first_only.first_set.second.any);
+		CheckFirstSet(*grammar, first_only_list, "select", true);
+		CheckFirstSet(*grammar, first_only_list, "select foo", true);
+		CheckFirstSet(*grammar, first_only_list, "foo", false);
+	}
+	SECTION("The autocomplete cursor can stand for any second token") {
+		vector<MatcherToken> tokens {MatcherToken("foo", 0, TokenType::IDENTIFIER),
+		                             MatcherToken("", 3, TokenType::END_OF_INPUT_AUTOCOMPLETE)};
+		TokenIterator iterator(tokens);
+		vector<MatcherSuggestion> suggestions;
+		ParseResultAllocator allocator;
+		idx_t max_token_index = 0;
+		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+		MatchContext context(suggestions, allocator, process_allocator, max_token_index);
+		MatchState state(iterator, context);
+		REQUIRE(qualified.first_set.MightMatch(state));
+	}
+	SECTION("A rejected matcher still reports the token it would have consumed") {
+		auto tokens = TokenizeFirstSetTestInput(*grammar, "foo , bar");
+		TokenIterator iterator(tokens);
+		vector<MatcherSuggestion> suggestions;
+		ParseResultAllocator allocator;
+		idx_t max_token_index = 0;
+		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+		MatchContext context(suggestions, allocator, process_allocator, max_token_index);
+		MatchState state(iterator, context);
+		REQUIRE_FALSE(qualified.first_set.MightMatch(state));
+		REQUIRE(max_token_index == 1);
+		REQUIRE(iterator.Position() == 0);
+	}
+}
+
 TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][grammar_extension]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -2212,6 +2324,7 @@ TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][gr
 	// other keyword matchers can have their own semantics
 	KeywordMatcher custom_keyword("SELECT", KeywordInfo(), helper);
 	IdentifierMatcher identifier(SuggestionState::SUGGEST_COLUMN_NAME, helper);
+	IdentifierMatcher table_name(SuggestionState::SUGGEST_TABLE_NAME, helper);
 	NumberLiteralMatcher number;
 	StringLiteralMatcher string_literal;
 	OperatorMatcher generic_operator;
@@ -2237,7 +2350,7 @@ TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][gr
 	ListMatcher uncomputed_list({number});
 
 	ChoiceMatcher root({choice, optional_prefix, nullable_list, repeat, sequence, custom_list, unmarked_list,
-	                    identifier, string_literal, generic_operator, any_operator, arithmetic_operator,
+	                    identifier, table_name, string_literal, generic_operator, any_operator, arithmetic_operator,
 	                    custom_keyword});
 	for (auto matcher : vector<reference<Matcher>> {choice, optional_number, optional_prefix, nullable_list, repeat,
 	                                                sequence, custom_list, root}) {
@@ -2248,7 +2361,12 @@ TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][gr
 	SECTION("Atomic matchers") {
 		CheckFirstSet(*grammar, identifier, "some_column", true);
 		CheckFirstSet(*grammar, identifier, "\"quoted name\"", true);
-		CheckFirstSet(*grammar, identifier, "'path'", true);
+		// only names that can be given as paths accept string literals
+		CheckFirstSet(*grammar, identifier, "'path'", false);
+		CheckFirstSet(*grammar, table_name, "'path'", true);
+		// keywords are accepted where their category allows it
+		CheckFirstSet(*grammar, identifier, "select", false);
+		CheckFirstSet(*grammar, identifier, "comment", true);
 		CheckFirstSet(*grammar, identifier, "42", false);
 		CheckFirstSet(*grammar, identifier, "+", false);
 		CheckFirstSet(*grammar, identifier, ";", false);

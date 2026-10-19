@@ -7,7 +7,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // FIRST sets
 //===--------------------------------------------------------------------===//
-bool MatcherFirstSet::Merge(const MatcherFirstSet &other) {
+bool MatcherTokenSet::MergeTokens(const MatcherTokenSet &other) {
 	bool changed = false;
 	if (other.any && !any) {
 		any = changed = true;
@@ -29,12 +29,89 @@ bool MatcherFirstSet::Merge(const MatcherFirstSet &other) {
 	return changed;
 }
 
-void MatcherFirstSet::AddLiteral(idx_t literal_id) {
+void MatcherTokenSet::AddLiteral(idx_t literal_id) {
 	auto word = literal_id / 64;
 	if (word >= literals.size()) {
 		literals.resize(word + 1, 0);
 	}
 	literals[word] |= uint64_t(1) << (literal_id % 64);
+}
+
+bool MatcherTokenSet::IsEmpty() const {
+	if (any || class_mask) {
+		return false;
+	}
+	for (auto word : literals) {
+		if (word) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool MatcherTokenSet::Equals(const MatcherTokenSet &other) const {
+	if (any != other.any || class_mask != other.class_mask) {
+		return false;
+	}
+	auto words = MaxValue(literals.size(), other.literals.size());
+	for (idx_t i = 0; i < words; i++) {
+		auto left = i < literals.size() ? literals[i] : 0;
+		auto right = i < other.literals.size() ? other.literals[i] : 0;
+		if (left != right) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void MatcherFirstSet::Finalize() {
+	computed = true;
+	if (one.any || second.any) {
+		first_suffices = true;
+		return;
+	}
+	// ONE covers FIRST: a token that passes the FIRST check can always be a one-token match
+	if ((one.class_mask & class_mask) != class_mask) {
+		first_suffices = false;
+		return;
+	}
+	for (idx_t i = 0; i < literals.size(); i++) {
+		auto one_word = i < one.literals.size() ? one.literals[i] : 0;
+		if ((one_word & literals[i]) != literals[i]) {
+			first_suffices = false;
+			return;
+		}
+	}
+	first_suffices = true;
+}
+
+bool MatcherFirstSet::MightMatchSecond(MatchState &state) const {
+	auto &iterator = state.token_iterator;
+	auto token = iterator.Current();
+	D_ASSERT(token);
+	if (one.Contains(*token, [&]() { return iterator.CurrentLiteralInfo(*table); })) {
+		return true;
+	}
+	auto next = iterator.Peek(1);
+	// the autocomplete cursor can stand for any token
+	if (next && next->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+		return true;
+	}
+	if (next && second.Contains(*next, [&]() { return iterator.PeekLiteralInfo(*table, 1); })) {
+		return true;
+	}
+	// the matcher would have consumed the current token before failing: keep the error position
+	if (iterator.Position() + 1 > state.context.max_token_index) {
+		state.context.max_token_index = iterator.Position() + 1;
+	}
+	return false;
+}
+
+bool MatcherFirstSet::Merge(const MatcherFirstSet &other) {
+	bool changed = MergeTokens(other);
+	changed |= one.MergeTokens(other.one);
+	changed |= second.MergeTokens(other.second);
+	return changed;
 }
 
 //! Calls fun(child) for every child of a built-in composite matcher
@@ -72,24 +149,42 @@ static bool IsComposite(const Matcher &matcher) {
 	       type == MatcherType::REPEAT;
 }
 
-//! Recomputes the FIRST set of a composite matcher from its children, returns whether anything changed
+//! Recomputes the lookahead sets of a composite matcher from its children, returns whether anything changed.
+//! ONE holds the first tokens of one-token matches and SECOND the second tokens of longer matches.
 static bool UpdateFirstSet(Matcher &matcher) {
 	auto &first = matcher.first_set;
 	bool changed = false;
 	bool nullable;
 	switch (matcher.Type()) {
-	case MatcherType::LIST:
+	case MatcherType::LIST: {
+		auto &children = matcher.Cast<ListMatcher>().matchers;
 		// the first non-nullable element ends the FIRST set of a sequence
 		nullable = true;
-		for (auto &child : matcher.Cast<ListMatcher>().matchers) {
-			auto &child_first = child.get().first_set;
-			changed |= first.Merge(child_first);
-			if (!child_first.nullable) {
-				nullable = false;
-				break;
+		for (idx_t i = 0; i < children.size() && nullable; i++) {
+			auto &child_first = children[i].get().first_set;
+			changed |= first.MergeTokens(child_first);
+			// the element can be followed by the FIRST set of the rest of the sequence
+			MatcherTokenSet suffix_first;
+			bool suffix_nullable = true;
+			for (idx_t j = i + 1; j < children.size(); j++) {
+				auto &suffix_child = children[j].get().first_set;
+				suffix_first.MergeTokens(suffix_child);
+				if (!suffix_child.nullable) {
+					suffix_nullable = false;
+					break;
+				}
 			}
+			if (suffix_nullable) {
+				changed |= first.one.MergeTokens(child_first.one);
+			}
+			changed |= first.second.MergeTokens(child_first.second);
+			if (!child_first.one.IsEmpty()) {
+				changed |= first.second.MergeTokens(suffix_first);
+			}
+			nullable = child_first.nullable;
 		}
 		break;
+	}
 	case MatcherType::CHOICE:
 		nullable = false;
 		for (auto &child : matcher.Cast<ChoiceMatcher>().matchers) {
@@ -105,6 +200,10 @@ static bool UpdateFirstSet(Matcher &matcher) {
 	case MatcherType::REPEAT: {
 		auto &child_first = matcher.Cast<RepeatMatcher>().GetChildMatcher().first_set;
 		changed |= first.Merge(child_first);
+		// a one-token element can be followed by the next repetition
+		if (!child_first.one.IsEmpty()) {
+			changed |= first.second.MergeTokens(child_first);
+		}
 		nullable = child_first.nullable;
 		break;
 	}
@@ -158,10 +257,13 @@ void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table) {
 		if (IsComposite(matcher)) {
 			composites.push_back(matcher);
 		} else if (matcher.IsAtomic()) {
+			// matchers that only describe FIRST may consume any number of tokens
+			first.one.any = true;
+			first.second.any = true;
 			static_cast<const AtomicMatcher &>(matcher).InitializeFirstSet(first, table);
 		} else {
 			// custom and derived matchers: no information
-			first.any = true;
+			first.SetAny();
 		}
 	}
 	// composite matchers: least fixed point, the grammar is recursive
@@ -174,7 +276,7 @@ void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table) {
 		}
 	}
 	for (auto &entry : matchers) {
-		entry.get().first_set.computed = true;
+		entry.get().first_set.Finalize();
 	}
 }
 

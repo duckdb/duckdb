@@ -44,15 +44,11 @@ public:
 
 	void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const override {
 		first_set.class_mask = MatcherTokenClass::NUMBER;
+		first_set.SetSingleToken();
 	}
 
-private:
-	static bool MatchNumberLiteral(MatchState &state) {
-		auto token = state.token_iterator.Current();
-		if (!token) {
-			return false;
-		}
-		auto &token_text = token->text;
+	//! Whether the matcher accepts the token text; the tokenizer uses this to classify number tokens
+	static bool IsNumberLiteral(const string &token_text) {
 		if (token_text.empty() || !Tokenizer::CharacterIsInitialNumber(token_text[0])) {
 			return false;
 		}
@@ -72,7 +68,7 @@ private:
 			}
 			if (Tokenizer::CharacterIsScientific(token_text[i])) {
 				if (scientific_notation) {
-					throw ParserException("Already found scientific notation");
+					return false;
 				}
 				scientific_notation = true;
 			}
@@ -82,6 +78,15 @@ private:
 			if (!Tokenizer::CharacterIsNumber(token_text[i])) {
 				return false;
 			}
+		}
+		return true;
+	}
+
+private:
+	static bool MatchNumberLiteral(MatchState &state) {
+		auto token = state.token_iterator.Current();
+		if (!token || !IsNumberLiteral(token->text)) {
+			return false;
 		}
 		state.token_iterator.Advance();
 		state.UpdateMaxTokenIndex();

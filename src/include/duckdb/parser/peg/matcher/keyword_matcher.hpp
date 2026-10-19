@@ -64,6 +64,7 @@ public:
 		} else {
 			first_set.any = true;
 		}
+		first_set.SetSingleToken();
 	}
 
 private:
