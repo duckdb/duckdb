@@ -605,6 +605,30 @@ SELECT TRY((SELECT max(random()) FROM integers))
 ----
 TRY can not be used in combination with a volatile function
 
+# ordered-set aggregates normalize to plain aggregates during binding and are gated like them
+query I
+SELECT TRY((SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY 10 // i) FROM (VALUES (0), (1)) t(i)))
+----
+NULL
+
+query R
+SELECT TRY((SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY 10 // i) FROM (VALUES (1), (2)) t(i)))
+----
+7.5
+
+# the volatile rejection targets volatile computation inside the wrapped expression; a volatile
+# value from a flattened nested subquery is computed once below and referenced as a column by
+# both the TRY input and its HAS_ERROR probe, so the gate stays consistent with the value
+query I
+SELECT TRY((SELECT ((SELECT random()) * 0 + 1)::INTEGER))
+----
+1
+
+query I
+SELECT TRY((SELECT max(i * 0 + ((SELECT random()) * 0)::INTEGER) FROM (VALUES (1)) t(i)))
+----
+0
+
 # regression: a flattened nested subquery can introduce a synthetic aggregate next to the
 # subquery's own aggregates; only the subquery's own aggregate node is gated
 statement ok

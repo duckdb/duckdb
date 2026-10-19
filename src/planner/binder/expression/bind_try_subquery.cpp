@@ -201,6 +201,9 @@ void ExpressionBinder::LowerTrySubquery(const OperatorExpression &op, const TryS
 //! gated on HAS_ERROR probes of the aggregate inputs, so that an input error anywhere turns the aggregated
 //! result into NULL instead of a partially aggregated value. Errors raised outside these positions, such as
 //! in the WHERE clause, in nested subqueries or by the one-row cardinality check, propagate deliberately.
+//! Volatile computation inside a maskable position is rejected. A volatile value computed by a nested
+//! subquery is evaluated once in its flattened subplan and referenced as a column, so the TRY input and its
+//! HAS_ERROR probe observe one consistent value.
 BindResult ExpressionBinder::BindTrySubquery(OperatorExpression &op, idx_t depth) {
 	D_ASSERT(op.GetChildrenMutable().size() == 1);
 	auto &subquery_expr = op.GetChildrenMutable()[0]->Cast<SubqueryExpression>();
