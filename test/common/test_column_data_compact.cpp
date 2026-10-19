@@ -863,4 +863,46 @@ TEST_CASE("Compact representations with in-memory and hybrid allocators", "[colu
 	}
 }
 
+TEST_CASE("Collection sizes never shrink while appending", "[column_data_compact]") {
+	// no vector-size guard: this mirrors the Vector Sizes CI shape at any STANDARD_VECTOR_SIZE
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	ColumnDataCollection collection(buffer_manager, {LogicalType::BIGINT});
+	ColumnDataAppendState append_state;
+	collection.InitializeAppend(append_state);
+
+	// a full flat vector allocates a block, the constant then lands in the next chunk
+	DataChunk flat_input;
+	collection.InitializeScanChunk(flat_input);
+	{
+		auto writer = FlatVector::Writer<int64_t>(flat_input.data[0], STANDARD_VECTOR_SIZE);
+		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+			writer.WriteValue(UnsafeNumericCast<int64_t>(i));
+		}
+	}
+	flat_input.CheckCardinality(STANDARD_VECTOR_SIZE);
+	collection.Append(append_state, flat_input);
+	auto allocation_size = collection.AllocationSize();
+	auto size_in_bytes = collection.SizeInBytes();
+
+	// batching consumers require that both sizes never shrink across appends
+	auto check_monotonic = [&]() {
+		REQUIRE(collection.AllocationSize() >= allocation_size);
+		REQUIRE(collection.SizeInBytes() >= size_in_bytes);
+		allocation_size = collection.AllocationSize();
+		size_in_bytes = collection.SizeInBytes();
+	};
+	AppendConstantChunk(collection, append_state, Value::BIGINT(7), 1);
+	check_monotonic();
+	// a different constant materializes the entry inside the already-allocated block
+	AppendConstantChunk(collection, append_state, Value::BIGINT(8), 1);
+	check_monotonic();
+
+	REQUIRE(collection.Count() == STANDARD_VECTOR_SIZE + 2);
+	REQUIRE(collection.GetValue(0, STANDARD_VECTOR_SIZE - 1) ==
+	        Value::BIGINT(UnsafeNumericCast<int64_t>(STANDARD_VECTOR_SIZE - 1)));
+	REQUIRE(collection.GetValue(0, STANDARD_VECTOR_SIZE) == Value::BIGINT(7));
+	REQUIRE(collection.GetValue(0, STANDARD_VECTOR_SIZE + 1) == Value::BIGINT(8));
+}
+
 } // namespace duckdb
