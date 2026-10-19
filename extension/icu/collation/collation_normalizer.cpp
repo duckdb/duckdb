@@ -47,10 +47,10 @@ uint32_t Normalizer::Decode(const char *data, idx_t size, vector<uint32_t> &resu
 			codepoint = lead & 0x07;
 			length = 4;
 		} else {
-			throw InternalException("Invalid UTF-8 in collation input");
+			throw DataCorruptionException("Invalid UTF-8 in collation input");
 		}
 		if (pos + length > size) {
-			throw InternalException("Invalid UTF-8 in collation input");
+			throw DataCorruptionException("Invalid UTF-8 in collation input");
 		}
 		bool valid = true;
 		for (idx_t i = 1; i < length; i++) {
@@ -62,7 +62,7 @@ uint32_t Normalizer::Decode(const char *data, idx_t size, vector<uint32_t> &resu
 			codepoint = (codepoint << 6) | (trail & 0x3F);
 		}
 		if (!valid || codepoint > 0x10FFFF) {
-			throw InternalException("Invalid UTF-8 in collation input");
+			throw DataCorruptionException("Invalid UTF-8 in collation input");
 		}
 		if (codepoint >= 0x80) {
 			// ASCII characters never carry a combining class and never decompose
