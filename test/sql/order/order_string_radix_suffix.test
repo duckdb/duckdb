@@ -66,8 +66,7 @@ statement ok
 CREATE OR REPLACE TABLE binary_strings AS
 SELECT i, i%2 AS g, (i*977)%4096 AS v, (i//4096)%4 AS t,
        encode(repeat('a',{prefix})) || from_hex(lpad(hex((i*977)%4096),4,'0')) AS b
-FROM range(32768) r(i)
-ORDER BY hash(i);
+FROM range(32768) r(i);
 
 foreach external false true
 
