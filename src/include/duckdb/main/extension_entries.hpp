@@ -1437,6 +1437,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"rtree_index_scan_ratio", "spatial"},
     {"s3_access_key_id", "httpfs"},
     {"s3_allow_recursive_globbing", "httpfs"},
+    {"s3_enable_deprecated_url_parameters", "httpfs"},
     {"s3_endpoint", "httpfs"},
     {"s3_kms_key_id", "httpfs"},
     {"s3_list_concurrency", "httpfs"},
