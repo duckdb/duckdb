@@ -32,9 +32,7 @@ struct MetricQuerySQL {
 struct MetricQueryTotalBytesScanned {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "query.total_bytes_scanned";
-	static constexpr const char *Description =
-	    "Cumulative compressed size of the Parquet column chunks scanned by the query, however many bytes were read "
-	    "from storage to scan them. Left out if a scan of the query does not count the bytes it scans";
+	static constexpr const char *Description = "Cumulative compressed size of the Parquet column chunks scanned by the query, however many bytes were read from storage to scan them. Left out if a scan of the query does not count the bytes it scans";
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
@@ -48,8 +46,7 @@ struct MetricQueryTotalIntermediateRows {
 struct MetricQueryTotalIntermediateSizeBytes {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "query.total_intermediate_size_bytes";
-	static constexpr const char *Description =
-	    "Cumulative size in bytes of all intermediate results produced by the query";
+	static constexpr const char *Description = "Cumulative size in bytes of all intermediate results produced by the query";
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
@@ -100,9 +97,7 @@ struct MetricSystemPeakBufferMemory {
 struct MetricSystemPeakStreamingBufferSize {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "system.peak_streaming_buffer_size";
-	static constexpr const char *Description =
-	    "Peak number of bytes a streaming query result held: queued bytes plus the units blocked workers hold, both "
-	    "exact. Units still under construction are not counted";
+	static constexpr const char *Description = "Peak number of bytes a streaming query result held: queued bytes plus the units blocked workers hold, both exact. Units still under construction are not counted";
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
