@@ -79,8 +79,7 @@ from duckdb_external_file_cache_stats() s, stats_evict b;
 ----
 true	true
 
-query II
-select cache_hit_request_bytes <= read_request_bytes, block_concurrent_hit_count <= block_hit_count
-from duckdb_external_file_cache_stats();
+query I
+select cache_hit_request_bytes <= read_request_bytes from duckdb_external_file_cache_stats();
 ----
-true	true
+true

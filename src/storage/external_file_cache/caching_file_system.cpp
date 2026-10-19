@@ -63,7 +63,6 @@ public:
 
 	void ExecuteTask() override {
 		bool was_evicted = false;
-		bool waited_for_fetch = false;
 		annotated_unique_lock<annotated_mutex> lk(block->mtx);
 
 		while (true) {
@@ -77,9 +76,6 @@ public:
 					if (request_bytes > 0) {
 						stats.block_hit_count.fetch_add(1, std::memory_order_relaxed);
 						stats.cache_hit_request_bytes.fetch_add(request_bytes, std::memory_order_relaxed);
-						if (waited_for_fetch) {
-							stats.block_concurrent_hit_count.fetch_add(1, std::memory_order_relaxed);
-						}
 					}
 					result_pin = std::move(pin);
 					return;
@@ -142,7 +138,6 @@ public:
 				return;
 			}
 			case CacheBlockState::LOADING: {
-				waited_for_fetch = true;
 				block->cv.wait(lk,
 				               [&]() DUCKDB_REQUIRES(block->mtx) { return block->state != CacheBlockState::LOADING; });
 				continue;

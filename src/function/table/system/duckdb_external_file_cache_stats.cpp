@@ -7,7 +7,6 @@ struct DuckDBExternalFileCacheStatsData : public GlobalTableFunctionState {
 	DuckDBExternalFileCacheStatsData() : done(false) {
 	}
 
-	ExternalFileCacheStatsInformation stats;
 	bool done;
 };
 
@@ -26,9 +25,6 @@ static unique_ptr<FunctionData> DuckDBExternalFileCacheStatsBind(ClientContext &
 	names.emplace_back("block_hit_count");
 	return_types.emplace_back(LogicalType::UBIGINT);
 
-	names.emplace_back("block_concurrent_hit_count");
-	return_types.emplace_back(LogicalType::UBIGINT);
-
 	names.emplace_back("block_miss_count");
 	return_types.emplace_back(LogicalType::UBIGINT);
 
@@ -40,9 +36,7 @@ static unique_ptr<FunctionData> DuckDBExternalFileCacheStatsBind(ClientContext &
 
 unique_ptr<GlobalTableFunctionState> DuckDBExternalFileCacheStatsInit(ClientContext &context,
                                                                       TableFunctionInitInput &input) {
-	auto result = make_uniq<DuckDBExternalFileCacheStatsData>();
-	result->stats = ExternalFileCache::Get(context).GetStats().GetSnapshot();
-	return std::move(result);
+	return make_uniq<DuckDBExternalFileCacheStatsData>();
 }
 
 void DuckDBExternalFileCacheStatsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -51,14 +45,13 @@ void DuckDBExternalFileCacheStatsFunction(ClientContext &context, TableFunctionI
 		return;
 	}
 	data.done = true;
-	auto &stats = data.stats;
-	output.data[0].Append(Value::UBIGINT(stats.read_request_bytes));
-	output.data[1].Append(Value::UBIGINT(stats.cache_hit_request_bytes));
-	output.data[2].Append(Value::UBIGINT(stats.actual_io_bytes));
-	output.data[3].Append(Value::UBIGINT(stats.block_hit_count));
-	output.data[4].Append(Value::UBIGINT(stats.block_concurrent_hit_count));
-	output.data[5].Append(Value::UBIGINT(stats.block_miss_count));
-	output.data[6].Append(Value::UBIGINT(stats.eviction_refetch_count));
+	auto &stats = ExternalFileCache::Get(context).GetStats();
+	output.data[0].Append(Value::UBIGINT(stats.read_request_bytes.load(std::memory_order_relaxed)));
+	output.data[1].Append(Value::UBIGINT(stats.cache_hit_request_bytes.load(std::memory_order_relaxed)));
+	output.data[2].Append(Value::UBIGINT(stats.actual_io_bytes.load(std::memory_order_relaxed)));
+	output.data[3].Append(Value::UBIGINT(stats.block_hit_count.load(std::memory_order_relaxed)));
+	output.data[4].Append(Value::UBIGINT(stats.block_miss_count.load(std::memory_order_relaxed)));
+	output.data[5].Append(Value::UBIGINT(stats.eviction_refetch_count.load(std::memory_order_relaxed)));
 }
 
 void DuckDBExternalFileCacheStatsFun::RegisterFunction(BuiltinFunctions &set) {
