@@ -101,11 +101,19 @@ static bool FinalizeErrorMessage(FromVariantConversionData &conversion_data, Vec
 
 //! ------- Primitive Conversion Methods -------
 
+//! Throws if [byte_offset, byte_offset + size) is not fully within a blob of size 'blob_size'
+static void ValidateVariantByteRange(uint32_t byte_offset, idx_t size, idx_t blob_size) {
+	if (byte_offset > blob_size || size > blob_size - byte_offset) {
+		throw DataCorruptionException("Variant byte_offset (%d) with size (%d) is out of bounds for a blob of size %d",
+		                              byte_offset, size, blob_size);
+	}
+}
+
 //! bool
 struct VariantBooleanConversion {
 	using type = bool;
-	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, bool &ret,
-	                    const EmptyConversionPayloadFromVariant &payload, string &error) {
+	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, idx_t,
+	                    bool &ret, const EmptyConversionPayloadFromVariant &payload, string &error) {
 		if (type_id != VariantLogicalType::BOOL_FALSE && type_id != VariantLogicalType::BOOL_TRUE) {
 			if (error.empty()) {
 				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
@@ -121,28 +129,31 @@ struct VariantBooleanConversion {
 template <class T, VariantLogicalType TYPE_ID>
 struct VariantDirectConversion {
 	using type = T;
-	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
-	                    const EmptyConversionPayloadFromVariant &payload, string &error) {
+	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, idx_t blob_size,
+	                    T &ret, const EmptyConversionPayloadFromVariant &payload, string &error) {
 		if (type_id != TYPE_ID) {
 			if (error.empty()) {
 				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
 			}
 			return false;
 		}
+		ValidateVariantByteRange(byte_offset, sizeof(T), blob_size);
 		ret = Load<T>(value + byte_offset);
 		return true;
 	}
 
-	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
-	                    const StringConversionPayload &payload, string &error) {
+	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, idx_t blob_size,
+	                    T &ret, const StringConversionPayload &payload, string &error) {
 		if (type_id != TYPE_ID) {
 			if (error.empty()) {
 				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
 			}
 			return false;
 		}
+		ValidateVariantByteRange(byte_offset, 1, blob_size);
 		auto ptr = value + byte_offset;
 		auto length = VarintDecode<idx_t>(ptr);
+		ValidateVariantByteRange(NumericCast<uint32_t>(ptr - value), length, blob_size);
 		ret = StringVector::AddStringOrBlob(payload.vec, reinterpret_cast<const char *>(ptr), length);
 		return true;
 	}
@@ -153,14 +164,15 @@ template <class T>
 struct VariantDecimalConversion {
 	using type = T;
 	static constexpr VariantLogicalType TYPE_ID = VariantLogicalType::DECIMAL;
-	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
-	                    const DecimalConversionPayloadFromVariant &payload, string &error) {
+	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, idx_t blob_size,
+	                    T &ret, const DecimalConversionPayloadFromVariant &payload, string &error) {
 		if (type_id != TYPE_ID) {
 			if (error.empty()) {
 				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
 			}
 			return false;
 		}
+		ValidateVariantByteRange(byte_offset, 1, blob_size);
 		auto ptr = value + byte_offset;
 		auto width = VarintDecode<idx_t>(ptr);
 		auto scale = VarintDecode<idx_t>(ptr);
@@ -169,6 +181,7 @@ struct VariantDecimalConversion {
 			error = StringUtil::Format("Can't convert from VARIANT(DECIMAL(%d, %d))", width, scale);
 			return false;
 		}
+		ValidateVariantByteRange(NumericCast<uint32_t>(ptr - value), sizeof(T), blob_size);
 		ret = Load<T>(ptr);
 		return true;
 	}
@@ -198,10 +211,11 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 
 		auto type_id = variant.GetTypeId(row_index, sel[i]);
 		auto byte_offset = variant.GetByteOffset(row_index, sel[i]);
-		auto value_blob_data = const_data_ptr_cast(variant.GetData(row_index).GetData());
+		auto &blob = variant.GetData(row_index);
+		auto value_blob_data = const_data_ptr_cast(blob.GetData());
 		bool converted = false;
 		if (type_id != VariantLogicalType::OBJECT && type_id != VariantLogicalType::ARRAY) {
-			if (OP::Convert(type_id, byte_offset, value_blob_data, result_data[i + offset], payload,
+			if (OP::Convert(type_id, byte_offset, value_blob_data, blob.GetSize(), result_data[i + offset], payload,
 			                conversion_data.error)) {
 				converted = true;
 			}
