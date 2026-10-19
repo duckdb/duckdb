@@ -36,12 +36,21 @@ VariantDecimalData VariantUtils::DecodeDecimalData(const UnifiedVariantVectorDat
                                                    uint32_t value_index) {
 	D_ASSERT(variant.GetTypeId(row, value_index) == VariantLogicalType::DECIMAL);
 	auto byte_offset = variant.GetByteOffset(row, value_index);
-	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto &blob = variant.GetData(row);
+	auto blob_size = blob.GetSize();
+	if (byte_offset >= blob_size) {
+		throw DataCorruptionException("Variant decimal byte_offset (%d) is out of bounds for a blob of size %d",
+		                              byte_offset, blob_size);
+	}
+	auto data = const_data_ptr_cast(blob.GetData());
 	auto ptr = data + byte_offset;
 
 	auto width = VarintDecode<uint32_t>(ptr);
 	auto scale = VarintDecode<uint32_t>(ptr);
 	auto value_ptr = ptr;
+	if (NumericCast<idx_t>(value_ptr - data) > blob_size) {
+		throw DataCorruptionException("Variant decimal header runs past the end of a blob of size %d", blob_size);
+	}
 	return VariantDecimalData(width, scale, value_ptr);
 }
 
@@ -69,12 +78,21 @@ VariantNestedData VariantUtils::DecodeNestedData(const UnifiedVariantVectorData 
                                                  uint32_t value_index) {
 	D_ASSERT(IsNestedType(variant, row, value_index));
 	auto byte_offset = variant.GetByteOffset(row, value_index);
-	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto &blob = variant.GetData(row);
+	auto blob_size = blob.GetSize();
+	if (byte_offset >= blob_size) {
+		throw DataCorruptionException("Variant nested byte_offset (%d) is out of bounds for a blob of size %d",
+		                              byte_offset, blob_size);
+	}
+	auto data = const_data_ptr_cast(blob.GetData());
 	auto ptr = data + byte_offset;
 
 	VariantNestedData result;
 	result.child_count = VarintDecode<uint32_t>(ptr);
 	if (result.child_count) {
+		if (NumericCast<idx_t>(ptr - data) >= blob_size) {
+			throw DataCorruptionException("Variant nested data runs past the end of a blob of size %d", blob_size);
+		}
 		result.children_idx = VarintDecode<uint32_t>(ptr);
 	} else {
 		result.children_idx = 0;
