@@ -1939,6 +1939,8 @@ excluded_rules:
   - ExternalResourceKeyword
   # Syntax only: OVERRIDING {USER|SYSTEM} VALUE is accepted and ignored.
   - OverridingClause
+  # Syntax only: CREATE INDEX CONCURRENTLY is accepted and ignored.
+  - IndexConcurrently
   # Suggestion-only: exists so autocomplete offers the special SHOW forms as keywords; parsing of e.g.
   # "SHOW databases" resolves through ShowSettingName (the identifier), which the transformer special-cases.
   - ShowSpecialForm

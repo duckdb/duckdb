@@ -258,6 +258,7 @@ enum class PEGRuleId : uint32_t {
 	WithoutOids,
 	IndexElement,
 	UniqueIndex,
+	IndexConcurrently,
 	IndexType,
 	RelOption,
 	RelOptionName,

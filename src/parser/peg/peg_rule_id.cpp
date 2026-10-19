@@ -257,6 +257,7 @@ static const char *const PEG_RULE_NAMES[] = {
     "WithoutOids",
     "IndexElement",
     "UniqueIndex",
+    "IndexConcurrently",
     "IndexType",
     "RelOption",
     "RelOptionName",

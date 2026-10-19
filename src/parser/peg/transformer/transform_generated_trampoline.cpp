@@ -8254,15 +8254,15 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCopyDataTrampolin
 void PEGTransformerFactory::InitializeCreateIndexStmtTrampoline(PEGTransformer &transformer,
                                                                 GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(7)));
+	auto list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(8)));
 	auto dynamic_child_count = list_items.size();
 	process.ReserveChildSlots(7 + dynamic_child_count - 1);
-	auto &where_clause_opt = list_pr.GetChild(9).Cast<OptionalParseResult>();
+	auto &where_clause_opt = list_pr.GetChild(10).Cast<OptionalParseResult>();
 	if (where_clause_opt.HasResult()) {
 		process.PushChild({transformer.GetRule(PEGRuleId::WhereClause), where_clause_opt.GetResult()},
 		                  6 + dynamic_child_count - 1);
 	}
-	auto &with_list_opt = list_pr.GetChild(8).Cast<OptionalParseResult>();
+	auto &with_list_opt = list_pr.GetChild(9).Cast<OptionalParseResult>();
 	if (with_list_opt.HasResult()) {
 		process.PushChild({transformer.GetRule(PEGRuleId::WithList), with_list_opt.GetResult()},
 		                  5 + dynamic_child_count - 1);
@@ -8271,12 +8271,12 @@ void PEGTransformerFactory::InitializeCreateIndexStmtTrampoline(PEGTransformer &
 		auto child_idx = i - 1;
 		process.PushChild({transformer.GetRule(PEGRuleId::IndexElement), list_items[child_idx].get()}, 4 + child_idx);
 	}
-	auto &index_type_opt = list_pr.GetChild(6).Cast<OptionalParseResult>();
+	auto &index_type_opt = list_pr.GetChild(7).Cast<OptionalParseResult>();
 	if (index_type_opt.HasResult()) {
 		process.PushChild({transformer.GetRule(PEGRuleId::IndexType), index_type_opt.GetResult()}, 3);
 	}
-	process.PushChild({transformer.GetRule(PEGRuleId::BaseTableName), list_pr.GetChild(5)}, 2);
-	auto &if_not_exists_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	process.PushChild({transformer.GetRule(PEGRuleId::BaseTableName), list_pr.GetChild(6)}, 2);
+	auto &if_not_exists_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (if_not_exists_opt.HasResult()) {
 		process.PushChild({transformer.GetRule(PEGRuleId::IfNotExists), if_not_exists_opt.GetResult()}, 1);
 	}
@@ -8290,18 +8290,21 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeCreateIndexStmtTrampoline(PEGTransformer &transformer,
                                                          GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(7)));
+	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(8)));
 	auto dynamic_child_count = dynamic_list_items.size();
 	optional<bool> unique_index {};
 	if (process.child_results[0]) {
 		unique_index = process.TakeResult<bool>(0);
 	}
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
 	optional<bool> if_not_exists {};
 	if (process.child_results[1]) {
 		if_not_exists = process.TakeResult<bool>(1);
 	}
 	optional<Identifier> index_name {};
-	auto &index_name_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	auto &index_name_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
 	if (index_name_opt.HasResult()) {
 		index_name = index_name_opt.GetResult().Cast<IdentifierParseResult>().identifier;
 	}
@@ -8324,9 +8327,9 @@ PEGTransformerFactory::FinalizeCreateIndexStmtTrampoline(PEGTransformer &transfo
 	if (process.child_results[6 + dynamic_child_count - 1]) {
 		where_clause = process.TakeResult<unique_ptr<ParsedExpression>>(6 + dynamic_child_count - 1);
 	}
-	auto result =
-	    TransformCreateIndexStmt(transformer, unique_index, if_not_exists, index_name, std::move(base_table_name),
-	                             index_type, std::move(index_element), std::move(with_list), std::move(where_clause));
+	auto result = TransformCreateIndexStmt(transformer, unique_index, has_result, if_not_exists, index_name,
+	                                       std::move(base_table_name), index_type, std::move(index_element),
+	                                       std::move(with_list), std::move(where_clause));
 	return transformer.MakeResult<unique_ptr<CreateStatement>>(std::move(result));
 }
 
