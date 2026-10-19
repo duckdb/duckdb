@@ -253,4 +253,29 @@ TEST_CASE("ColumnDataConsumer handles chunks without blocks", "[column_data_comp
 	REQUIRE(sum == n + 2 * n + n * (n - 1) / 2);
 }
 
+TEST_CASE("Compact collections account their stored bytes", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		// the shapes below assume full-size vectors
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	ColumnDataCollection collection(buffer_manager, {LogicalType::BIGINT});
+	ColumnDataAppendState append_state;
+	collection.InitializeAppend(append_state);
+	for (idx_t i = 0; i < 3; i++) {
+		AppendConstantChunk(collection, append_state, Value::BIGINT(7), STANDARD_VECTOR_SIZE);
+	}
+	REQUIRE(collection.Count() == 3 * STANDARD_VECTOR_SIZE);
+	// a nonempty all-constant collection reports its metadata-resident bytes
+	REQUIRE(collection.SizeInBytes() > 0);
+	REQUIRE(collection.AllocationSize() > 0);
+	REQUIRE(collection.AllocationSize() >= collection.SizeInBytes());
+	// and stays far below one flat vector
+	REQUIRE(collection.SizeInBytes() < 4096);
+	// the per-chunk allocation attribution is nonzero as well
+	auto &segment = *collection.GetSegments()[0];
+	REQUIRE(segment.GetChunkAllocationSize(0) > 0);
+}
+
 } // namespace duckdb

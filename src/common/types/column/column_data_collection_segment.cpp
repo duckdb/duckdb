@@ -14,14 +14,15 @@ namespace duckdb {
 
 ColumnDataCollectionSegment::ColumnDataCollectionSegment(shared_ptr<ColumnDataAllocator> allocator_p,
                                                          vector<LogicalType> types_p)
-    : allocator(std::move(allocator_p)), total_allocated(0), last_chunk_total_allocated(0), types(std::move(types_p)),
-      count(0), heap(make_shared_ptr<StringHeap>(allocator->GetAllocator())) {
+    : allocator(std::move(allocator_p)), total_allocated(0), last_chunk_total_allocated(0), constant_metadata_size(0),
+      types(std::move(types_p)), count(0), heap(make_shared_ptr<StringHeap>(allocator->GetAllocator())) {
 }
 
 void ColumnDataCollectionSegment::Reset() {
 	count = 0;
 	total_allocated = 0;
 	last_chunk_total_allocated = 0;
+	constant_metadata_size = 0;
 	chunk_data.clear();
 	vector_data.clear();
 	child_indices.clear();
@@ -436,12 +437,12 @@ idx_t ColumnDataCollectionSegment::ChunkCount() const {
 
 idx_t ColumnDataCollectionSegment::SizeInBytes() const {
 	D_ASSERT(!allocator->IsShared());
-	return allocator->SizeInBytes() + heap->SizeInBytes();
+	return allocator->SizeInBytes() + heap->SizeInBytes() + constant_metadata_size;
 }
 
 idx_t ColumnDataCollectionSegment::AllocationSize() const {
 	D_ASSERT(!allocator->IsShared());
-	return allocator->AllocationSize() + heap->AllocationSize();
+	return allocator->AllocationSize() + heap->AllocationSize() + constant_metadata_size;
 }
 
 idx_t ColumnDataCollectionSegment::GetChunkAllocationSize(const idx_t chunk_idx) const {
