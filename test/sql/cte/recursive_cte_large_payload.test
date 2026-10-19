@@ -71,6 +71,10 @@ FROM r;
 true
 
 # UNION (distinct) recursion with a large list in the row
+# the recursion terminates through duplicate elimination, bound it with a timeout
+statement ok
+SET max_execution_time=30000
+
 query II
 WITH RECURSIVE r(i, dom) AS (
 	SELECT 0::BIGINT, (SELECT list(x) FROM range(1, 3001) t(x))
@@ -80,6 +84,9 @@ WITH RECURSIVE r(i, dom) AS (
 SELECT count(*), bool_and(list_sum(dom) = 4501500) FROM r;
 ----
 5	true
+
+statement ok
+SET max_execution_time=0
 
 # A large list of structs is carried through the copying path
 query II
