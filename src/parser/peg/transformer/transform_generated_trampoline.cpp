@@ -10551,7 +10551,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeConstraintTimingTrampoline(PEGTransformer &transformer,
                                                           GeneratedTransformProcess &process) {
 	auto result = process.TakeResult<ConstraintCheckMode>(0);
-	return transformer.MakeResult<ConstraintCheckMode>(std::move(result));
+	return transformer.MakeResult<ConstraintCheckMode>(result);
 }
 
 void PEGTransformerFactory::InitializeImmediateConstraintTrampoline(PEGTransformer &transformer,
@@ -10563,7 +10563,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeImmediateConstraintTrampoline(PEGTransformer &transformer,
                                                              GeneratedTransformProcess &process) {
 	auto result = TransformImmediateConstraint(transformer);
-	return transformer.MakeResult<ConstraintCheckMode>(std::move(result));
+	return transformer.MakeResult<ConstraintCheckMode>(result);
 }
 
 void PEGTransformerFactory::InitializeDeferredConstraintTrampoline(PEGTransformer &transformer,
@@ -10575,7 +10575,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeDeferredConstraintTrampoline(PEGTransformer &transformer,
                                                             GeneratedTransformProcess &process) {
 	auto result = TransformDeferredConstraint(transformer);
-	return transformer.MakeResult<ConstraintCheckMode>(std::move(result));
+	return transformer.MakeResult<ConstraintCheckMode>(result);
 }
 
 void PEGTransformerFactory::InitializeDefaultValueTrampoline(PEGTransformer &transformer,
@@ -16351,7 +16351,7 @@ PEGTransformerFactory::FinalizeNotExpressionTrampoline(PEGTransformer &transform
 		not_keyword.push_back(process.TakeResult<bool>(i));
 	}
 	auto result = TransformNotExpression(transformer, not_keyword);
-	return transformer.MakeResult<vector<bool>>(std::move(result));
+	return transformer.MakeResult<vector<bool>>(result);
 }
 
 void PEGTransformerFactory::InitializeNotKeywordTrampoline(PEGTransformer &transformer,
@@ -20761,7 +20761,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeMeasureSemanticsTrampoline(PEGTransformer &transformer,
                                                           GeneratedTransformProcess &process) {
 	auto result = process.TakeResult<bool>(0);
-	return transformer.MakeResult<bool>(std::move(result));
+	return transformer.MakeResult<bool>(result);
 }
 
 void PEGTransformerFactory::InitializeRunningSemanticsTrampoline(PEGTransformer &transformer,
@@ -20773,7 +20773,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeRunningSemanticsTrampoline(PEGTransformer &transformer,
                                                           GeneratedTransformProcess &process) {
 	auto result = TransformRunningSemantics(transformer);
-	return transformer.MakeResult<bool>(std::move(result));
+	return transformer.MakeResult<bool>(result);
 }
 
 void PEGTransformerFactory::InitializeFinalSemanticsTrampoline(PEGTransformer &transformer,
@@ -20785,7 +20785,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeFinalSemanticsTrampoline(PEGTransformer &transformer,
                                                         GeneratedTransformProcess &process) {
 	auto result = TransformFinalSemantics(transformer);
-	return transformer.MakeResult<bool>(std::move(result));
+	return transformer.MakeResult<bool>(result);
 }
 
 void PEGTransformerFactory::InitializeRowsPerMatchTrampoline(PEGTransformer &transformer,
@@ -20805,7 +20805,7 @@ void PEGTransformerFactory::InitializeRowsPerMatchTrampoline(PEGTransformer &tra
 arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeRowsPerMatchTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
 	auto result = process.TakeResult<MatchRecognizeRows>(0);
-	return transformer.MakeResult<MatchRecognizeRows>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeRows>(result);
 }
 
 void PEGTransformerFactory::InitializeOneRowPerMatchTrampoline(PEGTransformer &transformer,
@@ -20817,7 +20817,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeOneRowPerMatchTrampoline(PEGTransformer &transformer,
                                                         GeneratedTransformProcess &process) {
 	auto result = TransformOneRowPerMatch(transformer);
-	return transformer.MakeResult<MatchRecognizeRows>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeRows>(result);
 }
 
 void PEGTransformerFactory::InitializeAllRowsPerMatchTrampoline(PEGTransformer &transformer,
@@ -20839,7 +20839,7 @@ PEGTransformerFactory::FinalizeAllRowsPerMatchTrampoline(PEGTransformer &transfo
 		all_rows_empty_matches = process.TakeResult<MatchRecognizeRows>(0);
 	}
 	auto result = TransformAllRowsPerMatch(transformer, all_rows_empty_matches);
-	return transformer.MakeResult<MatchRecognizeRows>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeRows>(result);
 }
 
 void PEGTransformerFactory::InitializeAllRowsEmptyMatchesTrampoline(PEGTransformer &transformer,
@@ -20860,7 +20860,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeAllRowsEmptyMatchesTrampoline(PEGTransformer &transformer,
                                                              GeneratedTransformProcess &process) {
 	auto result = process.TakeResult<MatchRecognizeRows>(0);
-	return transformer.MakeResult<MatchRecognizeRows>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeRows>(result);
 }
 
 void PEGTransformerFactory::InitializeShowEmptyMatchesTrampoline(PEGTransformer &transformer,
@@ -20872,7 +20872,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeShowEmptyMatchesTrampoline(PEGTransformer &transformer,
                                                           GeneratedTransformProcess &process) {
 	auto result = TransformShowEmptyMatches(transformer);
-	return transformer.MakeResult<MatchRecognizeRows>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeRows>(result);
 }
 
 void PEGTransformerFactory::InitializeOmitEmptyMatchesTrampoline(PEGTransformer &transformer,
@@ -20884,7 +20884,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeOmitEmptyMatchesTrampoline(PEGTransformer &transformer,
                                                           GeneratedTransformProcess &process) {
 	auto result = TransformOmitEmptyMatches(transformer);
-	return transformer.MakeResult<MatchRecognizeRows>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeRows>(result);
 }
 
 void PEGTransformerFactory::InitializeWithUnmatchedRowsTrampoline(PEGTransformer &transformer,
@@ -20896,7 +20896,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeWithUnmatchedRowsTrampoline(PEGTransformer &transformer,
                                                            GeneratedTransformProcess &process) {
 	auto result = TransformWithUnmatchedRows(transformer);
-	return transformer.MakeResult<MatchRecognizeRows>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeRows>(result);
 }
 
 void PEGTransformerFactory::InitializeAfterMatchSkipTrampoline(PEGTransformer &transformer,
@@ -21297,7 +21297,7 @@ PEGTransformerFactory::FinalizeRowPatternQuantifierTrampoline(PEGTransformer &tr
 		quantifier_reluctant = process.TakeResult<bool>(1);
 	}
 	auto result = TransformRowPatternQuantifier(transformer, row_pattern_quantifier_kind, quantifier_reluctant);
-	return transformer.MakeResult<MatchRecognizeQuantifier>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeQuantifier>(result);
 }
 
 void PEGTransformerFactory::InitializeRowPatternQuantifierKindTrampoline(PEGTransformer &transformer,
@@ -21318,7 +21318,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeRowPatternQuantifierKindTrampoline(PEGTransformer &transformer,
                                                                   GeneratedTransformProcess &process) {
 	auto result = process.TakeResult<MatchRecognizeQuantifier>(0);
-	return transformer.MakeResult<MatchRecognizeQuantifier>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeQuantifier>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierReluctantTrampoline(PEGTransformer &transformer,
@@ -21330,7 +21330,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeQuantifierReluctantTrampoline(PEGTransformer &transformer,
                                                              GeneratedTransformProcess &process) {
 	auto result = TransformQuantifierReluctant(transformer);
-	return transformer.MakeResult<bool>(std::move(result));
+	return transformer.MakeResult<bool>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierStarTrampoline(PEGTransformer &transformer,
@@ -21342,7 +21342,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeQuantifierStarTrampoline(PEGTransformer &transformer,
                                                         GeneratedTransformProcess &process) {
 	auto result = TransformQuantifierStar(transformer);
-	return transformer.MakeResult<MatchRecognizeQuantifier>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeQuantifier>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierPlusTrampoline(PEGTransformer &transformer,
@@ -21354,7 +21354,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeQuantifierPlusTrampoline(PEGTransformer &transformer,
                                                         GeneratedTransformProcess &process) {
 	auto result = TransformQuantifierPlus(transformer);
-	return transformer.MakeResult<MatchRecognizeQuantifier>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeQuantifier>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierOptionalTrampoline(PEGTransformer &transformer,
@@ -21366,7 +21366,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeQuantifierOptionalTrampoline(PEGTransformer &transformer,
                                                             GeneratedTransformProcess &process) {
 	auto result = TransformQuantifierOptional(transformer);
-	return transformer.MakeResult<MatchRecognizeQuantifier>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeQuantifier>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierRangeTrampoline(PEGTransformer &transformer,
@@ -21380,7 +21380,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeQuantifierRangeTrampoline(PEGTransformer &transformer,
                                                          GeneratedTransformProcess &process) {
 	auto result = process.TakeResult<MatchRecognizeQuantifier>(0);
-	return transformer.MakeResult<MatchRecognizeQuantifier>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeQuantifier>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierBoundsTrampoline(PEGTransformer &transformer,
@@ -21401,7 +21401,7 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeQuantifierBoundsTrampoline(PEGTransformer &transformer,
                                                           GeneratedTransformProcess &process) {
 	auto result = process.TakeResult<MatchRecognizeQuantifier>(0);
-	return transformer.MakeResult<MatchRecognizeQuantifier>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeQuantifier>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierMinMaxTrampoline(PEGTransformer &transformer,
@@ -21416,7 +21416,7 @@ PEGTransformerFactory::FinalizeQuantifierMinMaxTrampoline(PEGTransformer &transf
 	auto number_literal = TransformNumberLiteral(transformer, list_pr.GetChild(0));
 	auto number_literal_1 = TransformNumberLiteral(transformer, list_pr.GetChild(2));
 	auto result = TransformQuantifierMinMax(transformer, std::move(number_literal), std::move(number_literal_1));
-	return transformer.MakeResult<MatchRecognizeQuantifier>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeQuantifier>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierMinTrampoline(PEGTransformer &transformer,
@@ -21430,7 +21430,7 @@ PEGTransformerFactory::FinalizeQuantifierMinTrampoline(PEGTransformer &transform
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto number_literal = TransformNumberLiteral(transformer, list_pr.GetChild(0));
 	auto result = TransformQuantifierMin(transformer, std::move(number_literal));
-	return transformer.MakeResult<MatchRecognizeQuantifier>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeQuantifier>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierMaxTrampoline(PEGTransformer &transformer,
@@ -21444,7 +21444,7 @@ PEGTransformerFactory::FinalizeQuantifierMaxTrampoline(PEGTransformer &transform
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto number_literal = TransformNumberLiteral(transformer, list_pr.GetChild(1));
 	auto result = TransformQuantifierMax(transformer, std::move(number_literal));
-	return transformer.MakeResult<MatchRecognizeQuantifier>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeQuantifier>(result);
 }
 
 void PEGTransformerFactory::InitializeQuantifierExactTrampoline(PEGTransformer &transformer,
@@ -21458,7 +21458,7 @@ PEGTransformerFactory::FinalizeQuantifierExactTrampoline(PEGTransformer &transfo
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto number_literal = TransformNumberLiteral(transformer, list_pr.GetChild(0));
 	auto result = TransformQuantifierExact(transformer, std::move(number_literal));
-	return transformer.MakeResult<MatchRecognizeQuantifier>(std::move(result));
+	return transformer.MakeResult<MatchRecognizeQuantifier>(result);
 }
 
 void PEGTransformerFactory::InitializeSubsetClauseTrampoline(PEGTransformer &transformer,
