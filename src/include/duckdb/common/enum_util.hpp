@@ -472,6 +472,8 @@ enum class PipelineScheduleMode : uint8_t;
 
 enum class PipelineScheduleStageType : uint8_t;
 
+enum class PoolState : uint8_t;
+
 enum class PragmaType : uint8_t;
 
 enum class PreparedParamType : uint8_t;
@@ -1350,6 +1352,9 @@ const char* EnumUtil::ToChars<PipelineScheduleMode>(PipelineScheduleMode value);
 
 template<>
 const char* EnumUtil::ToChars<PipelineScheduleStageType>(PipelineScheduleStageType value);
+
+template<>
+const char* EnumUtil::ToChars<PoolState>(PoolState value);
 
 template<>
 const char* EnumUtil::ToChars<PragmaType>(PragmaType value);
@@ -2338,6 +2343,9 @@ PipelineScheduleMode EnumUtil::FromString<PipelineScheduleMode>(const char *valu
 
 template<>
 PipelineScheduleStageType EnumUtil::FromString<PipelineScheduleStageType>(const char *value);
+
+template<>
+PoolState EnumUtil::FromString<PoolState>(const char *value);
 
 template<>
 PragmaType EnumUtil::FromString<PragmaType>(const char *value);

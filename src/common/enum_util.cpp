@@ -232,6 +232,7 @@
 #include "duckdb/planner/logical_operator_repeatability.hpp"
 #include "duckdb/planner/logical_plan_verification_result.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 #include "duckdb/storage/caching_mode.hpp"
@@ -5203,6 +5204,25 @@ const char* EnumUtil::ToChars<PipelineScheduleStageType>(PipelineScheduleStageTy
 template<>
 PipelineScheduleStageType EnumUtil::FromString<PipelineScheduleStageType>(const char *value) {
 	return static_cast<PipelineScheduleStageType>(StringUtil::StringToEnum(GetPipelineScheduleStageTypeValues(), 5, "PipelineScheduleStageType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetPoolStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PoolState::UNINITIALIZED), "UNINITIALIZED" },
+		{ static_cast<uint32_t>(PoolState::READY), "READY" },
+		{ static_cast<uint32_t>(PoolState::UNAVAILABLE), "UNAVAILABLE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PoolState>(PoolState value) {
+	return StringUtil::EnumToString(GetPoolStateValues(), 3, "PoolState", static_cast<uint32_t>(value));
+}
+
+template<>
+PoolState EnumUtil::FromString<PoolState>(const char *value) {
+	return static_cast<PoolState>(StringUtil::StringToEnum(GetPoolStateValues(), 3, "PoolState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPragmaTypeValues() {
