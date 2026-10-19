@@ -4,9 +4,8 @@ module: sql_statement
 # more: no binding and no catalog access. The connection supplies the parser
 # state — its options and the parser extensions loaded on it — so a statement
 # parsed on one connection should be executed on that connection. The caller
-# says whether a parse error counts as an error in the connection's active
-# transaction, which then invalidates it as the transaction invalidation
-# policy says.
+# chooses whether a parse error invalidates the connection's active
+# transaction, according to the transaction invalidation policy.
 # Statements are raw parser output; statement-level rewrites (pragma
 # reparsing, statement expansion, transaction wrapping) happen inside
 # statement_execute, so one user statement is always one handle.
@@ -125,9 +124,9 @@ functions:
       Parses and nothing more: no binding and no catalog access. The connection
       supplies the parser options and parser extensions. With
       apply_invalidation_policy, a parse error invalidates the connection's
-      active transaction as the transaction invalidation policy says, like an
-      error from running the statement would; pass that when the statements are
-      parsed to be run. Without it, a parse error leaves the transaction
+      active transaction according to the transaction invalidation policy, like
+      an error from running the statement would; pass that when the statements
+      are parsed to be run. Without it, a parse error leaves the transaction
       usable, for callers that only inspect the statements, for example with
       `[[statement_bind]]`.
       Statements are raw parser output; statement-level rewrites happen inside
@@ -147,7 +146,7 @@ functions:
         description: Null-terminated SQL string; may contain any number of statements.
       apply_invalidation_policy:
         type: bool
-        description: Whether a parse error invalidates the active transaction as the transaction invalidation policy says.
+        description: Whether a parse error invalidates the active transaction, according to the transaction invalidation policy.
       out_iterator:
         type: statement_iterator
         indirection: 1

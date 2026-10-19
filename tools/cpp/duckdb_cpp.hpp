@@ -996,8 +996,9 @@ public:
 	/// Parsing happens statement by statement as the iterator advances, so a syntax error surfaces from
 	/// `StatementIterator::Next` rather than from this call.
 	/// @param sql One or more semicolon-separated SQL statements.
-	/// @param apply_invalidation_policy Whether a syntax error invalidates the active transaction as the transaction
-	/// invalidation policy says. Pass false when the statements are only inspected, e.g. with `Bind`, instead of run.
+	/// @param apply_invalidation_policy Whether a syntax error invalidates the active transaction, according to the
+	/// transaction invalidation policy. Pass false when the statements are only inspected, e.g. with `Bind`, instead of
+	/// run.
 	auto ParseSQL(const char *sql, bool apply_invalidation_policy = true) -> StatementIterator;
 
 	/// `std::string` overload of `ParseSQL`.

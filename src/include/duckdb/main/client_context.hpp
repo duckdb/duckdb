@@ -256,8 +256,8 @@ public:
 
 	//! Iterate the user statements of a script as parsed. The submission of each one expands it, so a statement that
 	//! the engine rewrites into several is still one statement here. With apply_invalidation_policy a parse error
-	//! invalidates the active transaction as the invalidation policy says, as fits statements that are parsed to be
-	//! run; without it the transaction stays usable, as fits statements that are only inspected.
+	//! invalidates the active transaction according to the transaction invalidation policy, as fits statements that are
+	//! parsed to be run; without it the transaction stays usable, as fits statements that are only inspected.
 	DUCKDB_API StatementIterator IterateStatements(const string &query, bool apply_invalidation_policy = true);
 
 	//! Extract the logical plan of a query
