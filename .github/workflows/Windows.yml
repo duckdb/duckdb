@@ -366,10 +366,7 @@ jobs:
        - name: Dependencies
          shell: bash
          run: |
-           python scripts/ci/retry.py -- choco install \
-             ccache \
-             make \
-             --no-progress
+           python scripts/ci/retry.py -- python scripts/ci/install_mingw_dependencies.py
 
        - uses: ./.github/actions/ccache-action
 
