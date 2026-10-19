@@ -183,6 +183,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "allowed_configs",
 	    "allowed_directories",
 	    "allowed_paths",
+	    "block_allocator_memory", // cant reduce
 	    "current_dialect",
 	    "custom_user_agent",
 	    "debug_delta_only_variant_encoding_enabled",
