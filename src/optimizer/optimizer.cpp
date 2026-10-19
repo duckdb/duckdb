@@ -30,12 +30,6 @@
 #include "duckdb/optimizer/remove_redundant_order_keys.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/row_group_pruner.hpp"
-#include "duckdb/optimizer/rule/distinct_aggregate_optimizer.hpp"
-#include "duckdb/optimizer/rule/equal_or_null_simplification.hpp"
-#include "duckdb/optimizer/rule/empty_needle_removal.hpp"
-#include "duckdb/optimizer/rule/in_clause_simplification.hpp"
-#include "duckdb/optimizer/rule/join_dependent_filter.hpp"
-#include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/sampling_pushdown.hpp"
 #include "duckdb/optimizer/scalar_fn_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
@@ -55,9 +49,6 @@
 #include "duckdb/optimizer/partial_aggregate_pushdown.hpp"
 #include "duckdb/optimizer/projection_pullup.hpp"
 #include "duckdb/optimizer/projection_placement.hpp"
-#include "duckdb/optimizer/rule/contains_to_in_clause.hpp"
-#include "duckdb/optimizer/rule/monotone_preimage.hpp"
-#include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/planner.hpp"
@@ -71,56 +62,6 @@
 namespace duckdb {
 
 Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
-}
-
-void Optimizer::InitializeRewriteRules() {
-	if (!rewriter.rules.empty()) {
-		return;
-	}
-	rewriter.rules.push_back(make_uniq<ConstantOrderNormalizationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<StructExtractStructPackFoldingRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<DistributivityRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<ArithmeticSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<LeastGreatestSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<CaseSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<ConjunctionSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<DatePartSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<DateTruncSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<ComparisonSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<RowComparisonSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<InClauseSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<InEnumSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<EnumCompareSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<EqualOrNullSimplification>(rewriter));
-	rewriter.rules.push_back(make_uniq<MoveConstantsRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<MoveUnaryMinusRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<MonotonePreimageRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<LikeOptimizationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<StringPrefixRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<InstrPrefixRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<OrderedAggregateOptimizer>(rewriter));
-	rewriter.rules.push_back(make_uniq<DistinctAggregateOptimizer>(rewriter));
-	rewriter.rules.push_back(make_uniq<DistinctWindowedOptimizer>(rewriter));
-	rewriter.rules.push_back(make_uniq<RegexOptimizationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<RegexpReplaceExtractRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<EmptyNeedleRemovalRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<NoopReplaceRemovalRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<EnumComparisonRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<JoinDependentFilterRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<TimeStampComparison>(rewriter));
-	rewriter.rules.push_back(make_uniq<PredicateFactoringRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<ListComprehensionRewriteRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<ContainsToInClauseRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<NotComparisonSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<NotConjunctionSimplificationRule>(rewriter));
-
-#ifdef DEBUG
-	for (auto &rule : rewriter.rules) {
-		// root not defined in rule
-		D_ASSERT(rule->root);
-	}
-#endif
 }
 
 ClientContext &Optimizer::GetContext() {
@@ -250,7 +191,6 @@ void Optimizer::RunBuiltInOptimizers() {
 	default:
 		break;
 	}
-	InitializeRewriteRules();
 	// determine which secure views may expose the statistics of their contents - this runs before any rewrites so
 	// that the filters the optimizer pushes into a view are not mistaken for the view restricting its own rows
 	LogicalSecureView::AnalyzeStatistics(*plan);
@@ -596,7 +536,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
 			OptimizerExtensionInput input {GetContext(), *this, pre_optimizer_extension.optimizer_info.get()};
 			if (pre_optimizer_extension.pre_optimize_function) {
-				InitializeRewriteRules();
 				CTEFilterPusher::ClearDependencies(*plan);
 				pre_optimizer_extension.pre_optimize_function(input, plan);
 			}
@@ -609,7 +548,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
 			OptimizerExtensionInput input {GetContext(), *this, optimizer_extension.optimizer_info.get()};
 			if (optimizer_extension.optimize_function) {
-				InitializeRewriteRules();
 				optimizer_extension.optimize_function(input, plan);
 			}
 		});
