@@ -2311,6 +2311,131 @@ TEST_CASE("Lookahead sets reject matchers that cannot continue with the second t
 	}
 }
 
+//! Runs the lookahead of matcher with the tail checks of allocator; a rejected matcher must also fail to match
+static bool TailCheckMightMatch(const CompiledGrammar &grammar, const MatcherAllocator &matcher_allocator,
+                                const Matcher &matcher, const string &sql, idx_t &rejected_until) {
+	INFO("Matcher " << matcher.ToString() << " on input \"" << sql << "\"");
+	auto tokens = TokenizeFirstSetTestInput(grammar, sql);
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	idx_t max_token_index = 0;
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, allocator, process_allocator, max_token_index);
+	context.sequence_checks = matcher_allocator.GetSequenceChecks();
+	MatchState state(iterator, context);
+	auto might_match = matcher.first_set.MightMatch(state);
+	if (!might_match) {
+		REQUIRE_FALSE(matcher.MatchParseResult(state).IsSuccess());
+	}
+	rejected_until = context.tail_rejected_until;
+	return might_match;
+}
+
+TEST_CASE("Tail checks skip sequences whose later element cannot follow the prefix", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto grammar = CompiledGrammar::Get(*con.context);
+	auto &helper = grammar->GetKeywordHelper();
+	auto &table = helper.GetLiteralTable();
+
+	auto keyword_grammar = ParsedGrammar::Parse("Program <- '.' '(' ')' ','");
+	auto keyword_rules = CompileTestProgramRule(keyword_grammar);
+	MatcherAllocator matcher_allocator;
+	MatcherFactory factory(matcher_allocator, keyword_grammar, keyword_rules, helper, {});
+	auto &keywords = factory.CreateRootMatcher("Program").Cast<ListMatcher>().matchers;
+	auto &dot = keywords[0].get();
+	auto &open = keywords[1].get();
+	auto &close = keywords[2].get();
+	auto &comma = keywords[3].get();
+	auto &identifier =
+	    matcher_allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME, helper));
+	auto &string_literal = matcher_allocator.Allocate(make_uniq<StringLiteralMatcher>());
+	auto &number = matcher_allocator.Allocate(make_uniq<NumberLiteralMatcher>());
+	auto Structural = [&](unique_ptr<Matcher> matcher) -> Matcher & {
+		matcher->SetStructural();
+		return matcher_allocator.Allocate(std::move(matcher));
+	};
+	// Name <- Identifier ('.' Identifier)?
+	auto &qualification = Structural(make_uniq<ListMatcher>(vector<reference<Matcher>> {dot, identifier}));
+	auto &optional_qualification = Structural(make_uniq<OptionalMatcher>(qualification));
+	auto &name = Structural(make_uniq<ListMatcher>(vector<reference<Matcher>> {identifier, optional_qualification}));
+	// Modifiers <- '(' Identifier ')'
+	auto &modifiers = Structural(make_uniq<ListMatcher>(vector<reference<Matcher>> {open, identifier, close}));
+	auto &optional_modifiers = Structural(make_uniq<OptionalMatcher>(modifiers));
+	// Type <- Name Modifiers?
+	auto &type = Structural(make_uniq<ListMatcher>(vector<reference<Matcher>> {name, optional_modifiers}));
+	// TypeLiteral <- Type StringLiteral
+	auto &type_literal = Structural(make_uniq<ListMatcher>(vector<reference<Matcher>> {type, string_literal}));
+	// Unbalanced <- Name ')' NumberLiteral: a lone bracket makes the prefix unsafe
+	auto &unbalanced = Structural(make_uniq<ListMatcher>(vector<reference<Matcher>> {name, close, number}));
+	// Overlapping <- Type Identifier: the element can start where the prefix ends
+	auto &overlapping = Structural(make_uniq<ListMatcher>(vector<reference<Matcher>> {type, identifier}));
+	// Led <- (Identifier ',' Identifier / '.') StringLiteral: the second token depends on the alternative
+	auto &pair = Structural(make_uniq<ListMatcher>(vector<reference<Matcher>> {identifier, comma, identifier}));
+	auto &lead = Structural(make_uniq<ChoiceMatcher>(vector<reference<Matcher>> {pair, dot}));
+	auto &led = Structural(make_uniq<ListMatcher>(vector<reference<Matcher>> {lead, string_literal}));
+	auto &root = Structural(
+	    make_uniq<ChoiceMatcher>(vector<reference<Matcher>> {type_literal, unbalanced, overlapping, led, name}));
+	ComputeFirstSets(root, table);
+	matcher_allocator.InitializeSequenceChecks(table);
+
+	REQUIRE(type_literal.first_set.sequence_check_index != 0);
+	REQUIRE_FALSE(type_literal.first_set.first_suffices);
+	REQUIRE(unbalanced.first_set.sequence_check_index == 0);
+	REQUIRE(overlapping.first_set.sequence_check_index == 0);
+	REQUIRE(name.first_set.sequence_check_index == 0);
+	REQUIRE(led.first_set.sequence_check_index != 0);
+
+	idx_t rejected_until = 0;
+	SECTION("The first token the prefix cannot consume has to start the element") {
+		REQUIRE(TailCheckMightMatch(*grammar, matcher_allocator, type_literal, "foo 'x'", rejected_until));
+		REQUIRE(TailCheckMightMatch(*grammar, matcher_allocator, type_literal, "foo . bar 'x'", rejected_until));
+		REQUIRE_FALSE(TailCheckMightMatch(*grammar, matcher_allocator, type_literal, "foo . bar , 1", rejected_until));
+		REQUIRE(rejected_until == 3);
+		REQUIRE_FALSE(TailCheckMightMatch(*grammar, matcher_allocator, type_literal, "foo . bar", rejected_until));
+		REQUIRE(rejected_until == 3);
+	}
+	SECTION("Balanced brackets are skipped") {
+		REQUIRE(TailCheckMightMatch(*grammar, matcher_allocator, type_literal, "foo ( bar ) 'x'", rejected_until));
+		REQUIRE(TailCheckMightMatch(*grammar, matcher_allocator, type_literal, "foo ( 1 , 2 ) 'x'", rejected_until));
+		REQUIRE_FALSE(
+		    TailCheckMightMatch(*grammar, matcher_allocator, type_literal, "foo ( bar ) , 1", rejected_until));
+		REQUIRE(rejected_until == 4);
+		REQUIRE_FALSE(TailCheckMightMatch(*grammar, matcher_allocator, type_literal, "foo . bar )", rejected_until));
+		REQUIRE(rejected_until == 3);
+		// an unterminated bracket is never rejected
+		REQUIRE(TailCheckMightMatch(*grammar, matcher_allocator, type_literal, "foo ( bar", rejected_until));
+	}
+	SECTION("A leading choice is checked per alternative") {
+		REQUIRE(TailCheckMightMatch(*grammar, matcher_allocator, led, "foo , bar 'x'", rejected_until));
+		REQUIRE(TailCheckMightMatch(*grammar, matcher_allocator, led, ". 'x'", rejected_until));
+		REQUIRE_FALSE(TailCheckMightMatch(*grammar, matcher_allocator, led, "foo 'x'", rejected_until));
+		REQUIRE_FALSE(TailCheckMightMatch(*grammar, matcher_allocator, led, ". foo", rejected_until));
+		// the merged second-token sets accept a string after any alternative
+		CheckFirstSet(*grammar, led, "foo 'x'", true);
+		CheckFirstSet(*grammar, led, ". foo", false);
+	}
+	SECTION("Without the grammar's tail checks the lookahead stops at the second token") {
+		CheckFirstSet(*grammar, type_literal, "foo . bar , 1", true);
+		CheckFirstSet(*grammar, type_literal, "foo , 1", false);
+	}
+	SECTION("The autocomplete cursor can stand for any token") {
+		vector<MatcherToken> tokens {MatcherToken("foo", 0, TokenType::IDENTIFIER),
+		                             MatcherToken(".", 3, TokenType::OPERATOR),
+		                             MatcherToken("", 4, TokenType::END_OF_INPUT_AUTOCOMPLETE)};
+		TokenIterator iterator(tokens);
+		vector<MatcherSuggestion> suggestions;
+		ParseResultAllocator allocator;
+		idx_t max_token_index = 0;
+		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+		MatchContext context(suggestions, allocator, process_allocator, max_token_index);
+		context.sequence_checks = matcher_allocator.GetSequenceChecks();
+		MatchState state(iterator, context);
+		REQUIRE(type_literal.first_set.MightMatch(state));
+	}
+}
+
 TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][grammar_extension]") {
 	DuckDB db(nullptr);
 	Connection con(db);

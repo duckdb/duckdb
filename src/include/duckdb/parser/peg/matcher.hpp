@@ -33,6 +33,7 @@ class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
 struct ListMatchChain;
+struct MatcherSequenceCheck;
 class MatchProcess;
 
 enum class SuggestionState : uint8_t {
@@ -180,6 +181,11 @@ struct MatchContext {
 	bool expand_labels = false;
 	//! With memoizable_suggestions: suggestion walks already done, keyed by matcher and active label
 	std::map<std::pair<const Matcher *, const string *>, SuggestionType> walked_suggestions;
+	//! The grammar's sequence checks; unset when sequences must not be skipped, e.g. for the exact error position of
+	//! a failed match
+	optional_ptr<const vector<unique_ptr<MatcherSequenceCheck>>> sequence_checks;
+	//! Furthest token index a sequence skipped by a tail check could have reached
+	idx_t tail_rejected_until = 0;
 };
 
 struct MatchState {
@@ -315,6 +321,22 @@ struct MatcherTokenSet {
 	}
 };
 
+class ChoiceMatcher;
+
+//! Lookahead refinements of a sequence, derived from the grammar once. A leading choice is checked per alternative:
+//! the second token has to continue the alternative that accepts the first one (or start the rest of the sequence
+//! after a one-token alternative). A tail check scans the tokens the prefix can consume outside of balanced brackets
+//! (`alphabet`): the first other token has to start the element after the prefix (`required`).
+struct MatcherSequenceCheck {
+	optional_ptr<const ChoiceMatcher> leading_choice;
+	//! FIRST set of the sequence after the leading choice
+	MatcherTokenSet rest_first;
+	bool rest_nullable = false;
+	bool has_tail = false;
+	MatcherTokenSet alphabet;
+	MatcherTokenSet required;
+};
+
 //! Over-approximation of the tokens a matcher can start with (its FIRST set), computed once per grammar, together with
 //! the tokens for which it can match exactly one token (ONE) and the tokens it can see second (SECOND). Lets the
 //! matcher skip sub-matchers that certainly cannot match at the current token.
@@ -324,6 +346,8 @@ struct MatcherFirstSet : public MatcherTokenSet {
 	bool nullable = false;
 	//! every token in FIRST passes the lookahead check, so only FIRST has to be tested
 	bool first_suffices = true;
+	//! one-based index into the grammar's sequence checks, zero when there is none
+	uint16_t sequence_check_index = 0;
 	optional_ptr<const GrammarLiteralTable> table;
 	//! first tokens for which a match consuming exactly one token is possible
 	MatcherTokenSet one;
@@ -373,8 +397,12 @@ struct MatcherFirstSet : public MatcherTokenSet {
 		}
 		return MightMatchSecond(state);
 	}
-	//! The lookahead check for a token in FIRST: a one-token match or a valid second token
+	//! The lookahead check for a token in FIRST: a one-token match or a valid second token, then the tail check
 	DUCKDB_API bool MightMatchSecond(MatchState &state) const;
+	//! The per-alternative second-token check of a sequence that starts with a choice
+	DUCKDB_API bool MightMatchLeadingChoice(const MatcherSequenceCheck &check, MatchState &state) const;
+	//! Scans past the tokens the prefix can consume and checks that the element after it can start there
+	DUCKDB_API bool MightMatchTail(const MatcherSequenceCheck &check, MatchState &state) const;
 };
 
 class Matcher {
@@ -523,10 +551,16 @@ public:
 
 	Matcher &Allocate(unique_ptr<Matcher> matcher);
 	void InitializeListChains();
+	//! Derive the sequence checks after the FIRST sets are final
+	DUCKDB_API void InitializeSequenceChecks(const GrammarLiteralTable &table);
+	const vector<unique_ptr<MatcherSequenceCheck>> &GetSequenceChecks() const {
+		return sequence_checks;
+	}
 
 private:
 	vector<unique_ptr<Matcher>> matchers;
 	vector<unique_ptr<ListMatchChain>> list_chains;
+	vector<unique_ptr<MatcherSequenceCheck>> sequence_checks;
 };
 
 //! The arenas of a parse (parse results, matcher frames, packrat entries, transform results) start with room for
