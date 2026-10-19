@@ -32,7 +32,7 @@ struct ReduceExecuteInfo {
 			auto list_column_format_index = info.list_column_format.sel->get_index(original_row_idx);
 			if (info.list_column_format.validity.RowIsValid(list_column_format_index)) {
 				if (info.list_entries[list_column_format_index].length == 0 && !info.has_initial) {
-					throw InvalidInputException("Cannot perform list_reduce on an empty input list");
+					throw ParameterNotAllowedException("Cannot perform list_reduce on an empty input list");
 				}
 				left_vector.set_index(reduced_row_idx, info.list_entries[list_column_format_index].offset);
 				reduced_row_idx++;
