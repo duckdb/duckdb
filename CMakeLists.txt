@@ -1380,6 +1380,7 @@ elseif(BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(tools)
   add_subdirectory(extension)
 endif()
+duckdb_link_deferred_extension_libraries()
 
 if(NOT EXTENSION_CONFIG_BUILD)
   if(PREBUILT_BINARY)

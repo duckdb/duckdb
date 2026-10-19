@@ -1198,12 +1198,21 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 
 		//	Apply any arbitrary predicate
 		MergePayloads(chunk);
+		SelectionVector match_sel;
 		if (op.predicate) {
-			sel = ApplyArbitraryPredicate(chunk);
+			//	The predicate selection is relative to the rows that passed the tail conditions,
+			//	so combine the two to index the original join pairs
+			auto tail_sel = sel;
+			auto predicate_sel = ApplyArbitraryPredicate(chunk);
 			result_count = chunk.size();
 			if (!result_count) {
 				continue;
 			}
+			match_sel.Initialize(result_count);
+			for (idx_t i = 0; i < result_count; i++) {
+				match_sel.set_index(i, tail_sel->get_index(predicate_sel->get_index(i)));
+			}
+			sel = &match_sel;
 		}
 
 		//	We need all of the data to compute other predicates,

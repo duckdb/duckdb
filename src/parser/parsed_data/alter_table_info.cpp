@@ -628,6 +628,9 @@ unique_ptr<AlterInfo> AddConstraintInfo::Copy() const {
 
 string AddConstraintInfo::ToString() const {
 	string result = "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += "IF EXISTS ";
+	}
 	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ADD ";
 	result += constraint->ToString();
@@ -659,6 +662,9 @@ unique_ptr<AlterInfo> SetPartitionedByInfo::Copy() const {
 
 string SetPartitionedByInfo::ToString() const {
 	string result = "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += "IF EXISTS ";
+	}
 	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	if (partition_keys.empty()) {
 		result += " RESET PARTITIONED BY";
@@ -698,6 +704,9 @@ unique_ptr<AlterInfo> SetSortedByInfo::Copy() const {
 
 string SetSortedByInfo::ToString() const {
 	string result = "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += "IF EXISTS ";
+	}
 	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	if (orders.empty()) {
 		result += " RESET SORTED BY";
@@ -738,6 +747,9 @@ unique_ptr<AlterInfo> SetTableOptionsInfo::Copy() const {
 
 string SetTableOptionsInfo::ToString() const {
 	string result = "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += "IF EXISTS ";
+	}
 	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " SET (";
 	idx_t i = 0;
@@ -775,6 +787,9 @@ unique_ptr<AlterInfo> ResetTableOptionsInfo::Copy() const {
 
 string ResetTableOptionsInfo::ToString() const {
 	string result = "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += "IF EXISTS ";
+	}
 	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " RESET (";
 	idx_t i = 0;

@@ -1034,6 +1034,9 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto flags = FileOpenFlags::FILE_FLAGS_WRITE | FileOpenFlags::FILE_FLAGS_FILE_CREATE_NEW;
 	auto file = fs.OpenFile(path, flags);
+	if (!file) {
+		throw IOException("Could not open the profiling output file \"%s\" for writing", path);
+	}
 	file->Write((void *)info.c_str(), info.size());
 	file->Close();
 }

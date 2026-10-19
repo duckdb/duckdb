@@ -393,6 +393,8 @@ Expression:
     - ColDefAndExpressionTail
     - LogicalNotExpression
     - IsExpression
+    - ComparisonOperand
+    - NotComparisonOperand
     - IsTest
     - IsLiteral
     - NotNull
@@ -1677,7 +1679,7 @@ overrides:
   # expression.gram
   NotExpression:
     type: "vector<bool>"
-    by_value: true
+    by_value: false
   IsDistinctFromTail:
     type: "IsDistinctFromTail"
     by_value: true
@@ -1700,6 +1702,9 @@ overrides:
     type: "IsExpressionTail"
     by_value: true
   IsOtherOperatorTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsCastTail:
     type: "IsExpressionTail"
     by_value: true
   BetweenLikeOp:
@@ -1889,11 +1894,10 @@ expression_depth_nesting_rules:
   - SingleExpression
   - Type
   - NestedType
+  - SubqueryReference
 
 expression_depth_chain_rules:
   - LambdaArrowExpression
-  - LogicalOrExpression
-  - LogicalAndExpression
   - NotExpression
   - IsExpressionContinuation
   - IsDistinctFromExpression
@@ -1930,6 +1934,7 @@ collapsible_rules:
   - OtherOperatorExpression
   - InfixOtherOperatorExpression
   - BitwiseExpression
+  - TildeExpression
   - AdditiveExpression
   - MultiplicativeExpression
   - ExponentiationExpression
