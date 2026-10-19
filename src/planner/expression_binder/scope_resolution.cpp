@@ -306,6 +306,14 @@ optional_idx ExpressionBinder::ResolveOuterGroupOwner(ParsedExpression &expr) {
 	if (!CanMatchGroup(expr)) {
 		return optional_idx();
 	}
+	// resolving the owner walks the expression, so only do so when some enclosing scope can match at all
+	bool any_groups = false;
+	for (idx_t scope = 1; scope < ScopeCount() && !any_groups; scope++) {
+		any_groups = ScopeAt(scope).HasGroups();
+	}
+	if (!any_groups) {
+		return optional_idx();
+	}
 	// the expression only refers to a group of the scope that owns all of its columns, so that e.g. a
 	// column of an inner scope that shadows the grouped one keeps the expression in the inner scope
 	auto owner = ResolveExpressionOwner(expr, 0);
