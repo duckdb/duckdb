@@ -16,6 +16,10 @@
 #include "vergesort.h"
 #include "pdqsort.h"
 
+#include <algorithm>
+#include <new>
+#include <type_traits>
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -28,6 +32,13 @@ static idx_t SortedRunsTotalCount(const vector<unique_ptr<SortedRun>> &sorted_ru
 		total_count += sorted_run->Count();
 	}
 	return total_count;
+}
+
+static idx_t RowPartitionCount(const SortedRunMerger &merger) {
+	if (merger.total_count == 0) {
+		return 0;
+	}
+	return merger.total_count / merger.partition_size + (merger.total_count % merger.partition_size != 0);
 }
 
 struct SortedRunPartitionBoundary {
@@ -96,7 +107,7 @@ public:
 	    : begin_computed(partition_idx == 0), scanned(false) {
 		// Initialize each partition with sensible defaults
 		run_boundaries.resize(merger.sorted_runs.size());
-		const auto maximum_end = (partition_idx + 1) * merger.partition_size;
+		const auto maximum_end = merger.PartitionRowCount(partition_idx + 1);
 		for (idx_t run_idx = 0; run_idx < merger.sorted_runs.size(); run_idx++) {
 			const auto end = MinValue(merger.sorted_runs[run_idx]->Count(), maximum_end);
 			run_boundaries[run_idx] = {0, end};
@@ -224,8 +235,7 @@ class SortedRunMergerGlobalState : public GlobalSourceState {
 public:
 	explicit SortedRunMergerGlobalState(ClientContext &context_p, const SortedRunMerger &merger_p)
 	    : context(context_p), num_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()), merger(merger_p),
-	      num_runs(merger.sorted_runs.size()),
-	      num_partitions((merger.total_count + (merger.partition_size - 1)) / merger.partition_size),
+	      num_runs(merger.sorted_runs.size()), num_partitions(merger.PartitionCount()),
 	      iterator_state_type(GetBlockIteratorStateType(merger.external)),
 	      sort_key_type(merger.sort.key_layout->GetSortKeyType()), next_partition_idx(0), total_scanned(0),
 	      progress_scanned(0), destroy_partition_idx(0) {
@@ -250,7 +260,7 @@ public:
 	}
 
 	idx_t MaxThreads() override {
-		return MaxValue<idx_t>(num_partitions, 1);
+		return MaxValue<idx_t>(RowPartitionCount(merger), 1);
 	}
 
 	void DestroyScannedData() {
@@ -283,7 +293,11 @@ public:
 		}
 
 		// Compute average number of tuples per partition to destroy
-		const auto total_tuples_to_destroy = (end_partition_idx - destroy_partition_idx) * merger.partition_size;
+		const auto begin_row_count =
+		    destroy_partition_idx == 0 ? 0 : merger.PartitionRowCount(destroy_partition_idx + 1);
+		const auto end_row_count =
+		    end_partition_idx == num_partitions ? merger.total_count : merger.PartitionRowCount(end_partition_idx + 1);
+		const auto total_tuples_to_destroy = end_row_count - begin_row_count;
 		const auto tuples_to_destroy_per_partition = total_tuples_to_destroy / num_partitions;
 
 		// Compute max tuples per block
@@ -556,7 +570,7 @@ void SortedRunMergerLocalState::TemplatedComputePartitionBoundaries(SortedRunMer
 	}
 
 	// Initialize "total_remaining", i.e., how much we still need to update the boundaries until we're done
-	idx_t total_remaining = (p_idx.GetIndex() + 1) * gstate.merger.partition_size;
+	idx_t total_remaining = gstate.merger.PartitionRowCount(p_idx.GetIndex() + 1);
 
 	// Initialize iterators, and track of which runs are actively being used in the computation, i.e., not yet fixed
 	unsafe_vector<BLOCK_ITERATOR> run_iterators;
@@ -856,11 +870,205 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 //===--------------------------------------------------------------------===//
 // Sorted Run Merger
 //===--------------------------------------------------------------------===//
+static constexpr idx_t MAX_BYTE_SAMPLES = 512;
+
+template <class SORT_KEY>
+struct MergeByteSample {
+	SORT_KEY key;
+	idx_t rows;
+	double bytes_per_row;
+	idx_t ordinal;
+
+	bool operator<(const MergeByteSample &other) const {
+		if (key < other.key) {
+			return true;
+		}
+		if (other.key < key) {
+			return false;
+		}
+		return ordinal < other.ordinal;
+	}
+};
+
+template <SortKeyType SORT_KEY_TYPE>
+optional_idx SortedRunMerger::TemplatedFindByteSplit() const {
+	const auto &merger = *this;
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	using SAMPLE = MergeByteSample<SORT_KEY>;
+	static_assert(std::is_trivially_destructible<SAMPLE>::value, "Merge byte samples must not own resources");
+	D_ASSERT(SORT_KEY::CONSTANT_SIZE && SORT_KEY::HAS_PAYLOAD);
+	static constexpr idx_t NEIGHBORS = 32;
+	auto &context = merger.sort.client_context;
+	const auto &payload_layout = *merger.sort.payload_layout;
+	const auto row_width = payload_layout.GetRowWidth();
+	const auto heap_size_offset = payload_layout.GetHeapSizeOffset();
+	auto sample_buffer = BufferAllocator::Get(context).Allocate(MAX_BYTE_SAMPLES * sizeof(SAMPLE));
+	unsafe_array_ptr<SAMPLE> samples(reinterpret_cast<SAMPLE *>(sample_buffer.get()), MAX_BYTE_SAMPLES);
+	idx_t sample_count = 0;
+	const auto run_count = merger.sorted_runs.size();
+	for (idx_t run_idx = 0; run_idx < run_count; run_idx++) {
+		auto &run = *merger.sorted_runs[run_idx];
+		const auto count = run.Count();
+		const auto intervals = MinValue<idx_t>(count, MAX_BYTE_SAMPLES / run_count);
+		const auto interval_size = count / intervals;
+		const auto remainder = count % intervals;
+		ExternalBlockIteratorState key_state(*run.key_data, nullptr);
+		idx_t begin = 0;
+		for (idx_t interval_idx = 0; interval_idx < intervals; interval_idx++) {
+			context.InterruptCheck();
+			const auto width = interval_size + (interval_idx < remainder);
+			const auto end = begin + width;
+			const auto phase = (width / run_count) * run_idx + ((width % run_count) * run_idx) / run_count;
+			const auto row_idx = begin + phase;
+			auto key = key_state.GetValueAtIndex<SORT_KEY>(row_idx);
+			double payload_bytes;
+			if (merger.external) {
+				const auto chunk_idx = row_idx / STANDARD_VECTOR_SIZE;
+				const auto chunk_count =
+				    MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - chunk_idx * STANDARD_VECTOR_SIZE);
+				payload_bytes = static_cast<double>(run.payload_data->GetChunkDataSize(chunk_idx)) / chunk_count;
+			} else {
+				const auto neighbors = MinValue<idx_t>(NEIGHBORS, width);
+				auto neighbor_begin = row_idx - MinValue<idx_t>(row_idx - begin, neighbors / 2);
+				neighbor_begin = MinValue(neighbor_begin, end - neighbors);
+				payload_bytes = 0;
+				for (idx_t i = 0; i < neighbors; i++) {
+					const auto &neighbor = key_state.GetValueAtIndex<SORT_KEY>(neighbor_begin + i);
+					payload_bytes += static_cast<double>(Load<idx_t>(neighbor.GetPayload() + heap_size_offset));
+				}
+				payload_bytes = row_width + payload_bytes / neighbors;
+			}
+			key.SetPayload(nullptr);
+			new (&samples[sample_count]) SAMPLE {key, width, sizeof(SORT_KEY) + payload_bytes, sample_count};
+			sample_count++;
+			begin = end;
+		}
+		D_ASSERT(begin == count);
+	}
+	std::sort(samples.data(), samples.data() + sample_count);
+
+	idx_t rank = 0;
+	idx_t largest_partition = 0;
+	double partition_bytes = 0;
+	double largest_bytes = 0;
+	double total_bytes = 0;
+	for (idx_t i = 0; i < sample_count; i++) {
+		const auto &sample = samples[i];
+		auto remaining = sample.rows;
+		total_bytes += sample.bytes_per_row * sample.rows;
+		while (remaining != 0) {
+			const auto take = MinValue(remaining, merger.partition_size - rank % merger.partition_size);
+			partition_bytes += sample.bytes_per_row * take;
+			rank += take;
+			remaining -= take;
+			if (rank % merger.partition_size == 0 || rank == merger.total_count) {
+				if (partition_bytes > largest_bytes) {
+					largest_bytes = partition_bytes;
+					largest_partition = (rank - 1) / merger.partition_size;
+				}
+				partition_bytes = 0;
+			}
+		}
+	}
+	D_ASSERT(rank == merger.total_count);
+	if (largest_bytes <= 2 * (total_bytes / RowPartitionCount(merger))) {
+		return optional_idx();
+	}
+	const auto partition_begin = largest_partition * merger.partition_size;
+	const auto partition_end = largest_partition == RowPartitionCount(merger) - 1
+	                               ? merger.total_count
+	                               : partition_begin + merger.partition_size;
+	if (partition_end - partition_begin <= STANDARD_VECTOR_SIZE) {
+		return optional_idx();
+	}
+	const auto first_interior = partition_begin + STANDARD_VECTOR_SIZE;
+	const auto last_interior = ((partition_end - 1) / STANDARD_VECTOR_SIZE) * STANDARD_VECTOR_SIZE;
+	auto median_bytes = largest_bytes / 2;
+	rank = 0;
+	for (idx_t i = 0; i < sample_count; i++) {
+		const auto &sample = samples[i];
+		const auto begin = MaxValue(rank, partition_begin);
+		const auto end = MinValue(rank + sample.rows, partition_end);
+		rank += sample.rows;
+		if (begin >= end) {
+			continue;
+		}
+		const auto bytes = sample.bytes_per_row * (end - begin);
+		if (median_bytes > bytes) {
+			median_bytes -= bytes;
+			continue;
+		}
+		const auto offset = median_bytes / sample.bytes_per_row;
+		const auto rows = offset >= static_cast<double>(end - begin) ? end - begin : static_cast<idx_t>(offset);
+		const auto aligned = ((begin + rows) / STANDARD_VECTOR_SIZE) * STANDARD_VECTOR_SIZE;
+		return MinValue(MaxValue(aligned, first_interior), last_interior);
+	}
+	return optional_idx();
+}
+
+optional_idx SortedRunMerger::FindByteSplit() const {
+	const auto &merger = *this;
+	const auto key_type = merger.sort.key_layout->GetSortKeyType();
+	if (merger.total_count == 0 || merger.is_index_sort || merger.sort.is_index_sort || merger.sorted_runs.size() < 2 ||
+	    merger.sorted_runs.size() > MAX_BYTE_SAMPLES || RowPartitionCount(merger) < 3 ||
+	    merger.partition_size < 2 * STANDARD_VECTOR_SIZE || merger.partition_size % STANDARD_VECTOR_SIZE != 0 ||
+	    !SortKeyUtils::IsConstantSize(key_type) || !SortKeyUtils::HasPayload(key_type) ||
+	    merger.sort.payload_layout->AllConstant()) {
+		return optional_idx();
+	}
+	for (const auto &run : merger.sorted_runs) {
+		if (!run->finalized || run->Count() == 0 || !run->payload_data) {
+			return optional_idx();
+		}
+	}
+	try {
+		switch (key_type) {
+#define DUCKDB_BYTE_SPLIT_CASE(TYPE)                                                                                   \
+	case SortKeyType::TYPE:                                                                                            \
+		return TemplatedFindByteSplit<SortKeyType::TYPE>();
+			DUCKDB_FOR_EACH_PAYLOAD_SORT_KEY_TYPE(DUCKDB_BYTE_SPLIT_CASE)
+#undef DUCKDB_BYTE_SPLIT_CASE
+		default:
+			return optional_idx();
+		}
+	} catch (const OutOfMemoryException &) {
+		return optional_idx();
+	} catch (const std::bad_alloc &) {
+		return optional_idx();
+	}
+}
+
 SortedRunMerger::SortedRunMerger(const Sort &sort_p, vector<unique_ptr<SortedRun>> &&sorted_runs_p,
                                  idx_t partition_size_p, bool external_p, bool is_index_sort_p)
     : scheduler(TaskScheduler::GetScheduler(*sort_p.client_context.db)), sort(sort_p),
       sorted_runs(std::move(sorted_runs_p)), total_count(SortedRunsTotalCount(sorted_runs)),
-      partition_size(partition_size_p), external(external_p), is_index_sort(is_index_sort_p) {
+      partition_size(partition_size_p), external(external_p), is_index_sort(is_index_sort_p),
+      extra_partition_end(FindByteSplit()) {
+}
+
+idx_t SortedRunMerger::PartitionCount() const {
+	return RowPartitionCount(*this) + extra_partition_end.IsValid();
+}
+
+idx_t SortedRunMerger::PartitionRowCount(idx_t partition_count) const {
+	D_ASSERT(partition_count <= PartitionCount());
+	if (partition_count == 0) {
+		return 0;
+	}
+	if (partition_count == PartitionCount()) {
+		return total_count;
+	}
+	if (extra_partition_end.IsValid()) {
+		const auto extra_end = extra_partition_end.GetIndex();
+		const auto split_partition = extra_end / partition_size;
+		if (partition_count == split_partition + 1) {
+			return extra_end;
+		}
+		if (partition_count > split_partition + 1) {
+			partition_count--;
+		}
+	}
+	return partition_count * partition_size;
 }
 
 SortedRunMerger::~SortedRunMerger() {

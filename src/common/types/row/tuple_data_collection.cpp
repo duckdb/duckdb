@@ -111,6 +111,24 @@ idx_t TupleDataCollection::SizeInBytes() const {
 	return data_size + stl_allocator->AllocationSize();
 }
 
+idx_t TupleDataCollection::GetChunkDataSize(idx_t chunk_idx) const {
+	for (const auto &segment : segments) {
+		if (chunk_idx >= segment->ChunkCount()) {
+			chunk_idx -= segment->ChunkCount();
+			continue;
+		}
+		const auto &chunk = *segment->chunks[chunk_idx];
+		auto result = chunk.count * layout.GetRowWidth();
+		if (!layout.AllConstant()) {
+			for (auto part_idx = chunk.part_ids.Start(); part_idx < chunk.part_ids.End(); part_idx++) {
+				result += segment->chunk_parts[part_idx]->total_heap_size;
+			}
+		}
+		return result;
+	}
+	throw InternalException("Chunk index out of range in TupleDataCollection::GetChunkDataSize");
+}
+
 idx_t TupleDataCollection::GetBlockAllocationSize() const {
 	if (segments.empty() || (segments.size() == 1 && segments[0] && segments[0]->allocator == allocator)) {
 		return allocator->GetBlockAllocationSize();
