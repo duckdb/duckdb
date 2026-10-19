@@ -12,12 +12,11 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/planner/operator/logical_unnest.hpp"
-#include "duckdb/planner/operator/logical_window.hpp"
 
 #include <algorithm>
 
@@ -29,47 +28,22 @@ static unique_ptr<Expression> WrapInTry(unique_ptr<Expression> child) {
 	return std::move(result);
 }
 
-//! Resolve the referenced columns against the operators below the projection. Columns computed by an
-//! aggregate are collected for gating, columns computed by a window or unnest are not maskable positions.
-static void FindColumnSources(LogicalOperator &op, const vector<ColumnBinding> &refs, const OperatorExpression &try_op,
-                              optional_ptr<LogicalAggregate> &aggregate, vector<idx_t> &aggregate_positions) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_WINDOW: {
-		auto &window = op.Cast<LogicalWindow>();
-		for (auto &ref : refs) {
-			if (ref.table_index == window.window_index) {
-				throw BinderException(try_op,
-				                      "TRY over a subquery with a window function in its select list is not supported");
-			}
-		}
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_UNNEST: {
-		auto &unnest = op.Cast<LogicalUnnest>();
-		for (auto &ref : refs) {
-			if (ref.table_index == unnest.unnest_index) {
-				throw BinderException(try_op, "TRY over a subquery with UNNEST in its select list is not supported");
-			}
-		}
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+//! Find the aggregate node of the TRY select node by its recorded table index. The search traverses
+//! joins that subquery flattening may have inserted between the select list and the aggregate.
+static optional_ptr<LogicalAggregate> FindAggregateOperator(LogicalOperator &op, TableIndex aggregate_index) {
+	if (op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
 		auto &aggr = op.Cast<LogicalAggregate>();
-		for (auto &ref : refs) {
-			if (ref.table_index == aggr.aggregate_index) {
-				D_ASSERT(!aggregate || aggregate.get() == &aggr);
-				aggregate = &aggr;
-				aggregate_positions.push_back(ref.column_index);
-			}
+		if (aggr.aggregate_index == aggregate_index) {
+			return &aggr;
 		}
-		break;
-	}
-	default:
-		break;
 	}
 	for (auto &child : op.children) {
-		FindColumnSources(*child, refs, try_op, aggregate, aggregate_positions);
+		auto result = FindAggregateOperator(*child, aggregate_index);
+		if (result) {
+			return result;
+		}
 	}
+	return nullptr;
 }
 
 void ExpressionBinder::GateTryAggregates(const OperatorExpression &op, LogicalProjection &projection,
@@ -134,13 +108,14 @@ void ExpressionBinder::GateTryAggregates(const OperatorExpression &op, LogicalPr
 	expr = std::move(case_expr);
 }
 
-void ExpressionBinder::LowerTrySubquery(const OperatorExpression &op, LogicalOperator &root) {
-	// walk from the plan root to the projection computing the single output column of the subquery
+void ExpressionBinder::LowerTrySubquery(const OperatorExpression &op, const TrySubqueryPlanIndexes &indexes,
+                                        LogicalOperator &root) {
+	D_ASSERT(indexes.recorded);
+	// walk from the plan root to the select list projection of the TRY select node
 	auto binding = root.GetColumnBindings()[0];
 	reference<LogicalOperator> current(root);
-	optional_ptr<LogicalProjection> forward_projection;
-	idx_t forward_idx = 0;
-	while (true) {
+	optional_ptr<LogicalProjection> select_projection;
+	while (!select_projection) {
 		auto &current_op = current.get();
 		switch (current_op.type) {
 		case LogicalOperatorType::LOGICAL_LIMIT:
@@ -148,87 +123,75 @@ void ExpressionBinder::LowerTrySubquery(const OperatorExpression &op, LogicalOpe
 		case LogicalOperatorType::LOGICAL_TOP_N:
 		case LogicalOperatorType::LOGICAL_DISTINCT:
 		case LogicalOperatorType::LOGICAL_SAMPLE:
-		case LogicalOperatorType::LOGICAL_FILTER:
 			current = *current_op.children[0];
 			continue;
 		case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 			current = *current_op.children[1];
 			continue;
-		case LogicalOperatorType::LOGICAL_WINDOW:
-			if (binding.table_index == current_op.Cast<LogicalWindow>().window_index) {
-				throw BinderException(op,
-				                      "TRY over a subquery with a window function in its select list is not supported");
-			}
-			current = *current_op.children[0];
-			continue;
-		case LogicalOperatorType::LOGICAL_UNNEST:
-			if (binding.table_index == current_op.Cast<LogicalUnnest>().unnest_index) {
-				throw BinderException(op, "TRY over a subquery with UNNEST in its select list is not supported");
-			}
-			current = *current_op.children[0];
-			continue;
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			auto &projection = current_op.Cast<LogicalProjection>();
-			if (binding.table_index != projection.table_index) {
-				// a column forwarded from outside this projection, nothing to lower
-				return;
-			}
-			auto &expr = projection.expressions[binding.column_index];
-			if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-			    expr->Cast<BoundColumnRefExpression>().Depth() == 0) {
-				// a forwarding projection, such as the prune projection: follow the column down
-				forward_projection = &projection;
-				forward_idx = binding.column_index;
-				binding = expr->Cast<BoundColumnRefExpression>().Binding();
+			if (projection.table_index == indexes.prune_index) {
+				// the prune projection forwards the select list columns
+				binding = projection.expressions[binding.column_index]->Cast<BoundColumnRefExpression>().Binding();
 				current = *projection.children[0];
 				continue;
 			}
-			// the projection computing the select item: classify its inputs
-			vector<ColumnBinding> refs;
-			ExpressionIterator::VisitExpression<BoundColumnRefExpression>(*expr,
-			                                                              [&](const BoundColumnRefExpression &colref) {
-				                                                              if (colref.Depth() == 0) {
-					                                                              refs.push_back(colref.Binding());
-				                                                              }
-			                                                              });
-			optional_ptr<LogicalAggregate> aggregate;
-			vector<idx_t> aggregate_positions;
-			if (!refs.empty() && !projection.children.empty()) {
-				FindColumnSources(*projection.children[0], refs, op, aggregate, aggregate_positions);
+			if (projection.table_index != indexes.projection_index) {
+				throw InternalException("TRY subquery: unexpected projection above the select list");
 			}
-			if (aggregate) {
-				// the select item aggregates: gate it on HAS_ERROR probes of the aggregate inputs
-				std::sort(aggregate_positions.begin(), aggregate_positions.end());
-				aggregate_positions.erase(std::unique(aggregate_positions.begin(), aggregate_positions.end()),
-				                          aggregate_positions.end());
-				GateTryAggregates(op, projection, binding.column_index, *aggregate, aggregate_positions);
-				return;
-			}
-			// a plain projection: push TRY onto the projected expression
-			if (expr->IsVolatile()) {
-				throw BinderException(op, "TRY can not be used in combination with a volatile function");
-			}
-			expr = WrapInTry(std::move(expr));
-			return;
-		}
-		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-			auto &aggregate = current_op.Cast<LogicalAggregate>();
-			if (binding.table_index == aggregate.aggregate_index) {
-				if (!forward_projection) {
-					throw InternalException("TRY subquery: aggregate result without a projection above it");
-				}
-				vector<idx_t> aggregate_positions {binding.column_index};
-				GateTryAggregates(op, *forward_projection, forward_idx, aggregate, aggregate_positions);
-			}
-			// a bare group or GROUPING() reference cannot raise an error in the projection
-			return;
+			select_projection = &projection;
+			continue;
 		}
 		default:
-			// a bare column computed below the select list (scan, join, set operation):
-			// TRY has nothing to mask, errors below the projection propagate
-			return;
+			throw InternalException("TRY subquery: unexpected operator above the select list projection");
 		}
 	}
+
+	// classify the projected expression against the recorded indexes of the TRY select node, so that
+	// the lowering never crosses into derived tables, flattened subqueries or other query levels
+	auto &expr = select_projection->expressions[binding.column_index];
+	vector<ColumnBinding> refs;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(*expr, [&](const BoundColumnRefExpression &colref) {
+		if (colref.Depth() == 0) {
+			refs.push_back(colref.Binding());
+		}
+	});
+	vector<idx_t> aggregate_positions;
+	for (auto &ref : refs) {
+		if (ref.table_index == indexes.window_index) {
+			throw BinderException(op, "TRY over a subquery with a window function in its select list is not supported");
+		}
+		for (auto &unnest_index : indexes.unnest_indexes) {
+			if (ref.table_index == unnest_index) {
+				throw BinderException(op, "TRY over a subquery with UNNEST in its select list is not supported");
+			}
+		}
+		if (ref.table_index == indexes.aggregate_index) {
+			aggregate_positions.push_back(ref.column_index);
+		}
+	}
+	if (!aggregate_positions.empty()) {
+		// the select item aggregates in this node: gate it on HAS_ERROR probes of the aggregate inputs
+		auto aggregate = FindAggregateOperator(*select_projection->children[0], indexes.aggregate_index);
+		if (!aggregate) {
+			throw InternalException("TRY subquery: the aggregate node was not found below the select list");
+		}
+		std::sort(aggregate_positions.begin(), aggregate_positions.end());
+		aggregate_positions.erase(std::unique(aggregate_positions.begin(), aggregate_positions.end()),
+		                          aggregate_positions.end());
+		GateTryAggregates(op, *select_projection, binding.column_index, *aggregate, aggregate_positions);
+		return;
+	}
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		// a bare column computed outside this node's select list (a group, a FROM or derived table
+		// column, a flattened nested subquery): TRY has nothing to mask, errors there propagate
+		return;
+	}
+	// a plain projection: push TRY onto the projected expression
+	if (expr->IsVolatile()) {
+		throw BinderException(op, "TRY can not be used in combination with a volatile function");
+	}
+	expr = WrapInTry(std::move(expr));
 }
 
 //! TRY over a scalar subquery binds the subquery as an ordinary subquery and lowers the TRY onto the bound
@@ -275,7 +238,11 @@ BindResult ExpressionBinder::BindTrySubquery(OperatorExpression &op, idx_t depth
 	}
 	auto &bound_subquery = result.expression->Cast<BoundSubqueryExpression>();
 	if (bound_subquery.SubqueryMutable().plan) {
-		LowerTrySubquery(op, *bound_subquery.SubqueryMutable().plan);
+		auto &indexes = bound_subquery.GetBinder()->GetTrySubqueryPlanIndexes();
+		if (!indexes.recorded) {
+			throw InternalException("TRY subquery: no plan indexes were recorded for the top select node");
+		}
+		LowerTrySubquery(op, indexes, *bound_subquery.SubqueryMutable().plan);
 	}
 	return result;
 }

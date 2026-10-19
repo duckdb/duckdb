@@ -43,6 +43,7 @@ class LogicalOperator;
 class LogicalProjection;
 class LogicalAggregate;
 
+struct TrySubqueryPlanIndexes;
 struct DummyBinding;
 struct SelectBindState;
 
@@ -273,7 +274,7 @@ protected:
 	//! Bind TRY over a scalar subquery as an ordinary subquery, then lower the TRY onto its bound plan
 	BindResult BindTrySubquery(OperatorExpression &op, idx_t depth);
 	//! Lower TRY onto the maskable positions of a bound subquery plan, before the subquery is flattened
-	void LowerTrySubquery(const OperatorExpression &op, LogicalOperator &root);
+	void LowerTrySubquery(const OperatorExpression &op, const TrySubqueryPlanIndexes &indexes, LogicalOperator &root);
 	//! Wrap the inputs of the gated aggregates in TRY and gate the projected expression on HAS_ERROR probes
 	void GateTryAggregates(const OperatorExpression &op, LogicalProjection &projection, idx_t projection_idx,
 	                       LogicalAggregate &aggregate, const vector<idx_t> &aggregate_positions);
