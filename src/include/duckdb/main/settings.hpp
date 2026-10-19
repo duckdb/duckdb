@@ -455,8 +455,8 @@ struct AutoloadKnownExtensionsSetting {
 struct BlockAllocatorMemorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "block_allocator_memory";
-	static constexpr const char *Description = "Physical memory that the block allocator is allowed to use. This "
-	                                           "memory is allocated once, never freed, and cannot be reduced.";
+	static constexpr const char *Description =
+	    "Block allocator capacity (cannot be reduced; free physical pages can be reclaimed).";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
@@ -682,6 +682,19 @@ struct DebugEvictionQueueSleepMicroSecondsSetting {
 	static constexpr bool IsDeprecated = false;
 	static constexpr const char *DefaultValue = "0";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugFileDescriptorLimitSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "debug_file_descriptor_limit";
+	static constexpr const char *Description = "Override the file descriptor limit that bounds how many files a scan "
+	                                           "opens ahead. 0 uses the limit of the process.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 

@@ -80,7 +80,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 		if (!arg.GetExpression().GetAlias().empty()) {
 			// Default argument
 			if (named_arguments.find(arg.GetExpression().GetAlias()) != named_arguments.end()) {
-				return MacroBindResult(StringUtil::Format("Macro %s() has named argument repeated '%s'", name,
+				return MacroBindResult(StringUtil::Format("Macro %s() has named argument repeated %s", name,
 				                                          arg.GetExpression().GetAlias()));
 			}
 			named_arg_types.insert(arg.GetExpression().GetAlias(), std::move(arg_type));

@@ -585,13 +585,13 @@ FunctionBinder::BindSortedAggregateState(ClientContext &context, const BoundAggr
 	auto &buffer_columns = StructType::GetChildTypes(buffer_struct);
 	auto &inner_arguments = inner_function.GetArguments();
 	if (argument_count != inner_arguments.size() || argument_count > buffer_columns.size()) {
-		throw BinderException("Aggregate state for \"%s\" has %llu state columns, expected at least %llu",
+		throw BinderException("Aggregate state for %s has %llu state columns, expected at least %llu",
 		                      inner_function.GetName(), (uint64_t)buffer_columns.size(),
 		                      (uint64_t)inner_arguments.size());
 	}
 	for (idx_t i = 0; i < argument_count; i++) {
 		if (inner_arguments[i].IsComplete() && buffer_columns[i].second != inner_arguments[i]) {
-			throw BinderException("Aggregate state for \"%s\" has state column %llu of type %s, expected %s",
+			throw BinderException("Aggregate state for %s has state column %llu of type %s, expected %s",
 			                      inner_function.GetName(), (uint64_t)i, buffer_columns[i].second.ToString(),
 			                      inner_arguments[i].ToString());
 		}
@@ -636,7 +636,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 		auto &logical_fields = StructType::GetChildTypes(export_layout.first);
 		ExportAggregateFunction::GetSortedStateOrders(expr.GetReturnType(), export_layout.second);
 		if (export_layout.second.size() != order_bys.orders.size() || children.size() > logical_fields.size()) {
-			throw InternalException("Exported state layout of ordered aggregate \"%s\" does not match its ORDER BY",
+			throw InternalException("Exported state layout of ordered aggregate %s does not match its ORDER BY",
 			                        bound_function.GetName());
 		}
 		// the statistics optimizer may have narrowed the buffered column types since the exported type was fixed at

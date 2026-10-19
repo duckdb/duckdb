@@ -409,6 +409,9 @@ idx_t Vector::GetDataSize() const {
 }
 
 idx_t Vector::GetDataSize(idx_t count) const {
+	if (!buffer) {
+		return 0;
+	}
 	return Buffer().GetDataSize(type, count);
 }
 
