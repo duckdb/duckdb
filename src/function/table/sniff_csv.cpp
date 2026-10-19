@@ -81,7 +81,7 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("Comment");
 	// 6. Skip Rows
-	return_types.emplace_back(LogicalType::UINTEGER);
+	return_types.emplace_back(LogicalType::UBIGINT);
 	names.emplace_back("SkipRows");
 	// 7. Has Header
 	return_types.emplace_back(LogicalType::BOOLEAN);
@@ -187,11 +187,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	output.data[4].Append(Value(str_opt));
 	// 6. Skip Rows
 	auto skip_rows = sniffer_options.dialect_options.skip_rows.GetValue();
-	if (skip_rows > NumericLimits<uint32_t>::Maximum()) {
-		throw InvalidInputException("skip value %s is out of range: sniff_csv supports skipping at most %s rows",
-		                            to_string(skip_rows), to_string(NumericLimits<uint32_t>::Maximum()));
-	}
-	output.data[5].Append(Value::UINTEGER(NumericCast<uint32_t>(skip_rows)));
+	output.data[5].Append(Value::UBIGINT(skip_rows));
 	// 7. Has Header
 	auto has_header = Value::BOOLEAN(sniffer_options.dialect_options.header.GetValue());
 	output.data[6].Append(has_header);
