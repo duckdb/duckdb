@@ -12,7 +12,7 @@ static SetScope GetSettingScope(const optional<SetScope> &setting_scope) {
 // ResetStatement <- 'RESET' ResetTarget
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformResetStatement(PEGTransformer &transformer,
                                                                         unique_ptr<SQLStatement> reset_target) {
-	return std::move(reset_target);
+	return reset_target;
 }
 
 // ResetTimeZone <- SettingScope? 'TIME' 'ZONE'
