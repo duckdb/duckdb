@@ -123,22 +123,34 @@ bool Recognize(vector<MatcherToken> &statement_tokens, const CompiledGrammar &gr
 	return grammar.TopLevelStatementMatcher().MatchParseResult(state).IsSuccess();
 }
 
-//! Copy the statement's tokens, replacing or inserting one token at `index`.
-vector<MatcherToken> EditedStatement(const TokenIterator &tokens, idx_t statement_start, idx_t index,
-                                     const string &text, bool replace) {
+enum class EditKind { INSERT, REPLACE, DELETE };
+
+//! Copy the statement's tokens with one token inserted before, replaced at, or deleted from `index`.
+vector<MatcherToken> EditedStatement(const TokenIterator &tokens, idx_t statement_start, idx_t index, EditKind kind,
+                                     const string &text = string()) {
 	vector<MatcherToken> result;
 	result.reserve(tokens.Size() - statement_start + 1);
 	for (idx_t i = statement_start; i < tokens.Size(); i++) {
 		if (i == index) {
-			auto type = IsWordKeyword(text) ? TokenType::KEYWORD : TokenType::OPERATOR;
-			result.emplace_back(text, tokens.GetToken(i).offset, type);
-			if (replace) {
+			if (kind != EditKind::DELETE) {
+				auto type = IsWordKeyword(text) ? TokenType::KEYWORD : TokenType::OPERATOR;
+				result.emplace_back(text, tokens.GetToken(i).offset, type);
+			}
+			if (kind != EditKind::INSERT) {
 				continue;
 			}
 		}
 		result.push_back(tokens.GetToken(i));
 	}
 	return result;
+}
+
+//! Whether the statement parses after the edit.
+bool EditRepairs(const TokenIterator &tokens, idx_t statement_start, idx_t index, EditKind kind,
+                 const CompiledGrammar &grammar, const ParserOptions &options, const string &text = string()) {
+	auto repaired = EditedStatement(tokens, statement_start, index, kind, text);
+	idx_t furthest;
+	return Recognize(repaired, grammar, options, furthest);
 }
 
 //! Re-run the grammar on the statement prefix with an autocomplete cursor at `position` to collect what fits there.
@@ -226,7 +238,7 @@ vector<string> SimilarKeywords(const string &token_text, const ExpectedTokens &e
 //! Does replacing the token at `index` with `replacement` let the parser get past the original failure?
 bool SubstitutionAdvances(const TokenIterator &tokens, idx_t statement_start, idx_t index, const string &replacement,
                           idx_t error_index, const CompiledGrammar &grammar, const ParserOptions &options) {
-	auto repaired = EditedStatement(tokens, statement_start, index, replacement, true);
+	auto repaired = EditedStatement(tokens, statement_start, index, EditKind::REPLACE, replacement);
 	idx_t furthest;
 	if (Recognize(repaired, grammar, options, furthest)) {
 		return true;
@@ -262,14 +274,6 @@ struct MissingToken {
 	idx_t index = 0;
 };
 
-//! Whether inserting `text` before token `index` makes the whole statement parse.
-bool InsertionRepairs(const TokenIterator &tokens, idx_t statement_start, idx_t index, const string &text,
-                      const CompiledGrammar &grammar, const ParserOptions &options) {
-	auto repaired = EditedStatement(tokens, statement_start, index, text, false);
-	idx_t furthest;
-	return Recognize(repaired, grammar, options, furthest);
-}
-
 //! The missing token at the failure point, if one can be named with confidence.
 //! `previous_expected` describes the position one token earlier, where a comma may also be missing.
 optional_idx FindMissingToken(const TokenIterator &tokens, idx_t statement_start, idx_t error_index,
@@ -286,7 +290,7 @@ optional_idx FindMissingToken(const TokenIterator &tokens, idx_t statement_start
 			break;
 		}
 		if (expected.HasKeyword(punctuation) &&
-		    InsertionRepairs(tokens, statement_start, error_index, punctuation, grammar, options)) {
+		    EditRepairs(tokens, statement_start, error_index, EditKind::INSERT, grammar, options, punctuation)) {
 			result = {punctuation, error_index};
 			return result.index;
 		}
@@ -296,7 +300,7 @@ optional_idx FindMissingToken(const TokenIterator &tokens, idx_t statement_start
 		auto &previous = tokens.GetToken(error_index - 1);
 		if (IsWordToken(previous) && !grammar.GetKeywordHelper().IsKeyword(previous.text) &&
 		    previous_expected.HasKeyword(",") &&
-		    InsertionRepairs(tokens, statement_start, error_index - 1, ",", grammar, options)) {
+		    EditRepairs(tokens, statement_start, error_index - 1, EditKind::INSERT, grammar, options, ",")) {
 			result = {",", error_index - 1};
 			return result.index;
 		}
@@ -320,7 +324,7 @@ optional_idx FindMissingToken(const TokenIterator &tokens, idx_t statement_start
 			// only a unique keyword repair is reported
 			break;
 		}
-		if (InsertionRepairs(tokens, statement_start, error_index, candidate, grammar, options)) {
+		if (EditRepairs(tokens, statement_start, error_index, EditKind::INSERT, grammar, options, candidate)) {
 			repairs.push_back(candidate);
 		}
 	}
@@ -329,6 +333,44 @@ optional_idx FindMissingToken(const TokenIterator &tokens, idx_t statement_start
 	}
 	result = {repairs[0], error_index};
 	return result.index;
+}
+
+//! Keywords and punctuation can be stray; literals and identifiers are content, a terminator is where input ends.
+//! Opening brackets are excluded: nesting repeats them legitimately, and a missing closer is reported instead.
+bool IsDroppable(const MatcherToken &token, const PEGKeywordHelper &keyword_helper) {
+	if (token.type == TokenType::OPERATOR) {
+		return token.text != "(" && token.text != "[" && token.text != "{";
+	}
+	return IsWordToken(token) && keyword_helper.IsKeyword(token.text);
+}
+
+bool RepeatsPredecessor(const TokenIterator &tokens, idx_t statement_start, idx_t index) {
+	return index > statement_start &&
+	       StringUtil::CIEquals(tokens.GetToken(index - 1).text, tokens.GetToken(index).text);
+}
+
+//! A stray token whose removal makes the statement parse: the failing token, or the token right before it.
+optional_idx FindUnexpectedToken(const TokenIterator &tokens, idx_t statement_start, idx_t error_index,
+                                 const ExpectedTokens &expected, const CompiledGrammar &grammar,
+                                 const ParserOptions &options) {
+	auto &keyword_helper = grammar.GetKeywordHelper();
+	auto &error_token = tokens.GetToken(error_index);
+	// where any word fits, only a repeated token (",," or "WHERE WHERE") is a safe guess
+	if (IsDroppable(error_token, keyword_helper) &&
+	    (!expected.AcceptsIdentifiers() || RepeatsPredecessor(tokens, statement_start, error_index)) &&
+	    EditRepairs(tokens, statement_start, error_index, EditKind::DELETE, grammar, options)) {
+		return error_index;
+	}
+	// The stray token may be the one before: it was consumed and left nothing to fill what it opened
+	// ("AND GROUP BY", "WHERE WHERE x"). Not when the input simply ended after it ("... JOIN;").
+	if (error_token.type == TokenType::TERMINATOR || error_index == statement_start) {
+		return optional_idx();
+	}
+	if (IsDroppable(tokens.GetToken(error_index - 1), keyword_helper) &&
+	    EditRepairs(tokens, statement_start, error_index - 1, EditKind::DELETE, grammar, options)) {
+		return error_index - 1;
+	}
+	return optional_idx();
 }
 
 string DescribeExpected(const ExpectedTokens &expected, const PEGKeywordHelper &keyword_helper) {
@@ -419,6 +461,13 @@ ParserException PEGSyntaxError::Create(const TokenIterator &tokens, idx_t statem
 				report_index = missing.index;
 				at_end = false;
 			}
+		}
+	}
+	if (compute_hints && hint.empty() && !at_end) {
+		auto unexpected = FindUnexpectedToken(tokens, statement_start, error_index, expected, grammar, options);
+		if (unexpected.IsValid()) {
+			report_index = unexpected.GetIndex();
+			hint = "Unexpected \"" + tokens.GetToken(report_index).text + "\"";
 		}
 	}
 	if (hint.empty()) {

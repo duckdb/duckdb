@@ -167,11 +167,12 @@ SELECT * FROM t WHERE
 syntax error at end of input
 Expected an expression
 
+# dropping either operator repairs this; the one before the failure is reported
 statement error
 SELECT * FROM t WHERE a = 1 AND OR x = 2
 ----
-syntax error at or near "OR"
-Expected an expression
+syntax error at or near "AND"
+Unexpected "AND"
 
 statement error
 SELECT 1 +
@@ -212,6 +213,52 @@ SELECT a x::INTEGER FROM t
 ----
 syntax error at or near "x"
 Missing ","
+
+# a stray keyword or punctuation whose removal makes the statement parse
+statement error
+SELECT * FROM t WHERE WHERE x = 1
+----
+syntax error at or near "WHERE"
+Unexpected "WHERE"
+
+statement error
+SELECT a,, x FROM t
+----
+Unexpected ","
+
+statement error
+SELECT * FROM t ORDER BY BY x
+----
+Unexpected "BY"
+
+statement error
+INSERT INTO t VALUES (1, 2))
+----
+syntax error at or near ")"
+Unexpected ")"
+
+statement error
+SELECT * FROM t WHERE x = 1 AND GROUP BY x
+----
+Unexpected "AND"
+
+statement error
+SELECT * FROM t WHERE x = 1, GROUP BY x
+----
+syntax error at or near ","
+Unexpected ","
+
+# the input simply ended after the keyword, so it is not reported as stray
+statement error
+SELECT * FROM t JOIN;
+----
+<!REGEX>:.*Unexpected.*
+
+# a stray word that is not a keyword is content, not something to drop
+statement error
+SELECT * FROM t WHERE x = 1 foo GROUP BY x
+----
+<!REGEX>:.*Unexpected.*
 
 # two keywords repair this (AND, OR), so nothing is guessed
 statement error
