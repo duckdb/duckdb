@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -180,6 +181,76 @@ TEST_CASE("Dictionary vectors deduplicate per segment and survive scans", "[colu
 	REQUIRE(flat_result.data[0].GetVectorType() == VectorType::FLAT_VECTOR);
 	REQUIRE(flat_result.GetValue(0, 1) == Value("dictionary_payload_value_1"));
 	REQUIRE(flat_result.GetValue(0, 99).IsNull());
+}
+
+TEST_CASE("ColumnDataConsumer handles chunks without blocks", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		// the shapes below assume full-size vectors
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+
+	// all-constant chunks store their values in metadata and reference no blocks
+	ColumnDataCollection collection(buffer_manager, {LogicalType::BIGINT});
+	ColumnDataAppendState append_state;
+	collection.InitializeAppend(append_state);
+	AppendConstantChunk(collection, append_state, Value::BIGINT(7), STANDARD_VECTOR_SIZE);
+	AppendConstantChunk(collection, append_state, Value::BIGINT(7), STANDARD_VECTOR_SIZE);
+
+	ColumnDataConsumer consumer(collection, {0});
+	consumer.InitializeScan();
+	ColumnDataConsumerScanState state;
+	state.current_chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
+	DataChunk chunk;
+	collection.InitializeScanChunk(chunk);
+	idx_t total = 0;
+	while (consumer.AssignChunk(state)) {
+		consumer.ScanChunk(state, chunk);
+		REQUIRE(chunk.data[0].GetVectorType() == VectorType::CONSTANT_VECTOR);
+		REQUIRE(ConstantVector::GetData<int64_t>(chunk.data[0])[0] == 7);
+		total += chunk.size();
+		consumer.FinishChunk(state);
+	}
+	REQUIRE(total == 2 * STANDARD_VECTOR_SIZE);
+
+	// chunks with and without blocks mix in the consumed order
+	ColumnDataCollection mixed(buffer_manager, {LogicalType::BIGINT});
+	ColumnDataAppendState mixed_append;
+	mixed.InitializeAppend(mixed_append);
+	AppendConstantChunk(mixed, mixed_append, Value::BIGINT(1), STANDARD_VECTOR_SIZE);
+	DataChunk flat_input;
+	mixed.InitializeScanChunk(flat_input);
+	{
+		auto writer = FlatVector::Writer<int64_t>(flat_input.data[0], STANDARD_VECTOR_SIZE);
+		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+			writer.WriteValue(UnsafeNumericCast<int64_t>(i));
+		}
+	}
+	flat_input.SetCardinality(STANDARD_VECTOR_SIZE);
+	mixed.Append(mixed_append, flat_input);
+	AppendConstantChunk(mixed, mixed_append, Value::BIGINT(2), STANDARD_VECTOR_SIZE);
+
+	ColumnDataConsumer mixed_consumer(mixed, {0});
+	mixed_consumer.InitializeScan();
+	ColumnDataConsumerScanState mixed_state;
+	mixed_state.current_chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
+	DataChunk mixed_chunk;
+	mixed.InitializeScanChunk(mixed_chunk);
+	idx_t rows = 0;
+	int64_t sum = 0;
+	while (mixed_consumer.AssignChunk(mixed_state)) {
+		mixed_consumer.ScanChunk(mixed_state, mixed_chunk);
+		auto values = mixed_chunk.data[0].Values<int64_t>();
+		for (auto entry : values) {
+			sum += entry.GetValue();
+		}
+		rows += mixed_chunk.size();
+		mixed_consumer.FinishChunk(mixed_state);
+	}
+	REQUIRE(rows == 3 * STANDARD_VECTOR_SIZE);
+	const auto n = int64_t(STANDARD_VECTOR_SIZE);
+	REQUIRE(sum == n + 2 * n + n * (n - 1) / 2);
 }
 
 } // namespace duckdb
