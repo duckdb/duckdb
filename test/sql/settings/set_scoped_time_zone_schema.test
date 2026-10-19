@@ -91,8 +91,9 @@ SELECT current_schema()
 ----
 main
 
+# after a reset the default catalog may differ per test configuration, so use a schema that exists everywhere
 statement ok
-SET SCHEMA 's1'
+SET SCHEMA 'main'
 
 statement ok
 RESET SCHEMA
