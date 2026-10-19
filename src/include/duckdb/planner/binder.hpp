@@ -403,6 +403,8 @@ public:
 	void SetAlwaysRequireRebind();
 	void SetInsideSubquery();
 	bool IsInsideSubquery() const;
+	void SetBindingTrySubquery();
+	bool IsBindingTrySubquery() const;
 
 	StatementProperties &GetStatementProperties();
 	static void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
@@ -434,6 +436,8 @@ private:
 	bool legacy_can_contain_nulls = false;
 	//! Whether this binder is inside a subquery boundary
 	bool inside_subquery = false;
+	//! Whether this binder binds a TRY subquery, which lowers TRY onto the bound plan after binding
+	bool binding_try_subquery = false;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! The table macros that are being expanded by this binder

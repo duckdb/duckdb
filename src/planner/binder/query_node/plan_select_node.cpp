@@ -26,6 +26,11 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 	if (!Settings::Get<DebugVerifyAggregateStateExportSetting>(context)) {
 		return false;
 	}
+	if (IsBindingTrySubquery()) {
+		// TRY is lowered onto these aggregates after planning; the verification rewrite would hide
+		// them behind an aggregate-state export, so the error capture could no longer reach them
+		return false;
+	}
 	if (statement.groups.grouping_sets.size() > 1 || !statement.grouping_functions.empty()) {
 		// verification is not supported with multiple grouping sets / grouping functions (yet?)
 		return false;

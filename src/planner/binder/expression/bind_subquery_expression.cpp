@@ -73,6 +73,11 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	auto subquery_binder = Binder::CreateBinder(context, binder);
 	subquery_binder->SetCanContainNulls(true);
 	subquery_binder->SetInsideSubquery();
+	if (bind_try_subquery) {
+		// TRY is lowered onto the bound plan of this subquery after binding
+		subquery_binder->SetBindingTrySubquery();
+		bind_try_subquery = false;
+	}
 
 	subquery_binder->BeginSubqueryBind(binder, *this);
 	auto bound_node = subquery_binder->BindNode(*expr.Subquery()->node);

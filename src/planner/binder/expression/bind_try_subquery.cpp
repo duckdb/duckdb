@@ -267,7 +267,9 @@ BindResult ExpressionBinder::BindTrySubquery(OperatorExpression &op, idx_t depth
 	// ownership resolve exactly as without TRY
 	const auto was_inside_try = inside_try;
 	inside_try = false;
+	bind_try_subquery = true;
 	auto result = BindExpression(subquery_expr, depth);
+	bind_try_subquery = false;
 	inside_try = was_inside_try;
 	if (result.HasError()) {
 		return result;

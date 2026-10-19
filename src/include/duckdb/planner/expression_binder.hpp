@@ -326,6 +326,8 @@ protected:
 	ClientContext &context;
 	vector<BoundColumnReferenceInfo> bound_columns;
 	bool inside_try = false;
+	//! Set while binding the subquery of a TRY, so the subquery binder knows TRY is lowered onto its plan
+	bool bind_try_subquery = false;
 
 	BindResult TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
 	                               const LambdaSyntaxType syntax_type);

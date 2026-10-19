@@ -226,6 +226,24 @@ SELECT TRY((SELECT 10 // (x - 1) FROM (VALUES (3)) t(x) GROUP BY ALL))
 ----
 5
 
+# the aggregate-state-export verification skips TRY subqueries: its rewrite would hide the
+# gated aggregates behind an exported state before TRY is lowered onto them
+statement ok
+SET debug_verify_aggregate_state_export=true
+
+query I
+SELECT TRY((SELECT max(10 // (i - 3)) FROM integers))
+----
+NULL
+
+query I
+SELECT TRY((SELECT max(10 // i) FROM integers))
+----
+10
+
+statement ok
+RESET debug_verify_aggregate_state_export
+
 # nested TRY over a scalar subquery
 query I
 SELECT TRY(TRY((SELECT max(10 // (i - 3)) FROM integers)))
