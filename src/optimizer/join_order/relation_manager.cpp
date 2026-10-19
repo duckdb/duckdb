@@ -855,6 +855,15 @@ bool RelationManager::ExtractBindings(const Expression &expression, unordered_se
 	return can_reorder;
 }
 
+bool RelationManager::ExtractFilterBindings(const Expression &expression, unordered_set<RelationIndex> &bindings) {
+	const auto can_reorder = ExtractBindings(expression, bindings);
+	if (!bindings.empty()) {
+		return true;
+	}
+	// without bindings the filter can only move if it references no columns at all
+	return can_reorder && !ExpressionContainsColumnRef(expression);
+}
+
 JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
                                                   vector<reference<LogicalOperator>> &filter_operators,
                                                   JoinRelationSetManager &set_manager) {
@@ -1056,15 +1065,15 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 		} else {
 			// handle filters from logical filters
 			for (auto &expression : f_op.expressions) {
-				if (filter_set.find(*expression) == filter_set.end()) {
+				unordered_set<RelationIndex> bindings;
+				if (!ExtractFilterBindings(*expression, bindings)) {
+					// the filter is on a column that is not in our relational map. (example: limit_rownum)
+					// in this case we do not create a FilterInfo for it. (duckdb-internal/#1493)
+					continue;
+				}
+				// zero-column filters may be volatile, keep duplicates
+				if (bindings.empty() || filter_set.find(*expression) == filter_set.end()) {
 					filter_set.insert(*expression);
-					unordered_set<RelationIndex> bindings;
-					ExtractBindings(*expression, bindings);
-					if (bindings.empty()) {
-						// the filter is on a column that is not in our relational map. (example: limit_rownum)
-						// in this case we do not create a FilterInfo for it. (duckdb-internal/#1493)
-						continue;
-					}
 					auto &set = set_manager.GetJoinRelation(bindings);
 					auto filter_info = make_uniq<FilterInfo>(expression->Copy(), set, filters_and_bindings.size());
 					filter_info->from_logical_filter = true;
