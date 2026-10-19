@@ -55,7 +55,7 @@ struct FSSTStorage {
 	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                           idx_t result_idx);
 	static void Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-	                   const SelectionVector &sel, idx_t sel_count);
+	                   const SelectionVector &sel, idx_t sel_count, idx_t result_offset, ScanVectorType scan_type);
 
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container);
 	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
@@ -768,7 +768,7 @@ void FSSTStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx
 // Select
 //===--------------------------------------------------------------------===//
 void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-                         const SelectionVector &sel, idx_t sel_count) {
+                         const SelectionVector &sel, idx_t sel_count, idx_t result_offset, ScanVectorType) {
 	auto &scan_state = state.scan_state->Cast<FSSTScanState>();
 	auto start = state.GetPositionInSegment();
 	D_ASSERT(start <= segment.count.load());
@@ -783,7 +783,7 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 	for (idx_t i = 0; i < sel_count; i++) {
 		idx_t index = sel.get_index(i);
 		D_ASSERT(index < vector_count);
-		result_data[i] = scan_state.DecompressString(strings.GetCompressedString(index), str_allocator);
+		result_data[result_offset + i] = scan_state.DecompressString(strings.GetCompressedString(index), str_allocator);
 	}
 }
 

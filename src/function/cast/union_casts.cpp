@@ -169,7 +169,7 @@ static unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, cons
 			};
 			// no matching member tag found in the target set
 			auto message =
-			    StringUtil::Format("Type %s can't be cast as %s. The member '%s' is not present in target union",
+			    StringUtil::Format("Type %s can't be cast as %s. The member %s is not present in target union",
 			                       source.ToString(), target.ToString(), source_member_name);
 			throw ConversionException(message);
 		}
@@ -359,6 +359,11 @@ BoundCastInfo DefaultCasts::ImplicitToUnionCast(BindCastInput &input, const Logi
 }
 
 static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	if (count == 0) {
+		// the intermediate union vector would not have any storage
+		FlatVector::SetSize(result, count_t(0));
+		return true;
+	}
 	// first cast all union members to varchar
 	auto &cast_data = parameters.cast_data->Cast<UnionMemberBoundCastData>();
 	Vector varchar_union(cast_data.type, count);

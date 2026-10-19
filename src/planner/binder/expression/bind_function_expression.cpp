@@ -106,6 +106,25 @@ struct ListReduceRebindResult {
 	bool override_has_accumulator_type = false;
 };
 
+//! Avoid repeated rebinds for DECIMAL type widening by forcing the lambda return type to the chosen accumulator type
+//! when decimals are involved
+static void CastDecimalLambdaToAccumulatorType(ClientContext &context, BindResult &bind_lambda_result,
+                                               const LogicalType &accumulator_type) {
+	auto &rebound_lambda_expr = bind_lambda_result.expression->Cast<BoundLambdaExpression>();
+	const auto return_type = rebound_lambda_expr.LambdaExpr()->GetReturnType();
+	if (return_type == accumulator_type ||
+	    (!TypeContainsDecimal(accumulator_type) && !TypeContainsDecimal(return_type))) {
+		return;
+	}
+	auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(rebound_lambda_expr.LambdaExprMutable()),
+	                                                    accumulator_type);
+	if (!cast_expr) {
+		throw BinderException("Could not cast lambda return type %s to accumulator type %s", return_type.ToString(),
+		                      accumulator_type.ToString());
+	}
+	rebound_lambda_expr.LambdaExprMutable() = std::move(cast_expr);
+}
+
 ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t depth,
                                                    const vector<LogicalType> &function_child_types,
                                                    bind_lambda_function_t bind_lambda_function,
@@ -158,22 +177,7 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 			bind_lambda_result.error.Throw();
 		}
 
-		auto &rebound_lambda_expr = bind_lambda_result.expression->Cast<BoundLambdaExpression>();
-		// Avoid repeated rebinds for DECIMAL type widening by forcing the lambda return type to the chosen
-		// accumulator type when decimals are involved.
-		if (TypeContainsDecimal(accumulator_type) ||
-		    TypeContainsDecimal(rebound_lambda_expr.LambdaExpr()->GetReturnType())) {
-			if (rebound_lambda_expr.LambdaExpr()->GetReturnType() != accumulator_type) {
-				const auto old_return_type = rebound_lambda_expr.LambdaExpr()->GetReturnType();
-				auto cast_expr = BoundCastExpression::AddCastToType(
-				    context, std::move(rebound_lambda_expr.LambdaExprMutable()), accumulator_type);
-				if (!cast_expr) {
-					throw BinderException("Could not cast lambda return type %s to accumulator type %s",
-					                      old_return_type.ToString(), accumulator_type.ToString());
-				}
-				rebound_lambda_expr.LambdaExprMutable() = std::move(cast_expr);
-			}
-		}
+		CastDecimalLambdaToAccumulatorType(context, bind_lambda_result, accumulator_type);
 		result.did_rebind = true;
 		result.capture_child_types = std::move(rebind_child_types);
 	} else if (accumulator_type != list_child_type) {
@@ -188,6 +192,7 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 		if (bind_lambda_result.HasError()) {
 			bind_lambda_result.error.Throw();
 		}
+		CastDecimalLambdaToAccumulatorType(context, bind_lambda_result, accumulator_type);
 		result.did_rebind = true;
 		result.override_accumulator_type_storage = accumulator_type;
 		result.override_has_accumulator_type = true;
@@ -303,7 +308,10 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		return BindFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
 	}
 	case CatalogType::MACRO_ENTRY:
-		// macro function
+		// macro function - a prepared statement must be re-bound when the macro changes
+		if (!func.ParentCatalog().IsSystemCatalog()) {
+			binder.GetStatementProperties().RegisterDBRead(func.ParentCatalog(), context);
+		}
 		return BindMacro(function, func.Cast<ScalarMacroCatalogEntry>(), depth, expr_ptr);
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
 		// an aggregate belongs to the innermost query level in which one of its arguments resolves a
@@ -369,6 +377,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	// The positional/named split (and, for capturing functions, the alias capture) is resolved later per candidate
 	// overload.
 	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
+	// for legacy calls with names: fallback arguments that keep the names, used if binding positionally fails
+	vector<pair<Identifier, unique_ptr<Expression>>> named_arguments;
 	arguments.reserve(function.GetArguments().size());
 	for (idx_t i = 0; i < function.GetArgumentsMutable().size(); i++) {
 		auto &arg = function.GetArgumentsMutable()[i];
@@ -383,6 +393,13 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 			bound_arg->SetAlias(arg.GetName());
 		}
 		if (function.IsLegacyFunctionCall()) {
+			if (!named_arguments.empty() || !arg.GetName().empty()) {
+				// first named argument: copy the unnamed arguments bound so far
+				for (idx_t prev = named_arguments.size(); prev < arguments.size(); prev++) {
+					named_arguments.emplace_back(Identifier(), arguments[prev].second->Copy());
+				}
+				named_arguments.emplace_back(arg.GetName(), bound_arg->Copy());
+			}
 			arguments.emplace_back(string(), std::move(bound_arg));
 		} else {
 			arguments.emplace_back(arg.GetName(), std::move(bound_arg));
@@ -391,6 +408,12 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 	FunctionBinder function_binder(binder);
 	auto result = function_binder.BindScalarFunction(func, std::move(arguments), error, function.IsOperator(), &binder);
+	if (!result && !named_arguments.empty()) {
+		// a legacy call that does not bind positionally may use names the function declares (e.g. **kwargs)
+		ErrorData named_error;
+		result = function_binder.BindScalarFunction(func, std::move(named_arguments), named_error,
+		                                            function.IsOperator(), &binder);
+	}
 	if (!result) {
 		error.AddQueryLocation(function);
 		error.Throw();
@@ -461,7 +484,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	auto &lambda_expr = args[lambda_expr_idx].GetExpressionMutable()->Cast<LambdaExpression>();
 
 	unique_ptr<ParsedExpression> lambda_expr_copy;
-	const bool is_list_reduce = func.name == "list_reduce";
+	// the aliases of list_reduce (e.g. reduce) are separate catalog entries
+	const bool is_list_reduce = func.name == "list_reduce" || func.alias_of == "list_reduce";
 	if (is_list_reduce) {
 		// We have to make this copy before binding in case we have to double-bind
 		lambda_expr_copy = lambda_expr.Copy();

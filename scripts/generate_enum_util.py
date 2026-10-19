@@ -78,6 +78,11 @@ blacklist = [
     "VariantPrimitiveType",
     # ClientContext::Retention, nested and private to the client context
     "Retention",
+    # HTTPRetryBudget::RecordedOutcome is a nested enum of the HTTP retry budget,
+    # which this script would emit unqualified.
+    "RecordedOutcome",
+    # PEGRuleId is generated from the grammar and ships its own PEGRuleIdToString/PEGRuleIdFromString
+    "PEGRuleId",
 ]
 
 enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")

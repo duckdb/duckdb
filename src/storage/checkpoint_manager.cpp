@@ -628,7 +628,12 @@ void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq, Serializer &seri
 void CheckpointReader::ReadSequence(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto info = ReadCreateInfo(deserializer, CatalogType::SEQUENCE_ENTRY, "sequence");
 	auto &sequence_info = info->Cast<CreateSequenceInfo>();
-	catalog.CreateSequence(transaction, sequence_info);
+	auto entry = catalog.CreateSequence(transaction, sequence_info);
+	auto &storage_manager = catalog.GetAttached().GetStorageManager();
+	if (entry && storage_manager.HasStorageVersion() &&
+	    StorageManager::IsPriorToVersion(StorageVersion::V2_0_0, storage_manager.GetStorageVersion())) {
+		entry->Cast<SequenceCatalogEntry>().DeriveLastValue();
+	}
 }
 
 //===--------------------------------------------------------------------===//
