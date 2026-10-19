@@ -556,11 +556,11 @@ string LogicalType::ToString() const {
 		if (type.id() != LogicalTypeId::UNBOUND) {
 			auto alias = type.GetAlias();
 			if (!alias.empty()) {
+				result += SQLIdentifier::ToString(alias);
 				if (type.HasExtensionInfo()) {
 					auto &ext_info = *type.GetExtensionInfo();
-					alias += TypeModifierListToString(ext_info.modifiers);
+					result += TypeModifierListToString(ext_info.modifiers);
 				}
-				result += alias;
 				continue;
 			}
 		}
