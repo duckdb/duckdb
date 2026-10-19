@@ -81,7 +81,7 @@ static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) 
 		return DBConfig::ParseMemoryLimitOrMaximum(input);
 	}
 	double percentage;
-	if (!TryDoubleCast(input.c_str(), input.size() - 1, percentage, false) || percentage < 0 || percentage > 100) {
+	if (!TryDoubleCast(input.c_str(), input.size() - 1, percentage, false) || !(percentage >= 0 && percentage <= 100)) {
 		throw InvalidInputException("Unable to parse valid percentage (input: %s)", input);
 	}
 	auto result = percentage * static_cast<double>(get_base()) / 100.0;
@@ -1167,7 +1167,7 @@ void IndexScanPercentageSetting::OnSet(SettingCallbackInfo &, Value &input) {
 		throw InvalidInputException("%s setting cannot be NULL", IndexScanPercentageSetting::Name);
 	}
 	auto index_scan_percentage = input.GetValue<double>();
-	if (index_scan_percentage < 0 || index_scan_percentage > 1.0) {
+	if (!(index_scan_percentage >= 0 && index_scan_percentage <= 1.0)) {
 		throw InvalidInputException("the index scan percentage must be within [0, 1]");
 	}
 }
@@ -1511,7 +1511,11 @@ void ProgressBarTimeSetting::SetLocal(ClientContext &context, const Value &input
 	}
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
-	config.wait_time = input.GetValue<int32_t>();
+	auto wait_time = input.GetValue<int32_t>();
+	if (wait_time < 0) {
+		throw InvalidInputException("%s setting cannot be negative", ProgressBarTimeSetting::Name);
+	}
+	config.wait_time = wait_time;
 	config.enable_progress_bar = true;
 }
 
