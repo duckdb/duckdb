@@ -657,7 +657,8 @@ public:
 	}
 	//! Hands an unpublished filter from a previous recursive iteration to the finalize-built filter path
 	void SetRecycledBloomFilter(shared_ptr<BloomFilter> filter) {
-		D_ASSERT(!filter || !filter->IsPublished());
+		// a null argument would drop a parked filter; callers must only hand over live, unpublished filters
+		D_ASSERT(filter && !filter->IsPublished());
 		recycled_bloom_filter = std::move(filter);
 	}
 	//! Marks the bloom filter complete. The reference stays, because the thread-local tables hold it too

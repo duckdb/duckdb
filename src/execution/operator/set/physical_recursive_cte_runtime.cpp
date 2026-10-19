@@ -140,6 +140,8 @@ static RecursiveCTEParallelism GetRecursiveParallelism(const RecursiveCTEState &
 struct RecursiveSinkWorkerBound {
 	idx_t worker_bound = 0;
 	idx_t producer_count = 0;
+	//! Whether the per-iteration reset already ran for this sink; shared sinks must reset exactly once
+	bool reset_done = false;
 };
 
 //! A sink with a single producer learns the exact worker count here, before any of its data flows
@@ -1000,6 +1002,11 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 			auto sink = pipeline->GetSink();
 			if (sink.get() != this) {
 				auto &sink_bound = sink_worker_bounds[*sink];
+				if (sink_bound.reset_done) {
+					// several producer pipelines feed this sink; it was already reset for this iteration
+					continue;
+				}
+				sink_bound.reset_done = true;
 				pipeline->ResetSinkForReschedule(sink_bound.worker_bound, sink_bound.producer_count == 1);
 			}
 		}

@@ -480,8 +480,11 @@ public:
 		// a perfect hash join publishes its own exact filter, so a bloom filter would never leave the sink
 		if (skip_filter_pushdown || can_use_perfect_hash || !ShouldBuildBloomFilterInSink(context, op)) {
 			hash_table->SetBloomFilter(nullptr);
-			// an in-memory join builds its filter during finalize, which can still reuse the allocation
-			hash_table->SetRecycledBloomFilter(std::move(recycled_filter));
+			// an in-memory join builds its filter during finalize, which can still reuse the allocation;
+			// an iteration without a filter must not clear a slot that finalize has not consumed yet
+			if (recycled_filter) {
+				hash_table->SetRecycledBloomFilter(std::move(recycled_filter));
+			}
 			return;
 		}
 		if (!recycled_filter) {
