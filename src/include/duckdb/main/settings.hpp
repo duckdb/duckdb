@@ -2531,6 +2531,19 @@ struct TempDirectorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct TempFileDirectIoSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "temp_file_direct_io";
+	static constexpr const char *Description =
+	    "Use direct I/O for temporary files, bypassing the operating system's page cache.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct TempFileEncryptionSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "temp_file_encryption";

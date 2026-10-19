@@ -350,6 +350,9 @@ void TemporaryFileHandle::CreateFileIfNotExists(TemporaryFileLock &) {
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto open_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
+	if (Settings::Get<TempFileDirectIoSetting>(db)) {
+		open_flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+	}
 	handle = fs.OpenFile(path, open_flags);
 }
 

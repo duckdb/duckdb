@@ -1553,6 +1553,13 @@
         "custom_implementation": true
     },
     {
+        "name": "temp_file_direct_io",
+        "description": "Use direct I/O for temporary files, bypassing the operating system's page cache.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "temp_file_encryption",
         "description": "Encrypt all temporary files, if the database is encrypted.",
         "type": "BOOLEAN",

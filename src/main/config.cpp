@@ -255,6 +255,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(StorageCompatibilityVersionSetting),
     DUCKDB_SETTING_CALLBACK(TableFunctionIdentifierConversionSetting),
     DUCKDB_GLOBAL(TempDirectorySetting),
+    DUCKDB_SETTING(TempFileDirectIoSetting),
     DUCKDB_SETTING_CALLBACK(TempFileEncryptionSetting),
     DUCKDB_GLOBAL(ThreadsSetting),
     DUCKDB_LOCAL(TrackedMetricsSetting),
