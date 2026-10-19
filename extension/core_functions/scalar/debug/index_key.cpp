@@ -243,8 +243,12 @@ unique_ptr<FunctionData> IndexKeyBind(INPUT &input) {
 
 	idx_t num_key_args = arguments.size() - INDEX_KEY_FIXED_ARGS;
 	if (num_key_args != key_types.size()) {
-		throw BinderException("index_key: index expects %llu key column(s), but %llu argument(s) provided",
-		                      key_types.size(), num_key_args);
+		auto index_description =
+		    path.constraint_type == IndexConstraintType::NONE
+		        ? StringUtil::Format("index '%s'", path.index_name)
+		        : StringUtil::Format("%s constraint index", EnumUtil::ToString(path.constraint_type));
+		throw BinderException("index_key: %s on table %s expects %llu key column(s), but %llu argument(s) provided",
+		                      index_description, qualified_table, key_types.size(), num_key_args);
 	}
 
 	// Set bound_function.GetArguments() to actual types for proper casting.

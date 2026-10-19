@@ -523,7 +523,12 @@ Binder Error: No function matches the given name and argument types
 statement error
 SELECT index_key({'table': 'tbl1', 'index': 'tbl1_idx_composite'}, 1);
 ----
-Binder Error: index_key: index expects 2 key column(s), but 1 argument(s) provided
+Binder Error: index_key: index 'tbl1_idx_composite' on table tbl1 expects 2 key column(s), but 1 argument(s) provided
+
+statement error
+SELECT index_key({'table': 'tbl1', 'constraint': 'primary'}, 1, 2);
+----
+Binder Error: index_key: PRIMARY constraint index on table tbl1 expects 1 key column(s), but 2 argument(s) provided
 
 ########################################################################################################################
 #                                                                                                                      #
