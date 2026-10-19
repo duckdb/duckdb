@@ -331,9 +331,29 @@ unique_ptr<Expression> MonotonePreimageRule::Apply(LogicalOperator &op, vector<r
 	if (!need_lower && !need_upper) {
 		return nullptr; // no narrowing
 	}
+	// the smallest finite value sorts below the -infinity sentinel, outside the domain. When the preimage reaches
+	// the bottom of the domain and f maps that value into it too, the lower bound only excludes -infinity.
+	bool below_sentinel_matches = false;
+	if (has_infinity && a == dom_lo) {
+		Value below_sentinel;
+		if (!EvalFunc(context, func, col_type, dom_lo - 2, below_sentinel)) {
+			return nullptr;
+		}
+		auto check = BoundComparisonExpression::Create(cmp, make_uniq<BoundConstantExpression>(below_sentinel),
+		                                               make_uniq<BoundConstantExpression>(c));
+		Value matches;
+		if (!ExpressionExecutor::TryEvaluateScalar(context, *check, matches) || matches.IsNull()) {
+			return nullptr;
+		}
+		below_sentinel_matches = BooleanValue::Get(matches);
+	}
 	unique_ptr<Expression> lower;
 	unique_ptr<Expression> upper;
-	if (need_lower) {
+	if (need_lower && below_sentinel_matches) {
+		lower =
+		    BoundComparisonExpression::Create(ExpressionType::COMPARE_NOTEQUAL, col.Copy(),
+		                                      make_uniq<BoundConstantExpression>(Value::NegativeInfinity(col_type)));
+	} else if (need_lower) {
 		lower = MakeColBound(true, col, col_type, a, dom_lo, has_infinity);
 	}
 	if (need_upper) {

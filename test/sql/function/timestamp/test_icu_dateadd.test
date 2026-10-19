@@ -509,7 +509,7 @@ Conversion Error: ICU date overflows timestamp range
 statement error
 SELECT ts + (INTERVAL 612 microsecond) FROM limits WHERE label = 'tsmax';
 ----
-Out of Range Error: Overflow in multiplication
+Conversion Error: ICU date overflows timestamp range
 
 statement error
 SELECT TIMESTAMPTZ '2024-01-01 12:00:00+00' - INTERVAL '-4611686018427387904 microseconds -4611686018427387904 microseconds'

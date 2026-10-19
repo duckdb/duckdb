@@ -86,8 +86,8 @@ Conversion Error: timestamp field value out of range: "294247-01-10 03:00:54.775
 statement ok
 COPY t TO '{TEST_DIR}/test_26797.csv';
 
-query II
-SELECT k, ts FROM read_csv('{TEST_DIR}/test_26797.csv') ORDER BY ts LIMIT 2;
+query III
+SELECT k, ts, typeof(ts) FROM read_csv('{TEST_DIR}/test_26797.csv') ORDER BY ts LIMIT 2;
 ----
-int64_min	290309-12-21 (BC) 19:59:05.224192
-above -infinity	290309-12-21 (BC) 19:59:05.224194
+int64_min	290309-12-21 (BC) 19:59:05.224192	TIMESTAMP
+above -infinity	290309-12-21 (BC) 19:59:05.224194	TIMESTAMP
