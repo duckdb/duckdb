@@ -143,12 +143,9 @@ struct ICUStrptime : public ICUDateFunc {
 					result = timestamp_tz_t(parsed.ToTimestamp());
 					return;
 				} else {
-					// Set TZ first, if any.
-					if (!parsed.tz.empty()) {
-						cache.SetTimeZone(calendar, parsed.tz);
-					}
-
-					result = GetTime(calendar, ToMicros(calendar, parsed, format));
+					// Use the calendar of the parsed time zone, if any - the shared calendar keeps the session zone
+					auto row_calendar = parsed.tz.empty() ? calendar : cache.GetCalendar(parsed.tz);
+					result = GetTime(row_calendar, ToMicros(row_calendar, parsed, format));
 					return;
 				}
 			}
@@ -166,11 +163,9 @@ struct ICUStrptime : public ICUDateFunc {
 					result.value = parsed.ToTimestamp().value;
 					return;
 				} else {
-					// Set TZ first, if any.
-					if (!parsed.tz.empty()) {
-						cache.SetTimeZone(calendar, parsed.tz);
-					}
-					result = GetTimeNS(calendar, ToNanos(calendar, parsed, format));
+					// Use the calendar of the parsed time zone, if any - the shared calendar keeps the session zone
+					auto row_calendar = parsed.tz.empty() ? calendar : cache.GetCalendar(parsed.tz);
+					result = GetTimeNS(row_calendar, ToNanos(row_calendar, parsed, format));
 					return;
 				}
 			}
@@ -207,8 +202,9 @@ struct ICUStrptime : public ICUDateFunc {
 				if (parsed.is_special) {
 					result.value = parsed.ToTimestamp().value;
 					return true;
-				} else if (parsed.tz.empty() || cache.TrySetTimeZone(calendar, parsed.tz)) {
-					if (TryGetTime(calendar, ToMicros(calendar, parsed, format), result)) {
+				} else {
+					auto row_calendar = parsed.tz.empty() ? calendar : cache.TryGetCalendar(parsed.tz);
+					if (row_calendar && TryGetTime(row_calendar, ToMicros(row_calendar, parsed, format), result)) {
 						return true;
 					}
 				}
@@ -226,8 +222,9 @@ struct ICUStrptime : public ICUDateFunc {
 				if (parsed.is_special) {
 					result.value = parsed.ToTimestamp().value;
 					return true;
-				} else if (parsed.tz.empty() || cache.TrySetTimeZone(calendar, parsed.tz)) {
-					if (TryGetTimeNS(calendar, ToNanos(calendar, parsed, format), result)) {
+				} else {
+					auto row_calendar = parsed.tz.empty() ? calendar : cache.TryGetCalendar(parsed.tz);
+					if (row_calendar && TryGetTimeNS(row_calendar, ToNanos(row_calendar, parsed, format), result)) {
 						return true;
 					}
 				}
@@ -403,18 +400,24 @@ struct ICUStrptime : public ICUDateFunc {
 			// Convert parts to a TZ (default or parsed) if no offset was provided
 			auto calendar = cal.get();
 
-			// Change TZ if one was provided.
+			// Use the calendar of the time zone if one was provided - the shared calendar keeps the session zone
 			if (tz.GetSize()) {
 				string error_msg;
-				cache.SetTimeZone(calendar, tz, &error_msg);
-				if (!error_msg.empty()) {
+				calendar = cache.TryGetCalendar(tz, &error_msg);
+				if (!calendar) {
 					HandleCastError::AssignError(error_msg, parameters);
 					return nullopt;
 				}
 			}
 
 			// Now get the parts in the given time zone
-			return FromNaive(calendar, us);
+			timestamp_tz_t result;
+			string error_msg;
+			if (!TryFromNaive(calendar, us, result, error_msg)) {
+				HandleCastError::AssignError(error_msg, parameters);
+				return nullopt;
+			}
+			return result;
 		}
 
 		return timestamp_tz_t(us);
@@ -675,10 +678,10 @@ struct ICUStrftime : public ICUDateFunc {
 
 		auto offset = ExtractField(calendar, CAL_ZONE_OFFSET) + ExtractField(calendar, CAL_DST_OFFSET);
 		offset /= Interval::MSECS_PER_SEC;
-		offset /= Interval::SECS_PER_MINUTE;
-		int hour_offset = offset / 60;
-		int minute_offset = offset % 60;
-		auto offset_str = Time::ToUTCOffset(hour_offset, minute_offset);
+		int hour_offset = offset / Interval::SECS_PER_HOUR;
+		int minute_offset = (offset % Interval::SECS_PER_HOUR) / Interval::SECS_PER_MINUTE;
+		int second_offset = offset % Interval::SECS_PER_MINUTE;
+		auto offset_str = Time::ToUTCOffset(hour_offset, minute_offset, second_offset);
 		const auto offset_len = offset_str.size();
 
 		const auto len = date_len + 1 + time_len + offset_len;

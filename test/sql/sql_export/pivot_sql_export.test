@@ -48,7 +48,7 @@ FROM (VALUES (1,'a_b','c',10),(2,'a','b_c',20)) t(g,k1,k2,v)
 PIVOT (sum(v) FOR (k1,k2) IN (('a_b','c'),('a','b_c')));
 ----
 1	10	NULL
-2	20	NULL
+2	NULL	20
 
 statement ok
 CREATE SEQUENCE pivot_export_sequence;

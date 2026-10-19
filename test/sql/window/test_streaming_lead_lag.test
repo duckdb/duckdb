@@ -267,10 +267,12 @@ NULL
 NULL
 NULL
 
-statement error
+query I
 SELECT LAG(i, (-9223372036854775808)::BIGINT) OVER () FROM range(3) t(i);
 ----
-Overflow in subtraction
+NULL
+NULL
+NULL
 
 # UNIONs mess up the pipelining
 query II

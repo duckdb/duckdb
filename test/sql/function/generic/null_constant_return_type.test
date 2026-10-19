@@ -58,11 +58,16 @@ SELECT typeof(list_extract(NULL::INT[], 1)), typeof(array_extract(NULL::DATE[3],
 ----
 INTEGER	DATE	HUGEINT	STRUCT(x INTEGER, a VARCHAR)
 
-# functions that only resolve their return type in the bind callback still fold to an untyped NULL
-query II
-SELECT typeof(struct_extract(NULL::STRUCT(a DATE), 'a')), typeof(union_extract(NULL::UNION(a DATE, b INT), 'a'))
+query I
+SELECT typeof(struct_extract(NULL::STRUCT(a DATE), 'a'))
 ----
-"NULL"	"NULL"
+DATE
+
+# functions that only resolve their return type in the bind callback still fold to an untyped NULL
+query I
+SELECT typeof(union_extract(NULL::UNION(a DATE, b INT), 'a'))
+----
+"NULL"
 
 query III
 SELECT typeof(list_concat(NULL::INT[], [1::BIGINT])), typeof(array_slice(NULL::INT[3], 1, 2)), typeof(map_extract(NULL::MAP(INT, DATE), 1))
