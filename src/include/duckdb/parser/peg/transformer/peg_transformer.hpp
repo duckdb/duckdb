@@ -4744,7 +4744,7 @@ public:
 	static CopyDatabaseType TransformCopySchema(PEGTransformer &transformer);
 	static CopyDatabaseType TransformCopyData(PEGTransformer &transformer);
 	static unique_ptr<CreateStatement>
-	TransformCreateIndexStmt(PEGTransformer &transformer, const optional<bool> &unique_index,
+	TransformCreateIndexStmt(PEGTransformer &transformer, const optional<bool> &unique_index, const bool &concurrently,
 	                         const optional<bool> &if_not_exists, const optional<Identifier> &index_name,
 	                         unique_ptr<BaseTableRef> base_table_name, const optional<Identifier> &index_type,
 	                         vector<unique_ptr<ParsedExpression>> index_element,
