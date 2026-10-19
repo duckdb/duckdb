@@ -1,0 +1,72 @@
+# name: test/sql/window/window_compact_frame_payloads.test
+# description: Holistic window aggregates over constant arguments in moving frames
+# group: [window]
+
+# MODE and the quantile family page their arguments through their own window collection
+# cursors, which must handle the compact representations returned by collection scans
+
+query II
+SELECT i, mode(7::BIGINT) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS m
+FROM range(5) t(i)
+----
+0	7
+1	7
+2	7
+3	7
+4	7
+
+query II
+SELECT i, quantile_cont(7::DOUBLE, 0.5) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS q
+FROM range(5) t(i)
+----
+0	7.0
+1	7.0
+2	7.0
+3	7.0
+4	7.0
+
+query II
+SELECT i, quantile_disc(7::BIGINT, 0.5) OVER (ORDER BY i ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS q
+FROM range(5) t(i)
+----
+0	7
+1	7
+2	7
+3	7
+4	7
+
+query II
+SELECT i, median('constant_string_payload_longer_than_twelve') OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS m
+FROM range(3) t(i)
+----
+0	constant_string_payload_longer_than_twelve
+1	constant_string_payload_longer_than_twelve
+2	constant_string_payload_longer_than_twelve
+
+# a filter forces the filtered sort tree build over the constant argument
+query II
+SELECT i, quantile_cont(7::DOUBLE, 0.5) FILTER (i % 2 = 0) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS q
+FROM range(5) t(i)
+----
+0	7.0
+1	7.0
+2	7.0
+3	7.0
+4	7.0
+
+# a NULL constant argument exercises the nullable sort tree build
+query II
+SELECT i, quantile_cont(NULL::DOUBLE, 0.5) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS q
+FROM range(3) t(i)
+----
+0	NULL
+1	NULL
+2	NULL
+
+query II
+SELECT i, mode(NULL::VARCHAR) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS m
+FROM range(3) t(i)
+----
+0	NULL
+1	NULL
+2	NULL

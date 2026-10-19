@@ -245,6 +245,8 @@ struct ModeState {
 		if (!RowIsVisible(row_idx)) {
 			D_ASSERT(inputs);
 			inputs->Seek(row_idx, *scan, page);
+			// the accessors below require flat vectors, scans can return compact representations
+			page.Flatten();
 			data = FlatVector::GetData<KEY_TYPE>(page.data[0]);
 			validity = &FlatVector::ValidityMutable(page.data[0]);
 		}
