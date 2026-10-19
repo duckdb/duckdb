@@ -4228,6 +4228,16 @@ public:
 	static void InitializeResetStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeResetStatementTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
+	static void InitializeResetTargetTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeResetTargetTrampoline(PEGTransformer &transformer,
+	                                                                     GeneratedTransformProcess &process);
+	static void InitializeResetTimeZoneTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeResetTimeZoneTrampoline(PEGTransformer &transformer,
+	                                                                       GeneratedTransformProcess &process);
+	static void InitializeResetVariableOrSettingTrampoline(PEGTransformer &transformer,
+	                                                       GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeResetVariableOrSettingTrampoline(PEGTransformer &transformer,
+	                                                                                GeneratedTransformProcess &process);
 	static void InitializeSetSchemaTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeSetSchemaTrampoline(PEGTransformer &transformer,
 	                                                                   GeneratedTransformProcess &process);
@@ -6154,12 +6164,19 @@ public:
 	static unique_ptr<SQLStatement> TransformSetStatement(PEGTransformer &transformer,
 	                                                      unique_ptr<SetStatement> set_assignment_or_time_zone);
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer,
-	                                                        const SettingInfo &set_variable_or_setting);
-	static unique_ptr<SetStatement> TransformSetSchema(PEGTransformer &transformer, const string &string_literal);
+	                                                        unique_ptr<SQLStatement> reset_target);
+	static unique_ptr<SQLStatement> TransformResetTimeZone(PEGTransformer &transformer,
+	                                                       const optional<SetScope> &setting_scope);
+	static unique_ptr<SQLStatement> TransformResetVariableOrSetting(PEGTransformer &transformer,
+	                                                                const SettingInfo &set_variable_or_setting);
+	static unique_ptr<SetStatement> TransformSetSchema(PEGTransformer &transformer,
+	                                                   const optional<SetScope> &setting_scope,
+	                                                   const string &string_literal);
 	static unique_ptr<SetStatement> TransformStandardAssignment(PEGTransformer &transformer,
 	                                                            const SettingInfo &set_variable_or_setting,
 	                                                            vector<unique_ptr<ParsedExpression>> set_assignment);
 	static unique_ptr<SetStatement> TransformSetTimeZone(PEGTransformer &transformer,
+	                                                     const optional<SetScope> &setting_scope,
 	                                                     unique_ptr<ParsedExpression> zone_value);
 	static unique_ptr<ParsedExpression> TransformZoneLocal(PEGTransformer &transformer);
 	static unique_ptr<ParsedExpression> TransformZoneDefault(PEGTransformer &transformer);

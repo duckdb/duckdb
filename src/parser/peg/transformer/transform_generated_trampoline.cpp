@@ -3122,6 +3122,15 @@ static const TransformFrameOps SET_ASSIGNMENT_OR_TIME_ZONE_OPS = {
 static const TransformFrameOps RESET_STATEMENT_OPS = {"ResetStatement",
                                                       &PEGTransformerFactory::InitializeResetStatementTrampoline,
                                                       &PEGTransformerFactory::FinalizeResetStatementTrampoline};
+static const TransformFrameOps RESET_TARGET_OPS = {"ResetTarget",
+                                                   &PEGTransformerFactory::InitializeResetTargetTrampoline,
+                                                   &PEGTransformerFactory::FinalizeResetTargetTrampoline};
+static const TransformFrameOps RESET_TIME_ZONE_OPS = {"ResetTimeZone",
+                                                      &PEGTransformerFactory::InitializeResetTimeZoneTrampoline,
+                                                      &PEGTransformerFactory::FinalizeResetTimeZoneTrampoline};
+static const TransformFrameOps RESET_VARIABLE_OR_SETTING_OPS = {
+    "ResetVariableOrSetting", &PEGTransformerFactory::InitializeResetVariableOrSettingTrampoline,
+    &PEGTransformerFactory::FinalizeResetVariableOrSettingTrampoline};
 static const TransformFrameOps SET_SCHEMA_OPS = {"SetSchema", &PEGTransformerFactory::InitializeSetSchemaTrampoline,
                                                  &PEGTransformerFactory::FinalizeSetSchemaTrampoline};
 static const TransformFrameOps STANDARD_ASSIGNMENT_OPS = {
@@ -4367,6 +4376,9 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"SetStatement", &SET_STATEMENT_OPS},
 	    {"SetAssignmentOrTimeZone", &SET_ASSIGNMENT_OR_TIME_ZONE_OPS},
 	    {"ResetStatement", &RESET_STATEMENT_OPS},
+	    {"ResetTarget", &RESET_TARGET_OPS},
+	    {"ResetTimeZone", &RESET_TIME_ZONE_OPS},
+	    {"ResetVariableOrSetting", &RESET_VARIABLE_OR_SETTING_OPS},
 	    {"SetSchema", &SET_SCHEMA_OPS},
 	    {"StandardAssignment", &STANDARD_ASSIGNMENT_OPS},
 	    {"SetVariableOrSetting", &SET_VARIABLE_OR_SETTING_OPS},
@@ -26114,27 +26126,92 @@ void PEGTransformerFactory::InitializeResetStatementTrampoline(PEGTransformer &t
                                                                GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(1);
-	process.PushChild({transformer.GetRule("SetVariableOrSetting"), list_pr.GetChild(1)}, 0);
+	process.PushChild({transformer.GetRule("ResetTarget"), list_pr.GetChild(1)}, 0);
 }
 
 arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeResetStatementTrampoline(PEGTransformer &transformer,
                                                         GeneratedTransformProcess &process) {
+	auto reset_target = process.TakeResult<unique_ptr<SQLStatement>>(0);
+	auto result = TransformResetStatement(transformer, std::move(reset_target));
+	return transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeResetTargetTrampoline(PEGTransformer &transformer,
+                                                            GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.Name());
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeResetTargetTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<unique_ptr<SQLStatement>>(0);
+	return transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeResetTimeZoneTrampoline(PEGTransformer &transformer,
+                                                              GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	auto &setting_scope_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (setting_scope_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("SettingScope"), setting_scope_opt.GetResult()}, 0);
+	}
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeResetTimeZoneTrampoline(PEGTransformer &transformer,
+                                                       GeneratedTransformProcess &process) {
+	optional<SetScope> setting_scope {};
+	if (process.child_results[0]) {
+		setting_scope = process.TakeResult<SetScope>(0);
+	}
+	auto result = TransformResetTimeZone(transformer, setting_scope);
+	return transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeResetVariableOrSettingTrampoline(PEGTransformer &transformer,
+                                                                       GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("SetVariableOrSetting"), list_pr.GetChild(0)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeResetVariableOrSettingTrampoline(PEGTransformer &transformer,
+                                                                GeneratedTransformProcess &process) {
 	auto set_variable_or_setting = process.TakeResult<SettingInfo>(0);
-	auto result = TransformResetStatement(transformer, set_variable_or_setting);
+	auto result = TransformResetVariableOrSetting(transformer, set_variable_or_setting);
 	return transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeSetSchemaTrampoline(PEGTransformer &transformer,
                                                           GeneratedTransformProcess &process) {
-	process.ReserveChildSlots(0);
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	auto &setting_scope_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (setting_scope_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("SettingScope"), setting_scope_opt.GetResult()}, 0);
+	}
 }
 
 arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSetSchemaTrampoline(PEGTransformer &transformer,
                                                                                    GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(1));
-	auto result = TransformSetSchema(transformer, string_literal);
+	optional<SetScope> setting_scope {};
+	if (process.child_results[0]) {
+		setting_scope = process.TakeResult<SetScope>(0);
+	}
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(2));
+	auto result = TransformSetSchema(transformer, setting_scope, string_literal);
 	return transformer.MakeResult<unique_ptr<SetStatement>>(std::move(result));
 }
 
@@ -26179,14 +26256,22 @@ PEGTransformerFactory::FinalizeSetVariableOrSettingTrampoline(PEGTransformer &tr
 void PEGTransformerFactory::InitializeSetTimeZoneTrampoline(PEGTransformer &transformer,
                                                             GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(1);
-	process.PushChild({transformer.GetRule("ZoneValue"), list_pr.GetChild(2)}, 0);
+	process.ReserveChildSlots(2);
+	process.PushChild({transformer.GetRule("ZoneValue"), list_pr.GetChild(3)}, 1);
+	auto &setting_scope_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (setting_scope_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("SettingScope"), setting_scope_opt.GetResult()}, 0);
+	}
 }
 
 arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeSetTimeZoneTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
-	auto zone_value = process.TakeResult<unique_ptr<ParsedExpression>>(0);
-	auto result = TransformSetTimeZone(transformer, std::move(zone_value));
+	optional<SetScope> setting_scope {};
+	if (process.child_results[0]) {
+		setting_scope = process.TakeResult<SetScope>(0);
+	}
+	auto zone_value = process.TakeResult<unique_ptr<ParsedExpression>>(1);
+	auto result = TransformSetTimeZone(transformer, setting_scope, std::move(zone_value));
 	return transformer.MakeResult<unique_ptr<SetStatement>>(std::move(result));
 }
 
