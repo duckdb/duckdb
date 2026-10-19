@@ -4,6 +4,7 @@
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/serializer/varint.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 
 #include <algorithm>
 
@@ -26,52 +27,39 @@ static constexpr idx_t BYTE_OFFSET_INDEX = 1;
 
 namespace {
 
-//! Throws if 'byte_offset' does not leave at least 'min_remaining' bytes in the blob
-static void ValidateBlobByteOffset(const string_t &blob, uint32_t byte_offset, idx_t min_remaining) {
-	auto blob_size = blob.GetSize();
-	if (byte_offset >= blob_size || min_remaining > blob_size - byte_offset) {
-		throw DataCorruptionException("Variant byte_offset (%d) is out of bounds for a blob of size %d", byte_offset,
-		                              blob_size);
-	}
-}
-
 //! Decode the (length-prefixed) string payload of a value at the given byte offset in the blob
 string_t DecodeStringData(const string_t &blob, uint32_t byte_offset) {
-	ValidateBlobByteOffset(blob, byte_offset, 1);
+	auto blob_size = blob.GetSize();
+	VariantUtils::Available(blob_size, byte_offset, 1);
 	auto data = const_data_ptr_cast(blob.GetData());
 	auto ptr = data + byte_offset;
 	auto length = VarintDecode<uint32_t>(ptr);
-	auto bytes_remaining = blob.GetSize() - NumericCast<idx_t>(ptr - data);
-	if (length > bytes_remaining) {
-		throw DataCorruptionException("Variant string length (%d) exceeds the remaining blob size (%d)", length,
-		                              bytes_remaining);
-	}
+	VariantUtils::Available(blob_size, NumericCast<idx_t>(ptr - data), length);
 	return string_t(reinterpret_cast<const char *>(ptr), length);
 }
 
 //! Decode the (width, scale, value pointer) of a DECIMAL value at the given byte offset
 VariantDecimalData DecodeDecimalData(const string_t &blob, uint32_t byte_offset) {
-	ValidateBlobByteOffset(blob, byte_offset, 1);
-	auto ptr = const_data_ptr_cast(blob.GetData()) + byte_offset;
+	auto blob_size = blob.GetSize();
+	VariantUtils::Available(blob_size, byte_offset, 1);
+	auto data = const_data_ptr_cast(blob.GetData());
+	auto ptr = data + byte_offset;
 	auto width = VarintDecode<uint32_t>(ptr);
 	auto scale = VarintDecode<uint32_t>(ptr);
-	if (NumericCast<idx_t>(ptr - const_data_ptr_cast(blob.GetData())) > blob.GetSize()) {
-		throw DataCorruptionException("Variant decimal header runs past the end of a blob of size %d", blob.GetSize());
-	}
+	VariantUtils::Available(blob_size, NumericCast<idx_t>(ptr - data), 0);
 	return VariantDecimalData(width, scale, ptr);
 }
 
 //! Decode the (child_count, children_idx) of an OBJECT/ARRAY value at the given byte offset
 VariantNestedData DecodeNestedData(const string_t &blob, uint32_t byte_offset) {
-	ValidateBlobByteOffset(blob, byte_offset, 1);
+	auto blob_size = blob.GetSize();
+	VariantUtils::Available(blob_size, byte_offset, 1);
 	auto data = const_data_ptr_cast(blob.GetData());
 	auto ptr = data + byte_offset;
 	VariantNestedData result;
 	result.child_count = VarintDecode<uint32_t>(ptr);
 	if (result.child_count) {
-		if (NumericCast<idx_t>(ptr - data) >= blob.GetSize()) {
-			throw DataCorruptionException("Variant nested data runs past the end of a blob of size %d", blob.GetSize());
-		}
+		VariantUtils::Available(blob_size, NumericCast<idx_t>(ptr - data), 1);
 		result.children_idx = VarintDecode<uint32_t>(ptr);
 	} else {
 		result.children_idx = 0;

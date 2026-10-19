@@ -101,14 +101,6 @@ static bool FinalizeErrorMessage(FromVariantConversionData &conversion_data, Vec
 
 //! ------- Primitive Conversion Methods -------
 
-//! Throws if [byte_offset, byte_offset + size) is not fully within a blob of size 'blob_size'
-static void ValidateVariantByteRange(uint32_t byte_offset, idx_t size, idx_t blob_size) {
-	if (byte_offset > blob_size || size > blob_size - byte_offset) {
-		throw DataCorruptionException("Variant byte_offset (%d) with size (%d) is out of bounds for a blob of size %d",
-		                              byte_offset, size, blob_size);
-	}
-}
-
 //! bool
 struct VariantBooleanConversion {
 	using type = bool;
@@ -137,7 +129,7 @@ struct VariantDirectConversion {
 			}
 			return false;
 		}
-		ValidateVariantByteRange(byte_offset, sizeof(T), blob_size);
+		VariantUtils::Available(blob_size, byte_offset, sizeof(T));
 		ret = Load<T>(value + byte_offset);
 		return true;
 	}
@@ -150,10 +142,10 @@ struct VariantDirectConversion {
 			}
 			return false;
 		}
-		ValidateVariantByteRange(byte_offset, 1, blob_size);
+		VariantUtils::Available(blob_size, byte_offset, 1);
 		auto ptr = value + byte_offset;
 		auto length = VarintDecode<idx_t>(ptr);
-		ValidateVariantByteRange(NumericCast<uint32_t>(ptr - value), length, blob_size);
+		VariantUtils::Available(blob_size, NumericCast<uint32_t>(ptr - value), length);
 		ret = StringVector::AddStringOrBlob(payload.vec, reinterpret_cast<const char *>(ptr), length);
 		return true;
 	}
@@ -172,7 +164,7 @@ struct VariantDecimalConversion {
 			}
 			return false;
 		}
-		ValidateVariantByteRange(byte_offset, 1, blob_size);
+		VariantUtils::Available(blob_size, byte_offset, 1);
 		auto ptr = value + byte_offset;
 		auto width = VarintDecode<idx_t>(ptr);
 		auto scale = VarintDecode<idx_t>(ptr);
@@ -181,7 +173,7 @@ struct VariantDecimalConversion {
 			error = StringUtil::Format("Can't convert from VARIANT(DECIMAL(%d, %d))", width, scale);
 			return false;
 		}
-		ValidateVariantByteRange(NumericCast<uint32_t>(ptr - value), sizeof(T), blob_size);
+		VariantUtils::Available(blob_size, NumericCast<uint32_t>(ptr - value), sizeof(T));
 		ret = Load<T>(ptr);
 		return true;
 	}
