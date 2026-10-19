@@ -5,6 +5,7 @@
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "test_helpers.hpp"
 
@@ -292,6 +293,28 @@ TEST_CASE("Compact collections account their stored bytes", "[column_data_compac
 	// the per-chunk allocation attribution is nonzero as well
 	auto &segment = *collection.GetSegments()[0];
 	REQUIRE(segment.GetChunkAllocationSize(0) > 0);
+
+	// materialization retires the constant charge from the per-chunk attribution as well
+	ColumnDataCollection mixed(buffer_manager, {LogicalType::BIGINT});
+	ColumnDataAppendState mixed_append;
+	mixed.InitializeAppend(mixed_append);
+	AppendConstantChunk(mixed, mixed_append, Value::BIGINT(7), 100);
+	DataChunk flat_input;
+	mixed.InitializeScanChunk(flat_input);
+	{
+		auto writer = FlatVector::Writer<int64_t>(flat_input.data[0], 100);
+		for (idx_t i = 0; i < 100; i++) {
+			writer.WriteValue(UnsafeNumericCast<int64_t>(i));
+		}
+	}
+	flat_input.SetCardinality(100);
+	mixed.Append(mixed_append, flat_input);
+	auto &mixed_segment = *mixed.GetSegments()[0];
+	const idx_t flat_entry_size =
+	    ColumnDataCollectionSegment::GetDataSize(sizeof(int64_t)) + ValidityMask::STANDARD_MASK_SIZE;
+	REQUIRE(mixed_segment.constant_metadata_size == 0);
+	REQUIRE(mixed.SizeInBytes() == flat_entry_size);
+	REQUIRE(mixed_segment.GetChunkAllocationSize(0) == flat_entry_size);
 }
 
 TEST_CASE("Repeated string bytes stay shared when compact recognition does not apply", "[column_data_compact]") {
