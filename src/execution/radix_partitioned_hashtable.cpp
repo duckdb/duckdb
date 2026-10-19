@@ -245,22 +245,12 @@ void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external
 	}
 
 	const auto radix_bits = MaxValue(radix_bits_p, sink_radix_bits.load());
-	auto &temporary_memory_state = *sink.temporary_memory_state;
 	if (external) {
 		const auto partition_multiplier =
 		    RadixPartitioning::NumberOfPartitions(radix_bits) / RadixPartitioning::NumberOfPartitions(sink_radix_bits);
 		sink.minimum_reservation = sink.minimum_reservation * partition_multiplier;
 		sink.external = true;
-	} else if (radix_bits > sink_radix_bits) {
-		// A recursive iteration can restart below the maximum partition count: growing the partitions
-		// grows the working set, so the reservation floor must cover the new configuration again.
-		sink.minimum_reservation =
-		    MaxValue<idx_t>(sink.minimum_reservation, sink.CalculateMinimumReservation(radix_bits));
 	}
-	// Publish the raised floor. UpdateSinkReservation can have published a larger minimum under this
-	// lock, so never lower the published value here.
-	temporary_memory_state.SetMinimumReservation(
-	    MaxValue<idx_t>(temporary_memory_state.GetMinimumReservation(), sink.minimum_reservation));
 
 	sink_radix_bits = radix_bits;
 }
