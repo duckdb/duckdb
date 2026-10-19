@@ -1,0 +1,14 @@
+diff --git a/src/storage/ducklake_table_entry.cpp b/src/storage/ducklake_table_entry.cpp
+index 2dbe577..5b0f1b2 100644
+--- a/src/storage/ducklake_table_entry.cpp
++++ b/src/storage/ducklake_table_entry.cpp
+@@ -1284,8 +1284,7 @@ DuckLakeTableEntry::ParseTableOptions(ClientContext &context, DuckLakeCatalog &c
+ 		if (entry.second) {
+ 			auto binder = Binder::CreateBinder(context);
+ 			ConstantBinder constant_binder(*binder, context, "table option");
+-			auto expr = entry.second->Copy();
+-			value = ExpressionExecutor::EvaluateScalar(context, *constant_binder.Bind(expr), true);
++			value = ExpressionExecutor::EvaluateScalar(context, *constant_binder.Bind(*entry.second), true);
+ 		}
+ 		if (value.IsNull()) {
+ 			throw BinderException("Table option \"%s\" requires a value", entry.first);

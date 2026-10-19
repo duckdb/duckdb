@@ -295,7 +295,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(const ParsedExpression &expr, opti
 
 BindResult ExpressionBinder::Bind(const ParsedExpression &expr, idx_t depth, bool root_expression) {
 	auto query_location = expr.GetQueryLocation();
-	auto alias = expr.GetAlias();
+	auto &alias = expr.GetAlias();
 	BindResult result = BindExpression(expr, depth, root_expression);
 	if (result.HasError()) {
 		return result;

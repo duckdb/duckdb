@@ -40,7 +40,7 @@ BindResult TableFunctionBinder::BindColumnReference(const ParsedExpression &expr
 	}
 
 	auto query_location = col_ref.GetQueryLocation();
-	auto column_names = col_ref.ColumnNames();
+	auto &column_names = col_ref.ColumnNames();
 	auto result_name = StringUtil::Join(column_names, ".");
 	// the name is never a column of this scope, so it can only come from an enclosing one. Resolving it
 	// there is not enough to call it a lateral parameter: a scope can reach a name and still fail to

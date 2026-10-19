@@ -11,7 +11,7 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(const ParameterExpression &expr, idx_t depth) {
 	auto parameters = binder.GetParameters();
-	auto parameter_id = expr.Identifier();
+	auto &parameter_id = expr.Identifier();
 
 	if (parameters) {
 		// Check if a parameter value has already been supplied (named params take precedence)
