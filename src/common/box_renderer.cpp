@@ -2132,6 +2132,8 @@ void BoxRendererImplementation::RenderValues(BaseResultRenderer &ss, vector<Rend
 		is_first_collection = false;
 
 		for (auto &chunk : collection.Chunks(scan_indexes)) {
+			// scans can return compact representations, this path requires flat vectors
+			chunk.Flatten();
 			vector<BoxRenderRow> chunk_rows;
 			chunk_rows.resize(chunk.size());
 			for (idx_t c = 0; c < columns_to_scan.size(); c++) {
