@@ -237,6 +237,17 @@ optional_idx ExpressionBinder::ResolveAggregateOwner(FunctionExpression &aggrega
 			CollectResolvableColumns(*order.expression, lambda_params, columns);
 		}
 	}
+	return ResolveOwner(columns, start);
+}
+
+optional_idx ExpressionBinder::ResolveExpressionOwner(ParsedExpression &expr, idx_t start) {
+	vector<reference<ColumnRefExpression>> columns;
+	vector<identifier_set_t> lambda_params;
+	CollectResolvableColumns(expr, lambda_params, columns);
+	return ResolveOwner(columns, start);
+}
+
+optional_idx ExpressionBinder::ResolveOwner(vector<reference<ColumnRefExpression>> &columns, idx_t start) {
 	auto owner = start;
 	bool found = false;
 	for (auto &colref : columns) {
@@ -268,6 +279,51 @@ optional_idx ExpressionBinder::ResolveOuterGroup(vector<reference<ParsedExpressi
 		}
 	}
 	return optional_idx();
+}
+
+//! Expression classes that can never equal a group expression, or that are already matched against
+//! the groups elsewhere: a column reference is matched by name and alias in `ResolveColumn`
+static bool CanMatchGroup(const ParsedExpression &expr) {
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::COLUMN_REF:
+	case ExpressionClass::CONSTANT:
+	case ExpressionClass::PARAMETER:
+	case ExpressionClass::POSITIONAL_REFERENCE:
+	case ExpressionClass::LAMBDA_REF:
+	case ExpressionClass::LAMBDA:
+	case ExpressionClass::STAR:
+	case ExpressionClass::DEFAULT:
+	case ExpressionClass::SUBQUERY:
+	case ExpressionClass::TYPE:
+	case ExpressionClass::WINDOW:
+		return false;
+	default:
+		return true;
+	}
+}
+
+optional_idx ExpressionBinder::ResolveOuterGroupOwner(ParsedExpression &expr) {
+	if (!CanMatchGroup(expr)) {
+		return optional_idx();
+	}
+	// the expression only refers to a group of the scope that owns all of its columns, so that e.g. a
+	// column of an inner scope that shadows the grouped one keeps the expression in the inner scope
+	auto owner = ResolveExpressionOwner(expr, 0);
+	if (!owner.IsValid() || owner.GetIndex() == 0) {
+		return optional_idx();
+	}
+	if (!ScopeAt(owner.GetIndex()).MatchesGroup(expr)) {
+		return optional_idx();
+	}
+	return owner;
+}
+
+BindResult ExpressionBinder::BindGroupInEnclosingScope(unique_ptr<ParsedExpression> &expr_ptr, idx_t owner,
+                                                       idx_t depth) {
+	// the groups are keyed by the qualified form, so bind a qualified copy and leave the original intact
+	auto qualified = expr_ptr->Copy();
+	QualifyColumnNames(ScopeAt(owner).binder, qualified);
+	return DispatchToScope(owner, qualified, depth);
 }
 
 } // namespace duckdb
