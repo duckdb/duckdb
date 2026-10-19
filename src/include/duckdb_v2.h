@@ -11362,45 +11362,29 @@ typedef struct _duckdb_v2_statement_iterator {
  * Parses a SQL string into an iterator over its statements.
  *
  * Parses and nothing more: no binding and no catalog access. The connection supplies the parser options and parser
- * extensions. A parse error invalidates the connection's active transaction as the transaction invalidation policy
- * says, like an error from running the statement would; to parse without that, use
- * `duckdb_v2_parse_sql_without_invalidation()`. Statements are raw parser output; statement-level rewrites happen
- * inside statement_execute. The SQL string is copied, so the caller may free it once this call returns. An input with
- * no statements — empty, whitespace, or separators only — yields an iterator that is immediately exhausted.
+ * extensions. With apply_invalidation_policy, a parse error invalidates the connection's active transaction as the
+ * transaction invalidation policy says, like an error from running the statement would; pass that when the statements
+ * are parsed to be run. Without it, a parse error leaves the transaction usable, for callers that only inspect the
+ * statements, for example with `duckdb_v2_statement_bind()`. Statements are raw parser output; statement-level rewrites
+ * happen inside statement_execute. The SQL string is copied, so the caller may free it once this call returns. An input
+ * with no statements — empty, whitespace, or separators only — yields an iterator that is immediately exhausted.
  *
  * history:
  * - unstable: v2.0.0
  *
  * @param conn The connection supplying the parser configuration.
  * @param sql Null-terminated SQL string; may contain any number of statements.
+ * @param apply_invalidation_policy Whether a parse error invalidates the active transaction as the transaction
+ * invalidation policy says.
  * @param out_iterator Receives the new iterator handle.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_parse_sql(duckdb_v2_connection_handle conn, const char *sql,
+                                                 bool apply_invalidation_policy,
                                                  duckdb_v2_statement_iterator_handle *out_iterator,
                                                  duckdb_v2_error_info_handle *err);
 #endif
-
-/*!
- * Parses a SQL string into an iterator over its statements, without a parse error invalidating the active transaction.
- *
- * Behaves as `duckdb_v2_parse_sql()`, except that a parse error leaves the connection's active transaction usable,
- * whatever the transaction invalidation policy says. Meant for callers that only inspect the statements, for example
- * with `duckdb_v2_statement_bind()`, instead of running them.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection supplying the parser configuration.
- * @param sql Null-terminated SQL string; may contain any number of statements.
- * @param out_iterator Receives the new iterator handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_parse_sql_without_invalidation(duckdb_v2_connection_handle conn, const char *sql,
-                                                                      duckdb_v2_statement_iterator_handle *out_iterator,
-                                                                      duckdb_v2_error_info_handle *err);
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!

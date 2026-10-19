@@ -465,8 +465,9 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 			QueryProfiler::Get(*this).StartQuery(query);
 		}
 
-		// Drain the lazy iterator into a vector for callers that want the eager shape.
-		StatementIterator iterator {ParseIterator(*this, query)};
+		// Drain the lazy iterator into a vector for callers that want the eager shape. The callers that run the
+		// statements apply the invalidation policy through ErrorResult.
+		StatementIterator iterator {ParseIterator(*this, query, false, lock)};
 		vector<unique_ptr<SQLStatement>> result;
 		while (iterator.Peek()) {
 			result.push_back(profile ? iterator.GetStatementForExecution() : iterator.GetStatement());
@@ -914,11 +915,12 @@ unique_ptr<QueryResult> ClientContext::QueryInternal(ClientContextLock &lock, co
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query);
 	// ParseIterator's constructor runs UTF-8 validation / Unicode-space strip and can throw — route
-	// through ErrorResult so the source location attaches the same way Peek failures do.
+	// through ErrorResult so the source location attaches the same way Peek failures do. ErrorResult also applies
+	// the invalidation policy.
 	optional_ptr<StatementIterator> iterator_ptr;
 	unique_ptr<StatementIterator> iterator_storage;
 	try {
-		iterator_storage = make_uniq<StatementIterator>(ParseIterator(*this, query));
+		iterator_storage = make_uniq<StatementIterator>(ParseIterator(*this, query, false, *lock));
 		iterator_ptr = *iterator_storage;
 	} catch (const std::exception &ex) {
 		return ErrorResult<QueryResult>(ErrorData(ex), query);

@@ -28,7 +28,6 @@ struct StatementIteratorWrapperV2 {
 	shared_ptr<ClientContext> context;
 	//! The original query string, kept to render a parse error through ProcessError.
 	string query;
-	//! False for parse_sql_without_invalidation.
 	bool apply_invalidation_policy;
 	//! Constructed on the first next(): the ParseIterator constructor runs UTF-8
 	//! validation and can throw, and that must route through the same parse-error
@@ -88,9 +87,9 @@ auto Convert(StatementIteratorWrapperV2 *ptr) -> duckdb_v2_statement_iterator_ha
 
 using namespace duckdb::capiv2;
 
-static DUCKDB_V2_ERROR ParseSQL(duckdb_v2_connection_handle conn, const char *sql,
-                                duckdb_v2_statement_iterator_handle *out_iterator, duckdb_v2_error_info_handle *err,
-                                bool apply_invalidation_policy) {
+DUCKDB_V2_ERROR duckdb_v2_parse_sql(duckdb_v2_connection_handle conn, const char *sql, bool apply_invalidation_policy,
+                                    duckdb_v2_statement_iterator_handle *out_iterator,
+                                    duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(conn);
 	DUCKDB_CHECK_ARG(sql);
 	DUCKDB_CHECK_ARG(out_iterator);
@@ -110,18 +109,6 @@ static DUCKDB_V2_ERROR ParseSQL(duckdb_v2_connection_handle conn, const char *sq
 		                                                             apply_invalidation_policy);
 		*out_iterator = Convert(wrapper.release());
 	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_parse_sql(duckdb_v2_connection_handle conn, const char *sql,
-                                    duckdb_v2_statement_iterator_handle *out_iterator,
-                                    duckdb_v2_error_info_handle *err) {
-	return ParseSQL(conn, sql, out_iterator, err, true);
-}
-
-DUCKDB_V2_ERROR duckdb_v2_parse_sql_without_invalidation(duckdb_v2_connection_handle conn, const char *sql,
-                                                         duckdb_v2_statement_iterator_handle *out_iterator,
-                                                         duckdb_v2_error_info_handle *err) {
-	return ParseSQL(conn, sql, out_iterator, err, false);
 }
 
 DUCKDB_V2_ERROR duckdb_v2_statement_iterator_next(duckdb_v2_statement_iterator_handle iterator,

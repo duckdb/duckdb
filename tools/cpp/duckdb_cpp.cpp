@@ -993,9 +993,9 @@ auto StatementIterator::Next() -> SqlStatement {
 	return detail::HandleFactory::Make<SqlStatement>(statement);
 }
 
-auto Connection::ParseSQL(const char *sql) -> StatementIterator {
+auto Connection::ParseSQL(const char *sql, bool apply_invalidation_policy) -> StatementIterator {
 	duckdb_v2_statement_iterator_handle iterator = nullptr;
-	CheckedAPICall(duckdb_v2_parse_sql, handle(), sql, &iterator);
+	CheckedAPICall(duckdb_v2_parse_sql, handle(), sql, apply_invalidation_policy, &iterator);
 	return detail::HandleFactory::Make<StatementIterator>(iterator);
 }
 
@@ -3387,7 +3387,8 @@ auto ScalarFunction::SetStatsCallback(StatsCallback callback) & -> ScalarFunctio
 			CheckedAPICall(duckdb_v2_scalar_function_stats_get_user_data, info, &user_data);
 			const auto &function = *static_cast<ScalarFunctionInfo *>(user_data);
 
-			auto input = detail::HandleFactory::Make<StatsInput>(static_cast<void *>(info), static_cast<void *>(context));
+			auto input =
+			    detail::HandleFactory::Make<StatsInput>(static_cast<void *>(info), static_cast<void *>(context));
 			function.stats_callback(input);
 		});
 	};
@@ -3865,7 +3866,8 @@ auto AggregateFunction::SetStatsCallback(StatsCallback callback) & -> AggregateF
 			CheckedAPICall(duckdb_v2_aggregate_function_stats_get_user_data, info, &user_data);
 			const auto &function = *static_cast<AggregateFunctionInfo *>(user_data);
 
-			auto input = detail::HandleFactory::Make<StatsInput>(static_cast<void *>(info), static_cast<void *>(context));
+			auto input =
+			    detail::HandleFactory::Make<StatsInput>(static_cast<void *>(info), static_cast<void *>(context));
 			function.stats_callback(input);
 		});
 	};
@@ -4577,7 +4579,8 @@ auto TableFunction::SetStatsCallback(StatsCallback callback) & -> TableFunction 
 			CheckedAPICall(duckdb_v2_table_function_stats_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
-			auto input = detail::HandleFactory::Make<StatsInput>(static_cast<void *>(info), static_cast<void *>(context));
+			auto input =
+			    detail::HandleFactory::Make<StatsInput>(static_cast<void *>(info), static_cast<void *>(context));
 			function.stats_callback(input);
 		});
 	};
