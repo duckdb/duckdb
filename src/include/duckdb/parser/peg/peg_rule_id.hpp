@@ -487,6 +487,7 @@ enum class PEGRuleId : uint32_t {
 	ExplainableStatements,
 	ExportStatement,
 	ExportSource,
+	ExportOptions,
 	ImportStatement,
 	ColumnReference,
 	NestedSchemaTableColumnName,

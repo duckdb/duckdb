@@ -1303,6 +1303,9 @@ static const TransformFrameOps EXPORT_STATEMENT_OPS = {"ExportStatement",
 static const TransformFrameOps EXPORT_SOURCE_OPS = {"ExportSource",
                                                     &PEGTransformerFactory::InitializeExportSourceTrampoline,
                                                     &PEGTransformerFactory::FinalizeExportSourceTrampoline};
+static const TransformFrameOps EXPORT_OPTIONS_OPS = {"ExportOptions",
+                                                     &PEGTransformerFactory::InitializeExportOptionsTrampoline,
+                                                     &PEGTransformerFactory::FinalizeExportOptionsTrampoline};
 static const TransformFrameOps IMPORT_STATEMENT_OPS = {"ImportStatement",
                                                        &PEGTransformerFactory::InitializeImportStatementTrampoline,
                                                        &PEGTransformerFactory::FinalizeImportStatementTrampoline};
@@ -3544,6 +3547,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ExplainableStatements", &EXPLAINABLE_STATEMENTS_OPS},
 	    {"ExportStatement", &EXPORT_STATEMENT_OPS},
 	    {"ExportSource", &EXPORT_SOURCE_OPS},
+	    {"ExportOptions", &EXPORT_OPTIONS_OPS},
 	    {"ImportStatement", &IMPORT_STATEMENT_OPS},
 	    {"ColumnReference", &COLUMN_REFERENCE_OPS},
 	    {"NestedSchemaTableColumnName", &NESTED_SCHEMA_TABLE_COLUMN_NAME_OPS},
@@ -13200,10 +13204,9 @@ void PEGTransformerFactory::InitializeExportStatementTrampoline(PEGTransformer &
                                                                 GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(2);
-	auto &generic_copy_option_list_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
-	if (generic_copy_option_list_opt.HasResult()) {
-		process.PushChild(
-		    {transformer.GetRule(PEGRuleId::GenericCopyOptionList), generic_copy_option_list_opt.GetResult()}, 1);
+	auto &export_options_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (export_options_opt.HasResult()) {
+		process.PushChild({transformer.GetRule(PEGRuleId::ExportOptions), export_options_opt.GetResult()}, 1);
 	}
 	auto &export_source_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (export_source_opt.HasResult()) {
@@ -13220,11 +13223,11 @@ PEGTransformerFactory::FinalizeExportStatementTrampoline(PEGTransformer &transfo
 		export_source = process.TakeResult<string>(0);
 	}
 	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(3));
-	optional<vector<GenericCopyOption>> generic_copy_option_list {};
+	optional<vector<GenericCopyOption>> export_options {};
 	if (process.child_results[1]) {
-		generic_copy_option_list = process.TakeResult<vector<GenericCopyOption>>(1);
+		export_options = process.TakeResult<vector<GenericCopyOption>>(1);
 	}
-	auto result = TransformExportStatement(transformer, export_source, string_literal, generic_copy_option_list);
+	auto result = TransformExportStatement(transformer, export_source, string_literal, export_options);
 	return transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(result));
 }
 
@@ -13239,6 +13242,27 @@ PEGTransformerFactory::FinalizeExportSourceTrampoline(PEGTransformer &transforme
 	auto catalog_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
 	auto result = TransformExportSource(transformer, catalog_name);
 	return transformer.MakeResult<string>(result);
+}
+
+void PEGTransformerFactory::InitializeExportOptionsTrampoline(PEGTransformer &transformer,
+                                                              GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.Name());
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeExportOptionsTrampoline(PEGTransformer &transformer,
+                                                       GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<vector<GenericCopyOption>>(0);
+	return transformer.MakeResult<vector<GenericCopyOption>>(result);
 }
 
 void PEGTransformerFactory::InitializeImportStatementTrampoline(PEGTransformer &transformer,

@@ -486,6 +486,7 @@ static const char *const PEG_RULE_NAMES[] = {
     "ExplainableStatements",
     "ExportStatement",
     "ExportSource",
+    "ExportOptions",
     "ImportStatement",
     "ColumnReference",
     "NestedSchemaTableColumnName",
