@@ -39,6 +39,19 @@ SELECT * FROM t WHERE x = 1 ORDR
 ----
 Did you mean "ORDER"?
 
+# keywords that start an expression are summarised as "an expression" but still get corrected
+statement error
+SELECT CAES WHEN x = 1 THEN 1 ELSE 0 END FROM t
+----
+syntax error at or near "CAES"
+Did you mean "CASE"?
+
+statement error
+SELECT * FROM t WHERE NTO x = 1
+----
+syntax error at or near "NTO"
+Did you mean "NOT"?
+
 # misspelled keyword that was swallowed as an alias - the error is reported on the misspelling
 statement error
 SELECT a FORM t

@@ -102,7 +102,8 @@ const char *CategoryDescription(SuggestionState type) {
 //! With `suggestions`, the autocomplete cursor at the end of the tokens collects them.
 //! The parse tree is built and discarded: RECOGNIZE_ONLY mode backtracks several times more on nested input.
 bool Recognize(vector<MatcherToken> &statement_tokens, const CompiledGrammar &grammar, const ParserOptions &options,
-               idx_t &furthest, optional_ptr<vector<MatcherSuggestion>> suggestions = nullptr) {
+               idx_t &furthest, optional_ptr<vector<MatcherSuggestion>> suggestions = nullptr,
+               bool expand_labels = false) {
 	vector<MatcherSuggestion> unused_suggestions;
 	ParseResultAllocator parse_result_allocator;
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
@@ -113,6 +114,7 @@ bool Recognize(vector<MatcherToken> &statement_tokens, const CompiledGrammar &gr
 	                           process_allocator, furthest, MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode,
 	                           &packrat_cache);
 	match_context.memoizable_suggestions = suggestions != nullptr;
+	match_context.expand_labels = expand_labels;
 	TokenIterator token_iterator(statement_tokens);
 	MatchState state(token_iterator, match_context);
 	return grammar.TopLevelStatementMatcher().MatchParseResult(state).IsSuccess();
@@ -137,8 +139,10 @@ vector<MatcherToken> EditedStatement(const TokenIterator &tokens, idx_t statemen
 }
 
 //! Re-run the grammar on the statement prefix with an autocomplete cursor at `position` to collect what fits there.
+//! With `expand_labels` the keywords inside labelled rules are collected as well, for correction candidates.
 ExpectedTokens ComputeExpectedTokens(const TokenIterator &tokens, idx_t statement_start, idx_t position,
-                                     const CompiledGrammar &grammar, const ParserOptions &options) {
+                                     const CompiledGrammar &grammar, const ParserOptions &options,
+                                     bool expand_labels = false) {
 	vector<MatcherToken> prefix;
 	prefix.reserve(position - statement_start + 1);
 	for (idx_t i = statement_start; i < position; i++) {
@@ -148,7 +152,7 @@ ExpectedTokens ComputeExpectedTokens(const TokenIterator &tokens, idx_t statemen
 
 	vector<MatcherSuggestion> suggestions;
 	idx_t furthest;
-	Recognize(prefix, grammar, options, furthest, &suggestions);
+	Recognize(prefix, grammar, options, furthest, &suggestions, expand_labels);
 
 	ExpectedTokens result;
 	case_insensitive_set_t seen_keywords;
@@ -164,7 +168,9 @@ ExpectedTokens ComputeExpectedTokens(const TokenIterator &tokens, idx_t statemen
 		}
 		if (suggestion.label) {
 			add_unique(result.labels, *suggestion.label);
-			continue;
+			if (suggestion.type != SuggestionState::SUGGEST_KEYWORD) {
+				continue;
+			}
 		}
 		if (suggestion.type == SuggestionState::SUGGEST_KEYWORD) {
 			auto &keyword = suggestion.keyword.candidate;
@@ -231,7 +237,14 @@ string KeywordCorrectionHint(const TokenIterator &tokens, idx_t statement_start,
                              const ExpectedTokens &expected, const CompiledGrammar &grammar,
                              const ParserOptions &options) {
 	static constexpr idx_t MAX_CANDIDATES = 3;
-	auto candidates = SimilarKeywords(tokens.GetToken(index).text, expected, grammar.GetKeywordHelper());
+	vector<string> candidates;
+	if (expected.labels.empty()) {
+		candidates = SimilarKeywords(tokens.GetToken(index).text, expected, grammar.GetKeywordHelper());
+	} else {
+		// keywords that start a labelled rule (CASE, CAST, ...) are hidden behind the label - collect them too
+		auto expanded = ComputeExpectedTokens(tokens, statement_start, index, grammar, options, true);
+		candidates = SimilarKeywords(tokens.GetToken(index).text, expanded, grammar.GetKeywordHelper());
+	}
 	for (idx_t i = 0; i < MinValue<idx_t>(candidates.size(), MAX_CANDIDATES); i++) {
 		if (SubstitutionAdvances(tokens, statement_start, index, candidates[i], error_index, grammar, options)) {
 			return "Did you mean \"" + candidates[i] + "\"?";
