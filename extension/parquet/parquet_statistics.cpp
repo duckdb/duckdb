@@ -324,7 +324,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 				break;
 			case ParquetExtraTypeInfo::UNIT_MICROS:
 			default:
-				timestamp_value = timestamp_t(val);
+				timestamp_value = ParquetTimestampMicrosToTimestamp(val);
 				break;
 			}
 		}

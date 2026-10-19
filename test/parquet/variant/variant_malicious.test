@@ -41,6 +41,23 @@ SELECT variant_bytes_to_variant('\x01\x00\x00\x28\x26\x01\x00\x00\x00\x00\x00\x0
 ----
 IO Error: Corrupted VARIANT 'value' buffer, DECIMAL16 value exceeds the maximum width of 38
 
+# TIMESTAMP values below the first midnight of the timestamp range are corrupted input
+statement error
+SELECT variant_bytes_to_variant('\x01\x00\x00\x34\xFF\x5F\x92\x5D\x03\x00\x00\x80'::BLOB);
+----
+IO Error: Corrupted VARIANT 'value' buffer, TIMESTAMP value (-9223372022400000001) is out of range
+
+statement error
+SELECT variant_bytes_to_variant('\x01\x00\x00\x30\x02\x00\x00\x00\x00\x00\x00\x80'::BLOB);
+----
+IO Error: Corrupted VARIANT 'value' buffer, TIMESTAMP value (-9223372036854775806) is out of range
+
+query II
+SELECT epoch_us(variant_bytes_to_variant('\x01\x00\x00\x34\x00\x60\x92\x5D\x03\x00\x00\x80'::BLOB)::TIMESTAMP),
+       variant_bytes_to_variant('\x01\x00\x00\x34\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x7F'::BLOB)::TIMESTAMP;
+----
+-9223372022400000000	infinity
+
 # TIME values outside of [00:00:00, 24:00:00] are corrupted input
 statement error
 SELECT variant_bytes_to_variant('\x01\x00\x00\x44\x00\x10\xAC\xD1\x53\x00\x00\x00'::BLOB);

@@ -6,6 +6,12 @@ require parquet
 
 # written by an earlier version as make_timestamp(-9223372036854775806)
 statement error
-SELECT epoch_us(ts) FROM 'data/parquet-testing/timestamp_below_range.parquet';
+SELECT epoch_us(ts) FROM '{DATA_DIR}/parquet-testing/broken/timestamp_below_range.parquet';
+----
+Conversion Error: Timestamp microseconds out of range: -9223372036854775806
+
+# the statistics of the file hold the same value
+statement error
+SELECT epoch_us(min(ts)) FROM '{DATA_DIR}/parquet-testing/broken/timestamp_below_range.parquet';
 ----
 Conversion Error: Timestamp microseconds out of range: -9223372036854775806
