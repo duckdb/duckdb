@@ -123,6 +123,23 @@ SELECT has_error(1 + (SELECT 1 // 0))
 ----
 true
 
+# the exposed aggregate gate also guards the projected value of the subquery
+query I
+SELECT has_error((SELECT 10 // count(1 // i) FROM (VALUES (0)) t(i)))
+----
+true
+
+# result modifiers and recursive scalar select items cannot transport the error flag
+statement error
+SELECT has_error((SELECT DISTINCT i FROM (VALUES (1), (1)) t(i)))
+----
+TRY over a subquery with result modifiers is only supported when the subquery is the direct argument of TRY
+
+statement error
+SELECT has_error((SELECT (SELECT 1 // 0)))
+----
+TRY over a subquery selecting a nested scalar subquery is only supported when the subquery is the direct argument of TRY
+
 # aggregates are rejected, as in TRY
 statement error
 SELECT has_error(sum(i)) FROM integers

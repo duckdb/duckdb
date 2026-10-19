@@ -71,7 +71,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		// a scalar subquery nested deeper inside a TRY argument: lower TRY onto it like a direct TRY
 		// subquery, and re-raise captured errors at the use site where the enclosing TRY masks them
 		rethrow_try_errors = true;
-		PrepareTrySubquery(expr, expr);
+		PrepareTrySubquery(expr, expr, true);
 	}
 	// bind the subquery in its own binder
 	auto subquery_binder = Binder::CreateBinder(context, binder);

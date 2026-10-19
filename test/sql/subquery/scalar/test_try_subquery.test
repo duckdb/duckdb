@@ -470,6 +470,89 @@ SELECT TRY(1 + (SELECT random()))
 ----
 TRY can not be used in combination with a volatile function
 
+# binder simplifications that unwrap to the nested subquery keep the enclosing TRY:
+# a same-type cast and a single-argument COALESCE return their child unchanged
+query I
+SELECT TRY(CAST((SELECT 1 // 0) AS INTEGER))
+----
+NULL
+
+query I
+SELECT TRY(COALESCE((SELECT 1 // 0)))
+----
+NULL
+
+query I
+SELECT TRY(CAST((SELECT 7) AS INTEGER))
+----
+7
+
+# the exposed gate also guards the projected value above the aggregation
+query I
+SELECT TRY(1 + (SELECT 10 // count(1 // i) FROM (VALUES (0)) t(i)))
+----
+NULL
+
+query I
+SELECT TRY(1 + (SELECT 10 // count(1 // i) FROM (VALUES (1)) t(i)))
+----
+11
+
+# LIMIT forwards the transport without referencing it
+query I
+SELECT TRY(1 + (SELECT 10 // (i - 1) FROM (VALUES (1)) t(i) LIMIT 1))
+----
+NULL
+
+# other result modifiers reference or deduplicate the transported column and stay rejected
+# in the nested form; TRY directly over the subquery supports them
+statement error
+SELECT TRY(1 + (SELECT i FROM (VALUES (1, 1)) t(i, j) ORDER BY j LIMIT 1))
+----
+TRY over a subquery with result modifiers is only supported when the subquery is the direct argument of TRY
+
+statement error
+SELECT TRY(1 + (SELECT i FROM (VALUES (1)) t(i) ORDER BY 1))
+----
+TRY over a subquery with result modifiers is only supported when the subquery is the direct argument of TRY
+
+statement error
+SELECT TRY(1 + (SELECT DISTINCT i FROM (VALUES (1), (1)) t(i)))
+----
+TRY over a subquery with result modifiers is only supported when the subquery is the direct argument of TRY
+
+# a nested subquery selecting another scalar subquery would lose the error flag and is rejected
+statement error
+SELECT TRY(COALESCE((SELECT (SELECT 1 // 0)), 42))
+----
+TRY over a subquery selecting a nested scalar subquery is only supported when the subquery is the direct argument of TRY
+
+# a volatile value below the flattened boundary is computed exactly once: the sequence advances once
+statement ok
+CREATE SEQUENCE try_volatile_seq;
+
+query I
+SELECT TRY((SELECT max(i * 0 + (SELECT nextval('try_volatile_seq')) * 0) FROM (VALUES (1)) t(i)))
+----
+0
+
+query I
+SELECT currval('try_volatile_seq')
+----
+1
+
+# combined: CTE chain, derived table, HAVING subquery and the export verification setting
+statement ok
+SET debug_verify_aggregate_state_export=true
+
+query I
+SELECT TRY((WITH c AS MATERIALIZED (SELECT i FROM (VALUES (0)) t(i)), d AS NOT MATERIALIZED (SELECT i FROM c) SELECT max(10 // i) FROM (SELECT i FROM d) derived HAVING (SELECT true)))
+----
+NULL
+
+statement ok
+RESET debug_verify_aggregate_state_export
+
 # volatile subqueries remain rejected under TRY, like volatile expressions
 statement error
 SELECT TRY((SELECT random()))

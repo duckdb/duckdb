@@ -273,8 +273,10 @@ protected:
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
 	//! Bind TRY over a scalar subquery as an ordinary subquery, then lower the TRY onto its bound plan
 	BindResult BindTrySubquery(OperatorExpression &op, idx_t depth);
-	//! Check the parsed shape of a TRY subquery and push TRY into a select item that is itself a subquery
-	void PrepareTrySubquery(SubqueryExpression &subquery_expr, const ParsedExpression &location);
+	//! Check the parsed shape of a TRY subquery and push TRY into a select item that is itself a subquery.
+	//! Shapes whose error flag cannot be transported faithfully are rejected when the flag is exposed.
+	void PrepareTrySubquery(SubqueryExpression &subquery_expr, const ParsedExpression &location,
+	                        bool expose_error_flag);
 	//! Lower TRY onto the maskable positions of a bound subquery plan, before the subquery is flattened.
 	//! With expose_error_flag the output column becomes a struct of the masked value and the error flag,
 	//! so the use site can re-raise captured errors. Returns the resulting output type.

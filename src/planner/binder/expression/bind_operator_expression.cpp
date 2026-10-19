@@ -8,6 +8,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -309,10 +310,13 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	case ExpressionType::OPERATOR_HAS_ERROR: {
 		auto &expr = *children[0];
 		if (operator_type == ExpressionType::OPERATOR_TRY &&
-		    expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+		    expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY &&
+		    !expr.Cast<BoundSubqueryExpression>().RethrowsTryErrors()) {
 			// a directly nested TRY over a scalar subquery was already lowered onto the subquery plan
 			return BindResult(std::move(children[0]));
 		}
+		// a rethrowing subquery can surface as the direct child when a binder simplification (such as a
+		// same-type cast or single-argument COALESCE) unwrapped to it: TRY must stay to consume the re-raise
 		// scalar subqueries deeper inside the argument were lowered during binding and re-raise their
 		// captured errors at the use site, so they need no rejection here
 		if (expr.IsVolatile()) {
