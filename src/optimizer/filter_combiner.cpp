@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
+#include "duckdb/optimizer/expression_rewriter.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
@@ -993,6 +994,9 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	}
 
 	// evaluate the constant side
+	if (!ExpressionRewriter::CanConstantFold(context, const_side)) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
 	Value constant_value;
 	string error_msg;
 	if (!ExpressionExecutor::TryEvaluateScalar(context, const_side, constant_value)) {
@@ -1114,6 +1118,9 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		auto &node = GetNode(left_is_scalar ? *right : *left);
 		idx_t equivalence_set = GetEquivalenceSet(node);
 		auto &scalar = left_is_scalar ? left : right;
+		if (!ExpressionRewriter::CanConstantFold(context, *scalar)) {
+			return FilterResult::UNSUPPORTED;
+		}
 		Value constant_value;
 		if (!ExpressionExecutor::TryEvaluateScalar(context, *scalar, constant_value)) {
 			return FilterResult::UNSUPPORTED;
@@ -1202,7 +1209,7 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 	if (expr.HasParameter()) {
 		return FilterResult::UNSUPPORTED;
 	}
-	if (expr.IsFoldable()) {
+	if (ExpressionRewriter::CanConstantFold(context, expr)) {
 		// scalar condition, evaluate it
 		Value result;
 		if (!ExpressionExecutor::TryEvaluateScalar(context, expr, result)) {
@@ -1237,6 +1244,9 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 
 			if (lower_is_scalar) {
 				auto &scalar = lower_bound;
+				if (!ExpressionRewriter::CanConstantFold(context, scalar)) {
+					return FilterResult::UNSUPPORTED;
+				}
 				Value constant_value;
 				if (!ExpressionExecutor::TryEvaluateScalar(context, scalar, constant_value)) {
 					return FilterResult::UNSUPPORTED;
@@ -1273,6 +1283,9 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 
 			if (upper_is_scalar) {
 				auto &scalar = upper_bound;
+				if (!ExpressionRewriter::CanConstantFold(context, scalar)) {
+					return FilterResult::UNSUPPORTED;
+				}
 				Value constant_value;
 				if (!ExpressionExecutor::TryEvaluateScalar(context, scalar, constant_value)) {
 					return FilterResult::UNSUPPORTED;
