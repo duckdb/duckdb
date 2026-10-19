@@ -157,6 +157,28 @@ SELECT index_key({'table': 'parent', 'constraint': 'foreign', 'columns': ['id']}
 ----
 Catalog Error: index_key: FOREIGN constraint was not found on table parent
 
+# 'columns' can be omitted when the table has a single constraint of the requested type
+query III
+SELECT
+    index_key({'table': 'tbl1', 'constraint': 'unique'}, 20::BIGINT),
+    index_key({'table': 'tbl2', 'constraint': 'foreign'}, 1),
+    index_key({'table': 'child', 'constraint': 'foreign'}, 1);
+----
+\x80\x00\x00\x00\x00\x00\x00\x14	\x80\x00\x00\x01	\x80\x00\x00\x01
+
+statement ok
+CREATE TABLE tbl_multi(a INTEGER UNIQUE, b INTEGER UNIQUE, pa INTEGER REFERENCES parent(id), pb INTEGER REFERENCES parent(id));
+
+statement error
+SELECT index_key({'table': 'tbl_multi', 'constraint': 'unique'}, 1);
+----
+Binder Error: index_key: table tbl_multi has multiple UNIQUE constraints, specify 'columns' to select one
+
+statement error
+SELECT index_key({'table': 'tbl_multi', 'constraint': 'foreign'}, 1);
+----
+Binder Error: index_key: table tbl_multi has multiple FOREIGN constraints, specify 'columns' to select one
+
 ########################################################################################################################
 #                                                                                                                      #
 #   User-defined indexes and constraint indexes do not share a namespace                                               #
@@ -457,11 +479,6 @@ SELECT index_key({'table': 'tbl1', 'constraint': 'PRIMARY'}, 1);
 \x80\x00\x00\x01
 
 statement error
-SELECT index_key({'table': 'tbl1', 'constraint': 'unique'}, 1);
-----
-Binder Error: index_key: UNIQUE constraints require a 'columns' field in path
-
-statement error
 SELECT index_key({'table': 'tbl1', 'index': 'tbl1_idx_txt', 'columns': ['txt']}, 'alpha');
 ----
 Binder Error: index_key: path field 'columns' requires a 'constraint' field
@@ -523,7 +540,7 @@ Binder Error: No function matches the given name and argument types
 statement error
 SELECT index_key({'table': 'tbl1', 'index': 'tbl1_idx_composite'}, 1);
 ----
-Binder Error: index_key: index 'tbl1_idx_composite' on table tbl1 expects 2 key column(s), but 1 argument(s) provided
+Binder Error: index_key: index "tbl1_idx_composite" on table tbl1 expects 2 key column(s), but 1 argument(s) provided
 
 statement error
 SELECT index_key({'table': 'tbl1', 'constraint': 'primary'}, 1, 2);

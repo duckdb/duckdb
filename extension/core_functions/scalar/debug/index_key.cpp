@@ -113,10 +113,6 @@ IndexKeyPath EvaluateIndexKeyPath(const Value &input_struct) {
 	}
 
 	path.constraint_type = ParseConstraintType(fields["constraint"]);
-	if (path.constraint_type != IndexConstraintType::PRIMARY && path.columns.empty()) {
-		throw BinderException("index_key: %s constraints require a 'columns' field in path",
-		                      EnumUtil::ToString(path.constraint_type));
-	}
 	return path;
 }
 
@@ -133,6 +129,7 @@ idx_t FindUserIndexOid(ClientContext &context, TableCatalogEntry &table_entry, c
 
 idx_t FindConstraintIndexOid(TableCatalogEntry &table_entry, const IndexKeyPath &path, const string &qualified_table) {
 	auto &table_columns = table_entry.GetColumns();
+	vector<idx_t> index_oids;
 	for (auto &constraint : table_entry.GetConstraints()) {
 		IndexConstraintType constraint_type;
 		vector<Identifier> constraint_columns;
@@ -157,11 +154,18 @@ idx_t FindConstraintIndexOid(TableCatalogEntry &table_entry, const IndexKeyPath 
 		}
 
 		if (constraint_type == path.constraint_type && (path.columns.empty() || path.columns == constraint_columns)) {
-			return constraint->GetBackingIndexOid();
+			index_oids.push_back(constraint->GetBackingIndexOid());
 		}
 	}
-	throw CatalogException("index_key: %s constraint was not found on table %s",
-	                       EnumUtil::ToString(path.constraint_type), qualified_table);
+	if (index_oids.empty()) {
+		throw CatalogException("index_key: %s constraint was not found on table %s",
+		                       EnumUtil::ToString(path.constraint_type), qualified_table);
+	}
+	if (index_oids.size() > 1) {
+		throw BinderException("index_key: table %s has multiple %s constraints, specify 'columns' to select one",
+		                      qualified_table, EnumUtil::ToString(path.constraint_type));
+	}
+	return index_oids[0];
 }
 
 struct IndexKeyBindData : public FunctionData {
@@ -245,7 +249,7 @@ unique_ptr<FunctionData> IndexKeyBind(INPUT &input) {
 	if (num_key_args != key_types.size()) {
 		auto index_description =
 		    path.constraint_type == IndexConstraintType::NONE
-		        ? StringUtil::Format("index '%s'", path.index_name)
+		        ? StringUtil::Format("index %s", path.index_name)
 		        : StringUtil::Format("%s constraint index", EnumUtil::ToString(path.constraint_type));
 		throw BinderException("index_key: %s on table %s expects %llu key column(s), but %llu argument(s) provided",
 		                      index_description, qualified_table, key_types.size(), num_key_args);
