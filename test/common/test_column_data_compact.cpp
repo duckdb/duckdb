@@ -21,7 +21,7 @@ static void AppendConstantChunk(ColumnDataCollection &collection, ColumnDataAppe
 	DataChunk chunk;
 	collection.InitializeScanChunk(chunk);
 	chunk.data[0].Reference(value, count_t(count));
-	chunk.SetCardinality(count);
+	chunk.CheckCardinality(count);
 	collection.Append(state, chunk);
 }
 
@@ -93,7 +93,7 @@ TEST_CASE("Mixed appends materialize constant entries without losing values", "[
 			writer.WriteValue(UnsafeNumericCast<int64_t>(i));
 		}
 	}
-	flat_input.SetCardinality(100);
+	flat_input.CheckCardinality(100);
 	collection.Append(append_state, flat_input);
 	// a constant with a different value also appends after materialization
 	AppendConstantChunk(collection, append_state, Value::BIGINT(-1), 100);
@@ -141,7 +141,7 @@ TEST_CASE("Dictionary vectors deduplicate per segment and survive scans", "[colu
 	for (idx_t round = 0; round < append_rounds; round++) {
 		chunk.Reset();
 		chunk.data[0].Dictionary(dictionary, sel, STANDARD_VECTOR_SIZE);
-		chunk.SetCardinality(STANDARD_VECTOR_SIZE);
+		chunk.CheckCardinality(STANDARD_VECTOR_SIZE);
 		collection.Append(append_state, chunk);
 	}
 	REQUIRE(collection.Count() == append_rounds * STANDARD_VECTOR_SIZE);
@@ -244,7 +244,7 @@ TEST_CASE("ColumnDataConsumer handles chunks without blocks", "[column_data_comp
 			writer.WriteValue(UnsafeNumericCast<int64_t>(i));
 		}
 	}
-	flat_input.SetCardinality(STANDARD_VECTOR_SIZE);
+	flat_input.CheckCardinality(STANDARD_VECTOR_SIZE);
 	mixed.Append(mixed_append, flat_input);
 	AppendConstantChunk(mixed, mixed_append, Value::BIGINT(2), STANDARD_VECTOR_SIZE);
 
@@ -307,7 +307,7 @@ TEST_CASE("Compact collections account their stored bytes", "[column_data_compac
 			writer.WriteValue(UnsafeNumericCast<int64_t>(i));
 		}
 	}
-	flat_input.SetCardinality(100);
+	flat_input.CheckCardinality(100);
 	mixed.Append(mixed_append, flat_input);
 	auto &mixed_segment = *mixed.GetSegments()[0];
 	const idx_t flat_entry_size =
@@ -355,7 +355,7 @@ TEST_CASE("Repeated string bytes stay shared when compact recognition does not a
 		auto writer = FlatVector::Writer<string_t>(flat_input.data[0], 1);
 		writer.WriteValue(string_t("short"));
 	}
-	flat_input.SetCardinality(1);
+	flat_input.CheckCardinality(1);
 	collection.Append(append_state, flat_input);
 	AppendConstantChunk(collection, append_state, Value(payload), STANDARD_VECTOR_SIZE - 1);
 	REQUIRE(collection.Count() == STANDARD_VECTOR_SIZE);
@@ -391,7 +391,7 @@ static void AppendDictionaryChunk(ColumnDataCollection &collection, ColumnDataAp
 		sel.set_index(i, i % dict_size);
 	}
 	chunk.data[0].Dictionary(std::move(dictionary), sel, count);
-	chunk.SetCardinality(count);
+	chunk.CheckCardinality(count);
 	collection.Append(state, chunk);
 }
 
@@ -423,7 +423,7 @@ TEST_CASE("Compact string entries survive block relocation", "[column_data_compa
 		input.Reset();
 		input.data[0].Dictionary(dictionary, sel, STANDARD_VECTOR_SIZE);
 		input.data[1].Reference(Value(constant_payload), count_t(STANDARD_VECTOR_SIZE));
-		input.SetCardinality(STANDARD_VECTOR_SIZE);
+		input.CheckCardinality(STANDARD_VECTOR_SIZE);
 		collection.Append(append_state, input);
 	}
 
@@ -525,7 +525,7 @@ TEST_CASE("DISALLOW_ZERO_COPY copies outlive the source collection", "[column_da
 		}
 		input.data[0].Dictionary(MakeStringDictionary(dict_size, prefix, false), sel, STANDARD_VECTOR_SIZE);
 		input.data[1].Reference(Value(constant_payload), count_t(STANDARD_VECTOR_SIZE));
-		input.SetCardinality(STANDARD_VECTOR_SIZE);
+		input.CheckCardinality(STANDARD_VECTOR_SIZE);
 		collection.Append(append_state, input);
 
 		collection.InitializeScanChunk(Allocator::DefaultAllocator(), result);
@@ -834,7 +834,7 @@ TEST_CASE("Compact representations with in-memory and hybrid allocators", "[colu
 		}
 		input.data[0].Dictionary(MakeStringDictionary(50, prefix, true), sel, STANDARD_VECTOR_SIZE);
 		input.data[1].Reference(Value(payload), count_t(STANDARD_VECTOR_SIZE));
-		input.SetCardinality(STANDARD_VECTOR_SIZE);
+		input.CheckCardinality(STANDARD_VECTOR_SIZE);
 		collection.Append(append_state, input);
 
 		for (const auto properties :
