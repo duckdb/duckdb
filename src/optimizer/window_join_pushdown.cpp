@@ -1,14 +1,155 @@
 #include "duckdb/optimizer/window_join_pushdown.hpp"
 
-// #include "duckdb/optimizer/apply_functional_dependencies.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression_binder/base_select_binder.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/optimizer/apply_functional_dependencies.hpp"
+
+//	Join push-down 𝑃,𝑂,𝑤,𝑓 references only A(𝑟) and:
+// 	(9) ⊞𝑃,...(𝑟)⋈︁𝑟.𝑏=𝑠.𝑥 𝑠 ≡⊞𝑃,...(𝑟 ⋈︁𝑟.𝑏=𝑠.𝑥 𝑠)  | FD 𝑃 →𝑏
+// and 𝑥 unique
+// 	(10) ⊞𝑃,...(𝑟)⋈︁𝑟.𝑏=𝑠.𝑥 𝑠 ≡⊞𝑃,...(𝑟 ⋈︁𝑟.𝑏=𝑠.𝑥 𝑠) | 𝑥
+// unique (left join) 	(11) ⊞𝑃,...(𝑟)⋉𝑟.𝑏=𝑠.𝑥 𝑠 ≡⊞𝑃,...(𝑟 ⋉𝑟.𝑏=𝑠.𝑥 𝑠) | FD 𝑃 →𝑏
+//	(12) ⊞𝑃,...(𝑟)⊲𝑟.𝑏=𝑠.𝑥 𝑠 ≡⊞𝑃,...(𝑟 ⊲𝑟.𝑏=𝑠.𝑥 𝑠) | FD 𝑃 →𝑏
 
 namespace duckdb {
 
 WindowJoinPushdown::WindowJoinPushdown(ClientContext &client) : client(client) {
 }
 
+bool WindowJoinPushdown::CanOptimize(const LogicalOperator &op) {
+	if (op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return false;
+	}
+	const auto &join = op.Cast<LogicalComparisonJoin>();
+
+	//	Single equality join
+	if (join.conditions.size() != 1) {
+		return false;
+	}
+	const auto &condition = join.conditions[0];
+	if (!condition.IsComparison()) {
+		return false;
+	}
+	switch (condition.GetComparisonType()) {
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		break;
+	default:
+		return false;
+	}
+
+	//	Find the window side
+	idx_t window_idx = 0;
+	switch (join.join_type) {
+	case JoinType::INNER:
+		if (join.children[window_idx]->type != LogicalOperatorType::LOGICAL_WINDOW) {
+			++window_idx;
+		}
+		DUCKDB_EXPLICIT_FALLTHROUGH;
+	case JoinType::LEFT:
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+		//	Only inner joins can be symmetric
+		if (join.children[window_idx]->type != LogicalOperatorType::LOGICAL_WINDOW) {
+			return false;
+		}
+		break;
+	default:
+		return false;
+	}
+	const auto &window = join.children[window_idx]->Cast<LogicalWindow>();
+	const auto &b = (window_idx == 0) ? condition.LeftReference() : condition.RightReference();
+
+	//	FD 𝑃 → 𝑏
+	bool fd_p_b = true;
+	if (join.join_type != JoinType::LEFT) {
+		for (const auto &expr : window.expressions) {
+			const auto &wexpr = expr->Cast<BoundWindowExpression>();
+			vector<reference<Expression>> refs;
+			for (auto &p : wexpr.Partitions()) {
+				refs.emplace_back(*p);
+			}
+			if (!BaseSelectBinder::IsFunctionallyDependent(b, refs)) {
+				fd_p_b = false;
+				break;
+			}
+		}
+	}
+
+	//	𝑥 unique
+	const auto &x = (window_idx == 1) ? condition.GetLHS() : condition.GetRHS();
+	bool x_unique = false;
+	if (join.join_type <= JoinType::LEFT && x.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		//	Need a bound reference here
+		const auto &binding = x.Cast<BoundColumnRefExpression>().Binding();
+		auto &s = *join.children[1 - window_idx];
+		const auto uccs = ApplyFunctionalDependencies::GetUniqueColumnCombinations(s);
+		for (const auto &ucc : uccs) {
+			if (ucc.size() != 1 || ucc.count(binding) == 0) {
+				continue;
+			}
+			x_unique = true;
+			break;
+		}
+	}
+
+	switch (join.join_type) {
+	case JoinType::INNER:
+		return fd_p_b && x_unique;
+	case JoinType::LEFT:
+		return x_unique;
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+		return fd_p_b;
+	default:
+		break;
+	}
+
+	return false;
+}
+
+unique_ptr<LogicalOperator> WindowJoinPushdown::OptimizeInternal(unique_ptr<LogicalOperator> op) {
+	if (!CanOptimize(*op)) {
+		for (auto &child : op->children) {
+			child = OptimizeInternal(std::move(child));
+		}
+		return op;
+	}
+	auto &join = op->Cast<LogicalComparisonJoin>();
+
+	idx_t window_idx = 0;
+	if (join.join_type == JoinType::INNER && join.children[window_idx]->type != LogicalOperatorType::LOGICAL_WINDOW) {
+		++window_idx;
+	}
+	auto &window = join.children[window_idx]->Cast<LogicalWindow>();
+
+	auto new_join = make_uniq<LogicalComparisonJoin>(join.join_type, join.type);
+	for (auto &condition : join.conditions) {
+		new_join->conditions.emplace_back(std::move(condition));
+	}
+	if (window_idx) {
+		new_join->children.emplace_back(std::move(join.children[0]));
+		new_join->children.emplace_back(std::move(window.children[0]));
+	} else {
+		new_join->children.emplace_back(std::move(window.children[0]));
+		new_join->children.emplace_back(std::move(join.children[1]));
+	}
+
+	auto new_window = make_uniq<LogicalWindow>(window.window_index);
+	new_window->children.emplace_back(std::move(new_join));
+	for (auto &expr : window.expressions) {
+		new_window->expressions.emplace_back(std::move(expr));
+	}
+
+	return std::move(new_window);
+}
+
 unique_ptr<LogicalOperator> WindowJoinPushdown::Optimize(unique_ptr<LogicalOperator> op) {
-	return std::move(op);
+	return OptimizeInternal(std::move(op));
 }
 
 } // namespace duckdb
