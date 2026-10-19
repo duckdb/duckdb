@@ -402,7 +402,7 @@ void RoaringCompressState::FlushContainer() {
 				}
 			}
 		}
-		scan_state->Verify();
+		scan_state->VerifyWrittenData();
 	}
 
 #endif
