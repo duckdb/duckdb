@@ -135,8 +135,9 @@ public:
 	shared_ptr<ColumnDataAllocator> allocator;
 	idx_t total_allocated;
 	idx_t last_chunk_total_allocated;
-	//! Metadata-resident bytes of CONSTANT entries, counted in SizeInBytes and AllocationSize so that
-	//! collections holding only compact entries report the bytes that actually store their values
+	//! Metadata-resident bytes of entries appended as CONSTANT, counted in SizeInBytes and AllocationSize so
+	//! that collections holding only compact entries report the bytes that actually store their values.
+	//! Charges stay after a materialization, like superseded block regions: sizes never shrink while appending
 	idx_t constant_metadata_size;
 
 	//! The types of the chunks

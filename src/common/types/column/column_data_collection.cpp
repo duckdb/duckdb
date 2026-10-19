@@ -1162,13 +1162,8 @@ static void MaterializeConstantEntry(ColumnDataMetaData &meta_data, const Logica
 	}
 	vdata.representation = ColumnDataRepresentation::FLAT;
 	vdata.constant = ColumnDataConstantValue();
-	// retire the constant charge from the size counters and the per-chunk attribution
-	// materialization only happens while appending to the chunk that took the charge, so the
-	// attribution window of that chunk stays non-negative
-	D_ASSERT(segment.constant_metadata_size >= sizeof(ColumnDataConstantValue));
-	D_ASSERT(segment.total_allocated - segment.last_chunk_total_allocated >= sizeof(ColumnDataConstantValue));
-	segment.constant_metadata_size -= sizeof(ColumnDataConstantValue);
-	segment.total_allocated -= sizeof(ColumnDataConstantValue);
+	// the constant charge stays counted, like the storage of any superseded entry: batching
+	// consumers require that collection sizes never shrink while appending
 }
 
 static idx_t DictionaryCodesAllocationSize() {
