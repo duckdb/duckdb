@@ -40,6 +40,15 @@ SELECT i, has_error(1 // i) FROM integers ORDER BY i NULLS LAST
 2	false
 NULL	false
 
+# the per-row error capture must not write through buffers shared with sibling columns
+query II
+SELECT i, try(1 // i) FROM integers ORDER BY i NULLS LAST
+----
+0	NULL
+1	1
+2	0
+NULL	NULL
+
 # cast errors are execution errors
 statement ok
 CREATE TABLE strings(s VARCHAR);

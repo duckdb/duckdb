@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/vector_writer.hpp"
 
 namespace duckdb {
 
@@ -81,6 +82,59 @@ idx_t ExpressionExecutor::Select(const BoundOperatorExpression &expr, Expression
 		return SelectNulls(child, input_sel, count, true_sel, false_sel);
 	}
 	return count - SelectNulls(child, input_sel, count, false_sel, true_sel);
+}
+
+bool ExpressionExecutor::ExecuteErrorCapture(const Expression &child, ExpressionState &child_state,
+                                             const SelectionVector *sel, idx_t count, Vector &values,
+                                             optional_ptr<Vector> error_flags) {
+	try {
+		Execute(child, &child_state, sel, count, values);
+		return true;
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		if (!Exception::IsExecutionError(error.Type())) {
+			throw;
+		}
+	}
+
+	// an error was raised: evaluate per row to capture the failing rows
+	// the failed evaluation may have left values referencing buffers of its inputs, so reinitialize it
+	// before writing into it
+	values.Initialize();
+	// CASE/COALESCE write their result at the physical row index, so the intermediate must fit that index
+	SelectionVector selvec(1);
+	DataChunk intermediate;
+	intermediate.Initialize(GetAllocator(), {values.GetType()}, STANDARD_VECTOR_SIZE);
+	unique_ptr<VectorWriter<bool>> flag_writer;
+	if (error_flags) {
+		flag_writer = make_uniq<VectorWriter<bool>>(*error_flags, count, 0ULL);
+	}
+	for (idx_t i = 0; i < count; i++) {
+		intermediate.Reset();
+		intermediate.SetChildCardinality(1);
+
+		// clear any dictionary states in the child expression, so that it is executed anew for every row
+		child_state.ResetDictionaryStates();
+
+		selvec.set_index(0, sel ? sel->get_index(i) : i);
+		Value val(values.GetType());
+		bool has_error = false;
+		try {
+			Execute(child, &child_state, &selvec, 1, intermediate.data[0]);
+			val = intermediate.GetValue(0, 0);
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			if (!Exception::IsExecutionError(error.Type())) {
+				throw;
+			}
+			has_error = true;
+		}
+		values.SetValue(i, val);
+		if (flag_writer) {
+			flag_writer->WriteValue(has_error);
+		}
+	}
+	return false;
 }
 
 void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, ExpressionState *state,
@@ -178,92 +232,27 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 	} else if (expression_type == ExpressionType::OPERATOR_TRY) {
 		auto &child_state = *state->child_states[0];
 		Vector try_result(result.GetType());
-		try {
-			Execute(*expr.GetChildren()[0], &child_state, sel, count, try_result);
+		if (ExecuteErrorCapture(*expr.GetChildren()[0], child_state, sel, count, try_result, nullptr)) {
+			// no error, forward the child result
 			if (try_result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 				result.Reference(try_result);
 				return;
 			}
 			VectorOperations::Copy(try_result, result, count, 0, 0);
 			return;
-		} catch (std::exception &ex) {
-			ErrorData error(ex);
-			auto error_type = error.Type();
-			if (!Exception::IsExecutionError(error_type)) {
-				throw;
-			}
 		}
-
-		// On error, evaluate per row
-		// CASE/COALESCE write their result at the physical row index, so the intermediate must fit that index
-		SelectionVector selvec(1);
-		DataChunk intermediate;
-		intermediate.Initialize(GetAllocator(), {result.GetType()}, STANDARD_VECTOR_SIZE);
-		for (idx_t i = 0; i < count; i++) {
-			intermediate.Reset();
-			intermediate.SetChildCardinality(1);
-
-			// Make sure to clear any dictionary states in the child expression, so that it actually
-			// gets executed anew for every row
-			child_state.ResetDictionaryStates();
-
-			selvec.set_index(0, sel ? sel->get_index(i) : i);
-			Value val(result.GetType());
-			try {
-				Execute(*expr.GetChildren()[0], &child_state, &selvec, 1, intermediate.data[0]);
-				val = intermediate.GetValue(0, 0);
-			} catch (std::exception &ex) {
-				ErrorData error(ex);
-				auto error_type = error.Type();
-				if (!Exception::IsExecutionError(error_type)) {
-					throw;
-				}
-			}
-			result.SetValue(i, val);
-		}
+		// the failing rows were captured as NULL
+		VectorOperations::Copy(try_result, result, count, 0, 0);
 		if (count == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	} else if (expression_type == ExpressionType::OPERATOR_HAS_ERROR) {
 		auto &child_state = *state->child_states[0];
 		Vector probe_result(expr.GetChildren()[0]->GetReturnType());
-		try {
-			Execute(*expr.GetChildren()[0], &child_state, sel, count, probe_result);
+		if (ExecuteErrorCapture(*expr.GetChildren()[0], child_state, sel, count, probe_result, &result)) {
 			// the child evaluated without an error for every row
 			result.Reference(Value::BOOLEAN(false), count_t(count));
 			return;
-		} catch (std::exception &ex) {
-			ErrorData error(ex);
-			if (!Exception::IsExecutionError(error.Type())) {
-				throw;
-			}
-		}
-
-		// On error, evaluate per row to find the rows that trigger it
-		SelectionVector selvec(1);
-		DataChunk intermediate;
-		intermediate.Initialize(GetAllocator(), {probe_result.GetType()}, STANDARD_VECTOR_SIZE);
-		auto writer = FlatVector::Writer<bool>(result, count);
-		for (idx_t i = 0; i < count; i++) {
-			intermediate.Reset();
-			intermediate.SetChildCardinality(1);
-
-			// Make sure to clear any dictionary states in the child expression, so that it actually
-			// gets executed anew for every row
-			child_state.ResetDictionaryStates();
-
-			selvec.set_index(0, sel ? sel->get_index(i) : i);
-			bool has_error = false;
-			try {
-				Execute(*expr.GetChildren()[0], &child_state, &selvec, 1, intermediate.data[0]);
-			} catch (std::exception &ex) {
-				ErrorData error(ex);
-				if (!Exception::IsExecutionError(error.Type())) {
-					throw;
-				}
-				has_error = true;
-			}
-			writer.WriteValue(has_error);
 		}
 		if (count == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
