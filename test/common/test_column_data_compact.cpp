@@ -435,20 +435,24 @@ TEST_CASE("Compact string entries survive block relocation", "[column_data_compa
 	REQUIRE(!handles.empty());
 	append_state.current_chunk_state.handles.clear();
 
-	for (idx_t round = 0; round < 2; round++) {
-		// force every block to a different address, poisoning the old allocations
+	// force every block to a different address, poisoning the old allocations
+	auto relocate = [&](vector<shared_ptr<BlockHandle>> &relocate_handles) {
 		vector<unique_ptr<FileBuffer>> old_buffers;
 		vector<BufferHandle> pins;
-		for (auto &handle : handles) {
+		for (auto &handle : relocate_handles) {
 			auto lock = handle->GetMemory().GetLock();
 			REQUIRE(handle->GetMemory().CanUnload() == CanUnloadResult::CAN_UNLOAD);
 			old_buffers.push_back(handle->GetMemory().UnloadAndTakeBlock(lock));
 		}
-		for (idx_t i = 0; i < handles.size(); i++) {
-			pins.push_back(buffer_manager.Pin(handles[i]));
+		for (idx_t i = 0; i < relocate_handles.size(); i++) {
+			pins.push_back(buffer_manager.Pin(relocate_handles[i]));
 			REQUIRE(pins.back().Ptr() != old_buffers[i]->GetData());
 			old_buffers[i]->Clear();
 		}
+	};
+
+	for (idx_t round = 0; round < 2; round++) {
+		relocate(handles);
 
 		// the dictionary heap pointers are repaired and the constant pointer reconstructed
 		const auto properties =
@@ -466,6 +470,34 @@ TEST_CASE("Compact string entries survive block relocation", "[column_data_compa
 			chunks++;
 		}
 		REQUIRE(chunks == 2);
+	}
+
+	// a materialized entry carries two swizzle ranges, both repaired after relocation
+	const string second_payload = "another_non_inlined_constant_payload";
+	ColumnDataCollection mixed(buffer_manager, {LogicalType::VARCHAR});
+	ColumnDataAppendState mixed_append;
+	mixed.InitializeAppend(mixed_append);
+	AppendConstantChunk(mixed, mixed_append, Value(constant_payload), 100);
+	AppendConstantChunk(mixed, mixed_append, Value(second_payload), 100);
+	vector<shared_ptr<BlockHandle>> mixed_handles;
+	for (const auto &entry : mixed_append.current_chunk_state.handles) {
+		mixed_handles.push_back(entry.second.GetBlockHandle());
+	}
+	REQUIRE(!mixed_handles.empty());
+	mixed_append.current_chunk_state.handles.clear();
+	for (idx_t round = 0; round < 2; round++) {
+		relocate(mixed_handles);
+		const auto properties =
+		    round == 0 ? ColumnDataScanProperties::ALLOW_ZERO_COPY : ColumnDataScanProperties::DISALLOW_ZERO_COPY;
+		ColumnDataScanState scan_state;
+		DataChunk result;
+		mixed.InitializeScanChunk(result);
+		mixed.InitializeScan(scan_state, properties);
+		REQUIRE(mixed.Scan(scan_state, result));
+		REQUIRE(result.GetValue(0, 0) == Value(constant_payload));
+		REQUIRE(result.GetValue(0, 99) == Value(constant_payload));
+		REQUIRE(result.GetValue(0, 100) == Value(second_payload));
+		REQUIRE(result.GetValue(0, 199) == Value(second_payload));
 	}
 }
 
@@ -561,6 +593,24 @@ TEST_CASE("Dictionary recognition gate boundaries", "[column_data_compact]") {
 		REQUIRE(result.data[0].GetVectorType() == VectorType::FLAT_VECTOR);
 		REQUIRE(result.GetValue(0, 7) == Value("no_id_7"));
 	}
+	// values exactly as wide as the codes are recognized
+	{
+		ColumnDataCollection collection(buffer_manager, {LogicalType::UINTEGER});
+		ColumnDataAppendState append_state;
+		collection.InitializeAppend(append_state);
+		auto dictionary = DictionaryVector::CreateReusableDictionary(LogicalType::UINTEGER, 100);
+		{
+			auto writer = FlatVector::Writer<uint32_t>(dictionary->data, 100);
+			for (idx_t i = 0; i < 100; i++) {
+				writer.WriteValue(UnsafeNumericCast<uint32_t>(i));
+			}
+		}
+		AppendDictionaryChunk(collection, append_state, std::move(dictionary), 100, STANDARD_VECTOR_SIZE);
+		DataChunk result;
+		scan_first(collection, result);
+		REQUIRE(result.data[0].GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		REQUIRE(result.GetValue(0, 7) == Value::UINTEGER(7));
+	}
 	// values narrower than the codes fall back to flat storage
 	{
 		ColumnDataCollection collection(buffer_manager, {LogicalType::USMALLINT});
@@ -579,26 +629,33 @@ TEST_CASE("Dictionary recognition gate boundaries", "[column_data_compact]") {
 		REQUIRE(result.data[0].GetVectorType() == VectorType::FLAT_VECTOR);
 		REQUIRE(result.GetValue(0, 7) == Value::USMALLINT(7));
 	}
-	// dictionary string bytes beyond one block fall back to flat storage with shared bytes
-	{
+	// dictionary string bytes up to exactly one block are recognized, one byte more falls back
+	// to flat storage with shared bytes
+	const auto block_size = buffer_manager.GetBlockSize();
+	for (idx_t excess = 0; excess < 2; excess++) {
 		ColumnDataCollection collection(buffer_manager, {LogicalType::VARCHAR});
 		ColumnDataAppendState append_state;
 		collection.InitializeAppend(append_state);
-		const idx_t value_size = 200000;
+		const idx_t first_size = block_size / 2;
+		const idx_t second_size = block_size - first_size + excess;
 		auto dictionary = DictionaryVector::CreateReusableDictionary(LogicalType::VARCHAR, 2);
 		{
 			auto writer = FlatVector::Writer<string_t>(dictionary->data, 2);
-			writer.WriteValue(string_t(string(value_size, 'a')));
-			writer.WriteValue(string_t(string(value_size, 'b')));
+			writer.WriteValue(string_t(string(first_size, 'a')));
+			writer.WriteValue(string_t(string(second_size, 'b')));
 		}
 		AppendDictionaryChunk(collection, append_state, std::move(dictionary), 2, STANDARD_VECTOR_SIZE);
 		DataChunk result;
 		scan_first(collection, result);
-		REQUIRE(result.data[0].GetVectorType() == VectorType::FLAT_VECTOR);
-		REQUIRE(result.GetValue(0, 0) == Value(string(value_size, 'a')));
-		REQUIRE(result.GetValue(0, 1) == Value(string(value_size, 'b')));
-		// the fallback shares the bytes instead of copying them per row
-		REQUIRE(collection.SizeInBytes() < 4 * value_size);
+		if (excess == 0) {
+			REQUIRE(result.data[0].GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		} else {
+			REQUIRE(result.data[0].GetVectorType() == VectorType::FLAT_VECTOR);
+		}
+		REQUIRE(result.GetValue(0, 0) == Value(string(first_size, 'a')));
+		REQUIRE(result.GetValue(0, 1) == Value(string(second_size, 'b')));
+		// one byte copy per entry at most, never one per row
+		REQUIRE(collection.SizeInBytes() < 2 * (first_size + second_size));
 	}
 }
 
@@ -677,8 +734,9 @@ TEST_CASE("Compact entries extend and materialize across appends", "[column_data
 		collection.InitializeAppend(append_state);
 		AppendDictionaryChunk(collection, append_state, MakeStringDictionary(50, "first_dictionary_payload_", true), 50,
 		                      100);
-		AppendDictionaryChunk(collection, append_state, MakeStringDictionary(50, "second_dictionary_payload_", false),
-		                      50, 100);
+		// 49 values for 100 rows so the second append takes the restored byte-sharing fallback
+		AppendDictionaryChunk(collection, append_state, MakeStringDictionary(49, "second_dictionary_payload_", false),
+		                      49, 100);
 		DataChunk result;
 		collection.InitializeScanChunk(result);
 		ColumnDataScanState scan_state;
@@ -711,10 +769,21 @@ TEST_CASE("Compact entries move with Combine, Swap, and reuse", "[column_data_co
 	AppendDictionaryChunk(second, second_append, MakeStringDictionary(50, "combined_dictionary_payload_", false), 50,
 	                      STANDARD_VECTOR_SIZE);
 
+	const auto combined_size = first.SizeInBytes() + second.SizeInBytes();
 	first.Combine(second);
 	REQUIRE(first.Count() == 2 * STANDARD_VECTOR_SIZE);
 	REQUIRE(first.GetValue(0, 0) == Value(payload));
 	REQUIRE(first.GetValue(0, STANDARD_VECTOR_SIZE + 1) == Value("combined_dictionary_payload_1"));
+	// the size counters and per-segment dictionaries move with the segments
+	REQUIRE(first.SizeInBytes() == combined_size);
+	idx_t moved_constant_bytes = 0;
+	idx_t moved_dictionaries = 0;
+	for (auto &moved_segment : first.GetSegments()) {
+		moved_constant_bytes += moved_segment->constant_metadata_size;
+		moved_dictionaries += moved_segment->dictionaries.size();
+	}
+	REQUIRE(moved_constant_bytes == sizeof(ColumnDataConstantValue));
+	REQUIRE(moved_dictionaries == 1);
 
 	ColumnDataCollection swapped(buffer_manager, {LogicalType::VARCHAR});
 	swapped.Swap(first);
@@ -724,11 +793,18 @@ TEST_CASE("Compact entries move with Combine, Swap, and reuse", "[column_data_co
 	// reuse after a reset starts from clean per-segment dictionary state
 	swapped.ResetForReuse();
 	REQUIRE(swapped.Count() == 0);
+	REQUIRE(swapped.GetSegments()[0]->dictionaries.empty());
+	REQUIRE(swapped.GetSegments()[0]->constant_metadata_size == 0);
 	ColumnDataAppendState reuse_append;
 	swapped.InitializeAppend(reuse_append);
+	AppendDictionaryChunk(swapped, reuse_append, MakeStringDictionary(50, "reused_dictionary_payload_", false), 50,
+	                      100);
+	// the dictionary is materialized again for the reused segment
+	REQUIRE(swapped.GetSegments()[0]->dictionaries.size() == 1);
 	AppendConstantChunk(swapped, reuse_append, Value(payload), 100);
-	REQUIRE(swapped.Count() == 100);
-	REQUIRE(swapped.GetValue(0, 99) == Value(payload));
+	REQUIRE(swapped.Count() == 200);
+	REQUIRE(swapped.GetValue(0, 1) == Value("reused_dictionary_payload_1"));
+	REQUIRE(swapped.GetValue(0, 199) == Value(payload));
 }
 
 TEST_CASE("Compact representations with in-memory and hybrid allocators", "[column_data_compact]") {
