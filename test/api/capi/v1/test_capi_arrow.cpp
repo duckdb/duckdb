@@ -832,8 +832,8 @@ TEST_CASE("Test C-API Arrow conversion of a TIMESTAMPTZ below the timestamp rang
 		const int64_t first_midnight = string(format) == "tss:UTC" ? -9223372022400 : -9223372022400000;
 		for (auto entry : {make_pair(first_midnight, false), make_pair(first_midnight - 1, false),
 		                   make_pair(first_midnight, true), make_pair(first_midnight - 1, true)}) {
-			// with a trailing NULL row, the conversion takes the loop that checks the validity mask
-			const int64_t values[] = {entry.first, 0};
+			// with a trailing NULL row, the conversion takes the loop that skips the values under NULL
+			const int64_t values[] = {entry.first, first_midnight - 1};
 			const uint8_t validity = 0x01;
 			const idx_t rows = entry.second ? 2 : 1;
 			const void *buffers[] = {entry.second ? &validity : nullptr, values};
@@ -875,6 +875,9 @@ TEST_CASE("Test C-API Arrow conversion of a TIMESTAMPTZ below the timestamp rang
 				auto vector = duckdb_data_chunk_get_vector(chunk, 0);
 				auto timestamps = static_cast<duckdb_timestamp *>(duckdb_vector_get_data(vector));
 				REQUIRE(timestamps[0].micros == -9223372022400000000);
+				if (entry.second) {
+					REQUIRE(!duckdb_validity_row_is_valid(duckdb_vector_get_validity(vector), 1));
+				}
 				duckdb_destroy_data_chunk(&chunk);
 			} else {
 				REQUIRE(err != nullptr);
