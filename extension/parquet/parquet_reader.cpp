@@ -359,6 +359,15 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		}
 	}
 
+	// CreateThriftFileProtocol bounded the container size limit by the whole file, since footer_len was not yet
+	// known at that point. The actual footer (crypto metadata and/or file metadata) can only ever occupy footer_len
+	// bytes, which is typically far smaller than the file - tighten the limit now to that true byte budget, so a
+	// declared list/map element count can no longer be inflated using unrelated bytes elsewhere in the file.
+	auto &compact_proto =
+	    reinterpret_cast<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport> &>(*file_proto);
+	auto limit = MinValue<idx_t>(footer_len, NumericLimits<int32_t>::Maximum());
+	compact_proto.setContainerSizeLimit(NumericCast<int32_t>(limit));
+
 	auto metadata = make_uniq<FileMetaData>();
 	unique_ptr<FileCryptoMetaData> crypto_metadata;
 	string encryption_key_hash;
