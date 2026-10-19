@@ -889,6 +889,8 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {{"s3/config", "h
                                                                 {"r2/credential_chain", "aws"},
                                                                 {"aws/credential_chain", "aws"},
                                                                 {"rds/credential_chain", "aws"},
+                                                                {"s3/none", "aws"},
+                                                                {"aws/none", "aws"},
                                                                 {"azure/access_token", "azure"},
                                                                 {"azure/config", "azure"},
                                                                 {"azure/credential_chain", "azure"},
