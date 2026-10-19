@@ -38,7 +38,7 @@ struct SleepMsFun {
 struct IndexKeyFun {
 	static constexpr const char *Name = "index_key";
 	static constexpr const char *Parameters = "path,...";
-	static constexpr const char *Description = "Generate index keys from key column arguments. The path struct requires a 'table' field, optional 'catalog'/'schema' fields, and either an 'index' field naming a user-defined index, or a 'constraint' field ('primary', 'unique' or 'foreign') with a 'columns' list selecting a constraint index. Currently only supports ART indexes.";
+	static constexpr const char *Description = "Generate index keys from key column arguments. The path struct requires a 'table' field, optional 'catalog'/'schema' fields, and either an 'index' field naming a user-defined index, or a 'constraint' field ('primary', 'unique' or 'foreign') selecting a constraint index. A 'columns' list selects the constraint by its key columns; it is required for 'unique' and 'foreign', and optional for 'primary'. Currently only supports ART indexes.";
 	static constexpr const char *Example = "index_key({'schema': 'main', 'table': 'tbl3', 'index': 'tbl3_idx'}, key1, key2, key3)";
 	static constexpr const char *Categories = "";
 
