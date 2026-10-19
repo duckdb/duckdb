@@ -432,7 +432,7 @@ optional_ptr<Binding> BindContext::GetBinding(const Identifier &name, ErrorData 
 	return GetBinding(BindingAlias(name), out_error);
 }
 
-BindingAlias GetBindingAlias(ColumnRefExpression &colref) {
+BindingAlias GetBindingAlias(const ColumnRefExpression &colref) {
 	auto &names = colref.ColumnNames();
 	if (names.size() <= 1) {
 		throw InternalException("Cannot get binding alias from column ref unless it has 2 or more entries");
@@ -453,7 +453,7 @@ BindingAlias GetBindingAlias(ColumnRefExpression &colref) {
 	return BindingAlias(catalog, schema_path, table_name);
 }
 
-BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
+BindResult BindContext::BindColumn(const ColumnRefExpression &colref, idx_t depth) {
 	if (!colref.IsQualified()) {
 		throw InternalException("Could not bind alias %s!", colref.GetColumnName());
 	}
@@ -467,7 +467,8 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 	return binding->Bind(colref, depth);
 }
 
-string BindContext::BindColumn(PositionalReferenceExpression &ref, Identifier &table_name, Identifier &column_name) {
+string BindContext::BindColumn(const PositionalReferenceExpression &ref, Identifier &table_name,
+                               Identifier &column_name) {
 	idx_t total_columns = 0;
 	idx_t current_position = ref.Index() - 1;
 	for (auto &entry : bindings_list) {
@@ -492,7 +493,7 @@ string BindContext::BindColumn(PositionalReferenceExpression &ref, Identifier &t
 	return StringUtil::Format("Positional reference %d out of range (total %d columns)", ref.Index(), total_columns);
 }
 
-unique_ptr<ColumnRefExpression> BindContext::PositionToColumn(PositionalReferenceExpression &ref) {
+unique_ptr<ColumnRefExpression> BindContext::PositionToColumn(const PositionalReferenceExpression &ref) {
 	Identifier table_name, column_name;
 
 	string error = BindColumn(ref, table_name, column_name);

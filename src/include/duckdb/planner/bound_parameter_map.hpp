@@ -33,7 +33,7 @@ public:
 
 	const identifier_map_t<BoundParameterData> &GetParameterData();
 
-	unique_ptr<BoundParameterExpression> BindParameterExpression(ParameterExpression &expr);
+	unique_ptr<BoundParameterExpression> BindParameterExpression(const ParameterExpression &expr);
 
 	//! Flag to indicate that we need to rebind this prepared statement before execution
 	bool rebind = false;

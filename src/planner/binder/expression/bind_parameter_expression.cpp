@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t depth) {
+BindResult ExpressionBinder::BindExpression(const ParameterExpression &expr, idx_t depth) {
 	auto parameters = binder.GetParameters();
 	auto parameter_id = expr.Identifier();
 

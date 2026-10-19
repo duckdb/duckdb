@@ -490,7 +490,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 			ConstantBinder binder(*this, context, StringUtil::Format("Default value for parameter %s", param_name));
 			auto default_expr = param_expr->Copy();
-			auto bound_default = binder.Bind(default_expr);
+			auto bound_default = binder.Bind(*default_expr);
 			if (!bound_default->IsFoldable()) {
 				auto msg = StringUtil::Format("Default value '%s' for parameter %s is not a constant expression.",
 				                              param_expr->ToString(), param_name);
@@ -574,7 +574,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			auto expression = function->Cast<ScalarMacroFunction>().expression->Copy();
 			ExpressionBinder::QualifyColumnNames(*this, expression);
 			try {
-				auto bind_result = binder.Bind(expression, 0, false);
+				auto bind_result = binder.Bind(*expression, 0, false);
 				if (bind_result.HasError()) {
 					error = std::move(bind_result.error);
 					error.Throw();
@@ -613,8 +613,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 LogicalType Binder::BindLogicalType(const ParsedExpression &type_expr) {
 	ConstantBinder binder(*this, context, "Type binding");
-	auto copy = type_expr.Copy();
-	auto expr = binder.Bind(copy);
+	auto expr = binder.Bind(type_expr);
 
 	if (!expr->IsFoldable()) {
 		throw BinderException(type_expr, "Type expression is not constant");
@@ -1023,7 +1022,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		vector<string> scope_strings;
 
 		if (info.provider) {
-			auto bound_provider = default_binder.Bind(info.provider);
+			auto bound_provider = default_binder.Bind(*info.provider);
 			if (bound_provider->HasParameter()) {
 				throw InvalidInputException("Create Secret expressions can not have parameters!");
 			}
@@ -1031,14 +1030,14 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			    StringUtil::Lower(ExpressionExecutor::EvaluateScalar(context, *bound_provider, true).ToString());
 		}
 		if (info.type) {
-			auto bound_type = default_binder.Bind(info.type);
+			auto bound_type = default_binder.Bind(*info.type);
 			if (bound_type->HasParameter()) {
 				throw InvalidInputException("Create Secret expressions can not have parameters!");
 			}
 			type_string = StringUtil::Lower(ExpressionExecutor::EvaluateScalar(context, *bound_type, true).ToString());
 		}
 		if (info.scope) {
-			auto bound_scope = default_binder.Bind(info.scope);
+			auto bound_scope = default_binder.Bind(*info.scope);
 			if (bound_scope->HasParameter()) {
 				throw InvalidInputException("Create Secret expressions can not have parameters!");
 			}
@@ -1069,7 +1068,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// Execute all options expressions
 		case_insensitive_map_t<Value> bound_options;
 		for (auto &option : info.options) {
-			auto bound_value = default_binder.Bind(option.second);
+			auto bound_value = default_binder.Bind(*option.second);
 			if (bound_value->HasParameter()) {
 				throw InvalidInputException("Create Secret expressions can not have parameters!");
 			}

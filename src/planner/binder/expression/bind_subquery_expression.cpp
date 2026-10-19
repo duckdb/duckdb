@@ -59,7 +59,7 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 	}
 }
 
-BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t depth) {
+BindResult ExpressionBinder::BindExpression(const SubqueryExpression &expr, idx_t depth) {
 	if (inside_try) {
 		throw BinderException("TRY can not be used in combination with a scalar subquery");
 	}
@@ -69,7 +69,9 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	subquery_binder->SetInsideSubquery();
 
 	subquery_binder->BeginSubqueryBind(binder, *this);
-	auto bound_node = subquery_binder->BindNode(*expr.Subquery()->node);
+	// binding a query node rewrites it, so bind a copy and leave the subquery intact
+	auto subquery_node = expr.Subquery()->node->Copy();
+	auto bound_node = subquery_binder->BindNode(*subquery_node);
 	subquery_binder->FinishSubqueryBind();
 
 	// check the correlated columns of the subquery for correlated columns with depth > 1
@@ -85,7 +87,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	// bind the child expression the subquery is compared against, if any
 	unique_ptr<Expression> bound_child;
 	if (expr.GetChild()) {
-		auto child_result = Bind(expr.GetChildMutable(), depth);
+		auto child_result = Bind(*expr.GetChild(), depth);
 		if (child_result.HasError()) {
 			return child_result;
 		}

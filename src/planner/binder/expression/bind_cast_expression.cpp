@@ -6,9 +6,9 @@
 
 namespace duckdb {
 
-BindResult ExpressionBinder::BindExpression(CastExpression &expr, idx_t depth) {
+BindResult ExpressionBinder::BindExpression(const CastExpression &expr, idx_t depth) {
 	// first try to bind the child of the cast expression
-	auto result = Bind(expr.ChildMutable(), depth);
+	auto result = Bind(expr.Child(), depth);
 	if (result.HasError()) {
 		return result;
 	}

@@ -1160,13 +1160,11 @@ ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const Column
 
 RemotePushdownOptimizer::ConstantFoldResult
 RemotePushdownOptimizer::TryConstantFold(unique_ptr<ParsedExpression> &expr) {
-	// bind a copy of the expression (binding modifies the expression in-place)
 	unique_ptr<Expression> bound_expr;
 	try {
-		auto expr_copy = expr->Copy();
 		auto fold_binder = Binder::CreateBinder(binder.context);
 		ConstantBinder constant_binder(*fold_binder, binder.context, "remote pushdown");
-		bound_expr = constant_binder.Bind(expr_copy);
+		bound_expr = constant_binder.Bind(*expr);
 	} catch (std::exception &) {
 		// the expression cannot be bound as a constant (e.g. no matching function overload)
 		return ConstantFoldResult::NOT_FOLDABLE;

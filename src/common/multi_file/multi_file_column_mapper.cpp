@@ -128,7 +128,7 @@ struct FieldIdMapper : public ColumnMapper {
 		ConstantBinder constant_binder(*binder, context, "default value");
 		auto expr = default_val->Copy();
 		LogicalType target_type = column.type;
-		auto bound = constant_binder.Bind(expr, &target_type);
+		auto bound = constant_binder.Bind(*expr, &target_type);
 		if (!bound->IsFoldable()) {
 			return bound;
 		}

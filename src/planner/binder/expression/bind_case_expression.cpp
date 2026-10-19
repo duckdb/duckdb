@@ -6,16 +6,16 @@
 
 namespace duckdb {
 
-BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
+BindResult ExpressionBinder::BindExpression(const CaseExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
 	ErrorData error;
 	vector<pair<unique_ptr<Expression>, unique_ptr<Expression>>> checks;
-	for (auto &check : expr.CaseChecksMutable()) {
-		auto when_expr = BindChild(check.when_expr, depth, error);
-		auto then_expr = BindChild(check.then_expr, depth, error);
+	for (auto &check : expr.CaseChecks()) {
+		auto when_expr = BindChild(*check.when_expr, depth, error);
+		auto then_expr = BindChild(*check.then_expr, depth, error);
 		checks.emplace_back(std::move(when_expr), std::move(then_expr));
 	}
-	auto else_expr = BindChild(expr.ElseMutable(), depth, error);
+	auto else_expr = BindChild(expr.Else(), depth, error);
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}

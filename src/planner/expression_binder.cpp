@@ -49,33 +49,32 @@ StackChecker<ExpressionBinder> ExpressionBinder::StackCheck(const ParsedExpressi
 	return StackChecker<ExpressionBinder>(*this, extra_stack);
 }
 
-BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
-	auto stack_checker = StackCheck(*expr);
+BindResult ExpressionBinder::BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression) {
+	auto stack_checker = StackCheck(expr);
 
-	auto &expr_ref = *expr;
-	switch (expr_ref.GetExpressionClass()) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BETWEEN:
-		return BindExpression(expr_ref.Cast<BetweenExpression>(), depth);
+		return BindExpression(expr.Cast<BetweenExpression>(), depth);
 	case ExpressionClass::CASE:
-		return BindExpression(expr_ref.Cast<CaseExpression>(), depth);
+		return BindExpression(expr.Cast<CaseExpression>(), depth);
 	case ExpressionClass::CAST:
-		return BindExpression(expr_ref.Cast<CastExpression>(), depth);
+		return BindExpression(expr.Cast<CastExpression>(), depth);
 	case ExpressionClass::COLLATE:
-		return BindExpression(expr_ref.Cast<CollateExpression>(), depth);
+		return BindExpression(expr.Cast<CollateExpression>(), depth);
 	case ExpressionClass::COLUMN_REF:
-		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth, root_expression, expr);
+		return BindExpression(expr.Cast<ColumnRefExpression>(), depth, root_expression);
 	case ExpressionClass::LAMBDA_REF:
-		return BindExpression(expr_ref.Cast<LambdaRefExpression>(), depth);
+		return BindExpression(expr.Cast<LambdaRefExpression>(), depth);
 	case ExpressionClass::COMPARISON:
-		return BindExpression(expr_ref.Cast<ComparisonExpression>(), depth);
+		return BindExpression(expr.Cast<ComparisonExpression>(), depth);
 	case ExpressionClass::CONJUNCTION:
-		return BindExpression(expr_ref.Cast<ConjunctionExpression>(), depth);
+		return BindExpression(expr.Cast<ConjunctionExpression>(), depth);
 	case ExpressionClass::CONSTANT:
-		return BindExpression(expr_ref.Cast<ConstantExpression>(), depth);
+		return BindExpression(expr.Cast<ConstantExpression>(), depth);
 	case ExpressionClass::TYPE:
-		return BindExpression(expr_ref.Cast<TypeExpression>(), depth);
+		return BindExpression(expr.Cast<TypeExpression>(), depth);
 	case ExpressionClass::FUNCTION: {
-		auto &function = expr_ref.Cast<FunctionExpression>();
+		auto &function = expr.Cast<FunctionExpression>();
 		if (IsUnnestFunction(function.FunctionName())) {
 			// special case, not in catalog
 			return BindUnnest(function, depth, root_expression);
@@ -87,40 +86,39 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 			return BindResult(BinderException::Unsupported(
 			    function, "RUNNING and FINAL are only meaningful in the MEASURES of a MATCH_RECOGNIZE"));
 		}
-		// binding a function expression requires an extra parameter for macros
-		return BindExpression(function, depth, expr);
+		return BindExpression(function, depth);
 	}
 	case ExpressionClass::LAMBDA: {
 		const vector<LogicalType> function_child_types;
-		return BindExpression(expr_ref.Cast<LambdaExpression>(), depth, function_child_types, nullptr, nullptr);
+		return BindExpression(expr.Cast<LambdaExpression>(), depth, function_child_types, nullptr, nullptr);
 	}
 	case ExpressionClass::PATTERN:
 		// a row pattern is matched by MATCH_RECOGNIZE rather than evaluated, so it is not an expression
 		// anywhere an expression is expected
-		return BindResult(BinderException::Unsupported(expr_ref, "A row pattern is only meaningful in the PATTERN "
-		                                                         "clause of MATCH_RECOGNIZE"));
+		return BindResult(BinderException::Unsupported(expr, "A row pattern is only meaningful in the PATTERN "
+		                                                     "clause of MATCH_RECOGNIZE"));
 	case ExpressionClass::OPERATOR:
-		return BindExpression(expr_ref.Cast<OperatorExpression>(), depth);
+		return BindExpression(expr.Cast<OperatorExpression>(), depth);
 	case ExpressionClass::SUBQUERY:
-		return BindExpression(expr_ref.Cast<SubqueryExpression>(), depth);
+		return BindExpression(expr.Cast<SubqueryExpression>(), depth);
 	case ExpressionClass::PARAMETER:
-		return BindExpression(expr_ref.Cast<ParameterExpression>(), depth);
+		return BindExpression(expr.Cast<ParameterExpression>(), depth);
 	case ExpressionClass::POSITIONAL_REFERENCE:
-		return BindPositionalReference(expr, depth, root_expression);
+		return BindPositionalReference(expr.Cast<PositionalReferenceExpression>(), depth, root_expression);
 	case ExpressionClass::STAR:
-		return BindResult(BinderException::Unsupported(expr_ref, "STAR expression is not supported here"));
+		return BindResult(BinderException::Unsupported(expr, "STAR expression is not supported here"));
 	case ExpressionClass::WINDOW:
 		// a binder that does not handle windows itself reports that they are unsupported here
-		return BindUnsupportedExpression(expr_ref, depth, UnsupportedWindowMessage());
+		return BindUnsupportedExpression(expr, depth, UnsupportedWindowMessage());
 	default:
 		return BindResult(
 		    NotImplementedException("Unimplemented expression class in ExpressionBinder::BindExpression: %s",
-		                            EnumUtil::ToString(expr_ref.GetExpressionClass())));
+		                            EnumUtil::ToString(expr.GetExpressionClass())));
 	}
 }
 
-BindResult ExpressionBinder::DispatchToScope(idx_t scope, unique_ptr<ParsedExpression> &expr_ptr, idx_t base_depth) {
-	auto result = ScopeAt(scope).BindExpression(expr_ptr, base_depth + scope, false);
+BindResult ExpressionBinder::DispatchToScope(idx_t scope, const ParsedExpression &expr, idx_t base_depth) {
+	auto result = ScopeAt(scope).BindExpression(expr, base_depth + scope, false);
 	if (!result.HasError()) {
 		// the reference reaches out of this scope: record it as a correlated column of this binder
 		ExtractCorrelatedExpressions(binder, *result.expression);
@@ -128,8 +126,8 @@ BindResult ExpressionBinder::DispatchToScope(idx_t scope, unique_ptr<ParsedExpre
 	return result;
 }
 
-BindResult ExpressionBinder::BindInEnclosingScope(ColumnRefExpression &col_ref, idx_t depth,
-                                                  unique_ptr<ParsedExpression> &expr_ptr, ErrorData local_error) {
+BindResult ExpressionBinder::BindInEnclosingScope(const ColumnRefExpression &col_ref, idx_t depth,
+                                                  ErrorData local_error) {
 	auto bind_error = std::move(local_error);
 	// the index of a scope is a depth, so a scope pushed or popped while the search is running would
 	// shift every index underneath it
@@ -144,20 +142,14 @@ BindResult ExpressionBinder::BindInEnclosingScope(ColumnRefExpression &col_ref, 
 			break;
 		}
 		// bind the qualified form the scope produced, so that it is recognised by that scope, e.g. a reference to one
-		// of its groups. The original is kept so the search can go on.
-		auto original = std::move(expr_ptr);
-		if (resolution.qualified) {
-			expr_ptr = std::move(resolution.qualified);
-		} else {
-			expr_ptr = original->Copy();
-		}
-		auto result = DispatchToScope(resolution.depth, expr_ptr, depth);
+		// of its groups
+		auto result = resolution.qualified ? DispatchToScope(resolution.depth, *resolution.qualified, depth)
+		                                   : DispatchToScope(resolution.depth, col_ref, depth);
 		if (!result.HasError()) {
 			return result;
 		}
 		// the scope reaches the name but cannot bind it, e.g. a column shadowing a table alias, so the scopes outside
 		// it still get their turn
-		expr_ptr = std::move(original);
 		CombineErrors(bind_error, std::move(result.error));
 		scope = resolution.depth + 1;
 	}
@@ -165,10 +157,15 @@ BindResult ExpressionBinder::BindInEnclosingScope(ColumnRefExpression &col_ref, 
 	return BindResult(std::move(bind_error));
 }
 
-unique_ptr<Expression> ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, ErrorData &error) {
+unique_ptr<Expression> ExpressionBinder::BindChild(optional_ptr<const ParsedExpression> expr, idx_t depth,
+                                                   ErrorData &error) {
 	if (!expr) {
 		return nullptr;
 	}
+	return BindChild(*expr, depth, error);
+}
+
+unique_ptr<Expression> ExpressionBinder::BindChild(const ParsedExpression &expr, idx_t depth, ErrorData &error) {
 	auto result = Bind(expr, depth);
 	if (result.HasError()) {
 		if (!error.HasError()) {
@@ -266,7 +263,7 @@ LogicalType ExpressionBinder::ExchangeNullType(const LogicalType &type) {
 	return ExchangeType(type, LogicalTypeId::SQLNULL, LogicalType::INTEGER);
 }
 
-unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type,
+unique_ptr<Expression> ExpressionBinder::Bind(const ParsedExpression &expr, optional_ptr<LogicalType> result_type,
                                               bool root_expression) {
 	// bind the main expression - a name that reaches out of this scope is resolved where it occurs
 	auto bind_result = Bind(expr, 0, root_expression);
@@ -296,9 +293,9 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	return result;
 }
 
-BindResult ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
-	auto query_location = expr->GetQueryLocation();
-	auto alias = expr->GetAlias();
+BindResult ExpressionBinder::Bind(const ParsedExpression &expr, idx_t depth, bool root_expression) {
+	auto query_location = expr.GetQueryLocation();
+	auto alias = expr.GetAlias();
 	BindResult result = BindExpression(expr, depth, root_expression);
 	if (result.HasError()) {
 		return result;
@@ -311,12 +308,13 @@ BindResult ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t dept
 	return result;
 }
 
-BindResult ExpressionBinder::BindUnsupportedExpression(ParsedExpression &expr, idx_t depth, const string &message) {
+BindResult ExpressionBinder::BindUnsupportedExpression(const ParsedExpression &expr, idx_t depth,
+                                                       const string &message) {
 	// we always prefer to throw an error if it occurs in a child expression
 	// since that error might be more descriptive
 	// bind all children
 	ErrorData result;
-	ParsedExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<ParsedExpression> &child) {
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
 		// the children are bound only to surface their errors - the expression itself is unsupported
 		(void)BindChild(child, depth, result);
 	});

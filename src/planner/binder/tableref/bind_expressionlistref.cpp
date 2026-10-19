@@ -86,7 +86,7 @@ BoundStatement Binder::Bind(ExpressionListRef &expr) {
 			} else {
 				binder.target_type = LogicalType(LogicalTypeId::INVALID);
 			}
-			auto bound_expr = binder.Bind(expression_list[val_idx]);
+			auto bound_expr = binder.Bind(*expression_list[val_idx]);
 			list.push_back(std::move(bound_expr));
 		}
 		values.push_back(std::move(list));

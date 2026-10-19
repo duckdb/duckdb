@@ -108,7 +108,7 @@ static vector<BindingAlias> GetTableQualifications(const vector<Identifier> &nam
 	return result;
 }
 
-unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpression &col_ref) {
+unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(const ColumnRefExpression &col_ref) {
 	D_ASSERT(!col_ref.ColumnNames().empty());
 
 	// the whole reference names a table - try to interpret it as "[catalog.][schema path.]table"
@@ -235,11 +235,11 @@ void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vec
 		break;
 	}
 	case ExpressionType::FUNCTION: {
+		if (!ExpressionBinder::IsUnnestFunction(expr->Cast<FunctionExpression>().FunctionName())) {
+			QualifyFunction(expr);
+		}
 		// Special-handling for lambdas, which are inside function expressions.
 		auto &function = expr->Cast<FunctionExpression>();
-		if (!ExpressionBinder::IsUnnestFunction(function.FunctionName())) {
-			QualifyFunction(function);
-		}
 		if (function.IsLambdaFunction()) {
 			return QualifyColumnNamesInLambda(function, lambda_params);
 		}
@@ -257,27 +257,33 @@ void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vec
 	});
 }
 
-optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &function) {
+optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(const FunctionExpression &function,
+                                                            unique_ptr<FunctionExpression> &qualified) {
 	D_ASSERT(!ExpressionBinder::IsUnnestFunction(function.FunctionName()));
 	// lookup the function in the catalog
 	QueryErrorContext error_context(function.GetQueryLocation());
 	// promote a lone qualifier that names an attached database to a catalog, so that "db.f()" is not mistaken for a
 	// dot-call on a column named "db" by the rewrite below
-	binder.BindSchemaOrCatalog(function.GetQualifiedNameMutable());
+	auto qualified_name = function.GetQualifiedName();
+	binder.BindSchemaOrCatalog(qualified_name);
+	if (!(qualified_name == function.GetQualifiedName())) {
+		qualified = unique_ptr_cast<ParsedExpression, FunctionExpression>(function.Copy());
+		qualified->SetQualifiedName(qualified_name);
+	}
 
-	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
+	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(qualified_name.Name()),
 	                                error_context);
 	// resolve the qualification: this decides whether a leading component (e.g. "s1" in "s1.s2.my_macro()") is a
 	// catalog or the outermost schema of a nested schema path. The name as written is left alone - the dot-call
 	// rewrite below turns the qualification into a column reference and needs it unresolved.
-	auto bound_name = binder.BindTableName(function.GetQualifiedName());
+	auto bound_name = binder.BindTableName(qualified_name);
 	auto func = binder.GetCatalogEntry(EntryLookupInfo(function_lookup, bound_name), OnEntryNotFound::RETURN_NULL);
 	if (func) {
 		// found the function - we are done
 		return func;
 	}
 	// not a table function - check if the schema is set
-	if (function.GetQualifiedName().Schema().empty()) {
+	if (qualified_name.Schema().empty()) {
 		// schema is not set - leave it as-is
 		return nullptr;
 	}
@@ -292,11 +298,10 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	// the function exists in the system catalog - turn this into a dot call
 	ErrorData error;
 	unique_ptr<ColumnRefExpression> colref;
-	if (function.GetQualifiedName().Catalog().empty()) {
-		colref = make_uniq<ColumnRefExpression>(function.GetQualifiedName().Schema());
+	if (qualified_name.Catalog().empty()) {
+		colref = make_uniq<ColumnRefExpression>(qualified_name.Schema());
 	} else {
-		colref =
-		    make_uniq<ColumnRefExpression>(function.GetQualifiedName().Schema(), function.GetQualifiedName().Catalog());
+		colref = make_uniq<ColumnRefExpression>(qualified_name.Schema(), qualified_name.Catalog());
 	}
 	auto new_colref = QualifyColumnName(*colref, error);
 	if (!new_colref) {
@@ -305,8 +310,20 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	new_colref->ClearAlias();
 	// we can! transform this into a function call on the column
 	// i.e. "x.lower()" becomes "lower(x)"
-	function.GetArgumentsMutable().insert(function.GetArgumentsMutable().begin(), std::move(new_colref));
-	function.SetQualifiedName(QualifiedName(function.GetQualifiedName().Name()));
+	if (!qualified) {
+		qualified = unique_ptr_cast<ParsedExpression, FunctionExpression>(function.Copy());
+	}
+	qualified->GetArgumentsMutable().insert(qualified->GetArgumentsMutable().begin(), std::move(new_colref));
+	qualified->SetQualifiedName(QualifiedName(qualified_name.Name()));
+	return func;
+}
+
+optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(unique_ptr<ParsedExpression> &expr) {
+	unique_ptr<FunctionExpression> qualified;
+	auto func = QualifyFunction(expr->Cast<FunctionExpression>(), qualified);
+	if (qualified) {
+		expr = std::move(qualified);
+	}
 	return func;
 }
 
@@ -349,7 +366,7 @@ void ColumnQualifier::QualifyColumnNamesInLambda(FunctionExpression &function,
 	}
 }
 
-unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDotsInternal(ColumnRefExpression &col_ref,
+unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDotsInternal(const ColumnRefExpression &col_ref,
                                                                                     ErrorData &error,
                                                                                     idx_t &struct_extract_start) {
 	// two or more dots (i.e. "part1.part2.part3.part4...")
@@ -435,7 +452,7 @@ bool ColumnQualifier::TableBindingExists(const BindingAlias &alias) {
 	}
 }
 
-unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref,
+unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDots(const ColumnRefExpression &col_ref,
                                                                             ErrorData &error) {
 	idx_t struct_extract_start = col_ref.ColumnNames().size();
 	auto result_expr = QualifyColumnNameWithManyDotsInternal(col_ref, error, struct_extract_start);
@@ -451,7 +468,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDots(Colu
 	return result_expr;
 }
 
-unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(ColumnRefExpression &colref, ErrorData &error) {
+unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ColumnRefExpression &colref, ErrorData &error) {
 	auto qualified_colref = QualifyColumnNameInternal(colref, error);
 	if (!qualified_colref) {
 		if (alias_binder) {
@@ -472,7 +489,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(ColumnRefExpress
 	return qualified_colref;
 }
 
-unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameInternal(ColumnRefExpression &col_ref,
+unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameInternal(const ColumnRefExpression &col_ref,
                                                                         ErrorData &error) {
 	if (!col_ref.IsQualified()) {
 		// Try binding as a lambda parameter.

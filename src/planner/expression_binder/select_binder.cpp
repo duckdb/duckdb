@@ -8,8 +8,8 @@ SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNo
     : BaseSelectBinder(binder, context, node) {
 }
 
-bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
-                                            BindResult &result, unique_ptr<ParsedExpression> &expr_ptr) {
+bool SelectBinder::TryResolveAliasReference(const ColumnRefExpression &colref, idx_t depth, bool root_expression,
+                                            BindResult &result) {
 	// must be a qualified alias.<name>
 	if (!ExpressionBinder::IsPotentialAlias(colref)) {
 		return false;
@@ -36,7 +36,7 @@ bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t d
 		                      alias_name);
 	}
 	auto copied_unbound = node.bind_state.BindAlias(alias_index);
-	result = BindExpression(copied_unbound, depth, false);
+	result = BindExpression(*copied_unbound, depth, false);
 	return true;
 }
 

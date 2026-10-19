@@ -18,10 +18,10 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 
 	ConstantBinder pragma_binder(*this, context, "PRAGMA value");
 	for (auto &param : info.parameters) {
-		positional_arguments.push_back(pragma_binder.Bind(param));
+		positional_arguments.push_back(pragma_binder.Bind(*param));
 	}
 	for (auto &entry : info.named_parameters) {
-		named_arguments.emplace_back(Identifier(entry.first), pragma_binder.Bind(entry.second));
+		named_arguments.emplace_back(Identifier(entry.first), pragma_binder.Bind(*entry.second));
 	}
 
 	// bind the pragma function

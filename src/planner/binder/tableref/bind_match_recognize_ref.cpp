@@ -870,7 +870,7 @@ static vector<unique_ptr<Expression>> BindDefineConditions(MatchRecognizeDefineB
 		condition_binder.BeginDefine(define_name);
 		// the matcher reads a condition as a boolean, so the plan has to produce one
 		unique_ptr<ParsedExpression> condition = make_uniq<CastExpression>(LogicalType::BOOLEAN, std::move(expr));
-		conditions.push_back(condition_binder.Bind(condition));
+		conditions.push_back(condition_binder.Bind(*condition));
 		pattern_symbols.insert(define_name);
 		define_symbols.push_back(MatchRecognizeDefineColumn(define_name));
 	}
@@ -910,7 +910,7 @@ static vector<unique_ptr<Expression>> BindDefineConditions(MatchRecognizeDefineB
 			condition = make_uniq<CastExpression>(LogicalType::BOOLEAN, ConstantExpression::Boolean(true));
 		}
 		condition_binder.BeginDefine(symbol);
-		conditions.push_back(condition_binder.Bind(condition));
+		conditions.push_back(condition_binder.Bind(*condition));
 		pattern_symbols.insert(symbol);
 	}
 	return conditions;
@@ -1028,7 +1028,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		SelectBinder navigation_binder(*define_binder, context, define_node);
 		for (auto &expr : measure_navigation) {
 			auto column = expr->GetAlias().GetIdentifierName();
-			inputs.ProjectAs(navigation_binder.Bind(expr), column);
+			inputs.ProjectAs(navigation_binder.Bind(*expr), column);
 		}
 	}
 
@@ -1039,7 +1039,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	for (auto &expr : ref.config->partition_expressions) {
 		auto partition = expr->Copy();
 		condition_binder.BeginFrame(MatchRecognizeScope::PARTITION_BY);
-		bound_partitions.push_back(condition_binder.Bind(partition));
+		bound_partitions.push_back(condition_binder.Bind(*partition));
 		RejectMatcherFields(*bound_partitions.back(), match_number_index, "PARTITION BY");
 	}
 	auto &order_config = DBConfig::GetConfig(context);
@@ -1050,7 +1050,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		const auto type = order_config.ResolveOrder(context, order.type);
 		const auto null_order = order_config.ResolveNullOrder(context, type, order.null_order);
 		condition_binder.BeginFrame(MatchRecognizeScope::ORDER_BY);
-		bound_orders.emplace_back(type, null_order, condition_binder.Bind(expr));
+		bound_orders.emplace_back(type, null_order, condition_binder.Bind(*expr));
 		RejectMatcherFields(*bound_orders.back().expression, match_number_index, "ORDER BY");
 	}
 
@@ -1132,7 +1132,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 			D_ASSERT(!expr->GetAlias().empty());
 			measure_names.aliases.push_back(expr->GetAlias());
 			measure_names.columns.push_back(names.Reserve("__mr_measure_" + to_string(measure_names.columns.size())));
-			auto bound = measure_expression_binder.Bind(expr);
+			auto bound = measure_expression_binder.Bind(*expr);
 			// one more measure is now there to be named by the ones after it
 			measures.bound_column_count++;
 			bound->SetAlias(Identifier(measure_names.columns.back()));

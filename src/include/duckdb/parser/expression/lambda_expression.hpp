@@ -47,9 +47,6 @@ public:
 	unique_ptr<ParsedExpression> &RightMutable() {
 		return expr;
 	}
-	unique_ptr<ParsedExpression> &CopiedExprMutable() {
-		return copied_expr;
-	}
 
 	//! Returns a vector to the column references in the LHS expression, and fills the error message,
 	//! if the LHS is not a valid lambda parameter list
@@ -74,8 +71,6 @@ private:
 	unique_ptr<ParsedExpression> lhs;
 	//! The lambda or JSON expression (RHS)
 	unique_ptr<ParsedExpression> expr;
-	//! Band-aid for conflicts between lambda binding and JSON binding.
-	unique_ptr<ParsedExpression> copied_expr;
 
 private:
 	LambdaExpression();

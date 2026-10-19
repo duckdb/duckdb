@@ -19,7 +19,7 @@ BoundStatement Binder::Bind(SetVariableStatement &stmt) {
 	unique_ptr<LogicalOperator> op;
 	if (stmt.scope != SetScope::VARIABLE) {
 		ConstantBinder default_binder(*this, context, "SET value");
-		auto bound_value = default_binder.Bind(stmt.value);
+		auto bound_value = default_binder.Bind(*stmt.value);
 		if (bound_value->HasParameter()) {
 			throw NotImplementedException("SET statements cannot have parameters");
 		}

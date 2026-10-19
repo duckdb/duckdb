@@ -186,11 +186,11 @@ unique_ptr<Expression> ExpressionBinder::CreateBoundComparison(ExpressionType co
 	return BoundComparisonExpression::Create(comparison_type, std::move(left), std::move(right));
 }
 
-BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {
+BindResult ExpressionBinder::BindExpression(const ComparisonExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
 	ErrorData error;
-	auto left = BindChild(expr.LeftMutable(), depth, error);
-	auto right = BindChild(expr.RightMutable(), depth, error);
+	auto left = BindChild(expr.Left(), depth, error);
+	auto right = BindChild(expr.Right(), depth, error);
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}

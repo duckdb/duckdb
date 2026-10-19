@@ -995,8 +995,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto logical_indexes = unique_info.GetLogicalIndexes(column_list);
 	for (const auto &logical_index : logical_indexes) {
 		auto &col = column_list.GetColumn(logical_index);
-		unique_ptr<ParsedExpression> parsed =
-		    make_uniq<ColumnRefExpression>(col.GetName(), table_info.GetQualifiedName().Name());
+		ColumnRefExpression parsed(col.GetName(), table_info.GetQualifiedName().Name());
 		unbound_expressions.push_back(idx_binder.Bind(parsed));
 	}
 

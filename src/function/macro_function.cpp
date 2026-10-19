@@ -47,7 +47,7 @@ string FormatMacroFunction(const MacroFunction &function, const Identifier &name
 
 MacroBindResult MacroFunction::BindMacroFunction(
     Binder &binder, const vector<unique_ptr<MacroFunction>> &functions, const Identifier &name,
-    FunctionExpression &function_expr, vector<unique_ptr<ParsedExpression>> &positional_arguments,
+    const FunctionExpression &function_expr, vector<unique_ptr<ParsedExpression>> &positional_arguments,
     InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> &named_arguments,
     idx_t depth) {
 	ExpressionBinder expr_binder(binder, binder.context);
@@ -70,27 +70,27 @@ MacroBindResult MacroFunction::BindMacroFunction(
 	// Find argument types and separate positional and default arguments
 	vector<LogicalType> positional_arg_types;
 	InsertionOrderPreservingMap<LogicalType, Identifier, identifier_map_t<idx_t>> named_arg_types;
-	for (auto &arg : function_expr.GetArgumentsMutable()) {
-		auto arg_copy = arg.GetExpression().Copy();
+	for (auto &arg : function_expr.GetArguments()) {
+		auto &arg_expr = arg.GetExpression();
 		LogicalType arg_type = LogicalType::UNKNOWN;
 		if (requires_bind) {
-			const auto arg_bind_result = expr_binder.BindExpression(arg_copy, depth + 1);
+			const auto arg_bind_result = expr_binder.BindExpression(arg_expr, depth + 1);
 			arg_type = arg_bind_result.HasError() ? LogicalType::UNKNOWN : arg_bind_result.expression->GetReturnType();
 		}
-		if (!arg.GetExpression().GetAlias().empty()) {
+		if (!arg_expr.GetAlias().empty()) {
 			// Default argument
-			if (named_arguments.find(arg.GetExpression().GetAlias()) != named_arguments.end()) {
-				return MacroBindResult(StringUtil::Format("Macro %s() has named argument repeated %s", name,
-				                                          arg.GetExpression().GetAlias()));
+			if (named_arguments.find(arg_expr.GetAlias()) != named_arguments.end()) {
+				return MacroBindResult(
+				    StringUtil::Format("Macro %s() has named argument repeated %s", name, arg_expr.GetAlias()));
 			}
-			named_arg_types.insert(arg.GetExpression().GetAlias(), std::move(arg_type));
-			named_arguments[arg.GetExpression().GetAlias()] = std::move(arg.GetExpressionMutable());
+			named_arg_types.insert(arg_expr.GetAlias(), std::move(arg_type));
+			named_arguments[arg_expr.GetAlias()] = arg_expr.Copy();
 		} else if (!named_arguments.empty()) {
 			return MacroBindResult(
 			    StringUtil::Format("Macro %s() has positional argument following named argument", name));
 		} else {
 			// Positional argument
-			positional_arguments.push_back(std::move(arg.GetExpressionMutable()));
+			positional_arguments.push_back(arg_expr.Copy());
 			positional_arg_types.push_back(std::move(arg_type));
 		}
 	}

@@ -36,21 +36,21 @@ public:
 	static bool IsFunctionallyDependent(const unique_ptr<Expression> &expr, const vector<reference<Expression>> &deps);
 
 protected:
-	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
-	                          bool root_expression = false) override;
+	BindResult BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression = false) override;
 
-	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth) override;
+	BindResult BindAggregate(const FunctionExpression &expr, AggregateFunctionCatalogEntry &function,
+	                         idx_t depth) override;
 
-	BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth) override;
+	BindResult BindGroupingFunction(const OperatorExpression &op, idx_t depth) override;
 
 	//! Binds a WINDOW expression and returns the result.
-	virtual BindResult BindWindowExpression(WindowExpression &expr, idx_t depth);
-	virtual BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
+	virtual BindResult BindWindowExpression(const WindowExpression &expr, idx_t depth);
+	virtual BindResult BindColumnRef(const ParsedExpression &expr, idx_t depth, bool root_expression);
 
-	ProjectionIndex TryBindGroup(ParsedExpression &expr);
-	bool MatchesGroup(ParsedExpression &expr) override;
-	bool ClaimsAlias(ColumnRefExpression &colref) override;
-	BindResult BindGroup(ParsedExpression &expr, idx_t depth, ProjectionIndex group_index);
+	ProjectionIndex TryBindGroup(const ParsedExpression &expr);
+	bool MatchesGroup(const ParsedExpression &expr) override;
+	bool ClaimsAlias(const ColumnRefExpression &colref) override;
+	BindResult BindGroup(const ParsedExpression &expr, idx_t depth, ProjectionIndex group_index);
 
 protected:
 	bool inside_window = false;

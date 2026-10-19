@@ -86,43 +86,53 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 //! that is null exactly where p does not. Spelled that way the frame is answered by a segment tree;
 //! COUNT(*) has no argument for one to be built over, so it counts the rows a filter leaves in one at
 //! a time - a pass over the partition per row, where the frame grows a row at a time.
-static void RewriteFilteredCountStar(WindowExpression &window) {
-	if (!window.FilterMutable() || !window.GetArguments().empty() || window.Distinct() || !window.ArgOrders().empty()) {
-		return;
+static unique_ptr<ParsedExpression> RewriteFilteredCountStar(const WindowExpression &window) {
+	if (!window.Filter() || !window.GetArguments().empty() || window.Distinct() || !window.ArgOrders().empty()) {
+		return nullptr;
 	}
 	auto &qualified = window.GetQualifiedName();
 	// COUNT(*) reaches here as COUNT with no argument; the star is what the parser drops
 	const auto &spelled = qualified.Name().GetIdentifierName();
 	if (!qualified.Catalog().empty() || !qualified.Schema().empty() ||
 	    (!StringUtil::CIEquals(spelled, CountFun::Name) && !StringUtil::CIEquals(spelled, CountStarFun::Name))) {
-		return;
+		return nullptr;
 	}
 
+	auto result = window.Copy();
+	auto &rewritten = result->Cast<WindowExpression>();
 	auto kept = make_uniq<CaseExpression>();
 	CaseCheck check;
-	check.when_expr = std::move(window.FilterMutable());
+	check.when_expr = std::move(rewritten.FilterMutable());
 	check.then_expr = ConstantExpression::FromValue(Value::BOOLEAN(true));
 	kept->CaseChecksMutable().push_back(std::move(check));
 	kept->ElseMutable() = ConstantExpression::FromValue(Value(LogicalType::BOOLEAN));
 
-	window.GetArgumentsMutable().emplace_back(std::move(kept));
-	window.FilterMutable() = nullptr;
-	window.SetFunctionName(CountFun::Name);
+	rewritten.GetArgumentsMutable().emplace_back(std::move(kept));
+	rewritten.FilterMutable() = nullptr;
+	rewritten.SetFunctionName(CountFun::Name);
+	return result;
 }
 
-BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_t depth) {
+BindResult BaseSelectBinder::BindWindowExpression(const WindowExpression &window, idx_t depth) {
 	QueryErrorContext error_context(window.GetQueryLocation());
 
-	RewriteFilteredCountStar(window);
+	auto filtered_count_star = RewriteFilteredCountStar(window);
+	if (filtered_count_star) {
+		return BindWindowExpression(filtered_count_star->Cast<WindowExpression>(), depth);
+	}
 
 	//	Check for macros pretending to be aggregates
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, window.GetQualifiedName(), error_context);
 	auto entry = GetCatalogEntry(function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (entry && entry->type == CatalogType::MACRO_ENTRY) {
-		auto macro_expr = window.Copy();
-		auto macro = make_uniq<FunctionExpression>(window.GetQualifiedName(), std::move(window.GetArgumentsMutable()),
-		                                           std::move(window.FilterMutable()), nullptr, window.Distinct());
-		return BindMacro(*macro, entry->Cast<ScalarMacroCatalogEntry>(), depth, macro_expr);
+		vector<FunctionArgument> arguments;
+		for (auto &argument : window.GetArguments()) {
+			arguments.push_back(argument.Copy());
+		}
+		auto macro = make_uniq<FunctionExpression>(window.GetQualifiedName(), std::move(arguments),
+		                                           window.Filter() ? window.Filter()->Copy() : nullptr, nullptr,
+		                                           window.Distinct());
+		return BindMacro(*macro, entry->Cast<ScalarMacroCatalogEntry>(), depth, window);
 	}
 	auto count_star = binder.TryRewriteQualifiedCountStar(window);
 	if (count_star) {
@@ -168,20 +178,20 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	inside_window = true;
 	ErrorData error;
 	vector<unique_ptr<Expression>> bound_args;
-	for (auto &child : window.GetArgumentsMutable()) {
-		bound_args.push_back(BindChild(child.GetExpressionMutable(), depth, error));
+	for (auto &child : window.GetArguments()) {
+		bound_args.push_back(BindChild(child.GetExpression(), depth, error));
 	}
 	vector<unique_ptr<Expression>> bound_partitions;
-	for (auto &child : window.PartitionsMutable()) {
-		auto bound_partition = BindChild(child, depth, error);
+	for (auto &child : window.Partitions()) {
+		auto bound_partition = BindChild(*child, depth, error);
 		if (!error.HasError() && bound_partition->IsVolatile()) {
 			throw BinderException(error_context, "PARTITION BY window expressions cannot be volatile");
 		}
 		bound_partitions.push_back(std::move(bound_partition));
 	}
 	vector<unique_ptr<Expression>> bound_orders;
-	for (auto &order : window.OrderByMutable()) {
-		auto bound_order = BindChild(order.expression, depth, error);
+	for (auto &order : window.OrderBy()) {
+		auto bound_order = BindChild(*order.expression, depth, error);
 		if (!error.HasError() && bound_order->IsVolatile()) {
 			throw BinderException(error_context, "ORDER BY window expressions cannot be volatile");
 		}
@@ -195,19 +205,19 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		const auto type_id = bound_order->GetReturnType().id();
 		if (type_id == LogicalTypeId::TIME || type_id == LogicalTypeId::TIME_TZ) {
 			//	Convert to time + epoch and rebind
-			unique_ptr<ParsedExpression> epoch = ConstantExpression::FromValue(Value::DATE(date_t::epoch()));
-			auto bound_epoch = BindChild(epoch, depth, error);
+			auto epoch = ConstantExpression::FromValue(Value::DATE(date_t::epoch()));
+			auto bound_epoch = BindChild(*epoch, depth, error);
 			BindRangeExpression(context, "+", bound_order, bound_epoch);
 		}
 		bound_orders.push_back(std::move(bound_order));
 	}
-	auto bound_filter = BindChild(window.FilterMutable(), depth, error);
-	auto bound_start = BindChild(window.StartExprMutable(), depth, error);
-	auto bound_end = BindChild(window.EndExprMutable(), depth, error);
+	auto bound_filter = BindChild(window.Filter().get(), depth, error);
+	auto bound_start = BindChild(window.StartExpr().get(), depth, error);
+	auto bound_end = BindChild(window.EndExpr().get(), depth, error);
 
 	vector<unique_ptr<Expression>> bound_arg_orders;
-	for (auto &order : window.ArgOrdersMutable()) {
-		bound_arg_orders.push_back(BindChild(order.expression, depth, error));
+	for (auto &order : window.ArgOrders()) {
+		bound_arg_orders.push_back(BindChild(*order.expression, depth, error));
 	}
 
 	inside_window = false;
@@ -229,8 +239,8 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 
 	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
 	arguments.reserve(window.GetArguments().size());
-	for (idx_t arg_idx = 0; arg_idx < window.GetArgumentsMutable().size(); arg_idx++) {
-		auto &arg = window.GetArgumentsMutable()[arg_idx];
+	for (idx_t arg_idx = 0; arg_idx < window.GetArguments().size(); arg_idx++) {
+		auto &arg = window.GetArguments()[arg_idx];
 		auto bound_arg = std::move(bound_args[arg_idx]);
 
 		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
@@ -358,14 +368,14 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	LogicalType start_type = LogicalType::BIGINT;
 	if (window.WindowStart() == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.OrderBy().size() == 1);
-		range_sense = config.ResolveOrder(context, window.OrderByMutable()[0].type);
+		range_sense = config.ResolveOrder(context, window.OrderBy()[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
 		start_type = BindRangeExpression(context, range_name, bound_start, bound_orders[0],
 		                                 &result->SQLRangeStartBoundaryMutable());
 
 	} else if (window.WindowStart() == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.OrderBy().size() == 1);
-		range_sense = config.ResolveOrder(context, window.OrderByMutable()[0].type);
+		range_sense = config.ResolveOrder(context, window.OrderBy()[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
 		start_type = BindRangeExpression(context, range_name, bound_start, bound_orders[0],
 		                                 &result->SQLRangeStartBoundaryMutable());
@@ -374,14 +384,14 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	LogicalType end_type = LogicalType::BIGINT;
 	if (window.WindowEnd() == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.OrderBy().size() == 1);
-		range_sense = config.ResolveOrder(context, window.OrderByMutable()[0].type);
+		range_sense = config.ResolveOrder(context, window.OrderBy()[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
 		end_type =
 		    BindRangeExpression(context, range_name, bound_end, bound_orders[0], &result->SQLRangeEndBoundaryMutable());
 
 	} else if (window.WindowEnd() == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.OrderBy().size() == 1);
-		range_sense = config.ResolveOrder(context, window.OrderByMutable()[0].type);
+		range_sense = config.ResolveOrder(context, window.OrderBy()[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
 		end_type =
 		    BindRangeExpression(context, range_name, bound_end, bound_orders[0], &result->SQLRangeEndBoundaryMutable());
@@ -420,16 +430,16 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		start_type = end_type = order_type;
 	}
 
-	for (idx_t order_idx = 0; order_idx < window.OrderByMutable().size(); order_idx++) {
-		auto &order = window.OrderByMutable()[order_idx];
+	for (idx_t order_idx = 0; order_idx < window.OrderBy().size(); order_idx++) {
+		auto &order = window.OrderBy()[order_idx];
 		auto type = config.ResolveOrder(context, order.type);
 		auto null_order = config.ResolveNullOrder(context, type, order.null_order);
 		result->OrderByMutable().emplace_back(type, null_order, std::move(bound_orders[order_idx]));
 	}
 
 	// Argument orders are just like arguments, not frames
-	for (idx_t order_idx = 0; order_idx < window.ArgOrdersMutable().size(); order_idx++) {
-		auto &order = window.ArgOrdersMutable()[order_idx];
+	for (idx_t order_idx = 0; order_idx < window.ArgOrders().size(); order_idx++) {
+		auto &order = window.ArgOrders()[order_idx];
 		auto type = config.ResolveOrder(context, order.type);
 		auto null_order = config.ResolveNullOrder(context, type, order.null_order);
 		result->ArgOrdersMutable().emplace_back(type, null_order, std::move(bound_arg_orders[order_idx]));

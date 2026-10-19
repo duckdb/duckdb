@@ -26,9 +26,9 @@ public:
 	    IdentifierConversionPolicy identifier_conversion_policy = IdentifierConversionPolicy::FOLLOW_SETTING);
 
 protected:
-	BindResult BindLambdaReference(LambdaRefExpression &expr, idx_t depth);
-	BindResult BindColumnReference(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression);
-	BindResult BindExpression(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false) override;
+	BindResult BindLambdaReference(const LambdaRefExpression &expr, idx_t depth);
+	BindResult BindColumnReference(const ParsedExpression &expr, idx_t depth, bool root_expression);
+	BindResult BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression = false) override;
 
 	string UnsupportedAggregateMessage() override;
 

@@ -74,7 +74,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				                      "In USING KEY, only direct calls to an aggregate function can have an alias.");
 			}
 
-			auto bound_expr = expression_binder.Bind(expr);
+			auto bound_expr = expression_binder.Bind(*expr);
 			auto &bound_ref = bound_expr->Cast<BoundColumnRefExpression>();
 
 			auto column_index = bound_ref.Binding().column_index;
@@ -124,7 +124,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			// Bind the children of the aggregate function
 			for (auto &child : func_expr.GetArgumentsMutable()) {
-				auto bound_child = expression_binder.Bind(child.GetExpressionMutable());
+				auto bound_child = expression_binder.Bind(child.GetExpression());
 				aggregation_input_types.push_back(bound_child->GetReturnType());
 				bound_children.push_back(std::move(bound_child));
 			}

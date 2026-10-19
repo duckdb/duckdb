@@ -63,7 +63,7 @@ BoundStatement Binder::BindNode(DeleteQueryNode &node) {
 	unique_ptr<Expression> condition;
 	if (node.condition) {
 		WhereBinder binder(*this, context);
-		condition = binder.Bind(node.condition);
+		condition = binder.Bind(*node.condition);
 
 		PlanSubqueries(condition, root);
 		auto filter = make_uniq<LogicalFilter>(std::move(condition));

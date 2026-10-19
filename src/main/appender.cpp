@@ -540,12 +540,11 @@ Appender::Appender(Connection &con, const Identifier &database_name, const Ident
 				continue;
 			}
 
-			auto default_copy = expr->Copy();
-			D_ASSERT(!default_copy->HasParameter());
+			D_ASSERT(!expr->HasParameter());
 
 			ConstantBinder default_binder(*binder, context_ref, "DEFAULT value");
 			default_binder.target_type = type;
-			auto bound_default = default_binder.Bind(default_copy);
+			auto bound_default = default_binder.Bind(*expr);
 
 			if (!bound_default->IsFoldable()) {
 				// Not supported yet.

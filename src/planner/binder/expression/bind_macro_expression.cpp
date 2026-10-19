@@ -123,7 +123,8 @@ void ExpressionBinder::FindAggregateExprs(unique_ptr<ParsedExpression> &expr,
 	    *expr, [&](unique_ptr<ParsedExpression> &child_expr) { FindAggregateExprs(child_expr, exprs); });
 }
 
-void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> &expr, ScalarMacroFunction &macro_def) {
+unique_ptr<ParsedExpression> ExpressionBinder::UnfoldWindowMacroExpression(const WindowExpression &window,
+                                                                           ScalarMacroFunction &macro_def) {
 	auto macro_copy = macro_def.expression->Copy();
 	vector<reference<unique_ptr<ParsedExpression>>> aggregate_exprs;
 	FindAggregateExprs(macro_copy, aggregate_exprs);
@@ -138,7 +139,8 @@ void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> 
 	auto &agg_fn_expr = agg_expr_ref->Cast<FunctionExpression>();
 
 	// Transfer the macro function attributes
-	auto &window_expr = expr->Cast<WindowExpression>();
+	auto window_copy = window.Copy();
+	auto &window_expr = window_copy->Cast<WindowExpression>();
 	window_expr.SetQualifiedName(agg_fn_expr.GetQualifiedName());
 	window_expr.GetArgumentsMutable().clear();
 	for (auto &arg : agg_fn_expr.GetArgumentsMutable()) {
@@ -163,12 +165,14 @@ void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> 
 	}
 
 	// Replace the aggregate expression with the new window expression
-	agg_expr_ref = std::move(expr);
-	expr = std::move(macro_copy);
+	agg_expr_ref = std::move(window_copy);
+	return macro_copy;
 }
 
-void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
-                                             unique_ptr<ParsedExpression> &expr, idx_t depth) {
+unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroExpression(const FunctionExpression &function,
+                                                                     ScalarMacroCatalogEntry &macro_func,
+                                                                     optional_ptr<const WindowExpression> window,
+                                                                     idx_t depth) {
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positional_arguments;
 	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> named_arguments;
@@ -176,7 +180,10 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 	auto bind_result = MacroFunction::BindMacroFunction(binder, macro_func.macros, macro_func.name, function,
 	                                                    positional_arguments, named_arguments, depth);
 	if (!bind_result.error.empty()) {
-		throw BinderException(*expr, bind_result.error);
+		if (window) {
+			throw BinderException(*window, bind_result.error);
+		}
+		throw BinderException(function, bind_result.error);
 	}
 	auto &macro_def = macro_func.macros[bind_result.function_idx.GetIndex()]->Cast<ScalarMacroFunction>();
 
@@ -184,10 +191,11 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 	    MacroFunction::CreateDummyBinding(macro_def, macro_func.name, positional_arguments, named_arguments);
 	macro_binding = new_macro_binding.get();
 
-	// replace current expression with stored macro expression
+	// the expression is replaced by the stored macro expression
 	// special case: If this is a window function, then we need to return a window expression
-	if (expr->GetExpressionClass() == ExpressionClass::WINDOW) {
-		UnfoldWindowMacroExpression(expr, macro_def);
+	unique_ptr<ParsedExpression> expr;
+	if (window) {
+		expr = UnfoldWindowMacroExpression(*window, macro_def);
 	} else {
 		expr = macro_def.expression->Copy();
 	}
@@ -200,19 +208,20 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 	// now replace the parameters
 	vector<identifier_set_t> lambda_params;
 	ReplaceMacroParameters(expr, lambda_params);
+	return expr;
 }
 
-BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
-                                       unique_ptr<ParsedExpression> &expr) {
-	auto stack_checker = StackCheck(*expr, 3);
+BindResult ExpressionBinder::BindMacro(const FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
+                                       idx_t depth, optional_ptr<const WindowExpression> window) {
+	auto stack_checker = StackCheck(function, 3);
 	// expanding nested macros can take a long time, allow the query to be interrupted
 	context.InterruptCheck();
 
 	// unfold the macro expression
-	UnfoldMacroExpression(function, macro_func, expr, depth);
+	auto expr = UnfoldMacroExpression(function, macro_func, window, depth);
 
 	// bind the unfolded macro
-	return BindExpression(expr, depth);
+	return BindExpression(*expr, depth);
 }
 
 } // namespace duckdb

@@ -7,8 +7,7 @@ namespace duckdb {
 ReturningBinder::ReturningBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }
 
-BindResult ReturningBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = *expr_ptr;
+BindResult ReturningBinder::BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::SUBQUERY:
 		return BindResult(BinderException::Unsupported(expr, "SUBQUERY is not supported in returning statements"));
@@ -16,9 +15,9 @@ BindResult ReturningBinder::BindExpression(unique_ptr<ParsedExpression> &expr_pt
 		return BindResult(
 		    BinderException::Unsupported(expr, "BOUND SUBQUERY is not supported in returning statements"));
 	case ExpressionClass::COLUMN_REF:
-		return ExpressionBinder::BindExpression(expr_ptr, depth);
+		return ExpressionBinder::BindExpression(expr, depth);
 	default:
-		return ExpressionBinder::BindExpression(expr_ptr, depth);
+		return ExpressionBinder::BindExpression(expr, depth);
 	}
 }
 

@@ -15,15 +15,14 @@ GroupBinder::GroupBinder(Binder &binder, ClientContext &context, BoundSelectNode
     : ExpressionBinder(binder, context), node(node), bind_state(bind_state) {
 }
 
-BindResult GroupBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = *expr_ptr;
+BindResult GroupBinder::BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
 		return BindUnsupportedExpression(expr, depth, "GROUP BY clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
 		return BindUnsupportedExpression(expr, depth, "GROUP BY clause cannot contain window functions!");
 	default:
-		return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
+		return ExpressionBinder::BindExpression(expr, depth, root_expression);
 	}
 }
 
@@ -106,8 +105,8 @@ void GroupBinder::ReplaceSelectRef(SelectNode &node, SelectBindState &bind_state
 	used_aliases.insert(select_list_idx);
 }
 
-bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
-                                           BindResult &result, unique_ptr<ParsedExpression> &expr_ptr) {
+bool GroupBinder::TryResolveAliasReference(const ColumnRefExpression &colref, idx_t depth, bool root_expression,
+                                           BindResult &result) {
 	// try to resolve alias references in GROUP
 	// failed to bind the column and the node is the root expression with depth = 0
 	// check if refers to an alias in the select clause

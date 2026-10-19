@@ -25,11 +25,11 @@ void LateralBinder::ExtractCorrelatedColumns(Expression &expr) {
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractCorrelatedColumns(child); });
 }
 
-BindResult LateralBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+BindResult LateralBinder::BindColumnRef(const ParsedExpression &expr, idx_t depth, bool root_expression) {
 	if (depth == 0) {
 		throw InternalException("Lateral binder can only bind correlated columns");
 	}
-	auto result = ExpressionBinder::BindExpression(expr_ptr, depth);
+	auto result = ExpressionBinder::BindExpression(expr, depth);
 	if (result.HasError()) {
 		return result;
 	}
@@ -37,17 +37,16 @@ BindResult LateralBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, 
 	return result;
 }
 
-BindResult LateralBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = *expr_ptr;
+BindResult LateralBinder::BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
 		return BindUnsupportedExpression(expr, depth, "LATERAL join cannot contain DEFAULT clause!");
 	case ExpressionClass::WINDOW:
 		return BindResult("LATERAL join cannot contain window functions!");
 	case ExpressionClass::COLUMN_REF:
-		return BindColumnRef(expr_ptr, depth, root_expression);
+		return BindColumnRef(expr, depth, root_expression);
 	default:
-		return ExpressionBinder::BindExpression(expr_ptr, depth);
+		return ExpressionBinder::BindExpression(expr, depth);
 	}
 }
 

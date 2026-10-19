@@ -16,15 +16,15 @@ HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNo
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
-BindResult HavingBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
+BindResult HavingBinder::BindLambdaReference(const LambdaRefExpression &expr, idx_t depth) {
 	D_ASSERT(lambda_bindings && expr.LambdaIndex() < lambda_bindings->size());
 	auto &lambda_ref = expr.Cast<LambdaRefExpression>();
 	return (*lambda_bindings)[expr.LambdaIndex()].Bind(lambda_ref, depth);
 }
 
-BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+BindResult HavingBinder::BindColumnRef(const ParsedExpression &expr_p, idx_t depth, bool root_expression) {
 	// Keep the original column name to return a meaningful error message.
-	auto col_ref = expr_ptr->Cast<ColumnRefExpression>();
+	auto &col_ref = expr_p.Cast<ColumnRefExpression>();
 	const auto &column_name = col_ref.GetColumnName();
 
 	if (!col_ref.IsQualified()) {
@@ -36,13 +36,13 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 		// column was not found - check if it is a SQL value function
 		auto value_function = GetSQLValueFunction(col_ref.GetColumnName());
 		if (value_function) {
-			return BindExpression(value_function, depth);
+			return BindExpression(*value_function, depth);
 		}
 	}
 
 	// Bind the alias.
 	BindResult alias_result;
-	auto found_alias = column_alias_binder.BindAlias(*this, expr_ptr, depth, root_expression, alias_result);
+	auto found_alias = column_alias_binder.BindAlias(*this, col_ref, depth, root_expression, alias_result);
 	if (found_alias) {
 		if (depth > 0) {
 			throw BinderException("Having clause cannot reference alias %s in correlated subquery", column_name);
@@ -56,7 +56,7 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 		    ExceptionType::BINDER,
 		    StringUtil::Format("column %s must appear in the GROUP BY clause or be used in an aggregate function",
 		                       column_name));
-		return BindInEnclosingScope(expr_ptr->Cast<ColumnRefExpression>(), depth, expr_ptr, std::move(local_error));
+		return BindInEnclosingScope(col_ref, depth, std::move(local_error));
 	}
 
 	if (depth > 0) {
@@ -64,7 +64,7 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 		                      column_name);
 	}
 
-	auto expr = duckdb::BaseSelectBinder::BindColumnRef(expr_ptr, depth, root_expression);
+	auto expr = duckdb::BaseSelectBinder::BindColumnRef(col_ref, depth, root_expression);
 	if (expr.HasError()) {
 		return expr;
 	}
@@ -77,7 +77,7 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 	return BindResult(std::move(group_ref));
 }
 
-BindResult HavingBinder::BindWindowExpression(WindowExpression &expr, idx_t depth) {
+BindResult HavingBinder::BindWindowExpression(const WindowExpression &expr, idx_t depth) {
 	throw BinderException::Unsupported(expr, "HAVING clause cannot contain window functions!");
 }
 
@@ -91,7 +91,7 @@ void ExpressionBinder::QualifyColumnNames(HavingBinder &having_binder, unique_pt
 	qualifier.QualifyColumnNames(expr, lambda_params);
 }
 
-bool HavingBinder::ClaimsAlias(ColumnRefExpression &colref) {
+bool HavingBinder::ClaimsAlias(const ColumnRefExpression &colref) {
 	return column_alias_binder.DoesColumnAliasExist(colref);
 }
 

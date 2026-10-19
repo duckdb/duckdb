@@ -15,14 +15,15 @@
 
 namespace duckdb {
 
-LogicalType ExpressionBinder::ResolveNotType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
+LogicalType ExpressionBinder::ResolveNotType(const OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
 	// NOT expression, cast child to BOOLEAN
 	D_ASSERT(children.size() == 1);
 	children[0] = BoundCastExpression::AddCastToType(context, std::move(children[0]), LogicalType::BOOLEAN);
 	return LogicalType(LogicalTypeId::BOOLEAN);
 }
 
-LogicalType ExpressionBinder::ResolveCoalesceType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
+LogicalType ExpressionBinder::ResolveCoalesceType(const OperatorExpression &op,
+                                                  vector<unique_ptr<Expression>> &children) {
 	if (children.empty()) {
 		throw InternalException("IN requires at least a single child node");
 	}
@@ -62,7 +63,8 @@ LogicalType ExpressionBinder::ResolveCoalesceType(OperatorExpression &op, vector
 	return max_type;
 }
 
-LogicalType ExpressionBinder::ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
+LogicalType ExpressionBinder::ResolveOperatorType(const OperatorExpression &op,
+                                                  vector<unique_ptr<Expression>> &children) {
 	switch (op.GetExpressionType()) {
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
@@ -89,7 +91,7 @@ LogicalType ExpressionBinder::ResolveOperatorType(OperatorExpression &op, vector
 	}
 }
 
-BindResult ExpressionBinder::BindGroupingFunction(OperatorExpression &op, idx_t depth) {
+BindResult ExpressionBinder::BindGroupingFunction(const OperatorExpression &op, idx_t depth) {
 	return BindResult("GROUPING function is not supported here");
 }
 
@@ -101,7 +103,7 @@ BindResult ExpressionBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 //! step. Unlike BindFunction it accepts only a scalar function: a macro shadowing the operator's
 //! backing name (say, a user macro called struct_extract) cannot be handed already-bound children, so
 //! it is reported rather than invoked.
-BindResult ExpressionBinder::BindOperatorAsFunction(OperatorExpression &op, const Identifier &function_name,
+BindResult ExpressionBinder::BindOperatorAsFunction(const OperatorExpression &op, const Identifier &function_name,
                                                     vector<unique_ptr<Expression>> children) {
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES ||
 	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
@@ -109,7 +111,8 @@ BindResult ExpressionBinder::BindOperatorAsFunction(OperatorExpression &op, cons
 	}
 	FunctionExpression lookup(function_name, vector<unique_ptr<ParsedExpression>>());
 	lookup.SetQueryLocation(op.GetQueryLocation());
-	auto &func = BindFunction(lookup);
+	unique_ptr<FunctionExpression> qualified;
+	auto &func = BindFunction(lookup, qualified);
 	if (func.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
 		throw BinderException(op, "%s is not a scalar function", function_name.GetIdentifierName());
 	}
@@ -134,16 +137,12 @@ BindResult ExpressionBinder::BindOperatorAsFunction(OperatorExpression &op, cons
 //! GROUPING cannot go through DispatchToScope: it is not bound by the scope's BindExpression but by its
 //! BindGroupingFunction, which is what registers the grouping set on that scope's select node. The
 //! correlated-column registration DispatchToScope would have done is therefore repeated here.
-BindResult ExpressionBinder::BindGroupingInEnclosingScope(OperatorExpression &op,
-                                                          vector<reference<ParsedExpression>> &children, idx_t owner,
-                                                          idx_t depth) {
+BindResult ExpressionBinder::BindGroupingInEnclosingScope(const OperatorExpression &op,
+                                                          const vector<const_reference<ParsedExpression>> &children,
+                                                          idx_t owner, idx_t depth) {
 	ErrorData bind_error;
 	for (optional_idx scope = owner; scope.IsValid(); scope = ResolveOuterGroup(children, scope.GetIndex() + 1)) {
-		// BindGroupingFunction qualifies the children against the scope binding them, so bind a copy and
-		// leave the original intact for the scopes further out
-		auto attempt = op.Copy();
-		auto result = ScopeAt(scope.GetIndex())
-		                  .BindGroupingFunction(attempt->Cast<OperatorExpression>(), depth + scope.GetIndex());
+		auto result = ScopeAt(scope.GetIndex()).BindGroupingFunction(op, depth + scope.GetIndex());
 		if (!result.HasError()) {
 			ExtractCorrelatedExpressions(binder, *result.expression);
 			return result;
@@ -155,14 +154,14 @@ BindResult ExpressionBinder::BindGroupingInEnclosingScope(OperatorExpression &op
 	return BindResult(std::move(bind_error));
 }
 
-BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth) {
+BindResult ExpressionBinder::BindExpression(const OperatorExpression &op, idx_t depth) {
 	auto operator_type = op.GetExpressionType();
 	if (operator_type == ExpressionType::GROUPING_FUNCTION) {
 		// GROUPING reports on the groups of a query, so it belongs to the innermost level that groups
 		// by all of its arguments
 		if (!binder.GetEnclosingScopes().empty()) {
-			vector<reference<ParsedExpression>> children;
-			for (auto &child : op.GetChildrenMutable()) {
+			vector<const_reference<ParsedExpression>> children;
+			for (auto &child : op.GetChildren()) {
 				children.push_back(*child);
 			}
 			auto owner = ResolveOuterGroup(children, 0);
@@ -178,13 +177,13 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	ErrorData error;
 	vector<unique_ptr<Expression>> children;
 	if (operator_type == ExpressionType::OPERATOR_TRY) {
-		D_ASSERT(op.GetChildrenMutable().size() == 1);
+		D_ASSERT(op.GetChildren().size() == 1);
 		inside_try = true;
-		children.push_back(BindChild(op.GetChildrenMutable()[0], depth, error));
+		children.push_back(BindChild(*op.GetChildren()[0], depth, error));
 		inside_try = false;
 	} else {
-		for (idx_t i = 0; i < op.GetChildrenMutable().size(); i++) {
-			children.push_back(BindChild(op.GetChildrenMutable()[i], depth, error));
+		for (auto &child : op.GetChildren()) {
+			children.push_back(BindChild(*child, depth, error));
 		}
 	}
 

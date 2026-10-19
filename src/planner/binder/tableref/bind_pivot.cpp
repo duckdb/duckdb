@@ -550,7 +550,7 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 static void BindPivotConstantInList(unique_ptr<ParsedExpression> &expr, vector<Value> &values, Binder &binder) {
 	Value val;
 	ConstantBinder const_binder(binder, binder.context, "PIVOT IN list");
-	auto bound_expr = const_binder.Bind(expr);
+	auto bound_expr = const_binder.Bind(*expr);
 	if (!bound_expr->IsFoldable()) {
 		throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain constant expressions");
 	}

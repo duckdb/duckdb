@@ -12,8 +12,7 @@ CheckBinder::CheckBinder(Binder &binder, ClientContext &context, Identifier tabl
 	target_type = LogicalType::INTEGER;
 }
 
-BindResult CheckBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = *expr_ptr;
+BindResult CheckBinder::BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::WINDOW:
 		return BindResult("window functions are not allowed in check constraints");
@@ -22,7 +21,7 @@ BindResult CheckBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 	case ExpressionClass::COLUMN_REF:
 		return BindCheckColumn(expr.Cast<ColumnRefExpression>());
 	default:
-		return ExpressionBinder::BindExpression(expr_ptr, depth);
+		return ExpressionBinder::BindExpression(expr, depth);
 	}
 }
 
@@ -30,7 +29,7 @@ string CheckBinder::UnsupportedAggregateMessage() {
 	return "aggregate functions are not allowed in check constraints";
 }
 
-BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref, const Identifier &table_name) {
+BindResult ExpressionBinder::BindQualifiedColumnName(const ColumnRefExpression &colref, const Identifier &table_name) {
 	idx_t struct_start = 0;
 	if (colref.ColumnNames()[0] == table_name) {
 		struct_start++;
@@ -40,10 +39,10 @@ BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref
 	for (idx_t i = struct_start + 1; i < colref.ColumnNames().size(); i++) {
 		result = CreateStructExtract(std::move(result), colref.ColumnNames()[i]);
 	}
-	return BindExpression(result, 0);
+	return BindExpression(*result, 0);
 }
 
-BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
+BindResult CheckBinder::BindCheckColumn(const ColumnRefExpression &colref) {
 	if (!colref.IsQualified()) {
 		if (lambda_bindings) {
 			for (idx_t i = lambda_bindings->size(); i > 0; i--) {
@@ -66,8 +65,7 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 	}
 	auto &col = columns.GetColumn(colref.ColumnNames()[0]);
 	if (col.Generated()) {
-		auto bound_expression = col.GeneratedExpression().Copy();
-		return BindExpression(bound_expression, 0, false);
+		return BindExpression(col.GeneratedExpression(), 0, false);
 	}
 	bound_columns.insert(col.Physical());
 	D_ASSERT(col.StorageOid() != DConstants::INVALID_INDEX);

@@ -9,12 +9,12 @@
 
 namespace duckdb {
 
-BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth) {
+BindResult ExpressionBinder::BindExpression(const BetweenExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
 	ErrorData error;
-	auto input = BindChild(expr.InputMutable(), depth, error);
-	auto lower = BindChild(expr.LowerBoundMutable(), depth, error);
-	auto upper = BindChild(expr.UpperBoundMutable(), depth, error);
+	auto input = BindChild(expr.Input(), depth, error);
+	auto lower = BindChild(expr.LowerBound(), depth, error);
+	auto upper = BindChild(expr.UpperBound(), depth, error);
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}

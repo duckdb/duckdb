@@ -164,11 +164,7 @@ unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const Constraint
 	CheckBinder check_binder(binder, binder.context, table, columns, bound_check.bound_columns);
 	auto &check = constraint.Cast<CheckConstraint>();
 
-	// Create a copy of the unbound expression because binding can invalidate it.
-	auto check_copy = check.expression->Copy();
-
-	// Bind the constraint and reset the original expression.
-	bound_check.expression = check_binder.Bind(check_copy);
+	bound_check.expression = check_binder.Bind(*check.expression);
 	return std::move(bound_constraint);
 }
 
@@ -315,7 +311,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 
 		auto expression = col.GeneratedExpression().Copy();
 
-		auto bound_expression = expr_binder.Bind(expression);
+		auto bound_expression = expr_binder.Bind(*expression);
 		D_ASSERT(bound_expression);
 		if (bound_expression->HasSubquery()) {
 			throw BinderException("Failed to bind generated column %s because the expression contains a subquery",
@@ -359,13 +355,13 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 		if (column.HasDefaultValue()) {
 			// we bind a copy of the DEFAULT value because binding is destructive
 			// and we want to keep the original expression around for serialization
-			auto default_copy = column.DefaultValue().Copy();
-			if (default_copy->HasParameter()) {
+			auto &default_value = column.DefaultValue();
+			if (default_value.HasParameter()) {
 				throw BinderException("DEFAULT values cannot contain parameters");
 			}
 			ConstantBinder default_value_binder(*default_binder, context, "DEFAULT value");
 			default_value_binder.target_type = column.Type();
-			bound_default = default_value_binder.Bind(default_copy);
+			bound_default = default_value_binder.Bind(default_value);
 		} else {
 			// no default value specified: push a default value of constant null
 			bound_default = make_uniq<BoundConstantExpression>(Value(column.Type()));

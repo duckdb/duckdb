@@ -451,8 +451,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 		// VARCHAR parameter <- this is a regular expression
 		// LIST of VARCHAR parameters <- this is a set of columns
 		TableFunctionBinder binder(*this, context);
-		auto child = star->Expression()->Copy();
-		auto result = binder.Bind(child);
+		auto result = binder.Bind(*star->Expression());
 		if (!result->IsFoldable()) {
 			// cannot resolve parameters here
 			if (star->Expression()->HasParameter()) {

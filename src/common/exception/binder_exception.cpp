@@ -57,7 +57,7 @@ BinderException BinderException::NoMatchingFunction(const Identifier &catalog_na
 	                       call_str, candidate_str));
 }
 
-BinderException BinderException::Unsupported(ParsedExpression &expr, const string &message) {
+BinderException BinderException::Unsupported(const ParsedExpression &expr, const string &message) {
 	auto extra_info = Exception::InitializeExtraInfo("UNSUPPORTED", expr.GetQueryLocation());
 	return BinderException(extra_info, message);
 }

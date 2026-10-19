@@ -28,7 +28,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<Pa
 	return qualifier.CreateStructExtract(std::move(base), field_name);
 }
 
-unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpression &col_ref) {
+unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(const ColumnRefExpression &col_ref) {
 	ColumnQualifier qualifier(binder);
 	return qualifier.CreateStructPack(col_ref);
 }
@@ -44,11 +44,11 @@ unique_ptr<ColumnQualifier> ExpressionBinder::CreateColumnQualifier() {
 	return make_uniq<ColumnQualifier>(binder, lambda_bindings);
 }
 
-bool ExpressionBinder::MatchesGroup(ParsedExpression &expr) {
+bool ExpressionBinder::MatchesGroup(const ParsedExpression &expr) {
 	return false;
 }
 
-bool ExpressionBinder::ClaimsAlias(ColumnRefExpression &colref) {
+bool ExpressionBinder::ClaimsAlias(const ColumnRefExpression &colref) {
 	return false;
 }
 
@@ -58,7 +58,7 @@ void ExpressionBinder::QualifyColumnNames(ExpressionBinder &expression_binder, u
 	qualifier.QualifyColumnNames(expr, lambda_params);
 }
 
-BindResult ExpressionBinder::BindExpression(LambdaRefExpression &lambda_ref, idx_t depth) {
+BindResult ExpressionBinder::BindExpression(const LambdaRefExpression &lambda_ref, idx_t depth) {
 	D_ASSERT(lambda_bindings && lambda_ref.LambdaIndex() < lambda_bindings->size());
 	if (lambda_ref.LambdaIndex() < inaccessible_lambda_binding_count) {
 		throw BinderException(lambda_ref, "aggregate functions cannot reference lambda parameters");
@@ -66,13 +66,12 @@ BindResult ExpressionBinder::BindExpression(LambdaRefExpression &lambda_ref, idx
 	return (*lambda_bindings)[lambda_ref.LambdaIndex()].Bind(lambda_ref, depth);
 }
 
-unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error) {
+unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const ColumnRefExpression &col_ref, ErrorData &error) {
 	ColumnQualifier qualifier(binder, lambda_bindings);
 	return qualifier.QualifyColumnName(col_ref, error);
 }
 
-BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_t depth, bool root_expression,
-                                            unique_ptr<ParsedExpression> &expr_ptr) {
+BindResult ExpressionBinder::BindExpression(const ColumnRefExpression &col_ref_p, idx_t depth, bool root_expression) {
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES ||
 	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
@@ -84,18 +83,18 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 		// column wasn't found
 		if (ExpressionBinder::IsPotentialAlias(col_ref_p)) {
 			BindResult alias_result;
-			auto found_alias = TryResolveAliasReference(col_ref_p, depth, root_expression, alias_result, expr_ptr);
+			auto found_alias = TryResolveAliasReference(col_ref_p, depth, root_expression, alias_result);
 			if (found_alias) {
 				return alias_result;
 			}
 
 			auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
 			if (value_function) {
-				return BindExpression(value_function, depth);
+				return BindExpression(*value_function, depth);
 			}
 		}
 		// the name does not resolve in this scope: look for it in the enclosing ones
-		return BindInEnclosingScope(col_ref_p, depth, expr_ptr, std::move(error));
+		return BindInEnclosingScope(col_ref_p, depth, std::move(error));
 	}
 
 	expr->SetQueryLocation(col_ref_p.GetQueryLocation());
@@ -105,7 +104,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	// all of them are not column reference expressions, so we return here
 	if (expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
 		auto alias = expr->GetAlias();
-		auto result = BindExpression(expr, depth);
+		auto result = BindExpression(*expr, depth);
 		if (!result.HasError()) {
 			result.expression->SetAlias(std::move(alias));
 			return result;
@@ -114,7 +113,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 		// which does not bind.
 		// An enclosing scope may still read it as a column, as in `z.z` where this scope has a column `z` and `z` is
 		// also a table alias further out.
-		return BindInEnclosingScope(col_ref_p, depth, expr_ptr, std::move(result.error));
+		return BindInEnclosingScope(col_ref_p, depth, std::move(result.error));
 	}
 
 	// the above QualifyColumnName returned an individual column reference

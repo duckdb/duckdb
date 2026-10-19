@@ -23,15 +23,15 @@ public:
 	unique_ptr<ColumnQualifier> CreateColumnQualifier() override;
 
 protected:
-	BindResult BindLambdaReference(LambdaRefExpression &expr, idx_t depth);
-	BindResult BindWindowExpression(WindowExpression &expr, idx_t depth) override;
-	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
+	BindResult BindLambdaReference(const LambdaRefExpression &expr, idx_t depth);
+	BindResult BindWindowExpression(const WindowExpression &expr, idx_t depth) override;
+	BindResult BindColumnRef(const ParsedExpression &expr, idx_t depth, bool root_expression) override;
 
 public:
 	ColumnAliasBinder column_alias_binder;
 
 public:
-	bool ClaimsAlias(ColumnRefExpression &colref) override;
+	bool ClaimsAlias(const ColumnRefExpression &colref) override;
 
 private:
 	AggregateHandling aggregate_handling;
