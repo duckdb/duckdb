@@ -113,7 +113,6 @@ LogicalType ExpressionBinder::LowerTrySubquery(const ParsedExpression &location,
 		case LogicalOperatorType::LOGICAL_ORDER_BY:
 		case LogicalOperatorType::LOGICAL_TOP_N:
 		case LogicalOperatorType::LOGICAL_DISTINCT:
-		case LogicalOperatorType::LOGICAL_SAMPLE:
 			if (expose_error_flag) {
 				// these modifiers reference or deduplicate the select list column; a struct transport
 				// would leave their references scalar or change DISTINCT semantics (an error-masked
@@ -124,7 +123,10 @@ LogicalType ExpressionBinder::LowerTrySubquery(const ParsedExpression &location,
 			current = *current_op.children[0];
 			continue;
 		case LogicalOperatorType::LOGICAL_LIMIT:
-			// LIMIT forwards its child columns without referencing them
+			// constant LIMIT and OFFSET forward the child columns without referencing them; a LIMIT
+			// computed by a scalar subquery adds a hidden select list entry and is handled by the
+			// prune rejection below. USING SAMPLE attaches below the select list projection and never
+			// appears on this path
 			current = *current_op.children[0];
 			continue;
 		case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
@@ -134,7 +136,8 @@ LogicalType ExpressionBinder::LowerTrySubquery(const ParsedExpression &location,
 			auto &projection = current_op.Cast<LogicalProjection>();
 			if (projection.table_index == indexes.prune_index) {
 				if (expose_error_flag) {
-					// pruning implies ORDER BY over extra columns, see the modifier rejection above
+					// pruning accompanies hidden select list entries (ORDER BY columns or a LIMIT
+					// computed by a scalar subquery), whose references would stay typed scalar
 					throw BinderException(location, "TRY over a subquery with result modifiers is only supported "
 					                                "when the subquery is the direct argument of TRY");
 				}

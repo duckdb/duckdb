@@ -129,6 +129,23 @@ SELECT has_error((SELECT 10 // count(1 // i) FROM (VALUES (0)) t(i)))
 ----
 true
 
+# HAS_ERROR captures over cast and COALESCE compositions of rethrowing subqueries
+query IIIIII
+SELECT has_error(CAST((SELECT 1 // 0) AS BIGINT)),
+       has_error(CAST((SELECT 'bad') AS INTEGER)),
+       has_error((SELECT 1 // 0) + (SELECT 2 // 0)),
+       has_error(COALESCE((SELECT 1 // 0), 42)),
+       has_error(COALESCE((SELECT NULL::INTEGER), 42)),
+       has_error(COALESCE(42, (SELECT 1 // 0)))
+----
+true	true	true	true	false	false
+
+# sampling attaches below the select list projection and transports correctly
+query I
+SELECT has_error((SELECT 10 // i FROM (VALUES (0)) t(i) USING SAMPLE 100 PERCENT (reservoir, 42)))
+----
+true
+
 # result modifiers and recursive scalar select items cannot transport the error flag
 statement error
 SELECT has_error((SELECT DISTINCT i FROM (VALUES (1), (1)) t(i)))

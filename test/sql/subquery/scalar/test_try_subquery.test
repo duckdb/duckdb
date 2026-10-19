@@ -527,6 +527,112 @@ SELECT TRY(COALESCE((SELECT (SELECT 1 // 0)), 42))
 ----
 TRY over a subquery selecting a nested scalar subquery is only supported when the subquery is the direct argument of TRY
 
+# USING SAMPLE attaches below the select list projection, so it is not a result modifier and both
+# forms transport correctly
+query I
+SELECT TRY((SELECT 10 // i FROM (VALUES (0)) t(i) USING SAMPLE 100 PERCENT (reservoir, 42)))
+----
+NULL
+
+query I
+SELECT TRY(1 + (SELECT 10 // i FROM (VALUES (0)) t(i) USING SAMPLE 100 PERCENT (reservoir, 42)))
+----
+NULL
+
+# the direct form supports every result modifier shape the nested form rejects
+query I
+SELECT TRY((SELECT DISTINCT ON (i) 10 // i FROM (VALUES (0)) t(i)))
+----
+NULL
+
+query I
+SELECT TRY((SELECT 10 // i FROM (VALUES (0)) t(i) ORDER BY ALL))
+----
+NULL
+
+query I
+SELECT TRY((SELECT 10 // i FROM (VALUES (0)) t(i) LIMIT 1 OFFSET 0))
+----
+NULL
+
+query I
+SELECT TRY((SELECT 10 // i FROM (VALUES (0)) t(i) LIMIT (SELECT 1)))
+----
+NULL
+
+query I
+SELECT TRY((WITH c AS MATERIALIZED (SELECT 1 AS x) SELECT (SELECT 1 // 0) FROM c))
+----
+NULL
+
+# nested-form counterparts: constant LIMIT/OFFSET transport, the other modifiers reject
+query I
+SELECT TRY(1 + (SELECT 1 // 0 LIMIT 1 OFFSET 0))
+----
+NULL
+
+statement error
+SELECT TRY(1 + (SELECT DISTINCT ON (i) i FROM (VALUES (1)) t(i)))
+----
+TRY over a subquery with result modifiers is only supported when the subquery is the direct argument of TRY
+
+statement error
+SELECT TRY(1 + (SELECT i FROM (VALUES (1)) t(i) ORDER BY ALL))
+----
+TRY over a subquery with result modifiers is only supported when the subquery is the direct argument of TRY
+
+# a LIMIT computed by a scalar subquery adds a hidden select list entry and prunes, so it rejects
+statement error
+SELECT TRY(1 + (SELECT 7 LIMIT (SELECT 1)))
+----
+TRY over a subquery with result modifiers is only supported when the subquery is the direct argument of TRY
+
+statement error
+SELECT TRY(1 + (WITH c AS MATERIALIZED (SELECT 1 AS i) SELECT i FROM c ORDER BY ALL))
+----
+TRY over a subquery with result modifiers is only supported when the subquery is the direct argument of TRY
+
+# modifiers inside a CTE definition belong to a different query level and transport fine
+query I
+SELECT TRY(1 + (WITH c AS MATERIALIZED (SELECT DISTINCT i FROM (VALUES (1)) t(i)) SELECT i FROM c))
+----
+2
+
+# the WITH clause does not hide a nested scalar select item from the rejection
+statement error
+SELECT TRY(COALESCE((WITH c AS MATERIALIZED (SELECT 1 AS x) SELECT (SELECT 1 // 0) FROM c), 42))
+----
+TRY over a subquery selecting a nested scalar subquery is only supported when the subquery is the direct argument of TRY
+
+# a cast or function around a deeper subquery is not the exact-shape recursion; its errors
+# propagate from the deeper subplan instead of silently becoming NULL
+statement error
+SELECT TRY(COALESCE((SELECT CAST((SELECT 1 // 0) AS INTEGER)), 42))
+----
+Division by zero
+
+# TRY captures over cast and COALESCE compositions of rethrowing subqueries
+query IIIIII
+SELECT TRY(CAST((SELECT 1 // 0) AS BIGINT)),
+       TRY(CAST((SELECT 'bad') AS INTEGER)),
+       TRY((SELECT 1 // 0) + (SELECT 2 // 0)),
+       TRY(COALESCE((SELECT 1 // 0), 42)),
+       TRY(COALESCE((SELECT NULL::INTEGER), 42)),
+       TRY(COALESCE(42, (SELECT 1 // 0)))
+----
+NULL	NULL	NULL	NULL	42	42
+
+# the copied gate keeps TRY and HAS_ERROR consistent per outer row under correlation
+query III
+SELECT o.i,
+       TRY(1 + (SELECT 10 // count(1 // x) FROM (VALUES (0), (1)) t(x) WHERE x = o.i)),
+       HAS_ERROR(1 + (SELECT 10 // count(1 // x) FROM (VALUES (0), (1)) t(x) WHERE x = o.i))
+FROM (VALUES (0), (1), (0)) o(i) ORDER BY o.i
+----
+0	NULL	true
+0	NULL	true
+1	11	false
+
 # a volatile value below the flattened boundary is computed exactly once: the sequence advances once
 statement ok
 CREATE SEQUENCE try_volatile_seq;
