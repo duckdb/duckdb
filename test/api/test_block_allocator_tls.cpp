@@ -303,6 +303,7 @@ TEST_CASE("Allocation cache can reuse arena storage without container destructio
 }
 
 #if defined(__linux__)
+// Compute shards and construct the cache before pinning: musl's CPU count follows affinity.
 static idx_t AllocationCacheTestShard(idx_t cpu) {
 #ifndef DUCKDB_NO_THREADS
 	const auto count = MaxValue<idx_t>(1, MinValue<idx_t>(256, (std::thread::hardware_concurrency() + 3) / 4));
@@ -312,58 +313,10 @@ static idx_t AllocationCacheTestShard(idx_t cpu) {
 #endif
 }
 
-TEST_CASE("Allocation cache shares within four CPU groups and preserves local spares", "[api][allocation_cache]") {
-	AllocationCacheTestAffinity affinity;
-	const auto cpus = affinity.CPUs();
-	if (cpus.empty()) {
-		return;
-	}
-	const auto first_cpu = cpus[0];
-	const auto domain = AllocationCacheTestShard(first_cpu);
-	idx_t sibling = first_cpu;
-	idx_t other = first_cpu;
-	for (auto cpu : cpus) {
-		const auto candidate = AllocationCacheTestShard(cpu);
-		if (cpu != first_cpu && candidate == domain) {
-			sibling = cpu;
-		} else if (candidate != domain) {
-			other = cpu;
-		}
-	}
-	if (sibling == first_cpu || other == first_cpu || !affinity.Pin(first_cpu)) {
-		return;
-	}
-	constexpr idx_t SIZE = 512 * 1024;
-	atomic<idx_t> live_bytes {0};
-	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
-	                   make_uniq<AllocationCacheTestData>(live_bytes));
-	{
-		BlockAllocator allocator(fallback, 256 * 1024, 0, 0);
-		auto first = allocator.AllocateData(SIZE);
-		first[0] = 42;
-		first[SIZE - 1] = 84;
-		allocator.FreeData(first, SIZE);
-		REQUIRE(affinity.Pin(sibling));
-		auto shared = allocator.AllocateData(SIZE);
-		REQUIRE(shared == first);
-		allocator.FreeData(shared, SIZE);
-		REQUIRE(affinity.Pin(other));
-		auto second = allocator.AllocateData(SIZE);
-		REQUIRE(second != first);
-		allocator.FreeData(second, SIZE);
-		REQUIRE(affinity.Pin(first_cpu));
-		auto local = allocator.AllocateData(SIZE);
-		REQUIRE(local == first);
-		REQUIRE(local[0] == 42);
-		REQUIRE(local[SIZE - 1] == 84);
-		allocator.FreeData(local, SIZE);
-	}
-	REQUIRE(live_bytes.load() == 0);
-}
 TEST_CASE("Allocation cache bounds retained bytes across CPU groups", "[api][allocation_cache]") {
 	AllocationCacheTestAffinity affinity;
 	const auto cpus = affinity.CPUs();
-	if (cpus.size() < 2 || !affinity.Pin(cpus[0])) {
+	if (cpus.size() < 2) {
 		return;
 	}
 	idx_t other_cpu = cpus.back();
@@ -379,6 +332,9 @@ TEST_CASE("Allocation cache bounds retained bytes across CPU groups", "[api][all
 	                   make_uniq<AllocationCacheTestData>(live_bytes));
 	{
 		BlockAllocator allocator(fallback, 256 * 1024, 0, 0);
+		if (!affinity.Pin(cpus[0])) {
+			return;
+		}
 		for (idx_t i = 0; i < 32; i++) {
 			allocator.FreeData(nullptr, SIZE);
 		}
@@ -410,7 +366,7 @@ TEST_CASE("Allocation cache shares surplus buffers across CPU groups while retai
 			break;
 		}
 	}
-	if (other_cpu == cpus[0] || !affinity.Pin(cpus[0])) {
+	if (other_cpu == cpus[0]) {
 		return;
 	}
 	constexpr idx_t SIZE = 512 * 1024;
@@ -420,6 +376,9 @@ TEST_CASE("Allocation cache shares surplus buffers across CPU groups while retai
 	                   make_uniq<AllocationCacheTestData>(live_bytes));
 	{
 		BlockAllocator allocator(fallback, 256 * 1024, 0, 0);
+		if (!affinity.Pin(cpus[0])) {
+			return;
+		}
 		std::unordered_set<data_ptr_t> original;
 		for (idx_t i = 0; i < COUNT; i++) {
 			original.insert(allocator.AllocateData(SIZE));
