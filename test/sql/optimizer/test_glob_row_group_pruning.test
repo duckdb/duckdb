@@ -27,10 +27,11 @@ SELECT count(*) FROM t WHERE s GLOB 'mmm*';
 ----
 2048
 
+# a prefix outside all row-group ranges scans nothing (fold or a 0-scan)
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM t WHERE s GLOB 'qqq';
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 3.*
+analyzed_plan	<!REGEX>:.*Row Groups Scanned: [1-9].*
 
 query I
 SELECT count(*) FROM t WHERE s GLOB 'qqq';

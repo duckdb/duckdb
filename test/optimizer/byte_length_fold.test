@@ -1,0 +1,460 @@
+# name: test/optimizer/byte_length_fold.test
+# description: Fold MIN/MAX over byte-length functions (strlen/octet_length) from string length statistics
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+# Alternative verify disables eager aggregate execution
+require no_alternative_verify
+
+# min_string_length is only persisted in the V2_0_0+ storage format
+statement ok
+SET storage_compatibility_version='latest';
+
+statement ok
+ATTACH '{TEST_DIR}/byte_length_fold.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+# 4 row groups, each holding strings of byte length 1..100, so every row group has
+# max_string_length = 100 and min_string_length = 1
+statement ok
+CREATE TABLE t AS (SELECT i, (i * 2) AS j, repeat('a', (i % 100) + 1) AS s FROM range(8192) _(i));
+
+# BLOB statistics are string statistics as well, octet_length(BLOB) is a byte length
+statement ok
+CREATE TABLE tb AS (SELECT i, CAST(repeat('a', (i % 50) + 1) AS BLOB) AS b FROM range(8192) _(i));
+
+# BIT is not a byte length: BIT's stored size carries a padding byte, so the string statistics
+# overstate octet_length by one
+statement ok
+CREATE TABLE t_bit AS (SELECT i, CAST(repeat('1', (i % 24) + 1) AS BIT) AS b FROM range(2048) _(i));
+
+# a partition holding only NULL values is neutral for MIN/MAX
+statement ok
+CREATE TABLE t_null (s VARCHAR);
+
+statement ok
+INSERT INTO t_null SELECT NULL::VARCHAR FROM range(2048) _(i);
+
+# NULLs are skipped by the length statistics, so a partition mixing NULLs and values is foldable
+statement ok
+CREATE TABLE t_mixed AS (SELECT i, CASE WHEN i % 3 = 0 THEN NULL ELSE repeat('a', (i % 20) + 1) END AS s
+                        FROM range(8192) _(i));
+
+# the longest values exceed the 12-byte min/max prefix, so the *value* statistics become truncated
+# bounds while the length statistics stay exact: 'x' || 40 * 'y' || digits(i) has byte length 42-45
+statement ok
+CREATE TABLE t_long AS (SELECT i, 'x' || repeat('y', 40) || i::VARCHAR AS s FROM range(8192) _(i));
+
+# short values keep the string min/max value statistics exact ('a0'..'a999' are 2-4 bytes)
+statement ok
+CREATE TABLE t_short AS (SELECT i, 'a' || (i % 1000)::VARCHAR AS s FROM range(8192) _(i));
+
+# interior deletes only: the deleted partition's length bounds are dominated by the exact
+# partitions, so they vote rather than veto
+statement ok
+CREATE TABLE t_voted AS (SELECT i AS id, repeat('a', (i % 100) + 1) AS s FROM range(0, 204_800) _(i));
+
+statement ok
+DELETE FROM t_voted WHERE id BETWEEN 100_000 AND 100_010;
+
+# the last row group holds the only length-80 strings, and a delete in it makes its statistics a
+# bound: the maximum cannot be folded, the minimum still can
+statement ok
+CREATE TABLE t_veto (id BIGINT, s VARCHAR);
+
+statement ok
+INSERT INTO t_veto SELECT i, repeat('a', (i % 50) + 1) FROM range(0, 6144) _(i);
+
+statement ok
+INSERT INTO t_veto SELECT i, repeat('a', 80) FROM range(6144, 8192) _(i);
+
+statement ok
+DELETE FROM t_veto WHERE id = 6144;
+
+# Work-around for unsetting version info
+statement ok
+ATTACH '{TEST_DIR}/byte_length_fold_tmp.duckdb' AS tmp
+
+statement ok
+USE tmp
+
+statement ok
+DETACH db
+
+statement ok
+ATTACH '{TEST_DIR}/byte_length_fold.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+statement ok
+DETACH tmp
+
+# the premise of the truncation test: the max value is a 12-byte prefix, but the length is exact
+query II
+SELECT row_group_id, stats.max_string_length FROM pragma_storage_info('t_long') WHERE column_name = 's'
+ORDER BY row_group_id LIMIT 1
+----
+0	45
+
+query II
+SELECT row_group_id, stats.min_string_length FROM pragma_storage_info('t_long') WHERE column_name = 's'
+ORDER BY row_group_id LIMIT 1
+----
+0	42
+
+# MAX(strlen(s)) folds from the exact byte length statistics, no scan
+query II
+EXPLAIN SELECT max(strlen(s)) FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(strlen(s)) FROM t
+----
+100
+
+# MIN over a length function folds as well
+query II
+EXPLAIN SELECT min(strlen(s)) FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(strlen(s)) FROM t
+----
+1
+
+# byte-length aggregates mix with count_star and a plain min
+query II
+EXPLAIN SELECT count(*), max(strlen(s)), min(j) FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query III
+SELECT count(*), max(strlen(s)), min(j) FROM t
+----
+8192	100	0
+
+# strlen(s) shared by two aggregates is lifted into a projection by CSE before statistics
+# propagation runs, so the aggregate sees a plain column reference
+query II
+EXPLAIN SELECT max(strlen(s)), min(strlen(s)) FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(strlen(s)), min(strlen(s)) FROM t
+----
+100	1
+
+# a plain string min/max folds next to a byte-length aggregate in the same aggregate operator when
+# the values are short enough for the min/max value statistics to stay exact
+query II
+EXPLAIN SELECT max(strlen(s)), min(s), max(s) FROM t_short
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query III
+SELECT max(strlen(s)), min(s), max(s) FROM t_short
+----
+4	a0	a999
+
+# the control: on the long values the plain string min/max cannot fold, and it drags the byte-length
+# aggregate of the same operator down with it even though that one could be answered
+query II
+EXPLAIN SELECT max(strlen(s)), min(s), max(s) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+# octet_length(BLOB) is a byte length over string statistics
+query II
+EXPLAIN SELECT max(octet_length(b)), min(octet_length(b)) FROM tb
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(octet_length(b)), min(octet_length(b)) FROM tb
+----
+50	1
+
+# BIT must not fold: the stored size is GetSize(), octet_length is GetSize()-1
+query II
+EXPLAIN SELECT max(octet_length(b)) FROM t_bit
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(octet_length(b)) FROM t_bit
+----
+3
+
+query II
+EXPLAIN SELECT min(octet_length(b)) FROM t_bit
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(octet_length(b)) FROM t_bit
+----
+1
+
+# t is ASCII-only, so length() equals strlen and folds from the same length statistics
+query II
+EXPLAIN SELECT max(length(s)) FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(length(s)) FROM t
+----
+100
+
+# a shared length() is lifted by CSE; on ASCII data it still folds
+query II
+EXPLAIN SELECT max(length(s)), min(length(s)) FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(length(s)), min(length(s)) FROM t
+----
+100	1
+
+query II
+EXPLAIN SELECT max(bit_length(s)) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(bit_length(s)) FROM t
+----
+800
+
+# a computed expression is not a plain byte length over a column
+query II
+EXPLAIN SELECT min(strlen(s || 'x')) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(strlen(s || 'x')) FROM t
+----
+2
+
+# an aggregate that casts the length is not recognized
+query II
+EXPLAIN SELECT max(CAST(strlen(s) AS INTEGER)) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(CAST(strlen(s) AS INTEGER)) FROM t
+----
+100
+
+# a filter that prunes whole row groups leaves only exact partitions
+query II
+EXPLAIN SELECT max(strlen(s)) FROM t WHERE i >= 2048 AND i < 6144
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(strlen(s)) FROM t WHERE i >= 2048 AND i < 6144
+----
+100
+
+query II
+EXPLAIN SELECT min(strlen(s)) FROM t WHERE i >= 2048 AND i < 6144
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(strlen(s)) FROM t WHERE i >= 2048 AND i < 6144
+----
+1
+
+# the filter cuts the first row group, but its all-rows minimum length (1) is dominated by the
+# exact candidate (1) from the aligned row groups: the bound votes, the fold still happens
+query II
+EXPLAIN SELECT min(strlen(s)) FROM t WHERE i >= 100
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(strlen(s)) FROM t WHERE i >= 100
+----
+1
+
+# filter on the string itself: surviving rows are all NULL, so MIN/MAX(strlen) is NULL. The
+# unfiltered length stats still say 1..20 - folding those would invent a non-NULL constant.
+query II
+EXPLAIN SELECT max(strlen(s)), min(strlen(s)) FROM t_mixed WHERE s IS NULL
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(strlen(s)), min(strlen(s)) FROM t_mixed WHERE s IS NULL
+----
+NULL	NULL
+
+# the complementary filter keeps only non-NULL rows. It still cuts every mixed partition, so the
+# length stats are only bounds and the fold must scan - but the answer matches the unfiltered one
+query II
+EXPLAIN SELECT max(strlen(s)), min(strlen(s)) FROM t_mixed WHERE s IS NOT NULL
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(strlen(s)), min(strlen(s)) FROM t_mixed WHERE s IS NOT NULL
+----
+20	1
+
+# selective filters that drop the rows attaining the unfiltered extrema: the cut partitions only
+# bound the survivors, so the fold must not report the all-rows 1 / 100
+query II
+EXPLAIN SELECT min(strlen(s)) FROM t WHERE (i % 100) > 0
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(strlen(s)) FROM t WHERE (i % 100) > 0
+----
+2
+
+query II
+EXPLAIN SELECT max(strlen(s)) FROM t WHERE (i % 100) < 50
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(strlen(s)) FROM t WHERE (i % 100) < 50
+----
+50
+
+# a range that sits inside one row group and misses length 1: only a bound remains, no fold
+query II
+EXPLAIN SELECT min(strlen(s)), max(strlen(s)) FROM t WHERE i >= 50 AND i < 100
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT min(strlen(s)), max(strlen(s)) FROM t WHERE i >= 50 AND i < 100
+----
+51	100
+
+# a bare column reference in a subquery is chased through the pass-through projection
+query II
+EXPLAIN SELECT max(strlen(s)) FROM (SELECT s FROM t) sub
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(strlen(s)) FROM (SELECT s FROM t) sub
+----
+100
+
+# an all-NULL partition is neutral, and an all-NULL table folds to NULL
+query II
+EXPLAIN SELECT max(strlen(s)), min(strlen(s)) FROM t_null
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(strlen(s)), min(strlen(s)) FROM t_null
+----
+NULL	NULL
+
+# mixed NULLs do not prevent the fold: the length statistics skip NULL values
+query II
+EXPLAIN SELECT max(strlen(s)), min(strlen(s)) FROM t_mixed
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(strlen(s)), min(strlen(s)) FROM t_mixed
+----
+20	1
+
+# the control: a plain MAX over the truncated string values cannot be folded
+query II
+EXPLAIN SELECT max(s) FROM t_long
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+# ... but the byte length of the same column folds, because the length fields are exact even when
+# the min/max value is truncated to a prefix
+query II
+EXPLAIN SELECT max(strlen(s)), min(strlen(s)) FROM t_long
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(strlen(s)), min(strlen(s)) FROM t_long
+----
+45	42
+
+# the deleted partition is a bound whose lengths are dominated by the exact partitions
+query II
+EXPLAIN SELECT max(strlen(s)), min(strlen(s)) FROM t_voted
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(strlen(s)), min(strlen(s)) FROM t_voted
+----
+100	1
+
+# the deleted partition holds the only length-80 strings: its bound (80) is not dominated by the
+# exact candidate (50), so MAX is vetoed
+query II
+EXPLAIN SELECT max(strlen(s)) FROM t_veto
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(strlen(s)) FROM t_veto
+----
+80
+
+# MIN has no such problem: the deleted partition's shortest string (80) is dominated by the exact
+# candidate (1)
+query II
+EXPLAIN SELECT min(strlen(s)) FROM t_veto
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(strlen(s)) FROM t_veto
+----
+1
+
+# rows appended inside an open transaction are not covered by the statistics, so a partition with
+# pending writes must not be folded from them
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO t VALUES (99999, 199998, repeat('a', 500))
+
+query II
+EXPLAIN SELECT max(strlen(s)) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+statement ok
+ROLLBACK
+
+query II
+EXPLAIN SELECT max(strlen(s)) FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(strlen(s)) FROM t
+----
+100

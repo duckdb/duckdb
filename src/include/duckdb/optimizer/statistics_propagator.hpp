@@ -55,6 +55,22 @@ public:
 	static unique_ptr<BaseStatistics> PropagateMonotoneBounds(ClientContext &context,
 	                                                          const BoundFunctionExpression &func,
 	                                                          const vector<BaseStatistics> &child_stats);
+	//! Evaluate `func` at plan time with every argument replaced by the given constant. Returns false
+	//! when the function cannot be evaluated at those arguments.
+	static bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionExpression &func,
+	                                   const vector<Value> &arg_values, Value &result);
+	//! Evaluate a monotone function at a pre-built pair of argument corners. Returns false when
+	//! either evaluation fails or yields NULL/NaN; throws if out_hi < out_lo (annotation broken).
+	static bool TryEvaluateMonotoneCorners(ClientContext &context, const BoundFunctionExpression &func,
+	                                       const vector<Value> &lo_args, const vector<Value> &hi_args, Value &out_lo,
+	                                       Value &out_hi);
+	//! Evaluate a monotone function at both endpoints of one column argument's range. Constant
+	//! arguments stay fixed; the column argument is replaced by col_min/col_max (swapped when
+	//! decreasing) so out_lo/out_hi bracket the mapped range. Builds the corners then delegates to
+	//! TryEvaluateMonotoneCorners.
+	static bool TryEvaluateMonotoneEndpoints(ClientContext &context, const BoundFunctionExpression &func,
+	                                         const vector<Value> &arg_values, idx_t column_arg, bool decreasing,
+	                                         const Value &col_min, const Value &col_max, Value &out_lo, Value &out_hi);
 	//! Compare two sets of statistics and return whether the comparison is always true or false
 	static FilterPropagateResult PropagateComparison(const BaseStatistics &left, const BaseStatistics &right,
 	                                                 ExpressionType comparison);
