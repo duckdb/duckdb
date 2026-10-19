@@ -1,4 +1,5 @@
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/main/settings.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -863,6 +864,10 @@ static bool FoldConstantArgument(ClientContext &context, unique_ptr<Expression> 
 	}
 	// a lambda has no value of its own, the function it is passed to executes its body
 	if (child->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA || !child->IsFoldable()) {
+		return false;
+	}
+	if (!child->IsConsistent() && Settings::Get<PortablePlanSetting>(context)) {
+		// an environment observation must not fold into the plan
 		return false;
 	}
 	Value result;
