@@ -345,6 +345,23 @@ TEST_CASE("Grammar literal IDs include category-only words and overlapping categ
 	REQUIRE_FALSE(table.Lookup("missing").IsKeyword());
 }
 
+TEST_CASE("Literal lookup preserves long grammar literals and category-only words", "[api][grammar_extension]") {
+	auto literal = string(256, 'a');
+	auto keyword = string(512, 'b');
+	auto grammar = ParsedGrammar::Parse("LiteralTest <- '" + literal + "'");
+	const auto flag = keyword_categories_t::CreateCategory(6);
+	case_insensitive_map_t<LiteralInfo> keywords;
+	keywords.emplace(keyword, LiteralInfo(0, flag));
+	GrammarLiteralTable table(grammar, keywords);
+	REQUIRE(table.Lookup(literal).LiteralId() != 0);
+	REQUIRE(table.Lookup(StringUtil::Upper(literal)) == table.Lookup(literal));
+	REQUIRE(table.Lookup(keyword).HasAnyFlags(flag));
+	REQUIRE(table.Lookup(StringUtil::Upper(keyword)) == table.Lookup(keyword));
+	REQUIRE(table.Lookup(keyword + "b") == LiteralInfo());
+	REQUIRE(table.Lookup(string(512, 'c')) == LiteralInfo());
+	REQUIRE(table.Lookup(string(65536, 'a')) == LiteralInfo());
+}
+
 TEST_CASE("Grammar literal tables preserve dialect-defined flags", "[api][grammar_extension]") {
 	auto grammar = ParsedGrammar::Parse("LiteralTest <- 'SHARED' / 'shared' / 'plain'");
 	const keyword_categories_t first_flag = keyword_categories_t::CreateCategory(6);
@@ -1174,6 +1191,246 @@ TEST_CASE("FIRST sets do not assume built-in semantics for derived matchers", "[
 	REQUIRE(list.MatchParseResult(state).IsSuccess());
 }
 
+enum class ListChainTestVariant {
+	OPTIONAL_TAILS,
+	INNER_REQUIRED,
+	OUTER_REQUIRED,
+	EMPTY_INNER,
+	UNNAMED_ATOM,
+	NONCOLLAPSIBLE_INNER,
+	NONCOLLAPSIBLE_MIDDLE,
+	NONCOLLAPSIBLE_OUTER,
+	SUPPRESSED_MIDDLE,
+	MEMOIZED_MIDDLE
+};
+
+static vector<string> MatchListChainTest(bool structural, ListChainTestVariant variant, MatchMode mode,
+                                         const string &text, bool cursor) {
+	CompiledGrammarRule atom_rule("Atom", nullptr), inner_rule("Inner", nullptr), middle_rule("Middle", nullptr),
+	    outer_rule("Outer", nullptr);
+	KeywordMatcher a("A", KeywordInfo()), b("B", KeywordInfo()), c("C", KeywordInfo()), d("D", KeywordInfo());
+	if (variant != ListChainTestVariant::UNNAMED_ATOM) {
+		a.SetRule(atom_rule);
+	}
+	OptionalMatcher optional_b(b), optional_c(c), optional_d(d);
+	MatcherAllocator matchers;
+	auto &inner = matchers.Allocate(make_uniq<ListMatcher>()).Cast<ListMatcher>();
+	auto &middle = matchers.Allocate(make_uniq<ListMatcher>()).Cast<ListMatcher>();
+	auto &outer = matchers.Allocate(make_uniq<ListMatcher>()).Cast<ListMatcher>();
+	inner.SetRule(inner_rule);
+	middle.SetRule(middle_rule);
+	outer.SetRule(outer_rule);
+	auto set_flags = [&](ListMatcher &matcher, ListChainTestVariant noncollapsible) {
+		if (variant != noncollapsible) {
+			matcher.SetCollapsible();
+		}
+		if (structural) {
+			matcher.SetStructural();
+		}
+	};
+	set_flags(inner, ListChainTestVariant::NONCOLLAPSIBLE_INNER);
+	set_flags(middle, ListChainTestVariant::NONCOLLAPSIBLE_MIDDLE);
+	set_flags(outer, ListChainTestVariant::NONCOLLAPSIBLE_OUTER);
+	if (variant != ListChainTestVariant::EMPTY_INNER) {
+		inner.matchers.push_back(a);
+		inner.matchers.push_back(variant == ListChainTestVariant::INNER_REQUIRED ? reference<Matcher>(b)
+		                                                                         : reference<Matcher>(optional_b));
+	}
+	middle.matchers = {inner, optional_c};
+	outer.matchers = {middle, variant == ListChainTestVariant::OUTER_REQUIRED ? reference<Matcher>(d)
+	                                                                          : reference<Matcher>(optional_d)};
+	middle.suppress_suggestions = variant == ListChainTestVariant::SUPPRESSED_MIDDLE;
+	if (variant == ListChainTestVariant::MEMOIZED_MIDDLE) {
+		middle.SetPackratMemoized();
+	}
+	auto grammar = CompiledGrammar::DefaultGrammar();
+	ComputeFirstSets(outer, grammar->GetKeywordHelper().GetLiteralTable());
+	matchers.InitializeListChains();
+	vector<MatcherToken> tokens;
+	idx_t offset = 0;
+	for (auto &word : StringUtil::Split(text, ' ')) {
+		if (!word.empty()) {
+			tokens.emplace_back(word, offset, TokenType::KEYWORD);
+		}
+		offset += word.size() + 1;
+	}
+	tokens.emplace_back("", text.size(), cursor ? TokenType::END_OF_INPUT_AUTOCOMPLETE : TokenType::END_OF_INPUT);
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	ArenaAllocator processes(Allocator::DefaultAllocator()), cache_allocator(Allocator::DefaultAllocator());
+	ParserPackratCache cache(cache_allocator);
+	idx_t max_position = 0;
+	MatchContext context(suggestions, allocator, processes, max_position, mode, IdentifierCaseMode::PRESERVE_CASE,
+	                     &cache);
+	vector<string> snapshot;
+	for (idx_t attempt = 0; attempt < 2; attempt++) {
+		suggestions.clear();
+		MatchState state(iterator, context);
+		auto result = outer.MatchParseResult(state);
+		REQUIRE(processes.SizeInBytes() == 0);
+		snapshot.push_back(
+		    StringUtil::Format("%d:%llu:%llu", result.IsSuccess(), state.token_iterator.Position(), max_position));
+		for (auto &suggestion : suggestions) {
+			snapshot.push_back(suggestion.keyword.candidate);
+		}
+		vector<reference<ParseResult>> pending;
+		if (result.HasParseResult()) {
+			pending.push_back(*result.GetParseResult());
+		}
+		while (!pending.empty()) {
+			auto &node = pending.back().get();
+			pending.pop_back();
+			auto location = node.GetLocation();
+			snapshot.push_back(StringUtil::Format("%s:%s:%s:%d:%llu:%llu", ParseResultToString(node.type), node.Name(),
+			                                      node.GetRule() ? node.GetRule()->name : string(), node.collapsed,
+			                                      location.offset, location.length));
+			if (node.type == ParseResultType::LIST) {
+				for (auto &child : node.Cast<ListParseResult>().GetChildren()) {
+					pending.push_back(child);
+				}
+			} else if (node.type == ParseResultType::OPTIONAL) {
+				auto &optional = node.Cast<OptionalParseResult>();
+				if (optional.HasResult()) {
+					pending.push_back(optional.GetResult());
+				}
+			}
+		}
+	}
+	return snapshot;
+}
+
+TEST_CASE("Leading list chains preserve results, failure state and suggestions", "[api][grammar_extension]") {
+	auto variant = ListChainTestVariant::OPTIONAL_TAILS;
+	SECTION("Optional tails") {
+	}
+	SECTION("A required inner tail can fail") {
+		variant = ListChainTestVariant::INNER_REQUIRED;
+	}
+	SECTION("A required outer tail can fail") {
+		variant = ListChainTestVariant::OUTER_REQUIRED;
+	}
+	SECTION("An empty inner list retains its own result") {
+		variant = ListChainTestVariant::EMPTY_INNER;
+	}
+	SECTION("An atom without a rule cannot replace its list") {
+		variant = ListChainTestVariant::UNNAMED_ATOM;
+	}
+	SECTION("A noncollapsible inner list retains its result") {
+		variant = ListChainTestVariant::NONCOLLAPSIBLE_INNER;
+	}
+	SECTION("A noncollapsible middle list retains its result") {
+		variant = ListChainTestVariant::NONCOLLAPSIBLE_MIDDLE;
+	}
+	SECTION("A noncollapsible outer list retains its result") {
+		variant = ListChainTestVariant::NONCOLLAPSIBLE_OUTER;
+	}
+	SECTION("Suggestion suppression remains a boundary") {
+		variant = ListChainTestVariant::SUPPRESSED_MIDDLE;
+	}
+	SECTION("Memoized children retain their cache boundary") {
+		variant = ListChainTestVariant::MEMOIZED_MIDDLE;
+	}
+	for (auto mode : {MatchMode::BUILD_PARSE_RESULT, MatchMode::RECOGNIZE_ONLY}) {
+		for (auto cursor : {false, true}) {
+			for (auto &text : vector<string> {"", "A", "A B", "A C", "A D", "A B C D", "A X", "X"}) {
+				CAPTURE(text);
+				CAPTURE(cursor);
+				auto expected = MatchListChainTest(false, variant, mode, text, cursor);
+				auto actual = MatchListChainTest(true, variant, mode, text, cursor);
+				REQUIRE(actual == expected);
+			}
+		}
+	}
+}
+
+TEST_CASE("List chain preparation follows the finalized graph", "[api][grammar_extension]") {
+	ListMatcher parent, child;
+	parent.SetStructural();
+	child.SetStructural();
+	parent.matchers.push_back(child);
+	REQUIRE_FALSE(parent.GetChainChild());
+	parent.InitializeListChain();
+	REQUIRE(parent.GetChainChild().get() == &child);
+
+	SECTION("Changing a link replaces the prepared edge") {
+		ListMatcher replacement;
+		replacement.SetStructural();
+		parent.matchers[0] = replacement;
+		parent.InitializeListChain();
+		REQUIRE(parent.GetChainChild().get() == &replacement);
+	}
+	SECTION("Removing the child clears the prepared edge") {
+		parent.matchers.clear();
+		parent.InitializeListChain();
+		REQUIRE_FALSE(parent.GetChainChild());
+	}
+	SECTION("Parent suppression clears the prepared edge") {
+		parent.suppress_suggestions = true;
+		parent.InitializeListChain();
+		REQUIRE_FALSE(parent.GetChainChild());
+	}
+	SECTION("Child suppression clears the prepared edge") {
+		child.suppress_suggestions = true;
+		parent.InitializeListChain();
+		REQUIRE_FALSE(parent.GetChainChild());
+	}
+	SECTION("Child memoization clears the prepared edge") {
+		child.SetPackratMemoized();
+		parent.InitializeListChain();
+		REQUIRE_FALSE(parent.GetChainChild());
+	}
+	SECTION("Custom implementations do not form a prepared edge") {
+		MatchProcessLifetimeState lifetime;
+		DerivedListTestMatcher custom(lifetime);
+		parent.matchers[0] = custom;
+		parent.InitializeListChain();
+		REQUIRE_FALSE(parent.GetChainChild());
+	}
+}
+
+TEST_CASE("Deep leading list chains retain heap-owned state through exceptions", "[api][grammar_extension]") {
+	CompiledGrammarRule rule("Wrapper", nullptr);
+	MatchProcessLifetimeState lifetime;
+	lifetime.depth = 3;
+	lifetime.create_result = true;
+	NestedTestMatcher leaf(lifetime);
+	vector<unique_ptr<ListMatcher>> lists;
+	for (idx_t i = 0; i < 4096; i++) {
+		auto list = make_uniq<ListMatcher>();
+		list->SetStructural();
+		list->SetCollapsible();
+		list->SetRule(rule);
+		list->matchers.push_back(lists.empty() ? reference<Matcher>(leaf) : reference<Matcher>(*lists.back()));
+		lists.push_back(std::move(list));
+	}
+	for (auto &list : lists) {
+		list->InitializeListChain();
+	}
+	SECTION("Success") {
+	}
+	SECTION("Exception in a custom descendant") {
+		lifetime.throw_at_leaf = true;
+	}
+	vector<MatcherToken> tokens;
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	ArenaAllocator processes(Allocator::DefaultAllocator());
+	idx_t max_position = 0;
+	MatchContext context(suggestions, allocator, processes, max_position);
+	MatchState state(iterator, context);
+	if (lifetime.throw_at_leaf) {
+		REQUIRE_THROWS_AS(lists.back()->MatchParseResult(state), InvalidInputException);
+	} else {
+		REQUIRE(lists.back()->MatchParseResult(state).IsSuccess());
+	}
+	REQUIRE(processes.SizeInBytes() == 0);
+	REQUIRE(lifetime.active == 0);
+	REQUIRE(lifetime.state_valid);
+	REQUIRE(lifetime.destroyed == vector<idx_t> {3, 2, 1});
+}
+
 static vector<MatcherToken> TokenizeFirstSetTestInput(const CompiledGrammar &grammar, const string &sql) {
 	vector<MatcherToken> tokens;
 	ParserTokenizerBehavior behavior(sql, tokens);
@@ -1205,7 +1462,10 @@ TEST_CASE("Tokenizer assigns FIRST set token classes", "[api][grammar_extension]
 	REQUIRE(token_class("1e10") == MatcherTokenClass::NUMBER);
 	REQUIRE(token_class("+") == generic_operator);
 	REQUIRE(token_class("||") == generic_operator);
-	REQUIRE(token_class("(") == generic_operator);
+	for (auto punctuation : {"(", ")", "[", "]", "{", "}", ",", ":", "::", ":=", "?", "$", "#"}) {
+		INFO(punctuation);
+		REQUIRE((token_class(punctuation) & generic_operator) == 0);
+	}
 	// operators with their own precedence level are not generic operators
 	REQUIRE(token_class("<=") == MatcherTokenClass::OPERATOR);
 	REQUIRE(token_class("=") == MatcherTokenClass::OPERATOR);
@@ -1312,6 +1572,10 @@ TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][gr
 		CheckFirstSet(*grammar, any_operator, "+", true);
 		CheckFirstSet(*grammar, any_operator, "<=", true);
 		CheckFirstSet(*grammar, any_operator, "42", false);
+		for (auto punctuation : {"(", ")", "[", "]", "{", "}", ",", ":", "::", ":=", "?", "$", "#"}) {
+			CheckFirstSet(*grammar, generic_operator, punctuation, false);
+			CheckFirstSet(*grammar, any_operator, punctuation, false);
+		}
 		CheckFirstSet(*grammar, arithmetic_operator, "*", true);
 		CheckFirstSet(*grammar, arithmetic_operator, "'str'", false);
 	}
@@ -1484,6 +1748,60 @@ TEST_CASE("Packrat results outlive reset process arenas", "[api][grammar_extensi
 	if (cached.IsSuccess()) {
 		REQUIRE(cached.HasParseResult());
 		REQUIRE(cached.GetParseResult()->Name() == "nested result");
+	}
+}
+
+class ObservedNumberLiteralMatcher : public NumberLiteralMatcher {
+public:
+	explicit ObservedNumberLiteralMatcher(idx_t &attempts) : attempts(attempts) {
+	}
+
+	MatcherResult MatchAtomic(MatchState &state) const override {
+		attempts++;
+		return NumberLiteralMatcher::MatchAtomic(state);
+	}
+
+private:
+	idx_t &attempts;
+};
+
+TEST_CASE("Choice rejection preserves atomic callbacks and alternative indices", "[api][grammar_extension]") {
+	idx_t attempts = 0;
+	ObservedNumberLiteralMatcher number(attempts);
+	ListMatcher rejected({number});
+	rejected.SetStructural();
+	KeywordMatcher keyword("SELECT", KeywordInfo());
+	ChoiceMatcher choice({number, rejected, keyword});
+	choice.SetStructural();
+	auto grammar = CompiledGrammar::DefaultGrammar();
+	ComputeFirstSets(choice, grammar->GetKeywordHelper().GetLiteralTable());
+	vector<MatcherToken> tokens {MatcherToken("select", 0, TokenType::KEYWORD)};
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator results;
+	ArenaAllocator processes(Allocator::DefaultAllocator());
+	idx_t max_position = 0;
+	MatchMode mode = MatchMode::BUILD_PARSE_RESULT;
+	SECTION("Build results") {
+	}
+	SECTION("Recognition retains all atomic attempts") {
+		mode = MatchMode::RECOGNIZE_ONLY;
+	}
+	MatchContext context(suggestions, results, processes, max_position, mode);
+	MatchState state(iterator, context);
+	REQUIRE_FALSE(number.first_set.MightMatch(state));
+	REQUIRE_FALSE(rejected.first_set.MightMatch(state));
+	auto result = choice.MatchParseResult(state);
+	REQUIRE(result.IsSuccess());
+	REQUIRE(state.token_iterator.Position() == 1);
+	REQUIRE(max_position == 1);
+	auto build_results = mode == MatchMode::BUILD_PARSE_RESULT;
+	REQUIRE(attempts == (build_results ? 1 : 2));
+	REQUIRE(result.HasParseResult() == build_results);
+	if (build_results) {
+		auto &parsed = result.GetParseResult()->Cast<ChoiceParseResult>();
+		REQUIRE(parsed.GetResult().type == ParseResultType::KEYWORD);
+		REQUIRE(parsed.ToString().find("CHOICE (idx: 2)") != string::npos);
 	}
 }
 

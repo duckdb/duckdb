@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include "duckdb/common/types/interval_no_normalize.hpp"
 #include "parquet_writer.hpp"
 #include "writer/array_column_writer.hpp"
 #include "writer/boolean_column_writer.hpp"
@@ -559,7 +560,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		return make_uniq<StandardColumnWriter<hugeint_t, ParquetUUIDTargetType, ParquetUUIDOperator>>(
 		    writer, std::move(schema), path_in_schema);
 	case LogicalTypeId::INTERVAL:
-		return make_uniq<StandardColumnWriter<interval_t, ParquetIntervalTargetType, ParquetIntervalOperator>>(
+		return make_uniq<
+		    StandardColumnWriter<interval_no_normalize, ParquetIntervalTargetType, ParquetIntervalOperator>>(
 		    writer, std::move(schema), path_in_schema);
 	case LogicalTypeId::ENUM:
 		return make_uniq<EnumColumnWriter>(writer, std::move(schema), path_in_schema);

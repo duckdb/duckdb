@@ -484,7 +484,7 @@ AggregateFunction GetDecimalSumAggregate(PhysicalType type) {
 unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	auto decimal_type = arguments[0]->GetReturnType();
+	auto decimal_type = BindDecimalArgument(input.GetClientContext(), arguments[0], "sum");
 	if (decimal_type.InternalType() == PhysicalType::VARCHAR) {
 		// wide decimal: sum the BIGNUM blobs, the result is the widest decimal of the same scale
 		function.ReplaceImplementation(GetWideDecimalSumAggregate());

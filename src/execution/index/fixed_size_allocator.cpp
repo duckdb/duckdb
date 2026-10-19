@@ -20,13 +20,18 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &b
 
 	// calculate how many segments fit into one buffer (available_segments_per_buffer)
 
-	idx_t bits_per_value = sizeof(validity_t) * 8;
-	idx_t byte_count = 0;
+	const idx_t block_size = block_manager.GetBlockSize();
+	const idx_t bits_per_value = sizeof(validity_t) * 8;
 
-	bitmask_count = 0;
-	available_segments_per_buffer = 0;
+	// each full validity_t value is followed by bits_per_value segments: skip all of them at once
+	const idx_t full_value_bytes = sizeof(validity_t) + bits_per_value * segment_size;
+	const idx_t full_value_count = block_size / full_value_bytes;
+	idx_t byte_count = full_value_count * full_value_bytes;
 
-	while (byte_count < block_manager.GetBlockSize()) {
+	bitmask_count = full_value_count;
+	available_segments_per_buffer = full_value_count * bits_per_value;
+
+	while (byte_count < block_size) {
 		if (!bitmask_count || (bitmask_count * bits_per_value) % available_segments_per_buffer == 0) {
 			// we need to add another validity_t value to the bitmask, to allow storing another
 			// bits_per_value segments on a buffer
@@ -34,7 +39,7 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &b
 			byte_count += sizeof(validity_t);
 		}
 
-		auto remaining_bytes = block_manager.GetBlockSize() - byte_count;
+		auto remaining_bytes = block_size - byte_count;
 		auto remaining_segments = MinValue(remaining_bytes / segment_size, bits_per_value);
 
 		if (remaining_segments == 0) {

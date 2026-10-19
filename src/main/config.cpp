@@ -561,11 +561,11 @@ SetScope ExtensionOption::ResolveScope(const Identifier &name, SetScope scope) c
 		scope = default_scope;
 	}
 	if (scope == SetScope::GLOBAL && !supports_global) {
-		throw InvalidInputException(
-		    "Setting \"%s\" cannot be set as a global variable - it can only be set per session", name);
+		throw InvalidInputException("Setting %s cannot be set as a global variable - it can only be set per session",
+		                            name);
 	}
 	if (scope == SetScope::SESSION && !supports_session) {
-		throw InvalidInputException("Setting \"%s\" cannot be set as a session variable - it can only be set globally",
+		throw InvalidInputException("Setting %s cannot be set as a session variable - it can only be set globally",
 		                            name);
 	}
 	return scope;
@@ -681,7 +681,7 @@ void DBConfig::CheckLock(const Identifier &name) {
 		}
 	}
 	// not allowed!
-	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
+	throw InvalidInputException("Cannot change configuration option %s - the configuration has been locked", name);
 }
 
 idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
@@ -821,7 +821,8 @@ optional_idx DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 
 // Right now we only really care about access mode when comparing DBConfigs
 bool DBConfigOptions::operator==(const DBConfigOptions &other) const {
-	return other.access_mode == access_mode && other.user_options == user_options;
+	return other.access_mode == access_mode && other.user_options == user_options &&
+	       other.configuration_env == configuration_env;
 }
 
 bool DBConfig::operator==(const DBConfig &other) {

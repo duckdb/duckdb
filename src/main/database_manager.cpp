@@ -426,6 +426,25 @@ InsertDatabasePathResult DatabaseManager::InsertDatabasePath(const AttachInfo &i
 	return path_manager->InsertDatabasePath(*this, info.path, info.name, info.on_conflict, options);
 }
 
+bool DatabaseManager::IsAttachedDatabaseFile(ClientContext &context, const string &path) {
+	auto &fs = FileSystem::GetFileSystem(context);
+	// attached database paths are canonicalized when the database is attached
+	auto canonical_path = fs.CanonicalizePath(path);
+	if (path_manager->IsDatabasePath(canonical_path)) {
+		return true;
+	}
+	// the WAL files of the database
+	for (auto &wal_suffix : {".wal", ".wal.checkpoint", ".wal.recovery"}) {
+		if (StringUtil::EndsWith(canonical_path, wal_suffix)) {
+			auto database_path = canonical_path.substr(0, canonical_path.size() - strlen(wal_suffix));
+			if (path_manager->IsDatabasePath(database_path)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 vector<string> DatabaseManager::GetAttachedDatabasePaths() {
 	vector<string> result;
 	lock_guard<mutex> guard(databases_lock);

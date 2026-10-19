@@ -11,6 +11,10 @@ namespace duckdb {
 // ===========================================
 static bool CombineNoAliasTypes(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
                                 const LogicalType &right, LogicalType &result) {
+	// a plain value cannot implicitly become an aggregate state
+	if (left.IsAggregateState() != right.IsAggregateState()) {
+		return false;
+	}
 	// we always prefer aliased types
 	if (!left.GetAlias().empty()) {
 		result = left;
