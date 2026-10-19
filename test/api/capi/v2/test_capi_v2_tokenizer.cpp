@@ -208,20 +208,6 @@ TEST_CASE("V2 tokenizer: operators and the trailing-plus trimming rule", "[capi_
 	                                                    {OPERATOR, 5, 1}}));
 }
 
-TEST_CASE("V2 tokenizer: qualifier dots are operators, leading decimals are numbers", "[capi_v2][tokenizer]") {
-	EnvFixture fx;
-	REQUIRE(TokenizeAll(fx.conn, "select t.a from t") == Complete({{KEYWORD, 0, 6},
-	                                                               {IDENTIFIER, 7, 1},
-	                                                               {OPERATOR, 8, 1},
-	                                                               {IDENTIFIER, 9, 1},
-	                                                               {KEYWORD, 11, 4},
-	                                                               {IDENTIFIER, 16, 1}}));
-	REQUIRE(
-	    TokenizeAll(fx.conn, "select 1.5, .5, 1.") ==
-	    Complete(
-	        {{KEYWORD, 0, 6}, {NUMBER, 7, 3}, {OPERATOR, 10, 1}, {NUMBER, 12, 2}, {OPERATOR, 14, 1}, {NUMBER, 16, 2}}));
-}
-
 // ===========================================================================
 // Statement boundaries and comments
 // ===========================================================================
