@@ -340,7 +340,10 @@ bool TableIndexList::HasBufferedReplays() const {
 }
 
 shared_ptr<IndexEntry> TableIndexList::FindEntry(const IndexEntry &index) const {
-	auto index_oid = index.GetIndexOid();
+	return FindEntry(index.GetIndexOid());
+}
+
+shared_ptr<IndexEntry> TableIndexList::FindEntry(idx_t index_oid) const {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		if (entry->GetIndexOid() != index_oid) {

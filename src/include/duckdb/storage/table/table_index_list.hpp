@@ -63,6 +63,7 @@ public:
 	void RemoveIndex(idx_t index_oid);
 	//! Returns the entry matching the index OID.
 	shared_ptr<IndexEntry> FindEntry(const IndexEntry &index) const;
+	shared_ptr<IndexEntry> FindEntry(idx_t index_oid) const;
 	//! Binds unbound indexes possibly present after loading an extension.
 	void Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type = {});
 	//! Returns true, if there are no index entries.

@@ -164,19 +164,6 @@ idx_t FindConstraintIndexOid(TableCatalogEntry &table_entry, const IndexKeyPath 
 	                       EnumUtil::ToString(path.constraint_type), qualified_table);
 }
 
-shared_ptr<IndexEntry> FindBoundIndexEntry(const TableIndexList &index_list, idx_t index_oid) {
-	for (auto entry : index_list.IndexEntries()) {
-		if (entry->GetIndexOid() != index_oid) {
-			continue;
-		}
-		if (entry->GetBindState() != IndexBindState::BOUND) {
-			throw InternalException("index_key: index %s is not bound", entry->GetName());
-		}
-		return entry;
-	}
-	throw InternalException("index_key: no index found in storage for index oid %llu", index_oid);
-}
-
 struct IndexKeyBindData : public FunctionData {
 	IndexKeyBindData(shared_ptr<IndexEntry> index_entry, vector<LogicalType> key_types)
 	    : index_entry(std::move(index_entry)), key_types(std::move(key_types)) {
@@ -239,7 +226,11 @@ unique_ptr<FunctionData> IndexKeyBind(INPUT &input) {
 	auto index_oid = path.constraint_type == IndexConstraintType::NONE
 	                     ? FindUserIndexOid(context, table_entry, path.index_name, qualified_table)
 	                     : FindConstraintIndexOid(table_entry, path, qualified_table);
-	const auto index_entry = FindBoundIndexEntry(data_table_info.GetIndexes(), index_oid);
+	const auto index_entry = data_table_info.GetIndexes().FindEntry(index_oid);
+	if (!index_entry) {
+		throw CatalogException("index_key: no index found in storage for index oid %llu on table %s", index_oid,
+		                       qualified_table);
+	}
 	const auto index = index_entry->GetReadHandle<BoundIndex>();
 
 	const auto &index_type = index->GetIndexType();
