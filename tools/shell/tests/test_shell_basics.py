@@ -1505,4 +1505,66 @@ def test_a_select_that_writes_keeps_its_rows_when_the_output_pipe_closes(shell, 
     assert counted.returncode == 0, counted.stderr
     assert counted.stdout.strip() == "200000", stderr
 
+
+def test_dynamic_pivot(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode list")
+        .statement("CREATE TABLE sales(city VARCHAR, year INTEGER, amount INTEGER);")
+        .statement("INSERT INTO sales VALUES ('ams', 2023, 10), ('ams', 2024, 20), ('rtm', 2023, 30);")
+        .statement("PIVOT sales ON year USING sum(amount) ORDER BY city;")
+        .statement("BEGIN; PIVOT sales ON year USING sum(amount) ORDER BY city DESC; COMMIT;")
+    )
+    result = test.run()
+    result.check_stdout(["city|2023|2024", "ams|10|20", "rtm|30|NULL", "city|2023|2024", "rtm|30|NULL", "ams|10|20"])
+
+
+def test_alter_with_volatile_default(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode list")
+        .statement("CREATE TABLE t AS SELECT range AS i FROM range(1000);")
+        .statement("ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random();")
+        .statement("SELECT count(*) AS filled FROM t WHERE c IS NOT NULL;")
+    )
+    result = test.run()
+    result.check_stdout("filled\n1000")
+
+
+def test_failing_alter_leaves_no_column(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode list")
+        .statement("CREATE TABLE t AS SELECT range AS i FROM range(1000);")
+        .statement("ALTER TABLE t ADD COLUMN d INTEGER DEFAULT nonexistent_function();")
+        .statement("SELECT count(*) AS columns FROM duckdb_columns() WHERE table_name = 't';")
+    )
+    result = test.run()
+    result.check_stderr("nonexistent_function")
+    assert result.stdout.splitlines()[-2:] == ["columns", "1"]
+
+
+def test_explain_dynamic_pivot_renders_the_plan(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE TABLE sales(city VARCHAR, year INTEGER, amount INTEGER);")
+        .statement("INSERT INTO sales VALUES ('ams', 2023, 10);")
+        .statement("EXPLAIN PIVOT sales ON year USING sum(amount);")
+    )
+    result = test.run()
+    result.check_stdout("Seq Scan")
+    result.check_not_exist("explain_key")
+
+
+def test_describe_dynamic_pivot_renders_the_description(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE TABLE sales(city VARCHAR, year INTEGER, amount INTEGER);")
+        .statement("INSERT INTO sales VALUES ('ams', 2023, 10);")
+        .statement("DESCRIBE PIVOT sales ON year USING sum(amount);")
+    )
+    result = test.run()
+    result.check_stdout("city")
+    result.check_not_exist("column_type")
+
 # fmt: on

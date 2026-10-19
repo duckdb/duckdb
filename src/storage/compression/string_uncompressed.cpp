@@ -158,7 +158,8 @@ void UncompressedStringStorage::StringScan(ColumnSegment &segment, ColumnScanSta
 // Select
 //===--------------------------------------------------------------------===//
 void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count,
-                                       Vector &result, const SelectionVector &sel, idx_t sel_count) {
+                                       Vector &result, const SelectionVector &sel, idx_t sel_count, idx_t result_offset,
+                                       ScanVectorType) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
 	auto layout = StringSegmentLayout::Read(scan_state.handle, segment);
@@ -174,7 +175,7 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 		auto selection_index = sel.get_index(i);
 		D_ASSERT(selection_index < vector_count);
 		auto entry = strings.GetEntry(selection_index);
-		result_data[i] = FetchStringFromEntry(state.context, segment, result, entry);
+		result_data[result_offset + i] = FetchStringFromEntry(state.context, segment, result, entry);
 	}
 }
 

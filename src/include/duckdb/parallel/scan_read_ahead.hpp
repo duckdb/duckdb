@@ -14,6 +14,8 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/condition_variable.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/serializer/async_memory_governor.hpp"
@@ -177,6 +179,10 @@ private:
 				read_ahead.pending_io_bytes -= MINIMUM_JOB_IO_CHARGE;
 			}
 			--read_ahead.active_producers;
+			// a pushed job was signalled already, a released slot frees one thread and a done scan all of them
+			if (!committed || read_ahead.IsDone()) {
+				read_ahead.SignalProgress(read_ahead.IsDone());
+			}
 		}
 
 		ScanReadAhead &read_ahead;
@@ -198,16 +204,29 @@ private:
 		lock_guard<mutex> guard(lock);
 		return !pending_jobs.empty();
 	}
+	//! The number of jobs that may be in flight under the current budget
+	idx_t ReservationDepth() const;
 	//! Reserve an in-flight job slot for producing a job
 	bool TryReserveSlot();
 	//! Schedule the job's I/O and admit the job to the queue
 	void PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<AsyncTask>> io_tasks);
 	//! Release a read-ahead slot
 	void ReleaseSlot();
+	//! Wake a thread waiting for another thread to push a job, release a slot or finish producing, or all of them
+	void SignalProgress(bool wake_all);
+	//! SignalProgress for a caller that holds the lock
+	void NotifyProgress(bool wake_all);
+	//! Wake one waiting thread, or all of them
+	void WakeWaiters(bool wake_all);
+	//! Wait until the read-ahead made progress since the given epoch, or the timeout passed
+	void WaitForProgress(ClientContext &context, idx_t epoch);
+	idx_t ProgressEpoch() const;
 
 private:
 	//! Minimum budget charge per job, beyond its scheduled I/O a job carries scan-state overhead (decode buffers)
 	static constexpr idx_t MINIMUM_JOB_IO_CHARGE = 16ULL * 1024 * 1024;
+	//! How long a thread yields for another thread to push a job before it waits for it
+	static constexpr idx_t PRODUCER_YIELD_MICROS = 1000;
 
 private:
 	ClientContext &context;
@@ -233,6 +252,11 @@ private:
 	atomic<bool> done {false};
 	//! Threads that reserved a slot but have not pushed their job yet
 	atomic<idx_t> active_producers {0};
+	//! Incremented whenever a waiting thread could make progress
+	atomic<idx_t> progress_epoch {0};
+	//! Threads waiting for progress, only these need a notification
+	atomic<idx_t> waiting_threads {0};
+	condition_variable progress;
 	//! File-opens scheduled on the async pool that have not completed yet, shared with the open tasks
 	shared_ptr<atomic<idx_t>> pending_opens;
 	//! Async I/O executor (async pool)

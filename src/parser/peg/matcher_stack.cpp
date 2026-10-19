@@ -5,7 +5,6 @@
 namespace duckdb {
 
 MatchStack::MatchStack() {
-	frames.reserve(INITIAL_FRAME_CAPACITY);
 }
 
 MatchStack::~MatchStack() {
@@ -117,7 +116,7 @@ bool MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 		frame.result = step.GetResult();
 		return true;
 	}
-	if (child->matcher.IsAtomic()) {
+	if (!child->matcher.IsStructural() && child->matcher.IsAtomic()) {
 		frame.child_result = ExecuteAtomicMatcher(*child);
 		return false;
 	}
@@ -156,6 +155,7 @@ MatcherResult MatchStack::Execute(MatchInput input) {
 	if (input.matcher.IsAtomic()) {
 		return ExecuteAtomicMatcher(input);
 	}
+	frames.reserve(INITIAL_FRAME_CAPACITY);
 	PushFrame(input);
 	while (!frames.empty()) {
 		if (!ExecuteFrame(frames.back())) {

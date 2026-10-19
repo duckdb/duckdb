@@ -164,7 +164,7 @@ public:
 		}
 
 		// Double until it fits
-		auto required = num_threads * lstate.sorted_run->SizeInBytes();
+		auto required = num_threads * lstate.sorted_run->SizeInBytesForSorting();
 		if (is_index_sort) {
 			required *= 4; // Index creation is pretty intense, so we are very conservative here
 		}
@@ -225,8 +225,8 @@ unique_ptr<GlobalSinkState> Sort::GetGlobalSinkState(ClientContext &context) con
 
 //! Returns true if the Sink call is done (either because run size is small or because run was finalized)
 static bool TryFinishSink(SortGlobalSinkState &gstate, SortLocalSinkState &lstate, unique_lock<mutex> &guard) {
-	// Check if we exceed the limit
-	const auto sorted_run_size = lstate.sorted_run->SizeInBytes();
+	// Check if we exceed the limit (sorting the run needs a merge buffer on top of the run itself)
+	const auto sorted_run_size = lstate.sorted_run->SizeInBytesForSorting();
 	if (sorted_run_size < lstate.maximum_run_size) {
 		return true; // Sink is done
 	}
