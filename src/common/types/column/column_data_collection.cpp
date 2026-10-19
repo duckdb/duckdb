@@ -943,6 +943,9 @@ static void AppendConstantEntry(ColumnDataMetaData &meta_data, const UnifiedVect
 	vdata.constant = constant;
 	vdata.representation = ColumnDataRepresentation::CONSTANT;
 	vdata.count = UnsafeNumericCast<uint16_t>(copy_count);
+	// account the metadata bytes that hold the value
+	segment.constant_metadata_size += sizeof(ColumnDataConstantValue);
+	segment.total_allocated += sizeof(ColumnDataConstantValue);
 }
 
 static bool TryExtendConstantEntry(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data,
@@ -1014,6 +1017,8 @@ static void MaterializeConstantEntry(ColumnDataMetaData &meta_data, const Logica
 	}
 	vdata.representation = ColumnDataRepresentation::FLAT;
 	vdata.constant = ColumnDataConstantValue();
+	D_ASSERT(segment.constant_metadata_size >= sizeof(ColumnDataConstantValue));
+	segment.constant_metadata_size -= sizeof(ColumnDataConstantValue);
 }
 
 static idx_t DictionaryCodesAllocationSize() {
