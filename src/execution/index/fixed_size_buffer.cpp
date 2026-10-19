@@ -63,7 +63,7 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segmen
     : block_manager(block_manager), readers(0), segment_count(segment_count), allocation_size(allocation_size),
       dirty(false), vacuum(false), loaded(false), block_pointer(block_pointer) {
 	D_ASSERT(block_pointer.IsValid());
-	block_handle = block_manager.RegisterBlock(block_pointer.block_id);
+	block_handle = block_manager.RegisterBlock(block_pointer.block_id, MemoryTag::ART_INDEX);
 	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
 }
 

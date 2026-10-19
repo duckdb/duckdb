@@ -133,6 +133,7 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 	collapsible_rules.insert("OtherOperatorExpression");
 	collapsible_rules.insert("InfixOtherOperatorExpression");
 	collapsible_rules.insert("BitwiseExpression");
+	collapsible_rules.insert("TildeExpression");
 	collapsible_rules.insert("AdditiveExpression");
 	collapsible_rules.insert("MultiplicativeExpression");
 	collapsible_rules.insert("ExponentiationExpression");
@@ -163,9 +164,8 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 	grammar.SetExpressionDepth("SingleExpression", ExpressionDepthKind::NESTING);
 	grammar.SetExpressionDepth("Type", ExpressionDepthKind::NESTING);
 	grammar.SetExpressionDepth("NestedType", ExpressionDepthKind::NESTING);
+	grammar.SetExpressionDepth("SubqueryReference", ExpressionDepthKind::NESTING);
 	grammar.SetExpressionDepth("LambdaArrowExpression", ExpressionDepthKind::CHAIN);
-	grammar.SetExpressionDepth("LogicalOrExpression", ExpressionDepthKind::CHAIN);
-	grammar.SetExpressionDepth("LogicalAndExpression", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("NotExpression", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("IsExpressionContinuation", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("IsDistinctFromExpression", ExpressionDepthKind::CHAIN);

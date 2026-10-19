@@ -1,0 +1,44 @@
+# name: test/sql/function/timestamp/test_timestamp_lower_bound.test
+# description: Timestamp constructors reject values below the minimum timestamp
+# group: [timestamp]
+
+statement error
+SELECT time_bucket(INTERVAL '1 hour', TIMESTAMP '290309-12-22 (BC) 00:00:00', TIMESTAMP '2000-01-01 00:00:01')
+----
+Overflow in TIME_BUCKET
+
+statement error
+SELECT epoch_ms(-9223372022400001)
+----
+<REGEX>:.*(Out of Range|Conversion) Error.*
+
+statement error
+SELECT make_timestamp_ms(-9223372022400001)
+----
+<REGEX>:.*(Out of Range|Conversion) Error.*
+
+statement error
+SELECT to_timestamp(-9223372022401)
+----
+<REGEX>:.*(Out of Range|Conversion) Error.*
+
+statement error
+SELECT to_timestamp(-9223372036854.775808)
+----
+<REGEX>:.*(Out of Range|Conversion) Error.*
+
+# the minimum timestamp is still accepted
+query I
+SELECT epoch_ms(-9223372022400000)::VARCHAR
+----
+290309-12-22 (BC) 00:00:00
+
+query I
+SELECT to_timestamp(-9223372022400)::VARCHAR
+----
+290309-12-22 (BC) 00:00:00+00
+
+query I
+SELECT time_bucket(INTERVAL '1 hour', TIMESTAMP '2020-01-01 10:30:00', TIMESTAMP '2000-01-01 00:00:01')::VARCHAR
+----
+2020-01-01 10:00:01

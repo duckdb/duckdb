@@ -1,5 +1,8 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/parser/constraints/not_null_constraint.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -342,6 +345,17 @@ static identifier_set_t GetConflictColumnNames(const TableStorageInfo &storage_i
 	return conflict_column_names;
 }
 
+static bool IsNotNullColumn(TableCatalogEntry &table, Identifier &column_name) {
+	auto column_index = table.GetColumnIndex(column_name);
+	for (auto &constraint : table.GetConstraints()) {
+		if (constraint->type == ConstraintType::NOT_NULL &&
+		    constraint->Cast<NotNullConstraint>().index == column_index) {
+			return true;
+		}
+	}
+	return false;
+}
+
 unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, TableCatalogEntry &table) {
 	D_ASSERT(node.on_conflict_info);
 
@@ -540,8 +554,30 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		auto distinct_stmt = make_uniq<SelectStatement>();
 		auto select_node = make_uniq<SelectNode>();
 		auto distinct = make_uniq<DistinctModifier>();
+		unique_ptr<ParsedExpression> any_key_null;
 		for (auto &col : distinct_on_columns) {
 			distinct->distinct_on_targets.push_back(make_uniq<ColumnRefExpression>(col));
+			if (IsNotNullColumn(table, col)) {
+				continue;
+			}
+			auto is_null =
+			    make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, make_uniq<ColumnRefExpression>(col));
+			if (any_key_null) {
+				any_key_null = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(any_key_null),
+				                                                std::move(is_null));
+			} else {
+				any_key_null = std::move(is_null);
+			}
+		}
+		if (any_key_null) {
+			// rows with a NULL key column never conflict (NULLs are distinct in unique indexes) - make them distinct
+			auto unique_null_key = make_uniq<CaseExpression>();
+			CaseCheck null_check;
+			null_check.when_expr = std::move(any_key_null);
+			null_check.then_expr = make_uniq<FunctionExpression>("uuid", vector<unique_ptr<ParsedExpression>>());
+			unique_null_key->CaseChecksMutable().push_back(std::move(null_check));
+			unique_null_key->ElseMutable() = ConstantExpression::FromValue(Value());
+			distinct->distinct_on_targets.push_back(std::move(unique_null_key));
 		}
 		select_node->modifiers.push_back(std::move(distinct));
 		select_node->select_list.push_back(make_uniq<StarExpression>());

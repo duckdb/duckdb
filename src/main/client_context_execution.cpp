@@ -130,7 +130,14 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		error = ErrorData("Unhandled exception!");
 	} // LCOV_EXCL_STOP
 
-	client_data->profiler->EndQuery();
+	try {
+		client_data->profiler->EndQuery();
+	} catch (std::exception &ex) {
+		// e.g. the profiling output could not be written - report it as the error of the query
+		if (!error.HasError()) {
+			error = ErrorData(ex);
+		}
+	}
 
 	// Refresh the logger
 	logger->Flush();

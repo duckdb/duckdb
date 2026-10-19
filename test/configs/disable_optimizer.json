@@ -5,6 +5,12 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
+      "reason": "Checks barrier ordering and scan pushdown performed by the optimizer.",
+      "paths": [
+        "test/sql/optimizer/barrier_projection_siblings.test"
+      ]
+    },
+    {
       "reason": "Checks evaluation counts after optimizer filter pushdown.",
       "paths": [
         "test/optimizer/pushdown/lateral_projection_evaluation.test",
@@ -140,6 +146,7 @@
         "test/sql/copy/csv/parallel/csv_parallel_null_option.test",
         "test/sql/transactions/concurrent_drop_table.test",
         "test/sql/index/art/scan/test_art_prepared_scan.test",
+        "test/sql/index/art/storage/test_art_corrupt_pointer.test",
         "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
         "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
         "test/sql/copy/parquet/parquet_prefetch_projection.test",

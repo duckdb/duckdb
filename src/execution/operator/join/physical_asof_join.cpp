@@ -123,8 +123,7 @@ AsOfGlobalSinkState::AsOfGlobalSinkState(ClientContext &client, const PhysicalAs
 	const vector<unique_ptr<BaseStatistics>> partitions_stats;
 	auto &lhs = op.children[0].get();
 	OperatorPartitionInfo empty_info;
-	const OperatorPartitionInfo &lhs_partition_info =
-	    (op.partition_infos.size() > 0) ? op.partition_infos[0] : empty_info;
+	const OperatorPartitionInfo &lhs_partition_info = !op.partition_infos.empty() ? op.partition_infos[0] : empty_info;
 	sort_strategies[0] = SortStrategy::Factory(client, op.lhs_partitions, op.lhs_orders, lhs.GetTypes(),
 	                                           partitions_stats, lhs_partition_info, lhs.estimated_cardinality, true);
 
@@ -866,8 +865,13 @@ struct SortKeyPrefixComparison {
 				break;
 			case SortKeyPrefixComparisonType::NESTED:
 				decoded.Reset();
-				lhs_width = CreateSortKeyHelpers::DecodeSortKey(lhs_key, vec, 0, modifiers);
-				rhs_width = CreateSortKeyHelpers::DecodeSortKey(rhs_key, vec, 1, modifiers);
+				//	Decode from the current column, not from the start of the whole key.
+				lhs_width = CreateSortKeyHelpers::DecodeSortKey(
+				    string_t(lhs_ptr, UnsafeNumericCast<uint32_t>(lhs_key.GetData() + lhs_key.GetSize() - lhs_ptr)),
+				    vec, 0, modifiers);
+				rhs_width = CreateSortKeyHelpers::DecodeSortKey(
+				    string_t(rhs_ptr, UnsafeNumericCast<uint32_t>(rhs_key.GetData() + rhs_key.GetSize() - rhs_ptr)),
+				    vec, 1, modifiers);
 				cmp = memcmp(lhs_ptr, rhs_ptr, MinValue<idx_t>(lhs_width, rhs_width));
 				if (!cmp) {
 					cmp = (rhs_width < lhs_width) - (lhs_width < rhs_width);

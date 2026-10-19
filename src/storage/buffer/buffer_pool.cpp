@@ -348,34 +348,12 @@ TemporaryMemoryManager &BufferPool::GetTemporaryMemoryManager() {
 BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, idx_t extra_memory, idx_t memory_limit) {
 	TempBufferPoolReservation r(tag, *this, extra_memory);
 
-	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
-		FlushForAllocation(extra_memory, memory_limit);
-		return {true, std::move(r)};
-	}
-
-	bool success = false;
-	while (!object_cache->IsEmpty()) {
-		const idx_t used = memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH);
-		const idx_t overshoot = used > memory_limit ? (used - memory_limit) : 0;
-		const idx_t target = MaxValue(extra_memory, overshoot);
-		const idx_t freed_mem = object_cache->EvictToReduceMemory(target);
-		// Break if all entries cannot be evicted.
-		if (freed_mem == 0) {
-			break;
-		}
-
-		if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
-			success = true;
-			break;
-		}
-	}
-	if (!success) {
+	if (!object_cache->EvictToMemoryLimit(memory_limit)) {
 		r.Resize(0);
-	} else {
-		FlushForAllocation(extra_memory, memory_limit);
+		return {false, std::move(r)};
 	}
-
-	return {success, std::move(r)};
+	FlushForAllocation(extra_memory, memory_limit);
+	return {true, std::move(r)};
 }
 
 void BufferPool::FlushForAllocation(const idx_t extra_memory, const idx_t memory_limit) {
