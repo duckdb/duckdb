@@ -1626,7 +1626,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(shared_ptr<const Scala
 
 	if (binder && result_func->Function().GetStability() == FunctionStability::CONSISTENT_WITHIN_QUERY) {
 		// the result depends on the query it is bound in, also when the bind_expression callback folds it
-		binder->SetAlwaysRequireRebind();
+		binder->GetStatementProperties().contains_query_dependent_function = true;
 	}
 	if (result_func->Function().HasBindExpressionCallback()) {
 		// if a bind_expression callback is registered - call it and emit the resulting expression

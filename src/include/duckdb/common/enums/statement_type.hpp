@@ -75,7 +75,7 @@ class ClientContext;
 struct StatementProperties {
 	StatementProperties()
 	    : requires_valid_transaction(true), bound_all_parameters(true), return_type(StatementReturnType::QUERY_RESULT),
-	      parameter_count(0), always_require_rebind(false) {
+	      parameter_count(0), always_require_rebind(false), contains_query_dependent_function(false) {
 	}
 
 	struct CatalogIdentity {
@@ -111,6 +111,9 @@ struct StatementProperties {
 	idx_t parameter_count;
 	//! Whether or not the statement ALWAYS requires a rebind
 	bool always_require_rebind;
+	//! Whether or not the statement contains a function whose result depends on the query or session it is bound in
+	//! (e.g. now(), getvariable()), also when the function was folded to a constant while binding
+	bool contains_query_dependent_function;
 
 	bool IsReadOnly() const {
 		return modified_databases.empty();
