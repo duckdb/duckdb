@@ -199,19 +199,6 @@ Value Literal::ToValue() const {
 	}
 }
 
-void Literal::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty<LiteralKind>(100, "kind", kind);
-	serializer.WritePropertyWithDefault<string>(101, "text", text);
-}
-
-Literal Literal::Deserialize(Deserializer &deserializer) {
-	Literal result;
-	deserializer.ReadProperty<LiteralKind>(100, "kind", result.kind);
-	deserializer.ReadPropertyWithDefault<string>(101, "text", result.text);
-	result.Verify();
-	return result;
-}
-
 void Literal::Verify() const {
 	// validates that text conforms to kind so a (potentially deserialized) literal never renders arbitrary SQL text
 	auto all_of = [&](const char *allowed) {
