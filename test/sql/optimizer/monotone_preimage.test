@@ -170,12 +170,9 @@ SELECT count(*) FROM ets WHERE year(t) = 2005;
 
 # ---------------------------------------------------------------------------
 # bounds on the edge of the TIMESTAMP domain.  Every int64 except the two infinity sentinels is a valid
-# timestamp (make_timestamp accepts all of them), but the values between INT64_MIN and the first midnight
-# of year -290308 (290309 BC) have no date/time form and cannot be rendered: EXPLAIN / EXPLAIN ANALYZE of a
-# preimage that reached the bottom of the domain failed with "Date out of range in timestamp conversion".
-# A bound on the domain edge is therefore written as a strict comparison against the adjacent sentinel
-# (t > '-infinity', t < 'infinity'), which renders and keeps every finite row; a bound strictly inside the
-# unrenderable band leaves f(t) in place.
+# timestamp (make_timestamp accepts all of them) that renders, also the values between INT64_MIN and the
+# first midnight of year -290308 (290309 BC). A bound on the domain edge is written as a strict comparison
+# against the adjacent sentinel (t > '-infinity', t < 'infinity'), which keeps every row of the domain.
 # ---------------------------------------------------------------------------
 query II
 EXPLAIN SELECT count(*) FROM ets WHERE epoch(t) > -9223372036854775807;
@@ -213,7 +210,7 @@ SELECT count(*) FROM ets WHERE epoch(t) < 9223372036854775807;
 200000
 
 # the smallest finite timestamp (INT64_MIN + 2, right above the -infinity sentinel) is a valid row that the
-# rewrite must keep, even though it cannot be printed
+# rewrite must keep
 statement ok
 CREATE TABLE ts_min(t TIMESTAMP);
 
@@ -225,7 +222,7 @@ SELECT count(*) FROM ts_min WHERE epoch(t) > -9223372036854775807;
 ----
 1
 
-# both ends of the finite domain, the first renderable timestamp, ±infinity and NULL
+# both ends of the finite domain, the first midnight of the range, ±infinity and NULL
 statement ok
 CREATE TABLE edge(t TIMESTAMP);
 
@@ -265,7 +262,7 @@ EXPLAIN SELECT count(*) FROM edge WHERE epoch_us(t) <= 9223372036854775806;
 ----
 logical_opt	<REGEX>:.*t > '-infinity'.*t < 'infinity'.*
 
-# ... or one step inside the unrenderable band, where the function is kept and the result is unchanged
+# ... or one step inside the domain, below the first midnight of the range
 query I
 SELECT count(*) FROM edge WHERE epoch_us(t) > -9223372036854775806;
 ----
@@ -284,7 +281,7 @@ SELECT count(*) FROM edge WHERE epoch_us(t) = -9223372036854775806;
 query II
 EXPLAIN SELECT count(*) FROM edge WHERE epoch_us(t) > -9223372036854775806;
 ----
-logical_opt	<REGEX>:.*epoch_us.*
+logical_opt	<REGEX>:.*t >= '290309-12-21 \(BC\) 19:59:05.224195'.*
 
 query I
 SELECT count(*) FROM edge WHERE epoch_us(t) >= -9223372036854775000;
