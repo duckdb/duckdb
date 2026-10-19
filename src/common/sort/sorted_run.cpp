@@ -280,8 +280,8 @@ struct SkaExtractSuffixKey : SkaExtractKey<SORT_KEY> {
 };
 
 template <class SORT_KEY, class ITERATOR, class MERGE>
-static void SortTiedBucket(ClientContext &context, ITERATOR begin, ITERATOR end, SkaExtractKey<SORT_KEY> &extract_key,
-                           const MERGE &merge) {
+static void SortTiedBucket(ClientContext &context, const ITERATOR &begin, const ITERATOR &end,
+                           SkaExtractKey<SORT_KEY> &extract_key, const MERGE &merge) {
 	if constexpr (SORT_KEY::CONSTANT_SIZE) {
 		duckdb_ska_sort::detail::StdSortFallback(begin, end, extract_key, merge);
 	} else {
@@ -388,7 +388,8 @@ static void TemplatedSort(ClientContext &context, TupleDataCollection &key_data,
 	// order, so that no merge anywhere in this sort allocates on its own (BufferedMerge never does)
 	SortMergeBuffer merge_buffer(BufferAllocator::Get(context), key_data.Count(), sizeof(SORT_KEY));
 	const BufferedMergePolicy<SORT_KEY> merge(merge_buffer);
-	const auto sort_ties = [&context](BLOCK_ITERATOR b, BLOCK_ITERATOR e, SkaExtractKey<SORT_KEY> &extract_key,
+	const auto sort_ties = [&context](const BLOCK_ITERATOR &b, const BLOCK_ITERATOR &e,
+	                                  SkaExtractKey<SORT_KEY> &extract_key,
 	                                  const BufferedMergePolicy<SORT_KEY> &policy) {
 		SortTiedBucket(context, b, e, extract_key, policy);
 	};
