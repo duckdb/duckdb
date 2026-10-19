@@ -407,6 +407,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"iceberg_load_table_response", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_manifests", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_metadata", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"iceberg_partition_specs", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_partition_stats", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_refs", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_rewrite_data_files", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
