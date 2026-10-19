@@ -58,7 +58,7 @@ statement ok
 INSERT INTO below_tz VALUES (make_timestamptz(-9223372036854775807 - 1)), (make_timestamptz(-9223372036854775806)), ('-infinity'), (NULL);
 
 query III
-SELECT (SELECT count(*) FROM below_tz WHERE epoch_us(t) <= -9223372036854775806), (SELECT count(*) FROM below_tz WHERE epoch(t) < 0),
+SELECT (SELECT count(*) FROM below_tz WHERE epoch_us(t) <= -9223372036854775806), (SELECT count(*) FROM below_tz WHERE epoch_us(t) < 0),
        (SELECT count(*) FROM below_tz WHERE epoch_us(t) >= -9223372036854775806);
 ----
 2	2	1

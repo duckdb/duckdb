@@ -51,9 +51,9 @@ static bool GetFiniteDomain(const LogicalType &type, int64_t &lo, int64_t &hi, b
 		return true;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		// every non-sentinel int64 is a valid, comparable timestamp (make_timestamp accepts all of them). The
-		// searched domain lies between the ±infinity sentinels, which keeps the never-true sentinels (hi+1 / lo-1)
-		// of the bisection away from INT64_MIN/MAX. The finite INT64_MIN below -infinity is handled in Apply.
+		// every non-sentinel int64 is a valid, comparable timestamp (make_timestamp accepts all of them). Search
+		// between the ±infinity sentinels so that hi+1 and lo-1 stay representable. Apply handles the finite
+		// INT64_MIN below -infinity.
 		lo = timestamp_t::ninfinity().value + 1;
 		hi = timestamp_t::infinity().value - 1;
 		has_infinity = true;
