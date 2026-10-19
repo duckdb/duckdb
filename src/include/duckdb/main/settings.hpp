@@ -455,8 +455,8 @@ struct AutoloadKnownExtensionsSetting {
 struct BlockAllocatorMemorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "block_allocator_memory";
-	static constexpr const char *Description = "Physical memory that the block allocator is allowed to use. This "
-	                                           "memory is allocated once, never freed, and cannot be reduced.";
+	static constexpr const char *Description =
+	    "Block allocator capacity (cannot be reduced; free physical pages can be reclaimed).";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;

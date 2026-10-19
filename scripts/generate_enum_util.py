@@ -11,6 +11,8 @@ blacklist = [
     "CMExpressionType",
     "RegexOptions",
     "Flags",
+    "FlushState",
+    "ReclaimMode",
     "ContainerType",
     "Type",
     "DictionaryAppendState",
