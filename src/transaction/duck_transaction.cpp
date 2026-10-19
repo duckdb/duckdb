@@ -139,12 +139,12 @@ void DuckTransaction::PushAppend(DuckTableEntry &table_entry, idx_t start_row, i
 	append_info->count = row_count;
 }
 
-UndoBufferReference DuckTransaction::CreateUpdateInfo(DuckTableEntry &table_entry, idx_t type_size, idx_t entries,
-                                                      idx_t row_group_start) {
-	idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
+UndoBufferReference DuckTransaction::CreateUpdateInfo(DuckTableEntry &table_entry, idx_t type_size, idx_t capacity,
+                                                      idx_t value_capacity, idx_t row_group_start) {
+	idx_t alloc_size = UpdateInfo::GetAllocSize(type_size, capacity, value_capacity);
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::UPDATE_TUPLE, alloc_size);
 	auto &update_info = UpdateInfo::Get(undo_entry);
-	UpdateInfo::Initialize(update_info, table_entry, GetTransactionId(), row_group_start);
+	UpdateInfo::Initialize(update_info, table_entry, GetTransactionId(), row_group_start, capacity, value_capacity);
 	return undo_entry;
 }
 
@@ -371,8 +371,8 @@ void DuckTransaction::SetModifications(DatabaseModificationType type) {
 		require_write_lock = require_write_lock || type.AlterTable();
 		require_write_lock = require_write_lock || type.CreateCatalogEntry();
 		require_write_lock = require_write_lock || type.DropCatalogEntry();
-		require_write_lock = require_write_lock || type.Sequence();
 		require_write_lock = require_write_lock || type.CreateIndex();
+		// not SEQUENCE: a checkpoint writes a sequence's current state, and WAL replay keeps the most used one
 
 		if (require_write_lock) {
 			// obtain a shared checkpoint lock to prevent concurrent checkpoints while this transaction is running

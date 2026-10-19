@@ -5,7 +5,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/optimizer/builtin_function_lookup.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/late_materialization_helper.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_nullability.hpp"
@@ -275,6 +275,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	child = *filter.children[0];
 
 	// Get bindings and types from filter to use in top-most operator later
+	// the types are not necessarily resolved at this point (e.g., after previous optimizers changed the plan)
+	filter.ResolveOperatorTypes();
 	const auto topmost_bindings = filter.GetColumnBindings();
 	const auto topmost_types = filter.types;
 	vector<ColumnBinding> new_bindings;
@@ -898,24 +900,10 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 	params.partition_count = window_expr.Partitions().size();
 	params.order_type = window_expr.OrderBy()[0].type;
 
-	VisitExpression(&window_expr.OrderByMutable()[0].expression);
-	if (params.payload_type == TopNPayloadType::SINGLE_COLUMN && !aggregate_payload.empty()) {
-		VisitExpression(&aggregate_payload[0]);
-	}
-	for (const auto &column_ref : column_references) {
-		const auto &column_stats = stats->find(column_ref.first);
-		if (column_stats == stats->end() || column_stats->second->CanHaveNull()) {
-			params.can_be_null = true;
-			break;
-		}
-	}
-	// A compound ORDER BY expression (NULLIF, arithmetic, cast, ...) can produce NULLs even when its input
-	// columns are non-null. Only a direct column reference inherits the column's known nullability, so treat a
-	// non-column-reference as potentially null to keep the nulls-last aggregate variant.
-	if (window_expr.OrderBy()[0].expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-		params.can_be_null = true;
-	}
-	column_references.clear();
+	// The statistics of a column binding are those at the top of the plan: a filter above the window (e.g. on the
+	// result of a decorrelated LATERAL join) can have narrowed them to non-NULL although the input of the window
+	// contains NULLs. They cannot tell whether the window input can be NULL, so keep the NULL-preserving variants.
+	params.can_be_null = true;
 
 	return params;
 }

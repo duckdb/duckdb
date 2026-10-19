@@ -44,8 +44,28 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateChildren(LogicalOperat
 	return nullptr;
 }
 
+void StatisticsPropagator::ResetAdditiveStatistics(const vector<ColumnBinding> &bindings) {
+	// additive statistics (e.g. total_string_length) describe a fixed row population - an operator that can emit an
+	// input row more than once invalidates them for all pass-through columns
+	for (auto &binding : bindings) {
+		auto entry = statistics_map.find(binding);
+		if (entry != statistics_map.end() && entry->second) {
+			entry->second->ResetAdditiveStatistics();
+		}
+	}
+}
+
+void StatisticsPropagator::ResetAdditiveVerificationStats(Expression &expr) {
+	auto &stats = expr.GetVerificationStats();
+	if (stats) {
+		stats->ResetAdditiveStatistics();
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ResetAdditiveVerificationStats(child); });
+}
+
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOperator &node,
                                                                      unique_ptr<LogicalOperator> &node_ptr) {
+	propagation_path.emplace_back(node_ptr);
 	unique_ptr<NodeStatistics> result;
 	switch (node.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
@@ -99,6 +119,11 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		result = PropagateStatistics(node.Cast<LogicalWindow>(), node_ptr);
 		break;
+	case LogicalOperatorType::LOGICAL_UNNEST:
+		result = PropagateChildren(node, node_ptr);
+		// unnest emits its input row once per unnested entry
+		ResetAdditiveStatistics(node.children[0]->GetColumnBindings());
+		break;
 	default:
 		result = PropagateChildren(node, node_ptr);
 	}
@@ -106,10 +131,11 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 	if (mode == StatisticsPropagationMode::FULL &&
 	    !optimizer.OptimizerDisabled(OptimizerType::COMPRESSED_MATERIALIZATION)) {
 		// compress data based on statistics for materializing operators
-		CompressedMaterialization compressed_materialization(optimizer, *root, statistics_map);
+		CompressedMaterialization compressed_materialization(optimizer, *root, propagation_path, statistics_map);
 		compressed_materialization.Compress(node_ptr);
 	}
 
+	propagation_path.pop_back();
 	return result;
 }
 
@@ -161,7 +187,11 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(unique_ptr<Expression> &expr) {
+#ifdef D_ASSERT_IS_ENABLED
+	auto return_type = expr->GetReturnType();
+#endif
 	auto stats = PropagateExpression(*expr, expr);
+	D_ASSERT(expr->GetReturnType() != return_type || expr->GetReturnType().EqualsIncludingCollation(return_type));
 	if (Settings::Get<DebugVerifyStatsSetting>(context) && stats) {
 		expr->SetVerificationStats(stats->ToUnique());
 	}

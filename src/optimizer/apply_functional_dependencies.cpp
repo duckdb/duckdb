@@ -43,6 +43,9 @@ void ApplyFunctionalDependencies::VisitLogicalGet(LogicalGet &get) {
 			continue;
 		}
 		auto &unique = constraint->Cast<UniqueConstraint>();
+		if (unique.IsDeferred()) {
+			continue;
+		}
 		auto &names = unique.GetColumnNames();
 		if (!unique.HasIndex() && !std::all_of(names.begin(), names.end(),
 		                                       [&](const Identifier &name) { return columns.ColumnExists(name); })) {

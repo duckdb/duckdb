@@ -392,7 +392,7 @@ bool RowGroup::InitializeScanInternal(CollectionScanState &state, SegmentNode<Ro
 	D_ASSERT(state.prepared_vector.prepare_state == VectorPrepareState::NONE);
 	state.prepared_vector.Reset();
 	state.assignment_io_registered = false;
-	state.row_group = node;
+	state.SetRowGroup(node);
 	state.vector_index = vector_offset;
 	auto row_start = node.GetRowStart();
 	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
@@ -930,7 +930,7 @@ bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 					continue;
 				}
 				if (rate < 1) {
-					auto row_group_start = state.row_group->GetRowStart();
+					auto row_group_start = state.GetRowGroup()->GetRowStart();
 					sample_count =
 					    SystemRowsSelection(sampling_info, row_group_start + current_row, max_count, sample_sel);
 					if (sample_count == 0) {
@@ -952,10 +952,8 @@ bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 		if (!CheckZonemapSegments(state)) {
 			continue;
 		}
-		auto &current_row_group = state.row_group->GetNode();
-
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
-		idx_t count = current_row_group.GetSelVector(options, state.vector_index, state.valid_sel, max_count);
+		idx_t count = GetSelVector(options, state.vector_index, state.valid_sel, max_count);
 		if (count == 0) {
 			// nothing to scan for this vector, skip the entire vector
 			NextVector(state);
@@ -1275,6 +1273,9 @@ void RowGroup::RevertAppend(idx_t new_count) {
 	for (auto &column : GetColumns()) {
 		column->RevertAppend(UnsafeNumericCast<row_t>(new_count));
 	}
+	if (transient) {
+		*transient = SuballocationBlock();
+	}
 	SetCount(new_count);
 	Verify();
 }
@@ -1290,17 +1291,32 @@ void RowGroup::InitializeAppend(SegmentNode<RowGroup> &row_group, RowGroupAppend
 	append_state.row_group = row_group;
 	row_group.GetNode().InitializeAppendInternal(append_state);
 }
+
+void RowGroup::InitializeNextAppend(SegmentNode<RowGroup> &row_group, RowGroupAppendState &append_state) {
+	D_ASSERT(append_state.row_group);
+	auto &previous = append_state.row_group->GetNode();
+	auto &next = row_group.GetNode();
+	D_ASSERT(!RefersToSameObject(previous, next));
+	D_ASSERT(RefersToSameObject(previous.GetCollection(), next.GetCollection()));
+	D_ASSERT(!next.transient);
+	next.transient = std::move(previous.transient);
+	InitializeAppend(row_group, append_state);
+}
+
 void RowGroup::InitializeAppendInternal(RowGroupAppendState &append_state) {
 	if (!RefersToSameObject(append_state.row_group->GetNode(), *this)) {
 		throw InternalException("RowGroup::InitializeAppend mismatch - call RowGroupAppendState::InitializeAppend");
 	}
 	append_state.offset_in_row_group = this->count;
+	if (!transient) {
+		transient = make_uniq<SuballocationBlock>();
+	}
 	// for each column, initialize the append state
 	append_state.states = make_unsafe_uniq_array<ColumnAppendState>(GetColumnCount());
 	for (idx_t i = 0; i < GetColumnCount(); i++) {
 		auto &col_data = GetColumn(i);
 		auto &state = append_state.states[i];
-		state.transient = &append_state.transient;
+		state.transient = transient.get();
 		col_data.InitializeAppend(state);
 	}
 }
@@ -2096,9 +2112,10 @@ void RowGroup::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group
 //===--------------------------------------------------------------------===//
 class VersionDeleteState {
 public:
-	VersionDeleteState(RowGroup &info, TransactionData transaction, DuckTableEntry &table_entry, idx_t base_row)
+	VersionDeleteState(RowGroup &info, TransactionData transaction, DuckTableEntry &table_entry, idx_t base_row,
+	                   optional_ptr<DeletedRowIds> deleted_ids, idx_t input_offset)
 	    : info(info), transaction(transaction), table_entry(table_entry), current_chunk(DConstants::INVALID_INDEX),
-	      count(0), base_row(base_row), delete_count(0) {
+	      count(0), base_row(base_row), delete_count(0), deleted_ids(deleted_ids), input_offset(input_offset) {
 	}
 
 	RowGroup &info;
@@ -2110,6 +2127,9 @@ public:
 	idx_t base_row;
 	idx_t chunk_row;
 	idx_t delete_count;
+	optional_ptr<DeletedRowIds> deleted_ids;
+	//! The position of the next row to flush in the input row ids of the delete
+	idx_t input_offset;
 
 public:
 	void Delete(row_t row_id);
@@ -2117,8 +2137,8 @@ public:
 };
 
 idx_t RowGroup::Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids, idx_t count,
-                       idx_t row_group_start) {
-	VersionDeleteState del_state(*this, transaction, table_entry, row_group_start);
+                       idx_t row_group_start, optional_ptr<DeletedRowIds> deleted_ids, idx_t input_offset) {
+	VersionDeleteState del_state(*this, transaction, table_entry, row_group_start, deleted_ids, input_offset);
 
 	// obtain a write lock
 	for (idx_t i = 0; i < count; i++) {
@@ -2176,6 +2196,20 @@ void VersionDeleteState::Flush() {
 	// this is returned in the actual_delete_count
 	auto actual_delete_count = info.DeleteRows(current_chunk, transaction.GetTransactionId(), rows, count);
 	delete_count += actual_delete_count;
+	if (deleted_ids) {
+		if (!deleted_ids->has_skipped_rows && actual_delete_count != count) {
+			// the first skipped rows - all rows flushed before were deleted, they are the preceding input rows
+			deleted_ids->has_skipped_rows = true;
+			deleted_ids->row_ids.assign(deleted_ids->input_ids, deleted_ids->input_ids + input_offset);
+		}
+		if (deleted_ids->has_skipped_rows) {
+			// DeleteRows moves the rows that were actually deleted to the front
+			for (idx_t i = 0; i < actual_delete_count; i++) {
+				deleted_ids->row_ids.push_back(UnsafeNumericCast<row_t>(base_row + chunk_row) + rows[i]);
+			}
+		}
+		input_offset += count;
+	}
 	if (transaction.transaction && actual_delete_count > 0) {
 		// now push the delete into the undo buffer, but only if any deletes were actually performed
 		transaction.transaction->PushDelete(table_entry, info.GetOrCreateVersionInfo(), current_chunk, rows,

@@ -51,6 +51,7 @@ class TableFilterSet;
 struct ColumnFetchState;
 struct PrefetchState;
 struct RowGroupAppendState;
+struct SuballocationBlock;
 class MetadataManager;
 class RowVersionManager;
 class CommitDropState;
@@ -118,6 +119,19 @@ private:
 	atomic<bool> deletes_is_loaded;
 	shared_ptr<RowVersionManager> owned_version_info;
 	atomic<optional_ptr<RowVersionManager>> version_info;
+};
+
+//! Collects the ids of the rows that a delete actually deleted, but only once rows were skipped (e.g. because they
+//! were matched more than once) - in the common case all input rows are deleted and nothing is collected
+struct DeletedRowIds {
+	explicit DeletedRowIds(const row_t *input_ids) : input_ids(input_ids) {
+	}
+
+	//! The row ids passed to the delete
+	const row_t *input_ids;
+	//! Whether any of the input rows were skipped - only then are the deleted row ids collected
+	bool has_skipped_rows = false;
+	vector<row_t> row_ids;
 };
 
 class RowGroup : public SegmentBase<RowGroup> {
@@ -216,9 +230,10 @@ public:
 	//! Clean up append states that can either be compressed or deleted
 	void CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count);
 
-	//! Delete the given set of rows in the version manager
+	//! Delete the given set of rows in the version manager - optionally collects the ids of the rows that were deleted
+	//! (input_offset is the position of row_ids in the row ids passed to the collection delete)
 	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *row_ids, idx_t count,
-	             idx_t row_group_start);
+	             idx_t row_group_start, optional_ptr<DeletedRowIds> deleted_ids = nullptr, idx_t input_offset = 0);
 
 	static vector<RowGroupWriteData> WriteToDisk(RowGroupWriteInfo &info,
 	                                             const vector<const_reference<RowGroup>> &row_groups);
@@ -239,6 +254,8 @@ public:
 	PersistentRowGroupData SerializeRowGroupInfo(idx_t row_group_start) const;
 
 	static void InitializeAppend(SegmentNode<RowGroup> &row_group, RowGroupAppendState &append_state);
+	//! Continue a finalized append in a new row group, retaining unused transient block space
+	static void InitializeNextAppend(SegmentNode<RowGroup> &row_group, RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 	void FinalizeAppend(RowGroupAppendState &append_state);
 
@@ -327,6 +344,8 @@ private:
 	bool has_per_column_metadata_blocks = false;
 	PerColumnMetadataBlocks per_column_metadata_blocks;
 	atomic<idx_t> allocation_size;
+	//! Append cursor, retained between appends and moved when appending to the next row group
+	unique_ptr<SuballocationBlock> transient;
 	//! The row id column data (mutable because `const` can lazy load)
 	mutable unique_ptr<ColumnData> row_id_column_data;
 	//! Whether or not `row_id_column_data` is loaded (mutable because `const` can lazy load)

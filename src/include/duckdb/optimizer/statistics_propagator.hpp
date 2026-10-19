@@ -95,10 +95,16 @@ private:
 	void UpdateFilterStatistics(const Expression &condition);
 	//! Set the statistics of a specific column binding to not contain null values
 	void SetStatisticsNotNull(ColumnBinding binding);
+	//! Reset additive statistics of bindings whose rows an operator can emit more than once
+	void ResetAdditiveStatistics(const vector<ColumnBinding> &bindings);
+	//! Reset additive statistics in the verification statistics of an expression tree
+	void ResetAdditiveVerificationStats(Expression &expr);
 	//! Determine whether a propagated condition can be pruned
 	FilterPropagateResult ClassifyFilter(Expression &condition);
 	//! Simplify conjunctions using filter truth semantics
 	bool SimplifyFilter(unique_ptr<Expression> &condition);
+	//! Remove constant_or_null(TRUE, ...) conjuncts whose NULL checks are implied by retained predicates
+	void SimplifyConstantOrNull(vector<unique_ptr<Expression>> &expressions);
 	//! Propagate a filter condition
 	FilterPropagateResult HandleFilter(unique_ptr<Expression> &condition);
 	//! Rewrite a join whose condition can never match; returns true if the operator was replaced
@@ -168,6 +174,8 @@ private:
 	unique_ptr<NodeStatistics> node_stats;
 	//! Whether statistics changed which relations a filter depends on
 	bool filter_bindings_changed = false;
+	//! The chain of operators from the root down to the operator currently being propagated
+	vector<reference<unique_ptr<LogicalOperator>>> propagation_path;
 };
 
 } // namespace duckdb
