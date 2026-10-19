@@ -33,7 +33,7 @@ enum class ParquetCacheValidity { VALID, INVALID, UNKNOWN };
 
 class ParquetFileMetadataCache : public ObjectCacheEntry {
 public:
-	ParquetFileMetadataCache(unique_ptr<duckdb_parquet::FileMetaData> file_metadata, CachingFileHandle &handle,
+	ParquetFileMetadataCache(unique_ptr<duckdb_parquet::FileMetaData> file_metadata, FileMetadata source_metadata,
 	                         unique_ptr<GeoParquetFileMetadata> geo_metadata,
 	                         unique_ptr<FileCryptoMetaData> crypto_metadata, string encryption_key_hash,
 	                         idx_t footer_size);
@@ -60,6 +60,7 @@ public:
 	optional_idx GetEstimatedCacheMemory() const override;
 
 	bool IsEncrypted() const;
+	const FileMetadata &GetFileMetadata() const;
 	bool CanUseMetadataStatistics(const shared_ptr<ParquetEncryptionConfig> &encryption_config,
 	                              optional_ptr<const string> encryption_key_hash = nullptr) const;
 	static string CreateEncryptionKeyHash(const ParquetEncryptionConfig &encryption_config,
@@ -69,8 +70,7 @@ public:
 	ParquetCacheValidity IsValid(const OpenFileInfo &info, ClientContext &context) const;
 
 private:
-	timestamp_t last_modified;
-	string version_tag;
+	FileMetadata source_metadata;
 };
 
 } // namespace duckdb

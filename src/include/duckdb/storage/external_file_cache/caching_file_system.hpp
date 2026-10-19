@@ -28,7 +28,9 @@ class DatabaseInstance;
 class FileOpenFlags;
 class FileSystem;
 struct FileHandle;
+struct FileMetadata;
 struct NetworkThroughputEstimate;
+struct SuffixReadResult;
 class QueryContext;
 class CachingFileSystem;
 
@@ -70,6 +72,12 @@ public:
 	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
 	//! Read and record time
 	DUCKDB_API void ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location);
+	//! Try to read a suffix of at least min_bytes into a buffer-manager allocation.
+	DUCKDB_API bool TryReadSuffix(idx_t min_bytes, FileBufferHandleGroup &data, SuffixReadResult &result);
+	//! Seed this handle with metadata obtained from the same file snapshot as externally supplied data.
+	DUCKDB_API void SetFileMetadata(FileMetadata metadata);
+	//! Maximum cache block size configured for this file.
+	DUCKDB_API idx_t GetCacheMaxBlockSize() const;
 	//! Whether responses observed by this handle prohibit sharing cached data (e.g., HTTP no-store/Vary)
 	DUCKDB_API bool IsCacheReuseProhibited();
 	//! Get some properties of the file
@@ -90,6 +98,18 @@ private:
 	bool StripForceFullDownloadIfPresent();
 	//! Refresh the cached file if the global cache state has changed.
 	shared_ptr<CachedFile> EnsureCachedFileCurrent();
+	//! Ensure validation metadata has been initialized.
+	void EnsureFileMetadata();
+	//! Get the validation metadata for the file snapshot this handle currently uses.
+	CacheValidationInfo GetValidationInfo();
+	//! Initialize validation and shared cache metadata from one file snapshot.
+	void InitializeFileMetadata(const shared_ptr<FileHandle> &handle, FileMetadata metadata);
+	//! Try to serve a suffix from blocks belonging to one cache generation.
+	bool TryReadCachedSuffix(idx_t request_size, const shared_ptr<CachedFile> &cached_file, FileBufferHandleGroup &data,
+	                         SuffixReadResult &result);
+	//! Copy a suffix read into ordinary zero-offset cache blocks.
+	bool TryCacheSuffix(const_data_ptr_t data, const SuffixReadResult &result,
+	                    const shared_ptr<CachedFile> &cached_file, idx_t content_generation);
 	//! Whether validation metadata permits using cached blocks.
 	bool CanUseCache();
 	//! Read without caching, splitting large reads of cacheable files into parallel reads of at most a block.
@@ -124,7 +144,9 @@ private:
 	//! File handle for the internal filesystem.
 	shared_ptr<FileHandle> file_handle;
 	//! Metadata snapshot taken with a single Stats call when the file handle is opened.
-	CacheValidationInfo validation_info;
+	optional<CacheValidationInfo> validation_info;
+	//! Whether Stats was intentionally deferred until the first metadata-producing operation.
+	bool defer_file_info;
 
 	//! Current position (if non-seeking reads)
 	idx_t position;

@@ -14,6 +14,7 @@
 
 #include <chrono>
 #include <condition_variable>
+#include <future>
 
 namespace duckdb {
 
@@ -124,10 +125,271 @@ private:
 	bool read_blocked DUCKDB_GUARDED_BY(lock) = false;
 };
 
+class SuffixTrackingFileSystem : public SimpleTrackingFileSystem {
+public:
+	FileMetadata Stats(FileHandle &handle) override {
+		stats_count++;
+		auto metadata = LocalFileSystem::Stats(handle);
+		metadata.version_tag = stats_version_tag;
+		return metadata;
+	}
+
+	bool TryReadSuffix(FileHandle &handle, data_ptr_t buffer, idx_t buffer_len, SuffixReadResult &result) override {
+		suffix_requests.push_back(buffer_len);
+		if (!suffix_supported) {
+			return false;
+		}
+
+		auto metadata = LocalFileSystem::Stats(handle);
+		metadata.version_tag = suffix_version_tag;
+		const auto file_size = NumericCast<idx_t>(metadata.file_size);
+		const auto bytes_read = MinValue(file_size, buffer_len);
+		LocalFileSystem::Read(handle, buffer, bytes_read, file_size - bytes_read);
+		result.bytes_read = bytes_read;
+		result.metadata = std::move(metadata);
+		return true;
+	}
+
+	bool suffix_supported = true;
+	string suffix_version_tag = "suffix-v1";
+	string stats_version_tag = "stats-v1";
+	idx_t stats_count = 0;
+	vector<idx_t> suffix_requests;
+};
+
+class BlockingSuffixFileSystem : public SimpleTrackingFileSystem {
+public:
+	FileMetadata Stats(FileHandle &handle) override {
+		auto metadata = LocalFileSystem::Stats(handle);
+		metadata.version_tag = StringUtil::Format("version-%lld", metadata.file_size);
+		return metadata;
+	}
+
+	bool TryReadSuffix(FileHandle &handle, data_ptr_t buffer, idx_t buffer_len, SuffixReadResult &result) override {
+		auto metadata = Stats(handle);
+		const auto file_size = NumericCast<idx_t>(metadata.file_size);
+		const auto bytes_read = MinValue(file_size, buffer_len);
+		LocalFileSystem::Read(handle, buffer, bytes_read, file_size - bytes_read);
+		{
+			annotated_unique_lock<annotated_mutex> guard(lock);
+			suffix_started = true;
+			started.notify_all();
+			released.wait(guard, [&]() DUCKDB_REQUIRES(lock) { return release_suffix; });
+		}
+		result.bytes_read = bytes_read;
+		result.metadata = std::move(metadata);
+		return true;
+	}
+
+	void WaitForSuffix() {
+		annotated_unique_lock<annotated_mutex> guard(lock);
+		started.wait(guard, [&]() DUCKDB_REQUIRES(lock) { return suffix_started; });
+	}
+
+	void ReleaseSuffix() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		release_suffix = true;
+		released.notify_all();
+	}
+
+private:
+	annotated_mutex lock;
+	std::condition_variable started DUCKDB_GUARDED_BY(lock);
+	std::condition_variable released DUCKDB_GUARDED_BY(lock);
+	bool suffix_started DUCKDB_GUARDED_BY(lock) = false;
+	bool release_suffix DUCKDB_GUARDED_BY(lock) = false;
+};
+
+class VersionedSuffixFileSystem : public LocalFileSystem {
+public:
+	static const string &Prefix() {
+		static const string prefix = "s3://suffix-version/";
+		return prefix;
+	}
+
+	string GetName() const override {
+		return "VersionedSuffixFileSystem";
+	}
+
+	bool CanHandleFile(const string &path) override {
+		return StringUtil::StartsWith(path, Prefix());
+	}
+
+	bool IsLocalFileSystem() const override {
+		return false;
+	}
+
+	bool FileExists(const string &path, optional_ptr<FileOpener> opener) override {
+		return CanHandleFile(path) && LocalFileSystem::FileExists(GetCurrentPath(), opener);
+	}
+
+	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener) override {
+		if (FileExists(path, opener)) {
+			return {OpenFileInfo(path)};
+		}
+		return {};
+	}
+
+	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) override {
+		return LocalFileSystem::OpenFile(GetCurrentPath(), flags, opener);
+	}
+
+	FileMetadata Stats(FileHandle &handle) override {
+		{
+			annotated_lock_guard<annotated_mutex> guard(lock);
+			stats_requests++;
+		}
+		return GetMetadata(handle);
+	}
+
+	int64_t GetFileSize(FileHandle &handle) override {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		file_size_requests++;
+		return GetMetadata(handle).file_size;
+	}
+
+	timestamp_t GetLastModifiedTime(FileHandle &handle) override {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		last_modified_requests++;
+		return GetMetadata(handle).last_modification_time;
+	}
+
+	string GetVersionTag(FileHandle &handle) override {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		version_tag_requests++;
+		return GetMetadata(handle).version_tag;
+	}
+
+	FileType GetFileType(FileHandle &handle) override {
+		return FileType::FILE_TYPE_REGULAR;
+	}
+
+	FileMetadata GetMetadata(FileHandle &handle) {
+		auto metadata = LocalFileSystem::Stats(handle);
+		metadata.version_tag = handle.GetPath();
+		return metadata;
+	}
+
+	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+		{
+			annotated_lock_guard<annotated_mutex> guard(lock);
+			read_requests++;
+		}
+		LocalFileSystem::Read(handle, buffer, nr_bytes, location);
+	}
+
+	bool TryReadSuffix(FileHandle &handle, data_ptr_t buffer, idx_t buffer_len, SuffixReadResult &result) override {
+		auto metadata = GetMetadata(handle);
+		const auto file_size = NumericCast<idx_t>(metadata.file_size);
+		const auto bytes_read = MinValue(file_size, buffer_len);
+		LocalFileSystem::Read(handle, buffer, bytes_read, file_size - bytes_read);
+		{
+			annotated_unique_lock<annotated_mutex> guard(lock);
+			suffix_requests++;
+			if (block_suffix) {
+				suffix_started = true;
+				started.notify_all();
+				released.wait(guard, [&]() DUCKDB_REQUIRES(lock) { return !block_suffix; });
+			}
+		}
+		result.bytes_read = bytes_read;
+		result.metadata = std::move(metadata);
+		return true;
+	}
+
+	void SetCurrentPath(string path) {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		current_path = std::move(path);
+	}
+
+	void BlockSuffix() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		block_suffix = true;
+	}
+
+	bool WaitForSuffix() {
+		annotated_unique_lock<annotated_mutex> guard(lock);
+		return started.wait_for(guard, std::chrono::seconds(5), [&]() DUCKDB_REQUIRES(lock) { return suffix_started; });
+	}
+
+	void ReleaseSuffix() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		block_suffix = false;
+		released.notify_all();
+	}
+
+	idx_t GetSuffixRequests() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		return suffix_requests;
+	}
+
+	idx_t GetReadRequests() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		return read_requests;
+	}
+
+	idx_t GetStatsRequests() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		return stats_requests;
+	}
+
+	idx_t GetFileSizeRequests() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		return file_size_requests;
+	}
+
+	idx_t GetLastModifiedRequests() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		return last_modified_requests;
+	}
+
+	idx_t GetVersionTagRequests() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		return version_tag_requests;
+	}
+
+private:
+	string GetCurrentPath() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		return current_path;
+	}
+
+	annotated_mutex lock;
+	std::condition_variable started DUCKDB_GUARDED_BY(lock);
+	std::condition_variable released DUCKDB_GUARDED_BY(lock);
+	string current_path DUCKDB_GUARDED_BY(lock);
+	idx_t suffix_requests DUCKDB_GUARDED_BY(lock) = 0;
+	idx_t read_requests DUCKDB_GUARDED_BY(lock) = 0;
+	idx_t stats_requests DUCKDB_GUARDED_BY(lock) = 0;
+	idx_t file_size_requests DUCKDB_GUARDED_BY(lock) = 0;
+	idx_t last_modified_requests DUCKDB_GUARDED_BY(lock) = 0;
+	idx_t version_tag_requests DUCKDB_GUARDED_BY(lock) = 0;
+	bool block_suffix DUCKDB_GUARDED_BY(lock) = false;
+	bool suffix_started DUCKDB_GUARDED_BY(lock) = false;
+};
+
+class TemporaryParquetFile {
+public:
+	explicit TemporaryParquetFile(string path_p) : path(std::move(path_p)) {
+		TestDeleteFile(path);
+	}
+	~TemporaryParquetFile() {
+		TestDeleteFile(path);
+	}
+
+	const string path;
+};
+
 OpenFileInfo MakeTestOpenFileInfo(const string &path) {
 	OpenFileInfo info(path);
 	info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
 	info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
+	return info;
+}
+
+OpenFileInfo MakeDeferredOpenFileInfo(const string &path) {
+	auto info = MakeTestOpenFileInfo(path);
+	info.extended_info->options["defer_file_info"] = Value::BOOLEAN(true);
 	return info;
 }
 
@@ -157,6 +419,13 @@ string ReadFull(CachingFileHandle &handle, idx_t size, idx_t offset = 0) {
 	string result(size, '\0');
 	group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), size);
 	return result;
+}
+
+string ReadSuffixTail(const FileBufferHandleGroup &suffix, const SuffixReadResult &result, idx_t size) {
+	D_ASSERT(size <= result.bytes_read);
+	string tail(size, '\0');
+	memcpy(data_ptr_cast(&tail[0]), suffix.Ptr() + result.bytes_read - size, size);
+	return tail;
 }
 
 string ReadSequential(CachingFileHandle &handle, idx_t size) {
@@ -252,6 +521,313 @@ TEST_CASE("Large reads are split at the cache block size", "[external_file_cache
 	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
 	REQUIRE(recording_fs->TakeReads().empty());
 	REQUIRE(CountCachedBlocks(cache) == 4);
+}
+
+TEST_CASE("Suffix reads use the remote cache block size and populate the cache", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET GLOBAL external_file_cache_remote_max_block_size=4096"));
+
+	const idx_t FILE_SIZE = 8192 + 123;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_suffix_cache.bin", content);
+	const auto remote_path = CACHING_TEST_REMOTE_PREFIX + test_file.GetPath();
+	auto recording_fs = make_uniq<SuffixTrackingFileSystem>();
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeDeferredOpenFileInfo(remote_path), ReaderSizedFlags());
+	REQUIRE(recording_fs->stats_count == 0);
+	REQUIRE(handle->CanSeek());
+	REQUIRE(recording_fs->stats_count == 0);
+
+	FileBufferHandleGroup suffix;
+	SuffixReadResult result;
+	REQUIRE(handle->TryReadSuffix(8, suffix, result));
+	auto suffix_bytes = ReadSuffixTail(suffix, result, 8);
+
+	REQUIRE(recording_fs->suffix_requests == vector<idx_t> {4096});
+	REQUIRE(recording_fs->stats_count == 0);
+	REQUIRE(result.bytes_read == 4096);
+	REQUIRE(result.metadata.file_size == NumericCast<int64_t>(FILE_SIZE));
+	REQUIRE(result.metadata.version_tag == recording_fs->suffix_version_tag);
+	REQUIRE(handle->GetVersionTag() == recording_fs->suffix_version_tag);
+	REQUIRE(suffix_bytes == content.substr(FILE_SIZE - suffix_bytes.size()));
+	REQUIRE(TotalCachedBytes(db_instance.GetExternalFileCache()) == 4096);
+
+	REQUIRE(ReadFull(*handle, 32, FILE_SIZE - 32) == content.substr(FILE_SIZE - 32));
+	REQUIRE(recording_fs->TakeReads().empty());
+	REQUIRE(recording_fs->stats_count == 0);
+}
+
+TEST_CASE("Repeated suffix reads reuse cached bytes", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET GLOBAL external_file_cache_remote_max_block_size=4096"));
+
+	const idx_t FILE_SIZE = 8192 + 123;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_suffix_reuse.bin", content);
+	const auto remote_path = CACHING_TEST_REMOTE_PREFIX + test_file.GetPath();
+	auto recording_fs = make_uniq<SuffixTrackingFileSystem>();
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	for (idx_t read = 0; read < 2; read++) {
+		auto handle = cfs.OpenFile(MakeDeferredOpenFileInfo(remote_path), ReaderSizedFlags());
+		FileBufferHandleGroup suffix;
+		SuffixReadResult result;
+		REQUIRE(handle->TryReadSuffix(8, suffix, result));
+		auto suffix_bytes = ReadSuffixTail(suffix, result, 8);
+		REQUIRE(suffix_bytes == content.substr(FILE_SIZE - suffix_bytes.size()));
+	}
+	REQUIRE(recording_fs->suffix_requests == vector<idx_t> {4096});
+}
+
+TEST_CASE("Suffix cache publication ignores partially covered blocks", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+	Connection con(db);
+	const idx_t BLOCK_SIZE = 2 * 1024 * 1024;
+	REQUIRE_NO_FAIL(
+	    con.Query(StringUtil::Format("SET GLOBAL external_file_cache_remote_max_block_size=%llu", BLOCK_SIZE)));
+
+	const idx_t FILE_SIZE = 2 * BLOCK_SIZE + 100;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_suffix_overlapping_block.bin", content);
+	const auto remote_path = CACHING_TEST_REMOTE_PREFIX + test_file.GetPath();
+	auto recording_fs = make_uniq<SuffixTrackingFileSystem>();
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeDeferredOpenFileInfo(remote_path), ReaderSizedFlags());
+	const auto suffix_start = FILE_SIZE - BLOCK_SIZE;
+	REQUIRE(ReadFull(*handle, BLOCK_SIZE, suffix_start - 100) == content.substr(suffix_start - 100, BLOCK_SIZE));
+
+	FileBufferHandleGroup suffix;
+	SuffixReadResult result;
+	REQUIRE(handle->TryReadSuffix(8, suffix, result));
+	auto suffix_bytes = ReadSuffixTail(suffix, result, 8);
+	REQUIRE(suffix_bytes == content.substr(FILE_SIZE - suffix_bytes.size()));
+}
+
+TEST_CASE("Suffix reads discard responses from an obsolete cache generation", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+	auto &cache = db_instance.GetExternalFileCache();
+
+	const string content_a(8192, 'A');
+	const string content_b(16384, 'B');
+	EFCTestFileGuard test_file("test_efc_suffix_generation.bin", content_a);
+	const auto remote_path = CACHING_TEST_REMOTE_PREFIX + test_file.GetPath();
+	auto blocking_fs = make_uniq<BlockingSuffixFileSystem>();
+
+	CachingFileSystem cfs(*blocking_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeDeferredOpenFileInfo(remote_path), ReaderSizedFlags());
+	bool suffix_succeeded = true;
+	std::thread reader([&]() {
+		FileBufferHandleGroup suffix;
+		SuffixReadResult result;
+		suffix_succeeded = handle->TryReadSuffix(8, suffix, result);
+	});
+
+	blocking_fs->WaitForSuffix();
+	cache.SetEnabled(false);
+	WriteTestContent(test_file.GetPath(), content_b);
+	cache.SetEnabled(true);
+	blocking_fs->ReleaseSuffix();
+	reader.join();
+
+	REQUIRE_FALSE(suffix_succeeded);
+	FileBufferHandleGroup suffix;
+	SuffixReadResult result;
+	REQUIRE(handle->TryReadSuffix(8, suffix, result));
+	REQUIRE(result.metadata.file_size == NumericCast<int64_t>(content_b.size()));
+	auto suffix_bytes = ReadSuffixTail(suffix, result, 8);
+	REQUIRE(suffix_bytes == string(8, 'B'));
+}
+
+TEST_CASE("Parquet suffix metadata retains the version that supplied its bytes", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET parquet_metadata_cache=true"));
+	REQUIRE_NO_FAIL(con.Query("SET validate_external_file_cache='VALIDATE_REMOTE'"));
+
+	TemporaryParquetFile file_a(TestCreatePath("test_efc_suffix_version_a.parquet"));
+	TemporaryParquetFile file_b(TestCreatePath("test_efc_suffix_version_b.parquet"));
+	REQUIRE_NO_FAIL(
+	    con.Query(StringUtil::Format("COPY (SELECT i FROM range(100000) t(i)) TO '%s' (FORMAT parquet)", file_a.path)));
+	REQUIRE_NO_FAIL(
+	    con.Query(StringUtil::Format("COPY (SELECT i FROM range(200000) t(i)) TO '%s' (FORMAT parquet)", file_b.path)));
+
+	auto versioned_fs = make_uniq<VersionedSuffixFileSystem>();
+	auto versioned_fs_ptr = versioned_fs.get();
+	versioned_fs_ptr->SetCurrentPath(file_a.path);
+	versioned_fs_ptr->BlockSuffix();
+	FileSystem::GetFileSystem(*con.context).RegisterSubSystem(std::move(versioned_fs));
+
+	const auto remote_path = VersionedSuffixFileSystem::Prefix() + "test.parquet";
+	auto pending = std::async(std::launch::async, [&]() {
+		return con.Query(StringUtil::Format("SELECT count(*) FROM read_parquet('%s')", remote_path));
+	});
+	REQUIRE(versioned_fs_ptr->WaitForSuffix());
+	db.instance->GetExternalFileCache().SetEnabled(false);
+	versioned_fs_ptr->SetCurrentPath(file_b.path);
+	db.instance->GetExternalFileCache().SetEnabled(true);
+	versioned_fs_ptr->ReleaseSuffix();
+
+	auto first_result = pending.get();
+	REQUIRE_NO_FAIL(*first_result);
+	REQUIRE(CHECK_COLUMN(first_result, 0, {200000}));
+	auto second_result = con.Query(StringUtil::Format("SELECT count(*) FROM read_parquet('%s')", remote_path));
+	REQUIRE_NO_FAIL(*second_result);
+	REQUIRE(CHECK_COLUMN(second_result, 0, {200000}));
+}
+
+TEST_CASE("Parquet suffix reads widen sub-footer cache blocks", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET GLOBAL external_file_cache_remote_max_block_size=4"));
+
+	TemporaryParquetFile file(TestCreatePath("test_efc_suffix_minimum.parquet"));
+	REQUIRE_NO_FAIL(
+	    con.Query(StringUtil::Format("COPY (SELECT i FROM range(42) t(i)) TO '%s' (FORMAT parquet)", file.path)));
+
+	auto versioned_fs = make_uniq<VersionedSuffixFileSystem>();
+	auto versioned_fs_ptr = versioned_fs.get();
+	versioned_fs_ptr->SetCurrentPath(file.path);
+	FileSystem::GetFileSystem(*con.context).RegisterSubSystem(std::move(versioned_fs));
+
+	const auto remote_path = VersionedSuffixFileSystem::Prefix() + "minimum.parquet";
+	auto result = con.Query(StringUtil::Format("SELECT count(*) FROM read_parquet('%s')", remote_path));
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	REQUIRE(versioned_fs_ptr->GetSuffixRequests() == 1);
+}
+
+TEST_CASE("Parquet reuses cached footer bytes without metadata caching", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET parquet_metadata_cache=false"));
+	REQUIRE_NO_FAIL(con.Query("SET validate_external_file_cache='NO_VALIDATION'"));
+
+	TemporaryParquetFile file(TestCreatePath("test_efc_suffix_footer_reuse.parquet"));
+	REQUIRE_NO_FAIL(
+	    con.Query(StringUtil::Format("COPY (SELECT i FROM range(100000) t(i)) TO '%s' (FORMAT parquet)", file.path)));
+
+	auto versioned_fs = make_uniq<VersionedSuffixFileSystem>();
+	auto versioned_fs_ptr = versioned_fs.get();
+	versioned_fs_ptr->SetCurrentPath(file.path);
+	FileSystem::GetFileSystem(*con.context).RegisterSubSystem(std::move(versioned_fs));
+
+	const auto remote_path = VersionedSuffixFileSystem::Prefix() + "footer-reuse.parquet";
+	for (idx_t query = 0; query < 2; query++) {
+		auto result = con.Query(StringUtil::Format("SELECT count(*) FROM read_parquet('%s')", remote_path));
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(CHECK_COLUMN(result, 0, {100000}));
+	}
+	REQUIRE(versioned_fs_ptr->GetSuffixRequests() == 1);
+	REQUIRE(versioned_fs_ptr->GetReadRequests() == 0);
+}
+
+TEST_CASE("Parquet execution reader reuses suffix metadata without a file info request", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET parquet_metadata_cache=false"));
+	REQUIRE_NO_FAIL(con.Query("SET validate_external_file_cache='VALIDATE_REMOTE'"));
+
+	TemporaryParquetFile file(TestCreatePath("test_efc_suffix_metadata_seed.parquet"));
+	REQUIRE_NO_FAIL(
+	    con.Query(StringUtil::Format("COPY (SELECT i FROM range(100000) t(i)) TO '%s' (FORMAT parquet)", file.path)));
+
+	auto versioned_fs = make_uniq<VersionedSuffixFileSystem>();
+	auto versioned_fs_ptr = versioned_fs.get();
+	versioned_fs_ptr->SetCurrentPath(file.path);
+	FileSystem::GetFileSystem(*con.context).RegisterSubSystem(std::move(versioned_fs));
+
+	const auto remote_path = VersionedSuffixFileSystem::Prefix() + "metadata-seed.parquet";
+	auto result = con.Query(StringUtil::Format("SELECT sum(i) FROM read_parquet('%s')", remote_path));
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(4999950000)}));
+	REQUIRE(versioned_fs_ptr->GetSuffixRequests() == 1);
+	REQUIRE(versioned_fs_ptr->GetStatsRequests() == 0);
+	REQUIRE(versioned_fs_ptr->GetFileSizeRequests() == 0);
+	REQUIRE(versioned_fs_ptr->GetLastModifiedRequests() == 0);
+	REQUIRE(versioned_fs_ptr->GetVersionTagRequests() == 0);
+}
+
+TEST_CASE("Cached Parquet suffix metadata initializes later data reads", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET parquet_metadata_cache=false"));
+	REQUIRE_NO_FAIL(con.Query("SET validate_external_file_cache='NO_VALIDATION'"));
+
+	TemporaryParquetFile file(TestCreatePath("test_efc_cached_suffix_metadata.parquet"));
+	REQUIRE_NO_FAIL(
+	    con.Query(StringUtil::Format("COPY (SELECT i FROM range(100000) t(i)) TO '%s' (FORMAT parquet)", file.path)));
+
+	auto versioned_fs = make_uniq<VersionedSuffixFileSystem>();
+	auto versioned_fs_ptr = versioned_fs.get();
+	versioned_fs_ptr->SetCurrentPath(file.path);
+	FileSystem::GetFileSystem(*con.context).RegisterSubSystem(std::move(versioned_fs));
+
+	const auto remote_path = VersionedSuffixFileSystem::Prefix() + "cached-metadata.parquet";
+	auto footer_result = con.Query(StringUtil::Format("SELECT count(*) FROM read_parquet('%s')", remote_path));
+	REQUIRE_NO_FAIL(*footer_result);
+	REQUIRE(CHECK_COLUMN(footer_result, 0, {100000}));
+
+	auto data_result = con.Query(StringUtil::Format("SELECT sum(i) FROM read_parquet('%s')", remote_path));
+	REQUIRE_NO_FAIL(*data_result);
+	REQUIRE(CHECK_COLUMN(data_result, 0, {Value::BIGINT(4999950000)}));
+	REQUIRE(versioned_fs_ptr->GetSuffixRequests() == 1);
+	REQUIRE(versioned_fs_ptr->GetStatsRequests() == 0);
+	REQUIRE(versioned_fs_ptr->GetFileSizeRequests() == 0);
+	REQUIRE(versioned_fs_ptr->GetLastModifiedRequests() == 0);
+	REQUIRE(versioned_fs_ptr->GetVersionTagRequests() == 0);
+}
+
+TEST_CASE("Uncached suffix reads preserve the reader request size", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+	db_instance.GetExternalFileCache().SetEnabled(false);
+
+	const idx_t FILE_SIZE = 8192 + 123;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_suffix_uncached.bin", content);
+	const auto remote_path = CACHING_TEST_REMOTE_PREFIX + test_file.GetPath();
+	auto recording_fs = make_uniq<SuffixTrackingFileSystem>();
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeDeferredOpenFileInfo(remote_path), ReaderSizedFlags());
+	FileBufferHandleGroup suffix;
+	SuffixReadResult result;
+	REQUIRE(handle->TryReadSuffix(8, suffix, result));
+
+	REQUIRE(recording_fs->suffix_requests == vector<idx_t> {8});
+	REQUIRE(recording_fs->stats_count == 0);
+	REQUIRE(result.bytes_read == 8);
+	REQUIRE(TotalCachedBytes(db_instance.GetExternalFileCache()) == 0);
+}
+
+TEST_CASE("Unsupported suffix reads retain lazy metadata fallback", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+
+	const idx_t FILE_SIZE = 8192 + 123;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_suffix_fallback.bin", content);
+	const auto remote_path = CACHING_TEST_REMOTE_PREFIX + test_file.GetPath();
+	auto recording_fs = make_uniq<SuffixTrackingFileSystem>();
+	recording_fs->suffix_supported = false;
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeDeferredOpenFileInfo(remote_path), ReaderSizedFlags());
+	FileBufferHandleGroup suffix;
+	SuffixReadResult result;
+	REQUIRE_FALSE(handle->TryReadSuffix(8, suffix, result));
+	REQUIRE(recording_fs->stats_count == 0);
+
+	REQUIRE(handle->GetFileSize() == FILE_SIZE);
+	REQUIRE(recording_fs->stats_count == 1);
 }
 
 TEST_CASE("Uncached reads are split at the cache block size", "[external_file_cache]") {
