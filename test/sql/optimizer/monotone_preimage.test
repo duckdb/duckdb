@@ -170,10 +170,9 @@ SELECT count(*) FROM ets WHERE year(t) = 2005;
 
 # ---------------------------------------------------------------------------
 # bounds on the edge of the TIMESTAMP domain.  Every int64 except the two infinity sentinels is a valid
-# timestamp (make_timestamp accepts all of them) that renders, also the values between INT64_MIN and the
-# first midnight of year -290308 (290309 BC). A bound on the domain edge is written as a strict comparison
-# against the adjacent sentinel (t > '-infinity', t < 'infinity'), which keeps every row of the domain. The finite
-# INT64_MIN sorts below -infinity, so when it satisfies the comparison too, the lower edge is t != '-infinity'.
+# timestamp that renders. The rewrite searches between the sentinels, and a bound on its edge is written as a
+# strict comparison against the adjacent sentinel (t > '-infinity', t < 'infinity'), or as t != '-infinity'
+# when the finite INT64_MIN below -infinity satisfies the comparison too.
 # ---------------------------------------------------------------------------
 query II
 EXPLAIN SELECT count(*) FROM ets WHERE epoch(t) > -9223372036854775807;
@@ -356,6 +355,12 @@ query I
 SELECT count(*) FROM below WHERE year(t) < 2000;
 ----
 2
+
+query III
+SELECT (SELECT count(*) FROM below WHERE year(t) = -290308), (SELECT count(*) FROM below WHERE epoch_us(t) = -9223372036854775806),
+       (SELECT count(*) FROM below WHERE epoch_us(t) = -9223372036854775807 - 1);
+----
+2	1	1
 
 query II
 EXPLAIN SELECT count(*) FROM below WHERE year(t) < 2000;

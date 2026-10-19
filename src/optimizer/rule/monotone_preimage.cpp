@@ -51,9 +51,9 @@ static bool GetFiniteDomain(const LogicalType &type, int64_t &lo, int64_t &hi, b
 		return true;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		// every non-sentinel int64 is a valid, comparable timestamp (make_timestamp accepts all of them), so the
-		// finite domain is everything except the ±infinity sentinels; that also keeps the never-true sentinels
-		// (hi+1 / lo-1) of the bisection away from INT64_MIN/MAX.
+		// every non-sentinel int64 is a valid, comparable timestamp (make_timestamp accepts all of them). The
+		// searched domain lies between the ±infinity sentinels, which keeps the never-true sentinels (hi+1 / lo-1)
+		// of the bisection away from INT64_MIN/MAX. The finite INT64_MIN below -infinity is handled in Apply.
 		lo = timestamp_t::ninfinity().value + 1;
 		hi = timestamp_t::infinity().value - 1;
 		has_infinity = true;
@@ -331,8 +331,7 @@ unique_ptr<Expression> MonotonePreimageRule::Apply(LogicalOperator &op, vector<r
 	if (!need_lower && !need_upper) {
 		return nullptr; // no narrowing
 	}
-	// the smallest finite value sorts below the -infinity sentinel, outside the domain. When the preimage reaches
-	// the bottom of the domain and f maps that value into it too, the lower bound only excludes -infinity.
+	// include the finite value below -infinity when it satisfies the comparison
 	bool below_sentinel_matches = false;
 	if (has_infinity && a == dom_lo) {
 		Value below_sentinel;
