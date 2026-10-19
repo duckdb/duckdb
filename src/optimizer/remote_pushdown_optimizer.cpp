@@ -1179,11 +1179,13 @@ RemotePushdownOptimizer::TryConstantFold(unique_ptr<ParsedExpression> &expr) {
 		// volatile functions (random(), ...) must be re-evaluated on every row
 		return ConstantFoldResult::NOT_FOLDABLE;
 	}
-	if (!bound_expr->IsConsistent()) {
+	if (!bound_expr->IsConsistent() || bound_expr->ObservesBindingContext()) {
 		if (Settings::Get<PortablePlanSetting>(binder.context)) {
 			// an environment observation must not fold into the statement
 			return ConstantFoldResult::NOT_FOLDABLE;
 		}
+	}
+	if (!bound_expr->IsConsistent()) {
 		// functions like now() must be re-evaluated (re-folded) when a prepared statement is re-executed
 		binder.SetAlwaysRequireRebind();
 	}
