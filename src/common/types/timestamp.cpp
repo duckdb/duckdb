@@ -324,7 +324,10 @@ string Timestamp::ToString(timestamp_t timestamp) {
 		return Date::ToInfinity(timestamp);
 	}
 
-	return Date::ToString(GetDate(timestamp)) + " " + Time::ToString(GetTime(timestamp));
+	date_t date;
+	dtime_t time;
+	Timestamp::Convert(timestamp, date, time);
+	return Date::ToString(date) + " " + Time::ToString(time);
 }
 
 date_t Timestamp::GetDate(timestamp_t timestamp) {

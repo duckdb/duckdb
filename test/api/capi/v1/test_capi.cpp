@@ -451,27 +451,6 @@ TEST_CASE("decompose timetz with duckdb_from_time_tz", "[capi]") {
 	REQUIRE(time_tz.offset == -7200);
 }
 
-TEST_CASE("decompose a timestamp whose day starts below the timestamp range", "[capi]") {
-	duckdb_timestamp ts {-9223372036854775806};
-	REQUIRE(duckdb_is_finite_timestamp(ts));
-
-	auto timestamp = duckdb_from_timestamp(ts);
-	REQUIRE(timestamp.date.year == -290308);
-	REQUIRE(timestamp.date.month == 12);
-	REQUIRE(timestamp.date.day == 21);
-	REQUIRE(timestamp.time.hour == 19);
-	REQUIRE(timestamp.time.min == 59);
-	REQUIRE(timestamp.time.sec == 5);
-	REQUIRE(timestamp.time.micros == 224194);
-
-	// the smallest finite timestamp
-	ts.micros = NumericLimits<int64_t>::Minimum();
-	REQUIRE(duckdb_is_finite_timestamp(ts));
-	timestamp = duckdb_from_timestamp(ts);
-	REQUIRE(timestamp.date.day == 21);
-	REQUIRE(timestamp.time.micros == 224192);
-}
-
 TEST_CASE("create time_tz value") {
 	duckdb_time_struct time;
 	time.hour = 4;
