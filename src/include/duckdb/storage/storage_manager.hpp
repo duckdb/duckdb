@@ -237,7 +237,7 @@ protected:
 	unique_ptr<CheckpointWriter> CreateCheckpointWriter(QueryContext context, CheckpointOptions options);
 
 private:
-	//! Returns false if the checkpoint must be skipped, keeping the WAL as the only record of buffered index replays.
+	//! Returns false if the checkpoint must be skipped to keep buffered index replays.
 	bool BindIndexesForCheckpoint(QueryContext context, const CheckpointOptions &options);
 };
 } // namespace duckdb

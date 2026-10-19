@@ -40,7 +40,9 @@
       "reason": "The exported aggregate states change the number of aggregates the PIVOT binder expects",
       "paths": [
         "test/sql/pivot/pivot_identical_aggregates_names.test",
-        "test/sql/pivot/pivot_value_collisions.test"
+        "test/sql/pivot/pivot_value_collisions.test",
+        "test/sql/pivot/pivot_aggregate_filter.test",
+        "test/sql/pivot/pivot_value_group_name_clash.test"
       ]
     },
     {
@@ -79,6 +81,7 @@
         "test/sql/aggregate/aggregates/test_ordered_aggregate_inner_error.test",
         "test/sql/aggregate/aggregates/test_ordered_aggregates.test",
         "test/sql/aggregate/aggregates/test_reservoir_quantile_decimal.test",
+        "test/sql/aggregate/aggregates/test_reservoir_quantile_sampling.test",
         "test/sql/function/list/aggregates/histogram_decimal.test",
         "test/sql/pivot/pivot_operator_expression.test",
         "test/sql/prepared/prepared_statistics_optimization.test",

@@ -154,6 +154,8 @@ struct DBConfigOptions {
 	bool abort_on_wal_failure = false;
 	//! Paths that are explicitly allowed, even if enable_external_access is false
 	unordered_set<string> allowed_paths;
+	//! Environment variables the embedder configures itself from, readable with OSUtil::GetEnvUnrestricted
+	unordered_set<string> configuration_env;
 	//! Directories that are explicitly allowed, even if enable_external_access is false
 	set<string> allowed_directories;
 	//! Additional configuration options that are allowed to be changed even when the configuration is locked
@@ -364,6 +366,11 @@ public:
 	void AddAllowedConfig(const Identifier &config_name);
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
+	//! Replace / reset the allowed directories and paths as a whole (under the lock that guards them)
+	void SetAllowedDirectories(const vector<string> &paths);
+	void SetAllowedPaths(const vector<string> &paths);
+	void ResetAllowedDirectories();
+	void ResetAllowedPaths();
 	//! Whether the given optimizer is disabled (disabled_optimizers)
 	DUCKDB_API bool IsOptimizerDisabled(OptimizerType type) const;
 	DUCKDB_API set<OptimizerType> GetDisabledOptimizers() const;

@@ -339,22 +339,11 @@ bool TableIndexList::HasBufferedReplays() const {
 	return false;
 }
 
-shared_ptr<IndexEntry> TableIndexList::FindEntry(const Identifier &name) const {
-	annotated_lock_guard lock(index_entries_lock);
-	for (const auto &entry : index_entries) {
-		if (entry->GetName() != name) {
-			continue;
-		}
-		if (entry->GetBindState() != IndexBindState::BOUND) {
-			throw InternalException("TableIndexList::FindEntry cannot return an unbound index");
-		}
-		return entry;
-	}
-	return nullptr;
+shared_ptr<IndexEntry> TableIndexList::FindEntry(const IndexEntry &index) const {
+	return FindEntry(index.GetIndexOid());
 }
 
-shared_ptr<IndexEntry> TableIndexList::FindEntry(const IndexEntry &index) const {
-	auto index_oid = index.GetIndexOid();
+shared_ptr<IndexEntry> TableIndexList::FindEntry(idx_t index_oid) const {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		if (entry->GetIndexOid() != index_oid) {
@@ -448,7 +437,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 		try {
 			bound_idx = BindIndexEntry(context, table, *index_entry, column_names, column_types);
 		} catch (std::exception &) {
-			// Reset the bind state, so that any other thread waiting for this bind can retry it.
+			// Reset the bind state: otherwise every later bind of this index waits forever for this one.
 			lock.lock();
 			index_entry->SetBindState(IndexBindState::UNBOUND);
 			throw;

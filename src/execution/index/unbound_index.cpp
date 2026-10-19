@@ -61,8 +61,7 @@ void UnboundIndex::ResetStorage() {
 }
 
 IndexCheckpointResult UnboundIndex::Checkpoint(PartialBlockManager &, StorageVersion) {
-	// The checkpoint binds indexes with buffered replays before it starts, or does not run at all.
-	// Checkpointing anyway would persist the index without them and truncate the WAL holding their only record.
+	// Persisting this index would lose its buffered operations.
 	if (HasBufferedReplays()) {
 		throw InternalException("Cannot checkpoint index %s: it has buffered WAL operations that were not bound",
 		                        GetIndexName());
@@ -71,7 +70,6 @@ IndexCheckpointResult UnboundIndex::Checkpoint(PartialBlockManager &, StorageVer
 }
 
 void UnboundIndex::ThrowBindFailure(const ErrorData &error, const string &reason) {
-	// The failed bind released or handed off the on-disk storage: it cannot be retried.
 	storage_reclaimed = true;
 	if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
 		error.Throw();
@@ -90,7 +88,6 @@ void UnboundIndex::ThrowBindFailure(const ErrorData &error, const string &reason
 
 unique_ptr<BoundIndex> UnboundIndex::Bind(IndexBinder &binder, const vector<LogicalType> &physical_column_types) {
 	if (storage_reclaimed) {
-		// Reachable only by retrying a failed bind, which already invalidated the database.
 		throw IOException("Cannot bind index %s: its storage was already reclaimed", GetIndexName());
 	}
 	auto bound_index = binder.BindIndex(*this);
@@ -110,7 +107,6 @@ unique_ptr<BoundIndex> UnboundIndex::Bind(IndexBinder &binder, const vector<Logi
 void UnboundIndex::BufferChunk(DataChunk &table_chunk, Vector &row_ids, const BufferedIndexReplay replay_type) {
 	D_ASSERT(!column_ids.empty());
 
-	// A checkpoint must bind this index before it can persist these operations.
 	db.GetStorageManager().MarkBufferedIndexReplays();
 
 	// table_chunk is in physical table layout: data[j] holds the data of physical column j.

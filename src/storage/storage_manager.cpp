@@ -145,7 +145,11 @@ void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 				    entry.second.ToString());
 			}
 		} else if (entry.first == "mmap_reserve_size") {
-			mmap_reserve_size = DBConfig::ParseMemoryLimitOrMaximum(entry.second.ToString());
+			const auto reserve_size = DBConfig::ParseMemoryLimitOrMaximum(entry.second.ToString());
+			if (reserve_size > NumericCast<idx_t>(NumericLimits<int64_t>::Maximum())) {
+				throw BinderException("MMAP_RESERVE_SIZE \"%s\" is out of range", entry.second.ToString());
+			}
+			mmap_reserve_size = reserve_size;
 		} else {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
@@ -840,7 +844,7 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 		return true;
 	}
 
-	// The database is closing (shutdown or DETACH): we do not bind, so skip if anything is still buffered.
+	// Shutdown or DETACH does not bind: skip the checkpoint if anything is still buffered.
 	if (!context.GetClientContext()) {
 		buffered_index_replays = HasBufferedReplays(tables);
 		return !buffered_index_replays;
@@ -853,7 +857,6 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 	bind_context.transaction.SetReadOnly();
 
 	// Indexes with buffered replays must be bound, otherwise the checkpoint would lose these operations.
-	// Explicit checkpoints also try to bind all others, best effort: only tables with bound indexes can be vacuumed.
 	for (auto &table : tables) {
 		auto &info = *table.get().GetStorage().GetDataTableInfo();
 		const auto must_bind = info.GetIndexes().HasBufferedReplays();
@@ -869,7 +872,6 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 			    "Cannot CHECKPOINT: an index with buffered write-ahead log operations cannot be bound: %s",
 			    error.RawMessage());
 		}
-		// Keep the WAL: it is the only remaining record of the buffered operations.
 		DUCKDB_LOG_WARNING(db.GetDatabase(),
 		                   "Skipped the checkpoint of database %s and kept its write-ahead log: an index with "
 		                   "buffered write-ahead log operations cannot be bound: %s",
@@ -903,9 +905,8 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	auto wal_size = GetWALSize();
 	auto should_checkpoint =
 	    wal_size > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT;
-	// Binding can fail: bind before the checkpoint starts, as any failure after that invalidates the database.
+	// Bind before the checkpoint starts: a failure after that invalidates the database.
 	if (should_checkpoint && !BindIndexesForCheckpoint(context, options)) {
-		// Keep the WAL: it is the only record of buffered index replays.
 		should_checkpoint = false;
 	}
 

@@ -101,7 +101,8 @@
         "test/sql/types/nested/array/array_fuzzer_failures.test",
         "test/parquet/timens_parquet.test",
         "test/sql/types/time/test_time_ns.test",
-        "test/sql/copy/parquet/int96_as.test"
+        "test/sql/copy/parquet/int96_as.test",
+        "test/sql/copy/parquet/byte_stream_split_flba.test"
       ]
     },
     {
@@ -184,7 +185,8 @@
         "test/sql/types/struct/empty_struct.test",
         "test/optimizer/pushdown/cte_domain_join_filter.test",
         "test/sql/subquery/lateral/lateral_domain_join_filter_semantics.test",
-        "test/sql/subquery/lateral/lateral_nested_domain_filter.test"
+        "test/sql/subquery/lateral/lateral_nested_domain_filter.test",
+        "test/sql/function/index/index_key.test"
       ]
     },
     {
