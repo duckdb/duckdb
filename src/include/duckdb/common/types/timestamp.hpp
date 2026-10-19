@@ -41,7 +41,7 @@ struct TimestampComponents {
 //! The static Timestamp class holds helper functions for the timestamp types.
 class Timestamp {
 public:
-	// min timestamp is 290308-12-22 (BC)
+	// min timestamp is 290309-12-22 (BC)
 	constexpr static const int32_t MIN_YEAR = -290308;
 	constexpr static const int32_t MIN_MONTH = 12;
 	constexpr static const int32_t MIN_DAY = 22;

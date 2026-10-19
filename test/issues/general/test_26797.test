@@ -60,9 +60,9 @@ SELECT DATE '290309-12-22 (BC)' + TIMETZ '00:00:00+01';
 Out of Range Error: Timestamp with time zone out of range
 
 statement ok
-COPY (SELECT '290309-12-22 (BC) 00:00:00+01' AS ts) TO '__TEST_DIR__/test_26797.csv';
+COPY (SELECT '290309-12-22 (BC) 00:00:00+01' AS ts) TO '{TEST_DIR}/test_26797.csv';
 
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/test_26797.csv', columns = {'ts': 'TIMESTAMPTZ'}, header = true, auto_detect = false);
+SELECT * FROM read_csv('{TEST_DIR}/test_26797.csv', columns = {'ts': 'TIMESTAMPTZ'}, header = true, auto_detect = false);
 ----
 Could not convert string "290309-12-22 (BC) 00:00:00+01" to 'TIMESTAMP WITH TIME ZONE'

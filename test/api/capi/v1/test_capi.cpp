@@ -504,6 +504,18 @@ TEST_CASE("decompose the ends of the timestamp range with duckdb_from_timestamp"
 		REQUIRE(infinite.time.sec == 0);
 		REQUIRE(infinite.time.micros == 0);
 	}
+
+	// a value below the range, which only raw data can still hold, keeps its date at midnight
+	for (int64_t micros : {NumericLimits<int64_t>::Minimum(), Timestamp::MIN_MICROS - 1}) {
+		auto below = duckdb_from_timestamp(duckdb_timestamp {micros});
+		REQUIRE(below.date.year == -290308);
+		REQUIRE(below.date.month == 12);
+		REQUIRE(below.date.day == 21);
+		REQUIRE(below.time.hour == 0);
+		REQUIRE(below.time.min == 0);
+		REQUIRE(below.time.sec == 0);
+		REQUIRE(below.time.micros == 0);
+	}
 }
 
 TEST_CASE("create time_tz value") {

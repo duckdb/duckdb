@@ -830,8 +830,13 @@ TEST_CASE("Test C-API Arrow conversion of a TIMESTAMPTZ below the timestamp rang
 		CAPTURE(format);
 		// the first midnight of the range, 290309-12-22 (BC) 00:00:00, and one unit before it
 		const int64_t first_midnight = string(format) == "tss:UTC" ? -9223372022400 : -9223372022400000;
-		for (int64_t value : {first_midnight, first_midnight - 1}) {
-			const void *buffers[] = {nullptr, &value};
+		for (auto entry : {make_pair(first_midnight, false), make_pair(first_midnight - 1, false),
+		                   make_pair(first_midnight, true), make_pair(first_midnight - 1, true)}) {
+			// with a trailing NULL row, the conversion takes the loop that checks the validity mask
+			const int64_t values[] = {entry.first, 0};
+			const uint8_t validity = 0x01;
+			const idx_t rows = entry.second ? 2 : 1;
+			const void *buffers[] = {entry.second ? &validity : nullptr, values};
 			ArrowSchema child_schema = {};
 			child_schema.format = format;
 			child_schema.name = "ts";
@@ -845,14 +850,15 @@ TEST_CASE("Test C-API Arrow conversion of a TIMESTAMPTZ below the timestamp rang
 			schema.release = ReleaseUnalignedSchema;
 
 			ArrowArray child_array = {};
-			child_array.length = 1;
+			child_array.length = NumericCast<int64_t>(rows);
+			child_array.null_count = entry.second ? 1 : 0;
 			child_array.n_buffers = 2;
 			child_array.buffers = buffers;
 			child_array.release = ReleaseUnalignedArray;
 			ArrowArray *arrays[] = {&child_array};
 			const void *struct_buffers[] = {nullptr};
 			ArrowArray array = {};
-			array.length = 1;
+			array.length = NumericCast<int64_t>(rows);
 			array.n_buffers = 1;
 			array.buffers = struct_buffers;
 			array.n_children = 1;
@@ -863,8 +869,9 @@ TEST_CASE("Test C-API Arrow conversion of a TIMESTAMPTZ below the timestamp rang
 			REQUIRE(duckdb_schema_from_arrow(tester.connection, &schema, &converted) == nullptr);
 			duckdb_data_chunk chunk = nullptr;
 			auto err = duckdb_data_chunk_from_arrow(tester.connection, &array, converted, &chunk);
-			if (value == first_midnight) {
+			if (entry.first == first_midnight) {
 				REQUIRE(err == nullptr);
+				REQUIRE(duckdb_data_chunk_get_size(chunk) == rows);
 				auto vector = duckdb_data_chunk_get_vector(chunk, 0);
 				auto timestamps = static_cast<duckdb_timestamp *>(duckdb_vector_get_data(vector));
 				REQUIRE(timestamps[0].micros == -9223372022400000000);
