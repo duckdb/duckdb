@@ -82,6 +82,9 @@ public:
 
 	DUCKDB_API static dtime_t GetTime(timestamp_t timestamp);
 	DUCKDB_API static dtime_ns_t GetTimeNs(timestamp_ns_t timestamp);
+	//! whole * unit + part for a part in [0, unit], also when only the sum fits in an int64_t, as on the first
+	//! partial day or millisecond of the range
+	DUCKDB_API static bool TryCombineUnits(int64_t whole, int64_t part, int64_t unit, int64_t &result);
 	//! Create a Timestamp object from a specified (date, time) combination
 	DUCKDB_API static timestamp_t FromDatetime(date_t date, dtime_t time);
 	DUCKDB_API static bool TryFromDatetime(date_t date, dtime_t time, timestamp_t &result);
