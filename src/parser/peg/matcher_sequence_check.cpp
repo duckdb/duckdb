@@ -106,6 +106,13 @@ public:
 private:
 	static constexpr idx_t BRACKET_PAIRS = 3;
 	static constexpr idx_t MAX_LEADING_ALTERNATIVES = 6;
+	static constexpr idx_t MAX_FIXED_PREFIX = 6;
+
+	//! Appends the tokens of a matcher that consumes a fixed number of tokens; false once the length can vary
+	bool AppendFixedPrefix(idx_t node_index, vector<MatcherTokenSet> &pattern) const;
+	//! The check of a sequence, created on first use
+	MatcherSequenceCheck &CheckFor(vector<pair<reference<ListMatcher>, unique_ptr<MatcherSequenceCheck>>> &checks,
+	                               Matcher &matcher) const;
 
 	TailBracket BracketLiteral(idx_t literal_id, idx_t &pair) const;
 	//! Merges the tokens consumed by children[begin, end) outside of the bracket pairs among them into result
@@ -261,6 +268,64 @@ bool SequenceCheckAnalysis::AnalyzeSequence(const vector<idx_t> &children, idx_t
 	return changed;
 }
 
+bool SequenceCheckAnalysis::AppendFixedPrefix(idx_t node_index, vector<MatcherTokenSet> &pattern) const {
+	auto &node = nodes[node_index];
+	auto &matcher = node.matcher;
+	auto &first = matcher.first_set;
+	if (pattern.size() >= MAX_FIXED_PREFIX || !first.computed || first.any || first.nullable) {
+		return false;
+	}
+	if (matcher.IsAtomic()) {
+		// single-token atomics: FIRST is exactly the one token they consume
+		if (first.one.any || first.second.any || !first.second.IsEmpty()) {
+			return false;
+		}
+		pattern.emplace_back(static_cast<const MatcherTokenSet &>(first));
+		return true;
+	}
+	if (!IsCompositeMatcher(matcher)) {
+		return false;
+	}
+	switch (matcher.Type()) {
+	case MatcherType::LIST:
+		for (auto child : node.children) {
+			if (!AppendFixedPrefix(child, pattern)) {
+				return false;
+			}
+		}
+		return !node.children.empty();
+	case MatcherType::CHOICE: {
+		// alternatives that are all single tokens: any of them
+		MatcherTokenSet tokens;
+		for (auto child : node.children) {
+			auto &alternative = nodes[child].matcher;
+			auto &alternative_first = alternative.first_set;
+			if (!alternative.IsAtomic() || alternative_first.any || alternative_first.one.any ||
+			    alternative_first.second.any || !alternative_first.second.IsEmpty()) {
+				return false;
+			}
+			tokens.MergeTokens(alternative_first);
+		}
+		pattern.push_back(std::move(tokens));
+		return !node.children.empty();
+	}
+	default:
+		return false;
+	}
+}
+
+MatcherSequenceCheck &
+SequenceCheckAnalysis::CheckFor(vector<pair<reference<ListMatcher>, unique_ptr<MatcherSequenceCheck>>> &checks,
+                                Matcher &matcher) const {
+	for (auto &entry : checks) {
+		if (&entry.first.get() == &matcher) {
+			return *entry.second;
+		}
+	}
+	checks.emplace_back(matcher.Cast<ListMatcher>(), make_uniq<MatcherSequenceCheck>());
+	return *checks.back().second;
+}
+
 bool SequenceCheckAnalysis::Update(idx_t node_index) {
 	auto &node = nodes[node_index];
 	if (node.matcher.Type() == MatcherType::LIST) {
@@ -392,23 +457,29 @@ vector<pair<reference<ListMatcher>, unique_ptr<MatcherSequenceCheck>>> SequenceC
 		if (!informative) {
 			continue;
 		}
-		optional_ptr<MatcherSequenceCheck> check;
-		for (auto &entry : sequence_checks) {
-			if (&entry.first.get() == &matcher) {
-				check = entry.second.get();
-			}
-		}
-		if (!check) {
-			sequence_checks.emplace_back(matcher.Cast<ListMatcher>(), make_uniq<MatcherSequenceCheck>());
-			check = sequence_checks.back().second.get();
-		}
-		check->leading_choice = choice;
-		check->rest_nullable = true;
-		for (idx_t i = 1; i < node.children.size() && check->rest_nullable; i++) {
+		auto &check = CheckFor(sequence_checks, matcher);
+		check.leading_choice = choice;
+		check.rest_nullable = true;
+		for (idx_t i = 1; i < node.children.size() && check.rest_nullable; i++) {
 			auto &rest_first = nodes[node.children[i]].matcher.first_set;
-			check->rest_first.MergeTokens(rest_first);
-			check->rest_nullable = rest_first.nullable;
+			check.rest_first.MergeTokens(rest_first);
+			check.rest_nullable = rest_first.nullable;
 		}
+	}
+	// leading single-token elements fix the tokens beyond the two the FIRST and SECOND sets cover
+	for (idx_t node_index = 0; node_index < nodes.size(); node_index++) {
+		auto &node = nodes[node_index];
+		auto &matcher = node.matcher;
+		if (!IsCompositeMatcher(matcher) || matcher.Type() != MatcherType::LIST || node.children.empty()) {
+			continue;
+		}
+		vector<MatcherTokenSet> pattern;
+		AppendFixedPrefix(node_index, pattern);
+		if (pattern.size() < 3) {
+			continue;
+		}
+		auto &check = CheckFor(sequence_checks, matcher);
+		check.later_tokens.assign(pattern.begin() + 2, pattern.end());
 	}
 	return sequence_checks;
 }

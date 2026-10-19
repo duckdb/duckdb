@@ -2375,8 +2375,11 @@ TEST_CASE("Tail checks skip sequences whose later element cannot follow the pref
 	auto &pair = Structural(make_uniq<ListMatcher>(vector<reference<Matcher>> {identifier, comma, identifier}));
 	auto &lead = Structural(make_uniq<ChoiceMatcher>(vector<reference<Matcher>> {pair, dot}));
 	auto &led = Structural(make_uniq<ListMatcher>(vector<reference<Matcher>> {lead, string_literal}));
-	auto &root = Structural(
-	    make_uniq<ChoiceMatcher>(vector<reference<Matcher>> {type_literal, unbalanced, overlapping, led, name}));
+	// Dotted <- Identifier '.' Identifier '.' Identifier: every element consumes exactly one token
+	auto &dotted =
+	    Structural(make_uniq<ListMatcher>(vector<reference<Matcher>> {identifier, dot, identifier, dot, identifier}));
+	auto &root = Structural(make_uniq<ChoiceMatcher>(
+	    vector<reference<Matcher>> {type_literal, unbalanced, overlapping, led, dotted, name}));
 	ComputeFirstSets(root, table);
 	matcher_allocator.InitializeSequenceChecks(table);
 
@@ -2386,6 +2389,7 @@ TEST_CASE("Tail checks skip sequences whose later element cannot follow the pref
 	REQUIRE(overlapping.first_set.sequence_check_index == 0);
 	REQUIRE(name.first_set.sequence_check_index == 0);
 	REQUIRE(led.first_set.sequence_check_index != 0);
+	REQUIRE(dotted.first_set.sequence_check_index != 0);
 
 	idx_t rejected_until = 0;
 	SECTION("The first token the prefix cannot consume has to start the element") {
@@ -2415,6 +2419,15 @@ TEST_CASE("Tail checks skip sequences whose later element cannot follow the pref
 		// the merged second-token sets accept a string after any alternative
 		CheckFirstSet(*grammar, led, "foo 'x'", true);
 		CheckFirstSet(*grammar, led, ". foo", false);
+	}
+	SECTION("Leading single-token elements fix the later tokens") {
+		REQUIRE(TailCheckMightMatch(*grammar, matcher_allocator, dotted, "a . b . c", rejected_until));
+		REQUIRE_FALSE(TailCheckMightMatch(*grammar, matcher_allocator, dotted, "a . b , c", rejected_until));
+		REQUIRE(rejected_until == 3);
+		REQUIRE_FALSE(TailCheckMightMatch(*grammar, matcher_allocator, dotted, "a . 1 . c", rejected_until));
+		REQUIRE(rejected_until == 2);
+		// the merged sets only see the first two tokens
+		CheckFirstSet(*grammar, dotted, "a . b , c", true);
 	}
 	SECTION("Without the grammar's tail checks the lookahead stops at the second token") {
 		CheckFirstSet(*grammar, type_literal, "foo . bar , 1", true);

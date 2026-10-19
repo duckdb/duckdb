@@ -323,11 +323,14 @@ struct MatcherTokenSet {
 
 class ChoiceMatcher;
 
-//! Lookahead refinements of a sequence, derived from the grammar once. A leading choice is checked per alternative:
+//! Lookahead refinements of a sequence, derived from the grammar once. Leading single-token elements fix the tokens
+//! at positions 2, 3, ... (`later_tokens`). A leading choice is checked per alternative:
 //! the second token has to continue the alternative that accepts the first one (or start the rest of the sequence
 //! after a one-token alternative). A tail check scans the tokens the prefix can consume outside of balanced brackets
 //! (`alphabet`): the first other token has to start the element after the prefix (`required`).
 struct MatcherSequenceCheck {
+	//! tokens the sequence needs at positions 2, 3, ... when its leading elements each consume exactly one token
+	vector<MatcherTokenSet> later_tokens;
 	optional_ptr<const ChoiceMatcher> leading_choice;
 	//! FIRST set of the sequence after the leading choice
 	MatcherTokenSet rest_first;

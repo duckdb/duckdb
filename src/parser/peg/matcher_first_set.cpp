@@ -85,6 +85,8 @@ void MatcherFirstSet::Finalize() {
 	first_suffices = true;
 }
 
+static bool RejectTail(MatchState &state, idx_t stop_position);
+
 bool MatcherFirstSet::MightMatchSecond(MatchState &state) const {
 	auto &iterator = state.token_iterator;
 	auto token = iterator.Current();
@@ -107,6 +109,17 @@ bool MatcherFirstSet::MightMatchSecond(MatchState &state) const {
 		return true;
 	}
 	auto &check = *(*state.context.sequence_checks)[sequence_check_index - 1];
+	for (idx_t i = 0; i < check.later_tokens.size(); i++) {
+		auto ahead = i + 2;
+		auto later = iterator.Peek(ahead);
+		// the autocomplete cursor can stand for any token
+		if (!later || later->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			return true;
+		}
+		if (!check.later_tokens[i].Contains(*later, [&]() { return iterator.PeekLiteralInfo(*table, ahead); })) {
+			return RejectTail(state, iterator.Position() + ahead);
+		}
+	}
 	if (check.leading_choice && !MightMatchLeadingChoice(check, state)) {
 		return false;
 	}
