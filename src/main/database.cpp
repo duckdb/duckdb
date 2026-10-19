@@ -6,6 +6,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/http/http_util.hpp"
+#include "duckdb/main/os_util.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
@@ -523,6 +524,7 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
 	config.user_settings = new_config.user_settings;
+	os_util = make_uniq<OSUtil>(*this, config.options.configuration_env);
 	// carry over a capability set handed to us, so a database created by code with its own copy of
 	// DuckDB can be given the extensions the binary that created it links
 	config.linked_extensions = new_config.linked_extensions;
@@ -705,6 +707,11 @@ void DatabaseInstance::InvokeExtensionEntrypointV2(const ExtensionInitResult &in
 
 LogManager &DatabaseInstance::GetLogManager() const {
 	return *log_manager;
+}
+
+OSUtil &DatabaseInstance::GetOSUtil() {
+	D_ASSERT(os_util);
+	return *os_util;
 }
 
 MetricsManager &DatabaseInstance::GetMetricsManager() {

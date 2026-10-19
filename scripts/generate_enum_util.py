@@ -30,6 +30,7 @@ blacklist = [
     "IdleFilter",
     "IdentifierConversionPolicy",
     "CreateDirectoryMode",
+    "MatchRecognizeScope",
     "RemoveDirectoryMode",
     "CopyOutputOwnership",
     "CopyOutputPublicationState",
@@ -77,6 +78,9 @@ blacklist = [
     "VariantPrimitiveType",
     # ClientContext::Retention, nested and private to the client context
     "Retention",
+    # HTTPRetryBudget::RecordedOutcome is a nested enum of the HTTP retry budget,
+    # which this script would emit unqualified.
+    "RecordedOutcome",
 ]
 
 enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")

@@ -331,18 +331,18 @@ void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 	if (!config.file_system) {
 		throw InvalidInputException("Cannot change/set allowed_directories before the database is started");
 	}
-	config.options.allowed_directories.clear();
-	auto &list = ListValue::GetChildren(input);
-	for (auto &val : list) {
-		config.AddAllowedDirectory(val.GetValue<string>());
+	vector<string> directories;
+	for (auto &val : ListValue::GetChildren(input)) {
+		directories.push_back(val.GetValue<string>());
 	}
+	config.SetAllowedDirectories(directories);
 }
 
 void AllowedDirectoriesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
-	config.options.allowed_directories = DBConfigOptions().allowed_directories;
+	config.ResetAllowedDirectories();
 }
 
 Value AllowedDirectoriesSetting::GetSetting(const ClientContext &context) {
@@ -368,18 +368,18 @@ void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 		throw InvalidInputException("Cannot change/set allowed_paths before the database is started");
 	}
 
-	config.options.allowed_paths.clear();
-	auto &list = ListValue::GetChildren(input);
-	for (auto &val : list) {
-		config.AddAllowedPath(val.GetValue<string>());
+	vector<string> paths;
+	for (auto &val : ListValue::GetChildren(input)) {
+		paths.push_back(val.GetValue<string>());
 	}
+	config.SetAllowedPaths(paths);
 }
 
 void AllowedPathsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
-	config.options.allowed_paths = DBConfigOptions().allowed_paths;
+	config.ResetAllowedPaths();
 }
 
 Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
@@ -619,17 +619,17 @@ void DisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 		}
 		disabled_optimizers.insert(OptimizerTypeFromString(param));
 	}
-	config.options.disabled_optimizers = std::move(disabled_optimizers);
+	config.SetDisabledOptimizers(std::move(disabled_optimizers));
 }
 
 void DisabledOptimizersSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.disabled_optimizers = DBConfigOptions().disabled_optimizers;
+	config.SetDisabledOptimizers(DBConfigOptions().disabled_optimizers);
 }
 
 Value DisabledOptimizersSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	string result;
-	for (auto &optimizer : config.options.disabled_optimizers) {
+	for (auto &optimizer : config.GetDisabledOptimizers()) {
 		if (!result.empty()) {
 			result += ",";
 		}
@@ -1417,6 +1417,10 @@ void ProfilingRendererSettingsSetting::SetLocal(ClientContext &context, const Va
 	unordered_map<string, Value> new_settings;
 	for (auto &entry : MapValue::GetChildren(input)) {
 		auto &key_value = StructValue::GetChildren(entry);
+		if (key_value[1].IsNull()) {
+			throw InvalidInputException("profiling_renderer_settings: the value of \"%s\" cannot be NULL",
+			                            key_value[0].ToString());
+		}
 		new_settings[StringUtil::Lower(key_value[0].ToString())] = key_value[1];
 	}
 	// eagerly configure the renderer of the current profiler format to validate the setting values
@@ -1975,7 +1979,8 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 		return;
 	}
 
-	auto compiled_grammar = CompiledGrammar::Create(context, selected_extensions);
+	auto compiled_grammar =
+	    DatabaseInstance::GetDatabase(context).GetParserCache().GetMatcher(context, selected_extensions);
 	client_config.active_grammar_extensions = std::move(selected_extensions);
 	client_config.cached_grammar = std::move(compiled_grammar);
 }

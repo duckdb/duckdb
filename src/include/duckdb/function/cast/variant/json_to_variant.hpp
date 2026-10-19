@@ -162,7 +162,8 @@ static bool ConvertJSONPrimitive(yyjson_val *val, ToVariantGlobalResultData &res
 			VarintEncode(length, str_blob_data);
 			memcpy(str_blob_data + length_varint_size, const_data_ptr_cast(str), length);
 		}
-		blob_offset_data[result_index] += length_varint_size + length;
+		OffsetData::AddBlobOffset(blob_offset_data[result_index], length_varint_size);
+		OffsetData::AddBlobOffset(blob_offset_data[result_index], length);
 		break;
 	}
 	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_TRUE: {
@@ -182,7 +183,7 @@ static bool ConvertJSONPrimitive(yyjson_val *val, ToVariantGlobalResultData &res
 			auto value = unsafe_yyjson_get_uint(val);
 			memcpy(blob_data + blob_offset_data[result_index], const_data_ptr_cast(&value), sizeof(uint64_t));
 		}
-		blob_offset_data[result_index] += sizeof(uint64_t);
+		OffsetData::AddBlobOffset(blob_offset_data[result_index], sizeof(uint64_t));
 		break;
 	}
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT: {
@@ -192,7 +193,7 @@ static bool ConvertJSONPrimitive(yyjson_val *val, ToVariantGlobalResultData &res
 			auto value = unsafe_yyjson_get_sint(val);
 			memcpy(blob_data + blob_offset_data[result_index], const_data_ptr_cast(&value), sizeof(int64_t));
 		}
-		blob_offset_data[result_index] += sizeof(int64_t);
+		OffsetData::AddBlobOffset(blob_offset_data[result_index], sizeof(int64_t));
 		break;
 	}
 	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
@@ -211,7 +212,7 @@ static bool ConvertJSONPrimitive(yyjson_val *val, ToVariantGlobalResultData &res
 			}
 			memcpy(blob_data + blob_offset_data[result_index], const_data_ptr_cast(&value), sizeof(double));
 		}
-		blob_offset_data[result_index] += sizeof(double);
+		OffsetData::AddBlobOffset(blob_offset_data[result_index], sizeof(double));
 		break;
 	}
 	default:

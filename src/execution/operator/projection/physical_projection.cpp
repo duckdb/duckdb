@@ -31,6 +31,16 @@ PhysicalProjection::PhysicalProjection(PhysicalPlan &physical_plan, vector<Logic
       select_list(std::move(select_list)) {
 }
 
+void PhysicalProjection::InitializeOutputChunk(Allocator &allocator, DataChunk &chunk) const {
+	for (auto &expression : select_list) {
+		if (expression->GetExpressionClass() != ExpressionClass::BOUND_REF) {
+			PhysicalOperator::InitializeOutputChunk(allocator, chunk);
+			return;
+		}
+	}
+	chunk.InitializeEmpty(types);
+}
+
 OperatorResultType PhysicalProjection::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = state_p.Cast<ProjectionState>();
