@@ -68,15 +68,12 @@ SELECT least(3, x := 2);
 ----
 2
 
+# the printed struct values carry the field names through the round trip - typeof folds to a constant
+# at bind time and would not see the deserialized plan
 query T
 SELECT struct_pack(a := 1, b := (SELECT 2));
 ----
 {'a': 1, 'b': 2}
-
-query T
-SELECT typeof(struct_pack(a := 1, b := (SELECT 2)));
-----
-STRUCT(a INTEGER, b INTEGER)
 
 query T
 SELECT struct_insert({'a': 1}, b := (SELECT 2));
@@ -90,9 +87,15 @@ SELECT union_value(k := (SELECT 7));
 
 # the legacy positional struct_pack call captures its argument names as named arguments
 query T
-SELECT typeof(struct_pack(v, w)) FROM (SELECT 1, 2) t(v, w);
+SELECT struct_pack(v, w) FROM (SELECT 1, 2) t(v, w);
 ----
-STRUCT(v INTEGER, w INTEGER)
+{'v': 1, 'w': 2}
+
+# a call without arguments round-trips as well
+query T
+SELECT struct_pack();
+----
+{}
 
 # named arguments of table functions round-trip as well
 query I
@@ -124,16 +127,21 @@ SELECT least(3, x := 2);
 2
 
 query T
-SELECT typeof(struct_pack(a := 1, b := (SELECT 2)));
+SELECT struct_pack(a := 1, b := (SELECT 2));
 ----
-STRUCT(a INTEGER, b INTEGER)
+{'a': 1, 'b': 2}
 
 query T
-SELECT typeof(struct_pack(v, w)) FROM (SELECT 1, 2) t(v, w);
+SELECT struct_pack(v, w) FROM (SELECT 1, 2) t(v, w);
 ----
-STRUCT(v INTEGER, w INTEGER)
+{'v': 1, 'w': 2}
 
 query T
 SELECT struct_insert({'a': 1}, b := (SELECT 2));
 ----
 {'a': 1, 'b': 2}
+
+query T
+SELECT struct_pack();
+----
+{}
