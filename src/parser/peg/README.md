@@ -190,12 +190,16 @@ The transformer generator (`scripts/parser/generate_transformer_trampoline.py`) 
 | `transform_generated_trampoline.cpp` | Transformer process implementations and registration table |
 | `matcher.cpp` | Packrat-memoized matcher rules |
 | `compiled_grammar.cpp` | Matcher rule overrides |
+| `include/peg_rule_id.hpp`, `peg_rule_id.cpp` | `PEGRuleId` enum with one constant per built-in rule, plus name lookups |
 
 If a generated process needs a hand-written semantic body, add that implementation to the appropriate
 `transform_*.cpp` file, then rerun `build_grammar.sh`.
 
 Run `scripts/parser/generate_transformer_trampoline.py --write` directly only when regenerating transformer
 processes without rebuilding the inlined grammar.
+
+Generated transformer code refers to child rules by `PEGRuleId` rather than by name. Rules that grammar extensions
+add at runtime receive IDs past `PEGRuleId::BUILTIN_COUNT` in the compiled grammar that defines them.
 
 ### Transformer Implementation Pattern
 

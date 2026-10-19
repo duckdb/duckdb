@@ -413,13 +413,9 @@ struct TransformStackFrame {
 	arena_ptr<TransformResultValue> child_result;
 	//! How much this frame adds to the expression depth while it is on the stack
 	idx_t expression_depth_weight = 0;
+	//! Rewind process storage to this point after destroying the frame.
+	ArenaAllocator::Position process_arena_position;
 };
-
-#ifdef DEBUG
-using frame_stack_t = InspectableStack<TransformStackFrame>;
-#else
-using frame_stack_t = stack<TransformStackFrame>;
-#endif
 
 class TransformStack {
 public:
@@ -449,17 +445,19 @@ private:
 
 private:
 	PEGTransformer &transformer;
-	frame_stack_t frames;
+	vector<TransformStackFrame> frames;
 };
 
 class PEGTransformer {
 public:
 	PEGTransformer(ArenaAllocator &allocator, TokenIterator &token_iterator, ParserOptions &options_p,
 	               const CompiledGrammar &grammar_p)
-	    : allocator(allocator), token_iterator(token_iterator), options(options_p), grammar(grammar_p) {
+	    : allocator(allocator), token_iterator(token_iterator), options(options_p), grammar(grammar_p),
+	      process_allocator(allocator.GetUnderlyingAllocator()) {
 	}
 
 	const CompiledGrammarRule &GetRule(const string &rule_name) const;
+	const CompiledGrammarRule &GetRule(PEGRuleId rule_id) const;
 
 public:
 	template <typename T>
@@ -510,10 +508,10 @@ public:
 		return allocator.Make<T>(std::forward<Args>(args)...);
 	}
 
-	//! Transform processes live exactly as long as one transform run, so they are carved out of the same arena
+	//! Process storage is reclaimed after the transform frame completes.
 	template <class T, typename... Args>
 	arena_ptr<TransformProcess> MakeProcess(Args &&...args) {
-		return arena_ptr<TransformProcess>(allocator.Make<T>(std::forward<Args>(args)...));
+		return arena_ptr<TransformProcess>(process_allocator.Make<T>(std::forward<Args>(args)...));
 	}
 
 	//! The result a transformer hands back, carved out of the same arena
@@ -603,6 +601,9 @@ public:
 
 	ParserOptions options;
 	const CompiledGrammar &grammar;
+
+private:
+	ArenaAllocator process_allocator;
 
 private:
 	friend class GeneratedTransformProcess;

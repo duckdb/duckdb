@@ -115,6 +115,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugDisableOptimizerSetting),
     DUCKDB_SETTING(EnableCachingOperatorsSetting),
     DUCKDB_SETTING(DebugEvictionQueueSleepMicroSecondsSetting),
+    DUCKDB_SETTING(DebugFileDescriptorLimitSetting),
     DUCKDB_SETTING_CALLBACK(ForceBitpackingModeSetting),
     DUCKDB_SETTING(DebugForceCommitFailureSetting),
     DUCKDB_SETTING(DebugForceCommitRevertFailureSetting),
@@ -560,11 +561,11 @@ SetScope ExtensionOption::ResolveScope(const Identifier &name, SetScope scope) c
 		scope = default_scope;
 	}
 	if (scope == SetScope::GLOBAL && !supports_global) {
-		throw InvalidInputException(
-		    "Setting \"%s\" cannot be set as a global variable - it can only be set per session", name);
+		throw InvalidInputException("Setting %s cannot be set as a global variable - it can only be set per session",
+		                            name);
 	}
 	if (scope == SetScope::SESSION && !supports_session) {
-		throw InvalidInputException("Setting \"%s\" cannot be set as a session variable - it can only be set globally",
+		throw InvalidInputException("Setting %s cannot be set as a session variable - it can only be set globally",
 		                            name);
 	}
 	return scope;
@@ -680,7 +681,7 @@ void DBConfig::CheckLock(const Identifier &name) {
 		}
 	}
 	// not allowed!
-	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
+	throw InvalidInputException("Cannot change configuration option %s - the configuration has been locked", name);
 }
 
 idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {

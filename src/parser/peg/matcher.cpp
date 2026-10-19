@@ -2,6 +2,7 @@
 #include "duckdb/parser/peg/matcher_stack.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/matcher_factory.hpp"
+#include "duckdb/parser/peg/matcher/list_matcher.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
@@ -57,6 +58,14 @@ Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
 	result.packrat_id = optional_idx(matchers.size());
 	matchers.push_back(std::move(matcher));
 	return result;
+}
+
+void MatcherAllocator::InitializeListChains() {
+	for (auto &matcher : matchers) {
+		if (matcher->IsStructural() && matcher->Type() == MatcherType::LIST) {
+			matcher->Cast<ListMatcher>().InitializeListChain();
+		}
+	}
 }
 
 ParseResultAllocator::ParseResultAllocator() : arena(Allocator::DefaultAllocator()), pending_destructors(arena) {

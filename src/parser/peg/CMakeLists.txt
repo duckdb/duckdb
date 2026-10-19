@@ -19,6 +19,7 @@ add_library_unity(
   parser_packrat.cpp
   peg_parser.cpp
   parsed_grammar.cpp
+  peg_rule_id.cpp
   passthrough_dialect.cpp
   sql_formatter.cpp)
 set(ALL_OBJECT_FILES
