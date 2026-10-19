@@ -135,10 +135,20 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
 	spill_plan = AggregateStateSpilling::TryCreateSpillPlan(radix_ht.GetLayout());
 	spill_phase = SpillPhase::NATIVE_ALLOWED;
 
-	minimum_reservation =
-	    CalculateMinimumReservation(MaxValue(config.GetRadixBits(), config.GetMaximumSinkRadixBits()));
+	SetReservationFloor(context, MaxValue(config.GetRadixBits(), config.GetMaximumSinkRadixBits()));
+}
+
+void RadixHTGlobalSinkState::SetReservationFloor(ClientContext &context_p, const idx_t radix_bits) {
+	minimum_reservation = CalculateMinimumReservation(radix_bits);
 	temporary_memory_state->SetMinimumReservation(minimum_reservation);
-	temporary_memory_state->SetRemainingSizeAndUpdateReservation(context, minimum_reservation);
+	temporary_memory_state->SetRemainingSizeAndUpdateReservation(context_p, minimum_reservation);
+}
+
+void RadixHTGlobalSinkState::ResetConfigForNewIteration(ClientContext &context_p, const idx_t scheduled_workers) {
+	config.ResetForNewIteration(scheduled_workers);
+	// The restart partition count determines the reservation floor. This also undoes the scaling that
+	// SetRadixBitsInternal applied if a previous iteration went external.
+	SetReservationFloor(context_p, config.GetRadixBits());
 }
 
 idx_t RadixHTGlobalSinkState::CalculateMinimumReservation(const idx_t radix_bits) const {
@@ -366,12 +376,7 @@ void RadixPartitionedHashTable::ResetGlobalSinkState(ClientContext &context, Glo
                                                      const idx_t scheduled_workers) const {
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
 	gstate.Destroy();
-	gstate.config.ResetForNewIteration(scheduled_workers);
-	// The partition count dropped, so shrink the reservation floor along with it. This also undoes the
-	// scaling that SetRadixBitsInternal applied if a previous iteration went external.
-	gstate.minimum_reservation = gstate.CalculateMinimumReservation(gstate.config.GetRadixBits());
-	gstate.temporary_memory_state->SetMinimumReservation(gstate.minimum_reservation);
-	gstate.temporary_memory_state->SetRemainingSizeAndUpdateReservation(context, gstate.minimum_reservation);
+	gstate.ResetConfigForNewIteration(context, scheduled_workers);
 	gstate.finalized = false;
 	gstate.external = false;
 	gstate.active_threads = 0;
@@ -400,10 +405,7 @@ void RadixPartitionedHashTable::AdjustScheduledWorkers(ClientContext &context, G
 		// data already flowed into this sink, so the configuration can no longer be replaced
 		return;
 	}
-	gstate.config.ResetForNewIteration(scheduled_workers);
-	gstate.minimum_reservation = gstate.CalculateMinimumReservation(gstate.config.GetRadixBits());
-	gstate.temporary_memory_state->SetMinimumReservation(gstate.minimum_reservation);
-	gstate.temporary_memory_state->SetRemainingSizeAndUpdateReservation(context, gstate.minimum_reservation);
+	gstate.ResetConfigForNewIteration(context, scheduled_workers);
 }
 
 void RadixPartitionedHashTable::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,

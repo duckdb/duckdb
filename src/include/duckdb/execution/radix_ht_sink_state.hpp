@@ -97,6 +97,10 @@ public:
 	void Destroy();
 	//! Minimum reservation to sink into HTs partitioned by the given radix bits
 	idx_t CalculateMinimumReservation(idx_t radix_bits) const;
+	//! Recomputes and publishes the reservation floor for the given radix bits
+	void SetReservationFloor(ClientContext &context, idx_t radix_bits);
+	//! Restarts the sink configuration for a recursive iteration and resets the floor to match
+	void ResetConfigForNewIteration(ClientContext &context, idx_t scheduled_workers);
 
 public:
 	idx_t GetThreadLimit() const {
