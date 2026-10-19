@@ -294,11 +294,12 @@ TEST_CASE("Compact collections account their stored bytes", "[column_data_compac
 	auto &segment = *collection.GetSegments()[0];
 	REQUIRE(segment.GetChunkAllocationSize(0) > 0);
 
-	// materialization retires the constant charge from the per-chunk attribution as well
+	// materialization keeps the constant charge, reported sizes never shrink while appending
 	ColumnDataCollection mixed(buffer_manager, {LogicalType::BIGINT});
 	ColumnDataAppendState mixed_append;
 	mixed.InitializeAppend(mixed_append);
 	AppendConstantChunk(mixed, mixed_append, Value::BIGINT(7), 100);
+	const auto size_before_materialization = mixed.AllocationSize();
 	DataChunk flat_input;
 	mixed.InitializeScanChunk(flat_input);
 	{
@@ -312,9 +313,12 @@ TEST_CASE("Compact collections account their stored bytes", "[column_data_compac
 	auto &mixed_segment = *mixed.GetSegments()[0];
 	const idx_t flat_entry_size =
 	    ColumnDataCollectionSegment::GetDataSize(sizeof(int64_t)) + ValidityMask::STANDARD_MASK_SIZE;
-	REQUIRE(mixed_segment.constant_metadata_size == 0);
-	REQUIRE(mixed.SizeInBytes() == flat_entry_size);
-	REQUIRE(mixed_segment.GetChunkAllocationSize(0) == flat_entry_size);
+	// batching consumers rely on reported sizes never shrinking while appending
+	REQUIRE(mixed.AllocationSize() >= size_before_materialization);
+	// the retired charge stays counted consistently across all size metrics
+	REQUIRE(mixed_segment.constant_metadata_size == sizeof(ColumnDataConstantValue));
+	REQUIRE(mixed.SizeInBytes() == flat_entry_size + sizeof(ColumnDataConstantValue));
+	REQUIRE(mixed_segment.GetChunkAllocationSize(0) == flat_entry_size + sizeof(ColumnDataConstantValue));
 }
 
 TEST_CASE("Repeated string bytes stay shared when compact recognition does not apply", "[column_data_compact]") {
