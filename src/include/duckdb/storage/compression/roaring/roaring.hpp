@@ -436,19 +436,21 @@ private:
 
 template <class READER>
 struct RunContainerScanState : public ContainerScanState {
-public:
+	friend READER;
+
+private:
 	RunContainerScanState(idx_t container_index, idx_t container_size, idx_t count);
 
 public:
 	void ScanPartial(ValidityMask &result, idx_t result_offset, idx_t to_scan) override;
 	void Skip(idx_t to_skip) override;
 
-protected:
+private:
 	void LoadNextRun() {
 		static_cast<READER &>(*this).LoadNextRunInternal();
 	}
 
-protected:
+private:
 	RunContainerRLEPair run;
 	bool finished = false;
 	idx_t run_index = 0;
@@ -465,7 +467,7 @@ public:
 public:
 	void VerifyWrittenData() const override;
 
-protected:
+private:
 	void LoadNextRunInternal();
 
 private:
@@ -479,7 +481,7 @@ public:
 	CompressedRunContainerScanState(idx_t container_index, idx_t container_size, idx_t count,
 	                                unsafe_array_ptr<const uint8_t> segments, unsafe_array_ptr<const uint8_t> data);
 
-protected:
+private:
 	void LoadNextRunInternal();
 	void VerifyWrittenData() const override;
 
@@ -493,7 +495,9 @@ private:
 
 template <bool INVERTED, class READER>
 struct ArrayContainerScanState : public ContainerScanState {
-public:
+	friend READER;
+
+private:
 	ArrayContainerScanState(idx_t container_index, idx_t container_size, idx_t count)
 	    : ContainerScanState(container_index, container_size), count(count) {
 	}
@@ -549,7 +553,7 @@ public:
 		scanned_count = end;
 	}
 
-protected:
+private:
 	uint16_t value;
 	bool finished = false;
 	const idx_t count;
