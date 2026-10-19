@@ -410,11 +410,65 @@ SELECT TRY(1 IN (SELECT i FROM integers))
 ----
 TRY can not be used in combination with EXISTS/IN/ANY/ALL subqueries
 
-# a subquery nested deeper inside the TRY argument remains rejected
-statement error
+# a scalar subquery nested deeper inside the TRY argument is lowered like a direct TRY subquery;
+# its captured errors are re-raised at the use site, where the enclosing TRY masks them
+query I
 SELECT TRY(1 + (SELECT max(i) FROM integers))
 ----
-TRY over a scalar subquery is only supported when the subquery is the direct argument of TRY
+4
+
+query I
+SELECT TRY(1 + (SELECT max(10 // (i - 3)) FROM integers))
+----
+NULL
+
+query I
+SELECT TRY((SELECT 10 // (i - 3) FROM integers WHERE i = 3) + (SELECT max(i) FROM integers))
+----
+NULL
+
+# errors outside the nested subquery's maskable positions still propagate
+statement error
+SELECT TRY(1 + (SELECT i FROM integers WHERE 10 // (i - 3) > 0))
+----
+Division by zero
+
+statement error
+SELECT TRY(1 + (SELECT i FROM integers))
+----
+More than one row returned by a subquery
+
+# without an enclosing TRY the subquery still throws at execution
+statement error
+SELECT 1 + (SELECT max(10 // (i - 3)) FROM integers)
+----
+Division by zero
+
+# an empty nested subquery yields NULL, exactly as without TRY
+query I
+SELECT TRY(1 + (SELECT i FROM integers WHERE i > 100))
+----
+NULL
+
+# correlated nested subqueries flatten with the re-raise in place
+query II
+SELECT o.i, TRY(o.i + (SELECT max(10 // (i2.i - o.i)) FROM integers i2)) FROM integers o ORDER BY o.i
+----
+1	NULL
+2	NULL
+3	NULL
+
+query II
+SELECT o.x, TRY(o.x + (SELECT max(10 // (i - o.x)) FROM (VALUES (1), (2)) t(i))) FROM (VALUES (1), (3)) o(x) ORDER BY o.x
+----
+1	NULL
+3	-2
+
+# a volatile nested subquery is rejected like a volatile expression
+statement error
+SELECT TRY(1 + (SELECT random()))
+----
+TRY can not be used in combination with a volatile function
 
 # volatile subqueries remain rejected under TRY, like volatile expressions
 statement error

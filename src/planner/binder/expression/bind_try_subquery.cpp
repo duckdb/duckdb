@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -46,25 +47,25 @@ static optional_ptr<LogicalAggregate> FindAggregateOperator(LogicalOperator &op,
 	return nullptr;
 }
 
-void ExpressionBinder::GateTryAggregates(const OperatorExpression &op, LogicalProjection &projection,
-                                         idx_t projection_idx, LogicalAggregate &aggregate,
-                                         const vector<idx_t> &aggregate_positions) {
+unique_ptr<Expression> ExpressionBinder::GateTryAggregates(const ParsedExpression &location,
+                                                           LogicalAggregate &aggregate,
+                                                           const vector<idx_t> &aggregate_positions) {
 	// wrap the aggregate inputs in TRY and collect HAS_ERROR probes over the same inputs
 	unique_ptr<Expression> gate;
 	for (auto position : aggregate_positions) {
 		auto &aggr_expr = aggregate.expressions[position]->Cast<BoundAggregateExpression>();
 		if (aggr_expr.GetFilter()) {
-			throw BinderException(op, "TRY over a subquery with an aggregate FILTER clause is not supported");
+			throw BinderException(location, "TRY over a subquery with an aggregate FILTER clause is not supported");
 		}
 		if (aggr_expr.GetOrderBys()) {
-			throw BinderException(op, "TRY over a subquery with an ordered aggregate is not supported");
+			throw BinderException(location, "TRY over a subquery with an ordered aggregate is not supported");
 		}
 		if (aggr_expr.StateExportMode() != AggregateStateExportMode::NONE) {
-			throw BinderException(op, "TRY over a subquery with an exported aggregate state is not supported");
+			throw BinderException(location, "TRY over a subquery with an exported aggregate state is not supported");
 		}
 		for (auto &child : aggr_expr.GetChildrenMutable()) {
 			if (child->IsVolatile()) {
-				throw BinderException(op, "TRY can not be used in combination with a volatile function");
+				throw BinderException(location, "TRY can not be used in combination with a volatile function");
 			}
 			auto probe = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_HAS_ERROR, LogicalType::BOOLEAN);
 			probe->GetChildrenMutable().push_back(child->Copy());
@@ -79,7 +80,7 @@ void ExpressionBinder::GateTryAggregates(const OperatorExpression &op, LogicalPr
 	}
 	if (!gate) {
 		// aggregates without inputs, such as count(*), have nothing to mask
-		return;
+		return nullptr;
 	}
 	// aggregate the probes, so that an error in any input row raises the gate
 	auto &system_catalog = Catalog::GetSystemCatalog(context);
@@ -91,25 +92,16 @@ void ExpressionBinder::GateTryAggregates(const OperatorExpression &op, LogicalPr
 	FunctionBinder function_binder(context);
 	auto gate_aggregate = function_binder.BindAggregateFunction(bool_or, std::move(gate_children), error);
 	if (!gate_aggregate) {
-		error.AddQueryLocation(op);
+		error.AddQueryLocation(location);
 		error.Throw();
 	}
 	ColumnBinding gate_binding(aggregate.aggregate_index, ProjectionIndex(aggregate.expressions.size()));
 	aggregate.expressions.push_back(std::move(gate_aggregate));
-
-	// gate the projected expression: an input error turns the aggregated result into NULL
-	auto &expr = projection.expressions[projection_idx];
-	auto case_expr = make_uniq<BoundCaseExpression>(expr->GetReturnType());
-	BoundCaseCheck check;
-	check.when_expr = make_uniq<BoundColumnRefExpression>(LogicalType::BOOLEAN, gate_binding);
-	check.then_expr = make_uniq<BoundConstantExpression>(Value(expr->GetReturnType()));
-	case_expr->CaseChecksMutable().push_back(std::move(check));
-	case_expr->ElseMutable() = std::move(expr);
-	expr = std::move(case_expr);
+	return make_uniq<BoundColumnRefExpression>(LogicalType::BOOLEAN, gate_binding);
 }
 
-void ExpressionBinder::LowerTrySubquery(const OperatorExpression &op, const TrySubqueryPlanIndexes &indexes,
-                                        LogicalOperator &root) {
+LogicalType ExpressionBinder::LowerTrySubquery(const ParsedExpression &location, const TrySubqueryPlanIndexes &indexes,
+                                               LogicalOperator &root, bool expose_error_flag) {
 	D_ASSERT(indexes.recorded);
 	// walk from the plan root to the select list projection of the TRY select node
 	auto binding = root.GetColumnBindings()[0];
@@ -159,17 +151,20 @@ void ExpressionBinder::LowerTrySubquery(const OperatorExpression &op, const TryS
 	vector<idx_t> aggregate_positions;
 	for (auto &ref : refs) {
 		if (ref.table_index == indexes.window_index) {
-			throw BinderException(op, "TRY over a subquery with a window function in its select list is not supported");
+			throw BinderException(location,
+			                      "TRY over a subquery with a window function in its select list is not supported");
 		}
 		for (auto &unnest_index : indexes.unnest_indexes) {
 			if (ref.table_index == unnest_index) {
-				throw BinderException(op, "TRY over a subquery with UNNEST in its select list is not supported");
+				throw BinderException(location, "TRY over a subquery with UNNEST in its select list is not supported");
 			}
 		}
 		if (ref.table_index == indexes.aggregate_index) {
 			aggregate_positions.push_back(ref.column_index);
 		}
 	}
+	// error_flag is only produced when the caller re-raises captured errors at the use site
+	unique_ptr<Expression> error_flag;
 	if (!aggregate_positions.empty()) {
 		// the select item aggregates in this node: gate it on HAS_ERROR probes of the aggregate inputs
 		auto aggregate = FindAggregateOperator(*select_projection->children[0], indexes.aggregate_index);
@@ -179,19 +174,62 @@ void ExpressionBinder::LowerTrySubquery(const OperatorExpression &op, const TryS
 		std::sort(aggregate_positions.begin(), aggregate_positions.end());
 		aggregate_positions.erase(std::unique(aggregate_positions.begin(), aggregate_positions.end()),
 		                          aggregate_positions.end());
-		GateTryAggregates(op, *select_projection, binding.column_index, *aggregate, aggregate_positions);
-		return;
-	}
-	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto gate = GateTryAggregates(location, *aggregate, aggregate_positions);
+		if (gate) {
+			if (expose_error_flag) {
+				// the value is only read when the gate is false, so it stays the raw aggregate result
+				error_flag = std::move(gate);
+			} else {
+				// gate the projected expression: an input error turns the aggregated result into NULL
+				auto case_expr = make_uniq<BoundCaseExpression>(expr->GetReturnType());
+				BoundCaseCheck check;
+				check.when_expr = std::move(gate);
+				check.then_expr = make_uniq<BoundConstantExpression>(Value(expr->GetReturnType()));
+				case_expr->CaseChecksMutable().push_back(std::move(check));
+				case_expr->ElseMutable() = std::move(expr);
+				expr = std::move(case_expr);
+			}
+		}
+	} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		// a bare column computed outside this node's select list (a group, a FROM or derived table
 		// column, a flattened nested subquery): TRY has nothing to mask, errors there propagate
-		return;
+	} else {
+		// a plain projection: push TRY onto the projected expression
+		if (expr->IsVolatile()) {
+			throw BinderException(location, "TRY can not be used in combination with a volatile function");
+		}
+		if (expose_error_flag) {
+			auto probe = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_HAS_ERROR, LogicalType::BOOLEAN);
+			probe->GetChildrenMutable().push_back(expr->Copy());
+			error_flag = std::move(probe);
+		}
+		expr = WrapInTry(std::move(expr));
 	}
-	// a plain projection: push TRY onto the projected expression
-	if (expr->IsVolatile()) {
-		throw BinderException(op, "TRY can not be used in combination with a volatile function");
+	if (!expose_error_flag) {
+		return expr->GetReturnType();
 	}
-	expr = WrapInTry(std::move(expr));
+	if (!error_flag) {
+		error_flag = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+	}
+	// pack the masked value and the error flag into a single struct column for the use site
+	expr->SetAlias("value");
+	error_flag->SetAlias("error");
+	vector<pair<Identifier, unique_ptr<Expression>>> pack_children;
+	pack_children.emplace_back(Identifier(), std::move(expr));
+	pack_children.emplace_back(Identifier(), std::move(error_flag));
+	auto &system_catalog = Catalog::GetSystemCatalog(context);
+	auto &struct_pack = system_catalog.GetEntry<ScalarFunctionCatalogEntry>(
+	    context, QualifiedName(system_catalog.GetName(), DEFAULT_SCHEMA, "struct_pack"));
+	ErrorData error;
+	FunctionBinder function_binder(context);
+	auto packed = function_binder.BindScalarFunction(struct_pack, std::move(pack_children), error, false, &binder);
+	if (!packed) {
+		error.AddQueryLocation(location);
+		error.Throw();
+	}
+	auto struct_type = packed->GetReturnType();
+	select_projection->expressions[binding.column_index] = std::move(packed);
+	return struct_type;
 }
 
 //! TRY over a scalar subquery binds the subquery as an ordinary subquery and lowers the TRY onto the bound
@@ -204,30 +242,35 @@ void ExpressionBinder::LowerTrySubquery(const OperatorExpression &op, const TryS
 //! Volatile computation inside a maskable position is rejected. A volatile value computed by a nested
 //! subquery is evaluated once in its flattened subplan and referenced as a column, so the TRY input and its
 //! HAS_ERROR probe observe one consistent value.
+void ExpressionBinder::PrepareTrySubquery(SubqueryExpression &subquery_expr, const ParsedExpression &location) {
+	auto &node = *subquery_expr.SubqueryMutable()->node;
+	if (node.type != QueryNodeType::SELECT_NODE) {
+		throw BinderException(location, "TRY over a subquery is only supported for plain SELECT subqueries");
+	}
+	auto &select_node = node.Cast<SelectNode>();
+	if (select_node.select_list.size() != 1) {
+		return;
+	}
+	// TRY over a select item that is itself a scalar subquery lowers inside that subquery
+	auto &select_item = select_node.select_list[0];
+	if (select_item->GetExpressionClass() == ExpressionClass::SUBQUERY &&
+	    select_item->Cast<SubqueryExpression>().GetSubqueryType() == SubqueryType::SCALAR) {
+		auto alias = select_item->GetAlias();
+		auto try_item = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
+		try_item->SetQueryLocation(select_item->GetQueryLocation());
+		try_item->GetChildrenMutable().push_back(std::move(select_item));
+		if (!alias.empty()) {
+			try_item->SetAlias(alias);
+		}
+		select_item = std::move(try_item);
+	}
+}
+
 BindResult ExpressionBinder::BindTrySubquery(OperatorExpression &op, idx_t depth) {
 	D_ASSERT(op.GetChildrenMutable().size() == 1);
 	auto &subquery_expr = op.GetChildrenMutable()[0]->Cast<SubqueryExpression>();
 	D_ASSERT(subquery_expr.GetSubqueryType() == SubqueryType::SCALAR);
-	auto &node = *subquery_expr.SubqueryMutable()->node;
-	if (node.type != QueryNodeType::SELECT_NODE) {
-		throw BinderException(op, "TRY over a subquery is only supported for plain SELECT subqueries");
-	}
-	auto &select_node = node.Cast<SelectNode>();
-	if (select_node.select_list.size() == 1) {
-		// TRY over a select item that is itself a scalar subquery lowers inside that subquery
-		auto &select_item = select_node.select_list[0];
-		if (select_item->GetExpressionClass() == ExpressionClass::SUBQUERY &&
-		    select_item->Cast<SubqueryExpression>().GetSubqueryType() == SubqueryType::SCALAR) {
-			auto alias = select_item->GetAlias();
-			auto try_item = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
-			try_item->SetQueryLocation(select_item->GetQueryLocation());
-			try_item->GetChildrenMutable().push_back(std::move(select_item));
-			if (!alias.empty()) {
-				try_item->SetAlias(alias);
-			}
-			select_item = std::move(try_item);
-		}
-	}
+	PrepareTrySubquery(subquery_expr, op);
 
 	// bind as an ordinary scalar subquery, so inner scopes, overload resolution and aggregate
 	// ownership resolve exactly as without TRY
@@ -245,7 +288,7 @@ BindResult ExpressionBinder::BindTrySubquery(OperatorExpression &op, idx_t depth
 		if (!indexes.recorded) {
 			throw InternalException("TRY subquery: no plan indexes were recorded for the top select node");
 		}
-		LowerTrySubquery(op, indexes, *bound_subquery.SubqueryMutable().plan);
+		LowerTrySubquery(op, indexes, *bound_subquery.SubqueryMutable().plan, false);
 	}
 	return result;
 }

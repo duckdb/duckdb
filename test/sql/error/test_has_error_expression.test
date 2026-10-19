@@ -106,12 +106,22 @@ SELECT has_error(random())
 ----
 HAS_ERROR can not be used in combination with a volatile function
 
-# subqueries are rejected, as in TRY: a flattened subquery evaluates in the outer plan,
-# where HAS_ERROR cannot observe its errors
-statement error
+# a scalar subquery under HAS_ERROR is lowered like a TRY subquery and re-raises captured
+# errors at the use site, where HAS_ERROR observes them
+query I
 SELECT has_error((SELECT 1 // 0))
 ----
-<REGEX>:.*Binder Error.*subquery.*
+true
+
+query I
+SELECT has_error((SELECT 1 // 1))
+----
+false
+
+query I
+SELECT has_error(1 + (SELECT 1 // 0))
+----
+true
 
 # aggregates are rejected, as in TRY
 statement error

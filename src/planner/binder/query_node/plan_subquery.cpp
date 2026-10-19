@@ -1,3 +1,5 @@
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
@@ -768,11 +770,69 @@ unique_ptr<Expression> RecursiveDependentJoinPlanner::VisitReplace(BoundSubquery
 	return binder.PlanSubquery(expr, root);
 }
 
+static unique_ptr<Expression> BindTryRethrowFunction(Binder &binder, const char *name,
+                                                     vector<unique_ptr<Expression>> children) {
+	auto &system_catalog = Catalog::GetSystemCatalog(binder.context);
+	auto &entry = system_catalog.GetEntry<ScalarFunctionCatalogEntry>(
+	    binder.context, QualifiedName(system_catalog.GetName(), DEFAULT_SCHEMA, name));
+	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
+	for (auto &child : children) {
+		arguments.emplace_back(Identifier(), std::move(child));
+	}
+	ErrorData error;
+	FunctionBinder function_binder(binder);
+	auto result = function_binder.BindScalarFunction(entry, std::move(arguments), error, false, &binder);
+	if (!result) {
+		error.Throw();
+	}
+	return result;
+}
+
+//! Replace a TRY subquery that was lowered with an exposed error flag by
+//! CASE WHEN <error flag> THEN error(...) ELSE <masked value> END, so that errors captured inside the
+//! subquery are re-raised at the use site, where the enclosing TRY or HAS_ERROR consumes them per row
+static unique_ptr<Expression> CreateTryErrorRethrow(Binder &binder, unique_ptr<Expression> subquery_result) {
+	auto struct_type = subquery_result->GetReturnType();
+	auto value_type = StructType::GetChildType(struct_type, 0);
+	auto flag_input = subquery_result->Copy();
+
+	vector<unique_ptr<Expression>> value_children;
+	value_children.push_back(std::move(subquery_result));
+	value_children.push_back(make_uniq<BoundConstantExpression>(Value("value")));
+	auto value = BindTryRethrowFunction(binder, "struct_extract", std::move(value_children));
+
+	vector<unique_ptr<Expression>> flag_children;
+	flag_children.push_back(std::move(flag_input));
+	flag_children.push_back(make_uniq<BoundConstantExpression>(Value("error")));
+	auto flag = BindTryRethrowFunction(binder, "struct_extract", std::move(flag_children));
+
+	// the raised error is always consumed by the enclosing TRY or HAS_ERROR; the original message is
+	// not available here, HAS_ERROR captures only the fact that an error occurred
+	vector<unique_ptr<Expression>> error_children;
+	error_children.push_back(make_uniq<BoundConstantExpression>(Value("Error raised in TRY subquery")));
+	auto raise = BindTryRethrowFunction(binder, "error", std::move(error_children));
+	auto then_expr = BoundCastExpression::AddCastToType(binder.context, std::move(raise), value_type);
+
+	auto case_expr = make_uniq<BoundCaseExpression>(value_type);
+	BoundCaseCheck check;
+	check.when_expr = std::move(flag);
+	check.then_expr = std::move(then_expr);
+	case_expr->CaseChecksMutable().push_back(std::move(check));
+	case_expr->ElseMutable() = std::move(value);
+	return std::move(case_expr);
+}
+
 unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root) {
 	D_ASSERT(root);
 	// first we translate the QueryNode of the subquery into a logical plan
 	auto subquery_root = std::move(expr.SubqueryMutable().plan);
 	D_ASSERT(subquery_root);
+
+	if (expr.RethrowsTryErrors()) {
+		// the plan outputs a struct of the masked value and the error flag; the flattened result column
+		// carries that struct until the rethrow wrapper unpacks it below
+		expr.SetReturnType(expr.Subquery().types[0]);
+	}
 
 	// now we actually flatten the subquery
 	auto plan = std::move(subquery_root);
@@ -782,6 +842,9 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 		result_expression = PlanUncorrelatedSubquery(*this, expr, root, std::move(plan));
 	} else {
 		result_expression = PlanCorrelatedSubquery(*this, expr, root, std::move(plan));
+	}
+	if (expr.RethrowsTryErrors()) {
+		result_expression = CreateTryErrorRethrow(*this, std::move(result_expression));
 	}
 	IncreaseDepth();
 	return result_expression;

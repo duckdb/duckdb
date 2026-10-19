@@ -313,10 +313,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			// a directly nested TRY over a scalar subquery was already lowered onto the subquery plan
 			return BindResult(std::move(children[0]));
 		}
-		if (expr.HasSubquery()) {
-			throw BinderException("%s can not be used in combination with a scalar subquery",
-			                      ExpressionTypeToString(operator_type));
-		}
+		// scalar subqueries deeper inside the argument were lowered during binding and re-raise their
+		// captured errors at the use site, so they need no rejection here
 		if (expr.IsVolatile()) {
 			throw BinderException("%s can not be used in combination with a volatile function",
 			                      ExpressionTypeToString(operator_type));
