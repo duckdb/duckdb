@@ -154,10 +154,7 @@ bool ICUDateFunc::TryGetTime(Calendar *calendar, uint64_t micros, timestamp_tz_t
 
 	// Now make sure the value is in range
 	result.value = millis;
-	date_t out_date = Timestamp::GetDate(timestamp_t(millis));
-	int64_t days_micros;
-	return TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(out_date.days, Interval::MICROS_PER_DAY,
-	                                                                 days_micros);
+	return Timestamp::IsValid(timestamp_t(millis));
 }
 
 timestamp_tz_t ICUDateFunc::GetTime(Calendar *calendar, uint64_t micros) {

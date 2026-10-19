@@ -4,10 +4,10 @@
 
 foreach part day hour minute second
 
-statement error
-SELECT date_trunc('{part}', make_timestamp(-9223372036854775806));
+query I
+SELECT date_trunc('{part}', make_timestamp(-9223372022400000000));
 ----
-<REGEX>:Conversion Error.*Date out of range.*
+290309-12-22 (BC) 00:00:00
 
 endloop
 

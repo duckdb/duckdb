@@ -11,14 +11,14 @@ statement ok
 SET TimeZone = 'UTC';
 
 # TIMESTAMP WITH TIME ZONE shares the int64 domain of TIMESTAMP: the smallest and largest finite values
-# (make_timestamptz(INT64_MIN + 2) / make_timestamptz(INT64_MAX - 1)) are valid rows that a rewritten
+# (make_timestamptz(-9223372022400000000) / make_timestamptz(INT64_MAX - 1)) are valid rows that a rewritten
 # comparison must keep, and a bound on the domain edge is written against the ±infinity sentinel
 statement ok
 CREATE TABLE edge_tz(t TIMESTAMPTZ);
 
 statement ok
 INSERT INTO edge_tz VALUES
-  (make_timestamptz(-9223372036854775806)), ('2000-01-01'), (make_timestamptz(9223372036854775806)),
+  (make_timestamptz(-9223372022400000000)), ('2000-01-01'), (make_timestamptz(9223372036854775806)),
   ('-infinity'), ('infinity'), (NULL);
 
 query I
@@ -38,6 +38,11 @@ SELECT count(*) FROM edge_tz WHERE epoch_us(t) >= -9223372036854775806;
 
 query I
 SELECT count(*) FROM edge_tz WHERE epoch_us(t) > -9223372036854775806;
+----
+3
+
+query I
+SELECT count(*) FROM edge_tz WHERE epoch_us(t) > -9223372022400000000;
 ----
 2
 

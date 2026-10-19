@@ -159,7 +159,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 				if (input.IsFinite()) {
 					auto micros = SetTime(calendar.get(), input);
 					truncator(calendar.get(), micros);
-					return GetTimeUnsafe(calendar.get(), micros);
+					return GetTime(calendar.get(), micros);
 				} else {
 					return input;
 				}
@@ -170,7 +170,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 					auto truncator = TruncationFactory(GetDatePartSpecifier(specifier.GetString()));
 					auto micros = SetTime(calendar.get(), input);
 					truncator(calendar.get(), micros);
-					return GetTimeUnsafe(calendar.get(), micros);
+					return GetTime(calendar.get(), micros);
 				} else {
 					return input;
 				}

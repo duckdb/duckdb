@@ -1,0 +1,68 @@
+# name: test/issues/general/test_26797.test
+# description: Finite timestamps outside the TIMESTAMP range cannot be created
+# group: [general]
+
+statement error
+SELECT make_timestamp(-9223372036854775806)::VARCHAR;
+----
+Conversion Error: Timestamp microseconds out of range: -9223372036854775806
+
+statement error
+SELECT TRY_CAST(make_timestamp(-9223372036854775806) AS VARCHAR);
+----
+Conversion Error: Timestamp microseconds out of range: -9223372036854775806
+
+statement error
+CREATE TABLE t AS SELECT make_timestamp(-9223372036854775806) AS ts;
+----
+Conversion Error: Timestamp microseconds out of range: -9223372036854775806
+
+# the smallest int64 and the last microsecond before the first midnight of the range
+statement error
+SELECT make_timestamp(-9223372036854775807 - 1);
+----
+Conversion Error: Timestamp microseconds out of range: -9223372036854775808
+
+statement error
+SELECT make_timestamp(x) FROM (VALUES (0), (-9223372022400000001)) t(x);
+----
+Conversion Error: Timestamp microseconds out of range: -9223372022400000001
+
+query III
+SELECT make_timestamp(-9223372022400000000), make_timestamp(9223372036854775806), make_timestamp(0);
+----
+290309-12-22 (BC) 00:00:00	294247-01-10 04:00:54.775806	1970-01-01 00:00:00
+
+# a UTC offset cannot move a timestamp past either end of the range
+statement error
+SELECT '290309-12-22 (BC) 00:00:00+01'::TIMESTAMPTZ;
+----
+Conversion Error: timestamp field value out of range: "290309-12-22 (BC) 00:00:00+01"
+
+statement error
+SELECT '294247-01-10 03:00:54.775807-01'::TIMESTAMPTZ;
+----
+Conversion Error: timestamp field value out of range: "294247-01-10 03:00:54.775807-01"
+
+query I
+SELECT TRY_CAST('290309-12-22 (BC) 00:00:00+01' AS TIMESTAMPTZ);
+----
+NULL
+
+query I
+SELECT epoch_us('290309-12-22 (BC) 01:00:00+01'::TIMESTAMPTZ);
+----
+-9223372022400000000
+
+statement error
+SELECT DATE '290309-12-22 (BC)' + TIMETZ '00:00:00+01';
+----
+Out of Range Error: Timestamp with time zone out of range
+
+statement ok
+COPY (SELECT '290309-12-22 (BC) 00:00:00+01' AS ts) TO '__TEST_DIR__/test_26797.csv';
+
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/test_26797.csv', columns = {'ts': 'TIMESTAMPTZ'}, header = true, auto_detect = false);
+----
+Could not convert string "290309-12-22 (BC) 00:00:00+01" to 'TIMESTAMP WITH TIME ZONE'

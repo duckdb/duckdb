@@ -821,3 +821,61 @@ TEST_CASE("Test C-API Arrow string views retain data after aligned scratch is re
 		}
 	}
 }
+
+TEST_CASE("Test C-API Arrow conversion of a TIMESTAMPTZ below the timestamp range", "[capi][arrow]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	for (auto format : {"tss:UTC", "tsm:UTC"}) {
+		CAPTURE(format);
+		// the first midnight of the range, 290309-12-22 (BC) 00:00:00, and one unit before it
+		const int64_t first_midnight = string(format) == "tss:UTC" ? -9223372022400 : -9223372022400000;
+		for (int64_t value : {first_midnight, first_midnight - 1}) {
+			const void *buffers[] = {nullptr, &value};
+			ArrowSchema child_schema = {};
+			child_schema.format = format;
+			child_schema.name = "ts";
+			child_schema.flags = ARROW_FLAG_NULLABLE;
+			child_schema.release = ReleaseUnalignedSchema;
+			ArrowSchema *children[] = {&child_schema};
+			ArrowSchema schema = {};
+			schema.format = "+s";
+			schema.n_children = 1;
+			schema.children = children;
+			schema.release = ReleaseUnalignedSchema;
+
+			ArrowArray child_array = {};
+			child_array.length = 1;
+			child_array.n_buffers = 2;
+			child_array.buffers = buffers;
+			child_array.release = ReleaseUnalignedArray;
+			ArrowArray *arrays[] = {&child_array};
+			const void *struct_buffers[] = {nullptr};
+			ArrowArray array = {};
+			array.length = 1;
+			array.n_buffers = 1;
+			array.buffers = struct_buffers;
+			array.n_children = 1;
+			array.children = arrays;
+			array.release = ReleaseUnalignedArray;
+
+			duckdb_arrow_converted_schema converted = nullptr;
+			REQUIRE(duckdb_schema_from_arrow(tester.connection, &schema, &converted) == nullptr);
+			duckdb_data_chunk chunk = nullptr;
+			auto err = duckdb_data_chunk_from_arrow(tester.connection, &array, converted, &chunk);
+			if (value == first_midnight) {
+				REQUIRE(err == nullptr);
+				auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+				auto timestamps = static_cast<duckdb_timestamp *>(duckdb_vector_get_data(vector));
+				REQUIRE(timestamps[0].micros == -9223372022400000000);
+				duckdb_destroy_data_chunk(&chunk);
+			} else {
+				REQUIRE(err != nullptr);
+				REQUIRE(StringUtil::Contains(duckdb_error_data_message(err),
+				                             "Could not convert TimestampTZ to Microsecond"));
+				duckdb_destroy_error_data(&err);
+			}
+			duckdb_destroy_arrow_converted_schema(&converted);
+		}
+	}
+}

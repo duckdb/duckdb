@@ -45,8 +45,19 @@ public:
 	constexpr static const int32_t MIN_YEAR = -290308;
 	constexpr static const int32_t MIN_MONTH = 12;
 	constexpr static const int32_t MIN_DAY = 22;
+	//! The smallest finite TIMESTAMP in microseconds, 290309-12-22 (BC) 00:00:00
+	constexpr static const int64_t MIN_MICROS = -9223372022400000000LL;
 
 public:
+	//! Whether the timestamp is finite and within the TIMESTAMP range
+	static inline bool IsValid(timestamp_t timestamp) {
+		return timestamp.IsFinite() && timestamp.value >= MIN_MICROS;
+	}
+	//! Every finite TIMESTAMP_NS is valid
+	static inline bool IsValid(timestamp_ns_t timestamp) {
+		return timestamp.IsFinite();
+	}
+
 	//! Convert a string in the format "YYYY-MM-DD hh:mm:ss[.f][-+TH[:tm]]" to a timestamp object
 	DUCKDB_API static timestamp_t FromString(const string &str, bool use_offset);
 	//! Convert a string where the offset can also be a time zone string: / [A_Za-z0-9/_]+/

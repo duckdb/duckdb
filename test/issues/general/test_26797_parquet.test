@@ -1,0 +1,11 @@
+# name: test/issues/general/test_26797_parquet.test
+# description: A Parquet TIMESTAMP_MICROS value below the TIMESTAMP range is rejected
+# group: [general]
+
+require parquet
+
+# written by an earlier version as make_timestamp(-9223372036854775806)
+statement error
+SELECT epoch_us(ts) FROM 'data/parquet-testing/timestamp_below_range.parquet';
+----
+Conversion Error: Timestamp microseconds out of range: -9223372036854775806

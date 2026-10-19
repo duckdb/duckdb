@@ -1121,7 +1121,9 @@ static bool TryCastTimestampBase(const SRC &input, DST &result, bool strict = tr
 		return true;
 	} else if (SRC::PRECISION < DST::PRECISION) {
 		const int64_t scaling = DST::PRECISION / SRC::PRECISION;
-		return TryMultiplyOperator::Operation(input.value, scaling, result.value);
+		if (!TryMultiplyOperator::Operation(input.value, scaling, result.value)) {
+			return false;
+		}
 	} else {
 		//	Round away from the epoch.
 		//	Scale first so we don't overflow.
@@ -1134,16 +1136,16 @@ static bool TryCastTimestampBase(const SRC &input, DST &result, bool strict = tr
 			++result.value;
 		}
 		result.value /= 2;
-		// rounding can go past the largest (or smallest) timestamp - the result must still be a valid timestamp
-		if (DST::PRECISION < Interval::MICROS_PER_SEC) {
-			int64_t micros;
-			if (!TryMultiplyOperator::Operation(result.value, Interval::MICROS_PER_SEC / DST::PRECISION, micros) ||
-			    !timestamp_t(micros).IsFinite()) {
-				return false;
-			}
-		}
-		return true;
 	}
+	// the result must still be a valid timestamp, also after rounding
+	if (DST::PRECISION <= Interval::MICROS_PER_SEC) {
+		int64_t micros;
+		if (!TryMultiplyOperator::Operation(result.value, Interval::MICROS_PER_SEC / DST::PRECISION, micros) ||
+		    !Timestamp::IsValid(timestamp_t(micros))) {
+			return false;
+		}
+	}
+	return true;
 }
 
 template <typename SRC, typename DST>

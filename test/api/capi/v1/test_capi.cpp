@@ -451,6 +451,17 @@ TEST_CASE("decompose timetz with duckdb_from_time_tz", "[capi]") {
 	REQUIRE(time_tz.offset == -7200);
 }
 
+TEST_CASE("Timestamps below the timestamp range cannot be created through the C API", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto result = tester.Query("CREATE TABLE t AS SELECT make_timestamp(-9223372036854775806) AS ts");
+	REQUIRE_FAIL(result);
+	REQUIRE(result->ErrorType() == DUCKDB_ERROR_CONVERSION);
+	REQUIRE(string(result->ErrorMessage()) ==
+	        "Conversion Error: Timestamp microseconds out of range: -9223372036854775806");
+}
+
 TEST_CASE("create time_tz value") {
 	duckdb_time_struct time;
 	time.hour = 4;
