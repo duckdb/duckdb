@@ -47,10 +47,21 @@ VariantDecimalData VariantUtils::DecodeDecimalData(const UnifiedVariantVectorDat
 
 string_t VariantUtils::DecodeStringData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index) {
 	auto byte_offset = variant.GetByteOffset(row, value_index);
-	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto &blob = variant.GetData(row);
+	auto blob_size = blob.GetSize();
+	if (byte_offset >= blob_size) {
+		throw DataCorruptionException("Variant string byte_offset (%d) is out of bounds for a blob of size %d",
+		                              byte_offset, blob_size);
+	}
+	auto data = const_data_ptr_cast(blob.GetData());
 	auto ptr = data + byte_offset;
 
 	auto length = VarintDecode<uint32_t>(ptr);
+	auto bytes_remaining = blob_size - NumericCast<idx_t>(ptr - data);
+	if (length > bytes_remaining) {
+		throw DataCorruptionException("Variant string length (%d) exceeds the remaining blob size (%d)", length,
+		                              bytes_remaining);
+	}
 	return string_t(reinterpret_cast<const char *>(ptr), length);
 }
 
