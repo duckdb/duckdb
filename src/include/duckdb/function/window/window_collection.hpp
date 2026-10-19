@@ -114,13 +114,19 @@ public:
 	}
 	//! Scan the next chunk
 	inline bool Scan() {
-		return paged.inputs->Scan(state, chunk);
+		if (!paged.inputs->Scan(state, chunk)) {
+			return false;
+		}
+		// the cell accessors require flat vectors, scans can return compact representations
+		chunk.Flatten();
+		return true;
 	}
 	//! Seek to the given row
 	inline idx_t Seek(idx_t row_idx) {
 		if (!RowIsVisible(row_idx)) {
 			D_ASSERT(paged.inputs.get());
 			paged.inputs->Seek(row_idx, state, chunk);
+			chunk.Flatten();
 		}
 		return RowOffset(row_idx);
 	}

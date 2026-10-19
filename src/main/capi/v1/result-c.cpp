@@ -134,6 +134,8 @@ void WriteData(duckdb_column *column, ColumnDataCollection &source, const vector
 	idx_t row = 0;
 	auto target = (DST *)column->deprecated_data;
 	for (auto &input : source.Chunks(column_ids)) {
+		// scans can return compact representations, this path requires flat vectors
+		input.Flatten();
 		auto source = FlatVector::GetData<SRC>(input.data[0]);
 		auto &mask = FlatVector::ValidityMutable(input.data[0]);
 
@@ -177,6 +179,8 @@ duckdb_state deprecated_duckdb_translate_column(QueryResult &result, duckdb_colu
 	{
 		idx_t row = 0;
 		for (auto &input : collection.Chunks(column_ids)) {
+			// scans can return compact representations, this path requires flat vectors
+			input.Flatten();
 			for (idx_t k = 0; k < input.size(); k++) {
 				column->deprecated_nullmask[row++] = FlatVector::IsNull(input.data[0], k);
 			}
