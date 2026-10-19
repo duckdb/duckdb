@@ -107,7 +107,8 @@ ColumnReader &VariantColumnReader::GetChildReader(idx_t child_idx) {
 }
 
 void VariantColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
-                                         const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
+                                         const duckdb_parquet::ParquetVector<ColumnChunk> &columns,
+                                         TProtocol &protocol_p) {
 	for (auto &child : child_readers) {
 		if (!child) {
 			continue;
@@ -116,7 +117,8 @@ void VariantColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_
 	}
 }
 
-unique_ptr<BaseStatistics> VariantColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
+unique_ptr<BaseStatistics> VariantColumnReader::Stats(idx_t row_group_idx_p,
+                                                      const duckdb_parquet::ParquetVector<ColumnChunk> &columns) {
 	auto result = ColumnReader::Stats(row_group_idx_p, columns);
 	if (result && index.IsPushdownExtract()) {
 		auto storage_index = StorageIndex::FromColumnIndex(index);

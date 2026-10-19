@@ -136,9 +136,9 @@ static idx_t ParquetColumnChunkFileOffset(const duckdb_parquet::ColumnChunk &chu
 	return offset;
 }
 
-void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(ThriftFileTransport &trans,
-                                                         vector<ParquetPrefetchColumn> &requested_columns,
-                                                         const vector<duckdb_parquet::ColumnChunk> &all_chunks) {
+void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(
+    ThriftFileTransport &trans, vector<ParquetPrefetchColumn> &requested_columns,
+    const duckdb_parquet::ParquetVector<duckdb_parquet::ColumnChunk> &all_chunks) {
 	if (requested_columns.empty()) {
 		return;
 	}
@@ -180,7 +180,10 @@ void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(ThriftFileTransport &tr
 			continue;
 		}
 		auto &path = chunk.meta_data.path_in_schema;
-		string name = path.empty() ? string() : StringUtil::Join(path, ".");
+		string name =
+		    path.empty()
+		        ? string()
+		        : StringUtil::Join(path, ".", [](const duckdb_parquet::ParquetString &part) { return string(part); });
 		// we tag hitchhikers with *column_name*
 		bucket_it->second.emplace_back("*" + std::move(name) + "*", chunk_start);
 	}
@@ -354,7 +357,8 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		}
 	}
 
-	auto metadata = make_uniq<FileMetaData>();
+	auto arena = make_uniq<ArenaAllocator>(allocator);
+	auto metadata = make_uniq<FileMetaData>(*arena);
 	unique_ptr<FileCryptoMetaData> crypto_metadata;
 	string encryption_key_hash;
 
@@ -362,7 +366,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		// Get the encryption util
 		// The parquet reader only reads data, so we set util to true
 		encryption_util = context.db->GetEncryptionUtil(true);
-		crypto_metadata = make_uniq<FileCryptoMetaData>();
+		crypto_metadata = make_uniq<FileCryptoMetaData>(*arena);
 		crypto_metadata->read(file_proto.get());
 
 		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
@@ -392,9 +396,9 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 
 	// Try to read the GeoParquet metadata (if present)
 	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
-	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), file_handle, std::move(geo_metadata),
-	                                                 std::move(crypto_metadata), std::move(encryption_key_hash),
-	                                                 footer_len);
+	return make_shared_ptr<ParquetFileMetadataCache>(std::move(arena), std::move(metadata), file_handle,
+	                                                 std::move(geo_metadata), std::move(crypto_metadata),
+	                                                 std::move(encryption_key_hash), footer_len);
 }
 
 static bool CanUseParquetMetadataStatistics(ClientContext &context,
@@ -1172,7 +1176,7 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 					throw DataCorruptionException(
 					    "Failed to read Parquet file \"%s\": the '%s' column of VARIANT column \"%s\" "
 					    "must be a binary BYTE_ARRAY column",
-					    file.path, child_schema.name, s_ele.name);
+					    file.path, child_schema.name, string(s_ele.name));
 				}
 			}
 		}
@@ -2154,7 +2158,10 @@ ParquetPrefetchStrategy ParquetReader::WholeGroupPrefetch(ParquetReaderScanState
 		vector<ParquetPrefetchColumn> pending_registrations;
 		for (auto &column_chunk : group.columns) {
 			auto &path = column_chunk.meta_data.path_in_schema;
-			string name = path.empty() ? string() : StringUtil::Join(path, ".");
+			string name =
+			    path.empty() ? string() : StringUtil::Join(path, ".", [](const duckdb_parquet::ParquetString &part) {
+				    return string(part);
+			    });
 			pending_registrations.push_back({name, ParquetColumnChunkFileOffset(column_chunk)});
 		}
 		state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);

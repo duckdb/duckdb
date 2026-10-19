@@ -57,7 +57,8 @@ ColumnReader &StructColumnReader::GetChildReader(idx_t child_idx) {
 }
 
 void StructColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
-                                        const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
+                                        const duckdb_parquet::ParquetVector<ColumnChunk> &columns,
+                                        TProtocol &protocol_p) {
 	for (auto &child : child_readers) {
 		if (!child) {
 			continue;

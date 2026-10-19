@@ -33,11 +33,14 @@ enum class ParquetCacheValidity { VALID, INVALID, UNKNOWN };
 
 class ParquetFileMetadataCache : public ObjectCacheEntry {
 public:
-	ParquetFileMetadataCache(unique_ptr<duckdb_parquet::FileMetaData> file_metadata, CachingFileHandle &handle,
-	                         unique_ptr<GeoParquetFileMetadata> geo_metadata,
+	ParquetFileMetadataCache(unique_ptr<ArenaAllocator> arena, unique_ptr<duckdb_parquet::FileMetaData> file_metadata,
+	                         CachingFileHandle &handle, unique_ptr<GeoParquetFileMetadata> geo_metadata,
 	                         unique_ptr<FileCryptoMetaData> crypto_metadata, string encryption_key_hash,
 	                         idx_t footer_size);
 	~ParquetFileMetadataCache() override = default;
+
+	//! Arena that backs all strings and vectors of the Thrift metadata - must outlive the metadata
+	unique_ptr<ArenaAllocator> arena;
 
 	//! Parquet file metadata
 	unique_ptr<const duckdb_parquet::FileMetaData> metadata;
