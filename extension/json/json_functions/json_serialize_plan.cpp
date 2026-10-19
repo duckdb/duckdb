@@ -133,6 +133,10 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 				Planner planner(context);
 				planner.CreatePlan(std::move(stmt));
 				auto plan = std::move(planner.plan);
+				if (!plan) {
+					throw InvalidInputException("json_serialize_plan: statement cannot be planned, parameters need "
+					                            "to have a known value to serialize the plan");
+				}
 
 				if (info.optimize && plan->RequireOptimizer()) {
 					Optimizer optimizer(*planner.binder, context);
