@@ -278,4 +278,52 @@ TEST_CASE("Compact collections account their stored bytes", "[column_data_compac
 	REQUIRE(segment.GetChunkAllocationSize(0) > 0);
 }
 
+TEST_CASE("Repeated string bytes stay shared when compact recognition does not apply", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		// the shapes below assume full-size vectors
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	const idx_t payload_size = 131072;
+	const string payload(payload_size, 'x');
+
+	// managed result collections keep flat entries but must still share the constant's bytes
+	ColumnDataCollection managed(buffer_manager, {LogicalType::VARCHAR},
+	                             ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES);
+	ColumnDataAppendState managed_append;
+	managed.InitializeAppend(managed_append);
+	AppendConstantChunk(managed, managed_append, Value(payload), STANDARD_VECTOR_SIZE);
+	ColumnDataScanState scan_state;
+	DataChunk chunk;
+	managed.InitializeScanChunk(chunk);
+	managed.InitializeScan(scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
+	REQUIRE(managed.Scan(scan_state, chunk));
+	REQUIRE(chunk.data[0].GetVectorType() == VectorType::FLAT_VECTOR);
+	auto managed_strings = FlatVector::GetData<string_t>(chunk.data[0]);
+	REQUIRE(managed_strings[0].GetString() == payload);
+	REQUIRE(managed_strings[STANDARD_VECTOR_SIZE - 1].GetString() == payload);
+	// one copy of the bytes plus the entry array, not one copy per row
+	REQUIRE(managed.SizeInBytes() < 2 * payload_size);
+
+	// an entry that already holds flat rows cannot become compact but still shares the bytes
+	ColumnDataCollection collection(buffer_manager, {LogicalType::VARCHAR});
+	ColumnDataAppendState append_state;
+	collection.InitializeAppend(append_state);
+	DataChunk flat_input;
+	collection.InitializeScanChunk(flat_input);
+	{
+		auto writer = FlatVector::Writer<string_t>(flat_input.data[0], 1);
+		writer.WriteValue(string_t("short"));
+	}
+	flat_input.SetCardinality(1);
+	collection.Append(append_state, flat_input);
+	AppendConstantChunk(collection, append_state, Value(payload), STANDARD_VECTOR_SIZE - 1);
+	REQUIRE(collection.Count() == STANDARD_VECTOR_SIZE);
+	REQUIRE(collection.GetValue(0, 0) == Value("short"));
+	REQUIRE(collection.GetValue(0, 1) == Value(payload));
+	REQUIRE(collection.GetValue(0, STANDARD_VECTOR_SIZE - 1) == Value(payload));
+	REQUIRE(collection.SizeInBytes() < 2 * payload_size);
+}
+
 } // namespace duckdb

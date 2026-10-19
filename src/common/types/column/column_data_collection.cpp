@@ -486,6 +486,144 @@ static void ColumnDataCopy(ColumnDataMetaData &meta_data, const UnifiedVectorFor
 	TemplatedColumnDataCopy<StandardValueCopy<T>>(meta_data, source_data, source, offset, copy_count);
 }
 
+//! Shares the string bytes of constant and small-dictionary appends that did not become a compact entry,
+//! e.g. in managed result collections or entries that already hold flat rows
+bool ColumnDataCopyCompressedStrings(ColumnDataMetaData &meta_data, const VectorDataIndex &current_index,
+                                     VectorDataIndex &child_index, const UnifiedVectorFormat &source_data,
+                                     Vector &source, const idx_t &offset, const idx_t &vector_remaining,
+                                     idx_t &append_count, idx_t &heap_size, data_ptr_t &base_heap_ptr) {
+	// check if we can do the optimization at all
+	switch (source.GetVectorType()) {
+	case VectorType::CONSTANT_VECTOR: {
+		const auto &constant_string = ConstantVector::GetData<string_t>(source)[0];
+		if (ConstantVector::IsNull(source) || constant_string.IsInlined()) {
+			return false; // regular path is OK
+		}
+		heap_size = constant_string.GetSize();
+		break;
+	}
+	case VectorType::DICTIONARY_VECTOR: {
+		const auto dictionary_size = DictionaryVector::DictionarySize(source);
+		if (!dictionary_size.IsValid() || dictionary_size.GetIndex() >= vector_remaining / 2) {
+			return false; // not a dictionary from storage or dictionary too large
+		}
+
+		const auto &dictionary_vector = DictionaryVector::Child(source);
+		const auto dictionary_strings = FlatVector::GetData<string_t>(dictionary_vector);
+		const auto &dictionary_validity = FlatVector::Validity(dictionary_vector);
+
+		// Compute total size needed for dictionary strings
+		const auto dictionary_size_idx = dictionary_size.GetIndex();
+		if (dictionary_validity.CannotHaveNull()) {
+			for (idx_t i = 0; i < dictionary_size_idx; i++) {
+				const auto &dictionary_string = dictionary_strings[i];
+				heap_size += !dictionary_string.IsInlined() * dictionary_string.GetSize();
+			}
+		} else {
+			for (idx_t i = 0; i < dictionary_size_idx; i++) {
+				const auto &dictionary_string = dictionary_strings[i];
+				const auto add_size = dictionary_validity.RowIsValidUnsafe(i) && !dictionary_string.IsInlined();
+				heap_size += add_size * dictionary_string.GetSize();
+			}
+		}
+
+		if (heap_size == 0) {
+			return false; // regular path is OK
+		}
+		break;
+	}
+	default:
+		return false;
+	}
+	D_ASSERT(heap_size != 0);
+
+	auto &segment = meta_data.segment;
+	auto &append_state = meta_data.state;
+
+	// allocate string heap for the compressed strings
+	child_index = segment.AllocateStringHeap(heap_size, meta_data.chunk_data, append_state, child_index);
+	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
+		meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
+	}
+	auto &child_segment = segment.GetVectorData(child_index);
+	base_heap_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, child_segment.block_id,
+	                                                  child_segment.offset);
+
+	auto &current_segment = segment.GetVectorData(current_index);
+	const auto base_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, current_segment.block_id,
+	                                                        current_segment.offset);
+
+	// initialize validity mask
+	auto validity_data = ColumnDataCollectionSegment::GetValidityPointerForWriting(base_ptr, sizeof(string_t));
+	ValidityMask target_validity(validity_data, STANDARD_VECTOR_SIZE);
+	if (current_segment.count == 0) {
+		// first time appending to this vector
+		// all data here is still uninitialized
+		// initialize the validity mask to set all to valid
+		target_validity.SetAllValid(STANDARD_VECTOR_SIZE);
+	}
+
+	// now write the compressed data
+	const auto target_entries = reinterpret_cast<string_t *>(base_ptr);
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// copy over the constant string
+		auto constant_string = ConstantVector::GetData<string_t>(source)[0];
+		memcpy(base_heap_ptr, constant_string.GetData(), constant_string.GetSize());
+		constant_string.SetPointer(char_ptr_cast(base_heap_ptr));
+
+		// duplicate it
+		for (idx_t i = 0; i < vector_remaining; i++) {
+			const auto target_idx = current_segment.count + i;
+			target_entries[target_idx] = constant_string;
+		}
+	} else {
+		D_ASSERT(source.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		const auto dictionary_size = DictionaryVector::DictionarySize(source);
+		const auto &dictionary_vector = DictionaryVector::Child(source);
+		const auto dictionary_strings = FlatVector::GetData<string_t>(dictionary_vector);
+		const auto &dictionary_validity = FlatVector::Validity(dictionary_vector);
+
+		// Copy over dictionary, computing offsets as we go
+		idx_t current_string_offset = 0;
+		idx_t string_offsets[STANDARD_VECTOR_SIZE];
+		const auto dictionary_size_idx = dictionary_size.GetIndex();
+		for (idx_t i = 0; i < dictionary_size_idx; i++) {
+			const auto &dictionary_string = dictionary_strings[i];
+			if (dictionary_validity.RowIsValid(i) && !dictionary_string.IsInlined()) {
+				string_offsets[i] = current_string_offset;
+				memcpy(base_heap_ptr + current_string_offset, dictionary_string.GetPointer(),
+				       dictionary_string.GetSize());
+				current_string_offset += dictionary_string.GetSize();
+			}
+		}
+
+		// Now copy over the string vector, pointing to the new dictionary
+		const auto source_entries = UnifiedVectorFormat::GetData<string_t>(source_data);
+		for (idx_t i = 0; i < vector_remaining; i++) {
+			const auto source_idx = UnsafeNumericCast<idx_t>((*source_data.sel)[offset + i]);
+			const auto target_idx = current_segment.count + i;
+			if (!source_data.validity.RowIsValid(source_idx)) {
+				target_validity.SetInvalid(target_idx);
+				continue;
+			}
+			const auto &source_entry = source_entries[source_idx];
+			auto &target_entry = target_entries[target_idx];
+			target_entry = source_entry;
+			if (!source_entry.IsInlined()) {
+				target_entry.SetPointer(char_ptr_cast(base_heap_ptr + string_offsets[source_idx]));
+#ifdef D_ASSERT_IS_ENABLED
+				if (source.GetType() == LogicalType::VARCHAR) {
+					target_entry.Verify();
+				}
+#endif
+			}
+		}
+	}
+
+	append_count = vector_remaining;
+	return true;
+}
+
 struct ColumnDataStringAppendInfo {
 	idx_t append_count = 0;
 	idx_t heap_size = 0;
@@ -604,65 +742,72 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 		const auto vector_remaining =
 		    MinValue<idx_t>(STANDARD_VECTOR_SIZE - segment.GetVectorData(current_index).count, remaining);
 
-		// 'append_count' is less if we cannot fit that amount of non-inlined strings on one buffer-managed block
-		const auto append_info = AnalyzeColumnDataStringAppend(source_data, offset, vector_remaining, block_size);
-		const auto append_count = append_info.append_count;
-		const auto heap_size = append_info.heap_size;
+		idx_t append_count = 0;
+		idx_t heap_size = 0;
 		data_ptr_t base_heap_ptr = nullptr;
-		const auto source_entries = UnifiedVectorFormat::GetData<string_t>(source_data);
+		if (!ColumnDataCopyCompressedStrings(meta_data, current_index, child_index, source_data, source, offset,
+		                                     vector_remaining, append_count, heap_size, base_heap_ptr)) {
+			// 'append_count' is less if we cannot fit that amount of non-inlined strings on one buffer-managed block
+			const auto append_info = AnalyzeColumnDataStringAppend(source_data, offset, vector_remaining, block_size);
+			append_count = append_info.append_count;
+			heap_size = append_info.heap_size;
+			const auto source_entries = UnifiedVectorFormat::GetData<string_t>(source_data);
 
-		// allocate string heap for the next 'append_count' strings
-		if (heap_size != 0) {
-			child_index = segment.AllocateStringHeap(heap_size, meta_data.chunk_data, append_state, child_index);
-			if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
-				meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
-			}
-			const auto &child_segment = segment.GetVectorData(child_index);
-			base_heap_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, child_segment.block_id,
-			                                                  child_segment.offset);
-			if (append_info.source_bytes_are_contiguous) {
-				memcpy(base_heap_ptr, append_info.contiguous_source_ptr, heap_size);
-			}
-		}
-
-		// We get a reference to the "current_segment" only after allocating the string heap above,
-		// because this can resize the vector holding the segments, moving it somewhere else
-		auto &current_segment = segment.GetVectorData(current_index);
-		auto base_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, current_segment.block_id,
-		                                                  current_segment.offset);
-		auto validity_data = ColumnDataCollectionSegment::GetValidityPointerForWriting(base_ptr, sizeof(string_t));
-		ValidityMask target_validity(validity_data, STANDARD_VECTOR_SIZE);
-		if (current_segment.count == 0) {
-			// first time appending to this vector
-			// all data here is still uninitialized
-			// initialize the validity mask to set all to valid
-			target_validity.SetAllValid(STANDARD_VECTOR_SIZE);
-		}
-
-		auto target_entries = reinterpret_cast<string_t *>(base_ptr);
-		idx_t heap_offset = 0;
-		for (idx_t i = 0; i < append_count; i++) {
-			auto source_idx = source_data.sel->get_index(offset + i);
-			auto target_idx = current_segment.count + i;
-			if (!source_data.validity.RowIsValid(source_idx)) {
-				target_validity.SetInvalid(target_idx);
-				continue;
-			}
-			const auto &source_entry = source_entries[source_idx];
-			auto &target_entry = target_entries[target_idx];
-			if (source_entry.IsInlined()) {
-				target_entry = source_entry;
-			} else {
-				D_ASSERT(base_heap_ptr != nullptr);
-				auto target_ptr = base_heap_ptr + heap_offset;
-				if (!append_info.source_bytes_are_contiguous) {
-					memcpy(target_ptr, source_entry.GetData(), source_entry.GetSize());
+			// allocate string heap for the next 'append_count' strings
+			if (heap_size != 0) {
+				child_index = segment.AllocateStringHeap(heap_size, meta_data.chunk_data, append_state, child_index);
+				if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
+					meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
 				}
-				target_entry = source_entry;
-				target_entry.SetPointer(char_ptr_cast(target_ptr));
-				heap_offset += source_entry.GetSize();
+				const auto &child_segment = segment.GetVectorData(child_index);
+				base_heap_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state,
+				                                                  child_segment.block_id, child_segment.offset);
+				if (append_info.source_bytes_are_contiguous) {
+					memcpy(base_heap_ptr, append_info.contiguous_source_ptr, heap_size);
+				}
+			}
+
+			// We get a reference to the "current_segment" only after allocating the string heap above,
+			// because this can resize the vector holding the segments, moving it somewhere else
+			auto &current_segment = segment.GetVectorData(current_index);
+			auto base_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state,
+			                                                  current_segment.block_id, current_segment.offset);
+			auto validity_data = ColumnDataCollectionSegment::GetValidityPointerForWriting(base_ptr, sizeof(string_t));
+			ValidityMask target_validity(validity_data, STANDARD_VECTOR_SIZE);
+			if (current_segment.count == 0) {
+				// first time appending to this vector
+				// all data here is still uninitialized
+				// initialize the validity mask to set all to valid
+				target_validity.SetAllValid(STANDARD_VECTOR_SIZE);
+			}
+
+			auto target_entries = reinterpret_cast<string_t *>(base_ptr);
+			idx_t heap_offset = 0;
+			for (idx_t i = 0; i < append_count; i++) {
+				auto source_idx = source_data.sel->get_index(offset + i);
+				auto target_idx = current_segment.count + i;
+				if (!source_data.validity.RowIsValid(source_idx)) {
+					target_validity.SetInvalid(target_idx);
+					continue;
+				}
+				const auto &source_entry = source_entries[source_idx];
+				auto &target_entry = target_entries[target_idx];
+				if (source_entry.IsInlined()) {
+					target_entry = source_entry;
+				} else {
+					D_ASSERT(base_heap_ptr != nullptr);
+					auto target_ptr = base_heap_ptr + heap_offset;
+					if (!append_info.source_bytes_are_contiguous) {
+						memcpy(target_ptr, source_entry.GetData(), source_entry.GetSize());
+					}
+					target_entry = source_entry;
+					target_entry.SetPointer(char_ptr_cast(target_ptr));
+					heap_offset += source_entry.GetSize();
+				}
 			}
 		}
+
+		auto &current_segment = segment.GetVectorData(current_index);
 		if (heap_size != 0) {
 #ifdef D_ASSERT_IS_ENABLED
 			const auto &child_segment = segment.GetVectorData(child_index);
