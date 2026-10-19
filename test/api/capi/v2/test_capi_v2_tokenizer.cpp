@@ -216,13 +216,10 @@ TEST_CASE("V2 tokenizer: qualifier dots are operators, leading decimals are numb
 	                                                               {IDENTIFIER, 9, 1},
 	                                                               {KEYWORD, 11, 4},
 	                                                               {IDENTIFIER, 16, 1}}));
-	REQUIRE(TokenizeAll(fx.conn, "select 1.5, .5, 1.") ==
-	        Complete({{KEYWORD, 0, 6},
-	                  {NUMBER, 7, 3},
-	                  {OPERATOR, 10, 1},
-	                  {NUMBER, 12, 2},
-	                  {OPERATOR, 14, 1},
-	                  {NUMBER, 16, 2}}));
+	REQUIRE(
+	    TokenizeAll(fx.conn, "select 1.5, .5, 1.") ==
+	    Complete(
+	        {{KEYWORD, 0, 6}, {NUMBER, 7, 3}, {OPERATOR, 10, 1}, {NUMBER, 12, 2}, {OPERATOR, 14, 1}, {NUMBER, 16, 2}}));
 }
 
 // ===========================================================================
