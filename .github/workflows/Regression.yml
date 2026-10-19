@@ -154,7 +154,7 @@ jobs:
           - name: Parser
             benchmark: .github/regression/parser.csv
           - name: H2OAI
-            benchmark: .github/regression/h2oai.csv
+            benchmark: ${{ contains(inputs.duckdb_version, '-alpha') && '.github/regression/h2oai.csv' || '.github/regression/h2oai_small.csv' }}
           - name: IMDB
             benchmark: .github/regression/imdb.csv
           - name: CSV
