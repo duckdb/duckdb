@@ -181,6 +181,18 @@ duckdb_type duckdb_get_type_id(duckdb_logical_type type) {
 	return duckdb::LogicalTypeIdToC(logical_type->id());
 }
 
+duckdb_logical_type duckdb_copy_logical_type(duckdb_logical_type type) {
+	if (!type) {
+		return nullptr;
+	}
+	try {
+		duckdb::LogicalType *logical_type = new duckdb::LogicalType(*reinterpret_cast<duckdb::LogicalType *>(type));
+		return reinterpret_cast<duckdb_logical_type>(logical_type);
+	} catch (...) {
+		return nullptr;
+	}
+}
+
 void duckdb_destroy_logical_type(duckdb_logical_type *type) {
 	if (type && *type) {
 		auto logical_type = reinterpret_cast<duckdb::LogicalType *>(*type);

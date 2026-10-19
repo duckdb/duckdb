@@ -1184,3 +1184,91 @@ TEST_CASE("C API unnamed struct cannot bypass tuple storage version gate", "[cap
 	duckdb_destroy_logical_type(&struct_type);
 	duckdb_destroy_logical_type(&child_type);
 }
+
+TEST_CASE("Test duckdb_copy_logical_type", "[capi]") {
+	// 1. Null handling
+	REQUIRE(duckdb_copy_logical_type(nullptr) == nullptr);
+
+	// 2. Primitive type independence
+	auto int_type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	REQUIRE(int_type != nullptr);
+	auto int_copy = duckdb_copy_logical_type(int_type);
+	REQUIRE(int_copy != nullptr);
+	duckdb_destroy_logical_type(&int_type);
+	REQUIRE(int_type == nullptr);
+	REQUIRE(duckdb_get_type_id(int_copy) == DUCKDB_TYPE_BIGINT);
+	duckdb_destroy_logical_type(&int_copy);
+	REQUIRE(int_copy == nullptr);
+
+	// 3. Parameterized type with alias (DECIMAL)
+	auto dec_type = duckdb_create_decimal_type(18, 3);
+	REQUIRE(dec_type != nullptr);
+	duckdb_logical_type_set_alias(dec_type, "my_custom_decimal");
+	auto dec_copy = duckdb_copy_logical_type(dec_type);
+	REQUIRE(dec_copy != nullptr);
+	duckdb_destroy_logical_type(&dec_type);
+	REQUIRE(dec_type == nullptr);
+	REQUIRE(duckdb_get_type_id(dec_copy) == DUCKDB_TYPE_DECIMAL);
+	REQUIRE(duckdb_decimal_width(dec_copy) == 18);
+	REQUIRE(duckdb_decimal_scale(dec_copy) == 3);
+	char *alias = duckdb_logical_type_get_alias(dec_copy);
+	REQUIRE(alias != nullptr);
+	REQUIRE(string(alias) == "my_custom_decimal");
+	duckdb_free(alias);
+	duckdb_destroy_logical_type(&dec_copy);
+
+	// 4. Nested complex type (LIST of STRUCT)
+	auto child_int = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	auto child_str = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	duckdb_logical_type member_types[] = {child_int, child_str};
+	const char *member_names[] = {"id", "name"};
+	auto struct_type = duckdb_create_struct_type(member_types, member_names, 2);
+	auto list_type = duckdb_create_list_type(struct_type);
+	REQUIRE(list_type != nullptr);
+
+	auto list_copy = duckdb_copy_logical_type(list_type);
+	REQUIRE(list_copy != nullptr);
+
+	// Destroy original types
+	duckdb_destroy_logical_type(&list_type);
+	duckdb_destroy_logical_type(&struct_type);
+	duckdb_destroy_logical_type(&child_str);
+	duckdb_destroy_logical_type(&child_int);
+
+	// Inspect copy
+	REQUIRE(duckdb_get_type_id(list_copy) == DUCKDB_TYPE_LIST);
+	auto copy_child = duckdb_list_type_child_type(list_copy);
+	REQUIRE(copy_child != nullptr);
+	REQUIRE(duckdb_get_type_id(copy_child) == DUCKDB_TYPE_STRUCT);
+	REQUIRE(duckdb_struct_type_child_count(copy_child) == 2);
+	char *name0 = duckdb_struct_type_child_name(copy_child, 0);
+	char *name1 = duckdb_struct_type_child_name(copy_child, 1);
+	REQUIRE(string(name0) == "id");
+	REQUIRE(string(name1) == "name");
+	duckdb_free(name0);
+	duckdb_free(name1);
+	duckdb_destroy_logical_type(&copy_child);
+	duckdb_destroy_logical_type(&list_copy);
+
+	// 5. Types originating from query execution (reproduction case for Issue #26664)
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+	auto result = tester.Query("SELECT NULL::GEOMETRY('OGC:CRS84')");
+	REQUIRE(NO_FAIL(*result));
+	auto cached_type = duckdb_column_logical_type(&result->InternalResult(), 0);
+	REQUIRE(cached_type != nullptr);
+
+	auto cached_copy = duckdb_copy_logical_type(cached_type);
+	REQUIRE(cached_copy != nullptr);
+
+	// Destroy original query result and type
+	duckdb_destroy_logical_type(&cached_type);
+	result.reset();
+
+	// Verify copy CRS
+	char *crs = duckdb_geometry_type_get_crs(cached_copy);
+	REQUIRE(crs != nullptr);
+	REQUIRE(string(crs) == "OGC:CRS84");
+	duckdb_free(crs);
+	duckdb_destroy_logical_type(&cached_copy);
+}

@@ -5587,6 +5587,20 @@ DUCKDB_C_API duckdb_state duckdb_register_logical_type(duckdb_connection con, du
 DUCKDB_C_API char *duckdb_geometry_type_get_crs(duckdb_logical_type type);
 #endif
 
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
+/*!
+ * Creates a copy of the given `duckdb_logical_type`. The resulting logical type must be destroyed with
+ * `duckdb_destroy_logical_type`.
+ *
+ * history:
+ * - stable: v1.5.6
+ *
+ * @param type The logical type to copy.
+ * @return duckdb_logical_type
+ */
+DUCKDB_C_API duckdb_logical_type duckdb_copy_logical_type(duckdb_logical_type type);
+#endif
+
 /* --- Struct definitions for logical_type --- */
 
 /* ============================================================================

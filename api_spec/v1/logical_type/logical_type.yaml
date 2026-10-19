@@ -469,3 +469,18 @@ functions:
       Gets the CRS (Coordinate Reference System) of a GEOMETRY type.
       Result must be freed with `duckdb_free`.
     return_description: The CRS of the GEOMETRY type, or NULL if the type is not a GEOMETRY type.
+  copy_logical_type:
+    offset: 546
+    lifecycle:
+      - ["stable", "v1.5.6", "2026-10-19"]
+    role: constructor
+    belongs_to: logical_type
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type to copy.
+    return_type: logical_type
+    description: |
+      Creates a copy of the given `duckdb_logical_type`.
+      The resulting logical type must be destroyed with `duckdb_destroy_logical_type`.
+    return_description: A copy of the logical type, or `nullptr` if `type` is invalid.
