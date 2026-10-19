@@ -27,6 +27,13 @@ PhysicalType VariantDecimalData::GetPhysicalType() const {
 	}
 }
 
+void VariantUtils::Available(idx_t blob_size, idx_t offset, idx_t size) {
+	if (offset > blob_size || size > blob_size - offset) {
+		throw DataCorruptionException("Variant byte_offset (%d) with size (%d) is out of bounds for a blob of size %d",
+		                              offset, size, blob_size);
+	}
+}
+
 bool VariantUtils::IsNestedType(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index) {
 	auto type_id = variant.GetTypeId(row, value_index);
 	return type_id == VariantLogicalType::ARRAY || type_id == VariantLogicalType::OBJECT;
@@ -38,19 +45,14 @@ VariantDecimalData VariantUtils::DecodeDecimalData(const UnifiedVariantVectorDat
 	auto byte_offset = variant.GetByteOffset(row, value_index);
 	auto &blob = variant.GetData(row);
 	auto blob_size = blob.GetSize();
-	if (byte_offset >= blob_size) {
-		throw DataCorruptionException("Variant decimal byte_offset (%d) is out of bounds for a blob of size %d",
-		                              byte_offset, blob_size);
-	}
+	VariantUtils::Available(blob_size, byte_offset, 1);
 	auto data = const_data_ptr_cast(blob.GetData());
 	auto ptr = data + byte_offset;
 
 	auto width = VarintDecode<uint32_t>(ptr);
 	auto scale = VarintDecode<uint32_t>(ptr);
 	auto value_ptr = ptr;
-	if (NumericCast<idx_t>(value_ptr - data) > blob_size) {
-		throw DataCorruptionException("Variant decimal header runs past the end of a blob of size %d", blob_size);
-	}
+	VariantUtils::Available(blob_size, NumericCast<idx_t>(value_ptr - data), 0);
 	return VariantDecimalData(width, scale, value_ptr);
 }
 
@@ -58,19 +60,12 @@ string_t VariantUtils::DecodeStringData(const UnifiedVariantVectorData &variant,
 	auto byte_offset = variant.GetByteOffset(row, value_index);
 	auto &blob = variant.GetData(row);
 	auto blob_size = blob.GetSize();
-	if (byte_offset >= blob_size) {
-		throw DataCorruptionException("Variant string byte_offset (%d) is out of bounds for a blob of size %d",
-		                              byte_offset, blob_size);
-	}
+	VariantUtils::Available(blob_size, byte_offset, 1);
 	auto data = const_data_ptr_cast(blob.GetData());
 	auto ptr = data + byte_offset;
 
 	auto length = VarintDecode<uint32_t>(ptr);
-	auto bytes_remaining = blob_size - NumericCast<idx_t>(ptr - data);
-	if (length > bytes_remaining) {
-		throw DataCorruptionException("Variant string length (%d) exceeds the remaining blob size (%d)", length,
-		                              bytes_remaining);
-	}
+	VariantUtils::Available(blob_size, NumericCast<idx_t>(ptr - data), length);
 	return string_t(reinterpret_cast<const char *>(ptr), length);
 }
 
@@ -80,19 +75,14 @@ VariantNestedData VariantUtils::DecodeNestedData(const UnifiedVariantVectorData 
 	auto byte_offset = variant.GetByteOffset(row, value_index);
 	auto &blob = variant.GetData(row);
 	auto blob_size = blob.GetSize();
-	if (byte_offset >= blob_size) {
-		throw DataCorruptionException("Variant nested byte_offset (%d) is out of bounds for a blob of size %d",
-		                              byte_offset, blob_size);
-	}
+	VariantUtils::Available(blob_size, byte_offset, 1);
 	auto data = const_data_ptr_cast(blob.GetData());
 	auto ptr = data + byte_offset;
 
 	VariantNestedData result;
 	result.child_count = VarintDecode<uint32_t>(ptr);
 	if (result.child_count) {
-		if (NumericCast<idx_t>(ptr - data) >= blob_size) {
-			throw DataCorruptionException("Variant nested data runs past the end of a blob of size %d", blob_size);
-		}
+		VariantUtils::Available(blob_size, NumericCast<idx_t>(ptr - data), 1);
 		result.children_idx = VarintDecode<uint32_t>(ptr);
 	} else {
 		result.children_idx = 0;
