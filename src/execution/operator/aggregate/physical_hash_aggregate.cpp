@@ -225,8 +225,8 @@ public:
 
 	//! Applies a callback to every radix table of this aggregate (per grouping, plus distinct tables)
 	//! together with its global sink state
-	template <class CALLBACK>
-	void ForEachRadixTable(CALLBACK &&callback) {
+	template <class FUNC>
+	void ForEachRadixTable(FUNC &&callback) {
 		for (idx_t grouping_idx = 0; grouping_idx < op.groupings.size(); grouping_idx++) {
 			auto &grouping = op.groupings[grouping_idx];
 			auto &grouping_state = grouping_states[grouping_idx];
