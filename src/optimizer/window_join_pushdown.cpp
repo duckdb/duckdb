@@ -8,12 +8,11 @@
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/optimizer/apply_functional_dependencies.hpp"
 
-//	Join push-down 𝑃,𝑂,𝑤,𝑓 references only A(𝑟) and:
-// 	(9) ⊞𝑃,...(𝑟)⋈︁𝑟.𝑏=𝑠.𝑥 𝑠 ≡⊞𝑃,...(𝑟 ⋈︁𝑟.𝑏=𝑠.𝑥 𝑠)  | FD 𝑃 →𝑏
-// and 𝑥 unique
-// 	(10) ⊞𝑃,...(𝑟)⋈︁𝑟.𝑏=𝑠.𝑥 𝑠 ≡⊞𝑃,...(𝑟 ⋈︁𝑟.𝑏=𝑠.𝑥 𝑠) | 𝑥
-// unique (left join) 	(11) ⊞𝑃,...(𝑟)⋉𝑟.𝑏=𝑠.𝑥 𝑠 ≡⊞𝑃,...(𝑟 ⋉𝑟.𝑏=𝑠.𝑥 𝑠) | FD 𝑃 →𝑏
-//	(12) ⊞𝑃,...(𝑟)⊲𝑟.𝑏=𝑠.𝑥 𝑠 ≡⊞𝑃,...(𝑟 ⊲𝑟.𝑏=𝑠.𝑥 𝑠) | FD 𝑃 →𝑏
+//	Join push-down P,O,w,f references only A(r) and:
+// 	(9)  ⊞P,...(r)⋈︁r.b=s.x s ≡⊞P,...(r ⋈︁r.b=s.x s)  | FD P → b and x unique
+// 	(10) ⊞P,...(r)⋈︁r.b=s.x s ≡⊞P,...(r ⋈︁r.b=s.x s) | x unique (left join)
+//  (11) ⊞P,...(r)⋉r.b=s.x s ≡⊞P,...(r ⋉r.b=s.x s) | FD P → b
+//	(12) ⊞P,...(r)⊲r.b=s.x s ≡⊞P,...(r ⊲r.b=s.x s) | FD P → b
 
 namespace duckdb {
 
@@ -64,7 +63,7 @@ bool WindowJoinPushdown::CanOptimize(const LogicalOperator &op) {
 	const auto &window = join.children[window_idx]->Cast<LogicalWindow>();
 	const auto &b = (window_idx == 0) ? condition.LeftReference() : condition.RightReference();
 
-	//	FD 𝑃 → 𝑏
+	//	FD P → b
 	bool fd_p_b = true;
 	if (join.join_type != JoinType::LEFT) {
 		for (const auto &expr : window.expressions) {
@@ -80,7 +79,7 @@ bool WindowJoinPushdown::CanOptimize(const LogicalOperator &op) {
 		}
 	}
 
-	//	𝑥 unique
+	//	x unique
 	const auto &x = (window_idx == 1) ? condition.GetLHS() : condition.GetRHS();
 	bool x_unique = false;
 	if (join.join_type <= JoinType::LEFT && x.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
