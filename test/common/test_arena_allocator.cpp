@@ -2,15 +2,27 @@
 #include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 
+#include <cstdlib>
 #include <cstring>
 
 using namespace duckdb;
 
 TEST_CASE("Arena reset preserves the bounds of an unaligned chunk", "[arena_allocator]") {
-	ArenaAllocator arena(Allocator::DefaultAllocator(), 1);
+	// Use malloc directly so ASan provides a redzone at the requested size.
+	Allocator allocator([](PrivateAllocatorData *, idx_t size) { return data_ptr_cast(std::malloc(size)); },
+	                    [](PrivateAllocatorData *, data_ptr_t pointer, idx_t) { std::free(pointer); },
+	                    [](PrivateAllocatorData *, data_ptr_t pointer, idx_t, idx_t size) {
+		                    return data_ptr_cast(std::realloc(pointer, size));
+	                    },
+	                    nullptr);
+	ArenaAllocator arena(allocator, 1);
 	arena.Allocate(1);
 	auto head = arena.GetHead();
+#ifdef DUCKDB_ARENA_ALLOCATOR_ASAN
+	REQUIRE(__asan_address_is_poisoned(head->data.get() + head->maximum_size));
+#endif
 	arena.AlignNext();
+	REQUIRE(head->current_position > head->maximum_size);
 	arena.Reset();
 	auto data = arena.Allocate(head->maximum_size);
 	memset(data, 42, head->maximum_size);
