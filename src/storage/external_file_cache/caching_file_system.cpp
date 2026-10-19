@@ -63,6 +63,7 @@ public:
 
 	void ExecuteTask() override {
 		bool was_evicted = false;
+		bool waited_for_fetch = false;
 		annotated_unique_lock<annotated_mutex> lk(block->mtx);
 
 		while (true) {
@@ -74,8 +75,11 @@ public:
 					D_ASSERT(Checksum(pin.Ptr(), block->nr_bytes) == block->checksum);
 #endif
 					if (request_bytes > 0) {
-						stats.hit_count.fetch_add(1, std::memory_order_relaxed);
+						stats.block_hit_count.fetch_add(1, std::memory_order_relaxed);
 						stats.cache_hit_request_bytes.fetch_add(request_bytes, std::memory_order_relaxed);
+						if (waited_for_fetch) {
+							stats.block_concurrent_hit_count.fetch_add(1, std::memory_order_relaxed);
+						}
 					}
 					result_pin = std::move(pin);
 					return;
@@ -105,7 +109,7 @@ public:
 					    ExternalFileCache::AllocateCacheBuffer(buffer_manager, caching_file_handle.GetPath(), to_read);
 					caching_file_handle.ReadAndRecord(context, buf.GetDataMutable(), to_read, offset);
 					if (request_bytes > 0) {
-						stats.miss_count.fetch_add(1, std::memory_order_relaxed);
+						stats.block_miss_count.fetch_add(1, std::memory_order_relaxed);
 					}
 					stats.actual_io_bytes.fetch_add(to_read, std::memory_order_relaxed);
 					if (was_evicted) {
@@ -138,6 +142,7 @@ public:
 				return;
 			}
 			case CacheBlockState::LOADING: {
+				waited_for_fetch = true;
 				block->cv.wait(lk,
 				               [&]() DUCKDB_REQUIRES(block->mtx) { return block->state != CacheBlockState::LOADING; });
 				continue;
@@ -431,7 +436,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	auto &scheduler = TaskScheduler::GetScheduler(db);
 	TaskExecutor executor(scheduler, TaskSchedulerType::ASYNC);
 
-	const idx_t request_end = location + nr_bytes;
+	const idx_t request_end = MinValue(location + nr_bytes, file_size);
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
 		const auto &block = *blocks[idx];
 		const idx_t overlap_start = MaxValue(block.location, location);

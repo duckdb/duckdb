@@ -15,22 +15,25 @@ static unique_ptr<FunctionData> DuckDBExternalFileCacheStatsBind(ClientContext &
                                                                  vector<LogicalType> &return_types,
                                                                  vector<Identifier> &names) {
 	names.emplace_back("read_request_bytes");
-	return_types.emplace_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::UBIGINT);
 
 	names.emplace_back("cache_hit_request_bytes");
-	return_types.emplace_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::UBIGINT);
 
 	names.emplace_back("actual_io_bytes");
-	return_types.emplace_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::UBIGINT);
 
-	names.emplace_back("hit_count");
-	return_types.emplace_back(LogicalType::BIGINT);
+	names.emplace_back("block_hit_count");
+	return_types.emplace_back(LogicalType::UBIGINT);
 
-	names.emplace_back("miss_count");
-	return_types.emplace_back(LogicalType::BIGINT);
+	names.emplace_back("block_concurrent_hit_count");
+	return_types.emplace_back(LogicalType::UBIGINT);
+
+	names.emplace_back("block_miss_count");
+	return_types.emplace_back(LogicalType::UBIGINT);
 
 	names.emplace_back("eviction_refetch_count");
-	return_types.emplace_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::UBIGINT);
 
 	return nullptr;
 }
@@ -49,12 +52,13 @@ void DuckDBExternalFileCacheStatsFunction(ClientContext &context, TableFunctionI
 	}
 	data.done = true;
 	auto &stats = data.stats;
-	output.data[0].Append(Value::BIGINT(NumericCast<int64_t>(stats.read_request_bytes)));
-	output.data[1].Append(Value::BIGINT(NumericCast<int64_t>(stats.cache_hit_request_bytes)));
-	output.data[2].Append(Value::BIGINT(NumericCast<int64_t>(stats.actual_io_bytes)));
-	output.data[3].Append(Value::BIGINT(NumericCast<int64_t>(stats.hit_count)));
-	output.data[4].Append(Value::BIGINT(NumericCast<int64_t>(stats.miss_count)));
-	output.data[5].Append(Value::BIGINT(NumericCast<int64_t>(stats.eviction_refetch_count)));
+	output.data[0].Append(Value::UBIGINT(stats.read_request_bytes));
+	output.data[1].Append(Value::UBIGINT(stats.cache_hit_request_bytes));
+	output.data[2].Append(Value::UBIGINT(stats.actual_io_bytes));
+	output.data[3].Append(Value::UBIGINT(stats.block_hit_count));
+	output.data[4].Append(Value::UBIGINT(stats.block_concurrent_hit_count));
+	output.data[5].Append(Value::UBIGINT(stats.block_miss_count));
+	output.data[6].Append(Value::UBIGINT(stats.eviction_refetch_count));
 }
 
 void DuckDBExternalFileCacheStatsFun::RegisterFunction(BuiltinFunctions &set) {
