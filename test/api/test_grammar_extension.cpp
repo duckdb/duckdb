@@ -1069,8 +1069,11 @@ TEST_CASE("Small grammars resolve missing generated references only when used", 
 	TokenIterator iterator(tokens);
 	ArenaAllocator arena(Allocator::DefaultAllocator());
 	PEGTransformer transformer(arena, iterator, options, grammar);
+#ifndef DUCKDB_CRASH_ON_ASSERT
+	// InternalException aborts instead of throwing in crash-on-assert builds.
 	REQUIRE_THROWS_AS(transformer.GetRule(id), InternalException);
 	REQUIRE_THROWS_AS(transformer.GetRule("AdditiveExpression"), InternalException);
+#endif
 }
 
 TEST_CASE("Overriding a transform opts its rule out of collapsing", "[api][grammar_extension]") {
