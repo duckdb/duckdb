@@ -212,8 +212,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_option_get_name)
 	(duckdb_v2_option_handle option, duckdb_v2_identifier_t *out_name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_parse_sql)
-	(duckdb_v2_connection_handle conn, const char *sql, duckdb_v2_statement_iterator_handle *out_iterator,
-	 duckdb_v2_error_info_handle *err);
+	(duckdb_v2_connection_handle conn, const char *sql, bool apply_invalidation_policy,
+	 duckdb_v2_statement_iterator_handle *out_iterator, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_result_destroy)(duckdb_v2_result_handle *result);
 	DUCKDB_V2_ERROR(*duckdb_v2_result_drain)
 	(duckdb_v2_result_handle result, idx_t *out_rows_changed, duckdb_v2_error_info_handle *err);
@@ -1403,9 +1403,6 @@ typedef struct {
 	(duckdb_v2_sql_statement_handle statement, const duckdb_v2_identifier_t *name,
 	 duckdb_v2_column_data_collection_handle collection, const duckdb_v2_identifier_t *column_names, idx_t column_count,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_parse_sql_without_invalidation)
-	(duckdb_v2_connection_handle conn, const char *sql, duckdb_v2_statement_iterator_handle *out_iterator,
-	 duckdb_v2_error_info_handle *err);
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_multi_file_function)
 	(duckdb_v2_connection_handle conn, duckdb_v2_multi_file_function_handle function, duckdb_v2_error_info_handle *err);
@@ -2127,7 +2124,6 @@ typedef struct {
 #define duckdb_v2_file_system_path_move                  duckdb_ext_api.duckdb_v2_file_system_path_move
 #define duckdb_v2_file_system_path_remove                duckdb_ext_api.duckdb_v2_file_system_path_remove
 #define duckdb_v2_statement_add_collection               duckdb_ext_api.duckdb_v2_statement_add_collection
-#define duckdb_v2_parse_sql_without_invalidation         duckdb_ext_api.duckdb_v2_parse_sql_without_invalidation
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_connection_register_multi_file_function                                                              \
 	duckdb_ext_api.duckdb_v2_connection_register_multi_file_function

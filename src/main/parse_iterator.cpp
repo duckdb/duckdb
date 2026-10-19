@@ -15,8 +15,9 @@
 
 namespace duckdb {
 
-ParseIterator::ParseIterator(ClientContext &context_p, const string &sql_p, bool apply_invalidation_policy_p)
-    : context(context_p), apply_invalidation_policy(apply_invalidation_policy_p) {
+ParseIterator::ParseIterator(ClientContext &context_p, const string &sql_p, bool apply_invalidation_policy_p,
+                             optional_ptr<ClientContextLock> held_lock_p)
+    : context(context_p), apply_invalidation_policy(apply_invalidation_policy_p), held_lock(held_lock_p) {
 	try {
 		sql = Parser::NormalizeSQLString(sql_p);
 	} catch (std::exception &ex) {
@@ -26,9 +27,16 @@ ParseIterator::ParseIterator(ClientContext &context_p, const string &sql_p, bool
 }
 
 void ParseIterator::ApplyInvalidationPolicy(const ErrorData &error) {
-	if (apply_invalidation_policy) {
-		context.ApplyInvalidationPolicy(error);
+	if (!apply_invalidation_policy) {
+		return;
 	}
+	if (held_lock) {
+		context.ApplyInvalidationPolicy(error);
+		return;
+	}
+	// Parsing itself can run without the context lock, but the transaction state must not change underneath us
+	auto lock = context.LockContext();
+	context.ApplyInvalidationPolicy(error);
 }
 
 ParseIterator::~ParseIterator() = default;
@@ -50,8 +58,10 @@ bool ParseIterator::Peek() {
 	try {
 		return PeekInternal();
 	} catch (std::exception &ex) {
-		// The statements are parsed to be run on this connection, so a parse error counts as an error in its
-		// transaction. Rendering the error for display is left to the caller, since some render errors themselves.
+		// Retrying would parse the failing statement again, and apply the policy again to whatever transaction is
+		// active by then
+		exhausted = true;
+		// Rendering the error for display is left to the caller, since some render errors themselves
 		ApplyInvalidationPolicy(ErrorData(ex));
 		throw;
 	}

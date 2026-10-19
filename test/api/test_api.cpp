@@ -1049,10 +1049,10 @@ TEST_CASE("Test ExtractStatements error location", "[api]") {
 TEST_CASE("Test a parser error in Submit invalidates the transaction", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("SET current_transaction_invalidation_policy='ALL_ERRORS_INVALIDATE_TRANSACTION'"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE audit(i INT)"));
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	REQUIRE_NO_FAIL(con.Query("SET current_transaction_invalidation_policy='ALL_ERRORS_INVALIDATE_TRANSACTION'"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO audit VALUES (21)"));
 	auto result = con.Submit("inser into audit_backup from audit");
 	REQUIRE(result->HasError());
@@ -1106,9 +1106,43 @@ TEST_CASE("Test iterating statements without applying the invalidation policy", 
 	REQUIRE_THROWS_WITH(iterator.Peek(), Catch::Matchers::Contains("syntax error"));
 	REQUIRE_THROWS_WITH(con.context->IterateStatements("SELECT '\xff'", false),
 	                    Catch::Matchers::Contains("Invalid UTF-8"));
+	REQUIRE_THROWS_WITH(con.ExtractStatements("inser into audit_backup from audit", false),
+	                    Catch::Matchers::Contains("syntax error"));
+	REQUIRE_THROWS_WITH(con.GetTableNames("inser into audit_backup from audit"),
+	                    Catch::Matchers::Contains("syntax error"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO audit VALUES (22)"));
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 
 	auto result = con.Query("SELECT COUNT(*) FROM audit");
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+}
+
+TEST_CASE("Test a parser error while iterating statements follows the invalidation policy", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE audit(i INT)"));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	REQUIRE_NO_FAIL(con.Query("SET current_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE'"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO audit VALUES (21)"));
+	auto iterator = con.context->IterateStatements("inser into audit_backup from audit");
+	REQUIRE_THROWS_WITH(iterator.Peek(), Catch::Matchers::Contains("syntax error"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO audit VALUES (22)"));
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+	auto result = con.Query("SELECT COUNT(*) FROM audit");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+}
+
+TEST_CASE("Test a parser error while iterating statements in autocommit mode", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE audit(i INT)"));
+
+	auto iterator = con.context->IterateStatements("inser into audit_backup from audit");
+	REQUIRE_THROWS_WITH(iterator.Peek(), Catch::Matchers::Contains("syntax error"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO audit VALUES (21)"));
+
+	auto result = con.Query("SELECT COUNT(*) FROM audit");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }

@@ -981,9 +981,9 @@ auto StatementIterator::Next() -> SqlStatement {
 	return detail::HandleFactory::Make<SqlStatement>(statement);
 }
 
-auto Connection::ParseSQL(const char *sql) -> StatementIterator {
+auto Connection::ParseSQL(const char *sql, bool apply_invalidation_policy) -> StatementIterator {
 	duckdb_v2_statement_iterator_handle iterator = nullptr;
-	CheckedAPICall(duckdb_v2_parse_sql, handle(), sql, &iterator);
+	CheckedAPICall(duckdb_v2_parse_sql, handle(), sql, apply_invalidation_policy, &iterator);
 	return detail::HandleFactory::Make<StatementIterator>(iterator);
 }
 

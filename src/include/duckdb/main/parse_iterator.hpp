@@ -8,12 +8,14 @@
 
 #pragma once
 
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 class ClientContext;
+class ClientContextLock;
 class ErrorData;
 class Parser;
 class SQLStatement;
@@ -33,10 +35,14 @@ class TokenIterator;
 class ParseIterator {
 public:
 	//! Peel parse-facing statements out of a SQL string (PEG / parser_override). The context is
-	//! bound for the lifetime of the iterator and must outlive it. A parse error invalidates the
-	//! active transaction as the invalidation policy says, unless apply_invalidation_policy is false,
-	//! which is meant for callers that only inspect the statements instead of running them.
-	DUCKDB_API ParseIterator(ClientContext &context, const string &sql, bool apply_invalidation_policy = true);
+	//! bound for the lifetime of the iterator and must outlive it. With apply_invalidation_policy,
+	//! a parse error invalidates the active transaction as the invalidation policy says. Without it,
+	//! a parse error leaves the transaction untouched, for callers that only inspect the statements
+	//! or that handle the error through ErrorResult themselves. A caller that holds the context lock
+	//! while using the iterator passes it as held_lock, otherwise the iterator takes the lock itself
+	//! to apply the policy.
+	DUCKDB_API ParseIterator(ClientContext &context, const string &sql, bool apply_invalidation_policy = true,
+	                         optional_ptr<ClientContextLock> held_lock = nullptr);
 	DUCKDB_API ~ParseIterator();
 
 	ParseIterator(const ParseIterator &) = delete;
@@ -47,6 +53,7 @@ public:
 
 	//! Returns true if a statement is currently available (after parsing as needed). Returns
 	//! false when the iterator is exhausted. Non-const: parses on demand and buffers the result.
+	//! A parse error ends the iteration: after it is thrown, Peek returns false.
 	DUCKDB_API bool Peek();
 
 	//! Returns the next buffered statement and clears the buffer. Returns nullptr if no
@@ -73,6 +80,7 @@ private:
 	ClientContext &context;
 	string sql;
 	bool apply_invalidation_policy;
+	optional_ptr<ClientContextLock> held_lock;
 	//! Parser instance kept alive across Peek calls so its PEG matcher / transformer caches
 	//! stay warm. Constructed lazily on the first Peek.
 	unique_ptr<Parser> parser;
