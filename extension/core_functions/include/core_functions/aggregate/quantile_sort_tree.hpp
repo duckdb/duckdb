@@ -52,6 +52,8 @@ struct QuantileCursor {
 	inline idx_t Seek(idx_t row_idx) {
 		if (!RowIsVisible(row_idx)) {
 			inputs.Seek(row_idx, scan, page);
+			// the accessors below require flat vectors, scans can return compact representations
+			page.Flatten();
 			data = FlatVector::GetData<INPUT_TYPE>(page.data[0]);
 			validity = &FlatVector::ValidityMutable(page.data[0]);
 		}
@@ -355,6 +357,8 @@ struct QuantileSortTree {
 		while (inputs.Scan(scan, sort)) {
 			const auto row_idx = scan.current_row_index;
 			if (filter_mask.CanHaveNull() || !partition.all_valid[0]) {
+				// the validity access requires a flat vector, scans can return compact representations
+				sort.Flatten();
 				auto &key = sort.data[0];
 				auto &validity = FlatVector::ValidityMutable(key);
 				idx_t filtered = 0;
