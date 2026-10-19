@@ -262,8 +262,9 @@ private:
 //! We still use BasePipelineEvent for dependency tracking and task bookkeeping, but the stock
 //! pipeline scheduling path is too expensive here: it assumes a one-shot execution, creates fresh
 //! PipelineExecutors/tasks every time, and resets shared pipeline state immediately before launch.
-//! Recursive CTEs need the same dependency semantics while reusing cached PipelineExecutors, and
-//! root events must sometimes be reset up-front on the main thread to avoid reset-vs-execute races.
+//! Recursive CTEs need the same dependency semantics while reusing cached PipelineExecutors.
+//! Operator state can be shared across pipelines (e.g. operators above a UNION), so it is reset
+//! up-front on the main thread for the whole schedule; events only reset pipeline-local state.
 class RecursiveCTEPipelineEvent : public BasePipelineEvent {
 public:
 	RecursiveCTEPipelineEvent(shared_ptr<Pipeline> pipeline_p, RecursiveCTEState &state_p, idx_t worker_limit_p,
@@ -278,20 +279,18 @@ public:
 	bool prepared_for_schedule = false;
 
 	void PrepareForSchedule() {
-		// Root recursive pipeline events can be scheduled back-to-back while sharing operator instances.
-		// Prepare their global pipeline state up-front on the main thread so later task execution does
-		// not race with another root event resetting the same operator state.
-		pipeline->ResetForReschedule(false);
+		// Sink and operator state were reset up-front on the main thread for the whole schedule.
+		// Root events also prepare their source state up-front, before any event can execute.
+		pipeline->ResetSourceForReschedule();
 		prepared_for_schedule = true;
 	}
 
 	void Schedule() override {
-		// Sink state is prepared up-front from the main thread. Reinitialize the remaining
-		// global state here, reusing existing state objects when operators expose reset hooks.
-		// Dependency-free pipeline events can be prepared up-front on the main thread to avoid
-		// racing with another root event that shares operator instances.
+		// A dependent event schedules from a worker thread while sibling pipelines that share
+		// operator instances may still be executing, so only the pipeline-local source state is
+		// reset here, once dependency outputs such as refilled CTE materializations are final.
 		if (!prepared_for_schedule) {
-			pipeline->ResetForReschedule(false);
+			pipeline->ResetSourceForReschedule();
 		}
 
 		SchedulePrepared(GetRecursivePipelineMaxThreads(*pipeline, worker_limit));
@@ -788,6 +787,15 @@ static void ScheduleRecursivePlan(const RecursiveCTEPipelineSchedulePlan &plan, 
                                   vector<shared_ptr<Event>> &events, const RecursiveCTEParallelism &parallelism) {
 	for (auto &pipeline : plan.initialize_on_schedule_pipelines) {
 		pipeline.get().ResetSource(true);
+	}
+
+	// Reset global operator state for every pipeline up-front: dependent events schedule from
+	// worker threads while sibling pipelines sharing operator instances are still executing, so
+	// operator state must not be reset at schedule time.
+	for (auto &stage : plan.stages) {
+		if (stage.type == PipelineScheduleStageType::EXECUTE) {
+			stage.pipeline.get().ResetOperatorsForReschedule();
+		}
 	}
 
 	const auto configured_threads =
