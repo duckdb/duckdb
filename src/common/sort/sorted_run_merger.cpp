@@ -1,4 +1,6 @@
 #include "duckdb/common/sorting/sorted_run_merger.hpp"
+
+#include "duckdb/common/array_ptr.hpp"
 #include "duckdb/main/client_context.hpp"
 
 #include "duckdb/common/mutex.hpp"
@@ -31,6 +33,61 @@ static idx_t SortedRunsTotalCount(const vector<unique_ptr<SortedRun>> &sorted_ru
 struct SortedRunPartitionBoundary {
 	idx_t begin;
 	idx_t end;
+};
+
+template <class SORT_KEY>
+static idx_t MergePartitionPrefix(const unsafe_array_ptr<const SORT_KEY> &keys,
+                                  const unsafe_vector<SortedRunPartitionBoundary> &boundaries) {
+	const auto &reference = keys[0];
+	if (reference.GetHeapSize() <= SORT_KEY::INLINE_LENGTH) {
+		return 0;
+	}
+	static constexpr idx_t MAXIMUM_PREFIX = 512;
+	auto prefix = MinValue<idx_t>(reference.GetHeapSize(), MAXIMUM_PREFIX);
+	const auto reference_data = reference.GetData();
+	idx_t offset = 0;
+	for (const auto &boundary : boundaries) {
+		const auto count = boundary.end - boundary.begin;
+		if (count == 0) {
+			continue;
+		}
+		for (const auto endpoint_idx : {offset, offset + count - 1}) {
+			const auto &endpoint = keys[endpoint_idx];
+			if (endpoint.GetHeapSize() <= SORT_KEY::INLINE_LENGTH ||
+			    memcmp(&reference.part0, &endpoint.part0, SORT_KEY::INLINE_LENGTH) != 0) {
+				return 0;
+			}
+			const auto limit = MinValue(prefix, endpoint.GetHeapSize());
+			const auto endpoint_data = endpoint.GetData();
+			idx_t equal_bytes = SORT_KEY::INLINE_LENGTH;
+			while (equal_bytes < limit && reference_data[equal_bytes] == endpoint_data[equal_bytes]) {
+				equal_bytes++;
+			}
+			prefix = equal_bytes;
+			if (prefix == SORT_KEY::INLINE_LENGTH) {
+				return 0;
+			}
+		}
+		offset += count;
+	}
+	return prefix;
+}
+
+template <class SORT_KEY>
+struct MergePrefixLess {
+	explicit MergePrefixLess(idx_t prefix_p) : prefix(prefix_p) {
+	}
+
+	bool operator()(const SORT_KEY &lhs, const SORT_KEY &rhs) const {
+		const auto lhs_size = lhs.GetHeapSize();
+		const auto rhs_size = rhs.GetHeapSize();
+		D_ASSERT(lhs_size > SORT_KEY::INLINE_LENGTH && rhs_size > SORT_KEY::INLINE_LENGTH);
+		D_ASSERT(prefix <= MinValue(lhs_size, rhs_size));
+		const auto comp = memcmp(lhs.GetData() + prefix, rhs.GetData() + prefix, MinValue(lhs_size, rhs_size) - prefix);
+		return comp < 0 || (comp == 0 && lhs_size < rhs_size);
+	}
+
+	const idx_t prefix;
 };
 
 struct SortedRunMergePartition {
@@ -660,6 +717,20 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 	// counted against the memory limit instead of coming from operator new inside std::inplace_merge
 	SortMergeBuffer merge_buffer(BufferAllocator::Get(gstate.context), merged_partition_count, sizeof(SORT_KEY));
 	const BufferedMergePolicy<SORT_KEY> merge(merge_buffer);
+	if (!SORT_KEY::CONSTANT_SIZE && !gstate.merger.sort.is_index_sort) {
+		const auto prefix = MergePartitionPrefix(
+		    unsafe_array_ptr<const SORT_KEY>(merged_partition_keys, merged_partition_count), run_boundaries);
+		if (prefix != 0) {
+			// Sorted endpoints establish this prefix for every key in each gathered fragment.
+			const MergePrefixLess<SORT_KEY> compare(prefix);
+			const auto prefix_fallback = [&](SORT_KEY *begin, SORT_KEY *end) {
+				duckdb_pdqsort::pdqsort_branchless(begin, end, compare);
+			};
+			duckdb_vergesort::vergesort(merged_partition_keys, merged_partition_keys + merged_partition_count, compare,
+			                            prefix_fallback, merge);
+			return;
+		}
+	}
 	duckdb_vergesort::vergesort(merged_partition_keys, merged_partition_keys + merged_partition_count,
 	                            std::less<SORT_KEY>(), fallback, merge);
 }
