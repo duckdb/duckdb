@@ -430,6 +430,7 @@ Expression:
     - CollateExpressionTail
     - AtTimeZoneExpression
     - AtTimeZoneExpressionTail
+    - UnaryExpression
     - PrefixExpression
     - ConstantLiteral
     - ColumnReference
@@ -1869,6 +1870,7 @@ expression_depth_nesting_rules:
   - Type
   - NestedType
   - SubqueryReference
+  - CustomPrefixExpression
 
 expression_depth_chain_rules:
   - LambdaArrowExpression
