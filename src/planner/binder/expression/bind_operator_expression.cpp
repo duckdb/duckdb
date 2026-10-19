@@ -185,7 +185,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		auto &try_child = op.GetChildrenMutable()[0];
 		if (try_child->GetExpressionClass() == ExpressionClass::SUBQUERY &&
 		    try_child->Cast<SubqueryExpression>().GetSubqueryType() == SubqueryType::SCALAR) {
-			// TRY directly over a scalar subquery is rewritten into an ordinary subquery
+			// TRY directly over a scalar subquery binds as an ordinary subquery and lowers onto its plan
 			return BindTrySubquery(op, depth);
 		}
 	}
@@ -310,7 +310,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		auto &expr = *children[0];
 		if (operator_type == ExpressionType::OPERATOR_TRY &&
 		    expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
-			// a directly nested TRY over a scalar subquery was already rewritten into an ordinary subquery
+			// a directly nested TRY over a scalar subquery was already lowered onto the subquery plan
 			return BindResult(std::move(children[0]));
 		}
 		if (expr.HasSubquery()) {

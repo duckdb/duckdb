@@ -269,7 +269,6 @@ BindResult ExpressionBinder::BindTrySubquery(OperatorExpression &op, idx_t depth
 	inside_try = false;
 	bind_try_subquery = true;
 	auto result = BindExpression(subquery_expr, depth);
-	bind_try_subquery = false;
 	inside_try = was_inside_try;
 	if (result.HasError()) {
 		return result;

@@ -60,11 +60,14 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 }
 
 BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t depth) {
+	// consume the one-shot marker BindTrySubquery sets for the subquery it is about to bind
+	const bool try_subquery = bind_try_subquery;
+	bind_try_subquery = false;
 	if (inside_try) {
 		if (expr.GetSubqueryType() != SubqueryType::SCALAR) {
 			throw BinderException("TRY can not be used in combination with EXISTS/IN/ANY/ALL subqueries");
 		}
-		// TRY directly over a scalar subquery is rewritten before binding, so this subquery sits deeper
+		// TRY directly over a scalar subquery goes through BindTrySubquery, so this subquery sits deeper
 		// inside the TRY argument, where its errors cannot be masked
 		throw BinderException(
 		    "TRY over a scalar subquery is only supported when the subquery is the direct argument of TRY");
@@ -73,10 +76,9 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	auto subquery_binder = Binder::CreateBinder(context, binder);
 	subquery_binder->SetCanContainNulls(true);
 	subquery_binder->SetInsideSubquery();
-	if (bind_try_subquery) {
+	if (try_subquery) {
 		// TRY is lowered onto the bound plan of this subquery after binding
 		subquery_binder->SetBindingTrySubquery();
-		bind_try_subquery = false;
 	}
 
 	subquery_binder->BeginSubqueryBind(binder, *this);
