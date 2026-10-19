@@ -2248,6 +2248,19 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	return std::move(state);
 }
 
+void PhysicalHashJoin::InitializeOutputChunk(Allocator &allocator, DataChunk &chunk) const {
+	if (join_type == JoinType::RIGHT_SEMI || join_type == JoinType::RIGHT_ANTI) {
+		PhysicalOperator::InitializeOutputChunk(allocator, chunk);
+		return;
+	}
+	// the probe-side output columns are always referenced or sliced from the probe input
+	vector<bool> initialize(types.size(), true);
+	for (idx_t i = 0; i < lhs_output_columns.col_idxs.size(); i++) {
+		initialize[i] = false;
+	}
+	chunk.Initialize(allocator, types, initialize);
+}
+
 OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                      GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = state_p.Cast<HashJoinOperatorState>();
