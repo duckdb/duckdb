@@ -105,7 +105,7 @@ void RunContainerScanState<READER>::Skip(idx_t to_skip) {
 	scanned_count = end;
 }
 
-void UncompressedRunContainerScanState::Verify() const {
+void UncompressedRunContainerScanState::VerifyWrittenData() const {
 #ifdef DEBUG
 	uint16_t index = 0;
 	for (idx_t i = 0; i < count; i++) {
@@ -130,7 +130,7 @@ CompressedRunContainerScanState::CompressedRunContainerScanState(idx_t container
                                                                  unsafe_array_ptr<const uint8_t> data)
     : RunContainerScanState(container_index, container_size, count), data(data), segments(segments), segment(segments) {
 	D_ASSERT(count >= COMPRESSED_RUN_THRESHOLD);
-	//! Used by Verify, have to use it to avoid a compiler warning/error
+	//! Used by VerifyWrittenData, have to use it to avoid a compiler warning/error
 	(void)this->segments;
 }
 
@@ -150,7 +150,7 @@ void CompressedRunContainerScanState::LoadNextRunInternal() {
 	run_index++;
 }
 
-void CompressedRunContainerScanState::Verify() const {
+void CompressedRunContainerScanState::VerifyWrittenData() const {
 #ifdef DEBUG
 	uint16_t index = 0;
 	ContainerSegmentScan verify_segment(segments);
@@ -195,7 +195,7 @@ void BitsetContainerScanState::Skip(idx_t to_skip) {
 	scanned_count += to_skip;
 }
 
-void BitsetContainerScanState::Verify() const {
+void BitsetContainerScanState::VerifyWrittenData() const {
 	// uncompressed, nothing to verify
 	return;
 }
@@ -321,8 +321,6 @@ ContainerScanState &RoaringScanState::LoadContainer(idx_t container_index, idx_t
 			}
 		}
 	}
-
-	current_container->Verify();
 
 	auto &scan_state = *current_container;
 	if (internal_offset) {

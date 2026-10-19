@@ -401,7 +401,7 @@ public:
 public:
 	virtual void ScanPartial(ValidityMask &result, idx_t result_offset, idx_t to_scan) = 0;
 	virtual void Skip(idx_t count) = 0;
-	virtual void Verify() const = 0;
+	virtual void VerifyWrittenData() const = 0;
 
 public:
 	//! The index of the container
@@ -463,7 +463,7 @@ public:
 	                                  unsafe_array_ptr<const RunContainerRLEPair> data);
 
 public:
-	void Verify() const override;
+	void VerifyWrittenData() const override;
 
 protected:
 	void LoadNextRunInternal();
@@ -481,7 +481,7 @@ public:
 
 protected:
 	void LoadNextRunInternal();
-	void Verify() const override;
+	void VerifyWrittenData() const override;
 
 private:
 	unsafe_array_ptr<const uint8_t> data;
@@ -577,7 +577,7 @@ public:
 		this->array_index++;
 	}
 
-	void Verify() const override {
+	void VerifyWrittenData() const override {
 #ifdef DEBUG
 		uint16_t index = 0;
 		for (uint16_t i = 0; i < this->count; i++) {
@@ -613,7 +613,7 @@ public:
 		this->value += data[this->array_index];
 		this->array_index++;
 	}
-	void Verify() const override {
+	void VerifyWrittenData() const override {
 #ifdef DEBUG
 		uint16_t index = 0;
 		ContainerSegmentScan verify_segment(segments);
@@ -643,7 +643,7 @@ public:
 public:
 	void ScanPartial(ValidityMask &result_mask, idx_t result_offset, idx_t to_scan) override;
 	void Skip(idx_t to_skip) override;
-	void Verify() const override;
+	void VerifyWrittenData() const override;
 
 public:
 	unsafe_array_ptr<const validity_t> bitset;
