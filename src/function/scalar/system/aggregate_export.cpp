@@ -754,10 +754,14 @@ unique_ptr<FunctionData> BindToAggregateState(INPUT &input) {
 			                      "constant");
 		}
 	}
-	auto function_name_val = input.GetNonNullConstant(1);
+	// the arguments are not yet cast to the parameter types when binding
+	auto function_name_val = input.GetNonNullConstant(1).DefaultCastAs(LogicalType::VARCHAR);
 	auto function_name = StringValue::Get(function_name_val);
 
 	auto signature_val = input.GetNonNullConstant(2);
+	if (signature_val.type().id() != LogicalTypeId::LIST) {
+		throw BinderException("to_aggregate_state: the signature must be a list of types");
+	}
 	// the signature lists all of the argument types in order
 	vector<LogicalType> argument_types;
 	for (auto &arg : ListValue::GetChildren(signature_val)) {
@@ -905,6 +909,20 @@ unique_ptr<ParsedExpression> ExportAggregateFunction::StateToSQL(const LogicalTy
 	return make_uniq<FunctionExpression>(QualifiedName("system", "main", "to_aggregate_state"), std::move(arguments));
 }
 
+void ExportAggregateFunction::GetSortedStateOrders(const LogicalType &state_type,
+                                                   vector<SortedAggregateStateOrder> &orders) {
+	auto ext_info = state_type.GetExtensionInfo();
+	if (!ext_info || state_type.id() != LogicalTypeId::LIST) {
+		throw InternalException("GetSortedStateOrders called on a state type that is not an ordered aggregate state");
+	}
+	auto order_entry = ext_info->properties.find("order_bys");
+	if (order_entry == ext_info->properties.end()) {
+		throw InternalException("GetSortedStateOrders called on a state type that is not an ordered aggregate state");
+	}
+	auto &buffer_struct = ListType::GetChildType(state_type);
+	ParseOrderBys(order_entry->second, StructType::GetChildTypes(buffer_struct).size(), orders);
+}
+
 void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {
 	auto &bound_function = aggregate.FunctionMutable();
 	// functions with an explicit export callback use it as the finalize; others use the field-based serialization
@@ -927,13 +945,13 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 		throw BinderException("Cannot use EXPORT_STATE for non-combinable function %s", bound_function.GetName());
 	}
 	if (bound_function.HasExportAggregateStateCallback() != bound_function.HasImportAggregateStateCallback()) {
-		throw InternalException("Aggregate function \"%s\" must define either both or neither of the "
+		throw InternalException("Aggregate function %s must define either both or neither of the "
 		                        "export_aggregate_state/import_aggregate_state callbacks",
 		                        bound_function.GetName());
 	}
 	if (!bound_function.HasGetStateTypeCallback()) {
 		throw NotImplementedException(
-		    "Aggregate function \"%s\" does not have a state type callback defined - cannot export state",
+		    "Aggregate function %s does not have a state type callback defined - cannot export state",
 		    bound_function.GetName());
 	}
 	D_ASSERT(bound_function.HasStateSizeCallback());

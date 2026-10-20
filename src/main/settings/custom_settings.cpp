@@ -39,6 +39,7 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -47,7 +48,6 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
-#include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/parser/peg/dialect_extension.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
 
@@ -81,7 +81,7 @@ static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) 
 		return DBConfig::ParseMemoryLimitOrMaximum(input);
 	}
 	double percentage;
-	if (!TryDoubleCast(input.c_str(), input.size() - 1, percentage, false) || percentage < 0 || percentage > 100) {
+	if (!TryDoubleCast(input.c_str(), input.size() - 1, percentage, false) || !(percentage >= 0 && percentage <= 100)) {
 		throw InvalidInputException("Unable to parse valid percentage (input: %s)", input);
 	}
 	auto result = percentage * static_cast<double>(get_base()) / 100.0;
@@ -331,18 +331,18 @@ void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 	if (!config.file_system) {
 		throw InvalidInputException("Cannot change/set allowed_directories before the database is started");
 	}
-	config.options.allowed_directories.clear();
-	auto &list = ListValue::GetChildren(input);
-	for (auto &val : list) {
-		config.AddAllowedDirectory(val.GetValue<string>());
+	vector<string> directories;
+	for (auto &val : ListValue::GetChildren(input)) {
+		directories.push_back(val.GetValue<string>());
 	}
+	config.SetAllowedDirectories(directories);
 }
 
 void AllowedDirectoriesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
-	config.options.allowed_directories = DBConfigOptions().allowed_directories;
+	config.ResetAllowedDirectories();
 }
 
 Value AllowedDirectoriesSetting::GetSetting(const ClientContext &context) {
@@ -368,18 +368,18 @@ void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 		throw InvalidInputException("Cannot change/set allowed_paths before the database is started");
 	}
 
-	config.options.allowed_paths.clear();
-	auto &list = ListValue::GetChildren(input);
-	for (auto &val : list) {
-		config.AddAllowedPath(val.GetValue<string>());
+	vector<string> paths;
+	for (auto &val : ListValue::GetChildren(input)) {
+		paths.push_back(val.GetValue<string>());
 	}
+	config.SetAllowedPaths(paths);
 }
 
 void AllowedPathsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
-	config.options.allowed_paths = DBConfigOptions().allowed_paths;
+	config.ResetAllowedPaths();
 }
 
 Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
@@ -389,30 +389,6 @@ Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
 		allowed_paths.emplace_back(dir);
 	}
 	return Value::LIST(LogicalType::VARCHAR, std::move(allowed_paths));
-}
-
-//===----------------------------------------------------------------------===//
-// Block Allocator Memory
-//===----------------------------------------------------------------------===//
-void BlockAllocatorMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	const auto size = ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return config.options.maximum_memory; });
-	if (db) {
-		BlockAllocator::Get(*db).Resize(size);
-	}
-	config.options.block_allocator_size = size;
-}
-
-void BlockAllocatorMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	const auto size = DBConfigOptions().block_allocator_size;
-	if (db) {
-		BlockAllocator::Get(*db).Resize(size);
-	}
-	config.options.block_allocator_size = size;
-}
-
-Value BlockAllocatorMemorySetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return StringUtil::BytesToHumanReadableString(config.options.block_allocator_size);
 }
 
 //===----------------------------------------------------------------------===//
@@ -592,6 +568,9 @@ void DisabledFilesystemsSetting::SetGlobal(DatabaseInstance *db_p, DBConfig &con
 	auto &db = GetDB<DisabledFilesystemsSetting>(db_p);
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto list = StringUtil::Split(input.ToString(), ",");
+	for (auto &entry : list) {
+		StringUtil::Trim(entry);
+	}
 	fs.SetDisabledFileSystems(list);
 }
 
@@ -619,17 +598,17 @@ void DisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 		}
 		disabled_optimizers.insert(OptimizerTypeFromString(param));
 	}
-	config.options.disabled_optimizers = std::move(disabled_optimizers);
+	config.SetDisabledOptimizers(std::move(disabled_optimizers));
 }
 
 void DisabledOptimizersSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.disabled_optimizers = DBConfigOptions().disabled_optimizers;
+	config.SetDisabledOptimizers(DBConfigOptions().disabled_optimizers);
 }
 
 Value DisabledOptimizersSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	string result;
-	for (auto &optimizer : config.options.disabled_optimizers) {
+	for (auto &optimizer : config.GetDisabledOptimizers()) {
 		if (!result.empty()) {
 			result += ",";
 		}
@@ -654,6 +633,29 @@ void VacuumRebuildIndexesSetting::OnSet(SettingCallbackInfo &info, Value &input)
 	if (info.db || info.context) {
 		throw InvalidInputException("Cannot change vacuum_rebuild_indexes setting while database is running");
 	}
+}
+
+//===----------------------------------------------------------------------===//
+// Enable Block Allocator
+//===----------------------------------------------------------------------===//
+void EnableBlockAllocatorSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("%s setting cannot be NULL", EnableBlockAllocatorSetting::Name);
+	}
+	const auto enabled = input.GetValue<bool>();
+	if (db) {
+		BlockAllocator::Get(*db).SetEnabled(enabled);
+	} else {
+		config.options.enable_block_allocator = enabled;
+	}
+}
+
+void EnableBlockAllocatorSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	SetGlobal(db, config, Value::BOOLEAN(DBConfigOptions().enable_block_allocator));
+}
+
+Value EnableBlockAllocatorSetting::GetSetting(const ClientContext &context) {
+	return Value::BOOLEAN(BlockAllocator::Get(*context.db).IsEnabled());
 }
 
 //===----------------------------------------------------------------------===//
@@ -1167,7 +1169,7 @@ void IndexScanPercentageSetting::OnSet(SettingCallbackInfo &, Value &input) {
 		throw InvalidInputException("%s setting cannot be NULL", IndexScanPercentageSetting::Name);
 	}
 	auto index_scan_percentage = input.GetValue<double>();
-	if (index_scan_percentage < 0 || index_scan_percentage > 1.0) {
+	if (!(index_scan_percentage >= 0 && index_scan_percentage <= 1.0)) {
 		throw InvalidInputException("the index scan percentage must be within [0, 1]");
 	}
 }
@@ -1417,6 +1419,10 @@ void ProfilingRendererSettingsSetting::SetLocal(ClientContext &context, const Va
 	unordered_map<string, Value> new_settings;
 	for (auto &entry : MapValue::GetChildren(input)) {
 		auto &key_value = StructValue::GetChildren(entry);
+		if (key_value[1].IsNull()) {
+			throw InvalidInputException("profiling_renderer_settings: the value of \"%s\" cannot be NULL",
+			                            key_value[0].ToString());
+		}
 		new_settings[StringUtil::Lower(key_value[0].ToString())] = key_value[1];
 	}
 	// eagerly configure the renderer of the current profiler format to validate the setting values
@@ -1507,7 +1513,11 @@ void ProgressBarTimeSetting::SetLocal(ClientContext &context, const Value &input
 	}
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
-	config.wait_time = input.GetValue<int32_t>();
+	auto wait_time = input.GetValue<int32_t>();
+	if (wait_time < 0) {
+		throw InvalidInputException("%s setting cannot be negative", ProgressBarTimeSetting::Name);
+	}
+	config.wait_time = wait_time;
 	config.enable_progress_bar = true;
 }
 
@@ -1975,7 +1985,8 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 		return;
 	}
 
-	auto compiled_grammar = CompiledGrammar::Create(context, selected_extensions);
+	auto compiled_grammar =
+	    DatabaseInstance::GetDatabase(context).GetParserCache().GetMatcher(context, selected_extensions);
 	client_config.active_grammar_extensions = std::move(selected_extensions);
 	client_config.cached_grammar = std::move(compiled_grammar);
 }

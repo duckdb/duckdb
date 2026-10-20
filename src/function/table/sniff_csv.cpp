@@ -42,7 +42,7 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 	auto it = input.named_parameters.find("auto_detect");
 	if (it != input.named_parameters.end()) {
 		if (it->second.IsNull()) {
-			throw BinderException("\"%s\" expects a non-null boolean value (e.g. TRUE or 1)", it->first);
+			throw BinderException("%s expects a non-null boolean value (e.g. TRUE or 1)", it->first);
 		}
 		if (!it->second.GetValue<bool>()) {
 			throw InvalidInputException("sniff_csv function does not accept auto_detect variable set to false");
@@ -55,7 +55,7 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 	it = input.named_parameters.find("force_match");
 	if (it != input.named_parameters.end()) {
 		if (it->second.IsNull()) {
-			throw BinderException("\"%s\" expects a non-null boolean value (e.g. TRUE or 1)", it->first);
+			throw BinderException("%s expects a non-null boolean value (e.g. TRUE or 1)", it->first);
 		}
 		result->force_match = it->second.GetValue<bool>();
 		input.named_parameters.erase(it);

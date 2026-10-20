@@ -80,9 +80,9 @@ enum class JSONGeometryFormat : uint8_t { WKT, GEOJSON };
 
 struct JSONCopyFormatOptions {
 	JSONGeometryFormat geometry_format = JSONGeometryFormat::WKT;
-	optional_ptr<StrfTimeFormat> date_format;
-	optional_ptr<StrfTimeFormat> timestamp_format;
-	optional_ptr<ClientContext> context;
+	mutable optional_ptr<StrfTimeFormat> date_format;
+	mutable optional_ptr<StrfTimeFormat> timestamp_format;
+	mutable optional_ptr<ClientContext> context;
 	optional_ptr<const Expression> timestamptz_format_expression;
 	optional_ptr<const Expression> timestamptz_ns_format_expression;
 };
@@ -313,7 +313,7 @@ static unique_ptr<FunctionData> JSONCreateBindParams(BoundScalarFunction &bound_
 			throw ParameterNotResolvedException();
 		} else if (object && i % 2 == 0) {
 			if (type != LogicalType::VARCHAR) {
-				throw BinderException("json_object() keys must be VARCHAR, add an explicit cast to argument \"%s\"",
+				throw BinderException("json_object() keys must be VARCHAR, add an explicit cast to argument %s",
 				                      arguments[i]->GetName());
 			}
 			bound_arguments.push_back(LogicalType::VARCHAR);
@@ -862,7 +862,7 @@ static void CreateValuesFormatted(yyjson_mut_doc *doc, yyjson_mut_val *vals[], V
 static void CreateValuesDate(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
                              const JSONCopyFormatOptions &options) {
 	CreateValuesFormatted(doc, vals, value_v, count, bool(options.date_format), [&](Vector &string_vector) {
-		options.date_format.get_mutable()->ConvertDateVector(value_v, string_vector);
+		options.date_format->ConvertDateVector(value_v, string_vector);
 	});
 }
 
@@ -875,14 +875,14 @@ static void CreateValuesTimestamp(yyjson_mut_doc *doc, yyjson_mut_val *vals[], V
 		return;
 	}
 	CreateValuesFormatted(doc, vals, value_v, count, bool(options.timestamp_format), [&](Vector &string_vector) {
-		options.timestamp_format.get_mutable()->ConvertTimestampVector(value_v, string_vector);
+		options.timestamp_format->ConvertTimestampVector(value_v, string_vector);
 	});
 }
 
 static void CreateValuesTimestampNS(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
                                     const JSONCopyFormatOptions &options) {
 	CreateValuesFormatted(doc, vals, value_v, count, bool(options.timestamp_format), [&](Vector &string_vector) {
-		options.timestamp_format.get_mutable()->ConvertTimestampNSVector(value_v, string_vector);
+		options.timestamp_format->ConvertTimestampNSVector(value_v, string_vector);
 	});
 }
 
@@ -892,7 +892,7 @@ static void CreateValuesTimestampTZ(yyjson_mut_doc *doc, yyjson_mut_val *vals[],
 		// no COPY format was given - use the full cast set so that the session time zone is applied
 		Vector string_vector(LogicalType::VARCHAR, count);
 		if (options.context) {
-			VectorOperations::Cast(*options.context.get_mutable(), value_v, string_vector, count, true);
+			VectorOperations::Cast(*options.context, value_v, string_vector, count, true);
 		} else {
 			VectorOperations::DefaultCast(value_v, string_vector, count);
 		}
@@ -910,7 +910,7 @@ static void CreateValuesTimestampTZ(yyjson_mut_doc *doc, yyjson_mut_val *vals[],
 		input.InitializeEmpty({value_v.GetType()});
 		input.data[0].Reference(value_v);
 		input.CheckCardinality(count);
-		ExpressionExecutor executor(*options.context.get_mutable(), *format_expression);
+		ExpressionExecutor executor(*options.context, *format_expression);
 		executor.ExecuteExpression(input, string_vector);
 	});
 }
@@ -1307,9 +1307,15 @@ static void JSONCopyToGeoJSONFunction(DataChunk &args, ExpressionState &state, V
 //! The column-selecting options are three-state: a NULL argument means the option was not given (use the default
 //! behavior), an empty string means it was explicitly unset, and anything else names a column
 static bool TryGetGeoJSONColumnOption(ClientContext &context, const Expression &argument, string &result) {
+	if (!argument.IsFoldable()) {
+		throw BinderException("%s column options must be constants", JSON_COPY_TO_GEOJSON_INTERNAL_NAME);
+	}
 	const auto value = ExpressionExecutor::EvaluateScalar(context, argument);
 	if (value.IsNull()) {
 		return false;
+	}
+	if (value.type().id() != LogicalTypeId::VARCHAR) {
+		throw BinderException("%s column options must be VARCHAR or NULL", JSON_COPY_TO_GEOJSON_INTERNAL_NAME);
 	}
 	result = StringValue::Get(value);
 	return true;
@@ -1516,6 +1522,8 @@ ScalarFunction JSONFunctions::GetJSONCopyToJSONFunction() {
 	fun.GetSignature().GetParameter(1).SetName("date_format");
 	fun.GetSignature().GetParameter(2).SetName("timestamp_format");
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	// formatting dates and timestamps can fail
+	fun.SetFallible();
 	fun.SetSerializeCallback(JSONCopyToJSONSerialize);
 	fun.SetDeserializeCallback(JSONCopyToJSONDeserialize);
 	return fun;
@@ -1534,6 +1542,7 @@ ScalarFunction JSONFunctions::GetJSONCopyToGeoJSONFunction() {
 	fun.GetSignature().GetParameter(4).SetName("id_column");
 	fun.GetSignature().GetParameter(5).SetName("write_bbox");
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetFallible();
 	return fun;
 }
 

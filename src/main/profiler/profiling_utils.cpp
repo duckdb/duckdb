@@ -5,8 +5,8 @@ namespace duckdb {
 
 void QueryMetrics::FinalizeMetrics(GatheredMetrics &info) {
 	info.SetMetric<MetricQuerySQL>(query_sql);
-	for (const auto &[key, ns] : string_timings) {
-		info.SetMetric(key, static_cast<double>(ns) / 1e9);
+	for (const auto &[key, timing] : string_timings) {
+		info.SetMetric(key, static_cast<double>(timing.duration) / 1e9);
 	}
 	for (const auto &[key, count] : string_counters) {
 		info.SetMetric(key, count);
@@ -14,6 +14,11 @@ void QueryMetrics::FinalizeMetrics(GatheredMetrics &info) {
 	for (auto &entry : GetLiveMetrics()) {
 		info.SetMetric(entry.first, std::move(entry.second));
 	}
+	info.SetMetric<MetricIOTotalReadOperations>(GetReadOperations());
+	info.SetMetric<MetricIOTotalReadTime>(GetReadTime());
+	info.SetMetric<MetricIOTotalWriteOperations>(GetWriteOperations());
+	info.SetMetric<MetricIOTotalWriteTime>(GetWriteTime());
+	info.SetMetric<MetricSystemTotalBytesSpilled>(GetBytesSpilled());
 	info.SetMetric<MetricSystemBlockedThreadTime>(blocked_thread_time);
 	info.SetMetric<MetricSystemPeakBufferMemory>(system_peak_buffer_memory);
 	info.SetMetric<MetricSystemPeakStreamingBufferSize>(system_peak_streaming_buffer_size);
@@ -53,7 +58,9 @@ profiler_metrics_t QueryMetrics::GetLiveMetrics() const {
 	return ReadLiveMetrics(*this, LiveMetrics());
 }
 
-QueryMetrics::QueryMetrics() : bytes_read(0), bytes_written(0), total_memory_allocated(0) {
+QueryMetrics::QueryMetrics()
+    : bytes_read(0), read_operations(0), read_time_us(0), bytes_written(0), write_operations(0), write_time_us(0),
+      bytes_spilled(0), total_memory_allocated(0) {
 	Reset();
 }
 
