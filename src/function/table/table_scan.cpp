@@ -722,6 +722,9 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 			g_state->row_ids[row_id_count++] = row_id;
 		}
 	}
+	// Each task fetches STANDARD_VECTOR_SIZE row IDs at a time, so threads beyond the batch count have no work.
+	auto batch_count = (g_state->row_id_count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+	g_state->max_threads = MinValue<idx_t>(g_state->max_threads, MaxValue<idx_t>(batch_count, 1));
 
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	if (input.CanRemoveFilterColumns()) {
