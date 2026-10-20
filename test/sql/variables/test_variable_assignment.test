@@ -128,17 +128,11 @@ select := 5
 ----
 syntax error
 
-# x = 5 is an expression statement, not an assignment
+# only := assigns
 statement error
 x = 5
 ----
-Binder Error
-
-# the alias shorthand of the expression statement is unaffected
-query I
-x: 5
-----
-5
+syntax error
 
 # named parameters in function calls are unaffected
 query I
