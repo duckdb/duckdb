@@ -11,6 +11,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "core_functions/aggregate/quantile_helpers.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/interpolate.hpp"
@@ -52,22 +53,20 @@ struct QuantileCursor {
 	inline idx_t Seek(idx_t row_idx) {
 		if (!RowIsVisible(row_idx)) {
 			inputs.Seek(row_idx, scan, page);
-			// the accessors below require flat vectors, scans can return compact representations
-			page.Flatten();
-			data = FlatVector::GetData<INPUT_TYPE>(page.data[0]);
-			validity = &FlatVector::ValidityMutable(page.data[0]);
+			page.data[0].ToUnifiedFormat(format);
+			data = UnifiedVectorFormat::GetData<INPUT_TYPE>(format);
 		}
 		return RowOffset(row_idx);
 	}
 
 	inline const INPUT_TYPE &operator[](idx_t row_idx) {
 		const auto offset = Seek(row_idx);
-		return data[offset];
+		return data[format.sel->get_index(offset)];
 	}
 
 	inline bool RowIsValid(idx_t row_idx) {
 		const auto offset = Seek(row_idx);
-		return validity->RowIsValid(offset);
+		return format.validity.RowIsValid(format.sel->get_index(offset));
 	}
 
 	inline bool CannotHaveNull() {
@@ -80,10 +79,10 @@ struct QuantileCursor {
 	ColumnDataScanState scan;
 	//! The data chunk paged into into
 	DataChunk page;
+	//! Cell access into the page - scans can return constant and dictionary vectors
+	UnifiedVectorFormat format;
 	//! The data pointer
 	const INPUT_TYPE *data = nullptr;
-	//! The validity mask
-	const ValidityMask *validity = nullptr;
 	//! Paged chunks do not track this but it is really necessary for performance
 	bool cannot_have_null;
 };
@@ -357,13 +356,11 @@ struct QuantileSortTree {
 		while (inputs.Scan(scan, sort)) {
 			const auto row_idx = scan.current_row_index;
 			if (filter_mask.CanHaveNull() || !partition.all_valid[0]) {
-				// the validity access requires a flat vector, scans can return compact representations
-				sort.Flatten();
-				auto &key = sort.data[0];
-				auto &validity = FlatVector::ValidityMutable(key);
+				// scans can return constant and dictionary vectors - read their validity in place
+				auto validity = sort.data[0].Validity();
 				idx_t filtered = 0;
 				for (sel_t i = 0; i < sort.size(); ++i) {
-					if (filter_mask.RowIsValid(i + row_idx) && validity.RowIsValid(i)) {
+					if (filter_mask.RowIsValid(i + row_idx) && validity.IsValid(i)) {
 						filter_sel[filtered++] = i;
 					}
 				}

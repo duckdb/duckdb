@@ -117,7 +117,7 @@ public:
 		if (!paged.inputs->Scan(state, chunk)) {
 			return false;
 		}
-		// the cell accessors require flat vectors, scans can return compact representations
+		// compact pages are flattened once per load: the cell accessors are too hot for a representation branch
 		chunk.Flatten();
 		return true;
 	}
