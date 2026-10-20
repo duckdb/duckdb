@@ -1,4 +1,5 @@
 #include "core_functions/aggregate/holistic_functions.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "core_functions/aggregate/quantile_state.hpp"
 #include "duckdb/common/enums/quantile_enum.hpp"
 #include "duckdb/common/operator/abs.hpp"
@@ -693,6 +694,14 @@ static bool CanInterpolate(const LogicalType &type) {
 	}
 }
 
+//! Wide decimals have no exact interpolation, they are interpolated as DOUBLE
+static LogicalType InterpolationType(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::DECIMAL && Decimal::IsWide(DecimalType::GetWidth(type))) {
+		return LogicalType::DOUBLE;
+	}
+	return type;
+}
+
 struct MedianFunction {
 	static AggregateFunction GetAggregate(const LogicalType &type) {
 		auto fun = CanInterpolate(type) ? GetContinuousQuantile(type) : GetDiscreteQuantile(type);
@@ -713,7 +722,7 @@ struct MedianFunction {
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function.ReplaceImplementation(GetAggregate(arguments[0]->GetReturnType()));
+		function.ReplaceImplementation(GetAggregate(InterpolationType(arguments[0]->GetReturnType())));
 		return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
 	}
 };
@@ -808,9 +817,9 @@ struct ContinuousQuantileFunction {
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		auto impl =
-		    GetAggregate(function.GetArguments()[0].id() == LogicalTypeId::DECIMAL ? arguments[0]->GetReturnType()
-		                                                                           : function.GetArguments()[0]);
+		auto impl = GetAggregate(function.GetArguments()[0].id() == LogicalTypeId::DECIMAL
+		                             ? InterpolationType(arguments[0]->GetReturnType())
+		                             : function.GetArguments()[0]);
 		function.ReplaceImplementation(impl);
 		return BindQuantile(input);
 	}
@@ -842,9 +851,9 @@ struct ContinuousQuantileListFunction {
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		auto impl =
-		    GetAggregate(function.GetArguments()[0].id() == LogicalTypeId::DECIMAL ? arguments[0]->GetReturnType()
-		                                                                           : function.GetArguments()[0]);
+		auto impl = GetAggregate(function.GetArguments()[0].id() == LogicalTypeId::DECIMAL
+		                             ? InterpolationType(arguments[0]->GetReturnType())
+		                             : function.GetArguments()[0]);
 		function.ReplaceImplementation(impl);
 		return BindQuantile(input);
 	}

@@ -29,3 +29,37 @@ SELECT bigdec::DOUBLE FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
 -1.2345678912345679e+26
 5.7896044618658096e+38
 -5.7896044618658096e+38
+
+# functions without a wide implementation compute through DOUBLE, as the old DOUBLE mapping did
+query I
+SELECT avg(bigdec) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
+----
+0.0
+
+query I
+SELECT median(bigdec) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
+----
+0.0
+
+query IIII
+SELECT approx_quantile(bigdec, 0.5) BETWEEN -0.5 AND 0.5, reservoir_quantile(bigdec, 0.5) BETWEEN -0.5 AND 0.5, typeof(approx_quantile(bigdec, 0.5)), typeof(reservoir_quantile(bigdec, 0.5)) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet' WHERE bigdec BETWEEN -1 AND 1
+----
+true	true	DOUBLE	DOUBLE
+
+query I
+SELECT round(bigdec, 1) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
+----
+0.5
+-0.5
+1.2345678912345679e+26
+-1.2345678912345679e+26
+5.7896044618658096e+38
+-5.7896044618658096e+38
+
+statement ok
+SUMMARIZE SELECT * FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
+
+query II
+SELECT min, max FROM (SUMMARIZE SELECT * FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet')
+----
+-578960446186580977117854925043439539266.34992332820282019728792003956564819968	578960446186580977117854925043439539266.34992332820282019728792003956564819967
