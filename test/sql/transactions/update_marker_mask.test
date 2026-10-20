@@ -1,0 +1,207 @@
+# name: test/sql/transactions/update_marker_mask.test
+# description: Writes of one transaction into a vector without ids are kept in a bitmask
+# group: [transactions]
+
+require vector_size 2048
+
+statement ok
+SET debug_skip_checkpoint_on_commit = true;
+
+statement ok
+CREATE TABLE t (id INTEGER, a INTEGER);
+
+statement ok
+INSERT INTO t SELECT i, 0 FROM range(3000) t(i);
+
+# two updates of one transaction into the same vector, seen by an older snapshot
+statement ok con3
+BEGIN
+
+query I con3
+SELECT COUNT(*) FROM t
+----
+3000
+
+statement ok con4
+BEGIN
+
+query I con4
+SELECT COUNT(*) FROM t
+----
+3000
+
+statement ok con1
+BEGIN
+
+statement ok con1
+UPDATE t SET a = 1 WHERE id IN (3, 5)
+
+statement ok con1
+UPDATE t SET a = 1 WHERE id IN (7, 9)
+
+statement ok con1
+UPDATE t SET a = 2 WHERE id = 3
+
+statement ok con1
+COMMIT
+
+statement error con3
+UPDATE t SET a = 3 WHERE id = 9
+----
+Conflict on update
+
+statement ok con3
+ROLLBACK
+
+statement error con4
+DELETE FROM t WHERE id = 3
+----
+Conflict on tuple deletion
+
+statement ok con4
+ROLLBACK
+
+# an update and a delete of one transaction, rolled back
+statement ok con3
+BEGIN
+
+query I con3
+SELECT COUNT(*) FROM t
+----
+3000
+
+statement ok con1
+BEGIN
+
+statement ok con1
+UPDATE t SET a = 4 WHERE id IN (11, 13)
+
+statement ok con1
+DELETE FROM t WHERE id IN (13, 15)
+
+query I con1
+SELECT COUNT(*) FROM t
+----
+2998
+
+statement ok con1
+ROLLBACK
+
+statement ok con3
+UPDATE t SET a = 5 WHERE id IN (11, 13, 15)
+
+statement ok con3
+COMMIT
+
+query II
+SELECT id, a FROM t WHERE id IN (3, 7, 9, 11, 13, 15) ORDER BY id
+----
+3	2
+7	1
+9	1
+11	5
+13	5
+15	5
+
+# writes of two transactions into the same vector
+statement ok con3
+BEGIN
+
+query I con3
+SELECT COUNT(*) FROM t
+----
+3000
+
+statement ok con1
+BEGIN
+
+statement ok con2
+BEGIN
+
+statement ok con1
+UPDATE t SET a = 6 WHERE id = 17
+
+statement ok con2
+DELETE FROM t WHERE id = 19
+
+statement error con2
+UPDATE t SET a = 6 WHERE id = 17
+----
+Conflict on update
+
+statement ok con2
+ROLLBACK
+
+statement ok con1
+COMMIT
+
+statement error con3
+DELETE FROM t WHERE id = 17
+----
+Conflict on tuple deletion
+
+statement ok con3
+ROLLBACK
+
+# a partial delete of two statements, committed
+statement ok con3
+BEGIN
+
+query I con3
+SELECT COUNT(*) FROM t
+----
+3000
+
+statement ok con1
+BEGIN
+
+statement ok con1
+DELETE FROM t WHERE id < 100
+
+statement ok con1
+DELETE FROM t WHERE id >= 100 AND id < 200
+
+statement ok con1
+COMMIT
+
+query I
+SELECT COUNT(*) FROM t
+----
+2800
+
+query I con3
+SELECT COUNT(*) FROM t
+----
+3000
+
+statement error con3
+UPDATE t SET a = 7 WHERE id = 150
+----
+Conflict on update
+
+statement ok con3
+ROLLBACK
+
+# a transaction that writes all rows of the vector piecewise
+statement ok con1
+BEGIN
+
+statement ok con1
+UPDATE t SET a = 8 WHERE id >= 200 AND id < 1000
+
+statement ok con1
+UPDATE t SET a = 8 WHERE id >= 1000 AND id < 2048
+
+statement ok con1
+DELETE FROM t WHERE id = 2047
+
+statement ok con1
+ROLLBACK
+
+statement ok
+CHECKPOINT
+
+query III
+SELECT COUNT(*), SUM(a), COUNT(*) FILTER (a = 8) FROM t
+----
+2800	0	0

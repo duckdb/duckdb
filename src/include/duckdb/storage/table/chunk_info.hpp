@@ -46,8 +46,8 @@ enum class VersionCompressionResult : uint8_t {
 
 //! The storage state of the delete side of a ChunkVectorInfo. Exhaustive and mutually exclusive:
 //! CONSTANT - all rows share constant_delete_id (NOT_DELETED_ID, a single delete id or a single update marker)
-//! MASKED   - partially deleted, all deleted rows share one committed id (mask_delete_id): which rows are
-//!            deleted is stored in deleted_mask, deleted_data freed
+//! MASKED   - the rows in deleted_mask share one id (mask_delete_id), the other rows are NOT_DELETED_ID;
+//!            deleted_data freed
 //! ARRAY    - per-row delete ids materialized in deleted_data
 enum class DeleteIdState : uint8_t { CONSTANT, MASKED, ARRAY };
 
@@ -124,6 +124,9 @@ private:
 	void DecompressDeleteMask();
 	//! Whether any of the rows (ids[i] - offset) was deleted by another transaction or updated by an unseen one
 	bool HasConflictingWrite(TransactionData transaction, const row_t ids[], idx_t count, row_t offset) const;
+	//! Writes id into the rows of a vector whose other rows have no id, keeping them in deleted_mask
+	idx_t WriteMask(transaction_t id, const row_t ids[], idx_t count, row_t offset, uint16_t rows[],
+	                transaction_t previous_ids[]);
 	//! Sets the ids of the rows to new_id(id, i), compressing them into a constant if all rows end up with the same one
 	template <class F>
 	void SetIds(const uint16_t rows[], idx_t count, F &&new_id);
@@ -139,13 +142,13 @@ private:
 	IndexPointer deleted_data;
 	//! The delete id or update marker shared by all rows (e.g. one transaction deleted or updated the whole vector)
 	transaction_t constant_delete_id;
-	//! Bitmask used in the MASKED state: valid bit == the row is deleted, invalid bit == the row is alive.
+	//! Bitmask used in the MASKED state: valid bit == the row holds mask_delete_id, invalid bit == NOT_DELETED_ID.
 	//! Matches the on-disk VECTOR_INFO orientation. Only meaningful when delete_state == DeleteIdState::MASKED.
 	ValidityMask deleted_mask;
-	//! The single committed id shared by every deleted row in the MASKED state. 0 means the deletes are
-	//! visible to all transactions (the value used when read from disk); a non-zero committed id means the
-	//! mask was folded from one committed transaction whose delete is not yet visible to every snapshot.
-	//! Only meaningful when delete_state == DeleteIdState::MASKED.
+	//! The single id shared by the rows of the mask in the MASKED state. 0 means the deletes are visible to all
+	//! transactions (the value used when read from disk); a committed id means the mask was folded from one
+	//! committed transaction whose delete is not yet visible to every snapshot; otherwise it is the delete id or
+	//! update marker of the one transaction that wrote the rows. Only meaningful when delete_state == MASKED.
 	transaction_t mask_delete_id = 0;
 	//! The current delete-side storage state - the single source of truth for the delete side
 	DeleteIdState delete_state = DeleteIdState::CONSTANT;
