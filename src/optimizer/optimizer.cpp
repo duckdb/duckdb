@@ -66,6 +66,7 @@
 #include "duckdb/optimizer/remote_pushdown_optimizer.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/optimizer/disjunctive_join_rewriter.hpp"
 
 namespace duckdb {
 
@@ -133,6 +134,14 @@ bool Optimizer::OptimizerDisabled(ClientContext &context_p, OptimizerType type) 
 	return config.IsOptimizerDisabled(type);
 }
 
+MetricsTimer Optimizer::StartProfiler(OptimizerType type) {
+	auto &profiler = QueryProfiler::Get(context);
+	if (!profiler.IsEnabled()) {
+		return MetricsTimer();
+	}
+	return profiler.StartTimerInternal("optimizer." + StringUtil::Lower(EnumUtil::ToString(type)));
+}
+
 void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &callback) {
 	context.InterruptCheck();
 
@@ -140,9 +149,8 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 		// optimizer is marked as disabled: skip
 		return;
 	}
-	auto &profiler = QueryProfiler::Get(context);
 	{
-		auto optimizer_timer = profiler.StartTimerInternal("optimizer." + StringUtil::Lower(EnumUtil::ToString(type)));
+		auto optimizer_timer = StartProfiler(type);
 		callback();
 	}
 	if (plan) {
@@ -319,6 +327,11 @@ void Optimizer::RunBuiltInOptimizers() {
 	MultiStageAggregateRewriter aggregate_rewriter(*this, AggregateRewritePolicy::UNCONDITIONAL,
 	                                               !OptimizerDisabled(OptimizerType::DISTINCT_AGGREGATE_REWRITE));
 	aggregate_rewriter.VisitOperator(plan);
+
+	RunOptimizer(OptimizerType::DISJUNCTIVE_JOIN_REWRITER, [&]() {
+		DisjunctiveJoinRewriter disjunctive_join_rewriter(binder);
+		plan = disjunctive_join_rewriter.Optimize(std::move(plan));
+	});
 
 	// try to inline CTEs instead of materialization
 	RunOptimizer(OptimizerType::CTE_INLINING, [&]() {

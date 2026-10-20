@@ -209,7 +209,7 @@
     },
     {
         "name": "block_allocator_memory",
-        "description": "Physical memory that the block allocator is allowed to use. This memory is allocated once, never freed, and cannot be reduced.",
+        "description": "Block allocator capacity (cannot be reduced; free physical pages can be reclaimed).",
         "type": "VARCHAR",
         "scope": "global",
         "custom_implementation": [
@@ -368,6 +368,14 @@
         "description": "Set a time for the eviction queue to sleep before acquiring the shared ownership of some block memory.",
         "type": "UBIGINT",
         "scope": "global",
+        "default_value": "0",
+        "is_debug": true
+    },
+    {
+        "name": "debug_file_descriptor_limit",
+        "description": "Override the file descriptor limit that bounds how many files a scan opens ahead. 0 uses the limit of the process.",
+        "type": "UBIGINT",
+        "default_scope": "local",
         "default_value": "0",
         "is_debug": true
     },

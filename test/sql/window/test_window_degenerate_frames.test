@@ -11,7 +11,7 @@ INSERT INTO t VALUES (0, 0, NULL), (1, 0, 10), (2, 0, NULL), (3, 1, 20), (4, 1, 
 foreach optimizer true false
 
 statement ok
-SET enable_optimizer=${optimizer};
+SET enable_optimizer={optimizer};
 
 # The frame is the current row
 query IIIIIIIIIII

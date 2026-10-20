@@ -115,6 +115,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugDisableOptimizerSetting),
     DUCKDB_SETTING(EnableCachingOperatorsSetting),
     DUCKDB_SETTING(DebugEvictionQueueSleepMicroSecondsSetting),
+    DUCKDB_SETTING(DebugFileDescriptorLimitSetting),
     DUCKDB_SETTING_CALLBACK(ForceBitpackingModeSetting),
     DUCKDB_SETTING(DebugForceCommitFailureSetting),
     DUCKDB_SETTING(DebugForceCommitRevertFailureSetting),
@@ -560,11 +561,11 @@ SetScope ExtensionOption::ResolveScope(const Identifier &name, SetScope scope) c
 		scope = default_scope;
 	}
 	if (scope == SetScope::GLOBAL && !supports_global) {
-		throw InvalidInputException(
-		    "Setting \"%s\" cannot be set as a global variable - it can only be set per session", name);
+		throw InvalidInputException("Setting %s cannot be set as a global variable - it can only be set per session",
+		                            name);
 	}
 	if (scope == SetScope::SESSION && !supports_session) {
-		throw InvalidInputException("Setting \"%s\" cannot be set as a session variable - it can only be set globally",
+		throw InvalidInputException("Setting %s cannot be set as a session variable - it can only be set globally",
 		                            name);
 	}
 	return scope;
@@ -680,7 +681,7 @@ void DBConfig::CheckLock(const Identifier &name) {
 		}
 	}
 	// not allowed!
-	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
+	throw InvalidInputException("Cannot change configuration option %s - the configuration has been locked", name);
 }
 
 idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
@@ -820,7 +821,8 @@ optional_idx DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 
 // Right now we only really care about access mode when comparing DBConfigs
 bool DBConfigOptions::operator==(const DBConfigOptions &other) const {
-	return other.access_mode == access_mode && other.user_options == user_options;
+	return other.access_mode == access_mode && other.user_options == user_options &&
+	       other.configuration_env == configuration_env;
 }
 
 bool DBConfig::operator==(const DBConfig &other) {
@@ -992,6 +994,41 @@ set<OptimizerType> DBConfig::GetDisabledOptimizers() const {
 void DBConfig::SetDisabledOptimizers(set<OptimizerType> disabled_optimizers) {
 	lock_guard<mutex> guard(disabled_optimizers_lock);
 	options.disabled_optimizers = std::move(disabled_optimizers);
+}
+
+void DBConfig::SetAllowedDirectories(const vector<string> &paths) {
+	decltype(options.allowed_directories) new_directories;
+	for (auto &path : paths) {
+		auto allowed_directory = SanitizeAllowedPath(path);
+		if (allowed_directory.empty()) {
+			throw InvalidInputException("Cannot provide an empty string for allowed_directory");
+		}
+		if (!StringUtil::EndsWith(allowed_directory, "/")) {
+			allowed_directory += "/";
+		}
+		new_directories.insert(std::move(allowed_directory));
+	}
+	lock_guard<mutex> guard(allowed_paths_lock);
+	options.allowed_directories = std::move(new_directories);
+}
+
+void DBConfig::SetAllowedPaths(const vector<string> &paths) {
+	decltype(options.allowed_paths) new_paths;
+	for (auto &path : paths) {
+		new_paths.insert(SanitizeAllowedPath(path));
+	}
+	lock_guard<mutex> guard(allowed_paths_lock);
+	options.allowed_paths = std::move(new_paths);
+}
+
+void DBConfig::ResetAllowedDirectories() {
+	lock_guard<mutex> guard(allowed_paths_lock);
+	options.allowed_directories = DBConfigOptions().allowed_directories;
+}
+
+void DBConfig::ResetAllowedPaths() {
+	lock_guard<mutex> guard(allowed_paths_lock);
+	options.allowed_paths = DBConfigOptions().allowed_paths;
 }
 
 void DBConfig::AddAllowedPath(const string &path) {

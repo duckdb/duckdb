@@ -678,10 +678,10 @@ struct ICUStrftime : public ICUDateFunc {
 
 		auto offset = ExtractField(calendar, CAL_ZONE_OFFSET) + ExtractField(calendar, CAL_DST_OFFSET);
 		offset /= Interval::MSECS_PER_SEC;
-		offset /= Interval::SECS_PER_MINUTE;
-		int hour_offset = offset / 60;
-		int minute_offset = offset % 60;
-		auto offset_str = Time::ToUTCOffset(hour_offset, minute_offset);
+		int hour_offset = offset / Interval::SECS_PER_HOUR;
+		int minute_offset = (offset % Interval::SECS_PER_HOUR) / Interval::SECS_PER_MINUTE;
+		int second_offset = offset % Interval::SECS_PER_MINUTE;
+		auto offset_str = Time::ToUTCOffset(hour_offset, minute_offset, second_offset);
 		const auto offset_len = offset_str.size();
 
 		const auto len = date_len + 1 + time_len + offset_len;
