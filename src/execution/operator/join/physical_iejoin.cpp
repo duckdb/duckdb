@@ -305,7 +305,9 @@ public:
 	}
 
 	bool TryPrepareNextStage();
-	bool TryNextTask(TaskPtr &task, Task &task_local);
+	bool TryNextTask(TaskPtr &task, Task &task_local) DUCKDB_EXCLUDES(lock);
+	//! Same, with the lock held, so that a caller can block on failure without missing an unblock
+	bool TryNextTaskLocked(TaskPtr &task, Task &task_local) DUCKDB_REQUIRES(lock);
 
 	void ExecuteLiTask(ClientContext &client);
 	void ExecutePermutationTask(ClientContext &client);
@@ -483,7 +485,13 @@ public:
 		return !joiner && !left_matches && !right_matches;
 	}
 
-	bool TryAssignTask();
+	//! Finish the current task (if any) and try to get the next one
+	bool TryAssignTask() DUCKDB_EXCLUDES(gsource.lock);
+	//! Try to get the next task with the lock held, so that a caller can block on failure without missing an unblock.
+	//! The task is only acquired; call InitializeTask after releasing the lock.
+	bool TryAcquireTaskLocked() DUCKDB_REQUIRES(gsource.lock);
+	//! Set up the local state for executing the acquired task
+	void InitializeTask();
 	//! Reports the progress of the current task
 	void UpdateProgress() {
 		if (!task) {
@@ -602,6 +610,10 @@ public:
 
 	//! Simple Joins
 	idx_t anti_lsel = 0;
+
+	//! Whether this task has produced any rows yet.
+	//! A task that has produced rows must not block waiting for other tasks: the sink may be waiting for it.
+	bool produced = false;
 };
 
 bool IEJoinLocalSourceState::TryAssignTask() {
@@ -617,6 +629,15 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 	if (!gsource.TryNextTask(task, task_local)) {
 		return false;
 	}
+	InitializeTask();
+	return true;
+}
+
+bool IEJoinLocalSourceState::TryAcquireTaskLocked() {
+	return gsource.TryNextTaskLocked(task, task_local);
+}
+
+void IEJoinLocalSourceState::InitializeTask() {
 	task_progress.Start();
 
 	auto &gsink = gsource.gsink;
@@ -676,8 +697,6 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 	case IEJoinSourceStage::DONE:
 		break;
 	}
-
-	return true;
 }
 
 void IEJoinLocalSourceState::ExecuteSinkL1Task(ExecutionContext &context, InterruptState &interrupt) {
@@ -1345,6 +1364,10 @@ void IEJoinGlobalSourceState::FinishTask(TaskPtr task) {
 
 bool IEJoinGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 	annotated_lock_guard<annotated_mutex> guard(lock);
+	return TryNextTaskLocked(task, task_local);
+}
+
+bool IEJoinGlobalSourceState::TryNextTaskLocked(TaskPtr &task, Task &task_local) {
 	FinishTask(task);
 
 	if (!HasMoreTasks()) {
@@ -1471,16 +1494,35 @@ SourceResultType PhysicalIEJoin::GetDataInternal(ExecutionContext &context, Data
 	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
 	// Therefore, we loop until we've produced tuples, or until the operator is actually done
 	while (gsource.stage != IEJoinSourceStage::DONE && result.size() == 0) {
-		if (!lsource.TaskFinished() || lsource.TryAssignTask()) {
-			lsource.ExecuteTask(context, result, input.interrupt_state);
-			lsource.UpdateProgress();
-		} else {
-			annotated_lock_guard<annotated_mutex> guard(gsource.lock);
-			if (gsource.TryPrepareNextStage() || gsource.stage == IEJoinSourceStage::DONE) {
-				gsource.UnblockTasks();
-			} else {
-				return gsource.BlockSource(input.interrupt_state);
+		if (lsource.TaskFinished() && !lsource.TryAssignTask()) {
+			{
+				annotated_lock_guard<annotated_mutex> guard(gsource.lock);
+				if (gsource.TryPrepareNextStage() || gsource.stage == IEJoinSourceStage::DONE) {
+					gsource.UnblockTasks();
+					continue;
+				}
+				// TryAssignTask released the lock: another thread may have prepared the next stage and unblocked
+				// the blocked tasks in between, so look again before blocking, or no one would ever unblock this task.
+				if (!lsource.TryAcquireTaskLocked()) {
+					if (lsource.produced) {
+						// The remaining tasks can only start once the other tasks of this stage have finished.
+						// This task has already handed rows to the sink, which may in turn be waiting for this task
+						// (e.g., a partitioned COPY cannot flush until every producer has combined), so blocking
+						// here could deadlock: let the tasks that are still running finish the join instead.
+						return SourceResultType::FINISHED;
+					}
+					// there are more tasks available, but we can't execute them yet
+					// block the source
+					return gsource.BlockSource(input.interrupt_state);
+				}
 			}
+			// Set up the task outside the lock: it allocates per-task state
+			lsource.InitializeTask();
+		}
+		lsource.ExecuteTask(context, result, input.interrupt_state);
+		lsource.UpdateProgress();
+		if (result.size() != 0) {
+			lsource.produced = true;
 		}
 	}
 	return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
