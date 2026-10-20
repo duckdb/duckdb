@@ -139,6 +139,14 @@ static auto RelaxedTypeMatch(MAP &map, const LogicalType &type) -> decltype(map.
 		return map.find(LogicalTypeId::DECIMAL);
 	case LogicalTypeId::ENUM:
 		return map.find(LogicalTypeId::ENUM);
+	case LogicalTypeId::GEOMETRY: {
+		// a GEOMETRY with a CRS matches the casts of the GEOMETRY without a CRS
+		auto entry = map.find(LogicalType::GEOMETRY());
+		if (entry != map.end()) {
+			return entry;
+		}
+		return map.find(LogicalType::ANY);
+	}
 	default:
 		return map.find(LogicalType::ANY);
 	}

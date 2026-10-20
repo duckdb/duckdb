@@ -71,7 +71,7 @@ static unique_ptr<FunctionData> JsonSerializeBind(BindScalarFunctionInput &input
 			}
 			skip_if_default = BooleanValue::Get(input.GetConstant(i));
 		} else {
-			throw BinderException(StringUtil::Format("json_serialize_sql: Unknown argument '%s'", alias));
+			throw BinderException(StringUtil::Format("json_serialize_sql: Unknown argument %s", alias));
 		}
 	}
 	return make_uniq<JsonSerializeBindData>(skip_if_null, skip_if_empty, skip_if_default, format);

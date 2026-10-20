@@ -327,9 +327,27 @@ public:
 			return lhs.size < rhs.size;
 		}
 
-		// Both strings are non-inlined
-		comp_res = memcmp(lhs.data.u.ptr, rhs.data.u.ptr, MinValue(lhs.size, rhs.size));
-		return comp_res < 0 || (comp_res == 0 && lhs.size < rhs.size);
+		const auto size = MinValue(lhs.size, rhs.size);
+		const auto suffix_size = size - SORT_KEY::INLINE_LENGTH;
+		constexpr idx_t WORD_COMPARE_LIMIT = 80;
+		if (suffix_size > WORD_COMPARE_LIMIT) {
+			comp_res =
+			    memcmp(lhs.data.u.ptr + SORT_KEY::INLINE_LENGTH, rhs.data.u.ptr + SORT_KEY::INLINE_LENGTH, suffix_size);
+			return comp_res < 0 || (comp_res == 0 && lhs.size < rhs.size);
+		}
+
+		for (idx_t offset = SORT_KEY::INLINE_LENGTH; offset + sizeof(uint64_t) < size; offset += sizeof(uint64_t)) {
+			const auto lhs_word = Load<uint64_t>(lhs.data.u.ptr + offset);
+			const auto rhs_word = Load<uint64_t>(rhs.data.u.ptr + offset);
+			if (lhs_word != rhs_word) {
+				return BSwapIfLE(lhs_word) < BSwapIfLE(rhs_word);
+			}
+		}
+
+		// Overlap already-compared bytes to keep the final word inside the logical key.
+		const auto lhs_word = BSwapIfLE(Load<uint64_t>(lhs.data.u.ptr + size - sizeof(uint64_t)));
+		const auto rhs_word = BSwapIfLE(Load<uint64_t>(rhs.data.u.ptr + size - sizeof(uint64_t)));
+		return lhs_word < rhs_word || (lhs_word == rhs_word && lhs.size < rhs.size);
 	}
 };
 

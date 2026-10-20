@@ -655,6 +655,23 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::FinalizeDependentJo
 	for (auto &binding : output.right_payload) {
 		binding = outer_state.replacement_graph.Resolve(binding);
 	}
+	// Correlated aggregate rewrites reference marker columns that must survive the projection maps below
+	auto keep_rewrite_inputs = [&](vector<ColumnBinding> &payload) {
+		for (idx_t i = 0, count = payload.size(); i < count; i++) {
+			auto entry = replacement_map.find(payload[i]);
+			if (entry == replacement_map.end()) {
+				continue;
+			}
+			for (auto &extra : {entry->second.marker, entry->second.empty_result}) {
+				auto resolved = outer_state.replacement_graph.Resolve(extra);
+				if (std::find(payload.begin(), payload.end(), resolved) == payload.end()) {
+					payload.push_back(resolved);
+				}
+			}
+		}
+	};
+	keep_rewrite_inputs(output.left_payload);
+	keep_rewrite_inputs(output.right_payload);
 	for (auto &binding : outer_state.bindings) {
 		binding = outer_state.replacement_graph.Resolve(binding);
 	}
@@ -1107,12 +1124,22 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownJoin(unique
 	}
 
 	if (join_type == JoinType::MARK) {
-		if (!left_requires_domain && right_requires_domain) {
+		if (right_requires_domain) {
 			auto right_state = PushDownChild(plan, propagate_null_values, state, false, 1);
 
 			auto left_state = PushDownChild(plan, propagate_null_values, right_state.bindings, false, 0);
 
-			AddCorrelatedJoinConditions(plan->Cast<LogicalJoin>(), left_state.bindings, right_state.bindings);
+			auto &comparison_join = plan->Cast<LogicalComparisonJoin>();
+			auto conditions = std::move(comparison_join.conditions);
+			comparison_join.conditions.clear();
+			AddCorrelatedJoinConditions(comparison_join, left_state.bindings, right_state.bindings);
+			// Keep the correlation keys before the IN predicate for per-group NULL and empty-set handling.
+			comparison_join.mark_types.insert(comparison_join.mark_types.begin(), delim_types.begin(),
+			                                  delim_types.end());
+			for (auto &condition : conditions) {
+				comparison_join.conditions.push_back(std::move(condition));
+			}
+			RewriteCorrelatedBindings(*plan, left_state.bindings);
 			left_state.replacement_graph.Merge(right_state.replacement_graph);
 			return left_state;
 		}

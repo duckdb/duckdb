@@ -135,8 +135,16 @@ Keywords are defined in list files under `grammar/keywords/`:
 | `column_name_keyword.list` | Allowed as column names |
 | `func_name_keyword.list` | Allowed as function names |
 | `type_name_keyword.list` | Allowed as type names |
+| `bare_label_keyword.list` | Allowed as a column alias without `AS` (e.g. `SELECT 1 name`) |
 
-A keyword must appear in exactly one list. The build script validates this.
+A keyword must appear in exactly one of the category lists. The build script validates this.
+
+`bare_label_keyword.list` is orthogonal to the categories, following Postgres' `bare_label_keyword`: every entry must
+also appear in a category list, and only unreserved or column-name keywords listed there can be used as an `AS`-less
+alias. Keywords that can follow an expression or type are deliberately left out (interval units such as `DAY`, function
+suffixes such as `FILTER` and `OVER`, type suffixes such as `VARYING` and `WITHOUT`, and star modifiers such as
+`EXCLUDE`), so `SELECT d + 1 day` is a syntax error rather than a column named `day`. New unreserved keywords should be
+added to the list unless they can trail an expression.
 
 ## Building the Grammar
 
@@ -182,12 +190,16 @@ The transformer generator (`scripts/parser/generate_transformer_trampoline.py`) 
 | `transform_generated_trampoline.cpp` | Transformer process implementations and registration table |
 | `matcher.cpp` | Packrat-memoized matcher rules |
 | `compiled_grammar.cpp` | Matcher rule overrides |
+| `include/peg_rule_id.hpp`, `peg_rule_id.cpp` | `PEGRuleId` enum with one constant per built-in rule, plus name lookups |
 
 If a generated process needs a hand-written semantic body, add that implementation to the appropriate
 `transform_*.cpp` file, then rerun `build_grammar.sh`.
 
 Run `scripts/parser/generate_transformer_trampoline.py --write` directly only when regenerating transformer
 processes without rebuilding the inlined grammar.
+
+Generated transformer code refers to child rules by `PEGRuleId` rather than by name. Rules that grammar extensions
+add at runtime receive IDs past `PEGRuleId::BUILTIN_COUNT` in the compiled grammar that defines them.
 
 ### Transformer Implementation Pattern
 

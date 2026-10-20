@@ -97,7 +97,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(AutoinstallExtensionRepositorySetting),
     DUCKDB_SETTING(AutoinstallKnownExtensionsSetting),
     DUCKDB_SETTING(AutoloadKnownExtensionsSetting),
-    DUCKDB_GLOBAL(BlockAllocatorMemorySetting),
     DUCKDB_SETTING(CacheLocalFilesSetting),
     DUCKDB_SETTING(CatalogErrorMaxSchemasSetting),
     DUCKDB_SETTING_CALLBACK(CheckpointOnDetachSetting),
@@ -115,6 +114,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugDisableOptimizerSetting),
     DUCKDB_SETTING(EnableCachingOperatorsSetting),
     DUCKDB_SETTING(DebugEvictionQueueSleepMicroSecondsSetting),
+    DUCKDB_SETTING(DebugFileDescriptorLimitSetting),
     DUCKDB_SETTING_CALLBACK(ForceBitpackingModeSetting),
     DUCKDB_SETTING(DebugForceCommitFailureSetting),
     DUCKDB_SETTING(DebugForceCommitRevertFailureSetting),
@@ -158,6 +158,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DisabledOptimizersSetting),
     DUCKDB_SETTING_CALLBACK(DuckDBAPISetting),
     DUCKDB_SETTING(DynamicOrFilterThresholdSetting),
+    DUCKDB_GLOBAL(EnableBlockAllocatorSetting),
     DUCKDB_SETTING_CALLBACK(EnableExternalAccessSetting),
     DUCKDB_SETTING_CALLBACK(EnableExternalFileCacheSetting),
     DUCKDB_SETTING(EnableFSSTVectorsSetting),
@@ -560,11 +561,11 @@ SetScope ExtensionOption::ResolveScope(const Identifier &name, SetScope scope) c
 		scope = default_scope;
 	}
 	if (scope == SetScope::GLOBAL && !supports_global) {
-		throw InvalidInputException(
-		    "Setting \"%s\" cannot be set as a global variable - it can only be set per session", name);
+		throw InvalidInputException("Setting %s cannot be set as a global variable - it can only be set per session",
+		                            name);
 	}
 	if (scope == SetScope::SESSION && !supports_session) {
-		throw InvalidInputException("Setting \"%s\" cannot be set as a session variable - it can only be set globally",
+		throw InvalidInputException("Setting %s cannot be set as a session variable - it can only be set globally",
 		                            name);
 	}
 	return scope;
@@ -680,7 +681,7 @@ void DBConfig::CheckLock(const Identifier &name) {
 		}
 	}
 	// not allowed!
-	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
+	throw InvalidInputException("Cannot change configuration option %s - the configuration has been locked", name);
 }
 
 idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
@@ -820,7 +821,8 @@ optional_idx DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 
 // Right now we only really care about access mode when comparing DBConfigs
 bool DBConfigOptions::operator==(const DBConfigOptions &other) const {
-	return other.access_mode == access_mode && other.user_options == user_options;
+	return other.access_mode == access_mode && other.user_options == user_options &&
+	       other.configuration_env == configuration_env;
 }
 
 bool DBConfig::operator==(const DBConfig &other) {
@@ -925,8 +927,8 @@ const ExtensionCallbackManager &DBConfig::GetCallbackManager() const {
 	return *callback_manager;
 }
 
-string DBConfig::SanitizeAllowedPath(const string &path_p) const {
-	auto result = file_system->CanonicalizePath(path_p);
+string DBConfig::SanitizeAllowedPath(const string &path_p, optional_ptr<FileOpener> opener) const {
+	auto result = file_system->CanonicalizePath(FileSystem::ExpandPath(path_p, opener));
 	// allowed_directories/allowed_path always uses forward slashes regardless of the OS
 	auto path_sep = file_system->PathSeparator(path_p);
 	if (path_sep != "/") {
@@ -979,6 +981,56 @@ void DBConfig::AddAllowedDirectory(const string &path) {
 	options.allowed_directories.insert(allowed_directory);
 }
 
+bool DBConfig::IsOptimizerDisabled(OptimizerType type) const {
+	lock_guard<mutex> guard(disabled_optimizers_lock);
+	return options.disabled_optimizers.find(type) != options.disabled_optimizers.end();
+}
+
+set<OptimizerType> DBConfig::GetDisabledOptimizers() const {
+	lock_guard<mutex> guard(disabled_optimizers_lock);
+	return options.disabled_optimizers;
+}
+
+void DBConfig::SetDisabledOptimizers(set<OptimizerType> disabled_optimizers) {
+	lock_guard<mutex> guard(disabled_optimizers_lock);
+	options.disabled_optimizers = std::move(disabled_optimizers);
+}
+
+void DBConfig::SetAllowedDirectories(const vector<string> &paths) {
+	decltype(options.allowed_directories) new_directories;
+	for (auto &path : paths) {
+		auto allowed_directory = SanitizeAllowedPath(path);
+		if (allowed_directory.empty()) {
+			throw InvalidInputException("Cannot provide an empty string for allowed_directory");
+		}
+		if (!StringUtil::EndsWith(allowed_directory, "/")) {
+			allowed_directory += "/";
+		}
+		new_directories.insert(std::move(allowed_directory));
+	}
+	lock_guard<mutex> guard(allowed_paths_lock);
+	options.allowed_directories = std::move(new_directories);
+}
+
+void DBConfig::SetAllowedPaths(const vector<string> &paths) {
+	decltype(options.allowed_paths) new_paths;
+	for (auto &path : paths) {
+		new_paths.insert(SanitizeAllowedPath(path));
+	}
+	lock_guard<mutex> guard(allowed_paths_lock);
+	options.allowed_paths = std::move(new_paths);
+}
+
+void DBConfig::ResetAllowedDirectories() {
+	lock_guard<mutex> guard(allowed_paths_lock);
+	options.allowed_directories = DBConfigOptions().allowed_directories;
+}
+
+void DBConfig::ResetAllowedPaths() {
+	lock_guard<mutex> guard(allowed_paths_lock);
+	options.allowed_paths = DBConfigOptions().allowed_paths;
+}
+
 void DBConfig::AddAllowedPath(const string &path) {
 	auto allowed_path = SanitizeAllowedPath(path);
 	lock_guard<mutex> guard(allowed_paths_lock);
@@ -1002,12 +1054,12 @@ vector<string> DBConfig::GetAllowedPaths() const {
 	return vector<string>(options.allowed_paths.begin(), options.allowed_paths.end());
 }
 
-bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
+bool DBConfig::CanAccessFile(const string &input_path, FileType type, optional_ptr<FileOpener> opener) {
 	if (Settings::Get<EnableExternalAccessSetting>(*this)) {
 		// all external access is allowed
 		return true;
 	}
-	string path = SanitizeAllowedPath(input_path);
+	string path = SanitizeAllowedPath(input_path, opener);
 
 	lock_guard<mutex> guard(allowed_paths_lock);
 	if (options.allowed_paths.count(path) > 0) {

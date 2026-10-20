@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/main/http/http_util.hpp"
+#include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -193,6 +194,7 @@ LogicalType HTTPLogType::GetLogType() {
 	    {"url", LogicalType::VARCHAR},
 	    {"start_time", LogicalType::TIMESTAMP_TZ},
 	    {"duration_ms", LogicalType::BIGINT},
+	    {"duration_us", LogicalType::BIGINT},
 	    {"request_body_length", LogicalType::UBIGINT},
 	    {"headers", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
 	};
@@ -279,6 +281,10 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
 	     request.have_request_timing
 	         ? Value::BIGINT(TimePoint::ElapsedMillis(request.request_monotonic_start, request.request_monotonic_end))
 	         : Value()},
+	    {"duration_us",
+	     request.have_request_timing
+	         ? Value::BIGINT(TimePoint::ElapsedMicros(request.request_monotonic_start, request.request_monotonic_end))
+	         : Value()},
 	    {"request_body_length", request.request_body_length ? Value::UBIGINT(request.request_body_length) : Value()}};
 	auto request_value = Value::STRUCT(request_child_list);
 	Value response_value;
@@ -362,14 +368,19 @@ LogicalType MetricsLogType::GetLogType() {
 	child_list_t<LogicalType> child_list = {
 	    {"metric", LogicalType::VARCHAR},
 	    {"value", LogicalType::VARCHAR},
+	    {"start_time", LogicalType::TIMESTAMP_TZ},
+	    {"end_time", LogicalType::TIMESTAMP_TZ},
 	};
 	return LogicalType::STRUCT(child_list);
 }
 
-string MetricsLogType::ConstructLogMessage(const string &metric, const Value &value) {
+string MetricsLogType::ConstructLogMessage(const string &metric, const Value &value,
+                                           optional_ptr<const MetricTiming> timing) {
 	child_list_t<Value> child_list = {
 	    {"metric", metric},
 	    {"value", value.ToString()},
+	    {"start_time", timing && timing->has_bounds ? Value::TIMESTAMP(timing->start_time) : Value()},
+	    {"end_time", timing && timing->has_bounds ? Value::TIMESTAMP(timing->end_time) : Value()},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }
