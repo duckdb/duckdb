@@ -152,6 +152,8 @@ struct VariantUtils {
 
 	//! Whether or not a type is natively supported in variant
 	DUCKDB_API static bool VariantSupportsType(const LogicalType &type);
+	//! Whether casting a value shredded as "shredded_type" to "target" gives the same result as casting the VARIANT
+	DUCKDB_API static bool ShreddedCastMatchesVariantCast(const LogicalType &shredded_type, const LogicalType &target);
 
 	//! Build a canonical (unshredded) VARIANT vector by traversing a variant directly through a
 	//! VariantIterator - avoids materializing the intermediate vector<VariantValue> tree

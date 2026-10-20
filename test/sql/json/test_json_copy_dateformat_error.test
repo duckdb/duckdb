@@ -1,0 +1,23 @@
+# name: test/sql/json/test_json_copy_dateformat_error.test
+# description: Errors while formatting dates in COPY TO json are regular errors
+# group: [json]
+
+require json
+
+statement error
+COPY (SELECT '5877642-06-25 (BC)'::DATE d) TO '{TEMP_DIR}/json_dateformat_error.json' (DATEFORMAT '%G');
+----
+Date out of range
+
+statement ok
+COPY (SELECT DATE '2024-01-02' d) TO '{TEMP_DIR}/json_dateformat_ok.json' (DATEFORMAT '%G');
+
+query I
+SELECT d FROM read_json('{TEMP_DIR}/json_dateformat_ok.json', columns := {d: 'VARCHAR'});
+----
+2024
+
+query I
+SELECT 42;
+----
+42
