@@ -170,7 +170,7 @@ public:
 		idx_t last_match_count;
 		SelectionVector last_sel_vector;
 
-		// thread-local probe match count, flushed to ht.total_probe_matches once per thread to avoid contention
+		// Thread-local probe match count, flushed when the current chunk's pointer scan is exhausted.
 		idx_t local_probe_matches = 0;
 
 		explicit ScanStructure(JoinHashTable &ht, TupleDataChunkState &key_state);
@@ -460,10 +460,10 @@ public:
 	bool single_join_error_on_multiple_rows = true;
 	//! Whether or not to perform deduplication based on join_keys when building ht
 	bool insert_duplicate_keys = true;
-	//! Number of probe matches
-	atomic<idx_t> total_probe_matches {0};
+	//! Number of probe matches, isolated from immutable probe metadata.
+	alignas(64) atomic<idx_t> total_probe_matches {0};
 	//! Residual predicate to evaluate during probing
-	optional_ptr<Expression> residual_predicate;
+	alignas(64) optional_ptr<Expression> residual_predicate;
 	//! Residual predicate mapping info
 	unique_ptr<ResidualPredicateInfo> residual_info;
 	//! Mapping from lhs_output_columns positions to lhs_probe_data positions
