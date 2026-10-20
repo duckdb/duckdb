@@ -318,7 +318,10 @@ public:
 	//! Combines the partitions in sink_collection into data_collection, as if it were not partitioned
 	void Unpartition();
 	//! Allocate the pointer table for the probe
-	void AllocatePointerTable();
+	void AllocatePointerTable(bool use_radix_layout = false);
+	idx_t GetBucketShift() const {
+		return bucket_shift;
+	}
 	//! Initialize the pointer table for the probe
 	void InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx_to);
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing.
@@ -549,6 +552,8 @@ private:
 
 	//! The hash map of the HT, created after finalization
 	HugeAllocation hash_map;
+	//! Shift to align fully resident buckets with radix partitions; zero selects the external/low-bit layout.
+	idx_t bucket_shift = 0;
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
 	//! An empty tuple that's a "dead end", can be used to stop chains early

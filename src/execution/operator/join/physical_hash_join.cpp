@@ -1323,7 +1323,7 @@ void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event)
 		hash_table->finalized = true;
 		return;
 	}
-	hash_table->AllocatePointerTable();
+	hash_table->AllocatePointerTable(!external && !FinalizeSingleThreaded(*this, false));
 
 	auto new_init_event = make_shared_ptr<HashJoinTableInitEvent>(pipeline, *this);
 	if (FinalizeSingleThreaded(*this, false)) {
