@@ -289,6 +289,7 @@ void MacroFunction::CopyProperties(MacroFunction &other) const {
 		other.default_parameters[kv.first] = kv.second->Copy();
 	}
 	other.types = types;
+	other.return_type = return_type;
 }
 
 vector<unique_ptr<ParsedExpression>>
@@ -347,7 +348,11 @@ string MacroFunction::ToSQL() const {
 		}
 		param_strings.emplace_back(std::move(param_string));
 	}
-	return StringUtil::Format("(%s) AS ", StringUtil::Join(param_strings, ", "));
+	string returns;
+	if (return_type.id() != LogicalTypeId::UNKNOWN) {
+		returns = " RETURNS " + return_type.ToString();
+	}
+	return StringUtil::Format("(%s)%s AS ", StringUtil::Join(param_strings, ", "), returns);
 }
 
 } // namespace duckdb

@@ -19,7 +19,7 @@ class FunctionExpression;
 
 class ScalarMacroFunction;
 
-enum class MacroType : uint8_t { VOID_MACRO = 0, TABLE_MACRO = 1, SCALAR_MACRO = 2 };
+enum class MacroType : uint8_t { VOID_MACRO = 0, TABLE_MACRO = 1, SCALAR_MACRO = 2, LANGUAGE_MACRO = 3 };
 
 struct MacroBindResult {
 	explicit MacroBindResult(string error_p) : error(std::move(error_p)) {
@@ -43,6 +43,8 @@ public:
 	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> default_parameters;
 	//! The types of the parameters
 	vector<LogicalType> types;
+	//! The declared return type, UNKNOWN when none was declared: the member's result is cast to it
+	LogicalType return_type = LogicalType::UNKNOWN;
 
 public:
 	virtual ~MacroFunction() {
