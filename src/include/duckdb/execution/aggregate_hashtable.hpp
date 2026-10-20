@@ -148,7 +148,7 @@ public:
 	//! Retained tuple blocks, allocator metadata, aggregate arena, and pointer table
 	idx_t GetSizeInBytes() const;
 	unique_ptr<PartitionedTupleData> AcquirePartitionedData();
-	void Abandon();
+	void Abandon(TupleDataPinProperties append_properties = TupleDataPinProperties::UNPIN_AFTER_DONE);
 	void Repartition();
 	shared_ptr<ArenaAllocator> GetAggregateAllocator();
 

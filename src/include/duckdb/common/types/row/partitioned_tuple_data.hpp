@@ -124,7 +124,8 @@ public:
 	void Reset();
 	//! Repartition this PartitionedTupleData into the new PartitionedTupleData
 	void Repartition(ClientContext &context, PartitionedTupleData &new_partitioned_data,
-	                 optional_ptr<PartitionedTupleDataRepartitionKeyTracker> key_tracker = nullptr);
+	                 optional_ptr<PartitionedTupleDataRepartitionKeyTracker> key_tracker = nullptr,
+	                 TupleDataPinProperties append_properties = TupleDataPinProperties::UNPIN_AFTER_DONE);
 	//! Unpins the data
 	void Unpin();
 	//! Get the partitions in this PartitionedTupleData
