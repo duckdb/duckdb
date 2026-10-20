@@ -160,3 +160,34 @@ USE memory;
 
 statement ok
 DETACH cex;
+
+# the FUNCTION keyword with a plain body and RETURNS parses through the CreateMacroStmt path
+statement ok
+CREATE FUNCTION fn_kw(x) RETURNS INTEGER AS x + 1;
+
+query IT
+SELECT fn_kw(1), typeof(fn_kw(1));
+----
+2	INTEGER
+
+# a parameter type list on DROP is only supported for language functions
+statement error
+DROP MACRO fn_kw(INTEGER);
+----
+<REGEX>:.*only supported for language functions.*
+
+statement error
+DROP FUNCTION fn_kw(INTEGER);
+----
+<REGEX>:.*only supported for language functions.*
+
+statement ok
+DROP FUNCTION fn_kw;
+
+# plan inspection serializes RETURNS definitions at the complete current representation
+require json
+
+query I
+SELECT json_serialize_plan('CREATE MACRO jm() RETURNS VARCHAR AS 42') LIKE '%"error":false%';
+----
+true

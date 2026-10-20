@@ -8,6 +8,7 @@
 #include "duckdb/catalog/catalog_entry/language_catalog_entry.hpp"
 #include "duckdb/function/language_macro_function.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/main/language_function_binder.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -402,6 +403,34 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	         base.aliases, base.types, base.names);
 }
 
+//! Equals ignores expression aliases, but type-constructor arguments bind by alias (named type
+//! modifiers, struct field names): compare them recursively, descending into cast target types
+static bool SemanticAliasesEqual(const ParsedExpression &before, const ParsedExpression &after) {
+	if (before.GetAlias() != after.GetAlias()) {
+		return false;
+	}
+	if (before.GetExpressionClass() == ExpressionClass::CAST && after.GetExpressionClass() == ExpressionClass::CAST) {
+		// the cast target type is not part of Children(): descend into it explicitly
+		if (!SemanticAliasesEqual(before.Cast<CastExpression>().TargetType(),
+		                          after.Cast<CastExpression>().TargetType())) {
+			return false;
+		}
+	}
+	auto before_children = before.Children();
+	auto after_children = after.Children();
+	if (before_children.size() != after_children.size()) {
+		return false;
+	}
+	auto before_it = before_children.begin();
+	auto after_it = after_children.begin();
+	for (idx_t child_idx = 0; child_idx < before_children.size(); child_idx++, ++before_it, ++after_it) {
+		if (!SemanticAliasesEqual(*before_it, *after_it)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 //! The parts of a definition a language binder's ValidateCreate must leave unchanged: the resolved
 //! signature (parameters, types, defaults, return type) and the language. Sources may be rewritten.
 static bool MacroSignatureEquals(const MacroFunction &before, const MacroFunction &after) {
@@ -429,9 +458,7 @@ static bool MacroSignatureEquals(const MacroFunction &before, const MacroFunctio
 		if (other == after.default_parameters.end() || !default_param.second->Equals(*other->second)) {
 			return false;
 		}
-		// Equals ignores aliases, which carry struct field names in type expressions: the rendered
-		// form includes them, so a mutation must collide in both representations to slip through
-		if (default_param.second->ToString() != other->second->ToString()) {
+		if (!SemanticAliasesEqual(*default_param.second, *other->second)) {
 			return false;
 		}
 	}
@@ -539,7 +566,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			continue;
 		}
 		auto &language_member = function->Cast<LanguageMacroFunction>();
-		if (has_language_members && language_member.language != entry_language) {
+		if (has_language_members && !StringUtil::CIEquals(language_member.language, entry_language)) {
 			throw BinderException("Macro %s() cannot mix members of languages \"%s\" and \"%s\"",
 			                      base.GetFunctionName(), entry_language, language_member.language);
 		}

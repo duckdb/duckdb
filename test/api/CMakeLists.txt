@@ -12,6 +12,7 @@ set(TEST_API_OBJECTS
     test_remove_directory_extended.cpp
     test_temporary_file_owner.cpp
     test_bind_statement.cpp
+    test_language_function_guard.cpp
     test_function_signature_variadic.cpp
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp
