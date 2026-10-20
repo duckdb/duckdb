@@ -1224,6 +1224,8 @@ public:
 	                                                                     GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeCreateMacroStmtTrampoline(PEGTransformer &transformer,
 	                                                                         GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue>
+	FinalizeCreateLanguageFunctionStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeMacroKeywordTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeFunctionKeywordTrampoline(PEGTransformer &transformer,
@@ -3076,6 +3078,10 @@ public:
 	                                                            const optional<bool> &if_not_exists,
 	                                                            const QualifiedName &qualified_name,
 	                                                            vector<unique_ptr<MacroFunction>> macro_definition);
+	static unique_ptr<CreateStatement> TransformCreateLanguageFunctionStmt(
+	    PEGTransformer &transformer, const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
+	    optional<vector<MacroParameter>> macro_parameters, const optional<LogicalType> &returns_type,
+	    const Identifier &language, const string &source);
 	static bool TransformMacroKeyword(PEGTransformer &transformer);
 	static bool TransformFunctionKeyword(PEGTransformer &transformer);
 	static unique_ptr<MacroFunction> TransformMacroDefinition(PEGTransformer &transformer,
