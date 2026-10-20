@@ -117,6 +117,9 @@ TEST_CASE("ParseIterator: parser errors surface through Peek", "[api][parse_iter
 
 	ParseIterator it(ctx, "SELECT FROM;");
 	REQUIRE_THROWS(it.Peek());
+	// A parse error ends the iteration, instead of parsing the failing statement again
+	REQUIRE_FALSE(it.Peek());
+	REQUIRE_FALSE(it.HasMore());
 }
 
 TEST_CASE("ParseIterator: movable", "[api][parse_iterator]") {

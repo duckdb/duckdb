@@ -150,6 +150,8 @@ jobs:
         with:
           separator: "\n"
           safe_output: false
+          write_output_files: true
+          output_dir: .github/outputs
           files_yaml: |
             github:
               - .github/**
@@ -247,11 +249,14 @@ jobs:
 
       - name: Run prepare checks
         timeout-minutes: 10
-        env:
-          CHANGED_FORMAT_FILES: ${{ steps.changed.outputs.format_all_changed_files }}
         run: |
           python3 scripts/ci/retry.py --timeout 2m -- make -j4 prepare_tools
-          printf '%s\n' "$CHANGED_FORMAT_FILES" > "$RUNNER_TEMP/changed-format-files.txt"
+          # the file list can exceed the size limit of an environment variable
+          if [ -f .github/outputs/format_all_changed_files.txt ]; then
+            cp .github/outputs/format_all_changed_files.txt "$RUNNER_TEMP/changed-format-files.txt"
+          else
+            : > "$RUNNER_TEMP/changed-format-files.txt"
+          fi
           PYTHON=.cache/prepare-venv/bin/python \
             make test_ci generate-files extension-patch-check -j "$(nproc)" -Otarget
           PYTHON=.cache/prepare-venv/bin/python \

@@ -112,6 +112,9 @@ BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 		throw BinderException("Cannot copy from %s to %s - FROM and TO databases are the same", stmt.from_database,
 		                      stmt.to_database);
 	}
+	if (target_catalog.IsSystemCatalog()) {
+		throw BinderException("Cannot copy to the system catalog");
+	}
 	if (stmt.copy_type == CopyDatabaseType::COPY_SCHEMA) {
 		result.types = {LogicalType::BOOLEAN};
 		result.names = {"Success"};

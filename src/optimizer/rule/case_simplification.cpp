@@ -19,7 +19,10 @@ unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector
 		if (case_check.when_expr->IsFoldable()) {
 			// the WHEN check is a foldable expression
 			// use an ExpressionExecutor to execute the expression
-			auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), *case_check.when_expr);
+			Value constant_value;
+			if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), *case_check.when_expr, constant_value)) {
+				continue;
+			}
 
 			// fold based on the constant condition
 			auto condition = constant_value.DefaultCastAs(LogicalType::BOOLEAN);

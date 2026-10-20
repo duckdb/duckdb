@@ -1253,6 +1253,9 @@ PEGTransformerFactory::TransformLikeClause(PEGTransformer &transformer, const st
 		throw ParserException(
 		    "ESCAPE clause is not supported with case-insensitive regular expression match operators");
 	}
+	if (is_regex_operator && escape_clause) {
+		throw ParserException("ESCAPE clause is not supported with SIMILAR TO and regular expression match operators");
+	}
 	if (escape_clause) {
 		if (like_variation == "~~") {
 			like_variation = "like_escape";
@@ -2093,8 +2096,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(
 		}
 		for (auto &replace_entry : result->ReplaceList()) {
 			if (result->ExcludeList().find(QualifiedColumnName(replace_entry.first)) != result->ExcludeList().end()) {
-				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and REPLACE list",
-				                      replace_entry.first);
+				throw ParserException("Column %s cannot occur in both EXCLUDE and REPLACE list", replace_entry.first);
 			}
 		}
 	}

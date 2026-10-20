@@ -9,9 +9,14 @@ namespace duckdb {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundOperatorExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExpressionState>(expr, root);
+	const auto save_inside_try = root.inside_try;
+	if (expr.GetExpressionType() == ExpressionType::OPERATOR_TRY) {
+		root.inside_try = true;
+	}
 	for (auto &child : expr.GetChildren()) {
 		result->AddChild(*child);
 	}
+	root.inside_try = save_inside_try;
 
 	result->Finalize();
 	return result;
