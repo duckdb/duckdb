@@ -208,17 +208,6 @@
         "default_value": "true"
     },
     {
-        "name": "block_allocator_memory",
-        "description": "Physical memory that the block allocator is allowed to use. This memory is allocated once, never freed, and cannot be reduced.",
-        "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": [
-            "get",
-            "set",
-            "reset"
-        ]
-    },
-    {
         "name": "cache_local_files",
         "description": "Whether the external file cache also caches local files. Remote files are always cached.",
         "type": "BOOLEAN",
@@ -747,6 +736,13 @@
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "50"
+    },
+    {
+        "name": "enable_block_allocator",
+        "description": "Enable new allocations from the fixed-size block pool (64-bit only; disabled by default on MinGW). Disabling preserves existing allocations and the virtual memory reservation.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "enable_external_access",
