@@ -5,6 +5,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
+#include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -1118,22 +1119,28 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 	reference<const LogicalType> type_iter(struct_type);
 	reference<const ColumnIndex> path_iter(path);
 	while (true) {
-		auto child_index = path_iter.get().GetPrimaryIndex();
-		auto &child_types = StructType::GetChildTypes(type_iter.get());
-		D_ASSERT(child_index < child_types.size());
-		auto is_unnamed = StructType::IsUnnamed(type_iter.get());
-
-		type_iter = child_types[child_index].second;
-
 		vector<unique_ptr<Expression>> arguments(2);
 		arguments[0] = (std::move(target));
-		if (is_unnamed) {
-			arguments[1] = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_index + 1)));
+		if (type_iter.get().id() == LogicalTypeId::VARIANT) {
+			// a VARIANT field is addressed by key, and is itself a VARIANT
+			arguments[1] = make_uniq<BoundConstantExpression>(Value(path_iter.get().GetFieldName()));
+			target = BindBuiltinScalarFunction(context, VariantExtractFun::Name, std::move(arguments));
 		} else {
-			arguments[1] = make_uniq<BoundConstantExpression>(Value(child_types[child_index].first));
+			auto child_index = path_iter.get().GetPrimaryIndex();
+			auto &child_types = StructType::GetChildTypes(type_iter.get());
+			D_ASSERT(child_index < child_types.size());
+			auto is_unnamed = StructType::IsUnnamed(type_iter.get());
+
+			type_iter = child_types[child_index].second;
+
+			if (is_unnamed) {
+				arguments[1] = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_index + 1)));
+			} else {
+				arguments[1] = make_uniq<BoundConstantExpression>(Value(child_types[child_index].first));
+			}
+			// the constant argument selects the key or the index overload of struct_extract
+			target = BindBuiltinScalarFunction(context, StructExtractFun::Name, std::move(arguments));
 		}
-		// the struct_extract set holds both the key and the index overload, the constant argument selects between them
-		target = BindBuiltinScalarFunction(context, StructExtractFun::Name, std::move(arguments));
 		if (!path_iter.get().HasChildren()) {
 			break;
 		}

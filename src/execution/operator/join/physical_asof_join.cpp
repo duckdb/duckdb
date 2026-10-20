@@ -123,8 +123,7 @@ AsOfGlobalSinkState::AsOfGlobalSinkState(ClientContext &client, const PhysicalAs
 	const vector<unique_ptr<BaseStatistics>> partitions_stats;
 	auto &lhs = op.children[0].get();
 	OperatorPartitionInfo empty_info;
-	const OperatorPartitionInfo &lhs_partition_info =
-	    (op.partition_infos.size() > 0) ? op.partition_infos[0] : empty_info;
+	const OperatorPartitionInfo &lhs_partition_info = !op.partition_infos.empty() ? op.partition_infos[0] : empty_info;
 	sort_strategies[0] = SortStrategy::Factory(client, op.lhs_partitions, op.lhs_orders, lhs.GetTypes(),
 	                                           partitions_stats, lhs_partition_info, lhs.estimated_cardinality, true);
 

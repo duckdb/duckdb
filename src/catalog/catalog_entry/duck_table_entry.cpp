@@ -81,10 +81,11 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 			}
 		} break;
 		case LogicalTypeId::TUPLE: {
-			// TUPLEs are stored as unnamed STRUCTs on disk, which older engines reject - gate them to v2.0.0+
+			// TUPLEs are stored as unnamed STRUCTs on disk, which older engines reject - gate creation to v2.0.0+
+			// existing unnamed STRUCTs (deserialized as TUPLE while loading an older file) must stay attachable
 			const auto storage_version = db.GetStorageManager().GetStorageVersion();
 
-			if (storage_version < StorageVersion::V2_0_0) {
+			if (storage_version < StorageVersion::V2_0_0 && db.GetStorageManager().IsLoaded()) {
 				auto required = GetStorageVersionName(StorageVersion::V2_0_0, false);
 				auto current = GetStorageVersionName(storage_version, false);
 
@@ -513,7 +514,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 			for (idx_t i = 0; i < columns.size(); i++) {
 				if (columns[i] == info.old_name) {
 					throw CatalogException(
-					    "Cannot rename column \"%s\" because this is involved in the foreign key constraint",
+					    "Cannot rename column %s because this is involved in the foreign key constraint",
 					    info.old_name);
 				}
 			}
@@ -552,8 +553,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 		    auto &trig = concurrent_entry.Cast<TriggerCatalogEntry>();
 		    for (const auto &col : trig.columns) {
 			    if (col == info.old_name) {
-				    throw TransactionException("Catalog write-write conflict on alter with \"%s\": trigger \"%s\" "
-				                               "references column \"%s\" which is being renamed",
+				    throw TransactionException("Catalog write-write conflict on alter with %s: trigger %s "
+				                               "references column %s which is being renamed",
 				                               name, trig.name, info.old_name);
 			    }
 		    }
@@ -978,7 +979,7 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<Id
 	}
 
 	if (!found) {
-		result.error = ErrorData(CatalogException("Cannot drop field \"%s\" - it does not exist", dropped_entry));
+		result.error = ErrorData(CatalogException("Cannot drop field %s - it does not exist", dropped_entry));
 	} else {
 		result.mapping = Value::STRUCT(std::move(child_mapping));
 		result.new_type = LogicalType::ConstructNestedType(type, std::move(new_type_children));
@@ -1078,7 +1079,7 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 		new_type_children.emplace_back(field_name, type_value);
 	}
 	if (!found) {
-		result.error = ErrorData(CatalogException("Cannot rename field \"%s\" - it does not exist", rename_entry));
+		result.error = ErrorData(CatalogException("Cannot rename field %s - it does not exist", rename_entry));
 	} else {
 		result.mapping = Value::STRUCT(std::move(child_mapping));
 		result.new_type = LogicalType::ConstructNestedType(type, std::move(new_type_children));
@@ -1248,8 +1249,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 		// TODO: check if the generated_expression breaks, only delete it if it does
 		if (copy.Generated() && column_dependency_manager.IsDependencyOf(col.Logical(), change_idx)) {
 			throw BinderException(
-			    "This column is referenced by the generated column \"%s\", so its type can not be changed",
-			    copy.Name());
+			    "This column is referenced by the generated column %s, so its type can not be changed", copy.Name());
 		}
 		create_info->columns.AddColumn(std::move(copy));
 	}

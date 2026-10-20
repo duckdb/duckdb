@@ -38,8 +38,9 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 	transformer.Clear();
 
 	// Calculate location and length cleanly
-	if (stmt_pr.offset.IsValid()) {
-		auto start = stmt_pr.offset.GetIndex();
+	auto offset = stmt_pr.GetOffset();
+	if (offset.IsValid()) {
+		auto start = offset.GetIndex();
 		idx_t end_index = terminator_offset.IsValid() ? terminator_offset.GetIndex() : token_iterator.EndOffset();
 		stmt->stmt_location = QueryLocation(start, end_index - start);
 	}
@@ -90,7 +91,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	if (term_inner.type != ParseResultType::END_OF_INPUT) {
 		auto semi_children = term_inner.Cast<RepeatParseResult>().GetChildren();
 		if (!semi_children.empty()) {
-			terminator_offset = semi_children[0].get().offset;
+			terminator_offset = semi_children[0].get().GetOffset();
 		}
 	}
 
@@ -120,6 +121,7 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 	collapsible_rules.insert("OtherOperatorExpression");
 	collapsible_rules.insert("InfixOtherOperatorExpression");
 	collapsible_rules.insert("BitwiseExpression");
+	collapsible_rules.insert("TildeExpression");
 	collapsible_rules.insert("AdditiveExpression");
 	collapsible_rules.insert("MultiplicativeExpression");
 	collapsible_rules.insert("ExponentiationExpression");
@@ -152,8 +154,6 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 	grammar.SetExpressionDepth("NestedType", ExpressionDepthKind::NESTING);
 	grammar.SetExpressionDepth("SubqueryReference", ExpressionDepthKind::NESTING);
 	grammar.SetExpressionDepth("LambdaArrowExpression", ExpressionDepthKind::CHAIN);
-	grammar.SetExpressionDepth("LogicalOrExpression", ExpressionDepthKind::CHAIN);
-	grammar.SetExpressionDepth("LogicalAndExpression", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("NotExpression", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("IsExpressionContinuation", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("IsDistinctFromExpression", ExpressionDepthKind::CHAIN);

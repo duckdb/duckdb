@@ -1,4 +1,5 @@
 #include "core_functions/scalar/string_functions.hpp"
+#include "core_functions/scalar/string_characters.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/string_util.hpp"
 
@@ -12,19 +13,14 @@ namespace duckdb {
 // Note: A first implementation using the array algorithm version resulted in an error raised by duckdb
 // (too muach memory usage)
 
-static idx_t LevenshteinDistance(const string_t &txt, const string_t &tgt) {
-	auto txt_len = txt.GetSize();
-	auto tgt_len = tgt.GetSize();
-
+template <class T>
+static idx_t LevenshteinDistance(const T *txt_str, idx_t txt_len, const T *tgt_str, idx_t tgt_len) {
 	// If one string is empty, the distance equals the length of the other string
 	if (txt_len == 0) {
 		return tgt_len;
 	} else if (tgt_len == 0) {
 		return txt_len;
 	}
-
-	auto txt_str = txt.GetData();
-	auto tgt_str = tgt.GetData();
 
 	// Create two working vectors
 	vector<idx_t> distances0(tgt_len + 1, 0);
@@ -62,6 +58,16 @@ static idx_t LevenshteinDistance(const string_t &txt, const string_t &tgt) {
 	}
 
 	return distances0[tgt_len];
+}
+
+//! The distance between the characters of the strings - not their bytes
+static idx_t LevenshteinDistance(const string_t &txt, const string_t &tgt) {
+	if (StringIsAscii(txt) && StringIsAscii(tgt)) {
+		return LevenshteinDistance(txt.GetData(), txt.GetSize(), tgt.GetData(), tgt.GetSize());
+	}
+	auto txt_chars = GetStringCharacters(txt);
+	auto tgt_chars = GetStringCharacters(tgt);
+	return LevenshteinDistance(txt_chars.data(), txt_chars.size(), tgt_chars.data(), tgt_chars.size());
 }
 
 static int64_t LevenshteinScalarFunction(Vector &result, const string_t str, string_t tgt) {

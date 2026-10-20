@@ -14,7 +14,7 @@ class GrammarTypeInfo:
     cpp_type: str
     by_value: bool = False  # True for unique_ptr<T>, vector<unique_ptr<T>> (non-copyable)
     default_initializer: str = ""  # Optional enum member/full C++ initializer for Optional(...) values
-    pass_location: bool = False  # Pass parse_result.offset to the hand-written body
+    pass_location: bool = False  # Pass the parse result's offset to the hand-written body
 
 
 def load_grammar_types_yaml(types_file):

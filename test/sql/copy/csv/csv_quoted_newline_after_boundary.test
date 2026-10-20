@@ -14,7 +14,7 @@ false	4
 loop buf 40 67
 
 query I
-SELECT count(*) FROM read_csv('__TEST_DIR__/qnl.csv', buffer_size=${buf}, max_line_size=${buf}) WHERE b = 3 AND a = chr(10) || 'ab'
+SELECT count(*) FROM read_csv('__TEST_DIR__/qnl.csv', buffer_size={buf}, max_line_size={buf}) WHERE b = 3 AND a = chr(10) || 'ab'
 ----
 1
 
@@ -23,7 +23,7 @@ endloop
 loop buf 68 81
 
 query I
-SELECT count(*) FROM read_csv('__TEST_DIR__/qnl.csv', buffer_size=${buf}, max_line_size=${buf}) WHERE b = 3 AND a = chr(10) || 'ab'
+SELECT count(*) FROM read_csv('__TEST_DIR__/qnl.csv', buffer_size={buf}, max_line_size={buf}) WHERE b = 3 AND a = chr(10) || 'ab'
 ----
 1
 
