@@ -106,3 +106,45 @@ query II
 SELECT count(*), count(DISTINCT d) FROM t WHERE d LIKE '%_u'
 ----
 6	1
+
+# the MODE and quantile window cursors page dictionary vectors directly: a majority value wins
+# every moving frame, and a single thread pins the scan order so the counts are exact
+statement ok
+CREATE TABLE t2 AS SELECT i,
+	CASE WHEN i % 3 = 0 THEN 'minor_' || (i % 97) ELSE 'majority_payload_value' END AS x,
+	CASE WHEN i % 11 = 0 THEN NULL WHEN i % 3 = 0 THEN 'minor_' || (i % 97) ELSE 'majority_payload_value' END AS xn
+FROM range(100000) t(i)
+
+statement ok
+CHECKPOINT
+
+statement ok
+SET threads=1
+
+query II
+SELECT count(*), count(*) FILTER (WHERE m = 'majority_payload_value')
+FROM (SELECT mode(x) OVER (ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) AS m FROM t2)
+----
+100000	99998
+
+query II
+SELECT count(*), count(*) FILTER (WHERE m = 'majority_payload_value')
+FROM (SELECT median(x) OVER (ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) AS m FROM t2)
+----
+100000	99999
+
+# NULL dictionary entries run the nullable sort tree build and the cursor validity checks
+query II
+SELECT count(m), count(*) FILTER (WHERE m = 'majority_payload_value')
+FROM (SELECT median(xn) OVER (ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) AS m FROM t2)
+----
+99999	99999
+
+query II
+SELECT count(m), count(*) FILTER (WHERE m = 'majority_payload_value')
+FROM (SELECT mode(xn) OVER (ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) AS m FROM t2)
+----
+99999	99999
+
+statement ok
+RESET threads
