@@ -146,5 +146,47 @@ FROM (SELECT mode(xn) OVER (ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) AS m FRO
 ----
 99999	99999
 
+# overlapping short frames keep the skip-list path, its cursor checks validity per dictionary row
+query II
+SELECT count(m), count(*) FILTER (WHERE m = 'majority_payload_value')
+FROM (SELECT median(xn) OVER (ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS m FROM t2)
+----
+99999	93939
+
+# growing frames select the quantile sort tree, NULL entries run its nullable build
+query II
+SELECT count(m), count(*) FILTER (WHERE m = 'majority_payload_value')
+FROM (SELECT median(xn) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS m FROM t2)
+----
+99999	99999
+
+# a FILTER clause runs the filtered sort tree build over the dictionary pages
+query III
+SELECT count(m), count(DISTINCT m), count(*) FILTER (WHERE m LIKE 'minor%')
+FROM (SELECT median(x) FILTER (WHERE i % 3 = 0) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS m FROM t2)
+----
+100000	25	100000
+
+# a two-entry dictionary (one value plus NULL) stays within the compact limit at every vector size
+statement ok
+CREATE TABLE t3 AS SELECT i,
+	CASE WHEN i % 11 = 0 THEN NULL ELSE 'only_dictionary_payload_value' END AS xs
+FROM range(50000) t(i)
+
+statement ok
+CHECKPOINT
+
+query II
+SELECT count(m), count(*) FILTER (WHERE m = 'only_dictionary_payload_value')
+FROM (SELECT mode(xs) OVER (ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) AS m FROM t3)
+----
+49999	49999
+
+query II
+SELECT count(m), count(*) FILTER (WHERE m = 'only_dictionary_payload_value')
+FROM (SELECT median(xs) OVER (ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS m FROM t3)
+----
+49999	49999
+
 statement ok
 RESET threads
