@@ -151,6 +151,32 @@ SELECT * FROM read_json('{TEST_DIR}/case_keys_duplicate.json', case_insensitive_
 1
 2
 
+# map inference merges the fields of the structs ignoring case too: Id / ID / id are one field, and the result is
+# the same as when every object spells the key the same way
+statement ok
+COPY (SELECT * FROM (VALUES ('{"a":{"Id":1},"b":{"ID":2},"c":{"id":3}}')) t(line)) TO '{TEST_DIR}/case_keys_map.json' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER '\t');
+
+query II
+SELECT typeof(json), json FROM read_json('{TEST_DIR}/case_keys_map.json', case_insensitive_keys := true, map_inference_threshold := 1);
+----
+MAP(VARCHAR, MAP(VARCHAR, BIGINT))	{a={Id=1}, b={ID=2}, c={id=3}}
+
+# the spellings have different value types: Id / ID is one field, so the objects are not a uniform map but columns
+statement ok
+COPY (SELECT * FROM (VALUES ('{"a":{"Id":1},"b":{"ID":"s"}}')) t(line)) TO '{TEST_DIR}/case_keys_map_types.json' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER '\t');
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM read_json('{TEST_DIR}/case_keys_map_types.json', case_insensitive_keys := true, map_inference_threshold := 1));
+----
+a	MAP(VARCHAR, BIGINT)
+b	MAP(VARCHAR, VARCHAR)
+
+# by default Id and ID are two fields of the merged struct, which can not be a struct
+statement error
+SELECT * FROM read_json('{TEST_DIR}/case_keys_map_types.json', map_inference_threshold := 1);
+----
+Duplicate name
+
 # the schemas of several files are combined, with and without union_by_name
 query III
 SELECT * FROM read_json(['{TEST_DIR}/case_keys.json', '{TEST_DIR}/case_keys_2.json'], case_insensitive_keys := true) ORDER BY 1;
