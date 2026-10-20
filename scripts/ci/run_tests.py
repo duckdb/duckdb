@@ -1681,7 +1681,7 @@ def run_batch(config: TestRunnerConfig, batch):
                 peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
             failed = proc.returncode != 0
             if not failed and config.fail_require_skip:
-                require_skip_lines = find_require_skip_lines(stdout)+find_require_skip_lines(stderr)
+                require_skip_lines = find_require_skip_lines(stdout) + find_require_skip_lines(stderr)
                 if require_skip_lines:
                     failed = True
                     message = "error: detected require-based skipped tests: " + require_skip_lines[0]
