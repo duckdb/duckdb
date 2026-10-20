@@ -7,7 +7,7 @@ require json
 statement ok
 COPY (SELECT 42 AS i) TO '{TEMP_DIR}/plain.csv';
 
-foreach extension bz2 XZ lz4 br lzo snappy deflate lzma zip
+foreach extension bz2 XZ lz4 br lzma zip
 
 statement ok
 COPY (SELECT 42 AS i) TO '{TEMP_DIR}/data.csv.{extension}' (COMPRESSION none);

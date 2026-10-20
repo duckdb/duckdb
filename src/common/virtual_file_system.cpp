@@ -153,8 +153,8 @@ static string CompressionSuffixPath(const string &lower_path) {
 //! The compression a file extension indicates, whether or not a filesystem for it is registered
 static FileCompressionType CompressionFromExtension(const string &lower_path) {
 	static const pair<const char *, const char *> compression_extensions[] = {
-	    {".zst", "zstd"}, {".bz2", "bzip2"},     {".xz", "xz"},           {".lz4", "lz4"},   {".br", "brotli"},
-	    {".lzo", "lzo"},  {".snappy", "snappy"}, {".deflate", "deflate"}, {".lzma", "lzma"}, {".zip", "zip"}};
+	    {".zst", "zstd"},  {".bz2", "bzip2"}, {".xz", "xz"},  {".lz4", "lz4"},
+	    {".br", "brotli"}, {".lzma", "lzma"}, {".zip", "zip"}};
 	auto path = CompressionSuffixPath(lower_path);
 	for (auto &entry : compression_extensions) {
 		if (StringUtil::EndsWith(path, entry.first)) {
