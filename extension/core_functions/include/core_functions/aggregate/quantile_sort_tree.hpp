@@ -53,20 +53,19 @@ struct QuantileCursor {
 	inline idx_t Seek(idx_t row_idx) {
 		if (!RowIsVisible(row_idx)) {
 			inputs.Seek(row_idx, scan, page);
-			page.data[0].ToUnifiedFormat(format);
-			data = UnifiedVectorFormat::GetData<INPUT_TYPE>(format);
+			values = make_uniq<VectorIterator<INPUT_TYPE>>(page.data[0]);
 		}
 		return RowOffset(row_idx);
 	}
 
 	inline const INPUT_TYPE &operator[](idx_t row_idx) {
 		const auto offset = Seek(row_idx);
-		return data[format.sel->get_index(offset)];
+		return (*values)[offset].GetValueUnsafe();
 	}
 
 	inline bool RowIsValid(idx_t row_idx) {
 		const auto offset = Seek(row_idx);
-		return format.validity.RowIsValid(format.sel->get_index(offset));
+		return (*values)[offset].IsValid();
 	}
 
 	inline bool CannotHaveNull() {
@@ -79,10 +78,8 @@ struct QuantileCursor {
 	ColumnDataScanState scan;
 	//! The data chunk paged into into
 	DataChunk page;
-	//! Cell access into the page - scans can return constant and dictionary vectors
-	UnifiedVectorFormat format;
-	//! The data pointer
-	const INPUT_TYPE *data = nullptr;
+	//! Cell access into the page, rebuilt per page load - scans can return constant and dictionary vectors
+	unique_ptr<VectorIterator<INPUT_TYPE>> values;
 	//! Paged chunks do not track this but it is really necessary for performance
 	bool cannot_have_null;
 };
