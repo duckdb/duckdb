@@ -170,8 +170,7 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
                                                const BoundOrderByNode &primary_order, const LogicalGet &logical_get,
                                                const StorageIndex &storage_index, LogicalLimit &logical_limit) const {
 	const auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
-	// the statistics kind decides how min/max are read: wide decimals are numeric but carry (order-preserving)
-	// string statistics
+	// wide decimals are numeric but carry order-preserving string statistics, which decides how min/max are read
 	const auto column_type = BaseStatistics::GetStatsType(colref.GetReturnType()) == StatisticsType::STRING_STATS
 	                             ? OrderByColumnType::STRING
 	                             : OrderByColumnType::NUMERIC;

@@ -245,7 +245,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		uint8_t width, scale;
 		idx_t bit_width;
 		if (type.InternalType() == PhysicalType::VARCHAR) {
-			// wide decimal: Arrow's decimal256 (format version 1.1) holds up to 76 digits
+			// wide decimals become Arrow decimal256 (format version 1.1), which holds up to 76 digits
 			if (options.arrow_output_version < ArrowFormatVersion::V1_1) {
 				throw NotImplementedException("Cannot convert %s to Arrow format version 1.0: decimals wider than 38 "
 				                              "digits require decimal256, SET arrow_output_version to 1.1 or later",

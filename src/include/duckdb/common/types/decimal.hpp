@@ -44,7 +44,7 @@ public:
 	static constexpr uint8_t MAX_WIDTH_INT64 = DecimalWidth<int64_t>::max;
 	//! MAX_WIDTH_INT128 is also the widest decimal that is stored in a fixed-size integer
 	static constexpr uint8_t MAX_WIDTH_INT128 = DecimalWidth<hugeint_t>::max;
-	//! The maximum width of a decimal: decimals wider than MAX_WIDTH_INT128 store their unscaled value as a BIGNUM blob
+	//! The maximum width of a decimal, widths above MAX_WIDTH_INT128 store the unscaled value as a BIGNUM blob
 	static constexpr uint8_t MAX_WIDTH_DECIMAL = 255;
 
 public:
@@ -56,8 +56,7 @@ public:
 	static bool IsWide(uint8_t width) {
 		return width > MAX_WIDTH_INT128;
 	}
-	//! The widest decimal that may result from combining decimals of the given widths: results stay within the
-	//! fixed-size range unless one of the inputs is already a wide (BIGNUM-backed) decimal
+	//! The widest result of combining decimals of the given widths, fixed-size unless an input is already wide
 	static uint8_t MaxCombinedWidth(uint8_t left_width, uint8_t right_width) {
 		return IsWide(left_width) || IsWide(right_width) ? MAX_WIDTH_DECIMAL : MAX_WIDTH_INT128;
 	}

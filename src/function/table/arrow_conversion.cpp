@@ -863,8 +863,7 @@ static void ConvertDecimal(Vector &vector, ArrowArray &array, idx_t size, idx_t 
 	}
 }
 
-//! Arrow decimal256 values are 32-byte little-endian two's complement integers; they become wide (BIGNUM-backed)
-//! decimals, or fixed-size decimals when the Arrow precision is at most 38 digits
+//! Converts 32-byte little-endian two's complement Arrow decimal256 values into wide or fixed-size decimals
 static void ConvertDecimal256(const_data_ptr_t src_ptr, Vector &vector, idx_t size, ValidityMask &val_mask) {
 	constexpr idx_t DECIMAL256_BYTES = 32;
 	switch (vector.GetType().InternalType()) {

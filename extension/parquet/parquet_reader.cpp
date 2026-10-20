@@ -555,7 +555,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 			}
 			schema.type_scale = NumericCast<uint32_t>(s_ele.scale);
 			if (s_ele.precision > Decimal::MAX_WIDTH_INT128) {
-				// wider than the fixed-size decimals: read as a wide (BIGNUM-backed) decimal when it fits, else DOUBLE
+				// precisions above 38 become wide (BIGNUM-backed) decimals when they fit, else DOUBLE
 				schema.type_info = ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY;
 				if (s_ele.precision <= Decimal::MAX_WIDTH_DECIMAL && s_ele.scale >= 0 &&
 				    s_ele.scale <= s_ele.precision &&

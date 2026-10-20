@@ -17,8 +17,7 @@ namespace duckdb {
 struct BignumIntermediate;
 class StringHeap;
 
-//! Helpers for wide decimals: DECIMAL values wider than Decimal::MAX_WIDTH_INT128 whose unscaled value is stored as
-//! a BIGNUM blob (PhysicalType::VARCHAR). All blobs are in the BIGNUM encoding, so they compare and hash like BIGNUMs.
+//! Helpers for DECIMAL values wider than 38 digits, stored as BIGNUM blobs
 class BignumDecimal {
 public:
 	//! 10^exponent as a BIGNUM blob, for exponent in [0, Decimal::MAX_WIDTH_DECIMAL]
@@ -29,13 +28,10 @@ public:
 
 	//! Formats an unscaled value with the given scale, e.g. 12345 with scale 2 -> "123.45"
 	DUCKDB_API static string ToString(const string_t &value, uint8_t scale);
-	//! Parses a decimal string (optional sign, digits, optional fraction and exponent, surrounding spaces) into the
-	//! unscaled value of a DECIMAL(width, scale), rounding half away from zero. Returns false if the string is not a
-	//! number or the value does not fit the width.
+	//! Parses a decimal string into the unscaled value of a DECIMAL(width, scale), rounding half away from zero
 	DUCKDB_API static bool TryParse(const char *data, idx_t size, uint8_t width, uint8_t scale, string &result);
 
-	//! Rescales an unscaled value from source_scale to target_scale (multiplying by a power of ten, or dividing with
-	//! rounding half away from zero) and checks that the result fits target_width.
+	//! Rescales an unscaled value to target_scale (rounding half away from zero) and checks it fits target_width
 	DUCKDB_API static bool TryRescale(const string_t &value, uint8_t source_scale, uint8_t target_width,
 	                                  uint8_t target_scale, string &result);
 
@@ -48,8 +44,7 @@ public:
 
 	//! Converts an unscaled value with the given scale to a double (correctly rounded through the decimal string)
 	DUCKDB_API static double ToDouble(const string_t &value, uint8_t scale);
-	//! Converts a double to the unscaled value of a DECIMAL(width, scale), returns false if it is not finite or does
-	//! not fit
+	//! Converts a double to the unscaled value of a DECIMAL(width, scale), returns false if it does not fit
 	DUCKDB_API static bool TryFromDouble(double value, uint8_t width, uint8_t scale, string &result);
 
 	//! Converts a two's complement integer of "size" bytes (big- or little-endian) into the BIGNUM blob of its value

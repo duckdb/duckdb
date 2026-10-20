@@ -312,7 +312,7 @@ Value Value::MinimumValue(const LogicalType &type) {
 		case PhysicalType::INT128:
 			return Value::DECIMAL(-Hugeint::POWERS_OF_TEN[width] + 1, width, scale);
 		case PhysicalType::VARCHAR:
-			// wide decimal: -(10^width - 1)
+			// the minimum wide decimal is -(10^width - 1)
 			return Value::WIDEDECIMAL(Bignum::VarcharToBignum(string_t("-" + string(width, '9'))), width, scale);
 		default:
 			throw InternalException("Unknown decimal type");
@@ -413,7 +413,7 @@ Value Value::MaximumValue(const LogicalType &type) {
 		case PhysicalType::INT128:
 			return Value::DECIMAL(Hugeint::POWERS_OF_TEN[width] - 1, width, scale);
 		case PhysicalType::VARCHAR:
-			// wide decimal: 10^width - 1
+			// the maximum wide decimal is 10^width - 1
 			return Value::WIDEDECIMAL(Bignum::VarcharToBignum(string_t(string(width, '9'))), width, scale);
 		default:
 			throw InternalException("Unknown decimal type");
@@ -654,7 +654,7 @@ Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
 		result.value_.bigint = value;
 		break;
 	case PhysicalType::VARCHAR:
-		// wide decimal: the unscaled value is a BIGNUM blob
+		// the unscaled value of a wide decimal is a BIGNUM blob
 		return Value::WIDEDECIMAL(BignumDecimal::FromInteger(hugeint_t(value)), width, scale);
 	default:
 		result.value_.hugeint = value;
@@ -667,7 +667,7 @@ Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
 
 Value Value::DECIMAL(hugeint_t value, uint8_t width, uint8_t scale) {
 	if (Decimal::IsWide(width)) {
-		// wide decimal: the unscaled value is a BIGNUM blob
+		// the unscaled value of a wide decimal is a BIGNUM blob
 		return Value::WIDEDECIMAL(BignumDecimal::FromInteger(value), width, scale);
 	}
 	D_ASSERT(width >= Decimal::MAX_WIDTH_INT64 && width <= Decimal::MAX_WIDTH_INT128);
@@ -1817,8 +1817,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::UNION:
 		return NestedToSQLString(*this, [](const Value &child) { return child.ToSQLString(); });
 	case LogicalTypeId::DECIMAL:
-		// Wide decimals (width > 38) are bignum-backed; the bare numeric literal would be
-		// reparsed as DOUBLE or BIGNUM and lose precision, so emit an explicit cast.
+		// a bare literal would be reparsed as DOUBLE or BIGNUM and lose precision, so emit an explicit cast
 		if (type_.InternalType() == PhysicalType::VARCHAR) {
 			return "'" + ToString() + "'::" + type_.ToString();
 		}

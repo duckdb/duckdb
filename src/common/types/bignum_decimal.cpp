@@ -256,8 +256,7 @@ bool BignumDecimal::TryParse(const char *data, idx_t size, uint8_t width, uint8_
 	if (pos != size) {
 		return false;
 	}
-	// the decimal point sits after "point" digits of the digit string; we keep "point + scale" digits as the
-	// unscaled value and use the digit after that for rounding (half away from zero)
+	// the unscaled value keeps "integer_digits + exponent + scale" digits, the next digit rounds half away from zero
 	const int64_t keep = static_cast<int64_t>(integer_digits) + exponent + scale;
 	string unscaled;
 	bool round_up = false;
@@ -325,7 +324,7 @@ bool BignumDecimal::TryRescale(const string_t &value, uint8_t source_scale, uint
 		result = scaled.GetString();
 		return true;
 	}
-	// scale down: divide by the power of ten and round half away from zero
+	// scaling down divides by the power of ten and rounds half away from zero
 	BorrowedBignum divisor(string_t(PowerOfTen(source_scale - target_scale)));
 	string_t quotient;
 	string_t remainder;
@@ -339,7 +338,7 @@ bool BignumDecimal::TryRescale(const string_t &value, uint8_t source_scale, uint
 	auto twice_remainder = BignumIntermediate::Multiply(heap, state, remainder_value.intermediate, two.intermediate);
 	BorrowedBignum twice_remainder_value(twice_remainder);
 	if (twice_remainder_value.intermediate.IsAbsoluteBigger(divisor.intermediate) != SMALLER) {
-		// |remainder| >= divisor / 2: round away from zero
+		// |remainder| >= divisor / 2 rounds away from zero
 		OwnedBignum one(Bignum::VarcharToBignum(string_t(source.intermediate.is_negative ? "-1" : "1")));
 		BorrowedBignum quotient_value(quotient);
 		quotient = BignumIntermediate::Add(heap, quotient_value.intermediate, one.intermediate);
@@ -355,7 +354,7 @@ string BignumDecimal::FromInteger(uhugeint_t value) {
 	uint8_t bytes[16];
 	idx_t size = 0;
 	for (idx_t i = 0; i < 16; i++) {
-		// big-endian: the most significant byte first
+		// big-endian, the most significant byte first
 		auto shift = (15 - i) * 8;
 		uint8_t byte = static_cast<uint8_t>((shift >= 64 ? value.upper >> (shift - 64) : value.lower >> shift) & 0xFF);
 		if (size == 0 && byte == 0 && i < 15) {
@@ -370,12 +369,11 @@ string BignumDecimal::FromInteger(hugeint_t value) {
 	if (value.upper >= 0) {
 		return FromInteger(uhugeint_t(static_cast<uint64_t>(value.upper), value.lower));
 	}
-	// the magnitude of the minimum hugeint (2^127) fits a uhugeint, so negate in two's complement in uhugeint space
-	// (~x + 1 cannot overflow because x is not zero)
+	// the magnitude of the minimum hugeint (2^127) fits a uhugeint, so negate in uhugeint two's complement space
 	uhugeint_t bits(static_cast<uint64_t>(value.upper), value.lower);
 	uhugeint_t magnitude = ~bits + uhugeint_t(1);
 	auto blob = FromInteger(magnitude);
-	// flip the sign: complement header and data bytes
+	// complementing the header and data bytes flips the sign
 	for (auto &c : blob) {
 		c = static_cast<char>(~c);
 	}
@@ -412,7 +410,7 @@ string BignumDecimal::FromTwosComplement(const_data_ptr_t data, idx_t size, bool
 	}
 	const bool negative = (magnitude[0] & 0x80) != 0;
 	if (negative) {
-		// the magnitude of a two's complement number: complement every byte and add one
+		// the magnitude of a negative two's complement number is the complement of every byte plus one
 		for (idx_t i = 0; i < size; i++) {
 			magnitude[i] = static_cast<uint8_t>(~magnitude[i]);
 		}
@@ -447,7 +445,7 @@ void BignumDecimal::ToTwosComplement(const string_t &value, data_ptr_t result, i
 		bytes[size - magnitude_bytes + i] = intermediate.GetAbsoluteByte(static_cast<int64_t>(start + i));
 	}
 	if (intermediate.is_negative) {
-		// two's complement: complement every byte and add one
+		// two's complement negation complements every byte and adds one
 		for (idx_t i = 0; i < size; i++) {
 			bytes[i] = static_cast<uint8_t>(~bytes[i]);
 		}

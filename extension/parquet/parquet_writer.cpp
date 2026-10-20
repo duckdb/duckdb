@@ -185,7 +185,7 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 			parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
 			break;
 		case PhysicalType::VARCHAR:
-			// wide decimal: big-endian two's complement bytes
+			// wide decimals are written as big-endian two's complement bytes
 			parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
 			break;
 		default:

@@ -119,9 +119,7 @@ static optional_ptr<ClientContext> GetBignumArithmeticContext(ExpressionState &s
 //===--------------------------------------------------------------------===//
 // Wide decimal arithmetic
 //===--------------------------------------------------------------------===//
-// Decimals wider than Decimal::MAX_WIDTH_INT128 store their unscaled value as a BIGNUM blob, so their arithmetic runs
-// on BignumIntermediate. The binder adds one digit of headroom to the result width of additions, so the width only has
-// to be checked when the result width was clamped to the maximum (check_overflow).
+// Wide decimals compute on BignumIntermediate, the width is only checked when the binder clamped it (check_overflow)
 [[noreturn]] static void ThrowWideDecimalOverflow(const char *operation, const LogicalType &result_type) {
 	throw OutOfRangeException("Overflow in %s of %s: the result does not fit the type", operation,
 	                          result_type.ToString());
@@ -411,15 +409,12 @@ unique_ptr<BaseStatistics> PropagateFloatingStats(ClientContext &context, Functi
 	return result.ToUnique();
 }
 
-//! Whether fixed-size decimal inputs may produce a result wider than Decimal::MAX_WIDTH_INT128: results only become
-//! wide (BIGNUM-backed) decimals when one of the inputs already is one, unless the wide_decimal_arithmetic setting
-//! lets fixed-size decimals grow past 38 digits
+//! Whether fixed-size decimal inputs may produce a wide result, which the wide_decimal_arithmetic setting enables
 static bool PromoteToWideDecimal(ClientContext &context) {
 	return Settings::Get<WideDecimalArithmeticSetting>(context);
 }
 
-//! Records a wide result over fixed-size inputs in the statement properties, it only exists because of the
-//! wide_decimal_arithmetic setting and stored expressions (indexes, constraints, generated columns) reject it
+//! Records a wide result over fixed-size inputs, which only the wide_decimal_arithmetic setting makes possible
 static void RecordWideDecimalPromotion(BindScalarFunctionInput &input, const vector<LogicalType> &input_types,
                                        const LogicalType &result_type) {
 	if (!input.HasBinder() || !Decimal::IsWide(DecimalType::GetWidth(result_type))) {
@@ -520,7 +515,7 @@ void DecimalAddSubtractResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	// now select the physical function to execute
 	auto &result_type = bound_function.GetReturnType();
 	if (result_type.InternalType() == PhysicalType::VARCHAR) {
-		// wide decimal: no numeric statistics propagation
+		// wide decimals have no numeric statistics propagation
 		bound_function.SetFunctionCallback(GetWideDecimalAddSubtract<IS_SUBTRACT>(check_overflow));
 		return;
 	}
@@ -876,7 +871,7 @@ static void DecimalNegateResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &decimal_type = input.GetArgumentType(0);
 	auto width = DecimalType::GetWidth(decimal_type);
 	if (Decimal::IsWide(width)) {
-		// wide decimal: negate the BIGNUM blob
+		// wide decimals negate the BIGNUM blob
 		bound_function.SetFunctionCallback(BignumNegate);
 	} else if (width <= Decimal::MAX_WIDTH_INT16) {
 		bound_function.SetFunctionCallback(
@@ -1224,7 +1219,7 @@ void DecimalMultiplyResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	bound_function.SetReturnType(result_type);
 	// now select the physical function to execute
 	if (result_type.InternalType() == PhysicalType::VARCHAR) {
-		// wide decimal: no numeric statistics propagation
+		// wide decimals have no numeric statistics propagation
 		bound_function.SetFunctionCallback(GetWideDecimalMultiply(check_overflow));
 		return;
 	}
@@ -1622,7 +1617,7 @@ static void DecimalModuloResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto check_overflow = ResolveDecimalArithmeticTypes<true>(input);
 	// now select the physical function to execute
 	if (bound_function.GetReturnType().InternalType() == PhysicalType::VARCHAR) {
-		// wide decimal: the remainder is always smaller than the divisor, so it fits the result width
+		// the wide remainder is always smaller than the divisor, so it fits the result width
 		auto null_on_zero = !Settings::Get<ErrorOnDivisionByZeroSetting>(input.GetClientContext());
 		bound_function.SetFunctionCallback(null_on_zero ? BignumDivideOperation<true, true>
 		                                                : BignumDivideOperation<false, true>);

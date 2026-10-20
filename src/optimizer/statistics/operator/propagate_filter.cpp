@@ -55,7 +55,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, Express
 		stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 	}
 	if (stats.GetStatsType() != StatisticsType::NUMERIC_STATS) {
-		// don't handle non-numeric columns here (yet) - note that wide decimals carry string statistics
+		// don't handle non-numeric columns here (yet), wide decimals carry string statistics
 		return;
 	}
 	if (!NumericStats::HasMinMax(stats)) {
@@ -95,7 +95,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 	}
 	D_ASSERT(lstats.GetType() == rstats.GetType());
 	if (lstats.GetStatsType() != StatisticsType::NUMERIC_STATS) {
-		// don't handle non-numeric columns here (yet) - note that wide decimals carry string statistics
+		// don't handle non-numeric columns here (yet), wide decimals carry string statistics
 		return;
 	}
 	if (!NumericStats::HasMinMax(lstats) || !NumericStats::HasMinMax(rstats)) {

@@ -224,7 +224,7 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 	return stats.ToUnique();
 }
 
-//! abs() of a wide decimal: negate the BIGNUM blob of negative values
+//! abs() of a wide decimal negates the BIGNUM blob of negative values
 static void WideDecimalAbs(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<bignum_t, string_t>(args.data[0], result, [&](bignum_t a) {
@@ -251,7 +251,7 @@ static void DecimalUnaryOpResolveTypes(ResolveScalarFunctionTypesInput &input) {
 		bound_function.SetFunctionCallback(ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::BIGINT));
 		break;
 	case PhysicalType::VARCHAR:
-		// wide decimal: the unscaled value is a BIGNUM blob
+		// the unscaled value of a wide decimal is a BIGNUM blob
 		bound_function.SetFunctionCallback(WideDecimalAbs);
 		break;
 	default:

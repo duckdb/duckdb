@@ -296,8 +296,7 @@ DUCKDB_V2_ERROR duckdb_v2_value_get_blob(duckdb_v2_value_handle value, duckdb_v2
 		// The byte-string reader: BLOB plus the kinds whose payload is opaque
 		// storage bytes (BIT's padding header + data, BIGNUM's bignum_decode
 		// input). VARCHAR is text, and has its own getter.
-		// A DECIMAL wider than 38 digits also stores BIGNUM bytes: its unscaled value, exact where
-		// value_get_decimal cannot be.
+		// a DECIMAL wider than 38 digits also stores its exact unscaled value as BIGNUM bytes
 		auto id = v.type().id();
 		const bool wide_decimal =
 		    id == duckdb::LogicalTypeId::DECIMAL && v.type().InternalType() == duckdb::PhysicalType::VARCHAR;
@@ -362,7 +361,7 @@ DUCKDB_V2_ERROR duckdb_v2_value_get_decimal(duckdb_v2_value_handle value, duckdb
 			*out = Convert(duckdb::hugeint_t(v.GetValueUnsafe<int64_t>()));
 			break;
 		case duckdb::PhysicalType::VARCHAR: {
-			// wide decimal (width > 38): the unscaled value is BIGNUM storage and may not fit in 128 bits
+			// the BIGNUM storage of a wide decimal may not fit in 128 bits
 			duckdb::hugeint_t unscaled;
 			if (!duckdb::BignumDecimal::TryToHugeint(duckdb::string_t(duckdb::StringValue::Get(v)), unscaled)) {
 				throw duckdb::OutOfRangeException(

@@ -130,8 +130,7 @@ struct CDecimalConverter : public CBaseConverter {
 	}
 };
 
-//! Wide decimals (width > 38) store their unscaled value as a BIGNUM blob; the deprecated duckdb_decimal can only
-//! hold values that fit in 128 bits, anything larger is reported as the "cannot be converted" default of zero
+//! The deprecated duckdb_decimal only holds 128-bit values, wider BIGNUM-backed decimals report the default of zero
 struct CWideDecimalConverter : public CBaseConverter {
 	template <class SRC, class DST>
 	static DST Convert(SRC input) {
