@@ -1,5 +1,5 @@
 # name: test/sql/join/full_outer/test_zero_column_materialized_join.test
-# description: Joins preserve rows when every materialized column is pruned
+# description: Outer joins preserve unmatched rows when every materialized column is pruned
 # group: [full_outer]
 
 statement ok
