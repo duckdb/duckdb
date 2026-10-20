@@ -3,6 +3,7 @@
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/types/numeric_blob.hpp"
 #include "duckdb/common/types/numeric_type.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
@@ -92,12 +93,24 @@ void NumericColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t r
 	state.pinned_column->InitializeScanWithOffset(state, row_idx);
 }
 
+//! Sizes a scanned vector: the row group scan only sizes the vectors of the chunk itself
+static void SetScanSize(Vector &vector, idx_t count) {
+	auto vector_type = vector.GetVectorType();
+	if (vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR) {
+		FlatVector::SetSize(vector, count_t(count));
+	} else if (vector.size() != count) {
+		throw InternalException("NumericColumnData::Scan - the representation has %d rows, expected %d", vector.size(),
+		                        count);
+	}
+}
+
 idx_t NumericColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                               idx_t target_count) {
 	// the stored representation becomes the run-time representation of the result
 	auto &column = Pinned(state);
 	Vector typed(column.type, target_count);
 	auto scan_count = column.Scan(transaction, vector_index, state, typed, target_count);
+	SetScanSize(typed, scan_count);
 	result.Shred(typed, scan_count);
 	return scan_count;
 }
