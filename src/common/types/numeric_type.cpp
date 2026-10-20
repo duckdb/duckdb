@@ -384,7 +384,8 @@ bool NumericType::TryParseLiteral(const string &text, Value &result) {
 	}
 	auto width = MaxValue<idx_t>(integer_digits + fractional_digits, 1);
 	if (width > Decimal::MAX_WIDTH_DECIMAL) {
-		return false;
+		throw OutOfRangeException("NUMERIC value needs %d digits, more than the maximum of %d", width,
+		                          Decimal::MAX_WIDTH_DECIMAL);
 	}
 	auto scale = NumericCast<uint8_t>(fractional_digits);
 	auto decimal = Value(text.substr(begin, end - begin))

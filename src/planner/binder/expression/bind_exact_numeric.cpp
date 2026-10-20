@@ -249,8 +249,12 @@ unique_ptr<Expression> ExpressionBinder::TryBindExactNumericArithmetic(ScalarFun
 			uint8_t right_digits, right_scale;
 			GetOperandDigits(*children[1], right_digits, right_scale);
 			if (is_multiply) {
-				result_type = NumericType::ForDigits(idx_t(left_digits) + right_digits,
-				                                     NumericCast<uint8_t>(idx_t(left_scale) + right_scale));
+				idx_t scale = idx_t(left_scale) + right_scale;
+				if (scale > Decimal::MAX_WIDTH_DECIMAL) {
+					throw OutOfRangeException("NUMERIC multiplication needs more than %d digits",
+					                          Decimal::MAX_WIDTH_DECIMAL);
+				}
+				result_type = NumericType::ForDigits(idx_t(left_digits) + right_digits, NumericCast<uint8_t>(scale));
 			} else {
 				result_type = NumericType::ForDigits(idx_t(MaxValue(left_digits, right_digits)) + 1,
 				                                     MaxValue(left_scale, right_scale));

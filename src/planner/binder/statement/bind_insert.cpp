@@ -95,23 +95,40 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 		expr_list.expected_types[col_idx] =
 		    NumericType::ContainsNumeric(expected_type) ? LogicalType(LogicalTypeId::INVALID) : expected_type;
 		if (expected_type.id() == LogicalTypeId::NUMERIC) {
-			// string literals that read as numbers are exact numbers
+			// a column of literals takes the representation that holds every literal exactly (the generic VALUES
+			// typing would round when the literals together need more than the widest decimal); string literals
+			// that read as numbers are exact numbers
+			LogicalType widened(LogicalTypeId::INVALID);
+			bool all_literals = true;
 			for (auto &row : expr_list.values) {
 				auto &cell = row[col_idx];
 				if (cell->GetExpressionClass() != ExpressionClass::CONSTANT) {
+					all_literals = false;
 					continue;
 				}
 				auto &literal = cell->Cast<ConstantExpression>().GetLiteral();
-				if (literal.kind != LiteralKind::STRING) {
+				if (literal.IsNull()) {
 					continue;
 				}
 				Value parsed;
 				if (!NumericType::TryParseLiteral(literal.text, parsed)) {
-					throw BinderException(*cell, "Cannot cast '%s' to NUMERIC: not an exact number", literal.text);
+					if (literal.kind == LiteralKind::STRING) {
+						throw BinderException(*cell, "Cannot cast '%s' to NUMERIC: not an exact number", literal.text);
+					}
+					// e.g. a literal with an exponent: the regular typing decides (and rejects a non-exact result)
+					all_literals = false;
+					continue;
 				}
-				auto alias = cell->GetAlias();
-				cell = ConstantExpression::FromValue(parsed);
-				cell->SetAlias(std::move(alias));
+				if (literal.kind == LiteralKind::STRING) {
+					auto alias = cell->GetAlias();
+					cell = ConstantExpression::FromValue(parsed);
+					cell->SetAlias(std::move(alias));
+				}
+				widened =
+				    widened.id() == LogicalTypeId::INVALID ? parsed.type() : NumericType::Widen(widened, parsed.type());
+			}
+			if (all_literals && widened.id() != LogicalTypeId::INVALID) {
+				expr_list.expected_types[col_idx] = widened;
 			}
 		}
 		expr_list.expected_names[col_idx] = column.Name();

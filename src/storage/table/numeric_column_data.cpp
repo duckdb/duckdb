@@ -285,6 +285,31 @@ static uint8_t NeededScale(UnifiedVectorFormat &vdata, idx_t count, uint8_t scal
 	return needed;
 }
 
+//! The fractional digits the values of a wide decimal vector need, from their decimal text
+static uint8_t NeededScaleWide(UnifiedVectorFormat &vdata, idx_t count, const LogicalType &type) {
+	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+	auto width = DecimalType::GetWidth(type);
+	auto scale = DecimalType::GetScale(type);
+	uint8_t needed = 0;
+	for (idx_t i = 0; i < count && needed < scale; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (!vdata.validity.RowIsValid(idx)) {
+			continue;
+		}
+		auto text = Value::WIDEDECIMAL(data[idx].GetString(), width, scale).ToString();
+		auto point = text.find('.');
+		if (point == string::npos) {
+			continue;
+		}
+		idx_t end = text.size();
+		while (end > point + 1 && text[end - 1] == '0') {
+			end--;
+		}
+		needed = MaxValue<uint8_t>(needed, NumericCast<uint8_t>(end - point - 1));
+	}
+	return needed;
+}
+
 //! Widen the unbounded statistics with the values of a vector of an exact representation
 static void UpdateUnboundedStats(BaseStatistics &stats, const Vector &vector, idx_t count) {
 	UnifiedVectorFormat vdata;
@@ -360,6 +385,9 @@ static void UpdateUnboundedStats(BaseStatistics &stats, const Vector &vector, id
 		if (found) {
 			min = Value::WIDEDECIMAL(lo.GetString(), DecimalType::GetWidth(type), DecimalType::GetScale(type));
 			max = Value::WIDEDECIMAL(hi.GetString(), DecimalType::GetWidth(type), DecimalType::GetScale(type));
+			if (type_scale > 0) {
+				needed_scale = NeededScaleWide(vdata, count, type);
+			}
 		}
 		break;
 	}
