@@ -407,6 +407,10 @@ string MacroFunction::SignatureToString() const {
 }
 
 static string MacroTypeToSQL(const LogicalType &type) {
+	// an aliased type (e.g. an extension-registered type) carries its own identity: render it as-is
+	if (type.HasAlias()) {
+		return type.ToString();
+	}
 	// render a top-level collation in the VARCHAR constructor form, which parses in type position
 	auto &type_info = type.GetTypeInfo();
 	if (type_info.type == LogicalTypeInfoType::STRING_TYPE_INFO) {
