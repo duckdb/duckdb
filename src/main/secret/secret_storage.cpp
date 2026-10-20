@@ -291,7 +291,7 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 			fs.CreateDirectoriesRecursive(secret_path);
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
-			if (error.Type() == ExceptionType::IO) {
+			if (error.Type() == ExceptionType::IO || error.Type() == ExceptionType::FILE_NOT_FOUND) {
 				throw IOException("Failed to initialize persistent storage directory. (original error: '%s')",
 				                  error.RawMessage());
 			}
@@ -320,7 +320,7 @@ void LocalFileSecretStorage::RemoveSecret(const string &secret, OnEntryNotFound 
 		fs.RemoveFile(file);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
-		if (error.Type() == ExceptionType::IO) {
+		if (error.Type() == ExceptionType::IO || error.Type() == ExceptionType::FILE_NOT_FOUND) {
 			throw IOException("Failed to remove secret file '%s', the file may have been removed by another duckdb "
 			                  "instance. (original error: '%s')",
 			                  file, error.RawMessage());

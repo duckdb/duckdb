@@ -2284,9 +2284,9 @@ functions:
       it, and otherwise as a STRUCT holding the path in its `filename` field and the options to open the file with in
       its other fields - e.g. the size of the file, as a file system reported it while globbing, or the options a caller
       passed along with the file (`read_x([{'filename': 'f.x', 'file_size': 42}])`). Opening the file with those
-      options, set with `[[file_open_options_set_value]]`, lets the file system skip work it would otherwise repeat,
-      such as asking a remote store for the size of the file. A single-file function that takes a VARCHAR parameter
-      instead is still accepted, and only receives the path. Every named parameter the single-file function declares is
+      options, set with `[[file_metadata_set_value]]` on the metadata passed to `[[file_system_open]]`, lets the file
+      system skip work it would otherwise repeat, such as asking a remote store for the size of the file. A single-file
+      function that takes a VARCHAR parameter instead is still accepted, and only receives the path. Every named parameter the single-file function declares is
       also a named parameter of the multi-file function, forwarded to it as given. Everything that involves several
       files - globbing, lists of files, hive partitioning, the `filename` column, `union_by_name` and the like - is
       provided by the multi-file function on top of it. The name is borrowed and copied. A single-file function must be
