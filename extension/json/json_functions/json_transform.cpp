@@ -107,14 +107,35 @@ static inline string_t GetString(yyjson_val *val) {
 	return string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
 }
 
+//! When a column is a wide DECIMAL every number is read as raw text (YYJSON_READ_NUMBER_AS_RAW), so it can be converted
+//! to a DECIMAL without going through a double. Other columns read the number back as the default flags would have:
+//! only an integer that fits no (u)int64 and a number that fits no finite double stay raw (YYJSON_READ_BIGNUM_AS_RAW)
+static inline bool ReadRawNumber(yyjson_val *val, yyjson_val &number) {
+	const auto str = unsafe_yyjson_get_str(val);
+	if (!yyjson_read_number(str, &number, YYJSON_READ_ALLOW_INF_AND_NAN, nullptr, nullptr)) {
+		return false;
+	}
+	if (!unsafe_yyjson_is_real(&number)) {
+		return true;
+	}
+	return Value::IsFinite(unsafe_yyjson_get_real(&number)) && strpbrk(str, ".eE");
+}
+
 template <class T, class OP = TryCast>
 static inline bool GetValueNumerical(yyjson_val *val, T &result, JSONTransformOptions &options) {
 	D_ASSERT(unsafe_yyjson_get_tag(val) != (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE));
 	bool success;
 	switch (unsafe_yyjson_get_tag(val)) {
+	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE: {
+		yyjson_val number;
+		if (ReadRawNumber(val, number)) {
+			return GetValueNumerical<T, OP>(&number, result, options);
+		}
+		success = OP::template Operation<string_t, T>(GetString(val), result, options.strict_cast);
+		break;
+	}
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
-	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
 		success = OP::template Operation<string_t, T>(GetString(val), result, options.strict_cast);
 		break;
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
@@ -184,9 +205,16 @@ static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_
 static inline bool GetValueString(yyjson_val *val, yyjson_alc *alc, string_t &result, Vector &vector) {
 	D_ASSERT(unsafe_yyjson_get_tag(val) != (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE));
 	switch (unsafe_yyjson_get_tag(val)) {
+	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE: {
+		yyjson_val number;
+		if (ReadRawNumber(val, number)) {
+			return GetValueString(&number, alc, result, vector);
+		}
+		result = string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
+		return true;
+	}
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
-	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
 		result = string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
 		return true;
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:

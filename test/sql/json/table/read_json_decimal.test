@@ -1,0 +1,72 @@
+# name: test/sql/json/table/read_json_decimal.test
+# description: read_json reads JSON numbers into DECIMAL columns from their text, not through a double
+# group: [table]
+
+require json
+
+statement ok
+COPY (SELECT * FROM (VALUES
+	('{"id":1,"d38":12345678901234.567890123456789012,"d18":123456789012345.678,"d4":12.3,"l":[1.10,2.20],"s":{"x":99999999999999999999.999999999999999999}}'),
+	('{"id":2,"d38":99999999999999999999.999999999999999999,"d18":999999999999999.999,"d4":-99.9,"l":[],"s":{"x":-0.000000000000000001}}'),
+	('{"id":3,"d38":-0.000000000000000001,"d18":-0.001,"d4":1e1,"l":[-1E-2],"s":{"x":1.5}}'),
+	('{"id":4,"d38":"12345678901234.567890123456789012","d18":"1.5","d4":null,"l":null,"s":null}')
+) t(line)) TO '{TEST_DIR}/decimals.json' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER '\t');
+
+# values beyond the 15-17 significant digits of a double are exact, and the maximum of the type does not overflow
+query IIIIII
+SELECT id, d38, d18, d4, l, s FROM read_json('{TEST_DIR}/decimals.json', columns := {id: 'INTEGER', d38: 'DECIMAL(38,18)', d18: 'DECIMAL(18,3)', d4: 'DECIMAL(4,1)', l: 'DECIMAL(4,2)[]', s: 'STRUCT(x DECIMAL(38,18))'}) ORDER BY id;
+----
+1	12345678901234.567890123456789012	123456789012345.678	12.3	[1.10, 2.20]	{'x': 99999999999999999999.999999999999999999}
+2	99999999999999999999.999999999999999999	999999999999999.999	-99.9	[]	{'x': -0.000000000000000001}
+3	-0.000000000000000001	-0.001	10.0	[-0.01]	{'x': 1.500000000000000000}
+4	12345678901234.567890123456789012	1.500	NULL	NULL	NULL
+
+# the same through the array format, which parses the documents in place
+statement ok
+COPY (SELECT * FROM (VALUES ('[{"d38":12345678901234.567890123456789012},{"d38":99999999999999999999.999999999999999999}]')) t(line)) TO '{TEST_DIR}/decimals_array.json' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER '\t');
+
+query I
+SELECT d38 FROM read_json('{TEST_DIR}/decimals_array.json', columns := {d38: 'DECIMAL(38,18)'}, format := 'array') ORDER BY d38;
+----
+12345678901234.567890123456789012
+99999999999999999999.999999999999999999
+
+# a value that does not fit the type still fails, or is NULL with ignore_errors
+statement ok
+COPY (SELECT * FROM (VALUES ('{"d":1234.5}'), ('{"d":1.5}')) t(line)) TO '{TEST_DIR}/decimals_overflow.json' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER '\t');
+
+statement error
+SELECT d FROM read_json('{TEST_DIR}/decimals_overflow.json', columns := {d: 'DECIMAL(4,1)'});
+----
+Failed to cast value to decimal: 1234.5
+
+query I
+SELECT d FROM read_json('{TEST_DIR}/decimals_overflow.json', columns := {d: 'DECIMAL(4,1)'}, ignore_errors := true) ORDER BY d NULLS FIRST;
+----
+NULL
+1.5
+
+# a wide DECIMAL column (numbers are read as text) does not change how the numbers of the other columns are converted
+statement ok
+COPY (SELECT * FROM (VALUES ('{"d":1.5,"a":1.0,"b":1e2,"c":1.5,"x":-2.5,"u":18446744073709551615,"h":123456789012345678901234567890,"f":2.5e-1,"v1":1.50,"v2":1e2,"v3":123456789012345678901234567890,"t":true}')) t(line)) TO '{TEST_DIR}/numbers.json' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER '\t');
+
+query IIIIIIIIIII
+SELECT a, b, c, x, u, h, f, v1, v2, v3, t FROM read_json('{TEST_DIR}/numbers.json', columns := {a: 'BIGINT', b: 'BIGINT', c: 'BIGINT', x: 'INTEGER', u: 'UBIGINT', h: 'HUGEINT', f: 'FLOAT', v1: 'VARCHAR', v2: 'VARCHAR', v3: 'VARCHAR', t: 'BOOLEAN'});
+----
+1	100	2	-2	18446744073709551615	123456789012345678901234567890	0.25	1.5	100.0	123456789012345678901234567890	true
+
+query IIIIIIIIIII
+SELECT a, b, c, x, u, h, f, v1, v2, v3, t FROM read_json('{TEST_DIR}/numbers.json', columns := {d: 'DECIMAL(18,1)', a: 'BIGINT', b: 'BIGINT', c: 'BIGINT', x: 'INTEGER', u: 'UBIGINT', h: 'HUGEINT', f: 'FLOAT', v1: 'VARCHAR', v2: 'VARCHAR', v3: 'VARCHAR', t: 'BOOLEAN'});
+----
+1	100	2	-2	18446744073709551615	123456789012345678901234567890	0.25	1.5	100.0	123456789012345678901234567890	true
+
+# next to a wide DECIMAL column, a JSON column keeps the number as it is written in the file
+query II
+SELECT v1, d FROM read_json('{TEST_DIR}/numbers.json', columns := {d: 'DECIMAL(18,1)', v1: 'JSON'});
+----
+1.50	1.5
+
+query II
+SELECT v1, d FROM read_json('{TEST_DIR}/numbers.json', columns := {d: 'DECIMAL(4,1)', v1: 'JSON'});
+----
+1.5	1.5
