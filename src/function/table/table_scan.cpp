@@ -178,6 +178,9 @@ public:
 	DuckIndexScanState(ClientContext &context, const FunctionData *bind_data_p, unsafe_vector<row_t> &&row_ids_p)
 	    : TableScanGlobalState(context, bind_data_p), next_batch_index(0), row_ids(std::move(row_ids_p)),
 	      finished_first_phase(row_ids.empty()), started_last_phase(false) {
+		// Each task fetches STANDARD_VECTOR_SIZE row IDs at a time, so threads beyond the batch count have no work.
+		auto batch_count = (row_ids.size() + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+		max_threads = MinValue<idx_t>(max_threads, MaxValue<idx_t>(batch_count, 1));
 	}
 
 	//! The batch index of the next Sink.
