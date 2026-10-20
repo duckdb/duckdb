@@ -257,13 +257,21 @@ void ArrayColumnData::FetchRows(TransactionData transaction, ColumnFetchState &s
 
 	// Fetch child column
 	auto &child_vec = ArrayVector::GetChildMutable(result);
+	auto &child_type = ArrayType::GetChildType(type);
 	auto array_size = ArrayType::GetSize(type);
 
 	for (idx_t idx = 0; idx < fetch_count; idx++) {
 		// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
+		ColumnScanState child_state(nullptr);
+		child_state.Initialize(state.context, child_type, nullptr);
+
 		const auto row_id = offsets[sel.get_index(idx)];
-		child_column->ScanRange(state.context, row_id * array_size, array_size, child_vec,
-		                        (result_offset + idx) * array_size);
+		const auto child_offset = row_id * array_size;
+
+		child_column->InitializeScanWithOffset(child_state, child_offset);
+		Vector child_scan(child_type, array_size);
+		child_column->ScanCount(child_state, child_scan, array_size);
+		VectorOperations::Copy(child_scan, child_vec, array_size, 0, (result_offset + idx) * array_size);
 	}
 }
 

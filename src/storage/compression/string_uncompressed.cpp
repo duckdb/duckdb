@@ -143,9 +143,13 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 	auto strings = layout.ValidateRange(start, scan_count);
 
+	const bool copy_strings = state.string_scan_type == StringScanType::COPY_STRINGS;
 	for (idx_t i = 0; i < scan_count; i++) {
 		auto entry = strings.GetEntry(i);
-		result_data[result_offset + i] = FetchStringFromEntry(state.context, segment, result, entry);
+		auto str = FetchStringFromEntry(state.context, segment, result, entry);
+		// overflow strings are already owned by the result
+		result_data[result_offset + i] =
+		    copy_strings && !entry.is_overflow ? StringVector::AddStringOrBlob(result, str) : str;
 	}
 }
 

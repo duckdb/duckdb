@@ -7,7 +7,6 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
@@ -432,16 +431,6 @@ idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t scan_c
 	return ScanVector(state, result, scan_count, ScanVectorType::SCAN_FLAT_VECTOR, result_offset);
 }
 
-void ColumnData::ScanRange(const QueryContext &context, idx_t row_idx, idx_t count, Vector &result,
-                           idx_t result_offset) {
-	ColumnScanState scan_state(nullptr);
-	scan_state.Initialize(context, type, nullptr);
-	InitializeScanWithOffset(scan_state, row_idx);
-	Vector scanned(type, count);
-	ScanCount(scan_state, scanned, count);
-	VectorOperations::Copy(scanned, result, count, 0, result_offset);
-}
-
 void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                         SelectionVector &sel, idx_t &s_count, const TableFilter &filter,
                         TableFilterState &filter_state) {
@@ -791,6 +780,35 @@ void ColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
 	FetchRowsAtSegmentLevel(transaction, state, offsets, sel, fetch_count, result, result_offset);
 }
 
+//! Runs of at least this many consecutive rows are scanned instead of fetched row by row
+static constexpr idx_t FETCH_SCAN_RUN_THRESHOLD = 4;
+
+#ifdef D_ASSERT_IS_ENABLED
+//! Verify that no scanned string points into the segment's block, which is unpinned once the fetch is done
+static void VerifyStringsCopied(ColumnSegment &segment, Vector &result, idx_t result_offset, idx_t count) {
+	if (result.GetType().InternalType() != PhysicalType::VARCHAR || !segment.GetBlockHandle()) {
+		return;
+	}
+	auto &buffer_manager = segment.GetBlockHandle()->GetMemory().GetBufferManager();
+	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
+	auto block_start = handle.Ptr();
+	// transient segments can be smaller than a block, so bound by the pinned buffer rather than the block size
+	auto block_end = block_start + handle.GetFileBuffer().Size();
+	auto strings = FlatVector::GetData<string_t>(result);
+	auto &validity = FlatVector::Validity(result);
+	for (idx_t i = result_offset; i < result_offset + count; i++) {
+		if (!validity.RowIsValid(i) || strings[i].IsInlined()) {
+			continue;
+		}
+		auto str_ptr = const_data_ptr_cast(strings[i].GetData());
+		if (str_ptr >= block_start && str_ptr < block_end) {
+			throw InternalException("FetchRowsAtSegmentLevel: scanned string points into the segment's block, "
+			                        "the compression function ignored StringScanType::COPY_STRINGS");
+		}
+	}
+}
+#endif
+
 void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetchState &state, const idx_t *offsets,
                                          const SelectionVector &sel, idx_t fetch_count, Vector &result,
                                          idx_t result_offset) {
@@ -801,7 +819,9 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 	optional_ptr<SegmentNode<ColumnSegment>> current_segment;
 	idx_t segment_start = 0;
 	idx_t segment_end = 0;
-	for (idx_t idx = 0; idx < fetch_count; idx++) {
+	unique_ptr<ColumnScanState> scan_state;
+	idx_t idx = 0;
+	while (idx < fetch_count) {
 		const idx_t offset = offsets[sel.get_index(idx)];
 		if (offset > count) {
 			throw InternalException("ColumnData::FetchRowsAtSegmentLevel - row_id %lld out of range for count %lld",
@@ -812,8 +832,33 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 			segment_start = current_segment->GetRowStart();
 			segment_end = segment_start + current_segment->GetNode().count;
 		}
-		const idx_t index_in_segment = offset - segment_start;
-		current_segment->GetNode().FetchRow(state, NumericCast<row_t>(index_in_segment), result, result_offset + idx);
+		idx_t run_count = 1;
+		while (idx + run_count < fetch_count && offset + run_count < segment_end &&
+		       offsets[sel.get_index(idx + run_count)] == offset + run_count) {
+			run_count++;
+		}
+		if (run_count >= FETCH_SCAN_RUN_THRESHOLD) {
+			if (!scan_state) {
+				scan_state = make_uniq<ColumnScanState>(nullptr);
+				scan_state->Initialize(state.context, type, nullptr);
+				scan_state->string_scan_type = StringScanType::COPY_STRINGS;
+			}
+			if (scan_state->current.get() == current_segment.get() && scan_state->offset_in_column <= offset) {
+				scan_state->offset_in_column = offset;
+			} else {
+				ColumnData::InitializeScanWithOffset(*scan_state, offset);
+			}
+			ScanVector(*scan_state, result, run_count, ScanVectorType::SCAN_FLAT_VECTOR, result_offset + idx);
+#ifdef D_ASSERT_IS_ENABLED
+			VerifyStringsCopied(current_segment->GetNode(), result, result_offset + idx, run_count);
+#endif
+		} else {
+			for (idx_t i = 0; i < run_count; i++) {
+				current_segment->GetNode().FetchRow(state, NumericCast<row_t>(offset + i - segment_start), result,
+				                                    result_offset + idx + i);
+			}
+		}
+		idx += run_count;
 	}
 	{
 		const lock_guard<mutex> update_guard(update_lock);

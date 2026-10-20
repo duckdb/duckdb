@@ -1,5 +1,5 @@
 # name: test/sql/storage/fetch_consecutive_rows.test
-# description: Fetching a full vector of consecutive row ids decodes it with one scan; index maintenance and row id fetches stay correct
+# description: Runs of consecutive row ids are scanned instead of fetched row by row; index maintenance and row id fetches stay correct
 # group: [storage]
 
 load {TEST_DIR}/fetch_consecutive_rows.db
@@ -120,7 +120,7 @@ statement ok con1
 CHECKPOINT;
 
 # An UPDATE of the key runs as delete plus insert and fetches whole vectors of every column by row id,
-# including a column with an uncommitted in-place update, which has to take the per-row path.
+# including a column with an uncommitted in-place update, which is applied on top of the scanned rows.
 statement ok con1
 BEGIN;
 
@@ -161,8 +161,7 @@ SELECT count(*) FROM t WHERE s = repeat('x', 5000) || 123000;
 ----
 1
 
-# Arrays fetch their child values through ColumnData::ScanRange: point lookups use the index, and an UPDATE of
-# the key fetches whole vectors of the array columns.
+# Arrays: point lookups use the index, and an UPDATE of the key fetches whole vectors of the array columns.
 statement ok con1
 CREATE TABLE arr (id BIGINT PRIMARY KEY, a INTEGER[3], s VARCHAR[2]);
 
@@ -190,3 +189,63 @@ query III con1
 SELECT count(*), count(a), sum(a[1]) FROM arr WHERE s[1] = 'string_value_' || (id - 100000);
 ----
 10000	9000	45000000
+
+# Each string compression, with runs below and above the scan threshold: an UPDATE of the key fetches every column
+# by row id. Scanned strings are copied into the result, since only the scan pins the blocks they point into.
+# DICTIONARY and FSST are only written by older storage versions, DICT_FSST only by newer ones.
+foreach version v1.2.0 latest
+
+foreach compression uncompressed dictionary fsst dict_fsst zstd
+
+statement ok con1
+ATTACH '{TEST_DIR}/fetch_consecutive_rows_${version}_${compression}.db' AS cdb (STORAGE_VERSION '${version}');
+
+statement ok con1
+SET force_compression = '${compression}';
+
+statement ok con1
+CREATE TABLE cdb.c (id BIGINT PRIMARY KEY, o BIGINT, s VARCHAR, l VARCHAR, n VARCHAR);
+
+statement ok con1
+INSERT INTO cdb.c SELECT i, i, 'string_value_' || i, 'category_value_' || (i % 10),
+       CASE WHEN i % 7 = 0 THEN NULL ELSE 'nullable_value_' || i END
+FROM range(50000) r(i);
+
+statement ok con1
+CHECKPOINT cdb;
+
+# runs of 2
+statement ok con1
+UPDATE cdb.c SET id = id + 1000000 WHERE o % 64 < 2;
+
+# runs of 32
+statement ok con1
+UPDATE cdb.c SET id = id + 1000000 WHERE o % 64 BETWEEN 8 AND 39;
+
+# everything, in vectors with gaps where the rows above were deleted
+statement ok con1
+UPDATE cdb.c SET id = id + 1000000;
+
+query II con1
+SELECT count(*), count(*) FILTER (WHERE s IS DISTINCT FROM 'string_value_' || o
+                                     OR l IS DISTINCT FROM 'category_value_' || (o % 10)
+                                     OR n IS DISTINCT FROM CASE WHEN o % 7 = 0 THEN NULL ELSE 'nullable_value_' || o END)
+FROM cdb.c;
+----
+50000	0
+
+query I con1
+SELECT count(*) FILTER (WHERE id <> o + CASE WHEN o % 64 < 2 OR o % 64 BETWEEN 8 AND 39 THEN 2000000 ELSE 1000000 END)
+FROM cdb.c;
+----
+0
+
+statement ok con1
+DETACH cdb;
+
+endloop
+
+endloop
+
+statement ok con1
+SET force_compression = 'auto';

@@ -150,7 +150,8 @@ void CompressedStringScanState::InitializeDictionary(const ColumnSegment &segmen
 }
 
 template <bool NEEDS_STRING_OFFSET_CHECK>
-void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count) {
+void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count,
+                                                 StringScanType string_scan_type) {
 	D_ASSERT(NEEDS_STRING_OFFSET_CHECK || dictionary);
 	if (NEEDS_STRING_OFFSET_CHECK) {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -198,7 +199,12 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		has_error |= elem_error;
 
 		const auto str_len = GetStringLength(string_dict_index);
-		result_data.WriteStringRef(FetchStringFromDict(str_dict_offset, str_len));
+		auto str = FetchStringFromDict(str_dict_offset, str_len);
+		if (string_scan_type == StringScanType::COPY_STRINGS) {
+			result_data.WriteValue(str);
+		} else {
+			result_data.WriteStringRef(str);
+		}
 	}
 
 	if (has_error) {
@@ -209,9 +215,9 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 }
 
 template void CompressedStringScanState::ScanToFlatVector<false>(Vector &result, idx_t result_offset, idx_t start,
-                                                                 idx_t scan_count);
+                                                                 idx_t scan_count, StringScanType string_scan_type);
 template void CompressedStringScanState::ScanToFlatVector<true>(Vector &result, idx_t result_offset, idx_t start,
-                                                                idx_t scan_count);
+                                                                idx_t scan_count, StringScanType string_scan_type);
 
 void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
                                                        idx_t start, idx_t scan_count) {

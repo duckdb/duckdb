@@ -134,7 +134,7 @@ void DictFSSTCompressionStorage::StringScanPartial(ColumnSegment &segment, Colum
 
 	auto start = state.GetPositionInSegment();
 	if (!ALLOW_DICT_VECTORS || !scan_state.AllowDictionaryScan(scan_count)) {
-		scan_state.ScanToFlatVector(result, result_offset, start, scan_count);
+		scan_state.ScanToFlatVector(result, result_offset, start, scan_count, state.string_scan_type);
 	} else {
 		scan_state.ScanToDictionaryVector(segment, result, result_offset, start, scan_count);
 	}

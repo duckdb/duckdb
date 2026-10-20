@@ -151,8 +151,6 @@ public:
 
 	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result);
 	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0);
-	//! Scans count rows from row_idx into result at result_offset; ignores updates, and result owns the copied data
-	void ScanRange(const QueryContext &context, idx_t row_idx, idx_t count, Vector &result, idx_t result_offset);
 
 	//! Select
 	virtual void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,

@@ -206,26 +206,9 @@ unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 	return stats;
 }
 
-//! Whether the selected offsets form one ascending run without gaps.
-static bool IsConsecutiveRun(const idx_t *offsets, const SelectionVector &sel, idx_t fetch_count) {
-	const idx_t first_offset = offsets[sel.get_index(0)];
-	for (idx_t idx = 1; idx < fetch_count; idx++) {
-		if (offsets[sel.get_index(idx)] != first_offset + idx) {
-			return false;
-		}
-	}
-	return true;
-}
-
 void StandardColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
                                    const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
                                    idx_t fetch_count, Vector &result, idx_t result_offset) {
-	if (fetch_count == STANDARD_VECTOR_SIZE && !HasUpdates() && !validity->HasUpdates() &&
-	    IsConsecutiveRun(offsets, sel, fetch_count)) {
-		// A full vector of consecutive rows is scanned instead of fetched row by row.
-		ScanRange(state.context, offsets[sel.get_index(0)], fetch_count, result, result_offset);
-		return;
-	}
 	if (state.child_states.empty()) {
 		state.child_states.emplace_back(make_uniq<ColumnFetchState>());
 	}

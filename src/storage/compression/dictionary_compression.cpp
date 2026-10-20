@@ -140,7 +140,7 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 	D_ASSERT(start <= segment.count.load());
 	D_ASSERT(scan_count <= segment.count.load() - start);
 	if (!ALLOW_DICT_VECTORS || scan_count != STANDARD_VECTOR_SIZE) {
-		scan_state.ScanToFlatVector(result, result_offset, start, scan_count);
+		scan_state.ScanToFlatVector(result, result_offset, start, scan_count, state.string_scan_type);
 	} else {
 		scan_state.ScanToDictionaryVector(segment, result, result_offset, start, scan_count);
 	}
