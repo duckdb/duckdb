@@ -7,9 +7,6 @@ require 64bit
 require notmingw
 
 statement ok
-SET block_allocator_memory='100MiB'
-
-statement ok
 CREATE TABLE blocks AS SELECT i, repeat('a', 100) AS s FROM range(10000) t(i)
 
 loop async_count 0 2
