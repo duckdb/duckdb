@@ -274,6 +274,22 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 	return AddEntry(transaction, std::move(function), info.on_conflict);
 }
 
+//! Remove the descriptions documenting a member's signature (untyped parameters are documented as ANY)
+static void RemoveMemberDescriptions(vector<FunctionDescription> &descriptions, const MacroFunction &member) {
+	vector<LogicalType> documented;
+	for (idx_t i = 0; i < member.parameters.size(); i++) {
+		auto type = i < member.types.size() ? member.types[i] : LogicalType::UNKNOWN;
+		documented.push_back(type.id() == LogicalTypeId::UNKNOWN ? LogicalType::ANY : type);
+	}
+	vector<FunctionDescription> remaining;
+	for (auto &description : descriptions) {
+		if (description.parameter_types != documented) {
+			remaining.push_back(std::move(description));
+		}
+	}
+	descriptions = std::move(remaining);
+}
+
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddLanguageFunctionMember(CatalogTransaction transaction,
                                                                       CreateMacroInfo &info,
                                                                       MacroCatalogEntry &existing) {
@@ -334,9 +350,14 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddLanguageFunctionMember(CatalogTra
 	auto new_info_base = existing.GetInfo();
 	auto &new_info = new_info_base->Cast<CreateMacroInfo>();
 	if (replaced.IsValid()) {
+		// descriptions are member-owned: a replaced member's documentation leaves with it
+		RemoveMemberDescriptions(new_info.descriptions, *new_info.macros[replaced.GetIndex()]);
 		new_info.macros[replaced.GetIndex()] = std::move(info.macros[0]);
 	} else {
 		new_info.macros.push_back(std::move(info.macros[0]));
+	}
+	for (auto &description : info.descriptions) {
+		new_info.descriptions.push_back(std::move(description));
 	}
 	new_info.temporary = existing.temporary;
 	for (auto &dependency : info.dependencies.Set()) {
@@ -528,6 +549,8 @@ bool DuckSchemaEntry::DropMacroFunctionMember(CatalogTransaction transaction, Dr
 	// replace the entry with one that carries the remaining members
 	auto new_info_base = existing.GetInfo();
 	auto &new_info = new_info_base->Cast<CreateMacroInfo>();
+	// a dropped member takes its documentation with it
+	RemoveMemberDescriptions(new_info.descriptions, *new_info.macros[member_idx.GetIndex()]);
 	new_info.macros.erase(new_info.macros.begin() + NumericCast<int64_t>(member_idx.GetIndex()));
 	new_info.temporary = existing.temporary;
 	auto function = MacroCatalogEntry::Create(catalog, *this, new_info);
