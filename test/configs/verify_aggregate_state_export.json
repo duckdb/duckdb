@@ -37,6 +37,15 @@
       ]
     },
     {
+      "reason": "The exported aggregate states change the number of aggregates the PIVOT binder expects",
+      "paths": [
+        "test/sql/pivot/pivot_identical_aggregates_names.test",
+        "test/sql/pivot/pivot_value_collisions.test",
+        "test/sql/pivot/pivot_aggregate_filter.test",
+        "test/sql/pivot/pivot_value_group_name_clash.test"
+      ]
+    },
+    {
       "reason": "FIXME: aggregate states that own memory cannot be exported and have no state type callback (arg_min/arg_max(N), min/max(N), bitstring_agg, bit_and/or/xor over BIT, histograms, mode, reservoir_quantile, etc.)",
       "paths": [
         "test/fuzzer/duckfuzz/bitstring_agg_minmax.test",
@@ -46,6 +55,7 @@
         "test/fuzzer/pedro/first_value_window_crash.test",
         "test/fuzzer/pedro/non_boolean_aggregate_filter.test",
         "test/fuzzer/sqlsmith/bitstring_agg_overflow.test",
+        "test/sql/aggregate/aggregates/test_bitstring_agg_small_types.test",
         "test/issues/general/test_5072.test",
         "test/sql/aggregate/aggregates/arg_min_max_n.test",
         "test/sql/aggregate/aggregates/arg_min_max_n_tpch.test",
@@ -71,6 +81,7 @@
         "test/sql/aggregate/aggregates/test_ordered_aggregate_inner_error.test",
         "test/sql/aggregate/aggregates/test_ordered_aggregates.test",
         "test/sql/aggregate/aggregates/test_reservoir_quantile_decimal.test",
+        "test/sql/aggregate/aggregates/test_reservoir_quantile_sampling.test",
         "test/sql/function/list/aggregates/histogram_decimal.test",
         "test/sql/pivot/pivot_operator_expression.test",
         "test/sql/prepared/prepared_statistics_optimization.test",
@@ -109,6 +120,7 @@
       "paths": [
         "test/sql/pivot/pivot_case_insensitive.test",
         "test/sql/pivot/pivot_empty_string_value.test",
+        "test/sql/pivot/pivot_identical_aggregates_names.test",
         "test/sql/pivot/test_pivot_duplicate_aggregates.test",
         "test/sql/sql_export/pivot_list_results.test",
         "test/sql/sql_export/pivot_sql_export.test"

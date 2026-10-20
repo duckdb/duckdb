@@ -65,7 +65,8 @@ add_library_unity(
   scalar_fn_pushdown.cpp
   projection_pullup.cpp
   projection_placement.cpp
-  remote_pushdown_optimizer.cpp)
+  remote_pushdown_optimizer.cpp
+  disjunctive_join_rewriter.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer>
     PARENT_SCOPE)

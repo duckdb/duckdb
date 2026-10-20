@@ -78,6 +78,17 @@ Calendar *ICUDateFunc::CalendarCacheState::GetCalendar(const string_t &tz_id) {
 	return entry.calendar.get();
 }
 
+Calendar *ICUDateFunc::CalendarCacheState::TryGetCalendar(const string_t &tz_id, string *error_message) {
+	auto &entry = GetEntry(tz_id);
+	if (!entry.calendar) {
+		if (error_message) {
+			*error_message = entry.error;
+		}
+		return nullptr;
+	}
+	return entry.calendar.get();
+}
+
 void ICUDateFunc::CalendarCacheState::SetTimeZone(Calendar *calendar, const string_t &tz_id, string *error_message) {
 	auto &entry = GetEntry(tz_id);
 	if (!entry.tz) {

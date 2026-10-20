@@ -6,6 +6,7 @@
 #include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/index_vector.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -573,6 +574,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	auto unique_column_names = select_node.names;
 	QueryResult::DeduplicateColumns(unique_column_names);
 	auto file_path = stmt.info->file_path;
+	if (!file_path.empty() && !FileSystem::IsRemoteFile(file_path) &&
+	    DatabaseManager::Get(context).IsAttachedDatabaseFile(context, file_path)) {
+		// writing to the file of an attached database would corrupt it
+		throw BinderException("Cannot COPY to \"%s\": the file belongs to an attached database", file_path);
+	}
 
 	ValidateCopyToOutputColumns(resolved_options, select_node.names.size());
 
@@ -782,7 +788,7 @@ void Binder::BindCopyFormat(CopyInfo &info) {
 	if (info.file_path_expression) {
 		auto inputs = BindCopyOption(context, *this, "filename", info.file_path_expression, conversion_policy);
 		if (inputs.size() != 1 || inputs[0].type().id() != LogicalTypeId::VARCHAR) {
-			throw InternalException("Unsupported parameter type for filename: expected e.g. TARGET 'file.parquet'");
+			throw BinderException("Unsupported parameter type for filename: expected e.g. TARGET 'file.parquet'");
 		}
 		if (!info.file_path.empty()) {
 			throw InternalException("Both a file path and a file path expression were provided for COPY - only one of "

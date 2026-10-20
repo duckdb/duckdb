@@ -81,10 +81,11 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 			}
 		} break;
 		case LogicalTypeId::TUPLE: {
-			// TUPLEs are stored as unnamed STRUCTs on disk, which older engines reject - gate them to v2.0.0+
+			// TUPLEs are stored as unnamed STRUCTs on disk, which older engines reject - gate creation to v2.0.0+
+			// existing unnamed STRUCTs (deserialized as TUPLE while loading an older file) must stay attachable
 			const auto storage_version = db.GetStorageManager().GetStorageVersion();
 
-			if (storage_version < StorageVersion::V2_0_0) {
+			if (storage_version < StorageVersion::V2_0_0 && db.GetStorageManager().IsLoaded()) {
 				auto required = GetStorageVersionName(StorageVersion::V2_0_0, false);
 				auto current = GetStorageVersionName(storage_version, false);
 
@@ -284,6 +285,13 @@ unique_ptr<BlockingSample> DuckTableEntry::GetSample() {
 	return storage->GetSample();
 }
 
+//! The index of the column name in a column reference of a table expression - the names before it qualify the table,
+//! the names after it are struct fields
+static idx_t ColumnNameIndex(const ColumnRefExpression &colref, const Identifier &table_name) {
+	auto &names = colref.ColumnNames();
+	return names.size() > 1 && names[0] == table_name ? 1 : 0;
+}
+
 unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &info) {
 	if (transaction.HasContext()) {
 		return AlterEntry(transaction.GetContext(), info);
@@ -332,6 +340,19 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		auto &rename_info = table_info.Cast<RenameTableInfo>();
 		auto copied_table = Copy(context);
 		copied_table->name = rename_info.new_table_name;
+		// CHECK constraints can qualify columns with the table name
+		for (auto &constraint : copied_table->Cast<DuckTableEntry>().constraints) {
+			if (constraint->type != ConstraintType::CHECK) {
+				continue;
+			}
+			auto &check = constraint->Cast<CheckConstraint>();
+			ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
+			    *check.expression, [&](ColumnRefExpression &colref) {
+				    if (ColumnNameIndex(colref, name) == 1) {
+					    colref.ColumnNamesMutable()[0] = rename_info.new_table_name;
+				    }
+			    });
+		}
 		return copied_table;
 	}
 	case AlterTableType::ADD_COLUMN: {
@@ -406,10 +427,11 @@ void DuckTableEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 	}
 }
 
-static void RenameExpression(ParsedExpression &root_expr, RenameColumnInfo &info) {
+static void RenameExpression(ParsedExpression &root_expr, RenameColumnInfo &info, const Identifier &table_name) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
-		if (colref.ColumnNames().back() == info.old_name) {
-			colref.ColumnNamesMutable().back() = info.new_name;
+		auto column_idx = ColumnNameIndex(colref, table_name);
+		if (colref.ColumnNames()[column_idx] == info.old_name) {
+			colref.ColumnNamesMutable()[column_idx] = info.new_name;
 		}
 	});
 }
@@ -452,7 +474,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 			copy.SetName(info.new_name);
 		}
 		if (col.Generated() && column_dependency_manager.IsDependencyOf(col.Logical(), rename_idx)) {
-			RenameExpression(copy.GeneratedExpressionMutable(), info);
+			RenameExpression(copy.GeneratedExpressionMutable(), info, name);
 		}
 		create_info->columns.AddColumn(std::move(copy));
 	}
@@ -465,7 +487,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 		case ConstraintType::CHECK: {
 			// CHECK constraint: need to rename column references that refer to the renamed column
 			auto &check = copy->Cast<CheckConstraint>();
-			RenameExpression(*check.expression, info);
+			RenameExpression(*check.expression, info, name);
 			break;
 		}
 		case ConstraintType::UNIQUE: {
@@ -492,7 +514,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 			for (idx_t i = 0; i < columns.size(); i++) {
 				if (columns[i] == info.old_name) {
 					throw CatalogException(
-					    "Cannot rename column \"%s\" because this is involved in the foreign key constraint",
+					    "Cannot rename column %s because this is involved in the foreign key constraint",
 					    info.old_name);
 				}
 			}
@@ -531,8 +553,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 		    auto &trig = concurrent_entry.Cast<TriggerCatalogEntry>();
 		    for (const auto &col : trig.columns) {
 			    if (col == info.old_name) {
-				    throw TransactionException("Catalog write-write conflict on alter with \"%s\": trigger \"%s\" "
-				                               "references column \"%s\" which is being renamed",
+				    throw TransactionException("Catalog write-write conflict on alter with %s: trigger %s "
+				                               "references column %s which is being renamed",
 				                               name, trig.name, info.old_name);
 			    }
 		    }
@@ -863,12 +885,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	if (!removed_columns.empty() && !info.cascade) {
 		throw CatalogException("Cannot drop column: column is a dependency of 1 or more generated column(s)");
 	}
-	bool dropped_column_is_generated = false;
+	bool dropped_column_is_generated = columns.GetColumn(LogicalIndex(removed_index)).Generated();
 	for (auto &col : columns.Logical()) {
 		if (col.Logical() == removed_index || removed_columns.count(col.Logical())) {
-			if (col.Generated()) {
-				dropped_column_is_generated = true;
-			}
 			continue;
 		}
 		create_info->columns.AddColumn(col.Copy());
@@ -960,7 +979,7 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<Id
 	}
 
 	if (!found) {
-		result.error = ErrorData(CatalogException("Cannot drop field \"%s\" - it does not exist", dropped_entry));
+		result.error = ErrorData(CatalogException("Cannot drop field %s - it does not exist", dropped_entry));
 	} else {
 		result.mapping = Value::STRUCT(std::move(child_mapping));
 		result.new_type = LogicalType::ConstructNestedType(type, std::move(new_type_children));
@@ -1060,7 +1079,7 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 		new_type_children.emplace_back(field_name, type_value);
 	}
 	if (!found) {
-		result.error = ErrorData(CatalogException("Cannot rename field \"%s\" - it does not exist", rename_entry));
+		result.error = ErrorData(CatalogException("Cannot rename field %s - it does not exist", rename_entry));
 	} else {
 		result.mapping = Value::STRUCT(std::move(child_mapping));
 		result.new_type = LogicalType::ConstructNestedType(type, std::move(new_type_children));
@@ -1230,8 +1249,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 		// TODO: check if the generated_expression breaks, only delete it if it does
 		if (copy.Generated() && column_dependency_manager.IsDependencyOf(col.Logical(), change_idx)) {
 			throw BinderException(
-			    "This column is referenced by the generated column \"%s\", so its type can not be changed",
-			    copy.Name());
+			    "This column is referenced by the generated column %s, so its type can not be changed", copy.Name());
 		}
 		create_info->columns.AddColumn(std::move(copy));
 	}
@@ -1438,6 +1456,24 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 	} else {
 		throw NotImplementedException("No support for adding %s constraints with ALTER TABLE",
 		                              EnumUtil::ToString(info.constraint->type));
+	}
+
+	// The indexes of constraints must precede all other indexes. A concurrent CREATE INDEX is not visible as a
+	// dependency yet, but it has already registered its index with the storage.
+	idx_t constraint_index_count = 0;
+	for (const auto &constraint : GetConstraints()) {
+		if (constraint->type == ConstraintType::UNIQUE) {
+			constraint_index_count++;
+		} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
+			auto &fk = constraint->Cast<ForeignKeyConstraint>();
+			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
+			    fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+				constraint_index_count++;
+			}
+		}
+	}
+	if (storage->GetDataTableInfo()->GetIndexes().Count() > constraint_index_count) {
+		throw DependencyException("Cannot alter entry %s because there are entries that depend on it.", name);
 	}
 
 	// We create a physical table with a new constraint and a new unique index.

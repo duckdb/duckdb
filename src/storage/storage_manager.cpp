@@ -14,7 +14,6 @@
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
-#include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/table/column_data.hpp"
@@ -143,7 +142,11 @@ void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 				    entry.second.ToString());
 			}
 		} else if (entry.first == "mmap_reserve_size") {
-			mmap_reserve_size = DBConfig::ParseMemoryLimitOrMaximum(entry.second.ToString());
+			const auto reserve_size = DBConfig::ParseMemoryLimitOrMaximum(entry.second.ToString());
+			if (reserve_size > NumericCast<idx_t>(NumericLimits<int64_t>::Maximum())) {
+				throw BinderException("MMAP_RESERVE_SIZE \"%s\" is out of range", entry.second.ToString());
+			}
+			mmap_reserve_size = reserve_size;
 		} else {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
@@ -181,10 +184,6 @@ StorageManager &StorageManager::Get(Catalog &catalog) {
 
 DatabaseInstance &StorageManager::GetDatabase() {
 	return db.GetDatabase();
-}
-
-ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
-	return context.db->GetObjectCache();
 }
 
 idx_t StorageManager::GetWALSize() {
