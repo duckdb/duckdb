@@ -9,11 +9,13 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 class DuckTableEntry;
 class RowVersionManager;
 
+//! The undo entry of a delete (DELETE_TUPLE) or of the update markers of an update (UPDATE_ROWS) in one vector
 struct DeleteInfo {
 	DuckTableEntry *table;
 	RowVersionManager *version_info;
@@ -23,6 +25,8 @@ struct DeleteInfo {
 	//! Whether or not row ids are consecutive (0, 1, 2, ..., count).
 	//! If this is true no rows are stored and `rows` should not be accessed.
 	bool is_consecutive;
+	//! How many of the ids that the rows held before are stored after the rows: 0 (none), 1 (shared) or count
+	idx_t previous_id_count;
 
 	uint16_t *GetRows() {
 		if (is_consecutive) {
@@ -35,6 +39,18 @@ struct DeleteInfo {
 			throw InternalException("DeleteInfo is consecutive - rows are not accessible");
 		}
 		return rows;
+	}
+	const transaction_t *GetPreviousIds() const {
+		auto rows_end = reinterpret_cast<uintptr_t>(rows) + (is_consecutive ? 0 : count * sizeof(uint16_t));
+		return reinterpret_cast<const transaction_t *>(AlignValue<uintptr_t, sizeof(transaction_t)>(rows_end));
+	}
+	transaction_t *GetPreviousIds() {
+		return const_cast<transaction_t *>(const_cast<const DeleteInfo *>(this)->GetPreviousIds());
+	}
+	//! The size of the entry (an upper bound, as the rows start before the end of the struct)
+	static idx_t GetAllocationSize(idx_t count, bool is_consecutive, idx_t previous_id_count) {
+		return sizeof(DeleteInfo) + (is_consecutive ? 0 : count * sizeof(uint16_t)) +
+		       (previous_id_count ? (previous_id_count + 1) * sizeof(transaction_t) : 0);
 	}
 
 private:

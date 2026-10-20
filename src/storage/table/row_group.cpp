@@ -1361,6 +1361,14 @@ void RowGroup::Update(TransactionData transaction, DuckTableEntry &table_entry, 
 		D_ASSERT(ids[i] >= row_t(row_group_start) && ids[i] < row_t(row_group_start + this->count));
 	}
 #endif
+	if (transaction.transaction) {
+		// mark the rows before updating them: an update conflicts with any write of a row the transaction does not see
+		auto vector_idx = (UnsafeNumericCast<idx_t>(ids[offset]) - row_group_start) / STANDARD_VECTOR_SIZE;
+		auto vector_start = row_group_start + vector_idx * STANDARD_VECTOR_SIZE;
+		uint16_t updated_rows[STANDARD_VECTOR_SIZE];
+		WriteRows(transaction, table_entry, vector_idx, vector_start, ids + offset, count,
+		          UnsafeNumericCast<row_t>(vector_start), true, updated_rows);
+	}
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
 		auto &col_data = GetColumn(column.index);
@@ -2170,8 +2178,23 @@ void RowGroup::Verify() {
 #endif
 }
 
-idx_t RowGroup::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count) {
-	return GetOrCreateVersionInfo().DeleteRows(vector_idx, transaction_id, rows, count);
+idx_t RowGroup::WriteRows(TransactionData transaction, DuckTableEntry &table_entry, idx_t vector_idx, idx_t base_row,
+                          const row_t ids[], idx_t count, row_t offset, bool is_update, uint16_t rows[]) {
+	auto &version_info = GetOrCreateVersionInfo();
+	transaction_t previous_ids[STANDARD_VECTOR_SIZE];
+	auto written = version_info.WriteRows(vector_idx, transaction, ids, count, offset, is_update, rows, previous_ids);
+	if (transaction.transaction && written > 0) {
+		try {
+			transaction.transaction->PushWrite(is_update ? UndoFlags::UPDATE_ROWS : UndoFlags::DELETE_TUPLE,
+			                                   table_entry, version_info, vector_idx, rows, written, base_row,
+			                                   previous_ids);
+		} catch (...) {
+			// without an undo entry, nothing would restore the ids
+			version_info.RollbackWrite(vector_idx, rows, written, previous_ids, written);
+			throw;
+		}
+	}
+	return written;
 }
 
 void VersionDeleteState::Delete(row_t row_id) {
@@ -2192,9 +2215,10 @@ void VersionDeleteState::Flush() {
 		return;
 	}
 	// it is possible for delete statements to delete the same tuple multiple times when combined with a USING clause
-	// in the current_info->Delete, we check which tuples are actually deleted (excluding duplicate deletions)
-	// this is returned in the actual_delete_count
-	auto actual_delete_count = info.DeleteRows(current_chunk, transaction.GetTransactionId(), rows, count);
+	// WriteRows skips the tuples that are deleted already, and returns how many tuples it actually deleted
+	uint16_t deleted_rows[STANDARD_VECTOR_SIZE];
+	auto actual_delete_count = info.WriteRows(transaction, table_entry, current_chunk, base_row + chunk_row, rows,
+	                                          count, 0, false, deleted_rows);
 	delete_count += actual_delete_count;
 	if (deleted_ids) {
 		if (!deleted_ids->has_skipped_rows && actual_delete_count != count) {
@@ -2203,17 +2227,11 @@ void VersionDeleteState::Flush() {
 			deleted_ids->row_ids.assign(deleted_ids->input_ids, deleted_ids->input_ids + input_offset);
 		}
 		if (deleted_ids->has_skipped_rows) {
-			// DeleteRows moves the rows that were actually deleted to the front
 			for (idx_t i = 0; i < actual_delete_count; i++) {
-				deleted_ids->row_ids.push_back(UnsafeNumericCast<row_t>(base_row + chunk_row) + rows[i]);
+				deleted_ids->row_ids.push_back(UnsafeNumericCast<row_t>(base_row + chunk_row + deleted_rows[i]));
 			}
 		}
 		input_offset += count;
-	}
-	if (transaction.transaction && actual_delete_count > 0) {
-		// now push the delete into the undo buffer, but only if any deletes were actually performed
-		transaction.transaction->PushDelete(table_entry, info.GetOrCreateVersionInfo(), current_chunk, rows,
-		                                    actual_delete_count, base_row + chunk_row);
 	}
 	count = 0;
 }

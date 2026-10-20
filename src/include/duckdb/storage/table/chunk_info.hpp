@@ -45,11 +45,14 @@ enum class VersionCompressionResult : uint8_t {
 };
 
 //! The storage state of the delete side of a ChunkVectorInfo. Exhaustive and mutually exclusive:
-//! CONSTANT - all rows share constant_delete_id (NOT_DELETED_ID for none-deleted, or a single delete id)
+//! CONSTANT - all rows share constant_delete_id (NOT_DELETED_ID, a single delete id or a single update marker)
 //! MASKED   - partially deleted, all deleted rows share one committed id (mask_delete_id): which rows are
 //!            deleted is stored in deleted_mask, deleted_data freed
 //! ARRAY    - per-row delete ids materialized in deleted_data
 enum class DeleteIdState : uint8_t { CONSTANT, MASKED, ARRAY };
+
+//! An update marker is the updater's transaction or commit id with this bit set, stored in the row's delete id
+static constexpr transaction_t UPDATE_MARKER_BIT = transaction_t(1) << 63;
 
 class ChunkVectorInfo {
 public:
@@ -73,13 +76,13 @@ public:
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
 
-	//! Performs a delete in the ChunkVectorInfo - returns how many tuples were actually deleted
-	//! The number of rows that were actually deleted might be lower than the input count
-	//! In case we delete rows that were already deleted
-	//! Note that "rows" is written to to reflect the row ids that were actually deleted
-	//! i.e. after calling this function, rows will hold [0..actual_delete_count] row ids of the actually deleted tuples
-	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
-	void CommitDelete(transaction_t commit_id, const DeleteInfo &info);
+	//! Writes the delete id or update marker into the rows (ids[i] - offset); outputs the written rows and old ids
+	idx_t WriteRows(TransactionData transaction, const row_t ids[], idx_t count, row_t offset, bool is_update,
+	                uint16_t rows[], transaction_t previous_ids[]);
+	//! Replaces the delete id and update marker of old_id on the rows by those of new_id (on commit and revert)
+	void CommitWrite(transaction_t old_id, transaction_t new_id, const uint16_t rows[], idx_t count);
+	//! Rolls back a write: the rows get back the ids they held before (NOT_DELETED_ID if none are stored)
+	void RollbackWrite(const uint16_t rows[], idx_t count, const transaction_t previous_ids[], idx_t previous_id_count);
 
 	//! Attempts to compress the per-row insert/delete ids into constants. Ids that precede
 	//! lowest_visibility_bound look the same to every active and future transaction, so they can collapse
@@ -119,6 +122,11 @@ private:
 	void CompressDeleteToMask(transaction_t mask_id);
 	//! MASKED -> ARRAY: re-materialize the per-row delete array from the bitmask
 	void DecompressDeleteMask();
+	//! Whether any of the rows (ids[i] - offset) was deleted by another transaction or updated by an unseen one
+	bool HasConflictingWrite(TransactionData transaction, const row_t ids[], idx_t count, row_t offset) const;
+	//! Sets the ids of the rows to new_id(id, i), compressing them into a constant if all rows end up with the same one
+	template <class F>
+	void SetIds(const uint16_t rows[], idx_t count, F &&new_id);
 
 private:
 	FixedSizeAllocator &allocator;
@@ -127,9 +135,9 @@ private:
 	//! The constant insert id (if there is only one)
 	transaction_t constant_insert_id;
 
-	//! The transaction ids of the transactions that deleted the tuples (if any)
+	//! The per-row delete ids (or update markers) of the tuples (if any)
 	IndexPointer deleted_data;
-	//! The constant delete id (if there is only one, e.g. because the entire vector was deleted in one transaction)
+	//! The delete id or update marker shared by all rows (e.g. one transaction deleted or updated the whole vector)
 	transaction_t constant_delete_id;
 	//! Bitmask used in the MASKED state: valid bit == the row is deleted, invalid bit == the row is alive.
 	//! Matches the on-disk VECTOR_INFO orientation. Only meaningful when delete_state == DeleteIdState::MASKED.
