@@ -235,6 +235,11 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 	idx_t keys_to_compare_count = 0;
 
 	for (idx_t i = 0; i < count; i++) {
+#if defined(__GNUC__) || defined(__clang__)
+		if (i + 64 < count) {
+			__builtin_prefetch(&entries.get()[hashes_dense[i + 64] & bitmask], 0, 3);
+		}
+#endif
 		auto row_hash = hashes_dense[i]; // hashes have been flattened before -> always access dense
 		auto row_ht_offset = row_hash & bitmask;
 
