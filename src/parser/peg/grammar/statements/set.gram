@@ -1,6 +1,6 @@
 SetStatement <- SetKeywordStatement / VariableAssignment
 SetKeywordStatement <- 'SET' SetAssignmentOrTimeZone
-VariableAssignment <- '$'? Identifier ':=' Expression
+VariableAssignment <- '$' Identifier ':=' Expression
 SetAssignmentOrTimeZone <- SetSchema / StandardAssignment / SetTimeZone
 
 ResetStatement <- 'RESET' ResetTarget

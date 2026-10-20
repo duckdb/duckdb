@@ -60,9 +60,8 @@ PEGTransformerFactory::TransformSetKeywordStatement(PEGTransformer &transformer,
 	return std::move(set_assignment_or_time_zone);
 }
 
-// VariableAssignment <- '$'? Identifier ':=' Expression
+// VariableAssignment <- '$' Identifier ':=' Expression
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformVariableAssignment(PEGTransformer &transformer,
-                                                                            const bool &has_result,
                                                                             const Identifier &identifier,
                                                                             unique_ptr<ParsedExpression> expression) {
 	return make_uniq<SetVariableStatement>(identifier, std::move(expression), SetScope::VARIABLE);

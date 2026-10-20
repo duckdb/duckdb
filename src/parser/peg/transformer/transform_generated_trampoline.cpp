@@ -26388,12 +26388,9 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeVariableAssignmentTrampoline(PEGTransformer &transformer,
                                                             GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	bool has_result {};
-	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
-	has_result = has_result_opt.HasResult();
 	auto identifier = list_pr.GetChild(1).Cast<IdentifierParseResult>().identifier;
 	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
-	auto result = TransformVariableAssignment(transformer, has_result, identifier, std::move(expression));
+	auto result = TransformVariableAssignment(transformer, identifier, std::move(expression));
 	return transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(result));
 }
 

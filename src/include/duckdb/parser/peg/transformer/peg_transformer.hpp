@@ -6174,7 +6174,7 @@ public:
 	TransformValuesExpressions(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> expression);
 	static unique_ptr<SQLStatement> TransformSetKeywordStatement(PEGTransformer &transformer,
 	                                                             unique_ptr<SetStatement> set_assignment_or_time_zone);
-	static unique_ptr<SQLStatement> TransformVariableAssignment(PEGTransformer &transformer, const bool &has_result,
+	static unique_ptr<SQLStatement> TransformVariableAssignment(PEGTransformer &transformer,
 	                                                            const Identifier &identifier,
 	                                                            unique_ptr<ParsedExpression> expression);
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer,
