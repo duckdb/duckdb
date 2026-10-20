@@ -83,23 +83,24 @@ FROM range(3) t(i)
 2	constant_string_payload_longer_than_twelve
 
 # lead/lag page copies from a constant argument, including the NULL constant
+# the ORDER BY inside the OVER clause keeps these off the streaming window path
 query II
-SELECT i, lag('segment_a') OVER () AS l FROM range(3) t(i) ORDER BY i
+SELECT i, lag('segment_a') OVER (ORDER BY i) AS l FROM range(3) t(i) ORDER BY i
 ----
 0	NULL
 1	segment_a
 2	segment_a
 
 query II
-SELECT i, lead(NULL::BIGINT, 1, 42) OVER () AS l FROM range(3) t(i) ORDER BY i
+SELECT i, lead(NULL::BIGINT, 1, 42) OVER (ORDER BY i) AS l FROM range(3) t(i) ORDER BY i
 ----
 0	NULL
 1	NULL
 2	42
 
-# RANGE frames read the order collection through the cursor cell accessors
+# bounded RANGE frames read the order collection through the cursor cell accessors
 query II
-SELECT i, sum(i) OVER (ORDER BY 7 RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS s
+SELECT i, sum(i) OVER (ORDER BY 7 RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS s
 FROM range(3) t(i) ORDER BY i
 ----
 0	3
@@ -115,7 +116,10 @@ FROM range(3) t(i)
 1	1
 2	1
 
-# naive aggregate (EXCLUDE forces it) over a constant argument
+# the naive aggregator (forced by the debug mode) over a constant argument
+statement ok
+SET debug_window_mode='separate'
+
 query II
 SELECT i, min('constant_string_payload_longer_than_twelve') OVER
 	(ORDER BY i ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW) AS m
@@ -124,6 +128,9 @@ FROM range(3) t(i)
 0	constant_string_payload_longer_than_twelve
 1	constant_string_payload_longer_than_twelve
 2	constant_string_payload_longer_than_twelve
+
+statement ok
+RESET debug_window_mode
 
 # a NULL constant argument with IGNORE NULLS runs the validity gather in WindowCollection::Combine
 query II
