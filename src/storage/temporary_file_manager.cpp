@@ -229,7 +229,7 @@ static data_ptr_t GetAlignedTemporaryIOBuffer(DatabaseInstance &db, const FileHa
 	if (!handle.GetFlags().DirectIO() || AlignPointer<Storage::SECTOR_SIZE>(buffer) == buffer) {
 		return buffer;
 	}
-	// Compression buffers and allocator fallbacks need not be sector-aligned.
+	// Allocator fallbacks need not be sector-aligned.
 	allocation = Allocator::Get(db).Allocate(size + Storage::SECTOR_SIZE - 1);
 	return AlignPointer<Storage::SECTOR_SIZE>(allocation.get());
 }
@@ -250,9 +250,9 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(QueryContext con
 		read_size = buffer->AllocSize();
 	} else {
 		// compressed - read into separate compression buffer first
-		compressed_buffer = Allocator::Get(db).Allocate(TemporaryBufferSizeToSize(identifier.size));
-		read_buffer = compressed_buffer.get();
-		read_size = compressed_buffer.GetSize();
+		read_size = TemporaryBufferSizeToSize(identifier.size);
+		compressed_buffer = Allocator::Get(db).Allocate(read_size + Storage::SECTOR_SIZE - 1);
+		read_buffer = AlignPointer<Storage::SECTOR_SIZE>(compressed_buffer.get());
 	}
 
 	idx_t read_position = GetPositionInFile(block_index);
@@ -280,13 +280,13 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(QueryContext con
 	// Decompress into buffer.
 	// The leading length word and the compressed payload both come off disk, so validate them before
 	// handing them to zstd: an oversized length would make ZSTD_decompress read past compressed_buffer.
-	const auto compressed_size = Load<idx_t>(compressed_buffer.get());
-	if (compressed_size > compressed_buffer.GetSize() - sizeof(idx_t)) {
+	const auto compressed_size = Load<idx_t>(read_buffer);
+	if (compressed_size > read_size - sizeof(idx_t)) {
 		throw IOException("Corrupt temporary file: compressed block claims %llu bytes but only %llu are available",
-		                  compressed_size, compressed_buffer.GetSize() - sizeof(idx_t));
+		                  compressed_size, read_size - sizeof(idx_t));
 	}
-	const auto decompressed_size = duckdb_zstd::ZSTD_decompress(
-	    buffer->InternalBuffer(), buffer->AllocSize(), compressed_buffer.get() + sizeof(idx_t), compressed_size);
+	const auto decompressed_size = duckdb_zstd::ZSTD_decompress(buffer->InternalBuffer(), buffer->AllocSize(),
+	                                                            read_buffer + sizeof(idx_t), compressed_size);
 	if (duckdb_zstd::ZSTD_isError(decompressed_size)) {
 		throw IOException("Corrupt temporary file: failed to decompress block (%s)",
 		                  duckdb_zstd::ZSTD_getErrorName(decompressed_size));
@@ -311,7 +311,7 @@ void TemporaryFileHandle::WriteTemporaryBuffer(QueryContext context, FileBuffer 
 		write_size = buffer.AllocSize();
 	} else {
 		// write the compressed buffer to the file
-		write_buffer = compressed_buffer.get();
+		write_buffer = AlignPointer<Storage::SECTOR_SIZE>(compressed_buffer.get());
 		write_size = TemporaryBufferSizeToSize(identifier.size);
 	}
 	idx_t write_position = GetPositionInFile(block_index);
@@ -610,11 +610,12 @@ TemporaryFileManager::CompressBuffer(TemporaryFileCompressionAdaptivity &compres
 	const auto compression_level = static_cast<int>(level);
 	D_ASSERT(compression_level >= duckdb_zstd::ZSTD_minCLevel() && compression_level <= duckdb_zstd::ZSTD_maxCLevel());
 	const auto zstd_bound = duckdb_zstd::ZSTD_compressBound(buffer.AllocSize());
-	compressed_buffer = Allocator::Get(db).Allocate(sizeof(idx_t) + zstd_bound);
-	const auto zstd_size = duckdb_zstd::ZSTD_compress(compressed_buffer.get() + sizeof(idx_t), zstd_bound,
+	compressed_buffer = Allocator::Get(db).Allocate(sizeof(idx_t) + zstd_bound + Storage::SECTOR_SIZE - 1);
+	const auto compressed_ptr = AlignPointer<Storage::SECTOR_SIZE>(compressed_buffer.get());
+	const auto zstd_size = duckdb_zstd::ZSTD_compress(compressed_ptr + sizeof(idx_t), zstd_bound,
 	                                                  buffer.InternalBuffer(), buffer.AllocSize(), compression_level);
 	D_ASSERT(!duckdb_zstd::ZSTD_isError(zstd_size));
-	Store<idx_t>(zstd_size, compressed_buffer.get());
+	Store<idx_t>(zstd_size, compressed_ptr);
 	const auto compressed_size = sizeof(idx_t) + zstd_size;
 
 	if (compressed_size > TemporaryBufferSizeToSize(MaximumCompressedTemporaryBufferSize())) {
