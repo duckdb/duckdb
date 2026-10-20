@@ -14,7 +14,7 @@ a"b	60
 loop buf 30 80
 
 query II
-SELECT column0, count(*) FROM read_csv('__TEST_DIR__/mb_esc.csv', delim='||', quote='"', escape='"', header=false, buffer_size=${buf}, max_line_size=${buf}) GROUP BY ALL
+SELECT column0, count(*) FROM read_csv('__TEST_DIR__/mb_esc.csv', delim='||', quote='"', escape='"', header=false, buffer_size={buf}, max_line_size={buf}) GROUP BY ALL
 ----
 a"b	60
 
