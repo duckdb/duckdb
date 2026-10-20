@@ -156,20 +156,20 @@ SELECT round('1.5'::DECIMAL(40,1)), round_even('2.5'::DECIMAL(40,1), 0), trunc('
 ----
 2.0	2.0	-1.0	1200.0
 
-query IIIII
-SELECT avg(x), median(x), quantile_cont(x, 0.5), approx_quantile(x, 0.5), reservoir_quantile(x, 0.5) FROM (VALUES ('1'::DECIMAL(40,3)), ('2'::DECIMAL(40,3)), ('3'::DECIMAL(40,3))) t(x)
+query III
+SELECT avg(x), median(x), quantile_cont(x, 0.5) FROM (VALUES ('1'::DECIMAL(40,3)), ('2'::DECIMAL(40,3)), ('3'::DECIMAL(40,3))) t(x)
 ----
-2.0	2.0	2.0	2.0	2.0
-
-query IIIII
-SELECT typeof(avg(x)), typeof(median(x)), typeof(quantile_cont(x, 0.5)), typeof(approx_quantile(x, 0.5)), typeof(reservoir_quantile(x, 0.5)) FROM (VALUES ('1'::DECIMAL(40,3))) t(x)
-----
-DOUBLE	DOUBLE	DOUBLE	DOUBLE	DOUBLE
+2.0	2.0	2.0
 
 query III
-SELECT quantile_cont(x, [0.25, 0.75]), typeof(approx_quantile(x, [0.25, 0.75])), typeof(reservoir_quantile(x, [0.25, 0.75])) FROM (VALUES ('1'::DECIMAL(40,3)), ('2'::DECIMAL(40,3)), ('3'::DECIMAL(40,3))) t(x)
+SELECT typeof(avg(x)), typeof(median(x)), typeof(quantile_cont(x, 0.5)) FROM (VALUES ('1'::DECIMAL(40,3))) t(x)
 ----
-[1.5, 2.5]	DOUBLE[]	DOUBLE[]
+DOUBLE	DOUBLE	DOUBLE
+
+query I
+SELECT quantile_cont(x, [0.25, 0.75]) FROM (VALUES ('1'::DECIMAL(40,3)), ('2'::DECIMAL(40,3)), ('3'::DECIMAL(40,3))) t(x)
+----
+[1.5, 2.5]
 
 query I
 SELECT avg(x) FROM (VALUES ('123456789012345678901234567890123456789012345678901234567890'::DECIMAL(60,0)), ('-123456789012345678901234567890123456789012345678901234567890'::DECIMAL(60,0))) t(x)

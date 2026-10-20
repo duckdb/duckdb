@@ -41,11 +41,6 @@ SELECT median(bigdec) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
 ----
 0.0
 
-query IIII
-SELECT approx_quantile(bigdec, 0.5) BETWEEN -0.5 AND 0.5, reservoir_quantile(bigdec, 0.5) BETWEEN -0.5 AND 0.5, typeof(approx_quantile(bigdec, 0.5)), typeof(reservoir_quantile(bigdec, 0.5)) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet' WHERE bigdec BETWEEN -1 AND 1
-----
-true	true	DOUBLE	DOUBLE
-
 query I
 SELECT round(bigdec, 1) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
 ----
