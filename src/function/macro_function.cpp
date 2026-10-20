@@ -6,7 +6,9 @@
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/common/logical_type_info.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -404,13 +406,25 @@ string MacroFunction::SignatureToString() const {
 	return result;
 }
 
+static string MacroTypeToSQL(const LogicalType &type) {
+	// render a top-level collation in the VARCHAR constructor form, which parses in type position
+	auto &type_info = type.GetTypeInfo();
+	if (type_info.type == LogicalTypeInfoType::STRING_TYPE_INFO) {
+		auto &string_info = type_info.Cast<StringTypeInfo>();
+		if (!string_info.collation.empty()) {
+			return "VARCHAR(" + KeywordHelper::WriteQuoted(string_info.collation) + ")";
+		}
+	}
+	return type.ToString();
+}
+
 string MacroFunction::ToSQL() const {
 	vector<string> param_strings;
 	for (idx_t param_idx = 0; param_idx < parameters.size(); param_idx++) {
 		const auto &param_name = parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
 		auto param_string = SQLIdentifier::ToString(param_name);
 		if (types[param_idx] != LogicalType::UNKNOWN) {
-			param_string += " " + types[param_idx].ToString();
+			param_string += " " + MacroTypeToSQL(types[param_idx]);
 		}
 		auto it = default_parameters.find(param_name);
 		if (it != default_parameters.end()) {
@@ -420,7 +434,7 @@ string MacroFunction::ToSQL() const {
 	}
 	string returns;
 	if (return_type.id() != LogicalTypeId::UNKNOWN) {
-		returns = " RETURNS " + return_type.ToString();
+		returns = " RETURNS " + MacroTypeToSQL(return_type);
 	}
 	return StringUtil::Format("(%s)%s AS ", StringUtil::Join(param_strings, ", "), returns);
 }

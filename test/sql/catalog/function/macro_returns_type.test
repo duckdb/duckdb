@@ -116,3 +116,44 @@ query T
 SELECT typeof(plain(1::SMALLINT));
 ----
 SMALLINT
+
+# a top-level collation in a parameter or RETURNS type survives EXPORT/IMPORT
+statement ok
+ATTACH ':memory:' AS cex;
+
+statement ok
+USE cex;
+
+statement ok
+CREATE MACRO collated() RETURNS VARCHAR('nocase') AS true;
+
+statement ok
+CREATE MACRO collated_param(p VARCHAR('nocase')) AS p = 'A';
+
+query II
+SELECT collated() = 'TRUE', collated_param('a');
+----
+true	true
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/macro_collation_export';
+
+statement ok
+DROP MACRO collated;
+
+statement ok
+DROP MACRO collated_param;
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/macro_collation_export';
+
+query II
+SELECT collated() = 'TRUE', collated_param('a');
+----
+true	true
+
+statement ok
+USE memory;
+
+statement ok
+DETACH cex;
