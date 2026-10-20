@@ -2858,6 +2858,12 @@ SourceResultType PhysicalHashJoin::GetDataInternal(ExecutionContext &context, Da
 			annotated_lock_guard<annotated_mutex> guard(gstate.lock);
 			if (gstate.TryPrepareNextStage(sink) || gstate.global_stage == HashJoinSourceStage::DONE) {
 				gstate.UnblockTasks();
+			} else if (!sink.external && gstate.global_stage == HashJoinSourceStage::SCAN_HT) {
+				// Without spilling, scanning the hash table is the last stage and all of its tasks have been assigned,
+				// so there is nothing left for this task to do. Do not block until the other tasks finish: this task
+				// has already handed probe rows to the sink, which may in turn be waiting for this task
+				// (e.g., a partitioned COPY cannot flush until every producer has combined).
+				return SourceResultType::FINISHED;
 			} else {
 				return gstate.BlockSource(input.interrupt_state);
 			}

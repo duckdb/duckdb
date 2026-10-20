@@ -29,6 +29,7 @@ SELECT count(*) FROM d JOIN r ON d.d_date >= r.r_date AND d.d_date + INTERVAL 90
 ----
 1658949
 
+# inner join: only the INNER stage of the source produces rows
 statement ok
 COPY (
 	SELECT *, hash(d_sk, r_id) % 2 AS part
@@ -39,3 +40,37 @@ query I
 SELECT count(*) FROM read_parquet('{TEST_DIR}/partitioned_iejoin/**/*.parquet');
 ----
 1658949
+
+# full outer join: the OUTER stage can only start once every INNER task has finished
+query I
+SELECT count(*) FROM d FULL OUTER JOIN r ON d.d_date >= r.r_date AND d.d_date + INTERVAL 90 DAY >= r.r_date;
+----
+1659134
+
+statement ok
+COPY (
+	SELECT *, hash(d_sk, r_id) % 2 AS part
+	FROM d FULL OUTER JOIN r ON d.d_date >= r.r_date AND d.d_date + INTERVAL 90 DAY >= r.r_date
+) TO '{TEST_DIR}/partitioned_iejoin_outer' (FORMAT PARQUET, PARTITION_BY (part));
+
+query III
+SELECT count(*), count(d_sk), count(r_id) FROM read_parquet('{TEST_DIR}/partitioned_iejoin_outer/**/*.parquet');
+----
+1659134	1658956	1659127
+
+# anti join: all rows come from the ANTI stage after the INNER stage
+query I
+SELECT count(*) FROM d ANTI JOIN r ON d.d_date >= r.r_date AND d.d_date + INTERVAL 90 DAY >= r.r_date;
+----
+7
+
+statement ok
+COPY (
+	SELECT *, d_sk % 2 AS part
+	FROM d ANTI JOIN r ON d.d_date >= r.r_date AND d.d_date + INTERVAL 90 DAY >= r.r_date
+) TO '{TEST_DIR}/partitioned_iejoin_anti' (FORMAT PARQUET, PARTITION_BY (part));
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/partitioned_iejoin_anti/**/*.parquet');
+----
+7
