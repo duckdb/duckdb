@@ -16,9 +16,13 @@ namespace duckdb {
 constexpr idx_t FixedSizeBuffer::BASE[];
 constexpr uint8_t FixedSizeBuffer::SHIFT[];
 
+FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, idx_t segment_count, idx_t allocation_size)
+    : block_manager(block_manager), readers(0), segment_count(segment_count), allocation_size(allocation_size),
+      dirty(false), vacuum(false), loaded(false), block_pointer(), block_handle(nullptr) {
+}
+
 FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, MemoryTag memory_tag)
-    : block_manager(block_manager), readers(0), segment_count(0), allocation_size(0), dirty(false), vacuum(false),
-      loaded(false), block_pointer(), block_handle(nullptr) {
+    : FixedSizeBuffer(block_manager, 0, 0) {
 	auto &buffer_manager = block_manager.buffer_manager;
 	buffer_handle = buffer_manager.Allocate(memory_tag, &block_manager, false);
 	block_handle = buffer_handle.GetBlockHandle();
@@ -92,13 +96,9 @@ shared_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partia
 	}
 
 	const auto new_allocation_size = GetNewAllocationSize(available_segments, segment_size, bitmask_offset);
-	auto result = make_shared_ptr<FixedSizeBuffer>(block_manager, MemoryTag::ART_INDEX);
-	result->segment_count = segment_count;
-	result->allocation_size = new_allocation_size;
-	memcpy(result->buffer_handle.GetDataMutable(), buffer_handle.Ptr(), new_allocation_size);
-
-	auto new_block_pointer = partial_block_manager.Write(*result, std::move(result->buffer_handle),
-	                                                     NumericCast<uint32_t>(new_allocation_size));
+	auto result = make_shared_ptr<FixedSizeBuffer>(block_manager, segment_count, new_allocation_size);
+	auto new_block_pointer =
+	    partial_block_manager.Write(*result, buffer_handle, NumericCast<uint32_t>(new_allocation_size));
 	D_ASSERT(new_block_pointer);
 	// Checkpoint metadata is collected before shared partial blocks are flushed.
 	result->block_pointer = *new_block_pointer;

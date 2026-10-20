@@ -4,6 +4,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/storage/block.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/block_packable.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
@@ -26,8 +27,10 @@ public:
 	idx_t AvailableSpace() const;
 	//! How many packables are residing in the current block.
 	idx_t UseCount() const;
-	//! Write data of the packable into the buffer backed by the partial block.
-	BlockPointer Store(BlockPackable &packable, BufferHandle source, uint32_t byte_size);
+	//! Consume the source pin, adopting its buffer when eligible or copying otherwise.
+	BlockPointer Store(BlockPackable &packable, BufferHandle &&source, uint32_t byte_size);
+	//! Borrow the source pin and copy its bytes into the packing buffer.
+	BlockPointer Store(BlockPackable &packable, const BufferHandle &source, uint32_t byte_size);
 	//! Flush the block to disk and zero-initialize any tail free space.
 	void Flush(QueryContext context, PartialBlockType type);
 	//! Merge packables before either block has a persistent block ID.
@@ -37,7 +40,9 @@ public:
 
 private:
 	//! Whether the source can serve as the packing buffer without an allocation or copy.
-	bool CanReuseBuffer(BufferHandle &source);
+	bool CanReuseBuffer(const BufferHandle &source);
+	//! Zero alignment padding and register an allocation whose bytes are already in the destination.
+	BlockPointer FinishStore(BlockPackable &packable, BufferHandle destination, uint32_t byte_size);
 
 private:
 	BlockManager &block_manager;
@@ -62,7 +67,7 @@ idx_t PartialBlock::UseCount() const {
 	return packables.size();
 }
 
-bool PartialBlock::CanReuseBuffer(BufferHandle &source) {
+bool PartialBlock::CanReuseBuffer(const BufferHandle &source) {
 	auto source_handle = source.GetBlockHandle();
 	if (source_handle->BlockId() < MAXIMUM_BLOCK) {
 		// if the buffer has a backing disk block, we might overwrite other segments in the block when growing the
@@ -103,11 +108,48 @@ bool PartialBlock::CanReuseBuffer(BufferHandle &source) {
 	return true;
 }
 
-BlockPointer PartialBlock::Store(BlockPackable &packable, BufferHandle source, uint32_t byte_size) {
+BlockPointer PartialBlock::Store(BlockPackable &packable, BufferHandle &&source, uint32_t byte_size) {
+	BufferHandle owned_source(std::move(source));
+	D_ASSERT(owned_source.IsValid());
+	D_ASSERT(byte_size > 0);
+	D_ASSERT(byte_size <= owned_source.GetFileBuffer().Size());
+
+	if (!block_handle && CanReuseBuffer(owned_source)) {
+		D_ASSERT(offset == 0);
+		block_handle = owned_source.GetBlockHandle();
+		return FinishStore(packable, std::move(owned_source), byte_size);
+	}
+	return Store(packable, owned_source, byte_size);
+}
+
+BlockPointer PartialBlock::Store(BlockPackable &packable, const BufferHandle &source, uint32_t byte_size) {
 	D_ASSERT(source.IsValid());
 	D_ASSERT(byte_size > 0);
 	D_ASSERT(byte_size <= source.GetFileBuffer().Size());
 	D_ASSERT(block_handle || offset == 0);
+	D_ASSERT(ValueIsAligned(offset));
+	D_ASSERT(AlignValue(idx_t(offset) + byte_size) <= block_manager.GetBlockSize());
+
+	auto &buffer_manager = block_manager.buffer_manager;
+	BufferHandle dst;
+	if (block_handle) {
+		D_ASSERT(source.GetBlockHandle() != block_handle);
+		dst = buffer_manager.Pin(block_handle);
+	} else {
+		auto &source_memory = source.GetBlockHandle()->GetMemory();
+		dst = buffer_manager.Allocate(source_memory.GetMemoryTag(), &block_manager, false);
+		block_handle = dst.GetBlockHandle();
+	}
+
+	memcpy(dst.GetDataMutable() + offset, source.Ptr(), byte_size);
+	return FinishStore(packable, std::move(dst), byte_size);
+}
+
+BlockPointer PartialBlock::FinishStore(BlockPackable &packable, BufferHandle destination, uint32_t byte_size) {
+	D_ASSERT(destination.IsValid());
+	D_ASSERT(destination.GetBlockHandle() == block_handle);
+	D_ASSERT(destination.GetFileBuffer().Size() == block_manager.GetBlockSize());
+	D_ASSERT(byte_size > 0);
 	D_ASSERT(ValueIsAligned(offset));
 
 	const auto unaligned_size = idx_t(offset) + byte_size;
@@ -115,27 +157,8 @@ BlockPointer PartialBlock::Store(BlockPackable &packable, BufferHandle source, u
 	D_ASSERT(aligned_size <= block_manager.GetBlockSize());
 
 	const BlockPointer block_ptr(block_id, offset);
-	auto &buffer_manager = block_manager.buffer_manager;
-
-	BufferHandle dst;
-	if (block_handle) {
-		D_ASSERT(source.GetBlockHandle() != block_handle);
-		dst = buffer_manager.Pin(block_handle);
-	} else if (CanReuseBuffer(source)) {
-		dst = std::move(source);
-		block_handle = dst.GetBlockHandle();
-	} else {
-		auto &source_memory = source.GetBlockHandle()->GetMemory();
-		dst = buffer_manager.Allocate(source_memory.GetMemoryTag(), &block_manager, false);
-		block_handle = dst.GetBlockHandle();
-	}
-
-	if (source.IsValid()) {
-		D_ASSERT(dst.GetFileBuffer().Size() == block_manager.GetBlockSize());
-		memcpy(dst.GetDataMutable() + offset, source.Ptr(), byte_size);
-	}
 	if (unaligned_size != aligned_size) {
-		memset(dst.GetDataMutable() + unaligned_size, 0, aligned_size - unaligned_size);
+		memset(destination.GetDataMutable() + unaligned_size, 0, aligned_size - unaligned_size);
 	}
 
 	packables.emplace_back(packable, offset);
@@ -356,11 +379,28 @@ void PartialBlockManager::RetainOrFlush(unique_ptr<PartialBlock> partial_block) 
 	}
 }
 
-optional<BlockPointer> PartialBlockManager::Write(BlockPackable &packable, BufferHandle source, uint32_t byte_size) {
+optional<BlockPointer> PartialBlockManager::Write(BlockPackable &packable, BufferHandle &&source, uint32_t byte_size) {
+	BufferHandle owned_source(std::move(source));
 	unique_lock<mutex> lock(partial_block_lock);
 
 	auto block = AcquirePartialBlock(byte_size);
-	BlockPointer block_ptr = block->Store(packable, std::move(source), byte_size);
+	BlockPointer block_ptr = block->Store(packable, std::move(owned_source), byte_size);
+	RetainOrFlush(std::move(block));
+
+	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
+		D_ASSERT(block_ptr.IsValid());
+		return block_ptr;
+	}
+
+	return nullopt;
+}
+
+optional<BlockPointer> PartialBlockManager::Write(BlockPackable &packable, const BufferHandle &source,
+                                                  uint32_t byte_size) {
+	unique_lock<mutex> lock(partial_block_lock);
+
+	auto block = AcquirePartialBlock(byte_size);
+	BlockPointer block_ptr = block->Store(packable, source, byte_size);
 	RetainOrFlush(std::move(block));
 
 	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {

@@ -30,6 +30,8 @@ public:
 	static constexpr uint8_t SHIFT[] = {32, 16, 8, 4, 2, 1};
 
 public:
+	//! Constructor for checkpoint metadata awaiting its packed backing buffer
+	FixedSizeBuffer(BlockManager &block_manager, idx_t segment_count, idx_t allocation_size);
 	//! Constructor for a new in-memory buffer
 	explicit FixedSizeBuffer(BlockManager &block_manager, MemoryTag memory_tag);
 	FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,

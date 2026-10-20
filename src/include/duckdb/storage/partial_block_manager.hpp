@@ -15,6 +15,7 @@
 #include "duckdb/common/query_context.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/storage/block.hpp"
+#include <cstdint>
 
 namespace duckdb {
 
@@ -56,7 +57,11 @@ public:
 	//! Consume a valid source pin and pack its first byte_size bytes; 0 < byte_size <= block size.
 	//! Returns a fixed destination only in FULL_CHECKPOINT mode, otherwise nullopt; may flush before returning.
 	//! The packable must outlive its pending allocation, until flushed or discarded.
-	optional<BlockPointer> Write(BlockPackable &packable, BufferHandle source, uint32_t byte_size);
+	//! The caller must permit adoption and modification of the source's backing storage.
+	optional<BlockPointer> Write(BlockPackable &packable, BufferHandle &&source, uint32_t byte_size);
+	//! Borrow a valid source pin and copy its first byte_size bytes synchronously without adopting its storage.
+	//! The source is neither modified nor retained; destination and packable lifetime rules are as above.
+	optional<BlockPointer> Write(BlockPackable &packable, const BufferHandle &source, uint32_t byte_size);
 
 	//! Reserve a disk block ID, using checkpoint accounting in FULL_CHECKPOINT mode; not for in-memory storage.
 	block_id_t GetFreeBlockId();
@@ -75,7 +80,7 @@ private:
 	unique_ptr<PartialBlock> AcquirePartialBlock(uint32_t byte_size);
 	//! Remove the block with least free space if the map limit is exceeded; otherwise return nullptr.
 	unique_ptr<PartialBlock> PruneFreeList();
-	//! Consume the block, retaining it if reusable or flushing it otherwise.
+	//! Consume the block, retaining it if reusable or flushing it otherwise; also flush any pruned map entry.
 	void RetainOrFlush(unique_ptr<PartialBlock> partial_block);
 
 private:
