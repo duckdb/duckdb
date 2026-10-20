@@ -22,6 +22,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/function/scalar/operator_functions.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -131,16 +132,21 @@ static void WideDecimalAddSubtract(DataChunk &args, ExpressionState &state, Vect
 	auto &heap = StringVector::GetStringHeap(result);
 	auto &result_type = result.GetType();
 	auto width = DecimalType::GetWidth(result_type);
+	// the right operand is negated on a copy, its bytes can be shared with the left operand and other rows
+	vector<uint8_t> negated_rhs;
 	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
 	    args.data[0], args.data[1], result, [&](bignum_t a, bignum_t b) {
 		    const BignumIntermediate lhs(a);
-		    BignumIntermediate rhs(b);
+		    string_t sum;
 		    if (IS_SUBTRACT) {
+			    negated_rhs.resize(b.data.GetSize());
+			    memcpy(negated_rhs.data(), b.data.GetData(), b.data.GetSize());
+			    BignumIntermediate rhs(negated_rhs.data(), negated_rhs.size());
 			    rhs.NegateInPlace();
-		    }
-		    auto sum = BignumIntermediate::Add(heap, lhs, rhs);
-		    if (IS_SUBTRACT) {
-			    rhs.NegateInPlace();
+			    sum = BignumIntermediate::Add(heap, lhs, rhs);
+		    } else {
+			    const BignumIntermediate rhs(b);
+			    sum = BignumIntermediate::Add(heap, lhs, rhs);
 		    }
 		    if (CHECK_WIDTH && !BignumDecimal::FitsWidth(sum, width)) {
 			    ThrowWideDecimalOverflow(IS_SUBTRACT ? "subtraction" : "addition", result_type);
@@ -412,6 +418,23 @@ static bool PromoteToWideDecimal(ClientContext &context) {
 	return Settings::Get<WideDecimalArithmeticSetting>(context);
 }
 
+//! Records a wide result over fixed-size inputs in the statement properties, it only exists because of the
+//! wide_decimal_arithmetic setting and stored expressions (indexes, constraints, generated columns) reject it
+static void RecordWideDecimalPromotion(BindScalarFunctionInput &input, const vector<LogicalType> &input_types,
+                                       const LogicalType &result_type) {
+	if (!input.HasBinder() || !Decimal::IsWide(DecimalType::GetWidth(result_type))) {
+		return;
+	}
+	for (auto &input_type : input_types) {
+		uint8_t width, scale;
+		if (input_type.id() != LogicalTypeId::UNKNOWN && input_type.GetDecimalProperties(width, scale) &&
+		    Decimal::IsWide(width)) {
+			return;
+		}
+	}
+	input.GetBinder().GetStatementProperties().depends_on_wide_decimal_setting = true;
+}
+
 //! Computes the result type of a decimal addition, subtraction or modulo over the given input types
 template <bool IS_MODULO>
 LogicalType DecimalArithmeticResultType(const vector<LogicalType> &input_types, bool promote_wide,
@@ -482,8 +505,10 @@ bool ResolveDecimalArithmeticTypes(ResolveScalarFunctionTypesInput &input) {
 template <bool IS_MODULO = false>
 unique_ptr<FunctionData> BindDecimalArithmetic(BindScalarFunctionInput &input) {
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
-	DecimalArithmeticResultType<IS_MODULO>(input.GetBoundFunction().GetLogicalArguments(),
-	                                       PromoteToWideDecimal(input.GetClientContext()), bind_data->check_overflow);
+	auto &input_types = input.GetBoundFunction().GetLogicalArguments();
+	auto result_type = DecimalArithmeticResultType<IS_MODULO>(
+	    input_types, PromoteToWideDecimal(input.GetClientContext()), bind_data->check_overflow);
+	RecordWideDecimalPromotion(input, input_types, result_type);
 	return std::move(bind_data);
 }
 
@@ -1216,8 +1241,10 @@ void DecimalMultiplyResolveTypes(ResolveScalarFunctionTypesInput &input) {
 //! The overflow check is derived from the types the function was called with, before they were cast
 unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
-	DecimalMultiplyResultType(input.GetBoundFunction().GetLogicalArguments(),
-	                          PromoteToWideDecimal(input.GetClientContext()), bind_data->check_overflow);
+	auto &input_types = input.GetBoundFunction().GetLogicalArguments();
+	auto result_type = DecimalMultiplyResultType(input_types, PromoteToWideDecimal(input.GetClientContext()),
+	                                             bind_data->check_overflow);
+	RecordWideDecimalPromotion(input, input_types, result_type);
 	return std::move(bind_data);
 }
 
