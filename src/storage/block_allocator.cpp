@@ -353,11 +353,11 @@ BlockAllocatorThreadLocalState &GetBlockAllocatorThreadLocalState(const BlockAll
 class AllocationCache {
 	using Queue = duckdb_moodycamel::ConcurrentQueue<data_ptr_t>;
 	static constexpr idx_t MIN_SHIFT = 19;
-	static constexpr idx_t MAX_SHIFT = 26;
+	static constexpr idx_t MAX_SHIFT = 32;
 	static constexpr idx_t MAX_SHARDS = 256;
 	static constexpr idx_t CPUS_PER_SHARD = 4;
 	static constexpr idx_t MAX_LOCAL_SPARES = 16;
-	// An admission ceiling, independent of pressure-driven reclamation.
+	// Retain at most 1 GiB per size class, or one larger allocation.
 	static constexpr idx_t MAX_CACHED_BYTES_PER_BUCKET = 1024ULL * 1024 * 1024;
 
 	struct alignas(64) Bucket {
@@ -407,7 +407,8 @@ public:
 			return false;
 		}
 		auto &bucket = buckets[CountZeros<idx_t>::Trailing(size) - MIN_SHIFT];
-		if (bucket.count.fetch_add(1, std::memory_order_relaxed) < MAX_CACHED_BYTES_PER_BUCKET / size) {
+		if (bucket.count.fetch_add(1, std::memory_order_relaxed) <
+		    MaxValue<idx_t>(MAX_CACHED_BYTES_PER_BUCKET / size, 1)) {
 			try {
 				const auto now = RetentionTimeMillis();
 				auto last_return = bucket.last_return_ms.load(std::memory_order_relaxed);
@@ -718,21 +719,13 @@ static void AdviseHugePages(data_ptr_t pointer, idx_t size) {
 }
 
 data_ptr_t BlockAllocator::AllocateHugeData(const idx_t size) const {
-	auto pointer = size == block_size && TryUsePool() ? GetBlockAllocatorThreadLocalState(*this).Allocate()
-	                                                  : allocator.AllocateData(size);
+	auto pointer = AllocateData(size);
 	AdviseHugePages(pointer, size);
 	return pointer;
 }
 
 void BlockAllocator::FreeHugeData(data_ptr_t pointer, const idx_t size) const {
-	if (IsInPool(pointer)) {
-		FreeData(pointer, size);
-		return;
-	}
-	allocator.FreeData(pointer, size);
-	if (pointer) {
-		estimated_unflushed_memory.fetch_add(size, std::memory_order_relaxed);
-	}
+	FreeData(pointer, size);
 }
 
 bool BlockAllocator::SupportsFlush() const {

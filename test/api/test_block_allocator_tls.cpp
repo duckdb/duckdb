@@ -423,6 +423,48 @@ TEST_CASE("Allocation cache reuses compatible allocations and releases retained 
 	REQUIRE(live_bytes.load() == 0);
 }
 
+TEST_CASE("Huge allocation retention shares cache ownership and pressure reclamation", "[api][allocation_cache]") {
+	const auto size = GENERATE(idx_t(8 * 1024 * 1024), idx_t(128 * 1024 * 1024));
+	bool pinned = false;
+#if defined(__linux__)
+	AllocationCacheTestAffinity affinity;
+	const auto cpus = affinity.CPUs();
+	pinned = !cpus.empty() && affinity.Pin(cpus[0]);
+#endif
+	atomic<idx_t> live_bytes {0};
+	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
+	                   make_uniq<AllocationCacheTestData>(live_bytes));
+	{
+		BlockAllocator allocator(fallback, 256 * 1024, 0);
+		auto first = BlockAllocatorTestHelper::AllocateHuge(allocator, size);
+		first[0] = 42;
+		first[size - 1] = 84;
+		BlockAllocatorTestHelper::FreeHuge(allocator, first, size);
+		REQUIRE(allocator.GetCachedMemory() == size);
+		REQUIRE(live_bytes.load() == size);
+
+		auto live = BlockAllocatorTestHelper::AllocateHuge(allocator, size);
+		if (pinned) {
+			REQUIRE(live == first);
+			REQUIRE(live[0] == 42);
+			REQUIRE(live[size - 1] == 84);
+		}
+		live[0] = 99;
+		live[size - 1] = 77;
+		auto spare = BlockAllocatorTestHelper::AllocateHuge(allocator, size);
+		BlockAllocatorTestHelper::FreeHuge(allocator, spare, size);
+		REQUIRE(allocator.GetCachedMemory() >= size);
+		allocator.FlushForAllocation(NumericLimits<idx_t>::Maximum(), 0);
+		CHECK(allocator.GetCachedMemory() == 0);
+		CHECK(live_bytes.load() == size);
+		CHECK(live[0] == 99);
+		CHECK(live[size - 1] == 77);
+		BlockAllocatorTestHelper::FreeHuge(allocator, live, size);
+		CHECK(allocator.GetCachedMemory() == size);
+	}
+	CHECK(live_bytes.load() == 0);
+}
+
 TEST_CASE("Allocation cache can reuse arena storage without container destruction", "[api][allocation_cache]") {
 	constexpr idx_t SIZE = 512 * 1024;
 	bool pinned = true;
@@ -961,6 +1003,12 @@ TEST_CASE("BufferAllocator accounts for ordinary and huge backing operations", "
 
 TEST_CASE("BufferAllocator routes allocation transitions through BlockAllocator",
           "[api][block_allocator][huge_route]") {
+	bool pinned = false;
+#if defined(__linux__)
+	AllocationCacheTestAffinity affinity;
+	const auto cpus = affinity.CPUs();
+	pinned = !cpus.empty() && affinity.Pin(cpus[0]);
+#endif
 	constexpr idx_t BLOCK_SIZE = 65536;
 	Allocator fallback;
 	DBConfig config;
@@ -1000,14 +1048,28 @@ TEST_CASE("BufferAllocator routes allocation transitions through BlockAllocator"
 	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 2 * BLOCK_SIZE);
 	constexpr idx_t CACHE_SIZE = 512 * 1024;
 	auto cached = buffer_allocator.AllocateData(CACHE_SIZE);
+	cached[0] = 42;
 	buffer_allocator.FreeData(cached, CACHE_SIZE);
 	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE + CACHE_SIZE);
-	auto uncached = buffer_allocator.AllocateHuge(CACHE_SIZE);
-	CHECK(uncached.get() != cached);
-	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE + CACHE_SIZE);
+	auto huge = buffer_allocator.AllocateHuge(CACHE_SIZE);
+	if (pinned) {
+		CHECK(huge.get() == cached);
+		CHECK(huge.get()[0] == 42);
+	}
+	const auto retained = huge.get() == cached ? BLOCK_SIZE : BLOCK_SIZE + CACHE_SIZE;
+	CHECK(allocator.GetCachedMemory() == retained);
 	CHECK(manager.GetUsedMemory() == initial_memory + CACHE_SIZE);
-	uncached.Reset();
-	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 2 * BLOCK_SIZE + CACHE_SIZE);
+	huge.Reset();
+	CHECK(allocator.GetCachedMemory() == retained + CACHE_SIZE);
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 2 * BLOCK_SIZE);
+	auto ordinary = buffer_allocator.AllocateData(CACHE_SIZE);
+	if (pinned) {
+		CHECK(ordinary == cached);
+		CHECK(ordinary[0] == 42);
+		CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
+	}
+	CHECK(manager.GetUsedMemory() == initial_memory + CACHE_SIZE);
+	buffer_allocator.FreeData(ordinary, CACHE_SIZE);
 	CHECK(manager.GetUsedMemory() == initial_memory);
 }
 
