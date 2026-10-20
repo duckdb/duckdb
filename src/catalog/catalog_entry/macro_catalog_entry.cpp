@@ -7,7 +7,7 @@ namespace duckdb {
 
 MacroCatalogEntry::MacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info)
     : FunctionEntry(
-          (info.macros[0]->type == MacroType::SCALAR_MACRO ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY),
+          (info.macros[0]->type == MacroType::TABLE_MACRO ? CatalogType::TABLE_MACRO_ENTRY : CatalogType::MACRO_ENTRY),
           catalog, schema, info),
       macros(std::move(info.macros)) {
 	this->temporary = info.temporary;
@@ -59,6 +59,21 @@ unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 	info->comment = comment;
 	info->tags = tags;
 	return std::move(info);
+}
+
+optional_idx MacroCatalogEntry::FindMember(const vector<LogicalType> &signature) const {
+	for (idx_t i = 0; i < macros.size(); i++) {
+		if (macros[i]->MatchesSignature(signature)) {
+			return i;
+		}
+	}
+	// an untyped member occupies its whole arity, any type list of that arity names it
+	for (idx_t i = 0; i < macros.size(); i++) {
+		if (macros[i]->HasUntypedParameter() && macros[i]->parameters.size() == signature.size()) {
+			return i;
+		}
+	}
+	return optional_idx();
 }
 
 string MacroCatalogEntry::ToSQL() const {
