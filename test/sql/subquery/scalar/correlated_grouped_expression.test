@@ -339,3 +339,11 @@ FROM sales GROUP BY 1 ORDER BY 1 NULLS LAST;
 2024-01-02	[45, 100]
 2024-01-03	[10, 60]
 NULL	NULL
+
+# the nested subquery's column resolves in the inner scope, so the expression does not match the outer group
+query I
+SELECT (SELECT x + (SELECT y) FROM (SELECT 100 AS y) u)
+FROM (SELECT 1 AS x, 2 AS y) t
+GROUP BY x, x + (SELECT y);
+----
+101

@@ -48,7 +48,7 @@ bool ExpressionBinder::MatchesGroup(ParsedExpression &expr) {
 	return false;
 }
 
-bool ExpressionBinder::HasGroups() {
+bool ExpressionBinder::HasCompoundGroups() {
 	return false;
 }
 

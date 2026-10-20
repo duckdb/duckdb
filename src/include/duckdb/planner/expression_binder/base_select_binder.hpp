@@ -49,7 +49,7 @@ protected:
 
 	ProjectionIndex TryBindGroup(ParsedExpression &expr);
 	bool MatchesGroup(ParsedExpression &expr) override;
-	bool HasGroups() override;
+	bool HasCompoundGroups() override;
 	bool ClaimsAlias(ColumnRefExpression &colref) override;
 	BindResult BindGroup(ParsedExpression &expr, idx_t depth, ProjectionIndex group_index);
 
