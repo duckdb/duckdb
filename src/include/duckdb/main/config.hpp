@@ -162,7 +162,7 @@ struct DBConfigOptions {
 	identifier_set_t allowed_configs;
 	//! The log configuration
 	LogConfig log_config = LogConfig();
-	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
+	//! Block allocator capacity (cannot be reduced; free physical pages can be reclaimed)
 	idx_t block_allocator_size = 0;
 	//! Memory limit for the write buffer per row group (optional)
 	optional_idx write_buffer_row_group_memory_limit;
