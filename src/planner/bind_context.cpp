@@ -1,4 +1,6 @@
 #include "duckdb/planner/bind_context.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/catalog/standard_entry.hpp"
@@ -737,8 +739,79 @@ void BindContext::AddBinding(unique_ptr<Binding> binding) {
 void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                TableCatalogEntry &entry, virtual_column_map_t virtual_columns) {
-	AddBinding(
-	    make_uniq<TableBinding>(alias, types, names, bound_column_ids, &entry, index, std::move(virtual_columns)));
+	auto binding =
+	    make_uniq<TableBinding>(alias, types, names, bound_column_ids, &entry, index, std::move(virtual_columns));
+	// references to NUMERIC columns are exact numeric expressions
+	vector<bool> exact_numeric;
+	bool any_exact = false;
+	for (auto &col : entry.GetColumns().Logical()) {
+		bool is_numeric = col.Type().id() == LogicalTypeId::NUMERIC;
+		exact_numeric.push_back(is_numeric);
+		any_exact = any_exact || is_numeric;
+	}
+	if (any_exact) {
+		binding->SetExactNumericColumns(std::move(exact_numeric));
+	}
+	AddBinding(std::move(binding));
+}
+
+vector<bool> BindContext::ExactNumericColumns(const LogicalOperator &plan, idx_t column_count) {
+	vector<bool> result(column_count, false);
+	reference<const LogicalOperator> op = plan;
+	while (true) {
+		switch (op.get().type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION: {
+			auto &expressions = op.get().expressions;
+			for (idx_t i = 0; i < column_count && i < expressions.size(); i++) {
+				result[i] = expressions[i]->exact_numeric;
+			}
+			return result;
+		}
+		case LogicalOperatorType::LOGICAL_GET: {
+			auto &get = op.get().Cast<LogicalGet>();
+			auto table = get.GetTable();
+			if (!table) {
+				return result;
+			}
+			auto &column_ids = get.GetColumnIds();
+			for (idx_t i = 0; i < column_count && i < column_ids.size(); i++) {
+				if (column_ids[i].IsVirtualColumn()) {
+					continue;
+				}
+				result[i] = table->GetColumn(LogicalIndex(column_ids[i].GetPrimaryIndex())).Type().id() ==
+				            LogicalTypeId::NUMERIC;
+			}
+			return result;
+		}
+		case LogicalOperatorType::LOGICAL_UNION:
+		case LogicalOperatorType::LOGICAL_EXCEPT:
+		case LogicalOperatorType::LOGICAL_INTERSECT: {
+			// exact when any input is exact - arithmetic on the union is sized for the widest input anyway
+			for (auto &child : op.get().children) {
+				auto child_result = ExactNumericColumns(*child, column_count);
+				for (idx_t i = 0; i < column_count; i++) {
+					result[i] = result[i] || child_result[i];
+				}
+			}
+			return result;
+		}
+		case LogicalOperatorType::LOGICAL_ORDER_BY:
+		case LogicalOperatorType::LOGICAL_LIMIT:
+		case LogicalOperatorType::LOGICAL_TOP_N:
+		case LogicalOperatorType::LOGICAL_DISTINCT:
+		case LogicalOperatorType::LOGICAL_SAMPLE:
+		case LogicalOperatorType::LOGICAL_FILTER:
+		case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+			if (op.get().children.empty()) {
+				return result;
+			}
+			// these operators pass the columns of their (last) child through
+			op = *op.get().children.back();
+			break;
+		default:
+			return result;
+		}
+	}
 }
 
 void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
@@ -797,7 +870,11 @@ vector<Identifier> BindContext::AliasColumnNames(const Identifier &table_name, c
 
 void BindContext::AddSubquery(TableIndex index, const Identifier &alias, SubqueryRef &ref, BoundStatement &subquery) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
-	AddGenericBinding(index, alias, names, subquery.types);
+	auto binding = make_uniq<Binding>(BindingType::BASE, BindingAlias(alias), subquery.types, names, index);
+	if (subquery.plan) {
+		binding->SetExactNumericColumns(ExactNumericColumns(*subquery.plan, subquery.types.size()));
+	}
+	AddBinding(std::move(binding));
 }
 
 void BindContext::AddEntryBinding(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
@@ -808,13 +885,28 @@ void BindContext::AddEntryBinding(TableIndex index, const Identifier &alias, con
 void BindContext::AddView(TableIndex index, const Identifier &alias, SubqueryRef &ref, BoundStatement &subquery,
                           ViewCatalogEntry &view) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
-	AddEntryBinding(index, alias, names, subquery.types, view.Cast<StandardEntry>());
+	auto binding = make_uniq<EntryBinding>(alias, subquery.types, names, index, view.Cast<StandardEntry>());
+	if (subquery.plan) {
+		binding->SetExactNumericColumns(ExactNumericColumns(*subquery.plan, subquery.types.size()));
+	}
+	AddBinding(std::move(binding));
 }
 
 void BindContext::AddSubquery(TableIndex index, const Identifier &alias, TableFunctionRef &ref,
                               BoundStatement &subquery) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
-	AddGenericBinding(index, alias, names, subquery.types);
+	auto binding = make_uniq<Binding>(BindingType::BASE, BindingAlias(alias), subquery.types, names, index);
+	if (subquery.plan) {
+		binding->SetExactNumericColumns(ExactNumericColumns(*subquery.plan, subquery.types.size()));
+	}
+	AddBinding(std::move(binding));
+}
+
+void BindContext::AddGenericBinding(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
+                                    const vector<LogicalType> &types, vector<bool> exact_numeric_columns) {
+	auto binding = make_uniq<Binding>(BindingType::BASE, BindingAlias(alias), types, names, index);
+	binding->SetExactNumericColumns(std::move(exact_numeric_columns));
+	AddBinding(std::move(binding));
 }
 
 void BindContext::AddGenericBinding(TableIndex index, const Identifier &alias, const vector<Identifier> &names,

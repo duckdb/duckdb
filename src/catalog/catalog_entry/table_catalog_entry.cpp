@@ -337,10 +337,11 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 		}
 	}
 
-	// we also convert any updates on LIST columns into delete + insert
+	// we also convert any updates on LIST columns into delete + insert, and updates on NUMERIC columns, whose new
+	// values may need a wider representation than the row group they live in
 	for (auto &col_index : update.columns) {
 		auto &column = GetColumns().GetColumn(col_index);
-		if (!column.Type().SupportsRegularUpdate()) {
+		if (!column.Type().SupportsRegularUpdate() || column.Type().id() == LogicalTypeId::NUMERIC) {
 			update.update_is_del_and_insert = true;
 			break;
 		}

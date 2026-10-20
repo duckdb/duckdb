@@ -261,6 +261,28 @@ static Value ExactValue(const LogicalType &type, hugeint_t value) {
 	return Value::Numeric(type, value);
 }
 
+//! The number of fractional digits the values of a decimal vector need: trailing zeros do not count, so whole numbers
+//! stored as decimals keep the column in an integer representation
+template <class T>
+static uint8_t NeededScale(UnifiedVectorFormat &vdata, idx_t count, uint8_t scale) {
+	auto data = UnifiedVectorFormat::GetData<T>(vdata);
+	uint8_t needed = 0;
+	for (idx_t i = 0; i < count && needed < scale; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (!vdata.validity.RowIsValid(idx)) {
+			continue;
+		}
+		auto value = data[idx];
+		uint8_t trailing_zeros = 0;
+		while (trailing_zeros < scale && value % 10 == 0) {
+			value /= 10;
+			trailing_zeros++;
+		}
+		needed = MaxValue<uint8_t>(needed, scale - trailing_zeros);
+	}
+	return needed;
+}
+
 //! Widen the unbounded statistics with the values of a vector of an exact representation
 static void UpdateUnboundedStats(BaseStatistics &stats, const Vector &vector, idx_t count) {
 	UnifiedVectorFormat vdata;
@@ -269,6 +291,8 @@ static void UpdateUnboundedStats(BaseStatistics &stats, const Vector &vector, id
 	bool has_null = false;
 	bool found = false;
 	Value min, max;
+	uint8_t type_scale = type.id() == LogicalTypeId::DECIMAL ? DecimalType::GetScale(type) : 0;
+	uint8_t needed_scale = type_scale;
 	switch (type.InternalType()) {
 	case PhysicalType::INT8: {
 		int8_t lo, hi;
@@ -285,6 +309,9 @@ static void UpdateUnboundedStats(BaseStatistics &stats, const Vector &vector, id
 		if (found) {
 			min = ExactValue(type, lo);
 			max = ExactValue(type, hi);
+			if (type_scale > 0) {
+				needed_scale = NeededScale<int16_t>(vdata, count, type_scale);
+			}
 		}
 		break;
 	}
@@ -294,6 +321,9 @@ static void UpdateUnboundedStats(BaseStatistics &stats, const Vector &vector, id
 		if (found) {
 			min = ExactValue(type, lo);
 			max = ExactValue(type, hi);
+			if (type_scale > 0) {
+				needed_scale = NeededScale<int32_t>(vdata, count, type_scale);
+			}
 		}
 		break;
 	}
@@ -303,6 +333,9 @@ static void UpdateUnboundedStats(BaseStatistics &stats, const Vector &vector, id
 		if (found) {
 			min = ExactValue(type, lo);
 			max = ExactValue(type, hi);
+			if (type_scale > 0) {
+				needed_scale = NeededScale<int64_t>(vdata, count, type_scale);
+			}
 		}
 		break;
 	}
@@ -312,6 +345,9 @@ static void UpdateUnboundedStats(BaseStatistics &stats, const Vector &vector, id
 		if (found) {
 			min = ExactValue(type, lo);
 			max = ExactValue(type, hi);
+			if (type_scale > 0) {
+				needed_scale = NeededScale<hugeint_t>(vdata, count, type_scale);
+			}
 		}
 		break;
 	}
@@ -333,6 +369,12 @@ static void UpdateUnboundedStats(BaseStatistics &stats, const Vector &vector, id
 	}
 	if (found) {
 		stats.SetHasNoNull();
+		if (needed_scale < type_scale) {
+			// the values are whole numbers (or need fewer fractional digits than their type): record them that way
+			auto reduced = LogicalType::DECIMAL(DecimalType::GetWidth(type), needed_scale);
+			min = min.DefaultCastAs(reduced);
+			max = max.DefaultCastAs(reduced);
+		}
 		UnboundedNumericStats::Update(stats, min);
 		UnboundedNumericStats::Update(stats, max);
 	}

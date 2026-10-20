@@ -2,6 +2,8 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/string_util.hpp"
 
@@ -191,6 +193,120 @@ LogicalType NumericType::ForRange(const Value &min, const Value &max, uint8_t sc
 	}
 	auto integer_digits = MaxValue(IntegerDigits(min), IntegerDigits(max));
 	return DecimalForDigits(integer_digits, scale);
+}
+
+idx_t NumericType::Digits(hugeint_t value) {
+	if (value == NumericLimits<hugeint_t>::Minimum()) {
+		return Hugeint::CACHED_POWERS_OF_TEN;
+	}
+	if (value < 0) {
+		value = -value;
+	}
+	idx_t digits = 1;
+	while (digits < Hugeint::CACHED_POWERS_OF_TEN && value >= Hugeint::POWERS_OF_TEN[digits]) {
+		digits++;
+	}
+	return digits;
+}
+
+LogicalType NumericType::ForUnscaledRange(hugeint_t min, hugeint_t max, uint8_t scale) {
+	if (scale == 0) {
+		if (min >= NumericLimits<int8_t>::Minimum() && max <= NumericLimits<int8_t>::Maximum()) {
+			return LogicalType::TINYINT;
+		}
+		if (min >= NumericLimits<int16_t>::Minimum() && max <= NumericLimits<int16_t>::Maximum()) {
+			return LogicalType::SMALLINT;
+		}
+		if (min >= NumericLimits<int32_t>::Minimum() && max <= NumericLimits<int32_t>::Maximum()) {
+			return LogicalType::INTEGER;
+		}
+		if (min >= NumericLimits<int64_t>::Minimum() && max <= NumericLimits<int64_t>::Maximum()) {
+			return LogicalType::BIGINT;
+		}
+		return LogicalType::HUGEINT;
+	}
+	auto digits = MaxValue(Digits(min), Digits(max));
+	auto width = MaxValue<idx_t>(digits, scale);
+	if (width > Decimal::MAX_WIDTH_DECIMAL) {
+		throw OutOfRangeException("NUMERIC value needs %d digits, more than the maximum of %d", width,
+		                          Decimal::MAX_WIDTH_DECIMAL);
+	}
+	return LogicalType::DECIMAL(NumericCast<uint8_t>(width), scale);
+}
+
+LogicalType NumericType::ForDigits(idx_t integer_digits, uint8_t scale) {
+	if (scale == 0) {
+		if (integer_digits <= 2) {
+			return LogicalType::TINYINT;
+		}
+		if (integer_digits <= 4) {
+			return LogicalType::SMALLINT;
+		}
+		if (integer_digits <= 9) {
+			return LogicalType::INTEGER;
+		}
+		if (integer_digits <= 18) {
+			return LogicalType::BIGINT;
+		}
+		if (integer_digits <= Decimal::MAX_WIDTH_INT128) {
+			return LogicalType::HUGEINT;
+		}
+	}
+	return DecimalForDigits(integer_digits, scale);
+}
+
+bool NumericType::TryGetRepresentationRange(const LogicalType &type, hugeint_t &min, hugeint_t &max, uint8_t &scale) {
+	scale = 0;
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+		min = NumericLimits<int8_t>::Minimum();
+		max = NumericLimits<int8_t>::Maximum();
+		return true;
+	case LogicalTypeId::SMALLINT:
+		min = NumericLimits<int16_t>::Minimum();
+		max = NumericLimits<int16_t>::Maximum();
+		return true;
+	case LogicalTypeId::INTEGER:
+		min = NumericLimits<int32_t>::Minimum();
+		max = NumericLimits<int32_t>::Maximum();
+		return true;
+	case LogicalTypeId::BIGINT:
+		min = NumericLimits<int64_t>::Minimum();
+		max = NumericLimits<int64_t>::Maximum();
+		return true;
+	case LogicalTypeId::HUGEINT:
+		min = NumericLimits<hugeint_t>::Minimum();
+		max = NumericLimits<hugeint_t>::Maximum();
+		return true;
+	case LogicalTypeId::UTINYINT:
+		min = 0;
+		max = NumericLimits<uint8_t>::Maximum();
+		return true;
+	case LogicalTypeId::USMALLINT:
+		min = 0;
+		max = NumericLimits<uint16_t>::Maximum();
+		return true;
+	case LogicalTypeId::UINTEGER:
+		min = 0;
+		max = NumericLimits<uint32_t>::Maximum();
+		return true;
+	case LogicalTypeId::UBIGINT:
+		min = 0;
+		max = hugeint_t(NumericLimits<uint64_t>::Maximum());
+		return true;
+	case LogicalTypeId::DECIMAL: {
+		auto width = DecimalType::GetWidth(type);
+		if (width >= Hugeint::CACHED_POWERS_OF_TEN) {
+			return false;
+		}
+		scale = DecimalType::GetScale(type);
+		max = Hugeint::POWERS_OF_TEN[width] - 1;
+		min = -max;
+		return true;
+	}
+	default:
+		return false;
+	}
 }
 
 LogicalType NumericType::WidestType(uint8_t scale) {

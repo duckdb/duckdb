@@ -1,4 +1,7 @@
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 
 #include "duckdb/function/match_recognize.hpp"
 
@@ -49,7 +52,37 @@ StackChecker<ExpressionBinder> ExpressionBinder::StackCheck(const ParsedExpressi
 	return StackChecker<ExpressionBinder>(*this, extra_stack);
 }
 
+static void ClearExactNumericThroughCasts(Expression &expr) {
+	expr.exact_numeric = false;
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION && BoundCastExpression::IsCast(expr)) {
+		auto &cast = expr.Cast<BoundFunctionExpression>();
+		auto &children = cast.GetChildrenMutable();
+		if (!children.empty()) {
+			ClearExactNumericThroughCasts(*children[0]);
+		}
+	}
+}
+
 BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
+	auto expression_class = expr->GetExpressionClass();
+	auto result = BindExpressionInternal(expr, depth, root_expression);
+	if (result.HasError() || !result.expression) {
+		return result;
+	}
+	auto &bound = *result.expression;
+	if (expression_class == ExpressionClass::CAST) {
+		// an explicit cast chooses the type - the result is a regular value of that type, and the input it wraps no
+		// longer counts as exact numeric either (implicit casts inserted by function binding are looked through)
+		ClearExactNumericThroughCasts(bound);
+	} else if (!bound.exact_numeric && NumericType::IsExact(bound.GetReturnType()) && HasExactNumericInput(bound)) {
+		// exact numeric expressions over exact numeric inputs stay exact
+		bound.exact_numeric = true;
+	}
+	return result;
+}
+
+BindResult ExpressionBinder::BindExpressionInternal(unique_ptr<ParsedExpression> &expr, idx_t depth,
+                                                    bool root_expression) {
 	auto stack_checker = StackCheck(*expr);
 
 	auto &expr_ref = *expr;

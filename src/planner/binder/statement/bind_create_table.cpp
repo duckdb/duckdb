@@ -665,11 +665,20 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// construct the result object
 		auto query_obj = Bind(*base.query);
 		base.query.reset();
+		// results that derive from NUMERIC columns are stored as NUMERIC again
+		auto sql_types = query_obj.types;
+		if (query_obj.plan) {
+			auto exact_numeric = BindContext::ExactNumericColumns(*query_obj.plan, sql_types.size());
+			for (idx_t i = 0; i < sql_types.size(); i++) {
+				if (exact_numeric[i]) {
+					sql_types[i] = LogicalType::NUMERIC;
+				}
+			}
+		}
 		result->query = std::move(query_obj.plan);
 
 		// construct the set of columns based on the names and types of the query
 		auto &names = query_obj.names;
-		auto &sql_types = query_obj.types;
 		// e.g. create table (col1 ,col2) as QUERY
 		// col1 and col2 are the target_col_names
 		auto target_col_names = base.columns.GetColumnNames();

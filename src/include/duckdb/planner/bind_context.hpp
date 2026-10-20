@@ -116,6 +116,11 @@ public:
 	void AddEntryBinding(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
 	                     const vector<LogicalType> &types, StandardEntry &entry);
 	//! Adds a base table with the given alias to the BindContext.
+	//! Per output column of a bound plan: whether it derives from a NUMERIC column
+	static vector<bool> ExactNumericColumns(const LogicalOperator &plan, idx_t column_count);
+	//! Adds a generic binding whose columns derive from NUMERIC columns as given
+	void AddGenericBinding(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
+	                       const vector<LogicalType> &types, vector<bool> exact_numeric_columns);
 	void AddGenericBinding(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
 	                       const vector<LogicalType> &types);
 

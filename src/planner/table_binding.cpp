@@ -138,7 +138,17 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	binding.column_index = ProjectionIndex(column_index);
 	LogicalType sql_type = types[column_index];
 	SetBoundColumnAlias(colref);
-	return BindResult(make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), sql_type, binding, depth));
+	auto result = make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), sql_type, binding, depth);
+	result->exact_numeric = IsExactNumericColumn(column_index);
+	return BindResult(std::move(result));
+}
+
+void Binding::SetExactNumericColumns(vector<bool> exact_numeric_columns_p) {
+	exact_numeric_columns = std::move(exact_numeric_columns_p);
+}
+
+bool Binding::IsExactNumericColumn(column_t column_index) const {
+	return column_index < exact_numeric_columns.size() && exact_numeric_columns[column_index];
 }
 
 optional_ptr<StandardEntry> Binding::GetStandardEntry() {
@@ -317,7 +327,9 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		SetBoundColumnAlias(colref);
 	}
 	ColumnBinding binding = GetColumnBinding(column_index);
-	return BindResult(make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), col_type, binding, depth));
+	auto result = make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), col_type, binding, depth);
+	result->exact_numeric = ventry == virtual_columns.end() && IsExactNumericColumn(column_index);
+	return BindResult(std::move(result));
 }
 
 optional_ptr<StandardEntry> TableBinding::GetStandardEntry() {
@@ -399,6 +411,9 @@ void CTEBinding::Reference() {
 		// copy over the names / types and initialize the binding
 		this->names = bind_state->names;
 		this->types = bind_state->types;
+		if (bind_state->query.plan) {
+			exact_numeric_columns = BindContext::ExactNumericColumns(*bind_state->query.plan, types.size());
+		}
 		Initialize();
 
 		// finalize binding

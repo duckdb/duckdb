@@ -220,6 +220,8 @@ public:
 	//! Exposed to be used from sub-binders that aren't subclasses of ExpressionBinder.
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	                                  bool root_expression = false);
+	//! Whether any input of a bound expression derives from a NUMERIC column
+	static bool HasExactNumericInput(const Expression &expr);
 
 	//! FIXME: Generalise this for extensibility.
 	//! Recursively replaces macro parameters with the provided input parameters.
@@ -293,6 +295,11 @@ protected:
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
+	//! Binds +, - and * over operands that derive from NUMERIC columns to the representation that holds every
+	//! possible result; returns nullptr when the regular binding applies
+	unique_ptr<Expression> TryBindExactNumericArithmetic(ScalarFunctionCatalogEntry &function,
+	                                                     vector<unique_ptr<Expression>> &children);
+	BindResult BindExpressionInternal(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression);
 	virtual BindResult BindLambdaFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth);
 	virtual BindResult BindWindow(FunctionExpression &expr, WindowFunctionCatalogEntry &function, idx_t depth);

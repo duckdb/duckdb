@@ -39,6 +39,15 @@
         "version": "v2.0.0",
         "equals_skip": true,
         "hash_skip": true
+      },
+      {
+        "id": 105,
+        "name": "exact_numeric",
+        "type": "bool",
+        "default": "false",
+        "version": "v2.0.0",
+        "equals_skip": true,
+        "hash_skip": true
       }
     ]
   },

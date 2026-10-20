@@ -183,6 +183,33 @@ SELECT typeof(n), typeof(m) FROM defaults LIMIT 1;
 ----
 INTEGER	DECIMAL(3,2)
 
+# whole numbers stored as decimals do not need fractional digits: the column stays in an integer representation
+statement ok
+CREATE TABLE whole(n NUMERIC);
+
+statement ok
+INSERT INTO whole VALUES (2.00::DECIMAL(5,2)), (100.00::DECIMAL(5,2));
+
+query I
+SELECT typeof(n) FROM whole LIMIT 1;
+----
+TINYINT
+
+statement ok
+INSERT INTO whole VALUES (2.50::DECIMAL(5,2));
+
+query I
+SELECT typeof(n) FROM whole LIMIT 1;
+----
+DECIMAL(4,1)
+
+query I
+SELECT n FROM whole ORDER BY n;
+----
+2.0
+2.5
+100.0
+
 # NUMERIC(width, scale) is a DECIMAL as before
 statement ok
 CREATE TABLE d(x NUMERIC(10, 2));
@@ -230,11 +257,17 @@ CREATE TABLE nested(l NUMERIC[]);
 ----
 NUMERIC is only supported as the type of a column
 
-# CREATE TABLE AS stores the representation the query produced
+# CREATE TABLE AS keeps results that derive from NUMERIC columns NUMERIC
 statement ok
-CREATE TABLE copy AS SELECT n FROM t;
+CREATE TABLE copy AS SELECT n, n::DECIMAL(44,2) AS fixed FROM t;
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE copy) ORDER BY column_name;
+----
+fixed	DECIMAL(44,2)
+n	NUMERIC
 
 query I
-SELECT column_type FROM (DESCRIBE copy);
+SELECT typeof(n) FROM copy LIMIT 1;
 ----
 DECIMAL(44,2)

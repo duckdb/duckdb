@@ -285,8 +285,17 @@ unique_ptr<GlobalSinkState> PhysicalUpdate::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<UpdateLocalState>(context.client, expressions, table.GetScanTypes(), bound_defaults,
-	                                   bound_constraints, capture_old_rows);
+	// NUMERIC columns: the updated columns carry the representation of their new values, the others the one they
+	// are scanned in
+	auto chunk_types = table.GetScanTypes();
+	for (idx_t i = 0; i < columns.size(); i++) {
+		auto column_index = columns[i].index;
+		if (table.GetTypes()[column_index].id() == LogicalTypeId::NUMERIC) {
+			chunk_types[column_index] = expressions[i]->GetReturnType();
+		}
+	}
+	return make_uniq<UpdateLocalState>(context.client, expressions, chunk_types, bound_defaults, bound_constraints,
+	                                   capture_old_rows);
 }
 
 SinkCombineResultType PhysicalUpdate::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {

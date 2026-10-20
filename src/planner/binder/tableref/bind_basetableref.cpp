@@ -159,7 +159,8 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		auto alias = ref.alias.empty() ? ref.Table() : ref.alias;
 		auto names = BindContext::AliasColumnNames(alias, ctebinding->GetColumnNames(), ref.column_name_alias);
 
-		bind_context.AddGenericBinding(index, alias, names, ctebinding->GetColumnTypes());
+		bind_context.AddGenericBinding(index, alias, names, ctebinding->GetColumnTypes(),
+		                               ctebinding->GetExactNumericColumns());
 
 		bool is_recurring = ref.GetQualifiedName().Schema() == "recurring";
 

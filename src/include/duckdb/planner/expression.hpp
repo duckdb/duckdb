@@ -25,6 +25,11 @@ protected:
 	//! The return type of the expression
 	LogicalType return_type;
 
+public:
+	//! Whether the expression derives from a NUMERIC column: its value is exact and arithmetic over it is bound to the
+	//! representation that holds every possible result instead of overflowing
+	bool exact_numeric = false;
+
 protected:
 	//! Expression statistics (if any) - ONLY USED FOR VERIFICATION
 	unique_ptr<BaseStatistics> verification_stats;
@@ -85,6 +90,7 @@ protected:
 		alias = other.alias;
 		SetReturnType(other.return_type);
 		query_location = other.query_location;
+		exact_numeric = other.exact_numeric;
 	}
 };
 

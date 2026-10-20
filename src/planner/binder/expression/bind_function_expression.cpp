@@ -373,6 +373,12 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
 
+	// arithmetic over values that derive from NUMERIC columns is sized so that it cannot overflow
+	auto exact_numeric = TryBindExactNumericArithmetic(func, bound_children);
+	if (exact_numeric) {
+		return BindResult(std::move(exact_numeric));
+	}
+
 	// all children bound successfully - collect them (with their explicit names, if any) into the full argument list.
 	// The positional/named split (and, for capturing functions, the alias capture) is resolved later per candidate
 	// overload.

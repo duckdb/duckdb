@@ -31,6 +31,15 @@ struct NumericType {
 	DUCKDB_API static LogicalType ForRange(const Value &min, const Value &max, uint8_t scale);
 	//! The number of integer digits of an exact numeric value (0 for |value| < 1)
 	DUCKDB_API static uint8_t IntegerDigits(const Value &value);
+	//! The number of decimal digits of an unscaled value
+	DUCKDB_API static idx_t Digits(hugeint_t value);
+	//! The narrowest representation for unscaled values in [min, max] at the given scale
+	DUCKDB_API static LogicalType ForUnscaledRange(hugeint_t min, hugeint_t max, uint8_t scale);
+	//! The narrowest representation for values with the given number of integer digits and scale
+	DUCKDB_API static LogicalType ForDigits(idx_t integer_digits, uint8_t scale);
+	//! The unscaled value range a fixed-size exact representation can hold; false for representations beyond 128 bits
+	DUCKDB_API static bool TryGetRepresentationRange(const LogicalType &type, hugeint_t &min, hugeint_t &max,
+	                                                 uint8_t &scale);
 	//! The widest supported representation of exact numbers with the given scale
 	DUCKDB_API static LogicalType WidestType(uint8_t scale);
 	//! Error thrown for values that cannot be stored in a NUMERIC column

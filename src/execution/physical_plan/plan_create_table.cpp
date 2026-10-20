@@ -24,6 +24,7 @@ PhysicalOperator &DuckCatalog::PlanCreateTableAs(ClientContext &context, Physica
 	if (!parallel_streaming_insert && use_batch_index) {
 		auto &insert = planner.Make<PhysicalBatchInsert>(op, op.schema, std::move(op.info), 0U);
 		D_ASSERT(op.children.size() == 1);
+		PhysicalInsert::ResolveInsertTypes(static_cast<PhysicalBatchInsert &>(insert).insert_types, plan.GetTypes());
 		insert.children.push_back(plan);
 		return insert;
 	}
@@ -31,6 +32,7 @@ PhysicalOperator &DuckCatalog::PlanCreateTableAs(ClientContext &context, Physica
 	auto parallel = parallel_streaming_insert && num_threads > 1;
 	auto &insert = planner.Make<PhysicalInsert>(op, op.schema, std::move(op.info), 0U, parallel);
 	D_ASSERT(op.children.size() == 1);
+	PhysicalInsert::ResolveInsertTypes(static_cast<PhysicalInsert &>(insert).insert_types, plan.GetTypes());
 	insert.children.push_back(plan);
 	return insert;
 }

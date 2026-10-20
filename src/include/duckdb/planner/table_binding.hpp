@@ -59,6 +59,12 @@ public:
 	const vector<Identifier> &GetColumnNames();
 	idx_t GetColumnCount();
 	void SetColumnType(idx_t col_idx, LogicalType type);
+	//! Mark which columns derive from NUMERIC columns (their references bind as exact numeric expressions)
+	void SetExactNumericColumns(vector<bool> exact_numeric_columns);
+	bool IsExactNumericColumn(column_t column_index) const;
+	const vector<bool> &GetExactNumericColumns() const {
+		return exact_numeric_columns;
+	}
 	//! Marks this binding as the NULL-producing side of an outer join
 	void SetNullExtended();
 	bool IsNullExtended() const;
@@ -103,6 +109,8 @@ protected:
 	identifier_map_t<column_t> name_map;
 	//! Whether rows of this binding can be NULL-extended by an outer join
 	bool null_extended = false;
+	//! Per column: whether it derives from a NUMERIC column (empty: none do)
+	vector<bool> exact_numeric_columns;
 };
 
 struct EntryBinding : public Binding {

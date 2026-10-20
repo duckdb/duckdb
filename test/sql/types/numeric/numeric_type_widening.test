@@ -158,7 +158,7 @@ SELECT n FROM p ORDER BY n NULLS LAST;
 5.0
 NULL
 
-# updates that fit the stored representation work, widening updates are not supported yet
+# updates are executed as a delete and an insert, so the new values may need a wider representation
 statement ok
 UPDATE p SET n = 7 WHERE n = 5;
 
@@ -169,10 +169,30 @@ SELECT n FROM p ORDER BY n NULLS LAST;
 7.0
 NULL
 
-statement error
+statement ok
 UPDATE p SET n = 123456789012345678901234567890 WHERE n = 7;
+
+query I
+SELECT typeof(n) FROM p LIMIT 1;
 ----
-not supported yet
+DECIMAL(31,1)
+
+query I
+SELECT n FROM p ORDER BY n NULLS LAST;
+----
+2.5
+123456789012345678901234567890.0
+NULL
+
+statement ok
+UPDATE p SET n = n * 2 WHERE n > 1000;
+
+query I
+SELECT n FROM p ORDER BY n NULLS LAST;
+----
+2.5
+246913578024691357802469135780.0
+NULL
 
 # joins and grouping use the bound representation
 query II
