@@ -33,7 +33,7 @@ public:
 
 	idx_t fixed_width_string_length;
 
-	unique_ptr<BaseStatistics> Stats(idx_t, const duckdb_parquet::ParquetVector<ColumnChunk> &) override {
+	unique_ptr<BaseStatistics> Stats(idx_t, const duckdb_parquet::ColumnChunkList &) override {
 		return {};
 	}
 

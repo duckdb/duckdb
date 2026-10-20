@@ -136,9 +136,9 @@ static idx_t ParquetColumnChunkFileOffset(const duckdb_parquet::ColumnChunk &chu
 	return offset;
 }
 
-void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(
-    ThriftFileTransport &trans, vector<ParquetPrefetchColumn> &requested_columns,
-    const duckdb_parquet::ParquetVector<duckdb_parquet::ColumnChunk> &all_chunks) {
+void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(ThriftFileTransport &trans,
+                                                         vector<ParquetPrefetchColumn> &requested_columns,
+                                                         const duckdb_parquet::ColumnChunkList &all_chunks) {
 	if (requested_columns.empty()) {
 		return;
 	}
@@ -357,8 +357,8 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		}
 	}
 
-	auto arena = make_uniq<ArenaAllocator>(allocator);
-	auto metadata = make_uniq<FileMetaData>(*arena);
+	auto metadata = make_uniq<ParquetMetadata>(allocator);
+	auto &file_metadata = metadata->file_metadata;
 	unique_ptr<FileCryptoMetaData> crypto_metadata;
 	string encryption_key_hash;
 
@@ -366,7 +366,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		// Get the encryption util
 		// The parquet reader only reads data, so we set util to true
 		encryption_util = context.db->GetEncryptionUtil(true);
-		crypto_metadata = make_uniq<FileCryptoMetaData>(*arena);
+		crypto_metadata = make_uniq<FileCryptoMetaData>(metadata->arena);
 		crypto_metadata->read(file_proto.get());
 
 		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
@@ -381,24 +381,24 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 			aad_crypto_metadata.SetModule(ParquetCrypto::FOOTER);
 		}
 		ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
-		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), *encryption_util,
+		ParquetCrypto::Read(file_metadata, *file_proto, encryption_config->GetFooterKey(), *encryption_util,
 		                    aad_crypto_metadata);
 		auto hash_util = context.db->GetMbedTLSUtil(false);
 		encryption_key_hash = ParquetFileMetadataCache::CreateEncryptionKeyHash(*encryption_config, *hash_util);
 	} else {
-		metadata->read(file_proto.get());
+		file_metadata.read(file_proto.get());
 	}
 
-	if (metadata->num_rows < 0) {
+	if (file_metadata.num_rows < 0) {
 		throw InvalidInputException("Failed to read Parquet file \"%s\": has negative number of rows",
 		                            file_handle.GetPath());
 	}
 
 	// Try to read the GeoParquet metadata (if present)
-	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
-	return make_shared_ptr<ParquetFileMetadataCache>(std::move(arena), std::move(metadata), file_handle,
-	                                                 std::move(geo_metadata), std::move(crypto_metadata),
-	                                                 std::move(encryption_key_hash), footer_len);
+	auto geo_metadata = GeoParquetFileMetadata::TryRead(file_metadata, context);
+	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), file_handle, std::move(geo_metadata),
+	                                                 std::move(crypto_metadata), std::move(encryption_key_hash),
+	                                                 footer_len);
 }
 
 static bool CanUseParquetMetadataStatistics(ClientContext &context,
@@ -719,7 +719,8 @@ ParquetReader::ReadVirtualColumnStatistics(ClientContext &context, const Parquet
 		return nullptr;
 	}
 	// the row numbers of every row group follow on from those of the row groups before it
-	return ReadColumnStatistics(*metadata->metadata, ParquetColumnSchema::FileRowNumber(), parquet_options);
+	return ReadColumnStatistics(metadata->metadata->file_metadata, ParquetColumnSchema::FileRowNumber(),
+	                            parquet_options);
 }
 
 unique_ptr<BaseStatistics> ParquetReader::GetVirtualColumnStatistics(ClientContext &context,
@@ -744,8 +745,8 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ClientContext &context,
 		return nullptr;
 	}
 
-	return ReadStatisticsInternal(*union_data.metadata->metadata, *union_data.root_schema, union_data.options,
-	                              file_col_idx);
+	return ReadStatisticsInternal(union_data.metadata->metadata->file_metadata, *union_data.root_schema,
+	                              union_data.options, file_col_idx);
 }
 
 static bool IsFullyShredded(const BaseStatistics &variant_stats, const ColumnIndex &column_index) {
@@ -1470,7 +1471,7 @@ optional_idx ParquetUnionData::TryGetCardinalityEstimate() const {
 		return reader->Cast<ParquetReader>().NumRows();
 	}
 	if (metadata) {
-		return NumericCast<idx_t>(metadata->metadata->num_rows);
+		return NumericCast<idx_t>(metadata->metadata->file_metadata.num_rows);
 	}
 	return optional_idx();
 }
@@ -1497,7 +1498,7 @@ ParquetReader::~ParquetReader() {
 const FileMetaData *ParquetReader::GetFileMetadata() const {
 	D_ASSERT(metadata);
 	D_ASSERT(metadata->metadata);
-	return metadata->metadata.get();
+	return &metadata->metadata->file_metadata;
 }
 
 string ParquetReader::GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm) {

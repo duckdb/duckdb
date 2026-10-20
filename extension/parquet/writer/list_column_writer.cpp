@@ -182,7 +182,7 @@ const ColumnWriter &ListColumnWriter::GetChildWriter() const {
 	return *child_writers[0];
 }
 
-idx_t ListColumnWriter::FinalizeSchema(duckdb_parquet::ParquetVector<duckdb_parquet::SchemaElement> &schemas) {
+idx_t ListColumnWriter::FinalizeSchema(duckdb_parquet::SchemaElementList &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = column_schema;

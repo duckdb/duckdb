@@ -135,7 +135,7 @@ void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	}
 }
 
-idx_t StructColumnWriter::FinalizeSchema(duckdb_parquet::ParquetVector<duckdb_parquet::SchemaElement> &schemas) {
+idx_t StructColumnWriter::FinalizeSchema(duckdb_parquet::SchemaElementList &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = column_schema;

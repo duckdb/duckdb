@@ -85,6 +85,11 @@ public:
 template <class T>
 using ParquetVector = duckdb::vector<T, true, ParquetAllocator<T>>;
 
+class ColumnChunk;
+class SchemaElement;
+using ColumnChunkList = ParquetVector<ColumnChunk>;
+using SchemaElementList = ParquetVector<SchemaElement>;
+
 //! Thrift protocols read/write std::string - these helpers bridge to the arena strings
 inline uint32_t ReadParquetString(duckdb_apache::thrift::protocol::TProtocol *iprot, ParquetString &result) {
 	std::string tmp;

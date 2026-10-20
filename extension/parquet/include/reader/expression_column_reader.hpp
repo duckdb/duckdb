@@ -58,12 +58,11 @@ public:
 	unique_ptr<ParquetColumnSchema> owned_schema;
 
 public:
-	void InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
-	                    const duckdb_parquet::ParquetVector<ColumnChunk> &columns, TProtocol &protocol_p) override;
+	void InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows, const duckdb_parquet::ColumnChunkList &columns,
+	                    TProtocol &protocol_p) override;
 
 	idx_t Read(ColumnReaderInput &input, Vector &result) override;
-	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p,
-	                                 const duckdb_parquet::ParquetVector<ColumnChunk> &columns) override;
+	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const duckdb_parquet::ColumnChunkList &columns) override;
 
 	void Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
 	            idx_t approved_tuple_count) override;

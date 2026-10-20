@@ -35,13 +35,12 @@ public:
 public:
 	ColumnReader &GetChildReader(idx_t child_idx);
 
-	void InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
-	                    const duckdb_parquet::ParquetVector<ColumnChunk> &columns, TProtocol &protocol_p) override;
+	void InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows, const duckdb_parquet::ColumnChunkList &columns,
+	                    TProtocol &protocol_p) override;
 
 	idx_t Read(ColumnReaderInput &input, Vector &result) override;
 
-	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p,
-	                                 const duckdb_parquet::ParquetVector<ColumnChunk> &columns) override;
+	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const duckdb_parquet::ColumnChunkList &columns) override;
 
 	void Skip(idx_t num_values) override;
 	idx_t GroupRowsAvailable() override;

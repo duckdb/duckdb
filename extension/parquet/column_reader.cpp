@@ -158,8 +158,7 @@ void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_m
 	}
 }
 
-unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p,
-                                               const duckdb_parquet::ParquetVector<ColumnChunk> &columns) {
+unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const duckdb_parquet::ColumnChunkList &columns) {
 	return Schema().Stats(*reader.GetFileMetadata(), reader.parquet_options, row_group_idx_p, columns);
 }
 
@@ -247,7 +246,7 @@ void ColumnReader::PlainSelect(shared_ptr<ResizeableBuffer> &plain_data, uint8_t
 }
 
 void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
-                                  const duckdb_parquet::ParquetVector<ColumnChunk> &columns, TProtocol &protocol_p) {
+                                  const duckdb_parquet::ColumnChunkList &columns, TProtocol &protocol_p) {
 	D_ASSERT(ColumnIndex() < columns.size());
 	chunk = &columns[ColumnIndex()];
 	protocol = &protocol_p;

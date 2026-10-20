@@ -75,7 +75,7 @@ struct PreparedParquetLayout {
 	explicit PreparedParquetLayout(ArenaAllocator &arena) : schema(arena) {
 	}
 
-	duckdb_parquet::ParquetVector<duckdb_parquet::SchemaElement> schema;
+	duckdb_parquet::SchemaElementList schema;
 	ShreddingType shredding_types;
 };
 

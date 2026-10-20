@@ -27,8 +27,8 @@ public:
 
 	void ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) override;
 
-	void InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
-	                    const duckdb_parquet::ParquetVector<ColumnChunk> &columns, TProtocol &protocol_p) override {
+	void InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows, const duckdb_parquet::ColumnChunkList &columns,
+	                    TProtocol &protocol_p) override {
 		child_column_reader->InitializeRead(row_group_idx_p, row_group_num_rows, columns, protocol_p);
 	}
 

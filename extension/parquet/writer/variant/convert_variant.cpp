@@ -53,7 +53,7 @@ static void MarkTypedValueShreddingGroupsRequired(ColumnWriter &typed_value) {
 	}
 }
 
-idx_t VariantColumnWriter::FinalizeSchema(duckdb_parquet::ParquetVector<duckdb_parquet::SchemaElement> &schemas) {
+idx_t VariantColumnWriter::FinalizeSchema(duckdb_parquet::SchemaElementList &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = Schema();

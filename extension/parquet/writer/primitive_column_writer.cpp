@@ -566,7 +566,7 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state,
 	state.write_info.insert(state.write_info.begin(), std::move(write_info));
 }
 
-idx_t PrimitiveColumnWriter::FinalizeSchema(duckdb_parquet::ParquetVector<duckdb_parquet::SchemaElement> &schemas) {
+idx_t PrimitiveColumnWriter::FinalizeSchema(duckdb_parquet::SchemaElementList &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = column_schema;

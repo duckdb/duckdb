@@ -56,9 +56,9 @@ struct ParquetStatisticsUtils {
 	static constexpr const char *INTERVAL_BLOOM_FILTER_KEY = "duckdb.interval_bloom_filter";
 	static constexpr const char *INTERVAL_BLOOM_FILTER_VALUE = "normalized-v1";
 
-	static unique_ptr<BaseStatistics>
-	TransformColumnStatistics(const ParquetColumnSchema &reader,
-	                          const duckdb_parquet::ParquetVector<ColumnChunk> &columns, bool can_have_nan);
+	static unique_ptr<BaseStatistics> TransformColumnStatistics(const ParquetColumnSchema &reader,
+	                                                            const duckdb_parquet::ColumnChunkList &columns,
+	                                                            bool can_have_nan);
 
 	static unique_ptr<BaseStatistics>
 	TransformParquetStatistics(const LogicalType &type, const ParquetColumnSchema &schema,

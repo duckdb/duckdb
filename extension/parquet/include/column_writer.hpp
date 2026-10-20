@@ -177,7 +177,7 @@ public:
 
 	virtual bool TryExportPreparedShreddingType(ShreddingType &result) const;
 
-	virtual idx_t FinalizeSchema(duckdb_parquet::ParquetVector<duckdb_parquet::SchemaElement> &schemas) = 0;
+	virtual idx_t FinalizeSchema(duckdb_parquet::SchemaElementList &schemas) = 0;
 
 	//! Create the column writer for a specific type recursively
 	static unique_ptr<ColumnWriter> CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,

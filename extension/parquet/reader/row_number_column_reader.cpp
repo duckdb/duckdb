@@ -30,8 +30,7 @@ RowNumberColumnReader::RowNumberColumnReader(const ParquetReader &reader, const 
 }
 
 void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
-                                           const duckdb_parquet::ParquetVector<ColumnChunk> &columns,
-                                           TProtocol &protocol_p) {
+                                           const duckdb_parquet::ColumnChunkList &columns, TProtocol &protocol_p) {
 	// the row numbers are produced from the row count without reading a column chunk - every column chunk has a value
 	// (or NULL) per row, so it cannot have fewer values than the row group has rows
 	for (auto &column : columns) {
@@ -82,8 +81,7 @@ RowGroupColumnReader::RowGroupColumnReader(const ParquetReader &reader, const Pa
 }
 
 void RowGroupColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
-                                          const duckdb_parquet::ParquetVector<ColumnChunk> &columns,
-                                          TProtocol &protocol_p) {
+                                          const duckdb_parquet::ColumnChunkList &columns, TProtocol &protocol_p) {
 	row_group_idx = row_group_idx_p;
 }
 
