@@ -422,6 +422,32 @@ static vector<string> SnapshotMacroSignatures(const CreateMacroInfo &info) {
 	return result;
 }
 
+void Binder::CheckLanguageMacroStorageVersion(Catalog &catalog, const CreateMacroInfo &info) {
+	bool uses_language_features = false;
+	for (auto &member : info.macros) {
+		if (member->type == MacroType::LANGUAGE_MACRO || member->return_type.id() != LogicalTypeId::UNKNOWN) {
+			uses_language_features = true;
+			break;
+		}
+	}
+	if (!uses_language_features) {
+		return;
+	}
+	auto &attached = catalog.GetAttached();
+	if (!attached.HasStorageManager()) {
+		return;
+	}
+	auto &storage_manager = attached.GetStorageManager();
+	const auto since = StorageCompatibility::FromString("v2.1.0").storage_version;
+	if (!info.temporary && !attached.IsTemporary() && !storage_manager.InMemory() &&
+	    storage_manager.GetStorageVersion() < since) {
+		string msg =
+		    "Language functions and RETURNS types are only supported for storage versions v2.1.0 and higher.\n";
+		msg += "Use an in-memory database, ATTACH with (STORAGE_VERSION v2.1.0), or create a TEMP function";
+		throw BinderException(msg);
+	}
+}
+
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	//! Set to identify exact matches in macro overloads
 	struct VectorOfLogicalTypeHash {
@@ -455,22 +481,20 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	SearchSchema(info);
 	auto &catalog = Catalog::GetCatalog(context, info.GetQualifiedName().Catalog());
 
-	// Figure out if we can store typed macro parameters and language/RETURNS members
+	// Figure out if we can store typed macro parameters
 	auto &attached = catalog.GetAttached();
 	auto store_types = true;
-	auto store_language_features = true;
 	if (attached.HasStorageManager()) {
 		// If DuckDB is used as a storage, we must check the version.
 		auto &storage_manager = attached.GetStorageManager();
 		const auto since = StorageCompatibility::FromString("v1.4.0").storage_version;
-		const auto always_storable = info.temporary || attached.IsTemporary() || storage_manager.InMemory();
-		store_types = always_storable || storage_manager.GetStorageVersion() >= since;
-		const auto language_since = StorageCompatibility::FromString("v2.1.0").storage_version;
-		store_language_features = always_storable || storage_manager.GetStorageVersion() >= language_since;
+		store_types = info.temporary || attached.IsTemporary() || storage_manager.InMemory() ||
+		              storage_manager.GetStorageVersion() >= since;
 	}
 	// try to bind each of the included functions
 	vector_of_logical_type_set_t type_overloads;
 	auto &base = info.Cast<CreateMacroInfo>();
+	CheckLanguageMacroStorageVersion(catalog, base);
 
 	// a function entry holds either plain macro members or language members of a single language
 	string entry_language;
@@ -504,14 +528,6 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 				}
 			}
 		}
-		if (!store_language_features &&
-		    (function->type == MacroType::LANGUAGE_MACRO || function->return_type.id() != LogicalTypeId::UNKNOWN)) {
-			string msg = "Language functions and RETURNS types are only supported for storage versions v2.1.0 and "
-			             "higher.\n";
-			msg += "Use an in-memory database, ATTACH with (STORAGE_VERSION v2.1.0), or create a TEMP function";
-			throw BinderException(msg);
-		}
-
 		if (function->type == MacroType::LANGUAGE_MACRO) {
 			// the source is stored verbatim, there is no expression to verify here
 		} else if (info.type == CatalogType::MACRO_ENTRY) {

@@ -1,0 +1,118 @@
+# name: test/sql/catalog/function/macro_returns_type.test
+# description: RETURNS declares a result type on any scalar macro member, enforced as a cast
+# group: [function]
+
+statement ok
+CREATE MACRO m(x) RETURNS INTEGER AS x + 1;
+
+query IT
+SELECT m(1), typeof(m(1));
+----
+2	INTEGER
+
+# RETURNS has standard CAST semantics: NULL passes through
+query I
+SELECT m(NULL);
+----
+NULL
+
+# ... and a value the type cannot represent is a runtime conversion error
+statement error
+SELECT m(2147483647::BIGINT * 2);
+----
+<REGEX>:.*Conversion Error.*
+
+statement ok
+DROP MACRO m;
+
+# the cast narrows a wider body result
+statement ok
+CREATE MACRO wide(x INTEGER) RETURNS SMALLINT AS x * 2;
+
+query T
+SELECT typeof(wide(3));
+----
+SMALLINT
+
+statement error
+SELECT wide(100000);
+----
+<REGEX>:.*Conversion Error.*
+
+# per-member RETURNS in one entry
+statement ok
+CREATE MACRO multi(x INTEGER) RETURNS BIGINT AS x, (x INTEGER, y INTEGER) RETURNS VARCHAR AS x + y;
+
+query TT
+SELECT typeof(multi(1)), typeof(multi(1, 2));
+----
+BIGINT	VARCHAR
+
+# RETURNS applies to window macros too
+statement ok
+CREATE MACRO wm(x) RETURNS DOUBLE AS sum(x);
+
+query T
+SELECT typeof(wm(i) OVER ()) FROM range(3) t(i) LIMIT 1;
+----
+DOUBLE
+
+# the declared type shows in duckdb_functions and renders back in the definition
+query TT rowsort
+SELECT return_type, macro_definition FROM duckdb_functions() WHERE function_name = 'multi';
+----
+BIGINT	x
+VARCHAR	(x + y)
+
+# RETURNS round-trips through EXPORT/IMPORT
+statement ok
+EXPORT DATABASE '{TEST_DIR}/macro_returns_type_export';
+
+statement ok
+DROP MACRO multi;
+
+statement ok
+DROP MACRO wide;
+
+statement ok
+DROP MACRO wm;
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/macro_returns_type_export';
+
+query TT
+SELECT typeof(multi(1)), typeof(multi(1, 2));
+----
+BIGINT	VARCHAR
+
+# a RETURNS type naming a user type resolves at CREATE
+statement ok
+CREATE TYPE rtype AS ENUM ('a', 'b');
+
+statement ok
+CREATE MACRO typed_return(x) RETURNS rtype AS x;
+
+query T
+SELECT typed_return('a');
+----
+a
+
+statement error
+SELECT typed_return('c');
+----
+<REGEX>:.*Conversion Error.*
+
+# table macros reject RETURNS
+statement error
+CREATE MACRO tm() RETURNS INTEGER AS TABLE SELECT 1;
+----
+<REGEX>:.*RETURNS types are not supported for table macros.*
+
+# protection test: macros without RETURNS keep their inferred types
+statement ok
+CREATE MACRO plain(x) AS x + 1;
+
+query T
+SELECT typeof(plain(1::SMALLINT));
+----
+SMALLINT
