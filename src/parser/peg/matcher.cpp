@@ -26,6 +26,18 @@ MatcherResult Matcher::MatchParseResult(MatchState &state) const {
 }
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
+	auto &context = state.context;
+	if (context.memoizable_suggestions) {
+		// the walk does not depend on the position, so each matcher needs to be walked only once
+		auto key = std::make_pair(this, context.active_label.get());
+		auto entry = context.walked_suggestions.find(key);
+		if (entry != context.walked_suggestions.end()) {
+			return entry->second;
+		}
+		auto result = AddLabelledSuggestion(state);
+		context.walked_suggestions.emplace(key, result);
+		return result;
+	}
 	if (!state.added_suggestions) {
 		state.added_suggestions = make_uniq<reference_set_t<const Matcher>>();
 	}
@@ -35,7 +47,25 @@ SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 		return SuggestionType::MANDATORY;
 	}
 	added_suggestions.insert(*this);
-	return AddSuggestionInternal(state);
+	return AddLabelledSuggestion(state);
+}
+
+SuggestionType Matcher::AddLabelledSuggestion(MatchState &state) const {
+	auto &context = state.context;
+	if (label.empty() || context.active_label) {
+		return AddSuggestionInternal(state);
+	}
+	context.active_label = label;
+	if (context.memoizable_suggestions) {
+		// only the label is reported, so the rule is not walked; labelled rules never match empty input
+		state.AddSuggestion(MatcherSuggestion(SuggestionState::SUGGEST_VARIABLE));
+		context.active_label = nullptr;
+		return SuggestionType::MANDATORY;
+	}
+	// suggestions added inside a labelled rule are summarised by its label
+	auto result = AddSuggestionInternal(state);
+	context.active_label = nullptr;
+	return result;
 }
 
 string Matcher::GetPrintName() const {
@@ -50,6 +80,7 @@ void Matcher::Print() const {
 }
 
 void MatchState::AddSuggestion(MatcherSuggestion suggestion) {
+	suggestion.label = context.active_label;
 	context.suggestions.push_back(std::move(suggestion));
 }
 
