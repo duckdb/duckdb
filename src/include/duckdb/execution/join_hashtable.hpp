@@ -548,7 +548,7 @@ private:
 	unique_ptr<TupleDataCollection> data_collection;
 
 	//! The hash map of the HT, created after finalization
-	AllocatedData hash_map;
+	HugeAllocation hash_map;
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
 	//! An empty tuple that's a "dead end", can be used to stop chains early
