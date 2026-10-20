@@ -238,7 +238,7 @@ CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, b
 	auto max_list_size = MinValue<idx_t>(transport->GetSize(), NumericLimits<int32_t>::Maximum());
 	auto container_limit = NumericCast<int32_t>(max_list_size);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport), 0,
-	                                                                                           container_limit);
+	                                                                                          container_limit);
 }
 
 static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file_handle) {
