@@ -373,6 +373,22 @@ bool MacroFunction::MatchesSignature(const vector<LogicalType> &signature) const
 	return true;
 }
 
+bool MacroFunction::ConflictsWith(const MacroFunction &other) const {
+	if (parameters.size() != other.parameters.size()) {
+		return false;
+	}
+	if (HasUntypedParameter() || other.HasUntypedParameter()) {
+		// an untyped member occupies its whole arity
+		return true;
+	}
+	for (idx_t i = 0; i < parameters.size(); i++) {
+		if (types[i] != other.types[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
 string MacroFunction::SignatureToString() const {
 	string result = "(";
 	for (idx_t i = 0; i < parameters.size(); i++) {

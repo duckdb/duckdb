@@ -72,6 +72,8 @@ public:
 	bool HasUntypedParameter() const;
 	//! Whether this member's parameter types equal the given type list exactly (untyped members never match)
 	bool MatchesSignature(const vector<LogicalType> &signature) const;
+	//! Whether this member and other can resolve the same call: an untyped member occupies its whole arity
+	bool ConflictsWith(const MacroFunction &other) const;
 	//! The parameter list as "(name TYPE, ...)" for error messages
 	string SignatureToString() const;
 
