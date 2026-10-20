@@ -108,8 +108,8 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	auto aligned_dict_count =
 	    AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(static_cast<idx_t>(dict_count));
 	if (aligned_dict_count * sizeof(uint32_t) > segment.GetBlockSize()) {
-		throw IOException("Failed to scan dictionary string - dict_count was out of range. Database file appears to "
-		                  "be corrupted.");
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - dict_count was out of range. Database file appears to be corrupted.");
 	}
 	string_lengths.resize(aligned_dict_count);
 	BitpackingPrimitives::UnPackBuffer<uint32_t>(data_ptr_cast(string_lengths.data()),
