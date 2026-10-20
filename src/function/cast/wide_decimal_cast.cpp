@@ -141,21 +141,8 @@ bool ExecuteToWideDecimal(Vector &source, Vector &result, idx_t count, CastParam
 //===--------------------------------------------------------------------===//
 template <class T>
 bool BlobToInteger(const string_t &blob, T &result) {
-	hugeint_t value;
-	if (!BignumDecimal::TryToHugeint(blob, value)) {
-		return false;
-	}
-	return TryCast::Operation<hugeint_t, T>(value, result, false);
-}
-
-template <>
-bool BlobToInteger(const string_t &blob, hugeint_t &result) {
-	return BignumDecimal::TryToHugeint(blob, result);
-}
-
-template <>
-bool BlobToInteger(const string_t &blob, uhugeint_t &result) {
-	return BignumDecimal::TryToUhugeint(blob, result);
+	bool strict = false;
+	return Bignum::BignumToInt<T>(bignum_t(blob), result, strict);
 }
 
 struct WideDecimalToString {

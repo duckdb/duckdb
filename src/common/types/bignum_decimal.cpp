@@ -9,7 +9,6 @@
 #include "duckdb/common/types/uhugeint.hpp"
 
 #include <cmath>
-#include <cstdio>
 
 namespace duckdb {
 
@@ -48,6 +47,97 @@ void IncrementDigits(string &digits) {
 	if (carry) {
 		digits.insert(digits.begin(), '1');
 	}
+}
+
+//! Skips an underscore between two digits, returns false if no digit follows the underscore
+bool SkipDigitSeparator(const char *data, idx_t size, idx_t &pos) {
+	if (pos < size && data[pos] == '_') {
+		pos++;
+		return pos < size && StringUtil::CharacterIsDigit(data[pos]);
+	}
+	return true;
+}
+
+//! Appends the digits at pos to digits, allowing underscores between digits, returns false on a stray underscore
+bool ReadDigits(const char *data, idx_t size, idx_t &pos, string &digits) {
+	while (pos < size && StringUtil::CharacterIsDigit(data[pos])) {
+		digits.push_back(data[pos++]);
+		if (!SkipDigitSeparator(data, size, pos)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+//! The decimal digits of a non-negative integer given as little-endian 32-bit limbs
+string LimbsToDecimal(vector<uint32_t> limbs) {
+	string digits;
+	while (!limbs.empty()) {
+		uint64_t remainder = 0;
+		for (idx_t i = limbs.size(); i > 0; i--) {
+			const uint64_t current = (remainder << 32) | limbs[i - 1];
+			limbs[i - 1] = static_cast<uint32_t>(current / 1000000000);
+			remainder = current % 1000000000;
+		}
+		while (!limbs.empty() && limbs.back() == 0) {
+			limbs.pop_back();
+		}
+		auto chunk = to_string(remainder);
+		if (!limbs.empty()) {
+			chunk.insert(0, 9 - chunk.size(), '0');
+		}
+		digits.insert(0, chunk);
+	}
+	return digits.empty() ? "0" : digits;
+}
+
+//! The decimal digits of mantissa * 2^shift
+string IntegerDigits(uint64_t mantissa, idx_t shift) {
+	vector<uint32_t> limbs(shift / 32, 0);
+	limbs.push_back(static_cast<uint32_t>(mantissa));
+	limbs.push_back(static_cast<uint32_t>(mantissa >> 32));
+	limbs.push_back(0);
+	const auto offset = static_cast<uint32_t>(shift % 32);
+	if (offset != 0) {
+		for (idx_t i = limbs.size(); i > 0; i--) {
+			limbs[i - 1] = (limbs[i - 1] << offset) | (i > 1 ? limbs[i - 2] >> (32 - offset) : 0);
+		}
+	}
+	return LimbsToDecimal(std::move(limbs));
+}
+
+//! The first max_digits decimal digits of fraction / 2^bits, preceded by the decimal point (empty for zero)
+string FractionDigits(uint64_t fraction, idx_t bits, idx_t max_digits) {
+	vector<uint32_t> limbs((bits + 31) / 32, 0);
+	limbs[0] = static_cast<uint32_t>(fraction);
+	if (limbs.size() > 1) {
+		limbs[1] = static_cast<uint32_t>(fraction >> 32);
+	}
+	const auto top_bits = static_cast<uint32_t>(bits % 32 == 0 ? 32 : bits % 32);
+	string digits;
+	bool non_zero = fraction != 0;
+	while (non_zero && digits.size() < max_digits) {
+		// multiply by ten, the digit is everything that overflows the fraction bits
+		uint64_t carry = 0;
+		non_zero = false;
+		for (auto &limb : limbs) {
+			const uint64_t current = uint64_t(limb) * 10 + carry;
+			limb = static_cast<uint32_t>(current);
+			carry = current >> 32;
+		}
+		uint32_t digit;
+		if (top_bits == 32) {
+			digit = static_cast<uint32_t>(carry);
+		} else {
+			digit = (static_cast<uint32_t>(carry) << (32 - top_bits)) | (limbs.back() >> top_bits);
+			limbs.back() &= (uint32_t(1) << top_bits) - 1;
+		}
+		for (auto limb : limbs) {
+			non_zero = non_zero || limb != 0;
+		}
+		digits.push_back(static_cast<char>('0' + digit));
+	}
+	return digits.empty() ? "" : "." + digits;
 }
 
 bool FitsWidthInternal(const BignumIntermediate &value, uint8_t width) {
@@ -129,21 +219,17 @@ bool BignumDecimal::TryParse(const char *data, idx_t size, uint8_t width, uint8_
 		pos++;
 	}
 	string digits;
-	idx_t integer_digits = 0;
-	bool any_digit = false;
-	while (pos < size && StringUtil::CharacterIsDigit(data[pos])) {
-		digits.push_back(data[pos++]);
-		integer_digits++;
-		any_digit = true;
+	if (!ReadDigits(data, size, pos, digits)) {
+		return false;
 	}
+	const idx_t integer_digits = digits.size();
 	if (pos < size && data[pos] == '.') {
 		pos++;
-		while (pos < size && StringUtil::CharacterIsDigit(data[pos])) {
-			digits.push_back(data[pos++]);
-			any_digit = true;
+		if (!ReadDigits(data, size, pos, digits)) {
+			return false;
 		}
 	}
-	if (!any_digit) {
+	if (digits.empty()) {
 		return false;
 	}
 	int64_t exponent = 0;
@@ -154,14 +240,14 @@ bool BignumDecimal::TryParse(const char *data, idx_t size, uint8_t width, uint8_
 			exponent_negative = data[pos] == '-';
 			pos++;
 		}
-		if (pos >= size || !StringUtil::CharacterIsDigit(data[pos])) {
+		string exponent_digits;
+		if (!ReadDigits(data, size, pos, exponent_digits) || exponent_digits.empty()) {
 			return false;
 		}
-		while (pos < size && StringUtil::CharacterIsDigit(data[pos])) {
+		for (auto c : exponent_digits) {
 			if (exponent < 100000) {
-				exponent = exponent * 10 + (data[pos] - '0');
+				exponent = exponent * 10 + (c - '0');
 			}
-			pos++;
 		}
 		if (exponent_negative) {
 			exponent = -exponent;
@@ -297,50 +383,13 @@ string BignumDecimal::FromInteger(hugeint_t value) {
 }
 
 bool BignumDecimal::TryToUhugeint(const string_t &value, uhugeint_t &result) {
-	if (IsNegative(value)) {
-		return false;
-	}
-	BorrowedBignum borrowed(value);
-	auto &intermediate = borrowed.intermediate;
-	const idx_t start = intermediate.GetStartDataPos();
-	if (intermediate.size - start > 16) {
-		return false;
-	}
-	result = 0;
-	for (idx_t i = start; i < intermediate.size; i++) {
-		result = (result << 8) | uhugeint_t(intermediate.GetAbsoluteByte(static_cast<int64_t>(i)));
-	}
-	return true;
+	bool strict = false;
+	return Bignum::BignumToInt(bignum_t(value), result, strict);
 }
 
 bool BignumDecimal::TryToHugeint(const string_t &value, hugeint_t &result) {
-	BorrowedBignum borrowed(value);
-	auto &intermediate = borrowed.intermediate;
-	const idx_t start = intermediate.GetStartDataPos();
-	if (intermediate.size - start > 16) {
-		return false;
-	}
-	uhugeint_t magnitude = 0;
-	for (idx_t i = start; i < intermediate.size; i++) {
-		magnitude = (magnitude << 8) | uhugeint_t(intermediate.GetAbsoluteByte(static_cast<int64_t>(i)));
-	}
-	const uhugeint_t limit = uhugeint_t(0x8000000000000000ULL, 0);
-	if (intermediate.is_negative) {
-		if (magnitude > limit) {
-			return false;
-		}
-		if (magnitude == limit) {
-			result = NumericLimits<hugeint_t>::Minimum();
-			return true;
-		}
-		result = hugeint_t(0) - hugeint_t(static_cast<int64_t>(magnitude.upper), magnitude.lower);
-		return true;
-	}
-	if (magnitude >= limit) {
-		return false;
-	}
-	result = hugeint_t(static_cast<int64_t>(magnitude.upper), magnitude.lower);
-	return true;
+	bool strict = false;
+	return Bignum::BignumToInt(bignum_t(value), result, strict);
 }
 
 double BignumDecimal::ToDouble(const string_t &value, uint8_t scale) {
@@ -423,13 +472,25 @@ bool BignumDecimal::TryFromDouble(double value, uint8_t width, uint8_t scale, st
 	if (!std::isfinite(value)) {
 		return false;
 	}
-	// render the double with exactly "scale" fraction digits, then parse the digits exactly
-	char buffer[1024];
-	auto length = snprintf(buffer, sizeof(buffer), "%.*f", static_cast<int>(scale), value);
-	if (length <= 0 || static_cast<size_t>(length) >= sizeof(buffer)) {
-		return false;
+	// |value| = mantissa * 2^shift with an integer mantissa of at most 53 bits
+	int exponent;
+	const double fraction = std::frexp(std::fabs(value), &exponent);
+	const auto mantissa = static_cast<uint64_t>(std::ldexp(fraction, 53));
+	const int shift = exponent - 53;
+	string text = value < 0 ? "-" : "";
+	if (shift >= 0) {
+		text += IntegerDigits(mantissa, static_cast<idx_t>(shift));
+	} else {
+		const auto fraction_bits = static_cast<idx_t>(-shift);
+		if (fraction_bits >= 64) {
+			text += "0";
+			text += FractionDigits(mantissa, fraction_bits, idx_t(scale) + 1);
+		} else {
+			text += to_string(mantissa >> fraction_bits);
+			text += FractionDigits(mantissa & ((uint64_t(1) << fraction_bits) - 1), fraction_bits, idx_t(scale) + 1);
+		}
 	}
-	return TryParse(buffer, static_cast<idx_t>(length), width, scale, result);
+	return TryParse(text.c_str(), text.size(), width, scale, result);
 }
 
 } // namespace duckdb
