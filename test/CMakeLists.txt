@@ -3,6 +3,10 @@ include_directories(../third_party/sqlite/include)
 include_directories(include)
 include_directories(extension/debug_fs/include)
 
+if(${DISABLE_THREADS})
+  add_definitions(-DDUCKDB_NO_THREADS)
+endif()
+
 add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
 add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
 add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
