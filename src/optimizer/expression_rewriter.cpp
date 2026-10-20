@@ -71,6 +71,11 @@ const vector<unique_ptr<Rule>> &ExpressionRewriter::GetRules() {
 	return rules;
 }
 
+void ExpressionRewriter::AddRule(unique_ptr<Rule> rule) {
+	D_ASSERT(rule->root);
+	rules.push_back(std::move(rule));
+}
+
 struct RewriteFrame {
 	reference<unique_ptr<Expression>> expr;
 	bool is_root;
