@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/struct_column_data.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
@@ -347,8 +348,8 @@ void StructColumnData::FetchRows(TransactionData transaction, ColumnFetchState &
 		auto child_index = child_storage_index.GetPrimaryIndex();
 		auto &sub_column = *sub_columns[child_index];
 		auto &child_type = StructType::GetChildTypes(type)[child_index].second;
-		if (!child_storage_index.HasChildren() && child_storage_index.HasType() &&
-		    child_storage_index.GetType() != child_type) {
+		if (!NumericType::ContainsNumeric(child_type) && !child_storage_index.HasChildren() &&
+		    child_storage_index.HasType() && child_storage_index.GetType() != child_type) {
 			auto context = transaction.transaction->context.lock();
 			for (idx_t idx = 0; idx < fetch_count; idx++) {
 				const idx_t offset = offsets[sel.get_index(idx)];

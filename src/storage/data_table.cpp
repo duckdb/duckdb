@@ -379,16 +379,16 @@ bool DataTable::HasUniqueIndexes() const {
 	return info->indexes.HasUniqueIndexes();
 }
 
-static void CheckIndexableColumns(const vector<ColumnDefinition> &column_definitions) {
-	for (auto &col : column_definitions) {
-		if (col.Type().id() == LogicalTypeId::NUMERIC) {
-			throw NotImplementedException("Indexes on tables with NUMERIC columns are not supported yet");
-		}
+static void CheckIndexableColumn(const LogicalType &type) {
+	if (NumericType::ContainsNumeric(type)) {
+		throw NotImplementedException("Indexes on NUMERIC columns are not supported yet");
 	}
 }
 
 void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
-	CheckIndexableColumns(column_definitions);
+	for (auto &column_id : index->GetColumnIds()) {
+		CheckIndexableColumn(column_definitions[column_id].Type());
+	}
 	info->indexes.AddIndex(std::move(index), index_oid, ConstraintCheckMode::DEFAULT);
 }
 
@@ -1053,7 +1053,7 @@ void DataTable::LocalAppend(DuckTableEntry &table, ClientContext &context, Colum
 
 		auto &col = column_list.GetColumn(PhysicalIndex(i));
 		if (!col.HasDefaultValue()) {
-			auto null_type = col.Type().id() == LogicalTypeId::NUMERIC ? NumericType::DefaultType() : col.Type();
+			auto null_type = NumericType::WithDefaultRepresentation(col.Type());
 			auto null_expr = make_uniq<BoundConstantExpression>(Value(null_type));
 			expressions.push_back(std::move(null_expr));
 			continue;
@@ -1697,7 +1697,9 @@ bool DataTable::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegment
 void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes,
                          const IndexConstraintType type, IndexStorageInfo index_info, idx_t index_oid,
                          const ConstraintCheckMode check_mode) {
-	CheckIndexableColumns(column_definitions);
+	for (const auto column_index : column_indexes) {
+		CheckIndexableColumn(columns.GetColumn(column_index).Type());
+	}
 	if (!IsMainTable()) {
 		throw TransactionException("Transaction conflict: attempting to add an index to table %s but it has been "
 		                           "%s by a different transaction",

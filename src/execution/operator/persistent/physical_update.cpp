@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/physical_update.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -290,7 +291,7 @@ unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &c
 	auto chunk_types = table.GetScanTypes();
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto column_index = columns[i].index;
-		if (table.GetTypes()[column_index].id() == LogicalTypeId::NUMERIC) {
+		if (NumericType::ContainsNumeric(table.GetTypes()[column_index])) {
 			chunk_types[column_index] = expressions[i]->GetReturnType();
 		}
 	}

@@ -6,6 +6,9 @@
 #include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/storage/statistics/array_stats.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
@@ -303,6 +306,108 @@ LogicalType UnboundedNumericStats::ResolveType(const BaseStatistics &stats) {
 		return NumericType::DefaultType();
 	}
 	return NumericType::ForRange(data.min, data.max, data.scale);
+}
+
+LogicalType UnboundedNumericStats::ResolveNestedType(const LogicalType &type,
+                                                     optional_ptr<const BaseStatistics> stats) {
+	if (!NumericType::ContainsNumeric(type)) {
+		return type;
+	}
+	if (!stats) {
+		return NumericType::WithDefaultRepresentation(type);
+	}
+	switch (type.id()) {
+	case LogicalTypeId::NUMERIC:
+		return ResolveType(*stats);
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(ResolveNestedType(ListType::GetChildType(type), ListStats::GetChildStats(*stats)));
+	case LogicalTypeId::MAP: {
+		// a MAP is stored as a LIST of key/value STRUCTs
+		auto &entry_stats = ListStats::GetChildStats(*stats);
+		return LogicalType::MAP(
+		    ResolveNestedType(MapType::KeyType(type), StructStats::GetChildStats(entry_stats, 0)),
+		    ResolveNestedType(MapType::ValueType(type), StructStats::GetChildStats(entry_stats, 1)));
+	}
+	case LogicalTypeId::ARRAY:
+		return LogicalType::ARRAY(ResolveNestedType(ArrayType::GetChildType(type), ArrayStats::GetChildStats(*stats)),
+		                          ArrayType::GetSize(type));
+	case LogicalTypeId::STRUCT: {
+		auto &child_types = StructType::GetChildTypes(type);
+		child_list_t<LogicalType> children;
+		for (idx_t i = 0; i < child_types.size(); i++) {
+			children.emplace_back(child_types[i].first,
+			                      ResolveNestedType(child_types[i].second, StructStats::GetChildStats(*stats, i)));
+		}
+		return LogicalType::STRUCT(std::move(children));
+	}
+	default:
+		throw NotImplementedException("NUMERIC nested in %s is not supported", type.ToString());
+	}
+}
+
+bool UnboundedNumericStats::ContainsUnbounded(const BaseStatistics &stats) {
+	switch (stats.GetStatsType()) {
+	case StatisticsType::UNBOUNDED_NUMERIC_STATS:
+		return true;
+	case StatisticsType::LIST_STATS:
+		return ContainsUnbounded(ListStats::GetChildStats(stats));
+	case StatisticsType::ARRAY_STATS:
+		return ContainsUnbounded(ArrayStats::GetChildStats(stats));
+	case StatisticsType::STRUCT_STATS: {
+		auto child_count = StructType::GetChildCount(stats.GetType());
+		for (idx_t i = 0; i < child_count; i++) {
+			if (ContainsUnbounded(StructStats::GetChildStats(stats, i))) {
+				return true;
+			}
+		}
+		return false;
+	}
+	default:
+		return false;
+	}
+}
+
+unique_ptr<BaseStatistics> UnboundedNumericStats::ConvertNested(const BaseStatistics &stats,
+                                                                const LogicalType &bound_type) {
+	if (!ContainsUnbounded(stats)) {
+		return stats.ToUnique();
+	}
+	switch (stats.GetStatsType()) {
+	case StatisticsType::UNBOUNDED_NUMERIC_STATS:
+		return ToTyped(stats, bound_type).ToUnique();
+	case StatisticsType::LIST_STATS: {
+		// (a MAP is a LIST of key/value STRUCTs - ListType::GetChildType handles both)
+		auto child = ConvertNested(ListStats::GetChildStats(stats), ListType::GetChildType(bound_type));
+		auto result = ListStats::CreateEmpty(bound_type);
+		result.CopyBase(stats);
+		ListStats::SetChildStats(result, std::move(child));
+		return result.ToUnique();
+	}
+	case StatisticsType::ARRAY_STATS: {
+		auto child = ConvertNested(ArrayStats::GetChildStats(stats), ArrayType::GetChildType(bound_type));
+		auto result = ArrayStats::CreateEmpty(bound_type);
+		result.CopyBase(stats);
+		ArrayStats::SetChildStats(result, std::move(child));
+		return result.ToUnique();
+	}
+	case StatisticsType::STRUCT_STATS: {
+		auto child_count = StructType::GetChildCount(bound_type);
+		auto result = StructStats::CreateEmpty(bound_type);
+		result.CopyBase(stats);
+		for (idx_t i = 0; i < child_count; i++) {
+			StructStats::SetChildStats(
+			    result, i,
+			    ConvertNested(StructStats::GetChildStats(stats, i), StructType::GetChildType(bound_type, i)));
+		}
+		return result.ToUnique();
+	}
+	default:
+		return stats.ToUnique();
+	}
+}
+
+unique_ptr<BaseStatistics> UnboundedNumericStats::ConvertNested(const BaseStatistics &stats) {
+	return ConvertNested(stats, ResolveNestedType(stats.GetType(), &stats));
 }
 
 void UnboundedNumericStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {

@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
@@ -55,7 +56,7 @@ PhysicalInsert::PhysicalInsert(PhysicalPlan &physical_plan, vector<LogicalType> 
 	for (idx_t i = 0; i < columns_to_fetch_p.size(); i++) {
 		auto &id = columns_to_fetch_p[i];
 		D_ASSERT(id < insert_types.size());
-		if (insert_types[id].id() == LogicalTypeId::NUMERIC) {
+		if (NumericType::ContainsNumeric(insert_types[id])) {
 			throw NotImplementedException("ON CONFLICT DO UPDATE referring to NUMERIC columns is not supported yet");
 		}
 		types_to_fetch[i] = insert_types[id];
@@ -73,7 +74,7 @@ PhysicalInsert::PhysicalInsert(PhysicalPlan &physical_plan, LogicalOperator &op,
 
 void PhysicalInsert::ResolveInsertTypes(vector<LogicalType> &insert_types, const vector<LogicalType> &source_types) {
 	for (idx_t i = 0; i < insert_types.size(); i++) {
-		if (insert_types[i].id() != LogicalTypeId::NUMERIC) {
+		if (!NumericType::ContainsNumeric(insert_types[i])) {
 			continue;
 		}
 		if (i >= source_types.size()) {

@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -341,7 +342,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	// values may need a wider representation than the row group they live in
 	for (auto &col_index : update.columns) {
 		auto &column = GetColumns().GetColumn(col_index);
-		if (!column.Type().SupportsRegularUpdate() || column.Type().id() == LogicalTypeId::NUMERIC) {
+		if (!column.Type().SupportsRegularUpdate() || NumericType::ContainsNumeric(column.Type())) {
 			update.update_is_del_and_insert = true;
 			break;
 		}
@@ -375,7 +376,7 @@ LogicalType TableCatalogEntry::GetExpectedTypeForInsert(const ColumnDefinition &
 }
 
 LogicalType TableCatalogEntry::GetBoundColumnType(ClientContext &context, const ColumnDefinition &column) {
-	if (column.Type().id() == LogicalTypeId::NUMERIC) {
+	if (NumericType::ContainsNumeric(column.Type())) {
 		throw NotImplementedException("NUMERIC columns are only supported in DuckDB tables");
 	}
 	return column.Type();
@@ -388,6 +389,10 @@ unique_ptr<Expression> TableCatalogEntry::GetDefaultExpressionForColumn(ClientCo
                                                                         const Expression &constant_value) const {
 	(void)context;
 	(void)constant_value;
+	if (NumericType::ContainsNumeric(result_type) && input_type == NumericType::AsText(result_type)) {
+		// text for a NUMERIC column is parsed by the storage, which picks the representation
+		return make_uniq<BoundColumnRefExpression>(input_type, binding);
+	}
 	return BoundCastExpression::AddCastToType(context, make_uniq<BoundColumnRefExpression>(input_type, binding),
 	                                          result_type);
 }

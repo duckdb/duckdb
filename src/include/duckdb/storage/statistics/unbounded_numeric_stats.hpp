@@ -49,6 +49,17 @@ struct UnboundedNumericStats {
 
 	//! The representation that a NUMERIC column with these statistics is bound to
 	DUCKDB_API static LogicalType ResolveType(const BaseStatistics &stats);
+	//! The type a column of the given (possibly nested) type is bound to: every NUMERIC inside it is resolved from the
+	//! corresponding statistics (the default representation when there are none)
+	DUCKDB_API static LogicalType ResolveNestedType(const LogicalType &type, optional_ptr<const BaseStatistics> stats);
+	//! The statistics with every unbounded numeric statistics inside them replaced by typed statistics of the
+	//! corresponding part of `bound_type` - what the optimizer and the zonemaps work with
+	DUCKDB_API static unique_ptr<BaseStatistics> ConvertNested(const BaseStatistics &stats,
+	                                                           const LogicalType &bound_type);
+	//! ConvertNested to the type the statistics themselves resolve to
+	DUCKDB_API static unique_ptr<BaseStatistics> ConvertNested(const BaseStatistics &stats);
+	//! Whether the statistics contain unbounded numeric statistics anywhere
+	DUCKDB_API static bool ContainsUnbounded(const BaseStatistics &stats);
 	//! These statistics as the numeric statistics of an exact type - unknown when the range does not fit the type
 	DUCKDB_API static BaseStatistics ToTyped(const BaseStatistics &stats, const LogicalType &type);
 	//! The statistics of an exact type (numeric statistics, or string statistics for wide decimals) as unbounded

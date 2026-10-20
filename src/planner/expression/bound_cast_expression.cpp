@@ -1,4 +1,6 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
@@ -37,7 +39,7 @@ static unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr,
 	D_ASSERT(expr);
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = expr->Cast<BoundParameterExpression>();
-		if (target_type.id() == LogicalTypeId::NUMERIC) {
+		if (NumericType::ContainsNumeric(target_type)) {
 			// the parameter keeps the type of the value bound to it - the storage accepts any exact representation
 			return expr;
 		}
@@ -84,19 +86,39 @@ static unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr,
 	if (!target_type.IsValid()) {
 		return expr;
 	}
-	if (target_type.id() == LogicalTypeId::NUMERIC) {
+	if (NumericType::ContainsNumeric(target_type)) {
 		// NUMERIC has no representation of its own: exact numbers keep their type and NULLs take the default
-		// representation, the storage picks the representation of the rows
+		// representation, the storage picks the representation of the rows - the same holds for every NUMERIC nested
+		// in the target type
 		auto &source_type = expr->GetReturnType();
-		if (source_type.id() == LogicalTypeId::SQLNULL) {
-			return AddCastToTypeInternal(std::move(expr), NumericType::DefaultType(), cast_functions, get_input,
-			                             try_cast, bind_source);
+		if (target_type.id() == LogicalTypeId::NUMERIC && source_type.id() == LogicalTypeId::VARCHAR &&
+		    expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+			// a string literal is an exact number when it reads as one
+			auto &value = expr->Cast<BoundConstantExpression>().GetValue();
+			Value parsed;
+			if (value.IsNull()) {
+				parsed = Value(NumericType::DefaultType());
+			} else if (!NumericType::TryParseLiteral(StringValue::Get(value), parsed)) {
+				throw BinderException(*expr, "Cannot cast '%s' to NUMERIC: not an exact number",
+				                      StringValue::Get(value));
+			}
+			auto result = make_uniq<BoundConstantExpression>(std::move(parsed));
+			result->SetAlias(expr->GetAlias());
+			result->SetQueryLocation(expr->GetQueryLocation());
+			return std::move(result);
 		}
-		if (NumericType::IsExact(source_type)) {
+		LogicalType resolved_target;
+		try {
+			resolved_target = NumericType::ResolveCastTarget(source_type, target_type);
+		} catch (BinderException &ex) {
+			ErrorData error(ex);
+			throw BinderException(*expr, error.RawMessage());
+		}
+		if (resolved_target == source_type) {
 			return expr;
 		}
-		throw BinderException(*expr, "Cannot cast %s to NUMERIC: %s", source_type.ToString(),
-		                      NumericType::NotExactMessage(source_type));
+		return AddCastToTypeInternal(std::move(expr), resolved_target, cast_functions, get_input, try_cast,
+		                             bind_source);
 	}
 
 	auto cast_function = cast_functions.GetCastFunction(expr->GetReturnType(), target_type, get_input);

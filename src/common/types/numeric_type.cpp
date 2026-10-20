@@ -1,10 +1,13 @@
 #include "duckdb/common/types/numeric_type.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
@@ -307,6 +310,199 @@ bool NumericType::TryGetRepresentationRange(const LogicalType &type, hugeint_t &
 	default:
 		return false;
 	}
+}
+
+bool NumericType::ContainsNumeric(const LogicalType &type) {
+	return TypeVisitor::Contains(type, LogicalTypeId::NUMERIC);
+}
+
+LogicalType NumericType::WithDefaultRepresentation(const LogicalType &type) {
+	if (!ContainsNumeric(type)) {
+		return type;
+	}
+	return TypeVisitor::VisitReplace(
+	    type, [](const LogicalType &child) { return child.id() == LogicalTypeId::NUMERIC ? DefaultType() : child; });
+}
+
+LogicalType NumericType::ExactLeavesToNumeric(const LogicalType &type) {
+	return TypeVisitor::VisitReplace(
+	    type, [](const LogicalType &child) { return IsExact(child) ? LogicalType::NUMERIC : child; });
+}
+
+LogicalType NumericType::DecimalsAsNumeric(const LogicalType &type) {
+	if (!TypeVisitor::Contains(type, LogicalTypeId::DECIMAL)) {
+		return type;
+	}
+	return TypeVisitor::VisitReplace(type, [](const LogicalType &child) {
+		return child.id() == LogicalTypeId::DECIMAL ? LogicalType::NUMERIC : child;
+	});
+}
+
+//! Counts the digits of a number written as [-]digits[.digits] (surrounding spaces allowed); false for other text
+static bool CountDigits(const char *text, idx_t size, idx_t &begin, idx_t &end, idx_t &integer_digits,
+                        idx_t &fractional_digits) {
+	begin = 0;
+	end = size;
+	while (begin < end && StringUtil::CharacterIsSpace(text[begin])) {
+		begin++;
+	}
+	while (end > begin && StringUtil::CharacterIsSpace(text[end - 1])) {
+		end--;
+	}
+	idx_t pos = begin;
+	if (pos < end && (text[pos] == '-' || text[pos] == '+')) {
+		pos++;
+	}
+	idx_t digits = 0;
+	integer_digits = 0;
+	fractional_digits = 0;
+	bool seen_point = false;
+	bool leading_zeros = true;
+	for (; pos < end; pos++) {
+		auto c = text[pos];
+		if (StringUtil::CharacterIsDigit(c)) {
+			digits++;
+			if (seen_point) {
+				fractional_digits++;
+			} else if (c != '0' || !leading_zeros) {
+				leading_zeros = false;
+				integer_digits++;
+			}
+		} else if (c == '.' && !seen_point) {
+			seen_point = true;
+		} else {
+			return false;
+		}
+	}
+	return digits > 0;
+}
+
+bool NumericType::TryParseLiteral(const string &text, Value &result) {
+	idx_t begin, end, integer_digits, fractional_digits;
+	if (!CountDigits(text.c_str(), text.size(), begin, end, integer_digits, fractional_digits)) {
+		return false;
+	}
+	auto width = MaxValue<idx_t>(integer_digits + fractional_digits, 1);
+	if (width > Decimal::MAX_WIDTH_DECIMAL) {
+		return false;
+	}
+	auto scale = NumericCast<uint8_t>(fractional_digits);
+	auto decimal = Value(text.substr(begin, end - begin))
+	                   .DefaultTryCastAs(LogicalType::DECIMAL(NumericCast<uint8_t>(width), scale));
+	if (!decimal) {
+		return false;
+	}
+	if (scale > 0) {
+		result = *decimal;
+		return true;
+	}
+	// whole numbers take the narrowest integer representation
+	result = decimal->DefaultCastAs(ForRange(*decimal, *decimal, 0));
+	return true;
+}
+
+LogicalType NumericType::AsText(const LogicalType &type) {
+	if (!ContainsNumeric(type)) {
+		return type;
+	}
+	return TypeVisitor::VisitReplace(type, [](const LogicalType &child) {
+		return child.id() == LogicalTypeId::NUMERIC ? LogicalType::VARCHAR : child;
+	});
+}
+
+LogicalType NumericType::TextType(const Vector &vector, idx_t count) {
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::VARCHAR);
+	UnifiedVectorFormat vdata;
+	vector.ToUnifiedFormat(count, vdata);
+	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+	idx_t integer_digits = 0;
+	idx_t fractional_digits = 0;
+	bool found = false;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (!vdata.validity.RowIsValid(idx)) {
+			continue;
+		}
+		idx_t begin, end, value_integer_digits, value_fractional_digits;
+		if (!CountDigits(data[idx].GetData(), data[idx].GetSize(), begin, end, value_integer_digits,
+		                 value_fractional_digits)) {
+			throw ConversionException("Cannot convert '%s' to NUMERIC: not an exact number", data[idx].GetString());
+		}
+		found = true;
+		integer_digits = MaxValue(integer_digits, value_integer_digits);
+		fractional_digits = MaxValue(fractional_digits, value_fractional_digits);
+	}
+	if (!found) {
+		return DefaultType();
+	}
+	if (fractional_digits > Decimal::MAX_WIDTH_DECIMAL) {
+		throw ConversionException("Cannot convert text with %d fractional digits to NUMERIC", fractional_digits);
+	}
+	return ForDigits(integer_digits, NumericCast<uint8_t>(fractional_digits));
+}
+
+static LogicalType ResolveCastTargetInternal(const LogicalType &source, const LogicalType &target) {
+	switch (target.id()) {
+	case LogicalTypeId::NUMERIC:
+		if (source.id() == LogicalTypeId::SQLNULL || source.id() == LogicalTypeId::UNKNOWN) {
+			return NumericType::DefaultType();
+		}
+		if (NumericType::IsExact(source)) {
+			return source;
+		}
+		throw BinderException("Cannot cast %s to NUMERIC: %s", source.ToString(), NumericType::NotExactMessage(source));
+	case LogicalTypeId::LIST:
+		if (source.id() == LogicalTypeId::LIST) {
+			return LogicalType::LIST(
+			    ResolveCastTargetInternal(ListType::GetChildType(source), ListType::GetChildType(target)));
+		}
+		break;
+	case LogicalTypeId::ARRAY:
+		if (source.id() == LogicalTypeId::ARRAY) {
+			return LogicalType::ARRAY(
+			    ResolveCastTargetInternal(ArrayType::GetChildType(source), ArrayType::GetChildType(target)),
+			    ArrayType::GetSize(target));
+		}
+		if (source.id() == LogicalTypeId::LIST) {
+			return LogicalType::ARRAY(
+			    ResolveCastTargetInternal(ListType::GetChildType(source), ArrayType::GetChildType(target)),
+			    ArrayType::GetSize(target));
+		}
+		break;
+	case LogicalTypeId::MAP:
+		if (source.id() == LogicalTypeId::MAP) {
+			return LogicalType::MAP(ResolveCastTargetInternal(MapType::KeyType(source), MapType::KeyType(target)),
+			                        ResolveCastTargetInternal(MapType::ValueType(source), MapType::ValueType(target)));
+		}
+		break;
+	case LogicalTypeId::STRUCT:
+		if (source.id() == LogicalTypeId::STRUCT) {
+			auto &target_children = StructType::GetChildTypes(target);
+			auto &source_children = StructType::GetChildTypes(source);
+			if (source_children.size() == target_children.size()) {
+				child_list_t<LogicalType> children;
+				for (idx_t i = 0; i < target_children.size(); i++) {
+					children.emplace_back(
+					    target_children[i].first,
+					    ResolveCastTargetInternal(source_children[i].second, target_children[i].second));
+				}
+				return LogicalType::STRUCT(std::move(children));
+			}
+		}
+		break;
+	default:
+		break;
+	}
+	if (!NumericType::ContainsNumeric(target)) {
+		return target;
+	}
+	// the source does not have the shape of the target - let the regular cast deal with it, using the default
+	// representation for the NUMERIC parts
+	return NumericType::WithDefaultRepresentation(target);
+}
+
+LogicalType NumericType::ResolveCastTarget(const LogicalType &source, const LogicalType &target) {
+	return ResolveCastTargetInternal(source, target);
 }
 
 LogicalType NumericType::WidestType(uint8_t scale) {

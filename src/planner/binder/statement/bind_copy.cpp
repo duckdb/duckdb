@@ -23,6 +23,7 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
@@ -691,6 +692,10 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	expected_names.reserve(named_column_map.size());
 	for (auto &column_index : named_column_map) {
 		expected_names.push_back(table.GetColumn(column_index).Name());
+	}
+	// NUMERIC columns are read as text - the storage picks their representation from the values
+	for (auto &type : expected_types) {
+		type = NumericType::AsText(type);
 	}
 
 	// COPY FROM a file

@@ -13,6 +13,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -92,7 +93,27 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 		auto expected_type = table.GetExpectedTypeForInsert(column);
 		// a NUMERIC column takes the representation of the values - infer it from the VALUES list
 		expr_list.expected_types[col_idx] =
-		    expected_type.id() == LogicalTypeId::NUMERIC ? LogicalType(LogicalTypeId::INVALID) : expected_type;
+		    NumericType::ContainsNumeric(expected_type) ? LogicalType(LogicalTypeId::INVALID) : expected_type;
+		if (expected_type.id() == LogicalTypeId::NUMERIC) {
+			// string literals that read as numbers are exact numbers
+			for (auto &row : expr_list.values) {
+				auto &cell = row[col_idx];
+				if (cell->GetExpressionClass() != ExpressionClass::CONSTANT) {
+					continue;
+				}
+				auto &literal = cell->Cast<ConstantExpression>().GetLiteral();
+				if (literal.kind != LiteralKind::STRING) {
+					continue;
+				}
+				Value parsed;
+				if (!NumericType::TryParseLiteral(literal.text, parsed)) {
+					throw BinderException(*cell, "Cannot cast '%s' to NUMERIC: not an exact number", literal.text);
+				}
+				auto alias = cell->GetAlias();
+				cell = ConstantExpression::FromValue(parsed);
+				cell->SetAlias(std::move(alias));
+			}
+		}
 		expr_list.expected_names[col_idx] = column.Name();
 
 		// now replace any DEFAULT values with the corresponding default expression
@@ -736,6 +757,13 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		source_types.clear();
 		for (auto &expr : root_select.plan->expressions) {
 			source_types.push_back(expr->GetReturnType());
+		}
+		for (idx_t i = 0; i < target_types.size() && i < source_types.size(); i++) {
+			if (NumericType::ContainsNumeric(target_types[i]) &&
+			    source_types[i] == NumericType::AsText(target_types[i])) {
+				// text for a NUMERIC column is parsed by the storage, which picks the representation
+				target_types[i] = source_types[i];
+			}
 		}
 		root = CastLogicalOperatorToTypes(source_types, target_types, std::move(root_select.plan));
 	} else {

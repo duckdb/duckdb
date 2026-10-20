@@ -71,11 +71,12 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 		case LogicalTypeId::TYPE: {
 			throw InvalidInputException("A table cannot be created with a 'TYPE' column");
 		} break;
-		case LogicalTypeId::NUMERIC: {
-			if (!RefersToSameObject(type, logical_type)) {
-				throw NotImplementedException("NUMERIC is only supported as the type of a column, not nested in %s",
-				                              logical_type.ToString());
+		case LogicalTypeId::UNION: {
+			if (TypeVisitor::Contains(type, LogicalTypeId::NUMERIC)) {
+				throw NotImplementedException("NUMERIC nested in a UNION is not supported yet");
 			}
+		} break;
+		case LogicalTypeId::NUMERIC: {
 			// each row group records the representation it is stored in, which older engines cannot read
 			const auto storage_version = db.GetStorageManager().GetStorageVersion();
 			if (storage_version < StorageVersion::V2_0_0) {
@@ -282,23 +283,19 @@ const ColumnList &DuckTableEntry::GetColumns() const {
 
 unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context, const StorageIndex &column_id) {
 	auto stats = GetStorageStatistics(context, column_id);
-	if (stats && stats->GetStatsType() == StatisticsType::UNBOUNDED_NUMERIC_STATS) {
+	if (stats && UnboundedNumericStats::ContainsUnbounded(*stats)) {
 		// the column is bound to the representation that holds its values - describe it in that type
-		auto bound_type = UnboundedNumericStats::ResolveType(*stats);
-		return UnboundedNumericStats::ToTyped(*stats, bound_type).ToUnique();
+		return UnboundedNumericStats::ConvertNested(*stats);
 	}
 	return stats;
 }
 
 LogicalType DuckTableEntry::GetBoundColumnType(ClientContext &context, const ColumnDefinition &column) {
-	if (column.Type().id() != LogicalTypeId::NUMERIC) {
+	if (!NumericType::ContainsNumeric(column.Type())) {
 		return column.Type();
 	}
 	auto stats = GetStorageStatistics(context, GetStorageIndex(ColumnIndex(column.Logical().index)));
-	if (!stats) {
-		return NumericType::DefaultType();
-	}
-	return UnboundedNumericStats::ResolveType(*stats);
+	return UnboundedNumericStats::ResolveNestedType(column.Type(), stats.get());
 }
 
 unique_ptr<BaseStatistics> DuckTableEntry::GetStorageStatistics(ClientContext &context, const StorageIndex &column_id) {
@@ -648,7 +645,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 
 	// Check if type is supported in this database version
 	CheckTypeIsSupported(info.new_column.GetType(), catalog.GetAttached());
-	if (info.new_column.GetType().id() == LogicalTypeId::NUMERIC) {
+	if (NumericType::ContainsNumeric(info.new_column.GetType())) {
 		throw NotImplementedException("ALTER TABLE ADD COLUMN with a NUMERIC column is not supported yet");
 	}
 
@@ -1287,11 +1284,11 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 
 	// Check if type is supported in this database version
 	CheckTypeIsSupported(info.target_type, catalog.GetAttached());
-	if (info.target_type.id() == LogicalTypeId::NUMERIC) {
+	if (NumericType::ContainsNumeric(info.target_type)) {
 		throw NotImplementedException("ALTER TABLE ALTER COLUMN TYPE to NUMERIC is not supported yet");
 	}
 	for (auto &col : columns.Logical()) {
-		if (col.Type().id() == LogicalTypeId::NUMERIC) {
+		if (NumericType::ContainsNumeric(col.Type())) {
 			throw NotImplementedException("ALTER TABLE ALTER COLUMN TYPE on a table with NUMERIC columns is not "
 			                              "supported yet");
 		}

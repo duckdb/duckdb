@@ -171,14 +171,11 @@ idx_t RowGroupCollection::GetRowGroupCount() const {
 
 LogicalType RowGroupCollection::GetScanType(idx_t column_idx) {
 	auto &type = types[column_idx];
-	if (type.id() != LogicalTypeId::NUMERIC) {
+	if (!NumericType::ContainsNumeric(type)) {
 		return type;
 	}
 	auto column_stats = stats.CopyStats(StorageIndex(column_idx));
-	if (!column_stats) {
-		return NumericType::DefaultType();
-	}
-	return UnboundedNumericStats::ResolveType(*column_stats);
+	return UnboundedNumericStats::ResolveNestedType(type, column_stats.get());
 }
 
 vector<LogicalType> RowGroupCollection::GetScanTypes() {
@@ -1076,20 +1073,28 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	// Contains all columns but only initializes indexed ones.
 	DataChunk result_chunk;
 	auto fetched_columns = vector<bool>(types.size(), false);
-	result_chunk.Initialize(GetAllocator(), types, fetched_columns);
 	// Now set all to-be-fetched columns.
 	for (auto &col : indexed_column_id_set) {
 		fetched_columns[col] = true;
 	}
+	// the fetched columns carry their scan type, the others (never read by the indexes) a placeholder type
+	vector<LogicalType> result_types;
+	result_types.reserve(types.size());
+	idx_t fetch_idx = 0;
+	for (idx_t j = 0; j < types.size(); j++) {
+		result_types.push_back(fetched_columns[j] ? column_types[fetch_idx++]
+		                                          : NumericType::WithDefaultRepresentation(types[j]));
+	}
+	result_chunk.Initialize(GetAllocator(), result_types, fetched_columns);
 
 	// Reference the necessary columns of the fetch_chunk.
-	idx_t fetch_idx = 0;
+	fetch_idx = 0;
 	for (idx_t j = 0; j < types.size(); j++) {
 		if (fetched_columns[j]) {
 			result_chunk.data[j].Reference(fetch_chunk.data[fetch_idx++]);
 			continue;
 		}
-		result_chunk.data[j].Reference(Value(types[j]), count_t(fetch_chunk.size()));
+		result_chunk.data[j].Reference(Value(result_types[j]), count_t(fetch_chunk.size()));
 	}
 
 	indexes.RemoveFromIndexes(result_chunk, row_identifiers, removal_type, active_checkpoint);
@@ -1229,7 +1234,7 @@ private:
 class VacuumIndexRemapper {
 public:
 	VacuumIndexRemapper(const vector<shared_ptr<IndexEntry>> &entries, RowGroupCollection &collection)
-	    : index_entries(entries), table_types(collection.GetTypes()) {
+	    : index_entries(entries), table_types(collection.GetScanTypes()) {
 		DataChunk index_chunk;
 		TableIndexList::InitializeIndexChunk(index_chunk, table_types, mapped_column_ids, collection.GetTableInfo());
 		old_rowid_idx = mapped_column_ids.size();
@@ -1323,7 +1328,8 @@ private:
 private:
 	//! The stable index entries selected for row ID remapping.
 	vector<shared_ptr<IndexEntry>> index_entries;
-	const vector<LogicalType> &table_types;
+	//! The scan types of the table (NUMERIC columns in the representation that holds the collection's values)
+	const vector<LogicalType> table_types;
 	//! Buffer slot -> table column id for the indexed key columns.
 	vector<StorageIndex> mapped_column_ids;
 	//! Buffer column indexes of the old and new rowid.

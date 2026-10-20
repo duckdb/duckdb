@@ -63,8 +63,8 @@ public:
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints,
 	                 const vector<LogicalType> &return_types, bool return_chunk) {
 		// For RETURNING: use operator's return types (may include virtual columns)
-		// For non-RETURNING with indexes: use table types for index updates
-		auto types = return_chunk ? return_types : table.GetTypes();
+		// For non-RETURNING with indexes: use table types for index updates (NUMERIC columns in their scan type)
+		auto types = return_chunk ? return_types : table.GetStorage().GetScanTypes();
 		auto initialize = vector<bool>(types.size(), false);
 		delete_chunk.Initialize(Allocator::Get(context), types, initialize);
 
@@ -106,7 +106,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
-	auto types = table.GetTypes();
+	auto types = table.GetScanTypes();
 	l_state.delete_chunk.Reset();
 
 	SelectionVector delete_sel(chunk.size());

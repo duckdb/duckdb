@@ -190,13 +190,15 @@ FilterPropagateResult NumericColumnData::CheckZonemap(ColumnScanState &state, Ta
 
 FilterPropagateResult NumericColumnData::CheckZonemap(optional_ptr<ClientContext> context, const StorageIndex &index,
                                                       TableFilter &filter) {
-	if (!stats) {
-		throw InternalException("NumericColumnData::CheckZonemap called on a column without stats");
-	}
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "NumericColumnData::CheckZonemap");
-	lock_guard<mutex> l(stats_lock);
-	auto filter_type = FilterColumnType(filter, UnboundedNumericStats::ResolveType(stats->statistics));
-	auto typed_stats = UnboundedNumericStats::ToTyped(stats->statistics, filter_type);
+	unique_lock<mutex> l;
+	if (stats) {
+		l = unique_lock<mutex>(stats_lock);
+	}
+	// a nested NUMERIC column keeps its statistics in its parent
+	auto &column_stats = GetStatisticsRef();
+	auto filter_type = FilterColumnType(filter, UnboundedNumericStats::ResolveType(column_stats));
+	auto typed_stats = UnboundedNumericStats::ToTyped(column_stats, filter_type);
 	return context ? expr_filter.CheckStatistics(*context, typed_stats) : expr_filter.CheckStatistics(typed_stats);
 }
 
@@ -462,6 +464,16 @@ void NumericColumnData::Append(ColumnAppendState &state, const Vector &vector, i
 		count += append_count;
 		return;
 	}
+	if (source_type.id() == LogicalTypeId::VARCHAR) {
+		// text (e.g. read by COPY FROM): the values decide the representation; TextType validated the text, so the
+		// cast is not strict (leading zeros are fine)
+		Vector parsed(NumericType::TextType(vector, append_count), append_count);
+		Vector source_ref(source_type);
+		source_ref.Reference(vector);
+		VectorOperations::DefaultCast(source_ref, parsed, append_count, false);
+		Append(state, parsed, append_count);
+		return;
+	}
 	auto target_type = NumericType::Widen(current->type, source_type);
 	if (target_type != current->type) {
 		Widen(state, target_type);
@@ -657,7 +669,8 @@ bool NumericColumnData::HasAnyChanges() const {
 PersistentColumnData NumericColumnData::Serialize() {
 	auto column = GetInner();
 	auto inner_data = column->Serialize();
-	inner_data.extra_data = make_uniq<NumericPersistentColumnData>(column->type, GetStatistics());
+	// a nested NUMERIC column keeps its statistics in its parent
+	inner_data.extra_data = make_uniq<NumericPersistentColumnData>(column->type, GetStatisticsRef().ToUnique());
 	return inner_data;
 }
 

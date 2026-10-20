@@ -255,9 +255,9 @@ void ArrayColumnData::FetchRows(TransactionData transaction, ColumnFetchState &s
 	validity->FetchRowsAtSegmentLevel(transaction, *state.child_states[0], offsets, sel, fetch_count, result,
 	                                  result_offset);
 
-	// Fetch child column
+	// Fetch child column - typed by the result, a NUMERIC child casts from its storage representation
 	auto &child_vec = ArrayVector::GetChildMutable(result);
-	auto &child_type = ArrayType::GetChildType(type);
+	auto &child_type = ArrayType::GetChildType(result.GetType());
 	auto array_size = ArrayType::GetSize(type);
 
 	for (idx_t idx = 0; idx < fetch_count; idx++) {

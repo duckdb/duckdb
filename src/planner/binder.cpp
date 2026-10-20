@@ -1,4 +1,5 @@
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -590,7 +591,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	vector<ColumnIndex> bound_columns;
 	idx_t column_count = 0;
 	for (auto &col : table.GetColumns().Logical()) {
-		if (col.Type().id() == LogicalTypeId::NUMERIC) {
+		if (NumericType::ContainsNumeric(col.Type())) {
 			throw NotImplementedException("RETURNING on a table with NUMERIC columns is not supported yet");
 		}
 		names.emplace_back(col.Name());

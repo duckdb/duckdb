@@ -1,6 +1,7 @@
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
+#include "duckdb/storage/statistics/unbounded_numeric_stats.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/types/vector.hpp"
 
@@ -148,6 +149,13 @@ unique_ptr<BaseStatistics> StructStats::PushdownExtract(const BaseStatistics &st
 	auto &child_indexes = index.GetChildIndexes();
 	if (child_indexes.empty()) {
 		D_ASSERT(child_stats.type == child_type);
+		if (UnboundedNumericStats::ContainsUnbounded(child_stats)) {
+			// a NUMERIC field is described in the type the scan is bound to
+			if (index.HasType()) {
+				return UnboundedNumericStats::ConvertNested(child_stats, index.GetType());
+			}
+			return UnboundedNumericStats::ConvertNested(child_stats);
+		}
 		if (index.GetType() != child_type) {
 			//! FIXME: support try_cast
 			return CastStatistics::TryPropagate(child_stats, child_type, index.GetType());

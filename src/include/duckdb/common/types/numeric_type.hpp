@@ -42,6 +42,26 @@ struct NumericType {
 	                                                 uint8_t &scale);
 	//! The widest supported representation of exact numbers with the given scale
 	DUCKDB_API static LogicalType WidestType(uint8_t scale);
+	//! Whether the type is NUMERIC or has NUMERIC nested anywhere inside it
+	DUCKDB_API static bool ContainsNumeric(const LogicalType &type);
+	//! The type with every NUMERIC replaced by the default representation
+	DUCKDB_API static LogicalType WithDefaultRepresentation(const LogicalType &type);
+	//! The target of a cast to a type containing NUMERIC: every NUMERIC takes the representation of the source value
+	//! at that position (exact values keep their type, NULLs take the default representation); throws for inexact
+	//! sources
+	DUCKDB_API static LogicalType ResolveCastTarget(const LogicalType &source, const LogicalType &target);
+	//! The type with every exact numeric type replaced by NUMERIC: the declared type of a column that stores the
+	//! results of an exact numeric expression
+	DUCKDB_API static LogicalType ExactLeavesToNumeric(const LogicalType &type);
+	//! The type with every DECIMAL replaced by NUMERIC
+	DUCKDB_API static LogicalType DecimalsAsNumeric(const LogicalType &type);
+	//! The exact value of a numeric string literal ([-]digits[.digits]) in the narrowest representation that holds
+	//! it; false for anything else (exponents, infinities, text)
+	DUCKDB_API static bool TryParseLiteral(const string &text, Value &result);
+	//! The type with every NUMERIC replaced by VARCHAR: how readers deliver NUMERIC columns, the storage parses them
+	DUCKDB_API static LogicalType AsText(const LogicalType &type);
+	//! The representation that holds every number in a vector of text ([-]digits[.digits]); throws for other text
+	DUCKDB_API static LogicalType TextType(const Vector &vector, idx_t count);
 	//! Error thrown for values that cannot be stored in a NUMERIC column
 	DUCKDB_API static string NotExactMessage(const LogicalType &type);
 };

@@ -275,6 +275,8 @@ BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool ro
 		auto result = make_uniq<BoundUnnestExpression>(return_type);
 		result->ChildMutable() = std::move(unnest_expr);
 		Identifier alias = function.GetAlias().empty() ? Identifier(result->ToString()) : function.GetAlias();
+		// the elements of a list that derives from NUMERIC columns are exact numeric values
+		bool exact_numeric = ExpressionBinder::HasExactNumericInput(*result);
 
 		auto current_level = outer_unnest_level + list_unnests - current_depth - 1;
 		TableIndex unnest_table_index;
@@ -283,6 +285,7 @@ BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool ro
 		// now create a column reference referring to the unnest
 		unnest_expr = make_uniq<BoundColumnRefExpression>(
 		    std::move(alias), return_type, ColumnBinding(unnest_table_index, unnest_column_index), depth);
+		unnest_expr->exact_numeric = exact_numeric;
 	}
 	// now perform struct unnests, if any
 	if (struct_unnests > 0) {

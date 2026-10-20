@@ -241,21 +241,20 @@ SELECT 1.5::DOUBLE::NUMERIC;
 ----
 Cannot cast DOUBLE to NUMERIC
 
-statement error
-SELECT '1.5'::NUMERIC;
+# a string literal that reads as a number is an exact number (see the literals block below)
+query II
+SELECT '1.5'::NUMERIC, typeof('1.5'::NUMERIC);
 ----
-Cannot cast VARCHAR to NUMERIC
+1.5	DECIMAL(2,1)
 
 statement error
 INSERT INTO t VALUES (1.5::FLOAT);
 ----
 Cannot cast FLOAT to NUMERIC
 
-# NUMERIC is a column type, not a nested type
-statement error
+# NUMERIC nested in other types: see numeric_type_nested.test
+statement ok
 CREATE TABLE nested(l NUMERIC[]);
-----
-NUMERIC is only supported as the type of a column
 
 # CREATE TABLE AS keeps results that derive from NUMERIC columns NUMERIC
 statement ok
@@ -271,3 +270,58 @@ query I
 SELECT typeof(n) FROM copy LIMIT 1;
 ----
 DECIMAL(44,2)
+
+# string literals that read as numbers are exact numbers, as they are for DECIMAL columns
+statement ok
+CREATE TABLE literals(n NUMERIC);
+
+statement ok
+INSERT INTO literals VALUES ('0.1'), ('0.2'), (' -42 '), ('+7'), ('1000000000000000000000000000000000000000000.5'), (NULL);
+
+query I
+SELECT typeof(n) FROM literals LIMIT 1;
+----
+DECIMAL(44,1)
+
+query I
+SELECT n FROM literals ORDER BY ALL;
+----
+-42.0
+0.1
+0.2
+7.0
+1000000000000000000000000000000000000000000.5
+NULL
+
+query II
+SELECT '12.50'::NUMERIC, typeof('12.50'::NUMERIC);
+----
+12.50	DECIMAL(4,2)
+
+query II
+SELECT '300'::NUMERIC, typeof('300'::NUMERIC);
+----
+300	SMALLINT
+
+# strings that are not plain numbers are not exact numbers
+statement error
+INSERT INTO literals VALUES ('1e3');
+----
+not an exact number
+
+statement error
+INSERT INTO literals VALUES ('abc');
+----
+not an exact number
+
+statement error
+SELECT 'inf'::NUMERIC;
+----
+not an exact number
+
+# VARCHAR values that are stored are parsed by the storage (see numeric_type_copy.test); in an expression the cast
+# has no type to produce and is refused
+statement error
+SELECT ('1.5' || '')::NUMERIC;
+----
+Cannot cast VARCHAR to NUMERIC

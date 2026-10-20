@@ -1,0 +1,10 @@
+{
+  "description": "Declare every DECIMAL column of a new table as NUMERIC: the representation follows the stored values.",
+  "settings": [
+    {
+      "name": "debug_decimal_as_numeric",
+      "value": "true"
+    }
+  ],
+  "skip_compiled": "true"
+}

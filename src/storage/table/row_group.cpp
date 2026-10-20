@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/storage/statistics/unbounded_numeric_stats.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/async_result.hpp"
@@ -321,7 +322,9 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 				auto &child = children[0];
 				auto child_index = child.GetPrimaryIndex();
 				auto &child_type = StructType::GetChildTypes(type)[child_index].second;
-				if (!child.HasChildren() && child_type != child.GetType()) {
+				if (!child.HasChildren() && child_type != child.GetType() &&
+				    !NumericType::ContainsNumeric(child_type)) {
+					// (a NUMERIC child is scanned in its bound type by its own column)
 					PushDownCast(child_type, child.GetType());
 				}
 				child_states[1].Initialize(context, struct_children[child_index].second, child, options);
@@ -1418,10 +1421,14 @@ unique_ptr<BaseStatistics> RowGroup::GetStatistics(const StorageIndex &column_id
 
 unique_ptr<BaseStatistics> RowGroup::GetBoundStatistics(const StorageIndex &column_idx) const {
 	auto column_stats = GetStatistics(column_idx);
-	if (column_stats && column_stats->GetStatsType() == StatisticsType::UNBOUNDED_NUMERIC_STATS) {
-		// describe the NUMERIC column in the representation the table is bound to
+	if (column_stats && UnboundedNumericStats::ContainsUnbounded(*column_stats)) {
+		// describe the NUMERIC parts in the representation the table is bound to
+		if (column_idx.IsPushdownExtract()) {
+			// (an extracted field without a scan type - fall back to its own range)
+			return UnboundedNumericStats::ConvertNested(*column_stats);
+		}
 		auto bound_type = GetCollection().GetScanType(column_idx.GetPrimaryIndex());
-		return UnboundedNumericStats::ToTyped(*column_stats, bound_type).ToUnique();
+		return UnboundedNumericStats::ConvertNested(*column_stats, bound_type);
 	}
 	return column_stats;
 }

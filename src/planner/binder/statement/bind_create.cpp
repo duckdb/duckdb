@@ -34,6 +34,7 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -932,13 +933,21 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (table.temporary) {
 			stmt.info->temporary = true;
 		}
-		for (auto &col : table.GetColumns().Logical()) {
-			if (col.Type().id() == LogicalTypeId::NUMERIC) {
-				throw NotImplementedException("Indexes on tables with NUMERIC columns are not supported yet");
-			}
-		}
 		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::CREATE_INDEX);
 		result.plan = table.catalog.BindCreateIndex(*this, stmt, table, std::move(plan));
+		// the index expressions are bound now: the columns they reference are the columns of the scan
+		if (!result.plan->children.empty() && result.plan->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+			auto &bound_get = result.plan->children[0]->Cast<LogicalGet>();
+			for (auto &column_id : bound_get.GetColumnIds()) {
+				if (column_id.IsVirtualColumn()) {
+					continue;
+				}
+				auto &column_type = table.GetColumn(LogicalIndex(column_id.GetPrimaryIndex())).Type();
+				if (NumericType::ContainsNumeric(column_type)) {
+					throw NotImplementedException("Indexes on NUMERIC columns are not supported yet");
+				}
+			}
+		}
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {

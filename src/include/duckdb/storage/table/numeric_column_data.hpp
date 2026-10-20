@@ -18,6 +18,8 @@ namespace duckdb {
 //! from the values of the row group.
 class NumericColumnData final : public ColumnData {
 public:
+	//! The type of the column reference inside an expression filter - the type the filter compares against
+	static LogicalType FilterColumnType(const TableFilter &filter, const LogicalType &fallback);
 	NumericColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
 	                  ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
@@ -78,7 +80,6 @@ public:
 	//! Cast a vector of one exact representation to another
 	static void CastVector(const Vector &source, Vector &target, idx_t count);
 	//! The type of the column reference inside a table filter, i.e. the type the NUMERIC column was bound to
-	static LogicalType FilterColumnType(const TableFilter &filter, const LogicalType &fallback);
 
 private:
 	shared_ptr<ColumnData> CreateInner(const LogicalType &storage_type);

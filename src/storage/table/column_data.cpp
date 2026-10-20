@@ -22,6 +22,7 @@
 #include "duckdb/storage/table/array_column_data.hpp"
 #include "duckdb/storage/table/geo_column_data.hpp"
 #include "duckdb/storage/table/numeric_column_data.hpp"
+#include "duckdb/storage/statistics/unbounded_numeric_stats.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/table/variant_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
@@ -569,7 +570,7 @@ FilterPropagateResult ColumnData::CheckZonemap(optional_ptr<ClientContext> conte
 	lock_guard<mutex> l(stats_lock);
 	if (index.IsPushdownExtract()) {
 		auto child_stats = stats->statistics.PushdownExtract(index.GetChildIndex(0));
-		if (!child_stats) {
+		if (!child_stats || UnboundedNumericStats::ContainsUnbounded(*child_stats)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
@@ -577,6 +578,16 @@ FilterPropagateResult ColumnData::CheckZonemap(optional_ptr<ClientContext> conte
 		               : expr_filter.CheckStatistics(*child_stats);
 	}
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
+	if (UnboundedNumericStats::ContainsUnbounded(stats->statistics)) {
+		// NUMERIC parts of a nested column: the filter compares against the type its reference is bound to
+		auto bound_type = NumericColumnData::FilterColumnType(filter, LogicalType(LogicalTypeId::INVALID));
+		if (bound_type.id() == LogicalTypeId::INVALID) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		auto bound_stats = UnboundedNumericStats::ConvertNested(stats->statistics, bound_type);
+		return context ? expr_filter.CheckStatistics(*context, *bound_stats)
+		               : expr_filter.CheckStatistics(*bound_stats);
+	}
 	return context ? expr_filter.CheckStatistics(*context, stats->statistics)
 	               : expr_filter.CheckStatistics(stats->statistics);
 }

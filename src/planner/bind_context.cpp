@@ -1,4 +1,5 @@
 #include "duckdb/planner/bind_context.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
@@ -745,7 +746,7 @@ void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const 
 	vector<bool> exact_numeric;
 	bool any_exact = false;
 	for (auto &col : entry.GetColumns().Logical()) {
-		bool is_numeric = col.Type().id() == LogicalTypeId::NUMERIC;
+		bool is_numeric = NumericType::ContainsNumeric(col.Type());
 		exact_numeric.push_back(is_numeric);
 		any_exact = any_exact || is_numeric;
 	}
@@ -755,15 +756,41 @@ void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const 
 	AddBinding(std::move(binding));
 }
 
-vector<bool> BindContext::ExactNumericColumns(const LogicalOperator &plan, idx_t column_count) {
-	vector<bool> result(column_count, false);
-	reference<const LogicalOperator> op = plan;
+//! The declared type of a column passed through a projection, found at its source
+static LogicalType ResolveExactColumnRef(LogicalOperator &op, const ColumnBinding &binding) {
+	for (auto &child : op.children) {
+		auto bindings = child->GetColumnBindings();
+		for (idx_t i = 0; i < bindings.size(); i++) {
+			if (bindings[i] == binding) {
+				return BindContext::ExactNumericTypes(*child, bindings.size())[i];
+			}
+		}
+	}
+	return LogicalType(LogicalTypeId::INVALID);
+}
+
+vector<LogicalType> BindContext::ExactNumericTypes(LogicalOperator &plan, idx_t column_count) {
+	vector<LogicalType> result(column_count, LogicalType(LogicalTypeId::INVALID));
+	reference<LogicalOperator> op = plan;
 	while (true) {
 		switch (op.get().type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			auto &expressions = op.get().expressions;
 			for (idx_t i = 0; i < column_count && i < expressions.size(); i++) {
-				result[i] = expressions[i]->exact_numeric;
+				auto &expr = *expressions[i];
+				if (!expr.exact_numeric) {
+					continue;
+				}
+				if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+					// a column passed through keeps its declared type - e.g. a struct with NUMERIC and other fields
+					auto resolved = ResolveExactColumnRef(op, expr.Cast<BoundColumnRefExpression>().Binding());
+					if (resolved.id() != LogicalTypeId::INVALID) {
+						result[i] = std::move(resolved);
+						continue;
+					}
+				}
+				// the result of an exact numeric expression is stored as NUMERIC again
+				result[i] = NumericType::ExactLeavesToNumeric(expr.GetReturnType());
 			}
 			return result;
 		}
@@ -778,8 +805,10 @@ vector<bool> BindContext::ExactNumericColumns(const LogicalOperator &plan, idx_t
 				if (column_ids[i].IsVirtualColumn()) {
 					continue;
 				}
-				result[i] = table->GetColumn(LogicalIndex(column_ids[i].GetPrimaryIndex())).Type().id() ==
-				            LogicalTypeId::NUMERIC;
+				auto &column_type = table->GetColumn(LogicalIndex(column_ids[i].GetPrimaryIndex())).Type();
+				if (NumericType::ContainsNumeric(column_type)) {
+					result[i] = column_type;
+				}
 			}
 			return result;
 		}
@@ -788,9 +817,11 @@ vector<bool> BindContext::ExactNumericColumns(const LogicalOperator &plan, idx_t
 		case LogicalOperatorType::LOGICAL_INTERSECT: {
 			// exact when any input is exact - arithmetic on the union is sized for the widest input anyway
 			for (auto &child : op.get().children) {
-				auto child_result = ExactNumericColumns(*child, column_count);
+				auto child_result = ExactNumericTypes(*child, column_count);
 				for (idx_t i = 0; i < column_count; i++) {
-					result[i] = result[i] || child_result[i];
+					if (result[i].id() == LogicalTypeId::INVALID) {
+						result[i] = child_result[i];
+					}
 				}
 			}
 			return result;
@@ -812,6 +843,15 @@ vector<bool> BindContext::ExactNumericColumns(const LogicalOperator &plan, idx_t
 			return result;
 		}
 	}
+}
+
+vector<bool> BindContext::ExactNumericColumns(LogicalOperator &plan, idx_t column_count) {
+	auto types = ExactNumericTypes(plan, column_count);
+	vector<bool> result(column_count, false);
+	for (idx_t i = 0; i < column_count; i++) {
+		result[i] = types[i].id() != LogicalTypeId::INVALID;
+	}
+	return result;
 }
 
 void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,

@@ -233,6 +233,53 @@ CREATE TABLE pk(n NUMERIC PRIMARY KEY);
 ----
 not supported yet
 
+# indexes on the other columns of a table with NUMERIC columns work
+statement ok
+CREATE TABLE keyed(id INTEGER PRIMARY KEY, n NUMERIC);
+
+statement ok
+INSERT INTO keyed VALUES (1, 1.5), (2, 300000);
+
+statement error
+INSERT INTO keyed VALUES (1, 2);
+----
+<REGEX>:.*Duplicate key.*
+
+statement ok
+UPDATE keyed SET n = 99999999999 WHERE id = 2;
+
+statement ok
+DELETE FROM keyed WHERE id = 1;
+
+query II
+SELECT id, n FROM keyed;
+----
+2	99999999999
+
+# the same holds for CHECK constraints on the other columns
+statement ok
+CREATE TABLE checked(id INTEGER CHECK (id > 0), n NUMERIC);
+
+statement ok
+INSERT INTO checked VALUES (1, 1.5), (2, 300000);
+
+statement error
+INSERT INTO checked VALUES (0, 1);
+----
+<REGEX>:.*CHECK constraint failed.*
+
+statement ok
+UPDATE checked SET n = 99999999999 WHERE id = 2;
+
+statement ok
+UPDATE checked SET id = 5 WHERE id = 1;
+
+query II
+SELECT id, n FROM checked ORDER BY id;
+----
+2	99999999999.0
+5	1.5
+
 # constraints over NUMERIC columns would need the bound representation at binding time
 statement error
 CREATE TABLE chk(n NUMERIC CHECK (n > 0));

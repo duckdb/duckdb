@@ -1,5 +1,6 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/common/types/numeric_type.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/constraints/list.hpp"
@@ -370,7 +371,7 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 		} else {
 			// no default value specified: push a default value of constant null
 			// a NUMERIC column has no representation of its own - its NULLs take the default representation
-			auto null_type = column.Type().id() == LogicalTypeId::NUMERIC ? NumericType::DefaultType() : column.Type();
+			auto null_type = NumericType::WithDefaultRepresentation(column.Type());
 			bound_default = make_uniq<BoundConstantExpression>(Value(null_type));
 		}
 		bound_defaults.push_back(std::move(bound_default));
@@ -661,6 +662,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	type_binder->SetSearchPath(result->schema.catalog, result->schema.name);
 
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
+	// a test setting: every DECIMAL column of a DuckDB table is declared as NUMERIC
+	bool decimal_as_numeric = catalog.IsDuckCatalog() && Settings::Get<DebugDecimalAsNumericSetting>(context);
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
@@ -668,11 +671,16 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// results that derive from NUMERIC columns are stored as NUMERIC again
 		auto sql_types = query_obj.types;
 		if (query_obj.plan) {
-			auto exact_numeric = BindContext::ExactNumericColumns(*query_obj.plan, sql_types.size());
+			auto exact_numeric = BindContext::ExactNumericTypes(*query_obj.plan, sql_types.size());
 			for (idx_t i = 0; i < sql_types.size(); i++) {
-				if (exact_numeric[i]) {
-					sql_types[i] = LogicalType::NUMERIC;
+				if (exact_numeric[i].id() != LogicalTypeId::INVALID) {
+					sql_types[i] = exact_numeric[i];
 				}
+			}
+		}
+		if (decimal_as_numeric) {
+			for (auto &type : sql_types) {
+				type = NumericType::DecimalsAsNumeric(type);
 			}
 		}
 		result->query = std::move(query_obj.plan);
@@ -709,6 +717,9 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
 			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
 			type_binder->BindLogicalType(column.TypeMutable());
+			if (decimal_as_numeric) {
+				column.SetType(NumericType::DecimalsAsNumeric(column.Type()));
+			}
 		}
 
 	} else {
@@ -730,6 +741,9 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
 			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
 			type_binder->BindLogicalType(column.TypeMutable());
+			if (decimal_as_numeric) {
+				column.SetType(NumericType::DecimalsAsNumeric(column.Type()));
+			}
 		}
 
 		auto &config = DBConfig::Get(catalog.GetAttached());
