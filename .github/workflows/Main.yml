@@ -203,7 +203,7 @@ jobs:
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             extra_exclude_archs=
           elif [[ "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
-            extra_exclude_archs="windows_arm64;osx_amd64"
+            extra_exclude_archs="osx_amd64"
           else
             extra_exclude_archs="windows_arm64;osx_amd64;wasm_eh"
           fi

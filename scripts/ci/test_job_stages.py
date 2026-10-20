@@ -277,7 +277,7 @@ class JobStagesTest(unittest.TestCase):
             self.assertEqual(selection.reduced_ci_mode, "disabled")
             self.assertEqual(
                 selection.extension_opt_in_archs,
-                "linux_arm64_musl" if event_name == "pull_request" else "",
+                "windows_arm64;linux_arm64_musl" if event_name == "pull_request" else "",
             )
         self.assertEqual(
             [config["name"] for config in selection.linux_release_matrix],
