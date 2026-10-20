@@ -1,8 +1,8 @@
 <div align="center">
   <picture>
-    <source media="(prefers-color-scheme: light)" srcset="logo/DuckDB_Logo-horizontal.svg">
-    <source media="(prefers-color-scheme: dark)" srcset="logo/DuckDB_Logo-horizontal-dark-mode.svg">
-    <img alt="DuckDB logo" src="logo/DuckDB_Logo-horizontal.svg" height="100">
+    <source media="(prefers-color-scheme: light)" srcset="https://duckdb.org/images/designmanual/DuckDB_inline-lightmode.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="https://duckdb.org/images/designmanual/DuckDB_inline-darkmode.svg">
+    <img alt="DuckDB logo" src="https://duckdb.org/images/designmanual/DuckDB_inline-lightmode.svg" height="100">
   </picture>
 </div>
 <br>
