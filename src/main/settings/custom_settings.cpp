@@ -592,6 +592,9 @@ void DisabledFilesystemsSetting::SetGlobal(DatabaseInstance *db_p, DBConfig &con
 	auto &db = GetDB<DisabledFilesystemsSetting>(db_p);
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto list = StringUtil::Split(input.ToString(), ",");
+	for (auto &entry : list) {
+		StringUtil::Trim(entry);
+	}
 	fs.SetDisabledFileSystems(list);
 }
 
