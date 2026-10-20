@@ -10414,8 +10414,28 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformValuesExpressio
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSetStatementInternal(PEGTransformer &transformer,
                                                                                       ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformSetKeywordStatementInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto set_assignment_or_time_zone = transformer.Transform<unique_ptr<SetStatement>>(list_pr.GetChild(1));
-	auto result = TransformSetStatement(transformer, std::move(set_assignment_or_time_zone));
+	auto result = TransformSetKeywordStatement(transformer, std::move(set_assignment_or_time_zone));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformVariableAssignmentInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	auto identifier = list_pr.GetChild(1).Cast<IdentifierParseResult>().identifier;
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(3));
+	auto result = TransformVariableAssignment(transformer, has_result, identifier, std::move(expression));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
@@ -11978,6 +11998,8 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ValuesClause", &PEGTransformerFactory::TransformValuesClauseInternal},
 	    {"ValuesExpressions", &PEGTransformerFactory::TransformValuesExpressionsInternal},
 	    {"SetStatement", &PEGTransformerFactory::TransformSetStatementInternal},
+	    {"SetKeywordStatement", &PEGTransformerFactory::TransformSetKeywordStatementInternal},
+	    {"VariableAssignment", &PEGTransformerFactory::TransformVariableAssignmentInternal},
 	    {"SetAssignmentOrTimeZone", &PEGTransformerFactory::TransformSetAssignmentOrTimeZoneInternal},
 	    {"ResetStatement", &PEGTransformerFactory::TransformResetStatementInternal},
 	    {"SetSchema", &PEGTransformerFactory::TransformSetSchemaInternal},

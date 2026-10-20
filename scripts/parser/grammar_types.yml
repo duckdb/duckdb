@@ -93,6 +93,8 @@ SQLStatement:
     - ResetStatement
     - SelectStatement
     - SetStatement
+    - SetKeywordStatement
+    - VariableAssignment
     - TransactionStatement
     - BeginTransaction
     - CommitTransaction

@@ -3675,6 +3675,13 @@ public:
 	static void InitializeSetStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeSetStatementTrampoline(PEGTransformer &transformer,
 	                                                                       GeneratedTransformProcess &process);
+	static void InitializeSetKeywordStatementTrampoline(PEGTransformer &transformer,
+	                                                    GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeSetKeywordStatementTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
+	static void InitializeVariableAssignmentTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeVariableAssignmentTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
 	static void InitializeSetAssignmentOrTimeZoneTrampoline(PEGTransformer &transformer,
 	                                                        GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue>
@@ -7433,8 +7440,15 @@ public:
 	TransformValuesExpressions(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> expression);
 	static unique_ptr<TransformResultValue> TransformSetStatementInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
-	static unique_ptr<SQLStatement> TransformSetStatement(PEGTransformer &transformer,
-	                                                      unique_ptr<SetStatement> set_assignment_or_time_zone);
+	static unique_ptr<TransformResultValue> TransformSetKeywordStatementInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformSetKeywordStatement(PEGTransformer &transformer,
+	                                                             unique_ptr<SetStatement> set_assignment_or_time_zone);
+	static unique_ptr<TransformResultValue> TransformVariableAssignmentInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformVariableAssignment(PEGTransformer &transformer, const bool &has_result,
+	                                                            const Identifier &identifier,
+	                                                            unique_ptr<ParsedExpression> expression);
 	static unique_ptr<TransformResultValue> TransformSetAssignmentOrTimeZoneInternal(PEGTransformer &transformer,
 	                                                                                 ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformResetStatementInternal(PEGTransformer &transformer,
