@@ -13,7 +13,7 @@
 #include "duckdb/common/types/string.hpp"
 #include "duckdb/common/arena_containers/arena_ptr.hpp"
 
-#if defined(__SANITIZE_ADDRESS__)
+#if defined(__SANITIZE_ADDRESS__) && !defined(__MINGW32__)
 #define DUCKDB_ARENA_ALLOCATOR_ASAN
 #elif defined(__has_feature)
 #if __has_feature(address_sanitizer)

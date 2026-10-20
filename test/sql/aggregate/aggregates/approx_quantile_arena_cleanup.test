@@ -5,9 +5,6 @@
 statement ok
 SET threads=4;
 
-statement ok
-SET block_allocator_memory='100MiB';
-
 loop n 0 3
 
 statement ok
