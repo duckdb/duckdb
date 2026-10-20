@@ -146,7 +146,12 @@ static data_ptr_t AllocateVirtualMemory(const idx_t size) {
 	// This returns nullptr on failure
 	return data_ptr_t(VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_NOACCESS));
 #else
-	const auto ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	auto flags = MAP_PRIVATE | MAP_ANONYMOUS;
+#if defined(__linux__)
+	// Reserve address space without charging the entire pool against the commit limit.
+	flags |= MAP_NORESERVE;
+#endif
+	const auto ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, flags, -1, 0);
 	return ptr == MAP_FAILED ? nullptr : data_ptr_cast(ptr);
 #endif
 }
