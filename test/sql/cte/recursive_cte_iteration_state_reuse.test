@@ -170,3 +170,48 @@ WITH RECURSIVE r(round, g, v) AS (
 SELECT count(*), max(v), min(v) FROM r;
 ----
 250001	49999	0
+
+# a recursive aggregate whose partitioning grows during the iteration under a memory limit: the
+# reservation floor must grow with the partitions so the sink does not spill against a stale floor
+statement ok
+SET memory_limit='512MiB';
+
+# partition growth requires more than GROW_STRATEGY_THREAD_THRESHOLD threads
+statement ok
+SET threads=8;
+
+query III
+WITH RECURSIVE big(round, g, v) AS (
+    SELECT 0, 0::BIGINT, 0::BIGINT
+    UNION ALL
+    SELECT round + 1, (big.g * 37 + i) % 499979 AS g2,
+           max(big.v + i)
+    FROM big CROSS JOIN range(500000) t(i)
+    WHERE round < 1
+    GROUP BY round, g2
+)
+SELECT count(*), max(v), min(v) FROM big;
+----
+499980	499999	0
+
+# the same mechanism after an iteration that populated the sink: the tiny first round resets the
+# restart to a single partition, so the large second round must regrow the floor with the partitions
+query III
+WITH RECURSIVE big(round, g, v) AS (
+    SELECT 0, 0::BIGINT, 0::BIGINT
+    UNION ALL
+    SELECT round + 1, (big.g * 37 + i) % 199999 AS g2,
+           max(big.v + i)
+    FROM big CROSS JOIN range(CASE WHEN round = 0 THEN 10 ELSE 200000 END) t(i)
+    WHERE round < 2
+    GROUP BY round, g2
+)
+SELECT count(*), max(v), min(v) FROM big;
+----
+200010	200008	0
+
+statement ok
+RESET memory_limit;
+
+statement ok
+RESET threads;

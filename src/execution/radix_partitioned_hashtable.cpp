@@ -125,7 +125,7 @@ struct AggregatePartition : StateWithBlockableTasks {
 
 RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const RadixPartitionedHashTable &radix_ht_p)
     : context(context_p), temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
-      finalized(false), external(false), active_threads(0),
+      finalized(false), external(false), iteration_reused(false), active_threads(0),
       number_of_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
       memory_limit(BufferManager::GetBufferManager(context).GetOperatorMemoryLimit()),
       block_alloc_size(BufferManager::GetBufferManager(context).GetBlockAllocSize()), any_combined(false),
@@ -145,6 +145,7 @@ void RadixHTGlobalSinkState::SetReservationFloor(ClientContext &context_p, const
 }
 
 void RadixHTGlobalSinkState::ResetConfigForNewIteration(ClientContext &context_p, const idx_t scheduled_workers) {
+	iteration_reused = true;
 	config.ResetForNewIteration(scheduled_workers);
 	// The restart partition count determines the reservation floor. This also undoes the scaling that
 	// SetRadixBitsInternal applied if a previous iteration went external.
@@ -250,6 +251,19 @@ void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external
 		    RadixPartitioning::NumberOfPartitions(radix_bits) / RadixPartitioning::NumberOfPartitions(sink_radix_bits);
 		sink.minimum_reservation = sink.minimum_reservation * partition_multiplier;
 		sink.external = true;
+	} else if (sink.iteration_reused && radix_bits > sink_radix_bits) {
+		// A recursive iteration can restart below the maximum partition count: growing the partitions
+		// grows the working set, so the reservation floor must cover the new configuration again.
+		sink.minimum_reservation =
+		    MaxValue<idx_t>(sink.minimum_reservation, sink.CalculateMinimumReservation(radix_bits));
+	}
+	if (sink.iteration_reused) {
+		// Publish the raised floor. UpdateSinkReservation can have published a larger minimum under this
+		// lock, so never lower the published value here. Ordinary (non-reused) sinks keep their floor
+		// private, as before.
+		auto &temporary_memory_state = *sink.temporary_memory_state;
+		temporary_memory_state.SetMinimumReservation(
+		    MaxValue<idx_t>(temporary_memory_state.GetMinimumReservation(), sink.minimum_reservation));
 	}
 
 	sink_radix_bits = radix_bits;

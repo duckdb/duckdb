@@ -119,6 +119,8 @@ public:
 	bool finalized;
 	//! Whether we are doing an external aggregation
 	atomic<bool> external;
+	//! Whether the recursive runtime reset this sink for reuse across iterations
+	atomic<bool> iteration_reused;
 	//! Threads that have called Sink
 	atomic<idx_t> active_threads;
 	//! Number of threads (from TaskScheduler)
