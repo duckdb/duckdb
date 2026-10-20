@@ -133,7 +133,7 @@ FROM (SELECT median(x) OVER (ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) AS m FR
 ----
 100000	99999
 
-# NULL dictionary entries run the nullable sort tree build and the cursor validity checks
+# NULL dictionary entries exercise the cursor validity checks (wide frames keep the skip list)
 query II
 SELECT count(m), count(*) FILTER (WHERE m = 'majority_payload_value')
 FROM (SELECT median(xn) OVER (ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) AS m FROM t2)
@@ -146,26 +146,19 @@ FROM (SELECT mode(xn) OVER (ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) AS m FRO
 ----
 99999	99999
 
-# overlapping short frames keep the skip-list path, its cursor checks validity per dictionary row
+# a narrow frame selects the quantile sort tree, the NULL entries run its nullable build
 query II
 SELECT count(m), count(*) FILTER (WHERE m = 'majority_payload_value')
 FROM (SELECT median(xn) OVER (ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS m FROM t2)
 ----
 99999	93939
 
-# growing frames select the quantile sort tree, NULL entries run its nullable build
-query II
-SELECT count(m), count(*) FILTER (WHERE m = 'majority_payload_value')
-FROM (SELECT median(xn) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS m FROM t2)
-----
-99999	99999
-
 # a FILTER clause runs the filtered sort tree build over the dictionary pages
 query III
 SELECT count(m), count(DISTINCT m), count(*) FILTER (WHERE m LIKE 'minor%')
-FROM (SELECT median(x) FILTER (WHERE i % 3 = 0) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS m FROM t2)
+FROM (SELECT median(x) FILTER (WHERE i % 3 = 0) OVER (ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS m FROM t2)
 ----
-100000	25	100000
+100000	97	100000
 
 # a two-entry dictionary (one value plus NULL) stays within the compact limit at every vector size
 statement ok
@@ -179,6 +172,13 @@ CHECKPOINT
 query II
 SELECT count(m), count(*) FILTER (WHERE m = 'only_dictionary_payload_value')
 FROM (SELECT mode(xs) OVER (ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) AS m FROM t3)
+----
+49999	49999
+
+# the skip list (wide frame) and the sort tree (narrow frame) both page the two-entry dictionary
+query II
+SELECT count(m), count(*) FILTER (WHERE m = 'only_dictionary_payload_value')
+FROM (SELECT median(xs) OVER (ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) AS m FROM t3)
 ----
 49999	49999
 
