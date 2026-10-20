@@ -360,6 +360,33 @@ TEST_CASE("Stable C++API: copy function writes through COPY TO", "[cpp_api]") {
 	REQUIRE(ReadFile(path) == "1 5000");
 }
 
+TEST_CASE("Stable C++API: copy function names its files with its extension", "[cpp_api]") {
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	conn.Execute("SET threads = 1").Drain();
+	auto function = CopyFunction::Create(conn.GetFactory());
+	REQUIRE_THROWS_MATCHES(function.SetFileExtension(".summary"), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	function.SetName("cpp_copy_ext")
+	    .SetFileExtension("summary")
+	    .SetCopyToBindCallback(SummaryBind)
+	    .SetCopyToInitCallback(SummaryInit)
+	    .SetCopyToBatchCallback(SummaryBatch)
+	    .SetCopyToFlushCallback(SummaryFlush)
+	    .SetCopyToFinalizeCallback(SummaryFinalize);
+	conn.Register(function);
+
+	// With PER_THREAD_OUTPUT DuckDB names the files in the directory itself.
+	const auto dir = duckdb::TestCreatePath("cpp_copy_ext_dir");
+	REQUIRE(conn.Execute("COPY (SELECT r AS i FROM range(10) t(r)) TO '" + dir +
+	                     "' (FORMAT cpp_copy_ext, PER_THREAD_OUTPUT)")
+	            .Drain() == 10);
+	auto files = conn.GetFileSystem().Glob(dir + "/*");
+	REQUIRE(files.size() == 1);
+	REQUIRE(duckdb::StringUtil::EndsWith(files[0], ".summary"));
+	REQUIRE(ReadFile(files[0]) == "1 10");
+}
+
 // ---------------------------------------------------------------------------
 // COPY FROM: register on a connection and drive through COPY ... FROM.
 // ---------------------------------------------------------------------------

@@ -159,7 +159,6 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 	auto named_params = ConvertParamListToMap(values);
 	QueryParameters parameters;
 	parameters.statement_args = named_params;
-	parameters.result_eagerness = ResultEagerness::FORCED;
 	return context->Query(query, parameters);
 }
 
@@ -176,17 +175,13 @@ unique_ptr<TableDescription> Connection::TableInfo(const Identifier &table_name)
 	return TableInfo(Identifier::InvalidCatalog(), Identifier::DefaultSchema(), table_name);
 }
 
-vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &query) {
-	// Eager convenience over the lazy ClientContext::ExtractStatements iterator: drain the
-	// engine-facing statements into a vector.
+vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &query, bool apply_invalidation_policy) {
 	auto &client_context = *context;
 	vector<unique_ptr<SQLStatement>> result;
 	try {
-		auto iterator = client_context.IterateStatements(query);
+		auto iterator = client_context.IterateStatements(query, apply_invalidation_policy);
 		while (iterator.Peek()) {
-			if (auto statement = iterator.GetStatement()) {
-				result.push_back(std::move(statement));
-			}
+			result.push_back(iterator.GetStatement());
 		}
 	} catch (std::exception &ex) {
 		ErrorData error(ex);

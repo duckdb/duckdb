@@ -5,7 +5,12 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/valid_checker.hpp"
+#include "duckdb/parser/statement/logical_plan_statement.hpp"
+#include "duckdb/main/statement_iterator.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/planner.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/storage/metadata/metadata_manager.hpp"
 #include "duckdb/storage/storage_info.hpp"
@@ -42,12 +47,16 @@ TEST_CASE("Test ExtractStatements with an explicit transaction", "[api]") {
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(a INT)"));
 
-	// The ALTER expands into multiple statements, which must not be wrapped in their own transaction
+	// The ALTER expands into several statements when it runs, inside the user's transaction
 	auto stmts = con.ExtractStatements("BEGIN; ALTER TABLE t ADD COLUMN c INT DEFAULT 1 NOT NULL; COMMIT;");
-	REQUIRE(stmts.size() == 6);
+	REQUIRE(stmts.size() == 3);
+	REQUIRE(stmts[1]->type == StatementType::MULTI_STATEMENT);
 	for (auto &stmt : stmts) {
 		REQUIRE_NO_FAIL(con.Query(std::move(stmt)));
 	}
+	REQUIRE(!con.context->transaction.HasActiveTransaction());
+	auto result = con.Query("SELECT column_name FROM duckdb_columns() WHERE table_name = 't' ORDER BY column_index");
+	REQUIRE(CHECK_COLUMN(result, 0, {"a", "c"}));
 }
 
 TEST_CASE("Test using connection after database is gone", "[api]") {
@@ -847,6 +856,43 @@ TEST_CASE("Test a logical execute still has types after an optimization pass", "
 	REQUIRE((query_plan->types[0].id() == LogicalTypeId::INTEGER));
 }
 
+static bool HasFlippedDelimJoin(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN && op.Cast<LogicalComparisonJoin>().delim_flipped) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (HasFlippedDelimJoin(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+TEST_CASE("Test executing an optimized plan with a flipped delim join", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
+
+	REQUIRE_NO_FAIL(con.Query("SET delim_join_as_cte = false"));
+	con.BeginTransaction();
+	Parser parser(*con.context);
+	parser.ParseQuery(
+	    "SELECT a.i, b.i, x FROM integers a, integers b JOIN LATERAL (VALUES (a.i)) ss(x) ON (true) ORDER BY ALL");
+	Planner planner(*con.context);
+	planner.CreatePlan(std::move(parser.statements[0]));
+	Optimizer optimizer(*planner.binder, *con.context);
+	auto plan = optimizer.Optimize(std::move(planner.plan));
+	con.Commit();
+	REQUIRE(HasFlippedDelimJoin(*plan));
+	REQUIRE_NO_FAIL(con.Query("SET delim_join_as_cte = true"));
+
+	REQUIRE_NO_FAIL(con.Query("PRAGMA disable_optimizer"));
+	auto result = con.Query(make_uniq<LogicalPlanStatement>(std::move(plan)));
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->RowCount() == 16);
+}
+
 TEST_CASE("Test SqlStatement::ToString for UPDATE, INSERT, DELETE statements with alias of RETURNING clause", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -998,4 +1044,105 @@ TEST_CASE("Test ExtractStatements error location", "[api]") {
 	Connection con(db);
 	REQUIRE_THROWS_WITH(con.ExtractStatements("FROM (VALUES ('1', '2'), ('1'))"),
 	                    Catch::Matchers::Contains("LINE 1: FROM (VALUES ('1', '2'), ('1'))"));
+}
+
+TEST_CASE("Test a parser error in Submit invalidates the transaction", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE audit(i INT)"));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	REQUIRE_NO_FAIL(con.Query("SET current_transaction_invalidation_policy='ALL_ERRORS_INVALIDATE_TRANSACTION'"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO audit VALUES (21)"));
+	auto result = con.Submit("inser into audit_backup from audit");
+	REQUIRE(result->HasError());
+	REQUIRE_FAIL(con.Query("INSERT INTO audit VALUES (22)"));
+	REQUIRE_NO_FAIL(con.Query("ABORT"));
+
+	result = con.Query("SELECT COUNT(*) FROM audit");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+}
+
+TEST_CASE("Test a parser error while iterating statements invalidates the transaction", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE audit(i INT)"));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	auto iterator = con.context->IterateStatements("INSERT INTO audit VALUES (21); inser into audit_backup from audit");
+	REQUIRE(iterator.Peek());
+	REQUIRE_NO_FAIL(con.Query(iterator.GetStatementForExecution()));
+	REQUIRE_THROWS_WITH(iterator.Peek(), Catch::Matchers::Contains("syntax error"));
+	REQUIRE_FAIL(con.Query("INSERT INTO audit VALUES (22)"));
+	REQUIRE_NO_FAIL(con.Query("ABORT"));
+
+	auto result = con.Query("SELECT COUNT(*) FROM audit");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+}
+
+TEST_CASE("Test invalid UTF-8 while iterating statements invalidates the transaction", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE audit(i INT)"));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO audit VALUES (21)"));
+	REQUIRE_THROWS_WITH(con.context->IterateStatements("SELECT '\xff'"), Catch::Matchers::Contains("Invalid UTF-8"));
+	REQUIRE_FAIL(con.Query("INSERT INTO audit VALUES (22)"));
+	REQUIRE_NO_FAIL(con.Query("ABORT"));
+
+	auto result = con.Query("SELECT COUNT(*) FROM audit");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+}
+
+TEST_CASE("Test iterating statements without applying the invalidation policy", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE audit(i INT)"));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO audit VALUES (21)"));
+	auto iterator = con.context->IterateStatements("inser into audit_backup from audit", false);
+	REQUIRE_THROWS_WITH(iterator.Peek(), Catch::Matchers::Contains("syntax error"));
+	REQUIRE_THROWS_WITH(con.context->IterateStatements("SELECT '\xff'", false),
+	                    Catch::Matchers::Contains("Invalid UTF-8"));
+	REQUIRE_THROWS_WITH(con.ExtractStatements("inser into audit_backup from audit", false),
+	                    Catch::Matchers::Contains("syntax error"));
+	REQUIRE_THROWS_WITH(con.GetTableNames("inser into audit_backup from audit"),
+	                    Catch::Matchers::Contains("syntax error"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO audit VALUES (22)"));
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+	auto result = con.Query("SELECT COUNT(*) FROM audit");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+}
+
+TEST_CASE("Test a parser error while iterating statements follows the invalidation policy", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE audit(i INT)"));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN"));
+	REQUIRE_NO_FAIL(con.Query("SET current_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE'"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO audit VALUES (21)"));
+	auto iterator = con.context->IterateStatements("inser into audit_backup from audit");
+	REQUIRE_THROWS_WITH(iterator.Peek(), Catch::Matchers::Contains("syntax error"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO audit VALUES (22)"));
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+	auto result = con.Query("SELECT COUNT(*) FROM audit");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+}
+
+TEST_CASE("Test a parser error while iterating statements in autocommit mode", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE audit(i INT)"));
+
+	auto iterator = con.context->IterateStatements("inser into audit_backup from audit");
+	REQUIRE_THROWS_WITH(iterator.Peek(), Catch::Matchers::Contains("syntax error"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO audit VALUES (21)"));
+
+	auto result = con.Query("SELECT COUNT(*) FROM audit");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }

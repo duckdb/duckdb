@@ -38,6 +38,9 @@ struct MultiFileOptions {
 	//! (Optional) The schema of the scan, given by the "schema" option. Every file is mapped onto it - by field id
 	//! when its columns are identified by INTEGER, by name otherwise - instead of the schema being read from the files
 	vector<MultiFileColumnDefinition> schema;
+	//! (Optional) Complete ordered scan schema, mapped by name before conversion. Unlike schema, no defaults or
+	//! field identifiers are supplied. Physical reader columns remain independent of these output columns.
+	vector<MultiFileColumnDefinition> bound_schema;
 	//! Whether to add a "file_row_number" column with the row number of each row within its file - it is read from the
 	//! row number virtual column of the reader
 	bool file_row_number = false;
@@ -65,13 +68,21 @@ struct MultiFileOptions {
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileOptions Deserialize(Deserializer &source);
 	DUCKDB_API void AddBatchInfo(BindInfo &bind_info) const;
-	DUCKDB_API void AutoDetectHivePartitioning(MultiFileList &files, ClientContext &context);
+	//! Settle the hive partitioning options against each other and against the files: hive_types implies
+	//! hive_partitioning, and the type of a partition key the caller did not give is taken from the values
+	//! in the paths. With detect_partitioning, WHETHER the files are partitioned is taken from the paths
+	//! too; a caller that already knows the scan's schema passes false and asks for partitioning itself
+	DUCKDB_API void AutoDetectHivePartitioning(MultiFileList &files, ClientContext &context,
+	                                           bool detect_partitioning = true);
 	DUCKDB_API static bool AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context);
 	DUCKDB_API void AutoDetectHiveTypesInternal(MultiFileList &files, ClientContext &context);
 	DUCKDB_API void VerifyHiveTypesArePartitions(const std::map<string, string> &partitions) const;
 	DUCKDB_API LogicalType GetHiveLogicalType(const string &hive_partition_column) const;
 	DUCKDB_API Value GetHivePartitionValue(const string &base, const string &entry, ClientContext &context) const;
 	DUCKDB_API bool AnySet() const;
+	DUCKDB_API void SetBoundSchema(const Value &value, ClientContext &context);
+	//! Validate owned declarations before binding or restoring even an empty file list.
+	DUCKDB_API void ValidateBoundSchema() const;
 	//! Set "column_statistics" from an option value - see column_statistics for its shape
 	DUCKDB_API void SetColumnStatistics(const Identifier &key, const Value &val);
 	//! Check "column_statistics" against the scan's columns once they are bound: every key must name a column, or a

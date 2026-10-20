@@ -70,7 +70,7 @@ TEST_CASE("V2 vector_cast: a normal cast converts every row or fails", "[capi_v2
 		CastChunk chunk(fx.factory, {"1", nullptr, "3"});
 		bool converted = false;
 		REQUIRE(duckdb_v2_vector_cast(fx.factory, chunk.source, chunk.target, DUCKDB_V2_CAST_MODE_NORMAL, &converted,
-		                              nullptr) == DUCKDB_V2_ERROR_NONE);
+		                              nullptr, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(converted);
 		// The target takes the source's size, and NULLs stay NULL.
 		REQUIRE(chunk.Target() == std::vector<int32_t> {1, -1, 3});
@@ -79,7 +79,7 @@ TEST_CASE("V2 vector_cast: a normal cast converts every row or fails", "[capi_v2
 		CastChunk chunk(fx.factory, {"1", "x", "3"});
 		duckdb_v2_error_info_handle err = nullptr;
 		REQUIRE(duckdb_v2_vector_cast(fx.factory, chunk.source, chunk.target, DUCKDB_V2_CAST_MODE_NORMAL, nullptr,
-		                              &err) == DUCKDB_V2_ERROR_TYPE_CONVERSION);
+		                              nullptr, &err) == DUCKDB_V2_ERROR_TYPE_CONVERSION);
 		duckdb_v2_str text = {nullptr, 0};
 		duckdb_v2_error_info_get_text(err, &text);
 		REQUIRE(Convert(text).find(Pad("x")) != std::string::npos);
@@ -91,36 +91,49 @@ TEST_CASE("V2 vector_cast: a try cast turns failed rows into NULL", "[capi_v2][v
 	EnvFixture fx;
 	CastChunk chunk(fx.factory, {"1", "x", nullptr, "4"});
 	bool converted = true;
+	duckdb_v2_error_info_handle cast_error = nullptr;
 	REQUIRE(duckdb_v2_vector_cast(fx.factory, chunk.source, chunk.target, DUCKDB_V2_CAST_MODE_TRY, &converted,
-	                              nullptr) == DUCKDB_V2_ERROR_NONE);
+	                              &cast_error, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE_FALSE(converted);
 	REQUIRE(chunk.Target() == std::vector<int32_t> {1, -1, -1, 4});
 
-	// Every row converting is reported as such.
+	// The error of a failed row is kept.
+	REQUIRE(cast_error);
+	DUCKDB_V2_ERROR code = DUCKDB_V2_ERROR_NONE;
+	REQUIRE(duckdb_v2_error_info_get_code(cast_error, &code) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(code == DUCKDB_V2_ERROR_TYPE_CONVERSION);
+	duckdb_v2_str text = {nullptr, 0};
+	REQUIRE(duckdb_v2_error_info_get_text(cast_error, &text) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE_THAT(std::string(text.ptr, text.len), Catch::Matchers::Contains("x"));
+	duckdb_v2_error_info_destroy(&cast_error);
+
+	// Every row converting is reported as such, with no error.
 	CastChunk clean(fx.factory, {"5", "6"});
+	cast_error = nullptr;
 	REQUIRE(duckdb_v2_vector_cast(fx.factory, clean.source, clean.target, DUCKDB_V2_CAST_MODE_TRY, &converted,
-	                              nullptr) == DUCKDB_V2_ERROR_NONE);
+	                              &cast_error, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(converted);
+	REQUIRE(cast_error == nullptr);
 	REQUIRE(clean.Target() == std::vector<int32_t> {5, 6});
 }
 
 TEST_CASE("V2 vector_cast: nothing the target held carries over", "[capi_v2][vector_cast]") {
 	EnvFixture fx;
 	CastChunk chunk(fx.factory, {"1", "x", "3"});
-	REQUIRE(duckdb_v2_vector_cast(fx.factory, chunk.source, chunk.target, DUCKDB_V2_CAST_MODE_TRY, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_cast(fx.factory, chunk.source, chunk.target, DUCKDB_V2_CAST_MODE_TRY, nullptr, nullptr,
+	                              nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(chunk.Target() == std::vector<int32_t> {1, -1, 3});
 
 	// Fix the failing row and cast into the same target: the NULL from before is gone.
 	auto fixed = Pad("2");
 	REQUIRE(V2VectorAssignString(chunk.source, 1, fixed.data(), fixed.size(), nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_vector_cast(fx.factory, chunk.source, chunk.target, DUCKDB_V2_CAST_MODE_NORMAL, nullptr,
+	REQUIRE(duckdb_v2_vector_cast(fx.factory, chunk.source, chunk.target, DUCKDB_V2_CAST_MODE_NORMAL, nullptr, nullptr,
 	                              nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(chunk.Target() == std::vector<int32_t> {1, 2, 3});
 
 	// An empty source empties the target.
 	REQUIRE(duckdb_v2_vector_set_size(chunk.source, 0, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_vector_cast(fx.factory, chunk.source, chunk.target, DUCKDB_V2_CAST_MODE_NORMAL, nullptr,
+	REQUIRE(duckdb_v2_vector_cast(fx.factory, chunk.source, chunk.target, DUCKDB_V2_CAST_MODE_NORMAL, nullptr, nullptr,
 	                              nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(chunk.Target().empty());
 }
@@ -130,22 +143,22 @@ TEST_CASE("V2 vector_cast: an instance's factory casts with the built-ins", "[ca
 	duckdb_v2_factory_handle factory = nullptr;
 	REQUIRE(duckdb_v2_instance_get_factory(fx.instance, &factory, nullptr) == DUCKDB_V2_ERROR_NONE);
 	CastChunk chunk(factory, {"7", "8"});
-	REQUIRE(duckdb_v2_vector_cast(factory, chunk.source, chunk.target, DUCKDB_V2_CAST_MODE_NORMAL, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_cast(factory, chunk.source, chunk.target, DUCKDB_V2_CAST_MODE_NORMAL, nullptr, nullptr,
+	                              nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(chunk.Target() == std::vector<int32_t> {7, 8});
 }
 
 TEST_CASE("V2 vector_cast: invalid arguments", "[capi_v2][vector_cast]") {
 	EnvFixture fx;
 	CastChunk chunk(fx.factory, {"1"});
-	REQUIRE(duckdb_v2_vector_cast(fx.factory, chunk.source, chunk.source, DUCKDB_V2_CAST_MODE_NORMAL, nullptr,
+	REQUIRE(duckdb_v2_vector_cast(fx.factory, chunk.source, chunk.source, DUCKDB_V2_CAST_MODE_NORMAL, nullptr, nullptr,
 	                              nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_vector_cast(fx.factory, chunk.source, chunk.target, static_cast<DUCKDB_V2_CAST_MODE>(42), nullptr,
+	                              nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_vector_cast(nullptr, chunk.source, chunk.target, DUCKDB_V2_CAST_MODE_NORMAL, nullptr, nullptr,
 	                              nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_vector_cast(nullptr, chunk.source, chunk.target, DUCKDB_V2_CAST_MODE_NORMAL, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_vector_cast(fx.factory, nullptr, chunk.target, DUCKDB_V2_CAST_MODE_NORMAL, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_vector_cast(fx.factory, nullptr, chunk.target, DUCKDB_V2_CAST_MODE_NORMAL, nullptr, nullptr,
+	                              nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
 } // namespace test_capi_v2

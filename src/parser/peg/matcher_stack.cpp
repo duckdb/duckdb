@@ -5,7 +5,6 @@
 namespace duckdb {
 
 MatchStack::MatchStack() {
-	frames.reserve(INITIAL_FRAME_CAPACITY);
 }
 
 MatchStack::~MatchStack() {
@@ -17,7 +16,13 @@ MatchStack::~MatchStack() {
 
 void MatchStack::DestroyTopFrame() {
 	D_ASSERT(!frames.empty());
+	auto &frame = frames.back();
+	auto &process_allocator = frame.match_state.context.process_allocator;
+	const auto process_arena_position = frame.process_arena_position;
 	frames.pop_back();
+	// the processes of a frame and everything they allocated are dead once the frame is popped - release them so the
+	// process arena only ever holds the live frames instead of every process the whole statement ever created
+	process_allocator.Rewind(process_arena_position);
 }
 
 optional<MatcherResult> PackratMatchState::TryLoadCachedResult(const Matcher &matcher, MatchState &state) {
@@ -79,6 +84,7 @@ MatcherResult MatchStack::ExecuteAtomicMatcher(MatchInput input) {
 void MatchStack::PushFrame(MatchInput input) {
 	input.state.rule = input.matcher.GetRule();
 	frames.emplace_back(input);
+	frames.back().process_arena_position = input.state.context.process_allocator.GetPosition();
 }
 
 void MatchStack::InitializeFrame(MatchStackFrame &frame) {
@@ -110,7 +116,7 @@ bool MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 		frame.result = step.GetResult();
 		return true;
 	}
-	if (child->matcher.IsAtomic()) {
+	if (!child->matcher.IsStructural() && child->matcher.IsAtomic()) {
 		frame.child_result = ExecuteAtomicMatcher(*child);
 		return false;
 	}
@@ -149,6 +155,7 @@ MatcherResult MatchStack::Execute(MatchInput input) {
 	if (input.matcher.IsAtomic()) {
 		return ExecuteAtomicMatcher(input);
 	}
+	frames.reserve(INITIAL_FRAME_CAPACITY);
 	PushFrame(input);
 	while (!frames.empty()) {
 		if (!ExecuteFrame(frames.back())) {

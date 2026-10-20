@@ -278,6 +278,33 @@ class TestReadFromStdin(object):
 
 
     @pytest.mark.parametrize("alias", [
+        "'/dev/stdin'",
+        'stdin',
+        'STDIN'
+    ])
+    def test_copy_from_stdin(self, shell, tmp_path, alias):
+        input_file = tmp_path / 'copy_from_stdin.csv'
+        input_file.write_text('1,2\n3,4\n')
+        test = (
+            ShellTest(shell)
+            .input_file(input_file)
+            .statement("CREATE TABLE t(a INTEGER, b INTEGER)")
+            .statement(f"COPY t FROM {alias}")
+            .statement("SELECT * FROM t ORDER BY a")
+            .add_argument(
+                '-csv',
+                ':memory:'
+            )
+        )
+        result = test.run()
+        result.check_stdout([
+            'a,b',
+            '1,2',
+            '3,4'
+        ])
+
+
+    @pytest.mark.parametrize("alias", [
         "'/dev/stderr'"
     ])
     def test_copy_csv_to_stderr(self, shell, alias):

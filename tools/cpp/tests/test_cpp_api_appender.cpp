@@ -8,7 +8,7 @@
 
 // ---------------------------------------------------------------------------
 // Stable C++ API tests: Appender. A ColumnDataCollection plus a statement that
-// reads it, wired together with a connection-scoped replacement scan.
+// reads it, bound to the statement with SqlStatement::AddCollection.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -39,6 +39,13 @@ void AppendValues(Connection &conn, Appender &appender, const std::vector<int64_
 	}
 	vec.SetSize(values.size());
 	appender.AppendChunk(chunk);
+}
+
+// A single BIGINT column.
+std::vector<LogicalType> BigintTypes(Factory &factory) {
+	std::vector<LogicalType> types;
+	types.push_back(factory.ParseType("BIGINT"));
+	return types;
 }
 
 } // namespace
@@ -105,23 +112,12 @@ TEST_CASE("Stable C++API: appender Clear drops the buffer without writing", "[cp
 TEST_CASE("Stable C++API: appender destruction drops unflushed rows", "[cpp_api]") {
 	auto db = Instance(":memory:");
 	auto conn = db.Connect();
-	auto &factory = conn.GetFactory();
 	conn.Execute("CREATE TABLE t (v BIGINT)").Drain();
-
-	// Named explicitly, so the test can ask for the buffer by name after the appender is gone.
-	std::vector<LogicalType> types;
-	types.push_back(factory.ParseType("BIGINT"));
 	{
-		Appender appender(conn, "INSERT INTO t SELECT * FROM gone_rows", std::move(types), "gone_rows");
+		Appender appender(conn, "t");
 		AppendValues(conn, appender, {1, 2});
-		// While it lives, the buffer is visible and holds the rows.
-		REQUIRE(CollectAppended(conn.Execute("SELECT count(*)::BIGINT FROM gone_rows")) == std::vector<int64_t> {2});
 	}
 	REQUIRE(CollectAppended(conn.Execute("SELECT count(*)::BIGINT FROM t")) == std::vector<int64_t> {0});
-
-	// The scan the appender left behind outlives it, but declines now that the buffer is gone -- rather than
-	// reading through a dangling pointer.
-	REQUIRE_THROWS_AS(conn.Execute("SELECT * FROM gone_rows").Drain(), Exception);
 }
 
 TEST_CASE("Stable C++API: appender with an explicit query", "[cpp_api]") {
@@ -150,20 +146,29 @@ TEST_CASE("Stable C++API: appender with an explicit query", "[cpp_api]") {
 	reader.Flush();
 }
 
-TEST_CASE("Stable C++API: appender is scoped to its connection", "[cpp_api]") {
+TEST_CASE("Stable C++API: appender buffer is only visible to its statement", "[cpp_api]") {
 	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
-	auto other = db.Connect();
 	conn.Execute("CREATE TABLE t (v BIGINT)").Drain();
 
-	std::vector<LogicalType> types;
-	types.push_back(factory.ParseType("BIGINT"));
-	Appender appender(conn, "INSERT INTO t SELECT * FROM scoped_rows", std::move(types), "scoped_rows");
+	Appender appender(conn, "INSERT INTO t SELECT * FROM scoped_rows", BigintTypes(factory), "scoped_rows");
+	REQUIRE_THROWS_AS(conn.Execute("SELECT * FROM scoped_rows").Drain(), Exception);
 
-	// The buffer's name resolves on the appender's connection only.
-	REQUIRE(CollectAppended(conn.Execute("SELECT count(*)::BIGINT FROM scoped_rows")) == std::vector<int64_t> {0});
-	REQUIRE_THROWS_AS(other.Execute("SELECT * FROM scoped_rows").Drain(), Exception);
+	// So two appenders on one connection can share a buffer name.
+	Appender twin(conn, "INSERT INTO t SELECT * FROM scoped_rows", BigintTypes(factory), "scoped_rows");
+	AppendValues(conn, appender, {1});
+	AppendValues(conn, twin, {2, 3});
+	twin.Flush();
+	appender.Flush();
+	REQUIRE(CollectAppended(conn.Execute("SELECT v FROM t ORDER BY v")) == std::vector<int64_t> {1, 2, 3});
+
+	// The buffer shadows a table of the same name.
+	conn.Execute("CREATE TABLE shadowed (v BIGINT)").Drain();
+	Appender shadowing(conn, "INSERT INTO t SELECT * FROM shadowed", BigintTypes(factory), "shadowed");
+	AppendValues(conn, shadowing, {4});
+	shadowing.Flush();
+	REQUIRE(CollectAppended(conn.Execute("SELECT count(*)::BIGINT FROM t WHERE v = 4")) == std::vector<int64_t> {1});
 }
 
 TEST_CASE("Stable C++API: appender refuses a mismatching chunk", "[cpp_api]") {
@@ -195,10 +200,14 @@ TEST_CASE("Stable C++API: appender construction refusals", "[cpp_api]") {
 	REQUIRE_THROWS_MATCHES(Appender(conn, "SELECT 1", {}, "buf"), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	// More than one statement.
-	std::vector<LogicalType> types;
-	types.push_back(factory.ParseType("BIGINT"));
-	REQUIRE_THROWS_MATCHES(Appender(conn, "SELECT 1; SELECT 2", std::move(types), "buf"), Exception,
+	REQUIRE_THROWS_MATCHES(Appender(conn, "SELECT 1; SELECT 2", BigintTypes(factory), "buf"), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	// A statement that cannot read a buffer.
+	REQUIRE_THROWS_MATCHES(Appender(conn, "CREATE TABLE c AS SELECT * FROM buf", BigintTypes(factory), "buf"),
+	                       Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	// A query defining the buffer's name itself.
+	REQUIRE_THROWS_MATCHES(Appender(conn, "WITH buf AS (SELECT 1) SELECT * FROM buf", BigintTypes(factory), "buf"),
+	                       Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	// A table that does not exist.
 	REQUIRE_THROWS_AS(Appender(conn, "no_such_table"), Exception);
 }

@@ -110,6 +110,7 @@ class TableFunction;
 class CopyFunction;
 class Factory;
 class Extension;
+class Stats;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Internal Implementation Details
@@ -179,7 +180,7 @@ private:
 /// ownership release from inside a member of the consuming wrapper.
 struct HandleFactory {
 	template <class T, class... ARGS>
-	static auto Make(ARGS &&... args) -> T {
+	static auto Make(ARGS &&...args) -> T {
 		return T(std::forward<ARGS>(args)...);
 	}
 };
@@ -604,7 +605,7 @@ public:
 	/// the update callback via `UpdateInput::GetUserData<T>`. Consumed by registration: set it again before
 	/// re-registering.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&... args) & -> CustomOption & {
+	auto SetUserData(ARGS &&...args) & -> CustomOption & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetUserDataInternal(ptr, detail::TypedDelete<T>);
 		return *this;
@@ -730,6 +731,18 @@ public:
 	/// identifier for named ones ($name). Parse-time, so it needs no catalog; only the types wait for `Bind`.
 	/// @return Views borrowed from this statement, valid until it is destroyed.
 	auto GetParameterNames() const -> std::vector<std::string_view>;
+
+	/// Makes a collection visible to the statement as a table named `name`, as a common table expression. Each
+	/// execution reads the collection's contents at that moment, so a prepared statement can run again after the
+	/// collection was cleared and refilled. Only SELECT, INSERT, UPDATE, DELETE and MERGE INTO statements accept one.
+	/// @param name The name the statement refers to the collection by; it shadows a catalog table of that name.
+	/// @param collection Borrowed: it must outlive this statement, every statement copied or prepared from it, and
+	/// every result executing it, and must not be cleared or reset while such a result is live.
+	/// @param column_names Names for the collection's columns, one per column; empty names them col1..colN.
+	/// @throws InvalidInputException For another statement type, a name the statement already defines, or a
+	/// mismatched number of column names.
+	auto AddCollection(std::string_view name, const ColumnDataCollection &collection,
+	                   const std::vector<std::string> &column_names = {}) -> void;
 
 private:
 	explicit SqlStatement(void *impl);
@@ -981,11 +994,14 @@ public:
 	/// Parsing happens statement by statement as the iterator advances, so a syntax error surfaces from
 	/// `StatementIterator::Next` rather than from this call.
 	/// @param sql One or more semicolon-separated SQL statements.
-	auto ParseSQL(const char *sql) -> StatementIterator;
+	/// @param apply_invalidation_policy Whether a syntax error invalidates the active transaction, according to the
+	/// transaction invalidation policy. Pass false when the statements are only inspected, e.g. with `Bind`, instead of
+	/// run.
+	auto ParseSQL(const char *sql, bool apply_invalidation_policy = true) -> StatementIterator;
 
 	/// `std::string` overload of `ParseSQL`.
-	auto ParseSQL(const std::string &sql) -> StatementIterator {
-		return ParseSQL(sql.c_str());
+	auto ParseSQL(const std::string &sql, bool apply_invalidation_policy = true) -> StatementIterator {
+		return ParseSQL(sql.c_str(), apply_invalidation_policy);
 	}
 
 	/// Splits a SQL string into its tokens without parsing it: no binding, no catalog access, no transaction. The
@@ -1053,6 +1069,8 @@ public:
 	/// Binds a statement without executing it, borrowing it rather than consuming it.
 	/// @param statement The statement to bind.
 	/// @return Its signature: the columns it will produce and the parameters it expects.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` for a statement that expands into several,
+	/// whose columns are known only once it executes.
 	auto Bind(const SqlStatement &statement) const -> Signature;
 
 	/// Resolves a table name and snapshots its description: where it resolved, its columns, and per-column facts.
@@ -2607,8 +2625,9 @@ public:
 	auto Cast(Factory &factory, Vector &target) const -> void;
 
 	/// `Cast` like SQL `TRY_CAST`: a row that does not convert becomes NULL in `target` instead of failing the cast.
+	/// @param error_message Optional. When not every row converted, receives the conversion error of one that did not.
 	/// @return Whether every row converted.
-	auto TryCast(Factory &factory, Vector &target) const -> bool;
+	auto TryCast(Factory &factory, Vector &target, std::string *error_message = nullptr) const -> bool;
 
 	/// How many rows the vector holds.
 	auto GetSize() const -> idx_t;
@@ -2626,6 +2645,9 @@ public:
 
 	/// How the vector is laid out.
 	auto GetVectorType() const -> VectorType;
+
+	/// The logical type of the vector's rows.
+	auto GetLogicalType() const -> LogicalType;
 
 	/// The validity mask for writing, allocating it if the vector does not have one yet.
 	/// @throws InvalidInputException Unless the vector is FLAT.
@@ -2740,6 +2762,11 @@ public:
 	/// How many rows the chunk can hold, e.g. how many rows a table function may write into its output chunk in one
 	/// call. Unstable API.
 	auto GetCapacity() const -> idx_t;
+
+	/// Empties the chunk so it can be filled again: its row count becomes 0, and its vectors writable FLAT vectors of
+	/// their types, as on creation. Pointers and views taken from the chunk or its vectors beforehand do not survive
+	/// this. Not for a chunk DuckDB lends to a callback for reading.
+	auto Clear() -> void;
 
 	/// Access one column, e.g. to read or write its data.
 	/// @param index Column index in [0, GetVectorCount()).
@@ -2896,15 +2923,13 @@ private:
 /// touching the database, and `Flush` runs the statement over everything buffered so far and empties the buffer.
 /// Many small inserts thereby become one bulk insert.
 ///
-/// The appender is built on the public API alone: a connection-scoped `ReplacementScan` exposes the buffer to the
-/// statement under a name. The same can be done by hand when a different shape is needed.
+/// The appender is built on the public API alone: `SqlStatement::AddCollection` exposes the buffer to the statement
+/// under a name. The same can be done by hand when a different shape is needed.
 ///
 /// An appender is bound to the connection it was created on and can only be flushed there. It is not thread-safe:
 /// append from one thread at a time, or give each thread its own appender. It must not outlive its `Connection`.
 ///
-/// Destroying an appender does not flush: rows buffered but not flushed are dropped. Since replacement scans cannot
-/// be unregistered, every appender leaves an inert scan registered on its connection; create appenders once and
-/// reuse them rather than creating one per batch.
+/// Destroying an appender does not flush: rows buffered but not flushed are dropped.
 class Appender {
 public:
 	/// Creates an appender that inserts into `table`.
@@ -2921,12 +2946,14 @@ public:
 	/// Use this when a plain INSERT of every column is not what is needed: a subset of columns, an UPDATE or MERGE
 	/// driven by the buffer, or an INSERT with an ON CONFLICT clause.
 	/// @param conn The connection to buffer against and flush on.
-	/// @param query Exactly one statement, referring to the buffer by `buffer_name`.
+	/// @param query Exactly one SELECT, INSERT, UPDATE, DELETE or MERGE INTO statement, referring to the buffer by
+	/// `buffer_name`.
 	/// @param column_types One type per buffer column, at least one.
-	/// @param buffer_name The name `query` reads the buffer under. Must be unique among the appenders on this
-	/// connection: the first one registered claims the name.
+	/// @param buffer_name The name `query` reads the buffer under. It shadows a table of that name, and must not be
+	/// the name of a common table expression `query` defines itself.
 	/// @param column_names Names for the buffer's columns; empty names them col1..colN.
-	/// @throws InvalidInputException When `column_types` is empty, or `query` is not exactly one statement.
+	/// @throws InvalidInputException When `column_types` is empty, `query` is not exactly one statement of a
+	/// supported type, or it already defines `buffer_name`.
 	Appender(Connection &conn, std::string_view query, std::vector<LogicalType> column_types,
 	         std::string_view buffer_name, const std::vector<std::string> &column_names = {});
 
@@ -2959,23 +2986,16 @@ public:
 	void Clear();
 
 private:
-	// Shared with the replacement scan that exposes the buffer. The scan outlives the appender, since scans cannot be
-	// unregistered, so it holds this by shared_ptr; the appender's destructor nulls the collection to make it decline.
-	struct Buffer {
-		std::string name;
-		std::vector<std::string> column_names;
-		std::unique_ptr<ColumnDataCollection> collection;
-	};
-
 	// The shared body of both constructors.
 	void Initialize(Connection &conn, const std::string &query, std::vector<LogicalType> column_types,
 	                const std::string &buffer_name, const std::vector<std::string> &column_names);
 	void ResetBuffer();
 
-	// The connection the buffer's replacement scan is registered on, and the only one a flush can run on.
+	// The connection the statement runs on.
 	Connection *connection = nullptr;
 	std::vector<LogicalType> types;
-	std::shared_ptr<Buffer> buffer;
+	// The buffer, declared before the statement that borrows it so it is destroyed after it.
+	std::unique_ptr<ColumnDataCollection> collection;
 	// The statement, parsed once and re-executed per flush, and the append state, recreated after every reset.
 	std::unique_ptr<SqlStatement> statement;
 	std::unique_ptr<ColumnDataCollection::AppendState> append_state;
@@ -3148,15 +3168,16 @@ public:
 	~QueryResult() override;
 
 	/// The result's columns, their names and types, as one owned `Schema`.
-	/// @throws InvalidInputException When the schema is not available yet; step the result first.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the schema is not available yet, for
+	/// a statement that expands into several; step the result first.
 	auto GetSchema() const -> Schema;
 
 	/// The shape of the result, so a caller can decide between consuming rows and draining without inspecting the SQL.
-	/// @throws InvalidInputException When the shape is not available yet; step the result first.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the shape is not available yet, for a
+	/// statement that expands into several; step the result first.
 	auto GetResultType() const -> ResultType;
 
-	/// The kind of SQL statement this result came from.
-	/// @throws InvalidInputException When the kind is not available yet; step the result first.
+	/// The kind of SQL statement this result came from, as written: MULTI for one that expands into several.
 	auto GetStatementType() const -> StatementType;
 
 	/// Does a bounded amount of work and returns without blocking.
@@ -3238,16 +3259,16 @@ public:
 	/// copy. Available as soon as `QueryResult::GetSchema` would be: at once for most statements, after stepping for
 	/// one that expands into several, such as PIVOT.
 	/// @param out Caller-allocated; overwritten. The caller then owns it and releases it with `out.release(&out)`.
-	/// @throws InvalidInputException When the schema is not available yet; step the result first. `out` is left
-	/// released on any throw.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the schema is not available yet;
+	/// step the result first. `out` is left released on any throw.
 	auto GetSchema(ArrowSchema &out) const -> void;
 
 	/// The shape of the result, so a caller can decide between reading arrays and draining without inspecting the SQL.
-	/// @throws InvalidInputException When the shape is not available yet; step the result first.
+	/// @throws Exception With code `DUCKDB_V2_ERROR_INPUT_METADATA_DEFERRED` when the shape is not available yet, for a
+	/// statement that expands into several; step the result first.
 	auto GetResultType() const -> ResultType;
 
-	/// The kind of SQL statement this result came from.
-	/// @throws InvalidInputException When the kind is not available yet; step the result first.
+	/// The kind of SQL statement this result came from, as written: MULTI for one that expands into several.
 	auto GetStatementType() const -> StatementType;
 
 	/// Does a bounded amount of work and returns without blocking.
@@ -3420,7 +3441,7 @@ public:
 	/// `GetBindData<T>`. The engine compares bind data when it compares expressions: by `operator==` when `T` has one,
 	/// by identity otherwise.
 	template <class T, class... ARGS>
-	void SetBindData(ARGS &&... args) {
+	void SetBindData(ARGS &&...args) {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
 	}
@@ -3535,6 +3556,44 @@ enum class OrderPreservation : uint8_t {
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+// Statistics
+//----------------------------------------------------------------------------------------------------------------------
+
+/// The statistics of an expression or a column: what values it can produce. A function's stats callback reads the
+/// statistics of its arguments and narrows those of its result, and the engine uses them to simplify the query, e.g.
+/// folding `x IS NULL` to false when `x` cannot be NULL.
+///
+/// Every statistic states what can occur: `true` means a kind of value may be present, `false` guarantees it is
+/// absent. The engine relies on the guarantees, so claiming less than the data holds produces wrong query results.
+/// Borrowed: valid only for the duration of the callback that handed it out. Unstable API.
+class Stats final : public detail::Handle<Stats> {
+	friend detail::HandleFactory;
+
+public:
+	Stats(Stats &&) noexcept = default;
+	Stats &operator=(Stats &&) noexcept = default;
+	~Stats() override = default;
+
+	/// Whether a value can be NULL. False guarantees every value is non-NULL.
+	auto CanHaveNull() const -> bool;
+	/// Whether a value can be valid, i.e. non-NULL. False guarantees every value is NULL. When both this and
+	/// `CanHaveNull` are false, there are no values at all.
+	auto CanHaveValid() const -> bool;
+
+	/// Sets whether a value can be NULL. Setting false is a guarantee the engine relies on; setting true is always
+	/// safe.
+	/// @throws InvalidInputException When the statistics are read-only, such as those of an argument.
+	auto SetCanHaveNull(bool value) -> void;
+	/// Sets whether a value can be valid, i.e. non-NULL. Setting false is a guarantee the engine relies on; setting
+	/// true is always safe.
+	/// @throws InvalidInputException When the statistics are read-only, such as those of an argument.
+	auto SetCanHaveValid(bool value) -> void;
+
+private:
+	explicit Stats(void *impl);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
 // Scalar Function
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -3557,6 +3616,7 @@ public:
 	class BindInput;
 	class InitInput;
 	class ExecInput;
+	class StatsInput;
 
 	/// Called once per query while the function call is bound, before the arguments are cast to the parameter types.
 	/// Optional; required when the return type is ANY.
@@ -3568,6 +3628,9 @@ public:
 	using InitCallback = void (*)(InitInput &input);
 	/// Called for every batch of rows; must fill the result vector. Required.
 	using ExecCallback = void (*)(ExecInput &input);
+	/// Called while the query is optimized, possibly more than once, to narrow the statistics of the result from
+	/// those of the arguments. Optional; without it the engine knows nothing about the result. Unstable API.
+	using StatsCallback = void (*)(StatsInput &input);
 
 	ScalarFunction(ScalarFunction &&) noexcept = default;
 	ScalarFunction &operator=(ScalarFunction &&) noexcept = default;
@@ -3609,7 +3672,7 @@ public:
 	/// any callback via the inputs' `GetUserData<T>`. Consumed by registration: set it again before
 	/// re-registering.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&... args) & -> ScalarFunction & {
+	auto SetUserData(ARGS &&...args) & -> ScalarFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetUserDataInternal(ptr, detail::TypedDelete<T>);
 		return *this;
@@ -3619,6 +3682,7 @@ public:
 	auto SetBindCallback(BindCallback callback) & -> ScalarFunction &;
 	auto SetInitCallback(InitCallback callback) & -> ScalarFunction &;
 	auto SetExecCallback(ExecCallback callback) & -> ScalarFunction &;
+	auto SetStatsCallback(StatsCallback callback) & -> ScalarFunction &;
 
 	/// How stable the function's result is across rows and queries. Defaults to `CONSISTENT`.
 	auto SetStability(FunctionStability value) & -> ScalarFunction &;
@@ -3641,6 +3705,7 @@ private:
 	BindCallback bind_callback = nullptr;
 	InitCallback init_callback = nullptr;
 	ExecCallback exec_callback = nullptr;
+	StatsCallback stats_callback = nullptr;
 	detail::UserData user_data;
 
 public:
@@ -3683,7 +3748,7 @@ public:
 		/// callbacks via `GetBindData<T>`. The engine compares bind data when it compares expressions: by
 		/// `operator==` when `T` has one, by identity otherwise.
 		template <class T, class... ARGS>
-		void SetBindData(ARGS &&... args) {
+		void SetBindData(ARGS &&...args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
 		}
@@ -3713,7 +3778,7 @@ public:
 		/// Constructs init data of type `T`, owned by this execution thread's function state and readable from the
 		/// exec callback via `GetInitData<T>`.
 		template <class T, class... ARGS>
-		void SetInitData(ARGS &&... args) {
+		void SetInitData(ARGS &&...args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetInitDataInternal(ptr, detail::TypedDelete<T>);
 		}
@@ -3806,6 +3871,56 @@ public:
 		void *GetInitDataInternal() const;
 		void *GetUserDataInternal() const;
 	};
+
+	/// What the stats callback works with. Borrowed, valid only for the callback duration.
+	///
+	/// The result statistics start out unknown, with every kind of value possible. A callback that leaves them
+	/// unchanged tells the engine nothing.
+	class StatsInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `ScalarFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many arguments the call has, in all four parts. Valid indices for `GetArgStats` are
+		/// [0, GetArgCount()).
+		auto GetArgCount() const -> idx_t;
+
+		/// The sizes of the four parts of the argument list, as the bind callback saw them.
+		auto GetArgumentCounts() const -> ArgumentCounts;
+
+		/// The statistics of one argument, at the index the bind callback used for it. Read-only.
+		/// @param index Argument index in [0, GetArgCount()).
+		auto GetArgStats(idx_t index) const -> Stats;
+
+		/// The statistics of the result, for the callback to narrow.
+		auto GetResultStats() const -> Stats;
+
+		/// The query's context. Borrowed, valid only for the callback duration.
+		auto GetContext() -> Context &;
+
+	private:
+		StatsInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
+		}
+
+		void *args;
+		Context context;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -3855,6 +3970,7 @@ public:
 	class CombineInput;
 	class FinalizeInput;
 	class DestroyInput;
+	class StatsInput;
 
 	/// Called once per query while the function call is bound. Optional; required when the return type is ANY.
 	using BindCallback = void (*)(BindInput &input);
@@ -3870,6 +3986,9 @@ public:
 	using FinalizeCallback = void (*)(FinalizeInput &input);
 	/// Called to release resources a batch of states owns. Optional; must not fail.
 	using DestroyCallback = void (*)(DestroyInput &input);
+	/// Called while the query is optimized, possibly more than once, to narrow the statistics of the result from
+	/// those of the arguments. Optional; without it the engine knows nothing about the result. Unstable API.
+	using StatsCallback = void (*)(StatsInput &input);
 
 	AggregateFunction(AggregateFunction &&) noexcept = default;
 	AggregateFunction &operator=(AggregateFunction &&) noexcept = default;
@@ -3910,7 +4029,7 @@ public:
 	/// any callback via the inputs' `GetUserData<T>`. Consumed by registration: set it again before
 	/// re-registering.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&... args) & -> AggregateFunction & {
+	auto SetUserData(ARGS &&...args) & -> AggregateFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetUserDataInternal(ptr, detail::TypedDelete<T>);
 		return *this;
@@ -3923,6 +4042,7 @@ public:
 	auto SetCombineCallback(CombineCallback callback) & -> AggregateFunction &;
 	auto SetFinalizeCallback(FinalizeCallback callback) & -> AggregateFunction &;
 	auto SetDestroyCallback(DestroyCallback callback) & -> AggregateFunction &;
+	auto SetStatsCallback(StatsCallback callback) & -> AggregateFunction &;
 
 	/// How stable the function's result is across rows and queries. Defaults to `CONSISTENT`.
 	auto SetStability(FunctionStability value) & -> AggregateFunction &;
@@ -3952,6 +4072,7 @@ private:
 	CombineCallback combine_callback = nullptr;
 	FinalizeCallback finalize_callback = nullptr;
 	DestroyCallback destroy_callback = nullptr;
+	StatsCallback stats_callback = nullptr;
 	detail::UserData user_data;
 
 public:
@@ -4213,6 +4334,57 @@ public:
 		void *GetBindDataInternal() const;
 		void *GetUserDataInternal() const;
 	};
+
+	/// What the stats callback works with. Borrowed, valid only for the callback duration.
+	///
+	/// The result statistics start out unknown, with every kind of value possible. They describe every result the
+	/// aggregate produces, including that of a group with no input rows, such as an ungrouped aggregate over an empty
+	/// table. A callback that leaves them unchanged tells the engine nothing.
+	class StatsInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `AggregateFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many arguments the call has, in all four parts. Valid indices for `GetArgStats` are
+		/// [0, GetArgCount()).
+		auto GetArgCount() const -> idx_t;
+
+		/// The sizes of the four parts of the argument list, as the bind callback saw them.
+		auto GetArgumentCounts() const -> ArgumentCounts;
+
+		/// The statistics of one argument, at the index the bind callback used for it. Read-only.
+		/// @param index Argument index in [0, GetArgCount()).
+		auto GetArgStats(idx_t index) const -> Stats;
+
+		/// The statistics of the result, for the callback to narrow.
+		auto GetResultStats() const -> Stats;
+
+		/// The query's context. Borrowed, valid only for the callback duration.
+		auto GetContext() -> Context &;
+
+	private:
+		StatsInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
+		}
+
+		void *args;
+		Context context;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -4357,6 +4529,7 @@ public:
 	class PartitioningInput;
 	class ClaimBatchInput;
 	class GetBindInfoInput;
+	class StatsInput;
 
 	/// Whether, and how, the scan is partitioned by a set of columns. Reported from the partitioning callback.
 	enum class PartitionInfo : uint8_t {
@@ -4400,6 +4573,9 @@ public:
 	/// identifiers, and exposes the options as the metadata of the reader of the file. May be called more than once
 	/// for the same bind data: only report what the bind already determined. Optional; unstable API.
 	using GetBindInfoCallback = void (*)(GetBindInfoInput &input);
+	/// Called while the query is optimized, once per declared column the query reads, to narrow that column's
+	/// statistics. Optional; without it the engine knows nothing about the columns. Unstable API.
+	using StatsCallback = void (*)(StatsInput &input);
 
 	TableFunction(TableFunction &&) noexcept = default;
 	TableFunction &operator=(TableFunction &&) noexcept = default;
@@ -4440,7 +4616,7 @@ public:
 	/// any callback via the inputs' `GetUserData<T>`. Consumed by registration: set it again before
 	/// re-registering.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&... args) & -> TableFunction & {
+	auto SetUserData(ARGS &&...args) & -> TableFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetUserDataInternal(ptr, detail::TypedDelete<T>);
 		return *this;
@@ -4460,6 +4636,8 @@ public:
 	auto SetClaimBatchCallback(ClaimBatchCallback callback) & -> TableFunction &;
 	/// Lets the function describe what a bound call reads: see `GetBindInfoCallback`. Unstable API.
 	auto SetGetBindInfoCallback(GetBindInfoCallback callback) & -> TableFunction &;
+	/// Lets the function narrow the statistics of the columns it produces: see `StatsCallback`. Unstable API.
+	auto SetStatsCallback(StatsCallback callback) & -> TableFunction &;
 
 	/// Declares whether the function supports projection pushdown. Defaults to false. With it, the engine asks for
 	/// only the columns a query uses: the exec callback's output chunk holds one vector per requested column, and
@@ -4484,6 +4662,7 @@ private:
 	PartitioningCallback partitioning_callback = nullptr;
 	ClaimBatchCallback claim_batch_callback = nullptr;
 	GetBindInfoCallback get_bind_info_callback = nullptr;
+	StatsCallback stats_callback = nullptr;
 	detail::UserData user_data;
 
 public:
@@ -4536,7 +4715,7 @@ public:
 		/// local init, exec and progress callbacks. Since every thread sees the same object, the function must
 		/// synchronize its own access to it.
 		template <class T, class... ARGS>
-		void SetGlobalState(ARGS &&... args) {
+		void SetGlobalState(ARGS &&...args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetGlobalStateInternal(ptr, detail::TypedDelete<T>);
 		}
@@ -4592,7 +4771,7 @@ public:
 		/// Constructs local state of type `T`, owned by this scanning thread and readable from the exec callback via
 		/// `ExecInput::GetLocalState<T>`. No other thread observes it, so it needs no synchronization.
 		template <class T, class... ARGS>
-		void SetLocalState(ARGS &&... args) {
+		void SetLocalState(ARGS &&...args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetLocalStateInternal(ptr, detail::TypedDelete<T>);
 		}
@@ -5046,6 +5225,48 @@ public:
 		void *GetBindDataInternal() const;
 		void *GetUserDataInternal() const;
 	};
+
+	/// What the stats callback works with. Borrowed, valid only for the callback duration.
+	///
+	/// The column statistics start out unknown, with every kind of value possible, and describe every value the scan
+	/// produces for the column. A callback that leaves them unchanged tells the engine nothing.
+	class StatsInput {
+		friend detail::HandleFactory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Which declared column (in `BindInput::AddResultColumn` order) the statistics describe.
+		auto GetColumnIndex() const -> idx_t;
+
+		/// The statistics of the column, for the callback to narrow.
+		auto GetResultStats() const -> Stats;
+
+		/// The query's context. Borrowed, valid only for the callback duration.
+		auto GetContext() -> Context &;
+
+	private:
+		StatsInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
+		}
+
+		void *args;
+		Context context;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -5223,11 +5444,16 @@ public:
 	/// Sets the function's name: the format SQL selects it with, as in `COPY ... TO 'path' (FORMAT name)`.
 	auto SetName(const std::string &name) & -> CopyFunction &;
 
+	/// Sets the extension of the files the function writes, without the leading dot, e.g. `parquet`. DuckDB uses it
+	/// when it names files itself, as for `PARTITION_BY`; without it such names end in a bare dot.
+	/// @throws InvalidInputException When the extension starts with a dot.
+	auto SetFileExtension(const std::string &extension) & -> CopyFunction &;
+
 	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
 	/// any callback via the inputs' `GetUserData<T>`. Consumed by registration: set it again before
 	/// re-registering.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&... args) & -> CopyFunction & {
+	auto SetUserData(ARGS &&...args) & -> CopyFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetUserDataInternal(ptr, detail::TypedDelete<T>);
 		return *this;
@@ -5278,7 +5504,7 @@ public:
 		/// callback via `GetBindData<T>`. The engine compares bind data when it compares statements: by `operator==`
 		/// when `T` has one, by identity otherwise.
 		template <class T, class... ARGS>
-		void SetBindData(ARGS &&... args) {
+		void SetBindData(ARGS &&...args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
 		}
@@ -5387,7 +5613,7 @@ public:
 		/// finalize callbacks of that file via `GetInitData<T>`. Batches may be prepared on several threads at once, so
 		/// the batch callback must synchronize its own access to it.
 		template <class T, class... ARGS>
-		void SetInitData(ARGS &&... args) {
+		void SetInitData(ARGS &&...args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetInitDataInternal(ptr, detail::TypedDelete<T>);
 		}
@@ -5434,7 +5660,7 @@ public:
 		/// Constructs batch data of type `T`: the prepared form of the batch, handed to the flush callback via
 		/// `CopyToFlushInput::GetBatchData<T>` and freed once the batch has been flushed.
 		template <class T, class... ARGS>
-		void SetBatchData(ARGS &&... args) {
+		void SetBatchData(ARGS &&...args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetBatchDataInternal(ptr, detail::TypedDelete<T>);
 		}
@@ -5634,7 +5860,7 @@ public:
 		/// `COPY ... FROM` callback via `GetBindData<T>`. The engine compares bind data when it compares statements:
 		/// by `operator==` when `T` has one, by identity otherwise.
 		template <class T, class... ARGS>
-		void SetBindData(ARGS &&... args) {
+		void SetBindData(ARGS &&...args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
 		}
@@ -5709,7 +5935,7 @@ public:
 		/// init, exec and progress callbacks. Since every thread sees the same object, the function must synchronize
 		/// its own access to it.
 		template <class T, class... ARGS>
-		void SetGlobalState(ARGS &&... args) {
+		void SetGlobalState(ARGS &&...args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetGlobalStateInternal(ptr, detail::TypedDelete<T>);
 		}
@@ -5757,7 +5983,7 @@ public:
 		/// Constructs local state of type `T`, owned by this reading thread and readable from the exec callback via
 		/// `CopyFromExecInput::GetLocalState<T>`. No other thread observes it, so it needs no synchronization.
 		template <class T, class... ARGS>
-		void SetLocalState(ARGS &&... args) {
+		void SetLocalState(ARGS &&...args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetLocalStateInternal(ptr, detail::TypedDelete<T>);
 		}
@@ -5967,7 +6193,7 @@ public:
 	/// exec callback via `ExecInput::GetUserData<T>`. Consumed by registration: set it again before
 	/// re-registering.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&... args) & -> CastFunction & {
+	auto SetUserData(ARGS &&...args) & -> CastFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetUserDataInternal(ptr, detail::TypedDelete<T>);
 		return *this;
@@ -6093,7 +6319,7 @@ public:
 	/// Constructs user data of type `T`, carried by the registered pragma and freed at engine teardown; read it from
 	/// the callback via the input's `GetUserData<T>`. Consumed by registration: set it again before re-registering.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&... args) & -> PragmaFunction & {
+	auto SetUserData(ARGS &&...args) & -> PragmaFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetUserDataInternal(ptr, detail::TypedDelete<T>);
 		return *this;
@@ -6277,7 +6503,7 @@ public:
 	/// Constructs user data of type `T`, carried by the registered sink and freed at database teardown; read it
 	/// from the callbacks via `GetUserData<T>`. Consumed by registration.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&... args) & -> LogSink & {
+	auto SetUserData(ARGS &&...args) & -> LogSink & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetUserDataInternal(ptr, detail::TypedDelete<T>);
 		return *this;
@@ -6520,12 +6746,24 @@ public:
 	auto CreateOpenOptions() const -> FileOpenOptions;
 
 	/// Whether a file exists at `path`, routed the way `OpenFile` routes it. A directory is not a file.
-	auto PathExists(const std::string &path) const -> bool;
+	auto Exists(const std::string &path) const -> bool;
 	/// Whether `path` names a remote file, e.g. under `s3://` or `https://`. Decided from the path alone, so it
 	/// answers even when the extension providing the remote file system is not loaded.
-	auto PathIsRemote(const std::string &path) const -> bool;
+	auto IsRemote(const std::string &path) const -> bool;
 	/// `path` expanded as `OpenFile` expands it: a leading `~` becomes the configured home directory.
-	auto PathExpand(const std::string &path) const -> std::string;
+	auto Expand(const std::string &path) const -> std::string;
+
+	/// The paths of the files matching a glob pattern, e.g. `data/*.csv`, in the order the file system lists them.
+	/// A pattern without glob characters matches the file it names, if there is one.
+	auto Glob(const std::string &pattern) const -> std::vector<std::string>;
+	/// Moves, or renames, a file. Whether an existing file at `target` is replaced, and whether the move is atomic, is
+	/// up to the file system; moving between two file systems is not supported.
+	/// @throws Exception When the file cannot be moved.
+	auto Move(const std::string &source, const std::string &target) const -> void;
+	/// Removes the file at `path`, if there is one.
+	/// @return Whether a file was removed.
+	/// @throws Exception When the file exists but cannot be removed.
+	auto Remove(const std::string &path) const -> bool;
 
 private:
 	explicit FileSystem(void *impl);
@@ -6701,7 +6939,7 @@ public:
 	/// Constructs user data of type `T`, carried by the registered scan and freed when its scope ends; read it from
 	/// the callback via `Input::GetUserData<T>`. Consumed by registration.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&... args) & -> ReplacementScan & {
+	auto SetUserData(ARGS &&...args) & -> ReplacementScan & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetUserDataInternal(ptr, detail::TypedDelete<T>);
 		return *this;

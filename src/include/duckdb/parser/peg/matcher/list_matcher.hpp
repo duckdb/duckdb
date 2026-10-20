@@ -15,6 +15,20 @@ public:
 	}
 
 	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state) const override;
+	//! Prepare after matcher links and flags are final; unprepared lists use ordinary execution.
+	DUCKDB_API void InitializeListChain();
+
+	optional_ptr<const ListMatcher> GetChainChild() const {
+		if (!first_child_is_chainable) {
+			return nullptr;
+		}
+		D_ASSERT(IsStructural() && !suppress_suggestions && !matchers.empty());
+		auto &child = matchers[0].get();
+		D_ASSERT(child.IsStructural() && child.Type() == MatcherType::LIST && !child.IsPackratMemoized());
+		auto &list = static_cast<const ListMatcher &>(child);
+		D_ASSERT(!list.suppress_suggestions);
+		return list;
+	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		if (suppress_suggestions) {
@@ -46,6 +60,9 @@ public:
 	vector<reference<Matcher>> matchers;
 	//! If true, this matcher will not contribute autocomplete suggestions (used for rules like ExpressionStatement)
 	bool suppress_suggestions = false;
+
+private:
+	bool first_child_is_chainable = false;
 };
 
 } // namespace duckdb

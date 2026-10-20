@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <stdint.h>
 #include <string.h>
 #include <string>
@@ -115,7 +116,7 @@ static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, 
 		       byte_length);
 		D_ASSERT(offset_ptr + (NumericCast<idx_t>(dictionary_count + 1) * byte_length) == string_ptr);
 		D_ASSERT(string_ptr + total_offset == metadata_blob_data + total_length);
-		metadata_blob.SetSizeAndFinalize(total_length, total_length);
+		metadata_blob.SetSizeAndFinalize(NumericCast<uint32_t>(total_length), total_length);
 
 #ifdef DEBUG
 		auto decoded_metadata = VariantMetadata(metadata_blob);
@@ -216,20 +217,26 @@ vector<idx_t> GetChildIndices(const UnifiedVariantVectorData &variant, idx_t row
 		for (idx_t i = 0; i < nested_data.child_count; i++) {
 			child_indices.push_back(i);
 		}
-		return child_indices;
-	}
-	auto shredded_fields = shredding_state->ObjectFields();
+	} else {
+		auto shredded_fields = shredding_state->ObjectFields();
 
-	for (idx_t i = 0; i < nested_data.child_count; i++) {
-		auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
-		auto &key = variant.GetKey(row, keys_index);
+		for (idx_t i = 0; i < nested_data.child_count; i++) {
+			auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
+			auto &key = variant.GetKey(row, keys_index);
 
-		if (shredded_fields.count(key.GetString())) {
-			//! This field is shredded on, omit it from the value
-			continue;
+			if (shredded_fields.count(key.GetString())) {
+				//! This field is shredded on, omit it from the value
+				continue;
+			}
+			child_indices.push_back(i);
 		}
-		child_indices.push_back(i);
 	}
+	// Object field IDs and offsets must follow UTF-8 field name order, even with an unsorted dictionary.
+	std::sort(child_indices.begin(), child_indices.end(), [&](idx_t left, idx_t right) {
+		auto left_key = variant.GetKeysIndex(row, left + nested_data.children_idx);
+		auto right_key = variant.GetKeysIndex(row, right + nested_data.children_idx);
+		return variant.GetKey(row, left_key) < variant.GetKey(row, right_key);
+	});
 	return child_indices;
 }
 
@@ -265,12 +272,12 @@ static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row
 			auto i = child_indices[entry];
 			auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
 			auto values_index = variant.GetValuesIndex(row, i + nested_data.children_idx);
-			offsets[offset_size + entry] = total_offset;
+			offsets[offset_size + entry] = NumericCast<uint32_t>(total_offset);
 
 			total_offset += AnalyzeValueData(variant, row, values_index, offsets, nullptr);
 			highest_keys_index = MaxValue(highest_keys_index, keys_index);
 		}
-		offsets[offset_size + num_elements] = total_offset;
+		offsets[offset_size + num_elements] = NumericCast<uint32_t>(total_offset);
 
 		//! Calculate the sizes for the objects value data
 		auto field_id_size = CalculateByteLength(highest_keys_index);
@@ -295,11 +302,11 @@ static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row
 		offsets.resize(offset_size + nested_data.child_count + 1);
 		for (idx_t i = 0; i < nested_data.child_count; i++) {
 			auto values_index = variant.GetValuesIndex(row, i + nested_data.children_idx);
-			offsets[offset_size + i] = total_offset;
+			offsets[offset_size + i] = NumericCast<uint32_t>(total_offset);
 
 			total_offset += AnalyzeValueData(variant, row, values_index, offsets, nullptr);
 		}
-		offsets[offset_size + nested_data.child_count] = total_offset;
+		offsets[offset_size + nested_data.child_count] = NumericCast<uint32_t>(total_offset);
 
 		auto field_offset_size = CalculateByteLength(total_offset);
 		auto num_elements = nested_data.child_count;
@@ -477,7 +484,7 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 			} else {
 				WritePrimitiveTypeHeader<VariantPrimitiveType::STRING>(value_data);
 			}
-			Store<uint32_t>(string_size, value_data);
+			Store<uint32_t>(NumericCast<uint32_t>(string_size), value_data);
 			value_data += sizeof(uint32_t);
 		} else {
 			uint8_t value_header = 0;
@@ -704,7 +711,7 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 			value_data += field_offset_size;
 			auto start_ptr = children_ptr;
 			WriteValueData(variant, row, values_index, children_ptr, offsets, offset_index, nullptr);
-			total_offset += (children_ptr - start_ptr);
+			total_offset += NumericCast<idx_t>(children_ptr - start_ptr);
 		}
 		memcpy(value_data, reinterpret_cast<data_ptr_t>(&total_offset), field_offset_size);
 		value_data += field_offset_size;
@@ -759,7 +766,7 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 			value_data += field_offset_size;
 			auto start_ptr = children_ptr;
 			WriteValueData(variant, row, values_index, children_ptr, offsets, offset_index, nullptr);
-			total_offset += (children_ptr - start_ptr);
+			total_offset += NumericCast<idx_t>(children_ptr - start_ptr);
 		}
 		memcpy(value_data, reinterpret_cast<data_ptr_t>(&total_offset), field_offset_size);
 		value_data += field_offset_size;
@@ -778,19 +785,19 @@ static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, optio
 	auto value_data = FlatVector::GetDataMutable<string_t>(value);
 
 	for (idx_t i = 0; i < count; i++) {
-		idx_t value_index = 0;
+		uint32_t value_index = 0;
 		if (value_index_sel) {
-			value_index = value_index_sel->get_index(i);
+			value_index = NumericCast<uint32_t>(value_index_sel->get_index(i));
 		}
 
-		idx_t row = i;
+		auto row = NumericCast<uint32_t>(i);
 		if (sel) {
-			row = sel->get_index(i);
+			row = NumericCast<uint32_t>(sel->get_index(i));
 		}
 
-		idx_t result_index = i;
+		auto result_index = NumericCast<uint32_t>(i);
 		if (result_sel) {
-			result_index = result_sel->get_index(i);
+			result_index = NumericCast<uint32_t>(result_sel->get_index(i));
 		}
 
 		bool is_shredded = false;
@@ -824,7 +831,7 @@ static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, optio
 		idx_t offset_index = 0;
 		WriteValueData(variant, row, value_index, value_blob_data, offsets, offset_index, shredding_state);
 		D_ASSERT(data_ptr_cast(value_blob.GetDataWriteable() + blob_length) == value_blob_data);
-		value_blob.SetSizeAndFinalize(blob_length, blob_length);
+		value_blob.SetSizeAndFinalize(NumericCast<uint32_t>(blob_length), blob_length);
 	}
 }
 

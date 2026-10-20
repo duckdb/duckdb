@@ -24,6 +24,8 @@ class LogicalComparisonJoin;
 class LogicalColumnDataGet;
 class LogicalGet;
 class LogicalExpressionGet;
+class LogicalCopyToFile;
+class LogicalCreateTable;
 class LogicalFilter;
 class LogicalProjection;
 class LogicalSecureView;
@@ -105,5 +107,40 @@ struct LogicalPlanSQLExportHelpers {
 
 	static bool IsIdentityProjection(const LogicalProjection &projection,
 	                                 const vector<LogicalPlanSQLExportField> &fields);
+
+	//! Alias the relation's visible columns with the statement's output names.
+	static LogicalPlanSQLExportResult ApplyOutputNames(LogicalPlanSQLExportResult result,
+	                                                   const vector<Identifier> &output_names);
+};
+
+//! Export of write statements with a query source (sql_export_statements.cpp)
+struct SQLExportStatementHelpers {
+	static LogicalPlanSQLExportResult ExportCopyToNode(LogicalCopyToFile &op, LogicalPlanSQLExportContext &context,
+	                                                   const LogicalPlanVerificationPath &path);
+	static LogicalPlanSQLExportResult ExportCreateTableAsNode(LogicalCreateTable &op,
+	                                                          LogicalPlanSQLExportContext &context,
+	                                                          const LogicalPlanVerificationPath &path);
+	//! The query node that carries WITH definitions for this exported relation.
+	static QueryNode &SourceDefinitionNode(QueryNode &query);
+};
+
+//! Export of data-modifying plan roots and CTE bodies (sql_export_dml.cpp)
+struct SQLExportDMLHelpers {
+	//! The RETURNING projection over a data-modifying operator, when the root has that shape.
+	static optional_ptr<LogicalProjection> MatchReturningRoot(LogicalOperator &root);
+	//! Export a RETURNING root; output names become the RETURNING aliases.
+	static LogicalPlanSQLExportResult ExportReturning(LogicalPlanSQLExportContext &context, LogicalProjection &root,
+	                                                  const optional<vector<Identifier>> &output_names,
+	                                                  const LogicalPlanVerificationPath &path);
+	//! Whether this operator is a data-modifying statement body: a DML operator or its RETURNING projection.
+	static bool MatchDMLBody(LogicalOperator &op);
+	//! Whether the statement-body chain itself crosses a replaced source boundary, in which case
+	//! the ordinary relational export must handle it instead of the statement export.
+	static bool ContainsReplacedBoundary(const LogicalPlanSQLExportContext &context, LogicalOperator &op);
+	//! Export a data-modifying statement body outside the plan root (e.g. a materialized CTE side).
+	static LogicalPlanSQLExportResult ExportBody(LogicalPlanSQLExportContext &context, LogicalOperator &op,
+	                                             const LogicalPlanVerificationPath &path);
+	//! Whether this exported query is a data-modifying statement node.
+	static bool IsDMLNode(const QueryNode &query);
 };
 } // namespace duckdb

@@ -78,6 +78,17 @@ Calendar *ICUDateFunc::CalendarCacheState::GetCalendar(const string_t &tz_id) {
 	return entry.calendar.get();
 }
 
+Calendar *ICUDateFunc::CalendarCacheState::TryGetCalendar(const string_t &tz_id, string *error_message) {
+	auto &entry = GetEntry(tz_id);
+	if (!entry.calendar) {
+		if (error_message) {
+			*error_message = entry.error;
+		}
+		return nullptr;
+	}
+	return entry.calendar.get();
+}
+
 void ICUDateFunc::CalendarCacheState::SetTimeZone(Calendar *calendar, const string_t &tz_id, string *error_message) {
 	auto &entry = GetEntry(tz_id);
 	if (!entry.tz) {
@@ -117,7 +128,13 @@ timestamp_tz_t ICUDateFunc::GetTimeUnsafe(Calendar *calendar, uint64_t micros) {
 	if (calendar->HasFailed()) {
 		throw InternalException("Unable to get calendar time.");
 	}
-	return timestamp_tz_t(millis * Interval::MICROS_PER_MSEC + int64_t(micros));
+	// The time is a whole number of milliseconds, so converting it back to microseconds can overflow.
+	int64_t result;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(millis, Interval::MICROS_PER_MSEC, result) ||
+	    !TryAddOperator::Operation<int64_t, int64_t, int64_t>(result, int64_t(micros), result)) {
+		throw OutOfRangeException("Unable to get calendar time: timestamp out of range");
+	}
+	return timestamp_tz_t(result);
 }
 
 bool ICUDateFunc::TryGetTime(Calendar *calendar, uint64_t micros, timestamp_tz_t &result) {
