@@ -197,8 +197,9 @@ idx_t JSONFileHandle::ReadFromCache(char *&pointer, idx_t &size, atomic<idx_t> &
 }
 
 JSONReader::JSONReader(ClientContext &context, JSONReaderOptions options_p, OpenFileInfo file_p)
-    : file(std::move(file_p)), context(context), options(std::move(options_p)), initialized(false),
-      next_buffer_index(0), thrown(false) {
+    : file(std::move(file_p)), context(context), options(std::move(options_p)),
+      read_flag(JSONCommon::GetReadFlag(JSONCommon::READ_STOP_FLAG, JSONCommon::NumbersAsRaw(options.sql_type_list))),
+      initialized(false), next_buffer_index(0), thrown(false) {
 }
 
 void JSONReader::OpenJSONFile() {
@@ -780,10 +781,9 @@ bool JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
 	const bool number_root = first_char < json_size &&
 	                         (StringUtil::CharacterIsDigit(json_start[first_char]) || json_start[first_char] == '-');
 	if (options.type == JSONScanType::READ_JSON_OBJECTS || ignorable_errors || number_root) {
-		doc = JSONCommon::ReadDocumentUnsafe(json_start, json_size, JSONCommon::READ_STOP_FLAG,
-		                                     scan_state.allocator.GetYYAlc(), &err);
+		doc = JSONCommon::ReadDocumentUnsafe(json_start, json_size, read_flag, scan_state.allocator.GetYYAlc(), &err);
 	} else {
-		doc = JSONCommon::ReadDocumentUnsafe(json_start, remaining, JSONCommon::READ_INSITU_FLAG,
+		doc = JSONCommon::ReadDocumentUnsafe(json_start, remaining, read_flag | YYJSON_READ_INSITU,
 		                                     scan_state.allocator.GetYYAlc(), &err);
 	}
 	if (err.code != YYJSON_READ_SUCCESS) {

@@ -421,6 +421,8 @@ void JSONScan::FinalizeBind(JSONScanData &json_data, vector<Identifier> &names) 
 	transform_options.error_unknown_key = options.auto_detect && !options.ignore_errors;
 	transform_options.date_format_map = json_data.date_format_map.get();
 	transform_options.delay_error = true;
+	// the readers of this scan parse numbers as text when a column is a DECIMAL (JSONReader::read_flag)
+	transform_options.numbers_as_raw = JSONCommon::NumbersAsRaw(options.sql_type_list);
 
 	if (!options.auto_detect) {
 		return;
