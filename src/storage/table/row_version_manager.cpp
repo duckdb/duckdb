@@ -9,7 +9,7 @@ namespace duckdb {
 
 RowVersionManager::RowVersionManager(BufferManager &buffer_manager_p) noexcept
     : allocator(STANDARD_VECTOR_SIZE * sizeof(transaction_t), buffer_manager_p.GetTemporaryBlockManager(),
-                MemoryTag::BASE_TABLE) {
+                MemoryTag::BASE_TABLE, true) {
 }
 
 idx_t RowVersionManager::GetRowCount(ScanOptions options, idx_t count) {
