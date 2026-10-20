@@ -306,12 +306,17 @@ optional_idx ExpressionBinder::ResolveOuterGroupOwner(ParsedExpression &expr) {
 	if (!CanMatchGroup(expr)) {
 		return optional_idx();
 	}
-	// resolving the owner walks the expression, so only do so when some enclosing scope can match at all
-	bool any_groups = false;
-	for (idx_t scope = 1; scope < ScopeCount() && !any_groups; scope++) {
-		any_groups = ScopeAt(scope).HasGroups();
+	// resolving the owner walks the expression, so only do so when some enclosing scope can match at all -
+	// plain column groups are already matched in `ResolveColumn`
+	bool any_compound_groups = false;
+	for (idx_t scope = 1; scope < ScopeCount() && !any_compound_groups; scope++) {
+		any_compound_groups = ScopeAt(scope).HasCompoundGroups();
 	}
-	if (!any_groups) {
+	if (!any_compound_groups) {
+		return optional_idx();
+	}
+	// the columns of a nested subquery can resolve in other scopes than the expression's own columns
+	if (expr.HasSubquery()) {
 		return optional_idx();
 	}
 	// the expression only refers to a group of the scope that owns all of its columns, so that e.g. a
