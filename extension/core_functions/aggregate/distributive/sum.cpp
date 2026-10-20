@@ -4,6 +4,11 @@
 #include "duckdb/common/bignum.hpp"
 #include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/vector/vector_writer.hpp"
+#include "duckdb/common/vector/shredded_vector.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
+#include "duckdb/common/types/numeric_blob.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -578,6 +583,173 @@ AggregateFunction GetWideDecimalSumAggregate() {
 
 } // namespace
 
+//===--------------------------------------------------------------------===//
+// SUM(NUMERIC): exact, in a 128-bit accumulator at the scale the values need
+//===--------------------------------------------------------------------===//
+struct NumericSumState {
+	bool is_set;
+	uint8_t scale;
+	hugeint_t value;
+};
+
+static void NumericSumOverflow() {
+	throw OutOfRangeException("Overflow in SUM(NUMERIC): the sum needs more than 38 digits");
+}
+
+static void NumericSumAdd(NumericSumState &state, hugeint_t value, uint8_t scale) {
+	if (!state.is_set) {
+		state.is_set = true;
+		state.scale = scale;
+		state.value = value;
+		return;
+	}
+	if (scale > state.scale) {
+		if (!Hugeint::TryMultiply(state.value, Hugeint::POWERS_OF_TEN[scale - state.scale], state.value)) {
+			NumericSumOverflow();
+		}
+		state.scale = scale;
+	} else if (scale < state.scale) {
+		if (!Hugeint::TryMultiply(value, Hugeint::POWERS_OF_TEN[state.scale - scale], value)) {
+			NumericSumOverflow();
+		}
+	}
+	if (!Hugeint::TryAddInPlace(state.value, value)) {
+		NumericSumOverflow();
+	}
+}
+
+struct NumericSumTargets {
+	NumericSumState **states = nullptr;
+	const SelectionVector *state_sel = nullptr;
+	NumericSumState *single = nullptr;
+
+	NumericSumState &Get(idx_t i) {
+		return single ? *single : *states[state_sel->get_index(i)];
+	}
+};
+
+template <class T>
+static void NumericSumTyped(UnifiedVectorFormat &vdata, idx_t count, uint8_t scale, NumericSumTargets &targets) {
+	auto data = UnifiedVectorFormat::GetData<T>(vdata);
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (!vdata.validity.RowIsValid(idx)) {
+			continue;
+		}
+		NumericSumAdd(targets.Get(i), hugeint_t(data[idx]), scale);
+	}
+}
+
+static void NumericSumVector(Vector &input, idx_t count, NumericSumTargets &targets) {
+	// the values in their run-time representation
+	unique_ptr<Vector> owned;
+	const Vector *typed;
+	if (input.GetVectorType() == VectorType::SHREDDED_VECTOR) {
+		typed = &ShreddedVector::GetShreddedVector(input);
+	} else {
+		auto type = NumericBlob::RangeType(input, count);
+		owned = make_uniq<Vector>(type, count);
+		NumericBlob::Decode(input, count, *owned);
+		typed = owned.get();
+	}
+	auto &type = typed->GetType();
+	uint8_t scale = type.id() == LogicalTypeId::DECIMAL ? DecimalType::GetScale(type) : 0;
+	UnifiedVectorFormat vdata;
+	typed->ToUnifiedFormat(count, vdata);
+	switch (type.InternalType()) {
+	case PhysicalType::INT8:
+		NumericSumTyped<int8_t>(vdata, count, scale, targets);
+		break;
+	case PhysicalType::INT16:
+		NumericSumTyped<int16_t>(vdata, count, scale, targets);
+		break;
+	case PhysicalType::INT32:
+		NumericSumTyped<int32_t>(vdata, count, scale, targets);
+		break;
+	case PhysicalType::INT64:
+		NumericSumTyped<int64_t>(vdata, count, scale, targets);
+		break;
+	case PhysicalType::INT128:
+		NumericSumTyped<hugeint_t>(vdata, count, scale, targets);
+		break;
+	case PhysicalType::VARCHAR: {
+		// wide decimals: BIGNUM blobs - the sum stays within 38 digits or overflows
+		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+		auto width = DecimalType::GetWidth(type);
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = vdata.sel->get_index(i);
+			if (!vdata.validity.RowIsValid(idx)) {
+				continue;
+			}
+			auto narrow = Value::WIDEDECIMAL(data[idx].GetString(), width, scale)
+			                  .DefaultTryCastAs(LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT128, scale), nullptr, true);
+			if (!narrow) {
+				NumericSumOverflow();
+			}
+			NumericSumAdd(targets.Get(i), narrow->GetValueUnsafe<hugeint_t>(), scale);
+		}
+		break;
+	}
+	default:
+		throw InternalException("SUM(NUMERIC) over an unexpected representation %s", type.ToString());
+	}
+}
+
+static idx_t NumericSumStateSize(AggregateStateInput &) {
+	return sizeof(NumericSumState);
+}
+
+static void NumericSumInitialize(AggregateStateInput &, data_ptr_t *states, idx_t count) {
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *reinterpret_cast<NumericSumState *>(states[i]);
+		state.is_set = false;
+		state.scale = 0;
+		state.value = 0;
+	}
+}
+
+static void NumericSumUpdate(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector,
+                             idx_t count) {
+	UnifiedVectorFormat sdata;
+	state_vector.ToUnifiedFormat(count, sdata);
+	NumericSumTargets targets;
+	targets.states = const_cast<NumericSumState **>(UnifiedVectorFormat::GetData<NumericSumState *>(sdata));
+	targets.state_sel = sdata.sel;
+	NumericSumVector(inputs[0], count, targets);
+}
+
+static void NumericSumCombine(Vector &source, Vector &target, AggregateInputData &, idx_t count) {
+	auto source_states = FlatVector::GetData<NumericSumState *>(source);
+	auto target_states = FlatVector::GetData<NumericSumState *>(target);
+	for (idx_t i = 0; i < count; i++) {
+		auto &from = *source_states[i];
+		if (from.is_set) {
+			NumericSumAdd(*target_states[i], from.value, from.scale);
+		}
+	}
+}
+
+static void NumericSumFinalize(Vector &states, AggregateFinalizeInputData &, Vector &result, idx_t count,
+                               idx_t offset) {
+	auto state_data = FlatVector::GetData<NumericSumState *>(states);
+	auto writer = FlatVector::Writer<string_t>(result, count, offset);
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *state_data[i];
+		if (!state.is_set) {
+			writer.WriteNull();
+			continue;
+		}
+		auto blob = NumericBlob::Encode(Decimal::ToString(state.value, Decimal::MAX_WIDTH_INT128, state.scale));
+		writer.WriteValue(StringVector::AddStringOrBlob(result, blob.c_str(), blob.size()));
+	}
+}
+
+static AggregateFunction GetNumericSum() {
+	return AggregateFunction({LogicalType::NUMERIC}, LogicalType::NUMERIC, NumericSumStateSize, NumericSumInitialize,
+	                         NumericSumUpdate, NumericSumCombine, NumericSumFinalize,
+	                         FunctionNullHandling::DEFAULT_NULL_HANDLING);
+}
+
 AggregateFunctionSet SumFun::GetFunctions() {
 	AggregateFunctionSet sum;
 	// decimal
@@ -598,6 +770,7 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	    LogicalType::BIGNUM, LogicalType::BIGNUM);
 	sum_bignum.GetSignature().GetParameter(0).SetName("arg");
 	sum.AddFunction(sum_bignum);
+	sum.AddFunction(GetNumericSum());
 	return sum;
 }
 

@@ -48,7 +48,9 @@ struct ErrorFun {
 struct BarrierFun {
 	static constexpr const char *Name = "__internal_barrier";
 	static constexpr const char *Parameters = "arg";
-	static constexpr const char *Description = "Returns arg unchanged, and marks it as an optimizer barrier: the expression is never evaluated on rows removed by the operators around it";
+	static constexpr const char *Description =
+	    "Returns arg unchanged, and marks it as an optimizer barrier: the expression is never evaluated on rows "
+	    "removed by the operators around it";
 	static constexpr const char *Example = "__internal_barrier(s::INTEGER = 42)";
 	static constexpr const char *Categories = "";
 
@@ -58,7 +60,8 @@ struct BarrierFun {
 struct CreateSortKeyFun {
 	static constexpr const char *Name = "create_sort_key";
 	static constexpr const char *Parameters = "key1,...";
-	static constexpr const char *Description = "Constructs a binary-comparable sort key based on a set of input parameters and sort qualifiers";
+	static constexpr const char *Description =
+	    "Constructs a binary-comparable sort key based on a set of input parameters and sort qualifiers";
 	static constexpr const char *Example = "create_sort_key('A', 'DESC')";
 	static constexpr const char *Categories = "";
 
@@ -70,6 +73,17 @@ struct InvokeFun {
 	static constexpr const char *Parameters = "lambda,arg1,...";
 	static constexpr const char *Description = "Invokes a lambda function with the given arguments";
 	static constexpr const char *Example = "invoke(x -> x + 1, 5)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct NumericRepresentationFun {
+	static constexpr const char *Name = "numeric_representation";
+	static constexpr const char *Parameters = "numeric";
+	static constexpr const char *Description =
+	    "Returns the run-time representation of a NUMERIC value (the exact type it is held in, or CANONICAL)";
+	static constexpr const char *Example = "numeric_representation(1.5::NUMERIC)";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();

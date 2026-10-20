@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/vector.hpp"
+#include "duckdb/storage/table/numeric_range.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/storage/storage_lock.hpp"
@@ -54,6 +55,8 @@ struct ColumnAppendState {
 	unique_ptr<BaseStatistics> append_stats;
 	//! Stats for the full append to this column
 	unique_ptr<BaseStatistics> full_append_stats;
+	//! The exact range of the values a NUMERIC column appended, covering every representation it went through
+	unique_ptr<NumericRange> numeric_range;
 	//! The optional block to use for transient allocations
 	optional_ptr<SuballocationBlock> transient;
 

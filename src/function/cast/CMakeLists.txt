@@ -17,6 +17,7 @@ add_library_unity(
   list_casts.cpp
   map_cast.cpp
   numeric_casts.cpp
+  numeric_type_casts.cpp
   pointer_cast.cpp
   string_cast.cpp
   struct_cast.cpp

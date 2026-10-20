@@ -1,4 +1,5 @@
 #include "duckdb/common/bignum.hpp"
+#include "duckdb/function/scalar/numeric_dispatch.hpp"
 #include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/likely.hpp"
@@ -304,6 +305,8 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 		}
 	}
 	abs.SetFallible();
+	abs.AddFunction(NumericDispatch::GetFunction("abs", {LogicalType::NUMERIC}, LogicalType::NUMERIC,
+	                                             NumericDispatchKind::GENERIC));
 	return abs;
 }
 
@@ -510,6 +513,8 @@ ScalarFunctionSet SignFun::GetFunctions() {
 		function.SetStatisticsCallback(PropagateSignStats);
 		sign.AddFunction(function);
 	}
+	sign.AddFunction(NumericDispatch::GetFunction("sign", {LogicalType::NUMERIC}, LogicalType::TINYINT,
+	                                              NumericDispatchKind::GENERIC));
 	return sign;
 }
 
@@ -609,6 +614,8 @@ ScalarFunctionSet CeilFun::GetFunctions() {
 		ceil.AddFunction(NameXArgument(std::move(ceil_function), type));
 	}
 	ceil.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	ceil.AddFunction(NumericDispatch::GetFunction("ceil", {LogicalType::NUMERIC}, LogicalType::NUMERIC,
+	                                              NumericDispatchKind::GENERIC));
 	return ceil;
 }
 
@@ -667,6 +674,8 @@ ScalarFunctionSet FloorFun::GetFunctions() {
 		floor.AddFunction(NameXArgument(std::move(floor_function), type));
 	}
 	floor.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	floor.AddFunction(NumericDispatch::GetFunction("floor", {LogicalType::NUMERIC}, LogicalType::NUMERIC,
+	                                               NumericDispatchKind::GENERIC));
 	return floor;
 }
 
@@ -969,6 +978,8 @@ ScalarFunctionSet TruncFun::GetFunctions() {
 		trunc.AddFunction(NameXPrecisionArguments(std::move(trunc_prec_function), type));
 	}
 	trunc.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	trunc.AddFunction(NumericDispatch::GetFunction("trunc", {LogicalType::NUMERIC}, LogicalType::NUMERIC,
+	                                               NumericDispatchKind::GENERIC));
 	return trunc;
 }
 
@@ -1254,6 +1265,10 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 		round.AddFunction(std::move(round_prec_function));
 	}
 	round.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	round.AddFunction(NumericDispatch::GetFunction("round", {LogicalType::NUMERIC}, LogicalType::NUMERIC,
+	                                               NumericDispatchKind::GENERIC));
+	round.AddFunction(NumericDispatch::GetFunction("round", {LogicalType::NUMERIC, LogicalType::INTEGER},
+	                                               LogicalType::NUMERIC, NumericDispatchKind::GENERIC));
 	return round;
 }
 

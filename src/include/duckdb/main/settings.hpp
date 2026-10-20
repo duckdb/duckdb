@@ -636,6 +636,19 @@ struct DebugCheckpointSleepMsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugDecimalAsNumericSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_decimal_as_numeric";
+	static constexpr const char *Description =
+	    "Declare the DECIMAL columns of new tables as NUMERIC (used to run the test suite over NUMERIC columns).";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugDeltaOnlyVariantEncodingEnabledSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_delta_only_variant_encoding_enabled";

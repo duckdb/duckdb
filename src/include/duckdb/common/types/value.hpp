@@ -219,6 +219,10 @@ public:
 	DUCKDB_API static Value BIT(const string &data);
 	DUCKDB_API static Value BIGNUM(const_data_ptr_t data, idx_t len);
 	DUCKDB_API static Value BIGNUM(const string &data);
+	//! Create a NUMERIC value from decimal text ([-]digits[.digits])
+	DUCKDB_API static Value NUMERIC(const string &text);
+	//! Create a NUMERIC value from its canonical blob
+	DUCKDB_API static Value NUMERICBLOB(const string &blob);
 
 	DUCKDB_API static Value GEOMETRY(const_data_ptr_t data, idx_t len);
 	DUCKDB_API static Value GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs);

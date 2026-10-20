@@ -457,6 +457,10 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 		auto str = reinterpret_cast<const string_t *>(data_ptr)[index];
 		return Value::LEGACY_AGGREGATE_STATE(type, const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
+	case LogicalTypeId::NUMERIC: {
+		auto blob = reinterpret_cast<const string_t *>(data_ptr)[index];
+		return Value::NUMERICBLOB(blob.GetString());
+	}
 	case LogicalTypeId::BIT: {
 		auto str = reinterpret_cast<const string_t *>(data_ptr)[index];
 		return Value::BIT(const_data_ptr_cast(str.GetData()), str.GetSize());

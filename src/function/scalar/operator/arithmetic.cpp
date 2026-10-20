@@ -1,4 +1,5 @@
 #include "duckdb/common/assert.hpp"
+#include "duckdb/function/scalar/numeric_dispatch.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -829,6 +830,9 @@ ScalarFunctionSet OperatorAddFun::GetFunctions() {
 
 	// we can add bignums together
 	add.AddFunction(AddFunction::GetFunction(LogicalType::BIGNUM, LogicalType::BIGNUM));
+	// exact: the result holds every possible sum of the representations of the operands
+	add.AddFunction(NumericDispatch::GetFunction("+", {LogicalType::NUMERIC, LogicalType::NUMERIC},
+	                                             LogicalType::NUMERIC, NumericDispatchKind::ADD));
 
 	add.ApplyToFunctions(NameOperatorParameters);
 	return add;
@@ -1068,6 +1072,11 @@ ScalarFunctionSet OperatorSubtractFun::GetFunctions() {
 	}
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::BIGNUM));
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::BIGNUM, LogicalType::BIGNUM));
+	// exact: the result holds every possible difference (negation) of the representations of the operands
+	subtract.AddFunction(NumericDispatch::GetFunction("-", {LogicalType::NUMERIC, LogicalType::NUMERIC},
+	                                                  LogicalType::NUMERIC, NumericDispatchKind::SUBTRACT));
+	subtract.AddFunction(
+	    NumericDispatch::GetFunction("-", {LogicalType::NUMERIC}, LogicalType::NUMERIC, NumericDispatchKind::SUBTRACT));
 	// we can subtract dates from each other
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::DATE, LogicalType::DATE));
 	// we can subtract integers from dates
@@ -1264,6 +1273,9 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	multiply.SetFallible();
 
 	multiply.ApplyToFunctions(NameOperatorParameters);
+	// exact: the result holds every possible product of the representations of the operands
+	multiply.AddFunction(NumericDispatch::GetFunction("*", {LogicalType::NUMERIC, LogicalType::NUMERIC},
+	                                                  LogicalType::NUMERIC, NumericDispatchKind::MULTIPLY));
 	return multiply;
 }
 

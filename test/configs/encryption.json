@@ -11,6 +11,17 @@
   ],
   "skip_tests": [
     {
+      "reason": "NUMERIC columns require storage version v2.0.0 or higher.",
+      "paths": [
+        "test/sql/types/numeric/numeric_type.test",
+        "test/sql/types/numeric/numeric_type_storage.test",
+        "test/sql/types/numeric/numeric_type_widening.test",
+        "test/sql/types/numeric/test_empty_numeric.test",
+        "test/sql/types/numeric/numeric_type_arithmetic.test",
+        "test/sql/types/numeric/numeric_type_nested.test"
+      ]
+    },
+    {
       "reason": "DECIMAL columns wider than 38 digits require storage version v2.0.0 or higher.",
       "paths": [
         "test/sql/types/decimal/wide_decimal_arithmetic.test",

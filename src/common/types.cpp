@@ -128,6 +128,10 @@ static bool TryGetBuiltinPhysicalType(LogicalTypeId id, PhysicalType &result) no
 		// a lambda has no value of its own - it occupies an argument slot that holds a constant placeholder
 		result = PhysicalType::UINT8;
 		return true;
+	case LogicalTypeId::NUMERIC:
+		// the canonical representation: an order-preserving blob, see NumericBlob
+		result = PhysicalType::VARCHAR;
+		return true;
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::TABLE:
@@ -877,6 +881,7 @@ bool LogicalType::SupportsRegularUpdate() const {
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::VARIANT:
+	case LogicalTypeId::NUMERIC:  // the representation of a row group may not hold the new values
 	case LogicalTypeId::GEOMETRY: // If geometry is shredded, its parts (lists/structs) can't be regularly updated.
 		return false;
 	case LogicalTypeId::STRUCT:

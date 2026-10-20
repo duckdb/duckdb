@@ -20,6 +20,8 @@ add_library_unity(
   uuid.cpp
   hyperloglog.cpp
   interval.cpp
+  numeric_blob.cpp
+  numeric_type.cpp
   list_segment.cpp
   selection_vector.cpp
   string_heap.cpp

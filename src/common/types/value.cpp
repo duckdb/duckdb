@@ -2,6 +2,7 @@
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/numeric_blob.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
@@ -992,6 +993,17 @@ Value Value::BIGNUM(const string &data) {
 	Value result(LogicalType::BIGNUM);
 	result.is_null = false;
 	result.value_info_ = make_shared_ptr<StringValueInfo>(data);
+	return result;
+}
+
+Value Value::NUMERIC(const string &text) {
+	return NUMERICBLOB(NumericBlob::Encode(text));
+}
+
+Value Value::NUMERICBLOB(const string &blob) {
+	Value result(LogicalType::NUMERIC);
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(blob);
 	return result;
 }
 
