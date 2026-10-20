@@ -64,6 +64,7 @@
         "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
         "test/sql/copy/parquet/parquet_hive.test",
         "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
+        "test/sql/pragma/profiling/test_profiling_bytes_scanned.test",
         "test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test",
         "test/sql/copy/parquet/parquet_prefetch_strategy_option.test",
         "test/sql/copy/parquet/read_ahead/readahead_depth_learning.test",
