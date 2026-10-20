@@ -46,7 +46,7 @@ SELECT count(*) FROM (SELECT (SELECT 1), (SELECT 2) FROM t0 WHERE c0 IN (SELECT 
 ----
 0
 
-# a filter above the join tree is moved, not duplicated
+# a filter above the join tree is evaluated once per row
 statement ok
 CREATE SEQUENCE root_filter_calls;
 
@@ -75,5 +75,63 @@ WHERE nextval('duplicate_filter_calls') > 0 AND nextval('duplicate_filter_calls'
 
 query I
 SELECT currval('duplicate_filter_calls');
+----
+2
+
+statement ok
+RESET disabled_optimizers;
+
+# a volatile filter on a leaf must run before the join duplicates its input
+statement ok
+CREATE SEQUENCE leaf_filter_calls;
+
+query I
+SELECT count(*)
+FROM (SELECT * FROM range(1) t(i) WHERE nextval('leaf_filter_calls') = 1) a
+JOIN (VALUES (0), (0)) b(i) USING (i);
+----
+2
+
+query I
+SELECT currval('leaf_filter_calls');
+----
+1
+
+# the same boundary is preserved on the other join input
+statement ok
+CREATE SEQUENCE right_filter_calls;
+
+query I
+SELECT count(*)
+FROM (VALUES (0), (0)) a(i)
+JOIN (SELECT * FROM range(1) t(i) WHERE nextval('right_filter_calls') = 1) b USING (i);
+----
+2
+
+query I
+SELECT currval('right_filter_calls');
+----
+1
+
+statement ok
+SET disabled_optimizers='filter_pushdown';
+
+# preserve a volatile filter between joins while optimizing its child join
+statement ok
+CREATE SEQUENCE intermediate_filter_calls;
+
+query I
+SELECT count(*)
+FROM (
+	SELECT l.i
+	FROM range(1) l(i) JOIN (VALUES (0), (0)) r(i) USING (i)
+	WHERE nextval('intermediate_filter_calls') = 1
+) a
+JOIN (VALUES (0), (0), (0)) b(i) USING (i);
+----
+3
+
+query I
+SELECT currval('intermediate_filter_calls');
 ----
 2
