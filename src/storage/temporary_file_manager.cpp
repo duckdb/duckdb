@@ -224,19 +224,23 @@ TemporaryFileIndex TemporaryFileHandle::TryGetBlockIndex(idx_t block_header_size
 	return TemporaryFileIndex(identifier, block_index, block_header_size, buffer_type);
 }
 
-static data_ptr_t GetAlignedTemporaryIOBuffer(DatabaseInstance &db, const FileHandle &handle, data_ptr_t buffer,
-                                              const idx_t size, AllocatedData &allocation) {
-	if (!handle.GetFlags().DirectIO() || AlignPointer<Storage::SECTOR_SIZE>(buffer) == buffer) {
-		return buffer;
+FileHandle &TemporaryFileHandle::GetIOHandle(data_ptr_t buffer, const idx_t size, const idx_t offset) {
+	if (!handle->GetFlags().DirectIO() || (AlignPointer<Storage::SECTOR_SIZE>(buffer) == buffer &&
+	                                       size % Storage::SECTOR_SIZE == 0 && offset % Storage::SECTOR_SIZE == 0)) {
+		return *handle;
 	}
-	// Allocator fallbacks need not be sector-aligned.
-	allocation = Allocator::Get(db).Allocate(size + Storage::SECTOR_SIZE - 1);
-	return AlignPointer<Storage::SECTOR_SIZE>(allocation.get());
+
+	TemporaryFileLock lock(file_lock);
+	if (!buffered_handle) {
+		auto &fs = FileSystem::GetFileSystem(db);
+		buffered_handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE);
+	}
+	return *buffered_handle;
 }
 
 unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(QueryContext context,
                                                                 const TemporaryFileIndex &index_in_file,
-                                                                unique_ptr<FileBuffer> buffer) const {
+                                                                unique_ptr<FileBuffer> buffer) {
 	auto block_index = index_in_file.block_index.GetIndex();
 	auto block_header_size = index_in_file.block_header_size.GetIndex();
 	D_ASSERT(buffer->GetHeaderSize() == block_header_size);
@@ -265,12 +269,7 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(QueryContext con
 		//! Decrypt the compressed buffer.
 		EncryptionEngine::DecryptTemporaryBuffer(db, read_buffer, read_size, encryption_metadata);
 	} else {
-		AllocatedData aligned_buffer;
-		auto io_buffer = GetAlignedTemporaryIOBuffer(db, *handle, read_buffer, read_size, aligned_buffer);
-		handle->Read(context, io_buffer, read_size, read_position);
-		if (io_buffer != read_buffer) {
-			memcpy(read_buffer, io_buffer, read_size);
-		}
+		GetIOHandle(read_buffer, read_size, read_position).Read(context, read_buffer, read_size, read_position);
 	}
 
 	if (is_uncompressed) {
@@ -299,7 +298,7 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(QueryContext con
 }
 
 void TemporaryFileHandle::WriteTemporaryBuffer(QueryContext context, FileBuffer &buffer, const idx_t block_index,
-                                               AllocatedData &compressed_buffer) const {
+                                               AllocatedData &compressed_buffer) {
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.AllocSize() == BufferManager::GetBufferManager(db).GetBlockAllocSize());
 	bool is_uncompressed = identifier.size == TemporaryBufferSize::DEFAULT;
@@ -322,12 +321,7 @@ void TemporaryFileHandle::WriteTemporaryBuffer(QueryContext context, FileBuffer 
 		handle->Write(context, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, write_position);
 		handle->Write(context, write_buffer, write_size, write_position + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
 	} else {
-		AllocatedData aligned_buffer;
-		auto io_buffer = GetAlignedTemporaryIOBuffer(db, *handle, write_buffer, write_size, aligned_buffer);
-		if (io_buffer != write_buffer) {
-			memcpy(io_buffer, write_buffer, write_size);
-		}
-		handle->Write(context, io_buffer, write_size, write_position);
+		GetIOHandle(write_buffer, write_size, write_position).Write(context, write_buffer, write_size, write_position);
 	}
 }
 
@@ -345,6 +339,7 @@ bool TemporaryFileHandle::DeleteIfEmpty() {
 		return false;
 	}
 	// the file is empty: delete it
+	buffered_handle.reset();
 	handle.reset();
 	auto &fs = FileSystem::GetFileSystem(db);
 	fs.RemoveFile(path);
