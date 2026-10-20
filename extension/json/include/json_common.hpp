@@ -51,7 +51,8 @@ using json_key_set_t = unordered_set<JSONKey, JSONKeyHash, JSONKeyEquality>;
 //! the case of ASCII letters (A-Z / a-z) are the same key
 struct JSONKeyCaseInsensitiveHash {
 	inline std::size_t operator()(const JSONKey &k) const {
-		// Setting bit 5 of every byte maps 'A'-'Z' to 'a'-'z'; other bytes may collide, which equality sorts out
+		// JSONKeyHash is the key's (last 8) raw bytes: setting bit 5 of every byte maps 'A'-'Z' to 'a'-'z'. Other
+		// bytes may collide (e.g. '@' and '`'), which equality sorts out
 		return JSONKeyHash()(k) | static_cast<size_t>(0x2020202020202020ULL);
 	}
 };
