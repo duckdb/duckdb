@@ -237,8 +237,7 @@ void ClientContext::ProcessError(ErrorData &error, const string &query) const {
 	}
 }
 
-template <class T>
-unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
+void ClientContext::ApplyInvalidationPolicy(const ErrorData &error) {
 	bool invalidates_transaction = true;
 	if (!ErrorInvalidatesTransaction(error.Type())) {
 		// standard exceptions don't invalidate the transaction
@@ -250,7 +249,11 @@ unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
 	if (invalidates_transaction && HasActiveTransaction()) {
 		ValidChecker::Invalidate(ActiveTransaction(), error.RawMessage());
 	}
+}
 
+template <class T>
+unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
+	ApplyInvalidationPolicy(error);
 	ProcessError(error, query);
 	return make_uniq<T>(std::move(error));
 }
@@ -447,16 +450,17 @@ bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
 	}
 }
 
-StatementIterator ClientContext::IterateStatements(const string &query) {
-	return StatementIterator(ParseIterator(*this, query));
+StatementIterator ClientContext::IterateStatements(const string &query, bool apply_invalidation_policy) {
+	return StatementIterator(ParseIterator(*this, query, apply_invalidation_policy));
 }
 
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
 	try {
 		QueryProfiler::Get(*this).StartQuery(query);
 
-		// Drain the lazy iterator into a vector for callers that want the eager shape.
-		StatementIterator iterator {ParseIterator(*this, query)};
+		// Drain the lazy iterator into a vector for callers that want the eager shape. The callers that run the
+		// statements apply the invalidation policy through ErrorResult.
+		StatementIterator iterator {ParseIterator(*this, query, false, lock)};
 		vector<unique_ptr<SQLStatement>> result;
 		while (iterator.Peek()) {
 			result.push_back(iterator.GetStatementForExecution());
@@ -889,11 +893,12 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query);
 	// ParseIterator's constructor runs UTF-8 validation / Unicode-space strip and can throw — route
-	// through ErrorResult so the source location attaches the same way Peek failures do.
+	// through ErrorResult so the source location attaches the same way Peek failures do. ErrorResult also applies
+	// the invalidation policy.
 	optional_ptr<StatementIterator> iterator_ptr;
 	unique_ptr<StatementIterator> iterator_storage;
 	try {
-		iterator_storage = make_uniq<StatementIterator>(ParseIterator(*this, query));
+		iterator_storage = make_uniq<StatementIterator>(ParseIterator(*this, query, false, *lock));
 		iterator_ptr = *iterator_storage;
 	} catch (const std::exception &ex) {
 		return ErrorResult<QueryResult>(ErrorData(ex), query);
@@ -1008,9 +1013,7 @@ unique_ptr<QueryResult> ClientContext::Submit(const string &query, const QueryPa
 
 		return SubmitInternal(*lock, std::move(statements[0]), parameters, true);
 	} catch (std::exception &ex) {
-		ErrorData error(ex);
-		ProcessError(error, query);
-		return make_uniq<QueryResult>(std::move(error));
+		return ErrorResult<QueryResult>(ErrorData(ex), query);
 	}
 }
 

@@ -28,13 +28,13 @@ RelationManager::RelationManager(ClientContext &context) : context(context) {
 }
 
 static bool OperatorNeedsRelation(LogicalOperatorType op_type);
-static bool OperatorIsNonReorderable(LogicalOperatorType op_type);
+static bool OperatorIsNonReorderable(const LogicalOperator &op);
 
-static bool CanReuseAlignedStats(LogicalOperatorType op_type) {
-	if (OperatorNeedsRelation(op_type) || OperatorIsNonReorderable(op_type)) {
+static bool CanReuseAlignedStats(const LogicalOperator &op) {
+	if (OperatorNeedsRelation(op.type) || OperatorIsNonReorderable(op)) {
 		return true;
 	}
-	switch (op_type) {
+	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_LIMIT:
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
@@ -104,7 +104,7 @@ bool RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 
 optional<RelationStats> RelationManager::AlignStatsWithRelationRoot(LogicalOperator &op, const RelationStats &stats) {
 	auto projected = RelationStatisticsHelper::ProjectOutputStats(stats, op);
-	if (projected && (op.children.size() != 1 || CanReuseAlignedStats(op.type))) {
+	if (projected && (op.children.size() != 1 || CanReuseAlignedStats(op))) {
 		return projected;
 	}
 	if (op.children.size() != 1) {
@@ -168,8 +168,16 @@ static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
 	}
 }
 
-static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
-	switch (op_type) {
+static bool OperatorIsNonReorderable(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_FILTER:
+		// Preserve the input rows on which volatile predicates are evaluated.
+		for (auto &expression : op.expressions) {
+			if (expression->IsVolatile()) {
+				return true;
+			}
+		}
+		return false;
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
@@ -267,7 +275,7 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 static bool IsProjectedRecursiveCTERef(const LogicalOperator &op, const JoinOrderOptimizer &optimizer) {
 	optional_ptr<const LogicalOperator> source = op;
 	while (source->children.size() == 1) {
-		if (OperatorIsNonReorderable(source->type) ||
+		if (OperatorIsNonReorderable(*source) ||
 		    (OperatorNeedsRelation(source->type) && source->type != LogicalOperatorType::LOGICAL_PROJECTION)) {
 			return false;
 		}
@@ -292,7 +300,7 @@ static bool RecursiveCTERefCanReorder(optional_ptr<LogicalOperator> parent) {
 static bool HasNonReorderableChild(LogicalOperator &op) {
 	LogicalOperator *tmp = &op;
 	while (tmp->children.size() == 1) {
-		if (OperatorNeedsRelation(tmp->type) || OperatorIsNonReorderable(tmp->type)) {
+		if (OperatorNeedsRelation(tmp->type) || OperatorIsNonReorderable(*tmp)) {
 			return true;
 		}
 		tmp = tmp->children[0].get();
@@ -409,7 +417,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	optional_ptr<LogicalOperator> limit_op = nullptr;
 	// pass through single child operators (but never past a non-reorderable op such as a DML node, which
 	// must be preserved as its own relation rather than skipped over and dropped during reconstruction)
-	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type) && !OperatorIsNonReorderable(op->type)) {
+	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type) && !OperatorIsNonReorderable(*op)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			if (HasNonReorderableChild(*op)) {
 				datasource_filters.push_back(*op);
@@ -422,7 +430,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		op = op->children[0].get();
 	}
 	bool non_reorderable_operation = false;
-	if (OperatorIsNonReorderable(op->type)) {
+	if (OperatorIsNonReorderable(*op)) {
 		// set operation, optimize separately in children
 		non_reorderable_operation = true;
 	}
@@ -855,6 +863,15 @@ bool RelationManager::ExtractBindings(const Expression &expression, unordered_se
 	return can_reorder;
 }
 
+bool RelationManager::ExtractFilterBindings(const Expression &expression, unordered_set<RelationIndex> &bindings) {
+	const auto can_reorder = ExtractBindings(expression, bindings);
+	if (!bindings.empty()) {
+		return true;
+	}
+	// without bindings the filter can only move if it references no columns at all
+	return can_reorder && !ExpressionContainsColumnRef(expression);
+}
+
 JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
                                                   vector<reference<LogicalOperator>> &filter_operators,
                                                   JoinRelationSetManager &set_manager) {
@@ -1056,15 +1073,14 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 		} else {
 			// handle filters from logical filters
 			for (auto &expression : f_op.expressions) {
+				unordered_set<RelationIndex> bindings;
+				if (!ExtractFilterBindings(*expression, bindings)) {
+					// the filter is on a column that is not in our relational map. (example: limit_rownum)
+					// in this case we do not create a FilterInfo for it. (duckdb-internal/#1493)
+					continue;
+				}
 				if (filter_set.find(*expression) == filter_set.end()) {
 					filter_set.insert(*expression);
-					unordered_set<RelationIndex> bindings;
-					ExtractBindings(*expression, bindings);
-					if (bindings.empty()) {
-						// the filter is on a column that is not in our relational map. (example: limit_rownum)
-						// in this case we do not create a FilterInfo for it. (duckdb-internal/#1493)
-						continue;
-					}
 					auto &set = set_manager.GetJoinRelation(bindings);
 					auto filter_info = make_uniq<FilterInfo>(expression->Copy(), set, filters_and_bindings.size());
 					filter_info->from_logical_filter = true;
