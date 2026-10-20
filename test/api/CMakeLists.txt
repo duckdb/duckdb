@@ -14,6 +14,7 @@ set(TEST_API_OBJECTS
     test_task_error_out_of_memory.cpp
     test_bind_statement.cpp
     test_function_binding.cpp
+    test_language_function_guard.cpp
     test_function_signature_variadic.cpp
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp
