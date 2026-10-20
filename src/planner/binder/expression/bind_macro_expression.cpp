@@ -202,11 +202,15 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	// expanding nested macros can take a long time, allow the query to be interrupted
 	context.InterruptCheck();
 
-	// validate the arguments, separate positional and named arguments, and select the member to call
+	// validate the arguments, separate positional and named arguments, and select the member to call.
+	// selection moves the argument expressions out of the call, so it runs on a copy: the original
+	// must stay rebindable for callers that retry binding this tree after a soft error
+	auto function_copy_owner = function.Copy();
+	auto &function_copy = function_copy_owner->Cast<FunctionExpression>();
 	vector<unique_ptr<ParsedExpression>> positional_arguments;
 	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> named_arguments;
 	binder.lambda_bindings = lambda_bindings;
-	auto macro_result = MacroFunction::BindMacroFunction(binder, macro_func.macros, macro_func.name, function,
+	auto macro_result = MacroFunction::BindMacroFunction(binder, macro_func.macros, macro_func.name, function_copy,
 	                                                     positional_arguments, named_arguments, depth);
 	if (!macro_result.error.empty()) {
 		throw BinderException(*expr, macro_result.error);
