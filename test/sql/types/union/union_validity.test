@@ -22,3 +22,12 @@ a	NULL
 b	NULL
 
 
+
+# a union whose selected member is NULL casts to a SQL NULL, not the string 'NULL' (#27509)
+query II rowsort
+SELECT u::VARCHAR IS NULL, length(u::VARCHAR) FROM tbl;
+----
+false	1
+true	NULL
+true	NULL
+true	NULL

@@ -390,7 +390,7 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 		if (member_entry.IsValid()) {
 			result_data.WriteValue(member_entry.GetValue());
 		} else {
-			result_data.WriteValue("NULL");
+			result_data.WriteNull();
 		}
 	}
 	result.Verify();

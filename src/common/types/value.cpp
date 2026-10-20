@@ -1728,7 +1728,9 @@ string Value::ToString() const {
 	if (IsNull()) {
 		return "NULL";
 	}
-	return StringValue::Get(DefaultCastAs(LogicalType::VARCHAR));
+	// a UNION whose selected member is NULL casts to a NULL VARCHAR
+	auto str = DefaultCastAs(LogicalType::VARCHAR);
+	return str.IsNull() ? "NULL" : StringValue::Get(str);
 }
 
 string Value::ToSQLString() const {
