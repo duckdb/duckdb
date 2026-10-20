@@ -55,8 +55,9 @@ public:
 
 private:
 	template <SortKeyType SORT_KEY_TYPE>
-	optional_idx TemplatedFindByteSplit() const;
-	optional_idx FindByteSplit() const;
+	optional_idx TemplatedFindSkewedPartitionSplit() const;
+	//! Optional output row rank at which to split a partition with disproportionately large payloads.
+	optional_idx FindSkewedPartitionSplit() const;
 
 	TaskScheduler &scheduler;
 

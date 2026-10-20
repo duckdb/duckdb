@@ -868,7 +868,7 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 }
 
 //===--------------------------------------------------------------------===//
-// Sorted Run Merger
+// Skewed Partition Splitting
 //===--------------------------------------------------------------------===//
 static constexpr idx_t MAX_BYTE_SAMPLES = 512;
 
@@ -891,27 +891,32 @@ struct MergeByteSample {
 };
 
 template <SortKeyType SORT_KEY_TYPE>
-optional_idx SortedRunMerger::TemplatedFindByteSplit() const {
+optional_idx SortedRunMerger::TemplatedFindSkewedPartitionSplit() const {
 	const auto &merger = *this;
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using SAMPLE = MergeByteSample<SORT_KEY>;
 	static_assert(std::is_trivially_destructible<SAMPLE>::value, "Merge byte samples must not own resources");
 	D_ASSERT(SORT_KEY::CONSTANT_SIZE && SORT_KEY::HAS_PAYLOAD);
+
 	static constexpr idx_t NEIGHBORS = 32;
 	auto &context = merger.sort.client_context;
 	const auto &payload_layout = *merger.sort.payload_layout;
 	const auto row_width = payload_layout.GetRowWidth();
 	const auto heap_size_offset = payload_layout.GetHeapSizeOffset();
+
 	auto sample_buffer = BufferAllocator::Get(context).Allocate(MAX_BYTE_SAMPLES * sizeof(SAMPLE));
 	unsafe_array_ptr<SAMPLE> samples(reinterpret_cast<SAMPLE *>(sample_buffer.get()), MAX_BYTE_SAMPLES);
 	idx_t sample_count = 0;
 	const auto run_count = merger.sorted_runs.size();
+
+	// Each sample represents an interval of rows; stagger its position between runs.
 	for (idx_t run_idx = 0; run_idx < run_count; run_idx++) {
 		auto &run = *merger.sorted_runs[run_idx];
 		const auto count = run.Count();
 		const auto intervals = MinValue<idx_t>(count, MAX_BYTE_SAMPLES / run_count);
 		const auto interval_size = count / intervals;
 		const auto remainder = count % intervals;
+
 		ExternalBlockIteratorState key_state(*run.key_data, nullptr);
 		idx_t begin = 0;
 		for (idx_t interval_idx = 0; interval_idx < intervals; interval_idx++) {
@@ -921,8 +926,10 @@ optional_idx SortedRunMerger::TemplatedFindByteSplit() const {
 			const auto phase = (width / run_count) * run_idx + ((width % run_count) * run_idx) / run_count;
 			const auto row_idx = begin + phase;
 			auto key = key_state.GetValueAtIndex<SORT_KEY>(row_idx);
+
 			double payload_bytes;
 			if (merger.external) {
+				// Estimate spilled payload bytes from chunk metadata without pinning payload blocks.
 				const auto chunk_idx = row_idx / STANDARD_VECTOR_SIZE;
 				const auto chunk_count =
 				    MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - chunk_idx * STANDARD_VECTOR_SIZE);
@@ -931,6 +938,7 @@ optional_idx SortedRunMerger::TemplatedFindByteSplit() const {
 				const auto neighbors = MinValue<idx_t>(NEIGHBORS, width);
 				auto neighbor_begin = row_idx - MinValue<idx_t>(row_idx - begin, neighbors / 2);
 				neighbor_begin = MinValue(neighbor_begin, end - neighbors);
+
 				payload_bytes = 0;
 				for (idx_t i = 0; i < neighbors; i++) {
 					const auto &neighbor = key_state.GetValueAtIndex<SORT_KEY>(neighbor_begin + i);
@@ -938,6 +946,7 @@ optional_idx SortedRunMerger::TemplatedFindByteSplit() const {
 				}
 				payload_bytes = row_width + payload_bytes / neighbors;
 			}
+
 			key.SetPayload(nullptr);
 			new (&samples[sample_count]) SAMPLE {key, width, sizeof(SORT_KEY) + payload_bytes, sample_count};
 			sample_count++;
@@ -945,13 +954,16 @@ optional_idx SortedRunMerger::TemplatedFindByteSplit() const {
 		}
 		D_ASSERT(begin == count);
 	}
+
 	std::sort(samples.data(), samples.data() + sample_count);
 
+	// Use the weighted samples in key order to estimate bytes in each existing row partition.
 	idx_t rank = 0;
 	idx_t largest_partition = 0;
 	double partition_bytes = 0;
 	double largest_bytes = 0;
 	double total_bytes = 0;
+
 	for (idx_t i = 0; i < sample_count; i++) {
 		const auto &sample = samples[i];
 		auto remaining = sample.rows;
@@ -971,9 +983,12 @@ optional_idx SortedRunMerger::TemplatedFindByteSplit() const {
 		}
 	}
 	D_ASSERT(rank == merger.total_count);
+
+	// Only split when one partition is estimated to hold more than twice the average bytes.
 	if (largest_bytes <= 2 * (total_bytes / RowPartitionCount(merger))) {
 		return optional_idx();
 	}
+
 	const auto partition_begin = largest_partition * merger.partition_size;
 	const auto partition_end = largest_partition == RowPartitionCount(merger) - 1
 	                               ? merger.total_count
@@ -983,6 +998,8 @@ optional_idx SortedRunMerger::TemplatedFindByteSplit() const {
 	}
 	const auto first_interior = partition_begin + STANDARD_VECTOR_SIZE;
 	const auto last_interior = ((partition_end - 1) / STANDARD_VECTOR_SIZE) * STANDARD_VECTOR_SIZE;
+
+	// Add one interior vector-aligned boundary near the heavy partition's byte midpoint.
 	auto median_bytes = largest_bytes / 2;
 	rank = 0;
 	for (idx_t i = 0; i < sample_count; i++) {
@@ -993,11 +1010,13 @@ optional_idx SortedRunMerger::TemplatedFindByteSplit() const {
 		if (begin >= end) {
 			continue;
 		}
+
 		const auto bytes = sample.bytes_per_row * (end - begin);
 		if (median_bytes > bytes) {
 			median_bytes -= bytes;
 			continue;
 		}
+
 		const auto offset = median_bytes / sample.bytes_per_row;
 		const auto rows = offset >= static_cast<double>(end - begin) ? end - begin : static_cast<idx_t>(offset);
 		const auto aligned = ((begin + rows) / STANDARD_VECTOR_SIZE) * STANDARD_VECTOR_SIZE;
@@ -1006,7 +1025,7 @@ optional_idx SortedRunMerger::TemplatedFindByteSplit() const {
 	return optional_idx();
 }
 
-optional_idx SortedRunMerger::FindByteSplit() const {
+optional_idx SortedRunMerger::FindSkewedPartitionSplit() const {
 	const auto &merger = *this;
 	const auto key_type = merger.sort.key_layout->GetSortKeyType();
 	if (merger.total_count == 0 || merger.is_index_sort || merger.sort.is_index_sort || merger.sorted_runs.size() < 2 ||
@@ -1023,11 +1042,11 @@ optional_idx SortedRunMerger::FindByteSplit() const {
 	}
 	try {
 		switch (key_type) {
-#define DUCKDB_BYTE_SPLIT_CASE(TYPE)                                                                                   \
-	case SortKeyType::TYPE:                                                                                            \
-		return TemplatedFindByteSplit<SortKeyType::TYPE>();
-			DUCKDB_FOR_EACH_PAYLOAD_SORT_KEY_TYPE(DUCKDB_BYTE_SPLIT_CASE)
-#undef DUCKDB_BYTE_SPLIT_CASE
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		return TemplatedFindSkewedPartitionSplit<SortKeyType::SORT_KEY_TYPE>();
+			DUCKDB_FOR_EACH_PAYLOAD_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 		default:
 			return optional_idx();
 		}
@@ -1038,12 +1057,15 @@ optional_idx SortedRunMerger::FindByteSplit() const {
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Sorted Run Merger
+//===--------------------------------------------------------------------===//
 SortedRunMerger::SortedRunMerger(const Sort &sort_p, vector<unique_ptr<SortedRun>> &&sorted_runs_p,
                                  idx_t partition_size_p, bool external_p, bool is_index_sort_p)
     : scheduler(TaskScheduler::GetScheduler(*sort_p.client_context.db)), sort(sort_p),
       sorted_runs(std::move(sorted_runs_p)), total_count(SortedRunsTotalCount(sorted_runs)),
       partition_size(partition_size_p), external(external_p), is_index_sort(is_index_sort_p),
-      extra_partition_end(FindByteSplit()) {
+      extra_partition_end(FindSkewedPartitionSplit()) {
 }
 
 idx_t SortedRunMerger::PartitionCount() const {
