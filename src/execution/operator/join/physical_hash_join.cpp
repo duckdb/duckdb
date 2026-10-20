@@ -436,9 +436,9 @@ class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op_p, ClientContext &context_p)
 	    : context(context_p), op(op_p), num_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
-	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
-	      initial_radix_bits(num_threads < 100 ? 4 : 5), finalized(false), active_local_states(0), total_size(0),
-	      max_partition_size(0), max_partition_count(0), probe_side_requirement(0), scanned_data(false) {
+	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), initial_radix_bits(4),
+	      finalized(false), active_local_states(0), total_size(0), max_partition_size(0), max_partition_count(0),
+	      probe_side_requirement(0), scanned_data(false) {
 		hash_table = op.InitializeHashTable(context, initial_radix_bits);
 		// Reserve the initial partition buffers before upstream hash tables are finalized.
 		auto minimum_reservation = MinValue(temporary_memory_state->GetMinimumReservation(),
