@@ -178,6 +178,9 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		// not possible with groups
 		return;
 	}
+	if (aggr.expressions.empty()) {
+		return;
+	}
 	// check if all aggregates are COUNT(*), MIN or MAX
 	vector<idx_t> count_star_idxs;
 	vector<MinMaxColumnInfo> min_max_columns;

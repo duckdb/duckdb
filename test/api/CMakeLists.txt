@@ -2,10 +2,6 @@ if(NOT CLANG_TIDY)
   add_subdirectory(adbc)
 endif()
 
-if(${DISABLE_THREADS})
-  add_definitions(-DDUCKDB_NO_THREADS)
-endif()
-
 add_subdirectory(capi)
 add_subdirectory(cpp)
 

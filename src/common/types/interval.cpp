@@ -564,10 +564,19 @@ interval_t Interval::Invert(interval_t interval) {
 }
 
 date_t Interval::Add(date_t left, interval_t right) {
-	if (!left.IsFinite()) {
-		return left;
-	}
 	date_t result;
+	if (!TryAdd(left, right, result)) {
+		throw OutOfRangeException("Date out of range");
+	}
+	return result;
+}
+
+bool Interval::TryAdd(date_t left, interval_t right, date_t &result) {
+	if (!left.IsFinite()) {
+		result = left;
+		return true;
+	}
+	result = left;
 	if (right.months != 0) {
 		int32_t year, month, day;
 		Date::Convert(left, year, month, day);
@@ -581,25 +590,38 @@ date_t Interval::Add(date_t left, interval_t right) {
 			year--;
 			month += Interval::MONTHS_PER_YEAR;
 		}
+		if (month < 1 || month > Interval::MONTHS_PER_YEAR) {
+			return false;
+		}
 		day = MinValue<int32_t>(day, Date::MonthDays(year, month));
-		result = Date::FromDate(year, month, day);
-	} else {
+		if (!Date::TryFromDate(year, month, day, result)) {
+			return false;
+		}
+	}
+	if (right.days != 0 && !TryAddOperator::Operation(result.days, right.days, result.days)) {
+		return false;
+	}
+	if (right.micros != 0 &&
+	    !TryAddOperator::Operation(result.days, int32_t(right.micros / Interval::MICROS_PER_DAY), result.days)) {
+		return false;
+	}
+	return result.IsFinite();
+}
+
+bool Interval::TryAdd(timestamp_t left, interval_t right, timestamp_t &result) {
+	if (!left.IsFinite()) {
 		result = left;
+		return true;
 	}
-	if (right.days != 0) {
-		if (!TryAddOperator::Operation(result.days, right.days, result.days)) {
-			throw OutOfRangeException("Date out of range");
-		}
+	date_t date;
+	dtime_t time;
+	Timestamp::Convert(left, date, time);
+	date_t new_date;
+	if (!TryAdd(date, right, new_date)) {
+		return false;
 	}
-	if (right.micros != 0) {
-		if (!TryAddOperator::Operation(result.days, int32_t(right.micros / Interval::MICROS_PER_DAY), result.days)) {
-			throw OutOfRangeException("Date out of range");
-		}
-	}
-	if (!result.IsFinite()) {
-		throw OutOfRangeException("Date out of range");
-	}
-	return result;
+	auto new_time = Interval::Add(time, right, new_date);
+	return Timestamp::TryFromDatetime(new_date, new_time, result);
 }
 
 dtime_t Interval::Add(dtime_t left, interval_t right, date_t &date) {

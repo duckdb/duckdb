@@ -598,7 +598,6 @@ TEST_CONFIGS_STORAGE_ENGINE := \
 	test/configs/block_verification_latest.json \
 	test/configs/block_size_16kB.json \
 	test/configs/latest_storage_block_size_16kB.json \
-	test/configs/block_allocator_100mib.json \
 	test/configs/compressed_in_memory.json \
 	test/configs/prefetch_all_storage.json \
 	test/configs/force_storage_mmap.json

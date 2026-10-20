@@ -147,8 +147,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_option_get_name)
 	(duckdb_v2_option_handle option, duckdb_v2_identifier_t *out_name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_parse_sql)
-	(duckdb_v2_connection_handle conn, const char *sql, duckdb_v2_statement_iterator_handle *out_iterator,
-	 duckdb_v2_error_info_handle *err);
+	(duckdb_v2_connection_handle conn, const char *sql, bool apply_invalidation_policy,
+	 duckdb_v2_statement_iterator_handle *out_iterator, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_result_destroy)(duckdb_v2_result_handle *result);
 	DUCKDB_V2_ERROR(*duckdb_v2_result_drain)
 	(duckdb_v2_result_handle result, idx_t *out_rows_changed, duckdb_v2_error_info_handle *err);
