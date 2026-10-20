@@ -350,7 +350,8 @@ TEST_CASE("BlockAllocator toggles allocation permission without changing pool ow
 	CHECK(live_bytes.load() == baseline_live_bytes + BLOCK_SIZE);
 
 	db_config.ResetOption(db.instance.get(), *option);
-	CHECK(allocator.IsEnabled());
+	CHECK(allocator.IsEnabled() == DBConfigOptions().enable_block_allocator);
+	db_config.SetOption(db.instance.get(), *option, Value::BOOLEAN(true));
 	free(disabled);
 	CHECK(live_bytes.load() == baseline_live_bytes);
 	auto reused = allocate();
@@ -966,6 +967,7 @@ TEST_CASE("BufferAllocator routes allocation transitions through BlockAllocator"
 	DBConfig config;
 	config.options.maximum_threads = 1;
 	config.options.async_threads = 0;
+	config.options.enable_block_allocator = true;
 	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, BLOCK_SIZE);
 	DuckDB db(nullptr, &config);
 	auto &allocator = BlockAllocator::Get(*db.instance);
@@ -1657,6 +1659,7 @@ TEST_CASE("BlockAllocator coalesces idle requests and yields between bounded asy
 	DBConfig config;
 	config.options.maximum_threads = 1;
 	config.options.async_threads = 1;
+	config.options.enable_block_allocator = true;
 	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, POOL_SIZE);
 	DuckDB db(nullptr, &config);
 	auto &allocator = BlockAllocator::Get(*db.instance);
@@ -1768,6 +1771,7 @@ TEST_CASE("BlockAllocator queued reclamation survives worker reconfiguration and
 	DBConfig config;
 	config.options.maximum_threads = 1;
 	config.options.async_threads = 1;
+	config.options.enable_block_allocator = true;
 	config.block_allocator = make_uniq<BlockAllocator>(Allocator::DefaultAllocator(), DEFAULT_BLOCK_ALLOC_SIZE,
 	                                                   128 * DEFAULT_BLOCK_ALLOC_SIZE);
 	auto db = make_uniq<DuckDB>(nullptr, &config);
@@ -1809,6 +1813,7 @@ TEST_CASE("BlockAllocator idle workers reclaim eligible blocks", "[api][block_al
 	DBConfig config;
 	config.options.maximum_threads = 2;
 	config.options.async_threads = 0;
+	config.options.enable_block_allocator = true;
 	config.block_allocator = make_uniq<BlockAllocator>(Allocator::DefaultAllocator(), DEFAULT_BLOCK_ALLOC_SIZE,
 	                                                   128 * DEFAULT_BLOCK_ALLOC_SIZE);
 	SECTION("A regular worker performs synchronous idle maintenance") {
@@ -1855,6 +1860,7 @@ TEST_CASE("BlockAllocator preserves failed discards without spinning and can ret
 	DBConfig config;
 	config.options.maximum_threads = 1;
 	config.options.async_threads = 0;
+	config.options.enable_block_allocator = true;
 #ifndef DUCKDB_NO_THREADS
 	config.options.async_threads = 1;
 #endif
@@ -1939,6 +1945,7 @@ TEST_CASE("BlockAllocator database shutdown unmaps locked pool pages", "[api][bl
 	DBConfig config;
 	config.options.maximum_threads = 1;
 	config.options.async_threads = 0;
+	config.options.enable_block_allocator = true;
 	config.block_allocator = make_uniq<BlockAllocator>(Allocator::DefaultAllocator(), DEFAULT_BLOCK_ALLOC_SIZE,
 	                                                   4 * DEFAULT_BLOCK_ALLOC_SIZE);
 	auto db = make_uniq<DuckDB>(nullptr, &config);

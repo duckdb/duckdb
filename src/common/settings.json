@@ -739,7 +739,7 @@
     },
     {
         "name": "enable_block_allocator",
-        "description": "Enable new allocations from the fixed-size block pool (64-bit only). Disabling preserves existing allocations and the virtual memory reservation.",
+        "description": "Enable new allocations from the fixed-size block pool (64-bit only; disabled by default on MinGW). Disabling preserves existing allocations and the virtual memory reservation.",
         "type": "BOOLEAN",
         "scope": "global",
         "custom_implementation": true

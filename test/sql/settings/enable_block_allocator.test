@@ -4,10 +4,12 @@
 
 require skip_reload
 
-query I
+query I nosort allocator_default
 SELECT current_setting('enable_block_allocator')
 ----
-true
+
+statement ok
+SET enable_block_allocator=true
 
 statement ok
 CREATE TABLE blocks AS SELECT i, repeat('a', 100) AS s FROM range(10000) t(i)
@@ -52,10 +54,8 @@ SET enable_block_allocator=false
 statement ok con1
 RESET enable_block_allocator
 
-query I
+query I nosort allocator_default
 SELECT current_setting('enable_block_allocator')
-----
-true
 
 statement ok
 DROP TABLE blocks

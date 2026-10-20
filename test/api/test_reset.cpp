@@ -78,7 +78,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"show_behavior", {EnumUtil::ToString(ShowBehaviorType::TABLE)}},
 	    {"autoload_known_extensions", {false}},
 	    {"autoinstall_known_extensions", {false}},
-	    {"enable_block_allocator", {false}},
+	    {"enable_block_allocator", {!DBConfigOptions().enable_block_allocator}},
 	    {"enable_profiling", {"json"}},
 	    {"explain_output", {{"all", "optimized_only", "physical_only"}}},
 	    {"file_search_path", {"test"}},

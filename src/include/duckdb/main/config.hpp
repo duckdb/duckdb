@@ -97,7 +97,11 @@ struct DBConfigOptions {
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = DConstants::INVALID_INDEX;
 	//! Initial permission to allocate from the fixed-size block pool.
+#ifdef __MINGW32__
+	bool enable_block_allocator = false;
+#else
 	bool enable_block_allocator = true;
+#endif
 	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default: 90% of available disk space.
 	idx_t maximum_swap_space = DConstants::INVALID_INDEX;
 	//! The maximum amount of CPU threads used by the database system. Default: all available.
