@@ -1237,6 +1237,7 @@ const StringUtil::EnumStringLiteral *GetCatalogTypeValues() {
 		{ static_cast<uint32_t>(CatalogType::DATABASE_ENTRY), "DATABASE_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::COORDINATE_SYSTEM_ENTRY), "COORDINATE_SYSTEM_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::TRIGGER_ENTRY), "TRIGGER_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::LANGUAGE_ENTRY), "LANGUAGE_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::TABLE_FUNCTION_ENTRY), "TABLE_FUNCTION_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::SCALAR_FUNCTION_ENTRY), "SCALAR_FUNCTION_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::AGGREGATE_FUNCTION_ENTRY), "AGGREGATE_FUNCTION_ENTRY" },
@@ -1257,12 +1258,12 @@ const StringUtil::EnumStringLiteral *GetCatalogTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
-	return StringUtil::EnumToString(GetCatalogTypeValues(), 26, "CatalogType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCatalogTypeValues(), 27, "CatalogType", static_cast<uint32_t>(value));
 }
 
 template<>
 CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
-	return static_cast<CatalogType>(StringUtil::StringToEnum(GetCatalogTypeValues(), 26, "CatalogType", value));
+	return static_cast<CatalogType>(StringUtil::StringToEnum(GetCatalogTypeValues(), 27, "CatalogType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCheckpointAbortValues() {
@@ -2616,19 +2617,20 @@ const StringUtil::EnumStringLiteral *GetExtraDropInfoTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ExtraDropInfoType::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(ExtraDropInfoType::SECRET_INFO), "SECRET_INFO" },
-		{ static_cast<uint32_t>(ExtraDropInfoType::TRIGGER_INFO), "TRIGGER_INFO" }
+		{ static_cast<uint32_t>(ExtraDropInfoType::TRIGGER_INFO), "TRIGGER_INFO" },
+		{ static_cast<uint32_t>(ExtraDropInfoType::FUNCTION_SIGNATURE_INFO), "FUNCTION_SIGNATURE_INFO" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value) {
-	return StringUtil::EnumToString(GetExtraDropInfoTypeValues(), 3, "ExtraDropInfoType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExtraDropInfoTypeValues(), 4, "ExtraDropInfoType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value) {
-	return static_cast<ExtraDropInfoType>(StringUtil::StringToEnum(GetExtraDropInfoTypeValues(), 3, "ExtraDropInfoType", value));
+	return static_cast<ExtraDropInfoType>(StringUtil::StringToEnum(GetExtraDropInfoTypeValues(), 4, "ExtraDropInfoType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExtraPersistentColumnDataTypeValues() {
