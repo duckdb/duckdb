@@ -204,10 +204,10 @@ struct ModeState {
 	ColumnDataScanState *scan = nullptr;
 	//! The data chunk paged into into
 	DataChunk page;
+	//! Cell access into the page - scans can return constant and dictionary vectors
+	UnifiedVectorFormat format;
 	//! The data pointer
 	const KEY_TYPE *data = nullptr;
-	//! The validity mask
-	const ValidityMask *validity = nullptr;
 
 	~ModeState() {
 		if (frequency_map) {
@@ -245,22 +245,20 @@ struct ModeState {
 		if (!RowIsVisible(row_idx)) {
 			D_ASSERT(inputs);
 			inputs->Seek(row_idx, *scan, page);
-			// the accessors below require flat vectors, scans can return compact representations
-			page.Flatten();
-			data = FlatVector::GetData<KEY_TYPE>(page.data[0]);
-			validity = &FlatVector::ValidityMutable(page.data[0]);
+			page.data[0].ToUnifiedFormat(format);
+			data = UnifiedVectorFormat::GetData<KEY_TYPE>(format);
 		}
 		return RowOffset(row_idx);
 	}
 
 	inline const KEY_TYPE &GetCell(idx_t row_idx) {
 		const auto offset = Seek(row_idx);
-		return data[offset];
+		return data[format.sel->get_index(offset)];
 	}
 
 	inline bool RowIsValid(idx_t row_idx) {
 		const auto offset = Seek(row_idx);
-		return validity->RowIsValid(offset);
+		return format.validity.RowIsValid(format.sel->get_index(offset));
 	}
 
 	void Reset() {
