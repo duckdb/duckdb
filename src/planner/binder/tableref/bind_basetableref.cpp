@@ -269,9 +269,11 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		vector<LogicalType> return_types;
 		vector<Identifier> return_names;
 		for (auto &col : table.GetColumns().Logical()) {
-			table_types.push_back(col.Type());
+			// a NUMERIC column is bound to the representation that holds its current values
+			auto bound_type = table.GetBoundColumnType(context, col);
+			table_types.push_back(bound_type);
 			table_names.emplace_back(col.Name());
-			return_types.push_back(col.Type());
+			return_types.push_back(std::move(bound_type));
 			return_names.emplace_back(col.Name());
 		}
 		table_names = BindContext::AliasColumnNames(ref.Table(), table_names, ref.column_name_alias);

@@ -89,7 +89,10 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 
 		// set the expected types as the types for the INSERT statement
 		auto &column = table.GetColumn(table_col_idx);
-		expr_list.expected_types[col_idx] = table.GetExpectedTypeForInsert(column);
+		auto expected_type = table.GetExpectedTypeForInsert(column);
+		// a NUMERIC column takes the representation of the values - infer it from the VALUES list
+		expr_list.expected_types[col_idx] =
+		    expected_type.id() == LogicalTypeId::NUMERIC ? LogicalType(LogicalTypeId::INVALID) : expected_type;
 		expr_list.expected_names[col_idx] = column.Name();
 
 		// now replace any DEFAULT values with the corresponding default expression

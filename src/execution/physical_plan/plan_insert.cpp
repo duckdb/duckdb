@@ -125,6 +125,7 @@ PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGe
 	if (use_batch_index && !parallel_streaming_insert) {
 		auto &insert = planner.Make<PhysicalBatchInsert>(op.types, op.table.Cast<DuckTableEntry>(),
 		                                                 std::move(op.bound_constraints), op.estimated_cardinality);
+		PhysicalInsert::ResolveInsertTypes(insert.Cast<PhysicalBatchInsert>().insert_types, plan->GetTypes());
 		insert.children.push_back(*plan);
 		return insert;
 	}
@@ -136,6 +137,7 @@ PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGe
 	    std::move(op.on_conflict_info.on_conflict_condition), std::move(op.on_conflict_info.do_update_condition),
 	    std::move(op.on_conflict_info.on_conflict_filter), std::move(op.on_conflict_info.columns_to_fetch),
 	    op.on_conflict_info.update_is_del_and_insert);
+	PhysicalInsert::ResolveInsertTypes(insert.Cast<PhysicalInsert>().insert_types, plan->GetTypes());
 	insert.children.push_back(*plan);
 	return insert;
 }

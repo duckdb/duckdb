@@ -54,6 +54,8 @@ struct ColumnAppendState {
 	unique_ptr<BaseStatistics> append_stats;
 	//! Stats for the full append to this column
 	unique_ptr<BaseStatistics> full_append_stats;
+	//! Exact statistics kept by a NUMERIC column over the whole append, covering every representation it went through
+	unique_ptr<BaseStatistics> wrapper_stats;
 	//! The optional block to use for transient allocations
 	optional_ptr<SuballocationBlock> transient;
 

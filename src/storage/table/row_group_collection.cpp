@@ -1,4 +1,6 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
+#include "duckdb/storage/statistics/unbounded_numeric_stats.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
@@ -165,6 +167,27 @@ idx_t RowGroupCollection::GetNextRowId() const {
 idx_t RowGroupCollection::GetRowGroupCount() const {
 	auto row_groups = GetRowGroups();
 	return row_groups->GetSegmentCount();
+}
+
+LogicalType RowGroupCollection::GetScanType(idx_t column_idx) {
+	auto &type = types[column_idx];
+	if (type.id() != LogicalTypeId::NUMERIC) {
+		return type;
+	}
+	auto column_stats = stats.CopyStats(StorageIndex(column_idx));
+	if (!column_stats) {
+		return NumericType::DefaultType();
+	}
+	return UnboundedNumericStats::ResolveType(*column_stats);
+}
+
+vector<LogicalType> RowGroupCollection::GetScanTypes() {
+	vector<LogicalType> result;
+	result.reserve(types.size());
+	for (idx_t i = 0; i < types.size(); i++) {
+		result.push_back(GetScanType(i));
+	}
+	return result;
 }
 
 const vector<LogicalType> &RowGroupCollection::GetTypes() const {
@@ -459,9 +482,8 @@ RowGroupIterationHelper::RowGroupIterator::RowGroupIterator(optional_ptr<RowGrou
     : collection(collection), transaction(transaction) {
 	if (collection) {
 		vector<LogicalType> scan_types;
-		auto &types = collection->GetTypes();
 		for (idx_t i = 0; i < column_ids.size(); i++) {
-			scan_types.push_back(types[column_ids[i].GetPrimaryIndex()]);
+			scan_types.push_back(collection->GetScanType(column_ids[i].GetPrimaryIndex()));
 		}
 		chunk = make_uniq<DataChunk>();
 		chunk->Initialize(collection->GetAllocator(), scan_types);
@@ -1039,7 +1061,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	vector<LogicalType> column_types;
 	column_types.reserve(column_ids.size());
 	for (auto &col : column_ids) {
-		column_types.push_back(types[col.GetPrimaryIndex()]);
+		column_types.push_back(GetScanType(col.GetPrimaryIndex()));
 	}
 
 	DataChunk fetch_chunk;
@@ -1357,11 +1379,13 @@ public:
 		for (idx_t c = 0; c < types.size(); c++) {
 			column_ids.emplace_back(c);
 		}
+		// NUMERIC columns are scanned in the representation that holds the values of the whole collection
+		auto scan_types = collection.GetScanTypes();
 		DataChunk scan_chunk;
 		if (remapper) {
 			remapper->InitializeMergeScan(scan_chunk, column_ids);
 		} else {
-			scan_chunk.Initialize(Allocator::DefaultAllocator(), types);
+			scan_chunk.Initialize(Allocator::DefaultAllocator(), scan_types);
 		}
 
 		idx_t current_append_idx = 0;
@@ -1373,7 +1397,7 @@ public:
 
 		TableScanState scan_state;
 		scan_state.Initialize(column_ids);
-		scan_state.table_state.Initialize(QueryContext(), types);
+		scan_state.table_state.Initialize(QueryContext(), scan_types);
 		scan_state.table_state.max_row = idx_t(-1);
 		idx_t merged_groups = 0;
 		idx_t total_row_groups = vacuum_state.row_group_counts.size();
@@ -2371,7 +2395,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 		if (bound_columns[i].IsRowIdColumn()) {
 			scan_types.emplace_back(LogicalType::ROW_TYPE);
 		} else {
-			scan_types.push_back(types[bound_columns[i].GetPrimaryIndex()]);
+			scan_types.push_back(GetScanType(bound_columns[i].GetPrimaryIndex()));
 		}
 	}
 	DataChunk scan_chunk;
@@ -2413,7 +2437,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DuckTr
 	auto physical_index = not_null_constraint.index.index;
 	D_ASSERT(physical_index < types.size());
 
-	scan_types.push_back(types[physical_index]);
+	scan_types.push_back(GetScanType(physical_index));
 	DataChunk scan_chunk;
 	scan_chunk.Initialize(GetAllocator(), scan_types);
 

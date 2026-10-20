@@ -113,7 +113,8 @@ idx_t LocalTableStorage::EstimatedSize() const {
 		idx_t row_size = 0;
 		auto &types = collection.GetTypes();
 		for (auto &type : types) {
-			row_size += GetTypeIdSize(type.InternalType());
+			// NUMERIC columns have no fixed physical type - estimate with the widest common representation
+			row_size += type.id() == LogicalTypeId::NUMERIC ? sizeof(hugeint_t) : GetTypeIdSize(type.InternalType());
 		}
 
 		data_size = appended_rows * row_size;

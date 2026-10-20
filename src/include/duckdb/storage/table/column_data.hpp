@@ -216,8 +216,8 @@ public:
 	                                  vector<ColumnSegmentInfo> &result, const ColumnSegmentInfoScanOptions &options);
 	virtual void Verify(RowGroup &parent);
 
-	FilterPropagateResult CheckZonemap(optional_ptr<ClientContext> context, const StorageIndex &index,
-	                                   TableFilter &filter);
+	virtual FilterPropagateResult CheckZonemap(optional_ptr<ClientContext> context, const StorageIndex &index,
+	                                           TableFilter &filter);
 	//! End of the last vector in [start_row, end_row) that the segment zonemaps do not reject for the filter
 	idx_t ZonemapScanEnd(optional_ptr<ClientContext> context, idx_t start_row, idx_t end_row, TableFilter &filter);
 
@@ -229,6 +229,9 @@ public:
 	void MergeStatistics(const BaseStatistics &other);
 	void MergeIntoStatistics(BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics() const;
+	//! A copy of the statistics of a segment of this column (NUMERIC columns check them against differently typed
+	//! filters)
+	unique_ptr<BaseStatistics> GetSegmentStatistics(SegmentNode<ColumnSegment> &segment);
 	const BaseStatistics &GetStatisticsRef() const;
 
 protected:
@@ -312,6 +315,7 @@ enum class ExtraPersistentColumnDataType : uint8_t {
 	INVALID = 0,
 	VARIANT = 1,
 	GEOMETRY = 2,
+	NUMERIC = 3,
 };
 
 class ExtraPersistentColumnData {
@@ -368,6 +372,21 @@ public:
 	}
 
 	GeometryStorageType storage_type;
+};
+
+class NumericPersistentColumnData final : public ExtraPersistentColumnData {
+public:
+	static constexpr auto TYPE = ExtraPersistentColumnDataType::NUMERIC;
+	NumericPersistentColumnData() : ExtraPersistentColumnData(TYPE) {
+	}
+	NumericPersistentColumnData(const LogicalType &storage_type_p, unique_ptr<BaseStatistics> stats_p)
+	    : ExtraPersistentColumnData(TYPE), storage_type(storage_type_p), stats(std::move(stats_p)) {
+	}
+
+	//! The representation the rows of this row group are stored in
+	LogicalType storage_type;
+	//! The exact value range of the row group (the segments only carry statistics of the storage type)
+	unique_ptr<BaseStatistics> stats;
 };
 
 struct PersistentColumnData {

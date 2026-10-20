@@ -55,6 +55,9 @@ PhysicalInsert::PhysicalInsert(PhysicalPlan &physical_plan, vector<LogicalType> 
 	for (idx_t i = 0; i < columns_to_fetch_p.size(); i++) {
 		auto &id = columns_to_fetch_p[i];
 		D_ASSERT(id < insert_types.size());
+		if (insert_types[id].id() == LogicalTypeId::NUMERIC) {
+			throw NotImplementedException("ON CONFLICT DO UPDATE referring to NUMERIC columns is not supported yet");
+		}
 		types_to_fetch[i] = insert_types[id];
 		columns_to_fetch.emplace_back(id);
 	}
@@ -66,6 +69,18 @@ PhysicalInsert::PhysicalInsert(PhysicalPlan &physical_plan, LogicalOperator &op,
       insert_table(nullptr), return_chunk(false), schema(&schema), info(std::move(info_p)), parallel(parallel),
       action_type(OnConflictAction::THROW), update_is_del_and_insert(false) {
 	GetInsertInfo(*info, insert_types);
+}
+
+void PhysicalInsert::ResolveInsertTypes(vector<LogicalType> &insert_types, const vector<LogicalType> &source_types) {
+	for (idx_t i = 0; i < insert_types.size(); i++) {
+		if (insert_types[i].id() != LogicalTypeId::NUMERIC) {
+			continue;
+		}
+		if (i >= source_types.size()) {
+			throw InternalException("ResolveInsertTypes: no source for NUMERIC column %d", i);
+		}
+		insert_types[i] = source_types[i];
+	}
 }
 
 void PhysicalInsert::GetInsertInfo(const BoundCreateTableInfo &info, vector<LogicalType> &insert_types) {

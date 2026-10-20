@@ -1,4 +1,5 @@
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -240,6 +241,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	}
 }
 
+vector<LogicalType> DataTable::GetScanTypes() {
+	return row_groups->GetScanTypes();
+}
+
 vector<LogicalType> DataTable::GetTypes() {
 	vector<LogicalType> types;
 	for (auto &it : column_definitions) {
@@ -374,7 +379,16 @@ bool DataTable::HasUniqueIndexes() const {
 	return info->indexes.HasUniqueIndexes();
 }
 
+static void CheckIndexableColumns(const vector<ColumnDefinition> &column_definitions) {
+	for (auto &col : column_definitions) {
+		if (col.Type().id() == LogicalTypeId::NUMERIC) {
+			throw NotImplementedException("Indexes on tables with NUMERIC columns are not supported yet");
+		}
+	}
+}
+
 void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
+	CheckIndexableColumns(column_definitions);
 	info->indexes.AddIndex(std::move(index), index_oid, ConstraintCheckMode::DEFAULT);
 }
 
@@ -1021,7 +1035,9 @@ void DataTable::LocalAppend(DuckTableEntry &table, ClientContext &context, Colum
 	map<PhysicalIndex, unique_ptr<Expression>> active_expressions;
 	for (idx_t i = 0; i < column_ids->size(); i++) {
 		auto &col = column_list.GetColumn((*column_ids)[i]);
-		auto expr = make_uniq<BoundReferenceExpression>(col.Name(), col.Type(), i);
+		// the appended data has the type of the collection - for a NUMERIC column that is the representation of the
+		// values, not the declared type
+		auto expr = make_uniq<BoundReferenceExpression>(col.Name(), collection.Types()[i], i);
 		active_expressions[col.Physical()] = std::move(expr);
 	}
 
@@ -1037,7 +1053,8 @@ void DataTable::LocalAppend(DuckTableEntry &table, ClientContext &context, Colum
 
 		auto &col = column_list.GetColumn(PhysicalIndex(i));
 		if (!col.HasDefaultValue()) {
-			auto null_expr = make_uniq<BoundConstantExpression>(Value(col.Type()));
+			auto null_type = col.Type().id() == LogicalTypeId::NUMERIC ? NumericType::DefaultType() : col.Type();
+			auto null_expr = make_uniq<BoundConstantExpression>(Value(null_type));
 			expressions.push_back(std::move(null_expr));
 			continue;
 		}
@@ -1048,9 +1065,13 @@ void DataTable::LocalAppend(DuckTableEntry &table, ClientContext &context, Colum
 		expressions.push_back(std::move(bound_default));
 	}
 
+	vector<LogicalType> result_types;
+	for (auto &expr : expressions) {
+		result_types.push_back(expr->GetReturnType());
+	}
 	ExpressionExecutor expression_executor(context, expressions);
 	DataChunk result;
-	result.Initialize(context, table.GetTypes());
+	result.Initialize(context, result_types);
 
 	for (auto &chunk : collection.Chunks()) {
 		expression_executor.Execute(chunk, result);
@@ -1132,9 +1153,8 @@ void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, 
 	vector<StorageIndex> column_ids;
 	vector<LogicalType> types;
 	for (idx_t i = 0; i < this->column_definitions.size(); i++) {
-		auto &col = this->column_definitions[i];
 		column_ids.emplace_back(i);
-		types.push_back(col.Type());
+		types.push_back(row_groups->GetScanType(i));
 	}
 	DataChunk chunk;
 	chunk.Initialize(Allocator::Get(db), types);
@@ -1677,6 +1697,7 @@ bool DataTable::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegment
 void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes,
                          const IndexConstraintType type, IndexStorageInfo index_info, idx_t index_oid,
                          const ConstraintCheckMode check_mode) {
+	CheckIndexableColumns(column_definitions);
 	if (!IsMainTable()) {
 		throw TransactionException("Transaction conflict: attempting to add an index to table %s but it has been "
 		                           "%s by a different transaction",

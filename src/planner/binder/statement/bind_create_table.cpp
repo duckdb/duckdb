@@ -1,4 +1,5 @@
 #include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/constraints/list.hpp"
@@ -368,7 +369,9 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 			bound_default = default_value_binder.Bind(default_copy);
 		} else {
 			// no default value specified: push a default value of constant null
-			bound_default = make_uniq<BoundConstantExpression>(Value(column.Type()));
+			// a NUMERIC column has no representation of its own - its NULLs take the default representation
+			auto null_type = column.Type().id() == LogicalTypeId::NUMERIC ? NumericType::DefaultType() : column.Type();
+			bound_default = make_uniq<BoundConstantExpression>(Value(null_type));
 		}
 		bound_defaults.push_back(std::move(bound_default));
 	}

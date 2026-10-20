@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/storage/statistics/unbounded_numeric_stats.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/transaction/commit_state.hpp"
@@ -753,7 +754,7 @@ bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo 
 					supported = false;
 					break;
 				}
-				auto column_stats = GetStatistics(storage_index);
+				auto column_stats = GetBoundStatistics(storage_index);
 				if (!column_stats) {
 					supported = false;
 					break;
@@ -1364,7 +1365,9 @@ void RowGroup::Update(TransactionData transaction, DuckTableEntry &table_entry, 
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
 		auto &col_data = GetColumn(column.index);
-		D_ASSERT(col_data.type.id() == update_chunk.data[i].GetType().id());
+		// a NUMERIC column is updated with vectors of the representation it is bound to
+		D_ASSERT(col_data.type.id() == update_chunk.data[i].GetType().id() ||
+		         col_data.type.id() == LogicalTypeId::NUMERIC);
 		if (offset > 0) {
 			Vector sliced_vector(update_chunk.data[i], offset, offset + count);
 			sliced_vector.Flatten();
@@ -1411,6 +1414,16 @@ unique_ptr<BaseStatistics> RowGroup::GetStatistics(const StorageIndex &column_id
 		return column_stats;
 	}
 	return column_stats->PushdownExtract(column_idx.GetChildIndex(0));
+}
+
+unique_ptr<BaseStatistics> RowGroup::GetBoundStatistics(const StorageIndex &column_idx) const {
+	auto column_stats = GetStatistics(column_idx);
+	if (column_stats && column_stats->GetStatsType() == StatisticsType::UNBOUNDED_NUMERIC_STATS) {
+		// describe the NUMERIC column in the representation the table is bound to
+		auto bound_type = GetCollection().GetScanType(column_idx.GetPrimaryIndex());
+		return UnboundedNumericStats::ToTyped(*column_stats, bound_type).ToUnique();
+	}
+	return column_stats;
 }
 
 void RowGroup::MergeStatistics(idx_t column_idx, const BaseStatistics &other) {
@@ -2052,7 +2065,7 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	const bool is_exact;
 
 	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
-		return row_group->GetStatistics(storage_index);
+		return row_group->GetBoundStatistics(storage_index);
 	}
 
 	bool MinMaxIsExact(const StorageIndex &) override {

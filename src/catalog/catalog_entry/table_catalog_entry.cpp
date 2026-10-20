@@ -373,6 +373,13 @@ LogicalType TableCatalogEntry::GetExpectedTypeForInsert(const ColumnDefinition &
 	return column.Type();
 }
 
+LogicalType TableCatalogEntry::GetBoundColumnType(ClientContext &context, const ColumnDefinition &column) {
+	if (column.Type().id() == LogicalTypeId::NUMERIC) {
+		throw NotImplementedException("NUMERIC columns are only supported in DuckDB tables");
+	}
+	return column.Type();
+}
+
 unique_ptr<Expression> TableCatalogEntry::GetDefaultExpressionForColumn(ClientContext &context,
                                                                         const LogicalType &input_type,
                                                                         const LogicalType &result_type,

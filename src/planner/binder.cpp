@@ -590,6 +590,9 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	vector<ColumnIndex> bound_columns;
 	idx_t column_count = 0;
 	for (auto &col : table.GetColumns().Logical()) {
+		if (col.Type().id() == LogicalTypeId::NUMERIC) {
+			throw NotImplementedException("RETURNING on a table with NUMERIC columns is not supported yet");
+		}
 		names.emplace_back(col.Name());
 		types.push_back(col.Type());
 		if (!col.Generated()) {

@@ -696,7 +696,9 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 		} else if (col_idx.HasType()) {
 			g_state->scanned_types.push_back(col_idx.GetScanType());
 		} else {
-			g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
+			// NUMERIC columns are scanned in the representation they are bound to
+			g_state->scanned_types.push_back(
+			    duck_table.GetBoundColumnType(context, columns.GetColumn(col_idx.ToLogical())));
 		}
 	}
 	return std::move(g_state);
@@ -722,7 +724,9 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 		} else if (col_idx.HasType()) {
 			g_state->scanned_types.emplace_back(col_idx.GetScanType());
 		} else {
-			g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
+			// NUMERIC columns are scanned in the representation they are bound to
+			g_state->scanned_types.push_back(
+			    duck_table.GetBoundColumnType(context, columns.GetColumn(col_idx.ToLogical())));
 		}
 	}
 

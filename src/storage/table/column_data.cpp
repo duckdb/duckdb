@@ -21,6 +21,7 @@
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/storage/table/array_column_data.hpp"
 #include "duckdb/storage/table/geo_column_data.hpp"
+#include "duckdb/storage/table/numeric_column_data.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/table/variant_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
@@ -520,6 +521,11 @@ FilterPropagateResult ColumnData::CheckSegmentStatistics(optional_ptr<ClientCont
 	lock_guard<mutex> l(stats_lock);
 	auto &segment_stats = segment.GetNode().GetStatsMutable();
 	return context ? expr_filter.CheckStatistics(*context, segment_stats) : expr_filter.CheckStatistics(segment_stats);
+}
+
+unique_ptr<BaseStatistics> ColumnData::GetSegmentStatistics(SegmentNode<ColumnSegment> &segment) {
+	lock_guard<mutex> l(stats_lock);
+	return segment.GetNode().GetStats().ToUnique();
 }
 
 idx_t ColumnData::ZonemapScanEnd(optional_ptr<ClientContext> context, idx_t start_row, idx_t end_row,
@@ -1108,6 +1114,16 @@ static PersistentColumnData GetPersistentColumnDataType(Deserializer &deserializ
 		result.extra_data = std::move(extra_data);
 		return result;
 	}
+	case ExtraPersistentColumnDataType::NUMERIC: {
+		if (column_type.id() != LogicalTypeId::NUMERIC) {
+			throw DataCorruptionException("NUMERIC column data found for a column of type %s", column_type);
+		}
+		// the row group is stored in the representation recorded with it
+		const auto &numeric_data = extra_data->Cast<NumericPersistentColumnData>();
+		PersistentColumnData result(numeric_data.storage_type);
+		result.extra_data = std::move(extra_data);
+		return result;
+	}
 	default:
 		throw InternalException("");
 	}
@@ -1126,6 +1142,15 @@ PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserialize
 			auto &variant_data = result.extra_data->Cast<VariantPersistentColumnData>();
 			result.DeserializeField(deserializer, 103, "shredded", variant_data.logical_type);
 		}
+		return result;
+	}
+
+	if (result.extra_data && result.extra_data->GetType() == ExtraPersistentColumnDataType::NUMERIC) {
+		// the data pointers carry statistics of the storage type, not of the NUMERIC column type
+		deserializer.Set<const LogicalType &>(type);
+		deserializer.ReadPropertyWithDefault(100, "data_pointers", result.pointers);
+		result.DeserializeField(deserializer, 101, "validity", LogicalTypeId::VALIDITY);
+		deserializer.Unset<LogicalType>();
 		return result;
 	}
 
@@ -1304,6 +1329,14 @@ void ExtraPersistentColumnData::Serialize(Serializer &serializer) const {
 		const auto &geometry_data = Cast<GeometryPersistentColumnData>();
 		serializer.WritePropertyWithDefault(101, "storage_type", geometry_data.storage_type, GeometryStorageType::WKB);
 	} break;
+	case ExtraPersistentColumnDataType::NUMERIC: {
+		const auto &numeric_data = Cast<NumericPersistentColumnData>();
+		serializer.WriteProperty<LogicalType>(101, "storage_type", numeric_data.storage_type);
+		serializer.WritePropertyWithDefault<bool>(102, "has_statistics", numeric_data.stats != nullptr, false);
+		if (numeric_data.stats) {
+			serializer.WriteProperty(103, "statistics", *numeric_data.stats);
+		}
+	} break;
 	default:
 		throw InternalException("Unknown PersistentColumnData type");
 	}
@@ -1321,6 +1354,17 @@ unique_ptr<ExtraPersistentColumnData> ExtraPersistentColumnData::Deserialize(Des
 		const auto storage_type = deserializer.ReadPropertyWithExplicitDefault<GeometryStorageType>(
 		    101, "storage_type", GeometryStorageType::WKB);
 		return make_uniq<GeometryPersistentColumnData>(storage_type);
+	}
+	case ExtraPersistentColumnDataType::NUMERIC: {
+		auto storage_type = deserializer.ReadProperty<LogicalType>(101, "storage_type");
+		unique_ptr<BaseStatistics> stats;
+		if (deserializer.ReadPropertyWithExplicitDefault<bool>(102, "has_statistics", false)) {
+			// the statistics are those of the NUMERIC column, not of the storage type
+			deserializer.Set<const LogicalType &>(LogicalType::NUMERIC);
+			stats = deserializer.ReadProperty<BaseStatistics>(103, "statistics").ToUnique();
+			deserializer.Unset<LogicalType>();
+		}
+		return make_uniq<NumericPersistentColumnData>(storage_type, std::move(stats));
 	}
 	default:
 		throw InternalException("Unknown PersistentColumnData type");
@@ -1482,6 +1526,9 @@ shared_ptr<ColumnData> ColumnData::CreateColumn(BlockManager &block_manager, Dat
 	}
 	if (type.id() == LogicalTypeId::VARIANT) {
 		return make_shared_ptr<VariantColumnData>(block_manager, info, column_index, type, data_type, parent);
+	}
+	if (type.id() == LogicalTypeId::NUMERIC) {
+		return make_shared_ptr<NumericColumnData>(block_manager, info, column_index, type, data_type, parent);
 	}
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		return make_shared_ptr<StructColumnData>(block_manager, info, column_index, type, data_type, parent);

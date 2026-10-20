@@ -7,6 +7,7 @@
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/array_stats.hpp"
+#include "duckdb/storage/statistics/unbounded_numeric_stats.hpp"
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -78,6 +79,9 @@ StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
 	}
 	if (type.id() == LogicalTypeId::VARIANT) {
 		return StatisticsType::VARIANT_STATS;
+	}
+	if (type.id() == LogicalTypeId::NUMERIC) {
+		return StatisticsType::UNBOUNDED_NUMERIC_STATS;
 	}
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
@@ -176,6 +180,9 @@ void BaseStatistics::Merge(const BaseStatistics &other, StatsMergeType merge_typ
 	case StatisticsType::VARIANT_STATS:
 		VariantStats::Merge(*this, other);
 		break;
+	case StatisticsType::UNBOUNDED_NUMERIC_STATS:
+		UnboundedNumericStats::Merge(*this, other);
+		break;
 	default:
 		break;
 	}
@@ -226,6 +233,8 @@ BaseStatistics BaseStatistics::CreateUnknownType(LogicalType type) {
 		return GeometryStats::CreateUnknown(std::move(type));
 	case StatisticsType::VARIANT_STATS:
 		return VariantStats::CreateUnknown(std::move(type));
+	case StatisticsType::UNBOUNDED_NUMERIC_STATS:
+		return UnboundedNumericStats::CreateUnknown(std::move(type));
 	default:
 		return BaseStatistics(std::move(type));
 	}
@@ -247,6 +256,8 @@ BaseStatistics BaseStatistics::CreateEmptyType(LogicalType type) {
 		return GeometryStats::CreateEmpty(std::move(type));
 	case StatisticsType::VARIANT_STATS:
 		return VariantStats::CreateEmpty(std::move(type));
+	case StatisticsType::UNBOUNDED_NUMERIC_STATS:
+		return UnboundedNumericStats::CreateEmpty(std::move(type));
 	default:
 		return BaseStatistics(std::move(type));
 	}
@@ -293,6 +304,9 @@ void BaseStatistics::Copy(const BaseStatistics &other) {
 		break;
 	case StatisticsType::STRING_STATS:
 		StringStats::Copy(*this, other);
+		break;
+	case StatisticsType::UNBOUNDED_NUMERIC_STATS:
+		UnboundedNumericStats::Copy(*this, other);
 		break;
 	default:
 		break;
@@ -419,6 +433,9 @@ void BaseStatistics::Serialize(Serializer &serializer) const {
 		case StatisticsType::VARIANT_STATS:
 			VariantStats::Serialize(*this, serializer);
 			break;
+		case StatisticsType::UNBOUNDED_NUMERIC_STATS:
+			UnboundedNumericStats::Serialize(*this, serializer);
+			break;
 		default:
 			break;
 		}
@@ -463,6 +480,9 @@ BaseStatistics BaseStatistics::Deserialize(Deserializer &deserializer) {
 		case StatisticsType::VARIANT_STATS:
 			VariantStats::Deserialize(obj, stats);
 			break;
+		case StatisticsType::UNBOUNDED_NUMERIC_STATS:
+			UnboundedNumericStats::Deserialize(obj, stats);
+			break;
 		default:
 			break;
 		}
@@ -495,6 +515,9 @@ Value BaseStatistics::ToStruct() const {
 	case StatisticsType::VARIANT_STATS:
 		children = VariantStats::ToStruct(*this);
 		break;
+	case StatisticsType::UNBOUNDED_NUMERIC_STATS:
+		children = UnboundedNumericStats::ToStruct(*this);
+		break;
 	default:
 		break;
 	}
@@ -512,7 +535,8 @@ string BaseStatistics::ToString() const {
 
 void BaseStatistics::Verify(const Vector &vector, const SelectionVector &sel, idx_t count,
                             const bool ignore_has_null) const {
-	D_ASSERT(vector.GetType() == this->type);
+	// NUMERIC statistics describe vectors of the column's bound representation, never of the NUMERIC type itself
+	D_ASSERT(vector.GetType() == this->type || GetStatsType() == StatisticsType::UNBOUNDED_NUMERIC_STATS);
 	switch (GetStatsType()) {
 	case StatisticsType::NUMERIC_STATS:
 		NumericStats::Verify(*this, vector, sel, count);
@@ -624,6 +648,10 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 			GeometryStats::Update(result, string_t(string_value));
 		}
 		return result;
+	}
+	case StatisticsType::UNBOUNDED_NUMERIC_STATS: {
+		// a NUMERIC constant is always NULL - no expression has the NUMERIC type itself
+		return UnboundedNumericStats::CreateEmpty(input.type());
 	}
 	case StatisticsType::VARIANT_STATS: {
 		auto result = VariantStats::CreateEmpty(input.type());

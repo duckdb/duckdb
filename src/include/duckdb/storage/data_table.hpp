@@ -91,6 +91,8 @@ public:
 
 	//! Returns a list of types of the table
 	vector<LogicalType> GetTypes();
+	//! The types a scan produces - NUMERIC columns in the representation that holds their values
+	vector<LogicalType> GetScanTypes();
 	const vector<ColumnDefinition> &Columns() const;
 
 	void InitializeScan(ClientContext &context, DuckTransaction &transaction, TableScanState &state,

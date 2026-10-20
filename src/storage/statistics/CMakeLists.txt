@@ -11,7 +11,8 @@ add_library_unity(
   string_stats.cpp
   struct_stats.cpp
   geometry_stats.cpp
-  variant_stats.cpp)
+  variant_stats.cpp
+  unbounded_numeric_stats.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_storage_statistics>
     PARENT_SCOPE)

@@ -1,0 +1,220 @@
+# name: test/sql/types/numeric/numeric_type_widening.test
+# description: Widening NUMERIC columns inside transactions, from other tables and through prepared statements
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t(n NUMERIC);
+
+# two appends of different representations into the same row group of a transaction
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO t SELECT i FROM range(3000) tbl(i);
+
+query I
+SELECT typeof(n) FROM t LIMIT 1;
+----
+SMALLINT
+
+statement ok
+INSERT INTO t SELECT i * 1000000000000 FROM range(10) tbl(i);
+
+query I
+SELECT typeof(n) FROM t LIMIT 1;
+----
+BIGINT
+
+query III
+SELECT count(*), sum(n), max(n) FROM t;
+----
+3010	45000004498500	9000000000000
+
+statement ok
+INSERT INTO t VALUES (-0.5);
+
+query I
+SELECT typeof(n) FROM t LIMIT 1;
+----
+DECIMAL(14,1)
+
+query III
+SELECT count(*), sum(n), min(n) FROM t;
+----
+3011	45000004498499.5	-0.5
+
+statement ok
+COMMIT;
+
+query III
+SELECT count(*), sum(n), min(n) FROM t;
+----
+3011	45000004498499.5	-0.5
+
+query I
+SELECT n FROM t WHERE n > 100 AND n < 110 ORDER BY n;
+----
+101.0
+102.0
+103.0
+104.0
+105.0
+106.0
+107.0
+108.0
+109.0
+
+# a rolled back append does not change the column
+statement ok
+CREATE TABLE r(n NUMERIC);
+
+statement ok
+INSERT INTO r VALUES (1);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO r VALUES (123456789012345678901234567890);
+
+query I
+SELECT typeof(n) FROM r LIMIT 1;
+----
+HUGEINT
+
+statement ok
+ROLLBACK;
+
+query II
+SELECT typeof(n), count(*) FROM r GROUP BY ALL;
+----
+TINYINT	1
+
+# inserting from another table
+statement ok
+CREATE TABLE source(b BIGINT, d DECIMAL(20, 4));
+
+statement ok
+INSERT INTO source VALUES (1, 1.0001), (-5000000000, 99999999999999.9999);
+
+statement ok
+INSERT INTO r SELECT b FROM source;
+
+query I
+SELECT typeof(n) FROM r LIMIT 1;
+----
+BIGINT
+
+statement ok
+INSERT INTO r SELECT d FROM source;
+
+query I
+SELECT typeof(n) FROM r LIMIT 1;
+----
+DECIMAL(18,4)
+
+query I
+SELECT n FROM r ORDER BY n;
+----
+-5000000000.0000
+1.0000
+1.0000
+1.0001
+99999999999999.9999
+
+# prepared statements take the representation of the bound value
+statement ok
+CREATE TABLE p(n NUMERIC);
+
+statement ok
+PREPARE ins AS INSERT INTO p VALUES ($1);
+
+statement ok
+EXECUTE ins(5);
+
+query I
+SELECT typeof(n) FROM p LIMIT 1;
+----
+TINYINT
+
+statement ok
+EXECUTE ins(2.5);
+
+query I
+SELECT typeof(n) FROM p LIMIT 1;
+----
+DECIMAL(2,1)
+
+statement ok
+EXECUTE ins(NULL);
+
+query I
+SELECT n FROM p ORDER BY n NULLS LAST;
+----
+2.5
+5.0
+NULL
+
+# updates that fit the stored representation work, widening updates are not supported yet
+statement ok
+UPDATE p SET n = 7 WHERE n = 5;
+
+query I
+SELECT n FROM p ORDER BY n NULLS LAST;
+----
+2.5
+7.0
+NULL
+
+statement error
+UPDATE p SET n = 123456789012345678901234567890 WHERE n = 7;
+----
+not supported yet
+
+# joins and grouping use the bound representation
+query II
+SELECT r.n, count(*) FROM r JOIN p ON r.n = p.n GROUP BY ALL ORDER BY ALL;
+----
+
+query II
+SELECT n, count(*) FROM r GROUP BY n ORDER BY n;
+----
+-5000000000.0000	1
+1.0000	2
+1.0001	1
+99999999999999.9999	1
+
+# not supported yet
+statement error
+INSERT INTO p VALUES (1) RETURNING n;
+----
+not supported yet
+
+statement error
+ALTER TABLE p ADD COLUMN m NUMERIC;
+----
+not supported yet
+
+statement error
+ALTER TABLE p ALTER COLUMN n SET DATA TYPE INTEGER;
+----
+not supported yet
+
+statement error
+CREATE INDEX idx ON p(n);
+----
+not supported yet
+
+statement error
+CREATE TABLE pk(n NUMERIC PRIMARY KEY);
+----
+not supported yet
+
+# constraints over NUMERIC columns would need the bound representation at binding time
+statement error
+CREATE TABLE chk(n NUMERIC CHECK (n > 0));
+----
+NUMERIC

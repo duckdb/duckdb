@@ -932,6 +932,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (table.temporary) {
 			stmt.info->temporary = true;
 		}
+		for (auto &col : table.GetColumns().Logical()) {
+			if (col.Type().id() == LogicalTypeId::NUMERIC) {
+				throw NotImplementedException("Indexes on tables with NUMERIC columns are not supported yet");
+			}
+		}
 		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::CREATE_INDEX);
 		result.plan = table.catalog.BindCreateIndex(*this, stmt, table, std::move(plan));
 		break;

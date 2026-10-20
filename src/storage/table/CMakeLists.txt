@@ -11,6 +11,7 @@ add_library_unity(
   geo_column_data.cpp
   array_column_data.cpp
   list_column_data.cpp
+  numeric_column_data.cpp
   in_memory_checkpoint.cpp
   update_segment.cpp
   per_column_metadata_blocks.cpp

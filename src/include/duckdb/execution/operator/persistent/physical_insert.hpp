@@ -160,6 +160,9 @@ public:
 
 public:
 	static void GetInsertInfo(const BoundCreateTableInfo &info, vector<LogicalType> &insert_types);
+	//! NUMERIC columns have no representation of their own: the inserted chunks carry the representation of the
+	//! source, which the storage widens to as needed
+	static void ResolveInsertTypes(vector<LogicalType> &insert_types, const vector<LogicalType> &source_types);
 
 protected:
 	void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,

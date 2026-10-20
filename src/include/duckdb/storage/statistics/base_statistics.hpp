@@ -43,7 +43,8 @@ enum class StatisticsType : uint8_t {
 	BASE_STATS,
 	ARRAY_STATS,
 	GEOMETRY_STATS,
-	VARIANT_STATS
+	VARIANT_STATS,
+	UNBOUNDED_NUMERIC_STATS
 };
 
 struct ExtraStatsData {
@@ -69,6 +70,7 @@ class BaseStatistics {
 	friend struct ArrayStats;
 	friend struct GeometryStats;
 	friend struct VariantStats;
+	friend struct UnboundedNumericStats;
 
 public:
 	DUCKDB_API ~BaseStatistics();

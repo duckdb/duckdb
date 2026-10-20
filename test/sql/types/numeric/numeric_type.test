@@ -1,0 +1,240 @@
+# name: test/sql/types/numeric/numeric_type.test
+# description: NUMERIC columns take the representation of the values they hold
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t(n NUMERIC);
+
+# the catalog keeps the declared type
+query I
+SELECT column_type FROM (DESCRIBE t);
+----
+NUMERIC
+
+# an empty column is bound to the default representation
+query I
+SELECT typeof(max(n)) FROM t;
+----
+INTEGER
+
+statement ok
+INSERT INTO t VALUES (1), (2), (3);
+
+query I
+SELECT typeof(n) FROM t LIMIT 1;
+----
+TINYINT
+
+query I
+SELECT n FROM t ORDER BY n;
+----
+1
+2
+3
+
+# values that do not fit widen the representation
+statement ok
+INSERT INTO t VALUES (1000);
+
+query I
+SELECT typeof(n) FROM t LIMIT 1;
+----
+SMALLINT
+
+statement ok
+INSERT INTO t VALUES (100000), (-100000);
+
+query I
+SELECT typeof(n) FROM t LIMIT 1;
+----
+INTEGER
+
+statement ok
+INSERT INTO t VALUES (10000000000);
+
+query I
+SELECT typeof(n) FROM t LIMIT 1;
+----
+BIGINT
+
+query III
+SELECT min(n), max(n), sum(n) FROM t;
+----
+-100000	10000000000	10000001006
+
+# fractional values turn the column into a decimal with the scale they need
+statement ok
+INSERT INTO t VALUES (1.5);
+
+query I
+SELECT typeof(n) FROM t LIMIT 1;
+----
+DECIMAL(12,1)
+
+statement ok
+INSERT INTO t VALUES (0.25);
+
+query I
+SELECT typeof(n) FROM t LIMIT 1;
+----
+DECIMAL(13,2)
+
+query I
+SELECT n FROM t ORDER BY n;
+----
+-100000.00
+0.25
+1.00
+1.50
+2.00
+3.00
+1000.00
+100000.00
+10000000000.00
+
+# filters, including ones that prune row groups by their statistics
+query I
+SELECT n FROM t WHERE n > 1000 ORDER BY n;
+----
+100000.00
+10000000000.00
+
+query I
+SELECT n FROM t WHERE n = 1.5;
+----
+1.50
+
+query I
+SELECT count(*) FROM t WHERE n < 0;
+----
+1
+
+query I
+SELECT count(*) FROM t WHERE n > 100000000000;
+----
+0
+
+query I
+SELECT count(*) FROM t WHERE n IS NULL;
+----
+0
+
+# NULLs
+statement ok
+INSERT INTO t VALUES (NULL);
+
+query I
+SELECT count(*) FROM t WHERE n IS NULL;
+----
+1
+
+query I
+SELECT typeof(n) FROM t LIMIT 1;
+----
+DECIMAL(13,2)
+
+# beyond 38 digits the column becomes a wide decimal
+statement ok
+INSERT INTO t VALUES ('123456789012345678901234567890123456789012.5'::DECIMAL(45,1));
+
+query I
+SELECT typeof(n) FROM t LIMIT 1;
+----
+DECIMAL(44,2)
+
+query I
+SELECT max(n) FROM t;
+----
+123456789012345678901234567890123456789012.50
+
+# a NUMERIC that only ever held NULLs stays in the default representation
+statement ok
+CREATE TABLE nulls(n NUMERIC);
+
+statement ok
+INSERT INTO nulls VALUES (NULL), (NULL);
+
+query II
+SELECT typeof(n), count(*) FROM nulls GROUP BY ALL;
+----
+INTEGER	2
+
+# the default representation is also used for NULL defaults and DEFAULT VALUES
+statement ok
+CREATE TABLE defaults(i INTEGER, n NUMERIC, m NUMERIC DEFAULT 7.25);
+
+statement ok
+INSERT INTO defaults (i) VALUES (1);
+
+statement ok
+INSERT INTO defaults DEFAULT VALUES;
+
+query III
+SELECT i, n, m FROM defaults ORDER BY i NULLS LAST;
+----
+1	NULL	7.25
+NULL	NULL	7.25
+
+query II
+SELECT typeof(n), typeof(m) FROM defaults LIMIT 1;
+----
+INTEGER	DECIMAL(3,2)
+
+# NUMERIC(width, scale) is a DECIMAL as before
+statement ok
+CREATE TABLE d(x NUMERIC(10, 2));
+
+query I
+SELECT column_type FROM (DESCRIBE d);
+----
+DECIMAL(10,2)
+
+# casts to NUMERIC keep the type of exact values
+query I
+SELECT typeof(42::NUMERIC);
+----
+INTEGER
+
+query I
+SELECT typeof(1.5::NUMERIC);
+----
+DECIMAL(2,1)
+
+query I
+SELECT typeof(NULL::NUMERIC);
+----
+INTEGER
+
+# values that are not exact numbers are rejected
+statement error
+SELECT 1.5::DOUBLE::NUMERIC;
+----
+Cannot cast DOUBLE to NUMERIC
+
+statement error
+SELECT '1.5'::NUMERIC;
+----
+Cannot cast VARCHAR to NUMERIC
+
+statement error
+INSERT INTO t VALUES (1.5::FLOAT);
+----
+Cannot cast FLOAT to NUMERIC
+
+# NUMERIC is a column type, not a nested type
+statement error
+CREATE TABLE nested(l NUMERIC[]);
+----
+NUMERIC is only supported as the type of a column
+
+# CREATE TABLE AS stores the representation the query produced
+statement ok
+CREATE TABLE copy AS SELECT n FROM t;
+
+query I
+SELECT column_type FROM (DESCRIBE copy);
+----
+DECIMAL(44,2)

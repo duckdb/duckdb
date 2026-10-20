@@ -134,6 +134,9 @@ struct ColumnScanState {
 	unique_ptr<PushedDownExpressionState> expression_state;
 	//! Whether or not updates should be allowed
 	UpdateScanType update_scan_type = UpdateScanType::STANDARD;
+	//! The column a NUMERIC column scan reads from - pinned when the scan is initialized so that the row group's
+	//! storage type can change underneath a running scan
+	shared_ptr<ColumnData> pinned_column;
 
 public:
 	void PushDownCast(const LogicalType &original_type, const LogicalType &cast_type);

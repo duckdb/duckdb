@@ -119,6 +119,7 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 		    std::move(set_expressions), std::move(set_columns), std::move(set_types), cardinality, op.return_chunk,
 		    !op.return_chunk, OnConflictAction::THROW, nullptr, nullptr, std::move(on_conflict_filter),
 		    std::move(columns_to_fetch), false);
+		PhysicalInsert::ResolveInsertTypes(result->op->Cast<PhysicalInsert>().insert_types, action_input.GetTypes());
 		result->op->children.push_back(action_input);
 		break;
 	}

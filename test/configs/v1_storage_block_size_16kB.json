@@ -13,6 +13,15 @@
   "inherit_skip_tests": "test/configs/force_storage.json",
   "skip_tests": [
     {
+      "reason": "NUMERIC columns require storage version v2.0.0 or higher.",
+      "paths": [
+        "test/sql/types/numeric/numeric_type.test",
+        "test/sql/types/numeric/numeric_type_storage.test",
+        "test/sql/types/numeric/numeric_type_widening.test",
+        "test/sql/types/numeric/test_empty_numeric.test"
+      ]
+    },
+    {
       "reason": "DECIMAL columns wider than 38 digits require storage version v2.0.0 or higher.",
       "paths": [
         "test/sql/types/decimal/wide_decimal_arithmetic.test",

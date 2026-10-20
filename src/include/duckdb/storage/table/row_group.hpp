@@ -271,6 +271,8 @@ public:
 	void MergeIntoStatistics(TableStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx) const;
 	unique_ptr<BaseStatistics> GetStatistics(const StorageIndex &column_idx) const;
+	//! The statistics as seen by queries: NUMERIC columns are described in the representation the table is bound to
+	unique_ptr<BaseStatistics> GetBoundStatistics(const StorageIndex &column_idx) const;
 
 	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result,
 	                          const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {});

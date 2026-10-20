@@ -349,7 +349,7 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSe
 	vector<reference<SegmentNode<RowGroup>>> ambiguous_groups;
 	multimap<Value, RowGroupSegmentNodeEntry> row_group_map;
 	for (auto &row_group : row_groups.SegmentNodes()) {
-		auto stats = row_group.GetNode().GetStatistics(options.column_idx);
+		auto stats = row_group.GetNode().GetBoundStatistics(StorageIndex(options.column_idx));
 		if (!stats) {
 			ambiguous_groups.push_back(row_group);
 			continue;

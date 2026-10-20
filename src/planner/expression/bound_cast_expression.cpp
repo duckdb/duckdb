@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
@@ -36,6 +37,10 @@ static unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr,
 	D_ASSERT(expr);
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = expr->Cast<BoundParameterExpression>();
+		if (target_type.id() == LogicalTypeId::NUMERIC) {
+			// the parameter keeps the type of the value bound to it - the storage accepts any exact representation
+			return expr;
+		}
 		if (!target_type.IsValid()) {
 			// invalidate the parameter
 			parameter.ParameterData()->return_type = LogicalType::INVALID;
@@ -78,6 +83,20 @@ static unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr,
 	}
 	if (!target_type.IsValid()) {
 		return expr;
+	}
+	if (target_type.id() == LogicalTypeId::NUMERIC) {
+		// NUMERIC has no representation of its own: exact numbers keep their type and NULLs take the default
+		// representation, the storage picks the representation of the rows
+		auto &source_type = expr->GetReturnType();
+		if (source_type.id() == LogicalTypeId::SQLNULL) {
+			return AddCastToTypeInternal(std::move(expr), NumericType::DefaultType(), cast_functions, get_input,
+			                             try_cast, bind_source);
+		}
+		if (NumericType::IsExact(source_type)) {
+			return expr;
+		}
+		throw BinderException(*expr, "Cannot cast %s to NUMERIC: %s", source_type.ToString(),
+		                      NumericType::NotExactMessage(source_type));
 	}
 
 	auto cast_function = cast_functions.GetCastFunction(expr->GetReturnType(), target_type, get_input);

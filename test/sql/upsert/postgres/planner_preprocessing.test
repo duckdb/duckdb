@@ -152,7 +152,7 @@ drop table excluded;
 # check that references to columns after dropped columns are handled correctly
 
 statement ok
-create table dropcol(key int primary key, drop1 int, keep1 text, drop2 numeric, keep2 float);
+create table dropcol(key int primary key, drop1 int, keep1 text, drop2 decimal(18, 3), keep2 float);
 
 statement ok
 insert into dropcol(key, drop1, keep1, drop2, keep2) values(1, 1, '1', '1', 1);

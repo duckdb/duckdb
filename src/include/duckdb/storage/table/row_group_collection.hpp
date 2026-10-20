@@ -204,6 +204,10 @@ public:
 	bool SupportsPerColumnWrites() const;
 	bool SupportsPerColumnWrites();
 	const vector<LogicalType> &GetTypes() const;
+	//! The type a scan of the column produces: the column type, or for a NUMERIC column the representation that holds
+	//! the values of this collection
+	LogicalType GetScanType(idx_t column_idx);
+	vector<LogicalType> GetScanTypes();
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
 	                                         ExpressionExecutor &default_executor);

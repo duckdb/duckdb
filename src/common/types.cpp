@@ -137,6 +137,7 @@ static bool TryGetBuiltinPhysicalType(LogicalTypeId id, PhysicalType &result) no
 	case LogicalTypeId::STRING_LITERAL:
 	case LogicalTypeId::INTEGER_LITERAL:
 	case LogicalTypeId::TEMPLATE:
+	case LogicalTypeId::NUMERIC:
 		result = PhysicalType::INVALID;
 		return true;
 	case LogicalTypeId::UNBOUND:

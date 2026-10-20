@@ -42,6 +42,9 @@ public:
 	//! Get statistics of a column (physical or virtual) within the table
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const StorageIndex &storage_index);
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
+	//! The statistics as kept by the storage - for NUMERIC columns the unbounded statistics that decide the bound type
+	unique_ptr<BaseStatistics> GetStorageStatistics(ClientContext &context, const StorageIndex &storage_index);
+	LogicalType GetBoundColumnType(ClientContext &context, const ColumnDefinition &column) override;
 
 	unique_ptr<BlockingSample> GetSample() override;
 

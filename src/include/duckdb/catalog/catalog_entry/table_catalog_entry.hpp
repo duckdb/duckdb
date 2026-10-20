@@ -148,6 +148,9 @@ public:
 	bool HasPrimaryKey() const;
 
 	virtual LogicalType GetExpectedTypeForInsert(const ColumnDefinition &column) const;
+	//! The type a scan of the column produces - the declared type, except for NUMERIC columns, which are bound to the
+	//! representation that holds their current values
+	virtual LogicalType GetBoundColumnType(ClientContext &context, const ColumnDefinition &column);
 	virtual unique_ptr<Expression> GetDefaultExpressionForColumn(ClientContext &context, const LogicalType &input_type,
 	                                                             const LogicalType &result_type, ColumnBinding binding,
 	                                                             const Expression &constant_value) const;
