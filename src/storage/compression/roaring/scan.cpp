@@ -188,6 +188,12 @@ void CompressedRunContainerScanState::VerifyWrittenData() const {
 template struct RunContainerScanState<UncompressedRunContainerScanState>;
 template struct RunContainerScanState<CompressedRunContainerScanState>;
 
+//! ArrayContainer
+
+[[noreturn]] void ThrowRoaringInvalidArray() {
+	throw DataCorruptionException("Corrupted Roaring segment: invalid array position or ordering");
+}
+
 //! BitsetContainer
 
 BitsetContainerScanState::BitsetContainerScanState(idx_t container_index, idx_t container_size,

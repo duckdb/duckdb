@@ -493,6 +493,8 @@ private:
 
 //! ARRAY Container
 
+[[noreturn]] void ThrowRoaringInvalidArray();
+
 template <bool INVERTED, class READER>
 struct ArrayContainerScanState : public ContainerScanState {
 	friend READER;
@@ -577,7 +579,11 @@ public:
 			this->finished = true;
 			return;
 		}
-		this->value = data[this->array_index];
+		const auto next_value = data[this->array_index];
+		if (next_value >= this->container_size || (this->array_index && next_value <= this->value)) {
+			ThrowRoaringInvalidArray();
+		}
+		this->value = next_value;
 		this->array_index++;
 	}
 
@@ -613,8 +619,12 @@ public:
 			this->finished = true;
 			return;
 		}
-		this->value = segment++;
-		this->value += data[this->array_index];
+		uint16_t next_value = segment++;
+		next_value += data[this->array_index];
+		if (next_value >= this->container_size || (this->array_index && next_value <= this->value)) {
+			ThrowRoaringInvalidArray();
+		}
+		this->value = next_value;
 		this->array_index++;
 	}
 	void VerifyWrittenData() const override {
