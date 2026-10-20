@@ -190,6 +190,7 @@ CreateStatement:
     - CreateTableStmt
     - CreateIndexStmt
     - CreateMacroStmt
+    - CreateLanguageFunctionStmt
     - CreateTypeStmt
     - CreateViewStmt
     - CreateTriggerStmt
