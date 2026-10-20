@@ -6,7 +6,6 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -119,28 +118,10 @@ template <class SRC>
 void BaseAppender::AppendWideDecimalValueInternal(Vector &col, SRC input) {
 	auto &type = col.GetType();
 	D_ASSERT(type.id() == LogicalTypeId::DECIMAL && type.InternalType() == PhysicalType::VARCHAR);
-	auto width = DecimalType::GetWidth(type);
-	auto scale = DecimalType::GetScale(type);
-	auto &result = FlatVector::GetDataMutable<string_t>(col)[chunk.size()];
-	if constexpr (std::is_same<SRC, string_t>::value) {
-		// strings are parsed exactly into the BIGNUM storage
-		string blob;
-		if (!BignumDecimal::TryParse(input.GetData(), input.GetSize(), width, scale, blob)) {
-			throw InvalidInputException("Could not convert string \"%s\" to %s", input.GetString(), type.ToString());
-		}
-		result = StringVector::AddStringOrBlob(col, blob.data(), blob.size());
-		return;
-	}
-	// the other typed appends carry at most 128 bits of information: convert through a HUGEINT-backed decimal of the
-	// same scale and widen that into the BIGNUM storage; wider scales cannot be represented in a 128-bit intermediate
-	CastParameters parameters;
-	hugeint_t unscaled;
-	if (scale > Decimal::MAX_WIDTH_INT128 ||
-	    !TryCastToDecimal::Operation<SRC, hugeint_t>(input, unscaled, parameters, Decimal::MAX_WIDTH_INT128, scale)) {
-		throw InvalidInputException("Could not append value to column of type %s", type.ToString());
-	}
-	auto value = Value::DECIMAL(unscaled, width, scale);
-	result = StringVector::AddStringOrBlob(col, StringValue::Get(value));
+	// every source type is converted with its regular cast to the column type
+	auto value = Value::CreateValue<SRC>(input).DefaultCastAs(type);
+	FlatVector::GetDataMutable<string_t>(col)[chunk.size()] =
+	    StringVector::AddStringOrBlob(col, StringValue::Get(value));
 }
 
 template <class T>
