@@ -194,6 +194,10 @@ static bool IsMultiColumnComparison(const BoundSubqueryExpression &expr) {
 	if (expr.GetChildren().size() > 1 || expr.GetChildTypes().size() > 1) {
 		return true;
 	}
+	if (expr.ComparisonType() == ExpressionType::COMPARE_EQUAL) {
+		// equality on a TUPLE is a single struct comparison, which is supported
+		return false;
+	}
 	for (auto &child : expr.GetChildren()) {
 		if (IsMultiColumnTuple(child->GetReturnType())) {
 			return true;

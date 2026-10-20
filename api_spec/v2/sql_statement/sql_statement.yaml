@@ -1,9 +1,11 @@
 module: sql_statement
 #
 # Turn a SQL string into individual statements. parse_sql parses and nothing
-# more: no binding, no catalog access, no transaction. The connection supplies
-# the parser state — its options and the parser extensions loaded on it — so a
-# statement parsed on one connection should be executed on that connection.
+# more: no binding and no catalog access. The connection supplies the parser
+# state — its options and the parser extensions loaded on it — so a statement
+# parsed on one connection should be executed on that connection. The caller
+# chooses whether a parse error invalidates the connection's active
+# transaction, according to the transaction invalidation policy.
 # Statements are raw parser output; statement-level rewrites (pragma
 # reparsing, statement expansion, transaction wrapping) happen inside
 # statement_execute, so one user statement is always one handle.
@@ -119,13 +121,18 @@ functions:
     description: |
       Parses a SQL string into an iterator over its statements.
 
-      Parses and nothing more: no binding, no catalog access, no transaction.
-      The connection supplies the parser options and parser extensions, and is
-      not otherwise touched. Statements are raw parser output; statement-level
-      rewrites happen inside statement_execute. The SQL string is copied, so
-      the caller may free it once this call returns. An input with no
-      statements — empty, whitespace, or separators only — yields an iterator
-      that is immediately exhausted.
+      Parses and nothing more: no binding and no catalog access. The connection
+      supplies the parser options and parser extensions. With
+      apply_invalidation_policy, a parse error invalidates the connection's
+      active transaction according to the transaction invalidation policy, like
+      an error from running the statement would; pass that when the statements
+      are parsed to be run. Without it, a parse error leaves the transaction
+      usable, for callers that only inspect the statements, for example with
+      `[[statement_bind]]`.
+      Statements are raw parser output; statement-level rewrites happen inside
+      statement_execute. The SQL string is copied, so the caller may free it
+      once this call returns. An input with no statements — empty, whitespace,
+      or separators only — yields an iterator that is immediately exhausted.
     role: constructor
     belongs_to: statement_iterator
     parameters:
@@ -137,6 +144,9 @@ functions:
         indirection: 1
         const: true
         description: Null-terminated SQL string; may contain any number of statements.
+      apply_invalidation_policy:
+        type: bool
+        description: Whether a parse error invalidates the active transaction, according to the transaction invalidation policy.
       out_iterator:
         type: statement_iterator
         indirection: 1

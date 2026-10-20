@@ -74,26 +74,38 @@ class UpdateLocalState : public LocalSinkState {
 public:
 	UpdateLocalState(ClientContext &context, const vector<unique_ptr<Expression>> &expressions,
 	                 const vector<LogicalType> &table_types, const vector<unique_ptr<Expression>> &bound_defaults,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool capture_old_rows)
-	    : default_executor(context, bound_defaults), bound_constraints(bound_constraints) {
-		// Initialize the update chunk.
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool capture_old_rows,
+	                 bool index_update)
+	    : bound_constraints(bound_constraints) {
+		// Only DEFAULT columns are computed into the update chunk, all other columns reference the input.
 		auto &allocator = Allocator::Get(context);
 		vector<LogicalType> update_types;
+		vector<bool> initialize;
 		update_types.reserve(expressions.size());
+		initialize.reserve(expressions.size());
+		bool has_default = false;
 		for (auto &expr : expressions) {
+			const bool is_default = expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT;
 			update_types.push_back(expr->GetReturnType());
+			initialize.push_back(is_default);
+			has_default = has_default || is_default;
 		}
-		update_chunk.Initialize(allocator, update_types);
+		update_chunk.Initialize(allocator, update_types, initialize);
+		if (has_default) {
+			default_executor = make_uniq<ExpressionExecutor>(context, bound_defaults);
+		}
 
-		// Initialize the mock and delete chunk.
-		mock_chunk.Initialize(allocator, table_types);
-		delete_chunk.Initialize(allocator, table_types);
+		// The mock chunk only references other vectors, the delete chunk is only fetched into for index updates.
+		mock_chunk.InitializeEmpty(table_types);
+		if (index_update) {
+			delete_chunk.Initialize(allocator, table_types);
+		}
 
 		// When capturing OLD rows, the return chunk holds the NEW image followed by the OLD image.
 		if (capture_old_rows) {
 			vector<LogicalType> combined_types(table_types);
 			combined_types.insert(combined_types.end(), table_types.begin(), table_types.end());
-			combined_chunk.Initialize(allocator, combined_types);
+			combined_chunk.InitializeEmpty(combined_types);
 		}
 	}
 
@@ -101,7 +113,7 @@ public:
 	DataChunk mock_chunk;
 	DataChunk delete_chunk;
 	DataChunk combined_chunk;
-	ExpressionExecutor default_executor;
+	unique_ptr<ExpressionExecutor> default_executor;
 	unique_ptr<TableDeleteState> delete_state;
 	unique_ptr<TableUpdateState> update_state;
 	const vector<unique_ptr<BoundConstraint>> &bound_constraints;
@@ -147,7 +159,9 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &l_state = input.local_state.Cast<UpdateLocalState>();
 
 	chunk.Flatten();
-	l_state.default_executor.SetChunk(chunk);
+	if (l_state.default_executor) {
+		l_state.default_executor->SetChunk(chunk);
+	}
 
 	DataChunk &update_chunk = l_state.update_chunk;
 	update_chunk.Reset();
@@ -155,7 +169,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		// Default expression, set to the default value of the column.
 		if (expressions[i]->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
-			l_state.default_executor.ExecuteExpression(columns[i].index, update_chunk.data[i]);
+			l_state.default_executor->ExecuteExpression(columns[i].index, update_chunk.data[i]);
 			continue;
 		}
 
@@ -286,7 +300,7 @@ unique_ptr<GlobalSinkState> PhysicalUpdate::GetGlobalSinkState(ClientContext &co
 
 unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &context) const {
 	return make_uniq<UpdateLocalState>(context.client, expressions, table.GetTypes(), bound_defaults, bound_constraints,
-	                                   capture_old_rows);
+	                                   capture_old_rows, index_update);
 }
 
 SinkCombineResultType PhysicalUpdate::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {

@@ -96,6 +96,12 @@ struct DBConfigOptions {
 	string default_autoinstall_repository;
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = DConstants::INVALID_INDEX;
+	//! Initial permission to allocate from the fixed-size block pool.
+#ifdef __MINGW32__
+	bool enable_block_allocator = false;
+#else
+	bool enable_block_allocator = true;
+#endif
 	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default: 90% of available disk space.
 	idx_t maximum_swap_space = DConstants::INVALID_INDEX;
 	//! The maximum amount of CPU threads used by the database system. Default: all available.
@@ -154,14 +160,14 @@ struct DBConfigOptions {
 	bool abort_on_wal_failure = false;
 	//! Paths that are explicitly allowed, even if enable_external_access is false
 	unordered_set<string> allowed_paths;
+	//! Environment variables the embedder configures itself from, readable with OSUtil::GetEnvUnrestricted
+	unordered_set<string> configuration_env;
 	//! Directories that are explicitly allowed, even if enable_external_access is false
 	set<string> allowed_directories;
 	//! Additional configuration options that are allowed to be changed even when the configuration is locked
 	identifier_set_t allowed_configs;
 	//! The log configuration
 	LogConfig log_config = LogConfig();
-	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
-	idx_t block_allocator_size = 0;
 	//! Memory limit for the write buffer per row group (optional)
 	optional_idx write_buffer_row_group_memory_limit;
 	//! Whether to print bindings when printing the plan (debug mode only)

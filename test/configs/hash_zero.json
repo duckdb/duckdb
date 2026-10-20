@@ -95,7 +95,12 @@
         "test/optimizer/statistics/statistics_count_not_null_pruning.test",
         "test/sql/sql_export/aggregate_topn_rewrites.test",
         "test/sql/aggregate/aggregate_state_export/approx_count_distinct_export_state.test",
-        "test/optimizer/pushdown/cte_domain_join_filter.test"
+        "test/optimizer/pushdown/cte_domain_join_filter.test",
+        "test/sql/sql_export/aggregate_literals.test",
+        "test/sql/sql_export/empty_aggregate_state.test",
+        "test/sql/storage/distinct_statistics_sample.test",
+        "test/optimizer/statistics/statistics_early_join_range.test",
+        "test/optimizer/joins/left_join_reordering/left_join_composite_domain.test"
       ]
     },
     {
@@ -114,7 +119,10 @@
         "test/sql/timezone/test_icu_calendar_japanese.test",
         "test/sql/timezone/test_icu_datetime_sweep.test",
         "test/sql/optimizer/constant_function_zonemap_pruning.test",
-        "test/sql/sql_export/call_values.test"
+        "test/sql/sql_export/call_values.test",
+        "test/sql/match_recognize/test_match_recognize_cursors.test",
+        "test/sql/match_recognize/test_match_recognize_composition.test",
+        "test/sql/index/art/storage/test_art_checkpoint_retains_clean_buffers.test"
       ]
     }
   ]
