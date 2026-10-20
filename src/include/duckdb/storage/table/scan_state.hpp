@@ -295,8 +295,6 @@ public:
 	//! Whether the column scans of the current assignment still have to be initialized
 	bool column_scans_pending = false;
 
-	unique_ptr<RandomEngine> random;
-
 	//! The amount of tuples considered by a scan, before applying filters
 	idx_t rows_scanned = 0;
 
@@ -339,6 +337,8 @@ private:
 	optional_ptr<SegmentNode<RowGroup>> row_group;
 	shared_ptr<RowGroup> pinned_row_group;
 	TableScanState &parent;
+	//! The random engine for system sampling
+	unique_ptr<RandomEngine> random;
 };
 
 struct ScanSamplingInfo {
