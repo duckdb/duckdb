@@ -30,6 +30,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		result = LogicalAlter::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_WITHIN_JOIN:
 		result = LogicalAnyJoin::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:

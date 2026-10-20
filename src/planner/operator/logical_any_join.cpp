@@ -12,7 +12,7 @@ LogicalAnyJoin::LogicalAnyJoin(JoinType type) : LogicalJoin(type, LogicalOperato
 }
 
 void LogicalAnyJoin::TrySpecialize(unique_ptr<LogicalOperator> &op) {
-	if (op->type != LogicalOperatorType::LOGICAL_ANY_JOIN) {
+	if (op->type != LogicalOperatorType::LOGICAL_ANY_JOIN && op->type != LogicalOperatorType::LOGICAL_WITHIN_JOIN) {
 		return;
 	}
 	auto &any_join = op->Cast<LogicalAnyJoin>();

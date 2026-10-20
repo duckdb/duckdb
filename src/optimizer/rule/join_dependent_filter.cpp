@@ -61,6 +61,7 @@ unique_ptr<Expression> JoinDependentFilterRule::Apply(LogicalOperator &op, vecto
 	case LogicalOperatorType::LOGICAL_FILTER:
 		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_WITHIN_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
 		// Only applies to these join types

@@ -16,7 +16,10 @@ namespace duckdb {
 //! LogicalAnyJoin represents a join with an arbitrary expression as JoinCondition
 class LogicalAnyJoin : public LogicalJoin {
 public:
-	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_ANY_JOIN;
+// TAGGED SUB-TYPES (e.g. LOGICAL_WITHIN_JOIN) share this class; TYPE is INVALID so
+	// Cast<LogicalAnyJoin>() never rejects the tagged operator (same pattern as
+	// LogicalComparisonJoin, which hosts ASOF/DELIM sub-types).
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_INVALID;
 
 public:
 	explicit LogicalAnyJoin(JoinType type);

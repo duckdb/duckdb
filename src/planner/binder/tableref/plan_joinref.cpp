@@ -256,6 +256,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 
 	// validate ASOF join conditions
 	auto is_asof = (ref_type == JoinRefType::ASOF);
+	auto is_within = (ref_type == JoinRefType::WITHIN);
 	if (is_asof) {
 		switch (type) {
 		case JoinType::RIGHT:
@@ -318,6 +319,24 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		asof_join->children.push_back(std::move(left_child));
 		asof_join->children.push_back(std::move(right_child));
 		return std::move(asof_join);
+	}
+
+	// Case 1b: WITHIN BY (distance/radius range) join. The distance predicate is an *arbitrary*
+	// expression (a function call over columns, e.g. array_distance(a.v, b.v) <= eps), so it must use the
+	// LogicalAnyJoin execution path (exactly what a plain `JOIN ON dist <= eps` uses). It is tagged
+	// LOGICAL_WITHIN_JOIN instead of LOGICAL_ANY_JOIN so that vector/spatial index extensions can recognize
+	// and intercept the radius join; without an index it falls back to the same Blockwise NL join as a
+	// plain distance filter join (identical semantics).
+	if (is_within) {
+		if (all_conditions.empty()) {
+			throw InternalException("WITHIN BY join has no distance condition");
+		}
+		auto within_join = make_uniq<LogicalAnyJoin>(type);
+		within_join->type = LogicalOperatorType::LOGICAL_WITHIN_JOIN;
+		within_join->condition = JoinCondition::CreateExpression(std::move(all_conditions));
+		within_join->children.push_back(std::move(left_child));
+		within_join->children.push_back(std::move(right_child));
+		return std::move(within_join);
 	}
 
 	// Case 2: No comparison conditions - use any join
