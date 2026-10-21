@@ -163,6 +163,11 @@ bool TryAddOperator::Operation(uint64_t left, uint64_t right, uint64_t &result) 
 }
 
 template <>
+bool TryAddOperator::Operation(timestamp_t left, interval_t right, timestamp_t &result) {
+	return Interval::TryAdd(left, right, result);
+}
+
+template <>
 bool TryAddOperator::Operation(date_t left, int32_t right, date_t &result) {
 	if (left == date_t::infinity() || left == date_t::ninfinity()) {
 		result = date_t(left);

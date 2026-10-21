@@ -12,7 +12,7 @@ SET async_threads=72
 foreach suffix a b c d
 
 statement ok
-COPY (SELECT i % 400 AS p, i AS v FROM range(400000) t(i)) TO '{TEST_DIR}/readahead_fd_threads_${suffix}' (FORMAT parquet, PARTITION_BY (p))
+COPY (SELECT i % 400 AS p, i AS v FROM range(400000) t(i)) TO '{TEST_DIR}/readahead_fd_threads_{suffix}' (FORMAT parquet, PARTITION_BY (p))
 
 endloop
 
