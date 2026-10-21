@@ -61,7 +61,7 @@ BoundLimitNode Binder::BindLimitValue(OrderBinder &order_binder, unique_ptr<Pars
 	auto target_type = is_percentage ? LogicalType::DOUBLE : LogicalType::BIGINT;
 	expr_binder.target_type = target_type;
 	auto original_limit = limit_val->Copy();
-	auto expr = expr_binder.Bind(limit_val);
+	auto expr = expr_binder.Bind(*limit_val);
 	if (expr->HasSubquery()) {
 		if (!order_binder.HasExtraList()) {
 			throw BinderException("Subquery in LIMIT/OFFSET not supported in set operation");
@@ -583,7 +583,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		ColumnAliasBinder alias_binder(bind_state);
 		WhereBinder where_binder(*this, context, alias_binder);
 		unique_ptr<ParsedExpression> condition = std::move(statement.where_clause);
-		auto where_clause = where_binder.Bind(condition);
+		auto where_clause = where_binder.Bind(*condition);
 		result.from_table.plan = PlanFilter(std::move(where_clause), std::move(result.from_table.plan));
 	}
 
@@ -615,9 +615,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
 			// bind the groups
 			LogicalType group_type;
-			// bound subqueries cannot be copied, so keep the parsed expression in case we need to bind it again
-			auto parsed_copy = group_expressions[i]->Copy();
-			auto bound_expr = group_binder.Bind(group_expressions[i], &group_type);
+			auto bound_expr = group_binder.Bind(*group_expressions[i], &group_type);
 			if (bound_expr->GetExpressionType() == ExpressionType::BOUND_EXPANDED) {
 				throw BinderException("UNNEST of struct cannot be used in GROUP BY clause");
 			}
@@ -631,7 +629,8 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			// push a potential collation, if necessary
 			bool requires_collation = ExpressionBinder::PushCollation(context, bound_expr, group_type);
 			if (requires_collation && contains_subquery) {
-				uncollated_expr = group_binder.Bind(parsed_copy);
+				// bound subqueries cannot be copied, so bind the group a second time
+				uncollated_expr = group_binder.Bind(*group_expressions[i]);
 			}
 			if (requires_collation) {
 				// if there is a collation on a group x, we should group by the collated expr,
@@ -659,7 +658,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	if (statement.having) {
 		HavingBinder having_binder(*this, context, result, statement.aggregate_handling);
 		ExpressionBinder::QualifyColumnNames(having_binder, statement.having);
-		result.having = having_binder.Bind(statement.having);
+		result.having = having_binder.Bind(*statement.having);
 	}
 
 	// bind the QUALIFY clause, if any
@@ -669,7 +668,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			throw BinderException("Combining QUALIFY with GROUP BY ALL is not supported yet");
 		}
 		QualifyBinder qualify_binder(*this, context, result);
-		result.qualify = qualify_binder.Bind(statement.qualify);
+		result.qualify = qualify_binder.Bind(*statement.qualify);
 		if (qualify_binder.HasBoundColumns()) {
 			if (qualify_binder.BoundAggregates()) {
 				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
@@ -691,7 +690,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		bool is_window = statement.select_list[i]->IsWindow();
 		idx_t unnest_count = result.unnests.SelectList().size();
 		LogicalType result_type;
-		auto expr = select_binder.Bind(statement.select_list[i], &result_type, true);
+		auto expr = select_binder.Bind(*statement.select_list[i], &result_type, true);
 		bool is_original_column = i < result.column_count;
 		bool can_group_by_all =
 		    statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && is_original_column;

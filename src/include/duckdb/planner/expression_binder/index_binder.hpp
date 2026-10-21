@@ -36,8 +36,7 @@ public:
 	static void InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, const Identifier &schema);
 
 protected:
-	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
-	                          bool root_expression = false) override;
+	BindResult BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression = false) override;
 	string UnsupportedAggregateMessage() override;
 
 private:

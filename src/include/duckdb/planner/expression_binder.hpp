@@ -90,8 +90,8 @@ public:
 	ExpressionBinder(Binder &binder, ClientContext &context);
 	virtual ~ExpressionBinder();
 
-	virtual bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
-	                                      BindResult &result, unique_ptr<ParsedExpression> &expr_ptr) {
+	virtual bool TryResolveAliasReference(const ColumnRefExpression &colref, idx_t depth, bool root_expression,
+	                                      BindResult &result) {
 		return false;
 	}
 
@@ -116,7 +116,7 @@ public:
 	idx_t inaccessible_lambda_binding_count = 0;
 
 public:
-	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type = nullptr,
+	unique_ptr<Expression> Bind(const ParsedExpression &expr, optional_ptr<LogicalType> result_type = nullptr,
 	                            bool root_expression = true);
 
 	//! Returns whether or not any columns have been bound by the expression binder
@@ -134,14 +134,14 @@ public:
 
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	//! Bind the expression at the given depth, returning the bound expression or the error
-	[[nodiscard]] BindResult Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);
+	[[nodiscard]] BindResult Bind(const ParsedExpression &expr, idx_t depth, bool root_expression = false);
 
 	//! Returns the STRUCT_EXTRACT operator expression
 	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const Identifier &field_name);
 	//! Returns a STRUCT_PACK function expression
-	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &col_ref);
+	unique_ptr<ParsedExpression> CreateStructPack(const ColumnRefExpression &col_ref);
 
-	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const Identifier &table_name);
+	BindResult BindQualifiedColumnName(const ColumnRefExpression &colref, const Identifier &table_name);
 
 	//! Entry point for qualifying the column references of the expression
 	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr,
@@ -153,11 +153,11 @@ public:
 	virtual unique_ptr<ColumnQualifier> CreateColumnQualifier();
 
 	//! Whether this scope groups by the given expression, i.e. whether a reference to it resolves to a group
-	virtual bool MatchesGroup(ParsedExpression &expr);
+	virtual bool MatchesGroup(const ParsedExpression &expr);
 
 	//! Whether the name matches a select-list alias of this scope. Such a scope owns the name even
 	//! though qualification cannot resolve it, and it is the one that reports any error.
-	virtual bool ClaimsAlias(ColumnRefExpression &colref);
+	virtual bool ClaimsAlias(const ColumnRefExpression &colref);
 
 	//! Unify the types of two bound operands and build the bound comparison over them
 	unique_ptr<Expression> CreateBoundComparison(ExpressionType comparison_type, unique_ptr<Expression> left,
@@ -175,40 +175,42 @@ public:
 	//! Resolve a column reference against the scopes at or beyond the given depth, without binding it.
 	//! Resolution consults exactly what a real bind against a scope would, by reusing the qualifier
 	//! that scope builds for itself.
-	ColumnResolution ResolveColumn(ColumnRefExpression &colref, idx_t start);
+	ColumnResolution ResolveColumn(const ColumnRefExpression &colref, idx_t start);
 	//! The scope that owns an aggregate: the innermost one at or beyond `start` in which any of its
 	//! arguments resolves a column. Invalid when no argument resolves a column at or beyond `start` -
 	//! at `start == 0` that pins a constant-only aggregate to the scope it appears in.
-	optional_idx ResolveAggregateOwner(FunctionExpression &aggregate, idx_t start);
+	optional_idx ResolveAggregateOwner(const FunctionExpression &aggregate, idx_t start);
 	//! The innermost scope at or beyond `start` whose groups all of the expressions match
-	optional_idx ResolveOuterGroup(vector<reference<ParsedExpression>> &expressions, idx_t start);
+	optional_idx ResolveOuterGroup(const vector<const_reference<ParsedExpression>> &expressions, idx_t start);
 	//! Merge the error of a newly probed scope into the error accumulated over the previous ones,
 	//! preferring a missing column over any other error and merging the candidate bindings
 	static void CombineErrors(ErrorData &current, ErrorData new_error);
 
 	//! Bind the expression in the scope at the given depth, so that the semantics of that scope apply,
 	//! and register the correlated columns of the result on this binder
-	BindResult DispatchToScope(idx_t scope, unique_ptr<ParsedExpression> &expr_ptr, idx_t base_depth);
+	BindResult DispatchToScope(idx_t scope, const ParsedExpression &expr, idx_t base_depth);
 
 	//! Bind a column that does not resolve in this scope against the innermost enclosing scope that does.
 	//! A scope that resolves the name but cannot bind it is passed over, and the search continues outward.
-	BindResult BindInEnclosingScope(ColumnRefExpression &col_ref, idx_t depth, unique_ptr<ParsedExpression> &expr_ptr,
-	                                ErrorData local_error);
+	BindResult BindInEnclosingScope(const ColumnRefExpression &col_ref, idx_t depth, ErrorData local_error);
 
 	//! Bind an aggregate owned by an enclosing scope, starting at the given scope. Ownership follows from
 	//! column resolutions, which are only a lower bound, so a scope that owns the aggregate but cannot
 	//! bind it is passed over and the search continues outward.
-	BindResult BindAggregateInEnclosingScope(FunctionExpression &aggregate, idx_t owner, idx_t depth,
-	                                         unique_ptr<ParsedExpression> &expr_ptr);
+	BindResult BindAggregateInEnclosingScope(const FunctionExpression &aggregate, idx_t owner, idx_t depth);
 
 	//! Bind a GROUPING owned by an enclosing scope, starting at the given scope. A scope that groups by
 	//! all of the arguments can still fail to bind them, so it is passed over like any other.
-	BindResult BindGroupingInEnclosingScope(OperatorExpression &op, vector<reference<ParsedExpression>> &children,
-	                                        idx_t owner, idx_t depth);
+	BindResult BindGroupingInEnclosingScope(const OperatorExpression &op,
+	                                        const vector<const_reference<ParsedExpression>> &children, idx_t owner,
+	                                        idx_t depth);
 
 	//! Bind a child expression, returning it. A null child, or one that fails to bind, returns null;
 	//! the first error encountered is recorded in the accumulator.
-	[[nodiscard]] unique_ptr<Expression> BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, ErrorData &error);
+	[[nodiscard]] unique_ptr<Expression> BindChild(const ParsedExpression &expr, idx_t depth, ErrorData &error);
+	//! Bind an optional child expression - a null child returns null
+	[[nodiscard]] unique_ptr<Expression> BindChild(optional_ptr<const ParsedExpression> expr, idx_t depth,
+	                                               ErrorData &error);
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 
 	static bool ContainsNullType(const LogicalType &type);
@@ -216,10 +218,9 @@ public:
 	static bool ContainsType(const LogicalType &type, LogicalTypeId target);
 	static LogicalType ExchangeType(const LogicalType &type, LogicalTypeId target, LogicalType new_type);
 
-	//! Bind the given expression. Unlike Bind(), this does *not* mute the given ParsedExpression.
+	//! Bind the given expression. Unlike Bind(), this does not carry over the alias and query location.
 	//! Exposed to be used from sub-binders that aren't subclasses of ExpressionBinder.
-	virtual BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
-	                                  bool root_expression = false);
+	virtual BindResult BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression = false);
 
 	//! FIXME: Generalise this for extensibility.
 	//! Recursively replaces macro parameters with the provided input parameters.
@@ -230,7 +231,7 @@ public:
 
 	static LogicalType GetExpressionReturnType(const Expression &expr);
 
-	virtual unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error);
+	virtual unique_ptr<ParsedExpression> QualifyColumnName(const ColumnRefExpression &col_ref, ErrorData &error);
 
 	//! Returns true if the function name is an alias for the UNNEST function
 	static bool IsUnnestFunction(const Identifier &function_name);
@@ -246,28 +247,28 @@ private:
 	StackChecker<ExpressionBinder> StackCheck(const ParsedExpression &expr, idx_t extra_stack = 1);
 
 protected:
-	BindResult BindExpression(BetweenExpression &expr, idx_t depth);
-	BindResult BindExpression(CaseExpression &expr, idx_t depth);
-	BindResult BindExpression(CollateExpression &expr, idx_t depth);
-	BindResult BindExpression(CastExpression &expr, idx_t depth);
-	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth, bool root_expression,
-	                          unique_ptr<ParsedExpression> &expr_ptr);
-	BindResult BindExpression(LambdaRefExpression &expr, idx_t depth);
-	BindResult BindExpression(ComparisonExpression &expr, idx_t depth);
-	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
-	BindResult BindExpression(ConstantExpression &expr, idx_t depth);
-	BindResult BindExpression(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> &expr_ptr);
-	BindResult BindExpression(TypeExpression &expr, idx_t depth);
+	BindResult BindExpression(const BetweenExpression &expr, idx_t depth);
+	BindResult BindExpression(const CaseExpression &expr, idx_t depth);
+	BindResult BindExpression(const CollateExpression &expr, idx_t depth);
+	BindResult BindExpression(const CastExpression &expr, idx_t depth);
+	BindResult BindExpression(const ColumnRefExpression &expr, idx_t depth, bool root_expression);
+	BindResult BindExpression(const LambdaRefExpression &expr, idx_t depth);
+	BindResult BindExpression(const ComparisonExpression &expr, idx_t depth);
+	BindResult BindExpression(const ConjunctionExpression &expr, idx_t depth);
+	BindResult BindExpression(const ConstantExpression &expr, idx_t depth);
+	BindResult BindExpression(const FunctionExpression &expr, idx_t depth);
+	BindResult BindExpression(const TypeExpression &expr, idx_t depth);
 
-	BindResult BindExpression(LambdaExpression &expr, idx_t depth, const vector<LogicalType> &function_child_types,
+	BindResult BindExpression(const LambdaExpression &expr, idx_t depth,
+	                          const vector<LogicalType> &function_child_types,
 	                          optional_ptr<bind_lambda_function_t> bind_lambda_function,
 	                          optional_ptr<BindLambdaContext> bind_lambda_context);
-	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
-	BindResult BindOperatorAsFunction(OperatorExpression &op, const Identifier &function_name,
+	BindResult BindExpression(const OperatorExpression &expr, idx_t depth);
+	BindResult BindOperatorAsFunction(const OperatorExpression &op, const Identifier &function_name,
 	                                  vector<unique_ptr<Expression>> children);
-	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
-	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
-	BindResult BindPositionalReference(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression);
+	BindResult BindExpression(const ParameterExpression &expr, idx_t depth);
+	BindResult BindExpression(const SubqueryExpression &expr, idx_t depth);
+	BindResult BindPositionalReference(const PositionalReferenceExpression &ref, idx_t depth, bool root_expression);
 
 	void TransformCapturedLambdaColumn(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
 	                                   BoundLambdaExpression &bound_lambda_expr,
@@ -282,27 +283,33 @@ protected:
 
 	unique_ptr<ParsedExpression> GetSQLValueFunction(const Identifier &column_name);
 
-	LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
-	LogicalType ResolveCoalesceType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
-	LogicalType ResolveNotType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+	LogicalType ResolveOperatorType(const OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+	LogicalType ResolveCoalesceType(const OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+	LogicalType ResolveNotType(const OperatorExpression &op, vector<unique_ptr<Expression>> &children);
 
-	BindResult BindUnsupportedExpression(ParsedExpression &expr, idx_t depth, const string &message);
+	BindResult BindUnsupportedExpression(const ParsedExpression &expr, idx_t depth, const string &message);
 
-	CatalogEntry &BindFunction(FunctionExpression &function);
+	//! Look up the function a call refers to. A call that resolves to a different form is returned in `qualified`.
+	CatalogEntry &BindFunction(const FunctionExpression &function, unique_ptr<FunctionExpression> &qualified);
 
 protected:
-	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);
-	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
-	virtual BindResult BindLambdaFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
-	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth);
-	virtual BindResult BindWindow(FunctionExpression &expr, WindowFunctionCatalogEntry &function, idx_t depth);
-	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression);
-	virtual BindResult BindMacro(FunctionExpression &expr, ScalarMacroCatalogEntry &macro, idx_t depth,
-	                             unique_ptr<ParsedExpression> &expr_ptr);
+	virtual BindResult BindGroupingFunction(const OperatorExpression &op, idx_t depth);
+	virtual BindResult BindFunction(const FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
+	virtual BindResult BindLambdaFunction(const FunctionExpression &expr, ScalarFunctionCatalogEntry &function,
+	                                      idx_t depth);
+	virtual BindResult BindAggregate(const FunctionExpression &expr, AggregateFunctionCatalogEntry &function,
+	                                 idx_t depth);
+	virtual BindResult BindWindow(const FunctionExpression &expr, WindowFunctionCatalogEntry &function, idx_t depth);
+	virtual BindResult BindUnnest(const FunctionExpression &expr, idx_t depth, bool root_expression);
+	//! Bind a macro call. A window function call of the macro is given as the window it is called over.
+	virtual BindResult BindMacro(const FunctionExpression &expr, ScalarMacroCatalogEntry &macro, idx_t depth,
+	                             optional_ptr<const WindowExpression> window = nullptr);
 	void FindAggregateExprs(unique_ptr<ParsedExpression> &expr, vector<reference<unique_ptr<ParsedExpression>>> &exprs);
-	void UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> &expr, ScalarMacroFunction &macro_def);
-	void UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
-	                           unique_ptr<ParsedExpression> &expr, idx_t depth);
+	unique_ptr<ParsedExpression> UnfoldWindowMacroExpression(const WindowExpression &window,
+	                                                         ScalarMacroFunction &macro_def);
+	unique_ptr<ParsedExpression> UnfoldMacroExpression(const FunctionExpression &function,
+	                                                   ScalarMacroCatalogEntry &macro_func,
+	                                                   optional_ptr<const WindowExpression> window, idx_t depth);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedWindowMessage();
@@ -317,7 +324,7 @@ protected:
 	vector<BoundColumnReferenceInfo> bound_columns;
 	bool inside_try = false;
 
-	BindResult TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
+	BindResult TryBindLambdaOrJson(const FunctionExpression &function, idx_t depth, CatalogEntry &func,
 	                               const LambdaSyntaxType syntax_type);
 
 	virtual void ThrowIfUnnestInLambda(const ColumnBinding &column_binding);

@@ -149,7 +149,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		}
 
 		TableFunctionBinder binder(*this, context, table_function.name.GetIdentifierName());
-		auto expr = binder.Bind(child);
+		auto expr = binder.Bind(*child);
 		if (expr->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}

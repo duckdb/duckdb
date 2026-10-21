@@ -48,7 +48,7 @@ public:
 	//! because of case insensitivity, or because the column is referenced through a column alias)
 	const Identifier &GetRegisteredColumnName(const Identifier &column_name);
 	virtual ErrorData ColumnNotFoundError(const Identifier &column_name) const;
-	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
+	virtual BindResult Bind(const ColumnRefExpression &colref, idx_t depth);
 	virtual optional_ptr<StandardEntry> GetStandardEntry();
 	const Identifier &GetAlias() const;
 
@@ -86,7 +86,8 @@ public:
 protected:
 	void Initialize();
 	//! Set the alias of the column reference to the name under which the column is registered in this binding
-	void SetBoundColumnAlias(ColumnRefExpression &colref);
+	//! The name a column reference that binds to this binding is bound under
+	Identifier GetBoundColumnName(const ColumnRefExpression &colref);
 
 protected:
 	//! The type of Binding
@@ -138,7 +139,7 @@ public:
 
 public:
 	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const Identifier &column_name);
-	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
+	BindResult Bind(const ColumnRefExpression &colref, idx_t depth) override;
 	optional_ptr<StandardEntry> GetStandardEntry() override;
 	ErrorData ColumnNotFoundError(const Identifier &column_name) const override;
 	// These are columns that are present in the name_map, appearing in the order that they're bound
@@ -166,12 +167,12 @@ public:
 
 public:
 	//! Binding macros
-	BindResult Bind(ColumnRefExpression &col_ref, idx_t depth) override;
+	BindResult Bind(const ColumnRefExpression &col_ref, idx_t depth) override;
 	//! Binding lambdas
-	BindResult Bind(LambdaRefExpression &lambda_ref, idx_t depth);
+	BindResult Bind(const LambdaRefExpression &lambda_ref, idx_t depth);
 
 	//! Returns a copy of the col_ref parameter as a parsed expression
-	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &col_ref);
+	unique_ptr<ParsedExpression> ParamToArg(const ColumnRefExpression &col_ref);
 };
 
 enum class CTEType { CAN_BE_REFERENCED, CANNOT_BE_REFERENCED };

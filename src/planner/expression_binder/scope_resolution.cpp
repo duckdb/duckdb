@@ -140,7 +140,7 @@ void ExpressionBinder::CombineErrors(ErrorData &current, ErrorData new_error) {
 	current = std::move(new_error);
 }
 
-ColumnResolution ExpressionBinder::ResolveColumn(ColumnRefExpression &colref, idx_t start) {
+ColumnResolution ExpressionBinder::ResolveColumn(const ColumnRefExpression &colref, idx_t start) {
 	ColumnResolution result;
 	for (idx_t depth = start; depth < ScopeCount(); depth++) {
 		auto &scope = ScopeAt(depth);
@@ -181,8 +181,8 @@ ColumnResolution ExpressionBinder::ResolveColumn(ColumnRefExpression &colref, id
 //! scope, so a parameter that happens to share a name with an outer column must not pull the
 //! expression out to that scope. The parameter names are read exactly as `ColumnQualifier` reads them,
 //! so the resolver sees the same names a real bind would.
-static void CollectResolvableColumns(ParsedExpression &expr, vector<identifier_set_t> &lambda_params,
-                                     vector<reference<ColumnRefExpression>> &result) {
+static void CollectResolvableColumns(const ParsedExpression &expr, vector<identifier_set_t> &lambda_params,
+                                     vector<const_reference<ColumnRefExpression>> &result) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::SUBQUERY:
 		return;
@@ -203,8 +203,8 @@ static void CollectResolvableColumns(ParsedExpression &expr, vector<identifier_s
 		if (!error_message.empty()) {
 			// the LHS is not a parameter list, so this is the JSON arrow operator: both sides are
 			// ordinary expressions and nothing is bound by the lambda
-			CollectResolvableColumns(*lambda.LeftMutable(), lambda_params, result);
-			CollectResolvableColumns(*lambda.RightMutable(), lambda_params, result);
+			CollectResolvableColumns(lambda.Left(), lambda_params, result);
+			CollectResolvableColumns(lambda.Right(), lambda_params, result);
 			return;
 		}
 		lambda_params.emplace_back();
@@ -212,7 +212,7 @@ static void CollectResolvableColumns(ParsedExpression &expr, vector<identifier_s
 			lambda_params.back().emplace(parameter.get().Cast<ColumnRefExpression>().GetName());
 		}
 		// only the body can reference anything outside the lambda
-		CollectResolvableColumns(*lambda.RightMutable(), lambda_params, result);
+		CollectResolvableColumns(lambda.Right(), lambda_params, result);
 		lambda_params.pop_back();
 		return;
 	}
@@ -220,20 +220,20 @@ static void CollectResolvableColumns(ParsedExpression &expr, vector<identifier_s
 		break;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](ParsedExpression &child) { CollectResolvableColumns(child, lambda_params, result); });
+	    expr, [&](const ParsedExpression &child) { CollectResolvableColumns(child, lambda_params, result); });
 }
 
-optional_idx ExpressionBinder::ResolveAggregateOwner(FunctionExpression &aggregate, idx_t start) {
-	vector<reference<ColumnRefExpression>> columns;
+optional_idx ExpressionBinder::ResolveAggregateOwner(const FunctionExpression &aggregate, idx_t start) {
+	vector<const_reference<ColumnRefExpression>> columns;
 	vector<identifier_set_t> lambda_params;
-	for (auto &child : aggregate.GetArgumentsMutable()) {
-		CollectResolvableColumns(*child.GetExpressionMutable(), lambda_params, columns);
+	for (auto &child : aggregate.GetArguments()) {
+		CollectResolvableColumns(child.GetExpression(), lambda_params, columns);
 	}
 	if (aggregate.Filter()) {
-		CollectResolvableColumns(*aggregate.FilterMutable(), lambda_params, columns);
+		CollectResolvableColumns(*aggregate.Filter(), lambda_params, columns);
 	}
 	if (aggregate.OrderBy()) {
-		for (auto &order : aggregate.OrderByMutable()->orders) {
+		for (auto &order : aggregate.OrderBy()->orders) {
 			CollectResolvableColumns(*order.expression, lambda_params, columns);
 		}
 	}
@@ -254,7 +254,8 @@ optional_idx ExpressionBinder::ResolveAggregateOwner(FunctionExpression &aggrega
 	return found ? optional_idx(owner) : optional_idx();
 }
 
-optional_idx ExpressionBinder::ResolveOuterGroup(vector<reference<ParsedExpression>> &expressions, idx_t start) {
+optional_idx ExpressionBinder::ResolveOuterGroup(const vector<const_reference<ParsedExpression>> &expressions,
+                                                 idx_t start) {
 	for (idx_t depth = start; depth < ScopeCount(); depth++) {
 		bool all_match = true;
 		for (auto &expr : expressions) {

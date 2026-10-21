@@ -94,7 +94,7 @@ LogicalType ListReduceBindLambdaOverride(ClientContext &context, const vector<Lo
 }
 
 using bind_lambda_expression_t =
-    std::function<BindResult(LambdaExpression &, idx_t, const vector<LogicalType> &,
+    std::function<BindResult(const LambdaExpression &, idx_t, const vector<LogicalType> &,
                              optional_ptr<bind_lambda_function_t>, optional_ptr<BindLambdaContext>)>;
 
 struct ListReduceRebindResult {
@@ -125,13 +125,11 @@ static void CastDecimalLambdaToAccumulatorType(ClientContext &context, BindResul
 	rebound_lambda_expr.LambdaExprMutable() = std::move(cast_expr);
 }
 
-ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t depth,
-                                                   const vector<LogicalType> &function_child_types,
-                                                   bind_lambda_function_t bind_lambda_function,
-                                                   BindResult &bind_lambda_result,
-                                                   const bind_lambda_expression_t &bind_lambda_expression,
-                                                   optional_ptr<BindLambdaContext> bind_lambda_context,
-                                                   const unique_ptr<ParsedExpression> &lambda_expr_copy) {
+ListReduceRebindResult
+MaybeRebindListReduceLambda(ClientContext &context, idx_t depth, const vector<LogicalType> &function_child_types,
+                            bind_lambda_function_t bind_lambda_function, BindResult &bind_lambda_result,
+                            const bind_lambda_expression_t &bind_lambda_expression,
+                            optional_ptr<BindLambdaContext> bind_lambda_context, const LambdaExpression &lambda_expr) {
 	ListReduceRebindResult result;
 	result.capture_child_types = function_child_types;
 
@@ -165,14 +163,11 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 	}
 
 	if (has_initial) {
-		D_ASSERT(lambda_expr_copy);
 		auto rebind_child_types = function_child_types;
 		rebind_child_types[2] = accumulator_type;
 
-		auto lambda_expr_rebind_copy = lambda_expr_copy->Copy();
-		auto &lambda_expr_rebind = lambda_expr_rebind_copy->Cast<LambdaExpression>();
-		bind_lambda_result = bind_lambda_expression(lambda_expr_rebind, depth, rebind_child_types,
-		                                            &bind_lambda_function, bind_lambda_context);
+		bind_lambda_result =
+		    bind_lambda_expression(lambda_expr, depth, rebind_child_types, &bind_lambda_function, bind_lambda_context);
 		if (bind_lambda_result.HasError()) {
 			bind_lambda_result.error.Throw();
 		}
@@ -181,13 +176,9 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 		result.did_rebind = true;
 		result.capture_child_types = std::move(rebind_child_types);
 	} else if (accumulator_type != list_child_type) {
-		if (!lambda_expr_copy) {
-			throw InternalException("list_reduce lambda copy is missing for rebind");
-		}
-		auto &lambda_expr_rebind = lambda_expr_copy->Cast<LambdaExpression>();
 		result.override_bind_lambda = &ListReduceBindLambdaOverride;
 		result.override_bind_lambda_context = make_uniq<ListReduceBindLambdaContext>(accumulator_type);
-		bind_lambda_result = bind_lambda_expression(lambda_expr_rebind, depth, function_child_types,
+		bind_lambda_result = bind_lambda_expression(lambda_expr, depth, function_child_types,
 		                                            &result.override_bind_lambda, *result.override_bind_lambda_context);
 		if (bind_lambda_result.HasError()) {
 			bind_lambda_result.error.Throw();
@@ -203,7 +194,7 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 
 } // namespace
 
-BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
+BindResult ExpressionBinder::TryBindLambdaOrJson(const FunctionExpression &function, idx_t depth, CatalogEntry &func,
                                                  const LambdaSyntaxType syntax_type) {
 	if (syntax_type == LambdaSyntaxType::LAMBDA_KEYWORD) {
 		// lambda x: x + 1 syntax.
@@ -258,11 +249,13 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 	                  json_bind_result.error.RawMessage());
 }
 
-CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
-	QueryErrorContext error_context(function.GetQueryLocation());
+CatalogEntry &ExpressionBinder::BindFunction(const FunctionExpression &function_p,
+                                             unique_ptr<FunctionExpression> &qualified) {
+	QueryErrorContext error_context(function_p.GetQueryLocation());
 
 	ColumnQualifier qualifier(binder);
-	auto func = qualifier.QualifyFunction(function);
+	auto func = qualifier.QualifyFunction(function_p, qualified);
+	auto &function = qualified ? *qualified : function_p;
 	if (!func) {
 		// function was not found - check if we this is a table function (to throw a more helpful error message)
 		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, function.GetQualifiedName(),
@@ -281,9 +274,11 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 	return *func;
 }
 
-BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
-                                            unique_ptr<ParsedExpression> &expr_ptr) {
-	auto &func = BindFunction(function);
+BindResult ExpressionBinder::BindExpression(const FunctionExpression &function_p, idx_t depth) {
+	// the call is bound in the form it resolves to, e.g. the dot-call "x.lower()" as "lower(x)"
+	unique_ptr<FunctionExpression> qualified;
+	auto &func = BindFunction(function_p, qualified);
+	auto &function = qualified ? *qualified : function_p;
 
 	switch (func.type) {
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
@@ -312,14 +307,14 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		if (!func.ParentCatalog().IsSystemCatalog()) {
 			binder.GetStatementProperties().RegisterDBRead(func.ParentCatalog(), context);
 		}
-		return BindMacro(function, func.Cast<ScalarMacroCatalogEntry>(), depth, expr_ptr);
+		return BindMacro(function, func.Cast<ScalarMacroCatalogEntry>(), depth);
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
 		// an aggregate belongs to the innermost query level in which one of its arguments resolves a
 		// column of that level, so that the level collecting it is the one the arguments refer to
 		if (!binder.GetEnclosingScopes().empty()) {
 			auto owner = ResolveAggregateOwner(function, 0);
 			if (owner.IsValid() && owner.GetIndex() != 0) {
-				return BindAggregateInEnclosingScope(function, owner.GetIndex(), depth, expr_ptr);
+				return BindAggregateInEnclosingScope(function, owner.GetIndex(), depth);
 			}
 		}
 		return BindAggregate(function, func.Cast<AggregateFunctionCatalogEntry>(), depth);
@@ -332,17 +327,12 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	}
 }
 
-BindResult ExpressionBinder::BindAggregateInEnclosingScope(FunctionExpression &aggregate, idx_t owner, idx_t depth,
-                                                           unique_ptr<ParsedExpression> &expr_ptr) {
-	// Bind a copy at each candidate scope. Binding rewrites the nodes it manages to bind - a column
-	// reference becomes the qualified form of the scope that owns it - so a failed attempt must not be
-	// handed to the next scope out. Moving the original aside also keeps `aggregate` valid throughout,
-	// since it aliases the node `expr_ptr` held on entry.
-	auto original = std::move(expr_ptr);
+BindResult ExpressionBinder::BindAggregateInEnclosingScope(const FunctionExpression &aggregate, idx_t owner,
+                                                           idx_t depth) {
+	// a scope that owns the aggregate but fails to bind it is passed over, and the next owner out is tried
 	ErrorData bind_error;
 	for (optional_idx scope = owner; scope.IsValid(); scope = ResolveAggregateOwner(aggregate, scope.GetIndex() + 1)) {
-		expr_ptr = original->Copy();
-		auto result = DispatchToScope(scope.GetIndex(), expr_ptr, depth);
+		auto result = DispatchToScope(scope.GetIndex(), aggregate, depth);
 		if (!result.HasError()) {
 			return result;
 		}
@@ -351,18 +341,18 @@ BindResult ExpressionBinder::BindAggregateInEnclosingScope(FunctionExpression &a
 			bind_error = std::move(result.error);
 		}
 	}
-	expr_ptr = std::move(original);
 	return BindResult(std::move(bind_error));
 }
 
-BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func, idx_t depth) {
+BindResult ExpressionBinder::BindFunction(const FunctionExpression &function, ScalarFunctionCatalogEntry &func,
+                                          idx_t depth) {
 	// bind the children of the function expression
 	ErrorData error;
 
 	// bind each child
 	vector<unique_ptr<Expression>> bound_children;
 	for (idx_t i = 0; i < function.GetArguments().size(); i++) {
-		bound_children.push_back(BindChild(function.GetArgumentsMutable()[i].GetExpressionMutable(), depth, error));
+		bound_children.push_back(BindChild(function.GetArguments()[i].GetExpression(), depth, error));
 	}
 
 	if (error.HasError()) {
@@ -380,8 +370,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	// for legacy calls with names: fallback arguments that keep the names, used if binding positionally fails
 	vector<pair<Identifier, unique_ptr<Expression>>> named_arguments;
 	arguments.reserve(function.GetArguments().size());
-	for (idx_t i = 0; i < function.GetArgumentsMutable().size(); i++) {
-		auto &arg = function.GetArgumentsMutable()[i];
+	for (idx_t i = 0; i < function.GetArguments().size(); i++) {
+		auto &arg = function.GetArguments()[i];
 		auto bound_arg = std::move(bound_children[i]);
 
 		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
@@ -427,7 +417,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	return BindResult(std::move(result));
 }
 
-BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func,
+BindResult ExpressionBinder::BindLambdaFunction(const FunctionExpression &function, ScalarFunctionCatalogEntry &func,
                                                 idx_t depth) {
 	// get the callback function for the lambda parameter types
 	auto &scalar_function = *func.functions.functions.front();
@@ -436,7 +426,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		return BindResult("This scalar function does not support lambdas!");
 	}
 
-	auto &args = function.GetArgumentsMutable();
+	auto &args = function.GetArguments();
 
 	// list lambda functions use the existing (list, lambda) shape; invoke is the only lambda
 	// function that accepts the lambda expression as the first argument.
@@ -461,7 +451,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 			                  "'. You might need to add explicit type casts.");
 		}
 
-		bound_children[i] = BindChild(function.GetArgumentsMutable()[i].GetExpressionMutable(), depth, error);
+		bound_children[i] = BindChild(function.GetArguments()[i].GetExpression(), depth, error);
 		if (error.HasError()) {
 			return BindResult(std::move(error));
 		}
@@ -481,15 +471,10 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// bind the lambda parameter
-	auto &lambda_expr = args[lambda_expr_idx].GetExpressionMutable()->Cast<LambdaExpression>();
+	auto &lambda_expr = args[lambda_expr_idx].GetExpression().Cast<LambdaExpression>();
 
-	unique_ptr<ParsedExpression> lambda_expr_copy;
 	// the aliases of list_reduce (e.g. reduce) are separate catalog entries
 	const bool is_list_reduce = func.name == "list_reduce" || func.alias_of == "list_reduce";
-	if (is_list_reduce) {
-		// We have to make this copy before binding in case we have to double-bind
-		lambda_expr_copy = lambda_expr.Copy();
-	}
 
 	BindResult bind_lambda_result =
 	    BindExpression(lambda_expr, depth, function_child_types, &bind_lambda_function, nullptr);
@@ -501,11 +486,11 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	if (bind_lambda_result.HasError()) {
 		return BindResult(bind_lambda_result.error);
 	}
-	auto bind_lambda_expression = [&](LambdaExpression &expr, idx_t lambda_depth, const vector<LogicalType> &types,
-	                                  optional_ptr<bind_lambda_function_t> bind_lambda_fn,
-	                                  optional_ptr<BindLambdaContext> bind_lambda_context) {
-		return BindExpression(expr, lambda_depth, types, bind_lambda_fn, bind_lambda_context);
-	};
+	auto bind_lambda_expression =
+	    [&](const LambdaExpression &expr, idx_t lambda_depth, const vector<LogicalType> &types,
+	        optional_ptr<bind_lambda_function_t> bind_lambda_fn, optional_ptr<BindLambdaContext> bind_lambda_context) {
+		    return BindExpression(expr, lambda_depth, types, bind_lambda_fn, bind_lambda_context);
+	    };
 
 	if (is_list_reduce) {
 		// list_reduce requires binding the lambda function a second time as there is a cyclical dependency between its
@@ -513,7 +498,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		// rebinding it with acc = return type
 		auto rebind_result =
 		    MaybeRebindListReduceLambda(context, depth, function_child_types, bind_lambda_function, bind_lambda_result,
-		                                bind_lambda_expression, nullptr, lambda_expr_copy);
+		                                bind_lambda_expression, nullptr, lambda_expr);
 		if (rebind_result.did_rebind) {
 			capture_child_types = std::move(rebind_result.capture_child_types);
 			override_bind_lambda_context = std::move(rebind_result.override_bind_lambda_context);
@@ -590,16 +575,17 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	return BindResult(std::move(result));
 }
 
-BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function,
+BindResult ExpressionBinder::BindAggregate(const FunctionExpression &expr, AggregateFunctionCatalogEntry &function,
                                            idx_t depth) {
 	return BindUnsupportedExpression(expr, depth, UnsupportedAggregateMessage());
 }
 
-BindResult ExpressionBinder::BindWindow(FunctionExpression &expr, WindowFunctionCatalogEntry &function, idx_t depth) {
+BindResult ExpressionBinder::BindWindow(const FunctionExpression &expr, WindowFunctionCatalogEntry &function,
+                                        idx_t depth) {
 	return BindUnsupportedExpression(expr, depth, UnsupportedWindowMessage());
 }
 
-BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression) {
+BindResult ExpressionBinder::BindUnnest(const FunctionExpression &expr, idx_t depth, bool root_expression) {
 	return BindUnsupportedExpression(expr, depth, UnsupportedUnnestMessage());
 }
 

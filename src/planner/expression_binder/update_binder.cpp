@@ -5,13 +5,12 @@ namespace duckdb {
 UpdateBinder::UpdateBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }
 
-BindResult UpdateBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = *expr_ptr;
+BindResult UpdateBinder::BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::WINDOW:
 		return BindResult(BinderException::Unsupported(expr, "window functions are not allowed in UPDATE"));
 	default:
-		return ExpressionBinder::BindExpression(expr_ptr, depth);
+		return ExpressionBinder::BindExpression(expr, depth);
 	}
 }
 

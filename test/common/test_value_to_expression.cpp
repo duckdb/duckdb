@@ -22,7 +22,7 @@ static Value BindAndEvaluate(Connection &con, duckdb::unique_ptr<ParsedExpressio
 	auto &context = *con.context;
 	auto binder = Binder::CreateBinder(context);
 	ConstantBinder constant_binder(*binder, context, "test");
-	auto bound = constant_binder.Bind(expr);
+	auto bound = constant_binder.Bind(*expr);
 	auto value = ExpressionExecutor::EvaluateScalar(context, *bound, true);
 	con.Rollback();
 	return value;

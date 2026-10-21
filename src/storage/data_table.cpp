@@ -826,8 +826,7 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 			}
 			D_ASSERT(col.Type().id() != LogicalTypeId::ANY);
 			generated_check_binder.target_type = col.Type();
-			auto to_be_bound_expression = col.GeneratedExpression().Copy();
-			auto bound_expression = generated_check_binder.Bind(to_be_bound_expression);
+			auto bound_expression = generated_check_binder.Bind(col.GeneratedExpression());
 			VerifyGeneratedExpressionSuccess(context, table, chunk, *bound_expression, col.Oid());
 		}
 	}
@@ -1042,9 +1041,8 @@ void DataTable::LocalAppend(DuckTableEntry &table, ClientContext &context, Colum
 			continue;
 		}
 
-		auto default_copy = col.DefaultValue().Copy();
 		default_binder.target_type = col.Type();
-		auto bound_default = default_binder.Bind(default_copy);
+		auto bound_default = default_binder.Bind(col.DefaultValue());
 		expressions.push_back(std::move(bound_default));
 	}
 

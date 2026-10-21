@@ -113,7 +113,8 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<Express
 	}
 }
 
-BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry &func, idx_t depth) {
+BindResult BaseSelectBinder::BindAggregate(const FunctionExpression &aggr, AggregateFunctionCatalogEntry &func,
+                                           idx_t depth) {
 	auto count_star = binder.TryRewriteQualifiedCountStar(aggr);
 	if (count_star) {
 		return BindAggregate(count_star->Cast<FunctionExpression>(), func, depth);
@@ -153,7 +154,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	// Now we bind the filter (if any)
 	unique_ptr<Expression> bound_filter_child;
 	if (aggr.Filter()) {
-		bound_filter_child = BindChild(aggr.FilterMutable(), 0, error);
+		bound_filter_child = BindChild(*aggr.Filter(), 0, error);
 	}
 	inside_aggregate_filter = false;
 
@@ -179,8 +180,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	vector<unique_ptr<Expression>> bound_arguments;
 	for (idx_t i = 0; i < aggr.GetArguments().size(); ++i) {
-		auto &child = aggr.GetArgumentsMutable()[i];
-		bound_arguments.push_back(BindChild(child.GetExpressionMutable(), 0, error));
+		auto &child = aggr.GetArguments()[i];
+		bound_arguments.push_back(BindChild(child.GetExpression(), 0, error));
 		// We have to negate the fractions for PERCENTILE_XXXX DESC
 		if (!error.HasError() && ordered_set_agg && i == aggr.GetArguments().size() - 1) {
 			NegatePercentileFractions(context, bound_arguments.back(), negate_fractions);
@@ -190,7 +191,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	// Bind the ORDER BYs, if any
 	vector<unique_ptr<Expression>> bound_orders;
 	if (aggr.OrderBy() && !aggr.OrderBy()->orders.empty()) {
-		for (auto &order : aggr.OrderByMutable()->orders) {
+		for (auto &order : aggr.OrderBy()->orders) {
 			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &const_expr = order.expression->Cast<ConstantExpression>();
 				if (const_expr.GetLiteral().kind != LiteralKind::INTEGER) {
@@ -204,7 +205,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 					}
 				}
 			}
-			bound_orders.push_back(BindChild(order.expression, 0, error));
+			bound_orders.push_back(BindChild(*order.expression, 0, error));
 		}
 	}
 
@@ -223,6 +224,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	// The positional/named split and (for legacy calls) the alias capture are resolved later, per candidate overload.
 	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
 
+	// an order-insensitive ordered-set aggregate consumes its ORDER BY as an argument
+	bool sort_arguments = !aggr.OrderBy()->orders.empty();
 	if (ordered_set_agg) {
 		const bool order_sensitive = (aggr.FunctionName() == "mode");
 		// Inject missing ordering arguments as positional arguments
@@ -236,12 +239,12 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 			}
 		}
 		if (!order_sensitive) {
-			aggr.OrderByMutable()->orders.clear();
+			sort_arguments = false;
 		}
 	}
 
-	for (idx_t arg_idx = 0; arg_idx < aggr.GetArgumentsMutable().size(); arg_idx++) {
-		auto &arg = aggr.GetArgumentsMutable()[arg_idx];
+	for (idx_t arg_idx = 0; arg_idx < aggr.GetArguments().size(); arg_idx++) {
+		auto &arg = aggr.GetArguments()[arg_idx];
 		auto bound_arg = std::move(bound_arguments[arg_idx]);
 		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
 		// and pass them all positionally, aliasing them by their name (see BindFunction for the rationale)
@@ -257,11 +260,11 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
 	unique_ptr<BoundOrderModifier> order_bys;
-	if (!aggr.OrderBy()->orders.empty()) {
+	if (sort_arguments) {
 		order_bys = make_uniq<BoundOrderModifier>();
 		auto &config = DBConfig::GetConfig(context);
-		for (idx_t order_idx = 0; order_idx < aggr.OrderByMutable()->orders.size(); order_idx++) {
-			auto &order = aggr.OrderByMutable()->orders[order_idx];
+		for (idx_t order_idx = 0; order_idx < aggr.OrderBy()->orders.size(); order_idx++) {
+			auto &order = aggr.OrderBy()->orders[order_idx];
 			auto order_expr = std::move(bound_orders[order_idx]);
 			PushCollation(context, order_expr, order_expr->GetReturnType());
 			const auto sense = config.ResolveOrder(context, order.type);

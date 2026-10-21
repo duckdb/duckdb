@@ -41,9 +41,9 @@ public:
 	void SetQueryComponent(string component = string());
 
 private:
-	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, const idx_t index);
-	unique_ptr<Expression> BindConstant(ParsedExpression &expr);
-	optional_idx TryGetProjectionReference(ParsedExpression &expr) const;
+	unique_ptr<Expression> CreateProjectionReference(const ParsedExpression &expr, const idx_t index);
+	unique_ptr<Expression> BindConstant(const ParsedExpression &expr);
+	optional_idx TryGetProjectionReference(const ParsedExpression &expr) const;
 
 private:
 	vector<reference<Binder>> binders;

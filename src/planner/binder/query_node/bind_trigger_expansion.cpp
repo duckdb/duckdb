@@ -499,7 +499,7 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 	for (auto &returning_expr : expanded_returning) {
 		VerifyNotExcluded(*returning_expr);
 		LogicalType result_type;
-		auto bound_expr = returning_binder.Bind(returning_expr, &result_type);
+		auto bound_expr = returning_binder.Bind(*returning_expr, &result_type);
 		result.names.push_back(bound_expr->GetName());
 		result.types.push_back(result_type);
 		proj_exprs.push_back(std::move(bound_expr));

@@ -114,11 +114,11 @@ const Identifier &Binding::GetRegisteredColumnName(const Identifier &column_name
 	return entry == name_map.end() ? column_name : entry->first;
 }
 
-void Binding::SetBoundColumnAlias(ColumnRefExpression &colref) {
+Identifier Binding::GetBoundColumnName(const ColumnRefExpression &colref) {
 	if (!colref.GetAlias().empty()) {
-		return;
+		return colref.GetAlias();
 	}
-	colref.SetAlias(GetRegisteredColumnName(colref.GetColumnName()));
+	return GetRegisteredColumnName(colref.GetColumnName());
 }
 
 ErrorData Binding::ColumnNotFoundError(const Identifier &column_name) const {
@@ -126,7 +126,7 @@ ErrorData Binding::ColumnNotFoundError(const Identifier &column_name) const {
 	                 StringUtil::Format("Values list %s does not have a column named %s", GetAlias(), column_name));
 }
 
-BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
+BindResult Binding::Bind(const ColumnRefExpression &colref, idx_t depth) {
 	column_t column_index;
 	bool success = false;
 	success = TryGetBindingIndex(colref.GetColumnName(), column_index);
@@ -137,8 +137,7 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	binding.table_index = index;
 	binding.column_index = ProjectionIndex(column_index);
 	LogicalType sql_type = types[column_index];
-	SetBoundColumnAlias(colref);
-	return BindResult(make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), sql_type, binding, depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(GetBoundColumnName(colref), sql_type, binding, depth));
 }
 
 optional_ptr<StandardEntry> Binding::GetStandardEntry() {
@@ -287,7 +286,7 @@ ColumnBinding TableBinding::GetColumnBinding(column_t column_index) {
 	return binding;
 }
 
-BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
+BindResult TableBinding::Bind(const ColumnRefExpression &colref, idx_t depth) {
 	auto &column_name = colref.GetColumnName();
 	column_t column_index;
 	bool success = false;
@@ -307,17 +306,19 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	}
 	// fetch the type of the column
 	LogicalType col_type;
+	Identifier name;
 	auto ventry = virtual_columns.find(column_index);
 	if (ventry != virtual_columns.end()) {
 		// virtual column - fetch type from there
 		col_type = ventry->second.type;
+		name = colref.GetName();
 	} else {
 		// normal column: fetch type from base column
 		col_type = types[column_index];
-		SetBoundColumnAlias(colref);
+		name = GetBoundColumnName(colref);
 	}
 	ColumnBinding binding = GetColumnBinding(column_index);
-	return BindResult(make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), col_type, binding, depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(std::move(name), col_type, binding, depth));
 }
 
 optional_ptr<StandardEntry> TableBinding::GetStandardEntry() {
@@ -337,7 +338,7 @@ DummyBinding::DummyBinding(vector<LogicalType> types, vector<Identifier> names, 
       dummy_name(std::move(dummy_name)) {
 }
 
-BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
+BindResult DummyBinding::Bind(const ColumnRefExpression &colref, idx_t depth) {
 	column_t column_index;
 	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
 		throw InternalException("Column %s not found in bindings", colref.GetColumnName());
@@ -349,7 +350,7 @@ BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	    make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), types[column_index], binding, depth));
 }
 
-BindResult DummyBinding::Bind(LambdaRefExpression &lambdaref, idx_t depth) {
+BindResult DummyBinding::Bind(const LambdaRefExpression &lambdaref, idx_t depth) {
 	column_t column_index;
 	if (!TryGetBindingIndex(Identifier(lambdaref.GetName()), column_index)) {
 		throw InternalException("Column %s not found in bindings", lambdaref.GetName());
@@ -359,7 +360,7 @@ BindResult DummyBinding::Bind(LambdaRefExpression &lambdaref, idx_t depth) {
 	                                                      lambdaref.LambdaIndex(), depth));
 }
 
-unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colref) {
+unique_ptr<ParsedExpression> DummyBinding::ParamToArg(const ColumnRefExpression &colref) {
 	column_t column_index;
 	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
 		throw InternalException("Column %s not found in macro", colref.GetColumnName());

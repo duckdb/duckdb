@@ -14,7 +14,7 @@ namespace duckdb {
 
 Value Binder::BindExternalResourceValue(unique_ptr<ParsedExpression> &expr) {
 	TableFunctionBinder binder(*this, context, "External resource", "External resource parameter");
-	auto bound = binder.Bind(expr);
+	auto bound = binder.Bind(*expr);
 	return ExpressionExecutor::EvaluateScalar(context, *bound, true);
 }
 

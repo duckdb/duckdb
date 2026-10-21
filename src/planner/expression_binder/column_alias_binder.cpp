@@ -11,7 +11,7 @@ namespace duckdb {
 ColumnAliasBinder::ColumnAliasBinder(SelectBindState &bind_state) : bind_state(bind_state), visited_select_indexes() {
 }
 
-unique_ptr<ParsedExpression> ColumnAliasBinder::ResolveAlias(ColumnRefExpression &colref) {
+unique_ptr<ParsedExpression> ColumnAliasBinder::ResolveAlias(const ColumnRefExpression &colref) {
 	if (!ExpressionBinder::IsPotentialAlias(colref)) {
 		return nullptr;
 	}
@@ -26,11 +26,8 @@ unique_ptr<ParsedExpression> ColumnAliasBinder::ResolveAlias(ColumnRefExpression
 	return bind_state.BindAlias(alias_entry->second);
 }
 
-bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, unique_ptr<ParsedExpression> &expr_ptr,
-                                  idx_t depth, bool root_expression, BindResult &result) {
-	D_ASSERT(expr_ptr->GetExpressionClass() == ExpressionClass::COLUMN_REF);
-	auto &expr = expr_ptr->Cast<ColumnRefExpression>();
-
+bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, const ColumnRefExpression &expr, idx_t depth,
+                                  bool root_expression, BindResult &result) {
 	if (!ExpressionBinder::IsPotentialAlias(expr)) {
 		return false;
 	}
@@ -46,12 +43,11 @@ bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, unique_ptr
 		return false;
 	}
 
-	// We found an alias, so we copy the alias expression into this expression.
-	auto original_expr = bind_state.BindAlias(alias_entry->second);
-	expr_ptr = std::move(original_expr);
+	// We found an alias, so we bind a copy of the alias expression in place of this expression.
+	auto alias_expr = bind_state.BindAlias(alias_entry->second);
 	visited_select_indexes.insert(alias_entry->second);
 
-	result = enclosing_binder.BindExpression(expr_ptr, depth, root_expression);
+	result = enclosing_binder.BindExpression(*alias_expr, depth, root_expression);
 	visited_select_indexes.erase(alias_entry->second);
 	return true;
 }

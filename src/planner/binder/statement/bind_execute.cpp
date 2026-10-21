@@ -45,7 +45,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		bool is_literal = pair.second->GetExpressionType() == ExpressionType::VALUE_CONSTANT;
 
 		ConstantBinder cbinder(*constant_binder, context, "EXECUTE statement");
-		auto bound_expr = cbinder.Bind(pair.second);
+		auto bound_expr = cbinder.Bind(*pair.second);
 		BoundParameterData parameter_data;
 		if (is_literal) {
 			auto &constant = bound_expr->Cast<BoundConstantExpression>();

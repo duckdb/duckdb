@@ -13,14 +13,13 @@ AlterBinder::AlterBinder(Binder &binder, ClientContext &context, TableCatalogEnt
 	this->target_type = std::move(target_type);
 }
 
-BindResult AlterBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
+BindResult AlterBinder::BindLambdaReference(const LambdaRefExpression &expr, idx_t depth) {
 	D_ASSERT(lambda_bindings && expr.LambdaIndex() < lambda_bindings->size());
 	auto &lambda_ref = expr.Cast<LambdaRefExpression>();
 	return (*lambda_bindings)[expr.LambdaIndex()].Bind(lambda_ref, depth);
 }
 
-BindResult AlterBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = *expr_ptr;
+BindResult AlterBinder::BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::WINDOW:
 		return BindResult(BinderException::Unsupported(expr, "window functions are not allowed in alter statement"));
@@ -29,7 +28,7 @@ BindResult AlterBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnReference(expr.Cast<ColumnRefExpression>(), depth);
 	default:
-		return ExpressionBinder::BindExpression(expr_ptr, depth);
+		return ExpressionBinder::BindExpression(expr, depth);
 	}
 }
 
@@ -37,7 +36,7 @@ string AlterBinder::UnsupportedAggregateMessage() {
 	return "aggregate functions are not allowed in alter statement";
 }
 
-BindResult AlterBinder::BindColumnReference(ColumnRefExpression &col_ref, idx_t depth) {
+BindResult AlterBinder::BindColumnReference(const ColumnRefExpression &col_ref, idx_t depth) {
 	if (!col_ref.IsQualified()) {
 		// Try binding as a lambda parameter.
 		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName());

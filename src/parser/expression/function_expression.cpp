@@ -113,7 +113,7 @@ void FunctionExpression::Verify() const {
 	D_ASSERT(!qualified_name.Name().empty());
 }
 
-optional_ptr<ParsedExpression> FunctionExpression::IsLambdaFunction() {
+optional_ptr<const ParsedExpression> FunctionExpression::IsLambdaFunction() const {
 	// Ignore the ->> operator (JSON extension).
 	if (qualified_name.Name() == "->>") {
 		return nullptr;
@@ -121,7 +121,7 @@ optional_ptr<ParsedExpression> FunctionExpression::IsLambdaFunction() {
 	// Check the children for lambda expressions.
 	for (auto &child : arguments) {
 		if (child.GetExpression().GetExpressionClass() == ExpressionClass::LAMBDA) {
-			return *child.GetExpressionMutable();
+			return child.GetExpression();
 		}
 	}
 	return nullptr;

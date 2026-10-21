@@ -44,7 +44,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 	if (action.condition) {
 		ProjectionBinder proj_binder(*this, context, proj_index, expressions, "WHERE clause");
 		proj_binder.target_type = LogicalType::BOOLEAN;
-		auto cond = proj_binder.Bind(action.condition);
+		auto cond = proj_binder.Bind(*action.condition);
 		result->condition = std::move(cond);
 	}
 	switch (action.action_type) {
@@ -133,7 +133,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			insert_binder.target_type = table.GetExpectedTypeForInsert(column);
 
 			TryReplaceDefaultExpression(action.expressions[i], column);
-			auto insert_expr = insert_binder.Bind(action.expressions[i]);
+			auto insert_expr = insert_binder.Bind(*action.expressions[i]);
 			auto insert_type = insert_expr->GetReturnType();
 			auto expr_index = ColumnBinding::PushExpression(expressions, std::move(insert_expr));
 			insert_bindings.emplace_back(proj_index, expr_index);
@@ -158,7 +158,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 		for (auto &expr : action.expressions) {
 			ProjectionBinder proj_binder(*this, context, proj_index, expressions, "Error Message");
 			proj_binder.target_type = LogicalType::VARCHAR;
-			auto error_msg = proj_binder.Bind(expr);
+			auto error_msg = proj_binder.Bind(*expr);
 			result->expressions.push_back(std::move(error_msg));
 		}
 		break;

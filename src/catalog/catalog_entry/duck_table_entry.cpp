@@ -1240,7 +1240,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	vector<LogicalIndex> bound_columns;
 	AlterBinder expr_binder(*binder, context, *this, bound_columns, info.target_type);
 	auto expression = info.expression->Copy();
-	auto bound_expression = expr_binder.Bind(expression);
+	auto bound_expression = expr_binder.Bind(*expression);
 
 	// Infer the target_type from the USING expression, if not set explicitly.
 	if (info.target_type == LogicalType::UNKNOWN) {

@@ -360,8 +360,7 @@ public:
 	}
 
 protected:
-	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override {
-		auto &expr = *expr_ptr;
+	BindResult BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression) override {
 		switch (expr.GetExpressionClass()) {
 		case ExpressionClass::WINDOW:
 			return BindResult(BinderException::Unsupported(expr, "window functions are not allowed in PARTITION_PATH"));
@@ -370,11 +369,11 @@ protected:
 		case ExpressionClass::COLUMN_REF:
 			return BindColumnReference(expr.Cast<ColumnRefExpression>());
 		default:
-			return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
+			return ExpressionBinder::BindExpression(expr, depth, root_expression);
 		}
 	}
 
-	BindResult BindLambdaFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function,
+	BindResult BindLambdaFunction(const FunctionExpression &expr, ScalarFunctionCatalogEntry &function,
 	                              idx_t depth) override {
 		return BindResult(BinderException::Unsupported(expr, "lambda functions are not allowed in PARTITION_PATH"));
 	}
@@ -384,7 +383,7 @@ protected:
 	}
 
 private:
-	BindResult BindColumnReference(ColumnRefExpression &col_ref) {
+	BindResult BindColumnReference(const ColumnRefExpression &col_ref) {
 		if (col_ref.ColumnNames().size() == 1) {
 			auto &column_name = col_ref.GetColumnName();
 			for (idx_t i = 0; i < partition_columns.size(); i++) {
@@ -592,7 +591,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	if (resolved_options.partition_path) {
 		PartitionPathBinder partition_path_binder(*this, context, select_node.names, select_node.types,
 		                                          resolved_options.partition_cols);
-		partition_path_expression = partition_path_binder.Bind(resolved_options.partition_path);
+		partition_path_expression = partition_path_binder.Bind(*resolved_options.partition_path);
 		if (partition_path_expression->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}
@@ -749,7 +748,7 @@ vector<Value> BindCopyOption(ClientContext &context, Binder &binder, const Ident
 		}
 	}
 	TableFunctionBinder option_binder(binder, context, "Copy", "Copy options", conversion_policy);
-	auto bound_expr = option_binder.Bind(expr);
+	auto bound_expr = option_binder.Bind(*expr);
 	if (bound_expr->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}

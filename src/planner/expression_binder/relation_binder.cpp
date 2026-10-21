@@ -6,8 +6,7 @@ RelationBinder::RelationBinder(Binder &binder, ClientContext &context, string op
     : ExpressionBinder(binder, context), op(std::move(op)) {
 }
 
-BindResult RelationBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = *expr_ptr;
+BindResult RelationBinder::BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::AGGREGATE:
 		return BindResult(BinderException::Unsupported(expr, "aggregate functions are not allowed in " + op));
@@ -18,7 +17,7 @@ BindResult RelationBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr
 	case ExpressionClass::WINDOW:
 		return BindResult(BinderException::Unsupported(expr, "window functions are not allowed in " + op));
 	default:
-		return ExpressionBinder::BindExpression(expr_ptr, depth);
+		return ExpressionBinder::BindExpression(expr, depth);
 	}
 }
 

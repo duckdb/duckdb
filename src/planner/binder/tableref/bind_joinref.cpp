@@ -24,7 +24,7 @@ static unique_ptr<Expression> BindColumn(Binder &binder, ClientContext &context,
                                          const Identifier &column_name) {
 	auto expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(column_name, alias);
 	ExpressionBinder expr_binder(binder, context);
-	return expr_binder.Bind(expr);
+	return expr_binder.Bind(*expr);
 }
 
 //! Build the bound comparison of a USING/NATURAL column. Each side is bound against its own binder,
@@ -209,13 +209,13 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 				// We gotta use the expression binder of the right side
 				ExpressionBinder expr_binder(right_binder, context);
 				for (auto &col : ref.duplicate_eliminated_columns) {
-					result->duplicate_eliminated_columns.emplace_back(expr_binder.Bind(col));
+					result->duplicate_eliminated_columns.emplace_back(expr_binder.Bind(*col));
 				}
 			} else {
 				// We use the left side
 				ExpressionBinder expr_binder(left_binder, context);
 				for (auto &col : ref.duplicate_eliminated_columns) {
-					result->duplicate_eliminated_columns.emplace_back(expr_binder.Bind(col));
+					result->duplicate_eliminated_columns.emplace_back(expr_binder.Bind(*col));
 				}
 			}
 		}
@@ -383,7 +383,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	bind_context.AddContext(std::move(right_binder.bind_context));
 	if (ref.condition) {
 		WhereBinder condition_binder(*this, context);
-		result->condition = condition_binder.Bind(ref.condition);
+		result->condition = condition_binder.Bind(*ref.condition);
 	}
 	// AND the USING/NATURAL conditions onto the condition written in the query, in that order
 	for (auto &condition : extra_conditions) {

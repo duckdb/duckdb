@@ -120,18 +120,18 @@ public:
 	}
 
 protected:
-	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
-	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth) override;
+	BindResult BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression) override;
+	BindResult BindAggregate(const FunctionExpression &expr, AggregateFunctionCatalogEntry &function,
+	                         idx_t depth) override;
 	string UnsupportedAggregateMessage() override;
 
 public:
 private:
 	//! PREV()/NEXT() walk the ordered partition rather than the match, so they are ordinary windows
-	BindResult BindNeighbour(FunctionExpression &function, const string &function_name,
-	                         unique_ptr<ParsedExpression> &expr_ptr, idx_t depth);
+	BindResult BindNeighbour(const FunctionExpression &function, const string &function_name, idx_t depth);
 	//! FIRST()/LAST() read a row of the match being assembled, so the plan supplies the expression and
 	//! the matcher reads it off the row it navigated to
-	BindResult BindNavigation(FunctionExpression &function, const string &function_name, idx_t depth);
+	BindResult BindNavigation(const FunctionExpression &function, const string &function_name, idx_t depth);
 	BindResult BindNavigated(unique_ptr<ParsedExpression> inner, string symbol, bool last, idx_t offset, idx_t depth,
 	                         int64_t step = 0);
 	//! Reject something that only means anything while the matcher is assembling a match
@@ -162,22 +162,23 @@ public:
 	                            const case_insensitive_map_t<string> &universal, bool all_rows);
 
 protected:
-	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
-	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth) override;
+	BindResult BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression) override;
+	BindResult BindAggregate(const FunctionExpression &expr, AggregateFunctionCatalogEntry &function,
+	                         idx_t depth) override;
 
 private:
 	//! An aggregate in MEASURES aggregates the rows of the match, which is a window over them
-	BindResult BindOverMatch(FunctionExpression &expr, idx_t depth);
+	BindResult BindOverMatch(const FunctionExpression &aggregate, idx_t depth);
 	//! One field of the matcher's state, as it stands where the measures are projected
 	unique_ptr<ParsedExpression> StateField(const string &field);
 	//! Bind an expression this binder built, whose own parts are not the clause's to interpret again
-	BindResult BindGenerated(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
-	BindResult BindNavigation(FunctionExpression &function, const string &function_name,
-	                          unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
+	BindResult BindGenerated(const ParsedExpression &expr, idx_t depth, bool root_expression);
+	BindResult BindNavigation(const FunctionExpression &function, const string &function_name, idx_t depth,
+	                          bool root_expression);
 	//! PREV/NEXT around CLASSIFIER(): the classifier of a row a fixed distance from a row of the match,
 	//! read off the whole match once it is known
-	BindResult BindClassifierStep(FunctionExpression &function, const string &function_name,
-	                              unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
+	BindResult BindClassifierStep(const FunctionExpression &function, const string &function_name, idx_t depth,
+	                              bool root_expression);
 
 	//! The column the matcher's state travels in
 	string state;

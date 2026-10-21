@@ -1,0 +1,69 @@
+diff --git a/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp b/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
+index 36fc6cd..d0d7b70 100644
+--- a/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
++++ b/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
+@@ -760,8 +760,7 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 
+ 		for (auto &option : set_options_info.table_options) {
+ 			auto &key = option.first;
+-			auto expr_copy = option.second->Copy();
+-			auto bound_expr = property_binder.Bind(expr_copy);
++			auto bound_expr = property_binder.Bind(*option.second);
+ 			if (bound_expr->HasParameter()) {
+ 				throw ParameterNotResolvedException();
+ 			}
+diff --git a/src/catalog/rest/iceberg_table_set.cpp b/src/catalog/rest/iceberg_table_set.cpp
+index d6efdf6..2cf1425 100644
+--- a/src/catalog/rest/iceberg_table_set.cpp
++++ b/src/catalog/rest/iceberg_table_set.cpp
+@@ -318,8 +318,7 @@ void IcebergTableSet::ApplyListResult(IcebergListTablesResult tables) {
+ 
+ static Value ParseTableProperty(TableFunctionBinder &binder, ClientContext &context, const ParsedExpression &expr_ref,
+                                 const string &property_name, const LogicalType &type) {
+-	auto expr = expr_ref.Copy();
+-	auto bound_expr = binder.Bind(expr);
++	auto bound_expr = binder.Bind(expr_ref);
+ 	if (bound_expr->HasParameter()) {
+ 		throw ParameterNotResolvedException();
+ 	}
+diff --git a/src/common/iceberg_default.cpp b/src/common/iceberg_default.cpp
+index 01658a5..2cb4b1b 100644
+--- a/src/common/iceberg_default.cpp
++++ b/src/common/iceberg_default.cpp
+@@ -24,8 +24,7 @@ Value IcebergDefaultBinder::Evaluate(optional_ptr<const ParsedExpression> expr,
+ 	if (!expr) {
+ 		return Value(type);
+ 	}
+-	auto expr_copy = expr->Copy();
+-	auto bound_expr = constant_binder.Bind(expr_copy, nullptr);
++	auto bound_expr = constant_binder.Bind(*expr, nullptr);
+ 
+ 	if (!bound_expr->IsFoldable()) {
+ 		throw NotImplementedException("Only foldable expressions are allowed as DEFAULT values");
+diff --git a/src/execution/operator/iceberg_insert.cpp b/src/execution/operator/iceberg_insert.cpp
+index b394515..5483436 100644
+--- a/src/execution/operator/iceberg_insert.cpp
++++ b/src/execution/operator/iceberg_insert.cpp
+@@ -1116,8 +1116,7 @@ static unique_ptr<IcebergTableMetadata> BuildPlaceholderMetadata(ClientContext &
+ 	auto binder = Binder::CreateBinder(context);
+ 	TableFunctionBinder property_binder(*binder, context, "format-version");
+ 	for (auto &option : create_info.options) {
+-		auto expr_copy = option.second->Copy();
+-		auto bound_expr = property_binder.Bind(expr_copy);
++		auto bound_expr = property_binder.Bind(*option.second);
+ 		if (bound_expr->HasParameter()) {
+ 			throw ParameterNotResolvedException();
+ 		}
+diff --git a/src/function/scan_planning/iceberg_row_filter.cpp b/src/function/scan_planning/iceberg_row_filter.cpp
+index 89ca357..64cc681 100644
+--- a/src/function/scan_planning/iceberg_row_filter.cpp
++++ b/src/function/scan_planning/iceberg_row_filter.cpp
+@@ -42,7 +42,7 @@ unique_ptr<Expression> IcebergRowFilter::Bind(ClientContext &context, const stri
+ 	}
+ 	binder->bind_context.AddGenericBinding(binder->GenerateTableIndex(), "iceberg_row", names, types);
+ 	WhereBinder expression_binder(*binder, context);
+-	auto result = expression_binder.Bind(expressions[0]);
++	auto result = expression_binder.Bind(*expressions[0]);
+ 	if (!result->IsConsistent()) {
+ 		throw BinderException("Iceberg row_filter must be deterministic");
+ 	}

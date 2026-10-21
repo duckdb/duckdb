@@ -17,7 +17,7 @@ static bool IsValidTypeLookup(optional_ptr<CatalogEntry> entry) {
 	return entry->Cast<TypeCatalogEntry>().user_type.id() != LogicalTypeId::INVALID;
 }
 
-BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t depth) {
+BindResult ExpressionBinder::BindExpression(const TypeExpression &type_expr, idx_t depth) {
 	auto &type_name = type_expr.GetTypeName();
 
 	QueryErrorContext error_context(type_expr);
@@ -82,8 +82,7 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 		ConstantBinder binder(this->binder, context, StringUtil::Format("Type parameter for type %s", type_name));
 		binder.ContinueStackDepth(*this);
 
-		auto expr = param->Copy();
-		auto bound_expr = binder.Bind(expr);
+		auto bound_expr = binder.Bind(*param);
 
 		if (!bound_expr->IsFoldable()) {
 			throw BinderException(type_expr, "Type parameter expression for type %s is not a constant", type_name);

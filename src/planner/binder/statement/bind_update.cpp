@@ -64,7 +64,7 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 		} else {
 			UpdateBinder binder(*expr_binder_ptr, context);
 			binder.target_type = table.GetExpectedTypeForInsert(column);
-			auto bound_expr = binder.Bind(expr);
+			auto bound_expr = binder.Bind(*expr);
 			if (root) {
 				PlanSubqueries(bound_expr, root);
 			}
@@ -215,7 +215,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	// project any additional columns required for the condition/expressions
 	if (node.set_info->condition) {
 		WhereBinder binder(*this, context);
-		auto condition = binder.Bind(node.set_info->condition);
+		auto condition = binder.Bind(*node.set_info->condition);
 
 		PlanSubqueries(condition, root);
 		auto filter = make_uniq<LogicalFilter>(std::move(condition));

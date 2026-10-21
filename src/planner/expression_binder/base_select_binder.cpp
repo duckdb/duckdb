@@ -18,8 +18,7 @@ BaseSelectBinder::BaseSelectBinder(Binder &binder, ClientContext &context, Bound
     : ExpressionBinder(binder, context), node(node) {
 }
 
-BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = *expr_ptr;
+BindResult BaseSelectBinder::BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression) {
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr);
 	if (group_index.IsValid()) {
@@ -28,19 +27,19 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
 		if (inside_aggregate) {
-			return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
+			return ExpressionBinder::BindExpression(expr, depth, root_expression);
 		}
-		return BindColumnRef(expr_ptr, depth, root_expression);
+		return BindColumnRef(expr, depth, root_expression);
 	case ExpressionClass::DEFAULT:
 		return BindResult(BinderException::Unsupported(expr, "SELECT clause cannot contain DEFAULT clause"));
 	case ExpressionClass::WINDOW:
 		return BindWindowExpression(expr.Cast<WindowExpression>(), depth);
 	default:
-		return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
+		return ExpressionBinder::BindExpression(expr, depth, root_expression);
 	}
 }
 
-bool BaseSelectBinder::ClaimsAlias(ColumnRefExpression &colref) {
+bool BaseSelectBinder::ClaimsAlias(const ColumnRefExpression &colref) {
 	if (!ExpressionBinder::IsPotentialAlias(colref)) {
 		return false;
 	}
@@ -48,14 +47,14 @@ bool BaseSelectBinder::ClaimsAlias(ColumnRefExpression &colref) {
 	return alias_map.find(colref.ColumnNames().back()) != alias_map.end();
 }
 
-bool BaseSelectBinder::MatchesGroup(ParsedExpression &expr) {
+bool BaseSelectBinder::MatchesGroup(const ParsedExpression &expr) {
 	// the groups are keyed by the qualified form, so qualify against this scope before matching
 	auto qualified = expr.Copy();
 	ExpressionBinder::QualifyColumnNames(binder, qualified);
 	return TryBindGroup(*qualified).IsValid();
 }
 
-ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
+ProjectionIndex BaseSelectBinder::TryBindGroup(const ParsedExpression &expr) {
 	if (inside_aggregate) {
 		return ProjectionIndex();
 	}
@@ -87,11 +86,11 @@ ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 	return ProjectionIndex();
 }
 
-BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	return ExpressionBinder::BindExpression(expr_ptr, depth);
+BindResult BaseSelectBinder::BindColumnRef(const ParsedExpression &expr, idx_t depth, bool root_expression) {
+	return ExpressionBinder::BindExpression(expr, depth);
 }
 
-BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t depth) {
+BindResult BaseSelectBinder::BindGroupingFunction(const OperatorExpression &op, idx_t depth) {
 	if (node.groups.group_expressions.empty()) {
 		return BindResult(BinderException(op, "GROUPING statement cannot be used without groups"));
 	}
@@ -102,11 +101,14 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 			group_indexes.push_back(ProjectionIndex(i));
 		}
 	} else {
-		for (auto &child : op.GetChildrenMutable()) {
-			ExpressionBinder::QualifyColumnNames(binder, child);
-			auto idx = TryBindGroup(*child);
+		for (auto &child : op.GetChildren()) {
+			// the groups are keyed by the qualified form, so qualify against this scope before matching
+			auto qualified = child->Copy();
+			ExpressionBinder::QualifyColumnNames(binder, qualified);
+			auto idx = TryBindGroup(*qualified);
 			if (!idx.IsValid()) {
-				return BindResult(BinderException(op, "GROUPING child %s must be a grouping column", child->GetName()));
+				return BindResult(
+				    BinderException(op, "GROUPING child %s must be a grouping column", qualified->GetName()));
 			}
 			group_indexes.push_back(idx);
 		}
@@ -120,7 +122,7 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 	                                                      ColumnBinding(node.groupings_index, col_idx), depth));
 }
 
-BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, ProjectionIndex group_index) {
+BindResult BaseSelectBinder::BindGroup(const ParsedExpression &expr, idx_t depth, ProjectionIndex group_index) {
 	auto &collated_groups = node.bind_state.collated_groups;
 	auto it = collated_groups.find(group_index);
 	if (it != collated_groups.end()) {

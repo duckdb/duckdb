@@ -9,12 +9,12 @@ ProjectionBinder::ProjectionBinder(Binder &binder, ClientContext &context, Table
       clause(std::move(clause_p)) {
 }
 
-BindResult ProjectionBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+BindResult ProjectionBinder::BindColumnRef(const ParsedExpression &expr, idx_t depth, bool root_expression) {
 	if (in_child_projection) {
-		return ExpressionBinder::BindExpression(expr_ptr, depth);
+		return ExpressionBinder::BindExpression(expr, depth);
 	}
 	in_child_projection = true;
-	auto result = ExpressionBinder::BindExpression(expr_ptr, depth);
+	auto result = ExpressionBinder::BindExpression(expr, depth);
 	in_child_projection = false;
 	if (result.HasError()) {
 		return result;
@@ -31,8 +31,7 @@ BindResult ProjectionBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_pt
 	return BindResult(std::move(proj_ref));
 }
 
-BindResult ProjectionBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = *expr_ptr;
+BindResult ProjectionBinder::BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
 		return BindUnsupportedExpression(expr, depth, clause + " cannot contain DEFAULT clause");
@@ -40,9 +39,9 @@ BindResult ProjectionBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 		return BindUnsupportedExpression(expr, depth, clause + " cannot contain window functions!");
 	case ExpressionClass::COLUMN_REF:
 	case ExpressionClass::SUBQUERY:
-		return BindColumnRef(expr_ptr, depth, root_expression);
+		return BindColumnRef(expr, depth, root_expression);
 	default:
-		return ExpressionBinder::BindExpression(expr_ptr, depth);
+		return ExpressionBinder::BindExpression(expr, depth);
 	}
 }
 

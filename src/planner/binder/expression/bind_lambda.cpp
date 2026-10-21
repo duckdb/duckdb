@@ -46,7 +46,7 @@ static void ExtractParameter(const ParsedExpression &expr, vector<Identifier> &c
 	column_aliases.push_back(column_ref.ToString());
 }
 
-static void ExtractParameters(LambdaExpression &expr, vector<Identifier> &column_names,
+static void ExtractParameters(const LambdaExpression &expr, vector<Identifier> &column_names,
                               vector<string> &column_aliases) {
 	// extract the lambda parameters, which are a single column
 	// reference, or a list of column references (ROW function)
@@ -70,20 +70,20 @@ static bool IsDoubleArrowRHS(const ParsedExpression &expr) {
 	return func.IsOperator() && func.FunctionName() == "->>" && func.GetArguments().size() == 2;
 }
 
-static unique_ptr<ParsedExpression> RestructureArrowChain(LambdaExpression &expr) {
-	auto &rhs_func = expr.RightMutable()->Cast<FunctionExpression>();
-	auto inner_lambda = make_uniq<LambdaExpression>(
-	    std::move(expr.LeftMutable()), std::move(rhs_func.GetArgumentsMutable()[0].GetExpressionMutable()));
+static unique_ptr<ParsedExpression> RestructureArrowChain(const LambdaExpression &expr) {
+	auto &rhs_func = expr.Right().Cast<FunctionExpression>();
+	auto inner_lambda =
+	    make_uniq<LambdaExpression>(expr.Left().Copy(), rhs_func.GetArguments()[0].GetExpression().Copy());
 	inner_lambda->GetLambdaSyntaxTypeMutable() = expr.GetLambdaSyntaxType();
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(inner_lambda));
-	children.push_back(std::move(rhs_func.GetArgumentsMutable()[1].GetExpressionMutable()));
+	children.push_back(rhs_func.GetArguments()[1].GetExpression().Copy());
 	auto restructured = make_uniq<FunctionExpression>("->>", std::move(children));
 	restructured->IsOperatorMutable() = true;
 	return std::move(restructured);
 }
 
-BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
+BindResult ExpressionBinder::BindExpression(const LambdaExpression &expr, idx_t depth,
                                             const vector<LogicalType> &function_child_types,
                                             optional_ptr<bind_lambda_function_t> bind_lambda_function,
                                             optional_ptr<BindLambdaContext> bind_lambda_context) {
@@ -95,27 +95,13 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		// The PEG parser produces A -> (B ->> C) where the standard parser left-associates to (A -> B) ->> C.
 		// Restructure to match standard behavior before binding.
 		if (IsDoubleArrowRHS(expr.Right())) {
-			unique_ptr<ParsedExpression> restructured = RestructureArrowChain(expr);
-			return BindExpression(restructured, depth);
+			auto restructured = RestructureArrowChain(expr);
+			return BindExpression(*restructured, depth);
 		}
 
 		// This is not a lambda expression, but the JSON arrow operator.
-		// Remember the original expression in case of a binding error.
-		if (!expr.CopiedExprMutable()) {
-			expr.CopiedExprMutable() = expr.Right().Copy();
-		}
-		OperatorExpression arrow_expr(ExpressionType::ARROW, std::move(expr.LeftMutable()),
-		                              std::move(expr.RightMutable()));
-		auto bind_result = BindExpression(arrow_expr, depth);
-
-		// The arrow_expr now might contain bound nodes.
-		// Restore the original expression.
-		if (bind_result.HasError()) {
-			D_ASSERT(arrow_expr.GetChildrenMutable().size() == 2);
-			expr.LeftMutable() = std::move(arrow_expr.GetChildrenMutable()[0]);
-			expr.RightMutable() = std::move(arrow_expr.GetChildrenMutable()[1]);
-		}
-		return bind_result;
+		OperatorExpression arrow_expr(ExpressionType::ARROW, expr.Left().Copy(), expr.Right().Copy());
+		return BindExpression(arrow_expr, depth);
 	}
 
 	// extract and verify lambda parameters to create dummy columns
@@ -141,10 +127,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	DummyBinding new_lambda_binding(column_types, column_names, table_alias);
 	lambda_bindings->push_back(new_lambda_binding);
 
-	if (expr.CopiedExprMutable()) {
-		expr.RightMutable() = std::move(expr.CopiedExprMutable());
-	}
-	auto result = BindExpression(expr.RightMutable(), depth, false);
+	auto result = BindExpression(expr.Right(), depth, false);
 	lambda_bindings->pop_back();
 
 	// successfully bound a subtree of nested lambdas, set this to nullptr in case other parts of the

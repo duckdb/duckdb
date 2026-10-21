@@ -27,14 +27,14 @@ public:
 	                             unique_ptr<ParsedExpression> &expr_ptr);
 
 protected:
-	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
-	BindResult BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) override;
+	BindResult BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression) override;
+	BindResult BindUnnest(const FunctionExpression &function, idx_t depth, bool root_expression) override;
 	void ThrowIfUnnestInLambda(const ColumnBinding &column_binding) override;
 
 	string UnsupportedAggregateMessage() override;
 
-	bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression, BindResult &result,
-	                              unique_ptr<ParsedExpression> &expr_ptr) override;
+	bool TryResolveAliasReference(const ColumnRefExpression &colref, idx_t depth, bool root_expression,
+	                              BindResult &result) override;
 
 private:
 	BoundSelectNode &node;

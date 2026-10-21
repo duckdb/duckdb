@@ -1,0 +1,13 @@
+diff --git a/src/storage/postgres_index.cpp b/src/storage/postgres_index.cpp
+index acacc7c..d2da945 100644
+--- a/src/storage/postgres_index.cpp
++++ b/src/storage/postgres_index.cpp
+@@ -92,7 +92,7 @@ unique_ptr<LogicalOperator> PostgresCatalog::BindCreateIndex(Binder &binder, Cre
+ 	// Bind the index expressions.
+ 	vector<unique_ptr<Expression>> expressions;
+ 	for (auto &expr : create_index_info->expressions) {
+-		expressions.push_back(index_binder.Bind(expr));
++		expressions.push_back(index_binder.Bind(*expr));
+ 	}
+ 
+ 	auto &get = plan->Cast<LogicalGet>();

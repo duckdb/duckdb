@@ -26,7 +26,7 @@ OrderBinder::OrderBinder(vector<reference<Binder>> binders, SelectNode &node, Se
 	this->extra_list = &node.select_list;
 }
 
-unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, const idx_t index) {
+unique_ptr<Expression> OrderBinder::CreateProjectionReference(const ParsedExpression &expr, const idx_t index) {
 	Identifier alias;
 	if (extra_list && index < extra_list->size()) {
 		alias = Identifier(extra_list->at(index)->ToString());
@@ -51,7 +51,7 @@ unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpres
 	return result;
 }
 
-optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) const {
+optional_idx OrderBinder::TryGetProjectionReference(const ParsedExpression &expr) const {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::CONSTANT: {
 		auto &constant = expr.Cast<ConstantExpression>();
@@ -124,7 +124,7 @@ void OrderBinder::SetQueryComponent(string component) {
 	}
 }
 
-unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr) {
+unique_ptr<Expression> OrderBinder::BindConstant(const ParsedExpression &expr) {
 	auto index = TryGetProjectionReference(expr);
 	if (!index.IsValid()) {
 		return nullptr;
@@ -164,7 +164,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	}
 	case ExpressionClass::COLLATE: {
 		auto &collation = expr->Cast<CollateExpression>();
-		auto collation_index = TryGetProjectionReference(*collation.ChildMutable());
+		auto collation_index = TryGetProjectionReference(collation.Child());
 		if (collation_index.IsValid()) {
 			child_list_t<Value> values;
 			values.emplace_back(make_pair("index", Value::UBIGINT(collation_index.GetIndex())));

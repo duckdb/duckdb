@@ -118,7 +118,7 @@ public:
 	      unnest_level(unnest_level), struct_handling(struct_handling), struct_error(std::move(struct_error)) {
 	}
 
-	BindResult Bind(FunctionExpression &function, idx_t depth, bool root_expression);
+	BindResult Bind(const FunctionExpression &function, idx_t depth, bool root_expression);
 
 private:
 	ExpressionBinder &expression_binder;
@@ -130,7 +130,7 @@ private:
 	string struct_error;
 };
 
-BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool root_expression) {
+BindResult UnnestBinder::Bind(const FunctionExpression &function, idx_t depth, bool root_expression) {
 	// bind the children of the function expression
 	if (depth > 0) {
 		return BindResult(BinderException(function, "UNNEST() for correlated expressions is not supported yet"));
@@ -148,7 +148,7 @@ BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool ro
 
 	idx_t max_depth = 1;
 	bool keep_parent_names = false;
-	auto &args = function.GetArgumentsMutable();
+	auto &args = function.GetArguments();
 
 	if (args.size() != 1) {
 		bool supported_argument = false;
@@ -160,7 +160,7 @@ BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool ro
 				break;
 			}
 			auto alias = args[i].GetExpression().GetAlias();
-			auto const_child = expression_binder.BindChild(args[i].GetExpressionMutable(), depth, error);
+			auto const_child = expression_binder.BindChild(args[i].GetExpression(), depth, error);
 			if (error.HasError()) {
 				return BindResult(std::move(error));
 			}
@@ -198,7 +198,7 @@ BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool ro
 	}
 	auto outer_unnest_level = unnest_level;
 	UnnestLevelGuard unnest_level_guard(unnest_level);
-	auto child = expression_binder.BindChild(args[0].GetExpressionMutable(), depth, error);
+	auto child = expression_binder.BindChild(args[0].GetExpression(), depth, error);
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}
@@ -329,7 +329,7 @@ BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool ro
 	return BindResult(std::move(unnest_expr));
 }
 
-BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) {
+BindResult SelectBinder::BindUnnest(const FunctionExpression &function, idx_t depth, bool root_expression) {
 	if (inside_window || inside_aggregate || inside_try) {
 		return BindResult(BinderException(function, UnsupportedUnnestMessage()));
 	}
@@ -338,7 +338,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	return unnest_binder.Bind(function, depth, root_expression);
 }
 
-BindResult GroupBinder::BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) {
+BindResult GroupBinder::BindUnnest(const FunctionExpression &function, idx_t depth, bool root_expression) {
 	if (inside_try) {
 		return BindResult(BinderException(function, UnsupportedUnnestMessage()));
 	}

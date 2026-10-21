@@ -16,15 +16,14 @@ TableFunctionBinder::TableFunctionBinder(Binder &binder, ClientContext &context,
       clause(std::move(clause_p)), identifier_conversion_policy(identifier_conversion_policy_p) {
 }
 
-BindResult TableFunctionBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
+BindResult TableFunctionBinder::BindLambdaReference(const LambdaRefExpression &expr, idx_t depth) {
 	D_ASSERT(lambda_bindings && expr.LambdaIndex() < lambda_bindings->size());
 	auto &lambda_ref = expr.Cast<LambdaRefExpression>();
 	return (*lambda_bindings)[expr.LambdaIndex()].Bind(lambda_ref, depth);
 }
 
-BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
-                                                    bool root_expression) {
-	auto &col_ref = expr_ptr->Cast<ColumnRefExpression>();
+BindResult TableFunctionBinder::BindColumnReference(const ParsedExpression &expr, idx_t depth, bool root_expression) {
+	auto &col_ref = expr.Cast<ColumnRefExpression>();
 	if (!col_ref.IsQualified()) {
 		// Try binding as a lambda parameter.
 		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName());
@@ -41,7 +40,7 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	}
 
 	auto query_location = col_ref.GetQueryLocation();
-	auto column_names = col_ref.ColumnNames();
+	auto &column_names = col_ref.ColumnNames();
 	auto result_name = StringUtil::Join(column_names, ".");
 	// the name is never a column of this scope, so it can only come from an enclosing one. Resolving it
 	// there is not enough to call it a lateral parameter: a scope can reach a name and still fail to
@@ -51,7 +50,7 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	ErrorData not_a_parameter(ExceptionType::BINDER,
 	                          StringUtil::Format("Referenced column \"%s\" not found in FROM clause!", result_name));
 	if (!table_function_name.empty()) {
-		if (!BindInEnclosingScope(col_ref, depth, expr_ptr, not_a_parameter).HasError()) {
+		if (!BindInEnclosingScope(col_ref, depth, not_a_parameter).HasError()) {
 			// it is a lateral join parameter - this is not supported in this type of table function
 			throw BinderException(query_location,
 			                      "Table function \"%s\" does not support lateral join column parameters - cannot use "
@@ -63,13 +62,13 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	if (identifier_conversion_policy != IdentifierConversionPolicy::ALLOW) {
 		auto value_function = ExpressionBinder::GetSQLValueFunction(column_names.back());
 		if (value_function) {
-			return BindExpression(value_function, depth, root_expression);
+			return BindExpression(*value_function, depth, root_expression);
 		}
 	}
 
 	if (table_function_name.empty()) {
 		// a COLUMNS expression: an enclosing scope may still own the name
-		auto result = BindInEnclosingScope(col_ref, depth, expr_ptr, std::move(not_a_parameter));
+		auto result = BindInEnclosingScope(col_ref, depth, std::move(not_a_parameter));
 		if (!result.HasError()) {
 			return result;
 		}
@@ -98,14 +97,12 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	return BindResult(make_uniq<BoundConstantExpression>(Value(result_name)));
 }
 
-BindResult TableFunctionBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
-                                               bool root_expression) {
-	auto &expr = *expr_ptr;
+BindResult TableFunctionBinder::BindExpression(const ParsedExpression &expr, idx_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::LAMBDA_REF:
 		return BindLambdaReference(expr.Cast<LambdaRefExpression>(), depth);
 	case ExpressionClass::COLUMN_REF:
-		return BindColumnReference(expr_ptr, depth, root_expression);
+		return BindColumnReference(expr, depth, root_expression);
 	case ExpressionClass::SUBQUERY:
 		throw BinderException(clause + " cannot contain subqueries");
 	case ExpressionClass::DEFAULT:
@@ -113,7 +110,7 @@ BindResult TableFunctionBinder::BindExpression(unique_ptr<ParsedExpression> &exp
 	case ExpressionClass::WINDOW:
 		return BindResult(clause + " cannot contain window functions!");
 	default:
-		return ExpressionBinder::BindExpression(expr_ptr, depth);
+		return ExpressionBinder::BindExpression(expr, depth);
 	}
 }
 

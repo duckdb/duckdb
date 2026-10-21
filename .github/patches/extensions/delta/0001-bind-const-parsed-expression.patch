@@ -1,0 +1,14 @@
+diff --git a/src/storage/delta_schema_entry.cpp b/src/storage/delta_schema_entry.cpp
+index 5d495e3..019fc88 100644
+--- a/src/storage/delta_schema_entry.cpp
++++ b/src/storage/delta_schema_entry.cpp
+@@ -55,8 +55,7 @@ static string CanonicalTablePath(const string &path) {
+ //! here. An option then accepts anything that evaluates to a constant, not only a literal.
+ static Value ParseCreateTableOption(ClientContext &context, TableFunctionBinder &binder,
+                                     const ParsedExpression &expression, const string &name, const LogicalType &type) {
+-	auto copy = expression.Copy();
+-	auto bound = binder.Bind(copy);
++	auto bound = binder.Bind(expression);
+ 	auto value = ExpressionExecutor::EvaluateScalar(context, *bound, true);
+ 	if (value.IsNull()) {
+ 		throw BinderException("NULL is not a valid value for Delta CREATE TABLE option '%s'", name);

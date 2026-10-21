@@ -20,13 +20,13 @@ public:
 	QualifyBinder(Binder &binder, ClientContext &context, BoundSelectNode &node);
 
 protected:
-	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
+	BindResult BindColumnRef(const ParsedExpression &expr, idx_t depth, bool root_expression) override;
 
 private:
 	ColumnAliasBinder column_alias_binder;
 
 public:
-	bool ClaimsAlias(ColumnRefExpression &colref) override;
+	bool ClaimsAlias(const ColumnRefExpression &colref) override;
 };
 
 } // namespace duckdb

@@ -17,12 +17,12 @@ class SelectBinder : public BaseSelectBinder {
 public:
 	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node);
 
-	bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression, BindResult &result,
-	                              unique_ptr<ParsedExpression> &expr_ptr) override;
+	bool TryResolveAliasReference(const ColumnRefExpression &colref, idx_t depth, bool root_expression,
+	                              BindResult &result) override;
 
 protected:
 	void ThrowIfUnnestInLambda(const ColumnBinding &column_binding) override;
-	BindResult BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) override;
+	BindResult BindUnnest(const FunctionExpression &function, idx_t depth, bool root_expression) override;
 
 protected:
 	idx_t unnest_level = 0;
