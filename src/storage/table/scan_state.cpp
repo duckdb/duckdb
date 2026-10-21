@@ -52,7 +52,7 @@ void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<
 			sampling_info.sample_phase = random.NextRandom();
 		}
 		if (table_sampling->seed.IsValid()) {
-			table_state.random.SetSeed(table_sampling->seed.GetIndex());
+			table_state.GetRandomEngine().SetSeed(table_sampling->seed.GetIndex());
 		}
 	}
 }
@@ -246,7 +246,14 @@ ParallelCollectionScanState::GetNextRowGroup(RowGroupSegmentTree &row_groups, Se
 
 CollectionScanState::CollectionScanState(TableScanState &parent_p)
     : vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
-      valid_sel(STANDARD_VECTOR_SIZE), random(-1), row_group(nullptr), parent(parent_p) {
+      valid_sel(STANDARD_VECTOR_SIZE), row_group(nullptr), parent(parent_p) {
+}
+
+RandomEngine &CollectionScanState::GetRandomEngine() {
+	if (!random) {
+		random = make_uniq<RandomEngine>();
+	}
+	return *random;
 }
 
 optional_ptr<SegmentNode<RowGroup>> CollectionScanState::GetRowGroup() const {

@@ -452,19 +452,6 @@ struct AutoloadKnownExtensionsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct BlockAllocatorMemorySetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "block_allocator_memory";
-	static constexpr const char *Description = "Physical memory that the block allocator is allowed to use. This "
-	                                           "memory is allocated once, never freed, and cannot be reduced.";
-	static constexpr const char *InputType = "VARCHAR";
-	static constexpr bool IsDebug = false;
-	static constexpr bool IsDeprecated = false;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
 struct CacheLocalFilesSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "cache_local_files";
@@ -682,6 +669,19 @@ struct DebugEvictionQueueSleepMicroSecondsSetting {
 	static constexpr bool IsDeprecated = false;
 	static constexpr const char *DefaultValue = "0";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugFileDescriptorLimitSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "debug_file_descriptor_limit";
+	static constexpr const char *Description = "Override the file descriptor limit that bounds how many files a scan "
+	                                           "opens ahead. 0 uses the limit of the process.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
@@ -1236,6 +1236,20 @@ struct DynamicOrFilterThresholdSetting {
 	static constexpr const char *DefaultValue = "50";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct EnableBlockAllocatorSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_block_allocator";
+	static constexpr const char *Description =
+	    "Enable new allocations from the fixed-size block pool (64-bit only; disabled by default on MinGW). Disabling "
+	    "preserves existing allocations and the virtual memory reservation.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct EnableExternalAccessSetting {

@@ -253,7 +253,10 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_row
 	if (chunk->__isset.crypto_metadata && !reader.metadata->crypto_metadata) {
 		throw InvalidInputException("File is encrypted but no file crypto metadata is set");
 	}
-	D_ASSERT(chunk->__isset.meta_data);
+	if (!chunk->__isset.meta_data) {
+		throw InvalidInputException("Failed to read file \"%s\": column chunk is missing its metadata",
+		                            Reader().GetFileName());
+	}
 
 	if (chunk->__isset.file_path) {
 		throw InvalidInputException("Failed to read file \"%s\": Only inlined data files are supported (no references)",
