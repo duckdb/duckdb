@@ -325,8 +325,7 @@ void PartitionedTupleData::Reset() {
 }
 
 void PartitionedTupleData::Repartition(ClientContext &context, PartitionedTupleData &new_partitioned_data,
-                                       optional_ptr<PartitionedTupleDataRepartitionKeyTracker> key_tracker,
-                                       TupleDataPinProperties append_properties) {
+                                       optional_ptr<PartitionedTupleDataRepartitionKeyTracker> key_tracker) {
 	D_ASSERT(layout.GetTypes() == new_partitioned_data.layout.GetTypes());
 
 	if (partitions.size() == new_partitioned_data.partitions.size()) {
@@ -342,7 +341,7 @@ void PartitionedTupleData::Repartition(ClientContext &context, PartitionedTupleD
 	}
 
 	PartitionedTupleDataAppendState append_state;
-	new_partitioned_data.InitializeAppendState(append_state, append_properties);
+	new_partitioned_data.InitializeAppendState(append_state);
 
 	for (idx_t partition_idx = 0; partition_idx < partitions.size(); partition_idx++) {
 		auto &partition = *partitions[partition_idx];

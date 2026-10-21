@@ -141,7 +141,7 @@ idx_t GroupedAggregateHashTable::GetSizeInBytes() const {
 }
 
 unique_ptr<PartitionedTupleData> GroupedAggregateHashTable::AcquirePartitionedData() {
-	// Release retained destination pins before copying the buffered rows.
+	// Release destination pins before copying the buffered rows.
 	partitioned_data->FlushAppendState(state.partitioned_append_state);
 	partitioned_data->Unpin();
 	if (radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD) {
@@ -162,17 +162,15 @@ unique_ptr<PartitionedTupleData> GroupedAggregateHashTable::AcquirePartitionedDa
 	return result;
 }
 
-void GroupedAggregateHashTable::Abandon(TupleDataPinProperties append_properties) {
+void GroupedAggregateHashTable::Abandon() {
 	if (radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD) {
-		if (append_properties == TupleDataPinProperties::UNPIN_AFTER_DONE) {
-			partitioned_data->FlushAppendState(state.partitioned_append_state);
-			partitioned_data->Unpin();
-		}
+		partitioned_data->FlushAppendState(state.partitioned_append_state);
+		partitioned_data->Unpin();
 		// Flush/unpin unpartitioned data and append to partitioned data
 		if (unpartitioned_data) {
 			unpartitioned_data->FlushAppendState(state.unpartitioned_append_state);
 			unpartitioned_data->Unpin();
-			unpartitioned_data->Repartition(context, *partitioned_data, nullptr, append_properties);
+			unpartitioned_data->Repartition(context, *partitioned_data);
 		}
 		InitializeUnpartitionedData();
 	}

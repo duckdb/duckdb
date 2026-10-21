@@ -666,8 +666,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		// Keep the materialized rows and clear only the local pointer table
 		// We don't do this when running with 1 or 2 threads, it only makes sense when there's many threads
 		gstate.any_abandoned = true;
-		ht.Abandon(!gstate.external && !memory_pressure ? TupleDataPinProperties::KEEP_EVERYTHING_PINNED
-		                                                : TupleDataPinProperties::UNPIN_AFTER_DONE);
+		ht.Abandon();
 		if (!memory_pressure) {
 			RadixHTAdaptivity::MaybeResumeLookups(gstate, lstate);
 		}

@@ -277,9 +277,14 @@ bool BufferPool::AddToEvictionQueue(BlockLock &lock, shared_ptr<BlockHandle> &ha
 	// The block lock is held throughout: Unpin holds it; ConvertToPersistent acquires the
 	// (uncontended) lock of the freshly created block before calling.
 	memory.VerifyMutex(lock);
+	D_ASSERT(memory.GetReaders() == 0);
+	// Repeated hash-table appends can reuse an entry while leaving the block evictable.
+	if (!track_eviction_timestamps && memory.GetBufferType() == FileBufferType::MANAGED_BUFFER &&
+	    memory.GetMemoryTag() == MemoryTag::HASH_TABLE && memory.HasLiveQueueEntry(lock)) {
+		return false;
+	}
 	auto &queue = GetEvictionQueueForBlockMemory(memory);
 
-	D_ASSERT(memory.GetReaders() == 0);
 	if (memory.HasLiveQueueEntry(lock)) {
 		// Count the previous live entry before bumping the sequence number. PurgeIteration
 		// reads sequence numbers without the block lock; bumping first could let it see the
