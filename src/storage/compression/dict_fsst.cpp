@@ -4,6 +4,11 @@
 #include "duckdb/storage/compression/dict_fsst/decompression.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
+#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/string_uncompressed.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 /*
 Data layout per segment:

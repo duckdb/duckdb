@@ -1,8 +1,13 @@
 #pragma once
 
+#include "duckdb/common/bitpacking.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/compression/dict_fsst/common.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
+
+class DictionaryEntry;
 
 namespace dict_fsst {
 
