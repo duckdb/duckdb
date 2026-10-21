@@ -11,7 +11,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundOpera
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExpressionState>(expr, root);
 	const auto save_inside_try = root.inside_try;
-	if (expr.GetExpressionType() == ExpressionType::OPERATOR_TRY) {
+	const auto expression_type = expr.GetExpressionType();
+	if (expression_type == ExpressionType::OPERATOR_TRY || expression_type == ExpressionType::OPERATOR_HAS_ERROR) {
 		root.inside_try = true;
 	}
 	for (auto &child : expr.GetChildren()) {
