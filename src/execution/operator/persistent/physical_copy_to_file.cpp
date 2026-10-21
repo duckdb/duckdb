@@ -2305,27 +2305,6 @@ void SortStrategyInput::Combine(ExecutionContext &context, PartitionedCopyInputG
 	strategy->Combine(context, combine_input);
 }
 
-vector<unique_ptr<PartitionedCopyGroup>> SortStrategyInput::Finalize(ClientContext &context,
-                                                                     PartitionedCopyInputGlobalState &gstate_p,
-                                                                     InterruptState &interrupt) const {
-	auto &gstate = gstate_p.Cast<SortStrategyInputGlobalState>();
-	idx_t total_count;
-	const auto bins = FinalizeBins(context, gstate, interrupt, total_count);
-	const auto &chunk_rows = strategy->GetHashGroups(*gstate.source);
-
-	vector<unique_ptr<PartitionedCopyGroup>> groups(chunk_rows.size());
-	for (const auto &bin : bins) {
-		// a bin proven to hold a single key is read straight from its tuple data, like a direct partition
-		auto single_key = strategy->TryTakeSinglePartition(bin, *gstate.source);
-		if (single_key) {
-			groups[bin] = make_uniq<DirectPartitionGroup>(context, std::move(single_key), strategy->scan_ids);
-		} else {
-			groups[bin] = make_uniq<SortedBinGroup>(*this, gstate, vector<idx_t> {bin}, chunk_rows[bin].count);
-		}
-	}
-	return groups;
-}
-
 vector<idx_t> SortStrategyInput::FinalizeBins(ClientContext &context, SortStrategyInputGlobalState &gstate,
                                               InterruptState &interrupt, idx_t &total_count) const {
 	OperatorSinkFinalizeInput finalize_input {*gstate.sink, interrupt};
@@ -2991,6 +2970,28 @@ void OverflowSortGroup::FinishPreparation(idx_t step) {
 		return;
 	}
 	sorted->FinishPreparation(step - 1);
+}
+
+// defined after DirectPartitionGroup, which single-key bins are read through
+vector<unique_ptr<PartitionedCopyGroup>> SortStrategyInput::Finalize(ClientContext &context,
+                                                                     PartitionedCopyInputGlobalState &gstate_p,
+                                                                     InterruptState &interrupt) const {
+	auto &gstate = gstate_p.Cast<SortStrategyInputGlobalState>();
+	idx_t total_count;
+	const auto bins = FinalizeBins(context, gstate, interrupt, total_count);
+	const auto &chunk_rows = strategy->GetHashGroups(*gstate.source);
+
+	vector<unique_ptr<PartitionedCopyGroup>> groups(chunk_rows.size());
+	for (const auto &bin : bins) {
+		// a bin proven to hold a single key is read straight from its tuple data, like a direct partition
+		auto single_key = strategy->TryTakeSinglePartition(bin, *gstate.source);
+		if (single_key) {
+			groups[bin] = make_uniq<DirectPartitionGroup>(context, std::move(single_key), strategy->scan_ids);
+		} else {
+			groups[bin] = make_uniq<SortedBinGroup>(*this, gstate, vector<idx_t> {bin}, chunk_rows[bin].count);
+		}
+	}
+	return groups;
 }
 
 //===--------------------------------------------------------------------===//
