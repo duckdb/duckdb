@@ -1060,13 +1060,13 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 	gstate.total_size =
 	    ht.GetTotalSize(gstate.local_hash_tables, gstate.max_partition_size, gstate.max_partition_count);
 	gstate.probe_side_requirement =
-	    GetPartitioningSpaceRequirement(context, children[0].get().GetTypes(), ht.GetRadixBits(), gstate.num_threads);
+	    GetPartitioningSpaceRequirement(context, gstate.probe_types, ht.GetRadixBits(), gstate.num_threads);
 	const auto max_partition_ht_size =
 	    gstate.max_partition_size + gstate.hash_table->PointerTableSize(gstate.max_partition_count);
 	gstate.temporary_memory_state->SetMinimumReservation(max_partition_ht_size + gstate.probe_side_requirement);
 
 	bool all_constant;
-	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(children[0].get().GetTypes(), all_constant));
+	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(gstate.probe_types, all_constant));
 	gstate.temporary_memory_state->SetRemainingSize(gstate.total_size);
 }
 
@@ -2866,6 +2866,12 @@ SourceResultType PhysicalHashJoin::GetDataInternal(ExecutionContext &context, Da
 			annotated_lock_guard<annotated_mutex> guard(gstate.lock);
 			if (gstate.TryPrepareNextStage(sink) || gstate.global_stage == HashJoinSourceStage::DONE) {
 				gstate.UnblockTasks();
+			} else if (!sink.external && gstate.global_stage == HashJoinSourceStage::SCAN_HT) {
+				// Without spilling, scanning the hash table is the last stage and all of its tasks have been assigned,
+				// so there is nothing left for this task to do. Do not block until the other tasks finish: this task
+				// has already handed probe rows to the sink, which may in turn be waiting for this task
+				// (e.g., a partitioned COPY cannot flush until every producer has combined).
+				return SourceResultType::FINISHED;
 			} else {
 				return gstate.BlockSource(input.interrupt_state);
 			}

@@ -13,11 +13,21 @@
 #include "duckdb/common/types/string.hpp"
 #include "duckdb/common/arena_containers/arena_ptr.hpp"
 
-#if defined(__SANITIZE_ADDRESS__) && !defined(__MINGW32__)
+#if defined(__has_include)
+#if __has_include(<sanitizer/asan_interface.h>)
+#define DUCKDB_ARENA_ALLOCATOR_HAS_ASAN_INTERFACE
+#endif
+#elif !defined(__MINGW32__)
+#define DUCKDB_ARENA_ALLOCATOR_HAS_ASAN_INTERFACE
+#endif
+
+#ifdef DUCKDB_ARENA_ALLOCATOR_HAS_ASAN_INTERFACE
+#if defined(__SANITIZE_ADDRESS__)
 #define DUCKDB_ARENA_ALLOCATOR_ASAN
 #elif defined(__has_feature)
 #if __has_feature(address_sanitizer)
 #define DUCKDB_ARENA_ALLOCATOR_ASAN
+#endif
 #endif
 #endif
 
