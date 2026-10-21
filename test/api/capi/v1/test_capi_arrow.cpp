@@ -894,7 +894,6 @@ TEST_CASE("Test C-API Arrow array shape validation", "[capi][arrow]") {
 	duckdb_destroy_arrow_converted_schema(&converted);
 }
 
-
 // Non-monotonic (decreasing) Arrow string offsets must be rejected, instead of wrapping around to
 // produce a string_t whose length claims nearly 4GB over a tiny underlying data buffer.
 TEST_CASE("Test C-API Arrow rejects non-monotonic string offsets", "[capi][arrow]") {

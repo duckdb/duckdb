@@ -15,7 +15,8 @@ namespace duckdb {
 // (too muach memory usage)
 
 template <class T>
-static idx_t LevenshteinDistance(ClientContext &context, const T *txt_str, idx_t txt_len, const T *tgt_str, idx_t tgt_len) {
+static idx_t LevenshteinDistance(ClientContext &context, const T *txt_str, idx_t txt_len, const T *tgt_str,
+                                 idx_t tgt_len) {
 	// If one string is empty, the distance equals the length of the other string
 	if (txt_len == 0) {
 		return tgt_len;
