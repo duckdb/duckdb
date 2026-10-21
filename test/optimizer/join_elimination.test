@@ -292,3 +292,20 @@ query II
 explain select count(*) from probe_keys left join (select distinct k from (select k, unnest([1,2,3]) e from dup_keys) u) t on t.k=probe_keys.idb;
 ----
 physical_plan	<!REGEX>:.*JOIN.*
+
+# A correlated count gets an empty-input fallback, attached as a join without join conditions. The
+# bug needs all three of: such a join, a distinct group above it, and the fallback column no longer
+# being used (issue #27445).
+
+statement ok
+create table t(c integer);
+
+statement ok
+insert into t values (1), (-1), (null);
+
+query I
+select (select case when true then 0 else count(distinct 1) end from t x where t.c > 0) as r from t;
+----
+0
+0
+0
