@@ -1459,6 +1459,27 @@ static bool CanContainNull(const ArrowArray &array, const ValidityMask *parent_m
 	return parent_mask->CanHaveNull();
 }
 
+// Arrow's null type converts to a constant vector, and FlatVector::SetNull needs flat vectors along its recursion
+// into STRUCT and ARRAY children, which never reaches LIST contents.
+static void FlattenForSetNull(Vector &vector) {
+	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
+		vector.Flatten();
+		return;
+	}
+	switch (vector.GetType().InternalType()) {
+	case PhysicalType::STRUCT:
+		for (auto &entry : StructVector::GetEntries(vector)) {
+			FlattenForSetNull(entry);
+		}
+		break;
+	case PhysicalType::ARRAY:
+		FlattenForSetNull(ArrayVector::GetChildMutable(vector));
+		break;
+	default:
+		break;
+	}
+}
+
 void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, idx_t chunk_offset,
                                                             ArrowArrayScanState &array_state, idx_t size,
                                                             const ArrowType &arrow_type, int64_t nested_offset,
@@ -1476,7 +1497,6 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 		auto dict_length = NumericCast<idx_t>(array.dictionary->length);
 		auto base_vector = make_uniq<Vector>(vector.GetType(), dict_length + 1);
 		ArrowToDuckDBConversion::SetValidityMask(*base_vector, *array.dictionary, 0, dict_length, 0, 0, has_nulls);
-		FlatVector::ValidityMutable(*base_vector).SetInvalid(dict_length);
 		auto &dictionary_type = arrow_type.GetDictionary();
 		auto arrow_physical_type = dictionary_type.GetPhysicalType();
 		;
@@ -1502,6 +1522,9 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 		// dict_length. Re-extend before sizing so the sentinel slot stays in bounds.
 		base_vector->Reserve(dict_length + 1);
 		FlatVector::SetSize(*base_vector, count_t(dict_length + 1));
+		// nested children of the sentinel slot hold uninitialized data unless they are marked NULL as well
+		FlattenForSetNull(*base_vector);
+		FlatVector::SetNull(*base_vector, dict_length, true);
 		array_state.AddDictionary(std::move(base_vector), array.dictionary);
 	}
 	auto offset_type = arrow_type.GetDuckType();
