@@ -369,6 +369,11 @@ idx_t DBConfig::GetWriteBufferMemoryLimit() const {
 	return options.maximum_memory / 5 / (options.maximum_threads + 1);
 }
 
+vector<string> DBConfig::GetExtensionDirectories() const {
+	lock_guard<mutex> guard(config_lock);
+	return options.extension_directories;
+}
+
 void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) {
 	SetOption(nullptr, option, value);
 }
