@@ -486,7 +486,6 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 		                                                     write_info.page_header.type == PageType::DATA_PAGE_V2)) {
 			column_chunk.meta_data.data_page_offset = UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten());
 		}
-		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		D_ASSERT(write_info.prepared_header);
 		D_ASSERT(write_info.prepared_payload);
 		// total uncompressed size in the column chunk includes the header size (!)

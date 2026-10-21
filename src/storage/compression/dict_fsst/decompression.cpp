@@ -107,7 +107,7 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	// close to UINT32_MAX, which would overflow the uint32_t arithmetic AlignValue<uint32_t> performs.
 	auto aligned_dict_count =
 	    AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(static_cast<idx_t>(dict_count));
-	if (static_cast<idx_t>(dict_count) > segment.count.load()) {
+	if (static_cast<idx_t>(dict_count) > segment.GetBlockSize()) {
 		throw DataCorruptionException(
 		    "Failed to scan dictionary string - dict_count was out of range. Database file appears to be corrupted.");
 	}
