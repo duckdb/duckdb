@@ -45,6 +45,8 @@ struct JoinFilterPushdownColumn {
 	JoinFilterPushdownMode mode = JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
 	//! Casts from the raw scan value to the pushed probe expression, in evaluation order.
 	vector<RuntimeFilterCastStep> runtime_filter_casts;
+	//! Whether the filter crossed a secure view: only filters checked on every row may be pushed there
+	bool crossed_secure_view = false;
 };
 
 enum class DeferredRuntimeFilterType : uint8_t { BLOOM_FILTER, PREFIX_RANGE };

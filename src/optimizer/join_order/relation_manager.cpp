@@ -103,6 +103,24 @@ bool RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 }
 
 optional<RelationStats> RelationManager::AlignStatsWithRelationRoot(LogicalOperator &op, const RelationStats &stats) {
+	if (op.type == LogicalOperatorType::LOGICAL_SECURE_VIEW && op.children.size() == 1) {
+		// pass-through relation: only the view's own estimate (and allowed statistics) cross the boundary
+		auto child_stats = AlignStatsWithRelationRoot(*op.children[0], stats);
+		if (!child_stats) {
+			return {};
+		}
+		auto &secure_view = op.Cast<LogicalSecureView>();
+		RelationStats result = std::move(*child_stats);
+		result.cardinality = op.EstimateCardinality(context);
+		result.filter_strength = 1;
+		if (!secure_view.propagate_statistics) {
+			for (auto &column : result.columns) {
+				column.distinct_count =
+				    DistinctCount(MaxValue<idx_t>(result.cardinality, 1), DistinctCountSource::CARDINALITY);
+			}
+		}
+		return result;
+	}
 	auto projected = RelationStatisticsHelper::ProjectOutputStats(stats, op);
 	if (projected && (op.children.size() != 1 || CanReuseAlignedStats(op))) {
 		return projected;
