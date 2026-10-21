@@ -145,6 +145,12 @@ bool IsFixedRepresentation(const LogicalType &type) {
 struct NumericInput {
 	explicit NumericInput(Vector &input, idx_t count) {
 		D_ASSERT(input.GetType().id() == LogicalTypeId::NUMERIC);
+		ShreddedNumericRange range;
+		if (NumericVector::TryGetRange(input, count, range)) {
+			// STANDARD_VECTOR_SIZE values below 2^52 in magnitude sum within 64 bits
+			static const hugeint_t SMALL_LIMIT = hugeint_t(int64_t(1) << 52);
+			small_values = range.min > -SMALL_LIMIT && range.max < SMALL_LIMIT;
+		}
 		if (NumericVector::TryGetTyped(input, typed)) {
 			if (IsFixedRepresentation(typed->GetType())) {
 				SetTyped();
@@ -186,6 +192,8 @@ struct NumericInput {
 	UnifiedVectorFormat data;
 	PhysicalType physical = PhysicalType::INVALID;
 	uint8_t scale = 0;
+	//! Whether the values are known to be small enough for a run to be summed in 64 bits without checks
+	bool small_values = false;
 };
 
 //! Runs OP::Typed<T> for the fixed-size representation of the input, OP::Blob for canonical blobs
@@ -225,6 +233,8 @@ inline hugeint_t ToUnscaled(const hugeint_t &value) {
 	return value;
 }
 
+struct WideAccumulator;
+
 template <class STATE>
 STATE *const *StatePointers(Vector &states, UnifiedVectorFormat &sdata) {
 	states.ToUnifiedFormat(sdata);
@@ -248,7 +258,7 @@ void FinalizeStates(Vector &states, AggregateFinalizeInputData &finalize_input, 
 		if (!HasValue(state)) {
 			finalize_data.ReturnNull();
 		} else {
-			*ConstantVector::GetData<string_t>(result) = state.value.Finalize(result);
+			*ConstantVector::GetData<string_t>(result) = state.Result(result);
 		}
 		return;
 	}
@@ -263,7 +273,7 @@ void FinalizeStates(Vector &states, AggregateFinalizeInputData &finalize_input, 
 		if (!HasValue(state)) {
 			finalize_data.ReturnNull();
 		} else {
-			rdata[finalize_data.result_idx] = state.value.Finalize(result);
+			rdata[finalize_data.result_idx] = state.Result(result);
 		}
 	}
 }
@@ -294,6 +304,10 @@ struct MaxOp {
 struct NumericMinMaxState {
 	bool is_set;
 	NumericStateValue value;
+
+	string_t Result(Vector &result) const {
+		return value.Finalize(result);
+	}
 };
 
 template <>
@@ -460,6 +474,10 @@ struct NumericFirstState {
 	//! Whether the recorded row is not NULL
 	bool value_is_valid;
 	NumericStateValue value;
+
+	string_t Result(Vector &result) const {
+		return value.Finalize(result);
+	}
 };
 
 template <>
@@ -605,6 +623,274 @@ struct NumericFirst {
 	}
 };
 
+//===--------------------------------------------------------------------===//
+// sum
+//===--------------------------------------------------------------------===//
+//! The exact sum in a 128-bit accumulator at the scale the values need
+struct NumericSumState {
+	bool is_set;
+	uint8_t scale;
+	hugeint_t value;
+
+	string_t Result(Vector &result) const {
+		return NumericBlob::AddUnscaled(result, value, scale);
+	}
+};
+
+template <>
+inline bool HasValue(const NumericSumState &state) {
+	return state.is_set;
+}
+
+//! The accumulator of one run of input values: a run holds at most STANDARD_VECTOR_SIZE values, so 64 bits hold the
+//! sum of values of up to 32 bits; 64-bit values are summed in 64 bits until that overflows
+template <class T>
+struct RunAccumulator {
+	using TYPE = int64_t;
+	static inline void Add(TYPE &accumulator, T value) {
+		accumulator += TYPE(value);
+	}
+	static inline void AddRun(TYPE &accumulator, const T *values, idx_t count, bool) {
+		for (idx_t k = 0; k < count; k++) {
+			accumulator += TYPE(values[k]);
+		}
+	}
+};
+
+//! A 64-bit sum that moves to 128 bits when it overflows
+struct WideAccumulator {
+	int64_t narrow = 0;
+	hugeint_t wide = 0;
+	bool is_wide = false;
+
+	inline void Add(int64_t value) {
+		int64_t sum;
+		if (!is_wide && !__builtin_add_overflow(narrow, value, &sum)) {
+			narrow = sum;
+			return;
+		}
+		if (!is_wide) {
+			wide = hugeint_t(narrow);
+			is_wide = true;
+		}
+		wide += hugeint_t(value);
+	}
+
+	//! Adds a dense run: values with few enough significant bits are summed without overflow checks
+	inline void AddRun(const int64_t *values, idx_t count, bool small_values) {
+		int64_t unsafe_bits = 0;
+		if (!small_values) {
+			for (idx_t k = 0; k < count; k++) {
+				unsafe_bits |= (values[k] ^ (values[k] >> 63)) & int64_t(SUM_OVERFLOW_MASK);
+			}
+		}
+		if (unsafe_bits == 0) {
+			int64_t sum = 0;
+			for (idx_t k = 0; k < count; k++) {
+				sum += values[k];
+			}
+			Add(sum);
+			return;
+		}
+		for (idx_t k = 0; k < count; k++) {
+			Add(values[k]);
+		}
+	}
+
+	inline hugeint_t Result() const {
+		return is_wide ? wide : hugeint_t(narrow);
+	}
+};
+
+template <>
+struct RunAccumulator<int64_t> {
+	using TYPE = WideAccumulator;
+	static inline void Add(TYPE &accumulator, int64_t value) {
+		accumulator.Add(value);
+	}
+	static inline void AddRun(TYPE &accumulator, const int64_t *values, idx_t count, bool small_values) {
+		accumulator.AddRun(values, count, small_values);
+	}
+};
+
+template <>
+struct RunAccumulator<uint64_t> {
+	using TYPE = hugeint_t;
+	static inline void Add(TYPE &accumulator, uint64_t value) {
+		accumulator += Hugeint::Convert(value);
+	}
+	static inline void AddRun(TYPE &accumulator, const uint64_t *values, idx_t count, bool) {
+		for (idx_t k = 0; k < count; k++) {
+			Add(accumulator, values[k]);
+		}
+	}
+};
+
+inline hugeint_t ToUnscaled(const WideAccumulator &accumulator) {
+	return accumulator.Result();
+}
+
+template <>
+struct RunAccumulator<hugeint_t> {
+	using TYPE = hugeint_t;
+	static inline void Add(TYPE &accumulator, hugeint_t value) {
+		if (!Hugeint::TryAddInPlace(accumulator, value)) {
+			throw OutOfRangeException("Overflow in SUM(NUMERIC): the sum needs more than 38 digits");
+		}
+	}
+	static inline void AddRun(TYPE &accumulator, const hugeint_t *values, idx_t count, bool) {
+		for (idx_t k = 0; k < count; k++) {
+			Add(accumulator, values[k]);
+		}
+	}
+};
+
+struct NumericSum {
+	using STATE = NumericSumState;
+
+	static void Initialize(AggregateStateInput &, data_ptr_t *states, idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			auto &state = *reinterpret_cast<STATE *>(states[i]);
+			state.is_set = false;
+			state.scale = 0;
+			state.value = 0;
+		}
+	}
+
+	static void Overflow() {
+		throw OutOfRangeException("Overflow in SUM(NUMERIC): the sum needs more than 38 digits");
+	}
+
+	static inline void Add(STATE &state, hugeint_t value, uint8_t scale) {
+		if (!state.is_set) {
+			state.is_set = true;
+			state.scale = scale;
+			state.value = value;
+			return;
+		}
+		if (scale > state.scale) {
+			if (!Hugeint::TryMultiply(state.value, Hugeint::POWERS_OF_TEN[scale - state.scale], state.value)) {
+				Overflow();
+			}
+			state.scale = scale;
+		} else if (scale < state.scale) {
+			if (!Hugeint::TryMultiply(value, Hugeint::POWERS_OF_TEN[state.scale - scale], value)) {
+				Overflow();
+			}
+		}
+		if (!Hugeint::TryAddInPlace(state.value, value)) {
+			Overflow();
+		}
+	}
+
+	//! Wide values: the sum stays within 38 digits or overflows
+	static inline void AddBlob(STATE &state, string_t blob) {
+		hugeint_t unscaled;
+		uint8_t scale;
+		if (!NumericBlob::TryDecodeUnscaled(blob, unscaled, scale)) {
+			Overflow();
+		}
+		Add(state, unscaled, scale);
+	}
+
+	struct UpdateOp {
+		template <class T>
+		static void Typed(const NumericInput &input, STATE *const *states, const UnifiedVectorFormat &sdata,
+		                  idx_t count, AggregateInputData &) {
+			auto data = UnifiedVectorFormat::GetData<T>(input.data);
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = input.data.sel->get_index(i);
+				if (!input.data.validity.RowIsValid(idx)) {
+					continue;
+				}
+				Add(*states[sdata.sel->get_index(i)], ToUnscaled(data[idx]), input.scale);
+			}
+		}
+		static void Blob(const NumericInput &input, STATE *const *states, const UnifiedVectorFormat &sdata, idx_t count,
+		                 AggregateInputData &) {
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = input.data.sel->get_index(i);
+				if (!input.data.validity.RowIsValid(idx)) {
+					continue;
+				}
+				AddBlob(*states[sdata.sel->get_index(i)], input.Blob(idx));
+			}
+		}
+	};
+
+	struct ClusterUpdateOp {
+		template <class T>
+		static void Typed(const NumericInput &input, const ClusteredAggr &clustered, AggregateInputData &) {
+			// every run is summed in the input representation and added to its state once
+			auto data = UnifiedVectorFormat::GetData<T>(input.data);
+			for (auto &run : clustered.runs()) {
+				typename RunAccumulator<T>::TYPE accumulator {};
+				bool found = false;
+				if (!run.sel && !input.data.sel->IsSet() && !input.data.validity.CanHaveNull()) {
+					// a dense run over a flat input without NULLs
+					RunAccumulator<T>::AddRun(accumulator, data, run.count, input.small_values);
+					found = run.count > 0;
+				} else {
+					for (idx_t k = 0; k < run.count; k++) {
+						auto row = run.sel ? run.sel[k] : k;
+						auto idx = input.data.sel->get_index(row);
+						if (!input.data.validity.RowIsValid(idx)) {
+							continue;
+						}
+						RunAccumulator<T>::Add(accumulator, data[idx]);
+						found = true;
+					}
+				}
+				if (found) {
+					Add(*reinterpret_cast<STATE *>(run.state), ToUnscaled(accumulator), input.scale);
+				}
+			}
+		}
+		static void Blob(const NumericInput &input, const ClusteredAggr &clustered, AggregateInputData &) {
+			for (auto &run : clustered.runs()) {
+				auto &state = *reinterpret_cast<STATE *>(run.state);
+				for (idx_t k = 0; k < run.count; k++) {
+					auto row = run.sel ? run.sel[k] : k;
+					auto idx = input.data.sel->get_index(row);
+					if (!input.data.validity.RowIsValid(idx)) {
+						continue;
+					}
+					AddBlob(state, input.Blob(idx));
+				}
+			}
+		}
+	};
+
+	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t, Vector &state_vector, idx_t count) {
+		NumericInput input(inputs[0], count);
+		UnifiedVectorFormat sdata;
+		auto states = StatePointers<STATE>(state_vector, sdata);
+		DispatchInput<UpdateOp>(input, states, sdata, count, input_data);
+	}
+
+	static void ClusterUpdate(Vector inputs[], AggregateInputData &input_data, idx_t, const ClusteredAggr &clustered,
+	                          idx_t count) {
+		NumericInput input(inputs[0], count);
+		DispatchInput<ClusterUpdateOp>(input, clustered, input_data);
+	}
+
+	static void Combine(Vector &source, Vector &target, AggregateInputData &, idx_t count) {
+		auto sources = FlatVector::GetData<STATE *>(source);
+		auto targets = FlatVector::GetData<STATE *>(target);
+		for (idx_t i = 0; i < count; i++) {
+			auto &source_state = *sources[i];
+			if (source_state.is_set) {
+				Add(*targets[i], source_state.value, source_state.scale);
+			}
+		}
+	}
+
+	static void Finalize(Vector &states, AggregateFinalizeInputData &finalize_input, Vector &result, idx_t count,
+	                     idx_t offset) {
+		FinalizeStates<STATE>(states, finalize_input, result, count, offset);
+	}
+};
+
 template <class FUNCTION>
 idx_t NumericStateSize(AggregateStateInput &) {
 	return sizeof(typename FUNCTION::STATE);
@@ -624,6 +910,10 @@ AggregateFunction NumericAggregates::GetMinMax(bool is_min) {
 		return MakeFunction<NumericMinMax<MinOp>>();
 	}
 	return MakeFunction<NumericMinMax<MaxOp>>();
+}
+
+AggregateFunction NumericAggregates::GetSum() {
+	return MakeFunction<NumericSum>();
 }
 
 AggregateFunction NumericAggregates::GetFirst(bool last, bool skip_nulls) {

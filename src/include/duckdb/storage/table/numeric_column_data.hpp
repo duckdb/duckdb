@@ -28,6 +28,8 @@ public:
 	NumericRange GetRange() const;
 	//! Replace the inner column (used by the checkpoint)
 	void SetInner(shared_ptr<ColumnData> inner);
+	//! Set the exact range of the values (used by the checkpoint, which keeps the range of the checkpointed rows)
+	void SetRange(const NumericRange &range);
 
 public:
 	idx_t GetMaxEntry() override;
@@ -80,6 +82,8 @@ private:
 	static void CastVector(const Vector &source, Vector &target, idx_t count);
 	//! The inner column pinned by a scan: scans keep reading the representation they started on
 	ColumnData &Pinned(ColumnScanState &state);
+	//! Pins the current inner column and its value range for a scan
+	void Pin(ColumnScanState &state);
 	shared_ptr<ColumnData> CreateInner(const LogicalType &storage_type);
 	//! A copy of the source in another representation
 	shared_ptr<ColumnData> Rebuild(ColumnData &source, const LogicalType &new_type);

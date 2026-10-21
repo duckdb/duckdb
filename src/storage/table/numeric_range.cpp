@@ -4,6 +4,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/numeric_blob.hpp"
 #include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
@@ -289,6 +290,56 @@ bool NumericRange::TryUpdate(const BaseStatistics &typed_stats) {
 //===--------------------------------------------------------------------===//
 // Types and statistics
 //===--------------------------------------------------------------------===//
+//! The unscaled value of an exact Value held in a fixed-size integer
+static bool TryGetUnscaledValue(const Value &value, hugeint_t &result) {
+	switch (value.type().InternalType()) {
+	case PhysicalType::INT8:
+		result = value.GetValueUnsafe<int8_t>();
+		return true;
+	case PhysicalType::INT16:
+		result = value.GetValueUnsafe<int16_t>();
+		return true;
+	case PhysicalType::INT32:
+		result = value.GetValueUnsafe<int32_t>();
+		return true;
+	case PhysicalType::INT64:
+		result = value.GetValueUnsafe<int64_t>();
+		return true;
+	case PhysicalType::INT128:
+		result = value.GetValueUnsafe<hugeint_t>();
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool NumericRange::TryGetUnscaled(const LogicalType &representation, ShreddedNumericRange &result) const {
+	result.valid = false;
+	if (!has_values) {
+		return false;
+	}
+	uint8_t target_scale = representation.id() == LogicalTypeId::DECIMAL ? DecimalType::GetScale(representation) : 0;
+	if (target_scale < scale || target_scale - scale >= Hugeint::CACHED_POWERS_OF_TEN) {
+		return false;
+	}
+	hugeint_t unscaled_min, unscaled_max;
+	if (!TryGetUnscaledValue(min, unscaled_min) || !TryGetUnscaledValue(max, unscaled_max)) {
+		return false;
+	}
+	if (target_scale > scale) {
+		auto &factor = Hugeint::POWERS_OF_TEN[target_scale - scale];
+		if (!Hugeint::TryMultiply(unscaled_min, factor, unscaled_min) ||
+		    !Hugeint::TryMultiply(unscaled_max, factor, unscaled_max)) {
+			return false;
+		}
+	}
+	result.valid = true;
+	result.scale = target_scale;
+	result.min = unscaled_min;
+	result.max = unscaled_max;
+	return true;
+}
+
 LogicalType NumericRange::ResolveType() const {
 	if (!has_values) {
 		return NumericType::DefaultType();

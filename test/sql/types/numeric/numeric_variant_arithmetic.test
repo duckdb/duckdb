@@ -9,11 +9,11 @@ statement ok
 INSERT INTO t VALUES (100, 100, 100), (-3, 7, 7);
 
 # the type is NUMERIC; the stored representation is the one the rows arrived in until a checkpoint narrows it, results
-# are narrowed to their values right away
+# take the representation of the kernel, which is sized by the values of the operands
 query IIII
 SELECT typeof(a + b), numeric_representation(a), numeric_representation(a + b), numeric_representation(a * b) FROM t LIMIT 1;
 ----
-NUMERIC	INTEGER	SMALLINT	SMALLINT
+NUMERIC	INTEGER	INTEGER	INTEGER
 
 query III
 SELECT a + b, a * b, a - b FROM t ORDER BY a;
@@ -80,7 +80,7 @@ SELECT x * y, x + y, x - y FROM d ORDER BY x;
 query I
 SELECT numeric_representation(x * y) FROM d WHERE x < 0;
 ----
-DECIMAL(7,4)
+DECIMAL(18,4)
 
 # division goes through DOUBLE, as for DECIMAL
 query II

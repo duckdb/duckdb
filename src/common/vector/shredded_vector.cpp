@@ -103,14 +103,18 @@ buffer_ptr<VectorBuffer> ShreddedVectorBuffer::SliceInternal(const LogicalType &
 	// propagate the slice into the shredded data and emit a new shredded vector
 	auto count = count_t(end - offset);
 	Vector sliced(*shredded_data, offset, end);
-	return make_buffer<ShreddedVectorBuffer>(sliced, count);
+	auto result = make_buffer<ShreddedVectorBuffer>(sliced, count);
+	result->numeric_range = numeric_range;
+	return result;
 }
 
 buffer_ptr<VectorBuffer> ShreddedVectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,
                                                              idx_t count) {
 	// propagate the slice into the shredded data and emit a new shredded vector
 	Vector sliced(*shredded_data, sel, count);
-	return make_buffer<ShreddedVectorBuffer>(sliced, count_t(count));
+	auto result = make_buffer<ShreddedVectorBuffer>(sliced, count_t(count));
+	result->numeric_range = numeric_range;
+	return result;
 }
 
 buffer_ptr<VectorBuffer> ShreddedVectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,

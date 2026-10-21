@@ -102,6 +102,23 @@ const uhugeint_t &PowerOfTen(idx_t exponent) {
 	return powers.values[exponent];
 }
 
+//! Writes the decimal digits of a 64-bit value in front of position `pos` of `digits`, two at a time
+inline void WriteDigits(uint64_t value, data_t *digits, idx_t &pos) {
+	while (value >= 100) {
+		auto quotient = value / 100;
+		auto pair = uint32_t(value - quotient * 100);
+		digits[--pos] = data_t(pair % 10);
+		digits[--pos] = data_t(pair / 10);
+		value = quotient;
+	}
+	if (value >= 10) {
+		digits[--pos] = data_t(value % 10);
+		digits[--pos] = data_t(value / 10);
+	} else {
+		digits[--pos] = data_t(value);
+	}
+}
+
 //! Writes the blob of magnitude * 10^-scale into the buffer and returns its length
 idx_t EncodeMagnitude(uhugeint_t magnitude, bool negative, uint8_t scale, data_ptr_t buffer) {
 	if (magnitude.upper == 0 && magnitude.lower == 0) {
@@ -111,24 +128,26 @@ idx_t EncodeMagnitude(uhugeint_t magnitude, bool negative, uint8_t scale, data_p
 	// the decimal digits of the magnitude, filled from the back
 	data_t digits[NUMERIC_MAX_INT128_DIGITS];
 	idx_t pos = NUMERIC_MAX_INT128_DIGITS;
-	static constexpr uint64_t TEN18 = 1000000000000000000ULL;
-	while (magnitude.upper != 0) {
-		auto quotient = magnitude / uhugeint_t(0, TEN18);
-		auto remainder = (magnitude - quotient * uhugeint_t(0, TEN18)).lower;
-		for (idx_t i = 0; i < 18; i++) {
-			digits[--pos] = data_t(remainder % 10);
-			remainder /= 10;
+	if (magnitude.upper == 0) {
+		WriteDigits(magnitude.lower, digits, pos);
+	} else {
+		static constexpr uint64_t TEN18 = 1000000000000000000ULL;
+		while (magnitude.upper != 0) {
+			auto quotient = magnitude / uhugeint_t(0, TEN18);
+			auto remainder = (magnitude - quotient * uhugeint_t(0, TEN18)).lower;
+			// 18 digits, zero padded
+			auto group_end = pos;
+			WriteDigits(remainder, digits, pos);
+			while (group_end - pos < 18) {
+				digits[--pos] = 0;
+			}
+			magnitude = quotient;
 		}
-		magnitude = quotient;
-	}
-	auto low = magnitude.lower;
-	while (low != 0) {
-		digits[--pos] = data_t(low % 10);
-		low /= 10;
-	}
-	// the magnitude is not zero: skip leading zeros of the 18-digit groups
-	while (digits[pos] == 0) {
-		pos++;
+		WriteDigits(magnitude.lower, digits, pos);
+		// the magnitude is not zero: skip the leading zeros of the highest group
+		while (digits[pos] == 0) {
+			pos++;
+		}
 	}
 	idx_t digit_count = NUMERIC_MAX_INT128_DIGITS - pos;
 	int64_t adjusted = int64_t(digit_count) - 1 - int64_t(scale);
@@ -137,11 +156,17 @@ idx_t EncodeMagnitude(uhugeint_t magnitude, bool negative, uint8_t scale, data_p
 		last--;
 	}
 	auto length = BlobHeader::Write(buffer, negative, adjusted);
-	for (idx_t i = pos; i < last; i++) {
-		auto b = data_t(digits[i] + 1);
-		buffer[length++] = negative ? data_t(~b) : b;
+	if (negative) {
+		for (idx_t i = pos; i < last; i++) {
+			buffer[length++] = data_t(~data_t(digits[i] + 1));
+		}
+		buffer[length++] = data_t(0xFF);
+	} else {
+		for (idx_t i = pos; i < last; i++) {
+			buffer[length++] = data_t(digits[i] + 1);
+		}
+		buffer[length++] = data_t(0);
 	}
-	buffer[length++] = negative ? data_t(0xFF) : data_t(0);
 	return length;
 }
 
@@ -171,6 +196,61 @@ struct Magnitude<uhugeint_t> {
 	}
 };
 
+//! The number of decimal digits of a 64-bit value (one for zero)
+inline idx_t DigitCount(uint64_t value) {
+	idx_t digits = 1;
+	for (;;) {
+		if (value < 10) {
+			return digits;
+		}
+		if (value < 100) {
+			return digits + 1;
+		}
+		if (value < 1000) {
+			return digits + 2;
+		}
+		if (value < 10000) {
+			return digits + 3;
+		}
+		value /= 10000;
+		digits += 4;
+	}
+}
+
+//! The two decimal digits of every value below 100, as digit + 1
+struct DigitPairs {
+	DigitPairs() {
+		for (idx_t i = 0; i < 100; i++) {
+			high[i] = data_t(i / 10 + 1);
+			low[i] = data_t(i % 10 + 1);
+		}
+	}
+	data_t high[100];
+	data_t low[100];
+};
+
+//! Writes the digits of a 64-bit magnitude (digit + 1, complemented for negatives) and the terminator; the magnitude
+//! has `digit_count` digits
+template <bool NEGATIVE>
+inline void WriteSmallDigits(uint64_t magnitude, idx_t digit_count, data_ptr_t digits) {
+	static const DigitPairs pairs;
+	idx_t pos = digit_count;
+	while (pos >= 2) {
+		auto quotient = magnitude / 100;
+		auto pair = magnitude - quotient * 100;
+		digits[pos - 1] = NEGATIVE ? data_t(~pairs.low[pair]) : pairs.low[pair];
+		digits[pos - 2] = NEGATIVE ? data_t(~pairs.high[pair]) : pairs.high[pair];
+		magnitude = quotient;
+		pos -= 2;
+	}
+	if (pos == 1) {
+		auto digit = data_t(magnitude + 1);
+		digits[0] = NEGATIVE ? data_t(~digit) : digit;
+	}
+	digits[digit_count] = NEGATIVE ? data_t(0xFF) : data_t(0);
+}
+
+//! Encodes the values of a fixed-size representation: values below 2^64 are written straight into the string slots
 template <class T>
 void EncodeTyped(Vector &typed, idx_t count, uint8_t scale, Vector &result) {
 	UnifiedVectorFormat vdata;
@@ -186,8 +266,50 @@ void EncodeTyped(Vector &typed, idx_t count, uint8_t scale, Vector &result) {
 		}
 		bool negative;
 		auto magnitude = Magnitude<T>::Get(data[idx], negative);
-		auto length = EncodeMagnitude(magnitude, negative, scale, buffer);
-		writer.WriteValue(StringVector::AddStringOrBlob(result, const_char_ptr_cast(buffer), length));
+		if (magnitude.upper != 0) {
+			auto length = EncodeMagnitude(magnitude, negative, scale, buffer);
+			auto &blob = writer.WriteEmptyString(length);
+			memcpy(blob.GetDataWriteable(), buffer, length);
+			blob.Finalize();
+			continue;
+		}
+		// the common case: an inlined string_t, built in place
+		alignas(8) data_t block[sizeof(string_t)] = {0};
+		auto blob = block + sizeof(uint32_t);
+		idx_t length;
+		auto small = magnitude.lower;
+		if (small == 0) {
+			blob[0] = NUMERIC_CLASS_ZERO;
+			length = 1;
+		} else {
+			auto digit_count = DigitCount(small);
+			int64_t adjusted = int64_t(digit_count) - 1 - int64_t(scale);
+			while (small % 10 == 0) {
+				small /= 10;
+				digit_count--;
+			}
+			length = 3 + digit_count + 1;
+			if (length > string_t::INLINE_LENGTH) {
+				auto &heap_blob = writer.WriteEmptyString(length);
+				auto target = data_ptr_cast(heap_blob.GetDataWriteable());
+				BlobHeader::Write(target, negative, adjusted);
+				if (negative) {
+					WriteSmallDigits<true>(small, digit_count, target + 3);
+				} else {
+					WriteSmallDigits<false>(small, digit_count, target + 3);
+				}
+				heap_blob.Finalize();
+				continue;
+			}
+			BlobHeader::Write(blob, negative, adjusted);
+			if (negative) {
+				WriteSmallDigits<true>(small, digit_count, blob + 3);
+			} else {
+				WriteSmallDigits<false>(small, digit_count, blob + 3);
+			}
+		}
+		Store<uint32_t>(UnsafeNumericCast<uint32_t>(length), block);
+		writer.WriteStringRef(Load<string_t>(block));
 	}
 }
 

@@ -4,6 +4,8 @@
 #include "duckdb/common/types/numeric_blob.hpp"
 #include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/numeric_vector.hpp"
+#include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
@@ -49,6 +51,11 @@ void NumericColumnData::SetInner(shared_ptr<ColumnData> inner_p) {
 	inner->SetParent(*this);
 }
 
+void NumericColumnData::SetRange(const NumericRange &range_p) {
+	lock_guard<mutex> guard(inner_lock);
+	range = range_p;
+}
+
 ColumnData &NumericColumnData::Pinned(ColumnScanState &state) {
 	if (!state.pinned_column) {
 		state.pinned_column = GetInner();
@@ -78,8 +85,16 @@ void NumericColumnData::InitializePrefetch(PrefetchState &prefetch_state, Column
 	Pinned(scan_state).InitializePrefetch(prefetch_state, scan_state, rows);
 }
 
+void NumericColumnData::Pin(ColumnScanState &state) {
+	// the representation and the range of the values it holds, taken together: every row the scan can see was
+	// appended (and its range recorded) before the scan started
+	lock_guard<mutex> guard(inner_lock);
+	state.pinned_column = inner;
+	range.TryGetUnscaled(inner->type, state.numeric_range);
+}
+
 void NumericColumnData::InitializeScan(ColumnScanState &state) {
-	state.pinned_column = GetInner();
+	Pin(state);
 	// the scan state was initialized for the NUMERIC type - re-initialize it for the storage type of this row group
 	state.child_states.clear();
 	state.Initialize(state.context, state.pinned_column->type, state.scan_options);
@@ -87,7 +102,7 @@ void NumericColumnData::InitializeScan(ColumnScanState &state) {
 }
 
 void NumericColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
-	state.pinned_column = GetInner();
+	Pin(state);
 	state.child_states.clear();
 	state.Initialize(state.context, state.pinned_column->type, state.scan_options);
 	state.pinned_column->InitializeScanWithOffset(state, row_idx);
@@ -108,10 +123,16 @@ idx_t NumericColumnData::Scan(TransactionData transaction, idx_t vector_index, C
                               idx_t target_count) {
 	// the stored representation becomes the run-time representation of the result
 	auto &column = Pinned(state);
-	Vector typed(column.type, target_count);
+	if (!state.numeric_cache || state.numeric_cache->GetType() != column.type) {
+		state.numeric_cache = make_uniq<VectorCache>(Allocator::DefaultAllocator(), column.type);
+	}
+	Vector typed(*state.numeric_cache);
 	auto scan_count = column.Scan(transaction, vector_index, state, typed, target_count);
 	SetScanSize(typed, scan_count);
 	result.Shred(typed, scan_count);
+	if (state.numeric_range.valid) {
+		NumericVector::SetRange(result, state.numeric_range);
+	}
 	return scan_count;
 }
 
@@ -411,6 +432,7 @@ public:
 		}
 		auto &column_data = result_column->Cast<NumericColumnData>();
 		column_data.SetInner(inner_state->GetFinalResult());
+		column_data.SetRange(range);
 		return ColumnCheckpointState::GetFinalResult();
 	}
 

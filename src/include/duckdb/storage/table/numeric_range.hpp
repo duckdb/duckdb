@@ -11,6 +11,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/shredded_numeric_range.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
@@ -52,6 +53,9 @@ public:
 	BaseStatistics ToTyped(const LogicalType &type) const;
 	//! Canonical NUMERIC statistics: string statistics over the canonical blobs of the minimum and maximum
 	BaseStatistics ToCanonical() const;
+	//! The range as unscaled values at the scale of a representation that holds it; false when there are no values,
+	//! for wide decimals, or when 128 bits do not suffice
+	bool TryGetUnscaled(const LogicalType &representation, ShreddedNumericRange &result) const;
 
 	void Serialize(Serializer &serializer) const;
 	static NumericRange Deserialize(Deserializer &deserializer);

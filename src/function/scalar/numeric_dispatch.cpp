@@ -4,6 +4,8 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/numeric_blob.hpp"
 #include "duckdb/common/types/numeric_type.hpp"
+#include "duckdb/common/types/vector_cache.hpp"
+#include "duckdb/common/vector/numeric_vector.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -13,6 +15,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/table/numeric_range.hpp"
 
 namespace duckdb {
@@ -24,15 +27,10 @@ namespace duckdb {
 //! them); other arguments as they are
 static unique_ptr<Vector> TypedArgument(Vector &arg, idx_t count) {
 	if (arg.GetType().id() != LogicalTypeId::NUMERIC) {
-		auto result = make_uniq<Vector>(arg.GetType());
-		result->Reference(arg);
-		return result;
+		return make_uniq<Vector>(Vector::Ref(arg));
 	}
 	if (arg.GetVectorType() == VectorType::SHREDDED_VECTOR) {
-		auto &typed = ShreddedVector::GetShreddedVector(arg);
-		auto result = make_uniq<Vector>(typed.GetType());
-		result->Reference(typed);
-		return result;
+		return make_uniq<Vector>(Vector::Ref(ShreddedVector::GetShreddedVector(arg)));
 	}
 	auto type = NumericBlob::RangeType(arg, count);
 	auto result = make_uniq<Vector>(type, count);
@@ -103,8 +101,9 @@ bool TryGetUnscaled(const Value &value, hugeint_t &result) {
 	}
 }
 
-//! The range of values an operand can take: the value of a constant, otherwise everything its representation holds
-bool TryGetOperandRange(Vector &typed, ExactRange &range) {
+//! The range of values an operand takes: the value of a constant, the exact range of the vector's values when it can
+//! be known, otherwise everything its representation holds
+bool TryGetOperandRange(Vector &arg, Vector &typed, idx_t count, ExactRange &range) {
 	auto &type = typed.GetType();
 	if (type.id() == LogicalTypeId::SQLNULL) {
 		range.min = 0;
@@ -129,6 +128,17 @@ bool TryGetOperandRange(Vector &typed, ExactRange &range) {
 		range.max = range.min;
 		return true;
 	}
+	// the range recorded on a shredded NUMERIC vector, otherwise the values (canonical NUMERIC arguments were decoded)
+	ShreddedNumericRange vector_range;
+	bool known =
+	    (arg.GetType().id() == LogicalTypeId::NUMERIC && NumericVector::TryGetRange(arg, count, vector_range)) ||
+	    NumericVector::TryComputeRange(typed, count, vector_range);
+	if (known) {
+		range.min = vector_range.min;
+		range.max = vector_range.max;
+		range.scale = vector_range.scale;
+		return true;
+	}
 	return NumericType::TryGetRepresentationRange(type, range.min, range.max, range.scale);
 }
 
@@ -149,88 +159,70 @@ bool TryNegate(hugeint_t value, hugeint_t &result) {
 	return true;
 }
 
-//! The representations the operands are cast to so that the typed operator produces every possible result exactly
-vector<LogicalType> ExactKernelTypes(NumericDispatchKind kind, vector<unique_ptr<Vector>> &typed) {
-	bool is_multiply = kind == NumericDispatchKind::MULTIPLY;
-	bool is_add = kind == NumericDispatchKind::ADD;
-	vector<ExactRange> ranges(typed.size());
-	bool have_ranges = true;
-	for (idx_t i = 0; i < typed.size(); i++) {
-		if (!TryGetOperandRange(*typed[i], ranges[i])) {
-			have_ranges = false;
-		}
+//! The range of every possible result of the operation over the operand ranges; false beyond 128 bits
+bool TryResultRange(NumericDispatchKind kind, vector<ExactRange> ranges, ExactRange &result) {
+	if (ranges.size() == 1) {
+		result.scale = ranges[0].scale;
+		return TryNegate(ranges[0].max, result.min) && TryNegate(ranges[0].min, result.max);
 	}
-	LogicalType result_type;
-	bool resolved = false;
-	if (have_ranges) {
-		if (typed.size() == 1) {
-			ExactRange result;
-			result.scale = ranges[0].scale;
-			if (TryNegate(ranges[0].max, result.min) && TryNegate(ranges[0].min, result.max)) {
-				result_type = NumericType::ForUnscaledRange(result.min, result.max, result.scale);
-				resolved = true;
-			}
-		} else if (is_multiply) {
-			idx_t scale = idx_t(ranges[0].scale) + ranges[1].scale;
-			hugeint_t candidates[4];
-			if (scale <= Decimal::MAX_WIDTH_DECIMAL &&
-			    Hugeint::TryMultiply(ranges[0].min, ranges[1].min, candidates[0]) &&
-			    Hugeint::TryMultiply(ranges[0].min, ranges[1].max, candidates[1]) &&
-			    Hugeint::TryMultiply(ranges[0].max, ranges[1].min, candidates[2]) &&
-			    Hugeint::TryMultiply(ranges[0].max, ranges[1].max, candidates[3])) {
-				auto min = candidates[0];
-				auto max = candidates[0];
-				for (idx_t i = 1; i < 4; i++) {
-					min = MinValue(min, candidates[i]);
-					max = MaxValue(max, candidates[i]);
-				}
-				result_type = NumericType::ForUnscaledRange(min, max, NumericCast<uint8_t>(scale));
-				resolved = true;
-			}
-		} else {
-			auto scale = MaxValue(ranges[0].scale, ranges[1].scale);
-			if (AlignScale(ranges[0], scale) && AlignScale(ranges[1], scale)) {
-				hugeint_t min = ranges[0].min;
-				hugeint_t max = ranges[0].max;
-				bool ok;
-				if (is_add) {
-					ok = Hugeint::TryAddInPlace(min, ranges[1].min) && Hugeint::TryAddInPlace(max, ranges[1].max);
-				} else {
-					ok = Hugeint::TrySubtractInPlace(min, ranges[1].max) &&
-					     Hugeint::TrySubtractInPlace(max, ranges[1].min);
-				}
-				if (ok) {
-					result_type = NumericType::ForUnscaledRange(min, max, scale);
-					resolved = true;
-				}
-			}
+	if (kind == NumericDispatchKind::MULTIPLY) {
+		idx_t scale = idx_t(ranges[0].scale) + ranges[1].scale;
+		hugeint_t candidates[4];
+		if (scale > Decimal::MAX_WIDTH_DECIMAL || !Hugeint::TryMultiply(ranges[0].min, ranges[1].min, candidates[0]) ||
+		    !Hugeint::TryMultiply(ranges[0].min, ranges[1].max, candidates[1]) ||
+		    !Hugeint::TryMultiply(ranges[0].max, ranges[1].min, candidates[2]) ||
+		    !Hugeint::TryMultiply(ranges[0].max, ranges[1].max, candidates[3])) {
+			return false;
 		}
-	}
-	if (!resolved) {
-		// beyond 128 bits: size the result by digits
-		uint8_t left_digits, left_scale;
-		GetOperandDigits(typed[0]->GetType(), left_digits, left_scale);
-		if (typed.size() == 1) {
-			result_type = NumericType::ForDigits(left_digits, left_scale);
-		} else {
-			uint8_t right_digits, right_scale;
-			GetOperandDigits(typed[1]->GetType(), right_digits, right_scale);
-			if (is_multiply) {
-				idx_t scale = idx_t(left_scale) + right_scale;
-				if (scale > Decimal::MAX_WIDTH_DECIMAL) {
-					throw OutOfRangeException("NUMERIC multiplication needs more than %d digits",
-					                          Decimal::MAX_WIDTH_DECIMAL);
-				}
-				result_type = NumericType::ForDigits(idx_t(left_digits) + right_digits, NumericCast<uint8_t>(scale));
-			} else {
-				result_type = NumericType::ForDigits(idx_t(MaxValue(left_digits, right_digits)) + 1,
-				                                     MaxValue(left_scale, right_scale));
-			}
+		result.min = candidates[0];
+		result.max = candidates[0];
+		for (idx_t i = 1; i < 4; i++) {
+			result.min = MinValue(result.min, candidates[i]);
+			result.max = MaxValue(result.max, candidates[i]);
 		}
+		result.scale = NumericCast<uint8_t>(scale);
+		return true;
 	}
+	auto scale = MaxValue(ranges[0].scale, ranges[1].scale);
+	if (!AlignScale(ranges[0], scale) || !AlignScale(ranges[1], scale)) {
+		return false;
+	}
+	result.min = ranges[0].min;
+	result.max = ranges[0].max;
+	result.scale = scale;
+	if (kind == NumericDispatchKind::ADD) {
+		return Hugeint::TryAddInPlace(result.min, ranges[1].min) && Hugeint::TryAddInPlace(result.max, ranges[1].max);
+	}
+	return Hugeint::TrySubtractInPlace(result.min, ranges[1].max) &&
+	       Hugeint::TrySubtractInPlace(result.max, ranges[1].min);
+}
 
+//! The result representation sized by the digits of the operand representations (beyond 128 bits)
+LogicalType ResultTypeByDigits(NumericDispatchKind kind, vector<unique_ptr<Vector>> &typed) {
+	uint8_t left_digits, left_scale;
+	GetOperandDigits(typed[0]->GetType(), left_digits, left_scale);
+	if (typed.size() == 1) {
+		return NumericType::ForDigits(left_digits, left_scale);
+	}
+	uint8_t right_digits, right_scale;
+	GetOperandDigits(typed[1]->GetType(), right_digits, right_scale);
+	if (kind == NumericDispatchKind::MULTIPLY) {
+		idx_t scale = idx_t(left_scale) + right_scale;
+		if (scale > Decimal::MAX_WIDTH_DECIMAL) {
+			throw OutOfRangeException("NUMERIC multiplication needs more than %d digits", Decimal::MAX_WIDTH_DECIMAL);
+		}
+		return NumericType::ForDigits(idx_t(left_digits) + right_digits, NumericCast<uint8_t>(scale));
+	}
+	return NumericType::ForDigits(idx_t(MaxValue(left_digits, right_digits)) + 1, MaxValue(left_scale, right_scale));
+}
+
+//! The representations the operands are cast to so that the typed operator of the result representation produces
+//! every possible result exactly
+vector<LogicalType> WidenedKernelTypes(NumericDispatchKind kind, vector<unique_ptr<Vector>> &typed,
+                                       const LogicalType &result_type, const vector<ExactRange> &ranges,
+                                       bool have_ranges) {
 	vector<LogicalType> cast_types;
-	if (is_multiply && result_type.id() == LogicalTypeId::DECIMAL) {
+	if (kind == NumericDispatchKind::MULTIPLY && result_type.id() == LogicalTypeId::DECIMAL) {
 		// the decimal multiplication keeps the scales of its operands and adds their widths: widen the first operand so
 		// the sum of the widths covers the result, and lift it past the fixed-size tiers when the result needs that
 		auto result_width = DecimalType::GetWidth(result_type);
@@ -271,6 +263,16 @@ vector<LogicalType> ExactKernelTypes(NumericDispatchKind kind, vector<unique_ptr
 	return cast_types;
 }
 
+//! Whether a representation holds every value of a range
+bool RepresentationHolds(const LogicalType &type, const ExactRange &range) {
+	hugeint_t min, max;
+	uint8_t scale;
+	if (!NumericType::TryGetRepresentationRange(type, min, max, scale)) {
+		return false;
+	}
+	return scale == range.scale && min <= range.min && range.max <= max;
+}
+
 //===--------------------------------------------------------------------===//
 // The typed kernels, bound per signature
 //===--------------------------------------------------------------------===//
@@ -281,6 +283,8 @@ struct NumericKernel {
 	unique_ptr<Expression> expression;
 	unique_ptr<ExpressionExecutor> executor;
 	DataChunk chunk;
+	//! The buffer the kernel writes its result into, reused across calls
+	unique_ptr<VectorCache> result_cache;
 };
 
 //! Whether two sets of constant arguments are the same (placeholders for non-constant arguments are NULL)
@@ -303,6 +307,48 @@ static bool SameConstants(const vector<Value> &left, const vector<Value> &right)
 		}
 	}
 	return true;
+}
+
+//! An arithmetic kernel is sized so that no result overflows. Its operator is told so through its statistics
+//! callback, which replaces it with the variant without overflow checks (as the optimizer does when column
+//! statistics prove it).
+void DisableOverflowChecks(ClientContext &context, BoundFunctionExpression &expr) {
+	auto statistics_callback = expr.Function().GetStatisticsCallback();
+	if (!statistics_callback) {
+		return;
+	}
+	vector<BaseStatistics> child_stats;
+	for (auto &child : expr.GetChildren()) {
+		auto &type = child->GetReturnType();
+		if (!NumericType::IsExact(type) || type.InternalType() == PhysicalType::VARCHAR) {
+			return;
+		}
+		auto stats = NumericStats::CreateEmpty(type);
+		auto zero = Value::Numeric(type, 0);
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			auto width = DecimalType::GetWidth(type);
+			auto scale = DecimalType::GetScale(type);
+			switch (type.InternalType()) {
+			case PhysicalType::INT16:
+				zero = Value::DECIMAL(int16_t(0), width, scale);
+				break;
+			case PhysicalType::INT32:
+				zero = Value::DECIMAL(int32_t(0), width, scale);
+				break;
+			case PhysicalType::INT64:
+				zero = Value::DECIMAL(int64_t(0), width, scale);
+				break;
+			default:
+				zero = Value::DECIMAL(hugeint_t(0), width, scale);
+				break;
+			}
+		}
+		NumericStats::SetMin(stats, zero);
+		NumericStats::SetMax(stats, zero);
+		child_stats.push_back(std::move(stats));
+	}
+	FunctionStatisticsInput input(expr, expr.BindInfoMutable().get(), child_stats, nullptr);
+	statistics_callback(context, input);
 }
 
 struct NumericDispatchState : public FunctionLocalState {
@@ -333,8 +379,13 @@ struct NumericDispatchState : public FunctionLocalState {
 		if (!kernel->expression) {
 			error.Throw();
 		}
+		if (is_operator) {
+			DisableOverflowChecks(context, kernel->expression->Cast<BoundFunctionExpression>());
+		}
 		kernel->executor = make_uniq<ExpressionExecutor>(context, *kernel->expression);
 		kernel->chunk.InitializeEmpty(types);
+		kernel->result_cache =
+		    make_uniq<VectorCache>(Allocator::DefaultAllocator(), kernel->expression->GetReturnType());
 		kernels.push_back(std::move(kernel));
 		return *kernels.back();
 	}
@@ -345,20 +396,40 @@ unique_ptr<FunctionLocalState> InitNumericDispatchState(ExpressionState &state, 
 	return make_uniq<NumericDispatchState>();
 }
 
-//! An exact result becomes a NUMERIC vector in the narrowest representation that holds its values
-void FinishResult(const LogicalType &return_type, Vector &typed_result, idx_t count, Vector &result) {
+//! An exact result becomes a NUMERIC vector that carries the exact range of its values; the representation is the
+//! kernel's unless the kernel widened the physical type past the operands and the values fit a narrower one
+void FinishResult(const LogicalType &return_type, Vector &typed_result, idx_t count, idx_t operand_size,
+                  optional_ptr<const ExactRange> interval, Vector &result) {
 	if (return_type.id() == LogicalTypeId::NUMERIC) {
 		typed_result.Flatten();
-		NumericRange range;
-		range.Update(typed_result, count);
-		auto narrow = range.ResolveType();
-		if (narrow != typed_result.GetType()) {
-			Vector narrowed(narrow, count);
-			VectorOperations::DefaultCast(typed_result, narrowed, count, true);
-			result.Shred(narrowed, count);
-			return;
+		auto &result_type = typed_result.GetType();
+		ShreddedNumericRange range;
+		bool known;
+		uint8_t result_scale = result_type.id() == LogicalTypeId::DECIMAL ? DecimalType::GetScale(result_type) : 0;
+		if (interval && interval->scale == result_scale) {
+			// every possible result lies in the interval of the operand ranges
+			range.valid = true;
+			range.scale = interval->scale;
+			range.min = interval->min;
+			range.max = interval->max;
+			known = true;
+		} else {
+			known = NumericVector::TryComputeRange(typed_result, count, range);
+		}
+		if (known && GetTypeIdSize(result_type.InternalType()) > operand_size) {
+			auto narrow = NumericType::ForUnscaledRange(range.min, range.max, range.scale);
+			if (narrow.InternalType() != result_type.InternalType()) {
+				Vector narrowed(narrow, count);
+				VectorOperations::DefaultCast(typed_result, narrowed, count, true);
+				result.Shred(narrowed, count);
+				NumericVector::SetRange(result, range);
+				return;
+			}
 		}
 		result.Shred(typed_result, count);
+		if (known) {
+			NumericVector::SetRange(result, range);
+		}
 		return;
 	}
 	if (typed_result.GetType() == return_type) {
@@ -379,21 +450,63 @@ void NumericDispatchFunction(DataChunk &args, ExpressionState &state, Vector &re
 	for (auto &arg : args.data) {
 		typed.push_back(TypedArgument(arg, count));
 	}
-	vector<LogicalType> kernel_types;
-	if (KIND == NumericDispatchKind::GENERIC) {
-		for (auto &operand : typed) {
-			kernel_types.push_back(operand->GetType());
-		}
-	} else {
-		kernel_types = ExactKernelTypes(KIND, typed);
-	}
-	vector<unique_ptr<Vector>> operands;
 	vector<Value> constants(typed.size(), Value(LogicalType(LogicalTypeId::INVALID)));
+	idx_t operand_size = 0;
 	for (idx_t i = 0; i < typed.size(); i++) {
 		if (args.data[i].GetType().id() != LogicalTypeId::NUMERIC &&
 		    args.data[i].GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			constants[i] = args.data[i].GetValue(0);
 		}
+		auto &type = typed[i]->GetType();
+		if (type.id() != LogicalTypeId::SQLNULL) {
+			operand_size = MaxValue<idx_t>(operand_size, GetTypeIdSize(type.InternalType()));
+		}
+	}
+	auto &name = func_expr.Function().GetName();
+	bool is_operator = KIND != NumericDispatchKind::GENERIC;
+
+	vector<LogicalType> kernel_types;
+	for (auto &operand : typed) {
+		kernel_types.push_back(operand->GetType());
+	}
+	optional_ptr<NumericKernel> kernel;
+	ExactRange interval;
+	bool resolved = false;
+	if (KIND == NumericDispatchKind::GENERIC) {
+		kernel = lstate.Get(context, name, kernel_types, constants, is_operator);
+	} else {
+		// size the kernel from the values the operands take: the operator of the operand representations when its
+		// result holds every possible result, otherwise the operands are widened to the result representation
+		vector<ExactRange> ranges(typed.size());
+		bool have_ranges = true;
+		bool have_nulls = false;
+		for (idx_t i = 0; i < typed.size(); i++) {
+			if (!TryGetOperandRange(args.data[i], *typed[i], count, ranges[i])) {
+				have_ranges = false;
+			}
+			have_nulls = have_nulls || typed[i]->GetType().id() == LogicalTypeId::SQLNULL;
+		}
+		LogicalType result_type;
+		resolved = have_ranges && TryResultRange(KIND, ranges, interval);
+		if (resolved) {
+			result_type = NumericType::ForUnscaledRange(interval.min, interval.max, interval.scale);
+			if (!have_nulls) {
+				auto &candidate = lstate.Get(context, name, kernel_types, constants, is_operator);
+				if (RepresentationHolds(candidate.expression->GetReturnType(), interval)) {
+					kernel = &candidate;
+				}
+			}
+		} else {
+			result_type = ResultTypeByDigits(KIND, typed);
+		}
+		if (!kernel) {
+			kernel_types = WidenedKernelTypes(KIND, typed, result_type, ranges, have_ranges);
+			kernel = lstate.Get(context, name, kernel_types, constants, is_operator);
+		}
+	}
+
+	vector<unique_ptr<Vector>> operands;
+	for (idx_t i = 0; i < typed.size(); i++) {
 		if (typed[i]->GetType() == kernel_types[i]) {
 			operands.push_back(std::move(typed[i]));
 			continue;
@@ -402,16 +515,13 @@ void NumericDispatchFunction(DataChunk &args, ExpressionState &state, Vector &re
 		VectorOperations::DefaultCast(*typed[i], *cast, count, true);
 		operands.push_back(std::move(cast));
 	}
-
-	auto &kernel = lstate.Get(context, func_expr.Function().GetName(), kernel_types, constants,
-	                          KIND != NumericDispatchKind::GENERIC);
 	for (idx_t i = 0; i < operands.size(); i++) {
-		kernel.chunk.data[i].Reference(*operands[i]);
+		kernel->chunk.data[i].Reference(*operands[i]);
 	}
-	kernel.chunk.SetChildCardinality(count);
-	Vector typed_result(kernel.expression->GetReturnType(), count);
-	kernel.executor->ExecuteExpression(kernel.chunk, typed_result);
-	FinishResult(func_expr.GetReturnType(), typed_result, count, result);
+	kernel->chunk.SetChildCardinality(count);
+	Vector typed_result(*kernel->result_cache);
+	kernel->executor->ExecuteExpression(kernel->chunk, typed_result);
+	FinishResult(func_expr.GetReturnType(), typed_result, count, operand_size, resolved ? &interval : nullptr, result);
 }
 
 //! The run-time representation of a NUMERIC vector

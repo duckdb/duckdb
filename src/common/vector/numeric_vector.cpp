@@ -3,6 +3,8 @@
 #include "duckdb/common/types/numeric_blob.hpp"
 #include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
+#include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
@@ -12,8 +14,7 @@ bool NumericVector::TryGetTyped(const Vector &vector, unique_ptr<Vector> &typed)
 	if (vector.GetVectorType() == VectorType::SHREDDED_VECTOR) {
 		auto &child = ShreddedVector::GetShreddedVector(vector);
 		D_ASSERT(child.size() == vector.size());
-		typed = make_uniq<Vector>(child.GetType());
-		typed->Reference(child);
+		typed = make_uniq<Vector>(Vector::Ref(child));
 		return true;
 	}
 	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -72,6 +73,124 @@ bool NumericVector::TryNativePair(const Vector &left, const Vector &right, uniqu
 		}
 	}
 	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Ranges
+//===--------------------------------------------------------------------===//
+template <class T>
+static hugeint_t RangeValue(const T &value) {
+	return Hugeint::Convert(value);
+}
+
+template <>
+hugeint_t RangeValue(const hugeint_t &value) {
+	return value;
+}
+
+template <class T>
+static void ComputeRange(const Vector &typed, idx_t count, ShreddedNumericRange &range) {
+	UnifiedVectorFormat vdata;
+	typed.ToUnifiedFormat(vdata);
+	auto data = UnifiedVectorFormat::GetData<T>(vdata);
+	T min = T();
+	T max = T();
+	if (!vdata.sel->IsSet() && vdata.validity.CannotHaveNull()) {
+		// flat without NULLs: a plain pass
+		if (count > 0) {
+			min = data[0];
+			max = data[0];
+		}
+		for (idx_t i = 1; i < count; i++) {
+			auto value = data[i];
+			min = value < min ? value : min;
+			max = value > max ? value : max;
+		}
+	} else {
+		bool found = false;
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = vdata.sel->get_index(i);
+			if (!vdata.validity.RowIsValid(idx)) {
+				continue;
+			}
+			auto value = data[idx];
+			if (!found) {
+				min = value;
+				max = value;
+				found = true;
+			} else if (value < min) {
+				min = value;
+			} else if (value > max) {
+				max = value;
+			}
+		}
+	}
+	range.min = RangeValue(min);
+	range.max = RangeValue(max);
+	range.valid = true;
+}
+
+bool NumericVector::TryComputeRange(const Vector &typed, idx_t count, ShreddedNumericRange &range) {
+	auto &type = typed.GetType();
+	range.scale = type.id() == LogicalTypeId::DECIMAL ? DecimalType::GetScale(type) : 0;
+	if (typed.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		count = 1;
+	}
+	switch (type.InternalType()) {
+	case PhysicalType::INT8:
+		ComputeRange<int8_t>(typed, count, range);
+		return true;
+	case PhysicalType::INT16:
+		ComputeRange<int16_t>(typed, count, range);
+		return true;
+	case PhysicalType::INT32:
+		ComputeRange<int32_t>(typed, count, range);
+		return true;
+	case PhysicalType::INT64:
+		ComputeRange<int64_t>(typed, count, range);
+		return true;
+	case PhysicalType::INT128:
+		ComputeRange<hugeint_t>(typed, count, range);
+		return true;
+	case PhysicalType::UINT8:
+		ComputeRange<uint8_t>(typed, count, range);
+		return true;
+	case PhysicalType::UINT16:
+		ComputeRange<uint16_t>(typed, count, range);
+		return true;
+	case PhysicalType::UINT32:
+		ComputeRange<uint32_t>(typed, count, range);
+		return true;
+	case PhysicalType::UINT64:
+		ComputeRange<uint64_t>(typed, count, range);
+		return true;
+	default:
+		range.valid = false;
+		return false;
+	}
+}
+
+bool NumericVector::TryGetRange(const Vector &vector, idx_t count, ShreddedNumericRange &range) {
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::NUMERIC);
+	if (vector.GetVectorType() != VectorType::SHREDDED_VECTOR) {
+		range.valid = false;
+		return false;
+	}
+	auto &buffer = vector.GetBufferRef()->Cast<ShreddedVectorBuffer>();
+	if (buffer.GetNumericRange().valid) {
+		range = buffer.GetNumericRange();
+		return true;
+	}
+	if (!TryComputeRange(buffer.GetChild(), count, range)) {
+		return false;
+	}
+	buffer.SetNumericRange(range);
+	return true;
+}
+
+void NumericVector::SetRange(Vector &vector, const ShreddedNumericRange &range) {
+	D_ASSERT(vector.GetVectorType() == VectorType::SHREDDED_VECTOR);
+	vector.GetBufferRef()->Cast<ShreddedVectorBuffer>().SetNumericRange(range);
 }
 
 } // namespace duckdb
