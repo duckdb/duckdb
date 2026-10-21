@@ -75,6 +75,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -135,6 +136,17 @@ static idx_t ParquetColumnChunkFileOffset(const duckdb_parquet::ColumnChunk &chu
 		offset = MinValue<idx_t>(offset, NumericCast<idx_t>(chunk.meta_data.index_page_offset));
 	}
 	return offset;
+}
+
+//! Adds the given column chunks to the prefetch log
+static void AddPrefetchLogColumns(const duckdb_parquet::RowGroup &group, const unordered_set<idx_t> &column_chunks,
+                                  vector<ParquetPrefetchColumn> &columns) {
+	for (auto column_chunk : column_chunks) {
+		auto &chunk = group.columns[column_chunk];
+		auto &path = chunk.meta_data.path_in_schema;
+		columns.emplace_back(path.empty() ? string() : StringUtil::Join(path, "."),
+		                     ParquetColumnChunkFileOffset(chunk));
+	}
 }
 
 void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(ThriftFileTransport &trans,
@@ -1666,6 +1678,65 @@ static FilterPropagateResult CheckParquetFloatFilter(ClientContext &context, Col
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
+//! The reader as a struct reader, if it reads a struct column with child readers
+static optional_ptr<StructColumnReader> TryGetStructReader(ColumnReader &reader) {
+	auto &schema = reader.Schema();
+	if (schema.schema_type != ParquetColumnSchemaType::COLUMN || schema.children.empty() ||
+	    !StructType::IsStruct(reader.Type())) {
+		return nullptr;
+	}
+	return reader.Cast<StructColumnReader>();
+}
+
+//! The reader of the struct field at the given path, if every step is a struct reader with that child
+static optional_ptr<ColumnReader> TryGetStructFieldReader(ColumnReader &column_reader,
+                                                          const vector<StructExtractPathEntry> &path) {
+	optional_ptr<ColumnReader> reader = column_reader;
+	for (auto &entry : path) {
+		auto struct_reader = TryGetStructReader(*reader);
+		if (!struct_reader || entry.child_idx >= struct_reader->child_readers.size() ||
+		    !struct_reader->child_readers[entry.child_idx]) {
+			return nullptr;
+		}
+		reader = struct_reader->child_readers[entry.child_idx].get();
+	}
+	return reader;
+}
+
+//! Adds the column chunks of the struct fields the expression reads, or of the whole column if it reads the column
+static void GatherFilterExpressionChunks(ColumnReader &column_reader, const Expression &expr,
+                                         unordered_set<idx_t> &column_chunks) {
+	vector<StructExtractPathEntry> path;
+	auto &base = PeelStructExtractPath(expr, path);
+	if (base.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+		auto field_reader = TryGetStructFieldReader(column_reader, path);
+		if (field_reader) {
+			field_reader->GatherColumnChunks(column_chunks);
+		} else {
+			column_reader.GatherColumnChunks(column_chunks);
+		}
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](const Expression &child) { GatherFilterExpressionChunks(column_reader, child, column_chunks); });
+}
+
+//! Adds the column chunks a filter reads
+static void GatherFilterColumnChunks(ColumnReader &reader, const TableFilter &filter,
+                                     unordered_set<idx_t> &column_chunks) {
+	if (!TryGetStructReader(reader) || filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		reader.GatherColumnChunks(column_chunks);
+		return;
+	}
+	auto &expr_filter = filter.Cast<ExpressionFilter>();
+	if (!expr_filter.column_indexes.empty()) {
+		// the filter also reads other columns
+		reader.GatherColumnChunks(column_chunks);
+		return;
+	}
+	GatherFilterExpressionChunks(reader, *expr_filter.expr, column_chunks);
+}
+
 static bool TryGetNestedBloomFilterLeaf(ColumnReader &column_reader, const Expression &expr,
                                         optional_ptr<ColumnReader> &leaf_reader) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
@@ -2225,7 +2296,9 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 			auto &child = state.GetColumnReader(local_idx);
 			child.RegisterPrefetch(trans, true);
 			if (log_prefetch) {
-				pending_registrations.emplace_back(child.Schema().name, child.FileOffset());
+				unordered_set<idx_t> column_chunks;
+				child.GatherColumnChunks(column_chunks);
+				AddPrefetchLogColumns(group, column_chunks, pending_registrations);
 			}
 			already_registered[local_idx.GetIndex()] = true;
 		}
@@ -2245,13 +2318,18 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 		}
 		auto col_idx = MultiFileLocalIndex(i);
 		auto &child = state.GetColumnReader(col_idx);
-		if (child.IsSkipped()) {
+
+		// nested readers have no chunk of their own, so check the chunks of their children
+		unordered_set<idx_t> column_chunks;
+		child.GatherColumnChunks(column_chunks);
+		if (column_chunks.empty()) {
 			//! Column reader is skipped entirely
 			continue;
 		}
+
 		child.RegisterPrefetch(trans, true);
 		if (log_prefetch) {
-			pending_registrations.emplace_back(child.Schema().name, child.FileOffset());
+			AddPrefetchLogColumns(group, column_chunks, pending_registrations);
 		}
 	}
 	trans.FinalizeRegistration();
@@ -2333,8 +2411,8 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 						if (scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
 							unordered_set<idx_t> filter_column_chunks;
 							for (auto &scan_filter : state.scan_filters) {
-								state.GetColumnReader(scan_filter.filter_idx.GetIndex())
-								    .GatherColumnChunks(filter_column_chunks);
+								GatherFilterColumnChunks(state.GetColumnReader(scan_filter.filter_idx.GetIndex()),
+								                         scan_filter.filter, filter_column_chunks);
 							}
 							uint64_t filter_compressed_bytes = 0;
 							for (auto column_chunk : filter_column_chunks) {
