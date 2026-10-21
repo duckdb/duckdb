@@ -4250,14 +4250,19 @@ void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gst
 		annotated_unique_lock<annotated_mutex> file_guard(ready_file_state->lock);
 		if (PhysicalCopyRotateNow(*this, *ready_file_state)) {
 			// Global state must be rotated. Move to local scope, create an new one, and immediately release global lock
-			auto owned_file_state = std::move(file_state);
+			// If this is the file state all prepares run against, hand it over to the global state while we still hold
+			// the lock: creating the replacement below can throw (e.g. when another thread's error interrupts the
+			// query), and a handle that goes out of scope would free a file state other threads still prepare into
+			auto owned_file_state = gstate.FinalizeFileStateLocked(std::move(file_state));
 			file_guard.unlock();
 			global_guard.unlock();
 
 			gstate.EnsureFileStateReady(file_state, create_file_state_fun);
 
 			// Finalize this file!
-			gstate.FinalizeFileState(std::move(owned_file_state));
+			if (owned_file_state) {
+				gstate.FinalizeFileState(std::move(owned_file_state));
+			}
 		} else {
 			global_guard.unlock();
 			ready_file_state->num_batches++;
