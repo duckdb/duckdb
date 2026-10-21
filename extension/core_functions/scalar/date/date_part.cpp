@@ -2539,12 +2539,23 @@ ScalarFunctionSet TimezoneFun::GetFunctions() {
 	return operator_set;
 }
 
+//! timezone_hour and timezone_minute throw on every DATE and INTERVAL, but not on the other types
+static ScalarFunctionSet SetDateAndIntervalFallible(ScalarFunctionSet set) {
+	set.ApplyToFunctions([](ScalarFunction &function) {
+		auto type = function.GetSignature().GetParameter(0).GetType().id();
+		if (type == LogicalTypeId::DATE || type == LogicalTypeId::INTERVAL) {
+			function.SetFallible();
+		}
+	});
+	return set;
+}
+
 ScalarFunctionSet TimezoneHourFun::GetFunctions() {
-	return GetTimePartFunction<DatePart::TimezoneHourOperator>();
+	return SetDateAndIntervalFallible(GetTimePartFunction<DatePart::TimezoneHourOperator>());
 }
 
 ScalarFunctionSet TimezoneMinuteFun::GetFunctions() {
-	return GetTimePartFunction<DatePart::TimezoneMinuteOperator>();
+	return SetDateAndIntervalFallible(GetTimePartFunction<DatePart::TimezoneMinuteOperator>());
 }
 
 ScalarFunctionSet EpochFun::GetFunctions() {

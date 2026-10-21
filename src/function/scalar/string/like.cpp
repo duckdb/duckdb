@@ -722,6 +722,7 @@ ScalarFunction NotLikeEscapeFun::GetFunction() {
 	    .AddParameter("like_specifier", LogicalType::VARCHAR)
 	    .AddParameter("escape_character", LogicalType::VARCHAR);
 	not_like_escape.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	not_like_escape.SetFallible();
 	return not_like_escape;
 }
 
@@ -732,6 +733,7 @@ ScalarFunction IlikeEscapeFun::GetFunction() {
 	    .AddParameter("like_specifier", LogicalType::VARCHAR)
 	    .AddParameter("escape_character", LogicalType::VARCHAR);
 	ilike_escape.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	ilike_escape.SetFallible();
 	return ilike_escape;
 }
 
@@ -742,6 +744,7 @@ ScalarFunction NotIlikeEscapeFun::GetFunction() {
 	    .AddParameter("like_specifier", LogicalType::VARCHAR)
 	    .AddParameter("escape_character", LogicalType::VARCHAR);
 	not_ilike_escape.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	not_ilike_escape.SetFallible();
 	return not_ilike_escape;
 }
 ScalarFunction LikeEscapeFun::GetFunction() {
@@ -751,6 +754,7 @@ ScalarFunction LikeEscapeFun::GetFunction() {
 	    .AddParameter("like_specifier", LogicalType::VARCHAR)
 	    .AddParameter("escape_character", LogicalType::VARCHAR);
 	like_escape.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	like_escape.SetFallible();
 	return like_escape;
 }
 
