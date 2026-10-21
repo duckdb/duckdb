@@ -15,6 +15,7 @@ set(TEST_API_OBJECTS
     test_process_util.cpp
     test_remove_directory_extended.cpp
     test_temporary_file_owner.cpp
+    test_task_error_out_of_memory.cpp
     test_bind_statement.cpp
     test_function_signature_variadic.cpp
     test_scalar_function_decimal_return.cpp
@@ -79,6 +80,7 @@ set(TEST_API_OBJECTS
     test_object_cache.cpp
     test_partial_executor.cpp
     test_scheduler_fairness.cpp
+    test_worker_exception.cpp
     test_buffer_pool_eviction.cpp
     test_block_allocator_tls.cpp
     test_data_table_scan_without_row_groups.cpp)
