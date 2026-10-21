@@ -5,6 +5,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
 
 namespace duckdb {
 
@@ -68,7 +69,7 @@ buffer_ptr<VectorBuffer> ShreddedVectorBuffer::Deserialize(Deserializer &deseria
 		throw SerializationException("Shredded vector data must be a struct with two children");
 	}
 	auto &unshredded_type = StructType::GetChildType(shredded_type, 0);
-	if (unshredded_type != LogicalType::VARIANT()) {
+	if (unshredded_type != VariantShredding::GetUnshreddedType()) {
 		throw SerializationException("Shredded vector data's first child must be the canonical VARIANT struct");
 	}
 	auto &inner_shredded_type = StructType::GetChildType(shredded_type, 1);
