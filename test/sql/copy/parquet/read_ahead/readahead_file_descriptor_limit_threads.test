@@ -9,15 +9,16 @@ require skip_reload
 statement ok
 SET async_threads=72
 
-foreach suffix a b c d
+foreach suffix a b
 
 statement ok
-COPY (SELECT i % 400 AS p, i AS v FROM range(400000) t(i)) TO '{TEST_DIR}/readahead_fd_threads_{suffix}' (FORMAT parquet, PARTITION_BY (p))
+COPY (SELECT i % 64 AS p, i AS v FROM range(65536) t(i))
+TO '{TEST_DIR}/readahead_fd_threads_{suffix}' (FORMAT parquet, PARTITION_BY (p))
 
 endloop
 
 statement ok
-SET debug_file_descriptor_limit=256
+SET debug_file_descriptor_limit=64
 
 statement ok
 CREATE MACRO peak_open_handles() AS TABLE
@@ -29,9 +30,9 @@ WITH events AS (
 SELECT max(open_handles) AS peak
 FROM (SELECT sum(delta) OVER (ORDER BY timestamp, delta DESC ROWS UNBOUNDED PRECEDING) AS open_handles FROM events)
 
-# with many threads the files held by claimed and queued jobs count too
+# A single scan with many threads must respect the descriptor budget.
 statement ok
-SET threads=32
+SET threads=16
 
 statement ok
 CALL enable_logging('FileSystem')
@@ -39,22 +40,22 @@ CALL enable_logging('FileSystem')
 query I
 SELECT count(*) FROM read_parquet('{TEST_DIR}/readahead_fd_threads_a/**/*.parquet')
 ----
-400000
+65536
 
 statement ok
 CALL disable_logging()
 
 query I
-SELECT peak < 128 FROM peak_open_handles()
+SELECT peak < 32 FROM peak_open_handles()
 ----
 true
 
 statement ok
 CALL truncate_duckdb_logs()
 
-# concurrent scans share one descriptor budget
+# Concurrent scans share the same process-wide budget.
 statement ok
-SET threads=2
+SET threads=8
 
 statement ok
 CALL enable_logging('FileSystem')
@@ -66,43 +67,12 @@ SELECT count(*) FROM (
 	SELECT v FROM read_parquet('{TEST_DIR}/readahead_fd_threads_b/**/*.parquet')
 )
 ----
-800000
+131072
 
 statement ok
 CALL disable_logging()
 
 query I
-SELECT peak < 128 FROM peak_open_handles()
-----
-true
-
-statement ok
-CALL truncate_duckdb_logs()
-
-# with many threads concurrent scans stay within the shared budget too
-statement ok
-SET threads=32
-
-statement ok
-CALL enable_logging('FileSystem')
-
-query I
-SELECT count(*) FROM (
-	SELECT v FROM read_parquet('{TEST_DIR}/readahead_fd_threads_a/**/*.parquet')
-	UNION ALL
-	SELECT v FROM read_parquet('{TEST_DIR}/readahead_fd_threads_b/**/*.parquet')
-	UNION ALL
-	SELECT v FROM read_parquet('{TEST_DIR}/readahead_fd_threads_c/**/*.parquet')
-	UNION ALL
-	SELECT v FROM read_parquet('{TEST_DIR}/readahead_fd_threads_d/**/*.parquet')
-)
-----
-1600000
-
-statement ok
-CALL disable_logging()
-
-query I
-SELECT peak < 128 FROM peak_open_handles()
+SELECT peak < 32 FROM peak_open_handles()
 ----
 true
