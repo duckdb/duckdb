@@ -68,30 +68,83 @@ struct DictChild {
 	ArrowArray array {};
 };
 
+// Dict-encoded child with string values {"a", "b", "c"}: slot j holds the value at j % 3.
+struct StringDictChild {
+	explicit StringDictChild(idx_t len) : indices(len) {
+		for (idx_t j = 0; j < len; j++) {
+			indices[j] = int32_t(j % 3);
+		}
+		dict_schema.format = "u";
+		dict_schema.release = ReleaseSchema;
+		schema.format = "i";
+		schema.name = "item";
+		schema.flags = 2; // ARROW_FLAG_NULLABLE
+		schema.dictionary = &dict_schema;
+		schema.release = ReleaseSchema;
+		dict_buffers[0] = nullptr;
+		dict_buffers[1] = DICT_OFFSETS;
+		dict_buffers[2] = DICT_DATA;
+		dict_array.length = 3;
+		dict_array.n_buffers = 3;
+		dict_array.buffers = dict_buffers;
+		dict_array.release = ReleaseArray;
+		buffers[0] = nullptr;
+		buffers[1] = indices.data();
+		array.length = int64_t(len);
+		array.n_buffers = 2;
+		array.buffers = buffers;
+		array.dictionary = &dict_array;
+		array.release = ReleaseArray;
+	}
+	StringDictChild(const StringDictChild &) = delete;
+
+	static constexpr int32_t DICT_OFFSETS[4] = {0, 1, 2, 3};
+	static constexpr char DICT_DATA[] = "abc";
+	std::vector<int32_t> indices;
+	const void *dict_buffers[3];
+	const void *buffers[2];
+	ArrowSchema dict_schema {};
+	ArrowSchema schema {};
+	ArrowArray dict_array {};
+	ArrowArray array {};
+};
+
 // LIST column with offsets[0] == gap: row r covers child slots gap + r * list_len onward.
 struct ListColumn {
 	ListColumn(DictChild &child, idx_t rows, idx_t gap, idx_t list_len = 1, bool wrap_struct = false)
+	    : ListColumn(child.schema, child.array, rows, gap, list_len, wrap_struct) {
+	}
+	// Explicit offsets, for lists of varying length.
+	ListColumn(StringDictChild &child, std::vector<int32_t> offsets_p) : offsets(std::move(offsets_p)) {
+		Init(child.schema, child.array, false);
+	}
+	ListColumn(ArrowSchema &child_schema, ArrowArray &child_array, idx_t rows, idx_t gap, idx_t list_len,
+	           bool wrap_struct)
 	    : offsets(rows + 1) {
 		for (idx_t i = 0; i <= rows; i++) {
 			offsets[i] = int32_t(gap + i * list_len);
 		}
+		Init(child_schema, child_array, wrap_struct);
+	}
+	void Init(ArrowSchema &child_schema, ArrowArray &child_array, bool wrap_struct) {
+		auto rows = offsets.size() - 1;
 		if (wrap_struct) {
-			struct_schema_children[0] = &child.schema;
+			struct_schema_children[0] = &child_schema;
 			struct_schema.format = "+s";
 			struct_schema.name = "s";
 			struct_schema.flags = 2;
 			struct_schema.n_children = 1;
 			struct_schema.children = struct_schema_children;
 			struct_schema.release = ReleaseSchema;
-			struct_array_children[0] = &child.array;
-			struct_array.length = child.array.length;
+			struct_array_children[0] = &child_array;
+			struct_array.length = child_array.length;
 			struct_array.n_buffers = 1;
 			struct_array.buffers = struct_buffers;
 			struct_array.n_children = 1;
 			struct_array.children = struct_array_children;
 			struct_array.release = ReleaseArray;
 		}
-		schema_children[0] = wrap_struct ? &struct_schema : &child.schema;
+		schema_children[0] = wrap_struct ? &struct_schema : &child_schema;
 		schema.format = "+l";
 		schema.name = "a";
 		schema.flags = 2;
@@ -100,7 +153,7 @@ struct ListColumn {
 		schema.release = ReleaseSchema;
 		buffers[0] = nullptr;
 		buffers[1] = offsets.data();
-		array_children[0] = wrap_struct ? &struct_array : &child.array;
+		array_children[0] = wrap_struct ? &struct_array : &child_array;
 		array.length = int64_t(rows);
 		array.n_buffers = 2;
 		array.buffers = buffers;
@@ -235,4 +288,24 @@ TEST_CASE("Arrow scan of fixed-size ARRAY(dict int32) with nonzero array offset"
 	REQUIRE(ScanMatches(col.schema, col.array,
 	                    "SELECT (CASE WHEN r = 0 THEN [NULL, 20, 30] ELSE [10, 20, 30] END)::INT[3] "
 	                    "FROM range(4) t(r)"));
+}
+
+TEST_CASE("Arrow scan of LIST(dict string) whose first chunk has no list elements", "[arrow]") {
+	// the first 2048 lists are empty and the last one holds child slot 0
+	StringDictChild child(1);
+	std::vector<int32_t> offsets(2050, 0);
+	offsets[2049] = 1;
+	ListColumn col(child, std::move(offsets));
+	REQUIRE(ScanMatches(col.schema, col.array,
+	                    "SELECT (CASE WHEN r = 2048 THEN ['a'] ELSE [] END)::VARCHAR[] FROM range(2049) t(r)"));
+}
+
+TEST_CASE("Arrow scan of LIST(dict string) whose only empty chunk is not the first - control", "[arrow]") {
+	// row 0 holds child slot 0, the other 2048 lists are empty: passes even with the bug
+	StringDictChild child(1);
+	std::vector<int32_t> offsets(2050, 1);
+	offsets[0] = 0;
+	ListColumn col(child, std::move(offsets));
+	REQUIRE(ScanMatches(col.schema, col.array,
+	                    "SELECT (CASE WHEN r = 0 THEN ['a'] ELSE [] END)::VARCHAR[] FROM range(2049) t(r)"));
 }
