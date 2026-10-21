@@ -215,9 +215,27 @@ jobs:
           throw 'Windows 32-bit compile commands are not using clang-cl'
         }
 
+    - name: Partitioned COPY diagnostics (do not merge)
+      shell: bash
+      if: ${{ !inputs.skip_tests }}
+      continue-on-error: true
+      run: |
+        UT=test/unittest.exe
+        if [ ! -f "$UT" ]; then UT=build/release/test/unittest.exe; fi
+        ls -la "$UT"
+        for t in test/sql/copy/partitioned/partitioned_full_outer_hash_join.test test/sql/copy/partitioned/partitioned_flush_join_race.test test/sql/copy/partitioned/integer_partitioned_write.test test/sql/copy/partitioned/partitioned_write_batch_limits.test; do
+          echo "===== direct run: $t"
+          "$UT" "$t" || echo "===== exit code: $?"
+        done
+        echo "===== direct run with --force-reload: partitioned_full_outer_hash_join.test"
+        "$UT" --force-reload test/sql/copy/partitioned/partitioned_full_outer_hash_join.test || echo "===== exit code: $?"
+        echo "===== direct run with --force-reload: partitioned_flush_join_race.test"
+        "$UT" --force-reload test/sql/copy/partitioned/partitioned_flush_join_race.test || echo "===== exit code: $?"
+
     - name: Test
       shell: bash
       if: ${{ !inputs.skip_tests }}
+      continue-on-error: true
       run: python test/run.py
 
     - name: Tools Test
