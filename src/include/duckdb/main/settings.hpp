@@ -1242,8 +1242,8 @@ struct EnableBlockAllocatorSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_block_allocator";
 	static constexpr const char *Description =
-	    "Enable new allocations from the fixed-size block pool (64-bit only). Disabling preserves existing allocations "
-	    "and the virtual memory reservation.";
+	    "Enable new allocations from the fixed-size block pool (64-bit only; disabled by default on MinGW). Disabling "
+	    "preserves existing allocations and the virtual memory reservation.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;

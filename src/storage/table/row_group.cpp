@@ -941,7 +941,7 @@ bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 				}
 			} else {
 				// percentage based system sampling
-				if (state.random.NextRandom() > sampling_info.sample_rate) {
+				if (state.GetRandomEngine().NextRandom() > sampling_info.sample_rate) {
 					NextVector(state);
 					continue;
 				}
