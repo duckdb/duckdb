@@ -105,8 +105,8 @@ public:
 	                           TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
 	//! Reuses an existing append state for a new iteration - faster than InitializeAppendState when the
 	//! append state already has pre-allocated buffers (selection vectors, partition pin states, chunk state)
-	virtual void ResetAppendState(PartitionedTupleDataAppendState &state,
-	                              TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
+	void ResetAppendState(PartitionedTupleDataAppendState &state,
+	                      TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
 	//! Appends a DataChunk to this PartitionedTupleData
 	void Append(PartitionedTupleDataAppendState &state, DataChunk &input,
 	            const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
@@ -152,10 +152,10 @@ protected:
 	//===--------------------------------------------------------------------===//
 	// Partitioning type implementation interface
 	//===--------------------------------------------------------------------===//
-	//! Initialize a PartitionedTupleDataAppendState for this type of partitioning (optional)
+	//! Initialize a PartitionedTupleDataAppendState for this type of partitioning: by default the per-partition pin
+	//! states, the chunk state and the map storage for the current partitions (optional)
 	virtual void InitializeAppendStateInternal(PartitionedTupleDataAppendState &state,
-	                                           TupleDataPinProperties properties) const {
-	}
+	                                           TupleDataPinProperties properties) const;
 	//! Compute the partition indices for this type of partitioning for the input DataChunk and store them in the
 	//! `partition_data` of the local state. If this type creates partitions on the fly (for, e.g., hive), this
 	//! function is also in charge of creating new partitions and mapping the input data to a partition index
