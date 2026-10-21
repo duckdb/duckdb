@@ -319,7 +319,8 @@ static void WithinIndexOptimize(OptimizerExtensionInput &input, unique_ptr<Logic
 	walk_tidx(*plan);
 
 	TableFunction fn = MakeWithinIndexScan();
-	auto new_get = make_uniq<LogicalGet>(TableIndex(new_tidx), std::move(fn), std::move(bind_data), std::move(ret_types),
+	BoundTableFunction bfn(fn);
+	auto new_get = make_uniq<LogicalGet>(TableIndex(new_tidx), std::move(bfn), std::move(bind_data), std::move(ret_types),
 	                                     std::move(ret_names));
 	for (idx_t i = 0; i < L + R; i++) {
 		new_get->AddColumnId((column_t)i);
