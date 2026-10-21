@@ -2,6 +2,8 @@
 # description: Reject a BOOLEAN Roaring metadata offset outside the segment
 # group: [roaring]
 
+require vector_size 2048
+
 require block_size 262144
 
 unzip data/storage/corrupt/roaring_corrupt_boolean_metadata_offset.db.gz {TEST_DIR}/roaring_corrupt_boolean_metadata_offset.db
