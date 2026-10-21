@@ -121,6 +121,31 @@ TEST_CASE("Deserialize VARCHAR vectors with string lengths exceeding the string 
 	REQUIRE_THROWS_AS(DeserializeVector(LogicalType::VARCHAR, 2, write_strings(1000000)), SerializationException);
 }
 
+TEST_CASE("Deserialize shredded VARIANT vectors with a mismatched unshredded layout", "[serialization]") {
+	auto write_shredded = [&](const LogicalType &child0_type, const LogicalType &child1_type) {
+		return [=](Serializer &s) {
+			auto shredded_type = LogicalType::STRUCT({{"unshredded", child0_type}, {"shredded", child1_type}});
+			s.WriteProperty(90, "vector_type", VectorType::SHREDDED_VECTOR);
+			s.WriteProperty(91, "shredded_type", shredded_type);
+			// matches the declared child count, so this doesn't trip the (unrelated) child-count check
+			s.WriteObject(92, "shredded_data", [&](Serializer &obj) {
+				WriteFlatHeader(obj);
+				obj.WriteList(103, "children", 2, [&](Serializer::List &list, idx_t i) {
+					list.WriteObject([&](Serializer &child_obj) {
+						WriteFlatHeader(child_obj);
+						int32_t value = 42;
+						child_obj.WriteProperty(102, "data", const_data_ptr_cast(&value), sizeof(int32_t));
+					});
+				});
+			});
+		};
+	};
+	// a shredded_type whose first child isn't the canonical VARIANT struct layout is rejected
+	REQUIRE_THROWS_AS(
+	    DeserializeVector(LogicalType::VARIANT(), 1, write_shredded(LogicalType::INTEGER, LogicalType::INTEGER)),
+	    SerializationException);
+}
+
 TEST_CASE("Deserialize STRUCT vectors with too many children", "[serialization]") {
 	auto type = LogicalType::STRUCT({{"a", LogicalType::INTEGER}});
 	auto write_struct = [&](idx_t child_count) {
