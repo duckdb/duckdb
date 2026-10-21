@@ -528,6 +528,31 @@ TEST_CASE("Test prepare dependencies with multiple connections", "[catalog]") {
 	REQUIRE_NO_FAIL(con3->Query("COMMIT"));
 }
 
+TEST_CASE("Extract the plan of joins the optimizer rewrites", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a AS SELECT 1 AS id, DATE '2025-01-01' AS dt"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE r AS SELECT 1 AS id, DATE '2024-01-01' AS rd, NULL::DATE AS fd"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE p (pid BIGINT PRIMARY KEY)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE knows (p1 BIGINT, p2 BIGINT, PRIMARY KEY (p1, p2))"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE interest (pid BIGINT, tag BIGINT, PRIMARY KEY (pid, tag))"));
+	const vector<string> queries {
+	    "SELECT a.id FROM a JOIN r ON r.id = a.id WHERE r.rd <= a.dt",
+	    "SELECT a.id FROM a JOIN r ON r.id = a.id WHERE r.fd IS NULL OR r.fd > a.dt",
+	    // an ANTI join that closes a join cycle
+	    "SELECT count(i.tag) FROM p AS p1 JOIN knows AS k1 ON k1.p1 = p1.pid JOIN knows AS k2 ON k1.p2 = k2.p1 "
+	    "JOIN p AS p3 ON k2.p2 = p3.pid JOIN interest AS i ON i.pid = p3.pid "
+	    "ANTI JOIN knows AS k3 ON k3.p1 = p1.pid AND k3.p2 = p3.pid"};
+	for (auto &query : queries) {
+		auto plan = con.ExtractPlan(query);
+		REQUIRE(plan);
+		auto result = con.Query(query);
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(plan->types == result->GetTypes());
+	}
+}
+
 TEST_CASE("Test connection API", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
