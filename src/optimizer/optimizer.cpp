@@ -134,6 +134,14 @@ bool Optimizer::OptimizerDisabled(ClientContext &context_p, OptimizerType type) 
 	return config.IsOptimizerDisabled(type);
 }
 
+MetricsTimer Optimizer::StartProfiler(OptimizerType type) {
+	auto &profiler = QueryProfiler::Get(context);
+	if (!profiler.IsEnabled()) {
+		return MetricsTimer();
+	}
+	return profiler.StartTimerInternal("optimizer." + StringUtil::Lower(EnumUtil::ToString(type)));
+}
+
 void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &callback) {
 	context.InterruptCheck();
 
@@ -141,9 +149,8 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 		// optimizer is marked as disabled: skip
 		return;
 	}
-	auto &profiler = QueryProfiler::Get(context);
 	{
-		auto optimizer_timer = profiler.StartTimerInternal("optimizer." + StringUtil::Lower(EnumUtil::ToString(type)));
+		auto optimizer_timer = StartProfiler(type);
 		callback();
 	}
 	if (plan) {

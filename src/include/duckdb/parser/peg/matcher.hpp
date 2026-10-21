@@ -186,10 +186,10 @@ struct MatchState {
 	}
 
 	template <class RESULT, class... ARGS>
-	MatcherResult AllocateParseResult(ARGS &&...args);
+	MatcherResult AllocateParseResult(ARGS &&... args);
 
 	template <class PROCESS, class... ARGS>
-	arena_ptr<MatchProcess> Make(ARGS &&...args);
+	arena_ptr<MatchProcess> Make(ARGS &&... args);
 
 	void UpdateMaxTokenIndex() {
 		if (token_iterator.Position() > context.max_token_index) {
@@ -299,7 +299,7 @@ public:
 
 	//! Match and construct the parse result
 	MatcherResult MatchParseResult(MatchState &state) const;
-	//! Create matcher-local state with state.Make<PROCESS>() for either execution driver.
+	//! Create matcher-local state with state.Make<PROCESS>() for incremental execution.
 	virtual arena_ptr<MatchProcess> StartMatch(MatchState &state) const = 0;
 	virtual bool IsAtomic() const {
 		return false;
@@ -433,7 +433,7 @@ public:
 	~ParseResultAllocator();
 
 	template <class RESULT, class... ARGS>
-	optional_ptr<ParseResult> Make(ARGS &&...args) {
+	optional_ptr<ParseResult> Make(ARGS &&... args) {
 		static_assert(std::is_base_of<ParseResult, RESULT>::value, "Expected a parse result");
 		auto result = arena.Make<RESULT>(std::forward<ARGS>(args)...);
 		if (ParseResultNeedsDestructor<RESULT>::value) {
@@ -468,7 +468,7 @@ private:
 };
 
 template <class PROCESS, class... ARGS>
-arena_ptr<MatchProcess> MatchState::Make(ARGS &&...args) {
+arena_ptr<MatchProcess> MatchState::Make(ARGS &&... args) {
 	static_assert(std::is_base_of<MatchProcess, PROCESS>::value, "Expected a matcher process");
 	return arena_ptr<MatchProcess>(context.process_allocator.Make<PROCESS>(std::forward<ARGS>(args)...));
 }
@@ -482,7 +482,7 @@ void ParseResult::SetNameFrom(const Matcher &matcher_p) {
 }
 
 template <class RESULT, class... ARGS>
-MatcherResult MatchState::AllocateParseResult(ARGS &&...args) {
+MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
 	if (!BuildParseResult()) {
 		return MatcherResult::Success();
 	}

@@ -175,11 +175,11 @@ unique_ptr<TableDescription> Connection::TableInfo(const Identifier &table_name)
 	return TableInfo(Identifier::InvalidCatalog(), Identifier::DefaultSchema(), table_name);
 }
 
-vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &query) {
+vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &query, bool apply_invalidation_policy) {
 	auto &client_context = *context;
 	vector<unique_ptr<SQLStatement>> result;
 	try {
-		auto iterator = client_context.IterateStatements(query);
+		auto iterator = client_context.IterateStatements(query, apply_invalidation_policy);
 		while (iterator.Peek()) {
 			result.push_back(iterator.GetStatement());
 		}
