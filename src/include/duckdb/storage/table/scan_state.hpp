@@ -325,9 +325,7 @@ public:
 	void InitializeColumnScans();
 	//! Processes the vector prepared by PrepareScanIO
 	void ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result);
-	//! Re-checks the prepared vector's row group against the current filters: read-ahead prepares a job's first
-	//! vector when the job is produced, so a dynamic filter that arrives before the job is decoded can prune the
-	//! row group after the fact. Drops the assignment and returns false when it does
+	//! Drops the prepared row group and returns false when the current filters prune it
 	bool RecheckPreparedRowGroup();
 	//! Releases the row group and the blocks the column scans pin, the next assignment initializes them again
 	void ReleasePins();

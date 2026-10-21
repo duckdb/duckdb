@@ -214,8 +214,7 @@ public:
 
 	static LogicalType GetLogType();
 
-	//! One entry per read-ahead job pushed: the backlog charge after the push, the budget it may grow to and the
-	//! jobs scheduled ahead of decoding
+	//! One entry per pushed read-ahead job with the backlog charge, its budget and the jobs in flight
 	static string ConstructLogMessage(idx_t pending_bytes, idx_t budget_bytes, idx_t active_jobs);
 };
 

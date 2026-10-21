@@ -361,16 +361,6 @@ AsyncResult TableFunctionFileReader::ScheduleIO(ClientContext &context, GlobalTa
 	return result;
 }
 
-bool TableFunctionFileReader::RecheckRowGroupFilters(ClientContext &context, GlobalTableFunctionState &,
-                                                     LocalTableFunctionState &lstate_p) {
-	if (!settings.recheck_row_group) {
-		return true;
-	}
-	auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();
-	TableFunctionInput input(bind_data.get(), lstate.local_state.get(), global_state.get());
-	return settings.recheck_row_group(context, input);
-}
-
 AsyncResult TableFunctionFileReader::Scan(ClientContext &context, GlobalTableFunctionState &,
                                           LocalTableFunctionState &lstate_p, DataChunk &chunk) {
 	auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();

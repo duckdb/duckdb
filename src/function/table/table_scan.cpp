@@ -492,8 +492,7 @@ public:
 		return job;
 	}
 
-	//! Re-checks a settled job's row group against the filters before decoding it: the job was produced ahead of
-	//! decoding, a dynamic filter set since then (e.g. by a Top-N sink) may prune the whole row group
+	//! Drops a settled job's row group when a filter set since it was produced prunes it
 	static void RecheckJob(TableScanLocalState &l_state) {
 		if (!l_state.job->scan_state->table_state.RecheckPreparedRowGroup()) {
 			// the row group is dropped without being scanned

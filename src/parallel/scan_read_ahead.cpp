@@ -341,9 +341,7 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 	executor->ScheduleTasks(std::move(read_tasks));
 	lock_guard<mutex> guard(lock);
 	if (memory_governor) {
-		// TryReserveSlot takes a job's minimum charge before the budget check, so the backlog can never exceed the
-		// reservation and the governor, which grows only past it, would never grow it beyond the minimum: ask for
-		// the next job's headroom here, so the reservation grows ahead of the backlog until it reaches the cap
+		// Reserve room for the next job before admission checks the budget.
 		memory_governor->UpdateReservation(pending_io_bytes.load() + MINIMUM_JOB_IO_CHARGE);
 		backlog_budget = memory_governor->BackpressureBudget();
 	}
