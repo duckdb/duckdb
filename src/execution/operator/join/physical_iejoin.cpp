@@ -487,10 +487,7 @@ public:
 
 	//! Finish the current task (if any) and try to get the next one
 	bool TryAssignTask() DUCKDB_EXCLUDES(gsource.lock);
-	//! Try to get the next task with the lock held, so that a caller can block on failure without missing an unblock.
-	//! The task is only acquired; call InitializeTask after releasing the lock.
-	bool TryAcquireTaskLocked() DUCKDB_REQUIRES(gsource.lock);
-	//! Set up the local state for executing the acquired task
+	//! Set up the local state for executing a task acquired through IEJoinGlobalSourceState::TryNextTaskLocked
 	void InitializeTask();
 	//! Reports the progress of the current task
 	void UpdateProgress() {
@@ -631,10 +628,6 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 	}
 	InitializeTask();
 	return true;
-}
-
-bool IEJoinLocalSourceState::TryAcquireTaskLocked() {
-	return gsource.TryNextTaskLocked(task, task_local);
 }
 
 void IEJoinLocalSourceState::InitializeTask() {
@@ -1503,7 +1496,7 @@ SourceResultType PhysicalIEJoin::GetDataInternal(ExecutionContext &context, Data
 				}
 				// TryAssignTask released the lock: another thread may have prepared the next stage and unblocked
 				// the blocked tasks in between, so look again before blocking, or no one would ever unblock this task.
-				if (!lsource.TryAcquireTaskLocked()) {
+				if (!gsource.TryNextTaskLocked(lsource.task, lsource.task_local)) {
 					if (lsource.produced) {
 						// The remaining tasks can only start once the other tasks of this stage have finished.
 						// This task has already handed rows to the sink, which may in turn be waiting for this task
