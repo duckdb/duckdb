@@ -246,7 +246,11 @@ CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, b
                          uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP) {
 	auto transport =
 	    duckdb_base_std::make_shared<ThriftFileTransport>(context, file_handle, prefetch_mode, accepted_column_gap);
-	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
+	// every list element takes at least one byte, so a list cannot hold more elements than the file has bytes
+	auto max_list_size = MinValue<idx_t>(transport->GetSize(), NumericLimits<int32_t>::Maximum());
+	auto container_limit = NumericCast<int32_t>(max_list_size);
+	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport), 0,
+	                                                                                          container_limit);
 }
 
 static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file_handle) {
@@ -366,6 +370,15 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 			throw InvalidInputException("Parquet footer length stored in file is not equal to footer length provided");
 		}
 	}
+
+	// CreateThriftFileProtocol bounded the container size limit by the whole file, since footer_len was not yet
+	// known at that point. The actual footer (crypto metadata and/or file metadata) can only ever occupy footer_len
+	// bytes, which is typically far smaller than the file - tighten the limit now to that true byte budget, so a
+	// declared list/map element count can no longer be inflated using unrelated bytes elsewhere in the file.
+	auto &compact_proto =
+	    reinterpret_cast<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport> &>(*file_proto);
+	auto limit = MinValue<idx_t>(footer_len, NumericLimits<int32_t>::Maximum());
+	compact_proto.setContainerSizeLimit(NumericCast<int32_t>(limit));
 
 	auto metadata = make_uniq<FileMetaData>();
 	unique_ptr<FileCryptoMetaData> crypto_metadata;

@@ -542,7 +542,7 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 
 	auto &info = entry->second;
 	if (info.name.empty()) {
-		info.name = EnumUtil::ToString(phys_op.type);
+		info.name = phys_op.GetName();
 	}
 }
 
@@ -748,6 +748,9 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 	if (info.MetricIsTracked<MetricOperatorType>()) {
 		result["type"] = Value(EnumUtil::ToString(operator_type));
 	}
+	if (info.MetricIsTracked<MetricOperatorName>()) {
+		result["name"] = Value(name);
+	}
 	if (info.MetricIsTracked<MetricOperatorTiming>()) {
 		result["timing"] = Value::DOUBLE(time);
 	}
@@ -888,6 +891,7 @@ static LegacyCumulative LegacyOperatorToResultTree(const GatheredMetrics &info, 
 	};
 
 	emit_as("type", "operator_type");
+	emit_as("name", "operator_name");
 	emit_as("timing", "operator_timing");
 	emit_as("rows_scanned", "operator_rows_scanned");
 	emit_as("intermediate_rows", "operator_cardinality");
@@ -1018,6 +1022,17 @@ QueryProfileResult &QueryProfiler::GetResult() {
 	return *result_tree;
 }
 
+void QueryProfiler::GetFinalizedProfileUnderLock(
+    const std::function<void(optional_ptr<const GatheredMetrics>, optional_ptr<const ProfilingNode>)> &callback) const {
+	lock_guard<std::mutex> guard(lock);
+	// a profile left over from before profiling was disabled is stale, and a running one is not finalized yet
+	if (!IsEnabled() || running || !metrics_finalized) {
+		callback(nullptr, nullptr);
+		return;
+	}
+	callback(metrics.get(), root.get());
+}
+
 bool QueryProfiler::HasRoot() const {
 	return root != nullptr;
 }
@@ -1050,7 +1065,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	auto &info = node->GetOperatorMetrics();
 	node->depth = depth;
 
-	info.name = EnumUtil::ToString(root_p.type);
+	info.name = root_p.GetName();
 	info.operator_type = root_p.type;
 	auto params = root_p.ParamsToString();
 	info.SetExtraInfo(std::move(params));
