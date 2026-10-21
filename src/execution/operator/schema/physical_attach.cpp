@@ -30,11 +30,11 @@ static void WarnIfDuckLakeMetadata(ClientContext &context, AttachedDatabase &att
 	// scan the committed entries, a catalog lookup would open a transaction on the database
 	bool has_metadata_table = false;
 	catalog.Cast<DuckCatalog>().ScanSchemas(VisibilityBound::AllCommitted(), [&](DuckSchemaEntry &schema) {
-		if (schema.name != *default_schema) {
+		if (schema.GetParentSchema() || schema.name != *default_schema) {
 			return;
 		}
 		schema.Scan(CatalogType::TABLE_ENTRY, VisibilityBound::AllCommitted(), [&](CatalogEntry &entry) {
-			if (entry.name == "ducklake_metadata") {
+			if (entry.type == CatalogType::TABLE_ENTRY && entry.name == "ducklake_metadata") {
 				has_metadata_table = true;
 			}
 		});
@@ -131,7 +131,12 @@ SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, Data
 
 		// check ATTACH IF NOT EXISTS
 		auto &db_manager = DatabaseManager::Get(context.client);
+		auto existing_db = db_manager.GetDatabase(name);
 		attached_db = db_manager.AttachDatabase(context.client, *attach_info, options);
+		// IF NOT EXISTS / OR REPLACE can return the existing attachment without opening the path
+		if (attached_db == existing_db) {
+			warn_ducklake_metadata = false;
+		}
 	} catch (...) {
 		// Compensating teardown (best-effort): a resource we just PROVISIONED has nothing owning it yet.
 		// A borrowed (referenced) resource is never torn down here.
