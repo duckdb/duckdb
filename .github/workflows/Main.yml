@@ -205,7 +205,7 @@ jobs:
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             extra_exclude_archs=
           elif [[ "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
-            extra_exclude_archs="windows_arm64;osx_amd64"
+            extra_exclude_archs="osx_amd64"
           else
             extra_exclude_archs="windows_arm64;osx_amd64;wasm_eh"
           fi
@@ -467,6 +467,10 @@ jobs:
           config: duckdb/.github/config/rust_based_extensions.cmake
           default_exclude_archs: wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64_mingw;linux_amd64_musl
           toolchain: rust
+        external:
+          config: duckdb/.github/config/external_extensions.cmake
+          default_exclude_archs: wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64_mingw;linux_amd64_musl
+          toolchain: rust
       extension_repository: duckdb/extension-template
       extension_ref: main
       ci_tools_repository: duckdb/extension-ci-tools
@@ -479,18 +483,7 @@ jobs:
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
       runners: ${{ needs.prepare.outputs.runners }}
-      prebuilt_duckdb: |
-        {
-          "linux_amd64": "duckdb-static-libs-linux-amd64.tar.gz",
-          "linux_arm64": "duckdb-static-libs-linux-arm64.tar.gz",
-          "linux_amd64_musl": "duckdb-static-libs-linux-amd64-musl.tar.gz",
-          "linux_arm64_musl": "duckdb-static-libs-linux-arm64-musl.tar.gz",
-          "osx_amd64": "duckdb-static-libs-osx-amd64.tar.gz",
-          "osx_arm64": "duckdb-static-libs-osx-arm64.tar.gz",
-          "windows_amd64": "duckdb-static-libs-windows-amd64.tar.gz",
-          "windows_arm64": "duckdb-static-libs-windows-arm64.tar.gz",
-          "windows_amd64_mingw": "duckdb-static-libs-windows-mingw.tar.gz"
-        }
+      prebuilt_source: workflow
 
  extensions-deploy:
     name: Deploy extensions
