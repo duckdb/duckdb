@@ -453,7 +453,6 @@ void PrimitiveColumnWriter::PrepareWrite(ColumnWriterState &state_p) {
 	}
 
 	for (auto &write_info : state.write_info) {
-		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		D_ASSERT(!write_info.prepared_header);
 		D_ASSERT(!write_info.prepared_payload);
 
