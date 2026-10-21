@@ -1,5 +1,6 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/numeric_blob.hpp"
 #include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -72,6 +73,44 @@ BoundCastInfo DefaultCasts::ToNumericCastSwitch(BindCastInput &input, const Logi
 // from NUMERIC
 //===--------------------------------------------------------------------===//
 //! The decimal text of every value, the same whatever its representation: no exponent, no trailing zeros
+//! Writes the decimal text of a fixed-size DECIMAL representation without the trailing zeros of the fraction
+template <class T>
+static void WriteDecimalText(const Vector &typed, idx_t count, uint8_t width, uint8_t scale, Vector &result) {
+	UnifiedVectorFormat vdata;
+	typed.ToUnifiedFormat(vdata);
+	auto data = UnifiedVectorFormat::GetData<T>(vdata);
+	auto writer = FlatVector::Writer<string_t>(result, count);
+	char buffer[64];
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (!vdata.validity.RowIsValid(idx)) {
+			writer.WriteNull();
+			continue;
+		}
+		auto value = data[idx];
+		auto length = idx_t(DecimalToString::DecimalLength<T>(value, width, scale));
+		DecimalToString::FormatDecimal<T>(value, width, scale, buffer, length);
+		while (buffer[length - 1] == '0') {
+			length--;
+		}
+		if (buffer[length - 1] == '.') {
+			length--;
+		}
+		if (length == 2 && buffer[0] == '-' && buffer[1] == '0') {
+			// a negative zero after trimming
+			length = 1;
+			buffer[0] = '0';
+		}
+		if (length <= string_t::INLINE_LENGTH) {
+			writer.WriteStringRef(string_t(buffer, UnsafeNumericCast<uint32_t>(length)));
+		} else {
+			auto &text = writer.WriteEmptyString(length);
+			memcpy(text.GetDataWriteable(), buffer, length);
+			text.Finalize();
+		}
+	}
+}
+
 static bool CastNumericToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	if (source.GetVectorType() == VectorType::SHREDDED_VECTOR) {
 		auto &typed = ShreddedVector::GetShreddedVector(source);
@@ -81,13 +120,31 @@ static bool CastNumericToVarchar(Vector &source, Vector &result, idx_t count, Ca
 			VectorOperations::DefaultCast(typed, result, count, true);
 			return true;
 		}
-		// decimals: the text of the representation without the trailing zeros of the fraction, in place
+		auto width = DecimalType::GetWidth(type);
+		auto scale = DecimalType::GetScale(type);
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			WriteDecimalText<int16_t>(typed, count, width, scale, result);
+			return true;
+		case PhysicalType::INT32:
+			WriteDecimalText<int32_t>(typed, count, width, scale, result);
+			return true;
+		case PhysicalType::INT64:
+			WriteDecimalText<int64_t>(typed, count, width, scale, result);
+			return true;
+		case PhysicalType::INT128:
+			WriteDecimalText<hugeint_t>(typed, count, width, scale, result);
+			return true;
+		default:
+			break;
+		}
+		// wide decimals: the text of the representation without the trailing zeros of the fraction, in place
 		Vector text(LogicalType::VARCHAR, count);
 		VectorOperations::DefaultCast(typed, text, count, true);
 		UnifiedVectorFormat vdata;
 		text.ToUnifiedFormat(vdata);
 		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
-		result.SetVectorType(VectorType::FLAT_VECTOR);
 		StringVector::AddHeapReference(result, text);
 		auto writer = FlatVector::Writer<string_t>(result, count);
 		for (idx_t i = 0; i < count; i++) {
@@ -130,7 +187,6 @@ static bool CastNumericToVarchar(Vector &source, Vector &result, idx_t count, Ca
 	return true;
 }
 
-//! A typed target: the representation is referenced when it matches, cast otherwise
 //! Whether the values of a typed NUMERIC vector are the same bits as values of the target: the same physical type
 //! and scale, and a value range the target holds (a DECIMAL(12,2) representation read as DECIMAL(10,2))
 static bool SameBits(Vector &source, const Vector &typed, const LogicalType &target, idx_t count) {

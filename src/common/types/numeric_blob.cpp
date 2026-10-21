@@ -196,121 +196,237 @@ struct Magnitude<uhugeint_t> {
 	}
 };
 
-//! The number of decimal digits of a 64-bit value (one for zero)
-inline idx_t DigitCount(uint64_t value) {
-	idx_t digits = 1;
-	for (;;) {
-		if (value < 10) {
-			return digits;
-		}
-		if (value < 100) {
-			return digits + 1;
-		}
-		if (value < 1000) {
-			return digits + 2;
-		}
-		if (value < 10000) {
-			return digits + 3;
-		}
-		value /= 10000;
-		digits += 4;
-	}
-}
-
-//! The two decimal digits of every value below 100, as digit + 1
-struct DigitPairs {
-	DigitPairs() {
-		for (idx_t i = 0; i < 100; i++) {
-			high[i] = data_t(i / 10 + 1);
-			low[i] = data_t(i % 10 + 1);
+//! Every value below 10000 as four digit bytes (digit + 1, leading zeros included), plain and complemented for
+//! negative values, with the number of trailing zero digits of the group
+struct DigitQuads {
+	DigitQuads() {
+		for (idx_t value = 0; value < 10000; value++) {
+			idx_t rest = value;
+			for (idx_t k = 4; k > 0; k--) {
+				digits[value][k - 1] = data_t(rest % 10 + 1);
+				complemented[value][k - 1] = data_t(~digits[value][k - 1]);
+				rest /= 10;
+			}
+			uint8_t zeros = 0;
+			while (zeros < 4 && digits[value][3 - zeros] == 1) {
+				zeros++;
+			}
+			trailing[value] = zeros;
 		}
 	}
-	data_t high[100];
-	data_t low[100];
+	data_t digits[10000][4];
+	data_t complemented[10000][4];
+	uint8_t trailing[10000];
 };
 
-//! Writes the digits of a 64-bit magnitude (digit + 1, complemented for negatives) and the terminator; the magnitude
-//! has `digit_count` digits
-template <bool NEGATIVE>
-inline void WriteSmallDigits(uint64_t magnitude, idx_t digit_count, data_ptr_t digits) {
-	static const DigitPairs pairs;
-	idx_t pos = digit_count;
-	while (pos >= 2) {
-		auto quotient = magnitude / 100;
-		auto pair = magnitude - quotient * 100;
-		digits[pos - 1] = NEGATIVE ? data_t(~pairs.low[pair]) : pairs.low[pair];
-		digits[pos - 2] = NEGATIVE ? data_t(~pairs.high[pair]) : pairs.high[pair];
-		magnitude = quotient;
-		pos -= 2;
-	}
-	if (pos == 1) {
-		auto digit = data_t(magnitude + 1);
-		digits[0] = NEGATIVE ? data_t(~digit) : digit;
-	}
-	digits[digit_count] = NEGATIVE ? data_t(0xFF) : data_t(0);
+const DigitQuads &Quads() {
+	static const DigitQuads quads;
+	return quads;
 }
 
-//! Encodes the values of a fixed-size representation: values below 2^64 are written straight into the string slots
+//! A 64-bit magnitude split into groups of four decimal digits, lowest group first
+struct DigitGroups {
+	uint16_t groups[5];
+	idx_t group_count;
+	idx_t top_digits;
+
+	explicit DigitGroups(uint64_t magnitude) : group_count(0) {
+		do {
+			auto quotient = magnitude / 10000;
+			groups[group_count++] = uint16_t(magnitude - quotient * 10000);
+			magnitude = quotient;
+		} while (magnitude != 0);
+		auto top = groups[group_count - 1];
+		top_digits = top >= 1000 ? 4 : top >= 100 ? 3 : top >= 10 ? 2 : 1;
+	}
+
+	idx_t DigitCount() const {
+		return 4 * (group_count - 1) + top_digits;
+	}
+
+	//! The trailing zero digits (the top group is never zero)
+	idx_t TrailingZeros(const DigitQuads &quads) const {
+		idx_t zeros = 0;
+		idx_t g = 0;
+		while (g < group_count - 1 && groups[g] == 0) {
+			zeros += 4;
+			g++;
+		}
+		return zeros + quads.trailing[groups[g]];
+	}
+
+	//! Writes all digits (digit + 1), returns the number written
+	template <bool NEGATIVE>
+	idx_t Write(const DigitQuads &quads, data_ptr_t digits) const {
+		auto table = NEGATIVE ? quads.complemented : quads.digits;
+		idx_t pos = 0;
+		auto &top = table[groups[group_count - 1]];
+		for (idx_t k = 4 - top_digits; k < 4; k++) {
+			digits[pos++] = top[k];
+		}
+		for (idx_t g = group_count - 1; g > 0; g--) {
+			memcpy(digits + pos, table[groups[g - 1]], 4);
+			pos += 4;
+		}
+		return pos;
+	}
+};
+
+//! Writes the blob of a 64-bit magnitude (not zero) into `blob`, which must have room for the digits of all its
+//! groups plus the header and terminator; returns the length
+template <bool NEGATIVE>
+inline idx_t EncodeSmall(const DigitQuads &quads, const DigitGroups &groups, uint8_t scale, data_ptr_t blob) {
+	auto digit_count = groups.DigitCount();
+	auto significant = digit_count - groups.TrailingZeros(quads);
+	BlobHeader::Write(blob, NEGATIVE, int64_t(digit_count) - 1 - int64_t(scale));
+	auto digits = blob + 3;
+	groups.Write<NEGATIVE>(quads, digits);
+	digits[significant] = NEGATIVE ? data_t(0xFF) : data_t(0);
+	// the bytes of the trailing zeros that were written past the terminator
+	for (idx_t k = significant + 1; k <= digit_count; k++) {
+		digits[k] = 0;
+	}
+	return 3 + significant + 1;
+}
+
+//! The three header bytes as a little-endian word: class, biased adjusted exponent high and low byte
+inline uint32_t HeaderWord(bool negative, int64_t adjusted) {
+	auto biased = uint32_t(uint16_t(adjusted + NUMERIC_EXPONENT_BIAS));
+	uint32_t word = (biased >> 8) << 8 | (biased & 0xFF) << 16;
+	if (negative) {
+		return NUMERIC_CLASS_NEGATIVE | (~word & 0xFFFF00);
+	}
+	return NUMERIC_CLASS_POSITIVE | word;
+}
+
+//! An inlined string_t as its two 64-bit words: length and the first four bytes, then the remaining eight
+struct InlineWords {
+	uint64_t first;
+	uint64_t second;
+};
+
+//! The trailing zero digits of a four-digit group loaded as a word (the least significant digit in the top byte)
+inline idx_t TrailingZeroDigits(uint32_t group_word) {
+	// a zero digit is the byte 0x01; the group is never all zeros here
+	auto marked = group_word ^ 0x01010101u;
+	return idx_t(__builtin_clz(marked)) / 8;
+}
+
+//! Encodes a magnitude of at most eight digits (not zero) as the words of an inlined string_t, assembled in registers
+template <bool NEGATIVE>
+inline InlineWords EncodeInline(const DigitQuads &quads, uint64_t high, uint64_t low, uint8_t scale) {
+	auto top = high != 0 ? high : low;
+	idx_t top_digits = top >= 1000 ? 4 : top >= 100 ? 3 : top >= 10 ? 2 : 1;
+	idx_t digit_count = top_digits;
+	auto top_word = Load<uint32_t>(quads.digits[top]);
+	// the top group without its leading zeros: the most significant digit is the lowest byte
+	uint64_t digits = top_word >> (8 * (4 - top_digits));
+	idx_t trailing;
+	if (high != 0) {
+		digit_count += 4;
+		auto low_word = Load<uint32_t>(quads.digits[low]);
+		digits |= uint64_t(low_word) << (8 * top_digits);
+		trailing = low == 0 ? 4 + TrailingZeroDigits(top_word) : TrailingZeroDigits(low_word);
+	} else {
+		trailing = TrailingZeroDigits(top_word);
+	}
+	auto significant = digit_count - trailing;
+	if (NEGATIVE) {
+		digits = ~digits;
+	}
+	// cut the trailing zeros and terminate; eight significant digits put the terminator in the last byte
+	auto terminator = NEGATIVE ? uint64_t(0xFF) : uint64_t(0);
+	uint64_t last_byte = 0;
+	if (significant < 8) {
+		digits &= (uint64_t(1) << (8 * significant)) - 1;
+		digits |= terminator << (8 * significant);
+	} else {
+		last_byte = terminator << 56;
+	}
+	uint64_t length = 3 + significant + 1;
+	auto header = uint64_t(HeaderWord(NEGATIVE, int64_t(digit_count) - 1 - int64_t(scale)));
+	InlineWords words;
+	words.first = length | header << 32 | (digits & 0xFF) << 56;
+	words.second = digits >> 8 | last_byte;
+	return words;
+}
+
+//! The slot of a string_t in the result data
+inline void StoreWords(string_t *slot, InlineWords words) {
+	auto target = data_ptr_cast(slot);
+	Store<uint64_t>(words.first, target);
+	Store<uint64_t>(words.second, target + sizeof(uint64_t));
+}
+
+//! Encodes one value into its slot; the writer provides the heap for blobs that do not inline
+template <class T>
+inline void EncodeValue(const DigitQuads &quads, T value, uint8_t scale, string_t *slot,
+                        VectorWriter<string_t> &writer) {
+	bool negative;
+	auto magnitude = Magnitude<T>::Get(value, negative);
+	if (magnitude.upper == 0) {
+		auto small = magnitude.lower;
+		if (small == 0) {
+			InlineWords words;
+			words.first = 1 | uint64_t(NUMERIC_CLASS_ZERO) << 32;
+			words.second = 0;
+			StoreWords(slot, words);
+			return;
+		}
+		auto high = small / 10000;
+		if (high < 10000) {
+			auto low = small - high * 10000;
+			StoreWords(slot, negative ? EncodeInline<true>(quads, high, low, scale)
+			                          : EncodeInline<false>(quads, high, low, scale));
+			return;
+		}
+		// more than eight digits
+		alignas(8) data_t scratch[32];
+		DigitGroups groups(small);
+		auto length = negative ? EncodeSmall<true>(quads, groups, scale, scratch)
+		                       : EncodeSmall<false>(quads, groups, scale, scratch);
+		if (length <= string_t::INLINE_LENGTH) {
+			*slot = string_t(const_char_ptr_cast(scratch), UnsafeNumericCast<uint32_t>(length));
+			return;
+		}
+		*slot = writer.GetHeap().EmptyString(length);
+		memcpy(slot->GetDataWriteable(), scratch, length);
+		slot->Finalize();
+		return;
+	}
+	data_t buffer[NUMERIC_MAX_BLOB_SIZE];
+	auto length = EncodeMagnitude(magnitude, negative, scale, buffer);
+	*slot = writer.GetHeap().EmptyString(length);
+	memcpy(slot->GetDataWriteable(), buffer, length);
+	slot->Finalize();
+}
+
+//! Encodes the values of a fixed-size representation
 template <class T>
 void EncodeTyped(Vector &typed, idx_t count, uint8_t scale, Vector &result) {
+	auto &quads = Quads();
 	UnifiedVectorFormat vdata;
 	typed.ToUnifiedFormat(vdata);
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
+	// the writer sizes the result and owns its heap; the slots are written directly
 	auto writer = FlatVector::Writer<string_t>(result, count);
-	data_t buffer[NUMERIC_MAX_BLOB_SIZE];
+	auto slots = FlatVector::GetDataMutable<string_t>(result);
+	if (!vdata.sel->IsSet() && vdata.validity.CannotHaveNull()) {
+		for (idx_t i = 0; i < count; i++) {
+			EncodeValue<T>(quads, data[i], scale, slots + i, writer);
+		}
+		writer.Truncate();
+		return;
+	}
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (!vdata.validity.RowIsValid(idx)) {
-			writer.WriteNull();
+			FlatVector::SetNull(result, i, true);
 			continue;
 		}
-		bool negative;
-		auto magnitude = Magnitude<T>::Get(data[idx], negative);
-		if (magnitude.upper != 0) {
-			auto length = EncodeMagnitude(magnitude, negative, scale, buffer);
-			auto &blob = writer.WriteEmptyString(length);
-			memcpy(blob.GetDataWriteable(), buffer, length);
-			blob.Finalize();
-			continue;
-		}
-		// the common case: an inlined string_t, built in place
-		alignas(8) data_t block[sizeof(string_t)] = {0};
-		auto blob = block + sizeof(uint32_t);
-		idx_t length;
-		auto small = magnitude.lower;
-		if (small == 0) {
-			blob[0] = NUMERIC_CLASS_ZERO;
-			length = 1;
-		} else {
-			auto digit_count = DigitCount(small);
-			int64_t adjusted = int64_t(digit_count) - 1 - int64_t(scale);
-			while (small % 10 == 0) {
-				small /= 10;
-				digit_count--;
-			}
-			length = 3 + digit_count + 1;
-			if (length > string_t::INLINE_LENGTH) {
-				auto &heap_blob = writer.WriteEmptyString(length);
-				auto target = data_ptr_cast(heap_blob.GetDataWriteable());
-				BlobHeader::Write(target, negative, adjusted);
-				if (negative) {
-					WriteSmallDigits<true>(small, digit_count, target + 3);
-				} else {
-					WriteSmallDigits<false>(small, digit_count, target + 3);
-				}
-				heap_blob.Finalize();
-				continue;
-			}
-			BlobHeader::Write(blob, negative, adjusted);
-			if (negative) {
-				WriteSmallDigits<true>(small, digit_count, blob + 3);
-			} else {
-				WriteSmallDigits<false>(small, digit_count, blob + 3);
-			}
-		}
-		Store<uint32_t>(UnsafeNumericCast<uint32_t>(length), block);
-		writer.WriteStringRef(Load<string_t>(block));
+		EncodeValue<T>(quads, data[idx], scale, slots + i, writer);
 	}
+	writer.Truncate();
 }
 
 //! The digits of a blob as an unscaled 128-bit value at the given scale; false when the value does not fit the scale
