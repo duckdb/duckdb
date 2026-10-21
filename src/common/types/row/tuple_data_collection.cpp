@@ -6,6 +6,7 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -109,6 +110,26 @@ idx_t TupleDataCollection::ChunkCount() const {
 
 idx_t TupleDataCollection::SizeInBytes() const {
 	return data_size + stl_allocator->AllocationSize();
+}
+
+idx_t TupleDataCollection::GetMaxChunkPartRowSize() const {
+	idx_t max_heap_size = 0;
+	if (!layout.AllConstant()) {
+		for (const auto &segment : segments) {
+			for (const auto &part : segment->chunk_parts) {
+				if (part->count == 0) {
+					continue;
+				}
+				const auto heap_size = part->total_heap_size / part->count + (part->total_heap_size % part->count != 0);
+				max_heap_size = MaxValue(max_heap_size, heap_size);
+			}
+		}
+	}
+	const auto row_width = layout.GetRowWidth();
+	if (max_heap_size > NumericLimits<idx_t>::Maximum() - row_width) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	return row_width + max_heap_size;
 }
 
 idx_t TupleDataCollection::GetChunkDataSize(idx_t chunk_idx) const {

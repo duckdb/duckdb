@@ -84,6 +84,8 @@ public:
 	idx_t SizeInBytes() const;
 	//! Logical row and heap bytes in a chunk, without pinning its blocks
 	idx_t GetChunkDataSize(idx_t chunk_idx) const;
+	//! Maximum average row bytes estimated from chunk parts, without pinning blocks
+	idx_t GetMaxChunkPartRowSize() const;
 	//! Buffer-manager memory charged for row and heap blocks
 	idx_t GetBlockAllocationSize() const;
 	//! Unpins all held pins
