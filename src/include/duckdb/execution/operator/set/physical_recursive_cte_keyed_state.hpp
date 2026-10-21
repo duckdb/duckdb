@@ -52,10 +52,10 @@ public:
 	                                 idx_t classification_work_ns, idx_t preaggregation_work_ns);
 	void FinalizeStateRows(RowOperationsState &row_state, Vector &addresses, DataChunk &keys, DataChunk &aggregates,
 	                       DataChunk &result);
-	void FinalizeAggregateRows(RowOperationsState &row_state, Vector &addresses, DataChunk &aggregates, idx_t count);
-	void AssembleStateRows(DataChunk &keys, DataChunk &aggregates, DataChunk &result) const;
 
 private:
+	void FinalizeAggregateRows(RowOperationsState &row_state, Vector &addresses, DataChunk &aggregates, idx_t count);
+	void AssembleStateRows(DataChunk &keys, DataChunk &aggregates, DataChunk &result) const;
 	template <bool COLLECT_METRICS>
 	SourceResultType GetUsingKeyDataInternal(ExecutionContext &context, DataChunk &chunk,
 	                                         RecursiveCTEGlobalSourceState &source);
