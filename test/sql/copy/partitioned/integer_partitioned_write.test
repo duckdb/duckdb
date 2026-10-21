@@ -203,3 +203,117 @@ SELECT p, max(r) FROM (SELECT p, row_number() OVER (PARTITION BY p) AS r FROM nu
 2	200
 3	200
 NULL	200
+
+# statistics that understate the key range: the footer of this file claims p in [0, 3] while the rows also hold
+# 7, 9 and 1000 (and NULLs); those keys end up in the overflow partition, which is sorted like a hash bin
+query II
+SELECT s.min, s.max FROM (SELECT STATS(p) s FROM '{DATA_DIR}/parquet-testing/partition_key_understated_stats.parquet' LIMIT 1);
+----
+0	3
+
+statement ok
+COPY (FROM '{DATA_DIR}/parquet-testing/partition_key_understated_stats.parquet') TO '{TEST_DIR}/int_part_overflow' (FORMAT PARQUET, PARTITION_BY (p));
+
+query III
+SELECT p, count(*), sum(v) FROM parquet_scan('{TEST_DIR}/int_part_overflow/p=*/*.parquet', HIVE_PARTITIONING=1) GROUP BY p ORDER BY p NULLS LAST;
+----
+0	2	12
+1	1	1
+2	2	10
+3	2	17
+7	2	14
+9	2	14
+1000	3	32
+NULL	2	20
+
+query I
+SELECT count(*) FROM (
+	SELECT filename, min(p) AS mn, max(p) AS mx
+	FROM parquet_scan('{TEST_DIR}/int_part_overflow/p=*/*.parquet', FILENAME=1, HIVE_PARTITIONING=1)
+	GROUP BY filename
+) WHERE mn IS DISTINCT FROM mx;
+----
+0
+
+# numeric extrema as keys
+statement ok
+CREATE TABLE extrema AS SELECT CASE WHEN i % 3 = 0 THEN -128 WHEN i % 3 = 1 THEN 127 ELSE NULL END::TINYINT AS p, i AS v FROM range(3000) tbl(i);
+
+statement ok
+COPY extrema TO '{TEST_DIR}/int_part_extrema' (FORMAT PARQUET, PARTITION_BY (p));
+
+query II
+SELECT p, count(*) FROM parquet_scan('{TEST_DIR}/int_part_extrema/p=*/*.parquet', HIVE_PARTITIONING=1) GROUP BY p ORDER BY p NULLS LAST;
+----
+-128	1000
+127	1000
+NULL	1000
+
+# nested payloads
+statement ok
+CREATE TABLE nested AS SELECT i % 4 AS p, [i, i + 1] AS l, {'a': i, 'b': 'x' || i} AS s, MAP {i: 'v' || i} AS m FROM range(4000) tbl(i);
+
+statement ok
+COPY nested TO '{TEST_DIR}/int_part_nested' (FORMAT PARQUET, PARTITION_BY (p));
+
+query III
+SELECT p, count(*), sum(l[1]) FROM parquet_scan('{TEST_DIR}/int_part_nested/p=*/*.parquet', HIVE_PARTITIONING=1) GROUP BY p ORDER BY p;
+----
+0	1000	1998000
+1	1000	1999000
+2	1000	2000000
+3	1000	2001000
+
+query I
+SELECT count(*) FROM (FROM nested EXCEPT ALL SELECT p, l, s, m FROM parquet_scan('{TEST_DIR}/int_part_nested/p=*/*.parquet', HIVE_PARTITIONING=1));
+----
+0
+
+# several flush generations and local combines: a tiny flush threshold with several threads
+statement ok
+SET partitioned_write_flush_threshold=1000;
+
+statement ok
+COPY t TO '{TEST_DIR}/int_part_flushes' (FORMAT PARQUET, PARTITION_BY (p));
+
+query III
+SELECT p, count(*), sum(v) FROM parquet_scan('{TEST_DIR}/int_part_flushes/p=*/*.parquet', HIVE_PARTITIONING=1) GROUP BY p ORDER BY p;
+----
+0	2500	24990000
+1	2500	24992500
+2	2500	24995000
+3	2500	24997500
+4	2500	25000000
+5	2500	25002500
+6	2500	25005000
+7	2500	25007500
+
+statement ok
+RESET partitioned_write_flush_threshold;
+
+# row and byte limited batches
+statement ok
+COPY t TO '{TEST_DIR}/int_part_rows' (FORMAT PARQUET, PARTITION_BY (p), ROW_GROUP_SIZE 1000);
+
+# a batch may exceed the row limit by at most one input chunk
+query III
+SELECT count(*) >= 16, max(row_group_num_rows) <= 1000 + 2048, sum(row_group_num_rows)
+FROM parquet_metadata('{TEST_DIR}/int_part_rows/p=*/*.parquet') WHERE column_id = 0;
+----
+true	true	20000
+
+statement ok
+CREATE TABLE wide AS SELECT i % 4 AS p, i AS v, CASE WHEN i % 500 = 0 THEN repeat('x', 100000) ELSE 'short' END AS s FROM range(4000) tbl(i);
+
+statement ok
+COPY wide TO '{TEST_DIR}/int_part_bytes' (FORMAT PARQUET, COMPRESSION uncompressed, ROW_GROUP_SIZE_BYTES 500000, PARTITION_BY (p));
+
+query I
+SELECT max(row_group_bytes) < 700000 FROM parquet_metadata('{TEST_DIR}/int_part_bytes/p=*/*.parquet');
+----
+true
+
+query I
+SELECT count(*) FROM (FROM wide EXCEPT ALL SELECT p, v, s FROM parquet_scan('{TEST_DIR}/int_part_bytes/p=*/*.parquet', HIVE_PARTITIONING=1));
+----
+0

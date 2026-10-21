@@ -1,6 +1,9 @@
 #include "duckdb/common/types/row/integer_partitioned_tuple_data.hpp"
 
 #include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 
 #include <type_traits>
 
@@ -45,6 +48,48 @@ bool IntegerPartitionedTupleData::SupportsType(const LogicalType &type) {
 	default:
 		return false;
 	}
+}
+
+//! The largest key range that is partitioned on directly
+static constexpr idx_t MAX_INTEGER_PARTITIONS = 4096;
+
+static idx_t MaxIntegerPartitions(ClientContext &context) {
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	const auto memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
+	// every partition keeps a partially filled row block and heap block pinned per thread while appending
+	const auto partition_memory = 2 * buffer_manager.GetBlockAllocSize();
+	return MinValue<idx_t>(MAX_INTEGER_PARTITIONS, memory_per_thread / partition_memory);
+}
+
+bool IntegerPartitionedTupleData::TryBoundedKey(ClientContext &context, const LogicalType &key_type,
+                                                optional_ptr<const BaseStatistics> stats, Value &min_value,
+                                                idx_t &value_count) {
+	if (!stats || !SupportsType(key_type) || stats->GetType() != key_type) {
+		return false;
+	}
+	if (!NumericStats::HasMinMax(*stats)) {
+		return false;
+	}
+	auto min = NumericStats::Min(*stats);
+	auto max = NumericStats::Max(*stats);
+	if (min.IsNull() || max.IsNull()) {
+		return false;
+	}
+	const auto lo = min.GetValue<hugeint_t>();
+	const auto hi = max.GetValue<hugeint_t>();
+	if (hi < lo) {
+		return false;
+	}
+	const auto range = hi - lo + 1;
+	const auto max_partitions = MaxIntegerPartitions(context);
+	const auto extra_partitions = PartitionCountFor(0);
+	if (max_partitions <= extra_partitions ||
+	    range > hugeint_t(static_cast<int64_t>(max_partitions - extra_partitions))) {
+		return false;
+	}
+	value_count = range.lower;
+	min_value = std::move(min);
+	return true;
 }
 
 void IntegerPartitionedTupleData::Initialize() {

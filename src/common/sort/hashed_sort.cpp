@@ -641,47 +641,6 @@ void HashedSort::GenerateOrderings(Orders &partitions, Orders &orders,
 	}
 }
 
-//! The largest key range that is partitioned on directly
-static constexpr idx_t MAX_INTEGER_PARTITIONS = 4096;
-
-static idx_t MaxIntegerPartitions(ClientContext &client) {
-	auto &buffer_manager = BufferManager::GetBufferManager(client);
-	const auto memory_per_thread = PhysicalOperator::GetMaxThreadMemory(client);
-	// every partition keeps a partially filled row block and heap block pinned per thread while appending
-	const auto partition_memory = 2 * buffer_manager.GetBlockAllocSize();
-	return MinValue<idx_t>(MAX_INTEGER_PARTITIONS, memory_per_thread / partition_memory);
-}
-
-static bool TryIntegerPartitioning(ClientContext &client, const LogicalType &key_type,
-                                   optional_ptr<const BaseStatistics> stats, Value &min_value, idx_t &value_count) {
-	if (!stats || !IntegerPartitionedTupleData::SupportsType(key_type) || stats->GetType() != key_type) {
-		return false;
-	}
-	if (!NumericStats::HasMinMax(*stats)) {
-		return false;
-	}
-	auto min = NumericStats::Min(*stats);
-	auto max = NumericStats::Max(*stats);
-	if (min.IsNull() || max.IsNull()) {
-		return false;
-	}
-	const auto lo = min.GetValue<hugeint_t>();
-	const auto hi = max.GetValue<hugeint_t>();
-	if (hi < lo) {
-		return false;
-	}
-	const auto range = hi - lo + 1;
-	const auto max_partitions = MaxIntegerPartitions(client);
-	const auto extra_partitions = IntegerPartitionedTupleData::PartitionCountFor(0);
-	if (max_partitions <= extra_partitions ||
-	    range > hugeint_t(static_cast<int64_t>(max_partitions - extra_partitions))) {
-		return false;
-	}
-	value_count = range.lower;
-	min_value = std::move(min);
-	return true;
-}
-
 HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression>> &partition_bys,
                        const vector<BoundOrderByNode> &order_bys, const Types &input_types,
                        const vector<unique_ptr<BaseStatistics>> &partition_stats, idx_t estimated_cardinality,
@@ -720,8 +679,8 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
 
 	//	A single integer partition key with known bounds is partitioned on directly: every group is single-key
 	if (can_bypass_single_key_sort && partition_key_count == 1) {
-		integer_partitioning = TryIntegerPartitioning(client, partition_key_types[0], partitions[0].stats.get(),
-		                                              integer_partition_min, integer_partition_count);
+		integer_partitioning = IntegerPartitionedTupleData::TryBoundedKey(
+		    client, partition_key_types[0], partitions[0].stats.get(), integer_partition_min, integer_partition_count);
 	}
 	track_single_keys = can_bypass_single_key_sort && !integer_partitioning;
 

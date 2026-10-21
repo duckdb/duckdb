@@ -80,6 +80,10 @@ public:
 	const idx_t &Count() const;
 	//! The number of chunks stored in the tuple data collection
 	idx_t ChunkCount() const;
+	//! The segments of this tuple data collection
+	const unsafe_arena_vector<unsafe_arena_ptr<TupleDataSegment>> &GetSegments() const {
+		return segments;
+	}
 	//! The size (in bytes) of the blocks held by this tuple data collection
 	idx_t SizeInBytes() const;
 	//! Buffer-manager memory charged for row and heap blocks

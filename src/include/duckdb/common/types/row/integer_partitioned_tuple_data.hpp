@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+class ClientContext;
+
 //! IntegerPartitionedTupleData partitions on the value of an integer column with known bounds: one partition per
 //! value in [min, min + value_count), one for NULL keys and one for keys outside the bounds. Every partition except
 //! the overflow partition holds a single key.
@@ -25,6 +27,10 @@ public:
 
 	//! Whether keys of this type can be partitioned on
 	static bool SupportsType(const LogicalType &type);
+	//! Whether a key with these statistics can be partitioned on directly within the memory budget: sets the smallest
+	//! key and the number of keys within the bounds
+	static bool TryBoundedKey(ClientContext &context, const LogicalType &key_type,
+	                          optional_ptr<const BaseStatistics> stats, Value &min_value, idx_t &value_count);
 	//! The number of partitions needed for the given number of key values
 	static idx_t PartitionCountFor(idx_t value_count) {
 		return value_count + 2;
