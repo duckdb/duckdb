@@ -62,6 +62,7 @@ public:
 	SortedRunPtr GetSortedRun(ClientContext &client, idx_t hash_bin, OperatorSourceInput &source) const override;
 
 	const ChunkRows &GetHashGroups(GlobalSourceState &global_state) const override;
+	unique_ptr<TupleDataCollection> TryTakeSinglePartition(idx_t hash_bin, GlobalSourceState &source) const override;
 
 	void RegisterHyperLogLog(LocalSinkState &local_state, ParallelHyperLogLogLocalState &hll_state) const override;
 
