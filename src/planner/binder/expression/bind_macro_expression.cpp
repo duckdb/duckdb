@@ -221,7 +221,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	if (member.type == MacroType::LANGUAGE_MACRO) {
 		auto &language_member = member.Cast<LanguageMacroFunction>();
 		if (expr->GetExpressionClass() == ExpressionClass::WINDOW) {
-			throw BinderException(*expr, "Function \"%s\" is a %s function and cannot be used as a window function",
+			throw BinderException(*expr, "Function %s is a %s function and cannot be used as a window function",
 			                      macro_func.name, language_member.language);
 		}
 		// flatten the arguments into parameter declaration order, defaults were already filled in
