@@ -1,0 +1,205 @@
+# name: test/sql/copy/partitioned/integer_partitioned_write.test
+# description: Partitioned writes keyed on an integer column with known bounds skip the hash partitioning and the sort
+# group: [partitioned]
+
+require parquet
+
+statement ok
+PRAGMA threads=4;
+
+# 8 partitions, 20000 rows: the partition column statistics are [0, 7]
+statement ok
+CREATE TABLE t AS SELECT i % 8 AS p, i AS v, 'row ' || i AS s FROM range(20000) tbl(i);
+
+statement ok
+COPY t TO '{TEST_DIR}/int_part1' (FORMAT PARQUET, PARTITION_BY (p));
+
+# every partition has its own directory with exactly its rows
+query III
+SELECT p, count(*), sum(v) FROM parquet_scan('{TEST_DIR}/int_part1/p=*/*.parquet', HIVE_PARTITIONING=1) GROUP BY p ORDER BY p;
+----
+0	2500	24990000
+1	2500	24992500
+2	2500	24995000
+3	2500	24997500
+4	2500	25000000
+5	2500	25002500
+6	2500	25005000
+7	2500	25007500
+
+# no file mixes partitions
+query I
+SELECT count(*) FROM (
+	SELECT filename, count(DISTINCT v % 8) AS keys
+	FROM parquet_scan('{TEST_DIR}/int_part1/p=*/*.parquet', FILENAME=1)
+	GROUP BY filename
+) WHERE keys <> 1;
+----
+0
+
+query II
+SELECT count(*), sum(v) FROM parquet_scan('{TEST_DIR}/int_part1/p=*/*.parquet');
+----
+20000	199990000
+
+# negative bounds
+statement ok
+CREATE TABLE neg AS SELECT (i % 7) - 3 AS p, i AS v FROM range(7000) tbl(i);
+
+statement ok
+COPY neg TO '{TEST_DIR}/int_part2' (FORMAT PARQUET, PARTITION_BY (p));
+
+query II
+SELECT p, count(*) FROM parquet_scan('{TEST_DIR}/int_part2/p=*/*.parquet', HIVE_PARTITIONING=1) GROUP BY p ORDER BY p;
+----
+-3	1000
+-2	1000
+-1	1000
+0	1000
+1	1000
+2	1000
+3	1000
+
+# NULL keys get the default partition
+statement ok
+CREATE TABLE nulls AS SELECT CASE WHEN i % 5 = 4 THEN NULL ELSE i % 5 END AS p, i AS v FROM range(1000) tbl(i);
+
+statement ok
+COPY nulls TO '{TEST_DIR}/int_part3' (FORMAT PARQUET, PARTITION_BY (p));
+
+query II
+SELECT count(*), sum(v) FROM parquet_scan('{TEST_DIR}/int_part3/p=__HIVE_DEFAULT_PARTITION__/*.parquet');
+----
+200	100300
+
+query II
+SELECT p, count(*) FROM parquet_scan('{TEST_DIR}/int_part3/p=*/*.parquet', HIVE_PARTITIONING=1) GROUP BY p ORDER BY p NULLS LAST;
+----
+0	200
+1	200
+2	200
+3	200
+NULL	200
+
+# a single key
+statement ok
+COPY (SELECT 42 AS p, v FROM t) TO '{TEST_DIR}/int_part4' (FORMAT PARQUET, PARTITION_BY (p));
+
+query II
+SELECT p, count(*) FROM parquet_scan('{TEST_DIR}/int_part4/p=*/*.parquet', HIVE_PARTITIONING=1) GROUP BY p;
+----
+42	20000
+
+# other integer types
+foreach type TINYINT SMALLINT INTEGER BIGINT UTINYINT USMALLINT UINTEGER UBIGINT
+
+statement ok
+COPY (SELECT p::{type} AS p, v FROM t) TO '{TEST_DIR}/int_part_{type}' (FORMAT PARQUET, PARTITION_BY (p), OVERWRITE);
+
+query II
+SELECT count(*), count(DISTINCT p) FROM parquet_scan('{TEST_DIR}/int_part_{type}/p=*/*.parquet', HIVE_PARTITIONING=1);
+----
+20000	8
+
+query I
+SELECT count(*) FROM (
+	SELECT filename, count(DISTINCT v % 8) AS keys
+	FROM parquet_scan('{TEST_DIR}/int_part_{type}/p=*/*.parquet', FILENAME=1)
+	GROUP BY filename
+) WHERE keys <> 1;
+----
+0
+
+endloop
+
+# a key range above the partition cap falls back to hash partitioning
+statement ok
+COPY (SELECT v AS p, s FROM t) TO '{TEST_DIR}/int_part5' (FORMAT PARQUET, PARTITION_BY (p));
+
+query II
+SELECT count(*), count(DISTINCT p) FROM parquet_scan('{TEST_DIR}/int_part5/p=*/*.parquet', HIVE_PARTITIONING=1);
+----
+20000	20000
+
+# ORDER BY keeps the sorted write
+statement ok
+COPY t TO '{TEST_DIR}/int_part6' (FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (v DESC));
+
+query I
+WITH per_file AS (
+	SELECT filename, v, lag(v) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_v
+	FROM read_parquet('{TEST_DIR}/int_part6/**/*.parquet', filename = true, file_row_number = true)
+)
+SELECT count(*) FROM per_file WHERE prev_v IS NOT NULL AND prev_v < v;
+----
+0
+
+query II
+SELECT count(*), count(DISTINCT p) FROM parquet_scan('{TEST_DIR}/int_part6/p=*/*.parquet', HIVE_PARTITIONING=1);
+----
+20000	8
+
+# two partition columns
+statement ok
+COPY (SELECT p, v % 3 AS q, v FROM t) TO '{TEST_DIR}/int_part7' (FORMAT PARQUET, PARTITION_BY (p, q));
+
+query I
+SELECT count(*) FROM parquet_scan('{TEST_DIR}/int_part7/p=*/q=*/*.parquet', HIVE_PARTITIONING=1);
+----
+20000
+
+query I
+SELECT count(*) FROM (
+	SELECT filename, count(DISTINCT (v % 8, v % 3)) AS keys
+	FROM parquet_scan('{TEST_DIR}/int_part7/p=*/q=*/*.parquet', FILENAME=1)
+	GROUP BY filename
+) WHERE keys <> 1;
+----
+0
+
+# the usual hash-bucket shape
+statement ok
+COPY (SELECT hash(v) % 16 AS p, v FROM t) TO '{TEST_DIR}/int_part8' (FORMAT PARQUET, PARTITION_BY (p));
+
+query II
+SELECT count(*), count(DISTINCT p) FROM parquet_scan('{TEST_DIR}/int_part8/p=*/*.parquet', HIVE_PARTITIONING=1);
+----
+20000	16
+
+query I
+SELECT count(*) FROM (
+	SELECT filename, count(DISTINCT hash(v) % 16) AS keys
+	FROM parquet_scan('{TEST_DIR}/int_part8/p=*/*.parquet', FILENAME=1)
+	GROUP BY filename
+) WHERE keys <> 1;
+----
+0
+
+# window functions partitioned by a bounded integer column use the same path
+query II
+SELECT p, max(r) FROM (SELECT p, row_number() OVER (PARTITION BY p) AS r FROM t) GROUP BY p ORDER BY p;
+----
+0	2500
+1	2500
+2	2500
+3	2500
+4	2500
+5	2500
+6	2500
+7	2500
+
+query I
+SELECT count(*) FROM (
+	SELECT p, v, sum(v) OVER (PARTITION BY p ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS s FROM t
+) w JOIN (SELECT p, sum(v) AS s FROM t GROUP BY p) g USING (p, s);
+----
+20000
+
+query II
+SELECT p, max(r) FROM (SELECT p, row_number() OVER (PARTITION BY p) AS r FROM nulls) GROUP BY p ORDER BY p NULLS LAST;
+----
+0	200
+1	200
+2	200
+3	200
+NULL	200

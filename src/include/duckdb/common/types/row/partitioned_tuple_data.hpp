@@ -75,7 +75,9 @@ inline fixed_size_map_t<list_entry_t> &PartitionedTupleDataAppendState::GetMap<t
 enum class PartitionedTupleDataType : uint8_t {
 	INVALID,
 	//! Radix partitioning on a hash column
-	RADIX
+	RADIX,
+	//! Partitioning on the value of an integer column with known bounds
+	INTEGER
 };
 
 class PartitionedTupleDataRepartitionKeyTracker {

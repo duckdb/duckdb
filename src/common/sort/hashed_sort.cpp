@@ -4,6 +4,8 @@
 #include "duckdb/common/sorting/partition_key_tracker.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
+#include "duckdb/common/types/row/integer_partitioned_tuple_data.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -51,13 +53,13 @@ public:
 	using Orders = vector<BoundOrderByNode>;
 	using Types = vector<LogicalType>;
 
-	using GroupingPartition = unique_ptr<RadixPartitionedTupleData>;
+	using GroupingPartition = unique_ptr<PartitionedTupleData>;
 	using GroupingAppend = unique_ptr<PartitionedTupleDataAppendState>;
 
 	HashedSortGlobalSinkState(ClientContext &client, const HashedSort &hashed_sort);
 
 	// OVER(PARTITION BY...) (hash grouping)
-	unique_ptr<RadixPartitionedTupleData> CreatePartition(idx_t new_bits) const;
+	unique_ptr<PartitionedTupleData> CreatePartition(idx_t new_bits) const;
 	unique_ptr<RepartitionKeyTracker> CreateRepartitionKeyTracker(PartitionKeyTracker &tracker) const;
 	void SyncPartitioning(const HashedSortGlobalSinkState &other);
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &partition_append,
@@ -76,6 +78,8 @@ public:
 
 	// OVER(PARTITION BY...) (hash grouping)
 	GroupingPartition grouping_data;
+	//! The number of radix bits of grouping_data (unused when integer partitioning)
+	idx_t radix_bits = 0;
 	//! Payload plus hash column
 	shared_ptr<TupleDataLayout> grouping_types_ptr;
 	unique_ptr<PartitionKeyTracker> single_key_tracker;
@@ -98,7 +102,7 @@ private:
 HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &client, const HashedSort &hashed_sort)
     : client(client), hashed_sort(hashed_sort), buffer_manager(BufferManager::GetBufferManager(client)),
       allocator(Allocator::Get(client)), fixed_bits(0), max_bits(1), count(0) {
-	if (hashed_sort.can_bypass_single_key_sort) {
+	if (hashed_sort.track_single_keys) {
 		single_key_tracker = make_uniq<PartitionKeyTracker>(allocator, hashed_sort.partition_key_types);
 	}
 
@@ -116,8 +120,13 @@ HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &client, cons
 	Rehash(hashed_sort.estimated_cardinality);
 }
 
-unique_ptr<RadixPartitionedTupleData> HashedSortGlobalSinkState::CreatePartition(idx_t new_bits) const {
+unique_ptr<PartitionedTupleData> HashedSortGlobalSinkState::CreatePartition(idx_t new_bits) const {
 	auto &payload_types = hashed_sort.payload_types;
+	if (hashed_sort.integer_partitioning) {
+		return make_uniq<IntegerPartitionedTupleData>(
+		    buffer_manager, grouping_types_ptr, MemoryTag::WINDOW, hashed_sort.partition_key_ids[0],
+		    hashed_sort.integer_partition_min, hashed_sort.integer_partition_count, client);
+	}
 	const auto hash_col_idx = payload_types.size();
 	return make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types_ptr, MemoryTag::WINDOW, new_bits,
 	                                            hash_col_idx, client);
@@ -130,13 +139,20 @@ HashedSortGlobalSinkState::CreateRepartitionKeyTracker(PartitionKeyTracker &trac
 }
 
 void HashedSortGlobalSinkState::Rehash(idx_t cardinality) {
+	//	Integer partitioning is fixed by the key range
+	if (hashed_sort.integer_partitioning) {
+		if (!grouping_data) {
+			grouping_data = CreatePartition(0);
+		}
+		return;
+	}
 	//	Have we started to combine? Then just live with it.
 	if (fixed_bits) {
 		return;
 	}
 	//	Is the average partition size too large?
 	const idx_t partition_size = DEFAULT_ROW_GROUP_SIZE;
-	const auto bits = grouping_data ? grouping_data->GetRadixBits() : 0;
+	const auto bits = grouping_data ? radix_bits : 0;
 	auto new_bits = bits ? bits : 4;
 	while (new_bits < max_bits && (cardinality / RadixPartitioning::NumberOfPartitions(new_bits)) > partition_size) {
 		new_bits = MinValue(new_bits + 2, max_bits);
@@ -145,17 +161,25 @@ void HashedSortGlobalSinkState::Rehash(idx_t cardinality) {
 	// Repartition the grouping data
 	if (new_bits != bits) {
 		grouping_data = CreatePartition(new_bits);
+		radix_bits = new_bits;
 		if (single_key_tracker) {
 			single_key_tracker->Reset(new_bits);
 		}
 	}
 }
 
+static idx_t LocalRadixBits(const PartitionedTupleData &local_partition) {
+	return local_partition.Cast<RadixPartitionedTupleData>().GetRadixBits();
+}
+
 void HashedSortGlobalSinkState::SyncLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append,
                                                    optional_ptr<PartitionKeyTracker> local_tracker) {
+	if (hashed_sort.integer_partitioning) {
+		return;
+	}
 	// We are done if the local_partition is right sized.
-	const auto new_bits = grouping_data->GetRadixBits();
-	if (local_partition->GetRadixBits() == new_bits) {
+	const auto new_bits = radix_bits;
+	if (LocalRadixBits(*local_partition) == new_bits) {
 		return;
 	}
 
@@ -180,12 +204,17 @@ void HashedSortGlobalSinkState::UpdateLocalPartition(GroupingPartition &local_pa
 	// First call: initialize the local partition
 	if (!local_partition) {
 		lock_guard<mutex> guard(lock);
-		local_partition = CreatePartition(grouping_data->GetRadixBits());
+		local_partition = CreatePartition(radix_bits);
 		partition_append = make_uniq<PartitionedTupleDataAppendState>();
 		local_partition->InitializeAppendState(*partition_append);
 		if (local_tracker) {
-			local_tracker->Reset(local_partition->GetRadixBits());
+			local_tracker->Reset(radix_bits);
 		}
+		return;
+	}
+
+	//	Integer partitioning never changes shape
+	if (hashed_sort.integer_partitioning) {
 		return;
 	}
 
@@ -195,10 +224,10 @@ void HashedSortGlobalSinkState::UpdateLocalPartition(GroupingPartition &local_pa
 		{
 			lock_guard<mutex> guard(lock);
 			Rehash(count);
-			new_bits = grouping_data->GetRadixBits();
+			new_bits = radix_bits;
 		}
 
-		if (local_partition->GetRadixBits() == new_bits) {
+		if (LocalRadixBits(*local_partition) == new_bits) {
 			return; // Already in sync
 		}
 
@@ -217,11 +246,15 @@ void HashedSortGlobalSinkState::UpdateLocalPartition(GroupingPartition &local_pa
 }
 
 void HashedSortGlobalSinkState::SyncPartitioning(const HashedSortGlobalSinkState &other) {
-	fixed_bits = other.grouping_data ? other.grouping_data->GetRadixBits() : 0;
+	if (hashed_sort.integer_partitioning) {
+		return;
+	}
+	fixed_bits = other.grouping_data ? other.radix_bits : 0;
 
-	const auto old_bits = grouping_data ? grouping_data->GetRadixBits() : 0;
+	const auto old_bits = grouping_data ? radix_bits : 0;
 	if (fixed_bits != old_bits) {
 		grouping_data = CreatePartition(fixed_bits);
+		radix_bits = fixed_bits;
 		if (single_key_tracker) {
 			single_key_tracker->Reset(fixed_bits);
 		}
@@ -268,6 +301,10 @@ void HashedSortGlobalSinkState::CombineLocalPartition(GroupingPartition &local_p
 }
 
 bool HashedSortGlobalSinkState::CanBypassSort(idx_t hash_bin) const {
+	if (hashed_sort.integer_partitioning) {
+		// every partition but the overflow partition holds a single key
+		return grouping_data && grouping_data->Cast<IntegerPartitionedTupleData>().IsSingleKeyPartition(hash_bin);
+	}
 	return single_key_tracker && single_key_tracker->CanBypass(hash_bin);
 }
 
@@ -318,7 +355,7 @@ ProgressData HashedSort::GetSinkProgress(ClientContext &client, GlobalSinkState 
 class HashedSortLocalSinkState : public LocalSinkState {
 public:
 	using LocalSortStatePtr = unique_ptr<LocalSinkState>;
-	using GroupingPartition = unique_ptr<RadixPartitionedTupleData>;
+	using GroupingPartition = unique_ptr<PartitionedTupleData>;
 	using GroupingAppend = unique_ptr<PartitionedTupleDataAppendState>;
 
 	HashedSortLocalSinkState(ExecutionContext &context, const HashedSort &hashed_sort);
@@ -371,7 +408,7 @@ HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, co
 	hash_types.emplace_back(LogicalType::HASH);
 	payload_chunk.Initialize(allocator, hash_types);
 
-	if (hashed_sort.can_bypass_single_key_sort) {
+	if (hashed_sort.track_single_keys) {
 		single_key_tracker = make_uniq<PartitionKeyTracker>(allocator, group_types);
 	}
 }
@@ -631,6 +668,47 @@ void HashedSort::GenerateOrderings(Orders &partitions, Orders &orders,
 	}
 }
 
+//! The largest key range that is partitioned on directly
+static constexpr idx_t MAX_INTEGER_PARTITIONS = 4096;
+
+static idx_t MaxIntegerPartitions(ClientContext &client) {
+	auto &buffer_manager = BufferManager::GetBufferManager(client);
+	const auto memory_per_thread = PhysicalOperator::GetMaxThreadMemory(client);
+	// every partition keeps a partially filled row block and heap block pinned per thread while appending
+	const auto partition_memory = 2 * buffer_manager.GetBlockAllocSize();
+	return MinValue<idx_t>(MAX_INTEGER_PARTITIONS, memory_per_thread / partition_memory);
+}
+
+static bool TryIntegerPartitioning(ClientContext &client, const LogicalType &key_type,
+                                   optional_ptr<const BaseStatistics> stats, Value &min_value, idx_t &value_count) {
+	if (!stats || !IntegerPartitionedTupleData::SupportsType(key_type) || stats->GetType() != key_type) {
+		return false;
+	}
+	if (!NumericStats::HasMinMax(*stats)) {
+		return false;
+	}
+	auto min = NumericStats::Min(*stats);
+	auto max = NumericStats::Max(*stats);
+	if (min.IsNull() || max.IsNull()) {
+		return false;
+	}
+	const auto lo = min.GetValue<hugeint_t>();
+	const auto hi = max.GetValue<hugeint_t>();
+	if (hi < lo) {
+		return false;
+	}
+	const auto range = hi - lo + 1;
+	const auto max_partitions = MaxIntegerPartitions(client);
+	const auto extra_partitions = IntegerPartitionedTupleData::PartitionCountFor(0);
+	if (max_partitions <= extra_partitions ||
+	    range > hugeint_t(static_cast<int64_t>(max_partitions - extra_partitions))) {
+		return false;
+	}
+	value_count = range.lower;
+	min_value = std::move(min);
+	return true;
+}
+
 HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression>> &partition_bys,
                        const vector<BoundOrderByNode> &order_bys, const Types &input_types,
                        const vector<unique_ptr<BaseStatistics>> &partition_stats, idx_t estimated_cardinality,
@@ -666,6 +744,13 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
 	for (idx_t key_idx = 0; key_idx < partition_key_count; key_idx++) {
 		partition_key_ids.push_back(sort_ids[key_idx]);
 	}
+
+	//	A single integer partition key with known bounds is partitioned on directly: every group is single-key
+	if (can_bypass_single_key_sort && partition_key_count == 1) {
+		integer_partitioning = TryIntegerPartitioning(client, partition_key_types[0], partitions[0].stats.get(),
+		                                              integer_partition_min, integer_partition_count);
+	}
+	track_single_keys = can_bypass_single_key_sort && !integer_partitioning;
 
 	// If a payload column is required, check whether there is one already
 	if (require_payload) {
