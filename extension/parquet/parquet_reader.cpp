@@ -977,7 +977,10 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		if (schema.children.size() == 3 && column_id.IsPushdownExtract()) {
 			//! VARIANT is shredded - it has a 'typed_value' column
 			auto &typed_value_schema = schema.children[2];
-			D_ASSERT(typed_value_schema.name == "typed_value");
+			if (typed_value_schema.name != "typed_value") {
+				throw InvalidInputException("Variant group can only contain 'value'/'typed_value', found '%s'",
+				                            typed_value_schema.name);
+			}
 			auto variant_stats = GetVariantStats(schema);
 
 			if (variant_stats && IsFullyShredded(*variant_stats, column_id) &&
