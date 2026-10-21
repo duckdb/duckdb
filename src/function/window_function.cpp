@@ -15,7 +15,9 @@ unique_ptr<BoundWindowExpression> WindowFunction::Bind(ClientContext &context,
 	vector<LogicalType> order_types;
 	vector<LogicalType> arg_order_types;
 
-	return func_binder.BindWindowFunction(*this, std::move(arguments), order_types, arg_order_types);
+	// the function does not come from a function set - copy it into a definition of its own
+	return func_binder.BindWindowFunction(make_shared_ptr<WindowFunction>(*this), std::move(arguments), {}, order_types,
+	                                      arg_order_types);
 }
 
 BoundWindowFunction::BoundWindowFunction(const WindowFunction &base)

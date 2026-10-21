@@ -187,23 +187,16 @@ public:
 	               const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
 	               optional_idx limit = optional_idx(), bool explicit_casts = false);
 
-	//! Bind a table function: select the overload, check the named arguments against its signature, and cast both
-	//! the positional and the named arguments to the types it declares
-	DUCKDB_API FunctionSelection BindFunctionArguments(
-	    const Identifier &name, const TableFunctionSet &functions, vector<unique_ptr<Expression>> &positional_arguments,
-	    vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, vector<Value> &parameters,
-	    named_argument_map_t &named_parameters);
+	//! Bind the arguments of a table or pragma function: select the overload, check the named arguments against its
+	//! signature, and cast both the positional and the named arguments to the types it declares
+	DUCKDB_API FunctionSelection
+	BindFunctionArguments(const BaseFunctionSet &functions, vector<unique_ptr<Expression>> &positional_arguments,
+	                      vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, vector<Value> &parameters,
+	                      named_argument_map_t &named_parameters);
 
 	//! Casts a constant to the type of the parameter it fills, as an argument of any function is cast - a parameter
 	//! whose type is not concrete, such as ANY, takes it as it is
 	DUCKDB_API static Value CastToParameterType(ClientContext &context, Value value, const LogicalType &parameter_type);
-
-	//! Bind a pragma function from the set of functions and input arguments
-	DUCKDB_API FunctionSelection
-	BindFunctionArguments(const Identifier &name, const PragmaFunctionSet &functions,
-	                      vector<unique_ptr<Expression>> &positional_arguments,
-	                      vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, vector<Value> &parameters,
-	                      named_argument_map_t &named_parameters);
 
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const Identifier &schema, const Identifier &name,
 	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
@@ -308,22 +301,6 @@ public:
 	                   vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, vector<LogicalType> &order_types,
 	                   vector<LogicalType> &arg_order_types);
 
-	//! Bind a function that does not come from a function set - the function is copied into a definition of its own
-	DUCKDB_API unique_ptr<BoundWindowExpression>
-	BindWindowFunction(const WindowFunction &function, vector<unique_ptr<Expression>> children,
-	                   vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, vector<LogicalType> &order_types,
-	                   vector<LogicalType> &arg_order_types);
-
-	DUCKDB_API unique_ptr<BoundWindowExpression> BindWindowFunction(shared_ptr<const WindowFunction> function,
-	                                                                vector<unique_ptr<Expression>> children,
-	                                                                vector<LogicalType> &order_types,
-	                                                                vector<LogicalType> &arg_order_types);
-
-	DUCKDB_API unique_ptr<BoundWindowExpression> BindWindowFunction(const WindowFunction &function,
-	                                                                vector<unique_ptr<Expression>> children,
-	                                                                vector<LogicalType> &order_types,
-	                                                                vector<LogicalType> &arg_order_types);
-
 	DUCKDB_API unique_ptr<BoundWindowExpression>
 	BindWindowFunction(const WindowFunctionCatalogEntry &function,
 	                   vector<pair<Identifier, unique_ptr<Expression>>> arguments, ErrorData &error,
@@ -332,79 +309,9 @@ public:
 	DUCKDB_API unique_ptr<Expression> BindScalarWindowFunction(BoundWindowExpression &wexpr,
 	                                                           const vector<LogicalType> &input_types);
 
-	//! Turn a function into a BoundScalarFunction bound to the given arguments. The function is kept as the
-	//! definition of the resulting bound function - see BoundScalarFunction::GetDefinition().
-	pair<BoundScalarFunction, unique_ptr<FunctionData>>
-	ResolveFunction(shared_ptr<const ScalarFunction> function, vector<unique_ptr<Expression>> &children,
-	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args);
-
-	pair<BoundScalarFunction, unique_ptr<FunctionData>> ResolveFunction(shared_ptr<const ScalarFunction> function,
-	                                                                    vector<unique_ptr<Expression>> &children) {
-		vector<pair<Identifier, unique_ptr<Expression>>> empty_keyword_args;
-		return ResolveFunction(std::move(function), children, empty_keyword_args);
-	}
-
-	//! Resolve a function that does not come from a function set - it is copied into a definition of its own
-	pair<BoundScalarFunction, unique_ptr<FunctionData>>
-	ResolveFunction(const ScalarFunction &function, vector<unique_ptr<Expression>> &children,
-	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args) {
-		return ResolveFunction(make_shared_ptr<ScalarFunction>(function), children, keyword_args);
-	}
-
-	pair<BoundScalarFunction, unique_ptr<FunctionData>> ResolveFunction(const ScalarFunction &function,
-	                                                                    vector<unique_ptr<Expression>> &children) {
-		return ResolveFunction(make_shared_ptr<ScalarFunction>(function), children);
-	}
-
-	pair<BoundAggregateFunction, unique_ptr<FunctionData>>
-	ResolveFunction(shared_ptr<const AggregateFunction> function, vector<unique_ptr<Expression>> &children,
-	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args);
-
-	pair<BoundAggregateFunction, unique_ptr<FunctionData>> ResolveFunction(shared_ptr<const AggregateFunction> function,
-	                                                                       vector<unique_ptr<Expression>> &children) {
-		vector<pair<Identifier, unique_ptr<Expression>>> empty_keyword_args;
-		return ResolveFunction(std::move(function), children, empty_keyword_args);
-	}
-
-	pair<BoundAggregateFunction, unique_ptr<FunctionData>>
-	ResolveFunction(const AggregateFunction &function, vector<unique_ptr<Expression>> &children,
-	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args) {
-		return ResolveFunction(make_shared_ptr<AggregateFunction>(function), children, keyword_args);
-	}
-
-	pair<BoundAggregateFunction, unique_ptr<FunctionData>> ResolveFunction(const AggregateFunction &function,
-	                                                                       vector<unique_ptr<Expression>> &children) {
-		return ResolveFunction(make_shared_ptr<AggregateFunction>(function), children);
-	}
-
-	pair<BoundWindowFunction, unique_ptr<FunctionData>>
-	ResolveFunction(shared_ptr<const WindowFunction> function, vector<unique_ptr<Expression>> &children,
-	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
-	                optional_ptr<vector<LogicalType>> order_types = nullptr,
-	                optional_ptr<vector<LogicalType>> arg_order_types = nullptr);
-
-	pair<BoundWindowFunction, unique_ptr<FunctionData>> ResolveFunction(shared_ptr<const WindowFunction> function,
-	                                                                    vector<unique_ptr<Expression>> &children) {
-		vector<pair<Identifier, unique_ptr<Expression>>> empty_keyword_args;
-		return ResolveFunction(std::move(function), children, empty_keyword_args);
-	}
-
-	pair<BoundWindowFunction, unique_ptr<FunctionData>>
-	ResolveFunction(const WindowFunction &function, vector<unique_ptr<Expression>> &children,
-	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
-	                optional_ptr<vector<LogicalType>> order_types = nullptr,
-	                optional_ptr<vector<LogicalType>> arg_order_types = nullptr) {
-		return ResolveFunction(make_shared_ptr<WindowFunction>(function), children, keyword_args, order_types,
-		                       arg_order_types);
-	}
-
-	pair<BoundWindowFunction, unique_ptr<FunctionData>> ResolveFunction(const WindowFunction &function,
-	                                                                    vector<unique_ptr<Expression>> &children) {
-		return ResolveFunction(make_shared_ptr<WindowFunction>(function), children);
-	}
-
-	//! Resolve a function with how the call binds to it, from the selection of the overload - the arguments are
-	//! passed as they were to the selection, positional ones first
+	//! Turn a function into a bound function with how the call binds to it, from the selection of the overload - the
+	//! arguments are passed as they were to the selection, positional ones first. The function is kept as the
+	//! definition of the resulting bound function - see BoundScalarFunction::GetDefinition()
 	DUCKDB_API pair<BoundScalarFunction, unique_ptr<FunctionData>>
 	ResolveFunction(shared_ptr<const ScalarFunction> function, const FunctionBinding &binding,
 	                vector<unique_ptr<Expression>> &children,

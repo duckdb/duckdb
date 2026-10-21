@@ -49,8 +49,8 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 	// selection, folding, casting and named-argument checking all happen in the function binder
 	vector<Value> params;
 	named_argument_map_t named_parameters;
-	auto bound_idx = function_binder.BindFunctionArguments(entry->name, entry->functions, positional_arguments,
-	                                                       named_arguments, params, named_parameters);
+	auto bound_idx = function_binder.BindFunctionArguments(entry->functions, positional_arguments, named_arguments,
+	                                                       params, named_parameters);
 	if (!bound_idx.IsValid()) {
 		auto error = bound_idx.GetError();
 		error.AddQueryLocation(error_context);

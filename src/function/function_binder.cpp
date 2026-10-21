@@ -786,13 +786,12 @@ FunctionBinder::SelectFunctionFromArguments(const BaseFunctionSet &functions,
 
 //! Reject a named argument that no overload of the set accepts, naming the options that were available. Overload
 //! selection would otherwise report only that nothing matched the call, which hides which name was wrong
-template <class T>
-static void VerifyNamedArgumentsAccepted(const Identifier &name, const FunctionSet<T> &functions,
+static void VerifyNamedArgumentsAccepted(const BaseFunctionSet &functions,
                                          const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
 	for (auto &named_argument : named_arguments) {
 		bool accepted = false;
-		for (idx_t i = 0; i < functions.functions.size() && !accepted; i++) {
-			auto &signature = functions.functions[i]->GetSignature();
+		for (idx_t i = 0; i < functions.GetOverloadCount() && !accepted; i++) {
+			auto &signature = functions.GetOverload(i).GetSignature();
 			// the options of a "**kwargs" are checked once the overload is chosen
 			accepted =
 			    signature.GetParameterIndexByName(named_argument.first).IsValid() || signature.GetKwargs() != nullptr;
@@ -802,8 +801,8 @@ static void VerifyNamedArgumentsAccepted(const Identifier &name, const FunctionS
 		}
 		// list every option any overload accepts, in name order
 		map<string, string> candidates;
-		for (idx_t i = 0; i < functions.functions.size(); i++) {
-			for (auto &param : functions.functions[i]->GetSignature().GetParameters()) {
+		for (idx_t i = 0; i < functions.GetOverloadCount(); i++) {
+			for (auto &param : functions.GetOverload(i).GetSignature().GetParameters()) {
 				if (!param.IsVariadic() && param.HasDefaultValue()) {
 					candidates[param.GetName().GetIdentifierName()] = param.GetType().ToString();
 				}
@@ -814,7 +813,7 @@ static void VerifyNamedArgumentsAccepted(const Identifier &name, const FunctionS
 			candidate_list += "    " + candidate.first + " " + candidate.second + "\n";
 		}
 		throw BinderException("Invalid named parameter %s for function %s\n%s", named_argument.first,
-		                      name.GetIdentifierName(),
+		                      functions.GetName().GetIdentifierName(),
 		                      candidate_list.empty() ? "Function does not accept any named parameters."
 		                                             : "Candidates:\n" + candidate_list);
 	}
@@ -909,8 +908,7 @@ static Value PlaceOption(ClientContext &context, Expression &expr, const TypedKw
 //! parameter the call leaves out receives its default; an option the call leaves out is not passed. Overload selection
 //! has already established that every parameter's cast is one the implicit rules allow. An option takes no part in
 //! selection, so it is cast to its type like an explicit cast.
-template <class T>
-static void PlaceArguments(ClientContext &context, const T &function, const FunctionBinding &binding,
+static void PlaceArguments(ClientContext &context, const SimpleFunction &function, const FunctionBinding &binding,
                            vector<unique_ptr<Expression>> &positional_arguments,
                            vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, vector<Value> &parameters,
                            named_argument_map_t &named_parameters) {
@@ -997,34 +995,18 @@ static void PlaceArguments(ClientContext &context, const T &function, const Func
 }
 
 FunctionSelection
-FunctionBinder::BindFunctionArguments(const Identifier &name, const TableFunctionSet &functions,
+FunctionBinder::BindFunctionArguments(const BaseFunctionSet &functions,
                                       vector<unique_ptr<Expression>> &positional_arguments,
                                       vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
                                       vector<Value> &parameters, named_argument_map_t &named_parameters) {
-	VerifyNamedArgumentsAccepted(name, functions, named_arguments);
-	auto entry = SelectFunction(context, functions, positional_arguments, named_arguments);
-	if (!entry.IsValid()) {
-		return entry;
+	VerifyNamedArgumentsAccepted(functions, named_arguments);
+	auto selection = SelectFunction(context, functions, positional_arguments, named_arguments);
+	if (selection.Succeeded()) {
+		auto &binding = selection.GetBinding();
+		PlaceArguments(context, functions.GetOverload(binding.function_index), binding, positional_arguments,
+		               named_arguments, parameters, named_parameters);
 	}
-	PlaceArguments(context, *functions.GetFunctionByOffset(entry.GetIndex()), entry.GetBinding(), positional_arguments,
-	               named_arguments, parameters, named_parameters);
-	return entry;
-}
-
-FunctionSelection
-FunctionBinder::BindFunctionArguments(const Identifier &name, const PragmaFunctionSet &functions,
-                                      vector<unique_ptr<Expression>> &positional_arguments,
-                                      vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
-                                      vector<Value> &parameters, named_argument_map_t &named_parameters) {
-	VerifyNamedArgumentsAccepted(name, functions, named_arguments);
-	auto [args, kwargs] = GetArgumentsFromExpressions(positional_arguments, named_arguments);
-	auto entry = SelectFunction(context, functions, args, kwargs);
-	if (!entry.IsValid()) {
-		entry.GetError().Throw();
-	}
-	PlaceArguments(context, *functions.GetFunctionByOffset(entry.GetIndex()), entry.GetBinding(), positional_arguments,
-	               named_arguments, parameters, named_parameters);
-	return entry;
+	return selection;
 }
 
 pair<vector<LogicalType>, vector<pair<Identifier, LogicalType>>>
@@ -1634,13 +1616,6 @@ FunctionBinder::ResolveScalarFunctionTypes(shared_ptr<const ScalarFunction> func
 }
 
 pair<BoundScalarFunction, unique_ptr<FunctionData>>
-FunctionBinder::ResolveFunction(shared_ptr<const ScalarFunction> function_p, vector<unique_ptr<Expression>> &arguments,
-                                vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
-	auto binding = MatchFunction(function_p, arguments, named_arguments);
-	return ResolveFunction(std::move(function_p), binding, arguments, named_arguments);
-}
-
-pair<BoundScalarFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(shared_ptr<const ScalarFunction> function_p, const FunctionBinding &binding,
                                 vector<unique_ptr<Expression>> &arguments,
                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
@@ -1726,14 +1701,6 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(shared_ptr<const Scala
 	}
 
 	return result;
-}
-
-pair<BoundAggregateFunction, unique_ptr<FunctionData>>
-FunctionBinder::ResolveFunction(shared_ptr<const AggregateFunction> function_p,
-                                vector<unique_ptr<Expression>> &children,
-                                vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
-	auto binding = MatchFunction(function_p, children, named_arguments);
-	return ResolveFunction(std::move(function_p), binding, children, named_arguments);
 }
 
 pair<BoundAggregateFunction, unique_ptr<FunctionData>>
@@ -1858,15 +1825,6 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(const
 	return BindAggregateFunction(func, std::move(arguments), error, std::move(filter), aggr_type);
 }
 
-pair<BoundWindowFunction, unique_ptr<FunctionData>>
-FunctionBinder::ResolveFunction(shared_ptr<const WindowFunction> function_p, vector<unique_ptr<Expression>> &children,
-                                vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
-                                optional_ptr<vector<LogicalType>> order_types,
-                                optional_ptr<vector<LogicalType>> arg_order_types) {
-	auto binding = MatchFunction(function_p, children, named_arguments);
-	return ResolveFunction(std::move(function_p), binding, children, named_arguments, order_types, arg_order_types);
-}
-
 pair<BoundWindowFunction, unique_ptr<FunctionData>> FunctionBinder::ResolveFunction(
     shared_ptr<const WindowFunction> function_p, const FunctionBinding &binding,
     vector<unique_ptr<Expression>> &children, vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
@@ -1927,32 +1885,6 @@ FunctionBinder::BindWindowFunction(shared_ptr<const WindowFunction> function, co
 	result->GetChildrenMutable() = std::move(children);
 
 	return result;
-}
-
-unique_ptr<BoundWindowExpression>
-FunctionBinder::BindWindowFunction(const WindowFunction &function, vector<unique_ptr<Expression>> children,
-                                   vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
-                                   vector<LogicalType> &order_types, vector<LogicalType> &arg_order_types) {
-	return BindWindowFunction(make_shared_ptr<WindowFunction>(function), std::move(children), std::move(keyword_args),
-	                          order_types, arg_order_types);
-}
-
-unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(shared_ptr<const WindowFunction> function,
-                                                                     vector<unique_ptr<Expression>> children,
-                                                                     vector<LogicalType> &order_types,
-                                                                     vector<LogicalType> &arg_order_types) {
-	vector<pair<Identifier, unique_ptr<Expression>>> empty_keyword_args;
-	return BindWindowFunction(std::move(function), std::move(children), std::move(empty_keyword_args), order_types,
-	                          arg_order_types);
-}
-
-unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(const WindowFunction &function,
-                                                                     vector<unique_ptr<Expression>> children,
-                                                                     vector<LogicalType> &order_types,
-                                                                     vector<LogicalType> &arg_order_types) {
-	vector<pair<Identifier, unique_ptr<Expression>>> empty_keyword_args;
-	return BindWindowFunction(make_shared_ptr<WindowFunction>(function), std::move(children),
-	                          std::move(empty_keyword_args), order_types, arg_order_types);
 }
 
 unique_ptr<BoundWindowExpression>
