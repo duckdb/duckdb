@@ -1258,6 +1258,11 @@ static bool TryAppendDictionaryEntry(ColumnDataMetaData &meta_data, const Unifie
 		return false;
 	}
 	auto &segment = meta_data.segment;
+	if (segment.dictionary_map.find(dict_id) == segment.dictionary_map.end() && copy_count * 2 < dict_size.GetIndex()) {
+		// copying a fresh dictionary only pays off when the append covers enough of it - the factor
+		// matches the compressed string fallback gate; reusing an existing dictionary is always free
+		return false;
+	}
 	auto slot = GetOrCreateSegmentDictionary(meta_data, dict_child, dict_size.GetIndex(), dict_id);
 	if (slot == DConstants::INVALID_INDEX) {
 		return false;

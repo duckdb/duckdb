@@ -905,4 +905,131 @@ TEST_CASE("Collection sizes never shrink while appending", "[column_data_compact
 	REQUIRE(collection.GetValue(0, STANDARD_VECTOR_SIZE + 1) == Value::BIGINT(8));
 }
 
+static VectorType FirstScannedVectorType(ColumnDataCollection &collection, DataChunk &chunk) {
+	ColumnDataScanState scan_state;
+	collection.InitializeScanChunk(chunk);
+	collection.InitializeScan(scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
+	REQUIRE(collection.Scan(scan_state, chunk));
+	return chunk.data[0].GetVectorType();
+}
+
+TEST_CASE("Sparse appends over fresh dictionaries stay flat", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		// the shapes below assume full-size vectors
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	const string prefix = "a_sparse_dictionary_payload_string_value_";
+
+	// 500 appends of 3 rows, each over a fresh 1500-entry dictionary: copying a dictionary
+	// for 3 codes is a net loss, the rows must be stored flat instead
+	ColumnDataCollection collection(buffer_manager, {LogicalType::VARCHAR});
+	ColumnDataAppendState append_state;
+	collection.InitializeAppend(append_state);
+	const idx_t dict_size = 1500;
+	for (idx_t round = 0; round < 500; round++) {
+		AppendDictionaryChunk(collection, append_state, MakeStringDictionary(dict_size, prefix, false), dict_size, 3);
+	}
+	REQUIRE(collection.Count() == 1500);
+	REQUIRE(collection.GetValue(0, 0) == Value(prefix + "0"));
+	REQUIRE(collection.GetValue(0, 4) == Value(prefix + "1"));
+
+	DataChunk chunk;
+	REQUIRE(FirstScannedVectorType(collection, chunk) == VectorType::FLAT_VECTOR);
+	// the flat rows cost their string bytes plus the row slots, nowhere near a dictionary copy
+	REQUIRE(collection.SizeInBytes() < 160000);
+
+	// worst case: a single row over a full-size dictionary
+	ColumnDataCollection single(buffer_manager, {LogicalType::VARCHAR});
+	ColumnDataAppendState single_append;
+	single.InitializeAppend(single_append);
+	AppendDictionaryChunk(single, single_append, MakeStringDictionary(STANDARD_VECTOR_SIZE, prefix, false),
+	                      STANDARD_VECTOR_SIZE, 1);
+	REQUIRE(single.Count() == 1);
+	REQUIRE(single.GetValue(0, 0) == Value(prefix + "0"));
+	DataChunk single_chunk;
+	REQUIRE(FirstScannedVectorType(single, single_chunk) == VectorType::FLAT_VECTOR);
+
+	// the single dictionary row must cost the same as the same row appended flat
+	ColumnDataCollection flat_single(buffer_manager, {LogicalType::VARCHAR});
+	ColumnDataAppendState flat_single_append;
+	flat_single.InitializeAppend(flat_single_append);
+	DataChunk flat_input;
+	flat_single.InitializeScanChunk(flat_input);
+	{
+		auto writer = FlatVector::Writer<string_t>(flat_input.data[0], 1);
+		writer.WriteValue(string_t(prefix + "0"));
+	}
+	flat_input.CheckCardinality(1);
+	flat_single.Append(flat_single_append, flat_input);
+	REQUIRE(single.SizeInBytes() == flat_single.SizeInBytes());
+}
+
+TEST_CASE("Dictionary reuse bypasses the fresh-dictionary size gate", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		// the shapes below assume full-size vectors
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	const string prefix = "a_reused_dictionary_payload_string_value_";
+	const idx_t dict_size = 1500;
+	auto dictionary = MakeStringDictionary(dict_size, prefix, false);
+
+	ColumnDataCollection collection(buffer_manager, {LogicalType::VARCHAR});
+	ColumnDataAppendState append_state;
+	collection.InitializeAppend(append_state);
+	// a full-vector append qualifies and materializes the segment dictionary
+	AppendDictionaryChunk(collection, append_state, dictionary, dict_size, STANDARD_VECTOR_SIZE);
+	const auto size_after_first = collection.SizeInBytes();
+
+	// a sparse append over the same dictionary reuses it for free: only the codes are added
+	AppendDictionaryChunk(collection, append_state, dictionary, dict_size, 3);
+	REQUIRE(collection.Count() == STANDARD_VECTOR_SIZE + 3);
+	const auto sparse_delta = collection.SizeInBytes() - size_after_first;
+	REQUIRE(sparse_delta <= AlignValue(STANDARD_VECTOR_SIZE * sizeof(sel_t)) + 64);
+
+	// both chunks scan as dictionary vectors
+	ColumnDataScanState scan_state;
+	DataChunk chunk;
+	collection.InitializeScanChunk(chunk);
+	collection.InitializeScan(scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
+	REQUIRE(collection.Scan(scan_state, chunk));
+	REQUIRE(chunk.data[0].GetVectorType() == VectorType::DICTIONARY_VECTOR);
+	REQUIRE(collection.Scan(scan_state, chunk));
+	REQUIRE(chunk.data[0].GetVectorType() == VectorType::DICTIONARY_VECTOR);
+	REQUIRE(chunk.size() == 3);
+	REQUIRE(chunk.GetValue(0, 2) == Value(prefix + "2"));
+}
+
+TEST_CASE("The fresh-dictionary gate sits at twice the appended rows", "[column_data_compact]") {
+	if (STANDARD_VECTOR_SIZE < 1024) {
+		// the shapes below assume full-size vectors
+		return;
+	}
+	DuckDB db(":memory:");
+	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+	const string prefix = "a_boundary_dictionary_payload_string_value_";
+
+	// copy_count * 2 == dict_size still takes the dictionary path
+	ColumnDataCollection at_boundary(buffer_manager, {LogicalType::VARCHAR});
+	ColumnDataAppendState at_boundary_append;
+	at_boundary.InitializeAppend(at_boundary_append);
+	AppendDictionaryChunk(at_boundary, at_boundary_append, MakeStringDictionary(100, prefix, false), 100, 50);
+	DataChunk at_chunk;
+	REQUIRE(FirstScannedVectorType(at_boundary, at_chunk) == VectorType::DICTIONARY_VECTOR);
+	REQUIRE(at_chunk.size() == 50);
+
+	// one dictionary entry more falls through to the flat copy
+	ColumnDataCollection past_boundary(buffer_manager, {LogicalType::VARCHAR});
+	ColumnDataAppendState past_boundary_append;
+	past_boundary.InitializeAppend(past_boundary_append);
+	AppendDictionaryChunk(past_boundary, past_boundary_append, MakeStringDictionary(101, prefix, false), 101, 50);
+	DataChunk past_chunk;
+	REQUIRE(FirstScannedVectorType(past_boundary, past_chunk) == VectorType::FLAT_VECTOR);
+	REQUIRE(past_chunk.size() == 50);
+	REQUIRE(past_chunk.GetValue(0, 49) == Value(prefix + "49"));
+}
+
 } // namespace duckdb
