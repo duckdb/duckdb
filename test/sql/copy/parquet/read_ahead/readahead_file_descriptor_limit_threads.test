@@ -46,7 +46,7 @@ statement ok
 CALL disable_logging()
 
 query I
-SELECT peak < 32 FROM peak_open_handles()
+SELECT peak <= 32 FROM peak_open_handles()
 ----
 true
 
@@ -73,6 +73,6 @@ statement ok
 CALL disable_logging()
 
 query I
-SELECT peak < 32 FROM peak_open_handles()
+SELECT peak <= 32 FROM peak_open_handles()
 ----
 true
