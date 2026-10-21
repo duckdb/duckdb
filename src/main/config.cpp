@@ -361,6 +361,14 @@ optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const Identifi
 	return nullptr;
 }
 
+idx_t DBConfig::GetWriteBufferMemoryLimit() const {
+	lock_guard<mutex> guard(config_lock);
+	if (options.write_buffer_row_group_memory_limit.IsValid()) {
+		return options.write_buffer_row_group_memory_limit.GetIndex();
+	}
+	return options.maximum_memory / 5 / (options.maximum_threads + 1);
+}
+
 void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) {
 	SetOption(nullptr, option, value);
 }
