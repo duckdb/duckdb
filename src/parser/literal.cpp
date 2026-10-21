@@ -1,6 +1,7 @@
 #include "duckdb/parser/literal.hpp"
 
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -118,7 +119,10 @@ static Value NumberToValue(const string &val) {
 	if (try_cast_as_integer) {
 		int32_t int_value;
 		if (TryCast::Operation<string_t, int32_t>(str_val, int_value)) {
-			return Value::INTEGER(int_value);
+			// the magnitude of INT32_MIN does not fit an INTEGER, so -2147483648 is typed as BIGINT
+			if (int_value != NumericLimits<int32_t>::Minimum()) {
+				return Value::INTEGER(int_value);
+			}
 		}
 		int64_t bigint_value;
 		if (TryCast::Operation<string_t, int64_t>(str_val, bigint_value)) {
@@ -145,6 +149,11 @@ static Value NumberToValue(const string &val) {
 	    str_val.GetSize() - num_underscores < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
 		// figure out the width/scale based on the decimal position
 		auto width = NumericCast<uint8_t>(str_val.GetSize() - 1 - num_underscores);
+		// a well-formed decimal has a single '.', so its position never sits past the width; a second (e.g. trailing)
+		// dot pushes decimal_position beyond width and would underflow the scale computation below
+		if (decimal_position.GetIndex() > NumericCast<idx_t>(width) + num_integer_underscores) {
+			throw ParserException("Could not convert string \"%s\" to a decimal value", val);
+		}
 		auto scale = NumericCast<uint8_t>(width - decimal_position.GetIndex() + num_integer_underscores);
 		if (val[0] == '-') {
 			width--;

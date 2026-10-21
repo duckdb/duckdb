@@ -148,6 +148,8 @@ public:
 	void NextInternal(idx_t count);
 	//! Returns the current row position in the segment
 	idx_t GetPositionInSegment() const;
+	//! Releases the segment scan states (and the blocks they pin), including those of the child states
+	void ReleasePins();
 };
 
 enum class FetchType {
@@ -269,8 +271,6 @@ public:
 	explicit CollectionScanState(TableScanState &parent_p);
 	//! The query context for this scan
 	QueryContext context;
-	//! The current row_group we are scanning
-	optional_ptr<SegmentNode<RowGroup>> row_group;
 	//! The vector index within the row_group
 	idx_t vector_index;
 	//! The maximum row within the row group
@@ -295,8 +295,6 @@ public:
 	//! Whether the column scans of the current assignment still have to be initialized
 	bool column_scans_pending = false;
 
-	RandomEngine random;
-
 	//! The amount of tuples considered by a scan, before applying filters
 	idx_t rows_scanned = 0;
 
@@ -308,7 +306,10 @@ public:
 	const vector<StorageIndex> &GetColumnIds();
 	ScanFilterInfo &GetFilterInfo();
 	ScanSamplingInfo &GetSamplingInfo();
+	RandomEngine &GetRandomEngine();
 	TableScanOptions &GetOptions();
+	optional_ptr<SegmentNode<RowGroup>> GetRowGroup() const;
+	void SetRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group);
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentNode<RowGroup> &row_group) const;
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentLock &l, SegmentNode<RowGroup> &row_group) const;
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment() const;
@@ -324,13 +325,20 @@ public:
 	void InitializeColumnScans();
 	//! Processes the vector prepared by PrepareScanIO
 	void ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result);
+	//! Releases the row group and the blocks the column scans pin, the next assignment initializes them again
+	void ReleasePins();
 
 private:
 	//! Registers the remaining assignment's scan I/O, returning the async tasks that execute it
 	vector<unique_ptr<AsyncTask>> RegisterAssignmentIO();
 
 private:
+	//! The segment node is the traversal cursor, while the shared pointer pins its replaceable payload
+	optional_ptr<SegmentNode<RowGroup>> row_group;
+	shared_ptr<RowGroup> pinned_row_group;
 	TableScanState &parent;
+	//! The random engine for system sampling
+	unique_ptr<RandomEngine> random;
 };
 
 struct ScanSamplingInfo {
@@ -351,15 +359,6 @@ struct TableScanOptions {
 	bool force_fetch_row = false;
 };
 
-class CheckpointLock {
-public:
-	explicit CheckpointLock(unique_ptr<StorageLockKey> lock_p) : lock(std::move(lock_p)) {
-	}
-
-private:
-	unique_ptr<StorageLockKey> lock;
-};
-
 class TableScanState {
 public:
 	TableScanState();
@@ -371,8 +370,6 @@ public:
 	CollectionScanState local_state;
 	//! Options for scanning
 	TableScanOptions options;
-	//! Shared lock over the checkpoint to prevent checkpoints while reading
-	shared_ptr<CheckpointLock> checkpoint_lock;
 	//! Filter info
 	ScanFilterInfo filters;
 	//! Sampling info
@@ -392,6 +389,8 @@ public:
 	void InitializeColumnScans();
 	//! Rows scanned from persistent and transaction-local storage
 	idx_t RowsScanned() const;
+	//! Releases what the scans of both storages pin, for a state that is kept around between assignments
+	void ReleasePins();
 
 private:
 	//! The column identifiers of the scan
@@ -412,7 +411,8 @@ struct ParallelCollectionScanState {
 	idx_t vector_index;
 	idx_t max_row;
 	idx_t batch_index;
-	atomic<idx_t> processed_rows;
+	//! Rows of assignments that were skipped entirely (e.g. by zonemaps) without being handed out
+	atomic<idx_t> skipped_rows;
 	optional_idx row_number_base;
 	mutex lock;
 
@@ -432,8 +432,6 @@ struct ParallelTableScanState {
 	ParallelCollectionScanState scan_state;
 	//! Parallel scan state for the transaction-local state
 	ParallelCollectionScanState local_state;
-	//! Shared lock over the checkpoint to prevent checkpoints while reading
-	shared_ptr<CheckpointLock> checkpoint_lock;
 };
 
 struct PrefetchState {

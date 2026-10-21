@@ -6,6 +6,7 @@
 #include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
+#include "duckdb/common/sorting/buffered_merge.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/parallel/parallel_destroy_task.hpp"
@@ -151,6 +152,8 @@ private:
 	//! Variables for scanning
 	idx_t merged_partition_count;
 	idx_t merged_partition_index;
+	//! Rows of the current partition that were added to the global progress
+	idx_t progress_scanned;
 
 	//! For scanning
 	Vector sort_key_pointers;
@@ -168,7 +171,7 @@ public:
 	      num_partitions((merger.total_count + (merger.partition_size - 1)) / merger.partition_size),
 	      iterator_state_type(GetBlockIteratorStateType(merger.external)),
 	      sort_key_type(merger.sort.key_layout->GetSortKeyType()), next_partition_idx(0), total_scanned(0),
-	      destroy_partition_idx(0) {
+	      progress_scanned(0), destroy_partition_idx(0) {
 		// Initialize partitions
 		partitions.resize(num_partitions);
 		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
@@ -222,18 +225,17 @@ public:
 			return;
 		}
 
-		// Compute average number of tuples per partition to destroy
+		// Estimate the number of tuples eligible for destruction
 		const auto total_tuples_to_destroy = (end_partition_idx - destroy_partition_idx) * merger.partition_size;
-		const auto tuples_to_destroy_per_partition = total_tuples_to_destroy / num_partitions;
 
 		// Compute max tuples per block
 		const auto &run = *merger.sorted_runs[0];
 		const auto tuples_per_block =
 		    run.payload_data ? run.payload_data->TuplesPerBlock() : run.key_data->TuplesPerBlock();
 
-		// Compute number of blocks we can destroy per partition
-		const auto blocks_to_destroy_per_partition = tuples_to_destroy_per_partition / tuples_per_block;
-		if (blocks_to_destroy_per_partition == 0) {
+		// Batch destruction across input runs, capped by the number of output partitions
+		const auto batching_divisor = MinValue(num_runs, num_partitions);
+		if (total_tuples_to_destroy / batching_divisor < tuples_per_block) {
 			return;
 		}
 
@@ -277,6 +279,8 @@ public:
 	idx_t next_partition_idx;
 	vector<unique_ptr<SortedRunMergePartition>> partitions;
 	atomic<idx_t> total_scanned;
+	//! Rows scanned so far, updated per chunk (for progress)
+	atomic<idx_t> progress_scanned;
 
 	mutex destroy_lock;
 	idx_t destroy_partition_idx;
@@ -292,7 +296,8 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
     : iterator_state_type(gstate.iterator_state_type), sort_key_type(gstate.sort_key_type),
       task(SortedRunMergerTask::FINISHED), run_boundaries(gstate.num_runs),
       merged_partition_count(DConstants::INVALID_INDEX), merged_partition_index(DConstants::INVALID_INDEX),
-      sort_key_pointers(LogicalType::POINTER), sorted_run_scan_state(gstate.context, gstate.merger.sort) {
+      progress_scanned(0), sort_key_pointers(LogicalType::POINTER),
+      sorted_run_scan_state(gstate.context, gstate.merger.sort) {
 	for (const auto &run : gstate.merger.sorted_runs) {
 		auto &key_data = *run->key_data;
 		switch (iterator_state_type) {
@@ -351,10 +356,14 @@ SourceResultType SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalSta
 	case SortedRunMergerTask::SCAN_PARTITION:
 		if (chunk) {
 			ScanPartition(gstate, *chunk);
+			gstate.progress_scanned.fetch_add(chunk->size(), std::memory_order_relaxed);
+			progress_scanned += chunk->size();
 		} else {
 			MaterializePartition(gstate);
 		}
 		if (!chunk || chunk->size() == 0) {
+			gstate.progress_scanned.fetch_add(merged_partition_count - progress_scanned, std::memory_order_relaxed);
+			progress_scanned = 0;
 			gstate.DestroyScannedData();
 			gstate.partitions[partition_idx.GetIndex()]->scanned = true;
 			//	fetch_add returns the _previous_ value!
@@ -646,8 +655,12 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 	static const auto fallback = [](SORT_KEY *begin, SORT_KEY *end) {
 		duckdb_pdqsort::pdqsort_branchless(begin, end);
 	};
+	// the run merges need a scratch buffer of up to half the keys - take it from the buffer allocator so that it is
+	// counted against the memory limit instead of coming from operator new inside std::inplace_merge
+	SortMergeBuffer merge_buffer(BufferAllocator::Get(gstate.context), merged_partition_count, sizeof(SORT_KEY));
+	const BufferedMergePolicy<SORT_KEY> merge(merge_buffer);
 	duckdb_vergesort::vergesort(merged_partition_keys, merged_partition_keys + merged_partition_count,
-	                            std::less<SORT_KEY>(), fallback);
+	                            std::less<SORT_KEY>(), fallback, merge);
 }
 
 void SortedRunMergerLocalState::ScanPartition(SortedRunMergerGlobalState &gstate, DataChunk &chunk) {
@@ -824,10 +837,15 @@ OperatorPartitionData SortedRunMerger::GetPartitionData(ExecutionContext &, Data
 ProgressData SortedRunMerger::GetProgress(ClientContext &, GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<SortedRunMergerGlobalState>();
 	ProgressData res;
-	res.done = static_cast<double>(gstate.total_scanned);
+	res.done = static_cast<double>(MinValue<idx_t>(gstate.progress_scanned, total_count));
 	res.total = static_cast<double>(total_count);
 	res.invalid = false;
 	return res;
+}
+
+bool SortedRunMerger::IsFinished(GlobalSourceState &gstate_p) const {
+	auto &gstate = gstate_p.Cast<SortedRunMergerGlobalState>();
+	return gstate.total_scanned == total_count;
 }
 
 //===--------------------------------------------------------------------===//
