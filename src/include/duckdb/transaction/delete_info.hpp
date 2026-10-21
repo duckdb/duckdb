@@ -47,6 +47,24 @@ struct DeleteInfo {
 	transaction_t *GetPreviousIds() {
 		return const_cast<transaction_t *>(const_cast<const DeleteInfo *>(this)->GetPreviousIds());
 	}
+	//! Whether the rows are 0, 1, 2, ..., count - 1, which an entry does not store
+	static bool IsConsecutive(const uint16_t rows[], idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			if (rows[i] != i) {
+				return false;
+			}
+		}
+		return true;
+	}
+	//! How many of the previous ids an entry stores: none (all NOT_DELETED_ID), one (all equal), or all
+	static idx_t GetPreviousIdCount(const transaction_t previous_ids[], idx_t count) {
+		for (idx_t i = 1; i < count; i++) {
+			if (previous_ids[i] != previous_ids[0]) {
+				return count;
+			}
+		}
+		return previous_ids[0] == NOT_DELETED_ID ? 0 : 1;
+	}
 	//! The size of the entry (an upper bound, as the rows start before the end of the struct)
 	static idx_t GetAllocationSize(idx_t count, bool is_consecutive, idx_t previous_id_count) {
 		return sizeof(DeleteInfo) + (is_consecutive ? 0 : count * sizeof(uint16_t)) +

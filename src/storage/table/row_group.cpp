@@ -25,6 +25,7 @@
 #include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/table/row_id_column_data.hpp"
@@ -2189,8 +2190,10 @@ idx_t RowGroup::WriteRows(TransactionData transaction, DuckTableEntry &table_ent
 			                                   table_entry, version_info, vector_idx, rows, written, base_row,
 			                                   previous_ids);
 		} catch (...) {
-			// without an undo entry, nothing would restore the ids
-			version_info.RollbackWrite(vector_idx, rows, written, previous_ids, written);
+			// without an undo entry, nothing would restore the ids - restore them as the entry would have
+			auto is_consecutive = DeleteInfo::IsConsecutive(rows, written);
+			version_info.RollbackWrite(vector_idx, is_consecutive ? nullptr : rows, written, previous_ids,
+			                           DeleteInfo::GetPreviousIdCount(previous_ids, written));
 			throw;
 		}
 	}

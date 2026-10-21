@@ -10,7 +10,6 @@ CREATE TABLE integers AS FROM range(10000000) t(i);
 statement ok
 SET threads=1
 
-# the per-row delete ids of the vectors are 16 KB each, ~80MB for 10M rows
 statement ok
 SET memory_limit='8MB';
 
@@ -22,10 +21,17 @@ SELECT COUNT(*), SUM(i) FROM integers
 ----
 10000000	49999995000000
 
+# the first delete of a vector keeps its rows in the vector's bitmask
 query I
 DELETE FROM integers WHERE i%2=0;
 ----
 5000000
+
+# a further delete needs the per-row delete ids of the vectors, 16 KB each, ~80MB for 10M rows
+query I
+DELETE FROM integers WHERE i%3=0;
+----
+1666667
 
 query II con1
 SELECT COUNT(*), SUM(i) FROM integers
@@ -35,7 +41,7 @@ SELECT COUNT(*), SUM(i) FROM integers
 query II
 SELECT COUNT(*), SUM(i) FROM integers
 ----
-5000000	25000000000000
+3333333	16666663333333
 
 statement ok con1
 ROLLBACK
@@ -45,22 +51,12 @@ statement ok
 BEGIN
 
 query I
-DELETE FROM integers WHERE i%3=0;
+DELETE FROM integers WHERE i%5=0;
 ----
-1666667
+666667
 
 statement ok
 ROLLBACK
-
-query II
-SELECT COUNT(*), SUM(i) FROM integers
-----
-5000000	25000000000000
-
-query I
-DELETE FROM integers WHERE i%3=0;
-----
-1666667
 
 query II
 SELECT COUNT(*), SUM(i) FROM integers

@@ -29,16 +29,16 @@ SELECT v FROM t WHERE id = {x} % 32
 statement ok
 SELECT sum(i) FROM range(20000) r(i)
 
-# threads 0-5 increment the row, alternately in place and as delete + insert (LIST column)
+# threads 0-5 increment the row, the even ones in place and the odd ones as delete + insert (LIST column)
 onlyif threadid<6
 statement maybe
-UPDATE t SET v = v + 1 WHERE id = {x} % 32 AND {x} % 2 = 0
+UPDATE t SET v = v + 1 WHERE id = {x} % 32 AND {threadid} % 2 = 0
 ----
 Conflict on update
 
 onlyif threadid<6
 statement maybe
-UPDATE t SET v = v + 1, tags = ['x'] WHERE id = {x} % 32 AND {x} % 2 = 1
+UPDATE t SET v = v + 1, tags = ['x'] WHERE id = {x} % 32 AND {threadid} % 2 = 1
 ----
 <REGEX>:.*(Conflict on tuple deletion|aborted).*
 
