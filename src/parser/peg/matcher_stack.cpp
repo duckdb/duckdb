@@ -114,12 +114,9 @@ public:
 				if (chain && matcher.get().GetPreparedChainIndex() + 1 < chain->lists.size() &&
 				    (!chain->has_optional_prefix ||
 				     (allow_empty_prefix && !chain->prefix_first_set.MightMatch(list_state)))) {
-					auto &last = chain->lists.back().get();
-					if (!last.first_set.MightMatch(list_state)) {
-						break;
-					}
+					// the dispatched list's lookahead covers its chain members, which fail on entry otherwise
 					pending = state.context.process_allocator.Make<PendingList>(matcher.get(), pending);
-					matcher = last;
+					matcher = chain->lists.back().get();
 					continue;
 				}
 
@@ -130,7 +127,7 @@ public:
 				         list_state))) {
 					break;
 				}
-				if (!child || !child->first_set.MightMatch(list_state)) {
+				if (!child) {
 					break;
 				}
 				pending = state.context.process_allocator.Make<PendingList>(matcher.get(), pending);
@@ -183,8 +180,7 @@ public:
 		auto choice = matcher.get().GetFirstChoice();
 		auto current = list_state.token_iterator.Current();
 		if (!choice || !state.BuildParseResult() ||
-		    (current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) ||
-		    !choice->first_set.MightMatch(list_state)) {
+		    (current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE)) {
 			return;
 		}
 		first_choice = choice;
