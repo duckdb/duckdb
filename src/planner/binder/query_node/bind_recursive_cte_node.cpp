@@ -53,7 +53,6 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 	// Create temporary binder to bind expressions
 	auto aggregate_binder = Binder::CreateBinder(context, nullptr);
-	ErrorData error;
 	FunctionBinder function_binder(*aggregate_binder);
 	aggregate_binder->bind_context.AddGenericBinding(setop_index, statement.ctename, result.names, result.types);
 	ExpressionBinder expression_binder(*aggregate_binder, context);
@@ -153,9 +152,9 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			// Find the best matching aggregate function
 			auto best_function_idx =
-			    FunctionBinder::SelectFunction(context, func.name, func.functions, aggregation_input_types, error);
+			    FunctionBinder::SelectFunction(context, func.name, func.functions, aggregation_input_types);
 			if (!best_function_idx.IsValid()) {
-				throw BinderException("No matching aggregate function\n%s", error.Message());
+				throw BinderException("No matching aggregate function\n%s", best_function_idx.GetError().Message());
 			}
 			// Found a matching function, bind it as an aggregate
 			const auto &best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());

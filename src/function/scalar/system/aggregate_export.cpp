@@ -247,12 +247,11 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 	}
 	auto &aggr_entry = func.Cast<AggregateFunctionCatalogEntry>();
 
-	ErrorData error;
 	FunctionBinder function_binder(context);
-	auto best_function =
-	    FunctionBinder::SelectFunction(context, aggr_entry.name, aggr_entry.functions, argument_types, error);
+	auto best_function = FunctionBinder::SelectFunction(context, aggr_entry.name, aggr_entry.functions, argument_types);
 	if (!best_function.IsValid()) {
-		throw BinderException("Could not re-bind exported aggregate %s: %s", function_name, error.Message());
+		throw BinderException("Could not re-bind exported aggregate %s: %s", function_name,
+		                      best_function.GetError().Message());
 	}
 	const auto &aggr = aggr_entry.functions.GetFunctionByOffset(best_function.GetIndex());
 	const auto &signature = aggr->GetSignature();

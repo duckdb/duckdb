@@ -38,8 +38,7 @@ shared_ptr<const AggregateFunction> TryGetBuiltinAggregateFunction(ClientContext
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(context, BuiltinName(catalog, name));
 
-	ErrorData error;
-	auto index = FunctionBinder::SelectFunction(context, entry.functions.name, entry.functions, arguments, error);
+	auto index = FunctionBinder::SelectFunction(context, entry.functions.name, entry.functions, arguments);
 	if (!index.IsValid()) {
 		return nullptr;
 	}

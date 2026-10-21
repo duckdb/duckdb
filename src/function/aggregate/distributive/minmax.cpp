@@ -347,10 +347,10 @@ shared_ptr<const AggregateFunction> GetCollatedMinMaxFunction(ClientContext &con
 		    name);
 	}
 
-	ErrorData error;
-	auto best_function = FunctionBinder::SelectFunction(context, func->name, func->functions, types, error);
+	auto best_function = FunctionBinder::SelectFunction(context, func->name, func->functions, types);
 	if (!best_function.IsValid()) {
-		throw BinderException("Fail to find corresponding function for collation min/max: %s", error.Message());
+		throw BinderException("Fail to find corresponding function for collation min/max: %s",
+		                      best_function.GetError().Message());
 	}
 	return func->functions.GetFunctionByOffset(best_function.GetIndex());
 }

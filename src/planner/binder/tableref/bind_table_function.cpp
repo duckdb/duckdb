@@ -483,12 +483,13 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	vector<Value> parameters;
 	named_argument_map_t named_parameters;
 	auto best_function_idx =
-	    table_in_out ? FunctionBinder::SelectFunction(context, function.name, function.functions, subquery.types, error)
+	    table_in_out ? FunctionBinder::SelectFunction(context, function.name, function.functions, subquery.types)
 	                 : function_binder.BindFunctionArguments(function.name, function.functions, positional_arguments,
-	                                                         named_arguments, parameters, named_parameters, error);
+	                                                         named_arguments, parameters, named_parameters);
 	if (!best_function_idx.IsValid()) {
-		error.AddQueryLocation(ref);
-		error.Throw();
+		auto selection_error = best_function_idx.GetError();
+		selection_error.AddQueryLocation(ref);
+		selection_error.Throw();
 	}
 	// copied out of the set: BindTableFunctionInternal fills in the bound return types
 	BoundTableFunction table_function(function.functions.GetFunctionByOffset(best_function_idx.GetIndex()));

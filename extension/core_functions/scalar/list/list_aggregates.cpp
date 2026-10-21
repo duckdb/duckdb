@@ -460,7 +460,6 @@ unique_ptr<BoundAggregateExpression> BindListAggregate(ClientContext &context, L
 	auto &func = GetListAggregateEntry(context, function_name);
 
 	// find a matching aggregate function
-	ErrorData error;
 	vector<LogicalType> types;
 	types.push_back(child_type);
 	// push any extra arguments into the type list
@@ -469,9 +468,9 @@ unique_ptr<BoundAggregateExpression> BindListAggregate(ClientContext &context, L
 	}
 
 	FunctionBinder function_binder(context);
-	auto best_function_idx = FunctionBinder::SelectFunction(context, func.name, func.functions, types, error);
+	auto best_function_idx = FunctionBinder::SelectFunction(context, func.name, func.functions, types);
 	if (!best_function_idx.IsValid()) {
-		throw BinderException("No matching aggregate function\n%s", error.Message());
+		throw BinderException("No matching aggregate function\n%s", best_function_idx.GetError().Message());
 	}
 
 	// create the child expression and its type - it refers to the list elements

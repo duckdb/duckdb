@@ -252,9 +252,8 @@ LogicalType TypeConstructorSet::Bind(optional_ptr<ClientContext> context, const 
 
 	// The candidates are selected with the regular function machinery, but reported in terms of types - a type is
 	// not a function, and "no function matches" reads as a mistake rather than as a bad type.
-	ErrorData error;
-	auto candidates = FunctionBinder::Candidates(context, name, *this, positional, named, error);
-	if (candidates.empty()) {
+	auto selection = FunctionBinder::SelectFunction(context, name, *this, positional, named);
+	if (selection.GetResult() == FunctionSelectionResult::NO_MATCH) {
 		vector<idx_t> all;
 		for (idx_t i = 0; i < functions.size(); i++) {
 			all.push_back(i);
@@ -266,13 +265,19 @@ LogicalType TypeConstructorSet::Bind(optional_ptr<ClientContext> context, const 
 		throw BinderException(query_location, "Type %s does not accept type parameters %s%s", name,
 		                      ArgumentsToString(arguments), CandidateList(name, functions, all));
 	}
-	if (candidates.size() > 1) {
+	if (selection.GetResult() == FunctionSelectionResult::AMBIGUOUS) {
+		vector<idx_t> candidates;
+		for (auto &candidate : selection.GetCandidates()) {
+			if (candidate.cost == selection.GetCandidates()[0].cost) {
+				candidates.push_back(candidate.GetIndex());
+			}
+		}
 		throw BinderException(query_location,
 		                      "Could not choose a definition of type %s for the type parameters %s. In order to "
 		                      "select one, please add explicit type casts.%s",
 		                      name, ArgumentsToString(arguments), CandidateList(name, functions, candidates));
 	}
-	auto &constructor = *GetFunctionByOffset(candidates[0]);
+	auto &constructor = *GetFunctionByOffset(selection.GetIndex());
 
 	auto modifiers = NormalizeArguments(name, constructor, arguments, query_location);
 	BindLogicalTypeInput input {context, base_type, modifiers, query_location};

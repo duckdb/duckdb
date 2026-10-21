@@ -377,12 +377,11 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 		                                     OnEntryNotFound::THROW_EXCEPTION);
 		auto &func = entry->Cast<WindowFunctionCatalogEntry>();
 
-		ErrorData error_win;
-		auto best = FunctionBinder::SelectFunction(binder->context, func.name, func.functions, arguments, error_win);
-		FunctionBinder function_binder(*binder);
+		auto best = FunctionBinder::SelectFunction(binder->context, func.name, func.functions, arguments);
 		if (!best.IsValid()) {
-			error_win.Throw();
+			best.GetError().Throw();
 		}
+		FunctionBinder function_binder(*binder);
 
 		const auto &win_func = func.functions.GetFunctionByOffset(best.GetIndex());
 
