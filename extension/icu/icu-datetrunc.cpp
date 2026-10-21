@@ -16,7 +16,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 			DatePartSpecifier part;
 			if (TryGetDatePartSpecifier(part_value->GetValue<string>(), part) &&
 			    (part == DatePartSpecifier::DECADE || part == DatePartSpecifier::CENTURY ||
-			     part == DatePartSpecifier::MILLENNIUM)) {
+			     part == DatePartSpecifier::MILLENNIUM || part == DatePartSpecifier::ERA)) {
 				// date_trunc is not monotone for these parts because ICU years skip year 0 at the BC/AD boundary
 				input.GetBoundFunction().SetArgProperties({});
 			}

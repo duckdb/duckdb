@@ -26,6 +26,24 @@ bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionExpressio
 	                                             ExpressionExecutor::MAX_FOLDED_NESTED_ELEMENTS);
 }
 
+// Whether [lo, hi] holds -infinity and another value. The smallest finite DATE or TIMESTAMP sorts below -infinity.
+bool HoldsNegativeInfinity(const Value &lo, const Value &hi) {
+	switch (lo.type().id()) {
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS: {
+		auto ninfinity = Value::NegativeInfinity(lo.type());
+		return lo < hi && lo <= ninfinity && ninfinity <= hi;
+	}
+	default:
+		return false;
+	}
+}
+
 // Equal bounds need not imply identical inputs for certain types, so we skip this optimization for those values.
 // Floating-point bounds only lose information for the sign of zero.
 bool CanInferConstantFromNumericBounds(const Value &value) {
@@ -205,6 +223,18 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateMonotoneBounds(ClientC
 		result.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	}
 	return result.ToUnique();
+}
+
+unique_ptr<BaseStatistics> StatisticsPropagator::PropagateFiniteMonotoneBounds(ClientContext &context,
+                                                                               FunctionStatisticsInput &input) {
+	// -infinity gives NULL, and it can lie between the bounds of an argument
+	for (auto &stats : input.child_stats) {
+		if (stats.GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(stats) &&
+		    HoldsNegativeInfinity(NumericStats::Min(stats), NumericStats::Max(stats))) {
+			return nullptr;
+		}
+	}
+	return PropagateMonotoneBounds(context, input.expr, input.child_stats);
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFunctionExpression &func,
