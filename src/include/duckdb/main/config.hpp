@@ -397,7 +397,7 @@ public:
 	DUCKDB_API const HTTPTransportManager &GetHTTPTransportManager() const;
 
 private:
-	mutable mutex config_lock;
+	mutable std::recursive_mutex config_lock;
 	//! Guards allowed_paths and allowed_directories, which a running instance can extend while files are being opened
 	mutable mutex allowed_paths_lock;
 	//! Guards disabled_optimizers, which can be changed while other connections plan queries
