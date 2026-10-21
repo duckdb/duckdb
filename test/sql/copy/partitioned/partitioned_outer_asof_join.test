@@ -4,6 +4,10 @@
 
 require parquet
 
+# The deadlock does not depend on the vector size, but with tiny vectors the 1M-row tables below
+# do not fit the 500MB memory limit (STANDARD_VECTOR_SIZE=2 runs out of memory in the first join)
+require vector_size 2048
+
 statement ok
 SET threads=4;
 
