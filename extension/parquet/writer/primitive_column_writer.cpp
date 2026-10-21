@@ -521,7 +521,6 @@ idx_t PrimitiveColumnWriter::DictionarySize(PrimitiveColumnWriterState &state) {
 void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, unique_ptr<MemoryStream> temp_writer,
                                             idx_t row_count) {
 	D_ASSERT(temp_writer);
-	D_ASSERT(temp_writer->GetPosition() > 0);
 
 	auto write_info = CreateDictionaryPageWriteInformation(temp_writer->GetPosition(), row_count);
 	write_info.temp_writer = std::move(temp_writer);
