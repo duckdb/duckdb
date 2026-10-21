@@ -10,8 +10,12 @@ namespace duckdb {
 
 namespace {
 
-//! A hash aggregate discards the order of its input unless one of its aggregates reads the rows in order
+//! A hash aggregate sinks in parallel, so the input order never reaches its aggregates; an ungrouped aggregate sinks in
+//! order when one of its aggregates reads the rows in order
 bool AggregateDiscardsOrder(const LogicalAggregate &aggr) {
+	if (!aggr.groups.empty()) {
+		return true;
+	}
 	for (auto &expr : aggr.expressions) {
 		auto &bound = expr->Cast<BoundAggregateExpression>();
 		if (bound.GetOrderBys()) {

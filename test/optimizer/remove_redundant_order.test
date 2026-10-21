@@ -5,7 +5,7 @@
 statement ok
 CREATE TABLE t AS SELECT range % 10 AS g, range AS v FROM range(1000) ORDER BY hash(range);
 
-# a hash aggregate over order-insensitive aggregates discards the order of its input
+# a hash aggregate discards the order of its input
 query II
 EXPLAIN SELECT g, count(*), max(v) FROM (SELECT g, v FROM t ORDER BY v) GROUP BY g;
 ----
@@ -48,7 +48,7 @@ EXPLAIN SELECT count(*) FROM (SELECT * FROM (SELECT * FROM t ORDER BY v) ORDER B
 ----
 physical_plan	<!REGEX>:.*Order By.*
 
-# an order-dependent aggregate reads its input in order: the sort stays
+# an ungrouped aggregate with an order-dependent function sinks its input in order: the sort stays
 query II
 EXPLAIN SELECT first(v) FROM (SELECT v FROM t ORDER BY v DESC);
 ----
@@ -75,14 +75,15 @@ SELECT string_agg(v, ',' ORDER BY v) FROM (SELECT v FROM t WHERE v < 5 ORDER BY 
 ----
 0,1,2,3,4
 
-# a single order-dependent aggregate keeps the sort for the whole group by
+# a hash aggregate sinks in parallel, so its aggregates never see the input order: the sort goes even for first()
 query II
 EXPLAIN SELECT g, max(v), first(v) FROM (SELECT g, v FROM t ORDER BY v DESC) GROUP BY g;
 ----
-physical_plan	<REGEX>:.*Order By.*
+physical_plan	<!REGEX>:.*Order By.*
 
+# an ORDER BY inside the aggregate is the way to order its input
 query III
-SELECT g, max(v), first(v) FROM (SELECT g, v FROM t ORDER BY v DESC) GROUP BY g ORDER BY g LIMIT 3;
+SELECT g, max(v), first(v ORDER BY v DESC) FROM (SELECT g, v FROM t ORDER BY v DESC) GROUP BY g ORDER BY g LIMIT 3;
 ----
 0	990	990
 1	991	991
