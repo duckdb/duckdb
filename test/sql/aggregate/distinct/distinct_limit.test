@@ -128,8 +128,9 @@ EXPLAIN SELECT DISTINCT i FROM range(100000) t(i) LIMIT 100000
 physical_plan	<REGEX>:.*LIMITED_DISTINCT.*
 
 # EXPLAIN: GROUP BY (no aggs) + LIMIT shows LIMITED_DISTINCT
+# (a group key with a small known range selects the perfect hash aggregate instead)
 query II
-EXPLAIN SELECT i % 100 FROM range(1000000) t(i) GROUP BY 1 LIMIT 10
+EXPLAIN SELECT i % 100000 FROM range(1000000) t(i) GROUP BY 1 LIMIT 10
 ----
 physical_plan	<REGEX>:.*LIMITED_DISTINCT.*
 
