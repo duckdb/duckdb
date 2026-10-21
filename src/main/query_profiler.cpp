@@ -4,7 +4,6 @@
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/tree_renderer/base_tree_renderer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
@@ -251,10 +250,10 @@ void QueryProfiler::EndQuery() {
 	if (emit_output) {
 		auto save_location = GetSaveLocation();
 		if (save_location.empty()) {
-			// print directly through the renderer's print sink
+			// print directly through the renderer's print sink, the blank line that separates consecutive profiles
+			// included: a pluggable renderer (ProfilerExtension) whose sink keeps the output elsewhere prints nothing
 			auto renderer = GetRenderer();
-			PrintProfilerOutput(renderer.get());
-			Printer::Print("\n");
+			PrintProfilerOutput(renderer.get(), "\n\n");
 		} else {
 			string tree = ToString();
 			WriteToFile(save_location.c_str(), tree);
@@ -391,7 +390,7 @@ string QueryProfiler::RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) 
 	return ss.str();
 }
 
-void QueryProfiler::PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) const {
+void QueryProfiler::PrintProfilerOutput(optional_ptr<TreeRenderer> renderer, const string &trailer) const {
 	if (!renderer) {
 		// "no_output" format: nothing is rendered, enabled or not
 		return;
@@ -404,6 +403,7 @@ void QueryProfiler::PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) con
 	}
 	renderer->RenderProfiler(*this, *sink);
 	renderer->Finish();
+	*sink << trailer;
 }
 
 void QueryProfiler::RenderProfilingNodeTree(TreeRenderer &renderer, BaseTreeRenderer &ss) const {

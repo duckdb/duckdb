@@ -179,8 +179,9 @@ private:
 	//! case. Used for the programmatic / string paths.
 	string RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
 	//! Print the profiler output directly via the renderer's print sink (nullptr prints nothing), handling the
-	//! disabled case. Only used on the terminal-print paths.
-	void PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
+	//! disabled case, followed by `trailer`. Only used on the terminal-print paths; everything they print goes
+	//! through the sink, so a renderer whose sink keeps or discards the output decides what is printed.
+	void PrintProfilerOutput(optional_ptr<TreeRenderer> renderer, const string &trailer = "") const;
 
 public:
 	//! Provides access to the root of the query tree, but ensures there are no concurrent modifications
