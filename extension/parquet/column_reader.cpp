@@ -664,11 +664,11 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 
 		auto res = duckdb_brotli::BrotliDecoderDecompressStream(state, &src_size_size_t, &src, &dst_size_size_t, &dst,
 		                                                        &total_out);
+		duckdb_brotli::BrotliDecoderDestroyInstance(state);
 		if (res != duckdb_brotli::BROTLI_DECODER_RESULT_SUCCESS) {
 			throw InvalidInputException("Failed to read file \"%s\": Brotli Decompression failure",
 			                            Reader().GetFileName());
 		}
-		duckdb_brotli::BrotliDecoderDestroyInstance(state);
 		break;
 	}
 
