@@ -388,6 +388,14 @@ bool MatcherFirstSet::MightMatchTail(const MatcherSequenceCheck &check, MatchSta
 		}
 		switch (TokenBracket(*token)) {
 		case BracketKind::OPEN:
+			if (depth == 0 && check.bracket_ends_prefix) {
+				// the prefix consumes no brackets: this one has to start the element
+				auto literal_id = iterator.PeekLiteralInfo(*table, ahead).LiteralId();
+				if (literal_id && check.required.HasLiteral(literal_id)) {
+					return true;
+				}
+				return RejectTail(state, iterator.Position() + ahead);
+			}
 			depth++;
 			continue;
 		case BracketKind::CLOSE:

@@ -51,11 +51,17 @@ static bool IsCompositeMatcher(const Matcher &matcher) {
 struct ConsumedTokens {
 	MatcherTokenSet tokens;
 	bool safe = true;
+	//! the tokens include balanced bracket pairs, which the tail scan skips
+	bool brackets = false;
 
 	bool Merge(const ConsumedTokens &other) {
 		bool changed = tokens.MergeTokens(other.tokens);
 		if (safe && !other.safe) {
 			safe = false;
+			changed = true;
+		}
+		if (!brackets && other.brackets) {
+			brackets = true;
 			changed = true;
 		}
 		return changed;
@@ -119,7 +125,7 @@ private:
 	bool AnalyzeSequence(const vector<idx_t> &children, idx_t begin, idx_t end, ConsumedTokens &result) const;
 	bool Update(idx_t node_index);
 	//! No token can be consumed by the prefix and start the element
-	bool Disjoint(const MatcherTokenSet &alphabet, const MatcherTokenSet &required) const;
+	bool Disjoint(const ConsumedTokens &prefix, const MatcherTokenSet &required) const;
 
 private:
 	const GrammarLiteralTable &table;
@@ -263,6 +269,10 @@ bool SequenceCheckAnalysis::AnalyzeSequence(const vector<idx_t> &children, idx_t
 				changed |= result.MarkUnsafe();
 			}
 		}
+		if (!result.brackets) {
+			result.brackets = true;
+			changed = true;
+		}
 		i = close + 1;
 	}
 	return changed;
@@ -338,7 +348,8 @@ bool SequenceCheckAnalysis::Update(idx_t node_index) {
 	return changed;
 }
 
-bool SequenceCheckAnalysis::Disjoint(const MatcherTokenSet &alphabet, const MatcherTokenSet &required) const {
+bool SequenceCheckAnalysis::Disjoint(const ConsumedTokens &prefix, const MatcherTokenSet &required) const {
+	auto &alphabet = prefix.tokens;
 	// the classes the tokenizer assigns, so that a class in one set cannot share a token with a class in the other
 	static constexpr uint8_t TOKEN_CLASSES[] = {
 	    MatcherTokenClass::WORD,     MatcherTokenClass::WORD | MatcherTokenClass::IDENTIFIER,
@@ -352,8 +363,10 @@ bool SequenceCheckAnalysis::Disjoint(const MatcherTokenSet &alphabet, const Matc
 	bool disjoint = true;
 	ForEachLiteralId(required, [&](idx_t literal_id) {
 		idx_t pair;
+		auto bracket = BracketLiteral(literal_id, pair);
+		// the scan skips bracket pairs the prefix consumes, so a required bracket is only found when it has none
 		if (alphabet.HasLiteral(literal_id) || (literal_classes[literal_id] & alphabet.class_mask) ||
-		    BracketLiteral(literal_id, pair) != TailBracket::NONE) {
+		    bracket == TailBracket::CLOSE || (bracket == TailBracket::OPEN && prefix.brackets)) {
 			disjoint = false;
 		}
 	});
@@ -406,11 +419,12 @@ vector<pair<reference<ListMatcher>, unique_ptr<MatcherSequenceCheck>>> SequenceC
 			}
 			ConsumedTokens prefix;
 			AnalyzeSequence(children, 0, i, prefix);
-			if (!prefix.safe || !Disjoint(prefix.tokens, element_first)) {
+			if (!prefix.safe || !Disjoint(prefix, element_first)) {
 				continue;
 			}
 			auto check = make_uniq<MatcherSequenceCheck>();
 			check->has_tail = true;
+			check->bracket_ends_prefix = !prefix.brackets;
 			check->alphabet = std::move(prefix.tokens);
 			check->required = static_cast<const MatcherTokenSet &>(element_first);
 			sequence_checks.emplace_back(matcher.Cast<ListMatcher>(), std::move(check));
