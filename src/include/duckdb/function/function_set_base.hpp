@@ -12,8 +12,18 @@
 
 namespace duckdb {
 
+//! The overloads of a function set, regardless of the kind of function - overload selection only needs their
+//! signatures
+class BaseFunctionSet {
+public:
+	virtual ~BaseFunctionSet() {
+	}
+	virtual auto GetOverload(idx_t offset) const -> const SimpleFunction & = 0;
+	virtual auto GetOverloadCount() const -> idx_t = 0;
+};
+
 template <class T>
-class FunctionSet {
+class FunctionSet : public BaseFunctionSet {
 public:
 	explicit FunctionSet(Identifier name) : name(std::move(name)) { // NOLINT
 	}
@@ -44,6 +54,14 @@ public:
 	const shared_ptr<const T> &GetFunctionByOffset(idx_t offset) const {
 		D_ASSERT(offset < functions.size());
 		return functions[offset];
+	}
+
+	auto GetOverload(idx_t offset) const -> const SimpleFunction & override {
+		D_ASSERT(offset < functions.size());
+		return *functions[offset];
+	}
+	auto GetOverloadCount() const -> idx_t override {
+		return functions.size();
 	}
 
 	//! Apply a modification to every overload in the set. The overloads are immutable once bound from, so each is

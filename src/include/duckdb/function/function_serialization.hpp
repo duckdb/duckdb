@@ -190,9 +190,9 @@ public:
 	//! Selects the overload of a plan written before v2.0.0, which records its named arguments only as the operator's
 	//! named parameters. Required keyword-only parameters are treated as if they had a default - the bind receives
 	//! those named parameters and rejects a missing one, as it did when the plan was written
-	static optional_idx SelectWithoutNamedArguments(FunctionBinder &binder, const Identifier &name,
-	                                                const TableFunctionSet &functions,
-	                                                const vector<LogicalType> &positional_types) {
+	static FunctionBinding SelectWithoutNamedArguments(ClientContext &context, const Identifier &name,
+	                                                   const TableFunctionSet &functions,
+	                                                   const vector<LogicalType> &positional_types) {
 		auto relaxed = functions;
 		relaxed.ApplyToFunctions([](TableFunction &function) {
 			auto &signature = function.GetSignature();
@@ -205,7 +205,7 @@ public:
 			}
 		});
 		ErrorData error;
-		return binder.BindFunction(name, relaxed, positional_types, {}, error);
+		return FunctionBinder::SelectFunction(context, name, relaxed, positional_types, {}, error);
 	}
 
 	//! Deserializes a table function, and whether the plan holds its bind data. Without it, the caller binds again
@@ -236,11 +236,11 @@ public:
 		vector<pair<Identifier, LogicalType>> keyword_types;
 		SplitArgumentTypes(qualified_name, arguments, positional_count, named_arguments, positional_types,
 		                   keyword_types);
-		FunctionBinder binder(context);
 		ErrorData error;
-		auto func_idx = binder.BindFunction(qualified_name.Name(), functions, positional_types, keyword_types, error);
+		auto func_idx = FunctionBinder::SelectFunction(context, qualified_name.Name(), functions, positional_types,
+		                                               keyword_types, error);
 		if (!func_idx.IsValid() && named_arguments.empty()) {
-			func_idx = SelectWithoutNamedArguments(binder, qualified_name.Name(), functions, positional_types);
+			func_idx = SelectWithoutNamedArguments(context, qualified_name.Name(), functions, positional_types);
 		}
 		if (!func_idx.IsValid()) {
 			throw SerializationException("Failed to find function %s(%s)\n%s", qualified_name.ToString(),
@@ -397,8 +397,8 @@ public:
 		// Lookup the function (and the correct overload)
 		FunctionBinder binder(context);
 		ErrorData error;
-		const auto func_idx =
-		    binder.BindFunction(qualified_name.Name(), functions, positional_types, keyword_types, error);
+		const auto func_idx = FunctionBinder::SelectFunction(context, qualified_name.Name(), functions,
+		                                                     positional_types, keyword_types, error);
 
 		// Ensure the function overload was found
 		if (!func_idx.IsValid()) {

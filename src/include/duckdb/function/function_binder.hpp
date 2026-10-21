@@ -36,26 +36,27 @@ struct ResolvedScalarFunctionTypes {
 	string pushed_collation;
 };
 
-//! Overload selection: picks the cheapest matching overload out of a function set, given the argument types of a
-//! call. Free-standing so that callers without a ClientContext - which only limits the set of implicit casts
-//! considered, can select overloads too.
-struct FunctionOverloads {
-	//! Cost of calling this overload with the given arguments, or an invalid index if it does not match
-	DUCKDB_API static optional_idx Cost(optional_ptr<ClientContext> context, const SimpleFunction &func,
-	                                    const vector<LogicalType> &arguments,
-	                                    const vector<pair<Identifier, LogicalType>> &named_arguments);
+//! The overload a call selects out of a function set, and how the arguments of the call are passed to it
+struct FunctionBinding {
+	//! Whether an overload was selected - if not, the error of the selection says why
+	bool IsValid() const {
+		return function_index.IsValid();
+	}
+	//! The index of the selected overload in the function set
+	idx_t GetIndex() const {
+		return function_index.GetIndex();
+	}
 
-	//! All overloads that match at the lowest cost. Empty (and error set) if none match.
-	template <class T>
-	static vector<idx_t> Candidates(optional_ptr<ClientContext> context, const Identifier &name,
-	                                const FunctionSet<T> &functions, const vector<LogicalType> &arguments,
-	                                const vector<pair<Identifier, LogicalType>> &named_arguments, ErrorData &error);
-
-	//! The single best overload. Invalid (and error set) if there is no match or the choice is ambiguous.
-	template <class T>
-	static optional_idx Select(optional_ptr<ClientContext> context, const Identifier &name,
-	                           const FunctionSet<T> &functions, const vector<LogicalType> &arguments,
-	                           const vector<pair<Identifier, LogicalType>> &named_arguments, ErrorData &error);
+	//! The index of the selected overload in the function set - invalid if no overload matches the call
+	optional_idx function_index;
+	//! The cost of casting the arguments to the parameters of the selected overload
+	idx_t cost = 0;
+	//! The parameter of the overload that receives each argument - the positional arguments, followed by the named
+	//! ones. Arguments received by "*args" or "**kwargs" map to that parameter
+	vector<idx_t> argument_parameters;
+	//! The type each argument is passed as: the type of its parameter, with the templates the argument types
+	//! determine substituted
+	vector<LogicalType> parameter_types;
 };
 
 //! The FunctionBinder class is responsible for binding functions
@@ -68,85 +69,52 @@ public:
 	ClientContext &context;
 
 public:
-	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
-	//! returns optional_idx() and sets error if none could be found
-	DUCKDB_API optional_idx BindFunction(const Identifier &name, const ScalarFunctionSet &functions,
-	                                     const vector<LogicalType> &regular_args,
-	                                     const vector<pair<Identifier, LogicalType>> &keyword_args, ErrorData &error);
-	DUCKDB_API optional_idx BindFunction(const Identifier &name, const ScalarFunctionSet &functions,
-	                                     const vector<LogicalType> &regular_args, ErrorData &error) {
-		return BindFunction(name, functions, regular_args, {}, error);
+	//! Overload selection: the cheapest overload of a function set that a call with the given argument types binds
+	//! to. Selection needs no binder - without a ClientContext only the built-in implicit casts are considered.
+	//! Invalid, with the error set, if no overload matches or the choice is ambiguous
+	DUCKDB_API static FunctionBinding SelectFunction(optional_ptr<ClientContext> context, const Identifier &name,
+	                                                 const BaseFunctionSet &functions,
+	                                                 const vector<LogicalType> &arguments,
+	                                                 const vector<pair<Identifier, LogicalType>> &named_arguments,
+	                                                 ErrorData &error);
+	static FunctionBinding SelectFunction(optional_ptr<ClientContext> context, const Identifier &name,
+	                                      const BaseFunctionSet &functions, const vector<LogicalType> &arguments,
+	                                      ErrorData &error) {
+		return SelectFunction(context, name, functions, arguments, {}, error);
 	}
-
-	DUCKDB_API optional_idx BindFunction(const Identifier &name, const ScalarFunctionSet &functions,
-	                                     const vector<unique_ptr<Expression>> &regular_args,
-	                                     const vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
-	                                     ErrorData &error);
-
-	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
-	//! function, returns optional_idx() and sets error if none could be found
-	DUCKDB_API optional_idx BindFunction(const Identifier &name, const AggregateFunctionSet &functions,
-	                                     const vector<LogicalType> &regular_args,
-	                                     const vector<pair<Identifier, LogicalType>> &keyword_args, ErrorData &error);
-	DUCKDB_API optional_idx BindFunction(const Identifier &name, const AggregateFunctionSet &functions,
-	                                     const vector<LogicalType> &regular_args, ErrorData &error) {
-		return BindFunction(name, functions, regular_args, {}, error);
-	}
-
-	DUCKDB_API optional_idx BindFunction(const Identifier &name, const AggregateFunctionSet &functions,
-	                                     const vector<unique_ptr<Expression>> &regular_args,
-	                                     const vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
-	                                     ErrorData &error);
-
-	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
-	//! function, returns optional_idx() and sets error if none could be found
-	DUCKDB_API optional_idx BindFunction(const Identifier &name, const WindowFunctionSet &functions,
-	                                     const vector<LogicalType> &regular_args,
-	                                     const vector<pair<Identifier, LogicalType>> &keyword_args, ErrorData &error);
-
-	DUCKDB_API optional_idx BindFunction(const Identifier &name, const WindowFunctionSet &functions,
-	                                     const vector<LogicalType> &regular_args, ErrorData &error) {
-		return BindFunction(name, functions, regular_args, {}, error);
-	}
-
-	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
-	//! function, returns optional_idx() and sets error if none could be found
-	DUCKDB_API optional_idx BindFunction(const Identifier &name, const TableFunctionSet &functions,
-	                                     const vector<LogicalType> &regular_args,
-	                                     const vector<pair<Identifier, LogicalType>> &keyword_args, ErrorData &error);
-	DUCKDB_API optional_idx BindFunction(const Identifier &name, const TableFunctionSet &functions,
-	                                     const vector<LogicalType> &regular_args, ErrorData &error) {
-		return BindFunction(name, functions, regular_args, {}, error);
-	}
-
-	DUCKDB_API optional_idx BindFunction(const Identifier &name, const TableFunctionSet &functions,
-	                                     const vector<unique_ptr<Expression>> &regular_args,
-	                                     const vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
-	                                     ErrorData &error);
+	//! Selects by the return types of the bound arguments
+	DUCKDB_API static FunctionBinding
+	SelectFunction(optional_ptr<ClientContext> context, const Identifier &name, const BaseFunctionSet &functions,
+	               const vector<unique_ptr<Expression>> &arguments,
+	               const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, ErrorData &error);
+	//! All overloads that match at the lowest cost. Empty, with the error set, if none match
+	DUCKDB_API static vector<idx_t> Candidates(optional_ptr<ClientContext> context, const Identifier &name,
+	                                           const BaseFunctionSet &functions, const vector<LogicalType> &arguments,
+	                                           const vector<pair<Identifier, LogicalType>> &named_arguments,
+	                                           ErrorData &error);
+	//! Cost of calling an overload with the given argument types, or an invalid index if it does not match
+	DUCKDB_API static optional_idx Cost(optional_ptr<ClientContext> context, const SimpleFunction &function,
+	                                    const vector<LogicalType> &arguments,
+	                                    const vector<pair<Identifier, LogicalType>> &named_arguments);
 
 	//! Bind a table function: select the overload, check the named arguments against its signature, and cast both
 	//! the positional and the named arguments to the types it declares
-	DUCKDB_API optional_idx BindFunction(const Identifier &name, const TableFunctionSet &functions,
-	                                     vector<unique_ptr<Expression>> &positional_arguments,
-	                                     vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
-	                                     vector<Value> &parameters, named_argument_map_t &named_parameters,
-	                                     ErrorData &error);
+	DUCKDB_API FunctionBinding BindFunctionArguments(const Identifier &name, const TableFunctionSet &functions,
+	                                                 vector<unique_ptr<Expression>> &positional_arguments,
+	                                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+	                                                 vector<Value> &parameters, named_argument_map_t &named_parameters,
+	                                                 ErrorData &error);
 
 	//! Casts a constant to the type of the parameter it fills, as an argument of any function is cast - a parameter
 	//! whose type is not concrete, such as ANY, takes it as it is
 	DUCKDB_API static Value CastToParameterType(ClientContext &context, Value value, const LogicalType &parameter_type);
 
-	//! Bind a table in-out function. Its arguments are the columns of an input table, so there is nothing to place
-	//! or fold - only the overload is chosen
-	DUCKDB_API optional_idx BindTableInOutFunction(const Identifier &name, const TableFunctionSet &functions,
-	                                               const vector<LogicalType> &input_types, ErrorData &error);
-
 	//! Bind a pragma function from the set of functions and input arguments
-	DUCKDB_API optional_idx BindFunction(const Identifier &name, const PragmaFunctionSet &functions,
-	                                     vector<unique_ptr<Expression>> &positional_arguments,
-	                                     vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
-	                                     vector<Value> &parameters, named_argument_map_t &named_parameters,
-	                                     ErrorData &error);
+	DUCKDB_API FunctionBinding BindFunctionArguments(const Identifier &name, const PragmaFunctionSet &functions,
+	                                                 vector<unique_ptr<Expression>> &positional_arguments,
+	                                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+	                                                 vector<Value> &parameters, named_argument_map_t &named_parameters,
+	                                                 ErrorData &error);
 
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const Identifier &schema, const Identifier &name,
 	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
@@ -354,19 +322,14 @@ private:
 	void ResolveTemplateTypes(BoundSimpleFunction &bound_function, const vector<unique_ptr<Expression>> &children);
 	void CheckTemplateTypesResolved(const BoundSimpleFunction &bound_function);
 
+	//! Select the best matching overload for the given full (maybe-named) argument list. Names positional arguments by
+	//! their alias if that is the only way the call matches an overload that captures argument aliases
 	template <class T>
-	optional_idx BindFunctionFromArguments(const Identifier &name, const FunctionSet<T> &functions,
-	                                       const vector<LogicalType> &arguments,
-	                                       const vector<pair<Identifier, LogicalType>> &named_arguments,
-	                                       ErrorData &error);
+	FunctionBinding SelectFunctionFromArguments(const Identifier &name, const FunctionSet<T> &functions,
+	                                            vector<pair<Identifier, unique_ptr<Expression>>> &arguments,
+	                                            ErrorData &error);
 
-	//! Select the best matching overload for the given full (maybe-named) argument list.
-	template <class T>
-	optional_idx BindFunctionFromArguments(const Identifier &name, const FunctionSet<T> &functions,
-	                                       vector<pair<Identifier, unique_ptr<Expression>>> &arguments,
-	                                       ErrorData &error);
-
-	pair<vector<LogicalType>, vector<pair<Identifier, LogicalType>>>
+	static pair<vector<LogicalType>, vector<pair<Identifier, LogicalType>>>
 	GetArgumentsFromExpressions(const vector<unique_ptr<Expression>> &regular_arguments,
 	                            const vector<pair<Identifier, unique_ptr<Expression>>> &keyword_arguments);
 };

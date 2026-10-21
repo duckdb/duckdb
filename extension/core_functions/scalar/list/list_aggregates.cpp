@@ -469,7 +469,7 @@ unique_ptr<BoundAggregateExpression> BindListAggregate(ClientContext &context, L
 	}
 
 	FunctionBinder function_binder(context);
-	auto best_function_idx = function_binder.BindFunction(func.name, func.functions, types, error);
+	auto best_function_idx = FunctionBinder::SelectFunction(context, func.name, func.functions, types, error);
 	if (!best_function_idx.IsValid()) {
 		throw BinderException("No matching aggregate function\n%s", error.Message());
 	}

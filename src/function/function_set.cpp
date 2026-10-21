@@ -16,8 +16,7 @@ ScalarFunctionSet::ScalarFunctionSet(ScalarFunction fun) : FunctionSet(fun.name)
 shared_ptr<const ScalarFunction> ScalarFunctionSet::GetFunctionByArguments(ClientContext &context,
                                                                            const vector<LogicalType> &arguments) {
 	ErrorData error;
-	FunctionBinder binder(context);
-	auto index = binder.BindFunction(name, *this, arguments, error);
+	auto index = FunctionBinder::SelectFunction(context, name, *this, arguments, error);
 	if (!index.IsValid()) {
 		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                      error.RawMessage());
@@ -38,8 +37,7 @@ AggregateFunctionSet::AggregateFunctionSet(AggregateFunction fun) : FunctionSet(
 shared_ptr<const AggregateFunction> AggregateFunctionSet::GetFunctionByArguments(ClientContext &context,
                                                                                  const vector<LogicalType> &arguments) {
 	ErrorData error;
-	FunctionBinder binder(context);
-	auto index = binder.BindFunction(name, *this, arguments, error);
+	auto index = FunctionBinder::SelectFunction(context, name, *this, arguments, error);
 	if (!index.IsValid()) {
 		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                      error.RawMessage());
@@ -60,8 +58,7 @@ WindowFunctionSet::WindowFunctionSet(WindowFunction fun) : FunctionSet(fun.name)
 shared_ptr<const WindowFunction> WindowFunctionSet::GetFunctionByArguments(ClientContext &context,
                                                                            const vector<LogicalType> &arguments) {
 	ErrorData error;
-	FunctionBinder binder(context);
-	auto index = binder.BindFunction(name, *this, arguments, error);
+	auto index = FunctionBinder::SelectFunction(context, name, *this, arguments, error);
 	if (!index.IsValid()) {
 		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                      error.RawMessage());
@@ -79,8 +76,7 @@ TableFunctionSet::TableFunctionSet(TableFunction fun) : FunctionSet(fun.name) {
 shared_ptr<const TableFunction> TableFunctionSet::GetFunctionByArguments(ClientContext &context,
                                                                          const vector<LogicalType> &arguments) {
 	ErrorData error;
-	FunctionBinder binder(context);
-	auto index = binder.BindFunction(name, *this, arguments, error);
+	auto index = FunctionBinder::SelectFunction(context, name, *this, arguments, error);
 	if (!index.IsValid()) {
 		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                      error.RawMessage());

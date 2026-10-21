@@ -248,7 +248,7 @@ optional_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalCo
 
 		auto &func = arg_min_max_entry;
 		ErrorData error;
-		auto best_function = function_binder.BindFunction(func.name, func.functions, child_types, error);
+		auto best_function = FunctionBinder::SelectFunction(context, func.name, func.functions, child_types, error);
 		if (!best_function.IsValid()) {
 			return nullptr;
 		}

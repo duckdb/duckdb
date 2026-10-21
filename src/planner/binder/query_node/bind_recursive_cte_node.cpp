@@ -153,7 +153,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			// Find the best matching aggregate function
 			auto best_function_idx =
-			    function_binder.BindFunction(func.name, func.functions, aggregation_input_types, error);
+			    FunctionBinder::SelectFunction(context, func.name, func.functions, aggregation_input_types, error);
 			if (!best_function_idx.IsValid()) {
 				throw BinderException("No matching aggregate function\n%s", error.Message());
 			}

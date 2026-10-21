@@ -253,7 +253,7 @@ LogicalType TypeConstructorSet::Bind(optional_ptr<ClientContext> context, const 
 	// The candidates are selected with the regular function machinery, but reported in terms of types - a type is
 	// not a function, and "no function matches" reads as a mistake rather than as a bad type.
 	ErrorData error;
-	auto candidates = FunctionOverloads::Candidates(context, name, *this, positional, named, error);
+	auto candidates = FunctionBinder::Candidates(context, name, *this, positional, named, error);
 	if (candidates.empty()) {
 		vector<idx_t> all;
 		for (idx_t i = 0; i < functions.size(); i++) {

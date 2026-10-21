@@ -80,9 +80,165 @@ static int64_t ImplicitCastCost(optional_ptr<ClientContext> context, const Logic
 	return CastRules::ImplicitCast(source, target);
 }
 
-optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const SimpleFunction &func,
-                                     const vector<LogicalType> &arguments,
-                                     const vector<pair<Identifier, LogicalType>> &named_arguments) {
+template <class FUNC>
+static void InferTemplateType(optional_ptr<ClientContext> context, const LogicalType &source, const LogicalType &target,
+                              case_insensitive_map_t<vector<LogicalType>> &bindings, const QueryLocation &location,
+                              const FUNC &function) {
+	if (target.id() == LogicalTypeId::UNKNOWN || target.id() == LogicalTypeId::SQLNULL) {
+		// If the actual type is unknown, we cannot infer anything more.
+		// Therefore, we map all remaining templates in the source to UNKNOWN or SQLNULL, if not already inferred to
+		// something else
+
+		// This might seem a bit strange, why not just not set the binding and error out later when we try to substitute
+		// all templates? Well, this is how bindings for most nested functions already work, they simply propagate the
+		// UNKNOWN/SQLNULL. The binder will later check for UNKNOWN/SQLNULL in return types and if it finds one, insert
+		// a dummy cast to INT32 so that the function can be executed without errors (and just return NULLs).
+
+		TypeVisitor::Contains(source, [&](const LogicalType &child) {
+			if (child.id() == LogicalTypeId::TEMPLATE) {
+				const auto index = TemplateType::GetName(child);
+				if (bindings.find(index) == bindings.end()) {
+					// not found, add the binding
+					bindings[index] = {target.id()};
+				}
+			}
+			return false; // continue visiting
+		});
+		return;
+	}
+
+	// If the source is a template type, we bind it, or try to unify its existing binding with the target type.
+	if (source.id() == LogicalTypeId::TEMPLATE) {
+		const auto &index = TemplateType::GetName(source);
+		auto it = bindings.find(index);
+		if (it == bindings.end()) {
+			// not found, add the binding
+			bindings[index] = {target};
+			return;
+		}
+		if (it->second.back() == target) {
+			// already bound to the same type
+			return;
+		}
+
+		// Try to unify (promote) the type candidates
+		LogicalType result;
+		if (!context) {
+			// the implicit casts available depend on the client context
+			throw InternalException("Template type '%s' of function %s cannot be unified without a ClientContext",
+			                        TemplateType::GetName(source), function.ToString());
+		}
+		if (LogicalType::TryGetMaxLogicalType(*context, it->second.back(), target, result)) {
+			// Type unification was successful
+			if (it->second.back() != result) {
+				// update the binding
+				it->second.push_back(target);
+				it->second.push_back(std::move(result)); // Push the new promoted type
+			}
+			return;
+		}
+
+		// If we reach here, it means the types are incompatible
+		string msg =
+		    StringUtil::Format("Cannot deduce template type '%s' in function: '%s'\nType '%s' was inferred to be:\n",
+		                       TemplateType::GetName(source), function.ToString(), TemplateType::GetName(source));
+		const auto &steps = it->second;
+
+		for (idx_t i = 0; i < steps.size(); i += 2) {
+			if (i == 0) {
+				// Normalize the first step to ensure it is a valid type
+				msg += StringUtil::Format(" - '%s', from first occurrence\n", steps[i].ToString());
+			} else {
+				msg += StringUtil::Format(" - '%s', by promoting '%s' + '%s'\n", steps[i].ToString(),
+				                          steps[i - 2].ToString(), steps[i - 1]);
+			}
+		}
+		msg += StringUtil::Format(" - '%s', which is incompatible with previously inferred type!", target.ToString());
+		throw BinderException(location, msg);
+	}
+
+	// Otherwise, recurse downwards into nested types, and try to infer nested type members
+	// This only works if the source and target types are completely defined (excluding templates),
+	// i.e. they have aux info.
+	if (!(source.IsNested() && target.IsNested() && source.HasParameters() && target.HasParameters())) {
+		return;
+	}
+
+	switch (source.id()) {
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY: {
+		if ((source.id() == LogicalTypeId::ARRAY || source.id() == LogicalTypeId::LIST) &&
+		    (target.id() == LogicalTypeId::LIST || target.id() == LogicalTypeId::ARRAY)) {
+			const auto &source_child =
+			    source.id() == LogicalTypeId::LIST ? ListType::GetChildType(source) : ArrayType::GetChildType(source);
+			const auto &target_child =
+			    target.id() == LogicalTypeId::LIST ? ListType::GetChildType(target) : ArrayType::GetChildType(target);
+			InferTemplateType(context, source_child, target_child, bindings, location, function);
+		}
+	} break;
+	case LogicalTypeId::MAP: {
+		// Map is only implicitly castable to map, so we only need to handle this case here/
+		if (target.id() == LogicalTypeId::MAP) {
+			const auto &source_key = MapType::KeyType(source);
+			const auto &source_val = MapType::ValueType(source);
+			const auto &target_key = MapType::KeyType(target);
+			const auto &target_val = MapType::ValueType(target);
+
+			InferTemplateType(context, source_key, target_key, bindings, location, function);
+			InferTemplateType(context, source_val, target_val, bindings, location, function);
+		}
+	} break;
+	case LogicalTypeId::UNION: {
+		// TODO: Support union types with template member types.
+		throw NotImplementedException("Union types cannot infer templated member types yet!");
+	} break;
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
+		// Structs are only implicitly castable to structs, so we only need to handle this case here.
+		if (StructType::IsStruct(target) && StructType::IsUnnamed(source)) {
+			const auto &source_children = StructType::GetChildTypes(source);
+			const auto &target_children = StructType::GetChildTypes(target);
+
+			const auto common_children = MinValue(source_children.size(), target_children.size());
+			for (idx_t i = 0; i < common_children; i++) {
+				const auto &source_child_type = source_children[i].second;
+				const auto &target_child_type = target_children[i].second;
+				InferTemplateType(context, source_child_type, target_child_type, bindings, location, function);
+			}
+		} else {
+			// TODO: Support named structs with template child types.
+			throw NotImplementedException("Named structs cannot infer templated child types yet!");
+		}
+	} break;
+	default:
+		break; // no template type to infer
+	}
+}
+
+static void SubstituteTemplateType(LogicalType &type, case_insensitive_map_t<vector<LogicalType>> &bindings,
+                                   const Identifier &function_name) {
+	// Replace all template types in with their bound concrete types.
+	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &t) -> LogicalType {
+		if (t.id() == LogicalTypeId::TEMPLATE) {
+			const auto index = TemplateType::GetName(t);
+			auto it = bindings.find(index);
+			if (it != bindings.end()) {
+				// found a binding, return the concrete type
+				return LogicalType::NormalizeType(it->second.back());
+			}
+
+			// If we reach here, the template type was not bound to any concrete type.
+			// We dont throw an error here, but give users a chance to handle unresolved template type later in the
+			// "bind_scalar_function_t" callback. We then throw an error if the template type is still not bound
+			// in the "CheckTemplateTypesResolved" method afterwards.
+		}
+		return t;
+	});
+}
+
+optional_idx FunctionBinder::Cost(optional_ptr<ClientContext> context, const SimpleFunction &func,
+                                  const vector<LogicalType> &arguments,
+                                  const vector<pair<Identifier, LogicalType>> &named_arguments) {
 	const auto &sig = func.GetSignature();
 
 	// Compute total number of arguments passed
@@ -204,16 +360,15 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 	return cost;
 }
 
-template <class T>
-vector<idx_t> FunctionOverloads::Candidates(optional_ptr<ClientContext> context, const Identifier &name,
-                                            const FunctionSet<T> &functions, const vector<LogicalType> &arguments,
-                                            const vector<pair<Identifier, LogicalType>> &named_arguments,
-                                            ErrorData &error) {
+vector<idx_t> FunctionBinder::Candidates(optional_ptr<ClientContext> context, const Identifier &name,
+                                         const BaseFunctionSet &functions, const vector<LogicalType> &arguments,
+                                         const vector<pair<Identifier, LogicalType>> &named_arguments,
+                                         ErrorData &error) {
 	optional_idx best_function;
 	idx_t lowest_cost = NumericLimits<idx_t>::Maximum();
 	vector<idx_t> candidate_functions;
-	for (idx_t f_idx = 0; f_idx < functions.functions.size(); f_idx++) {
-		auto &func = *functions.functions[f_idx];
+	for (idx_t f_idx = 0; f_idx < functions.GetOverloadCount(); f_idx++) {
+		auto &func = functions.GetOverload(f_idx);
 		// check the arguments of the function
 		auto bind_cost = Cost(context, func, arguments, named_arguments);
 		if (!bind_cost.IsValid()) {
@@ -237,14 +392,15 @@ vector<idx_t> FunctionOverloads::Candidates(optional_ptr<ClientContext> context,
 		vector<string> candidates;
 		Identifier catalog_name;
 		Identifier schema_name;
-		for (auto &f : functions.functions) {
-			if (catalog_name.empty() && !f->GetCatalogName().empty()) {
-				catalog_name = f->GetCatalogName();
+		for (idx_t f_idx = 0; f_idx < functions.GetOverloadCount(); f_idx++) {
+			auto &f = functions.GetOverload(f_idx);
+			if (catalog_name.empty() && !f.GetCatalogName().empty()) {
+				catalog_name = f.GetCatalogName();
 			}
-			if (schema_name.empty() && !f->GetSchemaName().empty()) {
-				schema_name = f->GetSchemaName();
+			if (schema_name.empty() && !f.GetSchemaName().empty()) {
+				schema_name = f.GetSchemaName();
 			}
-			candidates.push_back(f->ToString());
+			candidates.push_back(f.ToString());
 		}
 		error = ErrorData(BinderException::NoMatchingFunction(catalog_name, schema_name, name, arguments,
 		                                                      named_arguments, candidates));
@@ -254,37 +410,93 @@ vector<idx_t> FunctionOverloads::Candidates(optional_ptr<ClientContext> context,
 	return candidate_functions;
 }
 
-template <class T>
-static optional_idx
-MultipleCandidateException(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &name,
-                           const FunctionSet<T> &functions, const vector<idx_t> &candidate_functions,
-                           const vector<LogicalType> &arguments,
-                           const vector<pair<Identifier, LogicalType>> &named_arguments, ErrorData &error) {
-	D_ASSERT(functions.functions.size() > 1);
+static FunctionBinding MultipleCandidateException(const Identifier &catalog_name, const Identifier &schema_name,
+                                                  const Identifier &name, const BaseFunctionSet &functions,
+                                                  const vector<idx_t> &candidate_functions,
+                                                  const vector<LogicalType> &arguments,
+                                                  const vector<pair<Identifier, LogicalType>> &named_arguments,
+                                                  ErrorData &error) {
+	D_ASSERT(functions.GetOverloadCount() > 1);
 	// there are multiple possible function definitions
 	// throw an exception explaining which overloads are there
 	string call_str = Function::CallToString(catalog_name, schema_name, name, arguments, named_arguments);
 	string candidate_str;
 	for (auto &conf : candidate_functions) {
-		const auto &f = functions.GetFunctionByOffset(conf);
-		candidate_str += "\t" + f->ToString() + "\n";
+		candidate_str += "\t" + functions.GetOverload(conf).ToString() + "\n";
 	}
 	error = ErrorData(
 	    ExceptionType::BINDER,
 	    StringUtil::Format("Could not choose a best candidate function for the function call \"%s\". In order to "
 	                       "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
 	                       call_str, candidate_str));
-	return optional_idx();
+	return FunctionBinding();
 }
 
-template <class T>
-optional_idx FunctionOverloads::Select(optional_ptr<ClientContext> context, const Identifier &name,
-                                       const FunctionSet<T> &functions, const vector<LogicalType> &arguments,
-                                       const vector<pair<Identifier, LogicalType>> &named_arguments, ErrorData &error) {
+//! How a call passes its arguments to the parameters of an overload it matches
+static FunctionBinding BindArguments(optional_ptr<ClientContext> context, const SimpleFunction &function,
+                                     idx_t function_index, const vector<LogicalType> &arguments,
+                                     const vector<pair<Identifier, LogicalType>> &named_arguments) {
+	auto &signature = function.GetSignature();
+	FunctionBinding result;
+	result.function_index = function_index;
+	result.cost = FunctionBinder::Cost(context, function, arguments, named_arguments).GetIndex();
+
+	optional_idx args_idx;
+	optional_idx kwargs_idx;
+	for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
+		switch (signature.GetParameter(i).GetKind()) {
+		case FunctionParameterKind::VAR_POSITIONAL:
+			args_idx = i;
+			break;
+		case FunctionParameterKind::VAR_KEYWORD:
+			kwargs_idx = i;
+			break;
+		default:
+			break;
+		}
+	}
+	// the overload matches, so every argument has a parameter that receives it
+	const auto positional_count = signature.GetPositionalParameterCount();
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		result.argument_parameters.push_back(i < positional_count ? i : args_idx.GetIndex());
+	}
+	for (auto &named_argument : named_arguments) {
+		auto parameter_idx = signature.GetParameterIndexByName(named_argument.first);
+		result.argument_parameters.push_back(parameter_idx.IsValid() ? parameter_idx.GetIndex()
+		                                                             : kwargs_idx.GetIndex());
+	}
+
+	// substitute the templates the argument types determine
+	case_insensitive_map_t<vector<LogicalType>> bindings;
+	for (idx_t i = 0; i < result.argument_parameters.size(); i++) {
+		auto &parameter_type = signature.GetParameter(result.argument_parameters[i]).GetType();
+		result.parameter_types.push_back(parameter_type);
+		if (!parameter_type.IsTemplated()) {
+			continue;
+		}
+		auto &argument_type = i < arguments.size() ? arguments[i] : named_arguments[i - arguments.size()].second;
+		try {
+			InferTemplateType(context, parameter_type, argument_type, bindings, QueryLocation(), function);
+		} catch (BinderException &) {
+			// conflicting deductions are reported when the call is bound, with the location of the argument
+			bindings.clear();
+			break;
+		}
+	}
+	for (auto &parameter_type : result.parameter_types) {
+		SubstituteTemplateType(parameter_type, bindings, function.GetName());
+	}
+	return result;
+}
+
+FunctionBinding FunctionBinder::SelectFunction(optional_ptr<ClientContext> context, const Identifier &name,
+                                               const BaseFunctionSet &functions, const vector<LogicalType> &arguments,
+                                               const vector<pair<Identifier, LogicalType>> &named_arguments,
+                                               ErrorData &error) {
 	auto candidate_functions = Candidates(context, name, functions, arguments, named_arguments, error);
 	if (candidate_functions.empty()) {
-		// No candidates, return an invalid index.
-		return optional_idx();
+		// No candidates, return an invalid binding.
+		return FunctionBinding();
 	}
 	if (candidate_functions.size() > 1) {
 		// Multiple candidates, check if there are any unknown arguments.
@@ -294,28 +506,22 @@ optional_idx FunctionOverloads::Select(optional_ptr<ClientContext> context, cons
 				throw ParameterNotResolvedException();
 			}
 		}
-		auto catalog_name = functions.functions.size() > 0 ? functions.functions[0]->GetCatalogName() : Identifier();
-		auto schema_name = functions.functions.size() > 0 ? functions.functions[0]->GetSchemaName() : Identifier();
-		return MultipleCandidateException(catalog_name, schema_name, name, functions, candidate_functions, arguments,
-		                                  named_arguments, error);
+		auto &first = functions.GetOverload(0);
+		return MultipleCandidateException(first.GetCatalogName(), first.GetSchemaName(), name, functions,
+		                                  candidate_functions, arguments, named_arguments, error);
 	}
-	return candidate_functions[0];
+	auto function_index = candidate_functions[0];
+	return BindArguments(context, functions.GetOverload(function_index), function_index, arguments, named_arguments);
 }
 
-template <class T>
-optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, const FunctionSet<T> &functions,
-                                                       const vector<LogicalType> &arguments,
-                                                       const vector<pair<Identifier, LogicalType>> &named_arguments,
-                                                       ErrorData &error) {
-	return FunctionOverloads::Select(context, name, functions, arguments, named_arguments, error);
+FunctionBinding FunctionBinder::SelectFunction(optional_ptr<ClientContext> context, const Identifier &name,
+                                               const BaseFunctionSet &functions,
+                                               const vector<unique_ptr<Expression>> &arguments,
+                                               const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+                                               ErrorData &error) {
+	auto [types, named_types] = GetArgumentsFromExpressions(arguments, named_arguments);
+	return SelectFunction(context, name, functions, types, named_types, error);
 }
-
-//! Type constructors select overloads outside of FunctionBinder, as they can be bound without a ClientContext
-template optional_idx FunctionOverloads::Select<TypeConstructor>(optional_ptr<ClientContext>, const Identifier &,
-                                                                 const FunctionSet<TypeConstructor> &,
-                                                                 const vector<LogicalType> &,
-                                                                 const vector<pair<Identifier, LogicalType>> &,
-                                                                 ErrorData &);
 
 template <class T>
 static bool AnyOverloadSupportsImplicitArgumentNames(const FunctionSet<T> &functions) {
@@ -327,8 +533,8 @@ static bool AnyOverloadSupportsImplicitArgumentNames(const FunctionSet<T> &funct
 	return false;
 }
 
-static optional_idx PositionalAfterNamedArgumentError(const vector<pair<Identifier, unique_ptr<Expression>>> &arguments,
-                                                      ErrorData &error) {
+static FunctionBinding
+PositionalAfterNamedArgumentError(const vector<pair<Identifier, unique_ptr<Expression>>> &arguments, ErrorData &error) {
 	bool seen_named = false;
 	for (const auto &[name, expr] : arguments) {
 		if (!name.empty()) {
@@ -339,16 +545,16 @@ static optional_idx PositionalAfterNamedArgumentError(const vector<pair<Identifi
 			error = ErrorData(BinderException(
 			    expr->GetQueryLocation(), "Positional argument '%s' cannot follow named arguments in function call.",
 			    expr->ToString()));
-			return optional_idx();
+			return FunctionBinding();
 		}
 	}
 	throw InternalException("ThrowPositionalAfterNamed called without a positional-after-named argument");
 }
 
 template <class T>
-optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, const FunctionSet<T> &functions,
-                                                       vector<pair<Identifier, unique_ptr<Expression>>> &arguments,
-                                                       ErrorData &error) {
+FunctionBinding FunctionBinder::SelectFunctionFromArguments(const Identifier &name, const FunctionSet<T> &functions,
+                                                            vector<pair<Identifier, unique_ptr<Expression>>> &arguments,
+                                                            ErrorData &error) {
 	// First, attempt a regular bind, splitting the arguments into positional + named just once for all overloads.
 	vector<LogicalType> positional;
 	vector<pair<Identifier, LogicalType>> named;
@@ -357,7 +563,7 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, c
 	const auto is_valid_call = TrySplitArgumentTypes(arguments, positional, named);
 	if (is_valid_call) {
 		// Yes. Let's try to bind
-		const auto result = BindFunctionFromArguments(name, functions, positional, named, error);
+		const auto result = SelectFunction(context, name, functions, positional, named, error);
 
 		// We failed binding - does any other overload support implicit argument names?
 		// If not, this is a hard failure.
@@ -381,7 +587,7 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, c
 
 		if (TrySplitArgumentTypes(arguments, positional, named)) {
 			ErrorData retry_error;
-			auto result = BindFunctionFromArguments(name, functions, positional, named, retry_error);
+			auto result = SelectFunction(context, name, functions, positional, named, retry_error);
 			if (result.IsValid() || !is_valid_call) {
 				error = std::move(retry_error);
 				return result;
@@ -390,35 +596,11 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, c
 	}
 	if (is_valid_call) {
 		// the call only failed to match an overload, which is reported in the error
-		return optional_idx();
+		return FunctionBinding();
 	}
 
 	// No overload could rescue the positional-after-named call, give a clear error.
 	return PositionalAfterNamedArgumentError(arguments, error);
-}
-
-optional_idx FunctionBinder::BindFunction(const Identifier &name, const ScalarFunctionSet &functions,
-                                          const vector<LogicalType> &regular_args,
-                                          const vector<pair<Identifier, LogicalType>> &keyword_args, ErrorData &error) {
-	return BindFunctionFromArguments(name, functions, regular_args, keyword_args, error);
-}
-
-optional_idx FunctionBinder::BindFunction(const Identifier &name, const AggregateFunctionSet &functions,
-                                          const vector<LogicalType> &regular_args,
-                                          const vector<pair<Identifier, LogicalType>> &keyword_args, ErrorData &error) {
-	return BindFunctionFromArguments(name, functions, regular_args, keyword_args, error);
-}
-
-optional_idx FunctionBinder::BindFunction(const Identifier &name, const WindowFunctionSet &functions,
-                                          const vector<LogicalType> &regular_args,
-                                          const vector<pair<Identifier, LogicalType>> &keyword_args, ErrorData &error) {
-	return BindFunctionFromArguments(name, functions, regular_args, keyword_args, error);
-}
-
-optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFunctionSet &functions,
-                                          const vector<LogicalType> &regular_args,
-                                          const vector<pair<Identifier, LogicalType>> &keyword_args, ErrorData &error) {
-	return BindFunctionFromArguments(name, functions, regular_args, keyword_args, error);
 }
 
 //! Reject a named argument that no overload of the set accepts, naming the options that were available. Overload
@@ -642,13 +824,13 @@ static void PlaceArguments(ClientContext &context, const T &function,
 	signature.FillNamedDefaults(context, named_parameters);
 }
 
-optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFunctionSet &functions,
-                                          vector<unique_ptr<Expression>> &positional_arguments,
-                                          vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
-                                          vector<Value> &parameters, named_argument_map_t &named_parameters,
-                                          ErrorData &error) {
+FunctionBinding FunctionBinder::BindFunctionArguments(const Identifier &name, const TableFunctionSet &functions,
+                                                      vector<unique_ptr<Expression>> &positional_arguments,
+                                                      vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+                                                      vector<Value> &parameters, named_argument_map_t &named_parameters,
+                                                      ErrorData &error) {
 	VerifyNamedArgumentsAccepted(name, functions, named_arguments);
-	auto entry = BindFunction(name, functions, positional_arguments, named_arguments, error);
+	auto entry = SelectFunction(context, name, functions, positional_arguments, named_arguments, error);
 	if (!entry.IsValid()) {
 		return entry;
 	}
@@ -657,19 +839,14 @@ optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFun
 	return entry;
 }
 
-optional_idx FunctionBinder::BindTableInOutFunction(const Identifier &name, const TableFunctionSet &functions,
-                                                    const vector<LogicalType> &input_types, ErrorData &error) {
-	return BindFunctionFromArguments(name, functions, input_types, {}, error);
-}
-
-optional_idx FunctionBinder::BindFunction(const Identifier &name, const PragmaFunctionSet &functions,
-                                          vector<unique_ptr<Expression>> &positional_arguments,
-                                          vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
-                                          vector<Value> &parameters, named_argument_map_t &named_parameters,
-                                          ErrorData &error) {
+FunctionBinding FunctionBinder::BindFunctionArguments(const Identifier &name, const PragmaFunctionSet &functions,
+                                                      vector<unique_ptr<Expression>> &positional_arguments,
+                                                      vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+                                                      vector<Value> &parameters, named_argument_map_t &named_parameters,
+                                                      ErrorData &error) {
 	VerifyNamedArgumentsAccepted(name, functions, named_arguments);
 	auto [args, kwargs] = GetArgumentsFromExpressions(positional_arguments, named_arguments);
-	auto entry = BindFunctionFromArguments(name, functions, args, kwargs, error);
+	auto entry = SelectFunction(context, name, functions, args, kwargs, error);
 	if (!entry.IsValid()) {
 		error.Throw();
 	}
@@ -691,30 +868,6 @@ FunctionBinder::GetArgumentsFromExpressions(const vector<unique_ptr<Expression>>
 		keyword_arg_types.emplace_back(kwarg.first, ExpressionBinder::GetExpressionReturnType(*kwarg.second));
 	}
 	return {std::move(regular_arg_types), std::move(keyword_arg_types)};
-}
-
-optional_idx FunctionBinder::BindFunction(const Identifier &name, const ScalarFunctionSet &functions,
-                                          const vector<unique_ptr<Expression>> &regular_args,
-                                          const vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
-                                          ErrorData &error) {
-	auto [args, kwargs] = GetArgumentsFromExpressions(regular_args, keyword_args);
-	return BindFunctionFromArguments(name, functions, args, kwargs, error);
-}
-
-optional_idx FunctionBinder::BindFunction(const Identifier &name, const AggregateFunctionSet &functions,
-                                          const vector<unique_ptr<Expression>> &regular_args,
-                                          const vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
-                                          ErrorData &error) {
-	auto [args, kwargs] = GetArgumentsFromExpressions(regular_args, keyword_args);
-	return BindFunctionFromArguments(name, functions, args, kwargs, error);
-}
-
-optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFunctionSet &functions,
-                                          const vector<unique_ptr<Expression>> &regular_args,
-                                          const vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
-                                          ErrorData &error) {
-	auto [args, kwargs] = GetArgumentsFromExpressions(regular_args, keyword_args);
-	return BindFunctionFromArguments(name, functions, args, kwargs, error);
 }
 
 static bool TypeRequiresPrepare(const LogicalType &type) {
@@ -911,7 +1064,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
                                                           optional_ptr<Binder> binder) {
 	// select the best matching overload (this may name positional arguments by their alias for functions that opt
 	// into implicit argument naming, e.g. struct_pack/row)
-	auto best_function = BindFunctionFromArguments(func.name, func.functions, arguments, error);
+	auto best_function = SelectFunctionFromArguments(func.name, func.functions, arguments, error);
 	if (!best_function.IsValid()) {
 		return nullptr;
 	}
@@ -1151,156 +1304,6 @@ static void PropagateReturnCollation(BoundSimpleFunction &bound_function, const 
 	bound_function.SetReturnType(LogicalType::VARCHAR_COLLATION(std::move(collation)));
 }
 
-static void InferTemplateType(ClientContext &context, const LogicalType &source, const LogicalType &target,
-                              case_insensitive_map_t<vector<LogicalType>> &bindings, const Expression &current_expr,
-                              const BoundSimpleFunction &function) {
-	if (target.id() == LogicalTypeId::UNKNOWN || target.id() == LogicalTypeId::SQLNULL) {
-		// If the actual type is unknown, we cannot infer anything more.
-		// Therefore, we map all remaining templates in the source to UNKNOWN or SQLNULL, if not already inferred to
-		// something else
-
-		// This might seem a bit strange, why not just not set the binding and error out later when we try to substitute
-		// all templates? Well, this is how bindings for most nested functions already work, they simply propagate the
-		// UNKNOWN/SQLNULL. The binder will later check for UNKNOWN/SQLNULL in return types and if it finds one, insert
-		// a dummy cast to INT32 so that the function can be executed without errors (and just return NULLs).
-
-		TypeVisitor::Contains(source, [&](const LogicalType &child) {
-			if (child.id() == LogicalTypeId::TEMPLATE) {
-				const auto index = TemplateType::GetName(child);
-				if (bindings.find(index) == bindings.end()) {
-					// not found, add the binding
-					bindings[index] = {target.id()};
-				}
-			}
-			return false; // continue visiting
-		});
-		return;
-	}
-
-	// If the source is a template type, we bind it, or try to unify its existing binding with the target type.
-	if (source.id() == LogicalTypeId::TEMPLATE) {
-		const auto &index = TemplateType::GetName(source);
-		auto it = bindings.find(index);
-		if (it == bindings.end()) {
-			// not found, add the binding
-			bindings[index] = {target};
-			return;
-		}
-		if (it->second.back() == target) {
-			// already bound to the same type
-			return;
-		}
-
-		// Try to unify (promote) the type candidates
-		LogicalType result;
-		if (LogicalType::TryGetMaxLogicalType(context, it->second.back(), target, result)) {
-			// Type unification was successful
-			if (it->second.back() != result) {
-				// update the binding
-				it->second.push_back(target);
-				it->second.push_back(std::move(result)); // Push the new promoted type
-			}
-			return;
-		}
-
-		// If we reach here, it means the types are incompatible
-		string msg =
-		    StringUtil::Format("Cannot deduce template type '%s' in function: '%s'\nType '%s' was inferred to be:\n",
-		                       TemplateType::GetName(source), function.ToString(), TemplateType::GetName(source));
-		const auto &steps = it->second;
-
-		for (idx_t i = 0; i < steps.size(); i += 2) {
-			if (i == 0) {
-				// Normalize the first step to ensure it is a valid type
-				msg += StringUtil::Format(" - '%s', from first occurrence\n", steps[i].ToString());
-			} else {
-				msg += StringUtil::Format(" - '%s', by promoting '%s' + '%s'\n", steps[i].ToString(),
-				                          steps[i - 2].ToString(), steps[i - 1]);
-			}
-		}
-		msg += StringUtil::Format(" - '%s', which is incompatible with previously inferred type!", target.ToString());
-		throw BinderException(current_expr.GetQueryLocation(), msg);
-	}
-
-	// Otherwise, recurse downwards into nested types, and try to infer nested type members
-	// This only works if the source and target types are completely defined (excluding templates),
-	// i.e. they have aux info.
-	if (!(source.IsNested() && target.IsNested() && source.HasParameters() && target.HasParameters())) {
-		return;
-	}
-
-	switch (source.id()) {
-	case LogicalTypeId::LIST:
-	case LogicalTypeId::ARRAY: {
-		if ((source.id() == LogicalTypeId::ARRAY || source.id() == LogicalTypeId::LIST) &&
-		    (target.id() == LogicalTypeId::LIST || target.id() == LogicalTypeId::ARRAY)) {
-			const auto &source_child =
-			    source.id() == LogicalTypeId::LIST ? ListType::GetChildType(source) : ArrayType::GetChildType(source);
-			const auto &target_child =
-			    target.id() == LogicalTypeId::LIST ? ListType::GetChildType(target) : ArrayType::GetChildType(target);
-			InferTemplateType(context, source_child, target_child, bindings, current_expr, function);
-		}
-	} break;
-	case LogicalTypeId::MAP: {
-		// Map is only implicitly castable to map, so we only need to handle this case here/
-		if (target.id() == LogicalTypeId::MAP) {
-			const auto &source_key = MapType::KeyType(source);
-			const auto &source_val = MapType::ValueType(source);
-			const auto &target_key = MapType::KeyType(target);
-			const auto &target_val = MapType::ValueType(target);
-
-			InferTemplateType(context, source_key, target_key, bindings, current_expr, function);
-			InferTemplateType(context, source_val, target_val, bindings, current_expr, function);
-		}
-	} break;
-	case LogicalTypeId::UNION: {
-		// TODO: Support union types with template member types.
-		throw NotImplementedException("Union types cannot infer templated member types yet!");
-	} break;
-	case LogicalTypeId::STRUCT:
-	case LogicalTypeId::TUPLE: {
-		// Structs are only implicitly castable to structs, so we only need to handle this case here.
-		if (StructType::IsStruct(target) && StructType::IsUnnamed(source)) {
-			const auto &source_children = StructType::GetChildTypes(source);
-			const auto &target_children = StructType::GetChildTypes(target);
-
-			const auto common_children = MinValue(source_children.size(), target_children.size());
-			for (idx_t i = 0; i < common_children; i++) {
-				const auto &source_child_type = source_children[i].second;
-				const auto &target_child_type = target_children[i].second;
-				InferTemplateType(context, source_child_type, target_child_type, bindings, current_expr, function);
-			}
-		} else {
-			// TODO: Support named structs with template child types.
-			throw NotImplementedException("Named structs cannot infer templated child types yet!");
-		}
-	} break;
-	default:
-		break; // no template type to infer
-	}
-}
-
-static void SubstituteTemplateType(LogicalType &type, case_insensitive_map_t<vector<LogicalType>> &bindings,
-                                   const Identifier &function_name) {
-	// Replace all template types in with their bound concrete types.
-	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &t) -> LogicalType {
-		if (t.id() == LogicalTypeId::TEMPLATE) {
-			const auto index = TemplateType::GetName(t);
-			auto it = bindings.find(index);
-			if (it != bindings.end()) {
-				// found a binding, return the concrete type
-				return LogicalType::NormalizeType(it->second.back());
-			}
-
-			// If we reach here, the template type was not bound to any concrete type.
-			// We dont throw an error here, but give users a chance to handle unresolved template type later in the
-			// "bind_scalar_function_t" callback. We then throw an error if the template type is still not bound
-			// in the "CheckTemplateTypesResolved" method afterwards.
-		}
-		return t;
-	});
-}
-
 void FunctionBinder::ResolveTemplateTypes(BoundSimpleFunction &bound_function,
                                           const vector<unique_ptr<Expression>> &children) {
 	case_insensitive_map_t<vector<LogicalType>> bindings;
@@ -1313,7 +1316,7 @@ void FunctionBinder::ResolveTemplateTypes(BoundSimpleFunction &bound_function,
 		// If the parameter is not templated, we can skip it.
 		if (param.IsTemplated()) {
 			auto actual = ExpressionBinder::GetExpressionReturnType(*children[i]);
-			InferTemplateType(context, param, actual, bindings, *children[i], bound_function);
+			InferTemplateType(context, param, actual, bindings, children[i]->GetQueryLocation(), bound_function);
 
 			to_substitute.emplace_back(param);
 		}
@@ -1729,7 +1732,7 @@ FunctionBinder::BindAggregateFunction(const AggregateFunctionCatalogEntry &func,
                                       unique_ptr<Expression> filter, AggregateType aggr_type) {
 	// select the best matching overload (this may name positional arguments by their alias for functions that opt
 	// into implicit argument naming, e.g. struct_pack/row)
-	auto best_function = BindFunctionFromArguments(func.name, func.functions, arguments, error);
+	auto best_function = SelectFunctionFromArguments(func.name, func.functions, arguments, error);
 	if (!best_function.IsValid()) {
 		return nullptr;
 	}
@@ -1830,7 +1833,7 @@ FunctionBinder::BindWindowFunction(const WindowFunctionCatalogEntry &func,
                                    vector<pair<Identifier, unique_ptr<Expression>>> arguments, ErrorData &error,
                                    vector<LogicalType> &order_types, vector<LogicalType> &arg_order_types) {
 	// select the best matching overload
-	auto best_function = BindFunctionFromArguments(func.name, func.functions, arguments, error);
+	auto best_function = SelectFunctionFromArguments(func.name, func.functions, arguments, error);
 	if (!best_function.IsValid()) {
 		return nullptr;
 	}
