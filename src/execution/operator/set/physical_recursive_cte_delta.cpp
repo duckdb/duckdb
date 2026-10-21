@@ -141,6 +141,40 @@ static idx_t SelectDistinctPayloadRows(const Vector &previous, const Vector &cur
 	                                      &changed, &unchanged);
 }
 
+//! Whether the finalized payload of every row equals the candidate payload that produced it
+static bool FinalizedPayloadsEqualCandidates(RecursiveCTEKeyDeltaState &delta, const PhysicalRecursiveCTE &op,
+                                             DataChunk &finalized, DataChunk &candidates, idx_t count) {
+	for (idx_t payload_idx = 0; payload_idx < op.payload_idx.size(); payload_idx++) {
+		const auto mismatch_count =
+		    VectorOperations::DistinctFrom(finalized.data[payload_idx], candidates.data[op.payload_idx[payload_idx]],
+		                                   nullptr, count, &delta.changed_column_groups, &delta.equal_groups_a);
+		if (mismatch_count != 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+//! Rows whose payload differs from the previous payload in some column; previous_payload_offset selects the
+//! first previous payload column, as the layouts of the previous rows differ between callers
+static idx_t CountChangedPayloadRows(RecursiveCTEKeyDeltaState &delta, const PhysicalRecursiveCTE &op,
+                                     DataChunk &previous, idx_t previous_payload_offset, DataChunk &current,
+                                     idx_t count) {
+	idx_t changed_count = 0;
+	idx_t equal_count = count;
+	optional_ptr<SelectionVector> equal_groups;
+	for (idx_t payload_idx = 0; payload_idx < op.payload_idx.size() && equal_count > 0; payload_idx++) {
+		auto &next_equal_groups = payload_idx % 2 == 0 ? delta.equal_groups_a : delta.equal_groups_b;
+		const auto changed_column_count =
+		    SelectDistinctPayloadRows(previous.data[previous_payload_offset + payload_idx], current.data[payload_idx],
+		                              equal_groups, equal_count, delta.changed_column_groups, next_equal_groups);
+		changed_count += changed_column_count;
+		equal_count -= changed_column_count;
+		equal_groups = &next_equal_groups;
+	}
+	return changed_count;
+}
+
 static void CopySelectedAddresses(const Vector &source, const SelectionVector &selection, idx_t count, Vector &target) {
 	source.Flatten();
 	target.SetVectorType(VectorType::FLAT_VECTOR);
@@ -269,29 +303,14 @@ void RecursiveCTEKeyedState::ValidateDeferredUsingKeyCandidateReuse(DataChunk &c
 	FinalizeAggregateRows(delta.row_state, delta.finalize_addresses, delta.updated_aggregate_rows,
 	                      delta.deferred_count);
 
-	for (idx_t payload_idx = 0; payload_idx < op.payload_idx.size(); payload_idx++) {
-		const auto mismatch_count = VectorOperations::DistinctFrom(
-		    delta.updated_aggregate_rows.data[payload_idx], candidates.data[op.payload_idx[payload_idx]], nullptr,
-		    delta.deferred_count, &delta.changed_column_groups, &delta.equal_groups_a);
-		if (mismatch_count != 0) {
-			AppendPreviousUsingKeyDeltaRows(delta.matched_addresses, delta.deferred_count);
-			delta.deferred_previous_rows = false;
-			return;
-		}
+	if (!FinalizedPayloadsEqualCandidates(delta, op, delta.updated_aggregate_rows, candidates, delta.deferred_count)) {
+		AppendPreviousUsingKeyDeltaRows(delta.matched_addresses, delta.deferred_count);
+		delta.deferred_previous_rows = false;
+		return;
 	}
 
-	idx_t changed_count = 0;
-	idx_t equal_count = delta.deferred_count;
-	optional_ptr<SelectionVector> equal_groups;
-	for (idx_t payload_idx = 0; payload_idx < op.payload_idx.size() && equal_count > 0; payload_idx++) {
-		auto &next_equal_groups = payload_idx % 2 == 0 ? delta.equal_groups_a : delta.equal_groups_b;
-		const auto changed_column_count = SelectDistinctPayloadRows(
-		    delta.aggregate_rows.data[payload_idx], delta.updated_aggregate_rows.data[payload_idx], equal_groups,
-		    equal_count, delta.changed_column_groups, next_equal_groups);
-		changed_count += changed_column_count;
-		equal_count -= changed_column_count;
-		equal_groups = &next_equal_groups;
-	}
+	const auto changed_count =
+	    CountChangedPayloadRows(delta, op, delta.aggregate_rows, 0, delta.updated_aggregate_rows, delta.deferred_count);
 	if (changed_count != delta.deferred_count) {
 		AppendPreviousUsingKeyDeltaRows(delta.matched_addresses, delta.deferred_count);
 		delta.deferred_previous_rows = false;
@@ -386,26 +405,13 @@ bool RecursiveCTEKeyedState::TryReuseChangedGroupCandidates(idx_t candidate_coun
 		                      delta.finalize_addresses);
 		FinalizeAggregateRows(delta.row_state, delta.finalize_addresses, delta.aggregate_rows, row_count);
 
-		for (idx_t payload_idx = 0; payload_idx < op.payload_idx.size(); payload_idx++) {
-			const auto mismatch_count = VectorOperations::DistinctFrom(
-			    delta.aggregate_rows.data[payload_idx], update_rows.data[op.payload_idx[payload_idx]], nullptr,
-			    row_count, &delta.changed_column_groups, &delta.equal_groups_a);
-			if (mismatch_count != 0) {
-				return false;
-			}
+		if (!FinalizedPayloadsEqualCandidates(delta, op, delta.aggregate_rows, update_rows, row_count)) {
+			return false;
 		}
 
-		idx_t equal_count = row_count;
-		optional_ptr<SelectionVector> equal_groups;
-		for (idx_t payload_idx = 0; payload_idx < op.payload_idx.size() && equal_count > 0; payload_idx++) {
-			auto &next_equal_groups = payload_idx % 2 == 0 ? delta.equal_groups_a : delta.equal_groups_b;
-			const auto changed_column_count = SelectDistinctPayloadRows(
-			    delta.previous_scan_rows.data[1 + payload_idx], delta.aggregate_rows.data[payload_idx], equal_groups,
-			    equal_count, delta.changed_column_groups, next_equal_groups);
-			changed_count += changed_column_count;
-			equal_count -= changed_column_count;
-			equal_groups = &next_equal_groups;
-		}
+		// The previous rows carry the group address in their first column
+		changed_count +=
+		    CountChangedPayloadRows(delta, op, delta.previous_scan_rows, 1, delta.aggregate_rows, row_count);
 	}
 	if (intermediate_table.Scan(candidate_scan_state, update_rows)) {
 		return false;
