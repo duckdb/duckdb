@@ -161,19 +161,12 @@ vector<TypeArgument> NormalizeArguments(const Identifier &type_name, const TypeC
 		positional_count++;
 	}
 
-	identifier_set_t seen_names;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &arg = arguments[i];
 		if (!arg.HasName()) {
 			continue;
 		}
 		auto name = Identifier(arg.GetName());
-		if (seen_names.find(name) != seen_names.end()) {
-			throw BinderException(arg.GetQueryLocation(), "Duplicate type parameter %s for type %s", arg.GetName(),
-			                      type_name);
-		}
-		seen_names.insert(name);
-
 		auto param_idx = sig.GetParameterIndexByName(name);
 		if (!param_idx.IsValid()) {
 			// not a declared parameter - it can only be a named vararg
@@ -252,7 +245,13 @@ LogicalType TypeConstructorSet::Bind(optional_ptr<ClientContext> context, const 
 
 	// The candidates are selected with the regular function machinery, but reported in terms of types - a type is
 	// not a function, and "no function matches" reads as a mistake rather than as a bad type.
-	auto selection = FunctionBinder::SelectFunction(context, name, *this, positional, named);
+	auto selection = FunctionBinder::SelectFunction(context, *this, positional, named);
+	if (selection.GetResult() == FunctionSelectionResult::NO_MATCH && selection.GetFailedCandidateCount() == 0) {
+		// the parameters are invalid for any definition, e.g. a name is passed twice
+		auto error = selection.GetError();
+		error.AddQueryLocation(query_location);
+		error.Throw();
+	}
 	if (selection.GetResult() == FunctionSelectionResult::NO_MATCH) {
 		vector<idx_t> all;
 		for (idx_t i = 0; i < functions.size(); i++) {

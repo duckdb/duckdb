@@ -483,7 +483,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	vector<Value> parameters;
 	named_argument_map_t named_parameters;
 	auto best_function_idx =
-	    table_in_out ? FunctionBinder::SelectFunction(context, function.name, function.functions, subquery.types)
+	    table_in_out ? FunctionBinder::SelectFunction(context, function.functions, subquery.types)
 	                 : function_binder.BindFunctionArguments(function.name, function.functions, positional_arguments,
 	                                                         named_arguments, parameters, named_parameters);
 	if (!best_function_idx.IsValid()) {

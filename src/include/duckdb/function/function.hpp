@@ -37,6 +37,7 @@ class ScalarFunction;
 class TableFunctionSet;
 class TableFunction;
 class SimpleFunction;
+class FunctionProperties;
 class WindowFunction;
 class WindowFunctionSet;
 class BoundSimpleFunction;
@@ -497,6 +498,10 @@ protected:
 public:
 	DUCKDB_API string ToString() const;
 	DUCKDB_API hash_t Hash() const;
+	//! The properties of scalar, aggregate and window functions - other functions have none
+	virtual auto GetFunctionProperties() const -> optional_ptr<const FunctionProperties> {
+		return nullptr;
+	}
 
 	FunctionSignature &GetSignature() {
 		return signature;

@@ -20,6 +20,7 @@ public:
 	}
 	virtual auto GetOverload(idx_t offset) const -> const SimpleFunction & = 0;
 	virtual auto GetOverloadCount() const -> idx_t = 0;
+	virtual auto GetName() const -> const Identifier & = 0;
 };
 
 template <class T>
@@ -56,6 +57,9 @@ public:
 		return functions[offset];
 	}
 
+	auto GetName() const -> const Identifier & override {
+		return name;
+	}
 	auto GetOverload(idx_t offset) const -> const SimpleFunction & override {
 		D_ASSERT(offset < functions.size());
 		return *functions[offset];

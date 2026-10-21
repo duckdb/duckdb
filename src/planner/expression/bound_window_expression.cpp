@@ -377,7 +377,7 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 		                                     OnEntryNotFound::THROW_EXCEPTION);
 		auto &func = entry->Cast<WindowFunctionCatalogEntry>();
 
-		auto best = FunctionBinder::SelectFunction(binder->context, func.name, func.functions, arguments);
+		auto best = FunctionBinder::SelectFunction(binder->context, func.functions, arguments);
 		if (!best.IsValid()) {
 			best.GetError().Throw();
 		}
@@ -385,7 +385,9 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 
 		const auto &win_func = func.functions.GetFunctionByOffset(best.GetIndex());
 
-		auto [bound_func, bind_info] = function_binder.ResolveFunction(win_func, result->children);
+		vector<pair<Identifier, unique_ptr<Expression>>> keyword_args;
+		auto [bound_func, bind_info] =
+		    function_binder.ResolveFunction(win_func, best.GetBinding(), result->children, keyword_args);
 
 		result->bind_info = std::move(bind_info);
 		result->type = expression_type;

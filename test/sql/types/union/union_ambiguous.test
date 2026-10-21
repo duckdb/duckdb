@@ -6,12 +6,12 @@
 statement error
 CREATE TABLE tbl(a UNION(b INT, b INT));
 ----
-<REGEX>:.*Binder Error.*Duplicate type parameter.*
+<REGEX>:.*Binder Error.*Duplicate named argument.*
 
 statement error
 CREATE TABLE tbl(a UNION(b INT, B INT));
 ----
-<REGEX>:.*Binder Error.*Duplicate type parameter.*
+<REGEX>:.*Binder Error.*Duplicate named argument.*
 
 # allow members with same type
 statement ok

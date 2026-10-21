@@ -529,6 +529,10 @@ protected:
 
 class AggregateFunction : public BaseAggregateFunction, public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
+	//! The properties of the function, for code that only knows it as a SimpleFunction
+	auto GetFunctionProperties() const -> optional_ptr<const FunctionProperties> override {
+		return GetProperties();
+	}
 	static constexpr aggregate_cluster_update_t NoClusterUpdate() {
 		return nullptr;
 	}

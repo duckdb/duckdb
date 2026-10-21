@@ -49,7 +49,7 @@ TEST_CASE("Selecting a function maps every argument to the parameter that receiv
 	vector<LogicalType> positional {LogicalType::LIST(LogicalType::INTEGER), LogicalType::INTEGER, LogicalType::VARCHAR,
 	                                LogicalType::VARCHAR};
 	vector<pair<Identifier, LogicalType>> named {{"opt", LogicalType::BIGINT}, {"extra", LogicalType::BOOLEAN}};
-	auto selection = FunctionBinder::SelectFunction(*con.context, "f", set, positional, named);
+	auto selection = FunctionBinder::SelectFunction(*con.context, set, positional, named);
 	REQUIRE(selection.GetResult() == FunctionSelectionResult::SUCCESS);
 	REQUIRE(selection.GetIndex() == 0);
 	REQUIRE(!selection.GetError().HasError());
@@ -58,13 +58,10 @@ TEST_CASE("Selecting a function maps every argument to the parameter that receiv
 	auto &binding = selection.GetBinding();
 	const vector<idx_t> expected_parameters {0, 1, 2, 2, 3, 4};
 	REQUIRE(binding.argument_parameters == expected_parameters);
-	const vector<LogicalType> expected_types {LogicalType::LIST(LogicalType::INTEGER),
-	                                          LogicalType::INTEGER,
-	                                          LogicalType::VARCHAR,
-	                                          LogicalType::VARCHAR,
-	                                          LogicalType::BIGINT,
-	                                          LogicalType::ANY};
+	const vector<LogicalType> expected_types {LogicalType::LIST(LogicalType::INTEGER), LogicalType::INTEGER,
+	                                          LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::ANY};
 	REQUIRE(binding.parameter_types == expected_types);
+	REQUIRE(binding.return_type == LogicalType::INTEGER);
 }
 
 TEST_CASE("Selecting a function deduces the templates of the overload", "[api][function_binding]") {
@@ -73,18 +70,37 @@ TEST_CASE("Selecting a function deduces the templates of the overload", "[api][f
 	auto set = GetTemplatedSet();
 
 	// the template unifies the element type of the list with the value
-	auto selection = FunctionBinder::SelectFunction(*con.context, "f", set,
+	auto selection = FunctionBinder::SelectFunction(*con.context, set,
 	                                                {LogicalType::LIST(LogicalType::INTEGER), LogicalType::BIGINT});
 	REQUIRE(selection.IsValid());
-	const vector<LogicalType> expected_types {LogicalType::LIST(LogicalType::BIGINT), LogicalType::BIGINT};
-	REQUIRE(selection.GetBinding().parameter_types == expected_types);
+	auto &parameter_types = selection.GetBinding().parameter_types;
+	REQUIRE(parameter_types[0] == LogicalType::LIST(LogicalType::BIGINT));
+	REQUIRE(parameter_types[1] == LogicalType::BIGINT);
+	REQUIRE(selection.GetBinding().return_type == LogicalType::BIGINT);
 
 	// arguments that determine conflicting types for the template do not match the overload
-	selection = FunctionBinder::SelectFunction(*con.context, "f", set,
-	                                           {LogicalType::LIST(LogicalType::DATE), LogicalType::BOOLEAN});
+	selection =
+	    FunctionBinder::SelectFunction(*con.context, set, {LogicalType::LIST(LogicalType::DATE), LogicalType::BOOLEAN});
 	REQUIRE(selection.GetResult() == FunctionSelectionResult::NO_MATCH);
 	REQUIRE(selection.GetFailedCandidates()[0].reason == FunctionMismatchReason::TEMPLATE_DEDUCTION);
 	REQUIRE(StringUtil::Contains(selection.GetError().RawMessage(), "Cannot deduce template type 'T'"));
+
+	// without a client context, the template is unified with the built-in implicit casts
+	selection =
+	    FunctionBinder::SelectFunction(nullptr, set, {LogicalType::LIST(LogicalType::INTEGER), LogicalType::BIGINT});
+	REQUIRE(selection.IsValid());
+	REQUIRE(selection.GetBinding().return_type == LogicalType::BIGINT);
+
+	// a template that neither the arguments nor the defaults determine does not match either
+	FunctionSignature sig;
+	sig.AddParameter("value", LogicalType::INTEGER);
+	sig.SetReturnType(LogicalType::TEMPLATE("T"));
+	ScalarFunctionSet undetermined("u");
+	undetermined.AddFunction(ScalarFunction("u", std::move(sig), NoopExec));
+	selection = FunctionBinder::SelectFunction(*con.context, undetermined, {LogicalType::INTEGER});
+	REQUIRE(selection.GetResult() == FunctionSelectionResult::NO_MATCH);
+	REQUIRE(selection.GetFailedCandidates()[0].reason == FunctionMismatchReason::TEMPLATE_UNRESOLVED);
+	REQUIRE(StringUtil::Contains(selection.GetError().RawMessage(), "is not determined by the arguments"));
 }
 
 TEST_CASE("A call no overload matches records why each overload fails", "[api][function_binding]") {
@@ -92,7 +108,7 @@ TEST_CASE("A call no overload matches records why each overload fails", "[api][f
 	Connection con(db);
 	auto set = GetOverloadedSet();
 
-	auto selection = FunctionBinder::SelectFunction(*con.context, "g", set, {LogicalType::DATE});
+	auto selection = FunctionBinder::SelectFunction(*con.context, set, {LogicalType::DATE});
 	REQUIRE(selection.GetResult() == FunctionSelectionResult::NO_MATCH);
 	REQUIRE(!selection.IsValid());
 	REQUIRE(selection.GetCandidates().empty());
@@ -109,7 +125,8 @@ TEST_CASE("A call no overload matches records why each overload fails", "[api][f
 	REQUIRE(failed[0].position.GetIndex() == 0);
 	REQUIRE(failed[1].function_index == 0);
 	REQUIRE(failed[1].reason == FunctionMismatchReason::MISSING_PARAMETER);
-	REQUIRE(failed[1].position.GetIndex() == 1);
+	REQUIRE(failed[1].parameter.GetIndex() == 1);
+	REQUIRE(!failed[1].position.IsValid());
 	REQUIRE(failed[2].function_index == 1);
 	REQUIRE(failed[0].distance < failed[1].distance);
 	REQUIRE(failed[1].distance == failed[2].distance);
@@ -118,7 +135,7 @@ TEST_CASE("A call no overload matches records why each overload fails", "[api][f
 	                             "implicitly cast to VARCHAR)"));
 
 	// too many arguments, and a name no overload has
-	selection = FunctionBinder::SelectFunction(*con.context, "g", set,
+	selection = FunctionBinder::SelectFunction(*con.context, set,
 	                                           {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR});
 	REQUIRE(selection.GetFailedCandidates()[2].function_index == 2);
 	REQUIRE(selection.GetFailedCandidates()[2].reason == FunctionMismatchReason::TOO_MANY_ARGUMENTS);
@@ -132,8 +149,8 @@ TEST_CASE("A call no overload matches records why each overload fails", "[api][f
 	sig.SetReturnType(LogicalType::INTEGER);
 	ScalarFunctionSet defaulted("h");
 	defaulted.AddFunction(ScalarFunction("h", std::move(sig), NoopExec));
-	selection = FunctionBinder::SelectFunction(*con.context, "h", defaulted, {LogicalType::VARCHAR},
-	                                           {{"c", LogicalType::INTEGER}});
+	selection =
+	    FunctionBinder::SelectFunction(*con.context, defaulted, {LogicalType::VARCHAR}, {{"c", LogicalType::INTEGER}});
 	REQUIRE(selection.GetFailedCandidates()[0].reason == FunctionMismatchReason::UNKNOWN_NAMED_ARGUMENT);
 	REQUIRE(selection.GetFailedCandidates()[0].position.GetIndex() == 1);
 	// the only overload is not listed a second time
@@ -157,8 +174,7 @@ TEST_CASE("Fewer arguments that cannot be cast are a closer miss", "[api][functi
 		set.AddFunction(ScalarFunction("k", std::move(sig), NoopExec));
 	}
 
-	auto selection =
-	    FunctionBinder::SelectFunction(*con.context, "k", set, {LogicalType::INTEGER, LogicalType::BOOLEAN});
+	auto selection = FunctionBinder::SelectFunction(*con.context, set, {LogicalType::INTEGER, LogicalType::BOOLEAN});
 	REQUIRE(selection.GetResult() == FunctionSelectionResult::NO_MATCH);
 	auto &failed = selection.GetFailedCandidates();
 	REQUIRE(failed[0].function_index == 1);
@@ -168,8 +184,7 @@ TEST_CASE("Fewer arguments that cannot be cast are a closer miss", "[api][functi
 	REQUIRE(failed[1].distance == 2);
 
 	// a limit keeps the closest misses, not the first ones
-	selection =
-	    FunctionBinder::SelectFunction(*con.context, "k", set, {LogicalType::INTEGER, LogicalType::BOOLEAN}, {}, 1);
+	selection = FunctionBinder::SelectFunction(*con.context, set, {LogicalType::INTEGER, LogicalType::BOOLEAN}, {}, 1);
 	REQUIRE(selection.GetFailedCandidates().size() == 1);
 	REQUIRE(selection.GetFailedCandidates()[0].function_index == 1);
 	REQUIRE(selection.GetFailedCandidateCount() == 2);
@@ -180,8 +195,7 @@ TEST_CASE("A call several overloads match at the same cost is ambiguous", "[api]
 	Connection con(db);
 	auto set = GetOverloadedSet();
 
-	auto selection =
-	    FunctionBinder::SelectFunction(*con.context, "g", set, {LogicalType::INTEGER, LogicalType::INTEGER});
+	auto selection = FunctionBinder::SelectFunction(*con.context, set, {LogicalType::INTEGER, LogicalType::INTEGER});
 	REQUIRE(selection.GetResult() == FunctionSelectionResult::AMBIGUOUS);
 	REQUIRE(!selection.IsValid());
 	REQUIRE(StringUtil::Contains(selection.GetError().RawMessage(), "Could not choose a best candidate"));
@@ -195,13 +209,12 @@ TEST_CASE("The limit bounds the kept candidates, not the result", "[api][functio
 	Connection con(db);
 	auto set = GetOverloadedSet();
 
-	auto selection = FunctionBinder::SelectFunction(*con.context, "g", set, {LogicalType::DATE}, {}, 1);
+	auto selection = FunctionBinder::SelectFunction(*con.context, set, {LogicalType::DATE}, {}, 1);
 	REQUIRE(selection.GetResult() == FunctionSelectionResult::NO_MATCH);
 	REQUIRE(selection.GetFailedCandidates().size() == 1);
 	REQUIRE(selection.GetFailedCandidateCount() == 3);
 
-	selection =
-	    FunctionBinder::SelectFunction(*con.context, "g", set, {LogicalType::INTEGER, LogicalType::INTEGER}, {}, 1);
+	selection = FunctionBinder::SelectFunction(*con.context, set, {LogicalType::INTEGER, LogicalType::INTEGER}, {}, 1);
 	REQUIRE(selection.GetResult() == FunctionSelectionResult::AMBIGUOUS);
 	REQUIRE(selection.GetCandidates().size() == 1);
 	REQUIRE(selection.GetCandidateCount() == 2);

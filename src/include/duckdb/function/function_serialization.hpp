@@ -205,7 +205,7 @@ public:
 			}
 		});
 		ErrorData error;
-		return FunctionBinder::SelectFunction(context, name, relaxed, positional_types);
+		return FunctionBinder::SelectFunction(context, relaxed, positional_types);
 	}
 
 	//! Deserializes a table function, and whether the plan holds its bind data. Without it, the caller binds again
@@ -236,8 +236,7 @@ public:
 		vector<pair<Identifier, LogicalType>> keyword_types;
 		SplitArgumentTypes(qualified_name, arguments, positional_count, named_arguments, positional_types,
 		                   keyword_types);
-		auto func_idx =
-		    FunctionBinder::SelectFunction(context, qualified_name.Name(), functions, positional_types, keyword_types);
+		auto func_idx = FunctionBinder::SelectFunction(context, functions, positional_types, keyword_types);
 		// the error of the selection with the named arguments describes the plan best
 		auto error = func_idx.GetError();
 		if (!func_idx.IsValid() && named_arguments.empty()) {
@@ -397,8 +396,7 @@ public:
 
 		// Lookup the function (and the correct overload)
 		FunctionBinder binder(context);
-		const auto func_idx =
-		    FunctionBinder::SelectFunction(context, qualified_name.Name(), functions, positional_types, keyword_types);
+		const auto func_idx = FunctionBinder::SelectFunction(context, functions, positional_types, keyword_types);
 
 		// Ensure the function overload was found
 		if (!func_idx.IsValid()) {
@@ -422,7 +420,8 @@ public:
 				}
 
 				// Resolve function
-				auto [bound_function, bound_data] = binder.ResolveFunction(function, children, keyword_args);
+				auto [bound_function, bound_data] =
+				    binder.ResolveFunction(function, func_idx.GetBinding(), children, keyword_args);
 
 				if (TypeRequiresAssignment(bound_function.GetReturnType())) {
 					bound_function.SetReturnType(std::move(return_type));
