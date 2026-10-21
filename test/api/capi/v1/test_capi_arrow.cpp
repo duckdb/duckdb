@@ -439,7 +439,7 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 		// 4. Prepare Arrow schema for roundtrip
 		duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
 		duckdb_logical_type types[1] = {type};
-		const char *names[1] = {strdup("i")};
+		const char *names[1] = {"i"};
 		ArrowSchemaWrapper arrow_schema_wrapper;
 		duckdb_arrow_options arrow_options;
 		duckdb_connection_get_arrow_options(tester.connection, &arrow_options);
@@ -473,7 +473,6 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 		REQUIRE(all_arrow_values == all_duckdb_values);
 
 		// 6. Cleanup
-		free((void *)names[0]);
 		duckdb_destroy_arrow_converted_schema(&converted_schema);
 		for (auto arrow_array : arrow_arrays) {
 			if (arrow_array.release) {
@@ -490,7 +489,7 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 	SECTION("C-API Arrow Tess Null pointer inputs") {
 		duckdb_error_data err;
 		duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
-		const char *names[1] = {strdup("i")};
+		const char *names[1] = {"i"};
 		// Test duckdb_to_arrow_schema
 		ArrowSchema duckdb_arrow_schema;
 		err = duckdb_to_arrow_schema(nullptr, &type, names, 1, &duckdb_arrow_schema);
@@ -546,7 +545,6 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 		REQUIRE(err != nullptr);
 		duckdb_destroy_error_data(&err);
 		duckdb_destroy_arrow_options(&arrow_options);
-		free((void *)names[0]);
 	}
 
 	SECTION("data_chunk_from_arrow keeps the array alive while any of its columns is referenced") {

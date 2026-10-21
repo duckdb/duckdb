@@ -149,7 +149,7 @@ struct ICUListRange : public ICUDateFunc {
 				list.WriteElement().WriteValue(range_value);
 			}
 		}
-		result.Verify(args.size());
+		result.Verify();
 	}
 
 	static void AddICUListRangeFunction(ExtensionLoader &loader) {
