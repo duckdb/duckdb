@@ -45,7 +45,7 @@ jobs:
           mkdir to_be_uploaded
           rclone copy \
             --no-traverse \
-            ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:duckdb-staging/$TARGET/$DUCKDB_VERSION/$GITHUB_REPOSITORY/github_release/" \
+            ":s3,provider=AWS,env_auth=true,endpoint='${AWS_ENDPOINT_URL}':duckdb-staging/$TARGET/$DUCKDB_VERSION/$GITHUB_REPOSITORY/github_release/" \
             to_be_uploaded/
 
      - name: Deploy
@@ -62,4 +62,4 @@ jobs:
            --no-traverse \
            --header-upload "Content-Type: application/octet-stream" \
            to_be_uploaded/ \
-           ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:duckdb-install/$DUCKDB_VERSION/"
+           ":s3,provider=AWS,env_auth=true,endpoint='${AWS_ENDPOINT_URL}':duckdb-install/$DUCKDB_VERSION/"
