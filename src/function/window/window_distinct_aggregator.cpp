@@ -76,6 +76,10 @@ public:
 	optional_ptr<LocalSinkState> InitializeLocalSort(ExecutionContext &context) const;
 
 	bool TryPrepareNextStage(WindowDistinctAggregatorLocalState &lstate);
+	//! Record a stage task failure so that the threads waiting for the stage can rethrow it
+	void SetStageError(const std::exception &ex);
+	//! Rethrow the error recorded by SetStageError
+	[[noreturn]] void ThrowStageError();
 
 	//! The tree allocators.
 	//! We need to hold onto them for the tree lifetime,
@@ -91,6 +95,10 @@ public:
 	mutable idx_t tasks_assigned;
 	//! Tasks landed
 	mutable atomic<idx_t> tasks_completed;
+	//! Whether a stage task failed - the stage will then never be completed
+	atomic<bool> stage_failed;
+	//! The error that made a stage task fail (guarded by lock)
+	ErrorData stage_error;
 
 	//! The aggregate arguments + partition index
 	vector<LogicalType> sort_types;
@@ -119,7 +127,7 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
                                                                          const WindowDistinctAggregator &aggregator,
                                                                          idx_t group_count)
     : WindowAggregatorGlobalState(client, aggregator, group_count), stage(WindowDistinctSortStage::INIT),
-      tasks_assigned(0), tasks_completed(0), zipped_tree(BufferAllocator::Get(client)),
+      tasks_assigned(0), tasks_completed(0), stage_failed(false), zipped_tree(BufferAllocator::Get(client)),
       merge_sort_tree(BufferAllocator::Get(client), *this, group_count), levels_flat_native(client, aggr) {
 	//	1:	functionComputePrevIdcs(𝑖𝑛)
 	//	2:		sorted ← []
@@ -297,35 +305,54 @@ void WindowDistinctAggregatorLocalState::Finalize(ExecutionContext &context, Win
 
 void WindowDistinctAggregatorLocalState::ExecuteTask(ExecutionContext &context,
                                                      WindowDistinctAggregatorGlobalState &gdstate) {
+	//	Count the task as completed even if it fails, so the stage counters stay consistent.
+	//	The error is recorded first (below) so that the waiting threads rethrow it instead of continuing.
 	PostIncrement<atomic<idx_t>> on_done(gdstate.tasks_completed);
 
-	switch (stage) {
-	case WindowDistinctSortStage::COMBINE: {
-		auto &local_sink = *gdstate.local_sinks[block_idx];
-		InterruptState interrupt_state;
-		OperatorSinkCombineInput combine {*gdstate.global_sink, local_sink, interrupt_state};
-		gdstate.sort->Combine(context, combine);
-		break;
+	try {
+		switch (stage) {
+		case WindowDistinctSortStage::COMBINE: {
+			auto &local_sink = *gdstate.local_sinks[block_idx];
+			InterruptState interrupt_state;
+			OperatorSinkCombineInput combine {*gdstate.global_sink, local_sink, interrupt_state};
+			gdstate.sort->Combine(context, combine);
+			break;
+		}
+		case WindowDistinctSortStage::FINALIZE: {
+			//	5: Sort sorted lexicographically increasing
+			auto &sort = *gdstate.sort;
+			InterruptState interrupt;
+			OperatorSinkFinalizeInput finalize {*gdstate.global_sink, interrupt};
+			sort.Finalize(context.client, finalize);
+			auto sort_global = sort.GetGlobalSourceState(context.client, *gdstate.global_sink);
+			auto sort_local = sort.GetLocalSourceState(context, *sort_global);
+			OperatorSourceInput source {*sort_global, *sort_local, interrupt};
+			sort.MaterializeColumnData(context, source);
+			gdstate.sorted = sort.GetColumnData(source);
+			break;
+		}
+		case WindowDistinctSortStage::SORTED:
+			Sorted();
+			break;
+		default:
+			break;
+		}
+	} catch (std::exception &ex) {
+		//	Wake up the threads waiting for this stage
+		gdstate.SetStageError(ex);
+		throw;
 	}
-	case WindowDistinctSortStage::FINALIZE: {
-		//	5: Sort sorted lexicographically increasing
-		auto &sort = *gdstate.sort;
-		InterruptState interrupt;
-		OperatorSinkFinalizeInput finalize {*gdstate.global_sink, interrupt};
-		sort.Finalize(context.client, finalize);
-		auto sort_global = sort.GetGlobalSourceState(context.client, *gdstate.global_sink);
-		auto sort_local = sort.GetLocalSourceState(context, *sort_global);
-		OperatorSourceInput source {*sort_global, *sort_local, interrupt};
-		sort.MaterializeColumnData(context, source);
-		gdstate.sorted = sort.GetColumnData(source);
-		break;
-	}
-	case WindowDistinctSortStage::SORTED:
-		Sorted();
-		break;
-	default:
-		break;
-	}
+}
+
+void WindowDistinctAggregatorGlobalState::SetStageError(const std::exception &ex) {
+	lock_guard<mutex> stage_guard(lock);
+	stage_error = ErrorData(ex);
+	stage_failed = true;
+}
+
+void WindowDistinctAggregatorGlobalState::ThrowStageError() {
+	lock_guard<mutex> stage_guard(lock);
+	stage_error.Throw();
 }
 
 bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggregatorLocalState &lstate) {
@@ -394,11 +421,20 @@ void WindowDistinctAggregator::Finalize(ExecutionContext &context, CollectionPtr
 
 	// Sort, merge and build the tree in parallel
 	while (gdsink.stage.load() != WindowDistinctSortStage::FINISHED) {
+		if (gdsink.stage_failed) {
+			//	Another thread failed its task, so the stage will never be completed
+			gdsink.ThrowStageError();
+		}
 		if (gdsink.TryPrepareNextStage(ldstate)) {
 			ldstate.ExecuteTask(context, gdsink);
 		} else {
 			std::this_thread::yield();
 		}
+	}
+	//	The failing task may have been the last one of its stage,
+	//	in which case the stages finished but the sorted data is not usable.
+	if (gdsink.stage_failed) {
+		gdsink.ThrowStageError();
 	}
 
 	//	These are a parallel implementations,
@@ -520,10 +556,20 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorLocalState &ldastate)
 	//	Fan in parent levels until we are at the top
 	//	Note that we don't build the top layer as that would just be all the data.
 	while (build_level.load() < tree.size()) {
+		if (build_failed) {
+			//	Another thread failed to build its run, so the current level will never be completed
+			ThrowBuildError();
+		}
 		idx_t level_idx;
 		idx_t run_idx;
 		if (TryNextRun(level_idx, run_idx)) {
-			BuildRun(level_idx, run_idx, ldastate);
+			try {
+				BuildRun(level_idx, run_idx, ldastate);
+			} catch (std::exception &ex) {
+				//	Wake up the threads waiting for this level
+				SetBuildError(ex);
+				throw;
+			}
 		} else {
 			std::this_thread::yield();
 		}

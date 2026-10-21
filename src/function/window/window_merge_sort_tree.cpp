@@ -10,7 +10,7 @@ namespace duckdb {
 
 WindowMergeSortTree::WindowMergeSortTree(ClientContext &client, const vector<BoundOrderByNode> &orders_p,
                                          const vector<column_t> &order_idx, const idx_t count, bool unique)
-    : order_idx(order_idx), build_stage(WindowMergeSortStage::INIT), tasks_completed(0) {
+    : order_idx(order_idx), build_stage(WindowMergeSortStage::INIT), tasks_completed(0), stage_failed(false) {
 	// Sort the unfiltered indices by the orders
 	const auto force_external = Settings::Get<DebugForceExternalSetting>(client);
 	LogicalType index_type;
@@ -90,32 +90,51 @@ void WindowMergeSortTreeLocalState::Sink(ExecutionContext &context, DataChunk &c
 }
 
 void WindowMergeSortTreeLocalState::ExecuteSortTask(ExecutionContext &context, InterruptState &interrupt) {
+	//	Count the task as completed even if it fails, so the stage counters stay consistent.
+	//	The error is recorded first (below) so that the waiting threads rethrow it instead of continuing.
 	PostIncrement<atomic<idx_t>> on_completed(window_tree.tasks_completed);
 
-	switch (build_stage) {
-	case WindowMergeSortStage::COMBINE: {
-		auto &local_sink = *window_tree.local_sinks[build_task];
-		OperatorSinkCombineInput combine {*window_tree.global_sink, local_sink, interrupt};
-		window_tree.sort->Combine(context, combine);
-		break;
+	try {
+		switch (build_stage) {
+		case WindowMergeSortStage::COMBINE: {
+			auto &local_sink = *window_tree.local_sinks[build_task];
+			OperatorSinkCombineInput combine {*window_tree.global_sink, local_sink, interrupt};
+			window_tree.sort->Combine(context, combine);
+			break;
+		}
+		case WindowMergeSortStage::FINALIZE: {
+			auto &sort = *window_tree.sort;
+			OperatorSinkFinalizeInput finalize {*window_tree.global_sink, interrupt};
+			sort.Finalize(context.client, finalize);
+			auto sort_global = sort.GetGlobalSourceState(context.client, *window_tree.global_sink);
+			auto sort_local = sort.GetLocalSourceState(context, *sort_global);
+			OperatorSourceInput source {*sort_global, *sort_local, interrupt};
+			sort.MaterializeColumnData(context, source);
+			window_tree.sorted = sort.GetColumnData(source);
+			break;
+		}
+		case WindowMergeSortStage::SORTED:
+			BuildLeaves();
+			break;
+		default:
+			break;
+		}
+	} catch (std::exception &ex) {
+		//	Wake up the threads waiting for this stage
+		window_tree.SetStageError(ex);
+		throw;
 	}
-	case WindowMergeSortStage::FINALIZE: {
-		auto &sort = *window_tree.sort;
-		OperatorSinkFinalizeInput finalize {*window_tree.global_sink, interrupt};
-		sort.Finalize(context.client, finalize);
-		auto sort_global = sort.GetGlobalSourceState(context.client, *window_tree.global_sink);
-		auto sort_local = sort.GetLocalSourceState(context, *sort_global);
-		OperatorSourceInput source {*sort_global, *sort_local, interrupt};
-		sort.MaterializeColumnData(context, source);
-		window_tree.sorted = sort.GetColumnData(source);
-		break;
-	}
-	case WindowMergeSortStage::SORTED:
-		BuildLeaves();
-		break;
-	default:
-		break;
-	}
+}
+
+void WindowMergeSortTree::SetStageError(const std::exception &ex) {
+	lock_guard<mutex> stage_guard(lock);
+	stage_error = ErrorData(ex);
+	stage_failed = true;
+}
+
+void WindowMergeSortTree::ThrowStageError() {
+	lock_guard<mutex> stage_guard(lock);
+	stage_error.Throw();
 }
 
 idx_t WindowMergeSortTree::MeasurePayloadBlocks() {
@@ -203,11 +222,20 @@ bool WindowMergeSortTree::TryPrepareSortStage(WindowMergeSortTreeLocalState &lst
 void WindowMergeSortTreeLocalState::Finalize(ExecutionContext &context, InterruptState &interrupt) {
 	// Sort, merge and build the tree in parallel
 	while (window_tree.build_stage.load() != WindowMergeSortStage::FINISHED) {
+		if (window_tree.stage_failed) {
+			//	Another thread failed its task, so the stage will never be completed
+			window_tree.ThrowStageError();
+		}
 		if (window_tree.TryPrepareSortStage(*this)) {
 			ExecuteSortTask(context, interrupt);
 		} else {
 			std::this_thread::yield();
 		}
+	}
+	//	The failing task may have been the last one of its stage,
+	//	in which case the stages finished but the tree is not usable.
+	if (window_tree.stage_failed) {
+		window_tree.ThrowStageError();
 	}
 }
 

@@ -93,6 +93,15 @@ public:
 	idx_t tasks_assigned = 0;
 	//! Tasks landed
 	atomic<idx_t> tasks_completed;
+	//! Whether a stage task failed - the stage will then never be completed
+	atomic<bool> stage_failed;
+	//! The error that made a stage task fail (guarded by lock)
+	ErrorData stage_error;
+
+	//! Record a stage task failure so that the threads waiting for the stage can rethrow it
+	void SetStageError(const std::exception &ex);
+	//! Rethrow the error recorded by SetStageError
+	[[noreturn]] void ThrowStageError();
 
 	// Merge sort trees for various sizes
 	// Smaller is probably not worth the effort.
