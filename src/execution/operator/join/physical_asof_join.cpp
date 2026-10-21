@@ -751,9 +751,8 @@ public:
 		return !stopped && finished < total_tasks;
 	}
 
-	//! Assign a new task to the local state
-	bool TryNextTask(TaskPtr &task, Task &task_local) DUCKDB_EXCLUDES(lock);
-	//! Same, with the lock held, so that a caller can block on failure without missing an unblock
+	//! Finish the current task (if any), advance the stages of the active groups and try to get the next task.
+	//! Runs under the lock so that a caller can decide to block on failure without missing an unblock.
 	bool TryNextTaskLocked(TaskPtr &task, Task &task_local) DUCKDB_REQUIRES(lock);
 
 	//! The parent operator
@@ -1424,8 +1423,8 @@ public:
 
 	//! Task management
 	bool TaskFinished() const;
-	//! Finish the current task (if any) and try to get the next one
-	bool TryAssignTask() DUCKDB_EXCLUDES(gsource.lock);
+	//! Release the local state of the current task (if any) and record its completion in its hash group
+	void FinishTask();
 	//! Set up the local state for executing a task acquired through AsOfGlobalSourceState::TryNextTaskLocked
 	void InitializeTask();
 
@@ -1561,39 +1560,34 @@ void AsOfGlobalSourceState::FinishTask(TaskPtr task) {
 	}
 }
 
-bool AsOfLocalSourceState::TryAssignTask() {
+void AsOfLocalSourceState::FinishTask() {
 	D_ASSERT(TaskFinished());
 	// Because downstream operators may be using our internal buffers,
 	// we can't "finish" a task until we are about to get the next one.
-	if (task) {
-		task_progress.Finish(gsource.task_progress);
-		switch (task->stage) {
-		case AsOfJoinSourceStage::SORT:
-			gsource.asof_groups[task_local.group_idx]->sorted++;
-			break;
-		case AsOfJoinSourceStage::MATERIALIZE:
-			gsource.asof_groups[task_local.group_idx]->materialized++;
-			break;
-		case AsOfJoinSourceStage::GET:
-			gsource.asof_groups[task_local.group_idx]->gotten++;
-			break;
-		case AsOfJoinSourceStage::LEFT:
-			probe_buffer.EndLeftScan();
-			break;
-		case AsOfJoinSourceStage::RIGHT:
-			EndRightScan();
-			break;
-		case AsOfJoinSourceStage::INIT:
-		case AsOfJoinSourceStage::DONE:
-			break;
-		}
+	if (!task) {
+		return;
 	}
-
-	if (!gsource.TryNextTask(task, task_local)) {
-		return false;
+	task_progress.Finish(gsource.task_progress);
+	switch (task->stage) {
+	case AsOfJoinSourceStage::SORT:
+		gsource.asof_groups[task_local.group_idx]->sorted++;
+		break;
+	case AsOfJoinSourceStage::MATERIALIZE:
+		gsource.asof_groups[task_local.group_idx]->materialized++;
+		break;
+	case AsOfJoinSourceStage::GET:
+		gsource.asof_groups[task_local.group_idx]->gotten++;
+		break;
+	case AsOfJoinSourceStage::LEFT:
+		probe_buffer.EndLeftScan();
+		break;
+	case AsOfJoinSourceStage::RIGHT:
+		EndRightScan();
+		break;
+	case AsOfJoinSourceStage::INIT:
+	case AsOfJoinSourceStage::DONE:
+		break;
 	}
-	InitializeTask();
-	return true;
 }
 
 void AsOfLocalSourceState::InitializeTask() {
@@ -1617,15 +1611,11 @@ void AsOfLocalSourceState::InitializeTask() {
 	}
 }
 
-bool AsOfGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
-	annotated_lock_guard<annotated_mutex> guard(lock);
-	FinishTask(task);
-	return TryNextTaskLocked(task, task_local);
-}
-
 bool AsOfGlobalSourceState::TryNextTaskLocked(TaskPtr &task, Task &task_local) {
+	FinishTask(task);
+	task = nullptr;
+
 	if (!HasMoreTasks()) {
-		task = nullptr;
 		return false;
 	}
 
@@ -1660,8 +1650,6 @@ bool AsOfGlobalSourceState::TryNextTaskLocked(TaskPtr &task, Task &task_local) {
 		++started;
 		return true;
 	}
-
-	task = nullptr;
 
 	return false;
 }
@@ -1764,16 +1752,20 @@ SourceResultType PhysicalAsOfJoin::GetDataInternal(ExecutionContext &context, Da
 	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
 	// Therefore, we loop until we've produced tuples, or until the operator is actually done
 	while (gsource.HasUnfinishedTasks() && chunk.size() == 0) {
-		if (lsource.TaskFinished() && !lsource.TryAssignTask()) {
+		if (lsource.TaskFinished()) {
 			{
+				// Finish the current task, advance the stages, look for the next task and decide what to do without
+				// one, all under a single acquisition of the lock: the decision to block has to be made under the
+				// same lock as the failed search, or the unblock could slip in between and no one would ever wake
+				// this task up again.
 				annotated_lock_guard<annotated_mutex> guard(gsource.lock);
-				if (!gsource.HasMoreTasks()) {
-					gsource.UnblockTasks();
-					break;
-				}
-				// TryAssignTask released the lock: another thread may have prepared the next stage and unblocked
-				// the blocked tasks in between, so look again before blocking, or no one would ever unblock this task.
+				lsource.FinishTask();
 				if (!gsource.TryNextTaskLocked(lsource.task, lsource.task_local)) {
+					if (!gsource.HasMoreTasks()) {
+						// no more tasks - exit
+						gsource.UnblockTasks();
+						break;
+					}
 					if (lsource.produced) {
 						// The remaining tasks can only start once the other tasks of this stage have finished
 						// (e.g., the RIGHT stage of an outer join waits for every LEFT task). This task has already
