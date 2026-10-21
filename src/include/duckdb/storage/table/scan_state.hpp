@@ -304,8 +304,6 @@ public:
 	//! Whether the column scans of the current assignment still have to be initialized
 	bool column_scans_pending = false;
 
-	RandomEngine random;
-
 	//! The amount of tuples considered by a scan, before applying filters
 	idx_t rows_scanned = 0;
 
@@ -317,6 +315,7 @@ public:
 	const vector<StorageIndex> &GetColumnIds();
 	ScanFilterInfo &GetFilterInfo();
 	ScanSamplingInfo &GetSamplingInfo();
+	RandomEngine &GetRandomEngine();
 	TableScanOptions &GetOptions();
 	optional_ptr<SegmentNode<RowGroup>> GetRowGroup() const;
 	void SetRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group);
@@ -347,6 +346,8 @@ private:
 	optional_ptr<SegmentNode<RowGroup>> row_group;
 	shared_ptr<RowGroup> pinned_row_group;
 	TableScanState &parent;
+	//! The random engine for system sampling
+	unique_ptr<RandomEngine> random;
 };
 
 struct ScanSamplingInfo {

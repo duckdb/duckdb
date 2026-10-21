@@ -5,12 +5,14 @@
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache_util.hpp"
@@ -22,10 +24,30 @@ class DatabaseInstance;
 
 namespace {
 
-// Allocate an uncached read buffer to make sure it's de-allocated immediately, and its metadata is not stored in the
-// eviction queue.
+// Destroy the uncached buffer and its metadata on unpin; its allocation can still be reused.
 BufferHandle AllocateUncachedReadBuffer(BufferManager &buffer_manager, idx_t size) {
-	auto buffer = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, size);
+	BufferHandle buffer;
+	const auto header_size = Storage::DEFAULT_BLOCK_HEADER_SIZE;
+	if (size >= 256ULL * 1024 && size <= 64ULL * 1024 * 1024 - header_size) {
+		const auto capacity = NextPowerOfTwo(size + header_size);
+		const auto limit = buffer_manager.GetMaxMemory();
+		const auto used = buffer_manager.GetBufferPool().GetUsedMemory(false);
+		const auto available = limit - MinValue(limit, used);
+		auto &scheduler = TaskScheduler::GetScheduler(buffer_manager.GetDatabase());
+		const auto workers = MaxValue<idx_t>(1, scheduler.NumberOfThreads() + scheduler.NumberOfAsyncThreads());
+		// Leave room for a second read per worker before rounding pinned buffers.
+		// Changes to rounding should be tested with ClickBench on Parquet on a 192-core machine.
+		if (capacity <= available / workers / 2) {
+			try {
+				buffer = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, capacity - header_size);
+			} catch (const OutOfMemoryException &) {
+				// Concurrent allocations may have consumed the headroom.
+			}
+		}
+	}
+	if (!buffer.IsValid()) {
+		buffer = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, size);
+	}
 	buffer.GetBlockHandle()->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 	return buffer;
 }

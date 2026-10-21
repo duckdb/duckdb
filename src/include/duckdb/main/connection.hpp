@@ -133,8 +133,10 @@ public:
 	//! DEFAULT_SCHEMA.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const Identifier &table_name);
 
-	//! Extract the user statements of a script as parsed, without expanding any of them
-	DUCKDB_API vector<unique_ptr<SQLStatement>> ExtractStatements(const string &query);
+	//! Extract the user statements of a script as parsed, without expanding any of them. apply_invalidation_policy
+	//! works as for ClientContext::IterateStatements.
+	DUCKDB_API vector<unique_ptr<SQLStatement>> ExtractStatements(const string &query,
+	                                                              bool apply_invalidation_policy = true);
 	//! Extract the logical plan that corresponds to a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
 
