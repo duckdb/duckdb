@@ -277,8 +277,10 @@ private:
 		if (!HAS_DEFINES && !CHECKED && CONVERSION::PlainConstantSize() == sizeof(VALUE_TYPE)) {
 			// we can memcpy
 			idx_t copy_count = num_values * CONVERSION::PlainConstantSize();
-			memcpy(result_ptr + result_offset, plain_data.ptr, copy_count);
-			plain_data.unsafe_inc(copy_count);
+			if (copy_count > 0) {
+				memcpy(result_ptr + result_offset, plain_data.ptr, copy_count);
+				plain_data.unsafe_inc(copy_count);
+			}
 			return;
 		}
 		auto &result_mask = FlatVector::ValidityMutable(result);
