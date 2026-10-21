@@ -1078,16 +1078,20 @@ struct PrefixRangeBuildLane {
 	idx_t task_count = 0;
 };
 
-static void ExecuteHashJoinFinalizeTask(HashJoinGlobalSinkState &sink, const pair<idx_t, idx_t> &chunk_range,
-                                        bool parallel, optional_ptr<PrefixRangeBuildLane> prefix_range_lane) {
+struct JoinBuildRange {
+	idx_t begin;
+	idx_t end;
+};
+
+static void ExecuteHashJoinFinalizeTask(HashJoinGlobalSinkState &sink, const JoinBuildRange &chunk_range, bool parallel,
+                                        optional_ptr<PrefixRangeBuildLane> prefix_range_lane) {
 	optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state;
 	bool prefix_range_parallel = false;
 	if (prefix_range_lane) {
 		prefix_range_state = *prefix_range_lane->state;
 		prefix_range_parallel = prefix_range_lane->task_count > 1;
 	}
-	sink.hash_table->Finalize(chunk_range.first, chunk_range.second, parallel, prefix_range_state,
-	                          prefix_range_parallel);
+	sink.hash_table->Finalize(chunk_range.begin, chunk_range.end, parallel, prefix_range_state, prefix_range_parallel);
 }
 
 static void PublishDeferredRuntimeFilters(ClientContext &context, JoinHashTable &ht, JoinFilterGlobalState &gstate);
@@ -1104,7 +1108,7 @@ public:
 
 	void Add(idx_t partition, idx_t begin, idx_t end) {
 		D_ASSERT(begin < end);
-		shards[partition * shards.size() / partitions]->ranges.emplace_back(begin, end);
+		shards[partition * shards.size() / partitions]->ranges.push_back({begin, end});
 		range_count++;
 	}
 
@@ -1117,7 +1121,7 @@ public:
 		return group * shards.size() / group_count;
 	}
 
-	bool Next(idx_t start, idx_t &pass, pair<idx_t, idx_t> &range) {
+	bool Next(idx_t start, idx_t &pass, JoinBuildRange &range) {
 		for (; pass < shards.size(); pass++) {
 			auto &shard = *shards[(start + pass) % shards.size()];
 			const auto next = shard.next.fetch_add(1, std::memory_order_relaxed);
@@ -1142,7 +1146,7 @@ private:
 	}
 
 	struct alignas(64) Shard {
-		vector<pair<idx_t, idx_t>> ranges;
+		vector<JoinBuildRange> ranges;
 		atomic<idx_t> next {0};
 	};
 	vector<unique_ptr<Shard>> shards;
@@ -1161,10 +1165,10 @@ public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		const auto start = queue.StartShard();
 		idx_t pass = 0;
-		pair<idx_t, idx_t> range;
+		JoinBuildRange range;
 		while (queue.Next(start, pass, range)) {
 			sink.context.InterruptCheck();
-			ExecuteHashJoinTableInitTask(sink, range.first, range.second);
+			ExecuteHashJoinTableInitTask(sink, range.begin, range.end);
 		}
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
@@ -1238,7 +1242,7 @@ public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		const auto start = queue.StartShard();
 		idx_t pass = 0;
-		pair<idx_t, idx_t> range;
+		JoinBuildRange range;
 		while (queue.Next(start, pass, range)) {
 			sink.context.InterruptCheck();
 			ExecuteHashJoinFinalizeTask(sink, range, parallel, prefix_range_lane);
