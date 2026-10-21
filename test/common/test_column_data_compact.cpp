@@ -922,14 +922,29 @@ TEST_CASE("Sparse appends over fresh dictionaries stay flat", "[column_data_comp
 	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
 	const string prefix = "a_sparse_dictionary_payload_string_value_";
 
-	// 500 appends of 3 rows, each over a fresh 1500-entry dictionary: copying a dictionary
-	// for 3 codes is a net loss, the rows must be stored flat instead
+	// 500 appends of 3 rows, each over a fresh dictionary covering most of a vector: copying
+	// a dictionary for 3 codes is a net loss, the rows must be stored flat instead
 	ColumnDataCollection collection(buffer_manager, {LogicalType::VARCHAR});
 	ColumnDataAppendState append_state;
 	collection.InitializeAppend(append_state);
-	const idx_t dict_size = 1500;
+	// the same logical rows appended flat give the exact storage the fallback must match
+	ColumnDataCollection flat_equivalent(buffer_manager, {LogicalType::VARCHAR});
+	ColumnDataAppendState flat_append;
+	flat_equivalent.InitializeAppend(flat_append);
+	DataChunk flat_rows;
+	flat_equivalent.InitializeScanChunk(flat_rows);
+	const idx_t dict_size = (STANDARD_VECTOR_SIZE / 4) * 3;
 	for (idx_t round = 0; round < 500; round++) {
 		AppendDictionaryChunk(collection, append_state, MakeStringDictionary(dict_size, prefix, false), dict_size, 3);
+		flat_rows.Reset();
+		{
+			auto writer = FlatVector::Writer<string_t>(flat_rows.data[0], 3);
+			for (idx_t i = 0; i < 3; i++) {
+				writer.WriteValue(string_t(prefix + to_string(i % dict_size)));
+			}
+		}
+		flat_rows.CheckCardinality(3);
+		flat_equivalent.Append(flat_append, flat_rows);
 	}
 	REQUIRE(collection.Count() == 1500);
 	REQUIRE(collection.GetValue(0, 0) == Value(prefix + "0"));
@@ -937,8 +952,8 @@ TEST_CASE("Sparse appends over fresh dictionaries stay flat", "[column_data_comp
 
 	DataChunk chunk;
 	REQUIRE(FirstScannedVectorType(collection, chunk) == VectorType::FLAT_VECTOR);
-	// the flat rows cost their string bytes plus the row slots, nowhere near a dictionary copy
-	REQUIRE(collection.SizeInBytes() < 160000);
+	// the sparse appends must cost exactly the flat rows, not a dictionary copy per segment
+	REQUIRE(collection.SizeInBytes() == flat_equivalent.SizeInBytes());
 
 	// worst case: a single row over a full-size dictionary
 	ColumnDataCollection single(buffer_manager, {LogicalType::VARCHAR});
@@ -974,7 +989,7 @@ TEST_CASE("Dictionary reuse bypasses the fresh-dictionary size gate", "[column_d
 	DuckDB db(":memory:");
 	auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
 	const string prefix = "a_reused_dictionary_payload_string_value_";
-	const idx_t dict_size = 1500;
+	const idx_t dict_size = (STANDARD_VECTOR_SIZE / 4) * 3;
 	auto dictionary = MakeStringDictionary(dict_size, prefix, false);
 
 	ColumnDataCollection collection(buffer_manager, {LogicalType::VARCHAR});
