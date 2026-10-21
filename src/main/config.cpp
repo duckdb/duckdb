@@ -97,7 +97,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(AutoinstallExtensionRepositorySetting),
     DUCKDB_SETTING(AutoinstallKnownExtensionsSetting),
     DUCKDB_SETTING(AutoloadKnownExtensionsSetting),
-    DUCKDB_GLOBAL(BlockAllocatorMemorySetting),
     DUCKDB_SETTING(CacheLocalFilesSetting),
     DUCKDB_SETTING(CatalogErrorMaxSchemasSetting),
     DUCKDB_SETTING_CALLBACK(CheckpointOnDetachSetting),
@@ -159,6 +158,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DisabledOptimizersSetting),
     DUCKDB_SETTING_CALLBACK(DuckDBAPISetting),
     DUCKDB_SETTING(DynamicOrFilterThresholdSetting),
+    DUCKDB_GLOBAL(EnableBlockAllocatorSetting),
     DUCKDB_SETTING_CALLBACK(EnableExternalAccessSetting),
     DUCKDB_SETTING_CALLBACK(EnableExternalFileCacheSetting),
     DUCKDB_SETTING(EnableFSSTVectorsSetting),
@@ -982,6 +982,9 @@ void DBConfig::AddAllowedDirectory(const string &path) {
 }
 
 bool DBConfig::IsOptimizerDisabled(OptimizerType type) const {
+	if (!has_disabled_optimizers.load()) {
+		return false;
+	}
 	lock_guard<mutex> guard(disabled_optimizers_lock);
 	return options.disabled_optimizers.find(type) != options.disabled_optimizers.end();
 }
@@ -994,6 +997,7 @@ set<OptimizerType> DBConfig::GetDisabledOptimizers() const {
 void DBConfig::SetDisabledOptimizers(set<OptimizerType> disabled_optimizers) {
 	lock_guard<mutex> guard(disabled_optimizers_lock);
 	options.disabled_optimizers = std::move(disabled_optimizers);
+	has_disabled_optimizers.store(!options.disabled_optimizers.empty());
 }
 
 void DBConfig::SetAllowedDirectories(const vector<string> &paths) {
