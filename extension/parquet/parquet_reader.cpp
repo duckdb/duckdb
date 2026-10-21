@@ -2279,6 +2279,8 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 
 	vector<bool> already_registered(column_ids.size(), false);
 	vector<ParquetPrefetchColumn> pending_registrations;
+	// column chunks fetched by the filter step
+	unordered_set<idx_t> filter_chunks;
 
 	if (lazy_fetch && !state.scan_filters.empty()) {
 		auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
@@ -2295,9 +2297,10 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 			MultiFileLocalIndex local_idx(scan_filter.filter_idx);
 			auto &child = state.GetColumnReader(local_idx);
 			child.RegisterPrefetch(trans, true);
+			unordered_set<idx_t> column_chunks;
+			child.GatherColumnChunks(column_chunks);
+			filter_chunks.insert(column_chunks.begin(), column_chunks.end());
 			if (log_prefetch) {
-				unordered_set<idx_t> column_chunks;
-				child.GatherColumnChunks(column_chunks);
 				AddPrefetchLogColumns(group, column_chunks, pending_registrations);
 			}
 			already_registered[local_idx.GetIndex()] = true;
@@ -2324,6 +2327,21 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 		child.GatherColumnChunks(column_chunks);
 		if (column_chunks.empty()) {
 			//! Column reader is skipped entirely
+			continue;
+		}
+		if (child.IsSkipped() && has_non_optional_filter && !lazy_fetch) {
+			// fetching before the filter: keep reading nested columns only when needed, the filter may remove every row
+			continue;
+		}
+		bool fetched_by_filter = true;
+		for (auto column_chunk : column_chunks) {
+			if (filter_chunks.find(column_chunk) == filter_chunks.end()) {
+				fetched_by_filter = false;
+				break;
+			}
+		}
+		if (fetched_by_filter) {
+			// the filter step already fetched these chunks, e.g. another field of the same variant column
 			continue;
 		}
 
