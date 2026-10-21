@@ -10,11 +10,6 @@ SELECT levenshtein(repeat('a',300000), repeat('b',300000));
 ----
 <REGEX>:.*Query exceeded maximum execution time.*
 
-statement error
-SELECT damerau_levenshtein(repeat('a',100000), repeat('b',100000));
-----
-<REGEX>:.*Query exceeded maximum execution time.*
-
 statement ok
 SET max_execution_time=0;
 

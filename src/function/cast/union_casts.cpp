@@ -1,4 +1,5 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
