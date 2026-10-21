@@ -43,10 +43,72 @@ void PartitionedTupleData::InitializeAppendState(PartitionedTupleDataAppendState
 	InitializeAppendStateInternal(state, properties);
 }
 
+void PartitionedTupleData::InitializeAppendStateInternal(PartitionedTupleDataAppendState &state,
+                                                         TupleDataPinProperties properties) const {
+	// Init pin state per partition
+	const auto num_partitions = partitions.size();
+	state.partition_pin_states.reserve(num_partitions);
+	for (idx_t i = 0; i < num_partitions; i++) {
+		state.partition_pin_states.emplace_back();
+		partitions[i]->InitializeAppend(state.partition_pin_states[i], properties);
+	}
+
+	// Init single chunk state
+	auto column_count = layout.ColumnCount();
+	vector<column_t> column_ids;
+	column_ids.reserve(column_count);
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		column_ids.emplace_back(col_idx);
+	}
+	partitions[0]->InitializeChunkState(state.chunk_state, std::move(column_ids));
+
+	// Initialize fixed-size map
+	if (UseFixedSizeMap()) {
+		state.fixed_partition_entries.resize(num_partitions);
+	}
+}
+
 void PartitionedTupleData::ResetAppendState(PartitionedTupleDataAppendState &state,
                                             TupleDataPinProperties properties) const {
-	// Default: fall back to full re-initialization (subclasses can override with a faster path)
-	InitializeAppendState(state, properties);
+	if (!state.partition_sel.data()) {
+		state.partition_sel.Initialize();
+	}
+	if (!state.reverse_partition_sel.data()) {
+		state.reverse_partition_sel.Initialize();
+	}
+
+	const auto num_partitions = partitions.size();
+	if (state.partition_pin_states.size() != num_partitions) {
+		state.partition_pin_states.clear();
+		state.partition_pin_states.reserve(num_partitions);
+		for (idx_t i = 0; i < num_partitions; i++) {
+			state.partition_pin_states.emplace_back();
+		}
+	}
+	for (idx_t i = 0; i < num_partitions; i++) {
+		auto &pin_state = state.partition_pin_states[i];
+		pin_state.row_handles.clear();
+		pin_state.heap_handles.clear();
+		partitions[i]->InitializeAppend(pin_state, properties);
+	}
+
+	if (state.chunk_state.column_ids.empty()) {
+		auto column_count = layout.ColumnCount();
+		vector<column_t> column_ids;
+		column_ids.reserve(column_count);
+		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+			column_ids.emplace_back(col_idx);
+		}
+		partitions[0]->InitializeChunkState(state.chunk_state, std::move(column_ids));
+	}
+	state.chunk_state.chunk_lock = nullptr;
+	state.chunk_state.chunk_parts.clear();
+	state.chunk_state.chunk_part_indices.clear();
+
+	// the map is cleared before every append, so only its capacity has to match (size() counts occupied entries)
+	if (UseFixedSizeMap() && state.fixed_partition_entries.GetCapacity() != num_partitions) {
+		state.fixed_partition_entries.resize(num_partitions);
+	}
 }
 
 void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, DataChunk &input,
