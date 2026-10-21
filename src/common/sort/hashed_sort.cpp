@@ -35,8 +35,9 @@ public:
 	TupleDataParallelScanState parallel_scan;
 	atomic<idx_t> tasks_completed;
 	unique_ptr<GlobalSourceState> sort_source;
+	//! Single-key groups skip the sort: their rows are appended here directly (guarded by scan_lock)
 	unique_ptr<ColumnDataCollection> direct_column_data;
-	vector<unique_ptr<ColumnDataCollection>> direct_column_fragments;
+	ColumnDataAppendState direct_append_state;
 };
 
 HashedSortGroup::HashedSortGroup(ClientContext &client, Sort &sort, idx_t group_idx)
@@ -511,52 +512,20 @@ static void BuildDirectColumnData(ClientContext &client, const vector<LogicalTyp
 	TupleDataLocalScanState local_scan;
 	partition.InitializeScan(local_scan);
 
-	auto local_column_data =
-	    make_uniq<ColumnDataCollection>(client, payload_types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
-	ColumnDataAppendState append_state;
-	local_column_data->InitializeAppend(append_state);
-
+	// Downstream source tasks address hash groups by chunk index, so all scanning threads append into one
+	// collection: Append packs the rows densely, and copying under the lock is cheaper than a second copy
 	idx_t combined = 0;
 	while (partition.Scan(hash_group.parallel_scan, local_scan, chunk)) {
-		local_column_data->Append(append_state, chunk);
+		lock_guard<mutex> direct_guard(hash_group.scan_lock);
+		if (!hash_group.direct_column_data) {
+			hash_group.direct_column_data = make_uniq<ColumnDataCollection>(
+			    client, payload_types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+			hash_group.direct_column_data->InitializeAppend(hash_group.direct_append_state);
+		}
+		hash_group.direct_column_data->Append(hash_group.direct_append_state, chunk);
 		combined += chunk.size();
 	}
-
-	lock_guard<mutex> direct_guard(hash_group.scan_lock);
-	if (combined) {
-		hash_group.direct_column_fragments.emplace_back(std::move(local_column_data));
-		hash_group.count += combined;
-	}
-}
-
-#ifdef D_ASSERT_IS_ENABLED
-static idx_t ExpectedChunkCount(idx_t count) {
-	return (count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
-}
-#endif
-
-static void PackDirectColumnData(HashedSortGroup &hash_group) {
-	lock_guard<mutex> direct_guard(hash_group.scan_lock);
-	if (hash_group.direct_column_data) {
-		return;
-	}
-
-	auto &fragments = hash_group.direct_column_fragments;
-	if (fragments.empty()) {
-		return;
-	}
-
-	auto result = std::move(fragments[0]);
-
-	// Downstream source tasks address hash groups by packed chunk index.
-	for (idx_t fragment_idx = 1; fragment_idx < fragments.size(); fragment_idx++) {
-		result->Append(*fragments[fragment_idx]);
-	}
-
-	D_ASSERT(result->Count() == hash_group.count);
-	D_ASSERT(result->ChunkCount() == ExpectedChunkCount(hash_group.count));
-	hash_group.direct_column_data = std::move(result);
-	fragments.clear();
+	hash_group.count += combined;
 }
 
 void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, OperatorSinkFinalizeInput &finalize) const {
@@ -812,7 +781,6 @@ static SourceResultType MaterializeHashGroupData(ExecutionContext &context, idx_
 	}
 
 	if (!build_runs && gsink.CanBypassSort(hash_bin)) {
-		PackDirectColumnData(hash_group);
 		return SourceResultType::FINISHED;
 	}
 
