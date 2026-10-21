@@ -2599,7 +2599,12 @@ void PartitionedCopyState::CreateTaskList() {
 	const auto threads = MinValue<idx_t>(locals, ts.NumberOfThreads());
 	const auto aligned_scale = MaxValue<idx_t>(ValidityMask::BITS_PER_VALUE / STANDARD_VECTOR_SIZE, 1);
 	const auto aligned_count = PartitionedCopyHashGroup::BinValue(max_block.first, aligned_scale);
-	const auto per_thread = aligned_scale * PartitionedCopyHashGroup::BinValue(aligned_count, threads);
+	// Split the largest group over the threads, but with many small groups a task per group keeps the threads on
+	// different groups instead of queueing on one group's locks
+	const auto per_group = PartitionedCopyHashGroup::BinValue(aligned_count, threads);
+	const auto aligned_total = PartitionedCopyHashGroup::BinValue(total_blocks, aligned_scale);
+	const auto per_total = PartitionedCopyHashGroup::BinValue(aligned_total, threads * 4);
+	const auto per_thread = aligned_scale * MaxValue<idx_t>(per_group, per_total);
 	if (!per_thread) {
 		throw InternalException("No blocks per thread! %ld threads, %ld groups, %ld blocks, %ld hash group", threads,
 		                        partition_blocks.size(), max_block.first, max_block.second);
