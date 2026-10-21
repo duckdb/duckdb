@@ -662,17 +662,9 @@ private:
 class BindScalarFunctionInput : public BindFunctionInput {
 public:
 	BindScalarFunctionInput(ClientContext &context_p, BoundScalarFunction &bound_function_p,
-	                        vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p,
-	                        optional_ptr<Binder> binder_p = nullptr)
-	    : BindFunctionInput(context_p, bound_function_p, arguments_p, &argument_names_p),
-	      bound_function(bound_function_p), binder(binder_p) {
-	}
-
-	//! Construct without argument names - looking arguments up by name is not available in this case.
-	BindScalarFunctionInput(ClientContext &context_p, BoundScalarFunction &bound_function_p,
 	                        vector<unique_ptr<Expression>> &arguments_p, optional_ptr<Binder> binder_p = nullptr)
-	    : BindFunctionInput(context_p, bound_function_p, arguments_p, nullptr), bound_function(bound_function_p),
-	      binder(binder_p) {
+	    : BindFunctionInput(context_p, bound_function_p, bound_function_p.GetDefinition()->GetSignature(), arguments_p),
+	      bound_function(bound_function_p), binder(binder_p) {
 	}
 
 	BoundScalarFunction &GetBoundFunction() const {
@@ -697,13 +689,12 @@ private:
 class ResolveScalarFunctionTypesInput : private BindFunctionInput {
 public:
 	ResolveScalarFunctionTypesInput(ClientContext &context_p, BoundScalarFunction &bound_function_p,
-	                                vector<unique_ptr<Expression>> &arguments_p,
-	                                const vector<Identifier> &argument_names_p)
-	    : BindFunctionInput(context_p, bound_function_p, arguments_p, &argument_names_p),
+	                                vector<unique_ptr<Expression>> &arguments_p)
+	    : BindFunctionInput(context_p, bound_function_p, bound_function_p.GetDefinition()->GetSignature(), arguments_p),
 	      bound_function(bound_function_p), arguments(arguments_p) {
 	}
 
-	using BindFunctionInput::GetArgumentNames;
+	using BindFunctionInput::GetArgumentName;
 	using BindFunctionInput::GetClientContext;
 	using BindFunctionInput::GetConstant;
 	using BindFunctionInput::GetNonNullConstant;

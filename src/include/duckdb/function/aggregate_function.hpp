@@ -63,10 +63,6 @@ class BindAggregateFunctionInput : public BindFunctionInput {
 public:
 	// Defined out-of-line: converting to the BindFunctionInput base requires the complete BoundAggregateFunction.
 	BindAggregateFunctionInput(ClientContext &context_p, BoundAggregateFunction &bound_function_p,
-	                           vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p);
-
-	//! Construct without argument names - looking arguments up by name is not available in this case.
-	BindAggregateFunctionInput(ClientContext &context_p, BoundAggregateFunction &bound_function_p,
 	                           vector<unique_ptr<Expression>> &arguments_p);
 
 	BoundAggregateFunction &GetBoundFunction() const {

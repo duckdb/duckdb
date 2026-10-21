@@ -20,6 +20,7 @@ namespace duckdb {
 class AggregateFunctionCatalogEntry;
 
 class WindowFunctionCatalogEntry;
+struct BoundPragmaInfo;
 
 //! One ORDER BY key of an exported ordered aggregate state: the buffered struct column it sorts on and the modifiers.
 struct SortedAggregateStateOrder {
@@ -31,9 +32,21 @@ struct SortedAggregateStateOrder {
 //! A scalar function with its argument and return types resolved, before the bind callback is invoked
 struct ResolvedScalarFunctionTypes {
 	BoundScalarFunction bound_function;
-	vector<Identifier> argument_names;
 	//! The collation pushed into the arguments, to be propagated to the return type after binding
 	string pushed_collation;
+};
+
+//! A table function bound to the constants it is called with, before its bind callback is invoked
+struct ResolvedTableFunction {
+	explicit ResolvedTableFunction(BoundTableFunction function_p, vector<Value> parameters_p = {},
+	                               named_argument_map_t named_parameters_p = {})
+	    : function(std::move(function_p)), parameters(std::move(parameters_p)),
+	      named_parameters(std::move(named_parameters_p)) {
+	}
+
+	BoundTableFunction function;
+	vector<Value> parameters;
+	named_argument_map_t named_parameters;
 };
 
 //! An overload that matches a call, and how the arguments of the call are passed to it
@@ -187,12 +200,16 @@ public:
 	               const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
 	               optional_idx limit = optional_idx(), bool explicit_casts = false);
 
-	//! Bind the arguments of a table or pragma function: select the overload, check the named arguments against its
-	//! signature, and cast both the positional and the named arguments to the types it declares
-	DUCKDB_API FunctionSelection
-	BindFunctionArguments(const BaseFunctionSet &functions, vector<unique_ptr<Expression>> &positional_arguments,
-	                      vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, vector<Value> &parameters,
-	                      named_argument_map_t &named_parameters);
+	//! Bind a table function: select the overload, check the named arguments against its signature, and fold the
+	//! arguments to the constants it is called with, cast to the types it declares. Returns nullptr and sets the error
+	//! if no overload matches
+	DUCKDB_API unique_ptr<ResolvedTableFunction>
+	BindTableFunction(const TableFunctionSet &functions, vector<unique_ptr<Expression>> &positional_arguments,
+	                  vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, ErrorData &error);
+	//! Bind a pragma function, as BindTableFunction binds a table function
+	DUCKDB_API unique_ptr<BoundPragmaInfo>
+	BindPragmaFunction(const PragmaFunctionSet &functions, vector<unique_ptr<Expression>> &positional_arguments,
+	                   vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, ErrorData &error);
 
 	//! Casts a constant to the type of the parameter it fills, as an argument of any function is cast - a parameter
 	//! whose type is not concrete, such as ANY, takes it as it is
@@ -350,8 +367,9 @@ private:
 	                                                     vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
 	                                                     vector<LogicalType> &order_types,
 	                                                     vector<LogicalType> &arg_order_types);
-	//! Cast a set of expressions to the arguments of this function
-	void CastToFunctionArguments(BoundSimpleFunction &function, vector<unique_ptr<Expression>> &children);
+	//! Cast the arguments of a call to the types of the parameters they fill
+	void CastToFunctionArguments(const Identifier &function_name, vector<LogicalType> &argument_types,
+	                             vector<unique_ptr<Expression>> &children);
 
 	//! Select the best matching overload for the given full (maybe-named) argument list. Names positional arguments by
 	//! their alias if that is the only way the call matches an overload that captures argument aliases

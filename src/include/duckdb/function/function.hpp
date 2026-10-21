@@ -690,9 +690,8 @@ public:
 class BindFunctionInput {
 public:
 	BindFunctionInput(ClientContext &context_p, const BoundSimpleFunction &function_p,
-	                  vector<unique_ptr<Expression>> &arguments_p,
-	                  optional_ptr<const vector<Identifier>> argument_names_p)
-	    : context(context_p), function(function_p), arguments(arguments_p), argument_names(argument_names_p) {
+	                  const FunctionSignature &signature_p, vector<unique_ptr<Expression>> &arguments_p)
+	    : context(context_p), function(function_p), signature(signature_p), arguments(arguments_p) {
 	}
 
 	ClientContext &GetClientContext() const {
@@ -701,10 +700,9 @@ public:
 	vector<unique_ptr<Expression>> &GetArguments() const {
 		return arguments;
 	}
-	//! The resolved name of every argument, parallel to GetArguments(). Not set if the names are unavailable.
-	optional_ptr<const vector<Identifier>> GetArgumentNames() const {
-		return argument_names;
-	}
+	//! The resolved name of an argument: the parameter name for standard and keyword-only parameters, the name the
+	//! caller wrote for "**kwargs", and an empty name for "*args"
+	DUCKDB_API const Identifier &GetArgumentName(idx_t arg_idx) const;
 
 	//! Get the constant value of an argument.
 	//! Throws ParameterNotResolvedException if unresolved, and BinderException for non-constant arguments.
@@ -737,8 +735,8 @@ private:
 private:
 	ClientContext &context;
 	const BoundSimpleFunction &function;
+	const FunctionSignature &signature;
 	vector<unique_ptr<Expression>> &arguments;
-	optional_ptr<const vector<Identifier>> argument_names;
 };
 
 } // namespace duckdb

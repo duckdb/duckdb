@@ -45,19 +45,15 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 		    OnEntryNotFound::THROW_EXCEPTION);
 	}
 
-	FunctionBinder function_binder(*this);
 	// selection, folding, casting and named-argument checking all happen in the function binder
-	vector<Value> params;
-	named_argument_map_t named_parameters;
-	auto bound_idx = function_binder.BindFunctionArguments(entry->functions, positional_arguments, named_arguments,
-	                                                       params, named_parameters);
-	if (!bound_idx.IsValid()) {
-		auto error = bound_idx.GetError();
+	FunctionBinder function_binder(*this);
+	ErrorData error;
+	auto result = function_binder.BindPragmaFunction(entry->functions, positional_arguments, named_arguments, error);
+	if (!result) {
 		error.AddQueryLocation(error_context);
 		error.Throw();
 	}
-	auto bound_function = *entry->functions.GetFunctionByOffset(bound_idx.GetIndex());
-	return make_uniq<BoundPragmaInfo>(std::move(bound_function), std::move(params), std::move(named_parameters));
+	return result;
 }
 
 BoundStatement Binder::Bind(PragmaStatement &stmt) {
