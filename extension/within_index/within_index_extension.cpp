@@ -56,7 +56,7 @@ struct WithinIndexBindData : public TableFunctionData {
 };
 
 struct WithinIndexGlobalState : public GlobalTableFunctionState {
-	unique_ptr<MaterializedQueryResult> result;
+	unique_ptr<QueryResult> result;
 	bool done = false;
 	idx_t total_rows = 0;
 };
