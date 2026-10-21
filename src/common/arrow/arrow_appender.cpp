@@ -277,7 +277,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 			InitializeAppenderForType<ArrowScalarData<hugeint_t>>(append_data);
 			break;
 		case PhysicalType::VARCHAR:
-			// wide decimal: Arrow decimal256 (the schema conversion rejects widths above 76 digits)
+			// wide decimals become Arrow decimal256 (the schema conversion rejects widths above 76 digits)
 			InitializeAppenderForType<ArrowScalarData<ArrowDecimal256, string_t, ArrowWideDecimalConverter>>(
 			    append_data);
 			break;

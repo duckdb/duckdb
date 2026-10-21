@@ -172,7 +172,7 @@ duckdb_decimal duckdb_get_decimal(duckdb_value val) {
 	}
 	duckdb::hugeint_t hugeint;
 	if (type.InternalType() == duckdb::PhysicalType::VARCHAR) {
-		// wide decimal: the unscaled value is a BIGNUM blob, it is only representable if it fits in 128 bits
+		// the BIGNUM blob of a wide decimal is only representable if it fits in 128 bits
 		if (!duckdb::BignumDecimal::TryToHugeint(duckdb::string_t(duckdb::StringValue::Get(v)), hugeint)) {
 			return duckdb::FetchDefaultValue::Operation<duckdb_decimal>();
 		}

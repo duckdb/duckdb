@@ -54,8 +54,7 @@ struct DecimalParquetValueConversion {
 	}
 };
 
-//! Wide decimals (width > 38) are stored as BIGNUM blobs: the two's complement bytes are converted while reading and
-//! the result is allocated in the vector that is being filled
+//! Wide decimals are BIGNUM blobs, the two's complement bytes are converted into the vector being filled
 class WideDecimalColumnReader;
 
 template <bool FIXED_LENGTH>

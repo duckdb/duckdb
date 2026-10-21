@@ -9,8 +9,7 @@
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 
 //===--------------------------------------------------------------------===//
-// Casts to and from wide decimals: DECIMALs wider than Decimal::MAX_WIDTH_INT128 whose unscaled value is stored as
-// a BIGNUM blob (PhysicalType::VARCHAR). A BIGNUM is treated as a wide decimal with scale 0 in these casts.
+// Casts to and from wide decimals, whose unscaled value is a BIGNUM blob, and from BIGNUMs as scale 0 decimals
 //===--------------------------------------------------------------------===//
 namespace duckdb {
 
@@ -86,7 +85,7 @@ struct StringToWideDecimal {
 	}
 };
 
-//! A BIGNUM or wide decimal source: rescale the unscaled value
+//! A BIGNUM or wide decimal source is rescaled to the target scale
 struct ScaledToWideDecimal {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, WideDecimalCastInput &data) {
@@ -141,21 +140,8 @@ bool ExecuteToWideDecimal(Vector &source, Vector &result, idx_t count, CastParam
 //===--------------------------------------------------------------------===//
 template <class T>
 bool BlobToInteger(const string_t &blob, T &result) {
-	hugeint_t value;
-	if (!BignumDecimal::TryToHugeint(blob, value)) {
-		return false;
-	}
-	return TryCast::Operation<hugeint_t, T>(value, result, false);
-}
-
-template <>
-bool BlobToInteger(const string_t &blob, hugeint_t &result) {
-	return BignumDecimal::TryToHugeint(blob, result);
-}
-
-template <>
-bool BlobToInteger(const string_t &blob, uhugeint_t &result) {
-	return BignumDecimal::TryToUhugeint(blob, result);
+	bool strict = false;
+	return Bignum::BignumToInt<T>(bignum_t(blob), result, strict);
 }
 
 struct WideDecimalToString {
@@ -165,7 +151,7 @@ struct WideDecimalToString {
 	}
 };
 
-//! Wide decimal to a fixed-size decimal: rescale, then the (checked) width guarantees the value fits the integer
+//! Rescales a wide decimal to a fixed-size decimal, the checked width guarantees the value fits the integer
 struct WideDecimalToFixedDecimal {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, WideDecimalCastInput &data) {
@@ -182,7 +168,7 @@ struct WideDecimalToFixedDecimal {
 	}
 };
 
-//! Wide decimal to an integer: round to scale 0, then range check
+//! Rounds a wide decimal to scale 0 and range checks it against the integer type
 struct WideDecimalToInteger {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, WideDecimalCastInput &data) {
@@ -282,7 +268,7 @@ bool FromWideDecimalToDecimalCast(Vector &source, Vector &result, idx_t count, C
 	}
 }
 
-//! A fixed-size decimal to a BIGNUM: round to scale 0
+//! Rounds a fixed-size decimal to scale 0 for the BIGNUM
 struct FixedDecimalToBignum {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, WideDecimalCastInput &data) {

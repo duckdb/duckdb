@@ -45,7 +45,7 @@ duckdb_decimal duckdb_double_to_decimal(double val, uint8_t width, uint8_t scale
 		return duckdb::FetchDefaultValue::Operation<duckdb_decimal>();
 	}
 	if (duckdb::Decimal::IsWide(width)) {
-		// wide decimal: convert exactly, the result is only representable if it fits in 128 bits
+		// wide decimals convert exactly and are only representable if they fit in 128 bits
 		std::string blob;
 		duckdb::hugeint_t hugeint;
 		if (!duckdb::BignumDecimal::TryFromDouble(val, width, scale, blob) ||

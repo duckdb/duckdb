@@ -14,11 +14,15 @@
 		{
 			"reason": "DECIMAL values wider than 38 digits are not supported in VARIANT",
 			"paths": [
+				"test/sql/copy/csv/csv_wide_decimal_separator.test",
 				"test/sql/copy/parquet/bigdecimal.test",
 				"test/sql/copy/parquet/test_parquet_decimal_gt38.test",
+				"test/sql/json/scalar/json_transform_wide_decimal.test",
 				"test/sql/json/test_json_execute_serialized_types.test",
 				"test/sql/types/decimal/wide_decimal_arithmetic.test",
 				"test/sql/types/decimal/wide_decimal_casts.test",
+				"test/sql/types/decimal/wide_decimal_quantiles.test",
+				"test/sql/types/decimal/wide_decimal_review.test",
 				"test/sql/types/decimal/wide_decimal_storage.test"
 			]
 		},

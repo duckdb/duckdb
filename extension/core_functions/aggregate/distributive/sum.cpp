@@ -491,7 +491,7 @@ unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	auto decimal_type = BindDecimalArgument(input.GetClientContext(), arguments[0], "sum");
 	if (decimal_type.InternalType() == PhysicalType::VARCHAR) {
-		// wide decimal: sum the BIGNUM blobs, the result is the widest decimal of the same scale
+		// wide decimals sum their BIGNUM blobs into the widest decimal of the same scale
 		function.ReplaceImplementation(GetWideDecimalSumAggregate());
 		function.SetName("sum");
 		function.GetArguments()[0] = decimal_type;
@@ -557,7 +557,7 @@ struct BignumOperation {
 	}
 };
 
-//! Sum of wide decimals: a BIGNUM sum whose result must still fit the width of the result decimal
+//! Sums wide decimals as BIGNUMs, the result must still fit the width of the result decimal
 struct WideDecimalSumOperation : public BignumOperation {
 	template <class TARGET_TYPE, class STATE>
 	static void Finalize(STATE &state, TARGET_TYPE &target, AggregateFinalizeData &finalize_data) {

@@ -32,8 +32,7 @@ bool CastDecimalCInternal(duckdb_result *source, duckdb_string &result, idx_t co
 		result_string = duckdb::StringCastFromDecimal::Operation<hugeint_t>(source_value, width, scale, heap);
 		break;
 	case duckdb::PhysicalType::VARCHAR: {
-		// wide decimal: the materialized duckdb_decimal only holds values that fit in 128 bits, so format the
-		// original value instead
+		// the materialized duckdb_decimal only holds 128-bit values, so format the original value instead
 		auto value = query_result->Collection().GetValue(col, row);
 		if (value.IsNull()) {
 			return false;

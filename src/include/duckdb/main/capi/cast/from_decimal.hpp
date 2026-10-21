@@ -8,70 +8,13 @@
 
 #pragma once
 
+#include "duckdb/common/type_util.hpp"
 #include "duckdb/main/capi/cast/utils.hpp"
 #include "duckdb/main/query_result.hpp"
 
 namespace duckdb {
 
 //! DECIMAL -> ?
-//! The logical type a C API fetch of RESULT_TYPE produces, used to convert wide decimals through the Value API
-template <class RESULT_TYPE>
-LogicalType CResultLogicalType() {
-	return LogicalType(LogicalTypeId::INVALID);
-}
-template <>
-inline LogicalType CResultLogicalType<bool>() {
-	return LogicalType::BOOLEAN;
-}
-template <>
-inline LogicalType CResultLogicalType<int8_t>() {
-	return LogicalType::TINYINT;
-}
-template <>
-inline LogicalType CResultLogicalType<int16_t>() {
-	return LogicalType::SMALLINT;
-}
-template <>
-inline LogicalType CResultLogicalType<int32_t>() {
-	return LogicalType::INTEGER;
-}
-template <>
-inline LogicalType CResultLogicalType<int64_t>() {
-	return LogicalType::BIGINT;
-}
-template <>
-inline LogicalType CResultLogicalType<uint8_t>() {
-	return LogicalType::UTINYINT;
-}
-template <>
-inline LogicalType CResultLogicalType<uint16_t>() {
-	return LogicalType::USMALLINT;
-}
-template <>
-inline LogicalType CResultLogicalType<uint32_t>() {
-	return LogicalType::UINTEGER;
-}
-template <>
-inline LogicalType CResultLogicalType<uint64_t>() {
-	return LogicalType::UBIGINT;
-}
-template <>
-inline LogicalType CResultLogicalType<hugeint_t>() {
-	return LogicalType::HUGEINT;
-}
-template <>
-inline LogicalType CResultLogicalType<uhugeint_t>() {
-	return LogicalType::UHUGEINT;
-}
-template <>
-inline LogicalType CResultLogicalType<float>() {
-	return LogicalType::FLOAT;
-}
-template <>
-inline LogicalType CResultLogicalType<double>() {
-	return LogicalType::DOUBLE;
-}
-
 template <class RESULT_TYPE>
 bool CastDecimalCInternal(duckdb_result *source, RESULT_TYPE &result, idx_t col, idx_t row) {
 	auto result_data = (duckdb::DuckDBResultData *)source->internal_data;
@@ -95,13 +38,12 @@ bool CastDecimalCInternal(duckdb_result *source, RESULT_TYPE &result, idx_t col,
 		return duckdb::TryCastFromDecimal::Operation<hugeint_t, RESULT_TYPE>(source_value, result, parameters, width,
 		                                                                     scale);
 	case duckdb::PhysicalType::VARCHAR: {
-		// wide decimal: the materialized duckdb_decimal only holds values that fit in 128 bits, so convert the
-		// original value instead
+		// the materialized duckdb_decimal only holds 128-bit values, so convert the original value instead
 		auto value = query_result->Collection().GetValue(col, row);
 		if (value.IsNull()) {
 			return false;
 		}
-		auto converted = value.DefaultTryCastAs(CResultLogicalType<RESULT_TYPE>());
+		auto converted = value.DefaultTryCastAs(PrimitiveToLogicalType<RESULT_TYPE>());
 		if (!converted) {
 			return false;
 		}

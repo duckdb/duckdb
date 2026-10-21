@@ -173,6 +173,10 @@ static void DecimalDivisionResolveTypes(ResolveScalarFunctionTypesInput &input) 
 	if (!lhs_type.GetDecimalProperties(p1, s1) || !rhs_type.GetDecimalProperties(p2, s2)) {
 		throw InvalidInputException("decimal_division: both arguments must be DECIMAL");
 	}
+	if (Decimal::IsWide(p1) || Decimal::IsWide(p2)) {
+		throw NotImplementedException("decimal_division is not supported for DECIMAL types wider than %d digits",
+		                              Decimal::MAX_WIDTH_INT128);
+	}
 
 	uint8_t result_scale;
 	if (input.GetArgumentCount() == 3) {

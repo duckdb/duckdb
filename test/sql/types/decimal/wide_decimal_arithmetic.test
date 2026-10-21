@@ -140,21 +140,52 @@ SELECT abs('-1.5'::DECIMAL(40,1)), abs('1.5'::DECIMAL(40,1))
 ----
 1.5	1.5
 
-# functions that are not supported yet fail with a clear message
-statement error
-SELECT round('1.555'::DECIMAL(40,3), 2)
+# functions without a wide implementation compute through DOUBLE
+query IIII
+SELECT round('1.555'::DECIMAL(40,3), 2), ceil('1.555'::DECIMAL(40,3)), floor('-1.555'::DECIMAL(40,3)), trunc('1.555'::DECIMAL(40,3))
 ----
-not supported yet
+1.56	2.0	-2.0	1.0
 
-statement error
-SELECT ceil('1.555'::DECIMAL(40,3))
+query IIII
+SELECT typeof(round('1.555'::DECIMAL(40,3), 2)), typeof(round('1.5'::DECIMAL(40,1))), typeof(ceil('1.5'::DECIMAL(40,1))), typeof(trunc('1.5'::DECIMAL(40,1), 0))
 ----
-not supported yet
+DOUBLE	DOUBLE	DOUBLE	DOUBLE
 
-statement error
-SELECT avg(x) FROM (VALUES ('1'::DECIMAL(40,3))) t(x)
+query IIII
+SELECT round('1.5'::DECIMAL(40,1)), round_even('2.5'::DECIMAL(40,1), 0), trunc('-1.5'::DECIMAL(40,1), 0), round('1234.5'::DECIMAL(40,1), -2)
 ----
-not supported yet
+2.0	2.0	-1.0	1200.0
+
+query III
+SELECT avg(x), median(x), quantile_cont(x, 0.5) FROM (VALUES ('1'::DECIMAL(40,3)), ('2'::DECIMAL(40,3)), ('3'::DECIMAL(40,3))) t(x)
+----
+2.0	2.0	2.0
+
+query III
+SELECT typeof(avg(x)), typeof(median(x)), typeof(quantile_cont(x, 0.5)) FROM (VALUES ('1'::DECIMAL(40,3))) t(x)
+----
+DOUBLE	DOUBLE	DOUBLE
+
+query I
+SELECT quantile_cont(x, [0.25, 0.75]) FROM (VALUES ('1'::DECIMAL(40,3)), ('2'::DECIMAL(40,3)), ('3'::DECIMAL(40,3))) t(x)
+----
+[1.5, 2.5]
+
+query I
+SELECT avg(x) FROM (VALUES ('123456789012345678901234567890123456789012345678901234567890'::DECIMAL(60,0)), ('-123456789012345678901234567890123456789012345678901234567890'::DECIMAL(60,0))) t(x)
+----
+0.0
+
+query I
+SELECT round('123456789012345678901234567890.5'::DECIMAL(40,1))
+----
+1.2345678901234568e+29
+
+# discrete quantiles stay exact
+query II
+SELECT quantile_disc(x, 0.5), typeof(quantile_disc(x, 0.5)) FROM (VALUES ('1'::DECIMAL(40,3)), ('123456789012345678901234567890'::DECIMAL(40,3)), ('3'::DECIMAL(40,3))) t(x)
+----
+3.000	DECIMAL(40,3)
 
 # the division identity on a table of pseudo-random wide values
 statement ok

@@ -313,9 +313,11 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 		    AggregateFunction::UnaryAggregate<IntervalAvgState, interval_t, interval_t, IntervalAverageOperation>(
 		        LogicalType::INTERVAL, LogicalType::INTERVAL));
 	}
-	case PhysicalType::VARCHAR:
-		throw NotImplementedException("AVG over DECIMAL types wider than %d digits is not supported yet",
-		                              Decimal::MAX_WIDTH_INT128);
+	case PhysicalType::DOUBLE: {
+		return NameXParameter(
+		    AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
+		        LogicalType::DOUBLE, LogicalType::DOUBLE));
+	}
 	default:
 		throw InternalException("Unimplemented average aggregate");
 	}
@@ -325,6 +327,12 @@ unique_ptr<FunctionData> BindDecimalAvg(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto decimal_type = BindDecimalArgument(input.GetClientContext(), arguments[0], "avg");
+	if (Decimal::IsWide(DecimalType::GetWidth(decimal_type))) {
+		// wide decimals are averaged as DOUBLE
+		function.ReplaceImplementation(GetAverageAggregate(PhysicalType::DOUBLE));
+		function.SetName("avg");
+		return nullptr;
+	}
 	function.ReplaceImplementation(GetAverageAggregate(decimal_type.InternalType()));
 	function.SetName("avg");
 	function.GetArguments()[0] = decimal_type;
@@ -348,10 +356,7 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT64));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INTERVAL));
-	auto numeric_avg = AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE);
-	numeric_avg.GetSignature().GetParameter(0).SetName("x");
-	avg.AddFunction(numeric_avg);
+	avg.AddFunction(GetAverageAggregate(PhysicalType::DOUBLE));
 
 	auto timestamp_avg =
 	    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, DiscreteAverageOperation>(

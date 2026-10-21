@@ -425,7 +425,16 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 		break;
 	}
 	case LogicalTypeId::DECIMAL: {
-		if (decimal_separator == ',') {
+		if (parse_types[chunk_col_id].internal_type == PhysicalType::VARCHAR) {
+			// wide decimal, stored as the BIGNUM blob of its unscaled value
+			string blob;
+			success = CSVCast::TryParseWideDecimal(value_ptr, size, decimal_separator, parse_types[chunk_col_id].width,
+			                                       parse_types[chunk_col_id].scale, blob);
+			if (success) {
+				static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] =
+				    StringVector::AddStringOrBlob(parse_chunk.data[chunk_col_id], blob.data(), blob.size());
+			}
+		} else if (decimal_separator == ',') {
 			switch (parse_types[chunk_col_id].internal_type) {
 			case PhysicalType::INT16:
 				success = TryDecimalStringCast<int16_t, ','>(
@@ -1839,8 +1848,6 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loade
 	case LogicalType::BOOLEAN:
 		return true;
 	case LogicalTypeId::DECIMAL:
-		// wide decimals are parsed through VARCHAR and the regular cast
-		return !Decimal::IsWide(DecimalType::GetWidth(type));
 	case LogicalType::TIMESTAMP_TZ:
 		// We only try to do direct cast of timestamp tz if the ICU extension is not loaded, otherwise, it needs to go
 		// through string -> timestamp_tz casting
