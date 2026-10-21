@@ -19,10 +19,10 @@ RecursiveCTEPartialKeySpec::RecursiveCTEPartialKeySpec(vector<idx_t> indices_p, 
 }
 
 PhysicalRecursiveCTE::PhysicalRecursiveCTE(PhysicalPlan &physical_plan, Identifier ctename, TableIndex table_index,
-                                           vector<LogicalType> types, bool union_all, PhysicalOperator &top,
+                                           vector<LogicalType> types, RecursiveCTEMode mode, PhysicalOperator &top,
                                            PhysicalOperator &bottom, idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality),
-      ctename(std::move(ctename)), table_index(table_index), union_all(union_all),
+      ctename(std::move(ctename)), table_index(table_index), mode(mode),
       shared_executor_pool(make_shared_ptr<RecursiveExecutorPool>()) {
 	children.push_back(top);
 	children.push_back(bottom);
@@ -61,7 +61,7 @@ void RecursiveCTEState::RecordSinkMetrics(idx_t wait_ns, idx_t work_ns, idx_t ro
 }
 
 unique_ptr<GlobalSinkState> PhysicalRecursiveCTE::GetGlobalSinkState(ClientContext &context) const {
-	if (using_key) {
+	if (UsingKey()) {
 		return make_uniq<RecursiveCTEKeyedState>(context, *this);
 	}
 	return make_uniq<RecursiveCTEUnionState>(context, *this);
@@ -76,7 +76,7 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 }
 
 void PhysicalRecursiveCTE::PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const {
-	if (using_key) {
+	if (UsingKey()) {
 		sink_state.Cast<RecursiveCTEKeyedState>().CommitUsingKeyUpdates();
 	}
 }

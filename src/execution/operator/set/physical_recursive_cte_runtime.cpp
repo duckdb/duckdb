@@ -112,7 +112,7 @@ static RecursiveCTEParallelism GetRecursiveParallelism(const RecursiveCTEState &
 	if (worker_count <= 1) {
 		return RecursiveCTEParallelism(1);
 	}
-	if (!op.using_key && op.union_all && worker_count > 1) {
+	if (!op.UsingKey() && op.UnionAll() && worker_count > 1) {
 		// Ordinary UNION ALL needs enough work to amortize every scheduled pipeline and private-output combine.
 		auto estimated_work_units = work_units;
 		if (op.working_table && schedule_plan.cte_scan_pipeline_count > 0) {
@@ -1045,7 +1045,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		frontier_allocation_bytes = frontier.AllocationSize();
 		epoch_task_start = gstate.GetMetrics().TaskCount();
 	}
-	if (!using_key && union_all) {
+	if (!UsingKey() && UnionAll()) {
 		auto &union_state = gstate.Cast<RecursiveCTEUnionState>();
 		const auto source_tasks_write_recursive_output = parallelism.frontier_worker_count == 1 &&
 		                                                 parallelism.source_task_worker_count > 1 &&
@@ -1060,7 +1060,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		}
 	}
 	const auto max_worker_count = parallelism.MaxWorkerCount();
-	if (max_worker_count > 1 && !using_key && !union_all) {
+	if (max_worker_count > 1 && !UsingKey() && !UnionAll()) {
 		const auto partition_count = MinValue<idx_t>(NextPowerOfTwo(max_worker_count), 4);
 		gstate.Cast<RecursiveCTEUnionState>().PromoteDistinctState(context.client, partition_count);
 	}

@@ -9,6 +9,68 @@
 
 namespace duckdb {
 
+RecursiveCTEKeyedProperties RecursiveCTEKeyedProperties::Derive(const PhysicalRecursiveCTE &op) {
+	D_ASSERT(op.UsingKey());
+	RecursiveCTEKeyedProperties result;
+	for (auto &comparison : op.payload_comparisons) {
+		if (comparison) {
+			result.has_payload_comparisons = true;
+			break;
+		}
+	}
+	if (op.UnionAll()) {
+		return result;
+	}
+	result.can_preaggregate = true;
+	for (idx_t payload_idx = 0; payload_idx < op.payload_types.size(); payload_idx++) {
+		auto &aggregate = op.payload_aggregates[payload_idx]->Cast<BoundAggregateExpression>();
+		if (!aggregate.Function().HasStateCombineCallback() ||
+		    aggregate.Function().GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT) {
+			result.can_preaggregate = false;
+			break;
+		}
+	}
+	result.can_reuse_new_group_candidates = op.internal_types == op.GetTypes();
+	for (idx_t payload_idx = 0; result.can_reuse_new_group_candidates && payload_idx < op.payload_types.size();
+	     payload_idx++) {
+		auto &aggregate = op.payload_aggregates[payload_idx]->Cast<BoundAggregateExpression>();
+		auto &children = aggregate.GetChildren();
+		result.can_reuse_new_group_candidates =
+		    aggregate.Function().HasSingleValueIdentity() && !children.empty() &&
+		    children[0]->GetExpressionClass() == ExpressionClass::BOUND_REF &&
+		    children[0]->Cast<BoundReferenceExpression>().Index() == op.payload_idx[payload_idx];
+	}
+	result.can_reuse_changed_group_candidates =
+	    result.can_reuse_new_group_candidates && op.key_normalizers.empty() && !result.has_payload_comparisons;
+	for (auto &key_type : op.hash_key_types) {
+		switch (key_type.InternalType()) {
+		case PhysicalType::FLOAT:
+		case PhysicalType::DOUBLE:
+		case PhysicalType::LIST:
+		case PhysicalType::STRUCT:
+		case PhysicalType::ARRAY:
+		case PhysicalType::UNKNOWN:
+			result.can_reuse_changed_group_candidates = false;
+			break;
+		default:
+			break;
+		}
+	}
+	for (auto &payload_type : op.payload_types) {
+		switch (payload_type.InternalType()) {
+		case PhysicalType::LIST:
+		case PhysicalType::STRUCT:
+		case PhysicalType::ARRAY:
+		case PhysicalType::UNKNOWN:
+			result.can_reuse_changed_group_candidates = false;
+			break;
+		default:
+			break;
+		}
+	}
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
@@ -37,7 +99,6 @@ RecursiveCTEKeyedState::RecursiveCTEKeyedState(ClientContext &context, const Phy
 	for (auto &comparison : op.payload_comparisons) {
 		if (comparison) {
 			payload_comparison_executors.push_back(make_uniq<ExpressionExecutor>(context, *comparison));
-			has_payload_comparison_executors = true;
 		} else {
 			payload_comparison_executors.push_back(nullptr);
 		}
@@ -48,57 +109,10 @@ RecursiveCTEKeyedState::RecursiveCTEKeyedState(ClientContext &context, const Phy
 		partial_key_indexes.push_back(
 		    make_uniq<RecursiveCTEPartialKeyIndex>(Allocator::Get(context), op.hash_key_types, spec.Indices()));
 	}
-	if (!op.union_all) {
-		can_preaggregate_using_key = true;
-		for (idx_t payload_idx = 0; payload_idx < op.payload_types.size(); payload_idx++) {
-			auto &aggregate = payload_aggregate_objects[payload_idx];
-			if (!aggregate.function.HasStateCombineCallback() ||
-			    aggregate.function.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT) {
-				can_preaggregate_using_key = false;
-				break;
-			}
-		}
-		if (can_preaggregate_using_key) {
-			preaggregation_hashes.Initialize();
-		}
-		can_reuse_new_group_candidates = op.internal_types == op.GetTypes();
-		for (idx_t payload_idx = 0; can_reuse_new_group_candidates && payload_idx < op.payload_types.size();
-		     payload_idx++) {
-			auto &aggregate = op.payload_aggregates[payload_idx]->Cast<BoundAggregateExpression>();
-			auto &children = aggregate.GetChildren();
-			can_reuse_new_group_candidates =
-			    aggregate.Function().HasSingleValueIdentity() && !children.empty() &&
-			    children[0]->GetExpressionClass() == ExpressionClass::BOUND_REF &&
-			    children[0]->Cast<BoundReferenceExpression>().Index() == op.payload_idx[payload_idx];
-		}
-		can_reuse_changed_group_candidates =
-		    can_reuse_new_group_candidates && op.key_normalizers.empty() && !has_payload_comparison_executors;
-		for (auto &key_type : op.hash_key_types) {
-			switch (key_type.InternalType()) {
-			case PhysicalType::FLOAT:
-			case PhysicalType::DOUBLE:
-			case PhysicalType::LIST:
-			case PhysicalType::STRUCT:
-			case PhysicalType::ARRAY:
-			case PhysicalType::UNKNOWN:
-				can_reuse_changed_group_candidates = false;
-				break;
-			default:
-				break;
-			}
-		}
-		for (auto &payload_type : op.payload_types) {
-			switch (payload_type.InternalType()) {
-			case PhysicalType::LIST:
-			case PhysicalType::STRUCT:
-			case PhysicalType::ARRAY:
-			case PhysicalType::UNKNOWN:
-				can_reuse_changed_group_candidates = false;
-				break;
-			default:
-				break;
-			}
-		}
+	if (op.keyed.can_preaggregate) {
+		preaggregation_hashes.Initialize();
+	}
+	if (!op.UnionAll()) {
 		key_delta = make_uniq<RecursiveCTEKeyDeltaState>(context, op);
 	}
 	distinct_rows.Initialize(Allocator::DefaultAllocator(), op.hash_key_types);
@@ -359,7 +373,7 @@ public:
 	unique_ptr<RecursiveCTELocalPreaggregationState> using_key_preaggregation;
 
 	void SinkUsingKeyOutput(DataChunk &chunk, RecursiveCTEKeyedState &gstate) {
-		D_ASSERT(!op.union_all);
+		D_ASSERT(!op.UnionAll());
 		using_key_candidate_count += chunk.size();
 		if (buffer_using_key_output) {
 			BufferUsingKeyOutput(chunk);
@@ -408,7 +422,7 @@ public:
 	}
 
 	void BufferUsingKeyOutput(DataChunk &chunk) {
-		D_ASSERT(!op.union_all);
+		D_ASSERT(!op.UnionAll());
 		if (!output) {
 			output = make_uniq<ColumnDataCollection>(context, op.internal_types);
 			output->InitializeAppend(append_state);
@@ -417,7 +431,7 @@ public:
 	}
 
 	unique_ptr<GroupedAggregateHashTable> Preaggregate(idx_t &preaggregation_work_ns) {
-		D_ASSERT(output && !op.union_all);
+		D_ASSERT(output && !op.UnionAll());
 		D_ASSERT(buffer_using_key_output && using_key_preaggregation);
 		const auto preaggregation_start = std::chrono::steady_clock::now();
 		auto result = using_key_preaggregation->Preaggregate(*output);
@@ -452,7 +466,7 @@ unique_ptr<LocalSinkState> RecursiveCTEKeyedState::GetLocalSinkState(ExecutionCo
 }
 
 bool RecursiveCTEKeyedState::ShouldPreaggregateUsingKeyUpdates(idx_t candidate_count) {
-	D_ASSERT(can_preaggregate_using_key && candidate_count >= STANDARD_VECTOR_SIZE);
+	D_ASSERT(op.keyed.can_preaggregate && candidate_count >= STANDARD_VECTOR_SIZE);
 	if (op.working_table->Count() >= candidate_count) {
 		return false;
 	}
@@ -477,7 +491,7 @@ bool RecursiveCTEKeyedState::ShouldPreaggregateUsingKeyUpdates(idx_t candidate_c
 template <bool COLLECT_METRICS>
 void RecursiveCTEKeyedState::CommitUsingKeyUpdatesInternal() {
 	if (!local_preaggregates.empty()) {
-		D_ASSERT(!op.union_all && local_preaggregate_candidate_count > 0);
+		D_ASSERT(!op.UnionAll() && local_preaggregate_candidate_count > 0);
 		const auto combine_start =
 		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 		auto epoch_ht = std::move(local_preaggregates[0]);
@@ -532,7 +546,7 @@ void RecursiveCTEKeyedState::CommitUsingKeyUpdatesInternal() {
 	}
 	const auto candidate_count = intermediate_table.Count();
 	bool use_preaggregation = false;
-	if (can_preaggregate_using_key && candidate_count >= STANDARD_VECTOR_SIZE) {
+	if (op.keyed.can_preaggregate && candidate_count >= STANDARD_VECTOR_SIZE) {
 		const auto classification_start =
 		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 		use_preaggregation = ShouldPreaggregateUsingKeyUpdates(candidate_count);
@@ -547,9 +561,9 @@ void RecursiveCTEKeyedState::CommitUsingKeyUpdatesInternal() {
 		CommitPreaggregatedUsingKeyUpdatesInternal<COLLECT_METRICS>();
 		return;
 	}
-	const auto delta_candidate_count = op.union_all ? idx_t(0) : candidate_count;
+	const auto delta_candidate_count = op.UnionAll() ? idx_t(0) : candidate_count;
 	idx_t delta_work_ns = 0;
-	if (!op.union_all) {
+	if (!op.UnionAll()) {
 		D_ASSERT(key_delta);
 		const auto delta_start =
 		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
@@ -574,7 +588,7 @@ void RecursiveCTEKeyedState::CommitUsingKeyUpdatesInternal() {
 			payload_rows.Reset();
 			executor.Execute(update_rows, payload_rows);
 		}
-		if (!op.union_all) {
+		if (!op.UnionAll()) {
 			const auto new_group_count = ht->AddChunk(
 			    distinct_rows, payload_rows, AggregateType::NON_DISTINCT,
 			    [&](const Vector &group_addresses, const SelectionVector &new_groups, idx_t new_group_count) {
@@ -657,10 +671,10 @@ void RecursiveCTEKeyedState::CommitUsingKeyUpdatesInternal() {
 			    std::chrono::duration_cast<std::chrono::microseconds>(index_end - index_start).count()));
 		}
 	}
-	if (!op.union_all) {
+	if (!op.UnionAll()) {
 		const auto delta_start =
 		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
-		if (can_reuse_new_group_candidates && key_delta->new_count == delta_candidate_count) {
+		if (op.keyed.can_reuse_new_group_candidates && key_delta->new_count == delta_candidate_count) {
 			op.working_table->Reset();
 			op.working_table->Combine(intermediate_table);
 			InitializeIntermediateAppend();
@@ -717,7 +731,7 @@ void RecursiveCTEKeyedState::ApplyPreaggregatedUsingKeyUpdates(GroupedAggregateH
 template <bool COLLECT_METRICS>
 void RecursiveCTEKeyedState::CommitMixedUsingKeyUpdatesInternal(unique_ptr<GroupedAggregateHashTable> epoch_ht,
                                                                 idx_t preaggregated_candidate_count) {
-	D_ASSERT(!op.union_all && key_delta && epoch_ht && preaggregated_candidate_count > 0);
+	D_ASSERT(!op.UnionAll() && key_delta && epoch_ht && preaggregated_candidate_count > 0);
 	auto &delta = *key_delta;
 	const auto raw_candidate_count = intermediate_table.Count();
 	const auto delta_candidate_count = raw_candidate_count + preaggregated_candidate_count;
@@ -815,7 +829,7 @@ idx_t RecursiveCTEKeyedState::PreaggregateUsingKeyUpdates(GroupedAggregateHashTa
 
 template <bool COLLECT_METRICS>
 void RecursiveCTEKeyedState::CommitPreaggregatedUsingKeyUpdatesInternal() {
-	D_ASSERT(!op.union_all && key_delta);
+	D_ASSERT(!op.UnionAll() && key_delta);
 	auto &delta = *key_delta;
 	const auto delta_candidate_count = intermediate_table.Count();
 	idx_t delta_work_ns = 0;
@@ -862,7 +876,7 @@ void RecursiveCTEKeyedState::CommitUsingKeyUpdates() {
 }
 
 SinkResultType RecursiveCTEKeyedState::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) {
-	if (op.union_all) {
+	if (op.UnionAll()) {
 		AppendOutput(chunk);
 		return SinkResultType::NEED_MORE_INPUT;
 	}
@@ -872,7 +886,7 @@ SinkResultType RecursiveCTEKeyedState::Sink(ExecutionContext &context, DataChunk
 }
 
 SinkCombineResultType RecursiveCTEKeyedState::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) {
-	if (op.union_all) {
+	if (op.UnionAll()) {
 		return SinkCombineResultType::FINISHED;
 	}
 	auto &lstate = input.local_state.Cast<RecursiveCTEKeyedLocalState>();
@@ -934,7 +948,7 @@ SourceResultType RecursiveCTEKeyedState::GetUsingKeyDataInternal(ExecutionContex
 		switch (source_phase) {
 		case RecursiveCTESourcePhase::RECURSING_KEY: {
 			idx_t expected_new;
-			if (op.union_all) {
+			if (op.UnionAll()) {
 				expected_new = intermediate_table.Count();
 				op.working_table->Reset();
 				op.working_table->Combine(intermediate_table);
@@ -958,7 +972,7 @@ SourceResultType RecursiveCTEKeyedState::GetUsingKeyDataInternal(ExecutionContex
 			}
 
 			op.ExecuteRecursivePipelines(context);
-			const auto next_count = op.union_all ? intermediate_table.Count() : op.working_table->Count();
+			const auto next_count = op.UnionAll() ? intermediate_table.Count() : op.working_table->Count();
 			if (next_count == 0) {
 				ht->InitializeScan(ht_scan_state);
 				source.StartFinalDrain(ht->Count());

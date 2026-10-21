@@ -44,7 +44,7 @@ public:
 		return *ht;
 	}
 	bool CanPreaggregateUsingKey() const {
-		return can_preaggregate_using_key;
+		return op.keyed.can_preaggregate;
 	}
 	void AppendOutput(DataChunk &chunk);
 	void CombineOutput(ColumnDataCollection &output);
@@ -100,7 +100,7 @@ private:
 	ColumnDataAppendState working_append_state;
 	vector<unique_ptr<GroupedAggregateHashTable>> local_preaggregates;
 	idx_t local_preaggregate_candidate_count = 0;
-	//! Cached chunk for distinct key extraction in the using_key Sink path
+	//! Cached chunk for distinct key extraction in the keyed Sink path
 	DataChunk distinct_rows;
 	//! Cached chunks for source-side hash table scans
 	DataChunk update_rows;
@@ -114,10 +114,6 @@ private:
 	Vector preaggregation_hashes;
 	vector<unique_ptr<ExpressionExecutor>> payload_comparison_executors;
 	DataChunk raw_distinct_rows;
-	bool has_payload_comparison_executors = false;
-	bool can_preaggregate_using_key = false;
-	bool can_reuse_new_group_candidates = false;
-	bool can_reuse_changed_group_candidates = false;
 };
 
 } // namespace duckdb

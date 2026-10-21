@@ -186,7 +186,7 @@ void RecursiveCTEKeyedState::SnapshotUsingKeyDelta(const Vector &group_addresses
 	D_ASSERT(key_delta);
 	auto &delta = *key_delta;
 	const auto candidate_count = intermediate_table.Count();
-	const auto skip_new_group_addresses = allow_candidate_reuse && can_reuse_new_group_candidates &&
+	const auto skip_new_group_addresses = allow_candidate_reuse && op.keyed.can_reuse_new_group_candidates &&
 	                                      partial_key_indexes.empty() && new_group_count == candidate_count &&
 	                                      row_count == candidate_count;
 	if (skip_new_group_addresses) {
@@ -195,7 +195,7 @@ void RecursiveCTEKeyedState::SnapshotUsingKeyDelta(const Vector &group_addresses
 		delta.touched_count += new_group_count;
 		return;
 	}
-	if (allow_candidate_reuse && can_reuse_new_group_candidates) {
+	if (allow_candidate_reuse && op.keyed.can_reuse_new_group_candidates) {
 		delta.new_group_addresses.reserve(candidate_count);
 	}
 
@@ -257,7 +257,7 @@ void RecursiveCTEKeyedState::SnapshotUsingKeyDelta(const Vector &group_addresses
 	delta.touched_count += matched_count;
 	FlatVector::SetSize(delta.matched_addresses, matched_count);
 	// Keep prior values vector-local while direct candidate reuse remains possible.
-	const auto defer_append = allow_candidate_reuse && can_reuse_changed_group_candidates &&
+	const auto defer_append = allow_candidate_reuse && op.keyed.can_reuse_changed_group_candidates &&
 	                          row_count == candidate_count && new_group_count == 0 && matched_count == row_count;
 	SnapshotExistingUsingKeyDeltaAddresses(delta.matched_addresses, matched_count, defer_append);
 }
@@ -365,8 +365,8 @@ bool RecursiveCTEKeyedState::TryReuseChangedGroupCandidates(idx_t candidate_coun
 		         delta.changed_count == candidate_count);
 		return true;
 	}
-	if (!can_reuse_changed_group_candidates || delta.new_count != 0 || delta.touched_count != candidate_count ||
-	    delta.previous_rows.Count() != candidate_count) {
+	if (!op.keyed.can_reuse_changed_group_candidates || delta.new_count != 0 ||
+	    delta.touched_count != candidate_count || delta.previous_rows.Count() != candidate_count) {
 		return false;
 	}
 
@@ -434,7 +434,7 @@ idx_t RecursiveCTEKeyedState::FinalizeUsingKeyDelta(bool update_partial_indexes,
 		FinalizeStateRows(delta.row_state, delta.finalize_addresses, delta.key_scan_rows, delta.aggregate_rows,
 		                  delta.result_rows);
 		const idx_t previous_payload_offset = 1;
-		if (has_payload_comparison_executors) {
+		if (op.keyed.has_payload_comparisons) {
 			delta.comparison_rows.Reset();
 			for (idx_t payload_idx = 0; payload_idx < op.payload_idx.size(); payload_idx++) {
 				delta.comparison_rows.data[payload_idx].Reference(

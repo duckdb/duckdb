@@ -21,7 +21,7 @@ struct RecursiveCTEDistinctPartition {
 //===--------------------------------------------------------------------===//
 RecursiveCTEUnionState::RecursiveCTEUnionState(ClientContext &context, const PhysicalRecursiveCTE &op)
     : RecursiveCTEState(context, op), intermediate_table(context, op.GetTypes()) {
-	if (!op.union_all) {
+	if (!op.UnionAll()) {
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types);
 	}
 }
@@ -33,11 +33,11 @@ RecursiveCTEUnionState::~RecursiveCTEUnionState() {
 class RecursiveCTEUnionLocalState : public LocalSinkState {
 public:
 	RecursiveCTEUnionLocalState(ClientContext &context, const PhysicalRecursiveCTE &op)
-	    : op(op), hashes(LogicalType::HASH), partition_hashes(LogicalType::HASH),
-	      dummy_addresses(LogicalType::POINTER), new_groups(STANDARD_VECTOR_SIZE) {
+	    : op(op), hashes(LogicalType::HASH), partition_hashes(LogicalType::HASH), dummy_addresses(LogicalType::POINTER),
+	      new_groups(STANDARD_VECTOR_SIZE) {
 		output = make_uniq<ColumnDataCollection>(context, op.GetTypes());
 		output->InitializeAppend(append_state);
-		if (!op.union_all) {
+		if (!op.UnionAll()) {
 			partition_chunk.Initialize(Allocator::Get(context), op.GetTypes());
 		}
 	}
@@ -71,7 +71,7 @@ public:
 
 	void Reset(ExecutionContext &context, GlobalSinkState &gstate) override {
 		auto &recursive_state = gstate.Cast<RecursiveCTEUnionState>();
-		if (op.union_all && !recursive_state.UsesLocalUnionAllOutput()) {
+		if (op.UnionAll() && !recursive_state.UsesLocalUnionAllOutput()) {
 			return;
 		}
 		output->ResetForReuse();
@@ -218,7 +218,7 @@ void RecursiveCTEUnionState::SinkDistinct(DataChunk &chunk, RecursiveCTEUnionLoc
 }
 
 void RecursiveCTEUnionState::PromoteDistinctState(ClientContext &context, idx_t partition_count) {
-	D_ASSERT(!op.using_key && !op.union_all);
+	D_ASSERT(!op.UsingKey() && !op.UnionAll());
 	if (!distinct_partitions.empty() || partition_count <= 1) {
 		return;
 	}
@@ -253,7 +253,7 @@ void RecursiveCTEUnionState::PromoteDistinctState(ClientContext &context, idx_t 
 }
 
 SinkResultType RecursiveCTEUnionState::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) {
-	if (op.union_all) {
+	if (op.UnionAll()) {
 		if (!UsesLocalUnionAllOutput()) {
 			AppendOutput(chunk);
 			return SinkResultType::NEED_MORE_INPUT;
@@ -274,7 +274,7 @@ SinkResultType RecursiveCTEUnionState::Sink(ExecutionContext &context, DataChunk
 }
 
 SinkCombineResultType RecursiveCTEUnionState::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) {
-	if (op.union_all && !UsesLocalUnionAllOutput()) {
+	if (op.UnionAll() && !UsesLocalUnionAllOutput()) {
 		return SinkCombineResultType::FINISHED;
 	}
 	auto &lstate = input.local_state.Cast<RecursiveCTEUnionLocalState>();
@@ -384,7 +384,7 @@ SourceResultType RecursiveCTEUnionState::GetData(ExecutionContext &context, Data
 			// Pre-grow the dedup HT to avoid costly Resize + ReinsertTuples during the next Sink phase.
 			// current_output.Count() is the count of rows output in the previous iteration — an upper bound
 			// on the number of new unique rows the next iteration can add (since the recursion is converging).
-			if (!op.union_all) {
+			if (!op.UnionAll()) {
 				const idx_t expected_new = current_output.Count();
 				if (expected_new > 0) {
 					if (distinct_partitions.empty()) {
