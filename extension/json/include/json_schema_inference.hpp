@@ -24,6 +24,8 @@ struct JSONStructureNode {
 public:
 	explicit JSONStructureNode(bool case_insensitive_keys);
 	JSONStructureNode(const char *key_ptr, const size_t key_len, bool case_insensitive_keys);
+	//! An empty node that matches object keys the way parent does
+	static JSONStructureNode EmptyLike(const JSONStructureNode &parent);
 
 	//! Disable copy constructors
 	JSONStructureNode(const JSONStructureNode &other) = delete;

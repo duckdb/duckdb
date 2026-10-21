@@ -39,6 +39,10 @@ JSONStructureNode::JSONStructureNode(const char *key_ptr, const size_t key_len, 
 	key = make_uniq<string>(key_ptr, key_len);
 }
 
+JSONStructureNode JSONStructureNode::EmptyLike(const JSONStructureNode &parent) {
+	return JSONStructureNode(parent.case_insensitive_keys);
+}
+
 static void SwapJSONStructureNode(JSONStructureNode &a, JSONStructureNode &b) noexcept {
 	std::swap(a.key, b.key);
 	std::swap(a.initialized, b.initialized);
@@ -790,7 +794,7 @@ static LogicalType GetMergedType(ClientContext &context, const JSONStructureNode
                                  const idx_t depth, const LogicalType &null_type) {
 	D_ASSERT(node.descriptions.size() == 1);
 	auto &desc = node.descriptions[0];
-	JSONStructureNode merged(node.case_insensitive_keys);
+	auto merged = JSONStructureNode::EmptyLike(node);
 	for (const auto &child : desc.children) {
 		JSONStructure::MergeNodes(merged, child);
 	}

@@ -32,8 +32,9 @@
       },
       {
         "id": 105,
-        "name": "case_insensitive_keys",
-        "type": "bool"
+        "name": "key_match",
+        "type": "JSONKeyMatch",
+        "default": "JSONKeyMatch::EXACT"
       }
     ],
     "pointer_type": "none"

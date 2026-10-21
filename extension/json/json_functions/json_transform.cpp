@@ -588,7 +588,7 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 		nested_vals.push_back(JSONCommon::AllocateArray<yyjson_val *>(alc, count));
 	}
 
-	bool success = options.case_insensitive_keys
+	bool success = options.key_match == JSONKeyMatch::CASE_INSENSITIVE
 	                   ? AssignObjectValues<json_key_ci_map_t<idx_t>>(objects, alc, count, names, nested_vals, options,
 	                                                                  error_unknown_key)
 	                   : AssignObjectValues<json_key_map_t<idx_t>>(objects, alc, count, names, nested_vals, options,
