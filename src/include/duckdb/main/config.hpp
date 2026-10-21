@@ -10,6 +10,7 @@
 
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/common.hpp"
@@ -402,6 +403,8 @@ private:
 	mutable mutex allowed_paths_lock;
 	//! Guards disabled_optimizers, which can be changed while other connections plan queries
 	mutable mutex disabled_optimizers_lock;
+	//! Whether disabled_optimizers is non-empty
+	atomic<bool> has_disabled_optimizers {false};
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<EncodingFunctionSet> encoding_functions;
 	unique_ptr<ArrowTypeExtensionSet> arrow_extensions;
