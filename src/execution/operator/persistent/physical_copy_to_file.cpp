@@ -8,6 +8,7 @@
 #include "duckdb/common/sorting/sort_strategy.hpp"
 #include "duckdb/common/types/row/integer_partitioned_tuple_data.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
@@ -22,6 +23,7 @@
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/execution/operator/persistent/copy_batch_slicer.hpp"
 #include "duckdb/execution/operator/persistent/copy_output_lifecycle.hpp"
 #include "fmt/format.h"
@@ -2335,7 +2337,8 @@ void SortedBinGroup::ExecutePreparation(ExecutionContext &context, InterruptStat
 		strategy.MaterializeColumnData(context, bin, source_input);
 		// the last block range to finish takes the materialized collection
 		const auto blocks = PartitionedCopyHashGroup::BinValue<idx_t>(count, STANDARD_VECTOR_SIZE);
-		if ((materialized += end_block - begin_block) >= blocks) {
+		const auto materialized_blocks = materialized += end_block - begin_block;
+		if (materialized_blocks >= blocks) {
 			lock_guard<mutex> guard(collection_lock);
 			if (!collection) {
 				collection = strategy.GetColumnData(bin, source_input);
@@ -2605,7 +2608,7 @@ void IntegerPartitionInput::Sink(ExecutionContext &context, DataChunk &chunk, Pa
 	auto &hashes = lstate.hashes;
 	hashes.Reset();
 	VectorOperations::Hash(chunk.data[key_col], hashes.data[0], chunk.size());
-	hashes.SetCardinality(chunk.size());
+	hashes.CheckCardinality(chunk.size());
 	lstate.hll->Update(hashes.data[0]);
 }
 

@@ -207,7 +207,7 @@ NULL	200
 # statistics that understate the key range: the footer of this file claims p in [0, 3] while the rows also hold
 # 7, 9 and 1000 (and NULLs); those keys end up in the overflow partition, which is sorted like a hash bin
 query II
-SELECT s.min, s.max FROM (SELECT STATS(p) s FROM '{DATA_DIR}/parquet-testing/partition_key_understated_stats.parquet' LIMIT 1);
+SELECT stats_min_value, stats_max_value FROM parquet_metadata('{DATA_DIR}/parquet-testing/partition_key_understated_stats.parquet') WHERE path_in_schema = 'p';
 ----
 0	3
 
