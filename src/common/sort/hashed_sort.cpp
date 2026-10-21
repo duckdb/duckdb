@@ -525,7 +525,11 @@ static void BuildDirectColumnData(ClientContext &client, const vector<LogicalTyp
 		hash_group.direct_column_data->Append(hash_group.direct_append_state, chunk);
 		combined += chunk.size();
 	}
-	hash_group.count += combined;
+	if ((hash_group.count += combined) == partition.Count()) {
+		// the last scanning task releases the blocks the append state keeps pinned
+		lock_guard<mutex> direct_guard(hash_group.scan_lock);
+		hash_group.direct_append_state = ColumnDataAppendState();
+	}
 }
 
 void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, OperatorSinkFinalizeInput &finalize) const {
