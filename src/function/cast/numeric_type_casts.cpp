@@ -77,7 +77,7 @@ static bool CastNumericToVarchar(Vector &source, Vector &result, idx_t count, Ca
 		Vector text(LogicalType::VARCHAR, count);
 		VectorOperations::DefaultCast(typed, text, count, true);
 		UnifiedVectorFormat vdata;
-		text.ToUnifiedFormat(count, vdata);
+		text.ToUnifiedFormat(vdata);
 		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto writer = FlatVector::Writer<string_t>(result, count);
@@ -93,7 +93,7 @@ static bool CastNumericToVarchar(Vector &source, Vector &result, idx_t count, Ca
 		return true;
 	}
 	UnifiedVectorFormat vdata;
-	source.ToUnifiedFormat(count, vdata);
+	source.ToUnifiedFormat(vdata);
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto writer = FlatVector::Writer<string_t>(result, count);

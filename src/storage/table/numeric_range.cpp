@@ -202,7 +202,7 @@ void NumericRange::Update(const Vector &vector, idx_t count) {
 	auto &type = vector.GetType();
 	D_ASSERT(NumericType::IsExact(type));
 	UnifiedVectorFormat vdata;
-	vector.ToUnifiedFormat(count, vdata);
+	vector.ToUnifiedFormat(vdata);
 	uint8_t type_scale = type.id() == LogicalTypeId::DECIMAL ? DecimalType::GetScale(type) : 0;
 	uint8_t needed_scale = type_scale;
 	Value vector_min, vector_max;

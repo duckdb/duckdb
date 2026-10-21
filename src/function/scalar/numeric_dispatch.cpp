@@ -348,7 +348,7 @@ unique_ptr<FunctionLocalState> InitNumericDispatchState(ExpressionState &state, 
 //! An exact result becomes a NUMERIC vector in the narrowest representation that holds its values
 void FinishResult(const LogicalType &return_type, Vector &typed_result, idx_t count, Vector &result) {
 	if (return_type.id() == LogicalTypeId::NUMERIC) {
-		typed_result.Flatten(count);
+		typed_result.Flatten();
 		NumericRange range;
 		range.Update(typed_result, count);
 		auto narrow = range.ResolveType();
@@ -408,7 +408,7 @@ void NumericDispatchFunction(DataChunk &args, ExpressionState &state, Vector &re
 	for (idx_t i = 0; i < operands.size(); i++) {
 		kernel.chunk.data[i].Reference(*operands[i]);
 	}
-	kernel.chunk.SetCardinality(count);
+	kernel.chunk.SetChildCardinality(count);
 	Vector typed_result(kernel.expression->GetReturnType(), count);
 	kernel.executor->ExecuteExpression(kernel.chunk, typed_result);
 	FinishResult(func_expr.GetReturnType(), typed_result, count, result);

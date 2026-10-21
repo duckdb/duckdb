@@ -414,7 +414,7 @@ LogicalType NumericType::AsText(const LogicalType &type) {
 LogicalType NumericType::TextType(const Vector &vector, idx_t count) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::VARCHAR);
 	UnifiedVectorFormat vdata;
-	vector.ToUnifiedFormat(count, vdata);
+	vector.ToUnifiedFormat(vdata);
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 	idx_t integer_digits = 0;
 	idx_t fractional_digits = 0;

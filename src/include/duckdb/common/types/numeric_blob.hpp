@@ -21,6 +21,9 @@ namespace duckdb {
 //! terminator. Every payload byte is complemented for negative numbers so that larger magnitudes sort first. Byte order
 //! is numeric order and equal numbers have equal bytes, whatever representation they came from.
 struct NumericBlob {
+	//! The longest blob: class, exponent, the digits of a 255-digit value and the terminator
+	static constexpr idx_t MAX_BLOB_SIZE = 3 + 255 + 1;
+
 	//! Encodes decimal text ([-]digits[.digits], surrounding spaces allowed); false for text that is not a plain number
 	DUCKDB_API static bool TryEncode(const char *text, idx_t size, string &result);
 	//! Encodes decimal text, throwing for text that is not a plain number
@@ -35,6 +38,12 @@ struct NumericBlob {
 	DUCKDB_API static void Encode(Vector &typed, idx_t count, Vector &result);
 	//! Decodes a canonical NUMERIC vector into a vector of the given representation
 	DUCKDB_API static void Decode(Vector &canonical, idx_t count, Vector &typed);
+	//! The unscaled 128-bit value and the scale (without trailing zeros) of a blob; false beyond 38 digits
+	DUCKDB_API static bool TryDecodeUnscaled(const string_t &blob, hugeint_t &unscaled, uint8_t &scale);
+	//! Writes the blob of unscaled * 10^-scale into a buffer of MAX_BLOB_SIZE bytes and returns its length
+	DUCKDB_API static idx_t EncodeUnscaled(hugeint_t unscaled, uint8_t scale, data_ptr_t buffer);
+	//! Adds the blob of unscaled * 10^-scale to a canonical NUMERIC vector
+	DUCKDB_API static string_t AddUnscaled(Vector &result, hugeint_t unscaled, uint8_t scale);
 	//! Strips the trailing zeros of the fractional part of decimal text (and the point if nothing remains)
 	DUCKDB_API static string NormalizeText(const string &text);
 };
