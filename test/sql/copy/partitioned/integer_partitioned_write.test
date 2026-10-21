@@ -112,16 +112,8 @@ SELECT count(*) FROM (
 
 endloop
 
-# a key range above the partition cap falls back to hash partitioning
-statement ok
-COPY (SELECT v AS p, s FROM t) TO '{TEST_DIR}/int_part5' (FORMAT PARQUET, PARTITION_BY (p));
-
-query II
-SELECT count(*), count(DISTINCT p) FROM parquet_scan('{TEST_DIR}/int_part5/p=*/*.parquet', HIVE_PARTITIONING=1);
-----
-20000	20000
-
-# the cap is 256 keys: 256 keys are partitioned on directly, 300 keys fall back to hash partitioning
+# the cap is 256 keys: 256 keys are partitioned on directly, 300 keys fall back to hash partitioning (a 20000-key
+# version of this check ran out of address space on 32-bit Windows: one Parquet writer per partition)
 statement ok
 COPY (SELECT v % 256 AS p, v, s FROM t) TO '{TEST_DIR}/int_part5_256' (FORMAT PARQUET, PARTITION_BY (p));
 
