@@ -429,6 +429,10 @@ LogicalPlanSQLExportResult LogicalAggregate::ToSQL(LogicalPlanSQLExportContext &
 		}
 		select->groups.grouping_sets.push_back(std::move(all_groups));
 	}
+	if (select->groups.grouping_sets.empty() && aggregate.expressions.empty()) {
+		// GROUP BY () keeps an aggregate without groups or aggregates producing a single row
+		select->groups.grouping_sets.emplace_back();
+	}
 	for (auto &grouping : aggregate.grouping_functions) {
 		vector<unique_ptr<ParsedExpression>> arguments;
 		for (auto index : grouping) {
