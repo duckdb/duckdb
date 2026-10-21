@@ -13,6 +13,7 @@ ArenaChunk::ArenaChunk(Allocator &allocator, idx_t size) : current_position(0), 
 	data = allocator.Allocate(size);
 }
 ArenaChunk::~ArenaChunk() {
+	ResetPosition(0);
 	if (next) {
 		auto current_next = std::move(next);
 		while (current_next) {
@@ -106,7 +107,11 @@ data_ptr_t ArenaAllocator::Reallocate(data_ptr_t pointer, idx_t old_size, idx_t 
 	if (pointer == head_ptr &&
 	    (size < old_size || current_position + diff <= NumericCast<int64_t>(head->maximum_size))) {
 		// passed pointer is the head pointer, and the diff fits on the current chunk
-		head->current_position = NumericCast<idx_t>(current_position + diff);
+		if (size < old_size) {
+			head->ResetPosition(NumericCast<idx_t>(current_position + diff));
+		} else {
+			head->current_position = NumericCast<idx_t>(current_position + diff);
+		}
 		return pointer;
 	} else {
 		// allocate new memory
@@ -133,6 +138,33 @@ data_ptr_t ArenaAllocator::ReallocateAligned(data_ptr_t pointer, idx_t old_size,
 	return Reallocate(pointer, old_size, AlignValue<idx_t>(size));
 }
 
+ArenaAllocator::Position ArenaAllocator::GetPosition() const {
+	Position result;
+	if (head) {
+		result.chunk = head.get();
+		result.current_position = head->current_position;
+	}
+	return result;
+}
+
+void ArenaAllocator::Rewind(const Position &position) {
+	if (!position.chunk) {
+		// nothing was allocated when the position was taken
+		FreeAll();
+		return;
+	}
+	// destroy the chunks that were allocated after the position was taken, newest first
+	while (head.get() != position.chunk) {
+		D_ASSERT(head && head->next);
+		allocated_size -= head->maximum_size;
+		auto older = std::move(head->next);
+		head = std::move(older);
+		head->prev = nullptr;
+	}
+	D_ASSERT(position.current_position <= head->current_position);
+	head->ResetPosition(position.current_position);
+}
+
 void ArenaAllocator::FreeAll() {
 	Reset();
 	if (head) {
@@ -154,7 +186,7 @@ void ArenaAllocator::Reset() {
 		tail = head.get();
 
 		// reset the head
-		head->current_position = 0;
+		head->ResetPosition(0);
 		head->prev = nullptr;
 	}
 	allocated_size = 0;

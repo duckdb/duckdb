@@ -50,6 +50,11 @@ EXTENSION_DEPENDENCIES = {
     'ducklake': [
         'parquet',
     ],
+    'glue': [
+        'avro',
+        'json',
+        'parquet',
+    ],
     'iceberg': [
         'avro',
         'parquet',
@@ -313,16 +318,12 @@ class ParsedEntries:
 def check_prerequisites():
     if not os.path.isfile(DUCKDB_PATH):
         log(f"{DUCKDB_PATH} not found")
-        log(
-            "please run 'GENERATE_EXTENSION_ENTRIES=1 BUILD_ALL_EXT=1 make release', you might have to manually add DONT_LINK to all extension_configs"
-        )
+        log("please run 'GENERATE_EXTENSION_ENTRIES=1 BUILD_ALL_EXT=1 make release'")
         exit(1)
     if len(args.extensions) == 0 and not os.path.isfile(EXTENSIONS_PATH):
         log(f"{EXTENSIONS_PATH} not found and --extensions it not set")
         log("Either:")
-        log(
-            "* run 'GENERATE_EXTENSION_ENTRIES=1 BUILD_ALL_EXT=1 make release', you might have to manually add DONT_LINK to all extension_configs"
-        )
+        log("* run 'GENERATE_EXTENSION_ENTRIES=1 BUILD_ALL_EXT=1 make release'")
         log("* Specify a comma separated list of extensions using --extensions")
         exit(1)
     if not os.path.isdir(args.extension_repository):
@@ -417,10 +418,11 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
 
 
 def get_settings(load="") -> Set[str]:
+    # Debug and deprecated settings still need to trigger autoloading
     GET_SETTINGS_QUERY = """
         select distinct
             name
-        from duckdb_settings();
+        from duckdb_settings(include_all := true);
     """
     settings = get_query(GET_SETTINGS_QUERY, load)
     res = set()
@@ -887,6 +889,8 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {{"s3/config", "h
                                                                 {"r2/credential_chain", "aws"},
                                                                 {"aws/credential_chain", "aws"},
                                                                 {"rds/credential_chain", "aws"},
+                                                                {"s3/none", "aws"},
+                                                                {"aws/none", "aws"},
                                                                 {"azure/access_token", "azure"},
                                                                 {"azure/config", "azure"},
                                                                 {"azure/credential_chain", "azure"},
@@ -901,8 +905,8 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {{"s3/config", "h
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_LOG_TYPES[] = {
-    {"DuckLakeMetadata", "ducklake"},
-    {"Iceberg", "iceberg"},
+    {"DeltaKernel", "delta"}, {"DuckLakeMetadata", "ducklake"},         {"HTTPFSInfo", "httpfs"},
+    {"Iceberg", "iceberg"},   {"PostgresQueryLog", "postgres_scanner"}, {"Quack", "quack"},
 }; // END_OF_EXTENSION_LOG_TYPES
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
@@ -921,6 +925,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "icu",
     "inet",
     "json",
+    "legacy_parser",
     "motherduck",
     "mysql_scanner",
     "parquet",

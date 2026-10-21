@@ -2,8 +2,9 @@
 
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
-#include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -232,10 +233,17 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 		}
 		get.ResolveOperatorTypes();
 		const auto bindings = get.GetColumnBindings();
+		vector<JoinFilterPushdownColumn> accepted_columns;
 		for (auto &filter : columns) {
 			if (filter.probe_column_index.table_index != get.table_index) {
 				// the filter does not apply to the probe side here - bail-out
 				return;
+			}
+			if (get.function.supports_pushdown_type) {
+				auto column_id = get.GetColumnIndex(filter.probe_column_index).GetPrimaryIndex();
+				if (!get.function.supports_pushdown_type(*get.bind_data, column_id)) {
+					continue;
+				}
 			}
 			// add storage type to columns
 			for (idx_t i = 0; i < bindings.size(); i++) {
@@ -253,8 +261,12 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 			    reconstructed_type.id() == LogicalTypeId::VARIANT) {
 				return;
 			}
+			accepted_columns.push_back(std::move(filter));
 		}
-		targets.emplace_back(get, std::move(columns));
+		if (accepted_columns.empty()) {
+			return;
+		}
+		targets.emplace_back(get, std::move(accepted_columns));
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
@@ -367,6 +379,9 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		JoinFilterPushdownFilter get_filter;
 		get_filter.dynamic_filters = get.dynamic_filters;
 		get_filter.columns = std::move(target.columns);
+		if (get.has_estimated_cardinality) {
+			get_filter.estimated_scan_cardinality = get.estimated_cardinality;
+		}
 		pushdown_info->probe_info.push_back(std::move(get_filter));
 	}
 
@@ -383,15 +398,15 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	}
 
 	// set up the min/max aggregates for each of the filters
-	vector<AggregateFunction> aggr_functions;
-	aggr_functions.push_back(MinFunction::GetFunction());
-	aggr_functions.push_back(MaxFunction::GetFunction());
+	auto &context = optimizer.GetContext();
 	for (auto &join_condition : pushdown_info->join_condition) {
-		for (auto &aggr : aggr_functions) {
-			FunctionBinder function_binder(optimizer.GetContext());
+		for (const auto &aggr_name : {MinFun::Name, MaxFun::Name}) {
+			FunctionBinder function_binder(context);
 			vector<unique_ptr<Expression>> aggr_children;
 			aggr_children.push_back(join.conditions[join_condition].GetRHS().Copy());
-			auto aggr_expr = function_binder.BindAggregateFunction(aggr, std::move(aggr_children), nullptr,
+			// the one-argument overload of the min/max set is the plain aggregate, min(x, n) takes two
+			auto aggr = GetBuiltinAggregateFunction(context, aggr_name, {aggr_children[0]->GetReturnType()});
+			auto aggr_expr = function_binder.BindAggregateFunction(std::move(aggr), std::move(aggr_children), nullptr,
 			                                                       AggregateType::NON_DISTINCT);
 			if (aggr_expr->GetChildren().size() != 1) {
 				// min/max with collation - not supported

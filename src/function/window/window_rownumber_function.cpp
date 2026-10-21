@@ -135,6 +135,7 @@ WindowFunction RowNumberFun::GetFunction() {
 	    Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER, nullptr, WindowRowNumberExecutor::GetBounds,
 	    WindowRowNumberExecutor::GetSharing, WindowRowNumberExecutor::GetGlobal, WindowRowNumberExecutor::GetLocal,
 	    WindowRowNumberLocalState::Sinker, WindowRowNumberLocalState::Finalizer, WindowRowNumberExecutor::GetData);
+	fun.SetIsRanking(true);
 	fun.SetCanStreamCallback(WindowRowNumberExecutor::CanStream);
 	fun.SetStreamingStateCallback(WindowRowNumberExecutor::GetStreamingState);
 	fun.SetStreamingDataCallback(WindowRowNumberExecutor::StreamData);
@@ -228,10 +229,12 @@ public:
 };
 
 WindowFunction NtileFun::GetFunction() {
-	WindowFunction fun(Name, {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE, nullptr,
+	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE, nullptr,
 	                   WindowNtileExecutor::GetBounds, WindowNtileExecutor::GetSharing, WindowNtileExecutor::GetGlobal,
 	                   WindowNtileExecutor::GetLocal, WindowNtileLocalState::Sinker, WindowNtileLocalState::Finalizer,
 	                   WindowNtileExecutor::GetData);
+	fun.SetIsRanking(true);
+	fun.GetSignature().AddParameter("num_buckets", LogicalType::BIGINT);
 	return fun;
 }
 

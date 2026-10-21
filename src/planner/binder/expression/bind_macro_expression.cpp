@@ -1,10 +1,13 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/catalog/entry_lookup_info.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -202,6 +205,8 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
                                        unique_ptr<ParsedExpression> &expr) {
 	auto stack_checker = StackCheck(*expr, 3);
+	// expanding nested macros can take a long time, allow the query to be interrupted
+	context.InterruptCheck();
 
 	// unfold the macro expression
 	UnfoldMacroExpression(function, macro_func, expr, depth);

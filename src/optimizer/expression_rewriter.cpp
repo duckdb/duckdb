@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/expression_rewriter.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
@@ -24,8 +25,13 @@ static unique_ptr<Expression> ApplyRule(LogicalOperator &op, const vector<refere
 			// the rule matches! try to apply it
 			bool rule_made_change = false;
 			auto alias = expr->GetAlias();
+#ifdef D_ASSERT_IS_ENABLED
+			auto return_type = expr->GetReturnType();
+#endif
 			auto result = rule.get().Apply(op, bindings, rule_made_change, is_root);
 			if (result) {
+				D_ASSERT(result->GetReturnType() != return_type ||
+				         result->GetReturnType().EqualsIncludingCollation(return_type));
 				changes_made = true;
 				// the base node changed: the rule applied changes
 				if (!alias.empty()) {
@@ -79,23 +85,18 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 	return expr;
 }
 
-unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(unique_ptr<Expression> child, Value value) {
+unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(ClientContext &context, unique_ptr<Expression> child,
+                                                          Value value) {
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(child));
-	return ConstantOrNull(std::move(children), std::move(value));
+	return ConstantOrNull(context, std::move(children), std::move(value));
 }
 
-unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(vector<unique_ptr<Expression>> children, Value value) {
-	auto type = value.type();
-	auto func = ConstantOrNullFun::GetFunction();
-	func.GetSignature().GetParameter(0).SetType(type);
-	func.SetReturnType(type);
-	children.insert(children.begin(), make_uniq<BoundConstantExpression>(value));
-
-	BoundScalarFunction bound_func(func);
-
-	return make_uniq<BoundFunctionExpression>(std::move(bound_func), std::move(children),
-	                                          ConstantOrNull::Bind(std::move(value)));
+unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(ClientContext &context,
+                                                          vector<unique_ptr<Expression>> children, Value value) {
+	children.insert(children.begin(), make_uniq<BoundConstantExpression>(std::move(value)));
+	// the bind of constant_or_null derives the return type and the bind data from the leading constant
+	return BindBuiltinScalarFunction(context, ConstantOrNullFun::Name, std::move(children));
 }
 
 void ExpressionRewriter::VisitOperator(LogicalOperator &op) {

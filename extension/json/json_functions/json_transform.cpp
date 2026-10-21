@@ -11,6 +11,7 @@
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/types/geometry.hpp"
+#include "duckdb/common/types/value_map.hpp"
 #include "json_geojson.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types.hpp"
@@ -44,17 +45,20 @@ static LogicalType StructureStringToTypeArray(yyjson_val *arr, ClientContext &co
 }
 
 static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context) {
-	unordered_set<string> names;
+	// STRUCT field names are case-insensitive
+	identifier_set_t names;
 	child_list_t<LogicalType> child_types;
 	size_t idx, max;
 	yyjson_val *key, *val;
 	yyjson_obj_foreach(obj, idx, max, key, val) {
 		val = yyjson_obj_iter_get_val(key);
 		string key_str(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
-		if (names.find(key_str) != names.end()) {
+		if (key_str.empty()) {
+			throw BinderException("Empty key in object in JSON structure");
+		}
+		if (!names.insert(Identifier(key_str)).second) {
 			JSONCommon::ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
 		}
-		names.insert(key_str);
 		child_types.emplace_back(key_str, StructureStringToType(val, context));
 	}
 	D_ASSERT(yyjson_obj_size(obj) == names.size());
@@ -919,6 +923,38 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 		success = false;
 	}
 
+	// objects can have duplicate keys, and keys that fail to transform in non-strict mode are NULL
+	auto &map_keys = MapVector::GetKeys(result);
+	auto key_validity = map_keys.Validity();
+	value_set_t unique_keys;
+	for (idx_t i = 0; i < count; i++) {
+		if (!list_validity.RowIsValid(i)) {
+			continue;
+		}
+		const auto &list_entry = list_entries[i];
+		const char *invalid_reason = nullptr;
+		unique_keys.clear();
+		for (idx_t key_idx = list_entry.offset; key_idx < list_entry.offset + list_entry.length; key_idx++) {
+			if (!key_validity.IsValid(key_idx)) {
+				invalid_reason = "Map keys can not be NULL";
+				break;
+			}
+			if (!unique_keys.insert(map_keys.GetValue(key_idx)).second) {
+				invalid_reason = "Map keys must be unique";
+				break;
+			}
+		}
+		if (!invalid_reason) {
+			continue;
+		}
+		list_validity.SetInvalid(i);
+		if (success && options.strict_cast) {
+			options.error_message = invalid_reason;
+			options.object_index = i;
+			success = false;
+		}
+	}
+
 	if (!options.delay_error && !success) {
 		throw InvalidInputException(options.error_message);
 	}
@@ -1150,8 +1186,10 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetTransformFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({{"json", input_type}, {"structure", LogicalType::VARCHAR}}, LogicalType::ANY,
-	                               TransformFunction<false>, JSONTransformBind, nullptr, JSONFunctionLocalState::Init));
+	ScalarFunction fun({}, LogicalType::ANY, TransformFunction<false>, JSONTransformBind, nullptr,
+	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("json", input_type).AddParameter("structure", LogicalType::VARCHAR);
+	set.AddFunction(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetTransformFunction() {
@@ -1163,8 +1201,10 @@ ScalarFunctionSet JSONFunctions::GetTransformFunction() {
 }
 
 static void GetTransformStrictFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::ANY, TransformFunction<true>,
-	                               JSONTransformBind, nullptr, JSONFunctionLocalState::Init));
+	ScalarFunction fun({}, LogicalType::ANY, TransformFunction<true>, JSONTransformBind, nullptr,
+	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("json", input_type).AddParameter("structure", LogicalType::VARCHAR);
+	set.AddFunction(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {

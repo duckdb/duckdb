@@ -21,7 +21,6 @@
 #include "duckdb/execution/partition_info.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/execution/progress_data.hpp"
-#include "duckdb/optimizer/join_order/join_node.hpp"
 
 namespace duckdb {
 
@@ -90,6 +89,11 @@ public:
 
 	virtual bool Equals(const PhysicalOperator &other) const {
 		return false;
+	}
+
+	//! Initialize the vectors this operator uses for its output
+	virtual void InitializeOutputChunk(Allocator &allocator, DataChunk &chunk) const {
+		chunk.Initialize(allocator, types);
 	}
 
 	//! Functions to help decide how to set up pipeline dependencies

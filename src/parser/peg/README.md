@@ -138,8 +138,16 @@ Keywords are defined in list files under `src/parser/peg/grammar/keywords/`:
 | `column_name_keyword.list` | Allowed as column names |
 | `func_name_keyword.list` | Allowed as function names |
 | `type_name_keyword.list` | Allowed as type names |
+| `bare_label_keyword.list` | Allowed as a column alias without `AS` (e.g. `SELECT 1 name`) |
 
-A keyword must not appear in both the reserved and unreserved lists; `inline_grammar.py` rejects such conflicts.
+A keyword must appear in exactly one of the category lists; `inline_grammar.py` rejects violations.
+
+`bare_label_keyword.list` is orthogonal to the categories, following Postgres' `bare_label_keyword`: every entry must
+also appear in a category list, and only unreserved or column-name keywords listed there can be used as an `AS`-less
+alias. Keywords that can follow an expression or type are deliberately left out (interval units such as `DAY`, function
+suffixes such as `FILTER` and `OVER`, type suffixes such as `VARYING` and `WITHOUT`, and star modifiers such as
+`EXCLUDE`), so `SELECT d + 1 day` is a syntax error rather than a column named `day`. New unreserved keywords should be
+added to the list unless they can trail an expression.
 
 ## Building the Grammar
 
@@ -157,12 +165,12 @@ This target installs the Python dependencies (PyYAML) into the formatting virtua
    `inlined_grammar.gram` (useful for debugging).
 2. `scripts/parser/inline_grammar.py` — generates `inlined_grammar.hpp` (the grammar embedded as a byte array) and
    `keyword_map.cpp` (keyword lookup tables).
-3. `scripts/parser/generate_transformer.py --write` — generates the typed transformer wrappers (see below).
-4. `scripts/parser/generate_transformer_trampoline.py --write` — generates the trampoline transform processes (see below).
-5. `make format-parser-grammar` — formats the generated C++ files.
+3. `scripts/parser/generate_transformer_trampoline.py --write` — generates the transformer processes, the rule IDs and
+   the matcher configuration blocks (see below).
+4. `make format-parser-grammar` — formats the generated C++ files.
 
-The generators can also be run directly (with `--write`) when only the transformer artifacts need regenerating. Without
-`--write` they print what would be generated instead of modifying files.
+The transformer generator can also be run directly with `--write` when only the transformer artifacts need
+regenerating. Without `--write` it prints what would be generated instead of modifying files.
 
 ### Generated Files
 
@@ -171,11 +179,12 @@ The generators can also be run directly (with `--write`) when only the transform
 | `src/include/duckdb/parser/peg/inlined_grammar.gram` | `inline_grammar.py` | Complete merged grammar (all `.gram` files + keywords) |
 | `src/include/duckdb/parser/peg/inlined_grammar.hpp` | `inline_grammar.py` | C++ header: `const unsigned char INLINED_PEG_GRAMMAR[]` |
 | `src/parser/peg/keyword_map.cpp` | `inline_grammar.py` | C++ keyword category lookup maps |
-| `src/parser/peg/transformer/transform_generated.cpp` | `generate_transformer.py` | `*Internal` wrappers and the `RegisterGenerated()` table |
-| `src/parser/peg/transformer/transform_generated_trampoline.cpp` | `generate_transformer_trampoline.py` | Trampoline `Initialize*`/`Finalize*` processes and frame-ops table |
-| `src/include/duckdb/parser/peg/transformer/peg_transformer.hpp` | both transformer generators | Declarations between the `GENERATED RULES` and `GENERATED TRAMPOLINE RULES` markers |
-| `src/parser/peg/compiled_grammar.cpp` | `generate_transformer.py` | Terminal rule overrides between the `GENERATED RULE OVERRIDES` markers |
-| `src/parser/peg/matcher_factory.cpp` | `generate_transformer.py` | Packrat-memoized rule list between the `GENERATED PACKRAT MEMOIZED RULES` markers |
+| `src/parser/peg/transformer/transform_generated_trampoline.cpp` | `generate_transformer_trampoline.py` | `Initialize*`/`Finalize*` transform processes and the frame-ops registration table |
+| `src/include/duckdb/parser/peg/transformer/peg_transformer.hpp` | `generate_transformer_trampoline.py` | Declarations between the `GENERATED TRANSFORM RESULT TYPES` and `GENERATED TRAMPOLINE RULES` markers |
+| `src/include/duckdb/parser/peg/peg_rule_id.hpp`, `src/parser/peg/peg_rule_id.cpp` | `generate_transformer_trampoline.py` | `PEGRuleId` enum with one constant per built-in rule, plus name lookups |
+| `src/parser/peg/compiled_grammar.cpp` | `generate_transformer_trampoline.py` | Terminal rule overrides between the `GENERATED RULE OVERRIDES` markers |
+| `src/parser/peg/matcher_factory.cpp` | `generate_transformer_trampoline.py` | Packrat-memoized rule list between the `GENERATED PACKRAT MEMOIZED RULES` markers |
+| `src/parser/peg/transformer/peg_transformer_factory.cpp` | `generate_transformer_trampoline.py` | Collapsible and expression-depth rule lists between the `GENERATED COLLAPSIBLE RULES` and `GENERATED EXPRESSION DEPTH RULES` markers |
 
 **Do not edit generated files or generated blocks manually** — they will be overwritten by the build script. Files that
 are only partially generated contain `START GENERATED ... ` / `END GENERATED ...` marker comments around the
@@ -186,29 +195,33 @@ generated block; code outside the markers is hand-written.
 Each grammar rule that produces a value needs a transformer that converts its parse result into a DuckDB AST node
 (`SQLStatement`, `QueryNode`, `ParsedExpression`, etc.) or an intermediate helper type.
 
-Most of the parse-result plumbing is generated. For a grammar rule `Foo`, there are up to three functions:
+Most of the parse-result plumbing is generated. For a grammar rule `Foo`, there are up to two pieces:
 
 | Function | Written by | Purpose |
 |----------|------------|---------|
-| `TransformFooInternal(transformer, parse_result)` | generated | Unpacks the parse result, transforms the children, calls the typed body, boxes the result |
-| `InitializeFooTrampoline` / `FinalizeFooTrampoline` | generated | Same as `*Internal`, but as a two-phase process on the explicit transform stack (used to avoid deep recursion) |
+| `InitializeFooTrampoline` / `FinalizeFooTrampoline` | generated | A two-phase transform process on the explicit transform stack: `Initialize` schedules the children, `Finalize` calls the typed body with their results and boxes the return value |
 | `TransformFoo(transformer, typed children...)` | hand-written | The semantic body: builds the AST node from already-transformed children |
 
 Rules that consist only of literals, or choice rules whose alternatives all return the same type, are generated end-to-end and need no hand-written body.
 
+Generated transformer code refers to child rules by `PEGRuleId` rather than by name. Rules that grammar extensions
+add at runtime receive IDs past `PEGRuleId::BUILTIN_COUNT` in the compiled grammar that defines them.
+
 ### Generator Configuration
 
-`scripts/parser/grammar_types.yml` drives `generate_transformer.py`:
+`scripts/parser/grammar_types.yml` drives `generate_transformer_trampoline.py`:
 
 - Type categories map grammar rules to their C++ return type (`unique_ptr<SQLStatement>`, `QualifiedName`, ...).
   Every rule that is referenced as a child of a generated rule must have a type here.
 - `overrides` lists rules with a unique return type.
-- `excluded_rules` lists syntax-only rules that are skipped when generating wrappers.
+- `excluded_rules` lists syntax-only rules that are skipped when generating processes.
 - `matcher_rule_overrides` lists the special tokens handled by dedicated matchers (see above).
-- `packrat_memoized_rules` lists rules that use packrat memoization in the matcher.
+- `packrat_memoized_rules`, `collapsible_rules`, `expression_depth_nesting_rules` and `expression_depth_chain_rules`
+  configure the matcher and transformer: which rules are memoized, which transforms return their operand unchanged
+  when the rest of the rule matched nothing, and which rules count towards `max_expression_depth`.
 
-`scripts/parser/transformer_trampoline.yml` drives `generate_transformer_trampoline.py`. Rules not listed there get a
-generated trampoline. Listed rules are either `excluded`, `forward` (delegate to a single child), or `manual` /
+`scripts/parser/transformer_trampoline.yml` drives the per-rule process generation. Rules not listed there get a
+generated process. Listed rules are either `excluded`, `forward` (delegate to a single child), or `manual` /
 `manual_finalize` with hand-written `init` / `finalize` functions.
 
 ### Adding or Changing a Rule
@@ -236,16 +249,23 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowTables(PEGTransformer 
 }
 ```
 
-The generated wrapper that calls it looks like this (in `transform_generated.cpp`):
+The generated process that calls it looks like this (in `transform_generated_trampoline.cpp`):
 
 ```cpp
-unique_ptr<TransformResultValue> PEGTransformerFactory::TransformShowTablesInternal(PEGTransformer &transformer,
-                                                                                    ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto show_or_describe = transformer.Transform<ShowType>(list_pr.GetChild(0));
-	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.GetChild(3));
+void PEGTransformerFactory::InitializeShowTablesTrampoline(PEGTransformer &transformer,
+                                                           GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(2);
+	process.PushChild({transformer.GetRule(PEGRuleId::QualifiedName), list_pr.GetChild(3)}, 1);
+	process.PushChild({transformer.GetRule(PEGRuleId::ShowOrDescribe), list_pr.GetChild(0)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeShowTablesTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto show_or_describe = process.TakeResult<ShowType>(0);
+	auto qualified_name = process.TakeResult<QualifiedName>(1);
 	auto result = TransformShowTables(transformer, show_or_describe, qualified_name);
-	return make_uniq<TypedTransformResult<unique_ptr<QueryNode>>>(std::move(result));
+	return transformer.MakeResult<unique_ptr<QueryNode>>(std::move(result));
 }
 ```
 
@@ -273,22 +293,15 @@ config) still unpack the parse result by hand, using the types below.
 
 ### Registration
 
-Generated transforms are registered automatically: `RegisterGenerated()` in `transform_generated.cpp` registers every
-`*Internal` wrapper by rule name, and the frame-ops table in `transform_generated_trampoline.cpp` installs the
-trampoline processes. Both are invoked from the `PEGTransformerFactory` constructor in `peg_transformer_factory.cpp`.
+All transforms are registered through one table: `GeneratedTransformFrameOps()` in `transform_generated_trampoline.cpp`
+maps every rule name to its `Initialize*`/`Finalize*` pair, and the `PEGTransformerFactory` constructor in
+`peg_transformer_factory.cpp` walks that table, attaching the process to each rule together with its collapsible and
+expression-depth configuration.
 
-The handful of fully hand-written transforms (literals, identifiers, keywords, and a few expression and select rules)
-are registered in category-specific methods in the same file:
-
-```cpp
-void PEGTransformerFactory::RegisterCommon() {
-	REGISTER_TRANSFORM(TransformNumberLiteral);
-	REGISTER_TRANSFORM(TransformStringLiteral);
-	// ...
-}
-```
-
-The `REGISTER_TRANSFORM` macro strips the `Transform` prefix to derive the grammar rule name, so `TransformNumberLiteral` registers for the `NumberLiteral` grammar rule.
+Rules whose process cannot be generated (`PivotStatement`, `TableRef`, `WithClause`, ...) are listed as `manual` or
+`manual_finalize` in `transformer_trampoline.yml` with the names of their hand-written `init` / `finalize` functions.
+Those functions live in the matching `transform_*.cpp` file and appear in the same table, so there is no separate
+registration step for them.
 
 ## Extending the Grammar from Extensions
 
@@ -328,8 +341,10 @@ also adds a custom matcher.
 
 ### DialectExtension
 
-A `DialectExtension` (`dialect_extension.hpp`) registers a named SQL dialect with
-`DialectExtension::Register(config, DialectExtension("name"))`. Registered dialects are listed by `duckdb_dialects()`
-and can be selected with `SET current_dialect = 'name'`; the built-in dialect is `duckdb`. The dialect name is
-currently only validated and exposed through these settings, so a dialect still has to register its grammar changes
-through a `GrammarExtension`.
+A `DialectExtension` (`dialect_extension.hpp`) is a named SQL dialect, registered with
+`DialectExtension::Register(config, make_shared_ptr<MyDialect>())`. Registered dialects are listed by
+`duckdb_dialects()` and selected per connection with `SET current_dialect = 'name'`; the built-in dialect is `duckdb`.
+A dialect subclass overrides `ApplyGrammarChanges` to add, replace or splice rules into the base grammar (the same
+operations as a `GrammarExtension`), and can additionally replace the tokenizer, the keyword helper and the matcher
+factory through `CreateTokenizer`, `CreateKeywordHelper` and `CreateMatcherFactory`. See
+`test/extension/loadable_dialect_extension_demo.cpp` for a loadable example.

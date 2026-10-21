@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
+#include "duckdb/common/enums/scan_vector_type.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -162,8 +163,11 @@ typedef void (*compression_scan_vector_t)(ColumnSegment &segment, ColumnScanStat
 typedef void (*compression_scan_partial_t)(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
                                            Vector &result, idx_t result_offset);
 //! Function prototype used for reading a subset of the values of a vector indicated by a selection vector
+//! The selected values are written to 'result' starting at 'result_offset'. Emitting a compressed vector (e.g. a
+//! constant vector) is only allowed if 'scan_type' is SCAN_ENTIRE_VECTOR
 typedef void (*compression_select_t)(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-                                     const SelectionVector &sel, idx_t sel_count);
+                                     const SelectionVector &sel, idx_t sel_count, idx_t result_offset,
+                                     ScanVectorType scan_type);
 //! Function prototype used for applying a filter to a vector while scanning that vector
 typedef void (*compression_filter_t)(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                                      SelectionVector &sel, idx_t &sel_count, const TableFilter &filter,

@@ -12,7 +12,9 @@ struct EpochSecOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE sec) {
 		int64_t result;
-		if (!TryCast::Operation(sec * Interval::MICROS_PER_SEC, result)) {
+		// the first midnight of Timestamp::MIN_YEAR - smaller values are not valid timestamps
+		constexpr int64_t min_timestamp_micros = -9223372022400000000LL;
+		if (!TryCast::Operation(sec * Interval::MICROS_PER_SEC, result) || result < min_timestamp_micros) {
 			throw ConversionException("Epoch seconds out of range for TIMESTAMP WITH TIME ZONE");
 		}
 		return timestamp_t(result);
@@ -55,7 +57,8 @@ void TimeTZSortKeyFunction(DataChunk &input, ExpressionState &state, Vector &res
 
 ScalarFunction ToTimestampFun::GetFunction() {
 	// to_timestamp is an alias from Postgres that converts the time in seconds to a timestamp
-	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ, EpochSecFunction);
+	ScalarFunction func({}, LogicalType::TIMESTAMP_TZ, EpochSecFunction);
+	func.GetSignature().AddParameter("sec", LogicalType::DOUBLE);
 	// throws if the epoch seconds are out of range for a timestamp
 	func.SetFallible();
 	func.SetUnaryArgProperties(ArgProperties().NonDecreasing());
@@ -63,12 +66,15 @@ ScalarFunction ToTimestampFun::GetFunction() {
 }
 
 ScalarFunction NormalizedIntervalFun::GetFunction() {
-	ScalarFunction function({LogicalType::INTERVAL}, LogicalType::INTERVAL, NormalizedIntervalFunction);
+	ScalarFunction function({}, LogicalType::INTERVAL, NormalizedIntervalFunction);
+	function.GetSignature().AddParameter("interval", LogicalType::INTERVAL);
 	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
 ScalarFunction TimeTZSortKeyFun::GetFunction() {
-	return ScalarFunction({LogicalType::TIME_TZ}, LogicalType::UBIGINT, TimeTZSortKeyFunction);
+	ScalarFunction func({}, LogicalType::UBIGINT, TimeTZSortKeyFunction);
+	func.GetSignature().AddParameter("time_tz", LogicalType::TIME_TZ);
+	return func;
 }
 } // namespace duckdb

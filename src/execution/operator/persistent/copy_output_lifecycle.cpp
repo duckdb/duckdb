@@ -34,8 +34,7 @@ void CopyOutputLifecycle::Cleanup() {
 			return;
 		}
 		for (auto &file : files) {
-			if (file.ownership == CopyOutputOwnership::REMOVE_ON_FAILURE &&
-			    file.publication == CopyOutputPublicationState::FINALIZED) {
+			if (file.ownership == CopyOutputOwnership::REMOVE_ON_FAILURE) {
 				files_to_remove.push_back(std::move(file.path));
 			}
 		}
@@ -72,19 +71,10 @@ void CopyOutputLifecycle::Cleanup() {
 	}
 }
 
-idx_t CopyOutputLifecycle::RegisterFile(string path) {
+void CopyOutputLifecycle::RegisterFile(string path) {
 	auto ownership = GetOwnership(path);
 	annotated_lock_guard<annotated_mutex> guard(lock);
-	auto result = files.size();
-	files.push_back({std::move(path), ownership, CopyOutputPublicationState::UNFINALIZED});
-	return result;
-}
-
-void CopyOutputLifecycle::MarkFileFinalized(idx_t file_index) {
-	annotated_lock_guard<annotated_mutex> guard(lock);
-	D_ASSERT(file_index < files.size());
-	D_ASSERT(files[file_index].publication == CopyOutputPublicationState::UNFINALIZED);
-	files[file_index].publication = CopyOutputPublicationState::FINALIZED;
+	files.push_back({std::move(path), ownership});
 }
 
 void CopyOutputLifecycle::RegisterCreatedDirectory(string path) {

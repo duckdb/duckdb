@@ -68,6 +68,8 @@ template <>
 bool TryAddOperator::Operation(uint64_t left, uint64_t right, uint64_t &result);
 template <>
 bool TryAddOperator::Operation(date_t left, int32_t right, date_t &result);
+template <>
+bool TryAddOperator::Operation(timestamp_t left, interval_t right, timestamp_t &result);
 
 template <>
 bool TryAddOperator::Operation(int8_t left, int8_t right, int8_t &result);

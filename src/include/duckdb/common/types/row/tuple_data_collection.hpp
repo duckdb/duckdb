@@ -82,6 +82,8 @@ public:
 	idx_t ChunkCount() const;
 	//! The size (in bytes) of the blocks held by this tuple data collection
 	idx_t SizeInBytes() const;
+	//! Buffer-manager memory charged for row and heap blocks
+	idx_t GetBlockAllocationSize() const;
 	//! Unpins all held pins
 	void Unpin();
 	//! Sets the partition index of this tuple data collection
@@ -90,7 +92,8 @@ public:
 	vector<pair<idx_t, idx_t>> GetChunkRangesForPartition(idx_t partition_idx) const;
 	//! Gets the pointers to the start of every block
 	vector<data_ptr_t> GetRowBlockPointers();
-	//! Destroy the blocks corresponding to the chunk indices
+	//! Destroy blocks for an incremental chunk range; earlier chunks must no longer be read.
+	//! Blocks needed by chunks at or after chunk_idx_end are retained.
 	void DestroyChunks(idx_t chunk_idx_begin, idx_t chunk_idx_end);
 
 	//! Gets the scatter function for the given type
@@ -147,7 +150,7 @@ public:
 	static void GetVectorData(const TupleDataChunkState &chunk_state, UnifiedVectorFormat result[]);
 	//! Resets the cached cache vectors (used for ARRAY/LIST casts)
 	static void ResetCachedCastVectors(TupleDataChunkState &chunk_state, const vector<column_t> &column_ids);
-	//! Computes the heap sizes for the new DataChunk that will be appended
+	//! Computes heap sizes for the columns selected in chunk_state
 	static void ComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
 	                             const SelectionVector &append_sel, const idx_t append_count);
 	//! Computes the heap sizes for a SortKey layout

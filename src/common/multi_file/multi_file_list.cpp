@@ -14,14 +14,6 @@
 
 namespace duckdb {
 
-MultiFilePushdownInfo::MultiFilePushdownInfo(LogicalGet &get)
-    : table_index(get.table_index), column_names(get.names), column_indexes(get.GetColumnIds()),
-      extra_info(get.extra_info) {
-	for (auto &col_id : column_indexes) {
-		column_ids.push_back(col_id.GetPrimaryIndex());
-	}
-}
-
 MultiFilePushdownInfo::MultiFilePushdownInfo(TableIndex table_index, const vector<Identifier> &column_names,
                                              const vector<ColumnIndex> &column_indexes, ExtraOperatorInfo &extra_info)
     : table_index(table_index), column_names(column_names), column_indexes(column_indexes), extra_info(extra_info) {
@@ -38,10 +30,11 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, M
 		if (IsVirtualColumn(info.column_ids[i])) {
 			continue;
 		}
-		filter_info.column_map.insert({info.column_names[info.column_ids[i]].GetIdentifierName(), i});
+		filter_info.column_map.insert({info.column_names[info.column_ids[i]], i});
 	}
 	filter_info.hive_enabled = options.hive_partitioning;
 	filter_info.filename_enabled = options.filename;
+	filter_info.filename_column = Identifier(options.filename_column);
 
 	auto start_files = expanded_files.size();
 	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, filter_info, info);
@@ -166,6 +159,10 @@ vector<OpenFileInfo> MultiFileList::GetDisplayFileList(optional_idx max_files) c
 		files.push_back(std::move(file));
 	}
 	return files;
+}
+
+vector<OpenFileInfo> MultiFileList::GetAllFiles() const {
+	return MultiFileList::GetDisplayFileList();
 }
 
 MultiFileCount MultiFileList::GetFileCount(idx_t min_exact_count) const {
