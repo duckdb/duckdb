@@ -601,12 +601,10 @@ void UpdateSinkReservation(ClientContext &context, RadixHTGlobalSinkState &gstat
 	    (gstate.minimum_reservation + gstate.number_of_threads * gstate.block_alloc_size) / 8 * 10;
 	temporary_memory_state.SetMinimumReservation(aggregate_allocator_size * gstate.number_of_threads +
 	                                             minimum_reservation);
+	// Grow from current usage, not the previous request, which might not have been granted.
 	const auto remaining_size =
-	    MaxValue<idx_t>(gstate.number_of_threads * total_size, temporary_memory_state.GetRemainingSize());
-	const auto reservation_limit = MaxValue(gstate.memory_limit, minimum_reservation);
-	// Repeated pressure checks must not keep doubling an unsatisfied reservation.
-	const auto requested_size = remaining_size > reservation_limit / 2 ? reservation_limit : 2 * remaining_size;
-	temporary_memory_state.SetRemainingSizeAndUpdateReservation(context, requested_size);
+	    MaxValue<idx_t>(2 * gstate.number_of_threads * total_size, temporary_memory_state.GetRemainingSize());
+	temporary_memory_state.SetRemainingSizeAndUpdateReservation(context, remaining_size);
 }
 
 void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate,
