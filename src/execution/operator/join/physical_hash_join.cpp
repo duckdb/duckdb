@@ -1722,11 +1722,14 @@ static void PublishDeferredRuntimeFilters(ClientContext &context, JoinHashTable 
 
 static void CreateDynamicMinMaxFilter(const PhysicalComparisonJoin &op, const JoinFilterPushdownFilter &info,
                                       const ProjectionIndex &filter_col_idx, unique_ptr<Expression> filter_expr,
-                                      const LogicalType &column_type, bool selectivity_optional) {
+                                      const LogicalType &column_type, bool selectivity_optional, bool check_every_row) {
 	if (!filter_expr) {
 		return;
 	}
-	if (selectivity_optional) {
+	if (check_every_row) {
+		// whether a row is skipped never depends on the other rows in its vector or row group
+		info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<ExpressionFilter>(std::move(filter_expr)));
+	} else if (selectivity_optional) {
 		info.dynamic_filters->PushFilter(
 		    op, filter_col_idx,
 		    CreateSelectivityOptionalExpressionFilter(std::move(filter_expr), column_type,
@@ -1842,7 +1845,7 @@ static void CreateDynamicMinMaxFilters(const PhysicalComparisonJoin &op, const J
 		                          CreateJoinFilterComparisonExpression(context, column,
 		                                                               ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 		                                                               min_val, condition_type, reconstruct_expression),
-		                          filter_column_type, selectivity_optional);
+		                          filter_column_type, selectivity_optional, column.crossed_secure_view);
 		break;
 	}
 	default:
@@ -1856,7 +1859,7 @@ static void CreateDynamicMinMaxFilters(const PhysicalComparisonJoin &op, const J
 		                          CreateJoinFilterComparisonExpression(context, column,
 		                                                               ExpressionType::COMPARE_LESSTHANOREQUALTO,
 		                                                               max_val, condition_type, reconstruct_expression),
-		                          filter_column_type, selectivity_optional);
+		                          filter_column_type, selectivity_optional, column.crossed_secure_view);
 		break;
 	}
 	default:
@@ -1949,7 +1952,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				                          CanUsePrefixRangeFilter(info, context, op, ht, cmp) && can_compute_span;
 
 				bool pushed_in_filter = false;
-				if (CanUseInFilter(context, ht, cmp)) {
+				// an IN filter is only cheap as an optional filter, which a secure view does not allow
+				if (!pushdown_column.crossed_secure_view && CanUseInFilter(context, ht, cmp)) {
 					pushed_in_filter =
 					    PushInFilter(context, info, pushdown_column, *ht, op, filter_idx, filter_col_idx);
 				}

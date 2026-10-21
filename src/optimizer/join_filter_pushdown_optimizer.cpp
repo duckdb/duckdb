@@ -6,6 +6,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -159,6 +160,31 @@ static void PushdownProjectionColumns(LogicalProjection &proj, const vector<Join
 	}
 }
 
+//! Whether any expression evaluated inside a secure view (including filters pushed into its scans) can throw
+static bool SecureViewCanThrow(LogicalOperator &op) {
+	bool can_throw = false;
+	LogicalOperatorVisitor::EnumerateExpressions(
+	    op, [&](unique_ptr<Expression> *expr) { can_throw = can_throw || (*expr)->CanThrow(); });
+	if (can_throw) {
+		return true;
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		for (auto &entry : op.Cast<LogicalGet>().table_filters) {
+			auto &filter = entry.Filter();
+			if (filter.filter_type == TableFilterType::EXPRESSION_FILTER &&
+			    filter.Cast<ExpressionFilter>().expr->CanThrow()) {
+				return true;
+			}
+		}
+	}
+	for (auto &child : op.children) {
+		if (SecureViewCanThrow(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
                                                            vector<JoinFilterPushdownColumn> columns,
                                                            vector<PushdownFilterTarget> &targets) {
@@ -288,6 +314,21 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 			return;
 		}
 		GetPushdownFilterTargets(*probe_child.children[0], std::move(projected_columns), targets);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW: {
+		if (SecureViewCanThrow(*probe_child.children[0])) {
+			// a pushed filter would decide which hidden rows reach the error
+			break;
+		}
+		// storage-domain filters only - this also keeps TopN filters and the row-group pruner (which would count
+		// hidden rows) from crossing the view
+		for (auto &filter : columns) {
+			filter.mode = JoinFilterPushdownMode::STORAGE_ONLY;
+			filter.runtime_filter_casts.clear();
+			filter.crossed_secure_view = true;
+		}
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
