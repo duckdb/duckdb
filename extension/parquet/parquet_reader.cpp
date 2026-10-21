@@ -338,10 +338,12 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 			transport.Prefetch(metadata_pos, footer_len);
 		}
 	} else {
-		footer_len = UnsafeNumericCast<uint32_t>(footer_size.GetIndex());
-		if (footer_len == 0 || file_size < 12 + footer_len) {
+		auto provided_footer_len = footer_size.GetIndex();
+		if (provided_footer_len == 0 || provided_footer_len > NumericLimits<uint32_t>::Maximum() ||
+		    file_size < 12 + provided_footer_len) {
 			throw InvalidInputException("Invalid footer length provided for file '%s'", file_handle.GetPath());
 		}
+		footer_len = UnsafeNumericCast<uint32_t>(provided_footer_len);
 
 		idx_t total_footer_len = footer_len + 8;
 		auto metadata_pos = file_size - total_footer_len;
@@ -1440,6 +1442,9 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		}
 		idx_t footer_size_option;
 		if (extended_info.TryGetOption("footer_size", footer_size_option)) {
+			if (footer_size_option > NumericLimits<uint32_t>::Maximum()) {
+				throw InvalidInputException("Invalid footer length provided for file '%s'", file.path);
+			}
 			footer_size = footer_size_option;
 		}
 	}
