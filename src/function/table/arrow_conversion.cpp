@@ -282,13 +282,6 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, idx_t chunk_off
 	auto &child_array = *array.children[0];
 	auto &child_type = list_info.GetChild();
 
-	if (list_size == 0 && start_offset == 0) {
-		D_ASSERT(!child_array.dictionary);
-		ArrowToDuckDBConversion::ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state, list_size,
-		                                             child_type, -1);
-		return;
-	}
-
 	auto array_physical_type = child_type.GetPhysicalType();
 	switch (array_physical_type) {
 	case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
@@ -338,7 +331,10 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 	}
 
 	// Broadcast the validity mask to the child vector
-	if (array_mask.CanHaveNull()) {
+	auto broadcast_validity = [&]() {
+		if (!array_mask.CanHaveNull()) {
+			return;
+		}
 		auto &child_validity_mask = FlatVector::ValidityMutable(child_vector);
 		for (idx_t i = 0; i < size; i++) {
 			if (!array_mask.RowIsValid(i)) {
@@ -347,12 +343,14 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 				}
 			}
 		}
-	}
+	};
+	broadcast_validity();
 
 	auto &child_state = array_state.GetChild(0);
 	auto &child_array = *array.children[0];
 	auto &child_type = array_info.GetChild();
-	if (child_count == 0 && child_offset == 0) {
+	bool run_end_encoded = child_type.GetPhysicalType() == ArrowArrayPhysicalType::RUN_END_ENCODED;
+	if (child_count == 0 && child_offset == 0 && !run_end_encoded) {
 		D_ASSERT(!child_array.dictionary);
 		ArrowToDuckDBConversion::ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state, child_count,
 		                                             child_type, -1);
@@ -361,6 +359,12 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 			ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(child_vector, child_array, chunk_offset, child_state,
 			                                                       child_count, child_type,
 			                                                       NumericCast<int64_t>(child_offset));
+		} else if (run_end_encoded) {
+			ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(child_vector, child_array, chunk_offset,
+			                                                          child_state, child_count, child_type,
+			                                                          NumericCast<int64_t>(child_offset));
+			// decoding sets the validity of every child row again
+			broadcast_validity();
 		} else {
 			ArrowToDuckDBConversion::ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state,
 			                                             child_count, child_type, NumericCast<int64_t>(child_offset));
