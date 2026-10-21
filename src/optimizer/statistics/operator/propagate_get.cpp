@@ -14,8 +14,7 @@
 
 namespace duckdb {
 
-//! Locate the column reference of a table filter. A table filter filters on a single column, which it references
-//! through a BoundReferenceExpression.
+//! Single-column table filters reference their column through a BoundReferenceExpression.
 static bool GetColumnIndex(const unique_ptr<Expression> &expr, idx_t &index, Identifier &alias) {
 	if (expr->GetExpressionType() == ExpressionType::BOUND_REF) {
 		auto &bound_ref = expr->Cast<BoundReferenceExpression>();
@@ -29,7 +28,6 @@ static bool GetColumnIndex(const unique_ptr<Expression> &expr, idx_t &index, Ide
 	return found;
 }
 
-//! Whether the expression still filters on the column of the table filter
 static bool FiltersOnColumn(const Expression &expr, const ColumnBinding &binding) {
 	bool filters_on_column = false;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &ref) {
@@ -49,8 +47,7 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 	idx_t physical_index = DConstants::INVALID_INDEX;
 	Identifier column_alias;
 	if (!GetColumnIndex(expr_filter.expr, physical_index, column_alias)) {
-		// the filter does not reference the column it filters on - there is no column to propagate the statistics
-		// through, and the filter cannot be rewritten
+		// Without a column reference, these statistics cannot drive a rewrite.
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
@@ -63,6 +60,7 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 	auto column_ref = make_uniq<BoundColumnRefExpression>(column_alias, stats.GetType(), stats_binding);
 	auto filter_expr = expr_filter.ToExpression(*column_ref);
 	auto propagate_result = HandleFilter(filter_expr);
+	// Keep the column reference for subsequent statistics propagation passes.
 	if (FiltersOnColumn(*filter_expr, stats_binding)) {
 		auto colref = make_uniq<BoundReferenceExpression>(column_alias, stats.GetType(), physical_index);
 
@@ -70,8 +68,6 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 		ExpressionFilter::ReplaceExpressionRecursive(filter_expr, *colref, ExpressionType::BOUND_COLUMN_REF);
 		expr_filter.expr = std::move(filter_expr);
 	}
-	// otherwise the statistics folded the column away (e.g. `col IS NULL` into `false` for a column that cannot hold
-	// NULL): a table filter has to keep referencing the column it filters on, so the original filter is kept
 
 	if (propagate_result != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 		// Update stats here because the caller won't call UpdateFilterStatistics for non-default cases

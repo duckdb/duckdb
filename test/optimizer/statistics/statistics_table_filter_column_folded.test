@@ -2,11 +2,15 @@
 # description: A table filter keeps referencing its column when statistics fold the column away
 # group: [statistics]
 
-# the filter on c0 is folded into a constant by statistics propagation, but the table filter has to keep
-# referencing the column it filters on - otherwise the next statistics propagation pass cannot find the column
+# Empty-table statistics must not leave a column-free filter for the next propagation pass.
 statement ok
 CREATE TABLE t0(c0 INTEGER);
 
+query I
+SELECT 1 FROM t0 WHERE (c0 IS NULL) IN (NULL, true) AND (c0 = 1 OR 0 IN (SELECT 0));
+----
+
+# Nullable input must still return the matching row.
 statement ok
 INSERT INTO t0 VALUES (NULL), (5), (1);
 
@@ -57,7 +61,7 @@ EXPLAIN SELECT 1 FROM t1 WHERE (c0 IS NULL) IN (NULL, true) AND (c0 = 1 OR 0 IN 
 ----
 logical_opt	<REGEX>:.*\(c0 IS NULL\) IN \(NULL::BOOLEAN, true\).*
 
-# a filter that is folded into a constant no longer filters on the column, so it is removed from the scan
+# Statistics can still prune a scan when its filter cannot match any row.
 query II
 EXPLAIN SELECT 1 FROM t1 WHERE c0 IS NULL;
 ----
