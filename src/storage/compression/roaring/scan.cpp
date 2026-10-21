@@ -302,6 +302,7 @@ ContainerScanState &RoaringScanState::LoadContainer(idx_t container_index, idx_t
 	auto container_size = MinValue<idx_t>(segment_count - start_of_container, ROARING_CONTAINER_SIZE);
 	auto reader = GetContainerReader(container_index, container_size);
 	if (metadata.IsUncompressed()) {
+		// Include the final validity word even when the container only uses part of it.
 		auto word_count =
 		    container_size / ValidityMask::BITS_PER_VALUE + (container_size % ValidityMask::BITS_PER_VALUE != 0);
 		auto bitset = reader.GetArray<validity_t>(0, word_count);
