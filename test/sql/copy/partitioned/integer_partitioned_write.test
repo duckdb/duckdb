@@ -121,6 +121,32 @@ SELECT count(*), count(DISTINCT p) FROM parquet_scan('{TEST_DIR}/int_part5/p=*/*
 ----
 20000	20000
 
+# the cap is 256 keys: 256 keys are partitioned on directly, 300 keys fall back to hash partitioning
+statement ok
+COPY (SELECT v % 256 AS p, v, s FROM t) TO '{TEST_DIR}/int_part5_256' (FORMAT PARQUET, PARTITION_BY (p));
+
+query III
+SELECT count(*), count(DISTINCT p), sum(v) FROM parquet_scan('{TEST_DIR}/int_part5_256/p=*/*.parquet', HIVE_PARTITIONING=1);
+----
+20000	256	199990000
+
+statement ok
+COPY (SELECT v % 300 AS p, v, s FROM t) TO '{TEST_DIR}/int_part5_300' (FORMAT PARQUET, PARTITION_BY (p));
+
+query III
+SELECT count(*), count(DISTINCT p), sum(v) FROM parquet_scan('{TEST_DIR}/int_part5_300/p=*/*.parquet', HIVE_PARTITIONING=1);
+----
+20000	300	199990000
+
+query I
+SELECT count(*) FROM (
+	SELECT filename, count(DISTINCT v % 300) AS keys
+	FROM read_parquet('{TEST_DIR}/int_part5_300/**/*.parquet', filename = true)
+	GROUP BY filename
+) WHERE keys <> 1;
+----
+0
+
 # ORDER BY keeps the sorted write
 statement ok
 COPY t TO '{TEST_DIR}/int_part6' (FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (v DESC));

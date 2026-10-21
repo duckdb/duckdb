@@ -50,15 +50,24 @@ bool IntegerPartitionedTupleData::SupportsType(const LogicalType &type) {
 	}
 }
 
-//! The largest key range that is partitioned on directly
-static constexpr idx_t MAX_INTEGER_PARTITIONS = 4096;
+//! The largest key range that is partitioned on directly. Beyond a few hundred keys an input chunk touches almost
+//! every partition with a row or two, so the per-partition build and pin work of the append dominates, and every
+//! thread keeps a row block and a heap block per partition: on 8M narrow rows at 4 threads the direct path wins up to
+//! 256 keys and loses from about 1000 keys (1.65x slower at 3000). Larger ranges take the radix path.
+static constexpr idx_t MAX_INTEGER_PARTITION_KEYS = 256;
 
-static idx_t MaxIntegerPartitions(ClientContext &context) {
+//! The largest key range the memory budget allows: every partition keeps a partially filled row block and heap block
+//! pinned per thread while appending (zero if not even the NULL and overflow partitions fit)
+static idx_t MaxIntegerPartitionKeys(ClientContext &context) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	const auto memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
-	// every partition keeps a partially filled row block and heap block pinned per thread while appending
 	const auto partition_memory = 2 * buffer_manager.GetBlockAllocSize();
-	return MinValue<idx_t>(MAX_INTEGER_PARTITIONS, memory_per_thread / partition_memory);
+	const auto memory_partitions = memory_per_thread / partition_memory;
+	const auto extra_partitions = IntegerPartitionedTupleData::PartitionCountFor(0);
+	if (memory_partitions <= extra_partitions) {
+		return 0;
+	}
+	return MinValue<idx_t>(MAX_INTEGER_PARTITION_KEYS, memory_partitions - extra_partitions);
 }
 
 bool IntegerPartitionedTupleData::TryBoundedKey(ClientContext &context, const LogicalType &key_type,
@@ -81,10 +90,8 @@ bool IntegerPartitionedTupleData::TryBoundedKey(ClientContext &context, const Lo
 		return false;
 	}
 	const auto range = hi - lo + 1;
-	const auto max_partitions = MaxIntegerPartitions(context);
-	const auto extra_partitions = PartitionCountFor(0);
-	if (max_partitions <= extra_partitions ||
-	    range > hugeint_t(static_cast<int64_t>(max_partitions - extra_partitions))) {
+	const auto max_keys = MaxIntegerPartitionKeys(context);
+	if (max_keys == 0 || range > hugeint_t(static_cast<int64_t>(max_keys))) {
 		return false;
 	}
 	value_count = range.lower;
