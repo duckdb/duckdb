@@ -2315,7 +2315,13 @@ vector<unique_ptr<PartitionedCopyGroup>> SortStrategyInput::Finalize(ClientConte
 
 	vector<unique_ptr<PartitionedCopyGroup>> groups(chunk_rows.size());
 	for (const auto &bin : bins) {
-		groups[bin] = make_uniq<SortedBinGroup>(*this, gstate, vector<idx_t> {bin}, chunk_rows[bin].count);
+		// a bin proven to hold a single key is read straight from its tuple data, like a direct partition
+		auto single_key = strategy->TryTakeSinglePartition(bin, *gstate.source);
+		if (single_key) {
+			groups[bin] = make_uniq<DirectPartitionGroup>(context, std::move(single_key), strategy->scan_ids);
+		} else {
+			groups[bin] = make_uniq<SortedBinGroup>(*this, gstate, vector<idx_t> {bin}, chunk_rows[bin].count);
+		}
 	}
 	return groups;
 }
@@ -2633,7 +2639,9 @@ public:
 	shared_ptr<TupleDataLayout> layout;
 };
 
-//! One partition of an IntegerPartitionInput: a single key, read straight from the tuple data the group owns
+//! A group holding a single partition key, read straight from the tuple data it owns: a partition of an
+//! IntegerPartitionInput, or a hash bin of a SortStrategyInput proven to hold one key (whose tuples carry a trailing
+//! hash column that the scan projects away)
 class DirectPartitionGroup : public PartitionedCopyGroup {
 public:
 	class ScanState : public PartitionedCopyGroupScanState {
@@ -2684,8 +2692,18 @@ public:
 	};
 
 public:
-	DirectPartitionGroup(ClientContext &context, unique_ptr<TupleDataCollection> data_p)
-	    : context(context), data(std::move(data_p)), count(data->Count()) {
+	DirectPartitionGroup(ClientContext &context, unique_ptr<TupleDataCollection> data_p,
+	                     vector<column_t> column_ids_p = {})
+	    : context(context), data(std::move(data_p)), count(data->Count()), column_ids(std::move(column_ids_p)) {
+		if (column_ids.empty()) {
+			const auto column_count = data->GetLayout().ColumnCount();
+			for (column_t col_idx = 0; col_idx < column_count; col_idx++) {
+				column_ids.push_back(col_idx);
+			}
+		}
+		for (const auto &col_idx : column_ids) {
+			scan_types.push_back(data->GetLayout().GetTypes()[col_idx]);
+		}
 	}
 
 public:
@@ -2708,7 +2726,7 @@ public:
 	unique_ptr<PartitionedCopyGroupScanState>
 	InitializeScan(const PartitionedCopyChunkPosition &position) const override;
 	void InitializeScanChunk(DataChunk &chunk) const override {
-		chunk.Initialize(Allocator::Get(context), data->GetLayout().GetTypes());
+		chunk.Initialize(Allocator::Get(context), scan_types);
 	}
 	bool Scan(PartitionedCopyGroupScanState &state, DataChunk &chunk) const override;
 
@@ -2716,6 +2734,9 @@ private:
 	ClientContext &context;
 	unique_ptr<TupleDataCollection> data;
 	const idx_t count;
+	//! The columns read from the tuples, and their types
+	vector<column_t> column_ids;
+	vector<LogicalType> scan_types;
 };
 
 //! The keys of an IntegerPartitionInput outside the statistics' bounds: the preparation tasks re-sink them into a
@@ -2884,7 +2905,7 @@ void DirectPartitionGroup::Cursor::RowSizes(vector<idx_t> &sizes) {
 unique_ptr<PartitionedCopyGroupScanState>
 DirectPartitionGroup::InitializeScan(const PartitionedCopyChunkPosition &position) const {
 	auto result = make_uniq<ScanState>();
-	data->InitializeScan(result->state, TupleDataPinProperties::UNPIN_AFTER_DONE);
+	data->InitializeScan(result->state, column_ids, TupleDataPinProperties::UNPIN_AFTER_DONE);
 	data->SeekScan(result->state, {position.segment_idx, position.chunk_idx});
 	return std::move(result);
 }

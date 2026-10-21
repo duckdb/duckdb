@@ -726,6 +726,23 @@ const HashedSort::ChunkRows &HashedSort::GetHashGroups(GlobalSourceState &gstate
 	return gsource.chunk_rows;
 }
 
+unique_ptr<TupleDataCollection> HashedSort::TryTakeSinglePartition(idx_t hash_bin, GlobalSourceState &source) const {
+	auto &gsource = source.Cast<HashedSortGlobalSourceState>();
+	auto &gsink = gsource.gsink;
+	if (!gsink.grouping_data || !gsink.CanBypassSort(hash_bin)) {
+		return nullptr;
+	}
+	lock_guard<mutex> guard(gsink.lock);
+	auto &partitions = gsink.grouping_data->GetPartitions();
+	if (hash_bin >= partitions.size() || !partitions[hash_bin] || !partitions[hash_bin]->Count()) {
+		return nullptr;
+	}
+	auto result = std::move(partitions[hash_bin]);
+	// the bin leaves the sort path: its sort state is not needed
+	gsink.hash_groups[hash_bin].reset();
+	return result;
+}
+
 static SourceResultType MaterializeHashGroupData(ExecutionContext &context, idx_t hash_bin, bool build_runs,
                                                  OperatorSourceInput &source) {
 	auto &gsource = source.global_state.Cast<HashedSortGlobalSourceState>();
