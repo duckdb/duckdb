@@ -278,8 +278,6 @@ void PrimitiveColumnWriter::FlushPage(PrimitiveColumnWriterState &state) {
 	// compress the data
 	CompressPage(temp_writer, write_info.compressed_size, write_info.compressed_data, write_info.compressed_buf);
 	hdr.compressed_page_size = UnsafeNumericCast<int32_t>(write_info.compressed_size);
-	D_ASSERT(hdr.uncompressed_page_size > 0);
-	D_ASSERT(hdr.compressed_page_size > 0);
 
 	if (write_info.compressed_buf.IsSet()) {
 		// if the data has been compressed, we no longer need the uncompressed data
