@@ -689,7 +689,9 @@ public:
 	}
 
 	//! Assign a new task to the local state
-	bool TryNextTask(TaskPtr &task, Task &task_local);
+	bool TryNextTask(TaskPtr &task, Task &task_local) DUCKDB_EXCLUDES(lock);
+	//! Same, with the lock held, so that a caller can block on failure without missing an unblock
+	bool TryNextTaskLocked(TaskPtr &task, Task &task_local) DUCKDB_REQUIRES(lock);
 
 	//! The parent operator
 	const PhysicalAsOfJoin &op;
@@ -1354,8 +1356,10 @@ public:
 
 	//! Task management
 	bool TaskFinished() const;
-	//! Assign the next task
-	bool TryAssignTask();
+	//! Finish the current task (if any) and try to get the next one
+	bool TryAssignTask() DUCKDB_EXCLUDES(gsource.lock);
+	//! Set up the local state for executing a task acquired through AsOfGlobalSourceState::TryNextTaskLocked
+	void InitializeTask();
 
 	void ExecuteSortTask(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &source);
 	void ExecuteMaterializeTask(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &source);
@@ -1412,6 +1416,10 @@ public:
 	SelectionVector rsel;
 	//! Pointer to the right marker
 	const bool *rhs_matches = {};
+
+	//! Whether this task has produced any rows yet.
+	//! A task that has produced rows must not block waiting for other tasks: the sink may be waiting for it.
+	bool produced = false;
 };
 
 AsOfLocalSourceState::AsOfLocalSourceState(ExecutionContext &context, AsOfGlobalSourceState &gsource,
@@ -1516,6 +1524,11 @@ bool AsOfLocalSourceState::TryAssignTask() {
 	if (!gsource.TryNextTask(task, task_local)) {
 		return false;
 	}
+	InitializeTask();
+	return true;
+}
+
+void AsOfLocalSourceState::InitializeTask() {
 	task_begin = task->begin_idx;
 	task_progress.Start();
 
@@ -1534,14 +1547,15 @@ bool AsOfLocalSourceState::TryAssignTask() {
 	case AsOfJoinSourceStage::DONE:
 		break;
 	}
-
-	return true;
 }
 
 bool AsOfGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	FinishTask(task);
+	return TryNextTaskLocked(task, task_local);
+}
 
+bool AsOfGlobalSourceState::TryNextTaskLocked(TaskPtr &task, Task &task_local) {
 	if (!HasMoreTasks()) {
 		task = nullptr;
 		return false;
@@ -1682,29 +1696,46 @@ SourceResultType PhysicalAsOfJoin::GetDataInternal(ExecutionContext &context, Da
 	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
 	// Therefore, we loop until we've produced tuples, or until the operator is actually done
 	while (gsource.HasUnfinishedTasks() && chunk.size() == 0) {
-		if (!lsource.TaskFinished() || lsource.TryAssignTask()) {
-			try {
-				lsource.ExecuteTask(context, chunk, input);
-			} catch (...) {
-				gsource.stopped = true;
-				throw;
+		if (lsource.TaskFinished() && !lsource.TryAssignTask()) {
+			{
+				annotated_lock_guard<annotated_mutex> guard(gsource.lock);
+				if (!gsource.HasMoreTasks()) {
+					gsource.UnblockTasks();
+					break;
+				}
+				// TryAssignTask released the lock: another thread may have prepared the next stage and unblocked
+				// the blocked tasks in between, so look again before blocking, or no one would ever unblock this task.
+				if (!gsource.TryNextTaskLocked(lsource.task, lsource.task_local)) {
+					if (lsource.produced) {
+						// The remaining tasks can only start once the other tasks of this stage have finished
+						// (e.g., the RIGHT stage of an outer join waits for every LEFT task). This task has already
+						// handed rows to the sink, which may in turn be waiting for this task (e.g., a partitioned
+						// COPY cannot flush until every producer has combined), so blocking here could deadlock:
+						// let the tasks that are still running finish the join instead.
+						return SourceResultType::FINISHED;
+					}
+					// there are more tasks available, but we can't execute them yet
+					// block the source
+					return gsource.BlockSource(input.interrupt_state);
+				}
 			}
-			if (lsource.task) {
-				auto &task = *lsource.task;
-				auto done = task.begin_idx > lsource.task_begin ? task.begin_idx - lsource.task_begin : 0;
-				auto total = task.end_idx > lsource.task_begin ? task.end_idx - lsource.task_begin : 0;
-				lsource.task_progress.Update(gsource.task_progress, done, total);
-			}
-		} else {
-			annotated_lock_guard<annotated_mutex> guard(gsource.lock);
-			if (!gsource.HasMoreTasks()) {
-				gsource.UnblockTasks();
-				break;
-			} else {
-				// there are more tasks available, but we can't execute them yet
-				// block the source
-				return gsource.BlockSource(input.interrupt_state);
-			}
+			// Set up the task outside the lock
+			lsource.InitializeTask();
+		}
+		try {
+			lsource.ExecuteTask(context, chunk, input);
+		} catch (...) {
+			gsource.stopped = true;
+			throw;
+		}
+		if (lsource.task) {
+			auto &task = *lsource.task;
+			auto done = task.begin_idx > lsource.task_begin ? task.begin_idx - lsource.task_begin : 0;
+			auto total = task.end_idx > lsource.task_begin ? task.end_idx - lsource.task_begin : 0;
+			lsource.task_progress.Update(gsource.task_progress, done, total);
+		}
+		if (chunk.size() != 0) {
+			lsource.produced = true;
 		}
 	}
 
