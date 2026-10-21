@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-enum class WindowMergeSortStage : uint8_t { INIT, COMBINE, FINALIZE, SORTED, FINISHED };
+enum class WindowMergeSortStage : uint8_t { INIT, COMBINE, FINALIZE, SORTED, FINISH, FINISHED };
 
 class WindowMergeSortTree;
 
@@ -60,13 +60,16 @@ public:
 	//! Make a local sort for a thread
 	optional_ptr<LocalSinkState> InitializeLocalSort(ExecutionContext &context) const;
 
-	//! Thread-safe post-sort cleanup
+	//! Find the starts of all the blocks (run as part of the single FINALIZE task)
+	//! Returns the total number of rows
+	virtual idx_t MeasurePayloadBlocks();
+	//! Post-sort cleanup (run as the single FINISH task)
 	virtual void Finished();
 
 	//! Sort state machine
 	bool TryPrepareSortStage(WindowMergeSortTreeLocalState &lstate);
 	//! Build the MST in parallel from the sorted data
-	void Build();
+	void Build(ClientContext &context);
 
 	//! The column indices for sorting
 	const vector<column_t> order_idx;
@@ -91,17 +94,8 @@ public:
 	idx_t total_tasks = 0;
 	//! Tasks launched
 	idx_t tasks_assigned = 0;
-	//! Tasks landed
+	//! Tasks completed successfully
 	atomic<idx_t> tasks_completed;
-	//! Whether a stage task failed - the stage will then never be completed
-	atomic<bool> stage_failed;
-	//! The error that made a stage task fail (guarded by lock)
-	ErrorData stage_error;
-
-	//! Record a stage task failure so that the threads waiting for the stage can rethrow it
-	void SetStageError(const std::exception &ex);
-	//! Rethrow the error recorded by SetStageError
-	[[noreturn]] void ThrowStageError();
 
 	// Merge sort trees for various sizes
 	// Smaller is probably not worth the effort.
@@ -109,11 +103,6 @@ public:
 	using MergeSortTree64 = MergeSortTree<uint64_t, uint64_t>;
 	unique_ptr<MergeSortTree32> mst32;
 	unique_ptr<MergeSortTree64> mst64;
-
-protected:
-	//! Find the starts of all the blocks
-	//! Returns the total number of rows
-	virtual idx_t MeasurePayloadBlocks();
 };
 
 } // namespace duckdb

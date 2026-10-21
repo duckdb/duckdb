@@ -10,7 +10,7 @@ namespace duckdb {
 
 WindowMergeSortTree::WindowMergeSortTree(ClientContext &client, const vector<BoundOrderByNode> &orders_p,
                                          const vector<column_t> &order_idx, const idx_t count, bool unique)
-    : order_idx(order_idx), build_stage(WindowMergeSortStage::INIT), tasks_completed(0), stage_failed(false) {
+    : order_idx(order_idx), build_stage(WindowMergeSortStage::INIT), tasks_completed(0) {
 	// Sort the unfiltered indices by the orders
 	const auto force_external = Settings::Get<DebugForceExternalSetting>(client);
 	LogicalType index_type;
@@ -90,51 +90,40 @@ void WindowMergeSortTreeLocalState::Sink(ExecutionContext &context, DataChunk &c
 }
 
 void WindowMergeSortTreeLocalState::ExecuteSortTask(ExecutionContext &context, InterruptState &interrupt) {
-	//	Count the task as completed even if it fails, so the stage counters stay consistent.
-	//	The error is recorded first (below) so that the waiting threads rethrow it instead of continuing.
-	PostIncrement<atomic<idx_t>> on_completed(window_tree.tasks_completed);
-
-	try {
-		switch (build_stage) {
-		case WindowMergeSortStage::COMBINE: {
-			auto &local_sink = *window_tree.local_sinks[build_task];
-			OperatorSinkCombineInput combine {*window_tree.global_sink, local_sink, interrupt};
-			window_tree.sort->Combine(context, combine);
-			break;
-		}
-		case WindowMergeSortStage::FINALIZE: {
-			auto &sort = *window_tree.sort;
-			OperatorSinkFinalizeInput finalize {*window_tree.global_sink, interrupt};
-			sort.Finalize(context.client, finalize);
-			auto sort_global = sort.GetGlobalSourceState(context.client, *window_tree.global_sink);
-			auto sort_local = sort.GetLocalSourceState(context, *sort_global);
-			OperatorSourceInput source {*sort_global, *sort_local, interrupt};
-			sort.MaterializeColumnData(context, source);
-			window_tree.sorted = sort.GetColumnData(source);
-			break;
-		}
-		case WindowMergeSortStage::SORTED:
-			BuildLeaves();
-			break;
-		default:
-			break;
-		}
-	} catch (std::exception &ex) {
-		//	Wake up the threads waiting for this stage
-		window_tree.SetStageError(ex);
-		throw;
+	switch (build_stage) {
+	case WindowMergeSortStage::COMBINE: {
+		auto &local_sink = *window_tree.local_sinks[build_task];
+		OperatorSinkCombineInput combine {*window_tree.global_sink, local_sink, interrupt};
+		window_tree.sort->Combine(context, combine);
+		break;
 	}
-}
+	case WindowMergeSortStage::FINALIZE: {
+		auto &sort = *window_tree.sort;
+		OperatorSinkFinalizeInput finalize {*window_tree.global_sink, interrupt};
+		sort.Finalize(context.client, finalize);
+		auto sort_global = sort.GetGlobalSourceState(context.client, *window_tree.global_sink);
+		auto sort_local = sort.GetLocalSourceState(context, *sort_global);
+		OperatorSourceInput source {*sort_global, *sort_local, interrupt};
+		sort.MaterializeColumnData(context, source);
+		window_tree.sorted = sort.GetColumnData(source);
+		//	Allocate the tree from the sorted data as part of this task,
+		//	so that a failure here does not leave a half-allocated tree for another thread to retry.
+		window_tree.MeasurePayloadBlocks();
+		break;
+	}
+	case WindowMergeSortStage::SORTED:
+		BuildLeaves();
+		break;
+	case WindowMergeSortStage::FINISH:
+		window_tree.Finished();
+		break;
+	default:
+		break;
+	}
 
-void WindowMergeSortTree::SetStageError(const std::exception &ex) {
-	lock_guard<mutex> stage_guard(lock);
-	stage_error = ErrorData(ex);
-	stage_failed = true;
-}
-
-void WindowMergeSortTree::ThrowStageError() {
-	lock_guard<mutex> stage_guard(lock);
-	stage_error.Throw();
+	//	Completion means success: a failed task never completes its stage,
+	//	and the threads waiting for the stage leave through the executor's interrupt.
+	++window_tree.tasks_completed;
 }
 
 idx_t WindowMergeSortTree::MeasurePayloadBlocks() {
@@ -191,7 +180,6 @@ bool WindowMergeSortTree::TryPrepareSortStage(WindowMergeSortTreeLocalState &lst
 			return false;
 		}
 		//	Move on to building the tree in parallel
-		MeasurePayloadBlocks();
 		total_tasks = local_sinks.size();
 		tasks_completed = 0;
 		tasks_assigned = 0;
@@ -204,11 +192,21 @@ bool WindowMergeSortTree::TryPrepareSortStage(WindowMergeSortTreeLocalState &lst
 			lstate.build_task = tasks_assigned++;
 			return true;
 		} else if (tasks_completed < tasks_assigned) {
-			lstate.build_stage = WindowMergeSortStage::FINISHED;
 			// Sleep while other tasks finish
 			return false;
 		}
-		Finished();
+		// All leaves are built, so move on to finishing the tree (1 task)
+		total_tasks = 1;
+		tasks_completed = 0;
+		tasks_assigned = 0;
+		lstate.build_stage = build_stage = WindowMergeSortStage::FINISH;
+		lstate.build_task = tasks_assigned++;
+		return true;
+	case WindowMergeSortStage::FINISH:
+		if (tasks_completed < tasks_assigned) {
+			//	Wait for the single task to finish
+			return false;
+		}
 		break;
 	case WindowMergeSortStage::FINISHED:
 		break;
@@ -222,28 +220,22 @@ bool WindowMergeSortTree::TryPrepareSortStage(WindowMergeSortTreeLocalState &lst
 void WindowMergeSortTreeLocalState::Finalize(ExecutionContext &context, InterruptState &interrupt) {
 	// Sort, merge and build the tree in parallel
 	while (window_tree.build_stage.load() != WindowMergeSortStage::FINISHED) {
-		if (window_tree.stage_failed) {
-			//	Another thread failed its task, so the stage will never be completed
-			window_tree.ThrowStageError();
-		}
+		//	A failed task never completes its stage, so the waiting threads
+		//	leave through the interrupt that the executor raises for the failure
+		context.client.InterruptCheck();
 		if (window_tree.TryPrepareSortStage(*this)) {
 			ExecuteSortTask(context, interrupt);
 		} else {
 			std::this_thread::yield();
 		}
 	}
-	//	The failing task may have been the last one of its stage,
-	//	in which case the stages finished but the tree is not usable.
-	if (window_tree.stage_failed) {
-		window_tree.ThrowStageError();
-	}
 }
 
-void WindowMergeSortTree::Build() {
+void WindowMergeSortTree::Build(ClientContext &context) {
 	if (mst32) {
-		mst32->Build();
+		mst32->Build(context);
 	} else {
-		mst64->Build();
+		mst64->Build(context);
 	}
 }
 
