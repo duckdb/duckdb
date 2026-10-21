@@ -8,7 +8,6 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/common/logical_type_info.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -422,7 +421,7 @@ static string MacroTypeToSQL(const LogicalType &type) {
 	if (type_info.type == LogicalTypeInfoType::STRING_TYPE_INFO) {
 		auto &string_info = type_info.Cast<StringTypeInfo>();
 		if (!string_info.collation.empty()) {
-			return "VARCHAR(" + KeywordHelper::WriteQuoted(string_info.collation) + ")";
+			return "VARCHAR(" + SQLString::ToString(string_info.collation) + ")";
 		}
 	}
 	return type.ToString();
