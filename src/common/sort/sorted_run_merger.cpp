@@ -6,6 +6,7 @@
 #include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
+#include "duckdb/common/sorting/buffered_merge.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/parallel/parallel_destroy_task.hpp"
@@ -224,18 +225,17 @@ public:
 			return;
 		}
 
-		// Compute average number of tuples per partition to destroy
+		// Estimate the number of tuples eligible for destruction
 		const auto total_tuples_to_destroy = (end_partition_idx - destroy_partition_idx) * merger.partition_size;
-		const auto tuples_to_destroy_per_partition = total_tuples_to_destroy / num_partitions;
 
 		// Compute max tuples per block
 		const auto &run = *merger.sorted_runs[0];
 		const auto tuples_per_block =
 		    run.payload_data ? run.payload_data->TuplesPerBlock() : run.key_data->TuplesPerBlock();
 
-		// Compute number of blocks we can destroy per partition
-		const auto blocks_to_destroy_per_partition = tuples_to_destroy_per_partition / tuples_per_block;
-		if (blocks_to_destroy_per_partition == 0) {
+		// Batch destruction across input runs, capped by the number of output partitions
+		const auto batching_divisor = MinValue(num_runs, num_partitions);
+		if (total_tuples_to_destroy / batching_divisor < tuples_per_block) {
 			return;
 		}
 
@@ -655,8 +655,12 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 	static const auto fallback = [](SORT_KEY *begin, SORT_KEY *end) {
 		duckdb_pdqsort::pdqsort_branchless(begin, end);
 	};
+	// the run merges need a scratch buffer of up to half the keys - take it from the buffer allocator so that it is
+	// counted against the memory limit instead of coming from operator new inside std::inplace_merge
+	SortMergeBuffer merge_buffer(BufferAllocator::Get(gstate.context), merged_partition_count, sizeof(SORT_KEY));
+	const BufferedMergePolicy<SORT_KEY> merge(merge_buffer);
 	duckdb_vergesort::vergesort(merged_partition_keys, merged_partition_keys + merged_partition_count,
-	                            std::less<SORT_KEY>(), fallback);
+	                            std::less<SORT_KEY>(), fallback, merge);
 }
 
 void SortedRunMergerLocalState::ScanPartition(SortedRunMergerGlobalState &gstate, DataChunk &chunk) {

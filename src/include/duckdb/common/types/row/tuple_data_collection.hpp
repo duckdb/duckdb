@@ -92,7 +92,8 @@ public:
 	vector<pair<idx_t, idx_t>> GetChunkRangesForPartition(idx_t partition_idx) const;
 	//! Gets the pointers to the start of every block
 	vector<data_ptr_t> GetRowBlockPointers();
-	//! Destroy the blocks corresponding to the chunk indices
+	//! Destroy blocks for an incremental chunk range; earlier chunks must no longer be read.
+	//! Blocks needed by chunks at or after chunk_idx_end are retained.
 	void DestroyChunks(idx_t chunk_idx_begin, idx_t chunk_idx_end);
 
 	//! Gets the scatter function for the given type

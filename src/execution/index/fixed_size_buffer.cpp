@@ -63,7 +63,7 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segmen
     : block_manager(block_manager), readers(0), segment_count(segment_count), allocation_size(allocation_size),
       dirty(false), vacuum(false), loaded(false), block_pointer(block_pointer) {
 	D_ASSERT(block_pointer.IsValid());
-	block_handle = block_manager.RegisterBlock(block_pointer.block_id);
+	block_handle = block_manager.RegisterBlock(block_pointer.block_id, MemoryTag::ART_INDEX);
 	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
 }
 
@@ -78,7 +78,11 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 	}
 	if (OnDisk()) {
 		// marking a block as modified decreases the reference count of multi-use blocks
-		block_manager.MarkBlockAsModified(block_pointer.block_id);
+		// this must not throw out of a destructor, e.g., if the block ids of a corrupt file overlap
+		try {
+			block_manager.MarkBlockAsModified(block_pointer.block_id);
+		} catch (...) { // NOLINT
+		}
 	}
 }
 
@@ -130,6 +134,15 @@ void FixedSizeBuffer::LoadFromDisk() {
 	// Pin the partial block.
 	auto &buffer_manager = block_manager.buffer_manager;
 	auto pinned_buffer_handle = buffer_manager.Pin(block_handle);
+
+	// block_pointer.offset and allocation_size come straight from the index's on-disk metadata - verify the read
+	// stays within the (fixed-size) source and destination blocks before copying out of either of them.
+	auto block_size = block_manager.GetBlockSize();
+	if (allocation_size > block_size || block_pointer.offset > block_size - allocation_size) {
+		throw DataCorruptionException("Corrupted index buffer: offset %llu with allocation size %llu exceeds the "
+		                              "block size %llu",
+		                              block_pointer.offset, allocation_size, block_size);
+	}
 
 	// Copy the (partial) data into a new (not yet disk-backed) buffer handle.
 	shared_ptr<BlockHandle> new_block_handle;

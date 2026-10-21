@@ -25,7 +25,9 @@
         "test/sql/constraints/deferred/test_deferred_statements.test",
         "test/sql/constraints/deferred/test_deferred_syntax.test",
         "test/sql/constraints/deferred/test_deferred_trigger.test",
-        "test/sql/constraints/deferred/test_deferred_unique_pk.test"
+        "test/sql/constraints/deferred/test_deferred_unique_pk.test",
+        "test/sql/window/test_window_degenerate_frames.test",
+        "test/optimizer/remove_redundant_order_keys.test"
       ]
     },
     {
@@ -63,7 +65,8 @@
       "reason": "Stored aggregate-state and TUPLE columns require v2.0.0 storage.",
       "paths": [
         "test/sql/sql_export/empty_aggregate_state.test",
-        "test/sql/sql_export/mark_condition_shapes.test"
+        "test/sql/sql_export/mark_condition_shapes.test",
+        "test/sql/types/variant/variant_struct_field_subquery.test"
       ]
     }
   ]

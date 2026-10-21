@@ -427,9 +427,8 @@ unique_ptr<SegmentScanState> RLEInitScan(const QueryContext &context, ColumnSegm
 //===--------------------------------------------------------------------===//
 template <class T>
 void RLESkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
-	auto end = state.GetPositionInSegment();
-	D_ASSERT(end <= segment.count);
-	D_ASSERT(skip_count <= end);
+	D_ASSERT(state.GetPositionInSegment() <= segment.count);
+	D_ASSERT(skip_count <= state.GetPositionInSegment());
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 	scan_state.Skip(segment, skip_count);
 }
@@ -466,8 +465,8 @@ static void RLEScanConstant(RLEScanState<T> &scan_state, const typename RLEScanS
 template <class T, bool ENTIRE_VECTOR>
 void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                             idx_t result_offset) {
-	auto start = state.GetPositionInSegment();
-	D_ASSERT(start <= segment.count && scan_count <= segment.count - start);
+	D_ASSERT(state.GetPositionInSegment() <= segment.count);
+	D_ASSERT(scan_count <= segment.count - state.GetPositionInSegment());
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	// If we are scanning an entire Vector and it contains only a single run
@@ -519,19 +518,21 @@ void RLEScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, V
 //===--------------------------------------------------------------------===//
 template <class T>
 void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-               const SelectionVector &sel, idx_t sel_count) {
+               const SelectionVector &sel, idx_t sel_count, idx_t result_offset, ScanVectorType scan_type) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	// If we are scanning an entire Vector and it contains only a single run we don't need to select at all
 	auto current_run = scan_state.ValidateAndGetCurrentRun();
-	if (scan_state.position_in_entry < current_run.length &&
+	if (scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR && scan_state.position_in_entry < current_run.length &&
 	    CanEmitConstantVector<true>(scan_state.position_in_entry, current_run.length, vector_count)) {
 		RLEScanConstant<T>(scan_state, current_run, vector_count, result);
 		return;
 	}
 
-	auto result_data = FlatVector::Writer<T>(result, sel_count);
+	auto result_data = FlatVector::Writer<T>(result, sel_count, result_offset);
 
+	// Keep the current run until the selection advances past it.
+	idx_t run_end = current_run.length - scan_state.position_in_entry;
 	idx_t prev_idx = 0;
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto next_idx = sel.get_index(i);
@@ -539,14 +540,16 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 			throw InternalException("Error in RLESelect - selection vector indices are not ordered");
 		}
 		D_ASSERT(next_idx < vector_count);
-		// skip forward to the next index
-		scan_state.SkipInternal(next_idx - prev_idx);
-		// read the element
-		result_data.WriteValue(scan_state.ValidateAndGetCurrentRun().value);
-		// move the next to the prev
+		while (next_idx >= run_end) {
+			scan_state.ForwardToNextRun();
+			current_run = scan_state.ValidateAndGetCurrentRun();
+			run_end += current_run.length;
+		}
+		result_data.WriteValue(current_run.value);
 		prev_idx = next_idx;
 	}
-	// skip the tail
+	// Restore the position at the last selected row before skipping the tail.
+	scan_state.position_in_entry = current_run.length - (run_end - prev_idx);
 	scan_state.SkipInternal(vector_count - prev_idx);
 }
 

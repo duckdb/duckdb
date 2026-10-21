@@ -77,12 +77,9 @@ RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options, s
                                              bool constant_pattern)
     : RegexpBaseBindData(options, std::move(constant_string_p), constant_pattern) {
 	if (constant_pattern) {
+		// an invalid pattern is reported when the function state is initialized
 		auto pattern = make_uniq<RE2>(constant_string, options);
-		if (!pattern->ok()) {
-			throw InvalidInputException(pattern->error());
-		}
-
-		range_success = pattern->PossibleMatchRange(&range_min, &range_max, 1000);
+		range_success = pattern->ok() && pattern->PossibleMatchRange(&range_min, &range_max, 1000);
 	} else {
 		range_success = false;
 	}
@@ -412,6 +409,15 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 				throw InvalidInputException("Group index must be between 0 and 9!");
 			}
 			group_index = static_cast<int8_t>(group_idx);
+		}
+	}
+
+	if (constant_pattern && constant_string.find("\\C") == string::npos) {
+		auto validation_options = options;
+		validation_options.set_log_errors(false);
+		if (RE2(constant_string, validation_options).ok()) {
+			// A valid UTF-8 pattern without byte escapes cannot return a partial character.
+			bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 		}
 	}
 

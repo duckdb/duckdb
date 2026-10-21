@@ -115,7 +115,7 @@ public:
 	//! Add to a metric counter (profiling-only).
 	DUCKDB_API void AddToMetricCounter(const string &key, idx_t amount);
 	//! Add parser time measured before the per-statement profiler was started.
-	void AddParserTime(const Profiler &parser_timer);
+	void AddParserTime(const Profiler &parser_timer, timestamp_t start_time, timestamp_t end_time);
 
 	//! Set an arbitrary metric value (profiling-only; no-op when profiling is disabled).
 	DUCKDB_API void SetMetric(const string &key, Value new_value);
@@ -191,6 +191,11 @@ public:
 		lock_guard<std::mutex> guard(lock);
 		callback(root.get());
 	}
+	//! Provides access to the finalized metrics and query tree of the last profiled query, both null while a query is
+	//! running or when there are none, and ensures there are no concurrent modifications
+	DUCKDB_API void GetFinalizedProfileUnderLock(
+	    const std::function<void(optional_ptr<const GatheredMetrics>, optional_ptr<const ProfilingNode>)> &callback)
+	    const;
 
 private:
 	ClientContext &context;

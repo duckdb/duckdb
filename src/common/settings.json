@@ -208,17 +208,6 @@
         "default_value": "true"
     },
     {
-        "name": "block_allocator_memory",
-        "description": "Physical memory that the block allocator is allowed to use. This memory is allocated once, never freed, and cannot be reduced.",
-        "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": [
-            "get",
-            "set",
-            "reset"
-        ]
-    },
-    {
         "name": "cache_local_files",
         "description": "Whether the external file cache also caches local files. Remote files are always cached.",
         "type": "BOOLEAN",
@@ -368,6 +357,14 @@
         "description": "Set a time for the eviction queue to sleep before acquiring the shared ownership of some block memory.",
         "type": "UBIGINT",
         "scope": "global",
+        "default_value": "0",
+        "is_debug": true
+    },
+    {
+        "name": "debug_file_descriptor_limit",
+        "description": "Override the file descriptor limit that bounds how many files a scan opens ahead. 0 uses the limit of the process.",
+        "type": "UBIGINT",
+        "default_scope": "local",
         "default_value": "0",
         "is_debug": true
     },
@@ -739,6 +736,13 @@
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "50"
+    },
+    {
+        "name": "enable_block_allocator",
+        "description": "Enable new allocations from the fixed-size block pool (64-bit only; disabled by default on MinGW). Disabling preserves existing allocations and the virtual memory reservation.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "enable_external_access",

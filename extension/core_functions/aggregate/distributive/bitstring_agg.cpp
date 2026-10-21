@@ -123,15 +123,12 @@ struct BitStringAggOperation {
 		if (min > max) {
 			throw InvalidInputException("Invalid explicit bitstring range: Minimum (%d) > maximum (%d)", min, max);
 		}
-		INPUT_TYPE result;
-		if (!TrySubtractOperator::Operation(max, min, result)) {
+		// the difference of two (at most 64-bit) values does not always fit in their own type, but it fits in a hugeint
+		const auto range = Hugeint::Convert(max) - Hugeint::Convert(min);
+		if (range >= Hugeint::Convert(NumericLimits<idx_t>::Maximum())) {
 			return NumericLimits<idx_t>::Maximum();
 		}
-		auto val = NumericCast<idx_t>(result);
-		if (val == NumericLimits<idx_t>::Maximum()) {
-			return val;
-		}
-		return val + 1;
+		return Hugeint::Cast<idx_t>(range) + 1;
 	}
 
 	template <class INPUT_TYPE, class STATE>

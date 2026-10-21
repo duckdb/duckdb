@@ -23,7 +23,9 @@
         "test/sql/constraints/deferred/test_deferred_statements.test",
         "test/sql/constraints/deferred/test_deferred_syntax.test",
         "test/sql/constraints/deferred/test_deferred_trigger.test",
-        "test/sql/constraints/deferred/test_deferred_unique_pk.test"
+        "test/sql/constraints/deferred/test_deferred_unique_pk.test",
+        "test/sql/window/test_window_degenerate_frames.test",
+        "test/optimizer/remove_redundant_order_keys.test"
       ]
     },
     {
@@ -32,6 +34,12 @@
         "test/sql/storage/evict_unpinned_without_temp_directory.test",
         "test/sql/transactions/test_commit_cleanup_oom.test",
         "test/sql/transactions/test_commit_cleanup_oom_index_retry.test"
+      ]
+    },
+    {
+      "reason": "Requires httpfs to be unloaded, but this config loads it statically.",
+      "paths": [
+        "test/extension/install_httpfs_https_repository.test"
       ]
     },
     {
@@ -153,7 +161,8 @@
       "reason": "Stored aggregate-state and TUPLE columns require v2.0.0 storage.",
       "paths": [
         "test/sql/sql_export/empty_aggregate_state.test",
-        "test/sql/sql_export/mark_condition_shapes.test"
+        "test/sql/sql_export/mark_condition_shapes.test",
+        "test/sql/types/variant/variant_struct_field_subquery.test"
       ]
     },
     {

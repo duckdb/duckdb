@@ -146,6 +146,11 @@ BoundStatement Binder::Bind(QueryNode &node) {
 }
 
 BoundStatement Binder::Bind(TableRef &ref) {
+	for (auto &column_alias : ref.column_name_alias) {
+		if (column_alias.empty()) {
+			throw BinderException(ref, "column alias cannot be empty");
+		}
+	}
 	BoundStatement result;
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
@@ -223,7 +228,7 @@ void Binder::AddBoundView(ViewCatalogEntry &view) {
 	auto current = this;
 	while (current) {
 		if (current->bound_views.find(view) != current->bound_views.end()) {
-			throw BinderException("infinite recursion detected: attempting to recursively bind view \"%s\"", view.name);
+			throw BinderException("infinite recursion detected: attempting to recursively bind view %s", view.name);
 		}
 		current = current->parent.get();
 	}
