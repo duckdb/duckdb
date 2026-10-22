@@ -689,13 +689,13 @@ FSSTScanState::ValidatedStringRange FSSTScanState::ValidateRange(idx_t start, id
 	const auto offsets = FSSTStorage::CalculateBpDeltaOffsets(last_known_row, start, scan_count);
 
 	if (bitunpack_buffer_capacity < offsets.total_bitunpack_count) {
-		bitunpack_buffer = make_unsafe_uniq_array<uint32_t>(offsets.total_bitunpack_count);
+		bitunpack_buffer = make_unsafe_uniq_array_uninitialized<uint32_t>(offsets.total_bitunpack_count);
 		bitunpack_buffer_capacity = offsets.total_bitunpack_count;
 	}
 	BitUnpackRange(layout.lengths, data_ptr_cast(bitunpack_buffer.get()), offsets.total_bitunpack_count,
 	               offsets.bitunpack_start_row, layout.width);
 	if (delta_decode_capacity < offsets.total_delta_decode_count) {
-		delta_decode_buffer = make_unsafe_uniq_array<uint32_t>(offsets.total_delta_decode_count);
+		delta_decode_buffer = make_unsafe_uniq_array_uninitialized<uint32_t>(offsets.total_delta_decode_count);
 		delta_decode_capacity = offsets.total_delta_decode_count;
 	}
 	const auto strings = DecodeAndValidateOffsets(layout, bitunpack_buffer.get() + offsets.bitunpack_alignment_offset,

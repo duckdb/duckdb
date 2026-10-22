@@ -35,8 +35,13 @@ private:
 	                             StringScanType string_scan_type = StringScanType::STANDARD);
 	//! Builds the dictionary on first use, returns false if this scan has no dictionary
 	bool EnsureDictionary();
-	//! The offset of each string in the dictionary, computed on first use
-	const vector<uint32_t> &GetStringOffsets();
+	//! A string's offset from a running sum, restarted on a step back if allowed and cheap, else from all offsets
+	uint32_t GetStringOffset(idx_t string_number, bool allow_restart);
+	//! Unpacks the length of every string, which scans need; a few fetched strings only unpack the groups they use
+	void LoadStringLengths();
+	const uint32_t *GetStringLengthGroup(idx_t group_start);
+	uint32_t GetStringLength(idx_t dict_idx);
+	uint32_t SumStringLengths(idx_t start, idx_t end);
 
 public:
 	ColumnSegment &segment;
@@ -56,7 +61,12 @@ public:
 	idx_t decompress_position = 0;
 
 	vector<uint32_t> string_lengths;
+	//! The last group of string lengths unpacked without unpacking all of them
+	uint32_t string_length_group[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
+	idx_t string_length_group_start = DConstants::INVALID_INDEX;
 	vector<uint32_t> string_offsets;
+	//! String lengths summed by GetStringOffset so far
+	idx_t summed_lengths = 0;
 
 	//! Start of the block (pointing to the dictionary_header)
 	data_ptr_t baseptr;

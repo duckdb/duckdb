@@ -801,7 +801,9 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 	optional_ptr<SegmentNode<ColumnSegment>> current_segment;
 	idx_t segment_start = 0;
 	idx_t segment_end = 0;
-	unique_ptr<ColumnScanState> scan_state;
+	ColumnScanState scan_state(nullptr);
+	scan_state.context = state.context;
+	scan_state.string_scan_type = StringScanType::COPY_STRINGS;
 	SelectionVector window_sel;
 	idx_t idx = 0;
 	while (idx < fetch_count) {
@@ -827,24 +829,19 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 			last_offset = next_offset;
 			window_count++;
 		}
-		if (!scan_state) {
-			scan_state = make_uniq<ColumnScanState>(nullptr);
-			scan_state->Initialize(state.context, type);
-			scan_state->string_scan_type = StringScanType::COPY_STRINGS;
-		}
-		if (scan_state->current.get() == current_segment.get() && scan_state->offset_in_column <= offset) {
-			scan_state->offset_in_column = offset;
+		if (scan_state.current.get() == current_segment.get() && scan_state.offset_in_column <= offset) {
+			scan_state.offset_in_column = offset;
 		} else {
-			ColumnData::InitializeScanWithOffset(*scan_state, offset);
+			ColumnData::InitializeScanWithOffset(scan_state, offset);
 		}
-		if (segment.GetCompressionFunction().select) {
+		if (window_count > 1 && segment.GetCompressionFunction().select) {
 			if (!window_sel.IsSet()) {
 				window_sel.Initialize(STANDARD_VECTOR_SIZE);
 			}
 			for (idx_t i = 0; i < window_count; i++) {
 				window_sel.set_index(i, offsets[sel.get_index(idx + i)] - offset);
 			}
-			SelectVector(*scan_state, result, last_offset - offset + 1, window_sel, window_count,
+			SelectVector(scan_state, result, last_offset - offset + 1, window_sel, window_count,
 			             ScanVectorType::SCAN_FLAT_VECTOR, result_offset + idx);
 		} else {
 			idx_t run_idx = 0;
@@ -855,8 +852,8 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 				       offsets[sel.get_index(idx + run_idx + run_count)] == run_offset + run_count) {
 					run_count++;
 				}
-				scan_state->offset_in_column = run_offset;
-				ScanVector(*scan_state, result, run_count, ScanVectorType::SCAN_FLAT_VECTOR,
+				scan_state.offset_in_column = run_offset;
+				ScanVector(scan_state, result, run_count, ScanVectorType::SCAN_FLAT_VECTOR,
 				           result_offset + idx + run_idx);
 				run_idx += run_count;
 			}

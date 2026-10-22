@@ -192,13 +192,17 @@ SELECT count(*), count(a), sum(a[1]) FROM arr WHERE s[1] = 'string_value_' || (i
 
 # Each compression, with isolated rows, gaps and runs: an UPDATE of the key fetches every column
 # by row id. Scanned strings are copied into the result, since only the scan pins the blocks they point into.
-# DICTIONARY and FSST are only written by older storage versions, DICT_FSST only by newer ones.
+# DICTIONARY and FSST are only written by older storage versions, DICT_FSST only by newer ones. Each vector repeats
+# the strings of p in reverse order in its second half, so selected rows refer back to earlier dictionary entries, and
+# their lengths vary from string to string.
 statement ok con1
 CREATE MACRO crow(lo, hi) AS TABLE
 SELECT i AS id, i AS o, 'string_value_' || i AS s, 'category_value_' || (i % 10) AS l,
        CASE WHEN i % 7 = 0 THEN NULL ELSE 'nullable_value_' || i END AS n, i // 100 AS r, i / 3 AS f, 42 AS c,
        CASE WHEN i % 5 = 0 THEN NULL ELSE {'a': i, 'b': 'struct_value_' || i} END AS st,
-       CASE WHEN i % 3 = 0 THEN NULL ELSE [i, NULL, i + 1] END AS li
+       CASE WHEN i % 3 = 0 THEN NULL ELSE [i, NULL, i + 1] END AS li,
+       'repeat_value_' || (i // 2048 * 1024 + least(i % 2048, 2047 - i % 2048)) ||
+       repeat('x', (i // 2048 * 1024 + least(i % 2048, 2047 - i % 2048)) % 13) AS p
 FROM range(lo, hi) r(i);
 
 foreach version v1.2.0 latest
@@ -213,13 +217,28 @@ SET force_compression = '{compression}';
 
 statement ok con1
 CREATE TABLE cdb.c (id BIGINT PRIMARY KEY, o BIGINT, s VARCHAR, l VARCHAR, n VARCHAR, r BIGINT, f DOUBLE, c INTEGER,
-                    st STRUCT(a BIGINT, b VARCHAR), li BIGINT[]);
+                    st STRUCT(a BIGINT, b VARCHAR), li BIGINT[], p VARCHAR);
 
 statement ok con1
 INSERT INTO cdb.c SELECT * FROM crow(0, 20000);
 
 statement ok con1
 CHECKPOINT cdb;
+
+# Index scans return the columns they fetch by row id: isolated rows, rows whose strings of p go back in the
+# dictionary, a short run, and 40 rows of one vector.
+query II con1
+SELECT (SELECT count(*) FROM cdb.c WHERE id IN (5, 1100, 1500, 1900, 3148, 3548, 3948, 4101, 9000, 9001, 9002, 9003, 12293, 16389, 19999)),
+       (SELECT count(*) FROM (SELECT * FROM cdb.c WHERE id IN (5, 1100, 1500, 1900, 3148, 3548, 3948, 4101, 9000, 9001, 9002, 9003, 12293, 16389, 19999)
+                              EXCEPT SELECT * FROM crow(0, 20000)));
+----
+15	0
+
+query II con1
+SELECT (SELECT count(*) FROM cdb.c WHERE id IN (1100, 1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1115, 1116, 1117, 1118, 1119, 1120, 1121, 1122, 1123, 1124, 1125, 1126, 1127, 1128, 1129, 1130, 1131, 1132, 1133, 1134, 1135, 1136, 1137, 1138, 1139)),
+       (SELECT count(*) FROM (SELECT * FROM cdb.c WHERE id IN (1100, 1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1115, 1116, 1117, 1118, 1119, 1120, 1121, 1122, 1123, 1124, 1125, 1126, 1127, 1128, 1129, 1130, 1131, 1132, 1133, 1134, 1135, 1136, 1137, 1138, 1139) EXCEPT SELECT * FROM crow(0, 20000)));
+----
+40	0
 
 # deletes in descending row order within one transaction, so the commit fetches row ids that go backwards
 statement ok con1

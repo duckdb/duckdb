@@ -173,16 +173,25 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 	D_ASSERT(sel_count <= vector_count);
 
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
-	auto strings = layout.ValidateRange(start, vector_count);
-
 	const bool copy_strings = state.string_scan_type == StringScanType::COPY_STRINGS;
-	for (idx_t i = 0; i < sel_count; i++) {
-		auto selection_index = sel.get_index(i);
-		D_ASSERT(selection_index < vector_count);
-		auto entry = strings.GetEntry(selection_index);
+	auto write_entry = [&](idx_t i, const StringDictionaryEntry &entry) {
 		auto str = FetchStringFromEntry(state.context, segment, result, entry);
 		result_data[result_offset + i] =
 		    copy_strings && !entry.is_overflow ? StringVector::AddStringOrBlob(result, str) : str;
+	};
+	// a sparse selection validates its own entries rather than every entry in between
+	if (sel_count * 4 < vector_count) {
+		for (idx_t i = 0; i < sel_count; i++) {
+			D_ASSERT(sel.get_index(i) < vector_count);
+			write_entry(i, layout.ValidateAndGetEntry(start + sel.get_index(i)));
+		}
+		return;
+	}
+	auto strings = layout.ValidateRange(start, vector_count);
+	for (idx_t i = 0; i < sel_count; i++) {
+		auto selection_index = sel.get_index(i);
+		D_ASSERT(selection_index < vector_count);
+		write_entry(i, strings.GetEntry(selection_index));
 	}
 }
 

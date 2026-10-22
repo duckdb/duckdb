@@ -19,7 +19,7 @@ string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t
 	if (dict_idx == 0) {
 		return string_t(nullptr, 0);
 	}
-	uint32_t string_len = string_lengths[dict_idx];
+	uint32_t string_len = GetStringLength(dict_idx);
 
 	// normal string: read string from this block
 	auto dict_pos = dict_ptr + dict_offset;
@@ -107,11 +107,56 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 		break;
 	}
 
+	// scans build the dictionary on first use
+	build_dictionary = initialize_dictionary && mode != DictFSSTMode::FSST_ONLY;
+}
+
+void CompressedStringScanState::LoadStringLengths() {
+	if (!string_lengths.empty()) {
+		return;
+	}
 	string_lengths.resize(AlignValue<uint32_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(dict_count));
 	BitpackingPrimitives::UnPackBuffer<uint32_t>(data_ptr_cast(string_lengths.data()),
 	                                             data_ptr_cast(string_lengths_ptr), dict_count, string_lengths_width);
-	// scans build the dictionary on first use
-	build_dictionary = initialize_dictionary && mode != DictFSSTMode::FSST_ONLY;
+}
+
+const uint32_t *CompressedStringScanState::GetStringLengthGroup(idx_t group_start) {
+	D_ASSERT(group_start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0 && group_start < dict_count);
+	if (string_length_group_start != group_start) {
+		BitpackingPrimitives::UnPackBuffer<uint32_t>(
+		    data_ptr_cast(string_length_group), string_lengths_ptr + group_start * string_lengths_width / 8,
+		    BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, string_lengths_width);
+		string_length_group_start = group_start;
+	}
+	return string_length_group;
+}
+
+uint32_t CompressedStringScanState::GetStringLength(idx_t dict_idx) {
+	if (!string_lengths.empty()) {
+		return string_lengths[dict_idx];
+	}
+	const auto group_offset = dict_idx % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	return GetStringLengthGroup(dict_idx - group_offset)[group_offset];
+}
+
+uint32_t CompressedStringScanState::SumStringLengths(idx_t start, idx_t end) {
+	uint32_t sum = 0;
+	if (!string_lengths.empty()) {
+		const auto lengths = string_lengths.data();
+		for (auto i = start; i < end; i++) {
+			sum += lengths[i];
+		}
+		return sum;
+	}
+	constexpr idx_t GROUP_SIZE = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	for (auto group_start = start - start % GROUP_SIZE; group_start < end; group_start += GROUP_SIZE) {
+		const auto lengths = GetStringLengthGroup(group_start);
+		const auto to = MinValue<idx_t>(end - group_start, GROUP_SIZE);
+		for (auto i = MaxValue<idx_t>(start, group_start) - group_start; i < to; i++) {
+			sum += lengths[i];
+		}
+	}
+	return sum;
 }
 
 bool CompressedStringScanState::EnsureDictionary() {
@@ -124,6 +169,7 @@ bool CompressedStringScanState::EnsureDictionary() {
 	auto &validity = FlatVector::ValidityMutable(dict_data);
 	D_ASSERT(dict_count >= 1);
 	validity.SetInvalid(0);
+	LoadStringLengths();
 
 	uint32_t offset = 0;
 	for (uint32_t i = 0; i < dict_count; i++) {
@@ -135,16 +181,32 @@ bool CompressedStringScanState::EnsureDictionary() {
 	return true;
 }
 
-const vector<uint32_t> &CompressedStringScanState::GetStringOffsets() {
-	if (string_offsets.empty()) {
-		string_offsets.resize(dict_count);
-		uint32_t offset = 0;
-		for (uint32_t i = 0; i < dict_count; i++) {
-			string_offsets[i] = offset;
-			offset += string_lengths[i];
-		}
+uint32_t CompressedStringScanState::GetStringOffset(idx_t string_number, bool allow_restart) {
+	if (string_number >= dict_count) {
+		throw DataCorruptionException("Failed to scan dictionary string - dictionary index was out of range. Database "
+		                              "file appears to be corrupted.");
 	}
-	return string_offsets;
+	if (!string_offsets.empty()) {
+		return string_offsets[string_number];
+	}
+	if (string_number < decompress_position) {
+		if (!allow_restart || summed_lengths >= dict_count) {
+			LoadStringLengths();
+			string_offsets.resize(dict_count);
+			uint32_t offset = 0;
+			for (uint32_t i = 0; i < dict_count; i++) {
+				string_offsets[i] = offset;
+				offset += string_lengths[i];
+			}
+			return string_offsets[string_number];
+		}
+		decompress_position = 0;
+		decompress_offset = 0;
+	}
+	decompress_offset += SumStringLengths(decompress_position, string_number);
+	summed_lengths += string_number - decompress_position;
+	decompress_position = string_number;
+	return decompress_offset;
 }
 
 const SelectionVector &CompressedStringScanState::GetSelVec(idx_t start, idx_t scan_count) {
@@ -192,15 +254,19 @@ void CompressedStringScanState::Select(Vector &result, idx_t result_offset, idx_
 
 	auto result_data = FlatVector::Writer<string_t>(result, sel_count, result_offset);
 	if (string_scan_type == StringScanType::COPY_STRINGS) {
-		auto &offsets = GetStringOffsets();
+		// a select of many rows unpacks every length up front and computes all offsets on its first step back
+		const bool few_rows = sel_count < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+		if (!few_rows) {
+			LoadStringLengths();
+		}
 		for (idx_t i = 0; i < sel_count; i++) {
 			auto string_number = selvec.get_index(start_offset + sel.get_index(i));
 			if (string_number == 0) {
 				result_data.WriteNull();
 				continue;
 			}
-			result_data.WriteStringRef(
-			    FetchStringFromDict(result, offsets[string_number], string_number, StringScanType::COPY_STRINGS));
+			result_data.WriteStringRef(FetchStringFromDict(result, GetStringOffset(string_number, few_rows),
+			                                               string_number, StringScanType::COPY_STRINGS));
 		}
 	} else if (EnsureDictionary()) {
 		// We have prepared the full dictionary, we can reference these strings directly
@@ -215,6 +281,7 @@ void CompressedStringScanState::Select(Vector &result, idx_t result_offset, idx_
 			result_data.WriteStringRef(dictionary_values[string_number]);
 		}
 	} else {
+		LoadStringLengths();
 		for (idx_t i = 0; i < sel_count; i++) {
 			// Lookup dict offset in index buffer
 			auto string_number = selvec.get_index(start_offset + sel.get_index(i));
