@@ -80,7 +80,7 @@ void WindowRowNumberLocalState::Finalizer(ExecutionContext &context, CollectionP
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
 		local_tokens.Finalize(context, sink.interrupt_state);
-		local_tokens.window_tree.Build();
+		local_tokens.window_tree.Build(context.client);
 	}
 }
 
