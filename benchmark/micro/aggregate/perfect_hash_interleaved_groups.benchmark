@@ -1,0 +1,15 @@
+# name: benchmark/micro/aggregate/perfect_hash_interleaved_groups.benchmark
+# description: COUNT(*) and SUM(x) grouped by an integer cycling through 97 values (more keys per chunk than clustered aggregation takes)
+# group: [aggregate]
+
+name Integer Sum (Grouped, 97 Interleaved Groups)
+group aggregate
+
+load
+CREATE TABLE integers AS SELECT i % 97 AS g, i % 1000 AS x FROM range(0, 10000000) tbl(i);
+
+run
+SELECT COUNT(*), SUM(c), SUM(s) FROM (SELECT g, COUNT(*) AS c, SUM(x) AS s FROM integers GROUP BY g)
+
+result III
+97	10000000	4995000000
