@@ -31,7 +31,8 @@
         "test/sql/json/table/read_json.test",
         "test/sql/storage/external_file_cache/external_file_cache_validate.test",
         "test/sql/storage/external_file_cache/external_file_cache_parquet.test_slow",
-        "test/sql/storage/external_file_cache/external_file_cache_block_size.test"
+        "test/sql/storage/external_file_cache/external_file_cache_block_size.test",
+        "test/sql/storage/external_file_cache/external_file_cache_metadata_memory.test"
       ]
     },
     {
@@ -67,6 +68,7 @@
         "test/sql/copy/parquet/parquet_expression_filter_pruning.test",
         "test/sql/copy/parquet/read_ahead/readahead_depth_learning.test",
         "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test",
+        "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test_slow",
         "test/sql/copy/parquet/read_ahead/readahead_io_budget.test_slow",
         "test/sql/parallelism/async_task_schedule_pool.test",
         "test/sql/storage/prefetch/async_native_scan_pool.test",
@@ -102,6 +104,12 @@
       ]
     },
     {
+      "reason": "Asserts that commits keep failing after a failed WAL fsync; force_restart reopens the database between statements, clearing that state.",
+      "paths": [
+        "test/sql/storage/wal/wal_fsync_failure.test"
+      ]
+    },
+    {
       "reason": "Tests transient segment structure before checkpoint. force_restart checkpoints after every statement, merging segments.",
       "paths": [
         "test/sql/storage/adaptive_segment_allocation.test"
@@ -120,6 +128,12 @@
         "test/sql/storage/metadata/partial_column_metadata_reuse.test",
         "test/sql/storage/metadata/partial_column_metadata_reuse_v7.test",
         "test/sql/storage/metadata/full_table_metadata_reuse_v7.test"
+      ]
+    },
+    {
+      "reason": "Test checks which blocks stay loaded between statements",
+      "paths": [
+        "test/sql/storage/test_persistent_block_memory_tags.test"
       ]
     },
     {

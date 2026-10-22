@@ -6,5 +6,6 @@ duckdb_extension_load(spatial
     GIT_TAG 4e066c17e2d1f24625baff4c62430d68ceb4e41f
     INCLUDE_DIR src/spatial
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 endif()

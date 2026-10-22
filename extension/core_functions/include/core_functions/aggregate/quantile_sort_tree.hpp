@@ -18,6 +18,8 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/function/window/window_index_tree.hpp"
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <stdlib.h>
 #include <utility>
 
@@ -239,10 +241,22 @@ struct QuantileInterpolator<true> {
 			floored = Cast::Operation<hugeint_t, idx_t>((scaled_n - scaled_q) / scaling);
 			break;
 		}
-		default:
+		default: {
+			//	The target is ceil(n * q) evaluated as if exactly, matching the DECIMAL path.
+			//	A binary double for a decimal fraction is slightly off, so when n * q is mathematically an
+			//	integer (n = 10, q = 0.9) the product lands a few ulps away from it and ceil() would
+			//	pick the next element. Worse, the outcome of floor(n - n * q) depended on whether the
+			//	compiler fused the multiply and subtract into an FMA, so different call sites of this
+			//	function disagreed. Snap to the nearest integer when the product is within a few ulps
+			//	of it; the result is then independent of contraction and of the rounding of q.
 			const auto scaled_q = double(n) * q.dbl;
-			floored = LossyNumericCast<idx_t>(floor(double(n) - scaled_q));
+			const auto nearest = std::round(scaled_q);
+			const auto tolerance = double(n) * 4 * std::numeric_limits<double>::epsilon();
+			const auto ceiled = (std::fabs(scaled_q - nearest) <= tolerance) ? nearest : std::ceil(scaled_q);
+			//	0 <= q <= 1, so 0 <= ceiled <= n
+			floored = n - LossyNumericCast<idx_t>(ceiled);
 			break;
+		}
 		}
 
 		return MaxValue<idx_t>(1, n - floored) - 1;
@@ -362,12 +376,12 @@ struct QuantileSortTree {
 	}
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE, bool DISCRETE>
-	RESULT_TYPE WindowScalar(QuantileCursor<INPUT_TYPE> &data, const SubFrames &frames, const idx_t n, Vector &result,
-	                         const QuantileValue &q) {
+	RESULT_TYPE WindowScalar(ClientContext &context, QuantileCursor<INPUT_TYPE> &data, const SubFrames &frames,
+	                         const idx_t n, Vector &result, const QuantileValue &q) {
 		D_ASSERT(n > 0);
 
 		//	Thread safe and idempotent.
-		index_tree->Build();
+		index_tree->Build(context);
 
 		//	Find the interpolated indices within the frame
 		QuantileInterpolator<DISCRETE> interp(q, n, false);
@@ -384,12 +398,12 @@ struct QuantileSortTree {
 	}
 
 	template <typename INPUT_TYPE, typename CHILD_TYPE, bool DISCRETE>
-	void WindowList(QuantileCursor<INPUT_TYPE> &data, const SubFrames &frames, const idx_t n, Vector &list,
-	                const idx_t lidx, const QuantileBindData &bind_data) {
+	void WindowList(ClientContext &context, QuantileCursor<INPUT_TYPE> &data, const SubFrames &frames, const idx_t n,
+	                Vector &list, const idx_t lidx, const QuantileBindData &bind_data) {
 		D_ASSERT(n > 0);
 
 		//	Thread safe and idempotent.
-		index_tree->Build();
+		index_tree->Build(context);
 
 		// Result is a constant LIST<CHILD_TYPE> with a fixed length
 		auto ldata = FlatVector::GetDataMutable<list_entry_t>(list);

@@ -19,6 +19,7 @@
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/json_document.hpp"
 
 #include <utility>
@@ -266,12 +267,16 @@ void QueryProfiler::FinalizeMetrics() {
 	FinalizeMetricsInternal();
 }
 
-void QueryProfiler::TrackBytesRead(const idx_t amount) {
-	query_metrics.UpdateBytesRead(amount);
+void QueryProfiler::TrackBytesRead(const idx_t amount, const idx_t elapsed_us) {
+	query_metrics.UpdateBytesRead(amount, elapsed_us);
 }
 
-void QueryProfiler::TrackBytesWritten(const idx_t amount) {
-	query_metrics.UpdateBytesWritten(amount);
+void QueryProfiler::TrackBytesWritten(const idx_t amount, const idx_t elapsed_us) {
+	query_metrics.UpdateBytesWritten(amount, elapsed_us);
+}
+
+void QueryProfiler::TrackBytesSpilled(const idx_t amount) {
+	query_metrics.UpdateBytesSpilled(amount);
 }
 
 void QueryProfiler::TrackTotalMemoryAllocated(const idx_t amount) {
@@ -537,7 +542,7 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 
 	auto &info = entry->second;
 	if (info.name.empty()) {
-		info.name = EnumUtil::ToString(phys_op.type);
+		info.name = phys_op.GetName();
 	}
 }
 
@@ -743,6 +748,9 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 	if (info.MetricIsTracked<MetricOperatorType>()) {
 		result["type"] = Value(EnumUtil::ToString(operator_type));
 	}
+	if (info.MetricIsTracked<MetricOperatorName>()) {
+		result["name"] = Value(name);
+	}
 	if (info.MetricIsTracked<MetricOperatorTiming>()) {
 		result["timing"] = Value::DOUBLE(time);
 	}
@@ -883,6 +891,7 @@ static LegacyCumulative LegacyOperatorToResultTree(const GatheredMetrics &info, 
 	};
 
 	emit_as("type", "operator_type");
+	emit_as("name", "operator_name");
 	emit_as("timing", "operator_timing");
 	emit_as("rows_scanned", "operator_rows_scanned");
 	emit_as("intermediate_rows", "operator_cardinality");
@@ -945,8 +954,13 @@ unique_ptr<QueryProfileResult> QueryProfiler::ToLegacyResultTree() const {
 
 	emit("total_memory_allocated", "system.total_memory_allocated");
 	emit("total_bytes_written", "io.total_bytes_written");
+	emit("total_write_operations", "io.total_write_operations");
 	emit("total_bytes_read", "io.total_bytes_read");
+	emit("total_read_operations", "io.total_read_operations");
+	emit("total_write_time", "io.total_write_time");
+	emit("total_read_time", "io.total_read_time");
 	emit("system_peak_temp_dir_size", "system.peak_temp_dir_size");
+	emit("total_bytes_spilled", "system.total_bytes_spilled");
 	emit("system_peak_buffer_memory", "system.peak_buffer_memory");
 	emit("system_peak_streaming_buffer_size", "system.peak_streaming_buffer_size");
 
@@ -1035,6 +1049,9 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto flags = FileOpenFlags::FILE_FLAGS_WRITE | FileOpenFlags::FILE_FLAGS_FILE_CREATE_NEW;
 	auto file = fs.OpenFile(path, flags);
+	if (!file) {
+		throw IOException("Could not open the profiling output file \"%s\" for writing", path);
+	}
 	file->Write((void *)info.c_str(), info.size());
 	file->Close();
 }
@@ -1048,7 +1065,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	auto &info = node->GetOperatorMetrics();
 	node->depth = depth;
 
-	info.name = EnumUtil::ToString(root_p.type);
+	info.name = root_p.GetName();
 	info.operator_type = root_p.type;
 	auto params = root_p.ParamsToString();
 	info.SetExtraInfo(std::move(params));

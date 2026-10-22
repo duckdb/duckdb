@@ -278,8 +278,6 @@ void PrimitiveColumnWriter::FlushPage(PrimitiveColumnWriterState &state) {
 	// compress the data
 	CompressPage(temp_writer, write_info.compressed_size, write_info.compressed_data, write_info.compressed_buf);
 	hdr.compressed_page_size = UnsafeNumericCast<int32_t>(write_info.compressed_size);
-	D_ASSERT(hdr.uncompressed_page_size > 0);
-	D_ASSERT(hdr.compressed_page_size > 0);
 
 	if (write_info.compressed_buf.IsSet()) {
 		// if the data has been compressed, we no longer need the uncompressed data
@@ -453,7 +451,6 @@ void PrimitiveColumnWriter::PrepareWrite(ColumnWriterState &state_p) {
 	}
 
 	for (auto &write_info : state.write_info) {
-		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		D_ASSERT(!write_info.prepared_header);
 		D_ASSERT(!write_info.prepared_payload);
 
@@ -489,7 +486,6 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 		                                                     write_info.page_header.type == PageType::DATA_PAGE_V2)) {
 			column_chunk.meta_data.data_page_offset = UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten());
 		}
-		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		D_ASSERT(write_info.prepared_header);
 		D_ASSERT(write_info.prepared_payload);
 		// total uncompressed size in the column chunk includes the header size (!)
@@ -521,7 +517,6 @@ idx_t PrimitiveColumnWriter::DictionarySize(PrimitiveColumnWriterState &state) {
 void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, unique_ptr<MemoryStream> temp_writer,
                                             idx_t row_count) {
 	D_ASSERT(temp_writer);
-	D_ASSERT(temp_writer->GetPosition() > 0);
 
 	auto write_info = CreateDictionaryPageWriteInformation(temp_writer->GetPosition(), row_count);
 	write_info.temp_writer = std::move(temp_writer);

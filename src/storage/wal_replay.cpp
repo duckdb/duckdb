@@ -71,8 +71,10 @@ public:
 	vector<block_id_t> row_group_blocks;
 
 	struct ReplayIndexInfo {
-		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, idx_t index_oid)
-		    : index_list(index_list), index(std::move(index)), table_oid(table_oid), index_oid(index_oid) {
+		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, idx_t index_oid,
+		                ConstraintCheckMode check_mode)
+		    : index_list(index_list), index(std::move(index)), table_oid(table_oid), index_oid(index_oid),
+		      check_mode(check_mode) {
 		}
 
 		reference<TableIndexList> index_list;
@@ -81,6 +83,8 @@ public:
 		idx_t table_oid;
 		//! The oid of the index, used to match a DROP INDEX in the same replayed transaction.
 		idx_t index_oid;
+		//! The check mode of the constraint enforced by the index.
+		ConstraintCheckMode check_mode;
 	};
 	vector<ReplayIndexInfo> replay_index_infos;
 };
@@ -661,7 +665,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 
 				// Commit any outstanding indexes.
 				for (auto &info : state.replay_index_infos) {
-					info.index_list.get().AddIndex(std::move(info.index), info.index_oid);
+					info.index_list.get().AddIndex(std::move(info.index), info.index_oid, info.check_mode);
 				}
 				state.replay_index_infos.clear();
 
@@ -921,6 +925,10 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 
 		// Read the data into buffer handles and convert them to blocks on disk.
 		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
+			if (data_info.allocation_sizes[j] > block_manager->GetBlockSize()) {
+				throw DataCorruptionException("Corrupt WAL: index allocation size (%llu) exceeds the block size (%llu)",
+				                              data_info.allocation_sizes[j], block_manager->GetBlockSize());
+			}
 			// Read the data into a buffer handle.
 			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager.get(), false);
 			auto block_handle = buffer_handle.GetBlockHandle();
@@ -1014,7 +1022,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto index_oid = DatabaseManager::Get(context).NextOid();
 	unique_info.SetBackingIndexOid(index_oid);
 	catalog.Alter(context, alter_info);
-	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid, index_oid);
+	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid, index_oid,
+	                                      unique_info.check_mode);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1130,7 +1139,7 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 		return;
 	}
 	if (table_name.empty()) {
-		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger \"%s\"",
+		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger %s",
 		                        info.GetQualifiedName().Name());
 	}
 	// the trigger lives in the same (possibly nested) schema as its base table
@@ -1264,7 +1273,8 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_info), io_manager, db);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), table.oid, index_entry->oid);
+	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), table.oid, index_entry->oid,
+	                                      ConstraintCheckMode::DEFAULT);
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {

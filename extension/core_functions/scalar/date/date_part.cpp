@@ -438,21 +438,33 @@ struct DatePart {
 			return YearWeekFromParts(yyyy, ww);
 		}
 
+		// ISO years >= 1 use yyyy * 100 + week. Year 0 and negative years subtract the week,
+		// so the function decreases as the week number increases.
+		static int32_t MinISOYear(date_t input) {
+			return Date::ExtractISOYearNumber(input);
+		}
+		static int32_t MinISOYear(timestamp_t input) {
+			return Date::ExtractISOYearNumber(Timestamp::GetDate(input));
+		}
+		template <class U>
+		static int32_t MinISOYear(U) {
+			return 0;
+		}
+
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			auto result = PropagateDatePartStatistics<T, ISOYearOperator>(input.child_stats);
-			if (!result) {
+			// Endpoint bounds do not contain the values in between once the range reaches the
+			// subtracted-week encoding. Positive ISO years are non-decreasing in the date.
+			auto &nstats = input.child_stats[0];
+			if (!NumericStats::HasMinMax(nstats)) {
 				return nullptr;
 			}
-			const auto min_year = NumericStats::GetMin<int64_t>(*result);
-			const auto max_year = NumericStats::GetMax<int64_t>(*result);
-			if (min_year > 0) {
-				return PropagateDatePartStatistics<T, YearWeekOperator>(input.child_stats);
+			auto min = NumericStats::GetMin<T>(nstats);
+			auto max = NumericStats::GetMax<T>(nstats);
+			if (min > max || !min.IsFinite() || !max.IsFinite() || MinISOYear(min) < 1) {
+				return nullptr;
 			}
-			// the week is subtracted for years before the common era, so only bound the result by the ISO year
-			NumericStats::SetMin(*result, Value::BIGINT(min_year * 100 - 53));
-			NumericStats::SetMax(*result, Value::BIGINT(max_year * 100 + 53));
-			return result;
+			return PropagateDatePartStatistics<T, YearWeekOperator>(input.child_stats);
 		}
 	};
 

@@ -2511,6 +2511,10 @@ bool Value::IsValid() const {
 Value Value::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadPropertyWithExplicitDefault<LogicalType>(100, "type", LogicalTypeId::INVALID);
 	if (type.InternalType() == PhysicalType::INVALID) {
+		if (type.id() != LogicalTypeId::INVALID) {
+			throw SerializationException("Failed to deserialize value: type %s is missing its type info",
+			                             EnumUtil::ToString(type.id()));
+		}
 		type = deserializer.Get<const LogicalType &>();
 	}
 	auto is_null = deserializer.ReadProperty<bool>(101, "is_null");

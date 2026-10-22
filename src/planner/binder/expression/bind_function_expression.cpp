@@ -308,7 +308,10 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		return BindFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
 	}
 	case CatalogType::MACRO_ENTRY:
-		// macro function
+		// macro function - a prepared statement must be re-bound when the macro changes
+		if (!func.ParentCatalog().IsSystemCatalog()) {
+			binder.GetStatementProperties().RegisterDBRead(func.ParentCatalog(), context);
+		}
 		return BindMacro(function, func.Cast<ScalarMacroCatalogEntry>(), depth, expr_ptr);
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
 		// an aggregate belongs to the innermost query level in which one of its arguments resolves a
@@ -374,6 +377,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	// The positional/named split (and, for capturing functions, the alias capture) is resolved later per candidate
 	// overload.
 	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
+	// for legacy calls with names: fallback arguments that keep the names, used if binding positionally fails
+	vector<pair<Identifier, unique_ptr<Expression>>> named_arguments;
 	arguments.reserve(function.GetArguments().size());
 	for (idx_t i = 0; i < function.GetArgumentsMutable().size(); i++) {
 		auto &arg = function.GetArgumentsMutable()[i];
@@ -388,6 +393,13 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 			bound_arg->SetAlias(arg.GetName());
 		}
 		if (function.IsLegacyFunctionCall()) {
+			if (!named_arguments.empty() || !arg.GetName().empty()) {
+				// first named argument: copy the unnamed arguments bound so far
+				for (idx_t prev = named_arguments.size(); prev < arguments.size(); prev++) {
+					named_arguments.emplace_back(Identifier(), arguments[prev].second->Copy());
+				}
+				named_arguments.emplace_back(arg.GetName(), bound_arg->Copy());
+			}
 			arguments.emplace_back(string(), std::move(bound_arg));
 		} else {
 			arguments.emplace_back(arg.GetName(), std::move(bound_arg));
@@ -396,6 +408,12 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 	FunctionBinder function_binder(binder);
 	auto result = function_binder.BindScalarFunction(func, std::move(arguments), error, function.IsOperator(), &binder);
+	if (!result && !named_arguments.empty()) {
+		// a legacy call that does not bind positionally may use names the function declares (e.g. **kwargs)
+		ErrorData named_error;
+		result = function_binder.BindScalarFunction(func, std::move(named_arguments), named_error,
+		                                            function.IsOperator(), &binder);
+	}
 	if (!result) {
 		error.AddQueryLocation(function);
 		error.Throw();

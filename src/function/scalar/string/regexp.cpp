@@ -77,12 +77,9 @@ RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options, s
                                              bool constant_pattern)
     : RegexpBaseBindData(options, std::move(constant_string_p), constant_pattern) {
 	if (constant_pattern) {
+		// an invalid pattern is reported when the function state is initialized
 		auto pattern = make_uniq<RE2>(constant_string, options);
-		if (!pattern->ok()) {
-			throw InvalidInputException(pattern->error());
-		}
-
-		range_success = pattern->PossibleMatchRange(&range_min, &range_max, 1000);
+		range_success = pattern->ok() && pattern->PossibleMatchRange(&range_min, &range_max, 1000);
 	} else {
 		range_success = false;
 	}
