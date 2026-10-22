@@ -4,6 +4,7 @@
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
@@ -150,3 +151,51 @@ TEST_CASE("Parser tokenizes errors for shell highlighting", "[parser]") {
 	auto multiline_quote = Parser::TokenizeError("Error: bad 'quote\nstill bad");
 	REQUIRE(multiline_quote.size() == 2);
 }
+TEST_CASE("Parser slices keep the leading comment of the first statement", "[parser]") {
+	// Regression test for https://github.com/duckdb/duckdb/issues/27677: since v2.0 each statement's
+	// slice started at its first token, so a leading comment before the first statement was dropped
+	// from `statement->query` (and therefore from current_query() and the QueryLog). The first
+	// statement must own everything from byte 0; later statements still start at their own first
+	// token, and each slice runs up to the next statement's first token (end of input for the last).
+	duckdb::vector<std::pair<string, string>> cases {
+	    {"SELECT 42", "SELECT 42"},
+	    {"/* leading */ SELECT 42", "/* leading */ SELECT 42"},
+	    {"-- line comment\nSELECT 42", "-- line comment\nSELECT 42"},
+	    {"; SELECT 42", "; SELECT 42"},
+	    {"/* a */ SELECT 1; SELECT 2", "/* a */ SELECT 1; "},
+	    {"/* a */ SELECT 1; /* b */ SELECT 2", "/* a */ SELECT 1; /* b */ "},
+	    {"SELECT 1; SELECT 2; SELECT 3", "SELECT 1; "},
+	    {"/* a */ SELECT 1; SELECT 2; SELECT 3", "/* a */ SELECT 1; "},
+	};
+	for (auto &entry : cases) {
+		auto &query = entry.first;
+		CAPTURE(query);
+		auto parser = Parser::GetBuiltinParser();
+		parser.ParseQuery(query);
+		REQUIRE(!parser.statements.empty());
+		CHECK(parser.statements[0]->query == entry.second);
+	}
+
+	// The middle and trailing slices keep their trailing separator / whitespace and the final
+	// statement runs to the end of the input (trailing comments included).
+	{
+		auto parser = Parser::GetBuiltinParser();
+		parser.ParseQuery("/* a */ SELECT 1; SELECT 2; SELECT 3; SELECT 4 /* tail */");
+		REQUIRE(parser.statements.size() == 4);
+		CHECK(parser.statements[0]->query == "/* a */ SELECT 1; ");
+		CHECK(parser.statements[1]->query == "SELECT 2; ");
+		CHECK(parser.statements[2]->query == "SELECT 3; ");
+		CHECK(parser.statements[3]->query == "SELECT 4 /* tail */");
+	}
+
+	// A CREATE statement's stored definition (info->sql) includes the leading comment, matching the
+	// pre-2.0 behavior.
+	{
+		auto parser = Parser::GetBuiltinParser();
+		parser.ParseQuery("-- tag\nCREATE TABLE t (i INTEGER)");
+		REQUIRE(parser.statements.size() == 1);
+		auto &create = parser.statements[0]->Cast<CreateStatement>();
+		CHECK(create.info->sql == "-- tag\nCREATE TABLE t (i INTEGER)");
+	}
+}
+

@@ -143,7 +143,10 @@ bool ParseIterator::PeekInternal() {
 			// the statement's start to the next statement's start (or end of input) so the trailing
 			// `;` and inter-statement whitespace end up inside stmt->query — downstream consumers
 			// (logging, error reporting, EXPLAIN) rely on that shape.
-			idx_t stmt_loc = stmt->stmt_location.offset;
+			// The first statement owns from byte 0 so a leading comment is kept; later statements
+			// start at their own first token. See Parser::ParseQuery for the matching slice rule.
+			idx_t stmt_loc = first_statement_ ? 0 : stmt->stmt_location.offset;
+			first_statement_ = false;
 			idx_t end_loc = sql.size();
 			if (auto current = token_iterator->Current()) {
 				if (current->type != TokenType::END_OF_INPUT) {

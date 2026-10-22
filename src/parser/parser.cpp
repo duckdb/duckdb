@@ -304,12 +304,15 @@ void Parser::ParseQuery(const string &query_p) {
 	}
 
 	if (!statements.empty()) {
-		for (idx_t i = 0; i + 1 < statements.size(); i++) {
-			auto start = statements[i]->stmt_location.offset;
-			statements[i]->stmt_location = QueryLocation(start, statements[i + 1]->stmt_location.offset - start);
+		for (idx_t i = 0; i < statements.size(); i++) {
+			// The first statement owns everything from byte 0 (so leading comments are kept);
+			// every later statement owns the region from its own first token on. The region ends
+			// at the next statement's first token (or at end of input), so inter-statement
+			// whitespace and `;` separators stay inside the slice that precedes them.
+			auto start = (i == 0) ? 0 : statements[i]->stmt_location.offset;
+			auto end = (i + 1 < statements.size()) ? statements[i + 1]->stmt_location.offset : query.size();
+			statements[i]->stmt_location = QueryLocation(start, end - start);
 		}
-		statements.back()->stmt_location = QueryLocation(statements.back()->stmt_location.offset,
-		                                                 query.size() - statements.back()->stmt_location.offset);
 		for (auto &statement : statements) {
 			statement->query = query.substr(statement->stmt_location.offset, statement->stmt_location.length);
 			statement->stmt_location = QueryLocation(0, statement->query.size());

@@ -98,6 +98,9 @@ private:
 	unique_ptr<vector<unique_ptr<SQLStatement>>> overridden_statements;
 	//! Cursor into `overridden_statements`.
 	idx_t override_cursor = 0;
+	//! True until the first real (PEG) statement has been sliced, so its slice can start at
+	//! byte 0 and keep a leading comment. Separator-only statements do not consume it.
+	bool first_statement_ = true;
 	//! True once we've consulted parser_override extensions for this query.
 	bool override_resolved = false;
 };
