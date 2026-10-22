@@ -46,6 +46,11 @@ struct SortedRunPartitionBoundary {
 	idx_t end;
 };
 
+struct SortedRunBoundaryReader {
+	idx_t partition_idx;
+	idx_t lower_partition_idx;
+};
+
 template <class SORT_KEY>
 static idx_t MergePartitionPrefix(const unsafe_array_ptr<const SORT_KEY> &keys,
                                   const unsafe_vector<SortedRunPartitionBoundary> &boundaries) {
@@ -92,7 +97,7 @@ struct MergePrefixLess {
 struct SortedRunMergePartition {
 public:
 	SortedRunMergePartition(const SortedRunMerger &merger, const idx_t partition_idx)
-	    : begin_computed(partition_idx == 0), scanned(false) {
+	    : begin_computed(partition_idx == 0), gathered(false) {
 		// Initialize each partition with sensible defaults
 		run_boundaries.resize(merger.sorted_runs.size());
 		const auto maximum_end = merger.PartitionRowCount(partition_idx + 1);
@@ -123,7 +128,7 @@ private:
 	atomic<bool> begin_computed;
 
 public:
-	atomic<bool> scanned;
+	atomic<bool> gathered;
 };
 
 enum class SortedRunMergerTask : uint8_t {
@@ -222,16 +227,69 @@ private:
 class SortedRunMergerGlobalState : public GlobalSourceState {
 public:
 	explicit SortedRunMergerGlobalState(ClientContext &context_p, const SortedRunMerger &merger_p)
-	    : context(context_p), num_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()), merger(merger_p),
-	      num_runs(merger.sorted_runs.size()), num_partitions(merger.PartitionCount()),
-	      iterator_state_type(GetBlockIteratorStateType(merger.external)),
+	    : context(context_p), merger(merger_p), num_runs(merger.sorted_runs.size()),
+	      num_partitions(merger.PartitionCount()), iterator_state_type(GetBlockIteratorStateType(merger.external)),
 	      sort_key_type(merger.sort.key_layout->GetSortKeyType()), next_partition_idx(0), total_scanned(0),
-	      progress_scanned(0), destroy_partition_idx(0) {
+	      progress_scanned(0), destroy_key_partition_idx(0), gathered_partition_idx(0) {
+		if (merger.external) {
+			boundary_readers.reserve(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		}
 		// Initialize partitions
 		partitions.resize(num_partitions);
 		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
 			partitions[partition_idx] = make_uniq<SortedRunMergePartition>(merger, partition_idx);
 		}
+	}
+
+public:
+	class BoundaryGuard {
+	public:
+		BoundaryGuard(SortedRunMergerGlobalState &gstate_p, const idx_t partition_idx_p)
+		    : gstate(gstate_p), partition_idx(partition_idx_p) {
+			if (!gstate.merger.external) {
+				return;
+			}
+			lock_guard<mutex> guard(gstate.destroy_lock);
+			gstate.boundary_readers.push_back({partition_idx, gstate.gathered_partition_idx});
+		}
+
+		BoundaryGuard(const BoundaryGuard &) = delete;
+		BoundaryGuard &operator=(const BoundaryGuard &) = delete;
+
+		~BoundaryGuard() {
+			if (!gstate.merger.external) {
+				return;
+			}
+			lock_guard<mutex> guard(gstate.destroy_lock);
+			auto &readers = gstate.boundary_readers;
+			for (idx_t i = 0; i < readers.size(); i++) {
+				if (readers[i].partition_idx == partition_idx) {
+					readers[i] = readers.back();
+					readers.pop_back();
+					return;
+				}
+			}
+			D_ASSERT(false);
+		}
+
+	private:
+		SortedRunMergerGlobalState &gstate;
+		const idx_t partition_idx;
+	};
+
+	void SetBoundaryLowerBound(const idx_t partition_idx, const idx_t lower_partition_idx) {
+		if (!merger.external) {
+			return;
+		}
+		lock_guard<mutex> guard(destroy_lock);
+		for (auto &reader : boundary_readers) {
+			if (reader.partition_idx == partition_idx) {
+				D_ASSERT(reader.lower_partition_idx <= lower_partition_idx);
+				reader.lower_partition_idx = lower_partition_idx;
+				return;
+			}
+		}
+		D_ASSERT(false);
 	}
 
 public:
@@ -251,72 +309,60 @@ public:
 		return MaxValue<idx_t>(RowPartitionCount(merger), 1);
 	}
 
-	void DestroyScannedData() {
-		if (!merger.external) {
-			return; // Only need to destroy when doing an external sort
-		}
+	void DestroyPinnedData(const idx_t partition_idx) {
+		D_ASSERT(merger.external);
+		partitions[partition_idx]->gathered = true;
 
-		// Have to do this under lock, but other threads don't have to wait
-		unique_lock<mutex> guard(destroy_lock, std::try_to_lock);
-		if (!guard.owns_lock()) {
-			return;
+		lock_guard<mutex> guard(destroy_lock);
+		auto end_partition_idx = gathered_partition_idx;
+		while (end_partition_idx < num_partitions && partitions[end_partition_idx]->gathered) {
+			end_partition_idx++;
 		}
-
-		// Check how many partitions we can destroy
-		idx_t end_partition_idx;
-		for (end_partition_idx = destroy_partition_idx; end_partition_idx < num_partitions; end_partition_idx++) {
-			const auto &partition = *partitions[end_partition_idx];
-			if (!partition.scanned) {
-				break;
+		if (end_partition_idx != gathered_partition_idx) {
+			// Boundary searches only need keys. Gathered payload stays pinned until its output is consumed.
+			if (merger.sorted_runs[0]->payload_data) {
+				for (idx_t run_idx = 0; run_idx < num_runs; run_idx++) {
+					idx_t begin_idx = 0;
+					if (gathered_partition_idx != 0) {
+						auto &begin_partition = *partitions[gathered_partition_idx - 1];
+						const annotated_lock_guard<annotated_mutex> partition_guard(begin_partition.lock);
+						begin_idx = begin_partition.GetRunBoundaries()[run_idx].end;
+					}
+					auto &end_partition = *partitions[end_partition_idx - 1];
+					const annotated_lock_guard<annotated_mutex> partition_guard(end_partition.lock);
+					const auto end_idx = end_partition.GetRunBoundaries()[run_idx].end;
+					merger.sorted_runs[run_idx]->DestroyPayloadData(begin_idx, end_idx);
+				}
 			}
+			gathered_partition_idx = end_partition_idx;
 		}
+		DestroyPinnedKeyData();
+	}
 
-		// Destroying must lag "num_threads" partitions behind to avoid destroying actively used data
-		if (end_partition_idx < num_threads) {
+private:
+	void DestroyPinnedKeyData() {
+		auto end_partition_idx = gathered_partition_idx;
+		for (const auto &reader : boundary_readers) {
+			end_partition_idx = MinValue(end_partition_idx, reader.lower_partition_idx);
+		}
+		D_ASSERT(destroy_key_partition_idx <= end_partition_idx);
+		if (destroy_key_partition_idx == end_partition_idx) {
 			return;
 		}
-		end_partition_idx -= num_threads;
-		if (end_partition_idx <= destroy_partition_idx) {
-			return;
-		}
-
-		// Estimate the number of tuples eligible for destruction
-		const auto begin_row_count =
-		    destroy_partition_idx == 0 ? 0 : merger.PartitionRowCount(destroy_partition_idx + 1);
-		const auto end_row_count =
-		    end_partition_idx == num_partitions ? merger.total_count : merger.PartitionRowCount(end_partition_idx + 1);
-		const auto total_tuples_to_destroy = end_row_count - begin_row_count;
-
-		// Compute max tuples per block
-		const auto &run = *merger.sorted_runs[0];
-		const auto tuples_per_block =
-		    run.payload_data ? run.payload_data->TuplesPerBlock() : run.key_data->TuplesPerBlock();
-
-		// Batch destruction across input runs, capped by the number of output partitions
-		const auto batching_divisor = MinValue(num_runs, num_partitions);
-		if (total_tuples_to_destroy / batching_divisor < tuples_per_block) {
-			return;
-		}
-
+		// Retire only the prefix no active boundary search can revisit; gathered references stay pinned.
 		for (idx_t run_idx = 0; run_idx < num_runs; run_idx++) {
 			idx_t begin_idx = 0;
-			if (destroy_partition_idx != 0) {
-				auto &begin_partition = *partitions[destroy_partition_idx];
+			if (destroy_key_partition_idx != 0) {
+				auto &begin_partition = *partitions[destroy_key_partition_idx - 1];
 				const annotated_lock_guard<annotated_mutex> partition_guard(begin_partition.lock);
 				begin_idx = begin_partition.GetRunBoundaries()[run_idx].end;
 			}
-
-			idx_t end_idx = merger.sorted_runs[run_idx]->Count();
-			if (end_partition_idx != num_partitions) {
-				auto &end_partition = *partitions[end_partition_idx];
-				const annotated_lock_guard<annotated_mutex> partition_guard(end_partition.lock);
-				end_idx = end_partition.GetRunBoundaries()[run_idx].end;
-			}
-
-			merger.sorted_runs[run_idx]->DestroyData(begin_idx, end_idx);
+			auto &end_partition = *partitions[end_partition_idx - 1];
+			const annotated_lock_guard<annotated_mutex> partition_guard(end_partition.lock);
+			const auto end_idx = end_partition.GetRunBoundaries()[run_idx].end;
+			merger.sorted_runs[run_idx]->DestroyKeyData(begin_idx, end_idx);
 		}
-
-		destroy_partition_idx = end_partition_idx;
+		destroy_key_partition_idx = end_partition_idx;
 	}
 
 private:
@@ -326,7 +372,6 @@ private:
 
 public:
 	ClientContext &context;
-	const idx_t num_threads;
 
 	const SortedRunMerger &merger;
 	const idx_t num_runs;
@@ -342,7 +387,9 @@ public:
 	atomic<idx_t> progress_scanned;
 
 	mutex destroy_lock;
-	idx_t destroy_partition_idx;
+	idx_t destroy_key_partition_idx;
+	idx_t gathered_partition_idx;
+	unsafe_vector<SortedRunBoundaryReader> boundary_readers;
 
 	mutex materialized_partition_lock;
 	vector<unique_ptr<SortedRun>> materialized_partitions;
@@ -401,13 +448,17 @@ SourceResultType SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalSta
 	D_ASSERT(task != SortedRunMergerTask::FINISHED);
 	switch (task) {
 	case SortedRunMergerTask::COMPUTE_BOUNDARIES:
-		ComputePartitionBoundaries(gstate, partition_idx);
-		task = SortedRunMergerTask::ACQUIRE_BOUNDARIES;
+	case SortedRunMergerTask::ACQUIRE_BOUNDARIES: {
+		const SortedRunMergerGlobalState::BoundaryGuard boundary_guard(gstate, partition_idx.GetIndex());
+		if (task == SortedRunMergerTask::COMPUTE_BOUNDARIES) {
+			ComputePartitionBoundaries(gstate, partition_idx);
+			task = SortedRunMergerTask::ACQUIRE_BOUNDARIES;
+		} else {
+			AcquirePartitionBoundaries(gstate);
+			task = SortedRunMergerTask::MERGE_PARTITION;
+		}
 		break;
-	case SortedRunMergerTask::ACQUIRE_BOUNDARIES:
-		AcquirePartitionBoundaries(gstate);
-		task = SortedRunMergerTask::MERGE_PARTITION;
-		break;
+	}
 	case SortedRunMergerTask::MERGE_PARTITION:
 		MergePartition(gstate);
 		task = SortedRunMergerTask::SCAN_PARTITION;
@@ -423,8 +474,6 @@ SourceResultType SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalSta
 		if (!chunk || chunk->size() == 0) {
 			gstate.progress_scanned.fetch_add(merged_partition_count - progress_scanned, std::memory_order_relaxed);
 			progress_scanned = 0;
-			gstate.DestroyScannedData();
-			gstate.partitions[partition_idx.GetIndex()]->scanned = true;
 			//	fetch_add returns the _previous_ value!
 			const auto scan_count_before_adding = gstate.total_scanned.fetch_add(merged_partition_count);
 			const auto scan_count_after_adding = scan_count_before_adding + merged_partition_count;
@@ -455,6 +504,7 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 		run_boundaries = current_partition.GetRunBoundaries();
 	}
 
+	auto lower_partition_idx = begin_computed ? p_idx.GetIndex() : 0;
 	if (!begin_computed) {
 		// We can use information from previous partitions to speed up computing this partition
 		for (idx_t prev = p_idx.GetIndex(); prev > 1; prev--) {
@@ -467,9 +517,13 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 			for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
 				run_boundaries[run_idx].begin = prev_partition_run_boundaries[run_idx].begin;
 			}
+			lower_partition_idx = prev - 1;
 			break;
 		}
 	}
+
+	// Publish the copied lower bound before accessing keys, including fallback searches.
+	gstate.SetBoundaryLowerBound(partition_idx.GetIndex(), lower_partition_idx);
 
 	// Compute the end partition boundaries (lock-free)
 	switch (iterator_state_type) {
@@ -704,6 +758,10 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 		for (auto it = BLOCK_ITERATOR(state, run_boundary.begin); it != BLOCK_ITERATOR(state, run_boundary.end); ++it) {
 			merged_partition_keys[merged_partition_count++] = *it;
 		}
+	}
+
+	if constexpr (std::is_same<STATE, ExternalBlockIteratorState>::value) {
+		gstate.DestroyPinnedData(partition_idx.GetIndex());
 	}
 
 	if (active_runs == 1 || gstate.merger.is_index_sort) {

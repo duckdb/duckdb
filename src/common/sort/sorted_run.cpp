@@ -567,17 +567,26 @@ void SortedRun::Finalize(bool external) {
 	finalized = true;
 }
 
-void SortedRun::DestroyData(const idx_t tuple_idx_begin, const idx_t tuple_idx_end) {
-	// We always have full chunks for sorting, so we can just use the vector size
+static void DestroyData(TupleDataCollection &data, const idx_t tuple_idx_begin, const idx_t tuple_idx_end) {
+	if (tuple_idx_begin == tuple_idx_end) {
+		return;
+	}
+	// Only the final chunk of a sorted run can be partial.
 	const auto chunk_idx_start = tuple_idx_begin / STANDARD_VECTOR_SIZE;
-	const auto chunk_idx_end = tuple_idx_end / STANDARD_VECTOR_SIZE;
+	const auto chunk_idx_end = tuple_idx_end == data.Count() ? data.ChunkCount() : tuple_idx_end / STANDARD_VECTOR_SIZE;
 	if (chunk_idx_start == chunk_idx_end) {
 		return;
 	}
-	key_data->DestroyChunks(chunk_idx_start, chunk_idx_end);
-	if (payload_data) {
-		payload_data->DestroyChunks(chunk_idx_start, chunk_idx_end);
-	}
+	data.DestroyChunks(chunk_idx_start, chunk_idx_end);
+}
+
+void SortedRun::DestroyKeyData(const idx_t tuple_idx_begin, const idx_t tuple_idx_end) {
+	DestroyData(*key_data, tuple_idx_begin, tuple_idx_end);
+}
+
+void SortedRun::DestroyPayloadData(const idx_t tuple_idx_begin, const idx_t tuple_idx_end) {
+	D_ASSERT(payload_data);
+	DestroyData(*payload_data, tuple_idx_begin, tuple_idx_end);
 }
 
 idx_t SortedRun::Count() const {
