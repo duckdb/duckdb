@@ -367,7 +367,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// Push down joins against windows
 	RunOptimizer(OptimizerType::WINDOW_JOIN_PUSHDOWN, [&]() {
-		WindowJoinPushdown optimizer(context);
+		WindowJoinPushdown optimizer;
 		plan = optimizer.Optimize(std::move(plan));
 	});
 

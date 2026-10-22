@@ -16,15 +16,11 @@ class WindowJoinPushdown {
 public:
 	static bool CanOptimize(const LogicalOperator &op);
 
-	explicit WindowJoinPushdown(ClientContext &client);
-
 public:
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 
 private:
 	unique_ptr<LogicalOperator> OptimizeInternal(unique_ptr<LogicalOperator> op);
-
-	ClientContext &client;
 };
 
 } // namespace duckdb

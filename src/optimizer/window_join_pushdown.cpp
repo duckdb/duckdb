@@ -17,9 +17,6 @@
 
 namespace duckdb {
 
-WindowJoinPushdown::WindowJoinPushdown(ClientContext &client) : client(client) {
-}
-
 bool WindowJoinPushdown::CanOptimize(const LogicalOperator &op) {
 	if (op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		return false;
