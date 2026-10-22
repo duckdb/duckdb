@@ -1942,7 +1942,7 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 
 	if (input.IsNull()) {
 		client_config.active_grammar_extensions.clear();
-		client_config.cached_grammar.reset();
+		client_config.cached_grammar.atomic_store(shared_ptr<CachedSessionGrammar>());
 		return;
 	}
 
@@ -1983,8 +1983,8 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 	auto registry_version = callback_manager.GrammarRegistryVersion();
 	auto compiled_grammar = CompiledGrammar::ComposeSessionGrammar(context, selected_extensions);
 	client_config.active_grammar_extensions = std::move(selected_extensions);
-	client_config.cached_grammar = std::move(compiled_grammar);
-	client_config.cached_grammar_version = registry_version;
+	client_config.cached_grammar.atomic_store(
+	    make_shared_ptr<CachedSessionGrammar>(CachedSessionGrammar {std::move(compiled_grammar), registry_version}));
 }
 
 void ActiveGrammarExtensionsSetting::ResetLocal(ClientContext &context) {
@@ -1993,7 +1993,7 @@ void ActiveGrammarExtensionsSetting::ResetLocal(ClientContext &context) {
 	}
 	auto &client_config = ClientConfig::GetConfig(context);
 	client_config.active_grammar_extensions.clear();
-	client_config.cached_grammar.reset();
+	client_config.cached_grammar.atomic_store(shared_ptr<CachedSessionGrammar>());
 }
 
 bool ActiveGrammarExtensionsSetting::OnLocalSet(ClientContext &context, const Value &input) {
