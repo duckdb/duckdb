@@ -44,7 +44,10 @@ static idx_t GetStringSizeLimit(const idx_t available_space, const bool fsst_enc
 	return MinValue(DictFSSTCompression::STRING_SIZE_LIMIT, max_string_size + 1);
 }
 
-DictFSSTAnalyzeState::DictFSSTAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager) {
+DictFSSTAnalyzeState::DictFSSTAnalyzeState(BlockManager &block_manager)
+    : AnalyzeState(block_manager),
+      // a block cannot hold more distinct strings than half its size in bytes, matching the compression state
+      current_set(block_manager.buffer_manager.GetBufferAllocator(), block_manager.GetBlockSize() / 2, 1) {
 	const auto block_size = info.GetBlockSize();
 
 	string_size_limit = GetStringSizeLimit(block_size, false);
@@ -81,7 +84,7 @@ void DictFSSTAnalyzeState::FlushSimulatedBlock() {
 	current_unique_count = 0;
 	current_dict_size = 0;
 	current_max_string_length = 0;
-	current_set.clear();
+	current_set.Clear();
 	// the strings are only referenced by 'current_set', which we just cleared
 	heap.Destroy();
 }
@@ -114,7 +117,7 @@ bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 			disable_fsst = true;
 		}
 
-		bool new_string = !current_set.count(str);
+		bool new_string = current_set.Lookup(str).IsEmpty();
 		if (!new_string) {
 			block_had_repeated_value = true;
 		}
@@ -136,7 +139,8 @@ bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 		current_dict_size = next_dict_size;
 		current_max_string_length = next_max_length;
 		if (new_string) {
-			current_set.insert(heap.AddBlob(str));
+			current_set.Insert(heap.AddBlob(str));
+			D_ASSERT(!current_set.IsFull());
 		}
 	}
 	total_count += input.size();

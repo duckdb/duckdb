@@ -1,7 +1,8 @@
 #pragma once
 
 #include "duckdb/storage/compression/dict_fsst/common.hpp"
-#include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/primitive_dictionary.hpp"
+#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
@@ -52,7 +53,8 @@ public:
 	//! Whether a simulated block ever held the same value twice. A segment holds one block worth of values, so
 	//! this is also whether FSST_ONLY - which requires every value in a segment to be unique - is reachable.
 	bool block_had_repeated_value = false;
-	string_set_t current_set;
+	//! Fixed-size linear probing set of the distinct values in the current simulated block
+	PrimitiveDictionary<string_t> current_set;
 	//! Owns the memory of the strings in 'current_set'; reset per simulated block to bound memory usage
 	StringHeap heap;
 };
