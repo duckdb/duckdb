@@ -13,6 +13,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -287,6 +288,8 @@ bool RepresentationHolds(const LogicalType &type, const ExactRange &range) {
 //===--------------------------------------------------------------------===//
 struct NumericKernel {
 	vector<LogicalType> types;
+	//! The types the bound function takes its operands in: the binder casts operands of other types inside the kernel
+	vector<LogicalType> argument_types;
 	//! Non-NUMERIC constant arguments are bound as constants (e.g. the precision of round must be one)
 	vector<Value> constants;
 	unique_ptr<Expression> expression;
@@ -390,6 +393,18 @@ struct NumericDispatchState : public FunctionLocalState {
 		}
 		if (is_operator) {
 			DisableOverflowChecks(context, kernel->expression->Cast<BoundFunctionExpression>());
+		}
+		kernel->argument_types = types;
+		if (kernel->expression->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+			auto &bound_children = kernel->expression->Cast<BoundFunctionExpression>().GetChildren();
+			for (idx_t i = 0; i < bound_children.size() && i < types.size(); i++) {
+				auto &child = *bound_children[i];
+				if (BoundCastExpression::IsCast(child) &&
+				    BoundCastExpression::Child(child.Cast<BoundFunctionExpression>()).GetExpressionClass() ==
+				        ExpressionClass::BOUND_REF) {
+					kernel->argument_types[i] = child.GetReturnType();
+				}
+			}
 		}
 		kernel->executor = make_uniq<ExpressionExecutor>(context, *kernel->expression);
 		kernel->chunk.InitializeEmpty(types);
@@ -610,6 +625,12 @@ void NumericDispatchFunction(DataChunk &args, ExpressionState &state, Vector &re
 		}
 		if (!kernel) {
 			kernel_types = WidenedKernelTypes(KIND, typed, result_type, ranges, have_ranges);
+			kernel = lstate.Get(context, name, kernel_types, constants, is_operator);
+		}
+		if (kernel->argument_types != kernel_types) {
+			// the binder casts the operands inside the kernel: convert them outside instead, where the ranges make the
+			// conversions plain, and run the kernel on its own argument types
+			kernel_types = kernel->argument_types;
 			kernel = lstate.Get(context, name, kernel_types, constants, is_operator);
 		}
 	}
