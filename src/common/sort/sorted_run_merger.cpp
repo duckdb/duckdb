@@ -980,7 +980,8 @@ optional_idx SortedRunMerger::TemplatedFindSkewedPartitionSplit() const {
 				const auto chunk_idx = row_idx / STANDARD_VECTOR_SIZE;
 				const auto chunk_count =
 				    MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - chunk_idx * STANDARD_VECTOR_SIZE);
-				payload_bytes = static_cast<double>(run.payload_data->GetChunkDataSize(chunk_idx)) / chunk_count;
+				payload_bytes = static_cast<double>(run.payload_data->GetChunkDataSize(chunk_idx)) /
+				                static_cast<double>(chunk_count);
 			} else {
 				const auto neighbors = MinValue<idx_t>(NEIGHBORS, width);
 				auto neighbor_begin = row_idx - MinValue<idx_t>(row_idx - begin, neighbors / 2);
@@ -991,7 +992,7 @@ optional_idx SortedRunMerger::TemplatedFindSkewedPartitionSplit() const {
 					const auto &neighbor = key_state.GetValueAtIndex<SORT_KEY>(neighbor_begin + i);
 					payload_bytes += static_cast<double>(Load<idx_t>(neighbor.GetPayload() + heap_size_offset));
 				}
-				payload_bytes = row_width + payload_bytes / neighbors;
+				payload_bytes = static_cast<double>(row_width) + payload_bytes / static_cast<double>(neighbors);
 			}
 
 			key.SetPayload(nullptr);
@@ -1032,7 +1033,7 @@ optional_idx SortedRunMerger::TemplatedFindSkewedPartitionSplit() const {
 	D_ASSERT(rank == merger.total_count);
 
 	// Only split when one partition is estimated to hold more than twice the average bytes.
-	if (largest_bytes <= 2 * (total_bytes / RowPartitionCount(merger))) {
+	if (largest_bytes <= 2 * (total_bytes / static_cast<double>(RowPartitionCount(merger)))) {
 		return optional_idx();
 	}
 
@@ -1077,7 +1078,7 @@ optional_idx SortedRunMerger::FindSkewedPartitionSplit() const {
 	const auto key_type = merger.sort.key_layout->GetSortKeyType();
 	if (merger.total_count == 0 || merger.is_index_sort || merger.sort.is_index_sort || merger.sorted_runs.size() < 2 ||
 	    merger.sorted_runs.size() > MAX_BYTE_SAMPLES || RowPartitionCount(merger) < 3 ||
-	    merger.partition_size < 2 * STANDARD_VECTOR_SIZE || merger.partition_size % STANDARD_VECTOR_SIZE != 0 ||
+	    merger.partition_size < idx_t(2) * STANDARD_VECTOR_SIZE || merger.partition_size % STANDARD_VECTOR_SIZE != 0 ||
 	    !SortKeyUtils::IsConstantSize(key_type) || !SortKeyUtils::HasPayload(key_type) ||
 	    merger.sort.payload_layout->AllConstant()) {
 		return optional_idx();
