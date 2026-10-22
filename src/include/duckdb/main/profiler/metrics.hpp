@@ -354,4 +354,10 @@ struct MetricPhysicalPlannerTotalTime {
 	static constexpr const char *TypeStr = "double";
 };
 
+template <class... METRICS>
+struct MetricList {};
+
+// The metrics marked "live": they can be read while the query runs
+using LiveMetrics = MetricList<MetricSystemTotalMemoryAllocated, MetricIOTotalBytesRead, MetricIOTotalBytesWritten>;
+
 } // namespace duckdb
