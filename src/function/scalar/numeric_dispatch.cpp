@@ -881,7 +881,9 @@ ScalarFunction NumericDispatch::GetFunction(const string &name, vector<LogicalTy
 }
 
 ScalarFunction NumericRepresentationFun::GetFunction() {
-	return ScalarFunction({LogicalType::NUMERIC}, LogicalType::VARCHAR, NumericRepresentationFunction);
+	ScalarFunction function({}, LogicalType::VARCHAR, NumericRepresentationFunction);
+	function.GetSignature().AddParameter("numeric", LogicalType::NUMERIC);
+	return function;
 }
 
 } // namespace duckdb

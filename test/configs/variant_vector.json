@@ -14,14 +14,9 @@
 		{
 			"reason": "NUMERIC values come back from VARIANT in another representation, and NUMERIC values wider than 38 digits are not supported in VARIANT",
 			"paths": [
-				"test/sql/types/numeric/numeric_aggregate_state_reuse.test",
 				"test/sql/types/numeric/numeric_aggregates.test",
 				"test/sql/types/numeric/numeric_canonical_encoding.test",
-				"test/sql/types/numeric/numeric_cast_semantics.test",
-				"test/sql/types/numeric/numeric_cast_width.test",
-				"test/sql/types/numeric/numeric_exact_kernels.test",
 				"test/sql/types/numeric/numeric_kernel_sizing.test",
-				"test/sql/types/numeric/numeric_shredded_serialization.test",
 				"test/sql/types/numeric/numeric_type_arithmetic.test",
 				"test/sql/types/numeric/numeric_type.test",
 				"test/sql/types/numeric/numeric_variant_arithmetic.test",

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "duckdb/common/types/numeric_blob.hpp"
+#include "duckdb/common/vector/numeric_vector.hpp"
+
 #include "duckdb/function/cast/variant/to_variant_fwd.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -411,6 +414,18 @@ bool ConvertPrimitiveToVariant(ToVariantSourceData &source, ToVariantGlobalResul
 		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::TYPE:
 		throw NotImplementedException("Cannot convert TYPE to VARIANT");
+	case LogicalTypeId::NUMERIC: {
+		// NUMERIC values enter the VARIANT as the typed values of their representation: canonical values are decoded
+		// into the narrowest representation that holds them first
+		unique_ptr<Vector> typed;
+		if (!NumericVector::TryGetTyped(source.vec, typed)) {
+			typed = make_uniq<Vector>(NumericBlob::RangeType(source.vec, source.source_size), source.source_size);
+			NumericBlob::Decode(source.vec, source.source_size, *typed);
+		}
+		ToVariantSourceData typed_source(*typed, source.source_size, source.source_sel);
+		return ConvertToVariant<WRITE_DATA, IGNORE_NULLS>(typed_source, result, count, selvec, values_index_selvec,
+		                                                  is_root);
+	}
 	default:
 		throw NotImplementedException("Invalid LogicalType (%s) for ConvertToVariant",
 		                              EnumUtil::ToString(logical_type));

@@ -117,8 +117,7 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 	if (target.id() == LogicalTypeId::VARIANT) {
 		return ImplicitToVariantCast(input, source, target);
 	}
-	if (target.id() == LogicalTypeId::NUMERIC && source.id() != LogicalTypeId::VARIANT &&
-	    source.id() != LogicalTypeId::SQLNULL) {
+	if (target.id() == LogicalTypeId::NUMERIC && source.id() != LogicalTypeId::SQLNULL) {
 		return ToNumericCastSwitch(input, source, target);
 	}
 

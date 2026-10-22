@@ -151,12 +151,8 @@
     {
       "reason": "The NUMERIC aggregates (min/max/first/last/any_value/sum/avg) have no exportable state type yet.",
       "paths": [
-        "test/sql/types/numeric/numeric_aggregate_state_reuse.test",
         "test/sql/types/numeric/numeric_aggregates.test",
-        "test/sql/types/numeric/numeric_cast_semantics.test",
-        "test/sql/types/numeric/numeric_exact_kernels.test",
         "test/sql/types/numeric/numeric_kernel_sizing.test",
-        "test/sql/types/numeric/numeric_shredded_serialization.test",
         "test/sql/types/numeric/numeric_type.test",
         "test/sql/types/numeric/numeric_type_arithmetic.test",
         "test/sql/types/numeric/numeric_type_copy.test",

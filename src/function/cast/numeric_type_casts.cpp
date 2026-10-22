@@ -113,6 +113,18 @@ static bool CastFloatingToNumeric(Vector &source, Vector &result, idx_t count, C
 	return CastTextToNumeric(text, result, count, parameters);
 }
 
+//! A VARIANT holds its numbers as typed values of known types (integers, decimals, doubles) or as text: the text of
+//! the VARIANT is the number as it would print, which parses into NUMERIC like any text
+static bool CastVariantToNumeric(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	Vector text(LogicalType::VARCHAR, count);
+	if (!VectorOperations::DefaultTryCast(source, text, count, parameters.error_message, parameters.strict)) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, count_t(count));
+		return false;
+	}
+	return CastTextToNumeric(text, result, count, parameters);
+}
+
 BoundCastInfo DefaultCasts::ToNumericCastSwitch(BindCastInput &input, const LogicalType &source,
                                                 const LogicalType &target) {
 	D_ASSERT(target.id() == LogicalTypeId::NUMERIC);
@@ -125,6 +137,8 @@ BoundCastInfo DefaultCasts::ToNumericCastSwitch(BindCastInput &input, const Logi
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 		return CastFloatingToNumeric;
+	case LogicalTypeId::VARIANT:
+		return CastVariantToNumeric;
 	default:
 		return TryVectorNullCast;
 	}

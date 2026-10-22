@@ -204,7 +204,7 @@ struct NumericInput {
 
 //! Runs OP::Typed<T> for the fixed-size representation of the input, OP::Blob for canonical blobs
 template <class OP, class... ARGS>
-void DispatchInput(const NumericInput &input, ARGS &&...args) {
+void DispatchInput(const NumericInput &input, ARGS &&... args) {
 	switch (input.physical) {
 	case PhysicalType::INT8:
 		return OP::template Typed<int8_t>(input, std::forward<ARGS>(args)...);
@@ -1134,9 +1134,11 @@ idx_t NumericStateSize(AggregateStateInput &) {
 
 template <class FUNCTION>
 AggregateFunction MakeFunction() {
-	return AggregateFunction({LogicalType::NUMERIC}, LogicalType::NUMERIC, NumericStateSize<FUNCTION>,
-	                         FUNCTION::Initialize, FUNCTION::Update, FUNCTION::Combine, FUNCTION::Finalize,
-	                         FunctionNullHandling::DEFAULT_NULL_HANDLING, FUNCTION::ClusterUpdate);
+	AggregateFunction function({}, LogicalType::NUMERIC, NumericStateSize<FUNCTION>, FUNCTION::Initialize,
+	                           FUNCTION::Update, FUNCTION::Combine, FUNCTION::Finalize,
+	                           FunctionNullHandling::DEFAULT_NULL_HANDLING, FUNCTION::ClusterUpdate);
+	function.GetSignature().AddParameter("arg", LogicalType::NUMERIC);
+	return function;
 }
 
 } // namespace
@@ -1153,9 +1155,11 @@ AggregateFunction NumericAggregates::GetSum() {
 }
 
 AggregateFunction NumericAggregates::GetAvg() {
-	return AggregateFunction({LogicalType::NUMERIC}, LogicalType::DOUBLE, NumericStateSize<NumericAvg>,
-	                         NumericAvg::Initialize, NumericAvg::Update, NumericAvg::Combine, NumericAvg::Finalize,
-	                         FunctionNullHandling::DEFAULT_NULL_HANDLING, NumericAvg::ClusterUpdate);
+	AggregateFunction function({}, LogicalType::DOUBLE, NumericStateSize<NumericAvg>, NumericAvg::Initialize,
+	                           NumericAvg::Update, NumericAvg::Combine, NumericAvg::Finalize,
+	                           FunctionNullHandling::DEFAULT_NULL_HANDLING, NumericAvg::ClusterUpdate);
+	function.GetSignature().AddParameter("arg", LogicalType::NUMERIC);
+	return function;
 }
 
 AggregateFunction NumericAggregates::GetFirst(bool last, bool skip_nulls) {
