@@ -4862,11 +4862,13 @@ static bool PhysicalCopyRotateNow(const PhysicalCopyToFile &op, GlobalFileState 
 		// file size limit by itself, and rotating would then create new empty files forever
 		return false;
 	}
-	if (op.file_size_bytes.IsValid()) {
-		return op.function.file_size_bytes(*global_state.data) >= op.file_size_bytes.GetIndex();
+	// either rotation limit rotates the file
+	if (op.file_size_bytes.IsValid() &&
+	    op.function.file_size_bytes(*global_state.data) >= op.file_size_bytes.GetIndex()) {
+		return true;
 	}
-	if (op.batches_per_file.IsValid()) {
-		return global_state.num_batches >= op.batches_per_file.GetIndex();
+	if (op.batches_per_file.IsValid() && global_state.num_batches >= op.batches_per_file.GetIndex()) {
+		return true;
 	}
 	return false;
 }
