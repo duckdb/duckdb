@@ -2,7 +2,7 @@
 # description: Each row group of a NUMERIC column is stored in the narrowest representation that fits its values
 # group: [numeric]
 
-load __TEST_DIR__/numeric_type_storage.db
+load {TEST_DIR}/numeric_type_storage.db
 
 statement ok
 CREATE TABLE t(id INTEGER, n NUMERIC);

@@ -1816,6 +1816,11 @@ unique_ptr<BaseStatistics> PropagateModuloStats(ClientContext &context, Function
 	D_ASSERT(child_stats.size() == 2);
 	auto &lstats = child_stats[0];
 	auto &rstats = child_stats[1];
+	if (lstats.GetStatsType() != StatisticsType::NUMERIC_STATS ||
+	    rstats.GetStatsType() != StatisticsType::NUMERIC_STATS) {
+		// wide decimals carry string statistics
+		return nullptr;
+	}
 	if (!NumericStats::HasMinMax(rstats)) {
 		return nullptr;
 	}
