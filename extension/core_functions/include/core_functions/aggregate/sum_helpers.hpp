@@ -16,6 +16,7 @@
 #include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include <cmath>
 #include <type_traits>
 #include <utility>
 
@@ -69,7 +70,8 @@ struct RepeatedStateValue {
 static inline void KahanAddInternal(double input, double &summed, double &err) {
 	double diff = input - err;
 	double newval = summed + diff;
-	err = (newval - summed) - diff;
+	// once the sum is infinite the compensation is meaningless, and computing it would give NaN
+	err = std::isfinite(newval) ? (newval - summed) - diff : 0;
 	summed = newval;
 }
 
