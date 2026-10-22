@@ -669,25 +669,33 @@ static unique_ptr<Expression> ConstructMapExpression(ClientContext &context, Mul
 	return BindBuiltinScalarFunction(context, RemapStructFun::Name, std::move(children));
 }
 
-//! Whether every field on the path of a pushed-down extract is present in the file
-static bool ExtractPathExists(const MultiFileColumnDefinition &global_column, const ColumnIndex &global_index,
-                              const vector<MultiFileColumnDefinition> &local_columns, const ColumnMapper &mapper) {
+//! Whether a pushed-down extract has to be applied to the whole column, because the file lacks the column, or a field
+//! on the extract path whose default is not NULL (where the parent struct is NULL, the field is NULL, not the default)
+static bool ExtractNeedsWholeColumn(ClientContext &context, const MultiFileColumnDefinition &global_column,
+                                    const ColumnIndex &global_index,
+                                    const vector<MultiFileColumnDefinition> &local_columns, const ColumnMapper &mapper,
+                                    bool is_root) {
 	auto local_idx = mapper.Find(global_column);
 	if (!local_idx.IsValid()) {
-		return false;
+		if (is_root) {
+			return true;
+		}
+		auto default_expr = mapper.GetDefaultExpression(context, global_column, false);
+		return default_expr->GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
+		       !default_expr->Cast<BoundConstantExpression>().GetValue().IsNull();
 	}
 	auto &local_column = local_columns[local_idx];
 	if (!global_index.IsPushdownExtract() || global_column.type.id() != LogicalTypeId::STRUCT ||
 	    local_column.type.id() != LogicalTypeId::STRUCT) {
-		return true;
+		return false;
 	}
 	auto &child_index = global_index.GetChildIndex(0);
 	if (child_index.GetPrimaryIndex() >= global_column.children.size()) {
-		return true;
+		return false;
 	}
 	auto &child_column = global_column.children[child_index.GetPrimaryIndex()];
 	auto nested_mapper = mapper.Create(local_column.children);
-	return ExtractPathExists(child_column, child_index, local_column.children, *nested_mapper);
+	return ExtractNeedsWholeColumn(context, child_column, child_index, local_column.children, *nested_mapper, false);
 }
 
 //! Apply a pushed-down extract to an expression that produces the whole column
@@ -853,9 +861,9 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 			continue;
 		}
 
-		if (global_id.IsPushdownExtract() && !ExtractPathExists(global_column, global_id, local_columns, mapper)) {
-			// a field on the extract path is missing from this file - map the whole column and extract from it,
-			// so the defaults of missing fields are filled in the same way as when the whole column is read
+		if (global_id.IsPushdownExtract() &&
+		    ExtractNeedsWholeColumn(context, global_column, global_id, local_columns, mapper, true)) {
+			// map the whole column and extract from it, so the defaults are the same as when the whole column is read
 			ColumnIndex root_index(global_column_id);
 			auto root_map = MapColumn(context, global_column, root_index, local_columns, mapper, local_idx);
 			if (!root_map.column_index) {
