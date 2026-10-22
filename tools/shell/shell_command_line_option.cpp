@@ -392,7 +392,7 @@ static const CommandLineOption command_line_options[] = {
     {"serve", 0, "[quack[:SECRET]]", SetServeTarget, LaunchServer,
      "serve this database, optionally using a named secret (configurable with .serve_command)", true},
     {"storage-version", 1, "VER", SetStorageVersion, nullptr,
-     "database storage compatibility version to use. Default: 'latest'"},
+     "database storage compatibility version to use. Default: 'v2.0.0'"},
     {"table", 0, "", MarkOutputModeFlag, ToggleOutputMode<RenderMode::TABLE>, "set output mode to 'table'"},
     {"ui", 0, "", nullptr, LaunchUI, "launches a web interface using the ui extension (configurable with .ui_command)"},
     {"unredacted", 0, "", AllowUnredacted, nullptr, "allow printing unredacted secrets"},
