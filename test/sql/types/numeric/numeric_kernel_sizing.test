@@ -4,6 +4,10 @@
 
 load {TEST_DIR}/numeric_kernel_sizing.db
 
+# the alternative verification delivers scanned NUMERIC values as canonical blobs: the representations asserted here
+# are those of the regular scan
+require no_alternative_verify
+
 # a row group of small integers stored as INTEGER: the INTEGER kernel is used as long as the results fit
 statement ok
 CREATE TABLE t AS SELECT i::NUMERIC AS a, (i % 1000)::NUMERIC AS b FROM range(0, 100000) tbl(i);

@@ -33,7 +33,7 @@ SELECT min(n), max(n), min(nd), max(nd) FROM t;
 -5000	4999	-50	99
 
 query IIII
-SELECT min(n) = min(i), max(n) = max(i), min(nd) = min(d), max(nd) = max(d) FROM t, ref;
+SELECT (SELECT min(n) FROM t) = (SELECT min(i) FROM ref), (SELECT max(n) FROM t) = (SELECT max(i) FROM ref), (SELECT min(nd) FROM t) = (SELECT min(d) FROM ref), (SELECT max(nd) FROM t) = (SELECT max(d) FROM ref);
 ----
 true	true	true	true
 

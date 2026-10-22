@@ -4,6 +4,10 @@
 
 load {TEST_DIR}/numeric_variant_arithmetic.db
 
+# the alternative verification delivers scanned NUMERIC values as canonical blobs: the representations asserted here
+# are those of the regular scan
+require no_alternative_verify
+
 statement ok
 CREATE TABLE t(a NUMERIC, b NUMERIC, i INTEGER);
 

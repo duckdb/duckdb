@@ -25,7 +25,8 @@
 				"test/sql/types/numeric/numeric_variant_arithmetic.test",
 				"test/sql/types/numeric/numeric_variant_smoke.test",
 				"test/sql/types/numeric/numeric_variant_storage_smoke.test",
-				"test/sql/types/numeric/postgres_numeric_big.test"
+				"test/sql/types/numeric/postgres_numeric_big.test",
+				"test/optimizer/compressed_materialization_numeric.test"
 			]
 		},
 		{
