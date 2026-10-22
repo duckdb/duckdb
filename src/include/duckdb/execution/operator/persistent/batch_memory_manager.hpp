@@ -149,7 +149,8 @@ public:
 		}
 	}
 
-	//! Gives the reservation back once everything is flushed
+	//! Gives the reservation back once everything is flushed. Optional: the destructor gives it back at the end of
+	//! the query, but releasing early lets later sinks in the same query, e.g. EXPORT DATABASE, use the memory
 	void Release() {
 		const annotated_lock_guard<annotated_mutex> guard(reservation_lock);
 		memory_state.reset();
