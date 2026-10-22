@@ -32,6 +32,14 @@ namespace dict_fsst {
 	throw DataCorruptionException("Corrupted DICT_FSST segment: dictionary index is out of range");
 }
 
+[[noreturn]] static void ThrowInvalidNullLength() {
+	throw DataCorruptionException("Corrupted DICT_FSST segment: NULL dictionary entry has a nonzero length");
+}
+
+[[noreturn]] static void ThrowStringLengthsOutOfBounds() {
+	throw DataCorruptionException("Corrupted DICT_FSST segment: string lengths exceed the dictionary size");
+}
+
 [[noreturn]] static void ThrowInvalidBitpackingWidth() {
 	throw DataCorruptionException("Failed to scan dictionary string - bitpacking width was invalid. Database file "
 	                              "appears to be corrupted.");
@@ -161,9 +169,35 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 		throw DataCorruptionException(
 		    "Failed to scan dictionary string - dict_count was out of range. Database file appears to be corrupted.");
 	}
-	string_lengths.resize(AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(layout.dict_count));
-	BitpackingPrimitives::UnPackBuffer<uint32_t>(data_ptr_cast(string_lengths.data()), layout.string_lengths.data(),
-	                                             layout.dict_count, layout.string_lengths_width);
+	constexpr auto group_size = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	string_lengths.resize(AlignValue<idx_t, group_size>(layout.dict_count));
+
+	// Both the entry count and each length fit in uint32_t, so their sum fits in uint64_t.
+	uint64_t total_bytes = 0;
+	for (idx_t i = 0; i < layout.dict_count; i += group_size) {
+		BitpackingPrimitives::UnPackBlock<uint32_t>(
+		    data_ptr_cast(string_lengths.data() + i),
+		    layout.string_lengths.data() + (i * layout.string_lengths_width) / 8, layout.string_lengths_width);
+
+		// Validate only real entries, not the final group's padding.
+		const auto end = MinValue<idx_t>(i + group_size, layout.dict_count);
+		uint64_t group_bytes = 0;
+		for (idx_t j = i; j < end; j++) {
+			group_bytes += string_lengths[j];
+		}
+
+		// Each string offset sums earlier lengths, so bounding the total keeps all offsets in range.
+		total_bytes += group_bytes;
+		if (total_bytes > layout.dictionary.Size()) {
+			ThrowStringLengthsOutOfBounds();
+		}
+	}
+
+	// Index 0 represents NULL, so its length must be 0
+	if (string_lengths[0] != 0) {
+		ThrowInvalidNullLength();
+	}
+
 	if (!initialize_dictionary || layout.mode == DictFSSTMode::FSST_ONLY) {
 		// Used by fetch, as fetch will never produce a DictionaryVector
 		return;

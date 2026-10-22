@@ -74,6 +74,8 @@ public:
 	uint32_t decompress_offset = 0;
 	idx_t decompress_position = 0;
 
+	//! Decoded lengths for layout.dict_count entries, followed by unpacking padding.
+	//! The NULL length is zero and the total length does not exceed the dictionary size.
 	vector<uint32_t> string_lengths;
 
 	buffer_ptr<DictionaryEntry> dictionary;
