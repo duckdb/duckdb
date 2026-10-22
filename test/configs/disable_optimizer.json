@@ -5,6 +5,12 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
+      "reason": "Checks that the optimizer removed ORDER BY operators from the plan.",
+      "paths": [
+        "test/optimizer/remove_redundant_order.test"
+      ]
+    },
+    {
       "reason": "Checks barrier ordering and scan pushdown performed by the optimizer.",
       "paths": [
         "test/sql/optimizer/barrier_projection_siblings.test"
@@ -125,7 +131,8 @@
       "paths": [
         "test/sql/copy/parquet/parquet_prefetch_first_group_cost.test",
         "test/sql/copy/parquet/parquet_prefetch_overlapping_ranges.test",
-        "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test"
+        "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test",
+        "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test_slow"
       ]
     },
     {

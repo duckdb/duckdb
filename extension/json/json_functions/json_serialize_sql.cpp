@@ -282,6 +282,10 @@ struct ExecuteSqlTableFunction {
 		shared_ptr<Relation> plan;
 		unique_ptr<QueryResult> result;
 		unique_ptr<Connection> con;
+
+		bool SupportStatementCache() const override {
+			return false;
+		}
 	};
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
