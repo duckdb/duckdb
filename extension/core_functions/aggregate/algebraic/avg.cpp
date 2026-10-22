@@ -6,6 +6,8 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression.hpp"
 
+#include "duckdb/function/aggregate/numeric_aggregates.hpp"
+
 namespace duckdb {
 
 namespace {
@@ -357,6 +359,7 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INTERVAL));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::DOUBLE));
+	avg.AddFunction(NumericAggregates::GetAvg());
 
 	auto timestamp_avg =
 	    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, DiscreteAverageOperation>(

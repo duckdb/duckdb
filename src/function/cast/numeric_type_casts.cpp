@@ -220,7 +220,11 @@ static bool CastNumericToTyped(Vector &source, Vector &result, idx_t count, Cast
 		}
 		return VectorOperations::DefaultTryCast(typed, result, count, parameters.error_message, parameters.strict);
 	}
-	// canonical values: through their decimal text
+	// canonical values: decoded directly when every value fits the target
+	if (NumericType::IsExact(result.GetType()) && NumericBlob::TryDecode(source, count, result)) {
+		return true;
+	}
+	// otherwise through their decimal text, which reports the values that do not fit
 	Vector text(LogicalType::VARCHAR, count);
 	CastNumericToVarchar(source, text, count, parameters);
 	return VectorOperations::DefaultTryCast(text, result, count, parameters.error_message, parameters.strict);

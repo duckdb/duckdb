@@ -217,3 +217,30 @@ query II
 SELECT arg_min(g, i), arg_max(i, d) FROM ref;
 ----
 -2	9.9
+
+# avg is the exact sum divided by the count, as a DOUBLE like the average of a DECIMAL
+query III
+SELECT avg(n) = avg(n::DECIMAL(18,1)), avg(nd) = avg(nd::DECIMAL(10,2)), typeof(avg(n)) FROM t;
+----
+true	true	DOUBLE
+
+query II
+SELECT avg(n) = avg(n::DECIMAL(10,3)), avg(n) FILTER (WHERE n > 100) FROM scales;
+----
+true	NULL
+
+query I
+SELECT count(*) FROM (SELECT g, avg(n) AS a, avg(n::DECIMAL(18,1)) AS b FROM t GROUP BY g) WHERE a <> b OR a IS NULL;
+----
+0
+
+# a sum of different scales and of a wide value
+query I
+SELECT avg(n) FROM (SELECT 1.5::NUMERIC AS n UNION ALL SELECT 2::NUMERIC UNION ALL SELECT 0.25::NUMERIC);
+----
+1.25
+
+query I
+SELECT avg(n) FROM (VALUES ('123456789012345678901234567890.5'::NUMERIC), ('1'::NUMERIC)) t(n);
+----
+6.172839450617284e+28

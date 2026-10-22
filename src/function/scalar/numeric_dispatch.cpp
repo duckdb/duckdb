@@ -32,6 +32,14 @@ static unique_ptr<Vector> TypedArgument(Vector &arg, idx_t count) {
 	if (arg.GetVectorType() == VectorType::SHREDDED_VECTOR) {
 		return make_uniq<Vector>(Vector::Ref(ShreddedVector::GetShreddedVector(arg)));
 	}
+	if (arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// a constant is decoded once and stays a constant for the kernel
+		auto type = NumericBlob::RangeType(arg, 1);
+		auto result = make_uniq<Vector>(type, count);
+		NumericBlob::Decode(arg, 1, *result);
+		result->SetVectorType(VectorType::CONSTANT_VECTOR);
+		return result;
+	}
 	auto type = NumericBlob::RangeType(arg, count);
 	auto result = make_uniq<Vector>(type, count);
 	NumericBlob::Decode(arg, count, *result);

@@ -518,6 +518,27 @@ bool TryDecodeTyped(Vector &canonical, idx_t count, uint8_t scale, Vector &typed
 } // namespace
 
 //===--------------------------------------------------------------------===//
+// Layout
+//===--------------------------------------------------------------------===//
+idx_t NumericBlob::BlobSize(const_data_ptr_t data, idx_t available) {
+	if (available == 0) {
+		throw InternalException("Empty NUMERIC blob");
+	}
+	if (data[0] == NUMERIC_CLASS_ZERO) {
+		return 1;
+	}
+	auto terminator = data[0] == NUMERIC_CLASS_NEGATIVE ? data_t(0xFF) : data_t(0);
+	idx_t pos = 3;
+	while (pos < available && data[pos] != terminator) {
+		pos++;
+	}
+	if (pos >= available) {
+		throw InternalException("Truncated NUMERIC blob");
+	}
+	return pos + 1;
+}
+
+//===--------------------------------------------------------------------===//
 // Text
 //===--------------------------------------------------------------------===//
 bool NumericBlob::TryEncode(const char *text, idx_t size, string &result) {
@@ -802,49 +823,48 @@ static void DecodeThroughText(Vector &canonical, idx_t count, Vector &typed) {
 	VectorOperations::DefaultCast(text, typed, count, false);
 }
 
-void NumericBlob::Decode(Vector &canonical, idx_t count, Vector &typed) {
+bool NumericBlob::TryDecode(Vector &canonical, idx_t count, Vector &typed) {
 	D_ASSERT(canonical.GetType().id() == LogicalTypeId::NUMERIC);
+	if (canonical.GetVectorType() == VectorType::CONSTANT_VECTOR && count > 1) {
+		if (!TryDecode(canonical, 1, typed)) {
+			return false;
+		}
+		typed.SetVectorType(VectorType::CONSTANT_VECTOR);
+		return true;
+	}
 	auto scale = ScaleOf(typed.GetType());
-	bool decoded;
 	switch (typed.GetType().InternalType()) {
 	case PhysicalType::INT8:
-		decoded = TryDecodeTyped<int8_t>(canonical, count, scale, typed);
-		break;
+		return TryDecodeTyped<int8_t>(canonical, count, scale, typed);
 	case PhysicalType::INT16:
-		decoded = TryDecodeTyped<int16_t>(canonical, count, scale, typed);
-		break;
+		return TryDecodeTyped<int16_t>(canonical, count, scale, typed);
 	case PhysicalType::INT32:
-		decoded = TryDecodeTyped<int32_t>(canonical, count, scale, typed);
-		break;
+		return TryDecodeTyped<int32_t>(canonical, count, scale, typed);
 	case PhysicalType::INT64:
-		decoded = TryDecodeTyped<int64_t>(canonical, count, scale, typed);
-		break;
+		return TryDecodeTyped<int64_t>(canonical, count, scale, typed);
 	case PhysicalType::INT128:
-		decoded = TryDecodeTyped<hugeint_t>(canonical, count, scale, typed);
-		break;
+		return TryDecodeTyped<hugeint_t>(canonical, count, scale, typed);
 	case PhysicalType::UINT8:
-		decoded = TryDecodeTyped<uint8_t>(canonical, count, scale, typed);
-		break;
+		return TryDecodeTyped<uint8_t>(canonical, count, scale, typed);
 	case PhysicalType::UINT16:
-		decoded = TryDecodeTyped<uint16_t>(canonical, count, scale, typed);
-		break;
+		return TryDecodeTyped<uint16_t>(canonical, count, scale, typed);
 	case PhysicalType::UINT32:
-		decoded = TryDecodeTyped<uint32_t>(canonical, count, scale, typed);
-		break;
+		return TryDecodeTyped<uint32_t>(canonical, count, scale, typed);
 	case PhysicalType::UINT64:
-		decoded = TryDecodeTyped<uint64_t>(canonical, count, scale, typed);
-		break;
+		return TryDecodeTyped<uint64_t>(canonical, count, scale, typed);
 	case PhysicalType::UINT128:
-		decoded = TryDecodeTyped<uhugeint_t>(canonical, count, scale, typed);
-		break;
+		return TryDecodeTyped<uhugeint_t>(canonical, count, scale, typed);
 	default:
-		decoded = false;
-		break;
+		return false;
 	}
-	if (!decoded) {
-		// values that do not fit the representation (or wide decimals) take the checked text cast
-		DecodeThroughText(canonical, count, typed);
+}
+
+void NumericBlob::Decode(Vector &canonical, idx_t count, Vector &typed) {
+	if (TryDecode(canonical, count, typed)) {
+		return;
 	}
+	// values that do not fit the representation (or wide decimals) take the checked text cast
+	DecodeThroughText(canonical, count, typed);
 }
 
 } // namespace duckdb

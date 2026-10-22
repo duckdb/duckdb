@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/numeric_range.hpp"
+#include "duckdb/storage/statistics/numeric_range_stats.hpp"
 
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -391,6 +392,7 @@ BaseStatistics NumericRange::ToCanonical() const {
 		StringStats::FromConstant(result, string_t(min_blob));
 		StringStats::MergeInConstant(result, string_t(max_blob));
 	}
+	NumericRangeStats::Set(result, *this);
 	return result;
 }
 

@@ -28,6 +28,8 @@ struct NumericBlob {
 	DUCKDB_API static bool TryEncode(const char *text, idx_t size, string &result);
 	//! Encodes decimal text, throwing for text that is not a plain number
 	DUCKDB_API static string Encode(const string &text);
+	//! The size of the blob that starts at `data`, of which `available` bytes can be read
+	DUCKDB_API static idx_t BlobSize(const_data_ptr_t data, idx_t available);
 	//! The decimal text of a blob: no exponent, no trailing zeros
 	DUCKDB_API static string ToText(const string_t &blob);
 	//! The digits before and after the decimal point that a blob needs
@@ -38,6 +40,9 @@ struct NumericBlob {
 	DUCKDB_API static void Encode(Vector &typed, idx_t count, Vector &result);
 	//! Decodes a canonical NUMERIC vector into a vector of the given representation
 	DUCKDB_API static void Decode(Vector &canonical, idx_t count, Vector &typed);
+	//! Decodes a canonical NUMERIC vector into a vector of a fixed-size representation; false (with the typed vector
+	//! unspecified) when a value does not fit
+	DUCKDB_API static bool TryDecode(Vector &canonical, idx_t count, Vector &typed);
 	//! The unscaled 128-bit value and the scale (without trailing zeros) of a blob; false beyond 38 digits
 	DUCKDB_API static bool TryDecodeUnscaled(const string_t &blob, hugeint_t &unscaled, uint8_t &scale);
 	//! Writes the blob of unscaled * 10^-scale into a buffer of MAX_BLOB_SIZE bytes and returns its length
