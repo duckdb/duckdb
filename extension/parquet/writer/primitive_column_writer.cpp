@@ -89,8 +89,7 @@ void PrimitiveColumnWriter::RegisterToRowGroup(duckdb_parquet::RowGroup &row_gro
 	column_chunk.__isset.meta_data = true;
 	column_chunk.meta_data.codec = writer.GetCodec();
 	for (auto &path_part : IdentifiersToStrings(schema_path)) {
-		column_chunk.meta_data.path_in_schema.emplace_back();
-		column_chunk.meta_data.path_in_schema.back().assign(path_part.data(), path_part.size());
+		column_chunk.meta_data.path_in_schema.emplace_back().assign(path_part.data(), path_part.size());
 	}
 	column_chunk.meta_data.num_values = 0;
 	column_chunk.meta_data.type = writer.GetType(SchemaIndex());
