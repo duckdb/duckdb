@@ -30,17 +30,16 @@ struct Max {
 	}
 };
 
-// Clang on AArch64 lowers these to fminnm/fmax, which it can vectorize as reductions
-#if defined(__clang__) && defined(__aarch64__) && __has_builtin(__builtin_elementwise_maximum)
-#define DUCKDB_NATIVE_FLOAT_MINMAX
+// Clang on AArch64 lowers this to fmax, which it can vectorize as a reduction
+#if defined(__clang__) && defined(__aarch64__)
+#if __has_builtin(__builtin_elementwise_maximum)
+#define DUCKDB_NATIVE_FLOAT_MAX
+#endif
 #endif
 
-//! NaN is ignored unless both inputs are NaN (IEEE 754-2008 minNum)
+//! NaN is ignored unless both inputs are NaN
 template <class T>
 inline T MinFloatingPoint(T left, T right) {
-#ifdef DUCKDB_NATIVE_FLOAT_MINMAX
-	return std::fmin(left, right);
-#else
 	if (std::isnan(left)) {
 		return right;
 	}
@@ -48,13 +47,12 @@ inline T MinFloatingPoint(T left, T right) {
 		return left;
 	}
 	return right > left ? left : right;
-#endif
 }
 
 //! NaN propagates, since NaN sorts greater than everything (IEEE 754-2019 maximum)
 template <class T>
 inline T MaxFloatingPoint(T left, T right) {
-#ifdef DUCKDB_NATIVE_FLOAT_MINMAX
+#ifdef DUCKDB_NATIVE_FLOAT_MAX
 	return __builtin_elementwise_maximum(left, right);
 #else
 	if (std::isnan(left)) {
