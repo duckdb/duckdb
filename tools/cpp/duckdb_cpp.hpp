@@ -3577,7 +3577,7 @@ enum class OrderPreservation : uint8_t {
 /// absent. The engine relies on the guarantees, so claiming less than the data holds produces wrong query results.
 /// Borrowed: valid only for the duration of the callback that handed it out.
 class Stats final : public detail::Handle<Stats> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	Stats(Stats &&) noexcept = default;
@@ -3887,7 +3887,7 @@ public:
 	/// The result statistics start out unknown, with every kind of value possible. A callback that leaves them
 	/// unchanged tells the engine nothing.
 	class StatsInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
@@ -4351,7 +4351,7 @@ public:
 	/// aggregate produces, including that of a group with no input rows, such as an ungrouped aggregate over an empty
 	/// table. A callback that leaves them unchanged tells the engine nothing.
 	class StatsInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
@@ -5240,7 +5240,7 @@ public:
 	/// The column statistics start out unknown, with every kind of value possible, and describe every value the scan
 	/// produces for the column. A callback that leaves them unchanged tells the engine nothing.
 	class StatsInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.

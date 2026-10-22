@@ -3387,7 +3387,7 @@ auto ScalarFunction::SetStatsCallback(StatsCallback callback) & -> ScalarFunctio
 			CheckedAPICall(duckdb_v2_scalar_function_stats_get_user_data, info, &user_data);
 			const auto &function = *static_cast<ScalarFunctionInfo *>(user_data);
 
-			auto input = detail::Factory::Make<StatsInput>(static_cast<void *>(info), static_cast<void *>(context));
+			auto input = detail::HandleFactory::Make<StatsInput>(static_cast<void *>(info), static_cast<void *>(context));
 			function.stats_callback(input);
 		});
 	};
@@ -3570,18 +3570,18 @@ auto ScalarFunction::StatsInput::GetArgStats(idx_t index) const -> Stats {
 	duckdb_v2_stats_handle stats = nullptr;
 	CheckedAPICall(duckdb_v2_scalar_function_stats_get_arg_stats,
 	               static_cast<duckdb_v2_scalar_function_stats_info_handle>(args), index, &stats);
-	return detail::Factory::Make<Stats>(stats);
+	return detail::HandleFactory::Make<Stats>(stats);
 }
 
 auto ScalarFunction::StatsInput::GetResultStats() const -> Stats {
 	duckdb_v2_stats_handle stats = nullptr;
 	CheckedAPICall(duckdb_v2_scalar_function_stats_get_result_stats,
 	               static_cast<duckdb_v2_scalar_function_stats_info_handle>(args), &stats);
-	return detail::Factory::Make<Stats>(stats);
+	return detail::HandleFactory::Make<Stats>(stats);
 }
 
 auto ScalarFunction::StatsInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+	return detail::HandleFactory::Make<Context>(context);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -3865,7 +3865,7 @@ auto AggregateFunction::SetStatsCallback(StatsCallback callback) & -> AggregateF
 			CheckedAPICall(duckdb_v2_aggregate_function_stats_get_user_data, info, &user_data);
 			const auto &function = *static_cast<AggregateFunctionInfo *>(user_data);
 
-			auto input = detail::Factory::Make<StatsInput>(static_cast<void *>(info), static_cast<void *>(context));
+			auto input = detail::HandleFactory::Make<StatsInput>(static_cast<void *>(info), static_cast<void *>(context));
 			function.stats_callback(input);
 		});
 	};
@@ -4170,18 +4170,18 @@ auto AggregateFunction::StatsInput::GetArgStats(idx_t index) const -> Stats {
 	duckdb_v2_stats_handle stats = nullptr;
 	CheckedAPICall(duckdb_v2_aggregate_function_stats_get_arg_stats,
 	               static_cast<duckdb_v2_aggregate_function_stats_info_handle>(args), index, &stats);
-	return detail::Factory::Make<Stats>(stats);
+	return detail::HandleFactory::Make<Stats>(stats);
 }
 
 auto AggregateFunction::StatsInput::GetResultStats() const -> Stats {
 	duckdb_v2_stats_handle stats = nullptr;
 	CheckedAPICall(duckdb_v2_aggregate_function_stats_get_result_stats,
 	               static_cast<duckdb_v2_aggregate_function_stats_info_handle>(args), &stats);
-	return detail::Factory::Make<Stats>(stats);
+	return detail::HandleFactory::Make<Stats>(stats);
 }
 
 auto AggregateFunction::StatsInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+	return detail::HandleFactory::Make<Context>(context);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -4577,7 +4577,7 @@ auto TableFunction::SetStatsCallback(StatsCallback callback) & -> TableFunction 
 			CheckedAPICall(duckdb_v2_table_function_stats_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
-			auto input = detail::Factory::Make<StatsInput>(static_cast<void *>(info), static_cast<void *>(context));
+			auto input = detail::HandleFactory::Make<StatsInput>(static_cast<void *>(info), static_cast<void *>(context));
 			function.stats_callback(input);
 		});
 	};
@@ -5133,11 +5133,11 @@ auto TableFunction::StatsInput::GetResultStats() const -> Stats {
 	duckdb_v2_stats_handle stats = nullptr;
 	CheckedAPICall(duckdb_v2_table_function_stats_get_result_stats,
 	               static_cast<duckdb_v2_table_function_stats_info_handle>(args), &stats);
-	return detail::Factory::Make<Stats>(stats);
+	return detail::HandleFactory::Make<Stats>(stats);
 }
 
 auto TableFunction::StatsInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+	return detail::HandleFactory::Make<Context>(context);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
