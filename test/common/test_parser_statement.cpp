@@ -198,4 +198,3 @@ TEST_CASE("Parser slices keep the leading comment of the first statement", "[par
 		CHECK(create.info->sql == "-- tag\nCREATE TABLE t (i INTEGER)");
 	}
 }
-
