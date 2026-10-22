@@ -9,9 +9,6 @@
 #pragma once
 
 #include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/operator/decimal_cast_operators.hpp"
-#include "duckdb/common/operator/string_cast.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "yyjson.hpp"
 
 using namespace duckdb_yyjson; // NOLINT
