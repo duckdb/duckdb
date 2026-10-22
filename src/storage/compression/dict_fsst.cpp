@@ -168,7 +168,7 @@ void DictFSSTSelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector
 		result.Slice(sel, sel_count);
 		return;
 	}
-	scan_state.Select(result, result_offset, state.GetPositionInSegment(), sel, sel_count);
+	scan_state.Select(result, result_offset, state.GetPositionInSegment(), sel, sel_count, state.string_scan_type);
 }
 
 //===--------------------------------------------------------------------===//

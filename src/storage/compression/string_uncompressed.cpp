@@ -175,11 +175,14 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 	auto strings = layout.ValidateRange(start, vector_count);
 
+	const bool copy_strings = state.string_scan_type == StringScanType::COPY_STRINGS;
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto selection_index = sel.get_index(i);
 		D_ASSERT(selection_index < vector_count);
 		auto entry = strings.GetEntry(selection_index);
-		result_data[result_offset + i] = FetchStringFromEntry(state.context, segment, result, entry);
+		auto str = FetchStringFromEntry(state.context, segment, result, entry);
+		result_data[result_offset + i] =
+		    copy_strings && !entry.is_overflow ? StringVector::AddStringOrBlob(result, str) : str;
 	}
 }
 

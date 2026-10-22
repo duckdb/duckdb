@@ -247,7 +247,7 @@ protected:
 	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                 idx_t target_scan, UpdateScanType update_type);
 	void SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, const SelectionVector &sel,
-	                  idx_t sel_count, ScanVectorType scan_type);
+	                  idx_t sel_count, ScanVectorType scan_type, idx_t result_offset = 0);
 	void FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
 	                  idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state);
 

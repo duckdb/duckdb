@@ -134,7 +134,7 @@ struct ColumnScanState {
 	unique_ptr<PushedDownExpressionState> expression_state;
 	//! Whether or not updates should be allowed
 	UpdateScanType update_scan_type = UpdateScanType::STANDARD;
-	//! Whether partial scans copy strings into the result instead of pointing into the scanned blocks
+	//! Whether scans and selects copy strings into the result instead of pointing into the scanned blocks
 	StringScanType string_scan_type = StringScanType::STANDARD;
 
 public:

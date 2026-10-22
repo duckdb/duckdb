@@ -33,7 +33,7 @@ public:
 
 public:
 	void InitializeDictionary(const ColumnSegment &segment);
-	//! Scans require InitializeDictionary, fetch validates its selected entry instead.
+	//! Scans require InitializeDictionary, fetches and COPY_STRINGS scans validate their selected entries instead.
 	template <bool NEEDS_STRING_OFFSET_CHECK = false>
 	void ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count,
 	                      StringScanType string_scan_type = StringScanType::STANDARD);

@@ -33,7 +33,13 @@ public:
 	bool AllowDictionaryScan(idx_t scan_count);
 
 private:
-	string_t FetchStringFromDict(Vector &result, uint32_t dict_offset, idx_t dict_idx);
+	//! With COPY_STRINGS the string is owned by the result instead of pointing into the block
+	string_t FetchStringFromDict(Vector &result, uint32_t dict_offset, idx_t dict_idx,
+	                             StringScanType string_scan_type = StringScanType::STANDARD);
+	//! Builds the dictionary on first use, returns false if this scan has no dictionary
+	bool EnsureDictionary();
+	//! The offset of each string in the dictionary, computed on first use
+	const vector<uint32_t> &GetStringOffsets();
 
 public:
 	ColumnSegment &segment;
@@ -54,6 +60,7 @@ public:
 	idx_t decompress_position = 0;
 
 	vector<uint32_t> string_lengths;
+	vector<uint32_t> string_offsets;
 
 	//! Start of the block (pointing to the dictionary_header)
 	data_ptr_t baseptr;
@@ -62,6 +69,7 @@ public:
 	data_ptr_t string_lengths_ptr;
 
 	buffer_ptr<DictionaryEntry> dictionary;
+	bool build_dictionary = false;
 	void *decoder = nullptr;
 	bool all_values_inlined = false;
 
