@@ -1,0 +1,17 @@
+# name: benchmark/micro/compression/dictionary/dictionary_store_materialized.benchmark
+# description: Storing strings compressed at ~4.3x compression - the input is materialized first, so only writing it is timed
+# group: [dictionary]
+
+name Dictionary Compression Write
+group dictionary
+storage persistent v1.4.0
+require_reinit
+
+load
+PRAGMA force_compression='dict_fsst';
+DROP TABLE IF EXISTS test;
+CREATE OR REPLACE TABLE src AS SELECT (100 + (i%1000))::VARCHAR AS i FROM range(0, 100_000_000) tbl(i);
+
+run
+CREATE TABLE test AS SELECT * FROM src;
+checkpoint;

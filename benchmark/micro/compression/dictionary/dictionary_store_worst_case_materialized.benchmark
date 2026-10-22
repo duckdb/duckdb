@@ -1,0 +1,17 @@
+# name: benchmark/micro/compression/dictionary/dictionary_store_worst_case_materialized.benchmark
+# description: Storing a column containing only unique strings. - the input is materialized first, so only writing it is timed
+# group: [dictionary]
+
+name Dictionary Compression Write
+group dictionary
+storage persistent v1.4.0
+require_reinit
+
+load
+PRAGMA force_compression='dict_fsst';
+DROP TABLE IF EXISTS test;
+CREATE OR REPLACE TABLE src AS SELECT i::VARCHAR AS i FROM range(0, 50_000_000) tbl(i);
+
+run
+CREATE TABLE test AS SELECT * FROM src;
+checkpoint;
