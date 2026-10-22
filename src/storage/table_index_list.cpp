@@ -103,6 +103,20 @@ shared_ptr<IndexEntry> TableIndexList::AddIndex(unique_ptr<Index> index, idx_t i
 	return index_entry;
 }
 
+void TableIndexList::VisitBlockIds(BlockIdVisitor &visitor) {
+	annotated_lock_guard lock(index_entries_lock);
+	for (auto &entry : index_entries) {
+		entry->VisitBlockIds(visitor);
+	}
+}
+
+void TableIndexList::DisownBlocks() {
+	annotated_lock_guard lock(index_entries_lock);
+	for (auto &entry : index_entries) {
+		entry->DisownBlocks();
+	}
+}
+
 void TableIndexList::InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const {
 	D_ASSERT(this != &delete_indexes);
 	D_ASSERT(this != &append_indexes);
@@ -180,21 +194,52 @@ void TableIndexList::RemoveFromIndexes(DataChunk &chunk, Vector &row_ids, const 
 	}
 }
 
+shared_ptr<IndexEntry> TableIndexList::ExtractIndex(idx_t index_oid) {
+	for (idx_t i = 0; i < index_entries.size(); i++) {
+		auto &entry = index_entries[i];
+		if (entry->GetIndexOid() != index_oid) {
+			continue;
+		}
+		if (entry->GetBindState() != IndexBindState::BOUND) {
+			unbound_count--;
+		}
+		auto removed_entry = std::move(entry);
+		index_entries.erase_at(i);
+		return removed_entry;
+	}
+	return nullptr;
+}
+
 void TableIndexList::RemoveIndex(idx_t index_oid) {
 	shared_ptr<IndexEntry> removed_entry;
 	{
 		annotated_lock_guard lock(index_entries_lock);
-		for (idx_t i = 0; i < index_entries.size(); i++) {
-			auto &entry = index_entries[i];
-			if (entry->GetIndexOid() != index_oid) {
-				continue;
+		removed_entry = ExtractIndex(index_oid);
+	}
+	if (removed_entry) {
+		removed_entry->Retire();
+	}
+}
+
+shared_ptr<IndexEntry> TableIndexList::DetachIndex(idx_t index_oid) {
+	annotated_lock_guard lock(index_entries_lock);
+	auto entry = ExtractIndex(index_oid);
+	if (entry) {
+		detached_index_entries.push_back(entry);
+	}
+	return entry;
+}
+
+void TableIndexList::RemoveDetachedIndex(const IndexEntry &entry) {
+	shared_ptr<IndexEntry> removed_entry;
+	{
+		annotated_lock_guard lock(index_entries_lock);
+		for (idx_t i = 0; i < detached_index_entries.size(); i++) {
+			if (detached_index_entries[i].get() == &entry) {
+				removed_entry = std::move(detached_index_entries[i]);
+				detached_index_entries.erase_at(i);
+				break;
 			}
-			if (entry->GetBindState() != IndexBindState::BOUND) {
-				unbound_count--;
-			}
-			removed_entry = std::move(entry);
-			index_entries.erase_at(i);
-			break;
 		}
 	}
 	if (removed_entry) {
@@ -436,6 +481,11 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 		lock.lock();
 		auto current_entry = std::find(index_entries.begin(), index_entries.end(), index_entry);
 		if (current_entry == index_entries.end()) {
+			// a drop detached it meanwhile: the bound index now owns the storage that checkpoints still write
+			if (std::find(detached_index_entries.begin(), detached_index_entries.end(), index_entry) !=
+			    detached_index_entries.end()) {
+				index_entry->CommitBind(std::move(bound_idx));
+			}
 			continue;
 		}
 		index_entry->CommitBind(std::move(bound_idx));
@@ -493,6 +543,8 @@ vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndex
 	{
 		annotated_lock_guard lock(index_entries_lock);
 		entries = index_entries;
+		// dropped after the checkpoint's bound
+		entries.insert(entries.end(), detached_index_entries.begin(), detached_index_entries.end());
 	}
 
 	// written without the list lock, which every commit that changes the table takes
@@ -503,6 +555,8 @@ vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndex
 
 	try {
 		for (const auto &entry : entries) {
+			// retired only once it leaves the lists
+			D_ASSERT(entry->GetBindState() != IndexBindState::RETIRED);
 			auto checkpoint = entry->Checkpoint(writer);
 			shadows.push_back(std::move(checkpoint.shadow_index));
 			infos.push_back(std::move(checkpoint.storage_info));
