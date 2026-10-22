@@ -238,15 +238,14 @@ QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input)
 	if (input.empty()) {
 		throw InternalException("QualifiedName cannot be made with an empty input.");
 	}
-	if (input.size() == 1) {
-		return QualifiedName(Identifier(input[0]));
-	} else if (input.size() == 2) {
-		return QualifiedName({Identifier(input[0])}, Identifier(input[1]));
-	} else if (input.size() == 3) {
-		return QualifiedName(Identifier(input[0]), Identifier(input[1]), Identifier(input[2]));
-	} else {
-		throw ParserException("Too many qualifications found - expected [catalog.schema.name] or [schema.name]");
+	// Store the qualification as the full path - it may be deeper than [catalog, schema, name] for nested
+	// schemas. The leading component is resolved to a catalog at bind time (Binder::BindTableName).
+	vector<Identifier> path;
+	path.reserve(input.size());
+	for (auto &part : input) {
+		path.emplace_back(std::move(part));
 	}
+	return QualifiedName::FromPath(std::move(path));
 }
 
 QualifiedColumnName PEGTransformerFactory::StringToQualifiedColumnName(const vector<string> &input) {
