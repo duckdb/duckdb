@@ -359,16 +359,16 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = window_self_join_optimizer.Optimize(std::move(plan));
 	});
 
-	// Push down joins against windows
-	RunOptimizer(OptimizerType::WINDOW_JOIN_PUSHDOWN, [&]() {
-		WindowJoinPushdown optimizer(context);
-		plan = optimizer.Optimize(std::move(plan));
-	});
-
 	// Pull up projection from joins
 	RunOptimizer(OptimizerType::PROJECTION_PULLUP, [&]() {
 		ProjectionPullup projection_pullup(*this, plan);
 		projection_pullup.Optimize(plan);
+	});
+
+	// Push down joins against windows
+	RunOptimizer(OptimizerType::WINDOW_JOIN_PUSHDOWN, [&]() {
+		WindowJoinPushdown optimizer(context);
+		plan = optimizer.Optimize(std::move(plan));
 	});
 
 	// Simplifies FULL OUTER -> LEFT/RIGHT OUTER -> INNER if NULLs are filtered anyway

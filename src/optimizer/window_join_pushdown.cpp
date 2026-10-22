@@ -8,6 +8,7 @@
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/optimizer/apply_functional_dependencies.hpp"
 
+//	From https://www.vldb.org/pvldb/vol19/p3525-lindner.pdf §5 (Partition Analysis)
 //	Join push-down P,O,w,f references only A(r) and:
 // 	(9)  ⊞P,...(r)⋈︁r.b=s.x s ≡⊞P,...(r ⋈︁r.b=s.x s)  | FD P → b and x unique
 // 	(10) ⊞P,...(r)⋈︁r.b=s.x s ≡⊞P,...(r ⋈︁r.b=s.x s) | x unique (left join)
@@ -48,6 +49,10 @@ bool WindowJoinPushdown::CanOptimize(const LogicalOperator &op) {
 		if (join.children[window_idx]->type != LogicalOperatorType::LOGICAL_WINDOW) {
 			++window_idx;
 		}
+		//	TODO: Push down stacked window joins?
+		if (join.children[1 - window_idx]->type == LogicalOperatorType::LOGICAL_WINDOW) {
+			return false;
+		}
 		DUCKDB_EXPLICIT_FALLTHROUGH;
 	case JoinType::LEFT:
 	case JoinType::SEMI:
@@ -72,6 +77,9 @@ bool WindowJoinPushdown::CanOptimize(const LogicalOperator &op) {
 			for (auto &p : wexpr.Partitions()) {
 				refs.emplace_back(*p);
 			}
+			if (refs.empty()) {
+				return false;
+			}
 			if (!BaseSelectBinder::IsFunctionallyDependent(b, refs)) {
 				fd_p_b = false;
 				break;
@@ -82,7 +90,8 @@ bool WindowJoinPushdown::CanOptimize(const LogicalOperator &op) {
 	//	x unique
 	const auto &x = (window_idx == 1) ? condition.GetLHS() : condition.GetRHS();
 	bool x_unique = false;
-	if (join.join_type <= JoinType::LEFT && x.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+	const bool needs_unique = (join.join_type == JoinType::INNER || join.join_type == JoinType::LEFT);
+	if (needs_unique && x.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		//	Need a bound reference here
 		const auto &binding = x.Cast<BoundColumnRefExpression>().Binding();
 		auto &s = *join.children[1 - window_idx];
