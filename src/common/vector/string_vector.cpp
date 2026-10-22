@@ -37,6 +37,11 @@ VectorStringBuffer::VectorStringBuffer(Allocator &allocator, capacity_t capacity
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
+VectorStringBuffer::VectorStringBuffer(AllocatedData allocation, capacity_t capacity)
+    : StandardVectorBuffer(std::move(allocation), capacity, sizeof(string_t)) {
+	buffer_type = VectorBufferType::STRING_BUFFER;
+}
+
 VectorStringBuffer::VectorStringBuffer(capacity_t capacity) : StandardVectorBuffer(capacity, sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
@@ -91,6 +96,7 @@ void VectorStringBuffer::CopyInternal(const Vector &source, const SelectionVecto
 }
 
 void VectorStringBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
+	EnsureDataAllocated();
 	if (!val.IsNull() && val.type() != type) {
 		SetValue(type, index, val.DefaultCastAs(type));
 		return;
@@ -138,7 +144,7 @@ void VectorStringBuffer::VerifyInternal(const LogicalType &type, const Selection
 
 buffer_ptr<VectorBuffer> VectorStringBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
 	auto type_size = GetTypeIdSize(type.InternalType());
-	auto offset_ptr = data_ptr + type_size * offset;
+	auto offset_ptr = data_ptr ? data_ptr + type_size * offset : nullptr;
 	auto count = count_t(end - offset);
 	auto result = make_buffer<VectorStringBuffer>(offset_ptr, count);
 	result->GetValidityMask().Slice(validity, offset, count);
@@ -199,11 +205,12 @@ VectorStringBuffer &StringVector::GetStringBuffer(Vector &vector) {
 	if (!vector.GetBufferRef()) {
 		vector.SetBuffer(make_buffer<VectorStringBuffer>(nullptr, count_t(0)));
 	}
-	if (vector.Buffer().GetBufferType() != VectorBufferType::STRING_BUFFER) {
+	auto &buffer = vector.BufferForWrite();
+	if (buffer.GetBufferType() != VectorBufferType::STRING_BUFFER) {
 		throw InternalException(
 		    "StringVector::GetStringBuffer called on a vector - but that vector does NOT have a string buffer");
 	}
-	return vector.BufferMutable().Cast<VectorStringBuffer>();
+	return buffer.Cast<VectorStringBuffer>();
 }
 
 ArenaAllocator &StringVector::GetStringAllocator(Vector &vector) {

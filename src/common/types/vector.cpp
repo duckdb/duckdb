@@ -186,10 +186,14 @@ void Vector::Reinterpret(const Vector &other) {
 		CheckTypeIsReinterpretable(this_type, other_type);
 	}
 	ConstReference(other);
-	if (GetVectorType() == VectorType::DICTIONARY_VECTOR && other_type != this_type) {
+	if (!buffer) {
+		return;
+	}
+	auto &result_buffer = BufferForWrite();
+	if (result_buffer.GetVectorType() == VectorType::DICTIONARY_VECTOR && other_type != this_type) {
 		Vector new_vector(this_type, nullptr);
 		new_vector.Reinterpret(DictionaryVector::Child(other));
-		auto &old_dict = buffer->Cast<DictionaryBuffer>();
+		auto &old_dict = result_buffer.Cast<DictionaryBuffer>();
 		auto new_entry = make_shared_ptr<DictionaryEntry>(std::move(new_vector));
 		// reinterpret re-mints the entry; the id and global flag are one contract and must survive together
 		new_entry->id = old_dict.GetEntry().id;
@@ -206,6 +210,55 @@ void Vector::ResetFromCache(const VectorCache &cache) {
 	cache.ResetFromCache(*this);
 }
 
+VectorBuffer &Vector::DictionaryBufferForWrite() {
+	auto &dictionary = buffer->Cast<DictionaryBuffer>();
+	if (dictionary.IsReset()) {
+		auto flat_buffer = dictionary.Flatten(GetType());
+		buffer = std::move(flat_buffer);
+	}
+	return *buffer;
+}
+
+bool Vector::TryReuseDictionary(const Vector &source, const SelectionVector &sel, idx_t count,
+                                optional_ptr<SelCache> cache) {
+	if (!buffer || buffer.use_count() != 1 || GetVectorType() != VectorType::DICTIONARY_VECTOR || !sel.IsSet() ||
+	    !source.GetBufferRef() || GetType().IsNested() || GetType() != source.GetType()) {
+		return false;
+	}
+	auto &dictionary = buffer->Cast<DictionaryBuffer>();
+	if (!dictionary.IsReset()) {
+		return false;
+	}
+	if (source.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &source_dictionary = source.GetBufferRef()->Cast<DictionaryBuffer>();
+		if (source_dictionary.IsReset()) {
+			return false;
+		}
+		auto &source_sel = source_dictionary.GetSelVector();
+		if (cache) {
+			auto found = cache->cache.find(source_sel.data());
+			if (found != cache->cache.end()) {
+				dictionary.Rebind(source_dictionary.GetEntryPtr(),
+				                  found->second->Cast<DictionaryBuffer>().GetSelVector(), count);
+				return true;
+			}
+		}
+		SelectionVector composed(source_sel.Slice(sel, count));
+		dictionary.Rebind(source_dictionary.GetEntryPtr(), composed, count);
+		if (cache) {
+			cache->cache[source_sel.data()] = buffer;
+		}
+		return true;
+	}
+	if (source.GetVectorType() != VectorType::FLAT_VECTOR ||
+	    (source.Buffer().GetBufferType() != VectorBufferType::STANDARD_BUFFER &&
+	     source.Buffer().GetBufferType() != VectorBufferType::STRING_BUFFER)) {
+		return false;
+	}
+	dictionary.Rebind(make_buffer<DictionaryEntry>(Vector::Ref(source)), sel, count);
+	return true;
+}
+
 void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 	buffer = other.buffer->Slice(GetType(), offset, end);
 	if (!buffer) {
@@ -214,6 +267,9 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 }
 
 void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count) {
+	if (TryReuseDictionary(other, sel, count)) {
+		return;
+	}
 	Reference(other);
 	Slice(sel, count);
 }
@@ -258,8 +314,7 @@ void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const Selecti
 	if (dict.size() != dictionary_size) {
 		throw InternalException("Vector::Dictionary called with mismatching dictionary size");
 	}
-	Reference(dict);
-	Dictionary(dictionary_size, sel, count);
+	Slice(dict, sel, count);
 }
 
 void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const SelectionVector &sel, idx_t sel_count) {
@@ -267,6 +322,11 @@ void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const Selecti
 		throw InternalException("Struct vectors cannot be dictionaries");
 	}
 	D_ASSERT(type == reusable_dict->data.GetType());
+	if (buffer && buffer.use_count() == 1 && GetVectorType() == VectorType::DICTIONARY_VECTOR &&
+	    buffer->Cast<DictionaryBuffer>().IsReset()) {
+		buffer->Cast<DictionaryBuffer>().Rebind(std::move(reusable_dict), sel, sel_count);
+		return;
+	}
 	buffer = make_buffer<DictionaryBuffer>(sel, sel_count, std::move(reusable_dict));
 }
 
@@ -297,7 +357,7 @@ void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity
 }
 
 void Vector::AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data) {
-	buffer->AddAuxiliaryData(std::move(data));
+	BufferForWrite().AddAuxiliaryData(std::move(data));
 }
 
 void Vector::AddHeapReference(const Vector &other) {
@@ -322,11 +382,12 @@ void Vector::Reserve(idx_t to_reserve_p) {
 		Initialize(VectorDataInitialization::UNINITIALIZED, reserve_size);
 		return;
 	}
-	auto capacity = buffer->Capacity();
+	auto &result_buffer = BufferForWrite();
+	auto capacity = result_buffer.Capacity();
 	if (reserve_size <= capacity) {
 		return;
 	}
-	buffer->Reserve(reserve_size, VectorAppendMode::ALLOW_RESIZE);
+	result_buffer.Reserve(reserve_size, VectorAppendMode::ALLOW_RESIZE);
 }
 
 void Vector::Resize(idx_t, idx_t to_reserve_p) {
@@ -334,25 +395,25 @@ void Vector::Resize(idx_t, idx_t to_reserve_p) {
 }
 
 void Vector::Append(const Value &value, VectorAppendMode append_mode) {
-	buffer->AppendValue(GetType(), value, append_mode);
+	BufferForWrite().AppendValue(GetType(), value, append_mode);
 }
 
 void Vector::Append(const Vector &source, idx_t count, VectorAppendMode append_mode) {
-	buffer->Append(source, *FlatVector::IncrementalSelectionVector(), count, append_mode);
+	Append(source, *FlatVector::IncrementalSelectionVector(), count, append_mode);
 }
 
 void Vector::Append(const Vector &source, const SelectionVector &sel, idx_t count, VectorAppendMode append_mode) {
-	buffer->Append(source, sel, count, append_mode);
+	BufferForWrite().Append(source, sel, count, append_mode);
 }
 
 void Vector::Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
                   idx_t target_offset, idx_t copy_count) {
 	D_ASSERT(source.GetType() == GetType());
-	buffer->Copy(source, source_sel, source_count, source_offset, target_offset, copy_count);
+	BufferForWrite().Copy(source, source_sel, source_count, source_offset, target_offset, copy_count);
 }
 
 void Vector::SetValue(idx_t index, const Value &val) {
-	buffer->SetValue(GetType(), index, val);
+	BufferForWrite().SetValue(GetType(), index, val);
 }
 
 Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
@@ -895,7 +956,7 @@ void Vector::SetVectorType(VectorType new_vector_type) {
 	}
 	if (buffer) {
 		// FIXME: should we allow vectors without a buffer?
-		BufferMutable().SetVectorType(new_vector_type);
+		BufferForWrite().SetVectorType(new_vector_type);
 	}
 }
 

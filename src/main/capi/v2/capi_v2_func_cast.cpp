@@ -74,6 +74,7 @@ static auto CV2CastExec(Vector &input, Vector &output, idx_t count, CastParamete
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
+	output.Flatten();
 	bound_data.exec_cb(Convert(&args), Convert(context.get()), &err_ptr);
 
 	if (!err.HasError()) {

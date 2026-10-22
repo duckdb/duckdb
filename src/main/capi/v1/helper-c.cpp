@@ -1,7 +1,14 @@
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
+
+void PrepareCAPIResult(Vector &result) {
+	if (!result.GetType().IsNested()) {
+		FlatVector::GetDataMutable(result);
+	}
+}
 
 LogicalTypeId LogicalTypeIdFromC(const duckdb_type type) {
 	switch (type) {

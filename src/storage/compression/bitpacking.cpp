@@ -1155,8 +1155,8 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	auto &group = scan_state.GetCurrentGroup();
 	D_ASSERT(!group.AtEnd());
 
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	T *result_data = FlatVector::GetDataMutable<T>(result);
+	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	T *current_result_ptr = result_data + result_idx;
 
 	if (group.metadata.mode == BitpackingMode::CONSTANT) {

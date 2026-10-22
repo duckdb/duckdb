@@ -247,6 +247,7 @@ static auto CV2ScalarExec(DataChunk &input, ExpressionState &state, Vector &resu
 	auto err_ptr = Convert(&err);
 
 	CV2CallbackContext callback_context(state.GetContext());
+	result.Flatten();
 	info.exec_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {

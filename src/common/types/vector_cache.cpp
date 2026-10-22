@@ -3,6 +3,7 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
@@ -18,7 +19,7 @@ public:
 		case PhysicalType::LIST: {
 			// child data of the list
 			auto &child_type = ListType::GetChildType(type);
-			child_caches.push_back(make_uniq<VectorCacheEntry>(allocator, child_type, capacity));
+			child_caches.push_back(CreateNestedChild(allocator, child_type, capacity));
 			auto child_vector = make_uniq<Vector>(child_type, nullptr);
 			buffer = make_buffer<VectorListBuffer>(allocator, capacity, std::move(child_vector));
 			break;
@@ -26,7 +27,7 @@ public:
 		case PhysicalType::ARRAY: {
 			auto &child_type = ArrayType::GetChildType(type);
 			auto array_size = ArrayType::GetSize(type);
-			child_caches.push_back(make_uniq<VectorCacheEntry>(allocator, child_type, array_size * capacity));
+			child_caches.push_back(CreateNestedChild(allocator, child_type, array_size * capacity));
 			auto child_vector = make_uniq<Vector>(child_type, array_size * capacity);
 			buffer = make_shared_ptr<VectorArrayBuffer>(std::move(child_vector), array_size, capacity);
 			break;
@@ -34,24 +35,37 @@ public:
 		case PhysicalType::STRUCT: {
 			auto &child_types = StructType::GetChildTypes(type);
 			for (auto &child_type : child_types) {
-				child_caches.push_back(make_uniq<VectorCacheEntry>(allocator, child_type.second, capacity));
+				child_caches.push_back(CreateNestedChild(allocator, child_type.second, capacity));
 			}
 			buffer = make_buffer<VectorStructBuffer>(type);
 			break;
 		}
 		case PhysicalType::VARCHAR:
-			buffer = make_buffer<VectorStringBuffer>(allocator, capacity);
+			buffer = make_buffer<VectorStringBuffer>(AllocatedData(allocator), capacity);
 			break;
 		default:
-			buffer = make_buffer<StandardVectorBuffer>(allocator, capacity, GetTypeIdSize(internal_type));
+			buffer =
+			    make_buffer<StandardVectorBuffer>(AllocatedData(allocator), capacity, GetTypeIdSize(internal_type));
 			break;
 		}
 	}
 
-	void ResetFromCache(Vector &result) {
+	void ResetFromCache(Vector &result, bool keep_representation = true) {
 		D_ASSERT(type == result.GetType());
 		auto internal_type = type.InternalType();
 		buffer->ClearAuxiliaryData();
+		if (keep_representation && !type.IsNested()) {
+			buffer->ResetCapacity(buffer->Capacity());
+			buffer->SetVectorTypeOnly(VectorType::FLAT_VECTOR);
+			buffer->SetVectorSizeOnly(0);
+			auto &active = result.GetBufferRef();
+			if (active && active.use_count() == 1 && active->GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+				active->Cast<DictionaryBuffer>().Reset(type, buffer);
+			} else {
+				result.SetBuffer(buffer);
+			}
+			return;
+		}
 		result.SetBuffer(buffer_ptr<VectorBuffer>(buffer));
 		result.BufferMutable().ResetCapacity(capacity);
 		result.BufferMutable().SetVectorTypeOnly(VectorType::FLAT_VECTOR);
@@ -63,7 +77,7 @@ public:
 			auto &list_buffer = result.BufferMutable().Cast<VectorListBuffer>();
 
 			auto &list_child = list_buffer.GetChild();
-			child_cache.ResetFromCache(list_child);
+			child_cache.ResetFromCache(list_child, false);
 			list_buffer.SetChildSize(0);
 			break;
 		}
@@ -72,7 +86,7 @@ public:
 			// propagate through child
 			auto &child_cache = *child_caches[0];
 			auto &array_child = result.BufferMutable().Cast<VectorArrayBuffer>().GetChild();
-			child_cache.ResetFromCache(array_child);
+			child_cache.ResetFromCache(array_child, false);
 			break;
 		}
 		case PhysicalType::STRUCT: {
@@ -81,7 +95,7 @@ public:
 			auto &children = result.BufferMutable().Cast<VectorStructBuffer>().GetChildren();
 			for (idx_t i = 0; i < children.size(); i++) {
 				auto &child_cache = *child_caches[i];
-				child_cache.ResetFromCache(children[i]);
+				child_cache.ResetFromCache(children[i], false);
 			}
 			break;
 		}
@@ -96,6 +110,16 @@ public:
 	}
 	idx_t GetCapacity() const {
 		return capacity;
+	}
+
+private:
+	static unique_ptr<VectorCacheEntry> CreateNestedChild(Allocator &allocator, const LogicalType &type,
+	                                                      idx_t capacity) {
+		auto child = make_uniq<VectorCacheEntry>(allocator, type, capacity);
+		if (!type.IsNested()) {
+			child->buffer->Cast<StandardVectorBuffer>().EnsureDataAllocated();
+		}
+		return child;
 	}
 
 private:

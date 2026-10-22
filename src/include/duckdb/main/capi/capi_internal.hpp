@@ -29,6 +29,9 @@
 
 namespace duckdb {
 
+//! Allocate output payload before entering a callback without an allocation error channel.
+void PrepareCAPIResult(Vector &result);
+
 struct DBInstanceCacheWrapper {
 	unique_ptr<DBInstanceCache> instance_cache;
 };

@@ -310,6 +310,7 @@ static auto CV2AggregateFinalize(Vector &state, AggregateFinalizeInputData &fina
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
+	result.Flatten();
 	info.finalize_cb(Convert(&args), &err_ptr);
 
 	if (err.HasError()) {
