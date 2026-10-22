@@ -224,7 +224,8 @@ void ColumnReader::VerifyPageAgainstOffsetIndex(idx_t header_location, const Pag
 	if (page_values != index_rows) {
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": the OffsetIndex of column \"%s\" is corrupt. Page %llu "
-		    "should hold %llu rows according to the index, but holds %llu values",
+		    "should hold %llu rows according to the index, but holds %llu values. The file can be read without "
+		    "its page index: SET parquet_use_page_index = false",
 		    Reader().GetFileName(), Schema().name, page_idx, index_rows, page_values);
 	}
 }

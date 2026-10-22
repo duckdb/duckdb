@@ -20,6 +20,10 @@ COPY data TO '{TEST_DIR}/page_index_prefetch.parquet' (ROW_GROUP_SIZE 100000, DA
 statement ok
 SET threads = 1;
 
+# the bytes read below depend on how far apart two pages may be to be read together, pin it
+statement ok
+SET parquet_prefetch_column_gap = 16384;
+
 statement ok
 CREATE MACRO bytes_read() AS (SELECT coalesce(sum(bytes), 0) FROM duckdb_logs_parsed('FileSystem') WHERE op = 'READ' AND parse_filename(path) = 'page_index_prefetch.parquet');
 
@@ -175,10 +179,10 @@ SELECT id, v, payload, s FROM '{TEST_DIR}/page_index_prefetch.parquet' WHERE id 
 statement ok
 CALL disable_logging();
 
-query II
-SELECT row_group_id, list_sort(flatten(prefetch_groups)) FROM duckdb_logs_parsed('ParquetPrefetch') WHERE file_path LIKE '%page_index_prefetch.parquet' ORDER BY row_group_id
+query III
+SELECT row_group_id, strategy, list_sort(flatten(prefetch_groups)) FROM duckdb_logs_parsed('ParquetPrefetch') WHERE file_path LIKE '%page_index_prefetch.parquet' ORDER BY row_group_id
 ----
-1	[id, payload, s, v]
+1	column_wise_eager_pages	[id, payload, s, v]
 
 statement ok
 CALL truncate_duckdb_logs();

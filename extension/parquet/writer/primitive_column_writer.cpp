@@ -126,9 +126,9 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 		page_info.estimated_page_size += GetRowSize(vector, vector_index, state) * vcount;
 	} else {
 		for (idx_t i = 0; i < vcount; i++) {
-			if (i == 0 && !vector_can_span_multiple_pages) {
+			if (i == 0 && !vector_can_span_multiple_pages && writer.WritePageIndex()) {
 				// a vector that cannot span multiple pages (the values of lists) starts on a new page when the current
-				// page is full, so that every page begins at a row boundary
+				// page is full, so that every page begins at a row boundary as the OffsetIndex requires
 				auto &page_info = page_info_ref.get();
 				if (page_info.row_count > 0 && page_info.estimated_page_size >= page_size_limit) {
 					PageInformation new_info;

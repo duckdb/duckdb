@@ -107,9 +107,11 @@ struct ParquetReaderPrefetchConfig {
 
 enum class ParquetPrefetchStrategy : uint8_t {
 	NONE,
-	WHOLE_GROUP,      //! Prefetches the whole group
-	PREFETCH_FILTERS, //! Used when we have fully selective filters, so they are prefetched earlier
-	COLUMN_WISE_EAGER //! Used when we have projections and optional only filters
+	WHOLE_GROUP,             //! Prefetches the whole group
+	PREFETCH_FILTERS,        //! Used when we have fully selective filters, so they are prefetched earlier
+	COLUMN_WISE_EAGER,       //! Used when we have projections and optional only filters
+	PREFETCH_FILTERS_PAGES,  //! PREFETCH_FILTERS, reading only the pages the page index keeps
+	COLUMN_WISE_EAGER_PAGES, //! COLUMN_WISE_EAGER, reading only the pages the page index keeps
 };
 
 const char *ParquetPrefetchStrategyToString(ParquetPrefetchStrategy strategy);

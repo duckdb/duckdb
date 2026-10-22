@@ -96,6 +96,10 @@ const char *ParquetPrefetchStrategyToString(ParquetPrefetchStrategy strategy) {
 		return "prefetch_filters";
 	case ParquetPrefetchStrategy::COLUMN_WISE_EAGER:
 		return "column_wise_eager";
+	case ParquetPrefetchStrategy::PREFETCH_FILTERS_PAGES:
+		return "prefetch_filters_pages";
+	case ParquetPrefetchStrategy::COLUMN_WISE_EAGER_PAGES:
+		return "column_wise_eager_pages";
 	case ParquetPrefetchStrategy::NONE:
 		return "none";
 	default:
@@ -2532,8 +2536,13 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 		}
 	}
 	trans.FinalizeRegistration();
-	const auto strategy =
-	    lazy_fetch ? ParquetPrefetchStrategy::PREFETCH_FILTERS : ParquetPrefetchStrategy::COLUMN_WISE_EAGER;
+	ParquetPrefetchStrategy strategy;
+	if (state.page_index_active) {
+		strategy = lazy_fetch ? ParquetPrefetchStrategy::PREFETCH_FILTERS_PAGES
+		                      : ParquetPrefetchStrategy::COLUMN_WISE_EAGER_PAGES;
+	} else {
+		strategy = lazy_fetch ? ParquetPrefetchStrategy::PREFETCH_FILTERS : ParquetPrefetchStrategy::COLUMN_WISE_EAGER;
+	}
 	if (log_prefetch) {
 		state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
 		state.prefetch_metrics.logger.strategy = strategy;
@@ -2664,11 +2673,13 @@ AsyncResult ParquetReader::ScheduleRowGroupReads(ParquetReaderScanState &state, 
 	vector<unique_ptr<AsyncTask>> io_tasks;
 	switch (strategy) {
 	case ParquetPrefetchStrategy::PREFETCH_FILTERS:
+	case ParquetPrefetchStrategy::PREFETCH_FILTERS_PAGES:
 		// schedule only the filter columns' I/O, they are last in our list
 		io_tasks = CollectIOTasks(trans, state.file_handle, read_head_count - state.filter_head_count, read_head_count);
 		break;
 	case ParquetPrefetchStrategy::WHOLE_GROUP:
 	case ParquetPrefetchStrategy::COLUMN_WISE_EAGER:
+	case ParquetPrefetchStrategy::COLUMN_WISE_EAGER_PAGES:
 		// schedule the I/O for all columns up front
 		io_tasks = CollectIOTasks(trans, state.file_handle, 0, read_head_count);
 		break;
