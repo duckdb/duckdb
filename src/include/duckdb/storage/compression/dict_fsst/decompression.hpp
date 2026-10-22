@@ -22,9 +22,11 @@ private:
 		DictFSSTMode mode;
 		//! Dictionary entry count read from disk, validated as nonzero.
 		//! In FSST_ONLY mode, dict_count - 1 is at least the segment row count.
+		//! With zero-width lengths, at most the NULL and empty-string entries are present.
 		uint32_t dict_count;
 		//! Bit widths read from disk, both validated as at most 32.
 		bitpacking_width_t dictionary_indices_width;
+		//! String lengths have a nonzero width in FSST modes.
 		bitpacking_width_t string_lengths_width;
 		//! Dictionary string bytes, FSST-encoded unless mode is DICTIONARY.
 		CompressionSegmentReader dictionary;
