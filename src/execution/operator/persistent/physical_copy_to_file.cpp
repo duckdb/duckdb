@@ -11,7 +11,6 @@
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/execution/expression_executor.hpp"
