@@ -10,23 +10,57 @@
 namespace duckdb {
 namespace dict_fsst {
 
+[[noreturn]] static void ThrowPackedValuesOutOfBounds(const char *context) {
+	throw DataCorruptionException("Corrupted %s: packed values exceed the available space", context);
+}
+
+[[noreturn]] static void ThrowInvalidMode(DictFSSTMode mode) {
+	throw DataCorruptionException("Corrupted DICT_FSST segment: unrecognized compression mode %d",
+	                              static_cast<uint8_t>(mode));
+}
+
+[[noreturn]] static void ThrowInvalidDictionaryCount() {
+	throw DataCorruptionException("Corrupted DICT_FSST segment: dictionary has no NULL entry");
+}
+
+[[noreturn]] static void ThrowInvalidBitpackingWidth() {
+	throw DataCorruptionException("Failed to scan dictionary string - bitpacking width was invalid. Database file "
+	                              "appears to be corrupted.");
+}
+
+[[noreturn]] static void ThrowInvalidSymbolTable() {
+	throw DataCorruptionException("Failed to scan DICT_FSST string segment: invalid FSST symbol table. Database file "
+	                              "appears to be corrupted.");
+}
+
+static unsafe_array_ptr<const uint8_t> ReadBitpackedValues(CompressionSegmentReader &reader, idx_t count,
+                                                           bitpacking_width_t width, const char *context) {
+	constexpr auto group_size = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	const auto group_count = count / group_size + (count % group_size != 0);
+	const auto group_bytes = group_size * idx_t(width) / 8;
+	// Check the number of groups before multiplying, so a stored count cannot overflow the byte size.
+	if (group_bytes && group_count > reader.Remaining() / group_bytes) {
+		ThrowPackedValuesOutOfBounds(context);
+	}
+	// The unpacker reads uint32_t words, even when the segment starts at a nonzero block offset.
+	return reader.ReadBytesAligned<uint32_t>(group_count * group_bytes);
+}
+
 CompressedStringScanState::~CompressedStringScanState() {
 	delete reinterpret_cast<duckdb_fsst_decoder_t *>(decoder);
 }
 
 string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t dict_offset, idx_t dict_idx) {
-	D_ASSERT(dict_offset <= NumericCast<uint32_t>(segment.GetBlockSize()));
-
 	if (dict_idx == 0) {
 		return string_t(nullptr, 0);
 	}
 	uint32_t string_len = string_lengths[dict_idx];
 
 	// normal string: read string from this block
-	auto dict_pos = dict_ptr + dict_offset;
+	auto string_data = layout.dictionary.GetBytes(dict_offset, string_len);
 
-	auto str_ptr = char_ptr_cast(dict_pos);
-	switch (mode) {
+	auto str_ptr = const_char_ptr_cast(string_data.data());
+	switch (layout.mode) {
 	case DictFSSTMode::FSST_ONLY:
 	case DictFSSTMode::DICT_FSST: {
 		if (string_len == 0) {
@@ -45,59 +79,53 @@ string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t
 	}
 }
 
-void CompressedStringScanState::Initialize(bool initialize_dictionary) {
-	baseptr = handle->GetDataMutable() + segment.GetBlockOffset();
+CompressedStringScanState::SegmentLayout CompressedStringScanState::ReadLayout(const BufferHandle &handle,
+                                                                               const ColumnSegment &segment) {
+	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "DICT_FSST segment");
 
 	// Load header values
-	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(baseptr);
-	mode = header_ptr->mode;
-	if (mode >= DictFSSTMode::COUNT) {
-		throw FatalException("This block was written with a mode that is not recognized by this version, highest "
-		                     "available mode %d, found mode: %d",
-		                     static_cast<uint8_t>(DictFSSTMode::COUNT), static_cast<uint8_t>(mode));
+	const auto header = reader.Read<dict_fsst_compression_header_t>();
+	if (header.mode >= DictFSSTMode::COUNT) {
+		ThrowInvalidMode(header.mode);
+	}
+	if (header.dict_count == 0) {
+		ThrowInvalidDictionaryCount();
+	}
+	if (header.dictionary_indices_width > sizeof(uint32_t) * 8 || header.string_lengths_width > sizeof(uint32_t) * 8) {
+		ThrowInvalidBitpackingWidth();
 	}
 
-	dict_count = header_ptr->dict_count;
-	auto symbol_table_size = header_ptr->symbol_table_size;
-	dictionary_size = header_ptr->dict_size;
+	reader.Align(sizeof(idx_t));
+	auto dictionary = reader.ReadSubReader(header.dict_size, "DICT_FSST dictionary");
+	reader.Align(sizeof(idx_t));
+	auto symbol_table = reader.ReadSubReader(header.symbol_table_size, "DICT_FSST symbol table");
+	reader.Align(sizeof(idx_t));
+	auto lengths = ReadBitpackedValues(reader, header.dict_count, header.string_lengths_width, "DICT_FSST lengths");
+	reader.Align(sizeof(idx_t));
+	auto indices = ReadBitpackedValues(reader, segment.count.load(), header.dictionary_indices_width,
+	                                   "DICT_FSST dictionary indices");
+	return {header.mode,
+	        header.dict_count,
+	        header.dictionary_indices_width,
+	        header.string_lengths_width,
+	        dictionary,
+	        symbol_table,
+	        lengths,
+	        indices};
+}
 
-	dictionary_indices_width =
-	    (bitpacking_width_t)(Load<uint8_t>(data_ptr_cast(&header_ptr->dictionary_indices_width)));
-	string_lengths_width = (bitpacking_width_t)(Load<uint8_t>(data_ptr_cast(&header_ptr->string_lengths_width)));
-	if (dictionary_indices_width > sizeof(uint32_t) * 8 || string_lengths_width > sizeof(uint32_t) * 8) {
-		throw IOException("Failed to scan dictionary string - bitpacking width was invalid. Database file appears to "
-		                  "be corrupted.");
-	}
-
-	auto string_lengths_space = BitpackingPrimitives::GetRequiredSize(dict_count, string_lengths_width);
-	auto dictionary_indices_space =
-	    BitpackingPrimitives::GetRequiredSize(segment.count.load(), dictionary_indices_width);
-
-	auto dictionary_dest = AlignValue<idx_t>(DictFSSTCompression::DICTIONARY_HEADER_SIZE);
-	auto symbol_table_dest = AlignValue<idx_t>(dictionary_dest + dictionary_size);
-	auto string_lengths_dest = AlignValue<idx_t>(symbol_table_dest + symbol_table_size);
-	auto dictionary_indices_dest = AlignValue<idx_t>(string_lengths_dest + string_lengths_space);
-
-	const auto total_space = segment.GetBlockOffset() + dictionary_indices_dest + dictionary_indices_space;
-	if (total_space > segment.GetBlockSize()) {
-		throw IOException(
-		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");
-	}
-	dict_ptr = data_ptr_cast(baseptr + dictionary_dest);
-	dictionary_indices_ptr = data_ptr_cast(baseptr + dictionary_indices_dest);
-	string_lengths_ptr = data_ptr_cast(baseptr + string_lengths_dest);
-
-	switch (mode) {
+void CompressedStringScanState::Initialize(bool initialize_dictionary) {
+	switch (layout.mode) {
 	case DictFSSTMode::FSST_ONLY:
 	case DictFSSTMode::DICT_FSST: {
 		decoder = new duckdb_fsst_decoder_t;
 		// in FSST_ONLY / DICT_FSST modes a symbol table is always present, so any failure (out-of-bounds or a
 		// version mismatch) means the segment is corrupted
-		auto ret = duckdb_fsst_import(reinterpret_cast<duckdb_fsst_decoder_t *>(decoder), baseptr + symbol_table_dest,
-		                              symbol_table_size);
+		auto symbol_table = layout.symbol_table.GetBytes(0, layout.symbol_table.Size());
+		auto ret = duckdb_fsst_import(reinterpret_cast<duckdb_fsst_decoder_t *>(decoder), symbol_table.data(),
+		                              symbol_table.size());
 		if (ret == DUCKDB_FSST_IMPORT_VERSION_MISMATCH || ret == DUCKDB_FSST_IMPORT_OUT_OF_BOUNDS) {
-			throw IOException("Failed to scan DICT_FSST string segment: invalid FSST symbol table. Database file "
-			                  "appears to be corrupted.");
+			ThrowInvalidSymbolTable();
 		}
 		break;
 	}
@@ -105,31 +133,27 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 		break;
 	}
 
-	// Compute the aligned count in a 64-bit type: dict_count is read directly from the file and can be
-	// close to UINT32_MAX, which would overflow the uint32_t arithmetic AlignValue<uint32_t> performs.
-	auto aligned_dict_count =
-	    AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(static_cast<idx_t>(dict_count));
-	if (static_cast<idx_t>(dict_count) > segment.GetBlockSize()) {
+	if (static_cast<idx_t>(layout.dict_count) > segment.GetBlockSize()) {
 		throw DataCorruptionException(
 		    "Failed to scan dictionary string - dict_count was out of range. Database file appears to be corrupted.");
 	}
-	string_lengths.resize(aligned_dict_count);
-	BitpackingPrimitives::UnPackBuffer<uint32_t>(data_ptr_cast(string_lengths.data()),
-	                                             data_ptr_cast(string_lengths_ptr), dict_count, string_lengths_width);
-	if (!initialize_dictionary || mode == DictFSSTMode::FSST_ONLY) {
+	string_lengths.resize(AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(layout.dict_count));
+	BitpackingPrimitives::UnPackBuffer<uint32_t>(data_ptr_cast(string_lengths.data()), layout.string_lengths.data(),
+	                                             layout.dict_count, layout.string_lengths_width);
+	if (!initialize_dictionary || layout.mode == DictFSSTMode::FSST_ONLY) {
 		// Used by fetch, as fetch will never produce a DictionaryVector
 		return;
 	}
 
-	dictionary = DictionaryVector::CreateReusableDictionary(segment.GetType(), dict_count);
+	dictionary = DictionaryVector::CreateReusableDictionary(segment.GetType(), layout.dict_count);
 	auto &dict_data = dictionary->data;
 	auto dict_child_data = FlatVector::GetDataMutable<string_t>(dict_data);
 	auto &validity = FlatVector::ValidityMutable(dict_data);
-	D_ASSERT(dict_count >= 1);
+	D_ASSERT(layout.dict_count >= 1);
 	validity.SetInvalid(0);
 
 	uint32_t offset = 0;
-	for (uint32_t i = 0; i < dict_count; i++) {
+	for (uint32_t i = 0; i < layout.dict_count; i++) {
 		//! We can uncompress during fetching, we need the length of the string inside the dictionary
 		auto string_len = string_lengths[i];
 		dict_child_data[i] = FetchStringFromDict(dict_data, offset, i);
@@ -138,7 +162,9 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 }
 
 const SelectionVector &CompressedStringScanState::GetSelVec(idx_t start, idx_t scan_count) {
-	switch (mode) {
+	D_ASSERT(start <= segment.count.load());
+	D_ASSERT(scan_count <= segment.count.load() - start);
+	switch (layout.mode) {
 	case DictFSSTMode::FSST_ONLY: {
 		return *FlatVector::IncrementalSelectionVector();
 	}
@@ -149,15 +175,22 @@ const SelectionVector &CompressedStringScanState::GetSelVec(idx_t start, idx_t s
 		// We will scan in blocks of BITPACKING_ALGORITHM_GROUP_SIZE, so we may scan some extra values.
 		idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count + start_offset);
 
+		// Start at the group containing start. Its leading values are removed after unpacking.
+		const auto group_size = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+		const auto group_bytes = group_size * idx_t(layout.dictionary_indices_width) / 8;
+		const auto source_offset = (start / group_size) * group_bytes;
+		const auto source_size =
+		    BitpackingPrimitives::GetRequiredSize(decompress_count, layout.dictionary_indices_width);
+		auto indices = layout.dictionary_indices.SubArray(source_offset, source_size);
+
 		if (!sel_vec || sel_vec_size < decompress_count) {
 			sel_vec_size = decompress_count;
 			sel_vec = make_buffer<SelectionVector>(decompress_count);
 		}
 
-		data_ptr_t sel_buf_src = &dictionary_indices_ptr[((start - start_offset) * dictionary_indices_width) / 8];
 		sel_t *sel_vec_ptr = sel_vec->data();
-		BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), sel_buf_src, decompress_count,
-		                                          dictionary_indices_width);
+		BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), indices.data(), decompress_count,
+		                                          layout.dictionary_indices_width);
 
 		sel_vec->ShiftLeft(start_offset, scan_count);
 
@@ -177,7 +210,7 @@ void CompressedStringScanState::Select(Vector &result, idx_t result_offset, idx_
 	auto &selvec = GetSelVec(start, scan_count);
 
 	//! (index 0 is reserved for NULL, which we don't have in this mode)
-	const idx_t start_offset = mode == DictFSSTMode::FSST_ONLY ? start + 1 : 0;
+	const idx_t start_offset = layout.mode == DictFSSTMode::FSST_ONLY ? start + 1 : 0;
 
 	auto result_data = FlatVector::Writer<string_t>(result, sel_count, result_offset);
 	if (dictionary) {
@@ -212,7 +245,7 @@ void CompressedStringScanState::Select(Vector &result, idx_t result_offset, idx_
 }
 
 bool CompressedStringScanState::AllowDictionaryScan(idx_t scan_count) {
-	if (mode == DictFSSTMode::FSST_ONLY) {
+	if (layout.mode == DictFSSTMode::FSST_ONLY) {
 		return false;
 	}
 	if (scan_count != STANDARD_VECTOR_SIZE) {
