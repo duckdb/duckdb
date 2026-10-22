@@ -1,0 +1,79 @@
+# name: test/sql/storage/compression/numeric_string/numeric_string_rejects.test
+# description: Values that do not round-trip through a mantissa and scale keep NumericString out of the row group
+# group: [numeric_string]
+
+load {TEST_DIR}/numeric_string_rejects.db readwrite v2.1.0
+
+statement ok
+PRAGMA force_compression='numeric_string';
+
+# every table has one offending value among valid ones; the whole row group must fall back
+foreach offender '+1' chr(32)||'1' '1'||chr(32) '1e5' '-0' '-0.0' '.5' '5.' '1.2.3' '0x10' '1,5' '' '1234567890123456789' '--1' 'NaN' '1_000' '1'||chr(0) '0.'||repeat('0',60)||'1' repeat('0',60)
+
+statement ok
+CREATE OR REPLACE TABLE t AS SELECT i, CASE WHEN i = 777 THEN {offender} ELSE i::VARCHAR END AS v FROM range(2000) t(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(*) FROM pragma_storage_info('t') WHERE segment_type = 'VARCHAR' AND compression = 'NumericString';
+----
+0
+
+query I
+SELECT v = {offender} FROM t WHERE i = 777;
+----
+true
+
+endloop
+
+# values that do round-trip are fine even when they look unusual: mixed into a high-cardinality column, a single
+# rejected value would make the whole row group fall back
+statement ok
+CREATE OR REPLACE TABLE ok AS SELECT i, CASE i
+	WHEN 0 THEN '0' WHEN 1 THEN '0.0' WHEN 2 THEN '0.000' WHEN 3 THEN '-0.5' WHEN 4 THEN '100' WHEN 5 THEN '100.00'
+	WHEN 6 THEN '-999999999999999999' WHEN 7 THEN '999999999999999999' WHEN 8 THEN '0.123456789012345678'
+	WHEN 9 THEN '0.00000000000000000000000000000001' WHEN 10 THEN NULL
+	ELSE (i * 123456789012345)::VARCHAR END AS v FROM range(6000) t(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('ok') WHERE segment_type = 'VARCHAR';
+----
+NumericString
+
+query I
+SELECT v FROM ok WHERE i < 12 ORDER BY i;
+----
+0
+0.0
+0.000
+-0.5
+100
+100.00
+-999999999999999999
+999999999999999999
+0.123456789012345678
+0.00000000000000000000000000000001
+NULL
+1358024679135795
+
+query I
+SELECT count(*) FROM ok WHERE i > 11 AND v <> (i * 123456789012345)::VARCHAR;
+----
+0
+
+# all-NULL columns are left to the constant/validity codecs
+statement ok
+CREATE OR REPLACE TABLE nulls AS SELECT NULL::VARCHAR AS v FROM range(1000);
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT count(*), count(v) FROM nulls;
+----
+1000	0
