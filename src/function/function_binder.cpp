@@ -544,13 +544,11 @@ string FunctionMismatch::IncompatibleArgument::ToString(const SimpleFunction &,
 	auto &name = error.GetCall().GetArgument(argument).name;
 	auto &argument_type = error.GetCall().GetArgument(argument).type;
 	if (name.empty()) {
-		return StringUtil::Format("Argument %llu of type %s cannot be implicitly cast to %s\nYou might need to add "
-		                          "explicit type casts",
-		                          argument + 1, argument_type.ToString(), parameter_type.ToString());
+		return StringUtil::Format("Argument %llu of type %s cannot be implicitly cast to %s", argument + 1,
+		                          argument_type.ToString(), parameter_type.ToString());
 	}
-	return StringUtil::Format("Argument \"%s\" of type %s cannot be implicitly cast to %s\nYou might need to add "
-	                          "explicit type casts",
-	                          name.GetIdentifierName(), argument_type.ToString(), parameter_type.ToString());
+	return StringUtil::Format("Argument \"%s\" of type %s cannot be implicitly cast to %s", name.GetIdentifierName(),
+	                          argument_type.ToString(), parameter_type.ToString());
 }
 
 string FunctionMismatch::TemplateDeduction::ToString(const SimpleFunction &function,
@@ -657,7 +655,9 @@ ErrorData FunctionSelectError::NoMatch::ToError(const FunctionSelectError &error
 		}
 		group->second.push_back(mismatch.GetFunction());
 	}
-	auto message = "Could not bind '" + CallToString(error, first) + "'\nCandidates:";
+	auto message = StringUtil::Format(
+	    "No %s matches the given name and argument types '%s'. You might need to add explicit type casts.\nCandidates:",
+	    first ? first->GetKindName() : string("function"), CallToString(error, first));
 	for (auto &group : groups) {
 		message += CandidatesToString(group.second);
 		for (auto &line : StringUtil::Split(group.first, '\n')) {
@@ -688,21 +688,23 @@ ErrorData FunctionSelectError::NoMatch::ToError(const FunctionSelectError &error
 }
 
 ErrorData FunctionSelectError::AmbiguousMatch::ToError(const FunctionSelectError &error) const {
-	auto message = "Could not bind '" + CallToString(error, candidates[0].GetFunction()) + "'\nCandidates:";
+	auto &first = candidates[0].GetFunction();
+	auto kind = first.GetKindName();
+	auto message = StringUtil::Format("Could not choose a best candidate %s for the %s call \"%s\". In order to select "
+	                                  "one, please add explicit type casts.\nCandidates:",
+	                                  kind, kind, CallToString(error, first));
 	vector<reference<const SimpleFunction>> functions;
 	for (auto &candidate : candidates) {
 		functions.push_back(candidate.GetFunction());
 	}
 	message += CandidatesToString(functions);
 	message += "\n        All match the given arguments equally well";
-	message += "\n        You might need to add explicit type casts to disambiguate";
 	return ErrorData(ExceptionType::BINDER, message);
 }
 
 ErrorData FunctionSelectError::DuplicateArgument::ToError(const FunctionSelectError &error) const {
 	auto &argument_name = error.GetCall().GetArgument(argument).name;
-	auto message = StringUtil::Format("Could not bind '%s'\nNamed argument %s is passed more than once",
-	                                  CallToString(error, nullptr), argument_name);
+	auto message = StringUtil::Format("Duplicate named argument %s in %s", argument_name, CallToString(error, nullptr));
 	return WithArgumentLocation(ErrorData(BinderException(message)), error, argument);
 }
 

@@ -498,6 +498,10 @@ protected:
 public:
 	//! How the function reads in errors, e.g. as a candidate of a call
 	DUCKDB_API virtual string ToString() const;
+	//! What the function is called in errors, e.g. "No function matches ..."
+	DUCKDB_API virtual string GetKindName() const {
+		return "function";
+	}
 	DUCKDB_API hash_t Hash() const;
 	//! The properties of scalar, aggregate and window functions - other functions have none
 	virtual auto GetFunctionProperties() const -> optional_ptr<const FunctionProperties> {
