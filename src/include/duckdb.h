@@ -286,10 +286,12 @@ typedef enum DUCKDB_TYPE {
 	//! duckdb_timestamp (nanoseconds)
 	DUCKDB_TYPE_TIMESTAMP_TZ_NS = 42,
 
-	//! NUMERIC: an exact number of up to 255 digits. Fetched through the value functions as its decimal text
-	//! (duckdb_value_varchar) or converted (duckdb_value_double, the integer fetches when the value fits); in a
-	//! chunk, duckdb_vector_get_data yields duckdb_string_t values holding the canonical binary encoding, so cast
-	//! the column to VARCHAR, DOUBLE or DECIMAL in SQL to read it from a vector
+	/*!
+	 * NUMERIC: an exact number of up to 255 digits. Fetched through the value functions as its decimal text
+	 * (duckdb_value_varchar) or converted (duckdb_value_double, the integer fetches when the value fits); in a chunk,
+	 * duckdb_vector_get_data yields duckdb_string_t values holding the canonical binary encoding, so cast the column to
+	 * VARCHAR, DOUBLE or DECIMAL in SQL to read it from a vector
+	 */
 	DUCKDB_TYPE_NUMERIC = 43,
 } DUCKDB_TYPE;
 
