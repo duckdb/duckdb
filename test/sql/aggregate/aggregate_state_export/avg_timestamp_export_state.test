@@ -2,6 +2,9 @@
 # description: Exported avg states of timestamps keep their infinities
 # group: [aggregate_state_export]
 
+statement ok
+SET storage_compatibility_version = 'latest';
+
 # a state that saw an infinity has the maximum count, and 1 for infinity, 2 for -infinity or 3 for both as its value
 query III
 SELECT avg(ts) EXPORT_STATE, avg(ts) FILTER (ts < TIMESTAMP '2001-01-01') EXPORT_STATE, avg(ts) FILTER (ts > TIMESTAMP '1999-01-01') EXPORT_STATE
