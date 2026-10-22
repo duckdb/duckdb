@@ -582,6 +582,8 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 			for (idx_t i = 0; i < count; i++) {
 				const auto idx = offset + i;
 				const auto &row_location = row_locations[idx] + base_col_offset;
+				// Non-inlined NULL strings also own heap bytes.
+#ifndef DUCKDB_DEBUG_NO_INLINE
 				const auto valid =
 				    all_valid ||
 				    ValidityBytes::RowIsValid(
@@ -589,6 +591,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 				if (!valid) {
 					continue;
 				}
+#endif
 
 				const auto &old_heap_ptr = old_heap_locations[old_heap_sel.get_index(idx)];
 				const auto &new_heap_ptr = new_heap_locations[new_heap_sel.get_index(idx)];
