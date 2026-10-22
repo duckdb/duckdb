@@ -249,13 +249,18 @@ void RadixPartitionedTupleData::ComputePartitionIndices(PartitionedTupleDataAppe
 }
 
 void RadixPartitionedTupleData::ComputePartitionIndices(Vector &row_locations, idx_t count, Vector &partition_indices,
-                                                        unique_ptr<Vector> &utility_vector) const {
+                                                        unique_ptr<Vector> &utility_vector,
+                                                        const SelectionVector &append_sel) const {
+	if (radix_bits == 0) {
+		partition_indices.Reference(Value::UBIGINT(0), count_t(count));
+		return;
+	}
 	if (!utility_vector) {
 		utility_vector = make_uniq<Vector>(LogicalType::HASH);
 	}
 	Vector &intermediate = *utility_vector;
 	intermediate.SetVectorType(VectorType::FLAT_VECTOR);
-	partitions[0]->Gather(row_locations, *FlatVector::IncrementalSelectionVector(), count, hash_col_idx, intermediate,
+	partitions[0]->Gather(row_locations, append_sel, count, hash_col_idx, intermediate,
 	                      *FlatVector::IncrementalSelectionVector(), nullptr);
 	RadixBitsSwitch<ComputePartitionIndicesFunctor, void>(radix_bits, intermediate, partition_indices, count,
 	                                                      *FlatVector::IncrementalSelectionVector(), count);
