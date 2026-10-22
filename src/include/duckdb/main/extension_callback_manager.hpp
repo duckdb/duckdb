@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/shared_ptr.hpp"
@@ -63,6 +64,11 @@ public:
 	optional_ptr<StorageExtension> FindStorageExtension(const string &name) const;
 	optional_ptr<GrammarExtension> FindGrammarExtension(const string &name) const;
 	case_insensitive_map_t<shared_ptr<GrammarExtension>> GrammarExtensions() const;
+	//! Monotonic version bumped on every grammar extension registration, so sessions can detect
+	//! that their composed grammar is stale (e.g. after a LOAD mid-session)
+	idx_t GrammarRegistryVersion() const {
+		return grammar_registry_version.load();
+	}
 	optional_ptr<ProfilerExtension> FindProfilerExtension(const string &name) const;
 	bool HasParserExtensions() const;
 	optional_ptr<DialectExtension> GetDialectExtension(const string &name) const;
@@ -71,6 +77,7 @@ private:
 	mutex registry_lock;
 	shared_ptr<ExtensionCallbackRegistry> callback_registry;
 	vector<string> extension_schemas;
+	atomic<idx_t> grammar_registry_version {0};
 };
 
 template <class T>
