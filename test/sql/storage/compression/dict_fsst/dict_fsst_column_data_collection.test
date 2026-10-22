@@ -2,7 +2,7 @@
 # description: Dictionary vectors from storage through materializing operators
 # group: [dict_fsst]
 
-load __TEST_DIR__/dict_fsst_cdc.db
+load {TEST_DIR}/dict_fsst_cdc.db
 
 statement ok
 PRAGMA force_compression='dict_fsst'
