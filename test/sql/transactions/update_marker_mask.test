@@ -452,6 +452,10 @@ UPDATE t10 SET a = 2 WHERE id >= 10 AND id < 20
 statement ok con1
 DELETE FROM t10 WHERE id < 2048
 
+# an open transaction keeps the test runner from restarting, and replaying the WAL, while commits fail
+statement ok con2
+BEGIN
+
 statement ok
 SET GLOBAL debug_force_commit_failure = true
 
@@ -462,6 +466,9 @@ Forced commit failure
 
 statement ok
 SET GLOBAL debug_force_commit_failure = false
+
+statement ok con2
+ROLLBACK
 
 # once the checkpoint drops the committed markers, the rows hold no id of the reverted transaction
 statement ok
