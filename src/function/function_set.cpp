@@ -18,9 +18,9 @@ shared_ptr<const ScalarFunction> ScalarFunctionSet::GetFunctionByArguments(Clien
 	auto index = FunctionBinder::SelectFunction(context, *this, arguments);
 	if (!index.IsSuccess()) {
 		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                      index.GetError().RawMessage());
+		                      index.GetError().ToError().RawMessage());
 	}
-	return GetFunctionByOffset(index.GetBinding().GetOverloadIndex());
+	return index.GetBinding().GetFunction<ScalarFunction>();
 }
 
 AggregateFunctionSet::AggregateFunctionSet() : FunctionSet("") {
@@ -38,9 +38,9 @@ shared_ptr<const AggregateFunction> AggregateFunctionSet::GetFunctionByArguments
 	auto index = FunctionBinder::SelectFunction(context, *this, arguments);
 	if (!index.IsSuccess()) {
 		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                      index.GetError().RawMessage());
+		                      index.GetError().ToError().RawMessage());
 	}
-	return GetFunctionByOffset(index.GetBinding().GetOverloadIndex());
+	return index.GetBinding().GetFunction<AggregateFunction>();
 }
 
 WindowFunctionSet::WindowFunctionSet() : FunctionSet("") {
@@ -58,9 +58,9 @@ shared_ptr<const WindowFunction> WindowFunctionSet::GetFunctionByArguments(Clien
 	auto index = FunctionBinder::SelectFunction(context, *this, arguments);
 	if (!index.IsSuccess()) {
 		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                      index.GetError().RawMessage());
+		                      index.GetError().ToError().RawMessage());
 	}
-	return GetFunctionByOffset(index.GetBinding().GetOverloadIndex());
+	return index.GetBinding().GetFunction<WindowFunction>();
 }
 
 TableFunctionSet::TableFunctionSet(Identifier name) : FunctionSet(std::move(name)) {
@@ -75,9 +75,9 @@ shared_ptr<const TableFunction> TableFunctionSet::GetFunctionByArguments(ClientC
 	auto index = FunctionBinder::SelectFunction(context, *this, arguments);
 	if (!index.IsSuccess()) {
 		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                      index.GetError().RawMessage());
+		                      index.GetError().ToError().RawMessage());
 	}
-	return GetFunctionByOffset(index.GetBinding().GetOverloadIndex());
+	return index.GetBinding().GetFunction<TableFunction>();
 }
 
 PragmaFunctionSet::PragmaFunctionSet(Identifier name) : FunctionSet(std::move(name)) {

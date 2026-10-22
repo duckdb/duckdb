@@ -246,13 +246,14 @@ LogicalType TypeConstructorSet::Bind(optional_ptr<ClientContext> context, const 
 	// The candidates are selected with the regular function machinery, but reported in terms of types - a type is
 	// not a function, and "no function matches" reads as a mistake rather than as a bad type.
 	auto selection = FunctionBinder::SelectFunction(context, *this, positional, named);
-	if (selection.GetResult() == FunctionSelectionResult::NO_MATCH && selection.GetFailedCandidates().empty()) {
-		// the parameters are invalid for any definition, e.g. a name is passed twice
-		auto error = selection.GetError();
+	auto error_type = selection ? optional<FunctionSelectError::Type>() : selection.GetError().GetType();
+	if (error_type == FunctionSelectError::Type::DUPLICATE_ARGUMENT) {
+		// the parameters are invalid for any definition
+		auto error = selection.GetError().ToError();
 		error.AddQueryLocation(query_location);
 		error.Throw();
 	}
-	if (selection.GetResult() == FunctionSelectionResult::NO_MATCH) {
+	if (error_type == FunctionSelectError::Type::NO_MATCH) {
 		vector<idx_t> all;
 		for (idx_t i = 0; i < functions.size(); i++) {
 			all.push_back(i);
@@ -264,19 +265,18 @@ LogicalType TypeConstructorSet::Bind(optional_ptr<ClientContext> context, const 
 		throw BinderException(query_location, "Type %s does not accept type parameters %s%s", name,
 		                      ArgumentsToString(arguments), CandidateList(name, functions, all));
 	}
-	if (selection.GetResult() == FunctionSelectionResult::AMBIGUOUS) {
+	if (error_type == FunctionSelectError::Type::AMBIGUOUS_MATCH) {
 		vector<idx_t> candidates;
-		for (auto &candidate : selection.GetCandidates()) {
-			if (candidate.cost == selection.GetCandidates()[0].cost) {
-				candidates.push_back(candidate.GetOverloadIndex());
-			}
+		for (auto &candidate : selection.GetError().Cast<FunctionSelectError::AmbiguousMatch>().candidates) {
+			candidates.push_back(candidate.GetOverloadIndex());
 		}
 		throw BinderException(query_location,
 		                      "Could not choose a definition of type %s for the type parameters %s. In order to "
 		                      "select one, please add explicit type casts.%s",
 		                      name, ArgumentsToString(arguments), CandidateList(name, functions, candidates));
 	}
-	auto &constructor = *GetFunctionByOffset(selection.GetBinding().GetOverloadIndex());
+	auto constructor_ptr = selection.GetBinding().GetFunction<TypeConstructor>();
+	auto &constructor = *constructor_ptr;
 
 	auto modifiers = NormalizeArguments(name, constructor, arguments, query_location);
 	BindLogicalTypeInput input {context, base_type, modifiers, query_location};

@@ -190,9 +190,9 @@ public:
 	//! Selects the overload of a plan written before v2.0.0, which records its named arguments only as the operator's
 	//! named parameters. Required keyword-only parameters are treated as if they had a default - the bind receives
 	//! those named parameters and rejects a missing one, as it did when the plan was written
-	static FunctionSelection SelectWithoutNamedArguments(ClientContext &context, const Identifier &name,
-	                                                     const TableFunctionSet &functions,
-	                                                     const vector<LogicalType> &positional_types) {
+	static FunctionSelectResult SelectWithoutNamedArguments(ClientContext &context, const Identifier &name,
+	                                                        const TableFunctionSet &functions,
+	                                                        const vector<LogicalType> &positional_types) {
 		auto relaxed = functions;
 		relaxed.ApplyToFunctions([](TableFunction &function) {
 			auto &signature = function.GetSignature();
@@ -204,7 +204,6 @@ public:
 				}
 			}
 		});
-		ErrorData error;
 		return FunctionBinder::SelectFunction(context, relaxed, positional_types);
 	}
 
@@ -238,15 +237,19 @@ public:
 		                   keyword_types);
 		auto func_idx = FunctionBinder::SelectFunction(context, functions, positional_types, keyword_types);
 		// the error of the selection with the named arguments describes the plan best
-		auto error = func_idx.GetError();
-		if (!func_idx.IsSuccess() && named_arguments.empty()) {
-			func_idx = SelectWithoutNamedArguments(context, qualified_name.Name(), functions, positional_types);
+		ErrorData error;
+		if (!func_idx) {
+			error = func_idx.GetError().ToError();
+			if (named_arguments.empty()) {
+				func_idx = SelectWithoutNamedArguments(context, qualified_name.Name(), functions, positional_types);
+			}
 		}
-		if (!func_idx.IsSuccess()) {
+		if (!func_idx) {
 			throw SerializationException("Failed to find function %s(%s)\n%s", qualified_name.ToString(),
 			                             StringUtil::ToString(arguments, ","), error.RawMessage());
 		}
 
+		// by index: a selection without named arguments binds to a relaxed copy of the overload
 		BoundTableFunction function(functions.GetFunctionByOffset(func_idx.GetBinding().GetOverloadIndex()));
 		function.GetArguments() = std::move(arguments);
 		function.SetNamedArguments(positional_count, std::move(named_arguments));
@@ -331,6 +334,20 @@ public:
 		positional_count = named_offset;
 	}
 
+	template <class FUNC>
+	static pair<FUNC, unique_ptr<FunctionData>>
+	ResolveFunction(FunctionBinder &binder, const FunctionBinding &binding, vector<unique_ptr<Expression>> &children,
+	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args) {
+		if constexpr (std::is_same_v<FUNC, BoundScalarFunction>) {
+			return binder.ResolveScalarFunction(binding, children, keyword_args);
+		} else if constexpr (std::is_same_v<FUNC, BoundAggregateFunction>) {
+			return binder.ResolveAggregateFunction(binding, children, keyword_args);
+		} else {
+			static_assert(std::is_same_v<FUNC, BoundWindowFunction>, "unsupported bound function type");
+			return binder.ResolveWindowFunction(binding, children, keyword_args);
+		}
+	}
+
 	template <class FUNC, class CATALOG_ENTRY>
 	static pair<FUNC, unique_ptr<FunctionData>> Deserialize(Deserializer &deserializer, CatalogType catalog_type,
 	                                                        vector<unique_ptr<Expression>> &children,
@@ -401,7 +418,8 @@ public:
 		// Ensure the function overload was found
 		if (!func_idx.IsSuccess()) {
 			throw SerializationException("Failed to find function %s(%s)\n%s", qualified_name.ToString(),
-			                             StringUtil::ToString(arguments, ","), func_idx.GetError().RawMessage());
+			                             StringUtil::ToString(arguments, ","),
+			                             func_idx.GetError().ToError().RawMessage());
 		}
 
 		const auto function = functions.GetFunctionByOffset(func_idx.GetBinding().GetOverloadIndex());
@@ -421,7 +439,7 @@ public:
 
 				// Resolve function
 				auto [bound_function, bound_data] =
-				    binder.ResolveFunction(function, func_idx.GetBinding(), children, keyword_args);
+				    ResolveFunction<FUNC>(binder, func_idx.GetBinding(), children, keyword_args);
 
 				if (TypeRequiresAssignment(bound_function.GetReturnType())) {
 					bound_function.SetReturnType(std::move(return_type));

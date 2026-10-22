@@ -42,7 +42,7 @@ shared_ptr<const AggregateFunction> TryGetBuiltinAggregateFunction(ClientContext
 	if (!index.IsSuccess()) {
 		return nullptr;
 	}
-	return entry.functions.GetFunctionByOffset(index.GetBinding().GetOverloadIndex());
+	return index.GetBinding().GetFunction<AggregateFunction>();
 }
 
 shared_ptr<const WindowFunction> GetBuiltinWindowFunction(ClientContext &context, const Identifier &name,

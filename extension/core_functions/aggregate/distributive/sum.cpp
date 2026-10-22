@@ -255,12 +255,10 @@ pair<BoundAggregateFunction, unique_ptr<FunctionData>> BindLogicalSum(ClientCont
 	vector<pair<Identifier, unique_ptr<Expression>>> keyword_args;
 	auto selection = FunctionBinder::SelectFunction(context, entry.functions, arguments, keyword_args);
 	if (!selection.IsSuccess()) {
-		selection.GetError().Throw();
+		selection.GetError().ToError().Throw();
 	}
-	auto &binding = selection.GetBinding();
 	FunctionBinder binder(context);
-	return binder.ResolveFunction(entry.functions.GetFunctionByOffset(binding.GetOverloadIndex()), binding, arguments,
-	                              keyword_args);
+	return binder.ResolveAggregateFunction(selection.GetBinding(), arguments, keyword_args);
 }
 
 void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,

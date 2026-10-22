@@ -379,15 +379,13 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 
 		auto best = FunctionBinder::SelectFunction(binder->context, func.functions, arguments);
 		if (!best.IsSuccess()) {
-			best.GetError().Throw();
+			best.GetError().ToError().Throw();
 		}
 		FunctionBinder function_binder(*binder);
 
-		const auto &win_func = func.functions.GetFunctionByOffset(best.GetBinding().GetOverloadIndex());
-
 		vector<pair<Identifier, unique_ptr<Expression>>> keyword_args;
 		auto [bound_func, bind_info] =
-		    function_binder.ResolveFunction(win_func, best.GetBinding(), result->children, keyword_args);
+		    function_binder.ResolveWindowFunction(best.GetBinding(), result->children, keyword_args);
 
 		result->bind_info = std::move(bind_info);
 		result->type = expression_type;

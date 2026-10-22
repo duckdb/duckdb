@@ -251,9 +251,9 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 	auto best_function = FunctionBinder::SelectFunction(context, aggr_entry.functions, argument_types);
 	if (!best_function.IsSuccess()) {
 		throw BinderException("Could not re-bind exported aggregate %s: %s", function_name,
-		                      best_function.GetError().Message());
+		                      best_function.GetError().ToError().Message());
 	}
-	const auto &aggr = aggr_entry.functions.GetFunctionByOffset(best_function.GetBinding().GetOverloadIndex());
+	const auto aggr = best_function.GetBinding().GetFunction<AggregateFunction>();
 	const auto &signature = aggr->GetSignature();
 	for (idx_t arg_idx = 0; arg_idx < argument_types.size(); arg_idx++) {
 		if (argument_types[arg_idx].id() != LogicalTypeId::ANY) {
@@ -286,7 +286,7 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 
 	vector<pair<Identifier, unique_ptr<Expression>>> keyword_args;
 	auto [bound_aggr, bind_info] =
-	    function_binder.ResolveFunction(aggr, best_function.GetBinding(), args, keyword_args);
+	    function_binder.ResolveAggregateFunction(best_function.GetBinding(), args, keyword_args);
 
 	const auto &bound_args = bound_aggr.GetArguments();
 	bool signature_matches = bound_args.size() == argument_types.size();

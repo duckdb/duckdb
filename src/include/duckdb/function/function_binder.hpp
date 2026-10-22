@@ -15,6 +15,9 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/optional.hpp"
+
+#include <variant>
 
 namespace duckdb {
 class AggregateFunctionCatalogEntry;
@@ -53,14 +56,23 @@ struct ResolvedTableFunction {
 struct FunctionBinding {
 	//! The index of the overload in the function set
 	idx_t GetOverloadIndex() const {
-		return function_index;
+		return overload;
+	}
+	//! The overload the call binds to
+	const SimpleFunction &GetFunction() const {
+		return *function;
+	}
+	template <class T>
+	shared_ptr<const T> GetFunction() const {
+		DynamicCastCheck<T>(function.get());
+		return shared_ptr_cast<const SimpleFunction, const T>(function);
 	}
 
 	//! The cost of casting the arguments to the parameters of the overload
 	idx_t cost = 0;
 	//! The parameter of the overload that receives each argument - the positional arguments, followed by the named
 	//! ones. Arguments received by "*args" or "**kwargs" map to that parameter
-	vector<idx_t> argument_parameters;
+	vector<idx_t> argument_to_parameters;
 	//! The type of every parameter of the overload, with the templates the arguments and defaults determine
 	//! substituted
 	vector<LogicalType> parameter_types;
@@ -69,66 +81,217 @@ struct FunctionBinding {
 
 private:
 	friend class FunctionBinder;
-	idx_t function_index = 0;
+	idx_t overload = 0;
+	shared_ptr<const SimpleFunction> function;
 };
 
-//! Why an overload does not match a call
-enum class FunctionMismatchReason : uint8_t {
+class FunctionSelectError;
+
+//! Why an overload does not match a call. Arguments are numbered as the positional arguments, followed by the named
+//! ones - what the call itself says about an argument, its type and name, is not repeated here
+class FunctionMismatch {
+public:
+	enum class Type : uint8_t {
+		MISSING_PARAMETER,
+		TOO_MANY_ARGUMENTS,
+		UNKNOWN_NAMED_ARGUMENT,
+		ALREADY_PASSED_BY_POSITION,
+		INCOMPATIBLE_ARGUMENT,
+		TEMPLATE_DEDUCTION,
+		TEMPLATE_UNRESOLVED
+	};
+
 	//! A parameter without a default is not filled by the call
-	MISSING_PARAMETER,
-	//! The call passes more arguments than the overload takes
-	TOO_MANY_ARGUMENTS,
+	struct MissingParameter {
+		static constexpr auto TYPE = Type::MISSING_PARAMETER;
+		idx_t parameter;
+		//! The name of the parameter - empty if it has none
+		Identifier name;
+
+		string ToString(const SimpleFunction &function, const FunctionSelectError &error) const;
+	};
+	//! The call passes more arguments than the overload takes, starting at this one
+	struct TooManyArguments {
+		static constexpr auto TYPE = Type::TOO_MANY_ARGUMENTS;
+		idx_t argument;
+		//! The number of arguments the overload takes at most
+		idx_t maximum;
+		//! Whether the maximum is of the arguments passed by position
+		bool positional;
+
+		string ToString(const SimpleFunction &function, const FunctionSelectError &error) const;
+	};
 	//! A named argument names no parameter, and the overload has no "**kwargs" to receive it
-	UNKNOWN_NAMED_ARGUMENT,
+	struct UnknownNamedArgument {
+		static constexpr auto TYPE = Type::UNKNOWN_NAMED_ARGUMENT;
+		idx_t argument;
+
+		string ToString(const SimpleFunction &function, const FunctionSelectError &error) const;
+	};
 	//! A named argument names a parameter that a positional argument already fills
-	ALREADY_PASSED_BY_POSITION,
+	struct AlreadyPassedByPosition {
+		static constexpr auto TYPE = Type::ALREADY_PASSED_BY_POSITION;
+		idx_t argument;
+
+		string ToString(const SimpleFunction &function, const FunctionSelectError &error) const;
+	};
 	//! An argument cannot be implicitly cast to the type of the parameter that receives it
-	INCOMPATIBLE_ARGUMENT,
+	struct IncompatibleArgument {
+		static constexpr auto TYPE = Type::INCOMPATIBLE_ARGUMENT;
+		idx_t argument;
+		//! The type of the parameter that receives the argument
+		LogicalType parameter_type;
+
+		string ToString(const SimpleFunction &function, const FunctionSelectError &error) const;
+	};
 	//! The arguments determine conflicting types for a template of the overload
-	TEMPLATE_DEDUCTION,
+	struct TemplateDeduction {
+		static constexpr auto TYPE = Type::TEMPLATE_DEDUCTION;
+		//! The argument that conflicts - invalid if it is the default of a parameter
+		optional_idx argument;
+		string template_name;
+		//! The types the template was inferred to be, in the order they were inferred, followed by the type that
+		//! conflicts with them
+		vector<LogicalType> inferred_types;
+
+		string ToString(const SimpleFunction &function, const FunctionSelectError &error) const;
+	};
 	//! Neither the arguments nor the defaults determine a template of the types the call uses
-	TEMPLATE_UNRESOLVED
-};
+	struct TemplateUnresolved {
+		static constexpr auto TYPE = Type::TEMPLATE_UNRESOLVED;
+		string template_name;
 
+		string ToString(const SimpleFunction &function, const FunctionSelectError &error) const;
+	};
 
+	//! The alternatives are in the order of Type
+	using Reason = std::variant<MissingParameter, TooManyArguments, UnknownNamedArgument, AlreadyPassedByPosition,
+	                            IncompatibleArgument, TemplateDeduction, TemplateUnresolved>;
 
-//! An overload that does not match a call, and why
-struct FailedFunctionCandidate {
+	FunctionMismatch(idx_t overload, shared_ptr<const SimpleFunction> function, idx_t distance, Reason reason)
+	    : overload(overload), function(std::move(function)), distance(distance), reason(std::move(reason)) {
+	}
+
+public:
 	//! The index of the overload in the function set
 	idx_t GetOverloadIndex() const {
-		return function_index;
+		return overload;
 	}
-
-	FunctionMismatchReason reason = FunctionMismatchReason::TOO_MANY_ARGUMENTS;
-	//! The argument the reason refers to - the positional arguments, followed by the named ones. Invalid if the reason
-	//! refers to no single one
-	optional_idx position;
-	//! The parameter that is missing - only set for MISSING_PARAMETER
-	optional_idx parameter;
+	//! The overload the call does not match
+	const SimpleFunction &GetFunction() const {
+		return *function;
+	}
 	//! How far the call is from matching the overload, lower is closer. Any number of arguments that cannot be cast
 	//! is closer than a call of the wrong shape - missing parameters, extra arguments or unknown names
-	idx_t distance = 0;
-	//! The template that cannot be deduced - only set for TEMPLATE_DEDUCTION and TEMPLATE_UNRESOLVED
-	string template_name;
-	//! The types the template was inferred to be, in the order they were inferred, followed by the type that
-	//! conflicts with them - only set for TEMPLATE_DEDUCTION
-	vector<LogicalType> inferred_types;
+	idx_t GetDistance() const {
+		return distance;
+	}
+	Type GetType() const {
+		return static_cast<Type>(reason.index());
+	}
+	template <class T>
+	const T &Cast() const {
+		D_ASSERT(GetType() == T::TYPE);
+		return std::get<T>(reason);
+	}
+	bool IsTemplateMismatch() const {
+		return GetType() == Type::TEMPLATE_DEDUCTION || GetType() == Type::TEMPLATE_UNRESOLVED;
+	}
+	//! Why the call of the error does not match, e.g. "argument 1 of type DATE cannot be implicitly cast to VARCHAR"
+	string ToString(const FunctionSelectError &error) const;
 
 private:
-	friend class FunctionBinder;
-	idx_t function_index = 0;
+	idx_t overload;
+	shared_ptr<const SimpleFunction> function;
+	idx_t distance;
+	Reason reason;
 };
 
-enum class FunctionSelectionResult : uint8_t { SUCCESS, AMBIGUOUS, NO_MATCH };
+//! Why no overload of a function set could be selected for a call
+class FunctionSelectError {
+public:
+	enum class Type : uint8_t { NO_MATCH, AMBIGUOUS_MATCH, DUPLICATE_ARGUMENT };
+
+	//! No overload matches the call
+	struct NoMatch {
+		static constexpr auto TYPE = Type::NO_MATCH;
+		//! Why every overload does not match, closest first
+		vector<FunctionMismatch> mismatches;
+
+		//! The closest mismatch, if no other is as close
+		optional_ptr<const FunctionMismatch> GetClosest() const;
+		ErrorData ToError(const FunctionSelectError &error, const vector<QueryLocation> &locations) const;
+	};
+	//! Several overloads match at the lowest cost
+	struct AmbiguousMatch {
+		static constexpr auto TYPE = Type::AMBIGUOUS_MATCH;
+		vector<FunctionBinding> candidates;
+
+		ErrorData ToError(const FunctionSelectError &error, const vector<QueryLocation> &locations) const;
+	};
+	//! A named argument repeats the name of an earlier one, so no overload can match
+	struct DuplicateArgument {
+		static constexpr auto TYPE = Type::DUPLICATE_ARGUMENT;
+		idx_t argument;
+
+		ErrorData ToError(const FunctionSelectError &error, const vector<QueryLocation> &locations) const;
+	};
+
+	//! The alternatives are in the order of Type
+	using Kind = std::variant<NoMatch, AmbiguousMatch, DuplicateArgument>;
+
+	FunctionSelectError(Identifier name, vector<LogicalType> arguments,
+	                    vector<pair<Identifier, LogicalType>> named_arguments, Kind kind)
+	    : name(std::move(name)), arguments(std::move(arguments)), named_arguments(std::move(named_arguments)),
+	      kind(std::move(kind)) {
+	}
+
+public:
+	//! The name of the function set the selection was made from
+	const Identifier &GetName() const {
+		return name;
+	}
+	//! The types of the arguments of the call
+	const vector<LogicalType> &GetArguments() const {
+		return arguments;
+	}
+	const vector<pair<Identifier, LogicalType>> &GetNamedArguments() const {
+		return named_arguments;
+	}
+	//! The type of an argument - the positional arguments, followed by the named ones
+	const LogicalType &GetArgumentType(idx_t argument) const;
+	//! The name an argument is passed by - empty if it is passed by position
+	const Identifier &GetArgumentName(idx_t argument) const;
+	Type GetType() const {
+		return static_cast<Type>(kind.index());
+	}
+	template <class T>
+	const T &Cast() const {
+		D_ASSERT(GetType() == T::TYPE);
+		return std::get<T>(kind);
+	}
+	//! The error to report for the call - pointing at the argument it is about, if the locations of the arguments are
+	//! given: the positional arguments, followed by the named ones
+	ErrorData ToError(const vector<QueryLocation> &argument_locations = {}) const;
+
+private:
+	Identifier name;
+	vector<LogicalType> arguments;
+	vector<pair<Identifier, LogicalType>> named_arguments;
+	Kind kind;
+};
 
 //! The outcome of selecting the overload of a function set that a call binds to
-class FunctionSelection {
+class FunctionSelectResult {
 public:
-	FunctionSelectionResult GetResult() const {
-		return result;
+	FunctionSelectResult(FunctionBinding binding) : result(std::move(binding)) { // NOLINT: allow implicit conversion
 	}
+	FunctionSelectResult(FunctionSelectError error) : result(std::move(error)) { // NOLINT: allow implicit conversion
+	}
+
+public:
 	bool IsSuccess() const {
-		return result == FunctionSelectionResult::SUCCESS;
+		return std::holds_alternative<FunctionBinding>(result);
 	}
 	explicit operator bool() const {
 		return IsSuccess();
@@ -136,37 +299,16 @@ public:
 	//! The overload the call binds to - only if the selection succeeded
 	const FunctionBinding &GetBinding() const {
 		D_ASSERT(IsSuccess());
-		return candidates[0];
+		return std::get<FunctionBinding>(result);
 	}
-	//! The overloads that match the call, cheapest first
-	const vector<FunctionBinding> &GetCandidates() const {
-		return candidates;
-	}
-	//! The overloads that do not match the call, closest first
-	const vector<FailedFunctionCandidate> &GetFailedCandidates() const {
-		return failed_candidates;
-	}
-	//! Why the selection did not succeed
-	const ErrorData &GetError() const {
-		return error;
-	}
-	//! The argument the error is about, if it is about a single one - the positional arguments, followed by the named
-	//! ones. A caller that has the argument expressions points the error at it with AddErrorLocation
-	optional_idx GetErrorArgument() const {
-		return error_argument;
-	}
-	void AddErrorLocation(QueryLocation location) {
-		error.AddQueryLocation(location);
+	//! Why the selection failed - only if it did not succeed
+	const FunctionSelectError &GetError() const {
+		D_ASSERT(!IsSuccess());
+		return std::get<FunctionSelectError>(result);
 	}
 
 private:
-	friend class FunctionBinder;
-
-	FunctionSelectionResult result = FunctionSelectionResult::NO_MATCH;
-	vector<FunctionBinding> candidates;
-	vector<FailedFunctionCandidate> failed_candidates;
-	ErrorData error;
-	optional_idx error_argument;
+	std::variant<FunctionBinding, FunctionSelectError> result;
 };
 
 //! The FunctionBinder class is responsible for binding functions
@@ -182,12 +324,12 @@ public:
 	//! Overload selection: the cheapest overload of a function set that a call with the given argument types binds
 	//! to. Selection needs no binder - without a ClientContext only the built-in implicit casts are considered. With
 	//! explicit casts, an argument that cannot be implicitly cast to its parameter is accepted too
-	DUCKDB_API static FunctionSelection
+	DUCKDB_API static FunctionSelectResult
 	SelectFunction(optional_ptr<ClientContext> context, const BaseFunctionSet &functions,
 	               const vector<LogicalType> &arguments,
 	               const vector<pair<Identifier, LogicalType>> &named_arguments = {}, bool explicit_casts = false);
 	//! Selects by the return types of the bound arguments
-	DUCKDB_API static FunctionSelection
+	DUCKDB_API static FunctionSelectResult
 	SelectFunction(optional_ptr<ClientContext> context, const BaseFunctionSet &functions,
 	               const vector<unique_ptr<Expression>> &arguments,
 	               const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
@@ -319,43 +461,36 @@ public:
 	DUCKDB_API unique_ptr<Expression> BindScalarWindowFunction(BoundWindowExpression &wexpr,
 	                                                           const vector<LogicalType> &input_types);
 
-	//! Turn a function into a bound function with how the call binds to it, from the selection of the overload - the
-	//! arguments are passed as they were to the selection, positional ones first. The function is kept as the
-	//! definition of the resulting bound function - see BoundScalarFunction::GetDefinition()
+	//! Turn the overload a call binds to into a bound function. The arguments are passed as they were to the
+	//! selection, positional ones first. The overload is kept as the definition of the bound function
 	DUCKDB_API pair<BoundScalarFunction, unique_ptr<FunctionData>>
-	ResolveFunction(shared_ptr<const ScalarFunction> function, const FunctionBinding &binding,
-	                vector<unique_ptr<Expression>> &children,
-	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args);
+	ResolveScalarFunction(const FunctionBinding &binding, vector<unique_ptr<Expression>> &children,
+	                      vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args);
 	DUCKDB_API pair<BoundAggregateFunction, unique_ptr<FunctionData>>
-	ResolveFunction(shared_ptr<const AggregateFunction> function, const FunctionBinding &binding,
-	                vector<unique_ptr<Expression>> &children,
-	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args);
+	ResolveAggregateFunction(const FunctionBinding &binding, vector<unique_ptr<Expression>> &children,
+	                         vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args);
+	//! Also resolves the types of the ORDER BY arguments, if they are passed
 	DUCKDB_API pair<BoundWindowFunction, unique_ptr<FunctionData>>
-	ResolveFunction(shared_ptr<const WindowFunction> function, const FunctionBinding &binding,
-	                vector<unique_ptr<Expression>> &children,
-	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
-	                optional_ptr<vector<LogicalType>> order_types = nullptr,
-	                optional_ptr<vector<LogicalType>> arg_order_types = nullptr);
+	ResolveWindowFunction(const FunctionBinding &binding, vector<unique_ptr<Expression>> &children,
+	                      vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
+	                      optional_ptr<vector<LogicalType>> order_types = nullptr,
+	                      optional_ptr<vector<LogicalType>> arg_order_types = nullptr);
 
 private:
 	//! Resolves the argument / return types of the function and casts the children to them - everything that happens
 	//! before the bind callback is invoked
 	ResolvedScalarFunctionTypes
-	ResolveScalarFunctionTypes(shared_ptr<const ScalarFunction> function, const FunctionBinding &binding,
-	                           vector<unique_ptr<Expression>> &children,
+	ResolveScalarFunctionTypes(const FunctionBinding &binding, vector<unique_ptr<Expression>> &children,
 	                           vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args);
 
-	unique_ptr<Expression> BindScalarFunction(shared_ptr<const ScalarFunction> function, const FunctionBinding &binding,
-	                                          vector<unique_ptr<Expression>> children,
+	unique_ptr<Expression> BindScalarFunction(const FunctionBinding &binding, vector<unique_ptr<Expression>> children,
 	                                          vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
 	                                          bool is_operator, optional_ptr<Binder> binder);
 	unique_ptr<BoundAggregateExpression>
-	BindAggregateFunction(shared_ptr<const AggregateFunction> function, FunctionBinding binding,
-	                      vector<unique_ptr<Expression>> children,
+	BindAggregateFunction(FunctionBinding binding, vector<unique_ptr<Expression>> children,
 	                      vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, unique_ptr<Expression> filter,
 	                      AggregateType aggr_type);
-	unique_ptr<BoundWindowExpression> BindWindowFunction(shared_ptr<const WindowFunction> function,
-	                                                     const FunctionBinding &binding,
+	unique_ptr<BoundWindowExpression> BindWindowFunction(const FunctionBinding &binding,
 	                                                     vector<unique_ptr<Expression>> children,
 	                                                     vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
 	                                                     vector<LogicalType> &order_types,
@@ -364,26 +499,26 @@ private:
 	void CastToFunctionArguments(const Identifier &function_name, vector<LogicalType> &argument_types,
 	                             vector<unique_ptr<Expression>> &children);
 
-	//! Select the best matching overload for the given full (maybe-named) argument list. Names positional arguments by
-	//! their alias if that is the only way the call matches an overload that captures argument aliases
-	FunctionSelection SelectFunctionFromArguments(const BaseFunctionSet &functions,
-	                                              vector<pair<Identifier, unique_ptr<Expression>>> &arguments);
+	//! Select the best matching overload for the given full (maybe-named) argument list, and split it into the
+	//! positional and named arguments. Names positional arguments by their alias if that is the only way the call
+	//! matches an overload that captures argument aliases
+	optional<FunctionBinding> SelectFunctionFromArguments(const BaseFunctionSet &functions,
+	                                                      vector<pair<Identifier, unique_ptr<Expression>>> arguments,
+	                                                      vector<unique_ptr<Expression>> &positional,
+	                                                      vector<pair<Identifier, unique_ptr<Expression>>> &named,
+	                                                      ErrorData &error);
 
 	//! Whether an overload matches a call - with how the call binds to it if it does, and why not if it does not. With
 	//! explicit casts, an argument that cannot be implicitly cast to its parameter is accepted too
-	static bool MatchOverload(optional_ptr<ClientContext> context, const SimpleFunction &function,
-	                          const vector<LogicalType> &arguments,
-	                          const vector<pair<Identifier, LogicalType>> &named_arguments, bool explicit_casts,
-	                          FunctionBinding &binding, FailedFunctionCandidate &failure);
+	static std::variant<FunctionBinding, FunctionMismatch>
+	MatchOverload(optional_ptr<ClientContext> context, idx_t overload, shared_ptr<const SimpleFunction> function,
+	              const vector<LogicalType> &arguments, const vector<pair<Identifier, LogicalType>> &named_arguments,
+	              bool explicit_casts);
 	//! How a call binds to a function it is known to call - the arguments are cast explicitly. Throws if the call does
 	//! not fit the signature of the function
 	template <class T>
 	FunctionBinding MatchFunction(const shared_ptr<const T> &function, const vector<unique_ptr<Expression>> &arguments,
 	                              const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments);
-
-	static pair<vector<LogicalType>, vector<pair<Identifier, LogicalType>>>
-	GetArgumentsFromExpressions(const vector<unique_ptr<Expression>> &regular_arguments,
-	                            const vector<pair<Identifier, unique_ptr<Expression>>> &keyword_arguments);
 };
 
 } // namespace duckdb

@@ -19,6 +19,7 @@ public:
 	virtual ~BaseFunctionSet() {
 	}
 	virtual auto GetOverload(idx_t offset) const -> const SimpleFunction & = 0;
+	virtual auto GetSharedOverload(idx_t offset) const -> shared_ptr<const SimpleFunction> = 0;
 	virtual auto GetOverloadCount() const -> idx_t = 0;
 	virtual auto GetName() const -> const Identifier & = 0;
 };
@@ -63,6 +64,10 @@ public:
 	auto GetOverload(idx_t offset) const -> const SimpleFunction & override {
 		D_ASSERT(offset < functions.size());
 		return *functions[offset];
+	}
+	auto GetSharedOverload(idx_t offset) const -> shared_ptr<const SimpleFunction> override {
+		D_ASSERT(offset < functions.size());
+		return functions[offset];
 	}
 	auto GetOverloadCount() const -> idx_t override {
 		return functions.size();
