@@ -16,11 +16,11 @@ ScalarFunctionSet::ScalarFunctionSet(ScalarFunction fun) : FunctionSet(fun.name)
 shared_ptr<const ScalarFunction> ScalarFunctionSet::GetFunctionByArguments(ClientContext &context,
                                                                            const vector<LogicalType> &arguments) {
 	auto index = FunctionBinder::SelectFunction(context, *this, arguments);
-	if (!index.IsValid()) {
+	if (!index.IsSuccess()) {
 		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                      index.GetError().RawMessage());
 	}
-	return GetFunctionByOffset(index.GetIndex());
+	return GetFunctionByOffset(index.GetBinding().GetOverloadIndex());
 }
 
 AggregateFunctionSet::AggregateFunctionSet() : FunctionSet("") {
@@ -36,11 +36,11 @@ AggregateFunctionSet::AggregateFunctionSet(AggregateFunction fun) : FunctionSet(
 shared_ptr<const AggregateFunction> AggregateFunctionSet::GetFunctionByArguments(ClientContext &context,
                                                                                  const vector<LogicalType> &arguments) {
 	auto index = FunctionBinder::SelectFunction(context, *this, arguments);
-	if (!index.IsValid()) {
+	if (!index.IsSuccess()) {
 		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                      index.GetError().RawMessage());
 	}
-	return GetFunctionByOffset(index.GetIndex());
+	return GetFunctionByOffset(index.GetBinding().GetOverloadIndex());
 }
 
 WindowFunctionSet::WindowFunctionSet() : FunctionSet("") {
@@ -56,11 +56,11 @@ WindowFunctionSet::WindowFunctionSet(WindowFunction fun) : FunctionSet(fun.name)
 shared_ptr<const WindowFunction> WindowFunctionSet::GetFunctionByArguments(ClientContext &context,
                                                                            const vector<LogicalType> &arguments) {
 	auto index = FunctionBinder::SelectFunction(context, *this, arguments);
-	if (!index.IsValid()) {
+	if (!index.IsSuccess()) {
 		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                      index.GetError().RawMessage());
 	}
-	return GetFunctionByOffset(index.GetIndex());
+	return GetFunctionByOffset(index.GetBinding().GetOverloadIndex());
 }
 
 TableFunctionSet::TableFunctionSet(Identifier name) : FunctionSet(std::move(name)) {
@@ -73,11 +73,11 @@ TableFunctionSet::TableFunctionSet(TableFunction fun) : FunctionSet(fun.name) {
 shared_ptr<const TableFunction> TableFunctionSet::GetFunctionByArguments(ClientContext &context,
                                                                          const vector<LogicalType> &arguments) {
 	auto index = FunctionBinder::SelectFunction(context, *this, arguments);
-	if (!index.IsValid()) {
+	if (!index.IsSuccess()) {
 		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                      index.GetError().RawMessage());
 	}
-	return GetFunctionByOffset(index.GetIndex());
+	return GetFunctionByOffset(index.GetBinding().GetOverloadIndex());
 }
 
 PragmaFunctionSet::PragmaFunctionSet(Identifier name) : FunctionSet(std::move(name)) {

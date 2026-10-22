@@ -378,12 +378,12 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 		auto &func = entry->Cast<WindowFunctionCatalogEntry>();
 
 		auto best = FunctionBinder::SelectFunction(binder->context, func.functions, arguments);
-		if (!best.IsValid()) {
+		if (!best.IsSuccess()) {
 			best.GetError().Throw();
 		}
 		FunctionBinder function_binder(*binder);
 
-		const auto &win_func = func.functions.GetFunctionByOffset(best.GetIndex());
+		const auto &win_func = func.functions.GetFunctionByOffset(best.GetBinding().GetOverloadIndex());
 
 		vector<pair<Identifier, unique_ptr<Expression>>> keyword_args;
 		auto [bound_func, bind_info] =

@@ -529,7 +529,7 @@ static ErrorData NoMatchingFunctionError(const BaseFunctionSet &functions, const
 	string closest_candidate;
 	if (closest) {
 		closest_candidate =
-		    DescribeCandidate(functions.GetOverload(closest->function_index), *closest, arguments, named_arguments);
+		    DescribeCandidate(functions.GetOverload(closest->GetOverloadIndex()), *closest, arguments, named_arguments);
 	}
 	return ErrorData(BinderException::NoMatchingFunction(catalog_name, schema_name, functions.GetName(), arguments,
 	                                                     named_arguments, candidates, closest_candidate));
@@ -548,7 +548,7 @@ static ErrorData AmbiguousFunctionError(const BaseFunctionSet &functions, const 
 	string candidate_str;
 	for (auto &candidate : candidates) {
 		if (candidate.cost == candidates[0].cost) {
-			candidate_str += "\t" + functions.GetOverload(candidate.function_index).ToString() + "\n";
+			candidate_str += "\t" + functions.GetOverload(candidate.GetOverloadIndex()).ToString() + "\n";
 		}
 	}
 	return ErrorData(
@@ -583,8 +583,7 @@ static const Expression &GetArgument(const vector<unique_ptr<Expression>> &argum
 FunctionSelection FunctionBinder::SelectFunction(optional_ptr<ClientContext> context, const BaseFunctionSet &functions,
                                                  const vector<LogicalType> &arguments,
                                                  const vector<pair<Identifier, LogicalType>> &named_arguments,
-                                                 optional_idx limit, bool explicit_casts) {
-	D_ASSERT(!limit.IsValid() || limit.GetIndex() > 0);
+                                                 bool explicit_casts) {
 	FunctionSelection selection;
 	auto duplicate = FindDuplicateNamedArgument(named_arguments);
 	if (duplicate.IsValid()) {
@@ -624,9 +623,6 @@ FunctionSelection FunctionBinder::SelectFunction(optional_ptr<ClientContext> con
 	    failed.begin(), failed.end(),
 	    [](const FailedFunctionCandidate &a, const FailedFunctionCandidate &b) { return a.distance < b.distance; });
 
-	selection.candidate_count = candidates.size();
-	selection.failed_candidate_count = failed.size();
-
 	if (candidates.empty()) {
 		selection.result = FunctionSelectionResult::NO_MATCH;
 		// the closest miss is only named if no other overload is as close
@@ -638,7 +634,7 @@ FunctionSelection FunctionBinder::SelectFunction(optional_ptr<ClientContext> con
 		if (!failed.empty() && IsTemplateFailure(failed[0])) {
 			selection.error =
 			    ErrorData(ExceptionType::BINDER,
-			              TemplateDeductionMessage(functions.GetOverload(failed[0].function_index), failed[0]));
+			              TemplateDeductionMessage(functions.GetOverload(failed[0].GetOverloadIndex()), failed[0]));
 			selection.error_argument = failed[0].position;
 		} else {
 			selection.error = NoMatchingFunctionError(functions, arguments, named_arguments, closest);
@@ -656,12 +652,6 @@ FunctionSelection FunctionBinder::SelectFunction(optional_ptr<ClientContext> con
 	} else {
 		selection.result = FunctionSelectionResult::SUCCESS;
 	}
-
-	// keep only the cheapest matches and the closest misses
-	if (limit.IsValid()) {
-		candidates.resize(MinValue<idx_t>(candidates.size(), limit.GetIndex()));
-		failed.resize(MinValue<idx_t>(failed.size(), limit.GetIndex()));
-	}
 	return selection;
 }
 
@@ -669,9 +659,9 @@ FunctionSelection
 FunctionBinder::SelectFunction(optional_ptr<ClientContext> context, const BaseFunctionSet &functions,
                                const vector<unique_ptr<Expression>> &arguments,
                                const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
-                               optional_idx limit, bool explicit_casts) {
+                               bool explicit_casts) {
 	auto [types, named_types] = GetArgumentsFromExpressions(arguments, named_arguments);
-	auto selection = SelectFunction(context, functions, types, named_types, limit, explicit_casts);
+	auto selection = SelectFunction(context, functions, types, named_types, explicit_casts);
 	if (selection.GetErrorArgument().IsValid()) {
 		auto &argument = GetArgument(arguments, named_arguments, selection.GetErrorArgument().GetIndex());
 		selection.AddErrorLocation(argument.GetQueryLocation());
@@ -690,8 +680,8 @@ FunctionBinding FunctionBinder::MatchFunction(const shared_ptr<const T> &functio
 	}
 	FunctionSet<T> functions(function->GetName());
 	functions.AddFunction(function);
-	auto selection = SelectFunction(context, functions, arguments, named_arguments, optional_idx(), true);
-	if (!selection.Succeeded()) {
+	auto selection = SelectFunction(context, functions, arguments, named_arguments, true);
+	if (!selection.IsSuccess()) {
 		selection.GetError().Throw();
 	}
 	return selection.GetBinding();
@@ -748,7 +738,7 @@ FunctionBinder::SelectFunctionFromArguments(const BaseFunctionSet &functions,
 
 		// We failed binding - does any other overload support implicit argument names?
 		// If not, this is a hard failure.
-		if (result.IsValid() || !AnyOverloadSupportsImplicitArgumentNames(functions)) {
+		if (result.IsSuccess() || !AnyOverloadSupportsImplicitArgumentNames(functions)) {
 			return result;
 		}
 	}
@@ -769,7 +759,7 @@ FunctionBinder::SelectFunctionFromArguments(const BaseFunctionSet &functions,
 		if (TrySplitArgumentTypes(arguments, positional, named)) {
 			auto retry_result = SelectFunction(context, functions, positional, named);
 			AddErrorArgumentLocation(retry_result, arguments);
-			if (retry_result.IsValid() || !is_valid_call) {
+			if (retry_result.IsSuccess() || !is_valid_call) {
 				return retry_result;
 			}
 		}
@@ -998,12 +988,12 @@ FunctionBinder::BindTableFunction(const TableFunctionSet &functions,
                                   vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, ErrorData &error) {
 	VerifyNamedArgumentsAccepted(functions, named_arguments);
 	auto selection = SelectFunction(context, functions, positional_arguments, named_arguments);
-	if (!selection.Succeeded()) {
+	if (!selection.IsSuccess()) {
 		error = selection.GetError();
 		return nullptr;
 	}
 	auto &binding = selection.GetBinding();
-	auto &definition = functions.GetFunctionByOffset(binding.function_index);
+	auto &definition = functions.GetFunctionByOffset(binding.GetOverloadIndex());
 	auto resolved = ResolveArguments(*definition, binding, positional_arguments, named_arguments);
 	CastToFunctionArguments(definition->GetName(), resolved.types, resolved.arguments);
 	vector<Value> parameters;
@@ -1019,12 +1009,12 @@ unique_ptr<BoundPragmaInfo> FunctionBinder::BindPragmaFunction(
     vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, ErrorData &error) {
 	VerifyNamedArgumentsAccepted(functions, named_arguments);
 	auto selection = SelectFunction(context, functions, positional_arguments, named_arguments);
-	if (!selection.Succeeded()) {
+	if (!selection.IsSuccess()) {
 		error = selection.GetError();
 		return nullptr;
 	}
 	auto &binding = selection.GetBinding();
-	auto &definition = functions.GetFunctionByOffset(binding.function_index);
+	auto &definition = functions.GetFunctionByOffset(binding.GetOverloadIndex());
 	auto resolved = ResolveArguments(*definition, binding, positional_arguments, named_arguments);
 	CastToFunctionArguments(definition->GetName(), resolved.types, resolved.arguments);
 	vector<Value> parameters;
@@ -1244,14 +1234,14 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
 	// select the best matching overload (this may name positional arguments by their alias for functions that opt
 	// into implicit argument naming, e.g. struct_pack/row)
 	auto best_function = SelectFunctionFromArguments(func.functions, arguments);
-	if (!best_function.IsValid()) {
+	if (!best_function.IsSuccess()) {
 		error = best_function.GetError();
 		return nullptr;
 	}
 
 	// found a matching function!
 	auto &binding = best_function.GetBinding();
-	auto selected_function = func.functions.GetFunctionByOffset(binding.function_index);
+	auto selected_function = func.functions.GetFunctionByOffset(binding.GetOverloadIndex());
 	auto &bound_function = *selected_function;
 
 	// now that the overload is fixed, split the arguments into their final positional/named children
@@ -1766,13 +1756,13 @@ FunctionBinder::BindAggregateFunction(const AggregateFunctionCatalogEntry &func,
 	// select the best matching overload (this may name positional arguments by their alias for functions that opt
 	// into implicit argument naming, e.g. struct_pack/row)
 	auto best_function = SelectFunctionFromArguments(func.functions, arguments);
-	if (!best_function.IsValid()) {
+	if (!best_function.IsSuccess()) {
 		error = best_function.GetError();
 		return nullptr;
 	}
 
 	auto &binding = best_function.GetBinding();
-	auto bound_function = func.functions.GetFunctionByOffset(binding.function_index);
+	auto bound_function = func.functions.GetFunctionByOffset(binding.GetOverloadIndex());
 
 	// now that the overload is fixed, split the arguments into their final positional/named children
 	auto [regular_args, keyword_args] = SplitArguments(std::move(arguments));
@@ -1866,13 +1856,13 @@ FunctionBinder::BindWindowFunction(const WindowFunctionCatalogEntry &func,
                                    vector<LogicalType> &order_types, vector<LogicalType> &arg_order_types) {
 	// select the best matching overload
 	auto best_function = SelectFunctionFromArguments(func.functions, arguments);
-	if (!best_function.IsValid()) {
+	if (!best_function.IsSuccess()) {
 		error = best_function.GetError();
 		return nullptr;
 	}
 
 	auto &binding = best_function.GetBinding();
-	auto bound_function = func.functions.GetFunctionByOffset(binding.function_index);
+	auto bound_function = func.functions.GetFunctionByOffset(binding.GetOverloadIndex());
 
 	// now that the overload is fixed, split the arguments into their final positional/named children
 	auto [regular_args, keyword_args] = SplitArguments(std::move(arguments));

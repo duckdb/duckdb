@@ -52,12 +52,10 @@ struct ResolvedTableFunction {
 //! An overload that matches a call, and how the arguments of the call are passed to it
 struct FunctionBinding {
 	//! The index of the overload in the function set
-	idx_t GetIndex() const {
+	idx_t GetOverloadIndex() const {
 		return function_index;
 	}
 
-	//! The index of the overload in the function set
-	idx_t function_index = 0;
 	//! The cost of casting the arguments to the parameters of the overload
 	idx_t cost = 0;
 	//! The parameter of the overload that receives each argument - the positional arguments, followed by the named
@@ -68,6 +66,10 @@ struct FunctionBinding {
 	vector<LogicalType> parameter_types;
 	//! The return type of the overload, with the templates substituted
 	LogicalType return_type;
+
+private:
+	friend class FunctionBinder;
+	idx_t function_index = 0;
 };
 
 //! Why an overload does not match a call
@@ -88,10 +90,15 @@ enum class FunctionMismatchReason : uint8_t {
 	TEMPLATE_UNRESOLVED
 };
 
+
+
 //! An overload that does not match a call, and why
 struct FailedFunctionCandidate {
 	//! The index of the overload in the function set
-	idx_t function_index = 0;
+	idx_t GetOverloadIndex() const {
+		return function_index;
+	}
+
 	FunctionMismatchReason reason = FunctionMismatchReason::TOO_MANY_ARGUMENTS;
 	//! The argument the reason refers to - the positional arguments, followed by the named ones. Invalid if the reason
 	//! refers to no single one
@@ -106,6 +113,10 @@ struct FailedFunctionCandidate {
 	//! The types the template was inferred to be, in the order they were inferred, followed by the type that
 	//! conflicts with them - only set for TEMPLATE_DEDUCTION
 	vector<LogicalType> inferred_types;
+
+private:
+	friend class FunctionBinder;
+	idx_t function_index = 0;
 };
 
 enum class FunctionSelectionResult : uint8_t { SUCCESS, AMBIGUOUS, NO_MATCH };
@@ -116,30 +127,24 @@ public:
 	FunctionSelectionResult GetResult() const {
 		return result;
 	}
-	bool Succeeded() const {
+	bool IsSuccess() const {
 		return result == FunctionSelectionResult::SUCCESS;
+	}
+	explicit operator bool() const {
+		return IsSuccess();
 	}
 	//! The overload the call binds to - only if the selection succeeded
 	const FunctionBinding &GetBinding() const {
-		D_ASSERT(Succeeded());
+		D_ASSERT(IsSuccess());
 		return candidates[0];
 	}
-	//! The overloads that match the call, cheapest first. At most the limit the selection was made with
+	//! The overloads that match the call, cheapest first
 	const vector<FunctionBinding> &GetCandidates() const {
 		return candidates;
 	}
-	//! The overloads that do not match the call, closest first. At most the limit the selection was made with - the
-	//! closest ones are kept
+	//! The overloads that do not match the call, closest first
 	const vector<FailedFunctionCandidate> &GetFailedCandidates() const {
 		return failed_candidates;
-	}
-	//! The number of overloads that match the call, including those beyond the limit
-	idx_t GetCandidateCount() const {
-		return candidate_count;
-	}
-	//! The number of overloads that do not match the call, including those beyond the limit
-	idx_t GetFailedCandidateCount() const {
-		return failed_candidate_count;
 	}
 	//! Why the selection did not succeed
 	const ErrorData &GetError() const {
@@ -154,22 +159,12 @@ public:
 		error.AddQueryLocation(location);
 	}
 
-	//! Shorthands for Succeeded() and GetBinding().GetIndex(), so that a selection reads like the index it selects
-	bool IsValid() const {
-		return Succeeded();
-	}
-	idx_t GetIndex() const {
-		return GetBinding().GetIndex();
-	}
-
 private:
 	friend class FunctionBinder;
 
 	FunctionSelectionResult result = FunctionSelectionResult::NO_MATCH;
 	vector<FunctionBinding> candidates;
 	vector<FailedFunctionCandidate> failed_candidates;
-	idx_t candidate_count = 0;
-	idx_t failed_candidate_count = 0;
 	ErrorData error;
 	optional_idx error_argument;
 };
@@ -185,20 +180,18 @@ public:
 
 public:
 	//! Overload selection: the cheapest overload of a function set that a call with the given argument types binds
-	//! to. Selection needs no binder - without a ClientContext only the built-in implicit casts are considered. The
-	//! limit bounds how many matching and how many failed overloads the selection keeps, it does not change the result.
-	//! With explicit casts, an argument that cannot be implicitly cast to its parameter is accepted too
+	//! to. Selection needs no binder - without a ClientContext only the built-in implicit casts are considered. With
+	//! explicit casts, an argument that cannot be implicitly cast to its parameter is accepted too
 	DUCKDB_API static FunctionSelection
 	SelectFunction(optional_ptr<ClientContext> context, const BaseFunctionSet &functions,
 	               const vector<LogicalType> &arguments,
-	               const vector<pair<Identifier, LogicalType>> &named_arguments = {},
-	               optional_idx limit = optional_idx(), bool explicit_casts = false);
+	               const vector<pair<Identifier, LogicalType>> &named_arguments = {}, bool explicit_casts = false);
 	//! Selects by the return types of the bound arguments
 	DUCKDB_API static FunctionSelection
 	SelectFunction(optional_ptr<ClientContext> context, const BaseFunctionSet &functions,
 	               const vector<unique_ptr<Expression>> &arguments,
 	               const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
-	               optional_idx limit = optional_idx(), bool explicit_casts = false);
+	               bool explicit_casts = false);
 
 	//! Bind a table function: select the overload, check the named arguments against its signature, and fold the
 	//! arguments to the constants it is called with, cast to the types it declares. Returns nullptr and sets the error

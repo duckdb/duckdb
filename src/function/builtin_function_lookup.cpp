@@ -39,10 +39,10 @@ shared_ptr<const AggregateFunction> TryGetBuiltinAggregateFunction(ClientContext
 	auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(context, BuiltinName(catalog, name));
 
 	auto index = FunctionBinder::SelectFunction(context, entry.functions, arguments);
-	if (!index.IsValid()) {
+	if (!index.IsSuccess()) {
 		return nullptr;
 	}
-	return entry.functions.GetFunctionByOffset(index.GetIndex());
+	return entry.functions.GetFunctionByOffset(index.GetBinding().GetOverloadIndex());
 }
 
 shared_ptr<const WindowFunction> GetBuiltinWindowFunction(ClientContext &context, const Identifier &name,

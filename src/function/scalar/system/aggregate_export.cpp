@@ -249,11 +249,11 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 
 	FunctionBinder function_binder(context);
 	auto best_function = FunctionBinder::SelectFunction(context, aggr_entry.functions, argument_types);
-	if (!best_function.IsValid()) {
+	if (!best_function.IsSuccess()) {
 		throw BinderException("Could not re-bind exported aggregate %s: %s", function_name,
 		                      best_function.GetError().Message());
 	}
-	const auto &aggr = aggr_entry.functions.GetFunctionByOffset(best_function.GetIndex());
+	const auto &aggr = aggr_entry.functions.GetFunctionByOffset(best_function.GetBinding().GetOverloadIndex());
 	const auto &signature = aggr->GetSignature();
 	for (idx_t arg_idx = 0; arg_idx < argument_types.size(); arg_idx++) {
 		if (argument_types[arg_idx].id() != LogicalTypeId::ANY) {

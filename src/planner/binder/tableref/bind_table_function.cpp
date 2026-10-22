@@ -483,8 +483,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	if (table_in_out) {
 		// the arguments are the columns of the subquery
 		auto selection = FunctionBinder::SelectFunction(context, function.functions, subquery.types);
-		if (selection.Succeeded()) {
-			auto &definition = function.functions.GetFunctionByOffset(selection.GetBinding().function_index);
+		if (selection.IsSuccess()) {
+			auto &definition = function.functions.GetFunctionByOffset(selection.GetBinding().GetOverloadIndex());
 			resolved = make_uniq<ResolvedTableFunction>(BoundTableFunction(definition));
 		} else {
 			error = selection.GetError();
