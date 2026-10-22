@@ -247,6 +247,13 @@ struct MetricOperatorIntermediateSizeBytes {
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
+struct MetricOperatorName {
+	using METRIC_TYPE = string;
+	static constexpr const char *Name = "operator.name";
+	static constexpr const char *Description = "Name of the operator";
+	static constexpr const char *Unit = "";
+	static constexpr const char *TypeStr = "string";
+};
 struct MetricOperatorRowGroupsScanned {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "operator.row_groups_scanned";
@@ -346,5 +353,11 @@ struct MetricPhysicalPlannerTotalTime {
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
+
+template <class... METRICS>
+struct MetricList {};
+
+// The metrics marked "live": they can be read while the query runs
+using LiveMetrics = MetricList<MetricSystemTotalMemoryAllocated, MetricIOTotalBytesRead, MetricIOTotalBytesWritten>;
 
 } // namespace duckdb

@@ -37,15 +37,16 @@ class BlockAllocator {
 	friend class TaskScheduler;
 
 public:
-	BlockAllocator(Allocator &allocator, idx_t block_size, idx_t virtual_memory_size, idx_t physical_memory_size);
+	BlockAllocator(Allocator &allocator, idx_t block_size, idx_t pool_size);
 	~BlockAllocator();
 
 public:
 	static BlockAllocator &Get(DatabaseInstance &db);
 	static BlockAllocator &Get(AttachedDatabase &db);
 
-	//! Resize physical memory (can only be increased)
-	void Resize(idx_t new_physical_memory_size) DUCKDB_EXCLUDES(physical_memory_lock);
+	//! Control new pool allocations without changing ownership of existing blocks.
+	void SetEnabled(bool enabled);
+	bool IsEnabled() const;
 
 	//! Allocation functions (same API as Allocator)
 	data_ptr_t AllocateData(idx_t size) const;
@@ -79,9 +80,11 @@ private:
 
 	enum class FlushState : uint8_t { IDLE, SCHEDULED, RESCHEDULE_REQUESTED };
 	enum class ReclaimMode : uint8_t { FORCE, DECAY, OPPORTUNISTIC };
+	enum class PoolState : uint8_t { UNINITIALIZED, READY, UNAVAILABLE };
 
-	bool IsActive() const;
-	bool IsEnabled() const;
+	bool TryUsePool() const DUCKDB_EXCLUDES(pool_init_lock);
+	bool InitializePool() const DUCKDB_EXCLUDES(pool_init_lock);
+	bool IsInitialized() const;
 	bool IsInPool(data_ptr_t pointer) const;
 
 	idx_t ModuloBlockSize(idx_t n) const;
@@ -136,18 +139,18 @@ private:
 	//! Shift for dividing by block size
 	const idx_t block_size_div_shift;
 
-	//! Size of the virtual memory
-	const idx_t virtual_memory_size;
-	//! Pointer to the start of the virtual memory
-	atomic<data_ptr_t> virtual_memory_space;
-
-	//! Mutex for modifying physical memory size
-	annotated_mutex physical_memory_lock;
-	//! Size of the physical memory
-	atomic<idx_t> physical_memory_size;
+	//! Fixed capacity, rounded down to whole blocks; zero on 32-bit.
+	const idx_t pool_size;
+	//! Allocation permission is independent of the lifetime of the mapping.
+	atomic<bool> enabled {true};
+	//! READY publishes the mapping and queues; UNAVAILABLE prevents retrying a failed reservation.
+	mutable atomic<PoolState> pool_state;
+	mutable annotated_mutex pool_init_lock;
+	//! Immutable after publication through pool_state.
+	mutable data_ptr_t pool_base = nullptr;
 
 	//! Untouched block IDs
-	unsafe_unique_ptr<BlockQueue> untouched;
+	mutable unsafe_unique_ptr<BlockQueue> untouched;
 	//! Touched by block IDs
 	unsafe_unique_ptr<BlockQueue> touched;
 

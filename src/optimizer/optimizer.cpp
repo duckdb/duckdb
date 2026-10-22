@@ -27,6 +27,7 @@
 #include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
+#include "duckdb/optimizer/remove_redundant_order.hpp"
 #include "duckdb/optimizer/remove_redundant_order_keys.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/row_group_pruner.hpp"
@@ -134,6 +135,14 @@ bool Optimizer::OptimizerDisabled(ClientContext &context_p, OptimizerType type) 
 	return config.IsOptimizerDisabled(type);
 }
 
+MetricsTimer Optimizer::StartProfiler(OptimizerType type) {
+	auto &profiler = QueryProfiler::Get(context);
+	if (!profiler.IsEnabled()) {
+		return MetricsTimer();
+	}
+	return profiler.StartTimerInternal("optimizer." + StringUtil::Lower(EnumUtil::ToString(type)));
+}
+
 void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &callback) {
 	context.InterruptCheck();
 
@@ -141,9 +150,8 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 		// optimizer is marked as disabled: skip
 		return;
 	}
-	auto &profiler = QueryProfiler::Get(context);
 	{
-		auto optimizer_timer = profiler.StartTimerInternal("optimizer." + StringUtil::Lower(EnumUtil::ToString(type)));
+		auto optimizer_timer = StartProfiler(type);
 		callback();
 	}
 	if (plan) {
@@ -266,6 +274,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::AGGREGATE_FUNCTION_REWRITER, [&]() {
 		AggregateFunctionRewriter aggregate_function_rewriter(*this);
 		aggregate_function_rewriter.Optimize(plan);
+	});
+
+	// remove ORDER BY operators whose order is discarded by the operators above them
+	RunOptimizer(OptimizerType::REDUNDANT_ORDER, [&]() {
+		RemoveRedundantOrder remove_redundant_order;
+		remove_redundant_order.Optimize(plan);
 	});
 
 	// perform filter pullup

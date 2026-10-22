@@ -11,18 +11,51 @@ void QueryMetrics::FinalizeMetrics(GatheredMetrics &info) {
 	for (const auto &[key, count] : string_counters) {
 		info.SetMetric(key, count);
 	}
-	info.SetMetric<MetricIOTotalBytesRead>(GetBytesRead());
+	for (auto &entry : GetLiveMetrics()) {
+		info.SetMetric(entry.first, std::move(entry.second));
+	}
 	info.SetMetric<MetricIOTotalReadOperations>(GetReadOperations());
 	info.SetMetric<MetricIOTotalReadTime>(GetReadTime());
-	info.SetMetric<MetricIOTotalBytesWritten>(GetBytesWritten());
 	info.SetMetric<MetricIOTotalWriteOperations>(GetWriteOperations());
 	info.SetMetric<MetricIOTotalWriteTime>(GetWriteTime());
+	info.SetMetric<MetricSystemTotalBytesSpilled>(GetBytesSpilled());
 	info.SetMetric<MetricSystemBlockedThreadTime>(blocked_thread_time);
 	info.SetMetric<MetricSystemPeakBufferMemory>(system_peak_buffer_memory);
 	info.SetMetric<MetricSystemPeakStreamingBufferSize>(system_peak_streaming_buffer_size);
 	info.SetMetric<MetricSystemPeakTempDirSize>(system_peak_temp_dir_size);
-	info.SetMetric<MetricSystemTotalBytesSpilled>(GetBytesSpilled());
-	info.SetMetric<MetricSystemTotalMemoryAllocated>(GetTotalMemoryAllocated());
+}
+
+template <class METRIC>
+static typename METRIC::METRIC_TYPE ReadLiveMetric(const QueryMetrics &metrics) {
+	static_assert(sizeof(METRIC) == 0, "a metric marked \"live\" in metrics.json has no counter to read while the "
+	                                   "query runs: add one here");
+	return {};
+}
+
+template <>
+uint64_t ReadLiveMetric<MetricIOTotalBytesRead>(const QueryMetrics &metrics) {
+	return metrics.GetBytesRead();
+}
+
+template <>
+uint64_t ReadLiveMetric<MetricIOTotalBytesWritten>(const QueryMetrics &metrics) {
+	return metrics.GetBytesWritten();
+}
+
+template <>
+uint64_t ReadLiveMetric<MetricSystemTotalMemoryAllocated>(const QueryMetrics &metrics) {
+	return metrics.GetTotalMemoryAllocated();
+}
+
+template <class... METRICS>
+static profiler_metrics_t ReadLiveMetrics(const QueryMetrics &metrics, MetricList<METRICS...>) {
+	profiler_metrics_t result;
+	((result[METRICS::Name] = Value::CreateValue(ReadLiveMetric<METRICS>(metrics))), ...);
+	return result;
+}
+
+profiler_metrics_t QueryMetrics::GetLiveMetrics() const {
+	return ReadLiveMetrics(*this, LiveMetrics());
 }
 
 QueryMetrics::QueryMetrics()

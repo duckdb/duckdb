@@ -60,7 +60,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	// the packrat cache outlives the match processes, so they need separate arenas
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
 	ArenaAllocator packrat_allocator(Allocator::DefaultAllocator());
-	ParserPackratCache packrat_cache(packrat_allocator);
+	ParserPackratCache packrat_cache(packrat_allocator, token_iterator.Position(), token_iterator.Size());
 	MatchContext match_context(suggestions, parse_result_allocator, process_allocator, max_token_index,
 	                           MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, &packrat_cache);
 	MatchState state(token_iterator, match_context);
@@ -166,6 +166,7 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 	grammar.SetExpressionDepth("Type", ExpressionDepthKind::NESTING);
 	grammar.SetExpressionDepth("NestedType", ExpressionDepthKind::NESTING);
 	grammar.SetExpressionDepth("SubqueryReference", ExpressionDepthKind::NESTING);
+	grammar.SetExpressionDepth("CustomPrefixExpression", ExpressionDepthKind::NESTING);
 	grammar.SetExpressionDepth("LambdaArrowExpression", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("NotExpression", ExpressionDepthKind::CHAIN);
 	grammar.SetExpressionDepth("IsExpressionContinuation", ExpressionDepthKind::CHAIN);

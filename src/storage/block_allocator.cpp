@@ -5,6 +5,8 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/thread.hpp"
 
+#include <new>
+
 #if defined(__linux__) && INTPTR_MAX == INT64_MAX
 #include <cinttypes>
 #include <cstdio>
@@ -76,7 +78,7 @@ void BlockAllocator::InitializeRetention(const idx_t now_ms) const {
 
 void BlockAllocator::AddRetention(const idx_t count, const idx_t now_ms) const {
 	const auto epoch = now_ms / BlockAllocatorConfig::RETENTION_INTERVAL_MS;
-	const auto capacity = DivBlockSize(physical_memory_size.load(std::memory_order_relaxed));
+	const auto capacity = DivBlockSize(pool_size);
 	auto &bucket = retention_buckets[epoch % retention_buckets.size()];
 	auto current = bucket.load(std::memory_order_relaxed);
 	do {
@@ -144,7 +146,12 @@ static data_ptr_t AllocateVirtualMemory(const idx_t size) {
 	// This returns nullptr on failure
 	return data_ptr_t(VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_NOACCESS));
 #else
-	const auto ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	auto flags = MAP_PRIVATE | MAP_ANONYMOUS;
+#if defined(__linux__)
+	// Reserve address space without charging the entire pool against the commit limit.
+	flags |= MAP_NORESERVE;
+#endif
+	const auto ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, flags, -1, 0);
 	return ptr == MAP_FAILED ? nullptr : data_ptr_cast(ptr);
 #endif
 }
@@ -483,18 +490,18 @@ private:
 	array<Bucket, MAX_SHIFT - MIN_SHIFT + 1> buckets;
 };
 
-BlockAllocator::BlockAllocator(Allocator &allocator_p, const idx_t block_size_p, const idx_t virtual_memory_size_p,
-                               const idx_t physical_memory_size_p)
+BlockAllocator::BlockAllocator(Allocator &allocator_p, const idx_t block_size_p, const idx_t pool_size_p)
     : uuid(UUID::GenerateRandomUUID()), allocator(allocator_p), allocation_cache(make_uniq<AllocationCache>(allocator)),
       block_size(block_size_p), block_size_div_shift(CountZeros<idx_t>::Trailing(block_size)),
-      virtual_memory_size(AlignValue(virtual_memory_size_p, block_size)), virtual_memory_space(nullptr),
-      physical_memory_size(0), untouched(make_unsafe_uniq<BlockQueue>()), touched(make_unsafe_uniq<BlockQueue>()),
-      lifetime_state(make_shared_ptr<BlockAllocatorLifetimeState>()) {
+      pool_size(sizeof(void *) == 8 ? pool_size_p - pool_size_p % block_size : 0),
+      pool_state(pool_size != 0 && DivBlockSize(pool_size) <= NumericLimits<uint32_t>::Maximum()
+                     ? PoolState::UNINITIALIZED
+                     : PoolState::UNAVAILABLE),
+      touched(make_unsafe_uniq<BlockQueue>()), lifetime_state(make_shared_ptr<BlockAllocatorLifetimeState>()) {
 	static_assert(std::tuple_size<decltype(retention_buckets)>::value == BlockAllocatorConfig::RETENTION_BUCKETS,
 	              "Retention bucket storage must match the decay configuration");
 	D_ASSERT(IsPowerOfTwo(block_size));
 	InitializeRetention(RetentionTimeMillis());
-	Resize(physical_memory_size_p);
 }
 
 BlockAllocator::~BlockAllocator() {
@@ -503,9 +510,9 @@ BlockAllocator::~BlockAllocator() {
 		lifetime_state->alive = false;
 	}
 	GetBlockAllocatorThreadLocalState(*this).Clear();
-	if (IsActive()) {
+	if (IsInitialized()) {
 		try {
-			FreeVirtualMemory(virtual_memory_space, virtual_memory_size);
+			FreeVirtualMemory(pool_base, pool_size);
 		} catch (...) {
 			// Not allowed to throw in destructor!
 		}
@@ -520,53 +527,74 @@ BlockAllocator &BlockAllocator::Get(AttachedDatabase &db) {
 	return Get(db.GetDatabase());
 }
 
-void BlockAllocator::Resize(const idx_t new_physical_memory_size) {
-	annotated_lock_guard<annotated_mutex> guard(physical_memory_lock);
-
-	if (new_physical_memory_size != 0 && !IsActive()) {
-		virtual_memory_space = AllocateVirtualMemory(virtual_memory_size);
-		if (!IsActive()) {
-			return; // Failed to initialize
-		}
-	}
-
-	if (new_physical_memory_size < physical_memory_size) {
-		throw InvalidInputException("The \"block_allocator_size\" setting cannot be reduced (current: %llu)",
-		                            physical_memory_size.load());
-	}
-	if (new_physical_memory_size > virtual_memory_size) {
-		throw InvalidInputException("The \"block_allocator_size\" setting cannot be greater than the virtual memory "
-		                            "size (virtual memory size: %llu)",
-		                            virtual_memory_size);
-	}
-
-	// Enqueue block IDs efficiently in batches
-	uint32_t block_ids[STANDARD_VECTOR_SIZE];
-	const auto start = NumericCast<uint32_t>(DivBlockSize(physical_memory_size));
-	const auto end = NumericCast<uint32_t>(DivBlockSize(new_physical_memory_size));
-	for (auto block_id = start; block_id < end; block_id += STANDARD_VECTOR_SIZE) {
-		const auto next = MinValue<idx_t>(end - block_id, STANDARD_VECTOR_SIZE);
-		for (uint32_t i = 0; i < next; i++) {
-			block_ids[i] = block_id + i;
-		}
-		untouched->q.enqueue_bulk(block_ids, next);
-	}
-
-	// Finally, update to the new size
-	physical_memory_size = new_physical_memory_size;
-}
-
-bool BlockAllocator::IsActive() const {
-	return virtual_memory_space.load(std::memory_order_relaxed);
+void BlockAllocator::SetEnabled(bool enabled_p) {
+	enabled.store(enabled_p, std::memory_order_relaxed);
 }
 
 bool BlockAllocator::IsEnabled() const {
-	return physical_memory_size.load(std::memory_order_relaxed) != 0;
+	return enabled.load(std::memory_order_relaxed);
+}
+
+bool BlockAllocator::TryUsePool() const {
+	if (!IsEnabled()) {
+		return false;
+	}
+	const auto state = pool_state.load(std::memory_order_acquire);
+	if (state != PoolState::UNINITIALIZED) {
+		return state == PoolState::READY;
+	}
+	return InitializePool();
+}
+
+bool BlockAllocator::InitializePool() const {
+	annotated_lock_guard<annotated_mutex> guard(pool_init_lock);
+	const auto state = pool_state.load(std::memory_order_relaxed);
+	if (state != PoolState::UNINITIALIZED) {
+		return state == PoolState::READY;
+	}
+
+	unsafe_unique_ptr<BlockQueue> queue;
+	try {
+		queue = make_unsafe_uniq<BlockQueue>();
+		uint32_t block_ids[STANDARD_VECTOR_SIZE];
+		const auto count = DivBlockSize(pool_size);
+		for (idx_t block_id = 0; block_id < count; block_id += STANDARD_VECTOR_SIZE) {
+			const auto next = MinValue<idx_t>(count - block_id, STANDARD_VECTOR_SIZE);
+			for (idx_t i = 0; i < next; i++) {
+				block_ids[i] = NumericCast<uint32_t>(block_id + i);
+			}
+			if (!queue->q.enqueue_bulk(block_ids, next)) {
+				pool_state.store(PoolState::UNAVAILABLE, std::memory_order_release);
+				return false;
+			}
+		}
+	} catch (const std::bad_alloc &) {
+		pool_state.store(PoolState::UNAVAILABLE, std::memory_order_release);
+		return false;
+	}
+
+	const auto pointer = AllocateVirtualMemory(pool_size);
+	if (!pointer) {
+		pool_state.store(PoolState::UNAVAILABLE, std::memory_order_release);
+		return false;
+	}
+	untouched = std::move(queue);
+	pool_base = pointer;
+	pool_state.store(PoolState::READY, std::memory_order_release);
+	return true;
+}
+
+bool BlockAllocator::IsInitialized() const {
+	return pool_state.load(std::memory_order_acquire) == PoolState::READY;
 }
 
 bool BlockAllocator::IsInPool(const data_ptr_t pointer) const {
-	const auto virtual_memory_space_loaded = virtual_memory_space.load(std::memory_order_relaxed);
-	return pointer >= virtual_memory_space_loaded && pointer < virtual_memory_space_loaded + virtual_memory_size;
+	if (!IsInitialized()) {
+		return false;
+	}
+	const auto address = reinterpret_cast<uintptr_t>(pointer);
+	const auto base = reinterpret_cast<uintptr_t>(pool_base);
+	return address >= base && address - base < pool_size;
 }
 
 idx_t BlockAllocator::ModuloBlockSize(const idx_t n) const {
@@ -579,7 +607,7 @@ idx_t BlockAllocator::DivBlockSize(const idx_t n) const {
 
 uint32_t BlockAllocator::GetBlockID(const data_ptr_t pointer) const {
 	D_ASSERT(IsInPool(pointer));
-	const auto offset = NumericCast<idx_t>(pointer - virtual_memory_space.load(std::memory_order_relaxed));
+	const auto offset = NumericCast<idx_t>(pointer - pool_base);
 	D_ASSERT(ModuloBlockSize(offset) == 0);
 	const auto block_id = NumericCast<uint32_t>(DivBlockSize(offset));
 	VerifyBlockID(block_id);
@@ -587,16 +615,16 @@ uint32_t BlockAllocator::GetBlockID(const data_ptr_t pointer) const {
 }
 
 void BlockAllocator::VerifyBlockID(const uint32_t block_id) const {
-	D_ASSERT(block_id < NumericCast<uint32_t>(virtual_memory_size / block_size));
+	D_ASSERT(block_id < DivBlockSize(pool_size));
 }
 
 data_ptr_t BlockAllocator::GetPointer(const uint32_t block_id) const {
 	VerifyBlockID(block_id);
-	return virtual_memory_space.load(std::memory_order_relaxed) + NumericCast<idx_t>(block_id) * block_size;
+	return pool_base + NumericCast<idx_t>(block_id) * block_size;
 }
 
 data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
-	if (!IsActive() || !IsEnabled() || size != block_size) {
+	if (size != block_size || !TryUsePool()) {
 		if (allocation_cache->SupportsSize(size)) {
 			auto pointer = allocation_cache->TryAllocate(size);
 			if (pointer) {
@@ -629,7 +657,7 @@ void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) const 
 	if (!pointer) {
 		return;
 	}
-	if (!IsActive() || !IsInPool(pointer)) {
+	if (!IsInPool(pointer)) {
 		if (allocation_cache->SupportsSize(size) && allocation_cache->TryFree(pointer, size)) {
 			return;
 		}
@@ -646,8 +674,9 @@ data_ptr_t BlockAllocator::ReallocateData(const data_ptr_t pointer, const idx_t 
 		return pointer;
 	}
 
-	// If both the old and new allocation are not (or cannot be) in the pool, immediately use the fallback allocator
-	if (!IsActive() || (!IsInPool(pointer) && new_size != block_size)) {
+	const bool old_in_pool = IsInPool(pointer);
+	const bool new_can_use_pool = new_size == block_size && TryUsePool();
+	if (!old_in_pool && !new_can_use_pool) {
 		return allocator.ReallocateData(pointer, old_size, new_size);
 	}
 
@@ -694,14 +723,14 @@ static void AdviseHugePages(data_ptr_t pointer, idx_t size) {
 }
 
 data_ptr_t BlockAllocator::AllocateHugeData(const idx_t size) const {
-	auto pointer = IsActive() && IsEnabled() && size == block_size ? GetBlockAllocatorThreadLocalState(*this).Allocate()
-	                                                               : allocator.AllocateData(size);
+	auto pointer = size == block_size && TryUsePool() ? GetBlockAllocatorThreadLocalState(*this).Allocate()
+	                                                  : allocator.AllocateData(size);
 	AdviseHugePages(pointer, size);
 	return pointer;
 }
 
 void BlockAllocator::FreeHugeData(data_ptr_t pointer, const idx_t size) const {
-	if (IsActive() && IsInPool(pointer)) {
+	if (IsInPool(pointer)) {
 		FreeData(pointer, size);
 		return;
 	}
@@ -724,7 +753,7 @@ optional_idx BlockAllocator::DecayDelay() const {
 }
 
 void BlockAllocator::ReturnThreadLocalBlocks() const {
-	if (IsActive() && IsEnabled()) {
+	if (IsInitialized()) {
 		GetBlockAllocatorThreadLocalState(*this).Clear();
 	}
 }
@@ -902,8 +931,7 @@ idx_t BlockAllocator::TrimCachedMemory(idx_t memory_headroom, optional_idx pool_
 	const auto cached = allocation_cache->GetCachedMemory();
 	// Avoid reading the fixed pool's per-thread counters when even its capacity fits.
 	if (cached <= memory_headroom &&
-	    (physical_memory_size.load(std::memory_order_relaxed) <= memory_headroom - cached ||
-	     GetCachedPoolMemory() <= memory_headroom - cached)) {
+	    (pool_size <= memory_headroom - cached || GetCachedPoolMemory() <= memory_headroom - cached)) {
 		return 0;
 	}
 	idx_t freed = 0;
@@ -981,7 +1009,7 @@ void BlockAllocator::FlushFallbackAllocator(const idx_t deallocated) const noexc
 
 idx_t BlockAllocator::FreeInternal(const optional_idx block_limit, const optional_idx task_limit,
                                    const ReclaimMode mode, const optional_idx cache_limit) const {
-	if (!IsActive() || !IsEnabled()) {
+	if (!IsInitialized()) {
 		return 0;
 	}
 	// Bound this flush even when other threads keep freeing blocks.

@@ -14,6 +14,7 @@
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/enums/query_result_state.hpp"
+#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/enums/connection_type.hpp"
 #include "duckdb/common/enums/result_lifetime.hpp"
@@ -246,13 +247,18 @@ public:
 
 	//! Gets current percentage of the query's progress, returns 0 in case the progress bar is disabled.
 	DUCKDB_API QueryProgress GetQueryProgress();
+	//! Snapshot the query-level metrics of the running query, keyed by metric name (e.g. "io.total_bytes_read").
+	//! Safe to call from another thread while the query runs, and regardless of whether profiling is enabled.
+	DUCKDB_API profiler_metrics_t GetLiveQueryMetrics();
 
 	//! Register function in the temporary schema
 	DUCKDB_API void RegisterFunction(CreateFunctionInfo &info);
 
 	//! Iterate the user statements of a script as parsed. The submission of each one expands it, so a statement that
-	//! the engine rewrites into several is still one statement here
-	DUCKDB_API StatementIterator IterateStatements(const string &query);
+	//! the engine rewrites into several is still one statement here. With apply_invalidation_policy a parse error
+	//! invalidates the active transaction according to the transaction invalidation policy, as fits statements that are
+	//! parsed to be run; without it the transaction stays usable, as fits statements that are only inspected.
+	DUCKDB_API StatementIterator IterateStatements(const string &query, bool apply_invalidation_policy = true);
 
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
@@ -310,6 +316,9 @@ public:
 
 	//! Process an error for display to the user
 	DUCKDB_API void ProcessError(ErrorData &error, const string &query) const;
+	//! Invalidates the active transaction (or for fatal errors the database) when the current invalidation policy says
+	//! this error type should
+	DUCKDB_API void ApplyInvalidationPolicy(const ErrorData &error);
 
 	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 
