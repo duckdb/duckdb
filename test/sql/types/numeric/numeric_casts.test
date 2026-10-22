@@ -1,7 +1,8 @@
 # name: test/sql/types/numeric/numeric_casts.test
 # description: casts to and from NUMERIC: targets are enforced, rows fail on their own, canonical and typed values
-# convert the same way, scientific notation is an exact number
 # group: [numeric]
+
+# convert the same way, scientific notation is an exact number
 
 # the DECIMAL width is enforced for canonical values as well as typed ones
 statement error

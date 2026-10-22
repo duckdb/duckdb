@@ -1,7 +1,8 @@
 # name: test/sql/types/numeric/numeric_kernel_contract.test
 # description: NUMERIC overloads compute exact results whatever the representation: abs widens from its result
-# range, whole numbers round to themselves, wide decimals round exactly
 # group: [numeric]
+
+# range, whole numbers round to themselves, wide decimals round exactly
 
 load {TEST_DIR}/numeric_kernel_contract.db
 

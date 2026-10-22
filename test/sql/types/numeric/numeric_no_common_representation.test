@@ -1,7 +1,8 @@
 # name: test/sql/types/numeric/numeric_no_common_representation.test
 # description: NUMERIC values that are valid on their own but have no common representation (more than 255 digits
-# between them) are kept as canonical values: in columns, comparisons, joins, functions and nested types
 # group: [numeric]
+
+# between them) are kept as canonical values: in columns, comparisons, joins, functions and nested types
 
 load {TEST_DIR}/numeric_no_common_representation.db
 

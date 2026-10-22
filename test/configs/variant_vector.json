@@ -16,7 +16,10 @@
 			"paths": [
 				"test/sql/types/numeric/numeric_aggregates.test",
 				"test/sql/types/numeric/numeric_canonical_encoding.test",
+				"test/sql/types/numeric/numeric_casts.test",
+				"test/sql/types/numeric/numeric_kernel_contract.test",
 				"test/sql/types/numeric/numeric_kernel_sizing.test",
+				"test/sql/types/numeric/numeric_no_common_representation.test",
 				"test/sql/types/numeric/numeric_type_arithmetic.test",
 				"test/sql/types/numeric/numeric_type.test",
 				"test/sql/types/numeric/numeric_variant_arithmetic.test",
