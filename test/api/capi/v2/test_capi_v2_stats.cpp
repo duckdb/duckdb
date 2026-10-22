@@ -205,9 +205,9 @@ void StatsScalarStatsCb(duckdb_v2_scalar_function_stats_info_handle info, duckdb
 }
 
 void RegisterStatsScalar(duckdb_v2_connection_handle conn, const char *name, StatsMode *mode) {
-	auto integer = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(FactoryOf(conn), DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_scalar_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_scalar_function_create_with_connection(conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_create(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name_str = Convert(name);
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, &name_str, nullptr) == DUCKDB_V2_ERROR_NONE);
 
@@ -224,7 +224,7 @@ void RegisterStatsScalar(duckdb_v2_connection_handle conn, const char *name, Sta
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, StatsScalarExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_stats_callback(function, StatsScalarStatsCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_scalar_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 }
@@ -285,10 +285,10 @@ void StatsAggStatsCb(duckdb_v2_aggregate_function_stats_info_handle info, duckdb
 }
 
 void RegisterStatsAgg(duckdb_v2_connection_handle conn, const char *name, StatsMode *mode) {
-	auto integer = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto bigint = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto integer = MakeType(FactoryOf(conn), DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto bigint = MakeType(FactoryOf(conn), DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 	duckdb_v2_aggregate_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_aggregate_function_create_with_connection(conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_create(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name_str = Convert(name);
 	REQUIRE(duckdb_v2_aggregate_function_set_name(function, &name_str, nullptr) == DUCKDB_V2_ERROR_NONE);
 
@@ -312,7 +312,7 @@ void RegisterStatsAgg(duckdb_v2_connection_handle conn, const char *name, StatsM
 	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_set_stats_callback(function, StatsAggStatsCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_aggregate_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 	duckdb_v2_logical_type_destroy(&bigint);
@@ -333,8 +333,10 @@ void DeleteStatsPairGlobal(void *ptr) {
 
 void StatsPairBindCb(duckdb_v2_function_bind_info_handle, duckdb_v2_table_function_bind_info_handle result,
                      duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	duckdb_v2_factory_handle factory = nullptr;
 	duckdb_v2_logical_type_handle integer = nullptr;
-	if (duckdb_v2_context_create_type_from_id(context, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0, &integer,
+	if (duckdb_v2_context_get_factory(context, &factory, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0, &integer,
 	                                          err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
@@ -402,7 +404,7 @@ void StatsPairStatsCb(duckdb_v2_table_function_stats_info_handle info, duckdb_v2
 
 void RegisterStatsPair(duckdb_v2_connection_handle conn, const char *name, StatsMode *mode) {
 	duckdb_v2_table_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_table_function_create_with_connection(conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_create(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name_str = Convert(name);
 	REQUIRE(duckdb_v2_table_function_set_name(function, &name_str, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_opaque user_data = {mode, nullptr, nullptr};
@@ -412,7 +414,7 @@ void RegisterStatsPair(duckdb_v2_connection_handle conn, const char *name, Stats
 	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, StatsPairExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_stats_callback(function, StatsPairStatsCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_table_function(conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_table_function_destroy(&function);
 }
 
