@@ -30,6 +30,18 @@
 
 namespace duckdb {
 
+template <class FUNC>
+static data_ptr_t RetryAfterReclaiming(const BlockAllocator &block_allocator, FUNC &&allocate) {
+	try {
+		return allocate();
+	} catch (const std::bad_alloc &) {
+	} catch (const OutOfMemoryException &) {
+	}
+	// Cached backing must not cause an otherwise avoidable allocation failure.
+	block_allocator.FlushAll();
+	return allocate();
+}
+
 struct BlockAllocatorConfig {
 	//! Blocks transferred between thread-local caches and global queues.
 	static constexpr idx_t BATCH_SIZE = 16;
@@ -238,7 +250,8 @@ public:
 		}
 
 		// We have also run out of global blocks, use fallback allocator
-		return block_allocator->allocator.AllocateData(block_allocator->block_size);
+		return RetryAfterReclaiming(
+		    *block_allocator, [&] { return block_allocator->allocator.AllocateData(block_allocator->block_size); });
 	}
 
 	void Free(const data_ptr_t pointer) {
@@ -632,7 +645,7 @@ data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
 				return pointer;
 			}
 		}
-		return allocator.AllocateData(size);
+		return RetryAfterReclaiming(*this, [&] { return allocator.AllocateData(size); });
 	}
 	return GetBlockAllocatorThreadLocalState(*this).Allocate();
 }
@@ -678,7 +691,7 @@ data_ptr_t BlockAllocator::ReallocateData(const data_ptr_t pointer, const idx_t 
 	const bool old_in_pool = IsInPool(pointer);
 	const bool new_can_use_pool = new_size == block_size && TryUsePool();
 	if (!old_in_pool && !new_can_use_pool) {
-		return allocator.ReallocateData(pointer, old_size, new_size);
+		return RetryAfterReclaiming(*this, [&] { return allocator.ReallocateData(pointer, old_size, new_size); });
 	}
 
 	// Either old or new can be in the pool: allocate, copy, and free

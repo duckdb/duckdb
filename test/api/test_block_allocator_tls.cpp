@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cerrno>
 #include <condition_variable>
+#include <new>
 #include <thread>
 #include <unordered_set>
 
@@ -155,7 +156,6 @@ TEST_CASE("BlockAllocator initializes only for eligible allocations and falls ba
 	}
 }
 
-#if INTPTR_MAX == INT64_MAX
 namespace {
 #if defined(__linux__)
 class AllocationCacheTestAffinity {
@@ -198,10 +198,26 @@ struct AllocationCacheTestData : PrivateAllocatorData {
 	atomic<idx_t> &live_bytes;
 	bool fail_allocate = false;
 	bool fail_reallocate = false;
+	idx_t memory_limit = NumericLimits<idx_t>::Maximum();
+	idx_t failed_requests = 0;
+	bool throw_bad_alloc = false;
+
+	bool CanAllocate(idx_t size, idx_t old_size = 0) {
+		const auto remaining = live_bytes.load() - old_size;
+		if (remaining <= memory_limit && size <= memory_limit - remaining) {
+			return true;
+		}
+		failed_requests++;
+		if (throw_bad_alloc) {
+			throw std::bad_alloc();
+		}
+		return false;
+	}
 };
 
 data_ptr_t CacheTestAllocate(PrivateAllocatorData *data, idx_t size) {
-	if (data->Cast<AllocationCacheTestData>().fail_allocate) {
+	auto &state = data->Cast<AllocationCacheTestData>();
+	if (state.fail_allocate || !state.CanAllocate(size)) {
 		return nullptr;
 	}
 	auto pointer = Allocator::DefaultAllocate(data, size);
@@ -215,15 +231,91 @@ void CacheTestFree(PrivateAllocatorData *data, data_ptr_t pointer, idx_t size) {
 }
 
 data_ptr_t CacheTestReallocate(PrivateAllocatorData *data, data_ptr_t pointer, idx_t old_size, idx_t size) {
-	if (data->Cast<AllocationCacheTestData>().fail_reallocate) {
+	auto &state = data->Cast<AllocationCacheTestData>();
+	if (state.fail_reallocate || !state.CanAllocate(size, old_size)) {
 		return nullptr;
 	}
 	auto result = Allocator::DefaultReallocate(data, pointer, old_size, size);
-	data->Cast<AllocationCacheTestData>().live_bytes += size - old_size;
+	if (result) {
+		state.live_bytes += size - old_size;
+	}
 	return result;
 }
 } // namespace
 
+TEST_CASE("BlockAllocator reclaims cached backing before retrying native allocation failures",
+          "[api][block_allocator][allocation_cache]") {
+	enum class Operation { ALLOCATE, REALLOCATE, HUGE_ALLOCATION, EXHAUSTED_POOL };
+	const auto operation =
+	    GENERATE(Operation::ALLOCATE, Operation::REALLOCATE, Operation::HUGE_ALLOCATION, Operation::EXHAUSTED_POOL);
+	const bool throw_bad_alloc = GENERATE(false, true);
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t SIZE = 512 * 1024;
+	atomic<idx_t> live_bytes {0};
+	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
+	                   make_uniq<AllocationCacheTestData>(live_bytes));
+	auto &control = fallback.GetPrivateData()->Cast<AllocationCacheTestData>();
+	control.throw_bad_alloc = throw_bad_alloc;
+	{
+		BlockAllocator allocator(fallback, BLOCK_SIZE, 2 * BLOCK_SIZE);
+		const auto free_pool = [&](data_ptr_t pointer) {
+			allocator.FreeData(pointer, BLOCK_SIZE);
+		};
+		vector<unique_ptr<data_t, decltype(free_pool)>> pooled;
+		if (operation == Operation::EXHAUSTED_POOL) {
+			for (idx_t i = 0; i < 2; i++) {
+				pooled.emplace_back(allocator.AllocateData(BLOCK_SIZE), free_pool);
+			}
+		}
+		const auto free_live = [&](data_ptr_t pointer) {
+			allocator.FreeData(pointer, SIZE);
+		};
+		unique_ptr<data_t, decltype(free_live)> live(allocator.AllocateData(SIZE), free_live);
+		live.get()[0] = 42;
+		live.get()[SIZE - 1] = 84;
+		auto cached = allocator.AllocateData(2 * SIZE);
+		allocator.FreeData(cached, 2 * SIZE);
+		REQUIRE(allocator.GetCachedMemory() == 2 * SIZE);
+		control.memory_limit = live_bytes.load();
+		const auto request_size = operation == Operation::REALLOCATE       ? 2 * SIZE
+		                          : operation == Operation::EXHAUSTED_POOL ? BLOCK_SIZE
+		                                                                   : SIZE;
+		const auto free_result = [&](data_ptr_t pointer) {
+			allocator.FreeData(pointer, request_size);
+		};
+		unique_ptr<data_t, decltype(free_result)> result(nullptr, free_result);
+		CHECK_NOTHROW([&] {
+			if (operation == Operation::REALLOCATE) {
+				auto pointer = allocator.ReallocateData(live.get(), SIZE, request_size);
+				live.release();
+				result.reset(pointer);
+			} else if (operation == Operation::HUGE_ALLOCATION) {
+				result.reset(BlockAllocatorTestHelper::AllocateHuge(allocator, request_size));
+			} else {
+				result.reset(allocator.AllocateData(request_size));
+			}
+		}());
+		CHECK(result.get() != nullptr);
+		CHECK(control.failed_requests == 1);
+		CHECK(allocator.GetCachedMemory() == 0);
+		auto original = live ? live.get() : result.get();
+		if (original) {
+			CHECK(original[0] == 42);
+			CHECK(original[SIZE - 1] == 84);
+		}
+		if (result) {
+			result.get()[0] = 21;
+			control.memory_limit = 0;
+			const auto failures = control.failed_requests;
+			CHECK_THROWS(allocator.ReallocateData(result.get(), request_size, 2 * request_size));
+			CHECK(control.failed_requests == failures + 2);
+			CHECK(result.get()[0] == 21);
+		}
+	}
+	CHECK(live_bytes.load() == 0);
+}
+
+#if INTPTR_MAX == INT64_MAX
 #ifndef DUCKDB_NO_THREADS
 TEST_CASE("BlockAllocator publishes the complete pool to concurrent first allocations", "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
