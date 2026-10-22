@@ -465,7 +465,6 @@ static void TemplatedReorder(ClientContext &context, unique_ptr<TupleDataCollect
 	TupleDataAppendState new_key_data_append_state;
 	if (!SORT_KEY::CONSTANT_SIZE) {
 		new_key_data = key_data->CreateUnique();
-		new_key_data->SetPartitionIndex(0); // We'll need the keys before the payload, this keeps them in memory longer
 		new_key_data->InitializeAppend(new_key_data_append_state, TupleDataPinProperties::UNPIN_AFTER_DONE);
 	}
 
