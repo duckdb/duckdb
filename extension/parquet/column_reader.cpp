@@ -153,6 +153,10 @@ const ParquetReader &ColumnReader::Reader() {
 void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
 	if (chunk) {
 		uint64_t size = chunk->meta_data.total_compressed_size;
+		if (size == 0) {
+			// nothing to prefetch
+			return;
+		}
 		transport.RegisterPrefetch(FileOffset(), size, allow_merge);
 	}
 }
@@ -432,7 +436,7 @@ void ColumnReader::ResetPage() {
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
 
-	AllocateBlock(page_hdr.uncompressed_page_size + 1);
+	AllocateBlock(NumericCast<idx_t>(page_hdr.uncompressed_page_size) + 1);
 	bool uncompressed = false;
 	if (page_hdr.data_page_header_v2.__isset.is_compressed && !page_hdr.data_page_header_v2.is_compressed) {
 		uncompressed = true;
@@ -518,7 +522,7 @@ void ColumnReader::AllocateBlock(idx_t size) {
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
-	AllocateBlock(page_hdr.uncompressed_page_size + 1);
+	AllocateBlock(NumericCast<idx_t>(page_hdr.uncompressed_page_size) + 1);
 	uint32_t compressed_page_size = page_hdr.compressed_page_size;
 
 	if (chunk->__isset.crypto_metadata) {
@@ -660,11 +664,11 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 
 		auto res = duckdb_brotli::BrotliDecoderDecompressStream(state, &src_size_size_t, &src, &dst_size_size_t, &dst,
 		                                                        &total_out);
+		duckdb_brotli::BrotliDecoderDestroyInstance(state);
 		if (res != duckdb_brotli::BROTLI_DECODER_RESULT_SUCCESS) {
 			throw InvalidInputException("Failed to read file \"%s\": Brotli Decompression failure",
 			                            Reader().GetFileName());
 		}
-		duckdb_brotli::BrotliDecoderDestroyInstance(state);
 		break;
 	}
 
