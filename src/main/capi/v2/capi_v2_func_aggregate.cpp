@@ -351,7 +351,8 @@ static auto CV2AggregateStats(ClientContext &context, BoundAggregateExpression &
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.stats_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.stats_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();
