@@ -664,23 +664,6 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 }
 
 //===--------------------------------------------------------------------===//
-// Fetch
-//===--------------------------------------------------------------------===//
-template <class T>
-void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	D_ASSERT(row_id >= 0);
-	auto row_index = NumericCast<idx_t>(row_id);
-	D_ASSERT(row_index < segment.count);
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
-	RLEScanState<T> scan_state(std::move(handle), segment);
-	scan_state.Skip(segment, row_index);
-
-	auto result_data = FlatVector::GetDataMutable<T>(result);
-	result_data[result_idx] = scan_state.ValidateAndGetCurrentRun().value;
-}
-
-//===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
 template <class T, bool WRITE_STATISTICS = true>
@@ -688,9 +671,8 @@ CompressionFunction GetRLEFunction(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_RLE, data_type, RLEInitAnalyze<T>, RLEAnalyze<T>,
 	                           RLEFinalAnalyze<T>, RLEInitCompression<T, WRITE_STATISTICS>,
 	                           RLECompress<T, WRITE_STATISTICS>, RLEFinalizeCompress<T, WRITE_STATISTICS>,
-	                           RLEInitScan<T>, RLEScan<T>, RLEScanPartial<T>, RLEFetchRow<T>, RLESkip<T>, nullptr,
-	                           nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, RLESelect<T>,
-	                           RLEFilter<T>);
+	                           RLEInitScan<T>, RLEScan<T>, RLEScanPartial<T>, RLESkip<T>, nullptr, nullptr, nullptr,
+	                           nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, RLESelect<T>, RLEFilter<T>);
 }
 
 CompressionFunction RLEFun::GetFunction(PhysicalType type) {

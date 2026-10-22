@@ -20,13 +20,3 @@ statement error
 SELECT sum(a) FROM t;
 ----
 Data Corruption Error: Corrupted bitpacking segment: bit width exceeds the physical type width
-
-restart
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT sum(a) FROM t;
-----
-Data Corruption Error: Corrupted bitpacking segment: bit width exceeds the physical type width

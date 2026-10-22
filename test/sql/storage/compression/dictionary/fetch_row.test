@@ -38,11 +38,6 @@ SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VA
 ----
 Dictionary
 
-foreach force_fetch false true
-
-statement ok
-SET debug_force_fetch_row={force_fetch};
-
 query I
 select distinct b from test order by a % 7;
 ----
@@ -81,5 +76,3 @@ SELECT a, b FROM test WHERE a IN (0, 4, 5, 6, 31, 32, 33, 2047, 2048, 2049, 1000
 2048	NULL
 2049	(empty)
 10002	a string longer than twelve bytes
-
-endloop

@@ -187,42 +187,6 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 }
 
 //===--------------------------------------------------------------------===//
-// Fetch
-//===--------------------------------------------------------------------===//
-BufferHandle &ColumnFetchState::GetOrInsertHandle(ColumnSegment &segment) {
-	auto primary_id = segment.GetBlockHandle()->BlockId();
-
-	auto entry = handles.find(primary_id);
-	if (entry == handles.end()) {
-		// not pinned yet: pin it
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-		auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
-		auto pinned_entry = handles.insert(make_pair(primary_id, std::move(handle)));
-		return pinned_entry.first->second;
-	} else {
-		// already pinned: use the pinned handle
-		return entry->second;
-	}
-}
-
-void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id,
-                                               Vector &result, idx_t result_idx) {
-	D_ASSERT(row_id >= 0);
-	auto row_index = NumericCast<idx_t>(row_id);
-	D_ASSERT(row_index < segment.count.load());
-
-	// fetch a single row from the string segment
-	// first pin the main buffer if it is not already pinned
-	auto &handle = state.GetOrInsertHandle(segment);
-	auto layout = StringSegmentLayout::Read(handle, segment);
-
-	auto result_data = FlatVector::GetDataMutable<string_t>(result);
-
-	auto entry = layout.ValidateAndGetEntry(row_index);
-	result_data[result_idx] = FetchStringFromEntry(state.context, segment, result, entry);
-}
-
-//===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
 SerializedStringSegmentState::SerializedStringSegmentState() {
@@ -312,18 +276,17 @@ void UncompressedStringStorage::VisitBlockIds(const ColumnSegment &segment, Bloc
 //===--------------------------------------------------------------------===//
 CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::VARCHAR);
-	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type,
-	                           UncompressedStringStorage::StringInitAnalyze, UncompressedStringStorage::StringAnalyze,
-	                           UncompressedStringStorage::StringFinalAnalyze, UncompressedFunctions::InitCompression,
-	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
-	                           UncompressedStringStorage::StringInitScan, UncompressedStringStorage::StringScan,
-	                           UncompressedStringStorage::StringScanPartial, UncompressedStringStorage::StringFetchRow,
-	                           UncompressedFunctions::EmptySkip, UncompressedStringStorage::StringInitSegment,
-	                           UncompressedStringStorage::StringInitAppend, UncompressedStringStorage::StringAppend,
-	                           UncompressedStringStorage::FinalizeAppend, UncompressedStringStorage::StringRevertAppend,
-	                           UncompressedStringStorage::SerializeState, UncompressedStringStorage::DeserializeState,
-	                           UncompressedStringStorage::VisitBlockIds, UncompressedStringInitPrefetch,
-	                           UncompressedStringStorage::Select);
+	return CompressionFunction(
+	    CompressionType::COMPRESSION_UNCOMPRESSED, data_type, UncompressedStringStorage::StringInitAnalyze,
+	    UncompressedStringStorage::StringAnalyze, UncompressedStringStorage::StringFinalAnalyze,
+	    UncompressedFunctions::InitCompression, UncompressedFunctions::Compress,
+	    UncompressedFunctions::FinalizeCompress, UncompressedStringStorage::StringInitScan,
+	    UncompressedStringStorage::StringScan, UncompressedStringStorage::StringScanPartial,
+	    UncompressedFunctions::EmptySkip, UncompressedStringStorage::StringInitSegment,
+	    UncompressedStringStorage::StringInitAppend, UncompressedStringStorage::StringAppend,
+	    UncompressedStringStorage::FinalizeAppend, UncompressedStringStorage::StringRevertAppend,
+	    UncompressedStringStorage::SerializeState, UncompressedStringStorage::DeserializeState,
+	    UncompressedStringStorage::VisitBlockIds, UncompressedStringInitPrefetch, UncompressedStringStorage::Select);
 }
 
 //===--------------------------------------------------------------------===//

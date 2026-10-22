@@ -15,13 +15,3 @@ statement error
 SELECT len(a) FROM t LIMIT 5 OFFSET 98;
 ----
 Data Corruption Error: Corrupted LIST column: later offset is smaller than the preceding offset
-
-restart
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT len(a) FROM t LIMIT 5 OFFSET 98;
-----
-Data Corruption Error: Corrupted LIST column: later offset is smaller than the preceding offset

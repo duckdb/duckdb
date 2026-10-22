@@ -230,15 +230,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		idx_t scan_count = MinValue<idx_t>(remaining, current_start + current.count - state.offset_in_column);
 		idx_t result_offset = base_result_offset + initial_remaining - remaining;
 		if (scan_count > 0) {
-			if (state.scan_options && state.scan_options->force_fetch_row) {
-				for (idx_t i = 0; i < scan_count; i++) {
-					ColumnFetchState fetch_state;
-					current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.offset_in_column + i - current_start),
-					                 result, result_offset + i);
-				}
-			} else {
-				current.Scan(state, scan_count, result, result_offset, scan_type);
-			}
+			current.Scan(state, scan_count, result, result_offset, scan_type);
 
 			state.offset_in_column += scan_count;
 			remaining -= scan_count;
@@ -297,17 +289,8 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 				}
 				segment_sel = rebased_sel;
 			}
-			if (state.scan_options && state.scan_options->force_fetch_row) {
-				for (idx_t i = 0; i < segment_sel_count; i++) {
-					ColumnFetchState fetch_state;
-					auto source_idx = state.offset_in_column + segment_sel.get().get_index(i) - current_start;
-					current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(source_idx), result,
-					                 result_offset + sel_offset + i);
-				}
-			} else {
-				current.Select(state, scan_count, result, segment_sel.get(), segment_sel_count,
-				               result_offset + sel_offset, scan_type);
-			}
+			current.Select(state, scan_count, result, segment_sel.get(), segment_sel_count, result_offset + sel_offset,
+			               scan_type);
 			segment_internal_index = state.offset_in_column + scan_count;
 		}
 		sel_offset += segment_sel_count;
@@ -846,7 +829,7 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 		}
 		if (!scan_state) {
 			scan_state = make_uniq<ColumnScanState>(nullptr);
-			scan_state->Initialize(state.context, type, nullptr);
+			scan_state->Initialize(state.context, type);
 			scan_state->string_scan_type = StringScanType::COPY_STRINGS;
 		}
 		if (scan_state->current.get() == current_segment.get() && scan_state->offset_in_column <= offset) {
@@ -996,15 +979,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(const RowGro
 
 void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
                                 Vector &scan_vector) const {
-	if (state.scan_options && state.scan_options->force_fetch_row) {
-		for (idx_t i = 0; i < count; i++) {
-			ColumnFetchState fetch_state;
-			fetch_state.row_group = state.parent->GetRowGroup();
-			segment.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.offset_in_column + i), scan_vector, i);
-		}
-	} else {
-		segment.Scan(state, count, scan_vector, 0, ScanVectorType::SCAN_FLAT_VECTOR);
-	}
+	segment.Scan(state, count, scan_vector, 0, ScanVectorType::SCAN_FLAT_VECTOR);
 
 	if (updates) {
 		D_ASSERT(scan_vector.GetVectorType() == VectorType::FLAT_VECTOR);

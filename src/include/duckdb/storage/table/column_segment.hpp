@@ -29,7 +29,6 @@ class TableFilter;
 class Transaction;
 class UpdateSegment;
 struct ColumnAppendState;
-struct ColumnFetchState;
 struct ColumnScanState;
 struct PrefetchState;
 struct TableFilterState;
@@ -68,8 +67,6 @@ public:
 	//! Scan one vector while applying a filter to the vector, returning only the matching elements
 	void Filter(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel, idx_t &sel_count,
 	            const TableFilter &filter, TableFilterState &filter_state);
-	//! Fetch a value of the specific row id and append it to the result
-	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
 
 	[[deprecated("UnifiedVectorFormat parameter is ignored")]] static idx_t
 	FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata, const TableFilter &filter,

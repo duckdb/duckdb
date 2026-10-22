@@ -12,10 +12,7 @@ namespace dict_fsst {
 struct CompressedStringScanState : public SegmentScanState {
 public:
 	CompressedStringScanState(ColumnSegment &segment, BufferHandle &&handle_p)
-	    : segment(segment), owned_handle(std::move(handle_p)), handle(owned_handle) {
-	}
-	CompressedStringScanState(ColumnSegment &segment, BufferHandle &handle_p)
-	    : segment(segment), owned_handle(), handle(handle_p) {
+	    : segment(segment), handle(std::move(handle_p)) {
 	}
 
 	~CompressedStringScanState() override;
@@ -43,8 +40,7 @@ private:
 
 public:
 	ColumnSegment &segment;
-	BufferHandle owned_handle;
-	optional_ptr<BufferHandle> handle;
+	BufferHandle handle;
 
 	DictFSSTMode mode;
 	idx_t dictionary_size;

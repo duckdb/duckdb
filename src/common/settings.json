@@ -408,14 +408,6 @@
         "is_debug": true
     },
     {
-        "name": "debug_force_fetch_row",
-        "description": "Force per-row fetching during scans.",
-        "type": "BOOLEAN",
-        "default_scope": "local",
-        "default_value": "false",
-        "is_debug": true
-    },
-    {
         "name": "debug_force_mbedtls_unsafe",
         "description": "Enable mbedtls for encryption. Unsafe to use.",
         "type": "BOOLEAN",

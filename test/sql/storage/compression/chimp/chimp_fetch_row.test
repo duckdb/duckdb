@@ -7,9 +7,6 @@ require vector_size 2048
 
 load test/sql/storage/compression/chimp/chimp.db readonly
 
-statement ok
-SET debug_force_fetch_row=true;
-
 query T
 SELECT temperature::VARCHAR FROM temperatures_double LIMIT 3;
 ----

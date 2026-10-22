@@ -41,7 +41,6 @@ class DuckTransaction;
 class RowGroupSegmentTree;
 class TableFilter;
 struct AdaptiveFilterState;
-struct TableScanOptions;
 struct ScanSamplingInfo;
 struct TableFilterState;
 template <class T>
@@ -78,8 +77,6 @@ struct IndexScanState {
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
-
-typedef unordered_map<block_id_t, BufferHandle> buffer_handle_set_t;
 
 struct PushedDownExpressionState {
 public:
@@ -128,8 +125,6 @@ struct ColumnScanState {
 	idx_t last_offset = 0;
 	//! Whether or not we should scan a specific child column
 	vector<bool> scan_child_column;
-	//! Contains TableScan level config for scanning
-	optional_ptr<TableScanOptions> scan_options;
 	//! (optionally) the expression state for any pushed down expression(s)
 	unique_ptr<PushedDownExpressionState> expression_state;
 	//! Whether or not updates should be allowed
@@ -141,9 +136,8 @@ public:
 	void PushDownCast(const LogicalType &original_type, const LogicalType &cast_type);
 
 public:
-	void Initialize(const QueryContext &context_p, const LogicalType &type, const StorageIndex &column_id,
-	                optional_ptr<TableScanOptions> options);
-	void Initialize(const QueryContext &context_p, const LogicalType &type, optional_ptr<TableScanOptions> options);
+	void Initialize(const QueryContext &context_p, const LogicalType &type, const StorageIndex &column_id);
+	void Initialize(const QueryContext &context_p, const LogicalType &type);
 	//! Move the scan state forward by "count" rows (including all child states)
 	void Next(idx_t count);
 	//! Move ONLY this state forward by "count" rows (i.e. not the child states)
@@ -165,14 +159,10 @@ struct ColumnFetchState {
 	FetchType fetch_type = FetchType::TRANSACTIONAL_FETCH;
 	//! The query context for this fetch
 	QueryContext context;
-	//! The set of pinned block handles for this set of fetches
-	buffer_handle_set_t handles;
 	//! Any child states of the fetch
 	vector<unique_ptr<ColumnFetchState>> child_states;
 	//! The current row group we are fetching from
 	optional_ptr<SegmentNode<RowGroup>> row_group;
-
-	BufferHandle &GetOrInsertHandle(ColumnSegment &segment);
 };
 
 struct ScanFilter {
@@ -310,7 +300,6 @@ public:
 	const vector<StorageIndex> &GetColumnIds();
 	ScanFilterInfo &GetFilterInfo();
 	ScanSamplingInfo &GetSamplingInfo();
-	TableScanOptions &GetOptions();
 	optional_ptr<SegmentNode<RowGroup>> GetRowGroup() const;
 	void SetRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group);
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentNode<RowGroup> &row_group) const;
@@ -355,11 +344,6 @@ struct ScanSamplingInfo {
 	idx_t target_sample_rows = 0;
 };
 
-struct TableScanOptions {
-	//! Fetch rows one-at-a-time instead of using the regular scans.
-	bool force_fetch_row = false;
-};
-
 class TableScanState {
 public:
 	TableScanState();
@@ -369,8 +353,6 @@ public:
 	CollectionScanState table_state;
 	//! Transaction-local scan state
 	CollectionScanState local_state;
-	//! Options for scanning
-	TableScanOptions options;
 	//! Filter info
 	ScanFilterInfo filters;
 	//! Sampling info

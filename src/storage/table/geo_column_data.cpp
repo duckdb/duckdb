@@ -42,7 +42,7 @@ void GeoColumnData::InitializeChildScanStates(ColumnScanState &state) {
 	state.child_states.clear();
 
 	// Initialize using the type of the base column
-	state.Initialize(state.context, base_column->type, state.scan_options);
+	state.Initialize(state.context, base_column->type);
 }
 
 void GeoColumnData::InitializeScan(ColumnScanState &state) {

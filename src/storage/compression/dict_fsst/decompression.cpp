@@ -48,7 +48,7 @@ string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t
 }
 
 void CompressedStringScanState::Initialize(bool initialize_dictionary) {
-	baseptr = handle->GetDataMutable() + segment.GetBlockOffset();
+	baseptr = handle.GetDataMutable() + segment.GetBlockOffset();
 
 	// Load header values
 	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(baseptr);
@@ -110,7 +110,7 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	string_lengths.resize(AlignValue<uint32_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(dict_count));
 	BitpackingPrimitives::UnPackBuffer<uint32_t>(data_ptr_cast(string_lengths.data()),
 	                                             data_ptr_cast(string_lengths_ptr), dict_count, string_lengths_width);
-	// Fetch will never produce a DictionaryVector, scans build the dictionary on first use
+	// scans build the dictionary on first use
 	build_dictionary = initialize_dictionary && mode != DictFSSTMode::FSST_ONLY;
 }
 

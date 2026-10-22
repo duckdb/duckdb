@@ -21,13 +21,3 @@ statement error
 SELECT max(s) FROM t;
 ----
 Data Corruption Error: Failed to scan dictionary string - dictionary index was out of range
-
-restart
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT max(s) FROM t;
-----
-Data Corruption Error: Failed to scan dictionary string - dictionary index was out of range

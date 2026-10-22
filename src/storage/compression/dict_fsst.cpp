@@ -61,8 +61,6 @@ struct DictFSSTCompressionStorage {
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                              idx_t result_offset);
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
-	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
-	                           idx_t result_idx);
 };
 
 //===--------------------------------------------------------------------===//
@@ -143,17 +141,6 @@ void DictFSSTCompressionStorage::StringScanPartial(ColumnSegment &segment, Colum
 void DictFSSTCompressionStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
                                             Vector &result) {
 	StringScanPartial<true>(segment, state, scan_count, result, 0);
-}
-
-//===--------------------------------------------------------------------===//
-// Fetch
-//===--------------------------------------------------------------------===//
-void DictFSSTCompressionStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id,
-                                                Vector &result, idx_t result_idx) {
-	// fetch a single row from the string segment
-	CompressedStringScanState scan_state(segment, state.GetOrInsertHandle(segment));
-	scan_state.Initialize(false);
-	scan_state.ScanToFlatVector(result, result_idx, NumericCast<idx_t>(row_id), 1);
 }
 
 //===--------------------------------------------------------------------===//
@@ -275,8 +262,7 @@ CompressionFunction DictFSSTCompressionFun::GetFunction(PhysicalType data_type) 
 	    dict_fsst::DictFSSTCompressionStorage::InitCompression, dict_fsst::DictFSSTCompressionStorage::Compress,
 	    dict_fsst::DictFSSTCompressionStorage::FinalizeCompress, dict_fsst::DictFSSTCompressionStorage::StringInitScan,
 	    dict_fsst::DictFSSTCompressionStorage::StringScan,
-	    dict_fsst::DictFSSTCompressionStorage::StringScanPartial<false>,
-	    dict_fsst::DictFSSTCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip,
+	    dict_fsst::DictFSSTCompressionStorage::StringScanPartial<false>, UncompressedFunctions::EmptySkip,
 	    UncompressedStringStorage::StringInitSegment);
 	res.validity = CompressionValidity::NO_VALIDITY_REQUIRED;
 	res.select = dict_fsst::DictFSSTSelect;
