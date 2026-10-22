@@ -110,11 +110,9 @@ vector<string> ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, 
 		extension_directories.push_back(custom_extension_directory);
 	}
 
-	if (!config.options.extension_directories.empty()) {
-		// Add all configured extension directories
-		for (const auto &dir : config.options.extension_directories) {
-			extension_directories.push_back(dir);
-		}
+	// Add all configured extension directories
+	for (auto &dir : config.GetExtensionDirectories()) {
+		extension_directories.push_back(std::move(dir));
 	}
 	if (extension_directories.empty()) {
 		// Add default extension directory if no custom directories configured
