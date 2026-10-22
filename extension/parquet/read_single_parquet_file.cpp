@@ -281,7 +281,7 @@ static void LoadClaimedRowGroup(ClientContext &context, ReadSingleParquetFileGlo
                                 ReadSingleParquetFileLocalState &lstate) {
 	auto io_result = gstate.reader->ScheduleIO(context, gstate.state, lstate.state);
 	if (io_result.GetResultType() == AsyncResultType::BLOCKED) {
-		io_result.ExecuteTasksSynchronously(context);
+		io_result.ExecuteTasksSynchronously();
 	}
 }
 
@@ -357,7 +357,7 @@ static void ReadSingleParquetFileFunction(ClientContext &context, TableFunctionI
 		case AsyncResultType::BLOCKED:
 			// the reader needs data that is not in memory yet - run the I/O it scheduled and resume. It left
 			// partial data in the chunk that the resumed scan completes, so the chunk is not reset
-			scan_result.ExecuteTasksSynchronously(context);
+			scan_result.ExecuteTasksSynchronously();
 			continue;
 		case AsyncResultType::HAVE_MORE_OUTPUT:
 			if (output.size() == 0) {

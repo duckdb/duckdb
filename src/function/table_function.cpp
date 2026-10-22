@@ -193,7 +193,7 @@ bool TableFunction::operator!=(const TableFunction &rhs) const {
 	return !(*this == rhs);
 }
 
-bool TableFunctionInput::HandleBlocked(ClientContext &context, AsyncResult &blocked_result) {
+bool TableFunctionInput::HandleBlocked(AsyncResult &blocked_result) {
 	D_ASSERT(blocked_result.GetResultType() == AsyncResultType::BLOCKED);
 	switch (results_execution_mode) {
 	case AsyncResultsExecutionMode::TASK_EXECUTOR:
@@ -201,7 +201,7 @@ bool TableFunctionInput::HandleBlocked(ClientContext &context, AsyncResult &bloc
 		return true;
 	case AsyncResultsExecutionMode::SYNCHRONOUS:
 		// run the I/O synchronously, then loop again to resume
-		blocked_result.ExecuteTasksSynchronously(context);
+		blocked_result.ExecuteTasksSynchronously();
 		if (blocked_result.GetResultType() != AsyncResultType::HAVE_MORE_OUTPUT) {
 			throw InternalException("Unexpected behaviour from ExecuteTasksSynchronously");
 		}
