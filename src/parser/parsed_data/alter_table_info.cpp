@@ -61,14 +61,19 @@ SetCommentInfo::SetCommentInfo(CatalogType entry_catalog_type, Identifier entry_
       entry_catalog_type(entry_catalog_type), comment_value(std::move(new_comment_value_p)) {
 }
 
+SetCommentInfo::SetCommentInfo(CatalogType entry_catalog_type, QualifiedName entry_name_p, Value new_comment_value_p,
+                               OnEntryNotFound if_not_found)
+    : AlterInfo(AlterType::SET_COMMENT, std::move(entry_name_p), if_not_found), entry_catalog_type(entry_catalog_type),
+      comment_value(std::move(new_comment_value_p)) {
+}
+
 CatalogType SetCommentInfo::GetCatalogType() const {
 	return entry_catalog_type;
 }
 
 unique_ptr<AlterInfo> SetCommentInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, GetQualifiedName().Catalog(),
-	                                                 GetQualifiedName().Schema(), GetQualifiedName().Name(),
-	                                                 comment_value, if_not_found);
+	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, GetQualifiedName(), comment_value,
+	                                                 if_not_found);
 }
 
 string SetCommentInfo::ToString() const {

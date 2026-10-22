@@ -1,0 +1,212 @@
+# name: test/sql/catalog/nested_schema/nested_comment_on.test
+# description: Test COMMENT ON with catalog-qualified and deeply nested schema paths
+# group: [nested_schema]
+
+statement ok
+CREATE SCHEMA sales;
+
+statement ok
+CREATE SCHEMA sales.europe;
+
+statement ok
+CREATE SCHEMA sales.europe.north;
+
+statement ok
+CREATE TABLE sales.europe.orders(id INTEGER);
+
+statement ok
+CREATE TABLE sales.europe.north.deep(id INTEGER);
+
+statement ok
+CREATE VIEW sales.europe.v AS SELECT 1 AS id;
+
+statement ok
+CREATE VIEW sales.europe.north.deep_v AS SELECT 1 AS id;
+
+statement ok
+CREATE SEQUENCE sales.europe.north.deep_seq;
+
+statement ok
+CREATE TYPE sales.europe.north.deep_type AS INTEGER;
+
+statement ok
+CREATE MACRO sales.europe.north.deep_macro(a) AS a + 1;
+
+statement ok
+CREATE INDEX deep_idx ON sales.europe.north.deep(id);
+
+# catalog-qualified, single nesting level
+
+statement ok
+COMMENT ON TABLE memory.sales.europe.orders IS 'catalog table';
+
+query I
+SELECT comment FROM duckdb_tables() WHERE table_name = 'orders';
+----
+catalog table
+
+statement ok
+COMMENT ON COLUMN memory.sales.europe.orders.id IS 'catalog column';
+
+query I
+SELECT comment FROM duckdb_columns() WHERE table_name = 'orders' AND column_name = 'id';
+----
+catalog column
+
+statement ok
+COMMENT ON VIEW memory.sales.europe.v IS 'catalog view';
+
+query I
+SELECT comment FROM duckdb_views() WHERE view_name = 'v';
+----
+catalog view
+
+# two nesting levels, without and with catalog
+
+statement ok
+COMMENT ON TABLE sales.europe.north.deep IS 'deep table';
+
+query I
+SELECT comment FROM duckdb_tables() WHERE table_name = 'deep';
+----
+deep table
+
+statement ok
+COMMENT ON TABLE memory.sales.europe.north.deep IS 'deep table 2';
+
+query I
+SELECT comment FROM duckdb_tables() WHERE table_name = 'deep';
+----
+deep table 2
+
+statement ok
+COMMENT ON COLUMN sales.europe.north.deep.id IS 'deep column';
+
+query I
+SELECT comment FROM duckdb_columns() WHERE table_name = 'deep' AND column_name = 'id';
+----
+deep column
+
+statement ok
+COMMENT ON COLUMN memory.sales.europe.north.deep.id IS 'deep column 2';
+
+query I
+SELECT comment FROM duckdb_columns() WHERE table_name = 'deep' AND column_name = 'id';
+----
+deep column 2
+
+statement ok
+COMMENT ON VIEW memory.sales.europe.north.deep_v IS 'deep view';
+
+query I
+SELECT comment FROM duckdb_views() WHERE view_name = 'deep_v';
+----
+deep view
+
+statement ok
+COMMENT ON COLUMN memory.sales.europe.north.deep_v.id IS 'deep view column';
+
+query I
+SELECT comment FROM duckdb_columns() WHERE table_name = 'deep_v' AND column_name = 'id';
+----
+deep view column
+
+statement ok
+COMMENT ON SEQUENCE memory.sales.europe.north.deep_seq IS 'deep sequence';
+
+query I
+SELECT comment FROM duckdb_sequences() WHERE sequence_name = 'deep_seq';
+----
+deep sequence
+
+statement ok
+COMMENT ON TYPE memory.sales.europe.north.deep_type IS 'deep type';
+
+query I
+SELECT comment FROM duckdb_types() WHERE type_name = 'deep_type';
+----
+deep type
+
+statement ok
+COMMENT ON MACRO memory.sales.europe.north.deep_macro IS 'deep macro';
+
+query I
+SELECT comment FROM duckdb_functions() WHERE function_name = 'deep_macro';
+----
+deep macro
+
+statement ok
+COMMENT ON INDEX memory.sales.europe.north.deep_idx IS 'deep index';
+
+query I
+SELECT comment FROM duckdb_indexes() WHERE index_name = 'deep_idx';
+----
+deep index
+
+# deep paths that do not resolve are a binder error, not a parser error
+
+statement error
+COMMENT ON TABLE a.b.c.d IS 'x';
+----
+<REGEX>:Catalog Error.*does not exist.*
+
+statement error
+COMMENT ON TABLE memory.sales.europe.nope.deep IS 'x';
+----
+<REGEX>:Catalog Error.*does not exist.*
+
+statement error
+COMMENT ON COLUMN memory.sales.europe.north.deep.nope IS 'x';
+----
+<REGEX>:Binder Error.*does not have a column with name "nope".*
+
+# attached catalog with nested schemas
+
+statement ok
+ATTACH ':memory:' AS other;
+
+statement ok
+CREATE SCHEMA other.a;
+
+statement ok
+CREATE SCHEMA other.a.b;
+
+statement ok
+CREATE SCHEMA other.a.b.c;
+
+statement ok
+CREATE TABLE other.a.b.t(id INTEGER);
+
+statement ok
+CREATE TABLE other.a.b.c.u(id INTEGER);
+
+statement ok
+COMMENT ON TABLE other.a.b.t IS 'attached nested';
+
+statement ok
+COMMENT ON TABLE other.a.b.c.u IS 'attached deep';
+
+statement ok
+COMMENT ON COLUMN other.a.b.c.u.id IS 'attached deep column';
+
+query II
+SELECT table_name, comment FROM duckdb_tables() WHERE database_name = 'other' ORDER BY table_name;
+----
+t	attached nested
+u	attached deep
+
+query I
+SELECT comment FROM duckdb_columns() WHERE table_name = 'u' AND column_name = 'id';
+----
+attached deep column
+
+statement ok
+USE other;
+
+statement ok
+COMMENT ON TABLE a.b.c.u IS 'attached deep after use';
+
+query I
+SELECT comment FROM duckdb_tables() WHERE table_name = 'u';
+----
+attached deep after use

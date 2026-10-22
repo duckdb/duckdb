@@ -234,21 +234,6 @@ bool PEGTransformerFactory::ExpressionIsEmptyStar(const ParsedExpression &expr) 
 	return true;
 }
 
-QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input) {
-	if (input.empty()) {
-		throw InternalException("QualifiedName cannot be made with an empty input.");
-	}
-	if (input.size() == 1) {
-		return QualifiedName(Identifier(input[0]));
-	} else if (input.size() == 2) {
-		return QualifiedName({Identifier(input[0])}, Identifier(input[1]));
-	} else if (input.size() == 3) {
-		return QualifiedName(Identifier(input[0]), Identifier(input[1]), Identifier(input[2]));
-	} else {
-		throw ParserException("Too many qualifications found - expected [catalog.schema.name] or [schema.name]");
-	}
-}
-
 QualifiedColumnName PEGTransformerFactory::StringToQualifiedColumnName(const vector<string> &input) {
 	if (input.empty()) {
 		throw InternalException("QualifiedColumnName cannot be made with an empty input.");

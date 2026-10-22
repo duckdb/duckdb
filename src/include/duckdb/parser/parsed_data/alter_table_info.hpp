@@ -51,6 +51,8 @@ public:
 struct SetCommentInfo : public AlterInfo {
 	SetCommentInfo(CatalogType entry_catalog_type, Identifier entry_catalog, Identifier entry_schema,
 	               Identifier entry_name, Value new_comment_value_p, OnEntryNotFound if_not_found);
+	SetCommentInfo(CatalogType entry_catalog_type, QualifiedName entry_name, Value new_comment_value_p,
+	               OnEntryNotFound if_not_found);
 
 	CatalogType entry_catalog_type;
 	Value comment_value;
