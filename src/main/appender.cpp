@@ -368,7 +368,8 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 	// We try to cast the chunk.
 	auto size = chunk_p.size();
 	DataChunk cast_chunk;
-	cast_chunk.Initialize(allocator, appender_types);
+	// Chunks converted from Arrow can hold more than STANDARD_VECTOR_SIZE rows
+	cast_chunk.Initialize(allocator, appender_types, MaxValue<idx_t>(size, STANDARD_VECTOR_SIZE));
 	cast_chunk.SetChildCardinality(size);
 
 	for (idx_t i = 0; i < count; i++) {
