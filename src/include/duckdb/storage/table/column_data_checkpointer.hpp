@@ -23,8 +23,14 @@ public:
 	}
 	ColumnDataCheckpointData(ColumnCheckpointState &checkpoint_state, ColumnData &col_data, DatabaseInstance &db,
 	                         const RowGroup &row_group, StorageManager &storage_manager)
+	    : ColumnDataCheckpointData(checkpoint_state, col_data, db, row_group, storage_manager, col_data.type) {
+	}
+	//! Checkpoint data whose compression functions operate on "type" rather than on the type of the column itself.
+	//! Used by compression methods that store a column through the compression functions of another type.
+	ColumnDataCheckpointData(ColumnCheckpointState &checkpoint_state, ColumnData &col_data, DatabaseInstance &db,
+	                         const RowGroup &row_group, StorageManager &storage_manager, const LogicalType &type)
 	    : checkpoint_state(checkpoint_state), col_data(col_data), db(db), row_group(row_group),
-	      storage_manager(storage_manager) {
+	      storage_manager(storage_manager), type(type) {
 	}
 
 public:
@@ -42,6 +48,7 @@ private:
 	optional_ptr<DatabaseInstance> db;
 	optional_ptr<const RowGroup> row_group;
 	optional_ptr<StorageManager> storage_manager;
+	LogicalType type;
 };
 
 struct CheckpointAnalyzeResult {

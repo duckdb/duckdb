@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/numeric_string/numeric_string_large.test_slow
-# description: NumericString across many segments, with NULLs, mixed scales and partial scans
+# description: NumericString across many segments, with NULLs, decimals and partial scans
 # group: [numeric_string]
 
 load {TEST_DIR}/numeric_string_large.db readwrite v2.1.0
@@ -12,7 +12,7 @@ CREATE TABLE reference AS
 SELECT i,
        CASE WHEN i % 11 = 0 THEN NULL ELSE ((i * 2654435761) % 9000000000000000000)::VARCHAR END AS wide,
        (i % 1000 - 500)::VARCHAR AS narrow,
-       CASE i % 3 WHEN 0 THEN (i / 10.0)::DECIMAL(18,1)::VARCHAR WHEN 1 THEN (i / 1000.0)::DECIMAL(18,3)::VARCHAR ELSE i::VARCHAR END AS scales,
+       (i / 1000.0)::DECIMAL(18,3)::VARCHAR AS scales,
        lpad((i % 100000)::VARCHAR, 9, '0') AS padded
 FROM range(1500000) t(i);
 
@@ -28,9 +28,8 @@ CREATE TABLE compressed AS SELECT * FROM reference;
 statement ok
 CHECKPOINT;
 
-# narrow has 1000 distinct values and is left to dictionary compression
 query I
-SELECT DISTINCT compression FROM pragma_storage_info('compressed') WHERE segment_type = 'VARCHAR' AND column_name <> 'narrow';
+SELECT DISTINCT compression FROM pragma_storage_info('compressed') WHERE segment_type = 'VARCHAR';
 ----
 NumericString
 
@@ -77,7 +76,7 @@ SELECT count(DISTINCT padded) FROM compressed;
 query I
 SELECT count(*) FROM compressed WHERE scales LIKE '%.%';
 ----
-1000000
+1500000
 
 # parallel scan with a predicate that touches every segment
 query I

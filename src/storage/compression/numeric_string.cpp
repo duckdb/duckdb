@@ -1,13 +1,14 @@
-#include "duckdb/common/bitpacking.hpp"
+#include "duckdb/common/deque.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/function/compression/compression.hpp"
-#include "duckdb/storage/compression/compression_segment_reader.hpp"
-#include "duckdb/storage/compression/standard_compression_state.hpp"
-#include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/storage/statistics/stats_writer.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -18,65 +19,55 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // NumericString compression
 //
-// Stores VARCHAR values that are decimal numbers ("42", "-17", "123.45", "00123") as a bitpacked integer mantissa plus
-// a (usually constant) decimal scale instead of as strings. Values are packed in groups of GROUP_SIZE rows using
-// frame-of-reference bitpacking. Two modes exist:
-// - CANONICAL: every value is the shortest decimal rendering of (mantissa, scale): optional '-', no leading zeros.
-//   The scale can vary per value ("1.5" and "2.25" in the same segment are fine).
-// - FIXED_WIDTH: every value has the same length and the same scale and no sign. Leading zeros are allowed ("00123",
-//   "01.50"). This covers zero-padded identifiers such as postal codes.
-// Values are formatted back into strings on scan.
-//
-// Segment layout:
-//   SegmentHeader
-//   MantissaGroupMeta[group_count]
-//   ScaleGroupMeta[group_count]
-//   packed group data (8-byte aligned start), mantissa bits followed by scale bits per group
+// Stores VARCHAR values that are decimal numbers ("42", "-17", "123.45", "00123") through the integer compression
+// methods. Every value is parsed into an int64_t mantissa; the mantissas are handed to the integer compression method
+// (bitpacking or RLE) that analyzed smallest, which writes the segment exactly as it would for a BIGINT column. Each
+// segment records the chosen integer method and the layout needed to turn the mantissas back into the original
+// strings on scan. All values of a column must share one layout:
+// - CANONICAL: every value is the shortest decimal rendering of its mantissa at a fixed scale: optional '-', no
+//   leading zeros ("42", "-17" at scale 0; "1.50", "123.45" at scale 2).
+// - FIXED_WIDTH: every value has the same length and scale and no sign. Leading zeros are allowed ("00123", "01.50").
+//   This covers zero-padded identifiers such as postal codes.
+// Anything else (mixed scales, mixed widths with leading zeros, non-numeric text) is left to the string methods.
 //===--------------------------------------------------------------------===//
 namespace numeric_string {
 
-static constexpr idx_t GROUP_SIZE = 1024;
 //! 18 digits always fit in an int64_t mantissa
 static constexpr idx_t MAX_DIGITS = 18;
 //! Longest accepted string (sign, digits, decimal point and zero padding); bounds the formatting buffer
 static constexpr idx_t MAX_LENGTH = 48;
-//! Rough size of an FSST-compressed dictionary entry relative to the raw digits; used to model what dictionary
-//! compression would need for the same data
-static constexpr double DICTIONARY_ENTRY_RATIO = 0.5;
+//! Largest buffer any formatted value needs: sign + 18 digits + '.' + padding zeros
+static constexpr idx_t FORMAT_BUFFER_SIZE = 64;
+static_assert(FORMAT_BUFFER_SIZE > MAX_LENGTH, "formatted values must fit the format buffer");
+//! The mantissas are stored as BIGINT
+static constexpr PhysicalType MANTISSA_PHYSICAL_TYPE = PhysicalType::INT64;
+//! Integer compression methods the mantissas can be stored with. These methods only touch the block handle and the
+//! row count of a segment, so a VARCHAR segment can hand them its block directly.
+static constexpr CompressionType INNER_COMPRESSION_TYPES[] = {CompressionType::COMPRESSION_BITPACKING,
+                                                              CompressionType::COMPRESSION_RLE};
 
 enum class NumericStringMode : uint8_t { CANONICAL = 0, FIXED_WIDTH = 1 };
 
-struct SegmentHeader {
-	uint8_t mode;
-	uint8_t fixed_width;
-	uint8_t fixed_scale;
-	uint8_t reserved;
-	uint32_t group_count;
-	uint32_t mantissa_meta_offset;
-	uint32_t scale_meta_offset;
-	uint32_t data_offset;
-	uint32_t reserved2;
+struct NumericStringLayout {
+	NumericStringMode mode = NumericStringMode::CANONICAL;
+	//! Number of fractional digits
+	uint8_t scale = 0;
+	//! Total string length (FIXED_WIDTH only)
+	uint8_t width = 0;
 };
-static_assert(sizeof(SegmentHeader) == 24, "unexpected NumericString segment header size");
 
-struct MantissaGroupMeta {
-	int64_t base;
-	//! Offset of the packed bits relative to SegmentHeader::data_offset
-	uint32_t data_offset;
-	uint8_t width;
-	uint8_t reserved[3];
-};
-static_assert(sizeof(MantissaGroupMeta) == 16, "unexpected NumericString mantissa meta size");
+static bool IsInnerCompressionType(CompressionType type) {
+	for (auto inner_type : INNER_COMPRESSION_TYPES) {
+		if (inner_type == type) {
+			return true;
+		}
+	}
+	return false;
+}
 
-struct ScaleGroupMeta {
-	//! Offset of the packed bits relative to SegmentHeader::data_offset
-	uint32_t data_offset;
-	uint8_t base;
-	uint8_t width;
-	uint8_t reserved[2];
-};
-static_assert(sizeof(ScaleGroupMeta) == 8, "unexpected NumericString scale meta size");
-
+//===--------------------------------------------------------------------===//
+// Parsing and formatting
+//===--------------------------------------------------------------------===//
 struct ParsedNumber {
 	int64_t mantissa;
 	uint8_t scale;
@@ -135,10 +126,6 @@ static bool ParseNumericString(const char *data, idx_t len, ParsedNumber &result
 	result.leading_zero = leading_zero;
 	return true;
 }
-
-//! Largest buffer any formatted value needs: sign + 18 digits + '.' + padding zeros
-static constexpr idx_t FORMAT_BUFFER_SIZE = 64;
-static_assert(FORMAT_BUFFER_SIZE > MAX_LENGTH, "formatted values must fit the format buffer");
 
 static inline uint64_t AbsoluteMantissa(int64_t mantissa) {
 	return mantissa < 0 ? UnsafeNumericCast<uint64_t>(-(mantissa + 1)) + 1 : UnsafeNumericCast<uint64_t>(mantissa);
@@ -206,98 +193,219 @@ static idx_t FormatFixedWidth(int64_t mantissa, uint8_t width, uint8_t scale, ch
 	return UnsafeNumericCast<idx_t>(o - out);
 }
 
-static inline idx_t PackedBytes(idx_t count, bitpacking_width_t width) {
-	return BitpackingPrimitives::GetRequiredSize(count, width);
+static inline string_t FormatInto(Vector &result, const NumericStringLayout &layout, int64_t mantissa) {
+	char buffer[FORMAT_BUFFER_SIZE];
+	idx_t len;
+	if (layout.mode == NumericStringMode::FIXED_WIDTH) {
+		len = FormatFixedWidth(mantissa, layout.width, layout.scale, buffer);
+	} else {
+		len = FormatCanonical(mantissa, layout.scale, buffer);
+	}
+	auto str = StringVector::EmptyString(result, len);
+	memcpy(str.GetDataWriteable(), buffer, len);
+	str.Finalize();
+	return str;
+}
+
+//===--------------------------------------------------------------------===//
+// Segment state
+//===--------------------------------------------------------------------===//
+//! The persisted per-segment state: which integer method wrote the block and how to format the mantissas
+struct NumericStringSegmentState : public ColumnSegmentState {
+	NumericStringSegmentState() = default;
+	NumericStringSegmentState(CompressionType inner_type, NumericStringLayout layout)
+	    : inner_type(inner_type), layout(layout) {
+	}
+
+	CompressionType inner_type = CompressionType::COMPRESSION_AUTO;
+	NumericStringLayout layout;
+
+	void Serialize(Serializer &serializer) const override {
+		serializer.WriteProperty(1, "inner_compression", inner_type);
+		serializer.WriteProperty(2, "mode", static_cast<uint8_t>(layout.mode));
+		serializer.WriteProperty(3, "scale", layout.scale);
+		serializer.WriteProperty(4, "width", layout.width);
+	}
+
+	static unique_ptr<ColumnSegmentState> Deserialize(Deserializer &deserializer) {
+		auto result = make_uniq<NumericStringSegmentState>();
+		deserializer.ReadProperty(1, "inner_compression", result->inner_type);
+		auto mode = deserializer.ReadProperty<uint8_t>(2, "mode");
+		if (mode > static_cast<uint8_t>(NumericStringMode::FIXED_WIDTH)) {
+			ThrowCorrupt("unknown mode");
+		}
+		result->layout.mode = static_cast<NumericStringMode>(mode);
+		deserializer.ReadProperty(3, "scale", result->layout.scale);
+		deserializer.ReadProperty(4, "width", result->layout.width);
+		return std::move(result);
+	}
+};
+
+//! The in-memory segment state: the persisted state plus the resolved integer compression function
+struct NumericStringCompressedState : public CompressedSegmentState {
+	NumericStringCompressedState(const CompressionFunction &inner, NumericStringLayout layout)
+	    : inner(inner), layout(layout) {
+	}
+
+	const CompressionFunction &inner;
+	NumericStringLayout layout;
+
+	string GetSegmentInfo() const override {
+		return StringUtil::Format(
+		    "%s, %s", CompressionTypeToString(inner.type),
+		    layout.mode == NumericStringMode::FIXED_WIDTH
+		        ? StringUtil::Format("fixed width %d, scale %d", int(layout.width), int(layout.scale))
+		        : StringUtil::Format("canonical, scale %d", int(layout.scale)));
+	}
+};
+
+static unique_ptr<CompressedSegmentState> InitSegment(ColumnSegment &segment, block_id_t block_id,
+                                                      optional_ptr<ColumnSegmentState> segment_state) {
+	if (!segment_state) {
+		ThrowCorrupt("segment has no state");
+	}
+	auto &state = segment_state->Cast<NumericStringSegmentState>();
+	if (!IsInnerCompressionType(state.inner_type)) {
+		ThrowCorrupt("unsupported inner compression method");
+	}
+	auto &config = DBConfig::GetConfig(segment.GetDatabase());
+	auto &inner = config.GetCompressionFunction(state.inner_type, MANTISSA_PHYSICAL_TYPE).get();
+	return make_uniq<NumericStringCompressedState>(inner, state.layout);
+}
+
+static unique_ptr<ColumnSegmentState> SerializeState(ColumnSegment &segment) {
+	auto &state = segment.GetSegmentState()->Cast<NumericStringCompressedState>();
+	return make_uniq<NumericStringSegmentState>(state.inner.type, state.layout);
+}
+
+static unique_ptr<ColumnSegmentState> DeserializeState(Deserializer &deserializer) {
+	return NumericStringSegmentState::Deserialize(deserializer);
+}
+
+//===--------------------------------------------------------------------===//
+// Mantissa conversion
+//===--------------------------------------------------------------------===//
+//! Tracks which layouts are still possible for the values seen so far
+struct LayoutDetector {
+	bool canonical_ok = true;
+	bool fixed_ok = true;
+	bool have_value = false;
+	uint8_t scale = 0;
+	uint8_t width = 0;
+
+	//! Returns false if the values seen so far no longer share a layout
+	bool Accept(const ParsedNumber &number) {
+		if (!have_value) {
+			have_value = true;
+			scale = number.scale;
+			width = number.length;
+		} else if (number.scale != scale) {
+			return false;
+		}
+		if (number.leading_zero) {
+			canonical_ok = false;
+		}
+		if (number.negative || number.length != width) {
+			fixed_ok = false;
+		}
+		return canonical_ok || fixed_ok;
+	}
+
+	NumericStringLayout GetLayout() const {
+		NumericStringLayout layout;
+		layout.scale = scale;
+		if (canonical_ok) {
+			layout.mode = NumericStringMode::CANONICAL;
+		} else {
+			layout.mode = NumericStringMode::FIXED_WIDTH;
+			layout.width = width;
+		}
+		return layout;
+	}
+};
+
+//! Converts a vector of numeric strings into a flat vector of mantissas with the same validity. NULL slots get the
+//! previous mantissa so they do not widen the range the integer method sees. Returns false on a value that does not
+//! parse or does not fit the layout.
+static bool ConvertToMantissas(const Vector &input, Vector &mantissas, LayoutDetector &detector, int64_t &last_mantissa,
+                               optional_ptr<StatsWriter<string_t>> stats) {
+	UnifiedVectorFormat vdata;
+	input.ToUnifiedFormat(vdata);
+	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+	auto count = input.size();
+
+	mantissas.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::SetSize(mantissas, count);
+	auto out = FlatVector::GetDataMutable<int64_t>(mantissas);
+	auto &out_validity = FlatVector::ValidityMutable(mantissas);
+	out_validity.Reset(count);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (!vdata.validity.RowIsValid(idx)) {
+			out_validity.SetInvalid(i);
+			out[i] = last_mantissa;
+			if (stats) {
+				stats->SetHasNull();
+			}
+			continue;
+		}
+		ParsedNumber number;
+		if (!ParseNumericString(data[idx].GetData(), data[idx].GetSize(), number)) {
+			return false;
+		}
+		if (!detector.Accept(number)) {
+			return false;
+		}
+		if (stats) {
+			stats->Update(data[idx]);
+		}
+		out[i] = number.mantissa;
+		last_mantissa = number.mantissa;
+	}
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
+struct InnerCandidate {
+	InnerCandidate(reference<const CompressionFunction> function, unique_ptr<AnalyzeState> state)
+	    : function(function), state(std::move(state)) {
+	}
+
+	reference<const CompressionFunction> function;
+	unique_ptr<AnalyzeState> state;
+};
+
 struct NumericStringAnalyzeState : public AnalyzeState {
-	explicit NumericStringAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager) {
+	explicit NumericStringAnalyzeState(ColumnData &col_data)
+	    : AnalyzeState(col_data.GetBlockManager()), mantissas(LogicalType::BIGINT) {
+		auto &config = DBConfig::GetConfig(col_data.GetDatabase());
+		for (auto function : config.GetCompressionFunctions(MANTISSA_PHYSICAL_TYPE)) {
+			if (!IsInnerCompressionType(function.get().type)) {
+				continue;
+			}
+			auto state = function.get().init_analyze(col_data, MANTISSA_PHYSICAL_TYPE);
+			if (!state) {
+				continue;
+			}
+			candidates.emplace_back(function, std::move(state));
+		}
 	}
 
-	bool canonical_ok = true;
-	bool fixed_ok = true;
-	bool have_fixed = false;
-	uint8_t fixed_width = 0;
-	uint8_t fixed_scale = 0;
-
+	//! The integer methods still in the running
+	vector<InnerCandidate> candidates;
+	//! Set by FinalAnalyze: the candidate that analyzed smallest
+	idx_t best_candidate = DConstants::INVALID_INDEX;
+	LayoutDetector detector;
+	Vector mantissas;
+	int64_t last_mantissa = 0;
 	idx_t total_count = 0;
-	idx_t null_count = 0;
-	idx_t estimated_bytes = 0;
-	//! distinct (mantissa, scale) pairs and total string bytes: used to model the dictionary alternative
-	unordered_set<uint64_t> distinct_values;
-	idx_t total_string_bytes = 0;
 
-	// the group currently being analyzed
-	idx_t group_rows = 0;
-	bool group_has_value = false;
-	int64_t group_min = 0;
-	int64_t group_max = 0;
-	uint8_t scale_min = 0;
-	uint8_t scale_max = 0;
-
-	void CloseGroup() {
-		if (group_rows == 0) {
-			return;
-		}
-		bitpacking_width_t mantissa_width = 0;
-		bitpacking_width_t scale_width = 0;
-		if (group_has_value) {
-			mantissa_width = BitpackingPrimitives::MinimumBitWidth<uint64_t>(UnsafeNumericCast<uint64_t>(group_max) -
-			                                                                 UnsafeNumericCast<uint64_t>(group_min));
-			scale_width = BitpackingPrimitives::MinimumBitWidth<uint32_t>(uint32_t(scale_max) - uint32_t(scale_min));
-		}
-		estimated_bytes += PackedBytes(group_rows, mantissa_width) + PackedBytes(group_rows, scale_width) +
-		                   sizeof(MantissaGroupMeta) + sizeof(ScaleGroupMeta);
-		group_rows = 0;
-		group_has_value = false;
-	}
-
-	void AddRow() {
-		total_count++;
-		if (++group_rows == GROUP_SIZE) {
-			CloseGroup();
-		}
-	}
-
-	void AddNull() {
-		null_count++;
-		AddRow();
-	}
-
-	void AddValue(const ParsedNumber &number) {
-		distinct_values.insert(UnsafeNumericCast<uint64_t>(number.mantissa) ^ (uint64_t(number.scale) << 56));
-		total_string_bytes += number.length;
-		if (!group_has_value) {
-			group_min = group_max = number.mantissa;
-			scale_min = scale_max = number.scale;
-			group_has_value = true;
-		} else {
-			group_min = MinValue(group_min, number.mantissa);
-			group_max = MaxValue(group_max, number.mantissa);
-			scale_min = MinValue(scale_min, number.scale);
-			scale_max = MaxValue(scale_max, number.scale);
-		}
-		AddRow();
-	}
-
-	//! Returns false if the value is not representable in any mode
-	bool Accept(const ParsedNumber &number) {
-		if (number.leading_zero) {
-			canonical_ok = false;
-		}
-		if (number.negative) {
-			fixed_ok = false;
-		} else if (!have_fixed) {
-			have_fixed = true;
-			fixed_width = number.length;
-			fixed_scale = number.scale;
-		} else if (number.length != fixed_width || number.scale != fixed_scale) {
-			fixed_ok = false;
-		}
-		return canonical_ok || fixed_ok;
+	InnerCandidate &Best() {
+		D_ASSERT(best_candidate < candidates.size());
+		return candidates[best_candidate];
 	}
 };
 
@@ -307,273 +415,178 @@ static unique_ptr<AnalyzeState> InitAnalyze(ColumnData &col_data, PhysicalType t
 		// not supported by the target storage version
 		return nullptr;
 	}
-	return make_uniq<NumericStringAnalyzeState>(col_data.GetBlockManager());
+	auto state = make_uniq<NumericStringAnalyzeState>(col_data);
+	if (state->candidates.empty()) {
+		// no integer method available to store the mantissas with
+		return nullptr;
+	}
+	return std::move(state);
 }
 
 static bool Analyze(AnalyzeState &state_p, const Vector &input) {
 	auto &state = state_p.Cast<NumericStringAnalyzeState>();
-	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(vdata);
-	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
-	auto count = input.size();
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (!vdata.validity.RowIsValid(idx)) {
-			state.AddNull();
-			continue;
-		}
-		ParsedNumber number;
-		if (!ParseNumericString(data[idx].GetData(), data[idx].GetSize(), number)) {
-			return false;
-		}
-		if (!state.Accept(number)) {
-			return false;
-		}
-		state.AddValue(number);
+	if (!ConvertToMantissas(input, state.mantissas, state.detector, state.last_mantissa, nullptr)) {
+		return false;
 	}
-	return true;
+	state.total_count += input.size();
+	for (idx_t i = 0; i < state.candidates.size();) {
+		auto &candidate = state.candidates[i];
+		if (candidate.function.get().analyze(*candidate.state, state.mantissas)) {
+			i++;
+		} else {
+			state.candidates.erase_at(i);
+		}
+	}
+	return !state.candidates.empty();
 }
 
 static idx_t FinalAnalyze(AnalyzeState &state_p) {
 	auto &state = state_p.Cast<NumericStringAnalyzeState>();
-	if (state.total_count == 0) {
+	if (state.total_count == 0 || !state.detector.have_value) {
 		return NumericLimits<idx_t>::Maximum();
 	}
-	state.CloseGroup();
-	// Model what dictionary compression would need for the same data: a bitpacked index per row plus the
-	// (FSST-compressed) distinct strings. Columns with few distinct values relative to their numeric range (postal
-	// codes, keys repeated in runs) are stored at least as compactly by the dictionary and scan faster from it
-	// (dictionary vectors instead of formatting every row), so leave those to the dictionary methods.
-	auto distinct_count = state.distinct_values.size();
-	auto index_width = BitpackingPrimitives::MinimumBitWidth<uint64_t>(distinct_count);
-	auto dictionary_estimate = double(state.total_count) * index_width / 8 +
-	                           double(state.total_string_bytes) * DICTIONARY_ENTRY_RATIO * double(distinct_count) /
-	                               double(MaxValue<idx_t>(state.total_count - state.null_count, 1));
-	if (dictionary_estimate <= double(state.estimated_bytes)) {
-		return NumericLimits<idx_t>::Maximum();
+	idx_t best_size = NumericLimits<idx_t>::Maximum();
+	for (idx_t i = 0; i < state.candidates.size(); i++) {
+		auto &candidate = state.candidates[i];
+		auto size = candidate.function.get().final_analyze(*candidate.state);
+		if (size < best_size) {
+			best_size = size;
+			state.best_candidate = i;
+		}
 	}
-	auto segments = state.estimated_bytes / state.info.GetBlockSize() + 1;
-	return state.estimated_bytes + segments * sizeof(SegmentHeader);
+	return best_size;
 }
 
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-class NumericStringCompressionState : public StandardCompressionState {
-public:
-	NumericStringCompressionState(ColumnDataCheckpointData &checkpoint_data, NumericStringAnalyzeState &analyze_state)
-	    : StandardCompressionState(checkpoint_data, CompressionType::COMPRESSION_NUMERIC_STRING),
-	      stats_writer(checkpoint_data.GetType()) {
-		if (analyze_state.canonical_ok) {
-			mode = NumericStringMode::CANONICAL;
-		} else {
-			D_ASSERT(analyze_state.fixed_ok);
-			mode = NumericStringMode::FIXED_WIDTH;
-			fixed_width = analyze_state.fixed_width;
-			fixed_scale = analyze_state.fixed_scale;
-		}
-		CreateAndPinNewSegment();
+struct NumericStringCompressionState;
+
+//! Receives the segments the integer method flushes so they can be re-wrapped as NumericString segments
+struct InnerCheckpointState : public ColumnCheckpointState {
+	InnerCheckpointState(ColumnDataCheckpointData &checkpoint_data, NumericStringCompressionState &owner)
+	    : ColumnCheckpointState(checkpoint_data.GetRowGroup(), checkpoint_data.GetColumnData(),
+	                            checkpoint_data.GetCheckpointState().GetPartialBlockManager()),
+	      owner(owner) {
 	}
 
-	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = vdata.sel->get_index(i);
-			if (!vdata.validity.RowIsValid(idx)) {
-				stats_writer.SetHasNull();
-				pending_valid[pending_count] = false;
-				pending_mantissa[pending_count] = 0;
-				pending_scale[pending_count] = 0;
-			} else {
-				ParsedNumber number;
-				if (!ParseNumericString(data[idx].GetData(), data[idx].GetSize(), number)) {
-					throw InternalException("NumericString compression: value rejected during compression that was "
-					                        "accepted during analysis");
-				}
-				stats_writer.Update(data[idx]);
-				pending_valid[pending_count] = true;
-				pending_mantissa[pending_count] = number.mantissa;
-				pending_scale[pending_count] = number.scale;
-			}
-			if (++pending_count == GROUP_SIZE) {
-				FlushGroup();
-			}
+	NumericStringCompressionState &owner;
+
+	void FlushSegment(unique_ptr<ColumnSegment> segment, BufferHandle handle, idx_t segment_size) override;
+};
+
+//! String statistics of one appended vector, so segment statistics can be assembled for whatever row ranges the
+//! integer method decides to cut its segments at
+struct VectorStats {
+	VectorStats(idx_t row_start, idx_t count, BaseStatistics stats)
+	    : row_start(row_start), count(count), stats(std::move(stats)) {
+	}
+
+	idx_t row_start;
+	idx_t count;
+	BaseStatistics stats;
+};
+
+struct NumericStringCompressionState : public CompressionState {
+	NumericStringCompressionState(ColumnDataCheckpointData &checkpoint_data,
+	                              unique_ptr<NumericStringAnalyzeState> analyze_state)
+	    : CompressionState(checkpoint_data, CompressionType::COMPRESSION_NUMERIC_STRING),
+	      layout(analyze_state->detector.GetLayout()), inner(analyze_state->Best().function.get()),
+	      inner_checkpoint_state(checkpoint_data, *this),
+	      inner_checkpoint_data(inner_checkpoint_state, checkpoint_data.GetColumnData(), checkpoint_data.GetDatabase(),
+	                            checkpoint_data.GetRowGroup(), checkpoint_data.GetStorageManager(),
+	                            LogicalType::BIGINT),
+	      mantissas(LogicalType::BIGINT), stats_writer(LogicalType::VARCHAR) {
+		detector = analyze_state->detector;
+		inner_state = inner.init_compression(inner_checkpoint_data, std::move(analyze_state->Best().state));
+	}
+
+	NumericStringLayout layout;
+	//! The integer compression method that stores the mantissas
+	const CompressionFunction &inner;
+	InnerCheckpointState inner_checkpoint_state;
+	ColumnDataCheckpointData inner_checkpoint_data;
+	unique_ptr<CompressionState> inner_state;
+
+	LayoutDetector detector;
+	Vector mantissas;
+	int64_t last_mantissa = 0;
+	StatsWriter<string_t> stats_writer;
+	//! Statistics of the appended vectors that have not been fully flushed yet
+	deque<VectorStats> pending_stats;
+	idx_t rows_appended = 0;
+	idx_t rows_flushed = 0;
+
+	void Append(const Vector &input) {
+		stats_writer.Clear();
+		if (!ConvertToMantissas(input, mantissas, detector, last_mantissa, stats_writer)) {
+			throw InternalException("NumericString compression: value does not match the analyzed layout");
 		}
+		auto stats = BaseStatistics::CreateEmpty(LogicalType::VARCHAR);
+		stats_writer.Merge(stats);
+		pending_stats.emplace_back(rows_appended, input.size(), std::move(stats));
+		rows_appended += input.size();
+		inner.compress(*inner_state, mantissas);
 	}
 
 	void Finalize() {
-		FlushGroup();
-		FlushSegment(true);
+		inner.compress_finalize(*inner_state);
 	}
 
-private:
-	idx_t SegmentSize(idx_t group_count, idx_t packed_bytes) const {
-		auto meta_end = sizeof(SegmentHeader) + group_count * (sizeof(MantissaGroupMeta) + sizeof(ScaleGroupMeta));
-		return AlignValue<idx_t, 8>(meta_end) + packed_bytes;
+	//! Statistics for the rows [rows_flushed, rows_flushed + count): the union of the statistics of every appended
+	//! vector that overlaps the range. Segment boundaries need not align with vectors, so the result can be slightly
+	//! wider than the segment itself.
+	BaseStatistics SegmentStats(idx_t count) {
+		auto segment_end = rows_flushed + count;
+		auto stats = BaseStatistics::CreateEmpty(LogicalType::VARCHAR);
+		for (auto &entry : pending_stats) {
+			if (entry.row_start >= segment_end) {
+				break;
+			}
+			stats.Merge(entry.stats);
+		}
+		while (!pending_stats.empty() && pending_stats.front().row_start + pending_stats.front().count <= segment_end) {
+			pending_stats.pop_front();
+		}
+		return stats;
 	}
 
-	void FlushGroup() {
-		if (pending_count == 0) {
+	void FlushInnerSegment(unique_ptr<ColumnSegment> inner_segment, BufferHandle handle, idx_t segment_size) {
+		auto count = inner_segment->count.load();
+		if (count == 0) {
 			return;
 		}
-		// frame of reference for the mantissas and the scales
-		int64_t mantissa_min = 0, mantissa_max = 0;
-		uint8_t scale_min = 0, scale_max = 0;
-		bool has_value = false;
-		for (idx_t i = 0; i < pending_count; i++) {
-			if (!pending_valid[i]) {
-				continue;
-			}
-			if (!has_value) {
-				mantissa_min = mantissa_max = pending_mantissa[i];
-				scale_min = scale_max = pending_scale[i];
-				has_value = true;
-			} else {
-				mantissa_min = MinValue(mantissa_min, pending_mantissa[i]);
-				mantissa_max = MaxValue(mantissa_max, pending_mantissa[i]);
-				scale_min = MinValue(scale_min, pending_scale[i]);
-				scale_max = MaxValue(scale_max, pending_scale[i]);
-			}
+		if (rows_flushed + count > rows_appended) {
+			throw InternalException("NumericString compression: the integer method flushed more rows than appended");
 		}
-		bitpacking_width_t mantissa_width = 0;
-		bitpacking_width_t scale_width = 0;
-		if (has_value) {
-			mantissa_width = BitpackingPrimitives::MinimumBitWidth<uint64_t>(UnsafeNumericCast<uint64_t>(mantissa_max) -
-			                                                                 UnsafeNumericCast<uint64_t>(mantissa_min));
-			scale_width = BitpackingPrimitives::MinimumBitWidth<uint32_t>(uint32_t(scale_max) - uint32_t(scale_min));
-		}
-		auto mantissa_bytes = PackedBytes(pending_count, mantissa_width);
-		auto scale_bytes = PackedBytes(pending_count, scale_width);
-
-		// does the group fit in the current segment?
-		auto new_group_count = mantissa_meta.size() + 1;
-		if (SegmentSize(new_group_count, packed.size() + mantissa_bytes + scale_bytes) > info.GetBlockSize()) {
-			FlushSegment(false);
-		}
-
-		// NULL rows store the frame of reference so they do not widen the group
-		for (idx_t i = 0; i < pending_count; i++) {
-			if (pending_valid[i]) {
-				delta_buffer[i] =
-				    UnsafeNumericCast<uint64_t>(pending_mantissa[i]) - UnsafeNumericCast<uint64_t>(mantissa_min);
-				scale_buffer[i] = uint32_t(pending_scale[i]) - uint32_t(scale_min);
-			} else {
-				delta_buffer[i] = 0;
-				scale_buffer[i] = 0;
-			}
-		}
-
-		MantissaGroupMeta mantissa_entry;
-		memset(&mantissa_entry, 0, sizeof(mantissa_entry));
-		mantissa_entry.base = mantissa_min;
-		mantissa_entry.width = mantissa_width;
-		mantissa_entry.data_offset = UnsafeNumericCast<uint32_t>(packed.size());
-		AppendPacked(mantissa_bytes, [&](data_ptr_t dst) {
-			BitpackingPrimitives::PackBuffer<uint64_t>(dst, delta_buffer, pending_count, mantissa_width);
-		});
-
-		ScaleGroupMeta scale_entry;
-		memset(&scale_entry, 0, sizeof(scale_entry));
-		scale_entry.base = scale_min;
-		scale_entry.width = scale_width;
-		scale_entry.data_offset = UnsafeNumericCast<uint32_t>(packed.size());
-		AppendPacked(scale_bytes, [&](data_ptr_t dst) {
-			BitpackingPrimitives::PackBuffer<uint32_t>(dst, scale_buffer, pending_count, scale_width);
-		});
-
-		mantissa_meta.push_back(mantissa_entry);
-		scale_meta.push_back(scale_entry);
-		segment_rows += pending_count;
-		pending_count = 0;
+		auto stats = SegmentStats(count);
+		auto segment_state = make_uniq<NumericStringSegmentState>(inner.type, layout);
+		// the segment keeps the block the integer method wrote, but is a VARCHAR segment of this compression method
+		auto segment = make_uniq<ColumnSegment>(
+		    checkpoint_data.GetDatabase(), inner_segment->GetBlockHandle(), ColumnSegmentType::TRANSIENT, count,
+		    function, std::move(stats), INVALID_BLOCK, 0, inner_segment->SegmentSize(), std::move(segment_state));
+		inner_segment.reset();
+		rows_flushed += count;
+		checkpoint_data.GetCheckpointState().FlushSegment(std::move(segment), std::move(handle), segment_size);
 	}
-
-	template <class FUN>
-	void AppendPacked(idx_t bytes, FUN &&pack) {
-		if (bytes == 0) {
-			return;
-		}
-		auto aligned = AlignValue<idx_t, 8>(bytes);
-		auto offset = packed.size();
-		packed.resize(offset + aligned, 0);
-		pack(packed.data() + offset);
-	}
-
-	void FlushSegment(bool final) {
-		if (segment_rows == 0) {
-			if (final) {
-				// nothing was ever written to the segment that was created last
-				current_segment.reset();
-			}
-			return;
-		}
-		auto group_count = mantissa_meta.size();
-		SegmentHeader header;
-		memset(&header, 0, sizeof(header));
-		header.mode = static_cast<uint8_t>(mode);
-		header.fixed_width = fixed_width;
-		header.fixed_scale = fixed_scale;
-		header.group_count = UnsafeNumericCast<uint32_t>(group_count);
-		header.mantissa_meta_offset = sizeof(SegmentHeader);
-		header.scale_meta_offset =
-		    UnsafeNumericCast<uint32_t>(header.mantissa_meta_offset + group_count * sizeof(MantissaGroupMeta));
-		header.data_offset = UnsafeNumericCast<uint32_t>(
-		    AlignValue<idx_t, 8>(header.scale_meta_offset + group_count * sizeof(ScaleGroupMeta)));
-		auto total_size = header.data_offset + packed.size();
-		D_ASSERT(total_size == SegmentSize(group_count, packed.size()));
-		D_ASSERT(total_size <= info.GetBlockSize());
-
-		auto base_ptr = handle.GetDataMutable();
-		memcpy(base_ptr, &header, sizeof(header));
-		memcpy(base_ptr + header.mantissa_meta_offset, mantissa_meta.data(), group_count * sizeof(MantissaGroupMeta));
-		memcpy(base_ptr + header.scale_meta_offset, scale_meta.data(), group_count * sizeof(ScaleGroupMeta));
-		// zero the alignment padding
-		memset(base_ptr + header.scale_meta_offset + group_count * sizeof(ScaleGroupMeta), 0,
-		       header.data_offset - (header.scale_meta_offset + group_count * sizeof(ScaleGroupMeta)));
-		memcpy(base_ptr + header.data_offset, packed.data(), packed.size());
-
-		current_segment->count = segment_rows;
-		FlushCurrentSegment(stats_writer, total_size);
-
-		mantissa_meta.clear();
-		scale_meta.clear();
-		packed.clear();
-		segment_rows = 0;
-		if (!final) {
-			CreateAndPinNewSegment();
-		}
-	}
-
-public:
-	NumericStringMode mode = NumericStringMode::CANONICAL;
-	uint8_t fixed_width = 0;
-	uint8_t fixed_scale = 0;
-	StatsWriter<string_t> stats_writer;
-
-	//! rows of the group that is being collected
-	idx_t pending_count = 0;
-	int64_t pending_mantissa[GROUP_SIZE];
-	uint8_t pending_scale[GROUP_SIZE];
-	bool pending_valid[GROUP_SIZE];
-	uint64_t delta_buffer[GROUP_SIZE];
-	uint32_t scale_buffer[GROUP_SIZE];
-
-	//! groups of the current segment
-	vector<MantissaGroupMeta> mantissa_meta;
-	vector<ScaleGroupMeta> scale_meta;
-	vector<data_t> packed;
-	idx_t segment_rows = 0;
 };
 
+void InnerCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, BufferHandle handle, idx_t segment_size) {
+	owner.FlushInnerSegment(std::move(segment), std::move(handle), segment_size);
+}
+
 static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
-                                                    unique_ptr<AnalyzeState> state) {
-	return make_uniq<NumericStringCompressionState>(checkpoint_data, state->Cast<NumericStringAnalyzeState>());
+                                                    unique_ptr<AnalyzeState> analyze_state_p) {
+	auto analyze_state = unique_ptr_cast<AnalyzeState, NumericStringAnalyzeState>(std::move(analyze_state_p));
+	if (analyze_state->best_candidate == DConstants::INVALID_INDEX) {
+		throw InternalException("NumericString compression: no integer method selected");
+	}
+	return make_uniq<NumericStringCompressionState>(checkpoint_data, std::move(analyze_state));
 }
 
 static void Compress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = state_p.Cast<NumericStringCompressionState>();
-	UnifiedVectorFormat vdata;
-	scan_vector.ToUnifiedFormat(vdata);
-	state.Append(vdata, scan_vector.size());
+	state.Append(scan_vector);
 }
 
 static void FinalizeCompress(CompressionState &state_p) {
@@ -585,250 +598,99 @@ static void FinalizeCompress(CompressionState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 struct NumericStringScanState : public SegmentScanState {
-	NumericStringScanState(BufferHandle handle_p, const ColumnSegment &segment)
-	    : handle(std::move(handle_p)), segment_count(segment.count.load()),
-	      reader(CompressionSegmentReader::FromSegment(handle, segment, "NumericString segment")) {
-		if (reader.Size() < sizeof(SegmentHeader)) {
-			ThrowCorrupt("segment is smaller than the header");
-		}
-		memcpy(&header, reader.GetArray<uint8_t>(0, sizeof(SegmentHeader)).data(), sizeof(SegmentHeader));
-		if (header.mode > static_cast<uint8_t>(NumericStringMode::FIXED_WIDTH)) {
-			ThrowCorrupt("unknown mode");
-		}
-		auto expected_groups = (segment_count + GROUP_SIZE - 1) / GROUP_SIZE;
-		if (header.group_count != expected_groups) {
-			ThrowCorrupt("group count does not match the row count");
-		}
-		if (header.mantissa_meta_offset != sizeof(SegmentHeader) ||
-		    header.scale_meta_offset != header.mantissa_meta_offset + header.group_count * sizeof(MantissaGroupMeta) ||
-		    header.data_offset < header.scale_meta_offset + header.group_count * sizeof(ScaleGroupMeta) ||
-		    header.data_offset > reader.Size()) {
-			ThrowCorrupt("invalid section offsets");
-		}
+	explicit NumericStringScanState(unique_ptr<SegmentScanState> inner_state)
+	    : inner_state(std::move(inner_state)), mantissas(LogicalType::BIGINT) {
 	}
 
-	idx_t GroupRows(idx_t group) const {
-		auto start = group * GROUP_SIZE;
-		return MinValue<idx_t>(GROUP_SIZE, segment_count - start);
-	}
-
-	MantissaGroupMeta GetMantissaMeta(idx_t group) const {
-		MantissaGroupMeta meta;
-		auto offset = header.mantissa_meta_offset + group * sizeof(MantissaGroupMeta);
-		memcpy(&meta, reader.GetArray<uint8_t>(offset, sizeof(MantissaGroupMeta)).data(), sizeof(MantissaGroupMeta));
-		if (meta.width > 64) {
-			ThrowCorrupt("mantissa width exceeds 64 bits");
-		}
-		return meta;
-	}
-
-	ScaleGroupMeta GetScaleMeta(idx_t group) const {
-		ScaleGroupMeta meta;
-		auto offset = header.scale_meta_offset + group * sizeof(ScaleGroupMeta);
-		memcpy(&meta, reader.GetArray<uint8_t>(offset, sizeof(ScaleGroupMeta)).data(), sizeof(ScaleGroupMeta));
-		if (meta.width > 32) {
-			ThrowCorrupt("scale width exceeds 32 bits");
-		}
-		return meta;
-	}
-
-	//! Returns the packed bytes of a group section after validating they are inside the segment
-	const_data_ptr_t PackedData(idx_t relative_offset, idx_t rows, bitpacking_width_t width) const {
-		auto bytes = PackedBytes(rows, width);
-		auto offset = idx_t(header.data_offset) + relative_offset;
-		return reader.GetArray<uint8_t>(offset, bytes).data();
-	}
-
-	//! Decode a full group into the mantissa / scale buffers
-	void LoadGroup(idx_t group) {
-		if (group == loaded_group) {
-			return;
-		}
-		auto rows = GroupRows(group);
-		auto aligned_rows = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(rows);
-		D_ASSERT(aligned_rows <= GROUP_SIZE);
-
-		auto mantissa = GetMantissaMeta(group);
-		if (mantissa.width == 0) {
-			for (idx_t i = 0; i < rows; i++) {
-				mantissas[i] = mantissa.base;
-			}
-		} else {
-			auto src = PackedData(mantissa.data_offset, rows, mantissa.width);
-			BitpackingPrimitives::UnPackBuffer<uint64_t>(data_ptr_cast(delta_buffer), src, aligned_rows, mantissa.width,
-			                                             true);
-			auto base = UnsafeNumericCast<uint64_t>(mantissa.base);
-			for (idx_t i = 0; i < rows; i++) {
-				mantissas[i] = UnsafeNumericCast<int64_t>(base + delta_buffer[i]);
-			}
-		}
-
-		auto scale = GetScaleMeta(group);
-		if (scale.width == 0) {
-			for (idx_t i = 0; i < rows; i++) {
-				scales[i] = scale.base;
-			}
-		} else {
-			auto src = PackedData(scale.data_offset, rows, scale.width);
-			BitpackingPrimitives::UnPackBuffer<uint32_t>(data_ptr_cast(scale_buffer), src, aligned_rows, scale.width,
-			                                             true);
-			for (idx_t i = 0; i < rows; i++) {
-				auto value = uint32_t(scale.base) + scale_buffer[i];
-				if (value > NumericLimits<uint8_t>::Maximum()) {
-					ThrowCorrupt("scale exceeds 255");
-				}
-				scales[i] = UnsafeNumericCast<uint8_t>(value);
-			}
-		}
-		loaded_group = group;
-	}
-
-	//! Decode a single row without decoding the whole group
-	void LoadRow(idx_t row, int64_t &mantissa_result, uint8_t &scale_result) {
-		auto group = row / GROUP_SIZE;
-		auto index = row % GROUP_SIZE;
-		if (group == loaded_group) {
-			mantissa_result = mantissas[index];
-			scale_result = scales[index];
-			return;
-		}
-		auto rows = GroupRows(group);
-		auto block = index / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-		auto index_in_block = index % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-
-		auto mantissa = GetMantissaMeta(group);
-		if (mantissa.width == 0) {
-			mantissa_result = mantissa.base;
-		} else {
-			auto src = PackedData(mantissa.data_offset, rows, mantissa.width);
-			auto block_bytes = (BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE * mantissa.width) / 8;
-			BitpackingPrimitives::UnPackBlock<uint64_t>(data_ptr_cast(delta_buffer), src + block * block_bytes,
-			                                            mantissa.width, true);
-			mantissa_result =
-			    UnsafeNumericCast<int64_t>(UnsafeNumericCast<uint64_t>(mantissa.base) + delta_buffer[index_in_block]);
-		}
-
-		auto scale = GetScaleMeta(group);
-		if (scale.width == 0) {
-			scale_result = scale.base;
-		} else {
-			auto src = PackedData(scale.data_offset, rows, scale.width);
-			auto block_bytes = (BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE * scale.width) / 8;
-			BitpackingPrimitives::UnPackBlock<uint32_t>(data_ptr_cast(scale_buffer), src + block * block_bytes,
-			                                            scale.width, true);
-			auto value = uint32_t(scale.base) + scale_buffer[index_in_block];
-			if (value > NumericLimits<uint8_t>::Maximum()) {
-				ThrowCorrupt("scale exceeds 255");
-			}
-			scale_result = UnsafeNumericCast<uint8_t>(value);
-		}
-	}
-
-	inline idx_t Format(int64_t mantissa, uint8_t scale, char *buffer) const {
-		if (header.mode == static_cast<uint8_t>(NumericStringMode::FIXED_WIDTH)) {
-			return FormatFixedWidth(mantissa, header.fixed_width, header.fixed_scale, buffer);
-		}
-		return FormatCanonical(mantissa, scale, buffer);
-	}
-
-	inline string_t FormatInto(Vector &result, int64_t mantissa, uint8_t scale) const {
-		char buffer[FORMAT_BUFFER_SIZE];
-		auto len = Format(mantissa, scale, buffer);
-		auto str = StringVector::EmptyString(result, len);
-		memcpy(str.GetDataWriteable(), buffer, len);
-		str.Finalize();
-		return str;
-	}
-
-	BufferHandle handle;
-	const idx_t segment_count;
-	CompressionSegmentReader reader;
-	SegmentHeader header;
-
-	idx_t loaded_group = DConstants::INVALID_INDEX;
-	int64_t mantissas[GROUP_SIZE];
-	uint8_t scales[GROUP_SIZE];
-	uint64_t delta_buffer[GROUP_SIZE];
-	uint32_t scale_buffer[GROUP_SIZE];
+	//! The scan state of the integer method
+	unique_ptr<SegmentScanState> inner_state;
+	//! Scratch space the integer method scans into
+	Vector mantissas;
 };
 
+//! The integer method expects its own scan state in the column scan state: swap it in for the duration of the call
+struct InnerScanScope {
+	InnerScanScope(ColumnScanState &state, NumericStringScanState &scan_state) : state(state), scan_state(scan_state) {
+		std::swap(state.scan_state, scan_state.inner_state);
+	}
+	~InnerScanScope() {
+		std::swap(state.scan_state, scan_state.inner_state);
+	}
+
+	ColumnScanState &state;
+	NumericStringScanState &scan_state;
+};
+
+static NumericStringCompressedState &GetCompressedState(ColumnSegment &segment) {
+	return segment.GetSegmentState()->Cast<NumericStringCompressedState>();
+}
+
 static unique_ptr<SegmentScanState> InitScan(const QueryContext &context, ColumnSegment &segment) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
-	return make_uniq<NumericStringScanState>(std::move(handle), segment);
+	auto &compressed = GetCompressedState(segment);
+	return make_uniq<NumericStringScanState>(compressed.inner.init_scan(context, segment));
+}
+
+static void FormatMantissas(const NumericStringLayout &layout, Vector &mantissas, idx_t count, Vector &result,
+                            idx_t result_offset) {
+	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+	D_ASSERT(mantissas.GetVectorType() == VectorType::FLAT_VECTOR);
+	auto mantissa_data = FlatVector::GetData<int64_t>(mantissas);
+	auto result_data = FlatVector::GetDataMutable<string_t>(result);
+	for (idx_t i = 0; i < count; i++) {
+		result_data[result_offset + i] = FormatInto(result, layout, mantissa_data[i]);
+	}
 }
 
 static void ScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                         idx_t result_offset) {
+	auto &compressed = GetCompressedState(segment);
 	auto &scan_state = state.scan_state->Cast<NumericStringScanState>();
-	auto start = state.GetPositionInSegment();
-	D_ASSERT(start + scan_count <= segment.count.load());
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetDataMutable<string_t>(result);
-
-	idx_t scanned = 0;
-	while (scanned < scan_count) {
-		auto row = start + scanned;
-		auto group = row / GROUP_SIZE;
-		auto index = row % GROUP_SIZE;
-		auto to_scan = MinValue<idx_t>(scan_count - scanned, GROUP_SIZE - index);
-		scan_state.LoadGroup(group);
-		for (idx_t i = 0; i < to_scan; i++) {
-			result_data[result_offset + scanned + i] =
-			    scan_state.FormatInto(result, scan_state.mantissas[index + i], scan_state.scales[index + i]);
-		}
-		scanned += to_scan;
+	{
+		InnerScanScope scope(state, scan_state);
+		compressed.inner.scan_partial(segment, state, scan_count, scan_state.mantissas, 0);
 	}
+	FormatMantissas(compressed.layout, scan_state.mantissas, scan_count, result, result_offset);
 }
 
 static void Scan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	ScanPartial(segment, state, scan_count, result, 0);
 }
 
+static void Skip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+	auto &compressed = GetCompressedState(segment);
+	auto &scan_state = state.scan_state->Cast<NumericStringScanState>();
+	InnerScanScope scope(state, scan_state);
+	compressed.inner.skip(segment, state, skip_count);
+}
+
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
 static void FetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	D_ASSERT(row_id >= 0);
-	auto row = UnsafeNumericCast<idx_t>(row_id);
-	D_ASSERT(row < segment.count.load());
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
-	NumericStringScanState scan_state(std::move(handle), segment);
-
-	int64_t mantissa;
-	uint8_t scale;
-	scan_state.LoadRow(row, mantissa, scale);
-	auto result_data = FlatVector::GetDataMutable<string_t>(result);
-	result_data[result_idx] = scan_state.FormatInto(result, mantissa, scale);
+	auto &compressed = GetCompressedState(segment);
+	Vector mantissa(LogicalType::BIGINT, 1);
+	compressed.inner.fetch_row(segment, state, row_id, mantissa, 0);
+	FormatMantissas(compressed.layout, mantissa, 1, result, result_idx);
 }
 
 //===--------------------------------------------------------------------===//
 // Segment info
 //===--------------------------------------------------------------------===//
 static InsertionOrderPreservingMap<string> GetSegmentInfo(QueryContext context, ColumnSegment &segment) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
-	NumericStringScanState scan_state(std::move(handle), segment);
-
+	auto &compressed = GetCompressedState(segment);
 	InsertionOrderPreservingMap<string> result;
-	if (scan_state.header.mode == static_cast<uint8_t>(NumericStringMode::FIXED_WIDTH)) {
+	result["inner_compression"] = CompressionTypeToString(compressed.inner.type);
+	if (compressed.layout.mode == NumericStringMode::FIXED_WIDTH) {
 		result["mode"] = "fixed_width";
-		result["width"] = to_string(scan_state.header.fixed_width);
-		result["scale"] = to_string(scan_state.header.fixed_scale);
+		result["width"] = to_string(compressed.layout.width);
 	} else {
 		result["mode"] = "canonical";
 	}
-	result["group_count"] = to_string(scan_state.header.group_count);
-	idx_t mantissa_bits = 0;
-	idx_t scale_bits = 0;
-	for (idx_t group = 0; group < scan_state.header.group_count; group++) {
-		mantissa_bits += scan_state.GetMantissaMeta(group).width;
-		scale_bits += scan_state.GetScaleMeta(group).width;
-	}
-	if (scan_state.header.group_count > 0) {
-		result["avg_mantissa_width"] = to_string(mantissa_bits / scan_state.header.group_count);
-		result["avg_scale_width"] = to_string(scale_bits / scan_state.header.group_count);
+	result["scale"] = to_string(compressed.layout.scale);
+	if (compressed.inner.get_segment_info) {
+		for (auto &entry : compressed.inner.get_segment_info(context, segment)) {
+			result[entry.first] = entry.second;
+		}
 	}
 	return result;
 }
@@ -844,7 +706,8 @@ CompressionFunction NumericStringCompressionFun::GetFunction(PhysicalType data_t
 	    CompressionType::COMPRESSION_NUMERIC_STRING, data_type, numeric_string::InitAnalyze, numeric_string::Analyze,
 	    numeric_string::FinalAnalyze, numeric_string::InitCompression, numeric_string::Compress,
 	    numeric_string::FinalizeCompress, numeric_string::InitScan, numeric_string::Scan, numeric_string::ScanPartial,
-	    numeric_string::FetchRow, UncompressedFunctions::EmptySkip);
+	    numeric_string::FetchRow, numeric_string::Skip, numeric_string::InitSegment, nullptr, nullptr, nullptr, nullptr,
+	    numeric_string::SerializeState, numeric_string::DeserializeState);
 	function.get_segment_info = numeric_string::GetSegmentInfo;
 	return function;
 }

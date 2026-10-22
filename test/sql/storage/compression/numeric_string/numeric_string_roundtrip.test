@@ -7,7 +7,7 @@ load {TEST_DIR}/numeric_string_roundtrip.db readwrite v2.1.0
 statement ok
 PRAGMA force_compression='uncompressed';
 
-# integers, negatives, decimals with mixed scales, trailing zeros in the fraction, NULLs
+# integers, negatives, decimals, trailing zeros in the fraction, NULLs, and a column mixing scales
 statement ok
 CREATE TABLE reference AS
 SELECT i,
@@ -19,7 +19,8 @@ SELECT i,
                   WHEN 2 THEN (i / 100.0)::DECIMAL(18,2)::VARCHAR ELSE (i / 1000.0)::DECIMAL(18,3)::VARCHAR END AS mixed_scale,
        '0.' || lpad(i::VARCHAR, 5, '0') || '0' AS trailing_zeros,
        (123456789012345678 - i)::VARCHAR AS eighteen_digits,
-       (i % 3)::VARCHAR AS low_cardinality
+       (i % 3)::VARCHAR AS low_cardinality,
+       (i // 300)::VARCHAR AS runs
 FROM range(10000) t(i);
 
 statement ok
@@ -35,15 +36,22 @@ statement ok
 CHECKPOINT;
 
 query I
-SELECT DISTINCT compression FROM pragma_storage_info('compressed') WHERE segment_type = 'VARCHAR' AND column_name <> 'low_cardinality';
+SELECT DISTINCT compression FROM pragma_storage_info('compressed') WHERE segment_type = 'VARCHAR' AND column_name <> 'mixed_scale';
 ----
 NumericString
 
-# low-cardinality columns are left to dictionary compression even when forced
+# a column whose values do not share one scale is left to the string methods even when forced
 query I
-SELECT count(*) FROM pragma_storage_info('compressed') WHERE column_name = 'low_cardinality' AND compression = 'NumericString';
+SELECT count(*) FROM pragma_storage_info('compressed') WHERE column_name = 'mixed_scale' AND compression = 'NumericString';
 ----
 0
+
+# every segment names the integer method that stores its mantissas
+query I
+SELECT DISTINCT segment_info LIKE 'inner_compression: BitPacking, mode: %' OR segment_info LIKE 'inner_compression: RLE, mode: %'
+FROM pragma_storage_info('compressed', include_segment_info=true) WHERE compression = 'NumericString';
+----
+true
 
 query I
 SELECT count(*) FROM compressed c JOIN reference r USING (i)
@@ -54,9 +62,26 @@ WHERE c.ints IS DISTINCT FROM r.ints
    OR c.mixed_scale IS DISTINCT FROM r.mixed_scale
    OR c.trailing_zeros IS DISTINCT FROM r.trailing_zeros
    OR c.eighteen_digits IS DISTINCT FROM r.eighteen_digits
-   OR c.low_cardinality IS DISTINCT FROM r.low_cardinality;
+   OR c.low_cardinality IS DISTINCT FROM r.low_cardinality
+   OR c.runs IS DISTINCT FROM r.runs;
 ----
 0
+
+# long runs are stored through RLE rather than bitpacking
+query I
+SELECT DISTINCT segment_info LIKE 'inner_compression: RLE, mode: canonical, scale: 0%'
+FROM pragma_storage_info('compressed', include_segment_info=true) WHERE column_name = 'runs' AND segment_type = 'VARCHAR';
+----
+true
+
+query I
+SELECT runs FROM compressed WHERE i IN (0, 299, 300, 601, 9999) ORDER BY i;
+----
+0
+0
+1
+2
+33
 
 query IIII
 SELECT count(*), count(with_nulls), min(negatives), max(trailing_zeros) FROM compressed;
