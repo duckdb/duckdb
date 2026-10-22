@@ -167,7 +167,7 @@ void DictFSSTCompressionStorage::StringFetchRow(ColumnSegment &segment, ColumnFe
 void DictFSSTSelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                     const SelectionVector &sel, idx_t sel_count, idx_t result_offset, ScanVectorType scan_type) {
 	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
-	if (scan_state.mode != DictFSSTMode::FSST_ONLY && scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR) {
+	if (scan_state.layout.mode != DictFSSTMode::FSST_ONLY && scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR) {
 		// scan + slice, so that we can emit a dictionary vector
 		DictFSSTCompressionStorage::StringScan(segment, state, vector_count, result);
 		result.Slice(sel, sel_count);
@@ -189,11 +189,11 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 		if (!scan_state.filter_result) {
 			// no filter result yet - apply filter to the dictionary
 			// initialize the filter result - setting everything to false
-			scan_state.filter_result = make_unsafe_uniq_array<bool>(scan_state.dict_count);
+			scan_state.filter_result = make_unsafe_uniq_array<bool>(scan_state.layout.dict_count);
 
 			// Slot zero represents NULL and is not necessarily referenced by any row.
-			idx_t non_null_count = scan_state.dict_count - 1;
-			Vector dict_data(scan_state.dictionary->data, /*offset=*/1, scan_state.dict_count);
+			idx_t non_null_count = scan_state.layout.dict_count - 1;
+			Vector dict_data(scan_state.dictionary->data, /*offset=*/1, scan_state.layout.dict_count);
 			SelectionVector dict_sel;
 			idx_t filter_count = non_null_count;
 			ColumnSegment::FilterSelection(dict_sel, dict_data, filter_state, non_null_count, filter_count);
@@ -264,7 +264,7 @@ static InsertionOrderPreservingMap<string> DictFSSTGetSegmentInfo(QueryContext, 
 	const auto tuple_count = segment.count.load();
 
 	InsertionOrderPreservingMap<string> result;
-	result[DictFSSTModeToString(state->mode)] = StringUtil::Format("%d", tuple_count);
+	result[DictFSSTModeToString(state->layout.mode)] = StringUtil::Format("%d", tuple_count);
 	return result;
 }
 
