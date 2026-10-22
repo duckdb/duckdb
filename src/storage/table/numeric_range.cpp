@@ -406,6 +406,10 @@ BaseStatistics NumericRange::ToCanonical() const {
 		auto max_blob = NumericBlob::Encode(max.ToString());
 		StringStats::FromConstant(result, string_t(min_blob));
 		StringStats::MergeInConstant(result, string_t(max_blob));
+		// the endpoints bound the values, not the lengths of their blobs: zero is one byte, a value between the
+		// endpoints can carry more significant digits than either
+		StringStats::ResetMinStringLength(result);
+		StringStats::ResetMaxStringLength(result);
 	}
 	NumericRangeStats::Set(result, *this);
 	return result;

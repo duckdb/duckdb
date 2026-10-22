@@ -2,18 +2,23 @@
 # description: Arithmetic over NUMERIC is exact: the kernel is sized by the run-time representations of the operands
 # group: [numeric]
 
+load {TEST_DIR}/numeric_variant_arithmetic.db
+
 statement ok
 CREATE TABLE t(a NUMERIC, b NUMERIC, i INTEGER);
 
 statement ok
 INSERT INTO t VALUES (100, 100, 100), (-3, 7, 7);
 
-# the type is NUMERIC; the stored representation is the one the rows arrived in until a checkpoint narrows it, results
-# take the representation of the kernel, which is sized by the values of the operands
+# the type is NUMERIC; the checkpoint stores the rows in the narrowest representation that holds them, results take the
+# representation of the kernel, which is sized by the values of the operands
+statement ok
+CHECKPOINT;
+
 query IIII
 SELECT typeof(a + b), numeric_representation(a), numeric_representation(a + b), numeric_representation(a * b) FROM t LIMIT 1;
 ----
-NUMERIC	INTEGER	INTEGER	INTEGER
+NUMERIC	TINYINT	SMALLINT	SMALLINT
 
 query III
 SELECT a + b, a * b, a - b FROM t ORDER BY a;
@@ -77,10 +82,14 @@ SELECT x * y, x + y, x - y FROM d ORDER BY x;
 -224.9775	-97.74	-102.24
 61.725	123.95	122.95
 
+# the product takes the scales of the stored representations (DECIMAL(5,2) and DECIMAL(3,2) after the checkpoint)
+statement ok
+CHECKPOINT;
+
 query I
 SELECT numeric_representation(x * y) FROM d WHERE x < 0;
 ----
-DECIMAL(18,4)
+DECIMAL(7,4)
 
 # division goes through DOUBLE, as for DECIMAL
 query II

@@ -1225,10 +1225,12 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 		return 20;
 	case LogicalTypeId::DECIMAL:
 		return 21;
-	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::NUMERIC:
 		return 22;
-	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::FLOAT:
 		return 23;
+	case LogicalTypeId::DOUBLE:
+		return 24;
 	// date/time/timestamp
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:

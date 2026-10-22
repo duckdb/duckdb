@@ -22,6 +22,10 @@ SELECT sum(a + b), sum(a * b), max(a * b), min(a - b) FROM t;
 statement ok
 CREATE TABLE big AS SELECT (2147483647 - i)::NUMERIC AS a, (2147483647 - i)::NUMERIC AS b FROM range(0, 10) tbl(i);
 
+# the checkpoint stores the rows in the narrowest representation that holds them
+statement ok
+CHECKPOINT;
+
 query III
 SELECT numeric_representation(a), numeric_representation(a + b), numeric_representation(a * b) FROM big LIMIT 1;
 ----
