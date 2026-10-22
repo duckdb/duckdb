@@ -92,6 +92,17 @@ public:
 		value = salt;
 	}
 
+	//! Prefetch a future bucket, evaluating its address only within the loop bounds.
+	template <class GET_ENTRY>
+	static inline void Prefetch(idx_t row_idx, idx_t row_count, GET_ENTRY get_entry) {
+#if defined(__GNUC__) || defined(__clang__)
+		constexpr idx_t PREFETCH_DISTANCE = 64;
+		if (row_idx + PREFETCH_DISTANCE < row_count) {
+			__builtin_prefetch(get_entry(row_idx + PREFETCH_DISTANCE), 0, 3);
+		}
+#endif
+	}
+
 private:
 	hash_t value;
 };

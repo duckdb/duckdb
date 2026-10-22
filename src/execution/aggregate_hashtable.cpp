@@ -802,6 +802,10 @@ static void GroupedAggregateHashTableInnerLoop(ht_entry_t *const entries, const 
                                                idx_t &empty_count, idx_t &compare_count) {
 	// For each remaining entry, figure out whether or not it belongs to a full or empty group
 	for (idx_t i = 0; i < remaining_entries; i++) {
+		ht_entry_t::Prefetch(i, remaining_entries, [&](idx_t next_idx) {
+			const auto next_index = HAS_SEL ? sel_vector->get_index_unsafe(next_idx) : next_idx;
+			return &entries[ht_offsets[next_index]];
+		});
 		const auto index = HAS_SEL ? sel_vector->get_index_unsafe(i) : i;
 		const auto salt = hash_salts[index];
 		auto &ht_offset = ht_offsets[index];
