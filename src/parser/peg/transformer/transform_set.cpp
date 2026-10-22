@@ -131,7 +131,11 @@ PEGTransformerFactory::TransformStandardAssignment(PEGTransformer &transformer,
 	if (value->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		// SET value cannot be a column reference
 		auto &col_ref = value->Cast<ColumnRefExpression>();
-		value = ConstantExpression::String(col_ref.GetColumnName().GetIdentifierName());
+		if (col_ref.IsQualified()) {
+			value = ConstantExpression::String(col_ref.ToString());
+		} else {
+			value = ConstantExpression::String(col_ref.GetColumnName().GetIdentifierName());
+		}
 	} else if (value->GetExpressionClass() == ExpressionClass::DEFAULT) {
 		return make_uniq<ResetVariableStatement>(set_variable_or_setting.name, set_variable_or_setting.scope);
 	}

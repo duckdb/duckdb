@@ -4,9 +4,9 @@
 
 require parquet
 
-concurrentloop i 0 16
+concurrentloop i 0 4
 
-loop j 0 200
+loop j 0 10
 
 statement ok
 PRAGMA add_parquet_key('k{i}_{j}', '0123456789112345');

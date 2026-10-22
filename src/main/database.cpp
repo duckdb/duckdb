@@ -523,6 +523,7 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
+	config.SetDisabledOptimizers(config.options.disabled_optimizers);
 	config.user_settings = new_config.user_settings;
 	os_util = make_uniq<OSUtil>(*this, config.options.configuration_env);
 	// carry over a capability set handed to us, so a database created by code with its own copy of
