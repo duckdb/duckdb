@@ -205,40 +205,61 @@ vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() {
 	return result;
 }
 
-void TupleDataCollection::DestroyChunks(const idx_t chunk_idx_begin, const idx_t chunk_idx_end) {
+static idx_t FindChunkPart(const TupleDataSegment &segment, const idx_t chunk_idx, idx_t offset) {
+	if (chunk_idx == segment.ChunkCount()) {
+		D_ASSERT(offset == 0);
+		return segment.chunk_parts.size();
+	}
+	const auto &chunk = *segment.chunks[chunk_idx];
+	D_ASSERT(offset < chunk.count);
+	for (auto part_idx = chunk.part_ids.Start(); part_idx < chunk.part_ids.End(); part_idx++) {
+		const auto count = segment.chunk_parts[part_idx]->count;
+		if (offset < count) {
+			return part_idx;
+		}
+		offset -= count;
+	}
+	throw InternalException("Row offset out of range in TupleDataCollection::DestroyChunks");
+}
+
+static idx_t FindNextHeapBlock(const TupleDataSegment &segment, idx_t chunk_idx, idx_t part_idx, const idx_t part_end) {
+	for (; chunk_idx < segment.ChunkCount() && part_idx < part_end; chunk_idx++) {
+		const auto &chunk = *segment.chunks[chunk_idx];
+		part_idx = MaxValue<idx_t>(part_idx, chunk.part_ids.Start());
+		for (; part_idx < MinValue<idx_t>(chunk.part_ids.End(), part_end); part_idx++) {
+			const auto &part = *segment.chunk_parts[part_idx];
+			if (part.total_heap_size != 0) {
+				return part.heap_block_index;
+			}
+		}
+	}
+	return segment.allocator->HeapBlockCount();
+}
+
+void TupleDataCollection::DestroyChunks(const idx_t chunk_idx_begin, const idx_t chunk_idx_end,
+                                        const idx_t begin_offset, const idx_t end_offset) {
 	D_ASSERT(segments.size() == 1); // Assume 1 segment for now (multi-segment destroys can be implemented if needed)
 	D_ASSERT(chunk_idx_begin <= chunk_idx_end && chunk_idx_end <= ChunkCount());
-	auto &segment = *segments[0];
-	auto &chunk_begin = *segment.chunks[chunk_idx_begin];
-
-	const auto row_block_begin = chunk_begin.row_block_ids.Start();
-	if (chunk_idx_end == ChunkCount()) {
-		segment.allocator->DestroyRowBlocks(row_block_begin, segment.allocator->RowBlockCount());
-	} else {
-		auto &chunk_end = *segment.chunks[chunk_idx_end];
-		const auto row_block_end = chunk_end.row_block_ids.Start();
-		segment.allocator->DestroyRowBlocks(row_block_begin, row_block_end);
+	D_ASSERT(chunk_idx_begin != chunk_idx_end || begin_offset <= end_offset);
+	if (chunk_idx_begin == chunk_idx_end && begin_offset == end_offset) {
+		return;
 	}
+	auto &segment = *segments[0];
+	const auto part_begin = FindChunkPart(segment, chunk_idx_begin, begin_offset);
+	const auto part_end = FindChunkPart(segment, chunk_idx_end, end_offset);
 
-	if (!layout.AllConstant()) {
-		auto heap_chunk_begin = chunk_idx_begin;
-		while (heap_chunk_begin < chunk_idx_end && segment.chunks[heap_chunk_begin]->heap_block_ids.Empty()) {
-			heap_chunk_begin++;
-		}
-		if (heap_chunk_begin == chunk_idx_end) {
+	const auto row_block_begin = segment.chunk_parts[part_begin]->row_block_index;
+	const auto row_block_end = chunk_idx_end == segment.ChunkCount() ? segment.allocator->RowBlockCount()
+	                                                                 : segment.chunk_parts[part_end]->row_block_index;
+	segment.allocator->DestroyRowBlocks(row_block_begin, row_block_end);
+
+	if (!layout.AllConstant() && segment.allocator->HeapBlockCount() != 0) {
+		// Preserve heaps shared with later parts, including across parts without heap data.
+		const auto heap_block_begin = FindNextHeapBlock(segment, chunk_idx_begin, part_begin, part_end);
+		if (heap_block_begin == segment.allocator->HeapBlockCount()) {
 			return;
 		}
-
-		// A later chunk can share a heap block across intervening chunks without heap data.
-		const auto chunk_count = segment.ChunkCount();
-		auto heap_chunk_end = chunk_idx_end;
-		while (heap_chunk_end < chunk_count && segment.chunks[heap_chunk_end]->heap_block_ids.Empty()) {
-			heap_chunk_end++;
-		}
-		const auto heap_block_begin = segment.chunks[heap_chunk_begin]->heap_block_ids.Start();
-		const auto heap_block_end = heap_chunk_end == chunk_count
-		                                ? segment.allocator->HeapBlockCount()
-		                                : segment.chunks[heap_chunk_end]->heap_block_ids.Start();
+		const auto heap_block_end = FindNextHeapBlock(segment, chunk_idx_end, part_end, segment.chunk_parts.size());
 		segment.allocator->DestroyHeapBlocks(heap_block_begin, heap_block_end);
 	}
 }

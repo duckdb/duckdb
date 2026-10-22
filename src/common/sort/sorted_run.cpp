@@ -586,7 +586,15 @@ void SortedRun::DestroyKeyData(const idx_t tuple_idx_begin, const idx_t tuple_id
 
 void SortedRun::DestroyPayloadData(const idx_t tuple_idx_begin, const idx_t tuple_idx_end) {
 	D_ASSERT(payload_data);
-	DestroyData(*payload_data, tuple_idx_begin, tuple_idx_end);
+	if (tuple_idx_begin == tuple_idx_end) {
+		return;
+	}
+	const auto at_end = tuple_idx_end == payload_data->Count();
+	const auto chunk_end = at_end ? payload_data->ChunkCount() : tuple_idx_end / STANDARD_VECTOR_SIZE;
+	// Payload fetching is bounded to the fragment, so fully consumed parts can retire within a chunk.
+	payload_data->DestroyChunks(tuple_idx_begin / STANDARD_VECTOR_SIZE, chunk_end,
+	                            tuple_idx_begin % STANDARD_VECTOR_SIZE,
+	                            at_end ? 0 : tuple_idx_end % STANDARD_VECTOR_SIZE);
 }
 
 idx_t SortedRun::Count() const {

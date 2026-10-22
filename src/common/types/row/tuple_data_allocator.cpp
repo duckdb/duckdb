@@ -411,6 +411,13 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 		auto &part = part_ref.get();
 		const auto next = part.count;
 
+		// A merge fragment only needs overlapping parts; heap relocation still updates each whole part.
+		if (sort_key_payload_state &&
+		    (offset + next <= sort_key_payload_state->begin || offset >= sort_key_payload_state->end)) {
+			offset += next;
+			continue;
+		}
+
 		// Set up row locations for the scan
 		const auto row_width = layout.GetRowWidth();
 		const auto base_row_ptr = GetRowPointer(pin_state, part);

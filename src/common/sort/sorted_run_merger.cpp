@@ -746,10 +746,10 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 	for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
 		auto &state = states[run_idx];
 		state.SetKeepPinned(true);
-		state.SetPinPayload(true);
 
 		// Keep track of how many runs are actively being merged
 		const auto &run_boundary = run_boundaries[run_idx];
+		state.SetPinPayload(true, run_boundary.begin, run_boundary.end);
 		if (run_boundary.begin == run_boundary.end) {
 			continue;
 		}

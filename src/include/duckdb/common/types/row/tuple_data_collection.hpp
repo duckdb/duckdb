@@ -96,9 +96,10 @@ public:
 	vector<pair<idx_t, idx_t>> GetChunkRangesForPartition(idx_t partition_idx) const;
 	//! Gets the pointers to the start of every block
 	vector<data_ptr_t> GetRowBlockPointers();
-	//! Destroy blocks for an incremental chunk range; earlier chunks must no longer be read.
-	//! Blocks needed by chunks at or after chunk_idx_end are retained.
-	void DestroyChunks(idx_t chunk_idx_begin, idx_t chunk_idx_end);
+	//! Destroy blocks for an incremental chunk range, optionally bounded by row offsets within its boundary chunks.
+	//! Earlier rows must no longer be read; blocks needed at or after the end boundary are retained.
+	//! Nonzero offsets require subsequent fetches to skip the preceding parts in the boundary chunk.
+	void DestroyChunks(idx_t chunk_idx_begin, idx_t chunk_idx_end, idx_t begin_offset = 0, idx_t end_offset = 0);
 
 	//! Gets the scatter function for the given type
 	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, bool within_collection = false);
