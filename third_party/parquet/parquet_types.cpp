@@ -8928,7 +8928,9 @@ uint32_t ColumnIndex::read(::apache::thrift::protocol::TProtocol* iprot) {
             uint32_t _i299;
             for (_i299 = 0; _i299 < _size295; ++_i299)
             {
-              xfer += iprot->readBool(this->null_pages[_i299]);
+              bool _null_page;
+              xfer += iprot->readBool(_null_page);
+              this->null_pages[_i299] = _null_page;
             }
             xfer += iprot->readListEnd();
           }
