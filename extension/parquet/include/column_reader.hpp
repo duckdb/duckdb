@@ -175,6 +175,8 @@ public:
 
 	// register the range this reader will touch for prefetching
 	virtual void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge);
+	//! The first offset RegisterPrefetch registered: the chunk start, or the first needed page with a page index
+	idx_t PrefetchOffset() const;
 	//! Hands the reader the page index of the row group, so it can prefetch and read only the pages whose rows may
 	//! match the filters. Called after InitializeRead, only for row groups where the page index prunes pages.
 	virtual void InitializePageIndex(const ParquetRowGroupPageIndex &page_index);
@@ -405,6 +407,8 @@ private:
 	//! the scan state), set only when the page index can be used to skip pages of this column chunk
 	optional_ptr<const duckdb_parquet::OffsetIndex> offset_index;
 	optional_ptr<const vector<ParquetPageRowRange>> page_index_rows;
+	//! The first offset registered for prefetching, when it is not the chunk start
+	optional_idx prefetch_offset;
 	//! Whether the rows [begin, end) of the row group are needed according to the page index
 	bool PageIndexNeedsRows(idx_t begin, idx_t end) const;
 	//! Skips pages using the OffsetIndex instead of reading their headers; returns false when no page can be skipped

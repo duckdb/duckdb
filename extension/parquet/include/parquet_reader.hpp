@@ -261,8 +261,6 @@ public:
 	bool page_index_active = false;
 	//! The entry of page_index.row_ranges the scan is at
 	idx_t page_index_range_idx = 0;
-	//! The number of rows of the current row group that may match according to the page index
-	idx_t page_index_rows_kept = 0;
 
 	//! (optional) pointer to the PhysicalOperator for logging
 	optional_ptr<const PhysicalOperator> op;

@@ -150,7 +150,12 @@ const ParquetReader &ColumnReader::Reader() {
 	return reader;
 }
 
+idx_t ColumnReader::PrefetchOffset() const {
+	return prefetch_offset.IsValid() ? prefetch_offset.GetIndex() : FileOffset();
+}
+
 void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
+	prefetch_offset = optional_idx();
 	if (!chunk) {
 		return;
 	}
@@ -179,8 +184,12 @@ void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_m
 		if (!PageIndexNeedsRows(begin, end)) {
 			continue;
 		}
-		transport.RegisterPrefetch(NumericCast<idx_t>(locations[page_idx].offset),
-		                           NumericCast<idx_t>(locations[page_idx].compressed_page_size), allow_merge);
+		const auto page_offset = NumericCast<idx_t>(locations[page_idx].offset);
+		if (!prefetch_offset.IsValid() && chunk_start >= first_data_page) {
+			prefetch_offset = page_offset;
+		}
+		transport.RegisterPrefetch(page_offset, NumericCast<idx_t>(locations[page_idx].compressed_page_size),
+		                           allow_merge);
 	}
 }
 

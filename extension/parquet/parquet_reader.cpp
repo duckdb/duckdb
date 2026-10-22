@@ -1972,8 +1972,9 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 	column_reader.InitializeRead(state.group_index, row_group_num_rows, group.columns, *state.thrift_file_proto);
 }
 
-//! Page indexes up to this size are fetched in one read (ColumnIndexes and OffsetIndexes together)
-static constexpr idx_t PAGE_INDEX_SINGLE_READ_LIMIT = 1048576;
+//! Page indexes up to this size are fetched in one read (ColumnIndexes and OffsetIndexes together): a row group that
+//! fetches its own indexes pays a round trip before any of its data can be requested, so a few MB up front are cheaper
+static constexpr idx_t PAGE_INDEX_SINGLE_READ_LIMIT = 8 * 1048576;
 
 void ParquetReader::PrefetchPageIndex(ThriftFileTransport &transport, idx_t begin, idx_t end) const {
 	CallOnce(page_index_span_computed, [&] {
@@ -2015,7 +2016,6 @@ void ParquetReader::PreparePageIndex(ClientContext &context, ParquetReaderScanSt
 	state.page_index.Reset();
 	state.page_index_active = false;
 	state.page_index_range_idx = 0;
-	state.page_index_rows_kept = 0;
 	try {
 		PreparePageIndexInternal(context, state);
 	} catch (std::exception &ex) {
@@ -2028,7 +2028,6 @@ void ParquetReader::PreparePageIndex(ClientContext &context, ParquetReaderScanSt
 		trans.ClearPrefetch();
 		state.page_index.Reset();
 		state.page_index_active = false;
-		state.page_index_rows_kept = 0;
 	}
 }
 
@@ -2191,7 +2190,6 @@ void ParquetReader::PreparePageIndexInternal(ClientContext &context, ParquetRead
 	}
 	state.page_index.row_ranges = std::move(row_ranges);
 	state.page_index_active = true;
-	state.page_index_rows_kept = rows_kept;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		state.GetColumnReader(MultiFileLocalIndex(i)).InitializePageIndex(state.page_index);
 	}
@@ -2504,7 +2502,7 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 			auto &child = state.GetColumnReader(local_idx);
 			child.RegisterPrefetch(trans, true);
 			if (log_prefetch) {
-				pending_registrations.emplace_back(child.Schema().name, child.FileOffset());
+				pending_registrations.emplace_back(child.Schema().name, child.PrefetchOffset());
 			}
 			already_registered[local_idx.GetIndex()] = true;
 		}
@@ -2530,7 +2528,7 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 		}
 		child.RegisterPrefetch(trans, true);
 		if (log_prefetch) {
-			pending_registrations.emplace_back(child.Schema().name, child.FileOffset());
+			pending_registrations.emplace_back(child.Schema().name, child.PrefetchOffset());
 		}
 	}
 	trans.FinalizeRegistration();
@@ -2609,10 +2607,6 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 			// whole group and column wise prefetch fetch eagerly, filter prefetch fetches lazily
 			if (parquet_options.prefetch_strategy == ParquetPrefetchStrategyOption::WHOLE_GROUP) {
 				strategy = WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
-			} else if (state.page_index_active &&
-			           state.page_index_rows_kept * 2 <= NumericCast<idx_t>(group.num_rows)) {
-				// the page index rules out at least half of the rows: fetch only the pages that may hold the rest
-				strategy = ColumnWisePrefetch(state, trans, group, false, log_prefetch);
 			} else {
 				bool filters_look_unselective = false;
 				if (filters) {
@@ -2643,9 +2637,11 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 				}
 
 				if ((!filters || filters_look_unselective) &&
-				    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
+				    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN &&
+				    !state.page_index_active) {
 					strategy = WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
 				} else {
+					// with a page index only the pages that may match are registered, adjacent ones are coalesced
 					strategy = ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
 				}
 			}

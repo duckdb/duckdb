@@ -116,6 +116,73 @@ true
 statement ok
 CALL truncate_duckdb_logs();
 
+# a filter that keeps 60% of the rows of every row group with every column projected: without the index this is a
+# whole-group read, with it only the pages that may match are read, however many rows the index keeps
+statement ok
+CALL enable_logging('FileSystem');
+
+query IIII
+SELECT count(*), sum(v), max(payload), max(s) FROM '{TEST_DIR}/page_index_prefetch.parquet' WHERE id BETWEEN 0 AND 60000 OR id BETWEEN 100000 AND 160000 OR id BETWEEN 200000 AND 260000
+----
+180003	8999310000	p999	str_260000
+
+statement ok
+CALL disable_logging();
+
+statement ok
+CREATE TABLE partial_with_index AS SELECT bytes_read() AS bytes;
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+SET parquet_use_page_index = false;
+
+statement ok
+CALL enable_logging('FileSystem');
+
+query IIII
+SELECT count(*), sum(v), max(payload), max(s) FROM '{TEST_DIR}/page_index_prefetch.parquet' WHERE id BETWEEN 0 AND 60000 OR id BETWEEN 100000 AND 160000 OR id BETWEEN 200000 AND 260000
+----
+180003	8999310000	p999	str_260000
+
+statement ok
+CALL disable_logging();
+
+statement ok
+CREATE TABLE partial_without_index AS SELECT bytes_read() AS bytes;
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+SET parquet_use_page_index = true;
+
+query I
+SELECT partial_with_index.bytes < partial_without_index.bytes * 0.85 FROM partial_with_index, partial_without_index
+----
+true
+
+# the prefetch log lists every column of a page-level read, also the ones whose first page was skipped
+statement ok
+CALL enable_logging('ParquetPrefetch');
+
+query IIII
+SELECT id, v, payload, s FROM '{TEST_DIR}/page_index_prefetch.parquet' WHERE id = 177777
+----
+177777	16063	p2777	str_177777
+
+statement ok
+CALL disable_logging();
+
+query II
+SELECT row_group_id, list_sort(flatten(prefetch_groups)) FROM duckdb_logs_parsed('ParquetPrefetch') WHERE file_path LIKE '%page_index_prefetch.parquet' ORDER BY row_group_id
+----
+1	[id, payload, s, v]
+
+statement ok
+CALL truncate_duckdb_logs();
+
 # the whole_group strategy is still honoured when asked for, and reads the whole row group
 statement ok
 CALL enable_logging('FileSystem');
