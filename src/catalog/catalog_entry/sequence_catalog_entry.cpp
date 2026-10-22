@@ -75,7 +75,7 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 			                        state->data.min_value);
 		}
 		if (result > state->data.max_value || overflow) {
-			throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", name,
+			throw SequenceException("nextval: reached maximum value of sequence %s (%lld)", name,
 			                        state->data.max_value);
 		}
 	}

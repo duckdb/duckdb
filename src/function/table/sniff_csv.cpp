@@ -42,7 +42,7 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 	auto it = input.named_parameters.find("auto_detect");
 	if (it != input.named_parameters.end()) {
 		if (it->second.IsNull()) {
-			throw BinderException("\"%s\" expects a non-null boolean value (e.g. TRUE or 1)", it->first);
+			throw BinderException("%s expects a non-null boolean value (e.g. TRUE or 1)", it->first);
 		}
 		if (!it->second.GetValue<bool>()) {
 			throw InvalidInputException("sniff_csv function does not accept auto_detect variable set to false");
@@ -55,7 +55,7 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 	it = input.named_parameters.find("force_match");
 	if (it != input.named_parameters.end()) {
 		if (it->second.IsNull()) {
-			throw BinderException("\"%s\" expects a non-null boolean value (e.g. TRUE or 1)", it->first);
+			throw BinderException("%s expects a non-null boolean value (e.g. TRUE or 1)", it->first);
 		}
 		result->force_match = it->second.GetValue<bool>();
 		input.named_parameters.erase(it);
@@ -81,7 +81,7 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("Comment");
 	// 6. Skip Rows
-	return_types.emplace_back(LogicalType::UINTEGER);
+	return_types.emplace_back(LogicalType::UBIGINT);
 	names.emplace_back("SkipRows");
 	// 7. Has Header
 	return_types.emplace_back(LogicalType::BOOLEAN);
@@ -186,7 +186,8 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	str_opt = sniffer_options.dialect_options.state_machine_options.comment.FormatValue();
 	output.data[4].Append(Value(str_opt));
 	// 6. Skip Rows
-	output.data[5].Append(Value::UINTEGER(NumericCast<uint32_t>(sniffer_options.dialect_options.skip_rows.GetValue())));
+	auto skip_rows = sniffer_options.dialect_options.skip_rows.GetValue();
+	output.data[5].Append(Value::UBIGINT(skip_rows));
 	// 7. Has Header
 	auto has_header = Value::BOOLEAN(sniffer_options.dialect_options.header.GetValue());
 	output.data[6].Append(has_header);

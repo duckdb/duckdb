@@ -866,11 +866,53 @@ std::string LocalFileSystem::GetLastErrorAsString() {
 
 bool LocalFileSystem::TryCanonicalizeExistingPath(string &input) {
 	char resolved[PATH_MAX];
-	if (!realpath(input.c_str(), resolved)) {
-		return false;
+	if (realpath(input.c_str(), resolved)) {
+		input = resolved;
+		return true;
 	}
-	input = resolved;
-	return true;
+	// the path might be a dangling symlink - follow the chain and canonicalize the parent of the final target
+	static constexpr idx_t MAX_SYMLINK_DEPTH = 40;
+	string current = input;
+	for (idx_t depth = 0; depth < MAX_SYMLINK_DEPTH; depth++) {
+		char link_target[PATH_MAX];
+		auto link_length = readlink(current.c_str(), link_target, sizeof(link_target) - 1);
+		if (link_length < 0) {
+			return false;
+		}
+		string target(link_target, NumericCast<idx_t>(link_length));
+		auto sep = current.rfind('/');
+		if (target.empty() || sep == string::npos) {
+			return false;
+		}
+		if (target[0] != '/') {
+			target = current.substr(0, sep + 1) + target;
+		}
+		if (realpath(target.c_str(), resolved)) {
+			input = resolved;
+			return true;
+		}
+		auto target_sep = target.rfind('/');
+		if (target_sep == string::npos) {
+			return false;
+		}
+		struct stat target_stat;
+		if (lstat(target.c_str(), &target_stat) == 0 && S_ISLNK(target_stat.st_mode)) {
+			current = target;
+			continue;
+		}
+		// final target does not exist - canonicalize its parent directory
+		auto parent = target.substr(0, target_sep + 1);
+		if (!realpath(parent.c_str(), resolved)) {
+			return false;
+		}
+		string result = resolved;
+		if (result.empty() || result.back() != '/') {
+			result += '/';
+		}
+		input = result + target.substr(target_sep + 1);
+		return true;
+	}
+	return false;
 }
 
 bool LocalFileSystem::PathStartsWithDrive(const string &path) {

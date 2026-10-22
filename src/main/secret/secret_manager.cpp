@@ -193,8 +193,7 @@ unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction
 	//! Resolve storage
 	string resolved_storage;
 	if (storage.empty()) {
-		resolved_storage =
-		    persist_type == SecretPersistType::PERSISTENT ? config.default_persistent_storage : TEMPORARY_STORAGE_NAME;
+		resolved_storage = persist_type == SecretPersistType::PERSISTENT ? DefaultStorage() : TEMPORARY_STORAGE_NAME;
 	} else {
 		resolved_storage = storage.GetIdentifierName();
 	}
@@ -608,14 +607,17 @@ bool SecretManager::PersistentSecretsEnabled() {
 }
 
 void SecretManager::SetDefaultStorage(const string &storage) {
+	lock_guard<mutex> lck(manager_lock);
 	config.default_persistent_storage = storage;
 }
 
 void SecretManager::ResetDefaultStorage() {
+	lock_guard<mutex> lck(manager_lock);
 	config.default_persistent_storage = SecretManager::LOCAL_FILE_STORAGE_NAME;
 }
 
 string SecretManager::DefaultStorage() {
+	lock_guard<mutex> lck(manager_lock);
 	return config.default_persistent_storage;
 }
 
@@ -816,7 +818,7 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntryInternal(cons
 		}
 	}
 
-	throw SerializationException("Failed to deserialize secret '%s' from '%s': file appears empty! Please remove the "
+	throw SerializationException("Failed to deserialize secret %s from '%s': file appears empty! Please remove the "
 	                             "file, restart and try again",
 	                             entry_name, secret_path);
 }

@@ -1,5 +1,7 @@
 #if defined(_WIN32) || defined(WIN32)
 #include <io.h>
+#include <process.h>
+#define getpid _getpid
 #else
 #include <sys/stat.h>
 #include <sys/types.h>
