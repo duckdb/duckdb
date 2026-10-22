@@ -23,6 +23,11 @@ namespace dict_fsst {
 	throw DataCorruptionException("Corrupted DICT_FSST segment: dictionary has no NULL entry");
 }
 
+[[noreturn]] static void ThrowZeroWidthDictionaryTooLarge() {
+	throw DataCorruptionException(
+	    "Corrupted DICT_FSST segment: zero-width lengths allow at most two dictionary entries");
+}
+
 [[noreturn]] static void ThrowDictionaryIndexOutOfBounds() {
 	throw DataCorruptionException("Corrupted DICT_FSST segment: dictionary index is out of range");
 }
@@ -102,6 +107,16 @@ CompressedStringScanState::SegmentLayout CompressedStringScanState::ReadLayout(c
 	}
 	if (header.dictionary_indices_width > sizeof(uint32_t) * 8 || header.string_lengths_width > sizeof(uint32_t) * 8) {
 		ThrowInvalidBitpackingWidth();
+	}
+	if (header.string_lengths_width == 0) {
+		// FSST segments retain nonempty training strings, so their lengths cannot all be zero.
+		if (header.mode != DictFSSTMode::DICTIONARY) {
+			ThrowInvalidBitpackingWidth();
+		}
+		// A zero-width dictionary has only NULL and possibly the empty string.
+		if (header.dict_count > 2) {
+			ThrowZeroWidthDictionaryTooLarge();
+		}
 	}
 
 	reader.Align(sizeof(idx_t));
