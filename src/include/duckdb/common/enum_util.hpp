@@ -500,6 +500,8 @@ enum class QueryResultState : uint8_t;
 
 enum class RecoveryMode : uint8_t;
 
+enum class RecursiveCTEMode : uint8_t;
+
 enum class RecursiveCTEPipelineMetricType : uint8_t;
 
 enum class RecursiveCTESourcePhase : uint8_t;
@@ -1392,6 +1394,9 @@ const char* EnumUtil::ToChars<QueryResultState>(QueryResultState value);
 
 template<>
 const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
+
+template<>
+const char* EnumUtil::ToChars<RecursiveCTEMode>(RecursiveCTEMode value);
 
 template<>
 const char* EnumUtil::ToChars<RecursiveCTEPipelineMetricType>(RecursiveCTEPipelineMetricType value);
@@ -2380,6 +2385,9 @@ QueryResultState EnumUtil::FromString<QueryResultState>(const char *value);
 
 template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
+
+template<>
+RecursiveCTEMode EnumUtil::FromString<RecursiveCTEMode>(const char *value);
 
 template<>
 RecursiveCTEPipelineMetricType EnumUtil::FromString<RecursiveCTEPipelineMetricType>(const char *value);

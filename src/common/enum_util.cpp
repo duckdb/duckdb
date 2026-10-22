@@ -133,6 +133,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/execution/operator/set/physical_cte.hpp"
+#include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
@@ -4856,19 +4857,20 @@ PartitionedColumnDataType EnumUtil::FromString<PartitionedColumnDataType>(const 
 const StringUtil::EnumStringLiteral *GetPartitionedTupleDataTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(PartitionedTupleDataType::INVALID), "INVALID" },
-		{ static_cast<uint32_t>(PartitionedTupleDataType::RADIX), "RADIX" }
+		{ static_cast<uint32_t>(PartitionedTupleDataType::RADIX), "RADIX" },
+		{ static_cast<uint32_t>(PartitionedTupleDataType::INTEGER), "INTEGER" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<PartitionedTupleDataType>(PartitionedTupleDataType value) {
-	return StringUtil::EnumToString(GetPartitionedTupleDataTypeValues(), 2, "PartitionedTupleDataType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetPartitionedTupleDataTypeValues(), 3, "PartitionedTupleDataType", static_cast<uint32_t>(value));
 }
 
 template<>
 PartitionedTupleDataType EnumUtil::FromString<PartitionedTupleDataType>(const char *value) {
-	return static_cast<PartitionedTupleDataType>(StringUtil::StringToEnum(GetPartitionedTupleDataTypeValues(), 2, "PartitionedTupleDataType", value));
+	return static_cast<PartitionedTupleDataType>(StringUtil::StringToEnum(GetPartitionedTupleDataTypeValues(), 3, "PartitionedTupleDataType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPatternMatchTypeValues() {
@@ -5485,6 +5487,26 @@ const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value) {
 template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value) {
 	return static_cast<RecoveryMode>(StringUtil::StringToEnum(GetRecoveryModeValues(), 2, "RecoveryMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetRecursiveCTEModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RecursiveCTEMode::UNION), "UNION" },
+		{ static_cast<uint32_t>(RecursiveCTEMode::UNION_ALL), "UNION_ALL" },
+		{ static_cast<uint32_t>(RecursiveCTEMode::KEY_UNION), "KEY_UNION" },
+		{ static_cast<uint32_t>(RecursiveCTEMode::KEY_UNION_ALL), "KEY_UNION_ALL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RecursiveCTEMode>(RecursiveCTEMode value) {
+	return StringUtil::EnumToString(GetRecursiveCTEModeValues(), 4, "RecursiveCTEMode", static_cast<uint32_t>(value));
+}
+
+template<>
+RecursiveCTEMode EnumUtil::FromString<RecursiveCTEMode>(const char *value) {
+	return static_cast<RecursiveCTEMode>(StringUtil::StringToEnum(GetRecursiveCTEModeValues(), 4, "RecursiveCTEMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRecursiveCTEPipelineMetricTypeValues() {
@@ -7639,6 +7661,7 @@ const StringUtil::EnumStringLiteral *GetWindowMergeSortStageValues() {
 		{ static_cast<uint32_t>(WindowMergeSortStage::COMBINE), "COMBINE" },
 		{ static_cast<uint32_t>(WindowMergeSortStage::FINALIZE), "FINALIZE" },
 		{ static_cast<uint32_t>(WindowMergeSortStage::SORTED), "SORTED" },
+		{ static_cast<uint32_t>(WindowMergeSortStage::FINISH), "FINISH" },
 		{ static_cast<uint32_t>(WindowMergeSortStage::FINISHED), "FINISHED" }
 	};
 	return values;
@@ -7646,12 +7669,12 @@ const StringUtil::EnumStringLiteral *GetWindowMergeSortStageValues() {
 
 template<>
 const char* EnumUtil::ToChars<WindowMergeSortStage>(WindowMergeSortStage value) {
-	return StringUtil::EnumToString(GetWindowMergeSortStageValues(), 5, "WindowMergeSortStage", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetWindowMergeSortStageValues(), 6, "WindowMergeSortStage", static_cast<uint32_t>(value));
 }
 
 template<>
 WindowMergeSortStage EnumUtil::FromString<WindowMergeSortStage>(const char *value) {
-	return static_cast<WindowMergeSortStage>(StringUtil::StringToEnum(GetWindowMergeSortStageValues(), 5, "WindowMergeSortStage", value));
+	return static_cast<WindowMergeSortStage>(StringUtil::StringToEnum(GetWindowMergeSortStageValues(), 6, "WindowMergeSortStage", value));
 }
 
 }
