@@ -252,7 +252,10 @@ void RadixPartitionedTupleData::ComputePartitionIndices(Vector &row_locations, i
                                                         unique_ptr<Vector> &utility_vector,
                                                         const SelectionVector &append_sel) const {
 	if (radix_bits == 0) {
-		partition_indices.Reference(Value::UBIGINT(0), count_t(count));
+		// Keep the buffer capacity for subsequent appends from vectors.
+		partition_indices.SetVectorType(VectorType::CONSTANT_VECTOR);
+		partition_indices.SetValue(0, Value::UBIGINT(0));
+		FlatVector::SetSize(partition_indices, count_t(count));
 		return;
 	}
 	if (!utility_vector) {
