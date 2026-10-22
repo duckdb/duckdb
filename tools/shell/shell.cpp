@@ -816,7 +816,7 @@ static BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType /* One of the CTRL_*_EVEN
 #endif
 
 // Stop routing signals to ShellState before any of its owners are destroyed.
-void IgnoreInterrupts() {
+void duckdb_shell::IgnoreInterrupts() {
 #ifdef SIGINT
 	signal(SIGINT, SIG_IGN);
 #elif (defined(_WIN32) || defined(WIN32)) && !defined(_WIN32_WCE)
