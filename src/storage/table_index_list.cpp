@@ -489,23 +489,35 @@ unordered_set<column_t> TableIndexList::GetIndexedColumns() const {
 }
 
 vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndexWriter &writer) {
-	annotated_lock_guard lock(index_entries_lock);
-
-	vector<unique_ptr<BoundIndex>> shadows;
-	vector<shared_ptr<const IndexStorageInfo>> infos;
-	shadows.reserve(index_entries.size());
-	infos.reserve(index_entries.size());
-
-	for (const auto &entry : index_entries) {
-		auto checkpoint = entry->Checkpoint(writer);
-		shadows.push_back(std::move(checkpoint.shadow_index));
-		infos.push_back(std::move(checkpoint.storage_info));
+	vector<shared_ptr<IndexEntry>> entries;
+	{
+		annotated_lock_guard lock(index_entries_lock);
+		entries = index_entries;
 	}
 
-	writer.Flush();
+	// written without the list lock, which every commit that changes the table takes
+	vector<unique_ptr<BoundIndex>> shadows;
+	vector<shared_ptr<const IndexStorageInfo>> infos;
+	shadows.reserve(entries.size());
+	infos.reserve(entries.size());
 
-	for (idx_t i = 0; i < index_entries.size(); i++) {
-		index_entries[i]->InstallShadow(std::move(shadows[i]));
+	try {
+		for (const auto &entry : entries) {
+			auto checkpoint = entry->Checkpoint(writer);
+			shadows.push_back(std::move(checkpoint.shadow_index));
+			infos.push_back(std::move(checkpoint.storage_info));
+		}
+		writer.Flush();
+	} catch (...) {
+		// the live indexes stay
+		for (idx_t i = 0; i < shadows.size(); i++) {
+			entries[i]->InstallShadow(nullptr);
+		}
+		throw;
+	}
+
+	for (idx_t i = 0; i < entries.size(); i++) {
+		entries[i]->InstallShadow(std::move(shadows[i]));
 	}
 
 	return infos;
@@ -550,8 +562,13 @@ unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(idx_t index_oid, con
 }
 
 void TableIndexList::MergeCheckpointDeltas(const optional_idx checkpoint_id) const {
-	annotated_lock_guard lock(index_entries_lock);
-	for (const auto &entry : index_entries) {
+	vector<shared_ptr<IndexEntry>> entries;
+	{
+		annotated_lock_guard lock(index_entries_lock);
+		entries = index_entries;
+	}
+	// merged without the list lock, as the indexes are written
+	for (const auto &entry : entries) {
 		entry->MergeCheckpointDeltas(checkpoint_id);
 	}
 }
