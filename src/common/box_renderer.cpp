@@ -1751,10 +1751,12 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 	for (auto &collection : collections) {
 		for (auto &chunk : collection.render_values->Chunks(column_ids)) {
 			for (idx_t c = 0; c < column_count; c++) {
-				auto render_widths = FlatVector::GetData<uint64_t>(chunk.data[c]);
+				// scans can return constant and dictionary vectors - read the cells in place
+				auto render_widths = chunk.data[c].Values<uint64_t>();
 				for (idx_t r = 0; r < chunk.size(); r++) {
-					if (render_widths[r] > column_widths[c]) {
-						column_widths[c] = render_widths[r];
+					const auto render_width = render_widths[r].GetValueUnsafe();
+					if (render_width > column_widths[c]) {
+						column_widths[c] = render_width;
 					}
 				}
 			}
