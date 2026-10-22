@@ -361,3 +361,31 @@ statement error
 INSERT INTO t2 SELECT 'x', 1 ON CONFLICT DO NOTHING;
 ----
 <REGEX>:Conversion Error:.*Could not convert string 'x' to INT32.*
+
+# a prepared upsert only returns the rows of its own execution
+statement ok
+SET enable_optimizer=false;
+
+statement ok
+CREATE TABLE t_prepared_returning (k VARCHAR PRIMARY KEY, n INTEGER);
+
+statement ok
+PREPARE upsert_returning AS INSERT INTO t_prepared_returning SELECT $1::VARCHAR, 3 ON CONFLICT DO UPDATE SET n = t_prepared_returning.n + 1 RETURNING k, n;
+
+query II
+EXECUTE upsert_returning('x');
+----
+x	3
+
+query II
+EXECUTE upsert_returning('x');
+----
+x	4
+
+query II
+EXECUTE upsert_returning('x');
+----
+x	5
+
+statement ok
+SET enable_optimizer=true;
