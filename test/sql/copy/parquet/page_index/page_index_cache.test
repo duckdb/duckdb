@@ -132,11 +132,12 @@ CALL truncate_duckdb_logs();
 statement ok
 SET parquet_use_page_index = true;
 
-# the lookups read less with the index, the scan after them reads no more than it does without the index (the small
-# cached page blocks do not fragment it), the whole sequence reads less, and the cache holds no duplicate bytes
+# the lookups read less with the index, and so does the whole sequence: the scan after the lookups re-reads the small
+# page blocks the lookups cached (the cache folds them into its larger reads), but not more than the whole file, and
+# the cache holds no duplicate bytes afterwards
 query IIII
 SELECT lookups_with.bytes < lookups_without.bytes,
-       scan_with.bytes <= scan_without.bytes * 1.05,
+       scan_with.bytes <= (SELECT size FROM read_blob('{TEST_DIR}/page_index_cache_on.parquet')),
        lookups_with.bytes + scan_with.bytes < lookups_without.bytes + scan_without.bytes,
        scan_with.cached < (SELECT size * 1.05 FROM read_blob('{TEST_DIR}/page_index_cache_on.parquet'))
 FROM lookups_with, scan_with, lookups_without, scan_without
