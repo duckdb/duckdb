@@ -40,8 +40,8 @@ SELECT i FROM db.t
 42
 
 query III
-SELECT scope, parse_filename(path), op
+SELECT scope, parse_filename(path, 'both_slash'), op
 FROM duckdb_logs_parsed('FileSystem')
-WHERE parse_filename(path) = 'wal_replay_client_file_system.db.wal' AND op = 'OPEN'
+WHERE parse_filename(path, 'both_slash') = 'wal_replay_client_file_system.db.wal' AND op = 'OPEN'
 ----
 CONNECTION	wal_replay_client_file_system.db.wal	OPEN
