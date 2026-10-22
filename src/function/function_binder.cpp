@@ -346,10 +346,10 @@ std::variant<FunctionBinding, FunctionMismatch> FunctionBinder::MatchOverload(op
                                                                               bool explicit_casts) {
 	// every mismatch is counted towards the distance, the most useful one is the reason
 	idx_t mismatches = 0;
-	optional<FunctionMismatch::Reason> first_mismatch;
-	auto mismatch = [&](FunctionMismatch::Reason reason, idx_t count = 1) {
-		if (!first_mismatch || MismatchRank(reason) < MismatchRank(*first_mismatch)) {
-			first_mismatch = std::move(reason);
+	optional<FunctionMismatch::Reason> reason;
+	auto mismatch = [&](FunctionMismatch::Reason candidate, idx_t count = 1) {
+		if (!reason || MismatchRank(candidate) < MismatchRank(*reason)) {
+			reason = std::move(candidate);
 		}
 		mismatches += count;
 	};
@@ -424,7 +424,7 @@ std::variant<FunctionBinding, FunctionMismatch> FunctionBinder::MatchOverload(op
 
 	if (mismatches > 0) {
 		// the wrong shape is further away than arguments that cannot be cast, of which there are at most this many
-		return FunctionMismatch(overload, std::move(function), received_count + mismatches, std::move(*first_mismatch));
+		return FunctionMismatch(overload, std::move(function), received_count + mismatches, std::move(*reason));
 	}
 
 	// the shape matches, so every argument has a parameter that receives it: its position, "*args", its name or
@@ -448,7 +448,7 @@ std::variant<FunctionBinding, FunctionMismatch> FunctionBinder::MatchOverload(op
 	binding.overload = overload;
 	binding.function = function;
 	idx_t cost = 0;
-	bool has_parameter = false;
+	bool has_unknown_argument = false;
 	vector<bool> filled(sig.GetParameterCount(), false);
 	for (idx_t i = 0; i < received_count; i++) {
 		auto &argument = call.GetArgument(i);
@@ -465,7 +465,7 @@ std::variant<FunctionBinding, FunctionMismatch> FunctionBinder::MatchOverload(op
 		filled[param_idx] = true;
 
 		if (!is_named && arg_type.id() == LogicalTypeId::UNKNOWN) {
-			has_parameter = true;
+			has_unknown_argument = true;
 			continue;
 		}
 		if (explicit_casts) {
@@ -479,7 +479,7 @@ std::variant<FunctionBinding, FunctionMismatch> FunctionBinder::MatchOverload(op
 		cost += static_cast<idx_t>(cast_cost);
 	}
 	if (mismatches > 0) {
-		return FunctionMismatch(overload, std::move(function), mismatches, std::move(*first_mismatch));
+		return FunctionMismatch(overload, std::move(function), mismatches, std::move(*reason));
 	}
 
 	binding.return_type = sig.GetReturnType();
@@ -497,19 +497,8 @@ std::variant<FunctionBinding, FunctionMismatch> FunctionBinder::MatchOverload(op
 	}
 
 	// all arguments are implicitly castable - with a parameter of an unknown type, the cost is 0
-	binding.cost = has_parameter ? 0 : cost;
+	binding.cost = has_unknown_argument ? 0 : cost;
 	return binding;
-}
-
-//! The first named argument that repeats the name of an earlier one, if any
-static optional_idx FindDuplicateNamedArgument(const FunctionCallArguments &call) {
-	identifier_set_t seen_names;
-	for (idx_t i = call.GetPositionalCount(); i < call.GetArgumentCount(); i++) {
-		if (!seen_names.insert(call.GetArgument(i).name).second) {
-			return i;
-		}
-	}
-	return optional_idx();
 }
 
 FunctionBindResult FunctionBinder::SelectFunction(optional_ptr<ClientContext> context, const BaseFunctionSet &functions,
@@ -567,11 +556,6 @@ template <class T>
 FunctionBinding FunctionBinder::MatchFunction(const shared_ptr<const T> &function,
                                               const vector<unique_ptr<Expression>> &arguments,
                                               const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
-	// the callers build the named arguments themselves, a positional argument cannot follow them
-	for (auto &named_argument : named_arguments) {
-		D_ASSERT(!named_argument.first.empty());
-		(void)named_argument;
-	}
 	FunctionSet<T> functions(function->GetName());
 	functions.AddFunction(function);
 	auto selection = SelectFunction(context, functions, {arguments, named_arguments}, true);
@@ -1504,9 +1488,6 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const FunctionBinding 
                                                           vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
                                                           bool is_operator, optional_ptr<Binder> binder) {
 	auto [bound_function, bind_info] = ResolveScalarFunction(binding, children, keyword_args);
-
-	unique_ptr<Expression> result;
-
 	auto result_func = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(children),
 	                                                      std::move(bind_info), is_operator);
 
@@ -1518,14 +1499,12 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const FunctionBinding 
 		// if a bind_expression callback is registered - call it and emit the resulting expression
 		FunctionBindExpressionInput input(context, result_func->FunctionMutable(), result_func->BindInfoMutable().get(),
 		                                  result_func->GetChildrenMutable());
-		result = result_func->Function().GetBindExpressionCallback()(input);
+		auto result = result_func->Function().GetBindExpressionCallback()(input);
+		if (result) {
+			return result;
+		}
 	}
-
-	if (!result) {
-		result = std::move(result_func);
-	}
-
-	return result;
+	return std::move(result_func);
 }
 
 pair<BoundAggregateFunction, unique_ptr<FunctionData>>
