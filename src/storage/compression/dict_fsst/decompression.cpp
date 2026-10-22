@@ -23,6 +23,10 @@ namespace dict_fsst {
 	throw DataCorruptionException("Corrupted DICT_FSST segment: dictionary has no NULL entry");
 }
 
+[[noreturn]] static void ThrowDictionaryIndexOutOfBounds() {
+	throw DataCorruptionException("Corrupted DICT_FSST segment: dictionary index is out of range");
+}
+
 [[noreturn]] static void ThrowInvalidBitpackingWidth() {
 	throw DataCorruptionException("Failed to scan dictionary string - bitpacking width was invalid. Database file "
 	                              "appears to be corrupted.");
@@ -51,6 +55,7 @@ CompressedStringScanState::~CompressedStringScanState() {
 }
 
 string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t dict_offset, idx_t dict_idx) {
+	D_ASSERT(dict_idx < layout.dict_count);
 	if (dict_idx == 0) {
 		return string_t(nullptr, 0);
 	}
@@ -90,6 +95,10 @@ CompressedStringScanState::SegmentLayout CompressedStringScanState::ReadLayout(c
 	}
 	if (header.dict_count == 0) {
 		ThrowInvalidDictionaryCount();
+	}
+	// FSST_ONLY maps row i to dictionary entry i + 1, skipping the NULL entry.
+	if (header.mode == DictFSSTMode::FSST_ONLY && segment.count.load() > header.dict_count - 1) {
+		ThrowDictionaryIndexOutOfBounds();
 	}
 	if (header.dictionary_indices_width > sizeof(uint32_t) * 8 || header.string_lengths_width > sizeof(uint32_t) * 8) {
 		ThrowInvalidBitpackingWidth();
@@ -193,6 +202,15 @@ const SelectionVector &CompressedStringScanState::GetSelVec(idx_t start, idx_t s
 		                                          layout.dictionary_indices_width);
 
 		sel_vec->ShiftLeft(start_offset, scan_count);
+
+		// Validate the requested rows, not the leading values or final unpacking padding.
+		bool has_invalid_index = false;
+		for (idx_t i = 0; i < scan_count; i++) {
+			has_invalid_index |= sel_vec->get_index_unsafe(i) >= layout.dict_count;
+		}
+		if (has_invalid_index) {
+			ThrowDictionaryIndexOutOfBounds();
+		}
 
 		return *sel_vec;
 	}
