@@ -42,13 +42,13 @@ static ScalarFunctionSet GetOverloadedSet() {
 }
 
 //! Why no overload matches - the selection must have failed to match
-static const vector<FunctionMismatch> &GetMismatches(const FunctionSelectResult &selection) {
+static const vector<FunctionMismatch> &GetMismatches(const FunctionBindResult &selection) {
 	REQUIRE(!selection.IsSuccess());
-	REQUIRE(selection.GetError().GetType() == FunctionSelectError::Type::NO_MATCH);
-	return selection.GetError().Cast<FunctionSelectError::NoMatch>().mismatches;
+	REQUIRE(selection.GetError().GetType() == FunctionBindError::Type::NO_MATCH);
+	return selection.GetError().Cast<FunctionBindError::NoMatch>().mismatches;
 }
 
-static string GetErrorMessage(const FunctionSelectResult &selection) {
+static string GetErrorMessage(const FunctionBindResult &selection) {
 	return selection.GetError().RawMessage();
 }
 
@@ -137,19 +137,17 @@ TEST_CASE("A call no overload matches records why each overload fails", "[api][f
 	REQUIRE(failed[0].GetDistance() < failed[1].GetDistance());
 	REQUIRE(failed[1].GetDistance() == failed[2].GetDistance());
 	REQUIRE(failed[0].Cast<FunctionMismatch::IncompatibleArgument>().parameter_type == LogicalType::VARCHAR);
-	REQUIRE(selection.GetError().Cast<FunctionSelectError::NoMatch>().GetClosest()->GetOverloadIndex() == 2);
-	REQUIRE(StringUtil::Contains(message,
-	                             "Closest candidate: g(a VARCHAR) -> INTEGER (argument 1 of type DATE cannot be "
-	                             "implicitly cast to VARCHAR)"));
+	REQUIRE(selection.GetError().Cast<FunctionBindError::NoMatch>().GetClosest()->GetOverloadIndex() == 2);
+	REQUIRE(StringUtil::Contains(message, "Candidates:\n    'g(a VARCHAR) -> INTEGER'\n        Argument 1 of type DATE "
+	                                      "cannot be implicitly cast to VARCHAR"));
 
 	// too many arguments, and a name no overload has
 	vector<LogicalType> three_varchars {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
 	selection = FunctionBinder::SelectFunction(*con.context, set, three_varchars);
 	REQUIRE(GetMismatches(selection)[2].GetOverloadIndex() == 2);
 	REQUIRE(GetMismatches(selection)[2].GetType() == FunctionMismatch::Type::TOO_MANY_ARGUMENTS);
-	// the two overloads taking two arguments are equally close, so neither is named
-	REQUIRE(!StringUtil::Contains(GetErrorMessage(selection), "Closest candidate"));
-	REQUIRE(!selection.GetError().Cast<FunctionSelectError::NoMatch>().GetClosest());
+	// the two overloads taking two arguments are equally close, so neither is the closest
+	REQUIRE(!selection.GetError().Cast<FunctionBindError::NoMatch>().GetClosest());
 
 	// h(a VARCHAR, b INTEGER := 0) takes two arguments, but none named "c"
 	FunctionSignature sig;
@@ -162,12 +160,9 @@ TEST_CASE("A call no overload matches records why each overload fails", "[api][f
 	selection = FunctionBinder::SelectFunction(*con.context, defaulted, {{LogicalType::VARCHAR}, named_c});
 	REQUIRE(GetMismatches(selection)[0].GetType() == FunctionMismatch::Type::UNKNOWN_NAMED_ARGUMENT);
 	REQUIRE(GetMismatches(selection)[0].Cast<FunctionMismatch::UnknownNamedArgument>().argument == 1);
-	// the only overload is not listed a second time
 	message = GetErrorMessage(selection);
-	REQUIRE(StringUtil::Contains(message, "Candidate: h(a VARCHAR, b INTEGER := 0) -> INTEGER (it has no "
-	                                      "parameter named \"c\")"));
-	REQUIRE(!StringUtil::Contains(message, "Candidates:"));
-	REQUIRE(!StringUtil::Contains(message, "Closest candidate"));
+	REQUIRE(StringUtil::Contains(message, "    'h(a VARCHAR, b INTEGER := 0) -> INTEGER'\n        Has no parameter "
+	                                      "named \"c\""));
 }
 
 TEST_CASE("Fewer arguments that cannot be cast are a closer miss", "[api][function_binding]") {
@@ -200,10 +195,10 @@ TEST_CASE("A call several overloads match at the same cost is ambiguous", "[api]
 	vector<LogicalType> two_integers {LogicalType::INTEGER, LogicalType::INTEGER};
 	auto selection = FunctionBinder::SelectFunction(*con.context, set, two_integers);
 	REQUIRE(!selection);
-	REQUIRE(selection.GetError().GetType() == FunctionSelectError::Type::AMBIGUOUS_MATCH);
+	REQUIRE(selection.GetError().GetType() == FunctionBindError::Type::AMBIGUOUS_MATCH);
 	REQUIRE(StringUtil::Contains(GetErrorMessage(selection), "Could not choose a best candidate"));
 	// only the overloads tied at the lowest cost
-	auto &candidates = selection.GetError().Cast<FunctionSelectError::AmbiguousMatch>().candidates;
+	auto &candidates = selection.GetError().Cast<FunctionBindError::AmbiguousMatch>().candidates;
 	REQUIRE(candidates.size() == 2);
 	REQUIRE(candidates[0].cost == candidates[1].cost);
 }
@@ -216,7 +211,7 @@ TEST_CASE("A named argument passed twice matches no overload", "[api][function_b
 	vector<pair<Identifier, LogicalType>> named {{"a", LogicalType::VARCHAR}, {"a", LogicalType::VARCHAR}};
 	auto selection = FunctionBinder::SelectFunction(*con.context, set, FunctionCallArguments({}, named));
 	REQUIRE(!selection);
-	REQUIRE(selection.GetError().GetType() == FunctionSelectError::Type::DUPLICATE_ARGUMENT);
-	REQUIRE(selection.GetError().Cast<FunctionSelectError::DuplicateArgument>().argument == 1);
+	REQUIRE(selection.GetError().GetType() == FunctionBindError::Type::DUPLICATE_ARGUMENT);
+	REQUIRE(selection.GetError().Cast<FunctionBindError::DuplicateArgument>().argument == 1);
 	REQUIRE(StringUtil::Contains(GetErrorMessage(selection), "Duplicate named argument"));
 }

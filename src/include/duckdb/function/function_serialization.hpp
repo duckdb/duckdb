@@ -190,9 +190,9 @@ public:
 	//! Selects the overload of a plan written before v2.0.0, which records its named arguments only as the operator's
 	//! named parameters. Required keyword-only parameters are treated as if they had a default - the bind receives
 	//! those named parameters and rejects a missing one, as it did when the plan was written
-	static FunctionSelectResult SelectWithoutNamedArguments(ClientContext &context, const Identifier &name,
-	                                                        const TableFunctionSet &functions,
-	                                                        const vector<LogicalType> &positional_types) {
+	static FunctionBindResult SelectWithoutNamedArguments(ClientContext &context, const Identifier &name,
+	                                                      const TableFunctionSet &functions,
+	                                                      const vector<LogicalType> &positional_types) {
 		auto relaxed = functions;
 		relaxed.ApplyToFunctions([](TableFunction &function) {
 			auto &signature = function.GetSignature();

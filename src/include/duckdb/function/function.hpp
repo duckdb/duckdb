@@ -485,6 +485,9 @@ private:
 	QualifiedName qualified_name;
 };
 
+//! The kinds of functions that are selected by their arguments - every subclass of SimpleFunction is one kind
+enum class FunctionKind : uint8_t { SCALAR, AGGREGATE, WINDOW, TABLE, PRAGMA, TYPE };
+
 class SimpleFunction : public Function {
 public:
 	DUCKDB_API SimpleFunction(Identifier name, FunctionSignature signature);
@@ -498,10 +501,8 @@ protected:
 public:
 	//! How the function reads in errors, e.g. as a candidate of a call
 	DUCKDB_API virtual string ToString() const;
-	//! What the function is called in errors, e.g. "No function matches ..."
-	DUCKDB_API virtual string GetKindName() const {
-		return "function";
-	}
+	//! What kind of function this is
+	virtual FunctionKind GetKind() const = 0;
 	DUCKDB_API hash_t Hash() const;
 	//! The properties of scalar, aggregate and window functions - other functions have none
 	virtual auto GetFunctionProperties() const -> optional_ptr<const FunctionProperties> {

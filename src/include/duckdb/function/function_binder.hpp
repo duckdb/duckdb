@@ -70,7 +70,7 @@ struct FunctionBinding {
 	}
 	template <class T>
 	shared_ptr<const T> GetFunction() const {
-		DynamicCastCheck<T>(function.get());
+		D_ASSERT(function->GetKind() == T::KIND);
 		return shared_ptr_cast<const SimpleFunction, const T>(function);
 	}
 
@@ -143,7 +143,7 @@ private:
 	idx_t positional_count = 0;
 };
 
-class FunctionSelectError;
+class FunctionBindError;
 
 //! Why an overload does not match a call. Arguments are numbered as the positional arguments, followed by the named
 //! ones - what the call itself says about an argument, its type and name, is not repeated here
@@ -166,7 +166,7 @@ public:
 		//! The name of the parameter - empty if it has none
 		Identifier name;
 
-		string ToString(const SimpleFunction &function, const FunctionSelectError &error) const;
+		string ToString(const SimpleFunction &function, const FunctionBindError &error) const;
 	};
 	//! The call passes more arguments than the overload takes, starting at this one
 	struct TooManyArguments {
@@ -177,21 +177,21 @@ public:
 		//! Whether that is the number of arguments it accepts by position
 		bool positional;
 
-		string ToString(const SimpleFunction &function, const FunctionSelectError &error) const;
+		string ToString(const SimpleFunction &function, const FunctionBindError &error) const;
 	};
 	//! A named argument names no parameter, and the overload has no "**kwargs" to receive it
 	struct UnknownNamedArgument {
 		static constexpr auto TYPE = Type::UNKNOWN_NAMED_ARGUMENT;
 		idx_t argument;
 
-		string ToString(const SimpleFunction &function, const FunctionSelectError &error) const;
+		string ToString(const SimpleFunction &function, const FunctionBindError &error) const;
 	};
 	//! A named argument names a parameter that a positional argument already fills
 	struct AlreadyPassedByPosition {
 		static constexpr auto TYPE = Type::ALREADY_PASSED_BY_POSITION;
 		idx_t argument;
 
-		string ToString(const SimpleFunction &function, const FunctionSelectError &error) const;
+		string ToString(const SimpleFunction &function, const FunctionBindError &error) const;
 	};
 	//! An argument cannot be implicitly cast to the type of the parameter that receives it
 	struct IncompatibleArgument {
@@ -200,7 +200,7 @@ public:
 		//! The type of the parameter that receives the argument
 		LogicalType parameter_type;
 
-		string ToString(const SimpleFunction &function, const FunctionSelectError &error) const;
+		string ToString(const SimpleFunction &function, const FunctionBindError &error) const;
 	};
 	//! The arguments determine conflicting types for a template of the overload
 	struct TemplateDeduction {
@@ -212,14 +212,14 @@ public:
 		//! conflicts with them
 		vector<LogicalType> inferred_types;
 
-		string ToString(const SimpleFunction &function, const FunctionSelectError &error) const;
+		string ToString(const SimpleFunction &function, const FunctionBindError &error) const;
 	};
 	//! Neither the arguments nor the defaults determine a template of the types the call uses
 	struct TemplateUnresolved {
 		static constexpr auto TYPE = Type::TEMPLATE_UNRESOLVED;
 		string template_name;
 
-		string ToString(const SimpleFunction &function, const FunctionSelectError &error) const;
+		string ToString(const SimpleFunction &function, const FunctionBindError &error) const;
 	};
 
 	//! The alternatives are in the order of Type
@@ -261,7 +261,7 @@ public:
 		return GetType() == Type::TEMPLATE_DEDUCTION || GetType() == Type::TEMPLATE_UNRESOLVED;
 	}
 	//! Why the call of the error does not match, e.g. "argument 1 of type DATE cannot be implicitly cast to VARCHAR"
-	string ToString(const FunctionSelectError &error) const;
+	string ToString(const FunctionBindError &error) const;
 
 private:
 	idx_t overload;
@@ -271,7 +271,7 @@ private:
 };
 
 //! Why no overload of a function set could be selected for a call
-class FunctionSelectError {
+class FunctionBindError {
 public:
 	enum class Type : uint8_t { NO_MATCH, AMBIGUOUS_MATCH, DUPLICATE_ARGUMENT };
 
@@ -283,39 +283,42 @@ public:
 
 		//! The closest mismatch, if no other is as close
 		optional_ptr<const FunctionMismatch> GetClosest() const;
-		ErrorData ToError(const FunctionSelectError &error) const;
+		ErrorData ToError(const FunctionBindError &error) const;
 	};
 	//! Several overloads match at the lowest cost
 	struct AmbiguousMatch {
 		static constexpr auto TYPE = Type::AMBIGUOUS_MATCH;
 		vector<FunctionBinding> candidates;
 
-		ErrorData ToError(const FunctionSelectError &error) const;
+		ErrorData ToError(const FunctionBindError &error) const;
 	};
 	//! A named argument repeats the name of an earlier one, so no overload can match
 	struct DuplicateArgument {
 		static constexpr auto TYPE = Type::DUPLICATE_ARGUMENT;
 		idx_t argument;
+		//! The kind of the functions of the set - the call matches none of them, so none of them is at hand
+		FunctionKind function_kind;
 
-		ErrorData ToError(const FunctionSelectError &error) const;
+		ErrorData ToError(const FunctionBindError &error) const;
 	};
 
 	//! The alternatives are in the order of Type
 	using Kind = std::variant<NoMatch, AmbiguousMatch, DuplicateArgument>;
 
 	//! No overload of the set matches the call - the mismatches are sorted, closest first
-	static FunctionSelectError CreateNoMatch(Identifier name, FunctionCallArguments call,
-	                                         vector<FunctionMismatch> mismatches) {
-		return FunctionSelectError(std::move(name), std::move(call), NoMatch {std::move(mismatches)});
+	static FunctionBindError CreateNoMatch(Identifier name, FunctionCallArguments call,
+	                                       vector<FunctionMismatch> mismatches) {
+		return FunctionBindError(std::move(name), std::move(call), NoMatch {std::move(mismatches)});
 	}
 	//! Several overloads match the call at the lowest cost
-	static FunctionSelectError CreateAmbiguousMatch(Identifier name, FunctionCallArguments call,
-	                                                vector<FunctionBinding> candidates) {
-		return FunctionSelectError(std::move(name), std::move(call), AmbiguousMatch {std::move(candidates)});
+	static FunctionBindError CreateAmbiguousMatch(Identifier name, FunctionCallArguments call,
+	                                              vector<FunctionBinding> candidates) {
+		return FunctionBindError(std::move(name), std::move(call), AmbiguousMatch {std::move(candidates)});
 	}
 	//! A named argument of the call repeats the name of an earlier one
-	static FunctionSelectError CreateDuplicateArgument(Identifier name, FunctionCallArguments call, idx_t argument) {
-		return FunctionSelectError(std::move(name), std::move(call), DuplicateArgument {argument});
+	static FunctionBindError CreateDuplicateArgument(Identifier name, FunctionCallArguments call, idx_t argument,
+	                                                 FunctionKind function_kind) {
+		return FunctionBindError(std::move(name), std::move(call), DuplicateArgument {argument, function_kind});
 	}
 
 public:
@@ -343,7 +346,7 @@ public:
 	string RawMessage() const;
 
 private:
-	FunctionSelectError(Identifier name, FunctionCallArguments call, Kind kind)
+	FunctionBindError(Identifier name, FunctionCallArguments call, Kind kind)
 	    : name(std::move(name)), call(std::move(call)), kind(std::move(kind)) {
 	}
 
@@ -354,11 +357,11 @@ private:
 };
 
 //! The outcome of selecting the overload of a function set that a call binds to
-class FunctionSelectResult {
+class FunctionBindResult {
 public:
-	FunctionSelectResult(FunctionBinding binding) : result(std::move(binding)) { // NOLINT: allow implicit conversion
+	FunctionBindResult(FunctionBinding binding) : result(std::move(binding)) { // NOLINT: allow implicit conversion
 	}
-	FunctionSelectResult(FunctionSelectError error) : result(std::move(error)) { // NOLINT: allow implicit conversion
+	FunctionBindResult(FunctionBindError error) : result(std::move(error)) { // NOLINT: allow implicit conversion
 	}
 
 public:
@@ -374,13 +377,13 @@ public:
 		return std::get<FunctionBinding>(result);
 	}
 	//! Why the selection failed - only if it did not succeed
-	const FunctionSelectError &GetError() const {
+	const FunctionBindError &GetError() const {
 		D_ASSERT(!IsSuccess());
-		return std::get<FunctionSelectError>(result);
+		return std::get<FunctionBindError>(result);
 	}
 
 private:
-	std::variant<FunctionBinding, FunctionSelectError> result;
+	std::variant<FunctionBinding, FunctionBindError> result;
 };
 
 //! The FunctionBinder class is responsible for binding functions
@@ -396,10 +399,9 @@ public:
 	//! Overload selection: the cheapest overload of a function set that a call with the given arguments binds to.
 	//! Selection needs no binder - without a ClientContext only the built-in implicit casts are considered. With
 	//! explicit casts, an argument that cannot be implicitly cast to its parameter is accepted too
-	DUCKDB_API static FunctionSelectResult SelectFunction(optional_ptr<ClientContext> context,
-	                                                      const BaseFunctionSet &functions,
-	                                                      const FunctionCallArguments &call,
-	                                                      bool explicit_casts = false);
+	DUCKDB_API static FunctionBindResult SelectFunction(optional_ptr<ClientContext> context,
+	                                                    const BaseFunctionSet &functions,
+	                                                    const FunctionCallArguments &call, bool explicit_casts = false);
 
 	//! Bind a table function: select the overload, check the named arguments against its signature, and fold the
 	//! arguments to the constants it is called with, cast to the types it declares. Returns nullptr and sets the error
