@@ -164,9 +164,9 @@ TEST_CASE("A call no overload matches records why each overload fails", "[api][f
 	REQUIRE(GetMismatches(selection)[0].Cast<FunctionMismatch::UnknownNamedArgument>().argument == 1);
 	// the only overload is not listed a second time
 	message = GetErrorMessage(selection);
-	REQUIRE(StringUtil::Contains(message, "Candidate function: h(a VARCHAR, b INTEGER := 0) -> INTEGER (it has no "
+	REQUIRE(StringUtil::Contains(message, "Candidate: h(a VARCHAR, b INTEGER := 0) -> INTEGER (it has no "
 	                                      "parameter named \"c\")"));
-	REQUIRE(!StringUtil::Contains(message, "Candidate functions"));
+	REQUIRE(!StringUtil::Contains(message, "Candidates:"));
 	REQUIRE(!StringUtil::Contains(message, "Closest candidate"));
 }
 

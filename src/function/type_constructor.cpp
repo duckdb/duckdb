@@ -85,28 +85,6 @@ string ConstructorToString(const Identifier &type_name, const TypeConstructor &c
 	return type_name.GetIdentifierName() + "(" + StringUtil::Join(parts, ", ") + ")";
 }
 
-//! The type parameters of the call being bound, as (VARCHAR, INTEGER)
-string ArgumentsToString(const vector<TypeArgument> &arguments) {
-	vector<string> parts;
-	for (auto &arg : arguments) {
-		string part;
-		if (arg.HasName()) {
-			part = arg.GetName() + " := ";
-		}
-		parts.push_back(part + arg.GetType().ToString());
-	}
-	return "(" + StringUtil::Join(parts, ", ") + ")";
-}
-
-string CandidateList(const Identifier &type_name, const vector<shared_ptr<const TypeConstructor>> &constructors,
-                     const vector<idx_t> &offsets) {
-	string result = "\n\tCandidate definitions:";
-	for (auto offset : offsets) {
-		result += "\n\t" + ConstructorToString(type_name, *constructors[offset]);
-	}
-	return result;
-}
-
 //! How a modifier is referred to in errors: by its parameter name where it has one, by its position otherwise.
 string ArgumentName(const Identifier &name, idx_t position) {
 	if (name.empty()) {
@@ -211,6 +189,10 @@ vector<TypeArgument> NormalizeArguments(const Identifier &type_name, const TypeC
 
 } // namespace
 
+string TypeConstructor::ToString() const {
+	return ConstructorToString(GetName(), *this);
+}
+
 LogicalType TypeConstructorSet::Bind(optional_ptr<ClientContext> context, const LogicalType &base_type,
                                      const vector<TypeArgument> &arguments, QueryLocation query_location) const {
 	D_ASSERT(!functions.empty());
@@ -243,37 +225,12 @@ LogicalType TypeConstructorSet::Bind(optional_ptr<ClientContext> context, const 
 		}
 	}
 
-	// The candidates are selected with the regular function machinery, but reported in terms of types - a type is
-	// not a function, and "no function matches" reads as a mistake rather than as a bad type.
+	// The candidates are selected with the regular function machinery - its errors name the call, not a function
 	auto selection = FunctionBinder::SelectFunction(context, *this, {positional, named});
-	auto error_type = selection ? optional<FunctionSelectError::Type>() : selection.GetError().GetType();
-	if (error_type == FunctionSelectError::Type::DUPLICATE_ARGUMENT) {
-		// the parameters are invalid for any definition
+	if (!selection) {
 		ErrorData error = selection.GetError();
 		error.AddQueryLocation(query_location);
 		error.Throw();
-	}
-	if (error_type == FunctionSelectError::Type::NO_MATCH) {
-		vector<idx_t> all;
-		for (idx_t i = 0; i < functions.size(); i++) {
-			all.push_back(i);
-		}
-		if (arguments.empty()) {
-			throw BinderException(query_location, "Type %s requires type parameters%s", name,
-			                      CandidateList(name, functions, all));
-		}
-		throw BinderException(query_location, "Type %s does not accept type parameters %s%s", name,
-		                      ArgumentsToString(arguments), CandidateList(name, functions, all));
-	}
-	if (error_type == FunctionSelectError::Type::AMBIGUOUS_MATCH) {
-		vector<idx_t> candidates;
-		for (auto &candidate : selection.GetError().Cast<FunctionSelectError::AmbiguousMatch>().candidates) {
-			candidates.push_back(candidate.GetOverloadIndex());
-		}
-		throw BinderException(query_location,
-		                      "Could not choose a definition of type %s for the type parameters %s. In order to "
-		                      "select one, please add explicit type casts.%s",
-		                      name, ArgumentsToString(arguments), CandidateList(name, functions, candidates));
 	}
 	auto constructor_ptr = selection.GetBinding().GetFunction<TypeConstructor>();
 	auto &constructor = *constructor_ptr;

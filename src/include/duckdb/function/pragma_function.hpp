@@ -73,7 +73,7 @@ public:
 	DUCKDB_API static PragmaFunction PragmaStatement(const Identifier &name, pragma_query_t query);
 	DUCKDB_API static PragmaFunction PragmaStatement(const Identifier &name, pragma_function_t function);
 
-	DUCKDB_API string ToString() const;
+	DUCKDB_API string ToString() const override;
 
 public:
 	PragmaType type;

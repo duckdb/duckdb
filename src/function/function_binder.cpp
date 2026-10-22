@@ -323,16 +323,32 @@ static optional<FunctionMismatch::Reason> DeduceTemplates(optional_ptr<ClientCon
 	return nullopt;
 }
 
+//! How useful a reason is to report, lower is more useful. A wrong name points at an argument the call passes, and
+//! often causes the counts to be off as well
+static idx_t MismatchRank(const FunctionMismatch::Reason &reason) {
+	switch (static_cast<FunctionMismatch::Type>(reason.index())) {
+	case FunctionMismatch::Type::UNKNOWN_NAMED_ARGUMENT:
+	case FunctionMismatch::Type::ALREADY_PASSED_BY_POSITION:
+		return 0;
+	case FunctionMismatch::Type::MISSING_PARAMETER:
+		return 1;
+	case FunctionMismatch::Type::TOO_MANY_ARGUMENTS:
+		return 2;
+	default:
+		return 3;
+	}
+}
+
 std::variant<FunctionBinding, FunctionMismatch> FunctionBinder::MatchOverload(optional_ptr<ClientContext> context,
                                                                               idx_t overload,
                                                                               shared_ptr<const SimpleFunction> function,
                                                                               const FunctionCallArguments &call,
                                                                               bool explicit_casts) {
-	// every mismatch is counted towards the distance, the first one is the reason
+	// every mismatch is counted towards the distance, the most useful one is the reason
 	idx_t mismatches = 0;
 	optional<FunctionMismatch::Reason> first_mismatch;
 	auto mismatch = [&](FunctionMismatch::Reason reason, idx_t count = 1) {
-		if (!first_mismatch) {
+		if (!first_mismatch || MismatchRank(reason) < MismatchRank(*first_mismatch)) {
 			first_mismatch = std::move(reason);
 		}
 		mismatches += count;
@@ -498,25 +514,28 @@ static_assert(AlternativesFollowTypes<FunctionSelectError::Kind>(
 
 string FunctionMismatch::MissingParameter::ToString(const SimpleFunction &, const FunctionSelectError &) const {
 	if (name.empty()) {
-		return StringUtil::Format("parameter %llu is not passed", parameter + 1);
+		return StringUtil::Format("Required parameter at position %llu is missing", parameter + 1);
 	}
-	return StringUtil::Format("parameter \"%s\" is not passed", name.GetIdentifierName());
+	return StringUtil::Format("Required parameter \"%s\" is missing", name.GetIdentifierName());
 }
 
 string FunctionMismatch::TooManyArguments::ToString(const SimpleFunction &, const FunctionSelectError &) const {
-	return StringUtil::Format(
-	    positional ? "it takes at most %llu positional arguments" : "it takes at most %llu arguments", accepted);
+	auto kind = positional ? "positional " : "";
+	if (accepted == 0) {
+		return StringUtil::Format("Takes no %sarguments", kind);
+	}
+	return StringUtil::Format("Takes at most %llu %sargument%s", accepted, kind, accepted == 1 ? "" : "s");
 }
 
 string FunctionMismatch::UnknownNamedArgument::ToString(const SimpleFunction &,
                                                         const FunctionSelectError &error) const {
-	return StringUtil::Format("it has no parameter named \"%s\"",
+	return StringUtil::Format("Has no parameter named \"%s\"",
 	                          error.GetCall().GetArgument(argument).name.GetIdentifierName());
 }
 
 string FunctionMismatch::AlreadyPassedByPosition::ToString(const SimpleFunction &,
                                                            const FunctionSelectError &error) const {
-	return StringUtil::Format("parameter \"%s\" has already been provided as a positional argument",
+	return StringUtil::Format("Parameter \"%s\" is already passed by position",
 	                          error.GetCall().GetArgument(argument).name.GetIdentifierName());
 }
 
@@ -525,34 +544,33 @@ string FunctionMismatch::IncompatibleArgument::ToString(const SimpleFunction &,
 	auto &name = error.GetCall().GetArgument(argument).name;
 	auto &argument_type = error.GetCall().GetArgument(argument).type;
 	if (name.empty()) {
-		return StringUtil::Format("argument %llu of type %s cannot be implicitly cast to %s", argument + 1,
-		                          argument_type.ToString(), parameter_type.ToString());
+		return StringUtil::Format("Argument %llu of type %s cannot be implicitly cast to %s\nYou might need to add "
+		                          "explicit type casts",
+		                          argument + 1, argument_type.ToString(), parameter_type.ToString());
 	}
-	return StringUtil::Format("argument \"%s\" of type %s cannot be implicitly cast to %s", name.GetIdentifierName(),
-	                          argument_type.ToString(), parameter_type.ToString());
+	return StringUtil::Format("Argument \"%s\" of type %s cannot be implicitly cast to %s\nYou might need to add "
+	                          "explicit type casts",
+	                          name.GetIdentifierName(), argument_type.ToString(), parameter_type.ToString());
 }
 
 string FunctionMismatch::TemplateDeduction::ToString(const SimpleFunction &function,
                                                      const FunctionSelectError &) const {
 	auto &steps = inferred_types;
-	auto msg =
-	    StringUtil::Format("Cannot deduce template type '%s' in function: '%s'\n", template_name, function.ToString());
 	// the inferred types are the first one, then pairs of a type and what the template is promoted to with it
-	msg += StringUtil::Format("Type '%s' was inferred to be:\n", template_name);
+	auto msg = StringUtil::Format("Cannot deduce template type '%s', it was inferred to be:\n", template_name);
 	msg += StringUtil::Format(" - '%s', from first occurrence\n", steps[0].ToString());
 	for (idx_t i = 2; i + 1 < steps.size(); i += 2) {
 		msg += StringUtil::Format(" - '%s', by promoting '%s' + '%s'\n", steps[i].ToString(), steps[i - 2].ToString(),
 		                          steps[i - 1].ToString());
 	}
-	msg += StringUtil::Format(" - '%s', which is incompatible with previously inferred type!", steps.back().ToString());
+	msg +=
+	    StringUtil::Format(" - '%s', which is incompatible with the previously inferred type", steps.back().ToString());
 	return msg;
 }
 
 string FunctionMismatch::TemplateUnresolved::ToString(const SimpleFunction &function,
                                                       const FunctionSelectError &) const {
-	return StringUtil::Format("Cannot deduce template type '%s' in function: '%s'\nType '%s' is not determined by the "
-	                          "arguments",
-	                          template_name, function.ToString(), template_name);
+	return StringUtil::Format("Cannot deduce template type '%s', it is not determined by the arguments", template_name);
 }
 
 //! The argument a mismatch is about, if it is about a single one
@@ -595,62 +613,97 @@ optional_ptr<const FunctionMismatch> FunctionSelectError::NoMatch::GetClosest() 
 	return nullptr;
 }
 
-ErrorData FunctionSelectError::NoMatch::ToError(const FunctionSelectError &error) const {
-	// a template that cannot be deduced is reported on its own, it says more about the call than a list of overloads
-	if (!mismatches.empty() && mismatches[0].IsTemplateMismatch()) {
-		return WithArgumentLocation(ErrorData(ExceptionType::BINDER, mismatches[0].ToString(error)), error,
-		                            GetMismatchArgument(mismatches[0]));
+//! The number of candidates an error lists for every reason - one more is listed rather than mentioned as more
+static constexpr idx_t MAX_LISTED_CANDIDATES = 3;
+
+//! A list of candidates of an error, with the ones beyond the limit counted
+static string CandidatesToString(const vector<reference<const SimpleFunction>> &functions) {
+	auto listed = functions.size() <= MAX_LISTED_CANDIDATES + 1 ? functions.size() : MAX_LISTED_CANDIDATES;
+	string result;
+	for (idx_t i = 0; i < listed; i++) {
+		result += "\n    '" + functions[i].get().ToString() + "'";
 	}
-	// list every overload of the set in its order, and the closest one if a single overload is closer than all others
+	if (listed < functions.size()) {
+		result += StringUtil::Format("\n    ... and %llu more", functions.size() - listed);
+	}
+	return result;
+}
+
+//! The call an error is about, e.g. "abs(INTEGER, VARCHAR)"
+static string CallToString(const FunctionSelectError &error, optional_ptr<const SimpleFunction> function) {
+	auto &call = error.GetCall();
+	if (!function) {
+		return Function::CallToString(Identifier(), Identifier(), error.GetName(), call.GetPositionalTypes(),
+		                              call.GetNamedTypes());
+	}
+	return Function::CallToString(function->GetCatalogName(), function->GetSchemaName(), error.GetName(),
+	                              call.GetPositionalTypes(), call.GetNamedTypes());
+}
+
+ErrorData FunctionSelectError::NoMatch::ToError(const FunctionSelectError &error) const {
+	optional_ptr<const SimpleFunction> first;
+	if (!mismatches.empty()) {
+		first = mismatches[0].GetFunction();
+	}
+	// the candidates grouped by why the call does not match them, the group of the closest candidate first
+	vector<pair<string, vector<reference<const SimpleFunction>>>> groups;
+	for (auto &mismatch : mismatches) {
+		auto reason = mismatch.ToString(error);
+		auto group =
+		    std::find_if(groups.begin(), groups.end(), [&](const auto &entry) { return entry.first == reason; });
+		if (group == groups.end()) {
+			groups.emplace_back(std::move(reason), vector<reference<const SimpleFunction>>());
+			group = groups.end() - 1;
+		}
+		group->second.push_back(mismatch.GetFunction());
+	}
+	auto message = "Could not bind '" + CallToString(error, first) + "'\nCandidates:";
+	for (auto &group : groups) {
+		message += CandidatesToString(group.second);
+		for (auto &line : StringUtil::Split(group.first, '\n')) {
+			message += "\n        " + line;
+		}
+	}
+
+	// every overload is a candidate, in the order of the set
 	vector<reference<const FunctionMismatch>> overloads(mismatches.begin(), mismatches.end());
 	std::sort(overloads.begin(), overloads.end(), [](const FunctionMismatch &a, const FunctionMismatch &b) {
 		return a.GetOverloadIndex() < b.GetOverloadIndex();
 	});
 	vector<string> candidates;
-	Identifier catalog_name;
-	Identifier schema_name;
 	for (auto &overload : overloads) {
-		auto &f = overload.get().GetFunction();
-		if (catalog_name.empty() && !f.GetCatalogName().empty()) {
-			catalog_name = f.GetCatalogName();
-		}
-		if (schema_name.empty() && !f.GetSchemaName().empty()) {
-			schema_name = f.GetSchemaName();
-		}
-		candidates.push_back(f.ToString());
-	}
-	string closest_candidate;
-	auto closest = GetClosest();
-	if (closest) {
-		closest_candidate = closest->GetFunction().ToString() + " (" + closest->ToString(error) + ")";
+		candidates.push_back(overload.get().GetFunction().ToString());
 	}
 	auto &call = error.GetCall();
-	auto result = ErrorData(BinderException::NoMatchingFunction(catalog_name, schema_name, error.GetName(),
-	                                                            call.GetPositionalTypes(), call.GetNamedTypes(),
-	                                                            candidates, closest_candidate));
-	return WithArgumentLocation(std::move(result), error, closest ? GetMismatchArgument(*closest) : optional_idx());
+	auto result = ErrorData(BinderException::NoMatchingFunction(
+	    first ? first->GetCatalogName() : Identifier(), first ? first->GetSchemaName() : Identifier(), error.GetName(),
+	    call.GetPositionalTypes(), call.GetNamedTypes(), candidates, message));
+
+	// point at the argument of the closest candidate, if no other is as close - or of a template it cannot deduce
+	optional_idx argument;
+	if (!mismatches.empty() && (GetClosest() || mismatches[0].IsTemplateMismatch())) {
+		argument = GetMismatchArgument(mismatches[0]);
+	}
+	return WithArgumentLocation(std::move(result), error, argument);
 }
 
 ErrorData FunctionSelectError::AmbiguousMatch::ToError(const FunctionSelectError &error) const {
-	auto &first = candidates[0].GetFunction();
-	auto &call = error.GetCall();
-	string call_str = Function::CallToString(first.GetCatalogName(), first.GetSchemaName(), error.GetName(),
-	                                         call.GetPositionalTypes(), call.GetNamedTypes());
-	string candidate_str;
+	auto message = "Could not bind '" + CallToString(error, candidates[0].GetFunction()) + "'\nCandidates:";
+	vector<reference<const SimpleFunction>> functions;
 	for (auto &candidate : candidates) {
-		candidate_str += "\t" + candidate.GetFunction().ToString() + "\n";
+		functions.push_back(candidate.GetFunction());
 	}
-	return ErrorData(
-	    ExceptionType::BINDER,
-	    StringUtil::Format("Could not choose a best candidate function for the function call \"%s\". In order to "
-	                       "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
-	                       call_str, candidate_str));
+	message += CandidatesToString(functions);
+	message += "\n        All match the given arguments equally well";
+	message += "\n        You might need to add explicit type casts to disambiguate";
+	return ErrorData(ExceptionType::BINDER, message);
 }
 
 ErrorData FunctionSelectError::DuplicateArgument::ToError(const FunctionSelectError &error) const {
-	return WithArgumentLocation(ErrorData(BinderException("Duplicate named argument %s in function call to %s",
-	                                                      error.GetCall().GetArgument(argument).name, error.GetName())),
-	                            error, argument);
+	auto &argument_name = error.GetCall().GetArgument(argument).name;
+	auto message = StringUtil::Format("Could not bind '%s'\nNamed argument %s is passed more than once",
+	                                  CallToString(error, nullptr), argument_name);
+	return WithArgumentLocation(ErrorData(BinderException(message)), error, argument);
 }
 
 FunctionSelectError::operator ErrorData() const {
@@ -683,8 +736,6 @@ static optional_idx FindDuplicateNamedArgument(const FunctionCallArguments &call
 FunctionSelectResult FunctionBinder::SelectFunction(optional_ptr<ClientContext> context,
                                                     const BaseFunctionSet &functions, const FunctionCallArguments &call,
                                                     bool explicit_casts) {
-
-
 	// Look for duplicate names
 	identifier_set_t seen_names;
 	for (idx_t i = call.GetPositionalCount(); i < call.GetArgumentCount(); i++) {

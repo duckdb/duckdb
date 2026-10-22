@@ -496,7 +496,8 @@ protected:
 	FunctionSignature signature;
 
 public:
-	DUCKDB_API string ToString() const;
+	//! How the function reads in errors, e.g. as a candidate of a call
+	DUCKDB_API virtual string ToString() const;
 	DUCKDB_API hash_t Hash() const;
 	//! The properties of scalar, aggregate and window functions - other functions have none
 	virtual auto GetFunctionProperties() const -> optional_ptr<const FunctionProperties> {

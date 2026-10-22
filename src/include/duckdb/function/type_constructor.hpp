@@ -104,6 +104,9 @@ public:
 		return bind_function;
 	}
 
+	//! As MAP(key TYPE, value TYPE)
+	DUCKDB_API string ToString() const override;
+
 private:
 	bind_logical_type_function_t bind_function;
 };
