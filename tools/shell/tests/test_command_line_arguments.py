@@ -57,7 +57,7 @@ def test_storage_version_help(shell):
     ]
 
     assert len(storage_version_lines) == 1
-    assert "Default: 'latest'" in storage_version_lines[0]
+    assert "Default: 'v2.0.0'" in storage_version_lines[0]
 
 
 def test_command(shell):
