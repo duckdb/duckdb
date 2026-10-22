@@ -29,6 +29,12 @@
       ]
     },
     {
+      "reason": "A volatile collated subquery group is grouped differently once its GROUP BY ALL is expanded to SQL",
+      "paths": [
+        "test/sql/collate/collate_group_by_all.test"
+      ]
+    },
+    {
       "reason": "Native join reordering or implied filters change whether casts on excluded rows are evaluated",
       "paths": [
         "test/optimizer/pullup_join_expression_errors.test",
@@ -85,6 +91,7 @@
       "paths": [
         "test/sql/pragma/profiling/test_custom_profiling_using_groups.test",
         "test/sql/pragma/profiling/call_enable_profiling_function.test",
+        "test/sql/profiling/test_failed_query_profile.test",
         "test/sql/settings/lock_configuration_pragmas.test"
       ]
     },

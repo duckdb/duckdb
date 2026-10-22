@@ -14,6 +14,7 @@
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/enums/query_result_state.hpp"
+#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/enums/connection_type.hpp"
 #include "duckdb/common/enums/result_lifetime.hpp"
@@ -107,6 +108,10 @@ public:
 	//! The error of a statement that expands into several, given parameters
 	static constexpr const char *EXPANDING_PARAMETERS_ERROR =
 	    "parameters are not supported for a statement that expands into several";
+	//! The error of a prepared statement with parameters, while CONNECT-ed
+	static constexpr const char *CONNECTED_PARAMETERS_ERROR =
+	    "Parameterized prepared statements cannot be executed while CONNECT-ed; DISCONNECT first, or run the SQL as a "
+	    "fresh statement to route through the CONNECT binding";
 
 public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
@@ -246,6 +251,9 @@ public:
 
 	//! Gets current percentage of the query's progress, returns 0 in case the progress bar is disabled.
 	DUCKDB_API QueryProgress GetQueryProgress();
+	//! Snapshot the query-level metrics of the running query, keyed by metric name (e.g. "io.total_bytes_read").
+	//! Safe to call from another thread while the query runs, and regardless of whether profiling is enabled.
+	DUCKDB_API profiler_metrics_t GetLiveQueryMetrics();
 
 	//! Register function in the temporary schema
 	DUCKDB_API void RegisterFunction(CreateFunctionInfo &info);
@@ -342,8 +350,10 @@ private:
 	//! when the query failed: the error is on the handle
 	unique_ptr<QueryResult> CompleteDelegatedInternal(ClientContextLock &lock, QueryResult &result);
 
-	//! The user statements of a query, as parsed: a submission expands each one
-	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);
+	//! The user statements of a query, as parsed: a submission expands each one. profile is false for calls that
+	//! do not run the query
+	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query,
+	                                                         bool profile = true);
 	//! Expands a user statement for a caller that binds it without running it; a statement that expands into
 	//! several is refused with the given message
 	unique_ptr<SQLStatement> ExpandSingleStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
@@ -390,6 +400,9 @@ private:
 	                                             const QueryParameters &parameters, bool verify = true);
 	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
+	//! Run the statements of a query string one after the other
+	unique_ptr<QueryResult> QueryInternal(ClientContextLock &lock, const string &query,
+	                                      QueryParameters query_parameters);
 
 	unique_ptr<ClientContextLock> LockContext();
 
@@ -410,6 +423,8 @@ private:
 	void EndStatementInternal(ClientContextLock &lock);
 	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
 	                           optional_ptr<ErrorData> previous_error);
+	//! End the query in the profiler; a failure to emit the profile becomes the error unless there is one already
+	void EndQueryProfiling(ErrorData &error);
 	//! The result of the finished query. For a statement that expands into several and returns no rows, that is an
 	//! empty result in the query's format, the way a statement that returns nothing reports
 	unique_ptr<QueryResult> TakeFinishedResultInternal(ClientContextLock &lock);

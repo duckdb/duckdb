@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
+#include "duckdb/execution/operator/set/physical_recursive_cte_union_state.hpp"
 
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
@@ -73,10 +74,7 @@ static idx_t GetRecursiveWorkUnits(const RecursiveCTEState &state, idx_t direct_
 		work_units += state.CurrentInputTable().ChunkCount() * references.frontier_scans;
 	}
 	if (op.recurring_table && references.recurring_scans > 0) {
-		const auto recurring_chunks =
-		    op.using_key ? (state.GetHashTable().Count() + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE
-		                 : op.recurring_table->ChunkCount();
-		work_units += recurring_chunks * references.recurring_scans;
+		work_units += state.RecurringStateChunks() * references.recurring_scans;
 	}
 	// Direct probes consume their visible input without scanning the frozen recurring state. Recursive probe inputs
 	// are counted above, while independent probe inputs contribute their estimated chunks.
@@ -92,8 +90,7 @@ static idx_t GetRecursiveInputRows(const RecursiveCTEState &state) {
 		recursive_rows += state.CurrentInputTable().Count() * references.frontier_scans;
 	}
 	if (op.recurring_table && references.recurring_scans > 0) {
-		const auto recurring_rows = op.using_key ? state.GetHashTable().Count() : op.recurring_table->Count();
-		recursive_rows += recurring_rows * references.recurring_scans;
+		recursive_rows += state.RecurringStateRows() * references.recurring_scans;
 	}
 	return recursive_rows;
 }
@@ -115,7 +112,7 @@ static RecursiveCTEParallelism GetRecursiveParallelism(const RecursiveCTEState &
 	if (worker_count <= 1) {
 		return RecursiveCTEParallelism(1);
 	}
-	if (!op.using_key && op.union_all && worker_count > 1) {
+	if (!op.UsingKey() && op.UnionAll() && worker_count > 1) {
 		// Ordinary UNION ALL needs enough work to amortize every scheduled pipeline and private-output combine.
 		auto estimated_work_units = work_units;
 		if (op.working_table && schedule_plan.cte_scan_pipeline_count > 0) {
@@ -1048,23 +1045,24 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		frontier_allocation_bytes = frontier.AllocationSize();
 		epoch_task_start = gstate.GetMetrics().TaskCount();
 	}
-	if (!using_key && union_all) {
+	if (!UsingKey() && UnionAll()) {
+		auto &union_state = gstate.Cast<RecursiveCTEUnionState>();
 		const auto source_tasks_write_recursive_output = parallelism.frontier_worker_count == 1 &&
 		                                                 parallelism.source_task_worker_count > 1 &&
 		                                                 schedule_plan->source_tasks_write_recursive_output;
 		// Materialized fan-out already provides pipeline concurrency; private output multiplies collections per scan.
 		const auto has_materialized_fanout = schedule_plan->cte_scan_pipeline_count > 1;
-		gstate.SetUseLocalUnionAllOutput(source_tasks_write_recursive_output ||
-		                                 (parallelism.frontier_worker_count > 1 && !has_materialized_fanout &&
-		                                  work_units / parallelism.frontier_worker_count >= 2));
-		if (!gstate.UsesLocalUnionAllOutput()) {
-			gstate.InitializeSharedOutputAppend();
+		union_state.SetUseLocalUnionAllOutput(source_tasks_write_recursive_output ||
+		                                      (parallelism.frontier_worker_count > 1 && !has_materialized_fanout &&
+		                                       work_units / parallelism.frontier_worker_count >= 2));
+		if (!union_state.UsesLocalUnionAllOutput()) {
+			union_state.InitializeSharedOutputAppend();
 		}
 	}
 	const auto max_worker_count = parallelism.MaxWorkerCount();
-	if (max_worker_count > 1 && !using_key && !union_all) {
+	if (max_worker_count > 1 && !UsingKey() && !UnionAll()) {
 		const auto partition_count = MinValue<idx_t>(NextPowerOfTwo(max_worker_count), 4);
-		gstate.PromoteDistinctState(context.client, partition_count);
+		gstate.Cast<RecursiveCTEUnionState>().PromoteDistinctState(context.client, partition_count);
 	}
 	const auto epoch_start =
 	    collect_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();

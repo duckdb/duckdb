@@ -579,9 +579,14 @@ void TableFunctionMultiFileWrapper::GetVirtualColumns(ClientContext &context, Mu
 }
 
 void TableFunctionMultiFileWrapper::FinalizeBindData(MultiFileBindData &multi_file_data) {
+	auto &data = multi_file_data.bind_data->Cast<TableFunctionMultiFileData>();
+	if (multi_file_data.initial_reader) {
+		// the cardinality estimate comes from the first file - keep it, as a filter pushdown can prune that file's
+		// reader before the optimizer asks for the estimate
+		data.cardinality = multi_file_data.initial_reader->Cast<TableFunctionFileReader>().GetCardinality();
+	}
 	if (!multi_file_data.file_options.schema.empty()) {
 		// the schema was given up front, so BindReader never ran to find out whether the scan reads several files
-		auto &data = multi_file_data.bind_data->Cast<TableFunctionMultiFileData>();
 		data.options.multi_file_scan = multi_file_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
 		return;
 	}
@@ -591,17 +596,13 @@ void TableFunctionMultiFileWrapper::FinalizeBindData(MultiFileBindData &multi_fi
 		// function combined itself can be used to read every file
 		return;
 	}
-	auto &data = multi_file_data.bind_data->Cast<TableFunctionMultiFileData>();
 	data.options.expected_names = std::move(combined_names);
 	data.options.expected_types = std::move(combined_types);
 	data.options.schema_bind_data = std::move(combined_bind_data);
 	// the readers that were opened to combine the schemas were bound before the combined schema was known - release
 	// them so that every file is bound against the combined schema instead
 	multi_file_data.union_readers.clear();
-	if (multi_file_data.initial_reader) {
-		data.cardinality = multi_file_data.initial_reader->Cast<TableFunctionFileReader>().GetCardinality();
-		multi_file_data.initial_reader = nullptr;
-	}
+	multi_file_data.initial_reader = nullptr;
 }
 
 //! Drop the per-file bind data of a scan whose schema the function combined itself - every file is re-bound against
@@ -706,14 +707,10 @@ unique_ptr<NodeStatistics> TableFunctionMultiFileWrapper::GetCardinality(ClientC
                                                                          const MultiFileBindData &bind_data,
                                                                          idx_t file_count) {
 	auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
-	auto cardinality = data.cardinality;
-	if (bind_data.initial_reader) {
-		cardinality = bind_data.initial_reader->Cast<TableFunctionFileReader>().GetCardinality();
-	}
-	if (!cardinality.IsValid()) {
+	if (!data.cardinality.IsValid()) {
 		return nullptr;
 	}
-	return make_uniq<NodeStatistics>(cardinality.GetIndex() * file_count);
+	return make_uniq<NodeStatistics>(data.cardinality.GetIndex() * file_count);
 }
 
 //===--------------------------------------------------------------------===//
