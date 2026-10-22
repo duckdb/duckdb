@@ -74,8 +74,8 @@ QueryProfileResult &QueryProfileResult::AppendList() {
 }
 
 QueryProfiler::QueryProfiler(ClientContext &context_p)
-    : context(context_p), running(false), query_requires_profiling(false), is_explain_analyze(false),
-      metrics_finalized(false) {
+    : context(context_p), running(false), query_started(false), query_requires_profiling(false),
+      is_explain_analyze(false), metrics_finalized(false) {
 }
 
 bool QueryProfiler::IsEnabled() const {
@@ -138,9 +138,12 @@ void QueryProfiler::Reset() {
 
 void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
 	lock_guard<std::mutex> guard(lock);
-	// Always reset byte counters at the start of each query so the progress bar shows per-query values
-	query_metrics.bytes_read = 0;
-	query_metrics.bytes_written = 0;
+	// the counters tracked without profiling hold per-query values: reset them once, as StartQuery is called
+	// several times for one query
+	if (!query_started) {
+		query_started = true;
+		query_metrics.ResetLiveMetrics();
+	}
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
 	}
@@ -218,12 +221,18 @@ bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type
 	}
 }
 
+void QueryProfiler::ResetQueryStart() {
+	lock_guard<std::mutex> guard(lock);
+	query_started = false;
+}
+
 void QueryProfiler::StartExplainAnalyze() {
 	is_explain_analyze = true;
 }
 
 void QueryProfiler::EndQuery() {
 	unique_lock<std::mutex> guard(lock);
+	query_started = false;
 	if (!running) {
 		return;
 	}
@@ -243,6 +252,8 @@ void QueryProfiler::EndQuery() {
 	}
 
 	is_explain_analyze = false;
+	// a query that failed before it was planned has no tree to print; its profile still replaces the saved one
+	const bool has_plan = root != nullptr;
 
 	// To log is inexpensive, whether to log or not depends on whether logging is active
 	ToLogInternal();
@@ -251,14 +262,14 @@ void QueryProfiler::EndQuery() {
 
 	if (emit_output) {
 		auto save_location = GetSaveLocation();
-		if (save_location.empty()) {
+		if (!save_location.empty()) {
+			string tree = ToString();
+			WriteToFile(save_location.c_str(), tree);
+		} else if (has_plan) {
 			// print directly through the renderer's print sink
 			auto renderer = GetRenderer();
 			PrintProfilerOutput(renderer.get());
 			Printer::Print("\n");
-		} else {
-			string tree = ToString();
-			WriteToFile(save_location.c_str(), tree);
 		}
 	}
 }
@@ -266,6 +277,12 @@ void QueryProfiler::EndQuery() {
 void QueryProfiler::FinalizeMetrics() {
 	lock_guard<std::mutex> guard(lock);
 	FinalizeMetricsInternal();
+}
+
+profiler_metrics_t QueryProfiler::GetLiveMetrics() const {
+	// StartQuery resets the counters under the lock, so a snapshot never mixes two queries
+	lock_guard<std::mutex> guard(lock);
+	return query_metrics.GetLiveMetrics();
 }
 
 void QueryProfiler::TrackBytesRead(const idx_t amount, const idx_t elapsed_us) {
@@ -542,7 +559,7 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 
 	auto &info = entry->second;
 	if (info.name.empty()) {
-		info.name = EnumUtil::ToString(phys_op.type);
+		info.name = phys_op.GetName();
 	}
 }
 
@@ -748,6 +765,9 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 	if (info.MetricIsTracked<MetricOperatorType>()) {
 		result["type"] = Value(EnumUtil::ToString(operator_type));
 	}
+	if (info.MetricIsTracked<MetricOperatorName>()) {
+		result["name"] = Value(name);
+	}
 	if (info.MetricIsTracked<MetricOperatorTiming>()) {
 		result["timing"] = Value::DOUBLE(time);
 	}
@@ -888,6 +908,7 @@ static LegacyCumulative LegacyOperatorToResultTree(const GatheredMetrics &info, 
 	};
 
 	emit_as("type", "operator_type");
+	emit_as("name", "operator_name");
 	emit_as("timing", "operator_timing");
 	emit_as("rows_scanned", "operator_rows_scanned");
 	emit_as("intermediate_rows", "operator_cardinality");
@@ -1018,6 +1039,17 @@ QueryProfileResult &QueryProfiler::GetResult() {
 	return *result_tree;
 }
 
+void QueryProfiler::GetFinalizedProfileUnderLock(
+    const std::function<void(optional_ptr<const GatheredMetrics>, optional_ptr<const ProfilingNode>)> &callback) const {
+	lock_guard<std::mutex> guard(lock);
+	// a profile left over from before profiling was disabled is stale, and a running one is not finalized yet
+	if (!IsEnabled() || running || !metrics_finalized) {
+		callback(nullptr, nullptr);
+		return;
+	}
+	callback(metrics.get(), root.get());
+}
+
 bool QueryProfiler::HasRoot() const {
 	return root != nullptr;
 }
@@ -1050,7 +1082,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	auto &info = node->GetOperatorMetrics();
 	node->depth = depth;
 
-	info.name = EnumUtil::ToString(root_p.type);
+	info.name = root_p.GetName();
 	info.operator_type = root_p.type;
 	auto params = root_p.ParamsToString();
 	info.SetExtraInfo(std::move(params));

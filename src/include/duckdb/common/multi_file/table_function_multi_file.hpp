@@ -160,7 +160,7 @@ public:
 //! Bind data of a multi-file function that wraps a single-file table function
 struct TableFunctionMultiFileData : public TableFunctionData {
 	TableFunctionFileReaderOptions options;
-	//! The per-file cardinality estimate, kept when the readers used to combine the schemas are released
+	//! The cardinality estimate of the first file, kept here because its reader can be released or pruned
 	optional_idx cardinality;
 
 	//! Whether the schema every file is read with is known upfront - because it was combined from several files,

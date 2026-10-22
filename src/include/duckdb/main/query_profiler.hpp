@@ -101,8 +101,12 @@ public:
 	DUCKDB_API void Reset();
 	DUCKDB_API void StartQuery(const string &query, bool is_explain_analyze = false, bool start_at_optimizer = false);
 	DUCKDB_API void EndQuery();
+	//! Let the next StartQuery reset the live counters, also when the previous call never ended its query.
+	DUCKDB_API void ResetQueryStart();
 	//! Finalize query metrics for output; safe to call multiple times.
 	DUCKDB_API void FinalizeMetrics();
+	//! Snapshot the query-level metrics that are kept up to date while the query runs, keyed by metric name.
+	DUCKDB_API profiler_metrics_t GetLiveMetrics() const;
 
 	//! Track bytes read and the time spent reading.
 	DUCKDB_API void TrackBytesRead(idx_t amount, idx_t elapsed_us);
@@ -191,12 +195,19 @@ public:
 		lock_guard<std::mutex> guard(lock);
 		callback(root.get());
 	}
+	//! Provides access to the finalized metrics and query tree of the last profiled query, both null while a query is
+	//! running or when there are none, and ensures there are no concurrent modifications
+	DUCKDB_API void GetFinalizedProfileUnderLock(
+	    const std::function<void(optional_ptr<const GatheredMetrics>, optional_ptr<const ProfilingNode>)> &callback)
+	    const;
 
 private:
 	ClientContext &context;
 
 	//! Atomic so inactive flushes can skip acquiring the profiler lock.
 	atomic<bool> running;
+	//! Whether StartQuery was called for the current query; only the first call resets the live counters
+	bool query_started;
 	//! The lock used for accessing the global query profiler or flushing information to it from a thread
 	mutable std::mutex lock;
 

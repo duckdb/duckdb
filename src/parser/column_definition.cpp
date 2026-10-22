@@ -4,6 +4,8 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/logical_type_info.hpp"
+#include "duckdb/common/sql_identifier.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -137,7 +139,15 @@ string ColumnDefinition::ToSQLString() const {
 	if (type_info.type == LogicalTypeInfoType::STRING_TYPE_INFO) {
 		auto &string_info = type_info.Cast<StringTypeInfo>();
 		if (!string_info.collation.empty()) {
-			result += " COLLATE " + string_info.collation;
+			result += " COLLATE ";
+			// collations may be chained with '.'; quote each component as an identifier
+			auto collations = StringUtil::Split(string_info.collation, '.');
+			for (idx_t i = 0; i < collations.size(); i++) {
+				if (i > 0) {
+					result += ".";
+				}
+				result += SQLIdentifier(collations[i]);
+			}
 		}
 	}
 	if (Generated()) {
