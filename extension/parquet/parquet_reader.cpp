@@ -373,7 +373,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	auto limit = MinValue<idx_t>(footer_len, NumericLimits<int32_t>::Maximum());
 	compact_proto.setContainerSizeLimit(NumericCast<int32_t>(limit));
 
-	auto metadata = make_uniq<ParquetMetadata>(allocator);
+	auto metadata = make_uniq<ParquetMetadata>(Allocator::DefaultAllocator());
 	auto &file_metadata = metadata->file_metadata;
 	unique_ptr<FileCryptoMetaData> crypto_metadata;
 	string encryption_key_hash;
