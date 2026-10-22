@@ -920,7 +920,7 @@ unique_ptr<QueryResult> ClientContext::QueryInternal(ClientContextLock &lock, co
 	optional_ptr<StatementIterator> iterator_ptr;
 	unique_ptr<StatementIterator> iterator_storage;
 	try {
-		iterator_storage = make_uniq<StatementIterator>(ParseIterator(*this, query, false, *lock));
+		iterator_storage = make_uniq<StatementIterator>(ParseIterator(*this, query, false, lock));
 		iterator_ptr = *iterator_storage;
 	} catch (const std::exception &ex) {
 		return ErrorResult<QueryResult>(ErrorData(ex), query);
