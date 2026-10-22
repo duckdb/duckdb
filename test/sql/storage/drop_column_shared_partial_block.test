@@ -2,7 +2,7 @@
 # description: A column dropped by ALTER TABLE shares a partial block with a column that stays
 # group: [storage]
 
-load __TEST_DIR__/drop_column_shared_partial_block.db
+load {TEST_DIR}/drop_column_shared_partial_block.db
 
 statement ok
 CREATE TABLE t (x BIGINT, y BIGINT)

@@ -2,7 +2,7 @@
 # description: A drop whose commit fails leaves the table and its indexes in place
 # group: [storage]
 
-load __TEST_DIR__/drop_commit_failure.db
+load {TEST_DIR}/drop_commit_failure.db
 
 statement ok
 SET checkpoint_threshold='1TB'
