@@ -100,8 +100,13 @@ static bool FindCascade(const vector<GroupingSet> &grouping_sets, vector<Groupin
 		for (idx_t source_idx = level_idx; source_idx > 0; source_idx--) {
 			auto &source_set = grouping_sets[levels[source_idx - 1].grouping_set_idx];
 			if (std::includes(source_set.begin(), source_set.end(), grouping_set.begin(), grouping_set.end())) {
-				levels[level_idx].source_level = source_idx - 1;
-				levels[source_idx - 1].materialized = true;
+				auto source_level = source_idx - 1;
+				if (source_set.size() == grouping_set.size() && levels[source_level].source_level.IsValid()) {
+					// identical grouping set: share the source instead of chaining, to keep the cascade shallow
+					source_level = levels[source_level].source_level.GetIndex();
+				}
+				levels[level_idx].source_level = source_level;
+				levels[source_level].materialized = true;
 				break;
 			}
 		}

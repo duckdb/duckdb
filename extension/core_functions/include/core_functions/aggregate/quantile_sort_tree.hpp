@@ -376,12 +376,12 @@ struct QuantileSortTree {
 	}
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE, bool DISCRETE>
-	RESULT_TYPE WindowScalar(QuantileCursor<INPUT_TYPE> &data, const SubFrames &frames, const idx_t n, Vector &result,
-	                         const QuantileValue &q) {
+	RESULT_TYPE WindowScalar(ClientContext &context, QuantileCursor<INPUT_TYPE> &data, const SubFrames &frames,
+	                         const idx_t n, Vector &result, const QuantileValue &q) {
 		D_ASSERT(n > 0);
 
 		//	Thread safe and idempotent.
-		index_tree->Build();
+		index_tree->Build(context);
 
 		//	Find the interpolated indices within the frame
 		QuantileInterpolator<DISCRETE> interp(q, n, false);
@@ -398,12 +398,12 @@ struct QuantileSortTree {
 	}
 
 	template <typename INPUT_TYPE, typename CHILD_TYPE, bool DISCRETE>
-	void WindowList(QuantileCursor<INPUT_TYPE> &data, const SubFrames &frames, const idx_t n, Vector &list,
-	                const idx_t lidx, const QuantileBindData &bind_data) {
+	void WindowList(ClientContext &context, QuantileCursor<INPUT_TYPE> &data, const SubFrames &frames, const idx_t n,
+	                Vector &list, const idx_t lidx, const QuantileBindData &bind_data) {
 		D_ASSERT(n > 0);
 
 		//	Thread safe and idempotent.
-		index_tree->Build();
+		index_tree->Build(context);
 
 		// Result is a constant LIST<CHILD_TYPE> with a fixed length
 		auto ldata = FlatVector::GetDataMutable<list_entry_t>(list);

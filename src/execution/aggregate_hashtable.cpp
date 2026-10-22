@@ -344,7 +344,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 		return;
 	}
 
-	auto new_hash_map = buffer_manager.GetBufferAllocator().TryAllocateHuge(size * sizeof(ht_entry_t));
+	auto new_hash_map = buffer_manager.GetBufferAllocator().AllocateHuge(size * sizeof(ht_entry_t));
 	capacity = size;
 	hash_map = std::move(new_hash_map);
 	entries = reinterpret_cast<ht_entry_t *>(hash_map.get());

@@ -469,8 +469,14 @@ static unique_ptr<NodeStatistics> ReadSingleCSVFileCardinality(ClientContext &co
 	// determined through the scientific method as the average amount of rows in a CSV file
 	idx_t per_file_cardinality = 42;
 	if (csv_data.buffer_manager && csv_data.buffer_manager->file_handle) {
+		auto &file_handle = *csv_data.buffer_manager->file_handle;
 		auto estimated_row_width = csv_data.csv_types.size() * 5;
-		per_file_cardinality = csv_data.buffer_manager->file_handle->FileSize() / estimated_row_width;
+		auto file_size = file_handle.FileSize();
+		if (file_handle.IsPipe()) {
+			// a pipe has no size, the bytes the sniffer read are a lower bound for it
+			file_size = MaxValue<idx_t>(file_size, file_handle.UncompressedBytesRead());
+		}
+		per_file_cardinality = file_size / estimated_row_width;
 	}
 	return make_uniq<NodeStatistics>(per_file_cardinality);
 }
