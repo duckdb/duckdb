@@ -31,6 +31,11 @@ public:
 	std::atomic<idx_t> current_offset;
 };
 
+void PhysicalStreamingLimit::InitializeOutputChunk(Allocator &allocator, DataChunk &chunk) const {
+	// every output column only references or slices the input
+	chunk.Initialize(allocator, types, vector<bool>(types.size(), false));
+}
+
 unique_ptr<OperatorState> PhysicalStreamingLimit::GetOperatorState(ExecutionContext &context) const {
 	return make_uniq<StreamingLimitOperatorState>(*this);
 }

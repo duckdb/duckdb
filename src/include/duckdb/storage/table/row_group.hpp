@@ -96,6 +96,44 @@ struct RowGroupWriteData {
 	optional_idx write_count;
 };
 
+//! The version info of a row group, shared with the row groups a checkpoint or an ALTER copies it into
+class RowGroupVersionInfo {
+public:
+	explicit RowGroupVersionInfo(vector<MetaBlockPointer> deletes_pointers = {});
+
+	//! Loads the persisted deletes if necessary
+	optional_ptr<RowVersionManager> Get(BlockManager &block_manager);
+	//! Does not load persisted deletes
+	optional_ptr<RowVersionManager> GetIfLoaded() const {
+		return version_info.load();
+	}
+	shared_ptr<RowVersionManager> GetOrCreate(BlockManager &block_manager);
+	bool HasUnloadedDeletes() const;
+	const vector<MetaBlockPointer> &GetDeletesPointers() const {
+		return deletes_pointers;
+	}
+
+private:
+	mutex lock;
+	vector<MetaBlockPointer> deletes_pointers;
+	atomic<bool> deletes_is_loaded;
+	shared_ptr<RowVersionManager> owned_version_info;
+	atomic<optional_ptr<RowVersionManager>> version_info;
+};
+
+//! Collects the ids of the rows that a delete actually deleted, but only once rows were skipped (e.g. because they
+//! were matched more than once) - in the common case all input rows are deleted and nothing is collected
+struct DeletedRowIds {
+	explicit DeletedRowIds(const row_t *input_ids) : input_ids(input_ids) {
+	}
+
+	//! The row ids passed to the delete
+	const row_t *input_ids;
+	//! Whether any of the input rows were skipped - only then are the deleted row ids collected
+	bool has_skipped_rows = false;
+	vector<row_t> row_ids;
+};
+
 class RowGroup : public SegmentBase<RowGroup> {
 public:
 	friend class ColumnData;
@@ -110,9 +148,7 @@ private:
 	//! The RowGroupCollection this row-group is a part of
 	reference<RowGroupCollection> collection;
 	//! The version info of the row_group (inserted and deleted tuple info)
-	atomic<optional_ptr<RowVersionManager>> version_info;
-	//! The owned version info of the row_group (inserted and deleted tuple info)
-	shared_ptr<RowVersionManager> owned_version_info;
+	shared_ptr<RowGroupVersionInfo> version_info;
 	//! The column data of the row_group (mutable because `const` can lazily load)
 	mutable vector<shared_ptr<ColumnData>> columns;
 
@@ -194,9 +230,10 @@ public:
 	//! Clean up append states that can either be compressed or deleted
 	void CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count);
 
-	//! Delete the given set of rows in the version manager
+	//! Delete the given set of rows in the version manager - optionally collects the ids of the rows that were deleted
+	//! (input_offset is the position of row_ids in the row ids passed to the collection delete)
 	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *row_ids, idx_t count,
-	             idx_t row_group_start);
+	             idx_t row_group_start, optional_ptr<DeletedRowIds> deleted_ids = nullptr, idx_t input_offset = 0);
 
 	static vector<RowGroupWriteData> WriteToDisk(RowGroupWriteInfo &info,
 	                                             const vector<const_reference<RowGroup>> &row_groups);
@@ -280,8 +317,6 @@ private:
 	optional_ptr<RowVersionManager> GetVersionInfo();
 	optional_ptr<RowVersionManager> GetVersionInfoIfLoaded() const;
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoPtr();
-	shared_ptr<RowVersionManager> GetOrCreateVersionInfoInternal();
-	void SetVersionInfo(shared_ptr<RowVersionManager> version);
 
 	ColumnData &GetColumn(storage_t c) const;
 	void LoadColumn(storage_t c) const;
@@ -304,12 +339,10 @@ private:
 	vector<MetaBlockPointer> column_pointers;
 	//! Whether or not each column is loaded (mutable because `const` can lazy load)
 	mutable unique_ptr<atomic<bool>[]> is_loaded;
-	vector<MetaBlockPointer> deletes_pointers;
 	bool has_metadata_blocks = false;
 	vector<idx_t> extra_metadata_blocks;
 	bool has_per_column_metadata_blocks = false;
 	PerColumnMetadataBlocks per_column_metadata_blocks;
-	atomic<bool> deletes_is_loaded;
 	atomic<idx_t> allocation_size;
 	//! Append cursor, retained between appends and moved when appending to the next row group
 	unique_ptr<SuballocationBlock> transient;

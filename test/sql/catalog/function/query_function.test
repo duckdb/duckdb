@@ -73,11 +73,11 @@ SELECT * FROM query('WITH a(i) AS (SELECT 1) SELECT a1.i AS i1, a2.i AS i2 FROM 
 ----
 1	1
 
-# test incorrect usage, if using the peg parser this is now valid. 
-statement maybe
+# test incorrect usage: NULL is rejected
+statement error
 SELECT * FROM query(NULL);
 ----
-<REGEX>:Parser Error.*NULL.*
+<REGEX>:Binder Error.*NULL.*
 
 statement error
 SELECT * FROM query(' ');
@@ -189,7 +189,12 @@ Input list is empty
 statement error
 FROM query_table(['']);
 ----
-Parser Error: syntax error 
+Parser Error: Zero-length identifier in qualified name!
+
+statement error
+FROM query_table('main..tbl_int');
+----
+Parser Error: Zero-length identifier in qualified name!
 
 statement error
 FROM query_table('tbl_int', 'tbl_varchar', tbl2_varchar);

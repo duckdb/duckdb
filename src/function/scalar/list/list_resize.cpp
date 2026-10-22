@@ -74,7 +74,8 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 				sel.set_index(j, row_idx);
 			}
 			const auto &default_vector = args.data[2];
-			list.Append(default_vector, sel, args.size(), 0, remaining_count.GetValue());
+			// the selection only has an entry for every padded row
+			list.Append(default_vector, sel, remaining_count.GetValue(), 0, remaining_count.GetValue());
 			continue;
 		}
 
@@ -106,6 +107,10 @@ static void ListResizeResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	if (list_type == LogicalType::UNKNOWN) {
 		bound_function.SetReturnType(list_type);
 		return;
+	}
+
+	if (list_type.id() != LogicalTypeId::LIST) {
+		throw BinderException("%s can only operate on LISTs", bound_function.GetName());
 	}
 
 	// Attempt implicit casting, if the default type does not match list the list child type.

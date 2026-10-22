@@ -144,7 +144,7 @@ struct DuckDBAdbcStreamWrapper {
 
 	//! Drained into `materialized` and reset when another statement runs on the connection
 	duckdb::unique_ptr<duckdb::QueryResultStream<duckdb::ArrowFormat>> stream;
-	//! A result that completed at submission, which no later statement on the connection affects
+	//! A result the driver completed before handing it out, which no later statement on the connection affects
 	duckdb::unique_ptr<duckdb::QueryResult> result;
 	duckdb::ArrowSchemaWrapper schema;
 	//! What draining collected, handed out before the error it ran into, if any
@@ -237,22 +237,19 @@ static void CopySchema(const ArrowSchema &source, duckdb::ArrowSchemaWrapper &ta
 	}
 }
 
-//! A result that cannot stream, or whose caller forces eagerness, completes here, intact under later statements.
-//! rows_affected stays -1 (ADBC: unknown) unless the statement reports a changed-row count
+//! eager completes the result here, for a driver-built query that must reflect the catalog at the call. rows_affected
+//! stays -1, which ADBC defines as unknown, unless the statement reports a changed-row count
 static AdbcStatusCode ExecuteArrow(duckdb::PreparedStatementWrapper &prepared, DuckDBAdbcStreamWrapper &out,
-                                   int64_t &rows_affected, struct AdbcError *error, bool eager) {
+                                   bool reads_to_the_end, int64_t &rows_affected, struct AdbcError *error, bool eager) {
 	out.stream.reset();
 	out.result.reset();
 	rows_affected = -1;
 	duckdb::ErrorData error_data;
 	try {
 		duckdb::QueryParameters parameters(duckdb::make_shared_ptr<duckdb::ArrowFormat>(STANDARD_VECTOR_SIZE));
-		if (eager) {
-			parameters.result_eagerness = duckdb::ResultEagerness::FORCED;
-		}
 		auto result = prepared.statement->Submit(prepared.values, parameters);
 		if (!result->HasError() && !eager &&
-		    result->GetStatementProperties().result_eagerness != duckdb::ResultEagerness::FORCED) {
+		    duckdb::StreamsByDefault(prepared.statement->GetStatementType(), *result, reads_to_the_end)) {
 			out.stream = duckdb::make_uniq<duckdb::QueryResultStream<duckdb::ArrowFormat>>(std::move(result));
 			CopySchema(out.stream->FormatState().Schema(), out.schema);
 			return ADBC_STATUS_OK;
@@ -1983,6 +1980,13 @@ AdbcStatusCode StatementExecuteSchema(struct AdbcStatement *statement, struct Ar
 		wrapper->conn_wrapper->MaterializeStreams();
 	}
 
+	auto &prepared = *reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement);
+	if (prepared.statement && !prepared.statement->HasError() && !prepared.statement->MetadataAvailable()) {
+		SetError(error, "The result schema of this statement is known only once it is executed: it expands into "
+		                "several statements, or the types of its parameters are not known yet");
+		return ADBC_STATUS_NOT_IMPLEMENTED;
+	}
+
 	auto count = duckdb_prepared_statement_column_count(wrapper->statement);
 	std::vector<duckdb_logical_type> types(count);
 	std::vector<std::string> owned_names;
@@ -2211,11 +2215,12 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 					return ADBC_STATUS_INVALID_ARGUMENT;
 				}
 			}
-			auto status = ExecuteArrow(prepared, *stream_wrapper, affected, error, wrapper->eager_result);
+			// Only the last row's result is handed out, and which row is last is not known without consuming the
+			// next one, so no run counts on being read to its end
+			auto status = ExecuteArrow(prepared, *stream_wrapper, false, affected, error, wrapper->eager_result);
 			if (status != ADBC_STATUS_OK) {
 				return status;
 			}
-			// Recreate wrappers for next iteration
 			arrow_array_wrapper = duckdb::ArrowArrayWrapper();
 			stream.get_next(&stream, &arrow_array_wrapper.arrow_array);
 		}
@@ -2224,7 +2229,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
 	} else {
-		auto status = ExecuteArrow(prepared, *stream_wrapper, affected, error, wrapper->eager_result);
+		auto status = ExecuteArrow(prepared, *stream_wrapper, out != nullptr, affected, error, wrapper->eager_result);
 		if (status != ADBC_STATUS_OK) {
 			return status;
 		}

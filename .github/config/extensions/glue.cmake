@@ -1,9 +1,8 @@
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(glue
             LOAD_TESTS
-            APPLY_PATCHES
             GIT_URL https://github.com/duckdb/duckdb-aws-glue
-            GIT_TAG 24fa46ff3680ecb093673590911369d17fb6caf1
+            GIT_TAG 8b310c81f227cf7630fd4ff52925f208f0d35278
             SUBMODULES extension-ci-tools
             )
 endif()

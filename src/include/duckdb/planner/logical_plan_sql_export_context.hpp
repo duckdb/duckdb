@@ -45,6 +45,11 @@ public:
 	LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
 	ExportChild(LogicalOperator &child, const LogicalPlanVerificationPath &path,
 	            const vector<LogicalPlanSQLExportSource> &sources);
+	//! Export a plan root inside the given source scope. A RETURNING root exports as its statement,
+	//! aliasing the RETURNING items with the given output names, or positionally without them.
+	LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
+	ExportRoot(LogicalOperator &root, const LogicalPlanVerificationPath &path,
+	           const vector<LogicalPlanSQLExportSource> &sources, const optional<vector<Identifier>> &output_names);
 	LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 	ExportExpression(const LogicalOperator &op, const vector<reference<const Expression>> &expressions,
 	                 idx_t expression_ordinal, const BoundExpressionSQLExportContext &expression_context,
@@ -66,6 +71,16 @@ public:
 	const vector<reference<LogicalOperator>> &Ancestors() const {
 		return ancestors;
 	}
+	//! Enters an operator exported outside the standard child recursion (e.g. a RETURNING root)
+	struct AncestorScope {
+		AncestorScope(LogicalPlanSQLExportContext &context_p, LogicalOperator &op) : context(context_p) {
+			context.ancestors.push_back(op);
+		}
+		~AncestorScope() {
+			context.ancestors.pop_back();
+		}
+		LogicalPlanSQLExportContext &context;
+	};
 	//! Make a CTE relation referenceable while its consumers are exported
 	void PushNamedRelation(TableIndex index, const Identifier &name, bool is_recurring);
 	//! Remove the innermost named relation and return how often it was referenced

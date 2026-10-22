@@ -73,20 +73,16 @@ public:
 	AsyncWriteQueueTask(AsyncWriteQueue &queue_p, TaskExecutor &executor) : BaseExecutorTask(executor), queue(queue_p) {
 	}
 
-	~AsyncWriteQueueTask() override {
-		if (!started) {
-			queue.CancelScheduledTask();
-		}
+	void ExecuteTask() override {
+		queue.DrainRequests();
 	}
 
-	void ExecuteTask() override {
-		started = true;
-		queue.DrainRequests();
+	void Cancel() override {
+		queue.CancelScheduledTask();
 	}
 
 private:
 	AsyncWriteQueue &queue;
-	bool started = false;
 };
 
 AsyncWriteQueue::AsyncWriteQueue(ClientContext &client_context_p, AsyncWriteTarget &target_p)
@@ -204,7 +200,9 @@ void AsyncWriteQueue::ScheduleTasksInternal(bool force) {
 			auto selected_bytes = SelectPendingRequestBytes(scheduled_pending_bytes + scheduled_bytes);
 			auto task_budget = TaskByteBudget();
 			auto has_active_task = active_tasks + schedule_count > 0;
-			if (!force && has_active_task && selected_bytes < task_budget) {
+			auto unscheduled_bytes = pending_bytes - scheduled_pending_bytes - scheduled_bytes;
+			// A small leading request must not block a larger request behind it.
+			if (!force && has_active_task && unscheduled_bytes < task_budget) {
 				break;
 			}
 			schedule_count++;
@@ -1322,10 +1320,8 @@ bool ManagedAsyncWriteStreamQueue::TakePendingWriteRequest(AsyncWriteRequest &re
 	}
 
 	idx_t selected_bytes = 0;
+	// The queued-byte threshold was checked above; a small prefix may precede a large zero-copy payload.
 	auto end = SelectPhysicalWriteEnd(0, selected_bytes);
-	if (policy == SchedulePolicy::THRESHOLD && selected_bytes < first_task_schedule_threshold) {
-		return false;
-	}
 
 	auto write_offset = pending_writes.front().offset;
 	unique_ptr<AsyncWritePayload> payload;
@@ -1608,7 +1604,7 @@ void ManagedAsyncWriteStreamQueue::Close() {
 
 void ManagedAsyncWriteStreamQueue::AbortWrites() {
 	std::exception_ptr error;
-	lock_guard<mutex> submission_guard(submission_lock);
+	unique_lock<mutex> submission_guard(submission_lock);
 	idx_t discarded_bytes;
 	shared_ptr<const ErrorData> local_error_ref;
 	{
@@ -1625,6 +1621,8 @@ void ManagedAsyncWriteStreamQueue::AbortWrites() {
 		local_error_ref = local_error;
 	}
 	write_queue->DiscardExternalPendingBytes(discarded_bytes);
+	// After closing and discarding, release the lock before draining completions that may be waiting to refill.
+	submission_guard.unlock();
 	try {
 		write_queue->AbortWrites();
 	} catch (...) {

@@ -132,8 +132,22 @@ static bool PushStructCollation(ClientContext &context, unique_ptr<Expression> &
 	vector<unique_ptr<Expression>> fields;
 	FunctionBinder function_binder(context);
 
-	bool requires_collation = false;
 	auto &child_types = StructType::GetChildTypes(sql_type);
+	// check whether any field requires a collation first: binding the field extracts is linear in the number of
+	// fields per field
+	bool any_field_requires_collation = false;
+	for (auto &child_type : child_types) {
+		unique_ptr<Expression> field_ref = make_uniq<BoundReferenceExpression>(child_type.second, idx_t(0));
+		if (binding.PushCollation(context, field_ref, child_type.second, type)) {
+			any_field_requires_collation = true;
+			break;
+		}
+	}
+	if (!any_field_requires_collation) {
+		return false;
+	}
+
+	bool requires_collation = false;
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		vector<unique_ptr<Expression>> arguments;
 		arguments.push_back(lambda_parameter_expr->Copy());
@@ -159,7 +173,8 @@ static bool PushStructCollation(ClientContext &context, unique_ptr<Expression> &
 	is_null->GetChildrenMutable().push_back(lambda_parameter_expr->Copy());
 	auto null_result = make_uniq<BoundConstantExpression>(Value(result->GetReturnType()));
 	auto body = make_uniq<BoundCaseExpression>(std::move(is_null), std::move(null_result), std::move(result));
-	auto lambda = make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA, std::move(body), 1);
+	auto lambda =
+	    make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA, std::move(body), idx_t(1));
 	lambda->SetParameterNames({lambda_parameter});
 
 	// Invoke evaluates the source once, even when several fields need collations.

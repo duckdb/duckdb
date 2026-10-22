@@ -83,6 +83,7 @@ class JobSelection:
     enabled_jobs: list[str]
     save_cache: bool
     reduced_ci_mode: str
+    extension_opt_in_archs: str = ""
     optimized_release: bool = False
     runners: dict[str, str] = field(default_factory=dict)
     linux_release_matrix: list[dict[str, object]] = field(default_factory=list)
@@ -104,6 +105,14 @@ class JobSelectionInput:
 
 def should_save_cache(selection_input: JobSelectionInput) -> bool:
     return selection_input.repository != "duckdb/duckdb" or selection_input.event_name == "workflow_dispatch"
+
+
+def extension_opt_in_archs(selection_input: JobSelectionInput) -> str:
+    if selection_input.event_name == "workflow_dispatch":
+        return "windows_arm64;osx_amd64;linux_amd64_musl;linux_arm64_musl"
+    if selection_input.event_name == "pull_request" and "extensions" in selection_input.changed_keys:
+        return "windows_arm64;linux_arm64_musl"
+    return ""
 
 
 def enabled_jobs(selection_input: JobSelectionInput, reduced_ci_mode: str) -> list[str]:
@@ -279,7 +288,12 @@ def configure_runners(selection_input: JobSelectionInput) -> dict[str, str]:
 
 
 def compute_job_selection(selection_input: JobSelectionInput) -> JobSelection:
-    reduced_ci_mode = resolve_reduced_ci_mode(selection_input.reduced_ci_mode)
+    reduced_ci_mode = resolve_reduced_ci_mode(
+        selection_input.reduced_ci_mode,
+        os.getenv("OVERRIDE_REDUCED_CI_MODE"),
+        event_name=selection_input.event_name,
+        changed_keys=selection_input.changed_keys,
+    )
     selected_jobs = enabled_jobs(selection_input, reduced_ci_mode)
     optimized_release = selection_input.event_name == "workflow_dispatch" and "linux-release" in selected_jobs
     full_extension_matrix = reduced_ci_mode == "disabled" and "extensions-build" in selected_jobs
@@ -289,6 +303,7 @@ def compute_job_selection(selection_input: JobSelectionInput) -> JobSelection:
         enabled_jobs=selected_jobs,
         save_cache=should_save_cache(selection_input),
         reduced_ci_mode=reduced_ci_mode,
+        extension_opt_in_archs=extension_opt_in_archs(selection_input),
         optimized_release=optimized_release,
         runners=runners,
         linux_release_matrix=linux_release_matrix(configured_input, optimized_release, full_extension_matrix),
@@ -301,6 +316,7 @@ def write_outputs(selection: JobSelection, out: TextIO, *, include_matrices: boo
     out.write(f"save_cache={'true' if selection.save_cache else 'false'}\n")
     out.write(f"optimized_release={'true' if selection.optimized_release else 'false'}\n")
     out.write(f"reduced_ci_mode={selection.reduced_ci_mode}\n")
+    out.write(f"extension_opt_in_archs={selection.extension_opt_in_archs}\n")
     out.write(f"runners={json.dumps(selection.runners, separators=(',', ':'))}\n")
     if include_matrices:
         out.write(f"linux_release_matrix={json.dumps(selection.linux_release_matrix, separators=(',', ':'))}\n")
@@ -330,18 +346,26 @@ def parse_bool(value: str) -> bool:
     raise ValueError(f"invalid boolean value: {value!r}")
 
 
-def resolve_reduced_ci_mode(value: str, override: str | None = None) -> str:
+def resolve_reduced_ci_mode(
+    value: str,
+    override: str | None = None,
+    *,
+    event_name: str = "",
+    changed_keys: set[str] | None = None,
+) -> str:
     effective_value = override if override is not None else value
     normalized = effective_value.strip().lower()
     if normalized not in {"enabled", "disabled"}:
         raise ValueError(f"invalid reduced CI mode: {effective_value!r} (must be enabled or disabled)")
+    if override is None and event_name == "pull_request" and "extensions" in (changed_keys or set()):
+        return "disabled"
     return normalized
 
 
 def parse_changed_keys(value: str) -> set[str]:
     # changed-files may emit keys separated by spaces/newlines, and can be configured
-    # to use commas. Support both delimiters defensively.
-    return {token.lower() for token in re.split(r"[\s,]+", value.strip()) if token}
+    # to use commas. Its safe output mode escapes newlines with backslashes.
+    return {token.lower() for token in re.split(r"[\\\s,]+", value.strip()) if token}
 
 
 def parse_runners(value: str) -> dict[str, str]:
@@ -358,7 +382,6 @@ def parse_runners(value: str) -> dict[str, str]:
 
 def main() -> int:
     args = parse_args()
-    reduced_ci_mode = resolve_reduced_ci_mode(args.reduced_ci_mode, os.getenv("OVERRIDE_REDUCED_CI_MODE"))
     selection_input = JobSelectionInput(
         event_name=args.event_name,
         ref_name=args.ref_name,
@@ -366,7 +389,7 @@ def main() -> int:
         repository=args.repository,
         skip_tests=parse_bool(args.skip_tests),
         changed_keys=parse_changed_keys(args.changed_keys),
-        reduced_ci_mode=reduced_ci_mode,
+        reduced_ci_mode=args.reduced_ci_mode,
         runners=parse_runners(args.runners),
         runner_provider=args.runner_provider,
     )

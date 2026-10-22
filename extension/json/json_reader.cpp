@@ -752,7 +752,7 @@ static pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(char *const bu
 	}
 
 	// We weren't able to parse an array, could be broken or an array larger than our buffer size, let's skip over '['
-	SkipWhitespace(buffer_ptr, ++buffer_offset, --remaining);
+	SkipWhitespace(buffer_ptr, ++buffer_offset, buffer_size);
 	remaining = buffer_size - buffer_offset;
 
 	// If it's '{' we know there's RECORDS in the ARRAY, else it's VALUES
@@ -768,7 +768,18 @@ bool JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
                            const idx_t remaining) {
 	yyjson_doc *doc;
 	yyjson_read_err err;
-	if (options.type == JSONScanType::READ_JSON_OBJECTS) { // If we return strings, we cannot parse INSITU
+	// If we return strings, we cannot parse INSITU. If we ignore errors, we cannot parse INSITU either: a malformed
+	// document could extend into (and modify) the next one
+	const bool ignorable_errors = options.ignore_errors && GetFormat() == JSONFormat::NEWLINE_DELIMITED;
+	// A number that does not fit is read as a raw string, which INSITU parsing null-terminates in place - at the root
+	// that overwrites the delimiter that follows the document
+	idx_t first_char = 0;
+	while (first_char < json_size && StringUtil::CharacterIsSpace(json_start[first_char])) {
+		first_char++;
+	}
+	const bool number_root = first_char < json_size &&
+	                         (StringUtil::CharacterIsDigit(json_start[first_char]) || json_start[first_char] == '-');
+	if (options.type == JSONScanType::READ_JSON_OBJECTS || ignorable_errors || number_root) {
 		doc = JSONCommon::ReadDocumentUnsafe(json_start, json_size, JSONCommon::READ_STOP_FLAG,
 		                                     scan_state.allocator.GetYYAlc(), &err);
 	} else {
@@ -874,6 +885,14 @@ void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
 	}
 	// store the buffer in the file so it can be re-used by the first reader of the file
 	if (!file_handle->IsPipe()) {
+		// a file that is much smaller than the buffer only keeps what was read - with many files (e.g. union_by_name)
+		// one full-sized buffer per file adds up to far more than the data
+		const idx_t required = read_size + YYJSON_PADDING_SIZE;
+		if (required * 2 <= buffer_capacity) {
+			auto shrunk = allocator.Allocate(required);
+			memcpy(shrunk.get(), read_buffer.get(), required);
+			read_buffer = std::move(shrunk);
+		}
 		auto_detect_data = std::move(read_buffer);
 		auto_detect_data_size = read_size;
 	} else {
@@ -1152,6 +1171,16 @@ void JSONReader::PrepareForReadInternal(JSONReaderScanState &scan_state) {
 	if (!scan_state.read_buffer.IsSet()) {
 		scan_state.read_buffer = scan_state.global_allocator.Allocate(scan_state.buffer_capacity);
 		scan_state.buffer_ptr = char_ptr_cast(scan_state.read_buffer.get());
+	} else if (scan_state.read_buffer.GetSize() < scan_state.buffer_capacity) {
+		// the retained auto-detect buffer only holds what was read from the file - it cannot take a full read
+		auto buffer = scan_state.global_allocator.Allocate(scan_state.buffer_capacity);
+		if (scan_state.file_read_type == JSONFileReadType::SCAN_ENTIRE_FILE) {
+			memcpy(buffer.get(), scan_state.buffer_ptr + scan_state.prev_buffer_offset,
+			       scan_state.prev_buffer_remainder);
+		}
+		scan_state.read_buffer = std::move(buffer);
+		scan_state.buffer_ptr = char_ptr_cast(scan_state.read_buffer.get());
+		return;
 	}
 	if (scan_state.file_read_type == JSONFileReadType::SCAN_ENTIRE_FILE) {
 		// Copy last bit of previous buffer to the beginning if we are doing a single-threaded read
@@ -1237,6 +1266,7 @@ void JSONReader::ReadNextBufferSeek(JSONReaderScanState &scan_state) {
 		}
 
 		// Now read the file lock-free!
+		D_ASSERT(read_offset + scan_state.read_size + YYJSON_PADDING_SIZE <= scan_state.read_buffer.GetSize());
 		file_handle.ReadAtPosition(scan_state.buffer_ptr + read_offset, scan_state.read_size, scan_state.read_position,
 		                           scan_state.thread_local_filehandle);
 	}
@@ -1265,6 +1295,7 @@ bool JSONReader::ReadNextBufferNoSeek(JSONReaderScanState &scan_state) {
 	}
 	scan_state.buffer_index = GetBufferIndex();
 	PrepareForReadInternal(scan_state);
+	D_ASSERT(read_offset + request_size + YYJSON_PADDING_SIZE <= scan_state.read_buffer.GetSize());
 	if (!file_handle.Read(scan_state.buffer_ptr + read_offset, read_size, request_size)) {
 		return false; // Couldn't read anything
 	}

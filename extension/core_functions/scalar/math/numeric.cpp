@@ -347,8 +347,8 @@ ScalarFunctionSet BitCountFun::GetFunctions() {
 	    ScalarFunction({}, LogicalType::TINYINT, ScalarFunction::UnaryFunction<int64_t, int8_t, BitCntOperator>),
 	    LogicalType::BIGINT));
 	functions.AddFunction(
-	    NameXArgument(ScalarFunction({}, LogicalType::TINYINT,
-	                                 ScalarFunction::UnaryFunction<hugeint_t, int8_t, HugeIntBitCntOperator>),
+	    NameXArgument(ScalarFunction({}, LogicalType::SMALLINT,
+	                                 ScalarFunction::UnaryFunction<hugeint_t, int16_t, HugeIntBitCntOperator>),
 	                  LogicalType::HUGEINT));
 	functions.AddFunction(
 	    NameXArgument(ScalarFunction({}, LogicalType::BIGINT,
@@ -1005,9 +1005,14 @@ struct RoundOperatorPrecision {
 		double rounded_value;
 		if (precision < 0) {
 			double modifier = std::pow(10, -TA(precision));
+			if (std::isinf(modifier)) {
+				// every finite value rounds to zero
+				return Value::IsFinite(input) ? 0 : input;
+			}
 			rounded_value = ROUND_POLICY::Nearest(input / modifier) * modifier;
 			if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
-				return 0;
+				// the input is too large to be rounded to this precision
+				return input;
 			}
 		} else {
 			double modifier = std::pow(10, TA(precision));

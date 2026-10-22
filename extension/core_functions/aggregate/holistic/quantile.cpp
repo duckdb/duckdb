@@ -210,8 +210,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 					continue;
 				}
 
-				rdata[ridx] = gstate->GetWindowState().template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n,
-				                                                                                    result, quantile);
+				rdata[ridx] = gstate->GetWindowState().template WindowScalar<RESULT_TYPE, DISCRETE>(
+				    partition.context.client, data, frames, n, result, quantile);
 			}
 		} else {
 			auto &window_state = state.GetOrCreateWindowState();
@@ -228,8 +228,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 				window_state.UpdateSkip(data, frames, included);
 
 				// Find the position(s) needed
-				rdata[ridx] =
-				    window_state.template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n, result, quantile);
+				rdata[ridx] = window_state.template WindowScalar<RESULT_TYPE, DISCRETE>(partition.context.client, data,
+				                                                                        frames, n, result, quantile);
 
 				//	Save the previous state for next time
 				window_state.prevs = frames;
@@ -339,8 +339,8 @@ struct QuantileListOperation : QuantileOperation {
 					continue;
 				}
 
-				gstate->GetWindowState().template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx,
-				                                                                   bind_data);
+				gstate->GetWindowState().template WindowList<CHILD_TYPE, DISCRETE>(partition.context.client, data,
+				                                                                   frames, n, list, lidx, bind_data);
 			}
 		} else {
 			auto &window_state = state.GetOrCreateWindowState();
@@ -353,7 +353,8 @@ struct QuantileListOperation : QuantileOperation {
 				}
 
 				window_state.UpdateSkip(data, frames, included);
-				window_state.template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx, bind_data);
+				window_state.template WindowList<CHILD_TYPE, DISCRETE>(partition.context.client, data, frames, n, list,
+				                                                       lidx, bind_data);
 				window_state.prevs = frames;
 			}
 		}

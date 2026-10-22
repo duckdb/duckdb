@@ -208,17 +208,6 @@
         "default_value": "true"
     },
     {
-        "name": "block_allocator_memory",
-        "description": "Physical memory that the block allocator is allowed to use. This memory is allocated once, never freed, and cannot be reduced.",
-        "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": [
-            "get",
-            "set",
-            "reset"
-        ]
-    },
-    {
         "name": "cache_local_files",
         "description": "Whether the external file cache also caches local files. Remote files are always cached.",
         "type": "BOOLEAN",
@@ -372,6 +361,14 @@
         "is_debug": true
     },
     {
+        "name": "debug_file_descriptor_limit",
+        "description": "Override the file descriptor limit that bounds how many files a scan opens ahead. 0 uses the limit of the process.",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "0",
+        "is_debug": true
+    },
+    {
         "name": "debug_force_bitpacking_mode",
         "description": "Forces a specific bitpacking mode.",
         "type": "ENUM<BitpackingMode>",
@@ -458,6 +455,14 @@
             "force_variant_shredding"
         ],
         "struct": "ForceVariantShredding"
+    },
+    {
+        "name": "debug_force_wal_fsync_failure",
+        "description": "DEBUG SETTING: makes every WAL fsync fail, used for testing durability error handling",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false",
+        "is_debug": true
     },
     {
         "name": "debug_local_file_system_delay_ms",
@@ -576,6 +581,14 @@
         "type": "ENUM<DebugVectorVerification>",
         "default_scope": "global",
         "default_value": "NONE",
+        "is_debug": true
+    },
+    {
+        "name": "debug_wal_fsync_sleep_ms",
+        "description": "DEBUG SETTING: time to sleep during each WAL fsync, emulating high-latency durable storage",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0",
         "is_debug": true
     },
     {
@@ -723,6 +736,13 @@
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "50"
+    },
+    {
+        "name": "enable_block_allocator",
+        "description": "Enable new allocations from the fixed-size block pool (64-bit only; disabled by default on MinGW). Disabling preserves existing allocations and the virtual memory reservation.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "enable_external_access",
@@ -1183,6 +1203,13 @@
         "scope": "global",
         "struct": "LoggingStorage",
         "custom_implementation": true
+    },
+    {
+        "name": "match_recognize_max_states",
+        "description": "The maximum number of pattern states MATCH_RECOGNIZE explores for a single match, before it refuses the pattern (0 = no limit). A match is never refused below what matching the pattern without backtracking would take.",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "1000000"
     },
     {
         "name": "max_execution_time",

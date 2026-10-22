@@ -153,6 +153,10 @@ const ParquetReader &ColumnReader::Reader() {
 void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
 	if (chunk) {
 		uint64_t size = chunk->meta_data.total_compressed_size;
+		if (size == 0) {
+			// nothing to prefetch
+			return;
+		}
 		transport.RegisterPrefetch(FileOffset(), size, allow_merge);
 	}
 }
@@ -250,7 +254,13 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_row
 	chunk = &columns[ColumnIndex()];
 	protocol = &protocol_p;
 	D_ASSERT(chunk);
-	D_ASSERT(chunk->__isset.meta_data);
+	if (chunk->__isset.crypto_metadata && !reader.metadata->crypto_metadata) {
+		throw InvalidInputException("File is encrypted but no file crypto metadata is set");
+	}
+	if (!chunk->__isset.meta_data) {
+		throw InvalidInputException("Failed to read file \"%s\": column chunk is missing its metadata",
+		                            Reader().GetFileName());
+	}
 
 	if (chunk->__isset.file_path) {
 		throw InvalidInputException("Failed to read file \"%s\": Only inlined data files are supported (no references)",
@@ -426,7 +436,7 @@ void ColumnReader::ResetPage() {
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
 
-	AllocateBlock(page_hdr.uncompressed_page_size + 1);
+	AllocateBlock(NumericCast<idx_t>(page_hdr.uncompressed_page_size) + 1);
 	bool uncompressed = false;
 	if (page_hdr.data_page_header_v2.__isset.is_compressed && !page_hdr.data_page_header_v2.is_compressed) {
 		uncompressed = true;
@@ -512,13 +522,10 @@ void ColumnReader::AllocateBlock(idx_t size) {
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
-	AllocateBlock(page_hdr.uncompressed_page_size + 1);
+	AllocateBlock(NumericCast<idx_t>(page_hdr.uncompressed_page_size) + 1);
 	uint32_t compressed_page_size = page_hdr.compressed_page_size;
 
 	if (chunk->__isset.crypto_metadata) {
-		if (!reader.metadata->crypto_metadata) {
-			throw InvalidInputException("File is encrypted but no file crypto metadata is set");
-		}
 		auto const file_aad = reader.GetUniqueFileIdentifier(reader.metadata->crypto_metadata->encryption_algorithm);
 		if (!file_aad.empty()) {
 			// If there is a file aad (identifier), this means that the Encrypted file is written by Arrow
@@ -550,6 +557,50 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	                   page_hdr.uncompressed_page_size);
 }
 
+static bool TryDecompressLZ4Hadoop(const_data_ptr_t src, idx_t src_size, data_ptr_t dst, idx_t dst_size) {
+	// Hadoop framing stores a big-endian uncompressed block size, followed by one or more
+	// chunks, each prefixed by its big-endian compressed size.
+	while (src_size > 0) {
+		if (src_size < sizeof(uint32_t)) {
+			return false;
+		}
+		auto block_size = BSwapIfLE(Load<uint32_t>(src));
+		src += sizeof(uint32_t);
+		src_size -= sizeof(uint32_t);
+		if (block_size > dst_size) {
+			return false;
+		}
+		if (block_size == 0) {
+			// Hadoop uses a zero-sized block to terminate an empty stream.
+			return src_size == 0 && dst_size == 0;
+		}
+		idx_t remaining = block_size;
+		while (remaining > 0) {
+			if (src_size < sizeof(uint32_t)) {
+				return false;
+			}
+			auto compressed_size = BSwapIfLE(Load<uint32_t>(src));
+			src += sizeof(uint32_t);
+			src_size -= sizeof(uint32_t);
+			if (compressed_size == 0 || compressed_size > src_size) {
+				return false;
+			}
+			auto decompressed_size =
+			    duckdb_lz4::LZ4_decompress_safe(const_char_ptr_cast(src), char_ptr_cast(dst),
+			                                    NumericCast<int>(compressed_size), NumericCast<int>(remaining));
+			if (decompressed_size <= 0) {
+				return false;
+			}
+			src += compressed_size;
+			src_size -= compressed_size;
+			dst += decompressed_size;
+			dst_size -= decompressed_size;
+			remaining -= decompressed_size;
+		}
+	}
+	return dst_size == 0;
+}
+
 void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size,
                                       data_ptr_t dst, idx_t dst_size) {
 	switch (codec) {
@@ -560,6 +611,12 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		s.Decompress(const_char_ptr_cast(src), src_size, char_ptr_cast(dst), dst_size);
 		break;
 	}
+	case CompressionCodec::LZ4:
+		if (TryDecompressLZ4Hadoop(src, src_size, dst, dst_size)) {
+			break;
+		}
+		// Early parquet-cpp writers used raw LZ4 under the legacy codec identifier.
+		DUCKDB_EXPLICIT_FALLTHROUGH;
 	case CompressionCodec::LZ4_RAW: {
 		auto res =
 		    duckdb_lz4::LZ4_decompress_safe(const_char_ptr_cast(src), char_ptr_cast(dst),
@@ -607,11 +664,11 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 
 		auto res = duckdb_brotli::BrotliDecoderDecompressStream(state, &src_size_size_t, &src, &dst_size_size_t, &dst,
 		                                                        &total_out);
+		duckdb_brotli::BrotliDecoderDestroyInstance(state);
 		if (res != duckdb_brotli::BROTLI_DECODER_RESULT_SUCCESS) {
 			throw InvalidInputException("Failed to read file \"%s\": Brotli Decompression failure",
 			                            Reader().GetFileName());
 		}
-		duckdb_brotli::BrotliDecoderDestroyInstance(state);
 		break;
 	}
 
@@ -619,7 +676,7 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		duckdb::stringstream codec_name;
 		codec_name << codec;
 		throw InvalidInputException("Failed to read file \"%s\": Unsupported compression codec \"%s\". Supported "
-		                            "options are uncompressed, brotli, gzip, lz4_raw, snappy or zstd",
+		                            "options are uncompressed, brotli, gzip, lz4, lz4_raw, snappy or zstd",
 		                            Reader().GetFileName(), codec_name.str());
 	} // LCOV_EXCL_STOP
 	}

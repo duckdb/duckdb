@@ -2,10 +2,6 @@ if(NOT CLANG_TIDY)
   add_subdirectory(adbc)
 endif()
 
-if(${DISABLE_THREADS})
-  add_definitions(-DDUCKDB_NO_THREADS)
-endif()
-
 add_subdirectory(capi)
 add_subdirectory(cpp)
 
@@ -20,6 +16,9 @@ set(TEST_API_OBJECTS
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp
     test_config.cpp
+    test_connect_prepare.cpp
+    test_os_util.cpp
+    test_compression_select.cpp
     test_connection_secrets.cpp
     test_copy_output_lifecycle.cpp
     test_custom_allocator.cpp
@@ -46,6 +45,7 @@ set(TEST_API_OBJECTS
     test_query_result_format.cpp
     test_query_result_format_buffer.cpp
     test_query_result_stream.cpp
+    test_expanding_statements.cpp
     test_retained_result_collection.cpp
     test_plan_serialization.cpp
     test_relation_api.cpp
@@ -65,6 +65,7 @@ set(TEST_API_OBJECTS
     test_passthrough_dialect.cpp
     test_passthrough_token_matcher.cpp
     test_progress_bar.cpp
+    test_live_query_metrics.cpp
     test_uuid.cpp
     test_insertion_order_preserving_map.cpp
     test_bignum.cpp
@@ -76,6 +77,7 @@ set(TEST_API_OBJECTS
     test_scheduler_fairness.cpp
     test_buffer_pool_eviction.cpp
     test_block_allocator_tls.cpp
+    test_group_commit_bound.cpp
     test_data_table_scan_without_row_groups.cpp)
 
 if(NOT WIN32)
