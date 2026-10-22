@@ -8,6 +8,7 @@
 #include "duckdb/common/vector/numeric_vector.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -405,6 +406,99 @@ unique_ptr<FunctionLocalState> InitNumericDispatchState(ExpressionState &state, 
 }
 
 //! An exact result becomes a NUMERIC vector that carries the exact range of its values; the representation is the
+//===--------------------------------------------------------------------===//
+// Conversions between representations that the value range proves safe
+//===--------------------------------------------------------------------===//
+template <class SRC, class DST>
+void ConvertUnchecked(Vector &source, Vector &target, idx_t count, hugeint_t factor) {
+	auto multiplier = Hugeint::Cast<DST>(factor);
+	UnaryExecutor::Execute<SRC, DST>(source, target, count,
+	                                 [&](SRC value) { return static_cast<DST>(value) * multiplier; });
+}
+
+template <class SRC>
+void ConvertUncheckedFrom(Vector &source, Vector &target, idx_t count, hugeint_t factor) {
+	switch (target.GetType().InternalType()) {
+	case PhysicalType::INT8:
+		ConvertUnchecked<SRC, int8_t>(source, target, count, factor);
+		break;
+	case PhysicalType::INT16:
+		ConvertUnchecked<SRC, int16_t>(source, target, count, factor);
+		break;
+	case PhysicalType::INT32:
+		ConvertUnchecked<SRC, int32_t>(source, target, count, factor);
+		break;
+	case PhysicalType::INT64:
+		ConvertUnchecked<SRC, int64_t>(source, target, count, factor);
+		break;
+	default:
+		ConvertUnchecked<SRC, hugeint_t>(source, target, count, factor);
+		break;
+	}
+}
+
+//! The signed fixed-size physical types of the exact representations
+static bool IsSignedRepresentation(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128:
+		return true;
+	default:
+		return false;
+	}
+}
+
+//! Converts the values of an exact representation, whose unscaled values lie in `range`, to another exact
+//! representation of the same or a larger scale that holds every value: a plain conversion of the physical type and a
+//! multiplication by the scale difference, without the checks of a cast. False when the range does not prove it safe.
+bool TryConvertUnchecked(Vector &source, const ExactRange &range, Vector &target, idx_t count) {
+	auto &source_type = source.GetType();
+	auto &target_type = target.GetType();
+	if (!NumericType::IsExact(source_type) || !NumericType::IsExact(target_type) ||
+	    !IsSignedRepresentation(source_type.InternalType()) || !IsSignedRepresentation(target_type.InternalType())) {
+		return false;
+	}
+	hugeint_t target_min, target_max;
+	uint8_t target_scale;
+	if (!NumericType::TryGetRepresentationRange(target_type, target_min, target_max, target_scale)) {
+		return false;
+	}
+	if (target_scale < range.scale || target_scale - range.scale >= Hugeint::CACHED_POWERS_OF_TEN) {
+		return false;
+	}
+	auto &factor = Hugeint::POWERS_OF_TEN[target_scale - range.scale];
+	hugeint_t scaled_min, scaled_max;
+	if (!Hugeint::TryMultiply(range.min, factor, scaled_min) || !Hugeint::TryMultiply(range.max, factor, scaled_max)) {
+		return false;
+	}
+	if (scaled_min < target_min || scaled_max > target_max) {
+		return false;
+	}
+	switch (source_type.InternalType()) {
+	case PhysicalType::INT8:
+		ConvertUncheckedFrom<int8_t>(source, target, count, factor);
+		break;
+	case PhysicalType::INT16:
+		ConvertUncheckedFrom<int16_t>(source, target, count, factor);
+		break;
+	case PhysicalType::INT32:
+		ConvertUncheckedFrom<int32_t>(source, target, count, factor);
+		break;
+	case PhysicalType::INT64:
+		ConvertUncheckedFrom<int64_t>(source, target, count, factor);
+		break;
+	case PhysicalType::INT128:
+		ConvertUncheckedFrom<hugeint_t>(source, target, count, factor);
+		break;
+	default:
+		return false;
+	}
+	return true;
+}
+
 //! kernel's unless the kernel widened the physical type past the operands and the values fit a narrower one
 void FinishResult(const LogicalType &return_type, Vector &typed_result, idx_t count, idx_t operand_size,
                   optional_ptr<const ExactRange> interval, Vector &result) {
@@ -428,7 +522,13 @@ void FinishResult(const LogicalType &return_type, Vector &typed_result, idx_t co
 			auto narrow = NumericType::ForUnscaledRange(range.min, range.max, range.scale);
 			if (narrow.InternalType() != result_type.InternalType()) {
 				Vector narrowed(narrow, count);
-				VectorOperations::DefaultCast(typed_result, narrowed, count, true);
+				ExactRange result_range;
+				result_range.min = range.min;
+				result_range.max = range.max;
+				result_range.scale = range.scale;
+				if (!TryConvertUnchecked(typed_result, result_range, narrowed, count)) {
+					VectorOperations::DefaultCast(typed_result, narrowed, count, true);
+				}
 				result.Shred(narrowed, count);
 				NumericVector::SetRange(result, range);
 				return;
@@ -480,13 +580,14 @@ void NumericDispatchFunction(DataChunk &args, ExpressionState &state, Vector &re
 	optional_ptr<NumericKernel> kernel;
 	ExactRange interval;
 	bool resolved = false;
+	vector<ExactRange> ranges(typed.size());
+	bool have_ranges = false;
 	if (KIND == NumericDispatchKind::GENERIC) {
 		kernel = lstate.Get(context, name, kernel_types, constants, is_operator);
 	} else {
 		// size the kernel from the values the operands take: the operator of the operand representations when its
 		// result holds every possible result, otherwise the operands are widened to the result representation
-		vector<ExactRange> ranges(typed.size());
-		bool have_ranges = true;
+		have_ranges = true;
 		bool have_nulls = false;
 		for (idx_t i = 0; i < typed.size(); i++) {
 			if (!TryGetOperandRange(args.data[i], *typed[i], count, ranges[i])) {
@@ -520,7 +621,9 @@ void NumericDispatchFunction(DataChunk &args, ExpressionState &state, Vector &re
 			continue;
 		}
 		auto cast = make_uniq<Vector>(kernel_types[i], count);
-		VectorOperations::DefaultCast(*typed[i], *cast, count, true);
+		if (!have_ranges || !TryConvertUnchecked(*typed[i], ranges[i], *cast, count)) {
+			VectorOperations::DefaultCast(*typed[i], *cast, count, true);
+		}
 		operands.push_back(std::move(cast));
 	}
 	for (idx_t i = 0; i < operands.size(); i++) {
