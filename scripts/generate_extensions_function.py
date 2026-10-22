@@ -418,10 +418,11 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
 
 
 def get_settings(load="") -> Set[str]:
+    # Debug and deprecated settings still need to trigger autoloading
     GET_SETTINGS_QUERY = """
         select distinct
             name
-        from duckdb_settings();
+        from duckdb_settings(include_all := true);
     """
     settings = get_query(GET_SETTINGS_QUERY, load)
     res = set()
@@ -888,6 +889,8 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {{"s3/config", "h
                                                                 {"r2/credential_chain", "aws"},
                                                                 {"aws/credential_chain", "aws"},
                                                                 {"rds/credential_chain", "aws"},
+                                                                {"s3/none", "aws"},
+                                                                {"aws/none", "aws"},
                                                                 {"azure/access_token", "azure"},
                                                                 {"azure/config", "azure"},
                                                                 {"azure/credential_chain", "azure"},

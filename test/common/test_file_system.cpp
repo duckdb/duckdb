@@ -690,6 +690,18 @@ TEST_CASE("Test path canonicalization with symlinks", "[file_system]") {
 	test_cases.emplace_back("real_dir/.././fake_dir/././fake_file", "././real_dir/././real_file",
 	                        "follow file symlink with dots");
 
+#ifndef _WIN32
+	// dangling symlinks resolve to the (non-existent) file they point to
+	TestCreateSymlink(fs->JoinPath(real_dir, "dangling_link"),
+	                  fs->JoinPath(fs->JoinPath(fs->GetWorkingDirectory(), real_dir), "missing_file"), false);
+	TestCreateSymlink(fs->JoinPath(real_dir, "dangling_chain"),
+	                  fs->JoinPath(fs->JoinPath(fs->GetWorkingDirectory(), real_dir), "dangling_link"), false);
+	test_cases.emplace_back("real_dir/dangling_link", "real_dir/missing_file", "follow dangling symlink");
+	test_cases.emplace_back("fake_dir/dangling_link", "real_dir/missing_file",
+	                        "follow dangling symlink in symlink dir");
+	test_cases.emplace_back("real_dir/dangling_chain", "real_dir/missing_file", "follow chain of dangling symlinks");
+#endif
+
 	// prepend everything with the test dir
 	for (auto &test_case : test_cases) {
 		test_case.a = fs->JoinPath(test_dir, test_case.a);
@@ -1490,4 +1502,19 @@ TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
 	REQUIRE_THROWS(vfs.OpenFile(filepath, flags, /*opener=*/nullptr));
 
 	fs->RemoveFile(filepath);
+}
+
+TEST_CASE("JoinPath keeps a remote URL's query string at the end of the path", "[file_system]") {
+	LocalFileSystem fs;
+	// A query string rides at the end, not buried before the appended segment.
+	REQUIRE(fs.JoinPath("s3://bucket/dir?s3_sse_c_key=abc", "file.parquet") ==
+	        "s3://bucket/dir/file.parquet?s3_sse_c_key=abc");
+	// Nested appends (a hive directory, then the file) keep it at the end -- the partitioned COPY case.
+	auto hive_dir = fs.JoinPath("s3://bucket/dir?s3_sse_c_key=abc", "part=7");
+	REQUIRE(hive_dir == "s3://bucket/dir/part=7?s3_sse_c_key=abc");
+	REQUIRE(fs.JoinPath(hive_dir, "data_0.parquet") == "s3://bucket/dir/part=7/data_0.parquet?s3_sse_c_key=abc");
+	// A URL without a query is unchanged.
+	REQUIRE(fs.JoinPath("s3://bucket/dir", "file.parquet") == "s3://bucket/dir/file.parquet");
+	// A '?' in a plain (non-URL) path is a literal character, not a query delimiter.
+	REQUIRE(fs.JoinPath("/tmp/weird?name", "file.parquet") == "/tmp/weird?name/file.parquet");
 }

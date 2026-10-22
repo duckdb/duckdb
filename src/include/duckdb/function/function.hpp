@@ -716,10 +716,11 @@ public:
 	}
 
 	//! Try to get the constant value of an argument.
-	//! Never throws: returns none if the argument...
+	//! Returns none if the argument...
 	//! - is not constant (unresolved parameter or a non-foldable expression)
 	//! - index is out of range
 	//! - was not found when looking up by name
+	//! - raises an evaluation error (internal errors still propagate)
 	//! Use this when a non-constant argument should fall back to the runtime value instead of being an error.
 	DUCKDB_API optional<Value> TryGetConstant(idx_t arg_idx) const;
 	DUCKDB_API optional<Value> TryGetConstant(const Identifier &name) const;

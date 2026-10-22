@@ -146,6 +146,8 @@ public:
 	//! Directory (relative to file_path) of a partition's files, replacing the hive layout if set. Evaluated per
 	//! partition over a single row holding the partition values, in partition_columns order.
 	unique_ptr<Expression> partition_path_expression;
+	//! Statistics of the partition columns, if known
+	vector<unique_ptr<BaseStatistics>> partition_stats;
 
 	//! If the data should be sorted
 	vector<BoundOrderByNode> order_columns;

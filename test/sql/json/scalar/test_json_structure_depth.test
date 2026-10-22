@@ -1,0 +1,18 @@
+# name: test/sql/json/scalar/test_json_structure_depth.test
+# description: json_structure on a JSON typed input that is too deeply nested reports a regular error
+# group: [scalar]
+
+require json
+
+statement ok
+CREATE TABLE t AS SELECT (repeat('[', 200) || repeat(']', 200))::JSON AS j;
+
+statement error
+SELECT json_structure(j) FROM t;
+----
+<REGEX>:Invalid Input Error.*recursion depth.*
+
+query I
+SELECT try(json_structure(j)) FROM t;
+----
+NULL

@@ -548,7 +548,7 @@ private:
 	unique_ptr<TupleDataCollection> data_collection;
 
 	//! The hash map of the HT, created after finalization
-	AllocatedData hash_map;
+	HugeAllocation hash_map;
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
 	//! An empty tuple that's a "dead end", can be used to stop chains early
@@ -558,6 +558,9 @@ private:
 	//! finalize. Shared by every thread-local hash table of this operator, and shared again with any scan it
 	//! gets published to, so it outlives a reset of this table
 	shared_ptr<BloomFilter> bloom_filter;
+	//! Unpublished filter kept from a previous recursive iteration so finalize can reuse its allocation.
+	//! Only ever set on the global hash table, never on the thread-local ones that share bloom_filter
+	shared_ptr<BloomFilter> recycled_bloom_filter;
 	//! Whether finalize should build the bloom filter from the materialized build side
 	bool should_build_bloom_filter = false;
 
@@ -651,6 +654,12 @@ public:
 
 	shared_ptr<BloomFilter> GetBloomFilter() {
 		return bloom_filter;
+	}
+	//! Hands an unpublished filter from a previous recursive iteration to the finalize-built filter path
+	void SetRecycledBloomFilter(shared_ptr<BloomFilter> filter) {
+		// a null argument would drop a parked filter; callers must only hand over live, unpublished filters
+		D_ASSERT(filter && !filter->IsPublished());
+		recycled_bloom_filter = std::move(filter);
 	}
 	//! Marks the bloom filter complete. The reference stays, because the thread-local tables hold it too
 	void SealBloomFilter() {

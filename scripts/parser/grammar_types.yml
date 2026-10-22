@@ -97,6 +97,9 @@ SQLStatement:
     - PragmaFunction
     - PrepareStatement
     - ResetStatement
+    - ResetTarget
+    - ResetTimeZone
+    - ResetVariableOrSetting
     - SelectStatement
     - SetStatement
     - TransactionStatement
@@ -427,6 +430,7 @@ Expression:
     - CollateExpressionTail
     - AtTimeZoneExpression
     - AtTimeZoneExpressionTail
+    - UnaryExpression
     - PrefixExpression
     - ConstantLiteral
     - ColumnReference
@@ -552,6 +556,24 @@ Expression:
     - UsingExpression
     - IndexElement
     - RelOptionArgumentOpt
+    - ExpressionAlias
+    - MeasuresElement
+    - PatternClause
+    - RowPattern
+    - RowPatternAlternative
+    - RowPatternTerm
+    - RowPatternFactor
+    - RowPatternPrimary
+    - RowPatternPermute
+    - RowPatternAnchor
+    - PatternStart
+    - PatternEnd
+    - RowPatternGroup
+    - RowPatternEmpty
+    - RowPatternExclusion
+    - RowPatternLabel
+    - MeasureSemanticsExpression
+    - DefineElement
 
 ColumnRefExpression:
   type: "unique_ptr<ColumnRefExpression>"
@@ -603,6 +625,8 @@ TableRef:
     - CTEBody
     - CTESelectBody
     - CTEDMLBody
+    - TableMatchRecognizeClause
+    - MatchRecognizeBody
 
 BaseTableRef:
   type: "unique_ptr<BaseTableRef>"
@@ -658,6 +682,8 @@ ExpressionList:
     - SetAssignment
     - VariableList
     - UsingKey
+    - MeasuresClause
+    - DefineClause
 
 FunctionArgumentList:
   type: "vector<FunctionArgument>"
@@ -758,6 +784,7 @@ GenericCopyOptionList:
     - CopyOptions
     - CopyOptionList
     - SpecializedOptionList
+    - ExportOptions
     - ExplainOptionList
 
 WindowBoundaryExpressionList:
@@ -1129,6 +1156,14 @@ String:
     - BooleanType
     - DoubleType
     - UpdateSetColumnTarget
+
+ConstraintCheckMode:
+  type: "ConstraintCheckMode"
+  by_value: false
+  rules:
+    - ConstraintTiming
+    - ImmediateConstraint
+    - DeferredConstraint
 
 Bool:
   type: "bool"
@@ -1864,6 +1899,8 @@ expression_depth_nesting_rules:
   - SingleExpression
   - Type
   - NestedType
+  - SubqueryReference
+  - CustomPrefixExpression
 
 expression_depth_chain_rules:
   - LambdaArrowExpression
@@ -1903,6 +1940,7 @@ collapsible_rules:
   - OtherOperatorExpression
   - InfixOtherOperatorExpression
   - BitwiseExpression
+  - TildeExpression
   - AdditiveExpression
   - MultiplicativeExpression
   - ExponentiationExpression
@@ -1933,6 +1971,8 @@ excluded_rules:
   - ExternalResourceKeyword
   # Syntax only: OVERRIDING {USER|SYSTEM} VALUE is accepted and ignored.
   - OverridingClause
+  # Syntax only: CREATE INDEX CONCURRENTLY is accepted and ignored.
+  - IndexConcurrently
   # Suggestion-only: exists so autocomplete offers the special SHOW forms as keywords; parsing of e.g.
   # "SHOW databases" resolves through ShowSettingName (the identifier), which the transformer special-cases.
   - ShowSpecialForm
@@ -1981,3 +2021,70 @@ excluded_rules:
   # expression.gram rules kept manual during incremental transformer generation migration
   - OverClause
   - PrefixExpression
+
+MatchRecognizeClauseEntry:
+  type: "MatchRecognizeClause"
+  by_value: true
+  rules:
+    - MatchRecognizeClause
+    - MRPartition
+    - MROrderBy
+    - MRMeasures
+    - MRRows
+    - MRSkip
+    - MRPattern
+    - MRSubset
+    - MRDefineAuto
+    - MRDefine
+MatchRecognizeSubset:
+  type: "MatchRecognizeSubset"
+  by_value: true
+  rules:
+    - SubsetElement
+MatchRecognizeSubsetList:
+  type: "vector<MatchRecognizeSubset>"
+  by_value: true
+  rules:
+    - SubsetClause
+MeasureSemantics:
+  type: "bool"
+  rules:
+    - MeasureSemantics
+    - RunningSemantics
+    - FinalSemantics
+    - QuantifierReluctant
+MatchRecognizeRows:
+  type: "MatchRecognizeRows"
+  rules:
+    - RowsPerMatch
+    - OneRowPerMatch
+    - AllRowsPerMatch
+    - AllRowsEmptyMatches
+    - ShowEmptyMatches
+    - OmitEmptyMatches
+    - WithUnmatchedRows
+MatchRecognizeAfterMatchClause:
+  type: "MatchRecognizeAfterMatchClause"
+  by_value: true
+  rules:
+    - AfterMatchSkip
+    - AfterMatchSkipTarget
+    - SkipToNextRow
+    - SkipPastLastRow
+    - SkipToFirstVar
+    - SkipToLastVar
+    - SkipToVar
+MatchRecognizeQuantifier:
+  type: "MatchRecognizeQuantifier"
+  rules:
+    - RowPatternQuantifier
+    - RowPatternQuantifierKind
+    - QuantifierStar
+    - QuantifierPlus
+    - QuantifierOptional
+    - QuantifierRange
+    - QuantifierBounds
+    - QuantifierMinMax
+    - QuantifierMin
+    - QuantifierMax
+    - QuantifierExact

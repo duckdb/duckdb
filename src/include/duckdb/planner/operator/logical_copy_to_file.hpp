@@ -58,11 +58,16 @@ public:
 	vector<BoundOrderByNode> order_columns;
 	//! Directory of a partition's files relative to file_path (see PhysicalCopyToFile)
 	unique_ptr<Expression> partition_path_expression;
+	//! Statistics of the partition columns as derived by the optimizer (not serialized)
+	vector<unique_ptr<BaseStatistics>> partition_stats;
 
 	vector<Identifier> names;
 	vector<LogicalType> expected_types;
 
 public:
+	LogicalPlanSQLExportResult ToSQL(LogicalPlanSQLExportContext &context,
+	                                 const LogicalPlanVerificationPath &path) override;
+
 	vector<ColumnBinding> GetColumnBindings() override;
 	idx_t EstimateCardinality(ClientContext &context) override;
 	void Serialize(Serializer &serializer) const override;

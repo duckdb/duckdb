@@ -1,4 +1,5 @@
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
@@ -9,6 +10,7 @@
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -539,15 +541,36 @@ idx_t LocalStorage::Delete(DataTable &table, DuckTableEntry &table_entry, Vector
 	auto storage = table_manager.GetStorage(table);
 	D_ASSERT(storage);
 
-	// delete from unique indices (if any)
-	if (!storage->append_indexes.Empty()) {
+	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
+	if (storage->append_indexes.Empty()) {
+		idx_t delete_count = storage->GetCollection().Delete(TransactionData::Unversioned(), table_entry, ids, count);
+		storage->deleted_rows += delete_count;
+		return delete_count;
+	}
+	// a row can be matched multiple times (e.g. DELETE ... USING) - only remove the rows that were deleted now from
+	// the unique indices
+	DeletedRowIds deleted_ids(ids);
+	idx_t delete_count =
+	    storage->GetCollection().Delete(TransactionData::Unversioned(), table_entry, ids, count, deleted_ids);
+	storage->deleted_rows += delete_count;
+	if (!deleted_ids.has_skipped_rows) {
+		// all rows were deleted
 		storage->GetCollection().RemoveFromIndexes(context, storage->append_indexes, row_ids, count,
 		                                           IndexRemovalType::MAIN_INDEX_ONLY);
+		return delete_count;
 	}
-
-	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
-	idx_t delete_count = storage->GetCollection().Delete(TransactionData::Unversioned(), table_entry, ids, count);
-	storage->deleted_rows += delete_count;
+	auto &deleted_row_ids = deleted_ids.row_ids;
+	if (!deleted_row_ids.empty()) {
+		Vector deleted_row_id_vector(LogicalType::ROW_TYPE, deleted_row_ids.size());
+		{
+			auto writer = FlatVector::Writer<row_t>(deleted_row_id_vector, deleted_row_ids.size());
+			for (auto &row_id : deleted_row_ids) {
+				writer.WriteValue(row_id);
+			}
+		}
+		storage->GetCollection().RemoveFromIndexes(context, storage->append_indexes, deleted_row_id_vector,
+		                                           deleted_row_ids.size(), IndexRemovalType::MAIN_INDEX_ONLY);
+	}
 	return delete_count;
 }
 
@@ -624,7 +647,7 @@ void LocalStorage::FlushBulkAppendBlocksAndSync(AttachedDatabase &db) {
 	if (requires_sync) {
 		// the WAL will reference the flushed row groups (flushed just now or already during the
 		// statement, e.g. by batch inserts) - persist them now so that the commit does not have
-		// to FileSync while holding the WAL lock
+		// to FileSync while holding the commit lock
 		db.GetStorageManager().GetBlockManager().FileSync();
 		synced_flushed_blocks = true;
 	}

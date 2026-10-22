@@ -14,6 +14,7 @@
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -419,6 +420,10 @@ arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTableRefTrampolin
 		} else if (transform_join_or_pivot->type == TableReferenceType::PIVOT) {
 			auto &pivot_ref = transform_join_or_pivot->Cast<PivotRef>();
 			pivot_ref.source = std::move(inner_table_ref);
+			inner_table_ref = std::move(transform_join_or_pivot);
+		} else if (transform_join_or_pivot->type == TableReferenceType::MATCH_RECOGNIZE) {
+			auto &match_recognize_ref = transform_join_or_pivot->Cast<MatchRecognizeRef>();
+			match_recognize_ref.input = std::move(inner_table_ref);
 			inner_table_ref = std::move(transform_join_or_pivot);
 		} else {
 			throw NotImplementedException("Unsupported TableRef type encountered: %s",
@@ -1706,7 +1711,13 @@ optional_idx PEGTransformerFactory::TransformRepeatableSample(PEGTransformer &tr
 optional_idx PEGTransformerFactory::TransformSampleSeed(PEGTransformer &transformer,
                                                         unique_ptr<ParsedExpression> number_literal) {
 	auto &const_expr = number_literal->Cast<ConstantExpression>();
-	return optional_idx(const_expr.GetLiteral().ToValue().GetValue<idx_t>());
+	auto seed = const_expr.GetLiteral().ToValue().GetValue<idx_t>();
+	if (seed > static_cast<idx_t>(NumericLimits<int64_t>::Maximum())) {
+		// larger seeds are seen as "no seed" and give a different sample every time
+		throw ParserException("REPEATABLE seed %llu is out of range, the maximum is %lld", seed,
+		                      NumericLimits<int64_t>::Maximum());
+	}
+	return optional_idx(seed);
 }
 
 unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleCount(PEGTransformer &transformer,

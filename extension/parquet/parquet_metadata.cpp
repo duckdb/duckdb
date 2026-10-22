@@ -80,6 +80,11 @@ struct ParquetMetadataFilePaths {
 
 struct ParquetMetaDataBindData : public TableFunctionData {
 	unique_ptr<ParquetMetadataFilePaths> file_paths;
+
+	//! The file list is consumed by the first execution
+	bool SupportStatementCache() const override {
+		return false;
+	}
 };
 
 struct ParquetBloomProbeBindData : public ParquetMetaDataBindData {

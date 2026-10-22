@@ -228,8 +228,7 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(QueryContext con
                                                                 const TemporaryFileIndex &index_in_file,
                                                                 unique_ptr<FileBuffer> buffer) const {
 	auto block_index = index_in_file.block_index.GetIndex();
-	auto block_header_size = index_in_file.block_header_size.GetIndex();
-	D_ASSERT(buffer->GetHeaderSize() == block_header_size);
+	D_ASSERT(buffer->GetHeaderSize() == index_in_file.block_header_size.GetIndex());
 	AllocatedData compressed_buffer;
 	data_ptr_t read_buffer;
 	idx_t read_size;
@@ -645,18 +644,19 @@ To get usage information of the temp_directory, use 'CALL duckdb_temporary_files
 }
 
 void TemporaryFileManager::IncreaseSizeOnDisk(idx_t bytes) {
-	auto current_size_on_disk = GetTotalUsedSpaceInBytes();
-	if (current_size_on_disk + bytes > max_swap_space) {
-		auto used = StringUtil::BytesToHumanReadableString(current_size_on_disk);
-		auto max = StringUtil::BytesToHumanReadableString(max_swap_space);
-		auto data_size = StringUtil::BytesToHumanReadableString(bytes);
-		throw OutOfMemoryException(R"(failed to offload data block of size %s (%s/%s used).
+	auto current_size_on_disk = size_on_disk.load();
+	do {
+		if (current_size_on_disk + bytes > max_swap_space) {
+			auto used = StringUtil::BytesToHumanReadableString(current_size_on_disk);
+			auto max = StringUtil::BytesToHumanReadableString(max_swap_space);
+			auto data_size = StringUtil::BytesToHumanReadableString(bytes);
+			throw OutOfMemoryException(R"(failed to offload data block of size %s (%s/%s used).
 This limit was set by the 'max_temp_directory_size' setting.
 By default, this setting utilizes the available disk space on the drive where the 'temp_directory' is located.
 You can adjust this setting, by using (for example) PRAGMA max_temp_directory_size='10GiB')",
-		                           data_size, used, max);
-	}
-	size_on_disk += bytes;
+			                           data_size, used, max);
+		}
+	} while (!size_on_disk.compare_exchange_weak(current_size_on_disk, current_size_on_disk + bytes));
 }
 
 void TemporaryFileManager::DecreaseSizeOnDisk(idx_t bytes) {

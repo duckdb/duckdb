@@ -70,6 +70,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deseria
 	case ExpressionClass::PARAMETER:
 		result = ParameterExpression::Deserialize(deserializer);
 		break;
+	case ExpressionClass::PATTERN:
+		result = PatternExpression::Deserialize(deserializer);
+		break;
 	case ExpressionClass::POSITIONAL_REFERENCE:
 		result = PositionalReferenceExpression::Deserialize(deserializer);
 		break;
@@ -225,17 +228,6 @@ unique_ptr<ParsedExpression> LambdaRefExpression::Deserialize(Deserializer &dese
 	auto lambda_idx = deserializer.ReadPropertyWithDefault<idx_t>(200, "lambda_idx");
 	auto column_name = deserializer.ReadPropertyWithDefault<Identifier>(201, "column_name");
 	auto result = duckdb::unique_ptr<LambdaRefExpression>(new LambdaRefExpression(lambda_idx, std::move(column_name)));
-	return std::move(result);
-}
-
-void OperatorExpression::Serialize(Serializer &serializer) const {
-	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "children", children);
-}
-
-unique_ptr<ParsedExpression> OperatorExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<OperatorExpression>(new OperatorExpression(deserializer.Get<ExpressionType>()));
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "children", result->children);
 	return std::move(result);
 }
 
