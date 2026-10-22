@@ -819,3 +819,124 @@ TEST_CASE("Test C-API Arrow string views retain data after aligned scratch is re
 		}
 	}
 }
+
+// A hand-built ArrowArray whose shape disagrees with its resolved schema must be rejected cleanly,
+// instead of indexing into a children array that doesn't match the schema's column count.
+TEST_CASE("Test C-API Arrow array shape validation", "[capi][arrow]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	ArrowSchema child_schema = {};
+	child_schema.format = "i";
+	child_schema.name = "a";
+	child_schema.release = ReleaseUnalignedSchema;
+	ArrowSchema *children[] = {&child_schema};
+	ArrowSchema schema = {};
+	schema.format = "+s";
+	schema.n_children = 1;
+	schema.children = children;
+	schema.release = ReleaseUnalignedSchema;
+
+	duckdb_arrow_converted_schema converted = nullptr;
+	REQUIRE(duckdb_schema_from_arrow(tester.connection, &schema, &converted) == nullptr);
+
+	int32_t data[1] = {42};
+	const void *child_buffers[] = {nullptr, data};
+	ArrowArray child_array = {};
+	child_array.length = 1;
+	child_array.n_buffers = 2;
+	child_array.buffers = child_buffers;
+	child_array.release = ReleaseUnalignedArray;
+
+	SECTION("fewer children than the schema expects") {
+		ArrowArray array = {};
+		array.length = 1;
+		array.n_children = 0;
+		array.children = nullptr;
+		array.release = ReleaseUnalignedArray;
+
+		duckdb_data_chunk chunk = nullptr;
+		auto err = duckdb_data_chunk_from_arrow(tester.connection, &array, converted, &chunk);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+	}
+
+	SECTION("child length does not match the array length") {
+		child_array.length = 5;
+		ArrowArray *arrays[] = {&child_array};
+		ArrowArray array = {};
+		array.length = 1;
+		array.n_children = 1;
+		array.children = arrays;
+		array.release = ReleaseUnalignedArray;
+
+		duckdb_data_chunk chunk = nullptr;
+		auto err = duckdb_data_chunk_from_arrow(tester.connection, &array, converted, &chunk);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+	}
+
+	SECTION("matching shape is accepted") {
+		ArrowArray *arrays[] = {&child_array};
+		ArrowArray array = {};
+		array.length = 1;
+		array.n_children = 1;
+		array.children = arrays;
+		array.release = ReleaseUnalignedArray;
+
+		duckdb_data_chunk chunk = nullptr;
+		REQUIRE(duckdb_data_chunk_from_arrow(tester.connection, &array, converted, &chunk) == nullptr);
+		auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+		REQUIRE(static_cast<int32_t *>(duckdb_vector_get_data(vector))[0] == 42);
+		duckdb_destroy_data_chunk(&chunk);
+	}
+
+	duckdb_destroy_arrow_converted_schema(&converted);
+}
+
+// Non-monotonic (decreasing) Arrow string offsets must be rejected, instead of wrapping around to
+// produce a string_t whose length claims nearly 4GB over a tiny underlying data buffer.
+TEST_CASE("Test C-API Arrow rejects non-monotonic string offsets", "[capi][arrow]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	constexpr idx_t ROWS = 2;
+	// offsets[2] (5) is less than offsets[1] (10): a classic 32-bit offset underflow when subtracted.
+	const int32_t bad_offsets[ROWS + 1] = {0, 10, 5};
+	const char data[16] = {0};
+	const void *buffers[] = {nullptr, bad_offsets, data};
+
+	ArrowSchema child_schema = {};
+	child_schema.format = "u";
+	child_schema.name = "a";
+	child_schema.release = ReleaseUnalignedSchema;
+	ArrowSchema *children[] = {&child_schema};
+	ArrowSchema schema = {};
+	schema.format = "+s";
+	schema.n_children = 1;
+	schema.children = children;
+	schema.release = ReleaseUnalignedSchema;
+
+	ArrowArray child_array = {};
+	child_array.length = ROWS;
+	child_array.n_buffers = 3;
+	child_array.buffers = buffers;
+	child_array.release = ReleaseUnalignedArray;
+	ArrowArray *arrays[] = {&child_array};
+	const void *struct_buffers[] = {nullptr};
+	ArrowArray array = {};
+	array.length = ROWS;
+	array.n_buffers = 1;
+	array.buffers = struct_buffers;
+	array.n_children = 1;
+	array.children = arrays;
+	array.release = ReleaseUnalignedArray;
+
+	duckdb_arrow_converted_schema converted = nullptr;
+	REQUIRE(duckdb_schema_from_arrow(tester.connection, &schema, &converted) == nullptr);
+	duckdb_data_chunk chunk = nullptr;
+	auto err = duckdb_data_chunk_from_arrow(tester.connection, &array, converted, &chunk);
+	REQUIRE(err != nullptr);
+	duckdb_destroy_error_data(&err);
+	duckdb_destroy_arrow_converted_schema(&converted);
+}
