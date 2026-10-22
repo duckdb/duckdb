@@ -31,6 +31,7 @@
 #include "parquet_shredding.hpp"
 #include "parquet_types.h"
 #include "parquet_geometry.hpp"
+#include "writer/parquet_cdc_chunker.hpp"
 #include "writer/parquet_write_stats.hpp"
 #include "thrift/protocol/TCompactProtocol.h"
 #include "duckdb/execution/expression_executor.hpp"
@@ -171,6 +172,18 @@ struct ParquetWriterOptions {
 	idx_t string_dictionary_page_size_limit;
 	//! The maximum uncompressed size of a data page
 	idx_t data_page_size_limit;
+	//! Cut data pages at content-defined boundaries rather than only when they reach the size limit above. This
+	//! changes *where* pages end, not what is in them: a page that contains no changed value comes out of a
+	//! rewrite byte-identical, which is what lets a content-addressed store keep the bytes it already has.
+	bool content_defined_chunking = false;
+	//! The smallest page a content-defined cut will produce, in uncompressed value bytes. Together with the maximum
+	//! it fixes the average page, which comes out (min + max) / 2 long - Arrow's semantics, see
+	//! writer/parquet_cdc_chunker.hpp.
+	idx_t cdc_min_chunk_size = PARQUET_CDC_DEFAULT_MIN_CHUNK_SIZE;
+	//! The largest page a content-defined cut will produce, in uncompressed value bytes
+	idx_t cdc_max_chunk_size = PARQUET_CDC_DEFAULT_MAX_CHUNK_SIZE;
+	//! Bits taken off the boundary mask on top of what the two sizes imply; 0 is Arrow's default
+	int64_t cdc_norm_level = PARQUET_CDC_DEFAULT_NORM_LEVEL;
 	//! Whether to use bloom filters or not
 	bool enable_bloom_filters;
 	//! Maximum ratio of false-positives to allow in the written bloom filter
@@ -237,6 +250,18 @@ public:
 	}
 	idx_t DataPageSizeLimit() const {
 		return options.data_page_size_limit;
+	}
+	bool ContentDefinedChunking() const {
+		return options.content_defined_chunking;
+	}
+	idx_t CdcMinChunkSize() const {
+		return options.cdc_min_chunk_size;
+	}
+	idx_t CdcMaxChunkSize() const {
+		return options.cdc_max_chunk_size;
+	}
+	int64_t CdcNormLevel() const {
+		return options.cdc_norm_level;
 	}
 	bool EnableBloomFilters() const {
 		return options.enable_bloom_filters;

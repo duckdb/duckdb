@@ -74,9 +74,22 @@ static PageWriteInformation CreateDictionaryPageWriteInformation(idx_t uncompres
 PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema,
                                              vector<Identifier> schema_path)
     : ColumnWriter(writer, std::move(column_schema), std::move(schema_path)) {
+	cdc_cut_pages = writer.ContentDefinedChunking();
+}
+
+void PrimitiveColumnWriterState::ConfigureCdcChunker() {
+	if (!writer.ContentDefinedChunking()) {
+		return;
+	}
+	ParquetContentDefinedChunker::Options options;
+	options.min_chunk_size = writer.CdcMinChunkSize();
+	options.max_chunk_size = writer.CdcMaxChunkSize();
+	options.norm_level = writer.CdcNormLevel();
+	cdc_chunker.Reset(options);
 }
 
 unique_ptr<ColumnWriterState> PrimitiveColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
+	// the content-defined run is configured by the state itself, see PrimitiveColumnWriterState::ConfigureCdcChunker
 	auto result = make_uniq<PrimitiveColumnWriterState>(writer, row_group, row_group.columns.size());
 	RegisterToRowGroup(row_group);
 	return std::move(result);
@@ -100,6 +113,10 @@ unique_ptr<ColumnWriterPageState> PrimitiveColumnWriter::InitializePageState(Pri
 void PrimitiveColumnWriter::FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state) {
 }
 
+//! The types that get content-defined boundaries, and the bytes they are hashed as, are in
+//! writer/parquet_cdc_chunker.hpp - both are Arrow's, so that a column cut here and the same column cut by an
+//! Arrow writer land between the same values.
+
 void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count,
                                     bool vector_can_span_multiple_pages) {
 	auto &state = state_p.Cast<PrimitiveColumnWriterState>();
@@ -117,31 +134,79 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 
 	const idx_t page_size_limit = writer.DataPageSizeLimit();
 	const bool check_parent_empty = parent && !parent->is_empty.empty();
-	if (!check_parent_empty && validity.CannotHaveNull() && TypeIsConstantSize(vector.GetType().InternalType()) &&
+	// Content-defined boundaries are only applied to top-level columns. A column under a list or a struct has its
+	// page membership entangled with the parent's level/`is_empty` bookkeeping, and Arrow cuts those at record
+	// boundaries (repetition level 0) rather than per value, which this loop does not track.
+	const bool cut_by_content = cdc_cut_pages && parent == nullptr && ParquetCdcSupportedType(vector.GetType());
+	if (!cut_by_content && !check_parent_empty && validity.CannotHaveNull() &&
+	    TypeIsConstantSize(vector.GetType().InternalType()) &&
 	    page_info_ref.get().estimated_page_size + GetRowSize(vector, vector_index, state) * vcount < page_size_limit) {
-		// Fast path: fixed-size type, all valid, and it fits on the current page
+		// Fast path: fixed-size type, all valid, and it fits on the current page. Content-defined boundaries
+		// cannot take it, because the whole point is to look at every value.
 		auto &page_info = page_info_ref.get();
 		page_info.row_count += vcount;
 		page_info.estimated_page_size += GetRowSize(vector, vector_index, state) * vcount;
 	} else {
+		// A nullable column's definition levels are part of what the chunker sees, exactly as they are in Arrow -
+		// which means a null moves the hash, so null density shifts boundaries - and a non-nullable column has no
+		// levels to feed, in Arrow either.
+		const bool feed_levels = MaxDefine() > 0;
 		for (idx_t i = 0; i < vcount; i++) {
-			auto &page_info = page_info_ref.get();
-			page_info.row_count++;
 			if (check_parent_empty && parent->is_empty[parent_index + i]) {
-				page_info.empty_count++;
+				auto &empty_page = page_info_ref.get();
+				empty_page.row_count++;
+				empty_page.empty_count++;
 				continue;
 			}
-			if (validity.RowIsValid(vector_index)) {
-				page_info.estimated_page_size += GetRowSize(vector, vector_index, state);
-				// a vector that cannot span multiple pages stays on the page it started on
-				if (page_info.estimated_page_size >= page_size_limit && (vector_can_span_multiple_pages || i == 0)) {
-					PageInformation new_info;
-					new_info.offset = page_info.offset + page_info.row_count;
-					state.page_info.push_back(new_info);
-					page_info_ref = state.page_info.back();
+			const bool is_valid = validity.RowIsValid(vector_index);
+			// A content boundary opens the next page with the value that completed it, which is Arrow's convention:
+			// its chunker hands back chunks as [previous boundary, this level), boundary value included in the
+			// chunk after. Matching it is not a detail - a value counted on one side and not the other moves every
+			// following page's first value, which is the whole thing this is trying to keep still.
+			bool cut_before = false;
+			if (cut_by_content) {
+				if (feed_levels) {
+					state.cdc_chunker.RollLevel(state.definition_levels[parent_index + i]);
 				}
+				if (is_valid) {
+					ParquetCdcHashValue(state.cdc_chunker, vector, vector_index);
+				}
+				// the minimum is enforced inside the chunker, where the bytes are counted, and the maximum is its
+				// hard stop for the case where no boundary is hit at all - a long run of identical values, say
+				cut_before = state.cdc_chunker.NeedNewChunk();
+			}
+			// a vector that cannot span multiple pages stays on the page it started on, and a page that is still
+			// empty is already at a boundary: the writer erases an empty page only at the end of the row group, so
+			// opening a second one here would leave a hole in the middle of it. This is the one case where a
+			// boundary goes unmatched, and it needs a single value bigger than max_chunk_size to happen - Arrow
+			// emits a zero-level chunk for it, which is not something this writer can represent.
+			if (cut_before && page_info_ref.get().row_count > 0 && (vector_can_span_multiple_pages || i == 0)) {
+				PageInformation new_info;
+				new_info.offset = page_info_ref.get().offset + page_info_ref.get().row_count;
+				state.page_info.push_back(new_info);
+				page_info_ref = state.page_info.back();
+				state.cdc_chunker.PageCut();
+			}
+			auto &page_info = page_info_ref.get();
+			page_info.row_count++;
+			bool cut_after = false;
+			if (is_valid) {
+				page_info.estimated_page_size += GetRowSize(vector, vector_index, state);
+				// DuckDB's own page size limit, which closes a page after the value that overflowed it - a
+				// different convention from the boundary above on purpose, because this is not a boundary, it is
+				// an overflow. It only bites when data_page_size_limit is set below the content sizes.
+				cut_after = page_info.estimated_page_size >= page_size_limit;
 			} else {
 				page_info.null_count++;
+			}
+			if (cut_after && (vector_can_span_multiple_pages || i == 0)) {
+				PageInformation new_info;
+				new_info.offset = page_info.offset + page_info.row_count;
+				state.page_info.push_back(new_info);
+				page_info_ref = state.page_info.back();
+				if (cut_by_content) {
+					state.cdc_chunker.PageCut();
+				}
 			}
 			vector_index++;
 		}

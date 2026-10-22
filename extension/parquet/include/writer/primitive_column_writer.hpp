@@ -14,6 +14,7 @@
 
 #include "column_writer.hpp"
 #include "duckdb/common/serializer/async_file_writer.hpp"
+#include "writer/parquet_cdc_chunker.hpp"
 #include "writer/parquet_write_stats.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "parquet_statistics.hpp"
@@ -59,8 +60,18 @@ public:
 	PrimitiveColumnWriterState(ParquetWriter &writer_p, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
 	    : writer(writer_p), row_group(row_group), col_idx(col_idx) {
 		page_info.emplace_back();
+		ConfigureCdcChunker();
 	}
 	~PrimitiveColumnWriterState() override = default;
+
+	//! Start this row group's content-defined run at the sizes the COPY asked for, if the COPY asked for one at
+	//! all. This is done here rather than in PrimitiveColumnWriter::InitializeWriteState because that is not the
+	//! only way one of these states gets made: StandardColumnWriter - the writer behind every numeric and
+	//! temporal column - builds a StandardColumnWriterState of its own and never calls the base version.
+	//! Configuring at construction is the one place every writer goes through. Defined in the .cpp because it
+	//! needs ParquetWriter's getters, which this header only forward-declares, and it cannot throw: the numbers
+	//! were checked at bind time.
+	void ConfigureCdcChunker();
 
 	ParquetWriter &writer;
 	duckdb_parquet::RowGroup &row_group;
@@ -71,6 +82,14 @@ public:
 	idx_t current_page = 0;
 
 	unique_ptr<ParquetBloomFilter> bloom_filter;
+
+	//! Decides where this column chunk's pages start and end when content-defined page boundaries are enabled
+	//! (see writer/parquet_cdc_chunker.hpp). It lives here, next to the page_info it carves up, because a column
+	//! chunk state belongs to one row group and one thread: several row groups are written at once, with no lock
+	//! held around Prepare, so anything mutable hanging off the ColumnWriter itself would be raced. The price is
+	//! that the run restarts at every row group, where Arrow's goes on for the whole file - see
+	//! ParquetContentDefinedChunker::RowGroupStarted for what that costs in terms of matching Arrow's boundaries.
+	ParquetContentDefinedChunker cdc_chunker;
 };
 
 //! Base class for writing non-compound types (ex. numerics, strings)
@@ -97,6 +116,11 @@ public:
 	idx_t FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) override;
 
 protected:
+	//! Whether the file asked for content-defined page boundaries at all. Whether this particular column gets
+	//! them additionally depends on it being a top-level column of a type the chunker can read - see Prepare.
+	//! Read-only after the constructor, so the concurrent writers of one file can share it.
+	bool cdc_cut_pages = false;
+
 	static void WriteLevels(Allocator &allocator, WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels,
 	                        idx_t max_value, idx_t start_offset, idx_t count, optional_idx null_count = optional_idx());
 
