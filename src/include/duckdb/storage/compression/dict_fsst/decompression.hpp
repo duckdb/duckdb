@@ -20,7 +20,8 @@ private:
 	struct SegmentLayout {
 		//! Compression mode read from disk, validated as mode < DictFSSTMode::COUNT.
 		DictFSSTMode mode;
-		//! Dictionary entry count read from disk, validated only as nonzero.
+		//! Dictionary entry count read from disk, validated as nonzero.
+		//! In FSST_ONLY mode, dict_count - 1 is at least the segment row count.
 		uint32_t dict_count;
 		//! Bit widths read from disk, both validated as at most 32.
 		bitpacking_width_t dictionary_indices_width;
