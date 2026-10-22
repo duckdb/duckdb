@@ -145,8 +145,9 @@ bool CompressedMaterialization::TryCompressNumericComparisonJoinKey(JoinConditio
 	lhs_stats->CopyValidity(*lhs_it->second);
 	auto rhs_stats = rhs_range->ToTyped(representation).ToUnique();
 	rhs_stats->CopyValidity(*rhs_it->second);
-	condition.LeftReference() = BoundCastExpression::AddCastToType(context, lhs.Copy(), representation);
-	condition.RightReference() = BoundCastExpression::AddCastToType(context, rhs.Copy(), representation);
+	// the casts cannot fail: as try casts, filters rebuilt on top of them need not preserve cast errors
+	condition.LeftReference() = BoundCastExpression::AddCastToType(context, lhs.Copy(), representation, true);
+	condition.RightReference() = BoundCastExpression::AddCastToType(context, rhs.Copy(), representation, true);
 	condition.SetLeftStats(std::move(lhs_stats));
 	condition.SetRightStats(std::move(rhs_stats));
 	return true;
