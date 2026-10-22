@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
@@ -44,6 +45,16 @@ void CompressedMaterialization::CompressOrder(unique_ptr<LogicalOperator> &op) {
 
 void CompressedMaterialization::CompressTopN(unique_ptr<LogicalOperator> &op) {
 	auto &topn = op->Cast<LogicalTopN>();
+	// top-N is compressed for NUMERIC columns, whose sort key is the canonical encoding (as for VARCHAR) while their
+	// values compress to a fixed-size integer; other types keep the plan shape they have without compression, as
+	// optimizer extensions (an index scan replacing a top-N over a distance, say) match the operators around a top-N
+	bool numeric = false;
+	for (auto &type : op->types) {
+		numeric = numeric || TypeVisitor::Contains(type, LogicalTypeId::NUMERIC);
+	}
+	if (!numeric) {
+		return;
+	}
 	column_binding_set_t referenced_bindings;
 	if (topn.dynamic_filter) {
 		// the boundary of the first order column is pushed into the scan as a filter: it must keep its type
