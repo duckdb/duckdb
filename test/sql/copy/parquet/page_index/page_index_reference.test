@@ -25,14 +25,14 @@ foreach file spark_sorted spark_descending spark_row_groups_v2 arrow_sorted arro
 
 # DuckDB reads every ColumnIndex and OffsetIndex entry exactly as parquet-mr does
 query III
-SELECT (SELECT count(*) FROM (FROM actual_page_index('${file}') EXCEPT ALL FROM expected_page_index('${file}'))),
-       (SELECT count(*) FROM (FROM expected_page_index('${file}') EXCEPT ALL FROM actual_page_index('${file}'))),
-       (SELECT count(*) FROM actual_page_index('${file}')) = (SELECT count(*) FROM expected_page_index('${file}'))
+SELECT (SELECT count(*) FROM (FROM actual_page_index('{file}') EXCEPT ALL FROM expected_page_index('{file}'))),
+       (SELECT count(*) FROM (FROM expected_page_index('{file}') EXCEPT ALL FROM actual_page_index('{file}'))),
+       (SELECT count(*) FROM actual_page_index('{file}')) = (SELECT count(*) FROM expected_page_index('{file}'))
 ----
 0	0	true
 
 query I
-SELECT count(*) > 20 FROM actual_page_index('${file}')
+SELECT count(*) > 20 FROM actual_page_index('{file}')
 ----
 true
 
@@ -41,7 +41,7 @@ statement ok
 SET parquet_use_page_index = false;
 
 statement ok
-CREATE OR REPLACE TABLE ref AS SELECT * FROM 'data/parquet-testing/page_index/${file}.parquet';
+CREATE OR REPLACE TABLE ref AS SELECT * FROM 'data/parquet-testing/page_index/{file}.parquet';
 
 statement ok
 SET parquet_use_page_index = true;
@@ -55,87 +55,87 @@ CALL enable_logging('PhysicalOperator');
 # point lookups, ranges and IN lists on the sorted (or descending) key, with payload columns
 query I
 SELECT count(*) FROM (
-	(SELECT * FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE id = 1234 EXCEPT ALL SELECT * FROM ref WHERE id = 1234)
+	(SELECT * FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE id = 1234 EXCEPT ALL SELECT * FROM ref WHERE id = 1234)
 	UNION ALL
-	(SELECT * FROM ref WHERE id = 1234 EXCEPT ALL SELECT * FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE id = 1234)
+	(SELECT * FROM ref WHERE id = 1234 EXCEPT ALL SELECT * FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE id = 1234)
 )
 ----
 0
 
 query II
-SELECT count(*), sum(id) FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE id = 1234
+SELECT count(*), sum(id) FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE id = 1234
 ----
 1	1234
 
 query I
 SELECT count(*) FROM (
-	(SELECT * FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE id BETWEEN 2000 AND 2100 EXCEPT ALL SELECT * FROM ref WHERE id BETWEEN 2000 AND 2100)
+	(SELECT * FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE id BETWEEN 2000 AND 2100 EXCEPT ALL SELECT * FROM ref WHERE id BETWEEN 2000 AND 2100)
 	UNION ALL
-	(SELECT * FROM ref WHERE id BETWEEN 2000 AND 2100 EXCEPT ALL SELECT * FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE id BETWEEN 2000 AND 2100)
+	(SELECT * FROM ref WHERE id BETWEEN 2000 AND 2100 EXCEPT ALL SELECT * FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE id BETWEEN 2000 AND 2100)
 )
 ----
 0
 
 query III
-SELECT count(*), min(id), max(id) FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE id BETWEEN 2000 AND 2100
+SELECT count(*), min(id), max(id) FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE id BETWEEN 2000 AND 2100
 ----
 101	2000	2100
 
 query II
-SELECT count(*), sum(id) FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE id IN (1, 1000, 2999, 3999)
+SELECT count(*), sum(id) FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE id IN (1, 1000, 2999, 3999)
 ----
 4	7999
 
 # a filter on the unsorted column and on the string column (whose page bounds are truncated by both writers)
 query I
 SELECT count(*) FROM (
-	(SELECT * FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE v = 17 EXCEPT ALL SELECT * FROM ref WHERE v = 17)
+	(SELECT * FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE v = 17 EXCEPT ALL SELECT * FROM ref WHERE v = 17)
 	UNION ALL
-	(SELECT * FROM ref WHERE v = 17 EXCEPT ALL SELECT * FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE v = 17)
+	(SELECT * FROM ref WHERE v = 17 EXCEPT ALL SELECT * FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE v = 17)
 )
 ----
 0
 
 query I
 SELECT count(*) FROM (
-	(SELECT * FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE s = 's_003210' EXCEPT ALL SELECT * FROM ref WHERE s = 's_003210')
+	(SELECT * FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE s = 's_003210' EXCEPT ALL SELECT * FROM ref WHERE s = 's_003210')
 	UNION ALL
-	(SELECT * FROM ref WHERE s = 's_003210' EXCEPT ALL SELECT * FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE s = 's_003210')
+	(SELECT * FROM ref WHERE s = 's_003210' EXCEPT ALL SELECT * FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE s = 's_003210')
 )
 ----
 0
 
 query II
-SELECT count(*), any_value(id) FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE s = 's_003210'
+SELECT count(*), any_value(id) FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE s = 's_003210'
 ----
 1	3210
 
 query I
 SELECT count(*) FROM (
-	(SELECT * FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE s >= 'long_0039' AND s < 'long_004' EXCEPT ALL SELECT * FROM ref WHERE s >= 'long_0039' AND s < 'long_004')
+	(SELECT * FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE s >= 'long_0039' AND s < 'long_004' EXCEPT ALL SELECT * FROM ref WHERE s >= 'long_0039' AND s < 'long_004')
 	UNION ALL
-	(SELECT * FROM ref WHERE s >= 'long_0039' AND s < 'long_004' EXCEPT ALL SELECT * FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE s >= 'long_0039' AND s < 'long_004')
+	(SELECT * FROM ref WHERE s >= 'long_0039' AND s < 'long_004' EXCEPT ALL SELECT * FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE s >= 'long_0039' AND s < 'long_004')
 )
 ----
 0
 
 query I
-SELECT count(*) FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE s >= 'long_0039' AND s < 'long_004'
+SELECT count(*) FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE s >= 'long_0039' AND s < 'long_004'
 ----
 1
 
 # two filters: the pages that may match are the intersection
 query I
 SELECT count(*) FROM (
-	(SELECT * FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE id < 600 AND v > 900 EXCEPT ALL SELECT * FROM ref WHERE id < 600 AND v > 900)
+	(SELECT * FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE id < 600 AND v > 900 EXCEPT ALL SELECT * FROM ref WHERE id < 600 AND v > 900)
 	UNION ALL
-	(SELECT * FROM ref WHERE id < 600 AND v > 900 EXCEPT ALL SELECT * FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE id < 600 AND v > 900)
+	(SELECT * FROM ref WHERE id < 600 AND v > 900 EXCEPT ALL SELECT * FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE id < 600 AND v > 900)
 )
 ----
 0
 
 query I
-SELECT count(*) = (SELECT count(*) FROM ref WHERE id < 600 AND v > 900) FROM 'data/parquet-testing/page_index/${file}.parquet' WHERE id < 600 AND v > 900
+SELECT count(*) = (SELECT count(*) FROM ref WHERE id < 600 AND v > 900) FROM 'data/parquet-testing/page_index/{file}.parquet' WHERE id < 600 AND v > 900
 ----
 true
 

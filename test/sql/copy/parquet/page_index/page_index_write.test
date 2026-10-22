@@ -82,10 +82,10 @@ query I
 SELECT count(*)
 FROM parquet_page_index('{TEST_DIR}/page_index_write.parquet') p
 JOIN LATERAL (
-	SELECT min(${col}) AS mn, max(${col}) AS mx FROM data
+	SELECT min({col}) AS mn, max({col}) AS mx FROM data
 	WHERE id BETWEEN p.first_row_index AND p.first_row_index + p.num_rows - 1
 ) r ON true
-WHERE p.path_in_schema = '${col}' AND (p.min_value <> r.mn::VARCHAR OR p.max_value <> r.mx::VARCHAR)
+WHERE p.path_in_schema = '{col}' AND (p.min_value <> r.mn::VARCHAR OR p.max_value <> r.mx::VARCHAR)
 ----
 0
 

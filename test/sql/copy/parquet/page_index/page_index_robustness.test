@@ -104,7 +104,7 @@ SELECT page_id, first_row_index FROM parquet_page_index('data/parquet-testing/pa
 foreach file corrupt_min_length corrupt_non_monotonic corrupt_first_row_index
 
 query III
-SELECT count(*), sum(id), sum(v) = (SELECT sum(r % 7) FROM range(3000) t(r)) FROM 'data/parquet-testing/page_index/${file}.parquet'
+SELECT count(*), sum(id), sum(v) = (SELECT sum(r % 7) FROM range(3000) t(r)) FROM 'data/parquet-testing/page_index/{file}.parquet'
 ----
 3000	4498500	true
 
