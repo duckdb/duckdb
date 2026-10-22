@@ -251,7 +251,7 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 	auto best_function = FunctionBinder::SelectFunction(context, aggr_entry.functions, argument_types);
 	if (!best_function.IsSuccess()) {
 		throw BinderException("Could not re-bind exported aggregate %s: %s", function_name,
-		                      best_function.GetError().ToError().Message());
+		                      best_function.GetError().Message());
 	}
 	const auto aggr = best_function.GetBinding().GetFunction<AggregateFunction>();
 	const auto &signature = aggr->GetSignature();

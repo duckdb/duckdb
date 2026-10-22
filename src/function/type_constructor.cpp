@@ -249,7 +249,7 @@ LogicalType TypeConstructorSet::Bind(optional_ptr<ClientContext> context, const 
 	auto error_type = selection ? optional<FunctionSelectError::Type>() : selection.GetError().GetType();
 	if (error_type == FunctionSelectError::Type::DUPLICATE_ARGUMENT) {
 		// the parameters are invalid for any definition
-		auto error = selection.GetError().ToError();
+		ErrorData error = selection.GetError();
 		error.AddQueryLocation(query_location);
 		error.Throw();
 	}

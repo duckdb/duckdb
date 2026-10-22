@@ -239,7 +239,7 @@ public:
 		// the error of the selection with the named arguments describes the plan best
 		ErrorData error;
 		if (!func_idx) {
-			error = func_idx.GetError().ToError();
+			error = func_idx.GetError();
 			if (named_arguments.empty()) {
 				func_idx = SelectWithoutNamedArguments(context, qualified_name.Name(), functions, positional_types);
 			}
@@ -418,8 +418,7 @@ public:
 		// Ensure the function overload was found
 		if (!func_idx.IsSuccess()) {
 			throw SerializationException("Failed to find function %s(%s)\n%s", qualified_name.ToString(),
-			                             StringUtil::ToString(arguments, ","),
-			                             func_idx.GetError().ToError().RawMessage());
+			                             StringUtil::ToString(arguments, ","), func_idx.GetError().RawMessage());
 		}
 
 		const auto function = functions.GetFunctionByOffset(func_idx.GetBinding().GetOverloadIndex());

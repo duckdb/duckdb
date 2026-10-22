@@ -63,6 +63,11 @@ struct FunctionBinding {
 	const SimpleFunction &GetFunction() const {
 		return *function;
 	}
+	//! Whether the call binds to this overload at a lower cost - an order of how well the overloads match, not of
+	//! which overload they are
+	bool operator<(const FunctionBinding &other) const {
+		return cost < other.cost;
+	}
 	template <class T>
 	shared_ptr<const T> GetFunction() const {
 		DynamicCastCheck<T>(function.get());
@@ -115,21 +120,27 @@ public:
 	                      const vector<pair<Identifier, unique_ptr<Expression>>> &named = {});
 
 public:
-	const vector<LogicalType> &GetPositional() const {
-		return positional;
+	idx_t GetArgumentCount() const {
+		return arguments.size();
 	}
-	const vector<pair<Identifier, LogicalType>> &GetNamed() const {
-		return named;
+	idx_t GetPositionalCount() const {
+		return positional_count;
 	}
-	//! The location of every argument - empty if they are not known
-	const vector<QueryLocation> &GetLocations() const {
-		return locations;
+	//! An argument - the positional arguments, followed by the named ones
+	const FunctionCallArgument &GetArgument(idx_t argument) const {
+		return arguments[argument];
 	}
+	//! The types of the positional arguments
+	vector<LogicalType> GetPositionalTypes() const;
+	//! The names and types of the named arguments
+	vector<pair<Identifier, LogicalType>> GetNamedTypes() const;
 
 private:
-	vector<LogicalType> positional;
-	vector<pair<Identifier, LogicalType>> named;
-	vector<QueryLocation> locations;
+	void AddArgument(FunctionCallArgument argument);
+
+private:
+	vector<FunctionCallArgument> arguments;
+	idx_t positional_count = 0;
 };
 
 class FunctionSelectError;
@@ -161,9 +172,9 @@ public:
 	struct TooManyArguments {
 		static constexpr auto TYPE = Type::TOO_MANY_ARGUMENTS;
 		idx_t argument;
-		//! The number of arguments the overload takes at most
-		idx_t maximum;
-		//! Whether the maximum is of the arguments passed by position
+		//! The number of arguments the overload accepts at most
+		idx_t accepted;
+		//! Whether that is the number of arguments it accepts by position
 		bool positional;
 
 		string ToString(const SimpleFunction &function, const FunctionSelectError &error) const;
@@ -233,6 +244,11 @@ public:
 	idx_t GetDistance() const {
 		return distance;
 	}
+	//! Whether the call is closer to matching this overload - an order of how close the overloads are, not of which
+	//! overload they are
+	bool operator<(const FunctionMismatch &other) const {
+		return distance < other.distance;
+	}
 	Type GetType() const {
 		return static_cast<Type>(reason.index());
 	}
@@ -287,11 +303,19 @@ public:
 	//! The alternatives are in the order of Type
 	using Kind = std::variant<NoMatch, AmbiguousMatch, DuplicateArgument>;
 
-	FunctionSelectError(Identifier name, vector<LogicalType> arguments,
-	                    vector<pair<Identifier, LogicalType>> named_arguments, vector<QueryLocation> argument_locations,
-	                    Kind kind)
-	    : name(std::move(name)), arguments(std::move(arguments)), named_arguments(std::move(named_arguments)),
-	      argument_locations(std::move(argument_locations)), kind(std::move(kind)) {
+	//! No overload of the set matches the call - the mismatches are sorted, closest first
+	static FunctionSelectError CreateNoMatch(Identifier name, FunctionCallArguments call,
+	                                         vector<FunctionMismatch> mismatches) {
+		return FunctionSelectError(std::move(name), std::move(call), NoMatch {std::move(mismatches)});
+	}
+	//! Several overloads match the call at the lowest cost
+	static FunctionSelectError CreateAmbiguousMatch(Identifier name, FunctionCallArguments call,
+	                                                vector<FunctionBinding> candidates) {
+		return FunctionSelectError(std::move(name), std::move(call), AmbiguousMatch {std::move(candidates)});
+	}
+	//! A named argument of the call repeats the name of an earlier one
+	static FunctionSelectError CreateDuplicateArgument(Identifier name, FunctionCallArguments call, idx_t argument) {
+		return FunctionSelectError(std::move(name), std::move(call), DuplicateArgument {argument});
 	}
 
 public:
@@ -299,17 +323,10 @@ public:
 	const Identifier &GetName() const {
 		return name;
 	}
-	//! The types of the arguments of the call
-	const vector<LogicalType> &GetArguments() const {
-		return arguments;
+	//! The call the selection was made for
+	const FunctionCallArguments &GetCall() const {
+		return call;
 	}
-	const vector<pair<Identifier, LogicalType>> &GetNamedArguments() const {
-		return named_arguments;
-	}
-	//! The type of an argument - the positional arguments, followed by the named ones
-	const LogicalType &GetArgumentType(idx_t argument) const;
-	//! The name an argument is passed by - empty if it is passed by position
-	const Identifier &GetArgumentName(idx_t argument) const;
 	Type GetType() const {
 		return static_cast<Type>(kind.index());
 	}
@@ -318,16 +335,21 @@ public:
 		D_ASSERT(GetType() == T::TYPE);
 		return std::get<T>(kind);
 	}
-	//! The location of an argument - invalid if it is not known
-	QueryLocation GetArgumentLocation(idx_t argument) const;
 	//! The error to report for the call, pointing at the argument it is about if its location is known
-	ErrorData ToError() const;
+	operator ErrorData() const; // NOLINT: allow implicit conversion
+	[[noreturn]] void Throw() const;
+	//! The messages of the error, as ErrorData::Message() and ErrorData::RawMessage()
+	string Message() const;
+	string RawMessage() const;
+
+private:
+	FunctionSelectError(Identifier name, FunctionCallArguments call, Kind kind)
+	    : name(std::move(name)), call(std::move(call)), kind(std::move(kind)) {
+	}
 
 private:
 	Identifier name;
-	vector<LogicalType> arguments;
-	vector<pair<Identifier, LogicalType>> named_arguments;
-	vector<QueryLocation> argument_locations;
+	FunctionCallArguments call;
 	Kind kind;
 };
 

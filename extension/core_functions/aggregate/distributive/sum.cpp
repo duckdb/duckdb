@@ -255,7 +255,7 @@ pair<BoundAggregateFunction, unique_ptr<FunctionData>> BindLogicalSum(ClientCont
 	vector<pair<Identifier, unique_ptr<Expression>>> keyword_args;
 	auto selection = FunctionBinder::SelectFunction(context, entry.functions, {arguments, keyword_args});
 	if (!selection.IsSuccess()) {
-		selection.GetError().ToError().Throw();
+		selection.GetError().Throw();
 	}
 	FunctionBinder binder(context);
 	return binder.ResolveAggregateFunction(selection.GetBinding(), arguments, keyword_args);

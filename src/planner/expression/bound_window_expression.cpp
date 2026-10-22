@@ -379,7 +379,7 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 
 		auto best = FunctionBinder::SelectFunction(binder->context, func.functions, arguments);
 		if (!best.IsSuccess()) {
-			best.GetError().ToError().Throw();
+			best.GetError().Throw();
 		}
 		FunctionBinder function_binder(*binder);
 

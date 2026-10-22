@@ -487,7 +487,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 			auto definition = selection.GetBinding().GetFunction<TableFunction>();
 			resolved = make_uniq<ResolvedTableFunction>(BoundTableFunction(definition));
 		} else {
-			error = selection.GetError().ToError();
+			error = selection.GetError();
 		}
 	} else {
 		FunctionBinder function_binder(*this);

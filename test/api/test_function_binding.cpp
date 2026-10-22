@@ -49,7 +49,7 @@ static const vector<FunctionMismatch> &GetMismatches(const FunctionSelectResult 
 }
 
 static string GetErrorMessage(const FunctionSelectResult &selection) {
-	return selection.GetError().ToError().RawMessage();
+	return selection.GetError().RawMessage();
 }
 
 TEST_CASE("Selecting a function maps every argument to the parameter that receives it", "[api][function_binding]") {
