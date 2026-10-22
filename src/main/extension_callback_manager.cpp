@@ -81,6 +81,8 @@ void ExtensionCallbackManager::Register(shared_ptr<GrammarExtension> extension) 
 		    "Can't add GrammarExtension \"%s\", a GrammarExtension by that name already exists");
 	}
 	callback_registry.atomic_store(new_registry);
+	// sessions compare this against their cached grammar's version and recompose when it moved
+	++grammar_registry_version;
 }
 
 void ExtensionCallbackManager::Register(shared_ptr<DialectExtension> extension) {
