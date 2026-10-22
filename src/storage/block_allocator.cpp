@@ -200,7 +200,7 @@ private:
 
 #ifndef __MVS__
 //! Whether this thread created its state. A bool needs no thread_local destructor, so reading it allocates nothing
-static thread_local bool thread_local_state_created = false;
+static thread_local bool thread_local_state_created = false; // NOLINT
 #endif
 
 BlockAllocatorThreadLocalState &GetBlockAllocatorThreadLocalState(const BlockAllocator &block_allocator) {
