@@ -1,5 +1,6 @@
 #include "duckdb/storage/statistics/numeric_range_stats.hpp"
 
+#include "duckdb/common/types/numeric_blob.hpp"
 #include "duckdb/common/types/numeric_type.hpp"
 
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -86,8 +87,10 @@ void NumericRangeStats::ToStruct(const BaseStatistics &stats, child_list_t<Value
 	children.emplace_back("representation",
 	                      Value(NumericType::IsExact(representation) ? representation.ToString() : "CANONICAL"));
 	if (range->HasValues()) {
-		children.emplace_back("exact_min", Value(range->Min().ToString()));
-		children.emplace_back("exact_max", Value(range->Max().ToString()));
+		// the endpoints keep the representation they were collected in (an INTEGER or a DECIMAL of the row group that
+		// holds them, which depends on the order the row groups merge): print the number, not the representation
+		children.emplace_back("exact_min", Value(NumericBlob::NormalizeText(range->Min().ToString())));
+		children.emplace_back("exact_max", Value(NumericBlob::NormalizeText(range->Max().ToString())));
 	}
 }
 

@@ -104,7 +104,7 @@ bool TryGetUnscaled(const Value &value, hugeint_t &result) {
 		result = value.GetValueUnsafe<uint32_t>();
 		return true;
 	case PhysicalType::UINT64:
-		result = hugeint_t(value.GetValueUnsafe<uint64_t>());
+		result = hugeint_t(0, value.GetValueUnsafe<uint64_t>());
 		return true;
 	default:
 		return false;

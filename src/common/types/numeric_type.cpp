@@ -1,6 +1,7 @@
 #include "duckdb/common/types/numeric_type.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -312,7 +313,7 @@ bool NumericType::TryGetRepresentationRange(const LogicalType &type, hugeint_t &
 		return true;
 	case LogicalTypeId::UBIGINT:
 		min = 0;
-		max = hugeint_t(NumericLimits<uint64_t>::Maximum());
+		max = hugeint_t(0, NumericLimits<uint64_t>::Maximum());
 		return true;
 	case LogicalTypeId::DECIMAL: {
 		auto width = DecimalType::GetWidth(type);

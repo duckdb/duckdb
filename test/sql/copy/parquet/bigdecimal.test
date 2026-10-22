@@ -41,15 +41,16 @@ SELECT median(bigdec) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
 ----
 0.0
 
+# rounding a wide decimal is exact
 query I
 SELECT round(bigdec, 1) FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
 ----
 0.5
 -0.5
-1.2345678912345679e+26
--1.2345678912345679e+26
-5.7896044618658096e+38
--5.7896044618658096e+38
+123456789123456789123456789.1
+-123456789123456789123456789.1
+578960446186580977117854925043439539266.3
+-578960446186580977117854925043439539266.3
 
 statement ok
 SUMMARIZE SELECT * FROM '{DATA_DIR}/parquet-testing/bigdecimal.parquet'
