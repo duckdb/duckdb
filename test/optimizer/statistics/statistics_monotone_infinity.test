@@ -130,32 +130,32 @@ SELECT '-infinity'::DATE + 2, 2 + '-infinity'::DATE, '-infinity'::DATE - 2, DATE
 statement error
 SELECT make_date(-2147483647 - 1) + 2
 ----
-Out of Range Error: Date out of range
+<REGEX>:.*(Date out of range|date field value out of range).*
 
 statement error
 SELECT 2 + make_date(-2147483647 - 1)
 ----
-Out of Range Error: Date out of range
+<REGEX>:.*(Date out of range|date field value out of range).*
 
 statement error
 SELECT make_date(-2147483647 - 1) - (-2)
 ----
-Out of Range Error: Date out of range
+<REGEX>:.*(Date out of range|date field value out of range).*
 
 statement error
 SELECT DATE '5877642-06-25 (BC)' + (-2)
 ----
-Out of Range Error: Date out of range
+<REGEX>:.*(Date out of range|date field value out of range).*
 
 statement error
 SELECT DATE '5877642-06-25 (BC)' - 2
 ----
-Out of Range Error: Date out of range
+<REGEX>:.*(Date out of range|date field value out of range).*
 
 statement error
 SELECT count(*) FROM dates WHERE c + 2 = '-infinity'::DATE
 ----
-Out of Range Error: Date out of range
+<REGEX>:.*(Date out of range|date field value out of range).*
 
 statement ok
 CREATE TABLE days(i INTEGER);
@@ -166,7 +166,7 @@ INSERT INTO days VALUES (-2147483648), (-2147483647);
 statement error
 SELECT make_date(i) + 2 FROM days ORDER BY i
 ----
-Out of Range Error: Date out of range
+<REGEX>:.*(Date out of range|date field value out of range).*
 
 # -infinity as the lower bound keeps the bounds of date arithmetic
 query I
