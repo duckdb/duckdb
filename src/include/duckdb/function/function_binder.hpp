@@ -16,6 +16,7 @@
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/optional.hpp"
+#include "duckdb/common/query_location.hpp"
 
 #include <variant>
 
@@ -83,6 +84,52 @@ private:
 	friend class FunctionBinder;
 	idx_t overload = 0;
 	shared_ptr<const SimpleFunction> function;
+};
+
+//! One argument of a call - a positional one if it has no name
+struct FunctionCallArgument {
+	FunctionCallArgument(LogicalType type, Identifier name = Identifier(), // NOLINT: allow implicit conversion
+	                     QueryLocation location = QueryLocation())
+	    : type(std::move(type)), name(std::move(name)), location(location) {
+	}
+	//! For the type constants, e.g. LogicalType::INTEGER
+	FunctionCallArgument(LogicalTypeId id)
+	    : FunctionCallArgument(LogicalType(id)) { // NOLINT: allow implicit conversion
+	}
+
+	LogicalType type;
+	Identifier name;
+	QueryLocation location;
+};
+
+//! The arguments of a call to select an overload for - the positional arguments, followed by the named ones
+class FunctionCallArguments {
+public:
+	FunctionCallArguments() = default;
+	//! E.g. {LogicalType::INTEGER, {LogicalType::BIGINT, "opt"}} - the positional arguments come first
+	FunctionCallArguments(std::initializer_list<FunctionCallArgument> arguments); // NOLINT: allow implicit conversion
+	FunctionCallArguments(vector<LogicalType> positional,                         // NOLINT: allow implicit conversion
+	                      vector<pair<Identifier, LogicalType>> named = {});
+	//! The types and locations of bound arguments
+	FunctionCallArguments(const vector<unique_ptr<Expression>> &positional, // NOLINT: allow implicit conversion
+	                      const vector<pair<Identifier, unique_ptr<Expression>>> &named = {});
+
+public:
+	const vector<LogicalType> &GetPositional() const {
+		return positional;
+	}
+	const vector<pair<Identifier, LogicalType>> &GetNamed() const {
+		return named;
+	}
+	//! The location of every argument - empty if they are not known
+	const vector<QueryLocation> &GetLocations() const {
+		return locations;
+	}
+
+private:
+	vector<LogicalType> positional;
+	vector<pair<Identifier, LogicalType>> named;
+	vector<QueryLocation> locations;
 };
 
 class FunctionSelectError;
@@ -220,30 +267,31 @@ public:
 
 		//! The closest mismatch, if no other is as close
 		optional_ptr<const FunctionMismatch> GetClosest() const;
-		ErrorData ToError(const FunctionSelectError &error, const vector<QueryLocation> &locations) const;
+		ErrorData ToError(const FunctionSelectError &error) const;
 	};
 	//! Several overloads match at the lowest cost
 	struct AmbiguousMatch {
 		static constexpr auto TYPE = Type::AMBIGUOUS_MATCH;
 		vector<FunctionBinding> candidates;
 
-		ErrorData ToError(const FunctionSelectError &error, const vector<QueryLocation> &locations) const;
+		ErrorData ToError(const FunctionSelectError &error) const;
 	};
 	//! A named argument repeats the name of an earlier one, so no overload can match
 	struct DuplicateArgument {
 		static constexpr auto TYPE = Type::DUPLICATE_ARGUMENT;
 		idx_t argument;
 
-		ErrorData ToError(const FunctionSelectError &error, const vector<QueryLocation> &locations) const;
+		ErrorData ToError(const FunctionSelectError &error) const;
 	};
 
 	//! The alternatives are in the order of Type
 	using Kind = std::variant<NoMatch, AmbiguousMatch, DuplicateArgument>;
 
 	FunctionSelectError(Identifier name, vector<LogicalType> arguments,
-	                    vector<pair<Identifier, LogicalType>> named_arguments, Kind kind)
+	                    vector<pair<Identifier, LogicalType>> named_arguments, vector<QueryLocation> argument_locations,
+	                    Kind kind)
 	    : name(std::move(name)), arguments(std::move(arguments)), named_arguments(std::move(named_arguments)),
-	      kind(std::move(kind)) {
+	      argument_locations(std::move(argument_locations)), kind(std::move(kind)) {
 	}
 
 public:
@@ -270,14 +318,16 @@ public:
 		D_ASSERT(GetType() == T::TYPE);
 		return std::get<T>(kind);
 	}
-	//! The error to report for the call - pointing at the argument it is about, if the locations of the arguments are
-	//! given: the positional arguments, followed by the named ones
-	ErrorData ToError(const vector<QueryLocation> &argument_locations = {}) const;
+	//! The location of an argument - invalid if it is not known
+	QueryLocation GetArgumentLocation(idx_t argument) const;
+	//! The error to report for the call, pointing at the argument it is about if its location is known
+	ErrorData ToError() const;
 
 private:
 	Identifier name;
 	vector<LogicalType> arguments;
 	vector<pair<Identifier, LogicalType>> named_arguments;
+	vector<QueryLocation> argument_locations;
 	Kind kind;
 };
 
@@ -321,19 +371,13 @@ public:
 	ClientContext &context;
 
 public:
-	//! Overload selection: the cheapest overload of a function set that a call with the given argument types binds
-	//! to. Selection needs no binder - without a ClientContext only the built-in implicit casts are considered. With
+	//! Overload selection: the cheapest overload of a function set that a call with the given arguments binds to.
+	//! Selection needs no binder - without a ClientContext only the built-in implicit casts are considered. With
 	//! explicit casts, an argument that cannot be implicitly cast to its parameter is accepted too
-	DUCKDB_API static FunctionSelectResult
-	SelectFunction(optional_ptr<ClientContext> context, const BaseFunctionSet &functions,
-	               const vector<LogicalType> &arguments,
-	               const vector<pair<Identifier, LogicalType>> &named_arguments = {}, bool explicit_casts = false);
-	//! Selects by the return types of the bound arguments
-	DUCKDB_API static FunctionSelectResult
-	SelectFunction(optional_ptr<ClientContext> context, const BaseFunctionSet &functions,
-	               const vector<unique_ptr<Expression>> &arguments,
-	               const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
-	               bool explicit_casts = false);
+	DUCKDB_API static FunctionSelectResult SelectFunction(optional_ptr<ClientContext> context,
+	                                                      const BaseFunctionSet &functions,
+	                                                      const FunctionCallArguments &call,
+	                                                      bool explicit_casts = false);
 
 	//! Bind a table function: select the overload, check the named arguments against its signature, and fold the
 	//! arguments to the constants it is called with, cast to the types it declares. Returns nullptr and sets the error
@@ -512,8 +556,7 @@ private:
 	//! explicit casts, an argument that cannot be implicitly cast to its parameter is accepted too
 	static std::variant<FunctionBinding, FunctionMismatch>
 	MatchOverload(optional_ptr<ClientContext> context, idx_t overload, shared_ptr<const SimpleFunction> function,
-	              const vector<LogicalType> &arguments, const vector<pair<Identifier, LogicalType>> &named_arguments,
-	              bool explicit_casts);
+	              const FunctionCallArguments &call, bool explicit_casts);
 	//! How a call binds to a function it is known to call - the arguments are cast explicitly. Throws if the call does
 	//! not fit the signature of the function
 	template <class T>

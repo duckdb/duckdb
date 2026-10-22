@@ -245,7 +245,7 @@ LogicalType TypeConstructorSet::Bind(optional_ptr<ClientContext> context, const 
 
 	// The candidates are selected with the regular function machinery, but reported in terms of types - a type is
 	// not a function, and "no function matches" reads as a mistake rather than as a bad type.
-	auto selection = FunctionBinder::SelectFunction(context, *this, positional, named);
+	auto selection = FunctionBinder::SelectFunction(context, *this, {positional, named});
 	auto error_type = selection ? optional<FunctionSelectError::Type>() : selection.GetError().GetType();
 	if (error_type == FunctionSelectError::Type::DUPLICATE_ARGUMENT) {
 		// the parameters are invalid for any definition

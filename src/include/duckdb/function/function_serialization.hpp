@@ -235,7 +235,7 @@ public:
 		vector<pair<Identifier, LogicalType>> keyword_types;
 		SplitArgumentTypes(qualified_name, arguments, positional_count, named_arguments, positional_types,
 		                   keyword_types);
-		auto func_idx = FunctionBinder::SelectFunction(context, functions, positional_types, keyword_types);
+		auto func_idx = FunctionBinder::SelectFunction(context, functions, {positional_types, keyword_types});
 		// the error of the selection with the named arguments describes the plan best
 		ErrorData error;
 		if (!func_idx) {
@@ -413,7 +413,7 @@ public:
 
 		// Lookup the function (and the correct overload)
 		FunctionBinder binder(context);
-		const auto func_idx = FunctionBinder::SelectFunction(context, functions, positional_types, keyword_types);
+		const auto func_idx = FunctionBinder::SelectFunction(context, functions, {positional_types, keyword_types});
 
 		// Ensure the function overload was found
 		if (!func_idx.IsSuccess()) {

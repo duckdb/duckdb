@@ -60,7 +60,7 @@ TEST_CASE("Selecting a function maps every argument to the parameter that receiv
 	vector<LogicalType> positional {LogicalType::LIST(LogicalType::INTEGER), LogicalType::INTEGER, LogicalType::VARCHAR,
 	                                LogicalType::VARCHAR};
 	vector<pair<Identifier, LogicalType>> named {{"opt", LogicalType::BIGINT}, {"extra", LogicalType::BOOLEAN}};
-	auto selection = FunctionBinder::SelectFunction(*con.context, set, positional, named);
+	auto selection = FunctionBinder::SelectFunction(*con.context, set, {positional, named});
 	REQUIRE(selection.IsSuccess());
 	REQUIRE(selection.GetBinding().GetOverloadIndex() == 0);
 
@@ -159,7 +159,7 @@ TEST_CASE("A call no overload matches records why each overload fails", "[api][f
 	ScalarFunctionSet defaulted("h");
 	defaulted.AddFunction(ScalarFunction("h", std::move(sig), NoopExec));
 	vector<pair<Identifier, LogicalType>> named_c {{"c", LogicalType::INTEGER}};
-	selection = FunctionBinder::SelectFunction(*con.context, defaulted, {LogicalType::VARCHAR}, named_c);
+	selection = FunctionBinder::SelectFunction(*con.context, defaulted, {{LogicalType::VARCHAR}, named_c});
 	REQUIRE(GetMismatches(selection)[0].GetType() == FunctionMismatch::Type::UNKNOWN_NAMED_ARGUMENT);
 	REQUIRE(GetMismatches(selection)[0].Cast<FunctionMismatch::UnknownNamedArgument>().argument == 1);
 	// the only overload is not listed a second time
@@ -214,7 +214,7 @@ TEST_CASE("A named argument passed twice matches no overload", "[api][function_b
 	auto set = GetOverloadedSet();
 
 	vector<pair<Identifier, LogicalType>> named {{"a", LogicalType::VARCHAR}, {"a", LogicalType::VARCHAR}};
-	auto selection = FunctionBinder::SelectFunction(*con.context, set, {}, named);
+	auto selection = FunctionBinder::SelectFunction(*con.context, set, FunctionCallArguments({}, named));
 	REQUIRE(!selection);
 	REQUIRE(selection.GetError().GetType() == FunctionSelectError::Type::DUPLICATE_ARGUMENT);
 	REQUIRE(selection.GetError().Cast<FunctionSelectError::DuplicateArgument>().argument == 1);

@@ -52,19 +52,35 @@ static bool TrySplitArguments(vector<pair<Identifier, unique_ptr<Expression>>> &
 	return true;
 }
 
-//! The types of the arguments of a call
-static pair<vector<LogicalType>, vector<pair<Identifier, LogicalType>>>
-GetArgumentTypes(const vector<unique_ptr<Expression>> &arguments,
-                 const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
-	vector<LogicalType> types;
-	vector<pair<Identifier, LogicalType>> named_types;
-	for (auto &arg : arguments) {
-		types.push_back(ExpressionBinder::GetExpressionReturnType(*arg));
+FunctionCallArguments::FunctionCallArguments(std::initializer_list<FunctionCallArgument> arguments) {
+	for (auto &argument : arguments) {
+		if (argument.name.empty()) {
+			if (!named.empty()) {
+				throw InternalException("FunctionCallArguments: a positional argument cannot follow a named one");
+			}
+			positional.push_back(argument.type);
+		} else {
+			named.emplace_back(argument.name, argument.type);
+		}
+		locations.push_back(argument.location);
 	}
-	for (auto &arg : named_arguments) {
-		named_types.emplace_back(arg.first, ExpressionBinder::GetExpressionReturnType(*arg.second));
+}
+
+FunctionCallArguments::FunctionCallArguments(vector<LogicalType> positional_p,
+                                             vector<pair<Identifier, LogicalType>> named_p)
+    : positional(std::move(positional_p)), named(std::move(named_p)) {
+}
+
+FunctionCallArguments::FunctionCallArguments(const vector<unique_ptr<Expression>> &positional_p,
+                                             const vector<pair<Identifier, unique_ptr<Expression>>> &named_p) {
+	for (auto &arg : positional_p) {
+		positional.push_back(ExpressionBinder::GetExpressionReturnType(*arg));
+		locations.push_back(arg->GetQueryLocation());
 	}
-	return {std::move(types), std::move(named_types)};
+	for (auto &arg : named_p) {
+		named.emplace_back(arg.first, ExpressionBinder::GetExpressionReturnType(*arg.second));
+		locations.push_back(arg.second->GetQueryLocation());
+	}
 }
 
 static int64_t ImplicitCastCost(optional_ptr<ClientContext> context, const LogicalType &source,
@@ -237,9 +253,10 @@ static void SubstituteTemplateType(LogicalType &type, case_insensitive_map_t<vec
 //! out determine them. Returns why not, if they do not determine every template of the types the call uses
 static optional<FunctionMismatch::Reason> DeduceTemplates(optional_ptr<ClientContext> context,
                                                           const FunctionSignature &sig,
-                                                          const vector<LogicalType> &arguments,
-                                                          const vector<pair<Identifier, LogicalType>> &named_arguments,
-                                                          const vector<bool> &filled, FunctionBinding &binding) {
+                                                          const FunctionCallArguments &call, const vector<bool> &filled,
+                                                          FunctionBinding &binding) {
+	auto &arguments = call.GetPositional();
+	auto &named_arguments = call.GetNamed();
 	FunctionMismatch::TemplateDeduction deduction;
 	case_insensitive_map_t<vector<LogicalType>> bindings;
 	for (idx_t i = 0; i < binding.argument_to_parameters.size(); i++) {
@@ -285,10 +302,13 @@ static optional<FunctionMismatch::Reason> DeduceTemplates(optional_ptr<ClientCon
 	return nullopt;
 }
 
-std::variant<FunctionBinding, FunctionMismatch>
-FunctionBinder::MatchOverload(optional_ptr<ClientContext> context, idx_t overload,
-                              shared_ptr<const SimpleFunction> function, const vector<LogicalType> &arguments,
-                              const vector<pair<Identifier, LogicalType>> &named_arguments, bool explicit_casts) {
+std::variant<FunctionBinding, FunctionMismatch> FunctionBinder::MatchOverload(optional_ptr<ClientContext> context,
+                                                                              idx_t overload,
+                                                                              shared_ptr<const SimpleFunction> function,
+                                                                              const FunctionCallArguments &call,
+                                                                              bool explicit_casts) {
+	auto &arguments = call.GetPositional();
+	auto &named_arguments = call.GetNamed();
 	// every mismatch is counted towards the distance, the first one is the reason
 	idx_t mismatches = 0;
 	optional<FunctionMismatch::Reason> first_mismatch;
@@ -433,7 +453,7 @@ FunctionBinder::MatchOverload(optional_ptr<ClientContext> context, idx_t overloa
 	}
 	if (is_templated) {
 		// the shape and the casts match, so a template that cannot be deduced is the closest miss there is
-		auto template_mismatch = DeduceTemplates(context, sig, arguments, named_arguments, filled, binding);
+		auto template_mismatch = DeduceTemplates(context, sig, call, filled, binding);
 		if (template_mismatch) {
 			return FunctionMismatch(overload, std::move(function), 0, std::move(*template_mismatch));
 		}
@@ -534,11 +554,11 @@ static optional_idx GetMismatchArgument(const FunctionMismatch &mismatch) {
 }
 
 //! Point an error at an argument, if its location is known
-static ErrorData WithArgumentLocation(ErrorData error, const vector<QueryLocation> &locations, optional_idx argument) {
-	if (argument.IsValid() && argument.GetIndex() < locations.size()) {
-		error.AddQueryLocation(locations[argument.GetIndex()]);
+static ErrorData WithArgumentLocation(ErrorData result, const FunctionSelectError &error, optional_idx argument) {
+	if (argument.IsValid()) {
+		result.AddQueryLocation(error.GetArgumentLocation(argument.GetIndex()));
 	}
-	return error;
+	return result;
 }
 
 string FunctionMismatch::ToString(const FunctionSelectError &error) const {
@@ -553,11 +573,10 @@ optional_ptr<const FunctionMismatch> FunctionSelectError::NoMatch::GetClosest() 
 	return nullptr;
 }
 
-ErrorData FunctionSelectError::NoMatch::ToError(const FunctionSelectError &error,
-                                                const vector<QueryLocation> &locations) const {
+ErrorData FunctionSelectError::NoMatch::ToError(const FunctionSelectError &error) const {
 	// a template that cannot be deduced is reported on its own, it says more about the call than a list of overloads
 	if (!mismatches.empty() && mismatches[0].IsTemplateMismatch()) {
-		return WithArgumentLocation(ErrorData(ExceptionType::BINDER, mismatches[0].ToString(error)), locations,
+		return WithArgumentLocation(ErrorData(ExceptionType::BINDER, mismatches[0].ToString(error)), error,
 		                            GetMismatchArgument(mismatches[0]));
 	}
 	// list every overload of the set in its order, and the closest one if a single overload is closer than all others
@@ -586,11 +605,10 @@ ErrorData FunctionSelectError::NoMatch::ToError(const FunctionSelectError &error
 	auto result =
 	    ErrorData(BinderException::NoMatchingFunction(catalog_name, schema_name, error.GetName(), error.GetArguments(),
 	                                                  error.GetNamedArguments(), candidates, closest_candidate));
-	return WithArgumentLocation(std::move(result), locations, closest ? GetMismatchArgument(*closest) : optional_idx());
+	return WithArgumentLocation(std::move(result), error, closest ? GetMismatchArgument(*closest) : optional_idx());
 }
 
-ErrorData FunctionSelectError::AmbiguousMatch::ToError(const FunctionSelectError &error,
-                                                       const vector<QueryLocation> &) const {
+ErrorData FunctionSelectError::AmbiguousMatch::ToError(const FunctionSelectError &error) const {
 	auto &first = candidates[0].GetFunction();
 	string call_str = Function::CallToString(first.GetCatalogName(), first.GetSchemaName(), error.GetName(),
 	                                         error.GetArguments(), error.GetNamedArguments());
@@ -605,11 +623,10 @@ ErrorData FunctionSelectError::AmbiguousMatch::ToError(const FunctionSelectError
 	                       call_str, candidate_str));
 }
 
-ErrorData FunctionSelectError::DuplicateArgument::ToError(const FunctionSelectError &error,
-                                                          const vector<QueryLocation> &locations) const {
+ErrorData FunctionSelectError::DuplicateArgument::ToError(const FunctionSelectError &error) const {
 	return WithArgumentLocation(ErrorData(BinderException("Duplicate named argument %s in function call to %s",
 	                                                      error.GetArgumentName(argument), error.GetName())),
-	                            locations, argument);
+	                            error, argument);
 }
 
 const LogicalType &FunctionSelectError::GetArgumentType(idx_t argument) const {
@@ -621,22 +638,12 @@ const Identifier &FunctionSelectError::GetArgumentName(idx_t argument) const {
 	return argument < arguments.size() ? positional : named_arguments[argument - arguments.size()].first;
 }
 
-ErrorData FunctionSelectError::ToError(const vector<QueryLocation> &argument_locations) const {
-	return std::visit([&](const auto &kind) { return kind.ToError(*this, argument_locations); }, kind);
+QueryLocation FunctionSelectError::GetArgumentLocation(idx_t argument) const {
+	return argument < argument_locations.size() ? argument_locations[argument] : QueryLocation();
 }
 
-//! The locations of the arguments of a call - the positional arguments, followed by the named ones
-static vector<QueryLocation>
-GetArgumentLocations(const vector<unique_ptr<Expression>> &arguments,
-                     const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
-	vector<QueryLocation> locations;
-	for (auto &arg : arguments) {
-		locations.push_back(arg->GetQueryLocation());
-	}
-	for (auto &arg : named_arguments) {
-		locations.push_back(arg.second->GetQueryLocation());
-	}
-	return locations;
+ErrorData FunctionSelectError::ToError() const {
+	return std::visit([&](const auto &kind) { return kind.ToError(*this); }, kind);
 }
 
 //! The first named argument that repeats the name of an earlier one, if any
@@ -651,14 +658,14 @@ static optional_idx FindDuplicateNamedArgument(const vector<pair<Identifier, Log
 }
 
 FunctionSelectResult FunctionBinder::SelectFunction(optional_ptr<ClientContext> context,
-                                                    const BaseFunctionSet &functions,
-                                                    const vector<LogicalType> &arguments,
-                                                    const vector<pair<Identifier, LogicalType>> &named_arguments,
+                                                    const BaseFunctionSet &functions, const FunctionCallArguments &call,
                                                     bool explicit_casts) {
+	auto &arguments = call.GetPositional();
+	auto &named_arguments = call.GetNamed();
 	auto duplicate = FindDuplicateNamedArgument(named_arguments);
 	if (duplicate.IsValid()) {
 		// no overload can take the same argument twice
-		return FunctionSelectError(functions.GetName(), arguments, named_arguments,
+		return FunctionSelectError(functions.GetName(), arguments, named_arguments, call.GetLocations(),
 		                           FunctionSelectError::DuplicateArgument {arguments.size() + duplicate.GetIndex()});
 	}
 
@@ -666,8 +673,7 @@ FunctionSelectResult FunctionBinder::SelectFunction(optional_ptr<ClientContext> 
 	vector<FunctionBinding> candidates;
 	vector<FunctionMismatch> mismatches;
 	for (idx_t overload = 0; overload < functions.GetOverloadCount(); overload++) {
-		auto match = MatchOverload(context, overload, functions.GetSharedOverload(overload), arguments, named_arguments,
-		                           explicit_casts);
+		auto match = MatchOverload(context, overload, functions.GetSharedOverload(overload), call, explicit_casts);
 		if (auto binding = std::get_if<FunctionBinding>(&match)) {
 			candidates.push_back(std::move(*binding));
 		} else {
@@ -680,7 +686,7 @@ FunctionSelectResult FunctionBinder::SelectFunction(optional_ptr<ClientContext> 
 		std::stable_sort(
 		    mismatches.begin(), mismatches.end(),
 		    [](const FunctionMismatch &a, const FunctionMismatch &b) { return a.GetDistance() < b.GetDistance(); });
-		return FunctionSelectError(functions.GetName(), arguments, named_arguments,
+		return FunctionSelectError(functions.GetName(), arguments, named_arguments, call.GetLocations(),
 		                           FunctionSelectError::NoMatch {std::move(mismatches)});
 	}
 
@@ -699,19 +705,10 @@ FunctionSelectResult FunctionBinder::SelectFunction(optional_ptr<ClientContext> 
 			}
 		}
 		candidates.erase(tied_end, candidates.end());
-		return FunctionSelectError(functions.GetName(), arguments, named_arguments,
+		return FunctionSelectError(functions.GetName(), arguments, named_arguments, call.GetLocations(),
 		                           FunctionSelectError::AmbiguousMatch {std::move(candidates)});
 	}
 	return std::move(candidates[0]);
-}
-
-FunctionSelectResult
-FunctionBinder::SelectFunction(optional_ptr<ClientContext> context, const BaseFunctionSet &functions,
-                               const vector<unique_ptr<Expression>> &arguments,
-                               const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
-                               bool explicit_casts) {
-	auto [types, named_types] = GetArgumentTypes(arguments, named_arguments);
-	return SelectFunction(context, functions, types, named_types, explicit_casts);
 }
 
 template <class T>
@@ -725,9 +722,9 @@ FunctionBinding FunctionBinder::MatchFunction(const shared_ptr<const T> &functio
 	}
 	FunctionSet<T> functions(function->GetName());
 	functions.AddFunction(function);
-	auto selection = SelectFunction(context, functions, arguments, named_arguments, true);
+	auto selection = SelectFunction(context, functions, {arguments, named_arguments}, true);
 	if (!selection) {
-		selection.GetError().ToError(GetArgumentLocations(arguments, named_arguments)).Throw();
+		selection.GetError().ToError().Throw();
 	}
 	return selection.GetBinding();
 }
@@ -768,11 +765,11 @@ FunctionBinder::SelectFunctionFromArguments(const BaseFunctionSet &functions,
 	const auto implicit_names = AnyOverloadSupportsImplicitArgumentNames(functions);
 	if (is_valid_call) {
 		// Yes. Let's try to bind
-		auto result = SelectFunction(context, functions, positional, named);
+		auto result = SelectFunction(context, functions, {positional, named});
 		if (result) {
 			return result.GetBinding();
 		}
-		error = result.GetError().ToError(GetArgumentLocations(positional, named));
+		error = result.GetError().ToError();
 
 		// We failed binding - does any other overload support implicit argument names?
 		// If not, this is a hard failure.
@@ -799,12 +796,12 @@ FunctionBinder::SelectFunctionFromArguments(const BaseFunctionSet &functions,
 			}
 		}
 		if (TrySplitArguments(arguments, positional, named)) {
-			auto retry_result = SelectFunction(context, functions, positional, named);
+			auto retry_result = SelectFunction(context, functions, {positional, named});
 			if (retry_result) {
 				return retry_result.GetBinding();
 			}
 			if (!is_valid_call) {
-				error = retry_result.GetError().ToError(GetArgumentLocations(positional, named));
+				error = retry_result.GetError().ToError();
 			}
 			// otherwise the call only failed to match an overload, which is reported in the error
 			return nullopt;
@@ -1029,9 +1026,9 @@ FunctionBinder::BindTableFunction(const TableFunctionSet &functions,
                                   vector<unique_ptr<Expression>> &positional_arguments,
                                   vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, ErrorData &error) {
 	VerifyNamedArgumentsAccepted(functions, named_arguments);
-	auto selection = SelectFunction(context, functions, positional_arguments, named_arguments);
+	auto selection = SelectFunction(context, functions, {positional_arguments, named_arguments});
 	if (!selection) {
-		error = selection.GetError().ToError(GetArgumentLocations(positional_arguments, named_arguments));
+		error = selection.GetError().ToError();
 		return nullptr;
 	}
 	auto &binding = selection.GetBinding();
@@ -1050,9 +1047,9 @@ unique_ptr<BoundPragmaInfo> FunctionBinder::BindPragmaFunction(
     const PragmaFunctionSet &functions, vector<unique_ptr<Expression>> &positional_arguments,
     vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, ErrorData &error) {
 	VerifyNamedArgumentsAccepted(functions, named_arguments);
-	auto selection = SelectFunction(context, functions, positional_arguments, named_arguments);
+	auto selection = SelectFunction(context, functions, {positional_arguments, named_arguments});
 	if (!selection) {
-		error = selection.GetError().ToError(GetArgumentLocations(positional_arguments, named_arguments));
+		error = selection.GetError().ToError();
 		return nullptr;
 	}
 	auto &binding = selection.GetBinding();
