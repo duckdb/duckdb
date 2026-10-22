@@ -520,9 +520,7 @@ void SortKeyRecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &
 			const auto &old_heap_ptr = old_heap_locations[idx];
 			const auto &new_heap_ptr = new_heap_locations[idx];
 
-			auto &sort_key = *sort_keys[idx];
-			const auto diff = sort_key.GetData() - old_heap_ptr;
-			sort_keys[idx]->SetData(new_heap_ptr + diff);
+			sort_keys[idx]->RelocateHeapPointer(old_heap_ptr, new_heap_ptr);
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
@@ -530,9 +528,7 @@ void SortKeyRecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &
 			const auto &old_heap_ptr = old_heap_locations[old_heap_sel.get_index(idx)];
 			const auto &new_heap_ptr = new_heap_locations[new_heap_sel.get_index(idx)];
 
-			auto &sort_key = *sort_keys[idx];
-			const auto diff = sort_key.GetData() - old_heap_ptr;
-			sort_keys[idx]->SetData(new_heap_ptr + diff);
+			sort_keys[idx]->RelocateHeapPointer(old_heap_ptr, new_heap_ptr);
 		}
 	}
 }

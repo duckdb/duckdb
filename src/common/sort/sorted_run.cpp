@@ -248,7 +248,7 @@ struct SkaExtractSuffixKey : SkaExtractKey<SORT_KEY> {
 		if (offset >= size) {
 			return 0;
 		}
-		const auto ptr = key.GetData() + offset;
+		const auto ptr = key.GetSuffixData() + (offset - SORT_KEY::INLINE_LENGTH);
 		if (size - offset >= sizeof(uint64_t)) {
 			return BSwapIfLE(Load<uint64_t>(ptr));
 		}
@@ -267,8 +267,7 @@ struct SkaExtractSuffixKey : SkaExtractKey<SORT_KEY> {
 			return true;
 		}
 		return reference.GetSize() >= offset && key.GetSize() >= offset &&
-		       memcmp(reference.GetData() + SORT_KEY::INLINE_LENGTH, key.GetData() + SORT_KEY::INLINE_LENGTH,
-		              offset - SORT_KEY::INLINE_LENGTH) == 0;
+		       memcmp(reference.GetSuffixData(), key.GetSuffixData(), offset - SORT_KEY::INLINE_LENGTH) == 0;
 	}
 
 	bool ByteIsSkippable(const idx_t &byte_offset) const {
