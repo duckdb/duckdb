@@ -364,6 +364,9 @@ inline void EncodeValue(const DigitQuads &quads, T value, uint8_t scale, string_
                         VectorWriter<string_t> &writer) {
 	bool negative;
 	auto magnitude = Magnitude<T>::Get(value, negative);
+#ifndef DUCKDB_DEBUG_NO_INLINE
+	// blobs of up to twelve bytes are written as the inlined words of the string_t; a build without inlined strings
+	// stores every blob in the heap below
 	if (magnitude.upper == 0) {
 		auto small = magnitude.lower;
 		if (small == 0) {
@@ -394,6 +397,7 @@ inline void EncodeValue(const DigitQuads &quads, T value, uint8_t scale, string_
 		slot->Finalize();
 		return;
 	}
+#endif
 	data_t buffer[NUMERIC_MAX_BLOB_SIZE];
 	auto length = EncodeMagnitude(magnitude, negative, scale, buffer);
 	*slot = writer.GetHeap().EmptyString(length);
