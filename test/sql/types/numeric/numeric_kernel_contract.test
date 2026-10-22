@@ -39,6 +39,11 @@ SELECT ceil(n) FROM t ORDER BY n;
 127
 NULL
 
+# the checkpoint stores the rows in the narrowest representation that holds them (before it, the representation
+# depends on the storage configuration: in-memory rows, a persistent file or a replayed WAL)
+statement ok
+CHECKPOINT;
+
 query I
 SELECT numeric_representation(ceil(n)) FROM t LIMIT 1;
 ----

@@ -1828,6 +1828,10 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 		return NestedToSQLString(*this, [](const Value &child) { return child.ToSQLString(); });
+	case LogicalTypeId::NUMERIC:
+		// the decimal text of the number: it reparses as an exact INTEGER or DECIMAL literal, which converts to NUMERIC
+		// without loss (the SQL export adds the cast to the result type)
+		return ToString();
 	case LogicalTypeId::DECIMAL:
 		// a bare literal would be reparsed as DOUBLE or BIGNUM and lose precision, so emit an explicit cast
 		if (type_.InternalType() == PhysicalType::VARCHAR) {

@@ -39,7 +39,10 @@ TEST_CASE("Test C API NUMERIC type support", "[capi]") {
 	REQUIRE(data);
 	auto validity = duckdb_vector_get_validity(vec);
 	REQUIRE(duckdb_validity_row_is_valid(validity, 0));
-	REQUIRE(!duckdb_validity_row_is_valid(validity, 2));
+	if (STANDARD_VECTOR_SIZE >= 3) {
+		// the NULL is the third row: it sits in the first chunk only when a chunk holds at least three rows
+		REQUIRE(!duckdb_validity_row_is_valid(validity, 2));
+	}
 	REQUIRE(duckdb_string_t_length(data[0]) > 0);
 
 	// the logical type round-trips through the C API

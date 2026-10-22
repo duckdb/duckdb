@@ -109,6 +109,19 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 				    Decimal::MAX_WIDTH_INT128, required, db.GetName(), current);
 			}
 		} break;
+		case LogicalTypeId::NUMERIC: {
+			// NUMERIC is a new type id with its own column format, which older engines cannot read
+			const auto storage_version = db.GetStorageManager().GetStorageVersion();
+
+			if (storage_version < StorageVersion::V2_0_0) {
+				auto required = GetStorageVersionName(StorageVersion::V2_0_0, false);
+				auto current = GetStorageVersionName(storage_version, false);
+
+				throw InvalidInputException("NUMERIC columns are not supported in storage versions prior to %s "
+				                            "(database %s is using storage version %s)",
+				                            required, db.GetName(), current);
+			}
+		} break;
 		case LogicalTypeId::VARIANT: {
 			const auto storage_version = db.GetStorageManager().GetStorageVersion();
 

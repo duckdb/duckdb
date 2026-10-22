@@ -10,6 +10,9 @@
   ],
   "inherit_skip_tests": "test/configs/force_storage.json",
   "skip_compiled": "true",
+  "skip_error_messages": [
+    "NUMERIC columns are not supported in storage versions prior to v2.0.0"
+  ],
   "skip_tests": [
     {
       "reason": "NUMERIC columns require storage version v2.0.0 or higher.",
