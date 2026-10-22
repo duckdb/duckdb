@@ -782,9 +782,6 @@ void ColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
 	FetchRowsAtSegmentLevel(transaction, state, offsets, sel, fetch_count, result, result_offset);
 }
 
-//! When at least this many ascending rows of a segment lie within a vector's length, they are scanned, not fetched
-static constexpr idx_t FETCH_SCAN_ROW_THRESHOLD = 4;
-
 #ifdef D_ASSERT_IS_ENABLED
 //! Verify that no scanned string points into the segment's block, which is unpinned once the fetch is done
 static void VerifyStringsCopied(ColumnSegment &segment, Vector &result, idx_t result_offset, idx_t count) {
@@ -846,15 +843,6 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 			}
 			last_offset = next_offset;
 			window_count++;
-		}
-		if (window_count < FETCH_SCAN_ROW_THRESHOLD) {
-			for (idx_t i = 0; i < window_count; i++) {
-				const idx_t row_offset = offsets[sel.get_index(idx + i)];
-				segment.FetchRow(state, NumericCast<row_t>(row_offset - segment_start), result,
-				                 result_offset + idx + i);
-			}
-			idx += window_count;
-			continue;
 		}
 		if (!scan_state) {
 			scan_state = make_uniq<ColumnScanState>(nullptr);

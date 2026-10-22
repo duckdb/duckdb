@@ -1,5 +1,5 @@
 # name: test/sql/storage/fetch_consecutive_rows.test
-# description: Rows that lie close together in a segment are scanned instead of fetched row by row; index maintenance and row id fetches stay correct
+# description: Rows fetched by row id are scanned or selected per segment instead of fetched row by row; index maintenance and row id fetches stay correct
 # group: [storage]
 
 load {TEST_DIR}/fetch_consecutive_rows.db
@@ -190,7 +190,7 @@ SELECT count(*), count(a), sum(a[1]) FROM arr WHERE s[1] = 'string_value_' || (i
 ----
 10000	9000	45000000
 
-# Each compression, with rows spread below and above the scan threshold: an UPDATE of the key fetches every column
+# Each compression, with isolated rows, gaps and runs: an UPDATE of the key fetches every column
 # by row id. Scanned strings are copied into the result, since only the scan pins the blocks they point into.
 # DICTIONARY and FSST are only written by older storage versions, DICT_FSST only by newer ones.
 statement ok con1
