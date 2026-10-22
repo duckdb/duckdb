@@ -191,7 +191,7 @@ public:
 
 public:
 	//! Handles a BLOCKED result per the execution mode, returns true when the function must return to yield
-	DUCKDB_API bool HandleBlocked(ClientContext &context, AsyncResult &blocked_result);
+	DUCKDB_API bool HandleBlocked(AsyncResult &blocked_result);
 
 public:
 	optional_ptr<const FunctionData> bind_data;
