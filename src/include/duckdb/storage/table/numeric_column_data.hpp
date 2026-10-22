@@ -89,8 +89,13 @@ private:
 	shared_ptr<ColumnData> Rebuild(ColumnData &source, const LogicalType &new_type);
 	//! Switch the inner column to a wider representation in the middle of an append
 	void Widen(ColumnAppendState &state, const LogicalType &new_type);
+	//! The representation the column takes to hold its values and those of an appended vector
+	LogicalType AppendTargetType(ColumnAppendState &state, const LogicalType &current_type,
+	                             const LogicalType &source_type);
 	//! Append a vector of an exact representation
 	void AppendTyped(ColumnAppendState &state, const Vector &typed, idx_t count);
+	//! Append canonical values that have no common representation
+	void AppendCanonical(ColumnAppendState &state, const Vector &canonical, idx_t count);
 
 private:
 	mutable mutex inner_lock;

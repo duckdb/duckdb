@@ -4403,6 +4403,8 @@ const StringUtil::EnumStringLiteral *GetNumericDispatchKindValues() {
 		{ static_cast<uint32_t>(NumericDispatchKind::ADD), "ADD" },
 		{ static_cast<uint32_t>(NumericDispatchKind::SUBTRACT), "SUBTRACT" },
 		{ static_cast<uint32_t>(NumericDispatchKind::MULTIPLY), "MULTIPLY" },
+		{ static_cast<uint32_t>(NumericDispatchKind::ABS), "ABS" },
+		{ static_cast<uint32_t>(NumericDispatchKind::ROUND), "ROUND" },
 		{ static_cast<uint32_t>(NumericDispatchKind::GENERIC), "GENERIC" }
 	};
 	return values;
@@ -4410,12 +4412,12 @@ const StringUtil::EnumStringLiteral *GetNumericDispatchKindValues() {
 
 template<>
 const char* EnumUtil::ToChars<NumericDispatchKind>(NumericDispatchKind value) {
-	return StringUtil::EnumToString(GetNumericDispatchKindValues(), 4, "NumericDispatchKind", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetNumericDispatchKindValues(), 6, "NumericDispatchKind", static_cast<uint32_t>(value));
 }
 
 template<>
 NumericDispatchKind EnumUtil::FromString<NumericDispatchKind>(const char *value) {
-	return static_cast<NumericDispatchKind>(StringUtil::StringToEnum(GetNumericDispatchKindValues(), 4, "NumericDispatchKind", value));
+	return static_cast<NumericDispatchKind>(StringUtil::StringToEnum(GetNumericDispatchKindValues(), 6, "NumericDispatchKind", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOnConflictActionValues() {

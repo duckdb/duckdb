@@ -305,11 +305,14 @@ SELECT '300'::NUMERIC, typeof('300'::NUMERIC);
 ----
 300	NUMERIC
 
-# strings that are not plain numbers are not exact numbers
-statement error
+# scientific notation is an exact number, other text is not
+statement ok
 INSERT INTO literals VALUES ('1e3');
+
+query I
+SELECT n FROM literals WHERE n = 1000;
 ----
-not an exact number
+1000
 
 statement error
 INSERT INTO literals VALUES ('abc');

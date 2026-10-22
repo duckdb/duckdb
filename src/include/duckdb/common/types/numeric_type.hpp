@@ -26,9 +26,16 @@ struct NumericType {
 	DUCKDB_API static void GetDigits(const LogicalType &type, uint8_t &integer_digits, uint8_t &scale);
 	//! The narrowest representation that holds every value of both inputs (type-level widening, used for inserts)
 	DUCKDB_API static LogicalType Widen(const LogicalType &left, const LogicalType &right);
+	//! The same; false when there is no common representation (the values would need more than 255 digits)
+	DUCKDB_API static bool TryWiden(const LogicalType &left, const LogicalType &right, LogicalType &result);
 	//! The narrowest representation for values in [min, max] with the given number of fractional digits
 	//! (value-level, used for the bound type of a column and the storage type of a row group)
 	DUCKDB_API static LogicalType ForRange(const Value &min, const Value &max, uint8_t scale);
+	//! The same; false when there is no common representation
+	DUCKDB_API static bool TryForRange(const Value &min, const Value &max, uint8_t scale, LogicalType &result);
+	//! The storage type of a row group whose values have no common representation: their canonical encoding
+	DUCKDB_API static LogicalType CanonicalStorageType();
+	DUCKDB_API static bool IsCanonicalStorage(const LogicalType &type);
 	//! The number of integer digits of an exact numeric value (0 for |value| < 1)
 	DUCKDB_API static uint8_t IntegerDigits(const Value &value);
 	//! The number of decimal digits of an unscaled value
@@ -55,13 +62,21 @@ struct NumericType {
 	DUCKDB_API static LogicalType ExactLeavesToNumeric(const LogicalType &type);
 	//! The type with every DECIMAL replaced by NUMERIC
 	DUCKDB_API static LogicalType DecimalsAsNumeric(const LogicalType &type);
-	//! The exact value of a numeric string literal ([-]digits[.digits]) in the narrowest representation that holds
-	//! it; false for anything else (exponents, infinities, text)
+	//! The exact value of a numeric string literal ([-]digits[.digits][e[-]digits]) in the narrowest representation
+	//! that holds it; false for anything else (infinities, text)
 	DUCKDB_API static bool TryParseLiteral(const string &text, Value &result);
+	//! Parses the exponent of scientific notation, starting after the 'e'; false for other text
+	DUCKDB_API static bool TryParseExponent(const char *text, idx_t pos, idx_t end, int64_t &exponent);
+	//! The significant integer digits and the fractional digits of a number written in text; false for other text
+	DUCKDB_API static bool TryCountDigits(const char *text, idx_t size, idx_t &integer_digits,
+	                                      idx_t &fractional_digits);
+	//! Whether a number in text uses scientific notation, and its plain decimal notation (for validated text)
+	DUCKDB_API static bool HasExponent(const char *text, idx_t size);
+	DUCKDB_API static string ExpandExponent(const char *text, idx_t size);
+	//! The narrowest representation that holds every value with these digits; false beyond the widest DECIMAL
+	DUCKDB_API static bool TryForDigits(idx_t integer_digits, idx_t fractional_digits, LogicalType &type);
 	//! The type with every NUMERIC replaced by VARCHAR: how readers deliver NUMERIC columns, the storage parses them
 	DUCKDB_API static LogicalType AsText(const LogicalType &type);
-	//! The representation that holds every number in a vector of text ([-]digits[.digits]); throws for other text
-	DUCKDB_API static LogicalType TextType(const Vector &vector, idx_t count);
 	//! Error thrown for values that cannot be stored in a NUMERIC column
 	DUCKDB_API static string NotExactMessage(const LogicalType &type);
 };

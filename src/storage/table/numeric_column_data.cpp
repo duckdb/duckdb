@@ -63,13 +63,42 @@ ColumnData &NumericColumnData::Pinned(ColumnScanState &state) {
 	return *state.pinned_column;
 }
 
+//! Whether a column holds canonical values: the row group has no common representation
+static bool IsCanonical(const ColumnData &column) {
+	return NumericType::IsCanonicalStorage(column.type);
+}
+
+//! The canonical NUMERIC values of a stored vector: the blobs of canonical storage, otherwise encoded
+static void ToCanonical(const Vector &stored, idx_t count, Vector &canonical) {
+	D_ASSERT(canonical.GetType().id() == LogicalTypeId::NUMERIC);
+	if (NumericType::IsCanonicalStorage(stored.GetType())) {
+		canonical.Reinterpret(stored);
+		return;
+	}
+	Vector typed(stored.GetType());
+	typed.Reference(stored);
+	NumericBlob::Encode(typed, count, canonical);
+}
+
 void NumericColumnData::CastVector(const Vector &source, Vector &target, idx_t count) {
 	if (source.GetType() == target.GetType()) {
 		target.Reference(source);
 		return;
 	}
+	if (NumericType::IsCanonicalStorage(target.GetType())) {
+		Vector canonical(LogicalType::NUMERIC, count);
+		ToCanonical(source, count, canonical);
+		target.Reinterpret(canonical);
+		return;
+	}
 	Vector source_ref(source.GetType());
 	source_ref.Reference(source);
+	if (NumericType::IsCanonicalStorage(source.GetType())) {
+		Vector canonical(LogicalType::NUMERIC);
+		canonical.Reinterpret(source_ref);
+		NumericBlob::Decode(canonical, count, target);
+		return;
+	}
 	// the representations are chosen so that every value fits - a failure here is a bug
 	VectorOperations::DefaultCast(source_ref, target, count, true);
 }
@@ -129,6 +158,11 @@ idx_t NumericColumnData::Scan(TransactionData transaction, idx_t vector_index, C
 	Vector typed(*state.numeric_cache);
 	auto scan_count = column.Scan(transaction, vector_index, state, typed, target_count);
 	SetScanSize(typed, scan_count);
+	if (IsCanonical(column)) {
+		// no common representation: the canonical values themselves
+		result.Reinterpret(typed);
+		return scan_count;
+	}
 	result.Shred(typed, scan_count);
 	if (state.numeric_range.valid) {
 		NumericVector::SetRange(result, state.numeric_range);
@@ -142,7 +176,7 @@ idx_t NumericColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t
 	Vector typed(column.type, target_count);
 	auto scan_count = column.ScanCount(state, typed, target_count, 0);
 	Vector canonical(LogicalType::NUMERIC, scan_count);
-	NumericBlob::Encode(typed, scan_count, canonical);
+	ToCanonical(typed, scan_count, canonical);
 	VectorOperations::Copy(canonical, result, scan_count, 0, result_offset);
 	return scan_count;
 }
@@ -288,10 +322,32 @@ void NumericColumnData::Widen(ColumnAppendState &state, const LogicalType &new_t
 	new_inner->InitializeAppend(state);
 }
 
+LogicalType NumericColumnData::AppendTargetType(ColumnAppendState &state, const LogicalType &current_type,
+                                                const LogicalType &source_type) {
+	if (NumericType::IsCanonicalStorage(current_type)) {
+		return current_type;
+	}
+	LogicalType target_type;
+	if (NumericType::TryWiden(current_type, source_type, target_type)) {
+		return target_type;
+	}
+	// no common representation with the current one: the one of the values stored so far, when they have one
+	auto stored = GetRange();
+	stored.Merge(AppendRange(state));
+	if (!stored.HasValues()) {
+		return source_type;
+	}
+	auto stored_type = stored.ResolveType();
+	if (NumericType::IsCanonicalStorage(stored_type) || !NumericType::TryWiden(stored_type, source_type, target_type)) {
+		return NumericType::CanonicalStorageType();
+	}
+	return target_type;
+}
+
 void NumericColumnData::AppendTyped(ColumnAppendState &state, const Vector &vector, idx_t append_count) {
 	auto current = GetInner();
 	auto &source_type = vector.GetType();
-	auto target_type = NumericType::Widen(current->type, source_type);
+	auto target_type = AppendTargetType(state, current->type, source_type);
 	if (target_type != current->type) {
 		Widen(state, target_type);
 		current = GetInner();
@@ -303,8 +359,22 @@ void NumericColumnData::AppendTyped(ColumnAppendState &state, const Vector &vect
 		Vector cast_vector(current->type, append_count);
 		CastVector(vector, cast_vector, append_count);
 		current->Append(state, cast_vector, append_count);
-		AppendRange(state).Update(cast_vector, append_count);
+		// the range is taken from the values in the narrower of the two representations
+		AppendRange(state).Update(IsCanonical(*current) ? vector : cast_vector, append_count);
 	}
+	count += append_count;
+}
+
+void NumericColumnData::AppendCanonical(ColumnAppendState &state, const Vector &canonical, idx_t append_count) {
+	auto current = GetInner();
+	if (!IsCanonical(*current)) {
+		Widen(state, NumericType::CanonicalStorageType());
+		current = GetInner();
+	}
+	Vector blobs(current->type);
+	blobs.Reinterpret(canonical);
+	current->Append(state, blobs, append_count);
+	AppendRange(state).UpdateCanonical(canonical, append_count);
 	count += append_count;
 }
 
@@ -316,10 +386,15 @@ void NumericColumnData::Append(ColumnAppendState &state, const Vector &vector, i
 			AppendTyped(state, ShreddedVector::GetShreddedVector(vector), append_count);
 			return;
 		}
-		// canonical values: decode into the representation that holds them
+		// canonical values: decode into the representation that holds them, if there is one
 		Vector canonical(LogicalType::NUMERIC);
 		canonical.Reference(vector);
-		Vector typed(NumericBlob::RangeType(canonical, append_count), append_count);
+		LogicalType type;
+		if (!NumericBlob::TryRangeType(canonical, append_count, type)) {
+			AppendCanonical(state, canonical, append_count);
+			return;
+		}
+		Vector typed(type, append_count);
 		NumericBlob::Decode(canonical, append_count, typed);
 		AppendTyped(state, typed, append_count);
 		return;
@@ -370,7 +445,7 @@ idx_t NumericColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &res
 	auto &column = Pinned(state);
 	Vector typed(column.type, STANDARD_VECTOR_SIZE);
 	auto fetch_count = column.Fetch(state, row_id, typed);
-	NumericBlob::Encode(typed, fetch_count, result);
+	ToCanonical(typed, fetch_count, result);
 	return fetch_count;
 }
 
@@ -381,7 +456,7 @@ void NumericColumnData::FetchRows(TransactionData transaction, ColumnFetchState 
 	Vector typed(column->type, fetch_count);
 	column->FetchRows(transaction, state, storage_index, offsets, sel, fetch_count, typed, 0);
 	Vector canonical(LogicalType::NUMERIC, fetch_count);
-	NumericBlob::Encode(typed, fetch_count, canonical);
+	ToCanonical(typed, fetch_count, canonical);
 	VectorOperations::Copy(canonical, result, fetch_count, 0, result_offset);
 }
 

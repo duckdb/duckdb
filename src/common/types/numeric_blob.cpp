@@ -487,11 +487,23 @@ struct FromMagnitude<uhugeint_t> {
 	}
 };
 
+//! Decodes into a fixed-size representation; a DECIMAL target also bounds the magnitude by its width
 template <class T>
-bool TryDecodeTyped(Vector &canonical, idx_t count, uint8_t scale, Vector &typed) {
+bool TryDecodeTyped(Vector &canonical, idx_t count, const LogicalType &type, Vector &typed) {
 	UnifiedVectorFormat vdata;
 	canonical.ToUnifiedFormat(vdata);
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+	uint8_t scale = 0;
+	bool bounded = false;
+	uhugeint_t limit;
+	if (type.id() == LogicalTypeId::DECIMAL) {
+		scale = DecimalType::GetScale(type);
+		auto width = DecimalType::GetWidth(type);
+		if (width < Hugeint::CACHED_POWERS_OF_TEN) {
+			bounded = true;
+			limit = PowerOfTen(width);
+		}
+	}
 	typed.SetVectorType(VectorType::FLAT_VECTOR);
 	auto writer = FlatVector::Writer<T>(typed, count);
 	for (idx_t i = 0; i < count; i++) {
@@ -507,7 +519,10 @@ bool TryDecodeTyped(Vector &canonical, idx_t count, uint8_t scale, Vector &typed
 		}
 		uhugeint_t magnitude;
 		T value;
-		if (!TryGetMagnitude(view, scale, magnitude) || !FromMagnitude<T>::Get(magnitude, view.negative, value)) {
+		if (!TryGetMagnitude(view, scale, magnitude) || (bounded && magnitude >= limit) ||
+		    !FromMagnitude<T>::Get(magnitude, view.negative, value)) {
+			// a value that does not fit: the rows written so far are abandoned
+			writer.Truncate();
 			return false;
 		}
 		writer.WriteValue(value);
@@ -556,7 +571,7 @@ bool NumericBlob::TryEncode(const char *text, idx_t size, string &result) {
 		begin++;
 	}
 	string all_digits;
-	idx_t integer_digits = 0;
+	int64_t integer_digits = 0;
 	bool seen_point = false;
 	for (idx_t i = begin; i < end; i++) {
 		auto c = text[i];
@@ -567,6 +582,14 @@ bool NumericBlob::TryEncode(const char *text, idx_t size, string &result) {
 			}
 		} else if (c == '.' && !seen_point) {
 			seen_point = true;
+		} else if ((c == 'e' || c == 'E') && !all_digits.empty()) {
+			// scientific notation moves the decimal point
+			int64_t exponent;
+			if (!NumericType::TryParseExponent(text, i + 1, end, exponent)) {
+				return false;
+			}
+			integer_digits += exponent;
+			break;
 		} else {
 			return false;
 		}
@@ -587,7 +610,7 @@ bool NumericBlob::TryEncode(const char *text, idx_t size, string &result) {
 		last--;
 	}
 	// the decimal exponent of the first significant digit: "123.45" -> 2, "0.0012" -> -3
-	int64_t adjusted = int64_t(integer_digits) - 1 - int64_t(first);
+	int64_t adjusted = integer_digits - 1 - int64_t(first);
 	if (adjusted < -NUMERIC_EXPONENT_BIAS || adjusted >= NUMERIC_EXPONENT_BIAS) {
 		return false;
 	}
@@ -696,7 +719,7 @@ string_t NumericBlob::AddUnscaled(Vector &result, hugeint_t unscaled, uint8_t sc
 	return StringVector::AddStringOrBlob(result, const_char_ptr_cast(buffer), length);
 }
 
-LogicalType NumericBlob::RangeType(Vector &canonical, idx_t count) {
+bool NumericBlob::TryRangeType(Vector &canonical, idx_t count, LogicalType &type) {
 	UnifiedVectorFormat vdata;
 	canonical.ToUnifiedFormat(vdata);
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
@@ -715,13 +738,19 @@ LogicalType NumericBlob::RangeType(Vector &canonical, idx_t count) {
 		found = true;
 	}
 	if (!found) {
-		return NumericType::DefaultType();
+		type = NumericType::DefaultType();
+		return true;
 	}
-	if (fractional_digits > Decimal::MAX_WIDTH_DECIMAL) {
-		throw OutOfRangeException("NUMERIC value needs %d digits, more than the maximum of %d",
-		                          integer_digits + fractional_digits, Decimal::MAX_WIDTH_DECIMAL);
+	return NumericType::TryForDigits(integer_digits, fractional_digits, type);
+}
+
+LogicalType NumericBlob::RangeType(Vector &canonical, idx_t count) {
+	LogicalType type;
+	if (!TryRangeType(canonical, count, type)) {
+		throw OutOfRangeException("NUMERIC values with no common representation: they need more than %d digits",
+		                          Decimal::MAX_WIDTH_DECIMAL);
 	}
-	return NumericType::ForDigits(integer_digits, NumericCast<uint8_t>(fractional_digits));
+	return type;
 }
 
 string NumericBlob::NormalizeText(const string &text) {
@@ -832,28 +861,28 @@ bool NumericBlob::TryDecode(Vector &canonical, idx_t count, Vector &typed) {
 		typed.SetVectorType(VectorType::CONSTANT_VECTOR);
 		return true;
 	}
-	auto scale = ScaleOf(typed.GetType());
-	switch (typed.GetType().InternalType()) {
+	auto &type = typed.GetType();
+	switch (type.InternalType()) {
 	case PhysicalType::INT8:
-		return TryDecodeTyped<int8_t>(canonical, count, scale, typed);
+		return TryDecodeTyped<int8_t>(canonical, count, type, typed);
 	case PhysicalType::INT16:
-		return TryDecodeTyped<int16_t>(canonical, count, scale, typed);
+		return TryDecodeTyped<int16_t>(canonical, count, type, typed);
 	case PhysicalType::INT32:
-		return TryDecodeTyped<int32_t>(canonical, count, scale, typed);
+		return TryDecodeTyped<int32_t>(canonical, count, type, typed);
 	case PhysicalType::INT64:
-		return TryDecodeTyped<int64_t>(canonical, count, scale, typed);
+		return TryDecodeTyped<int64_t>(canonical, count, type, typed);
 	case PhysicalType::INT128:
-		return TryDecodeTyped<hugeint_t>(canonical, count, scale, typed);
+		return TryDecodeTyped<hugeint_t>(canonical, count, type, typed);
 	case PhysicalType::UINT8:
-		return TryDecodeTyped<uint8_t>(canonical, count, scale, typed);
+		return TryDecodeTyped<uint8_t>(canonical, count, type, typed);
 	case PhysicalType::UINT16:
-		return TryDecodeTyped<uint16_t>(canonical, count, scale, typed);
+		return TryDecodeTyped<uint16_t>(canonical, count, type, typed);
 	case PhysicalType::UINT32:
-		return TryDecodeTyped<uint32_t>(canonical, count, scale, typed);
+		return TryDecodeTyped<uint32_t>(canonical, count, type, typed);
 	case PhysicalType::UINT64:
-		return TryDecodeTyped<uint64_t>(canonical, count, scale, typed);
+		return TryDecodeTyped<uint64_t>(canonical, count, type, typed);
 	case PhysicalType::UINT128:
-		return TryDecodeTyped<uhugeint_t>(canonical, count, scale, typed);
+		return TryDecodeTyped<uhugeint_t>(canonical, count, type, typed);
 	default:
 		return false;
 	}

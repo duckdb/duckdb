@@ -125,7 +125,7 @@ static LogicalType DecimalForDigits(idx_t integer_digits, uint8_t scale) {
 	return LogicalType::DECIMAL(NumericCast<uint8_t>(width), scale);
 }
 
-LogicalType NumericType::Widen(const LogicalType &left, const LogicalType &right) {
+bool NumericType::TryWiden(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	if (!IsExact(left)) {
 		throw BinderException(NotExactMessage(left));
 	}
@@ -135,12 +135,48 @@ LogicalType NumericType::Widen(const LogicalType &left, const LogicalType &right
 	auto left_rank = SignedIntegerRank(left);
 	auto right_rank = SignedIntegerRank(right);
 	if (left_rank > 0 && right_rank > 0) {
-		return SignedIntegerType(MaxValue(left_rank, right_rank));
+		result = SignedIntegerType(MaxValue(left_rank, right_rank));
+		return true;
 	}
 	uint8_t left_digits, left_scale, right_digits, right_scale;
 	GetDigits(left, left_digits, left_scale);
 	GetDigits(right, right_digits, right_scale);
-	return DecimalForDigits(MaxValue(left_digits, right_digits), MaxValue(left_scale, right_scale));
+	return TryForDigits(MaxValue(left_digits, right_digits), MaxValue(left_scale, right_scale), result);
+}
+
+LogicalType NumericType::Widen(const LogicalType &left, const LogicalType &right) {
+	LogicalType result;
+	if (!TryWiden(left, right, result)) {
+		throw OutOfRangeException("NUMERIC values of %s and %s have no common representation: they need more than %d "
+		                          "digits",
+		                          left.ToString(), right.ToString(), Decimal::MAX_WIDTH_DECIMAL);
+	}
+	return result;
+}
+
+LogicalType NumericType::CanonicalStorageType() {
+	return LogicalType::BLOB;
+}
+
+bool NumericType::IsCanonicalStorage(const LogicalType &type) {
+	return type.id() == LogicalTypeId::BLOB;
+}
+
+bool NumericType::TryForRange(const Value &min, const Value &max, uint8_t scale, LogicalType &result) {
+	if (min.IsNull() || max.IsNull()) {
+		result = DefaultType();
+		return true;
+	}
+	if (scale == 0) {
+		auto min_hugeint = min.DefaultTryCastAs(LogicalType::HUGEINT);
+		auto max_hugeint = max.DefaultTryCastAs(LogicalType::HUGEINT);
+		if (min_hugeint && max_hugeint) {
+			result = ForUnscaledRange(min_hugeint->GetValue<hugeint_t>(), max_hugeint->GetValue<hugeint_t>(), 0);
+			return true;
+		}
+	}
+	auto integer_digits = MaxValue(IntegerDigits(min), IntegerDigits(max));
+	return TryForDigits(integer_digits, scale, result);
 }
 
 uint8_t NumericType::IntegerDigits(const Value &value) {
@@ -170,32 +206,13 @@ uint8_t NumericType::IntegerDigits(const Value &value) {
 }
 
 LogicalType NumericType::ForRange(const Value &min, const Value &max, uint8_t scale) {
-	if (min.IsNull() || max.IsNull()) {
-		return DefaultType();
+	LogicalType result;
+	if (!TryForRange(min, max, scale, result)) {
+		throw OutOfRangeException("NUMERIC values %s and %s have no common representation: they need more than %d "
+		                          "digits",
+		                          min.ToString(), max.ToString(), Decimal::MAX_WIDTH_DECIMAL);
 	}
-	if (scale == 0) {
-		auto min_hugeint = min.DefaultTryCastAs(LogicalType::HUGEINT);
-		auto max_hugeint = max.DefaultTryCastAs(LogicalType::HUGEINT);
-		if (min_hugeint && max_hugeint) {
-			auto lo = min_hugeint->GetValue<hugeint_t>();
-			auto hi = max_hugeint->GetValue<hugeint_t>();
-			if (lo >= NumericLimits<int8_t>::Minimum() && hi <= NumericLimits<int8_t>::Maximum()) {
-				return LogicalType::TINYINT;
-			}
-			if (lo >= NumericLimits<int16_t>::Minimum() && hi <= NumericLimits<int16_t>::Maximum()) {
-				return LogicalType::SMALLINT;
-			}
-			if (lo >= NumericLimits<int32_t>::Minimum() && hi <= NumericLimits<int32_t>::Maximum()) {
-				return LogicalType::INTEGER;
-			}
-			if (lo >= NumericLimits<int64_t>::Minimum() && hi <= NumericLimits<int64_t>::Maximum()) {
-				return LogicalType::BIGINT;
-			}
-			return LogicalType::HUGEINT;
-		}
-	}
-	auto integer_digits = MaxValue(IntegerDigits(min), IntegerDigits(max));
-	return DecimalForDigits(integer_digits, scale);
+	return result;
 }
 
 idx_t NumericType::Digits(hugeint_t value) {
@@ -338,7 +355,34 @@ LogicalType NumericType::DecimalsAsNumeric(const LogicalType &type) {
 	});
 }
 
-//! Counts the digits of a number written as [-]digits[.digits] (surrounding spaces allowed); false for other text
+//! Parses the exponent of a number written in scientific notation, starting after the 'e'; false for other text
+bool NumericType::TryParseExponent(const char *text, idx_t pos, idx_t end, int64_t &exponent) {
+	bool negative = false;
+	if (pos < end && (text[pos] == '-' || text[pos] == '+')) {
+		negative = text[pos] == '-';
+		pos++;
+	}
+	if (pos >= end) {
+		return false;
+	}
+	exponent = 0;
+	for (; pos < end; pos++) {
+		if (!StringUtil::CharacterIsDigit(text[pos])) {
+			return false;
+		}
+		exponent = exponent * 10 + (text[pos] - '0');
+		if (exponent > NumericLimits<int32_t>::Maximum()) {
+			return false;
+		}
+	}
+	if (negative) {
+		exponent = -exponent;
+	}
+	return true;
+}
+
+//! Counts the digits of a number written as [-]digits[.digits][e[-]digits] (surrounding spaces allowed): the
+//! significant integer digits and the fractional digits the value has in plain decimal notation; false for other text
 static bool CountDigits(const char *text, idx_t size, idx_t &begin, idx_t &end, idx_t &integer_digits,
                         idx_t &fractional_digits) {
 	begin = 0;
@@ -356,6 +400,7 @@ static bool CountDigits(const char *text, idx_t size, idx_t &begin, idx_t &end, 
 	idx_t digits = 0;
 	integer_digits = 0;
 	fractional_digits = 0;
+	int64_t exponent = 0;
 	bool seen_point = false;
 	bool leading_zeros = true;
 	for (; pos < end; pos++) {
@@ -370,11 +415,103 @@ static bool CountDigits(const char *text, idx_t size, idx_t &begin, idx_t &end, 
 			}
 		} else if (c == '.' && !seen_point) {
 			seen_point = true;
+		} else if ((c == 'e' || c == 'E') && digits > 0) {
+			if (!NumericType::TryParseExponent(text, pos + 1, end, exponent)) {
+				return false;
+			}
+			break;
 		} else {
 			return false;
 		}
 	}
-	return digits > 0;
+	if (digits == 0) {
+		return false;
+	}
+	// the exponent moves the decimal point: a digit count that may exceed the digits of the value is harmless
+	if (exponent > 0) {
+		auto shift = idx_t(exponent);
+		fractional_digits -= MinValue(fractional_digits, shift);
+		integer_digits += shift;
+	} else if (exponent < 0) {
+		auto shift = idx_t(-exponent);
+		integer_digits -= MinValue(integer_digits, shift);
+		fractional_digits += shift;
+	}
+	return true;
+}
+
+bool NumericType::TryCountDigits(const char *text, idx_t size, idx_t &integer_digits, idx_t &fractional_digits) {
+	idx_t begin, end;
+	return CountDigits(text, size, begin, end, integer_digits, fractional_digits);
+}
+
+bool NumericType::HasExponent(const char *text, idx_t size) {
+	for (idx_t i = 0; i < size; i++) {
+		if (text[i] == 'e' || text[i] == 'E') {
+			return true;
+		}
+	}
+	return false;
+}
+
+string NumericType::ExpandExponent(const char *text, idx_t size) {
+	// [-]digits[.digits]e[-]digits -> [-]digits[.digits]: the text was validated by CountDigits
+	idx_t pos = 0;
+	idx_t end = size;
+	while (pos < end && StringUtil::CharacterIsSpace(text[pos])) {
+		pos++;
+	}
+	while (end > pos && StringUtil::CharacterIsSpace(text[end - 1])) {
+		end--;
+	}
+	string result;
+	if (pos < end && (text[pos] == '-' || text[pos] == '+')) {
+		if (text[pos] == '-') {
+			result.push_back('-');
+		}
+		pos++;
+	}
+	string digits;
+	int64_t point = -1;
+	int64_t exponent = 0;
+	for (; pos < end; pos++) {
+		auto c = text[pos];
+		if (c == '.') {
+			point = NumericCast<int64_t>(digits.size());
+		} else if (c == 'e' || c == 'E') {
+			TryParseExponent(text, pos + 1, end, exponent);
+			break;
+		} else {
+			digits.push_back(c);
+		}
+	}
+	if (point < 0) {
+		point = NumericCast<int64_t>(digits.size());
+	}
+	// the position of the decimal point in the digits after applying the exponent
+	point += exponent;
+	if (point <= 0) {
+		result += "0.";
+		result.append(idx_t(-point), '0');
+		result += digits;
+	} else if (idx_t(point) >= digits.size()) {
+		result += digits;
+		result.append(idx_t(point) - digits.size(), '0');
+	} else {
+		result.append(digits, 0, idx_t(point));
+		result.push_back('.');
+		result.append(digits, idx_t(point), string::npos);
+	}
+	return result;
+}
+
+bool NumericType::TryForDigits(idx_t integer_digits, idx_t fractional_digits, LogicalType &type) {
+	if (fractional_digits > Decimal::MAX_WIDTH_DECIMAL ||
+	    integer_digits + fractional_digits > Decimal::MAX_WIDTH_DECIMAL) {
+		return false;
+	}
+	type = ForDigits(integer_digits, NumericCast<uint8_t>(fractional_digits));
+	return true;
 }
 
 bool NumericType::TryParseLiteral(const string &text, Value &result) {
@@ -388,8 +525,9 @@ bool NumericType::TryParseLiteral(const string &text, Value &result) {
 		                          Decimal::MAX_WIDTH_DECIMAL);
 	}
 	auto scale = NumericCast<uint8_t>(fractional_digits);
-	auto decimal = Value(text.substr(begin, end - begin))
-	                   .DefaultTryCastAs(LogicalType::DECIMAL(NumericCast<uint8_t>(width), scale));
+	auto plain = HasExponent(text.c_str(), text.size()) ? ExpandExponent(text.c_str(), text.size())
+	                                                    : text.substr(begin, end - begin);
+	auto decimal = Value(plain).DefaultTryCastAs(LogicalType::DECIMAL(NumericCast<uint8_t>(width), scale));
 	if (!decimal) {
 		return false;
 	}
@@ -409,38 +547,6 @@ LogicalType NumericType::AsText(const LogicalType &type) {
 	return TypeVisitor::VisitReplace(type, [](const LogicalType &child) {
 		return child.id() == LogicalTypeId::NUMERIC ? LogicalType::VARCHAR : child;
 	});
-}
-
-LogicalType NumericType::TextType(const Vector &vector, idx_t count) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::VARCHAR);
-	UnifiedVectorFormat vdata;
-	vector.ToUnifiedFormat(vdata);
-	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
-	idx_t integer_digits = 0;
-	idx_t fractional_digits = 0;
-	bool found = false;
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (!vdata.validity.RowIsValid(idx)) {
-			continue;
-		}
-		idx_t begin, end, value_integer_digits, value_fractional_digits;
-		if (!CountDigits(data[idx].GetData(), data[idx].GetSize(), begin, end, value_integer_digits,
-		                 value_fractional_digits)) {
-			throw ConversionException("Cannot convert '%s' to NUMERIC: not an exact number", data[idx].GetString());
-		}
-		found = true;
-		integer_digits = MaxValue(integer_digits, value_integer_digits);
-		fractional_digits = MaxValue(fractional_digits, value_fractional_digits);
-	}
-	if (!found) {
-		return DefaultType();
-	}
-	if (fractional_digits > Decimal::MAX_WIDTH_DECIMAL) {
-		throw OutOfRangeException("NUMERIC value needs %d digits, more than the maximum of %d",
-		                          integer_digits + fractional_digits, Decimal::MAX_WIDTH_DECIMAL);
-	}
-	return ForDigits(integer_digits, NumericCast<uint8_t>(fractional_digits));
 }
 
 static LogicalType ResolveCastTargetInternal(const LogicalType &source, const LogicalType &target) {

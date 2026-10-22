@@ -20,7 +20,10 @@
         "test/sql/types/numeric/numeric_type_widening.test",
         "test/sql/types/numeric/test_empty_numeric.test",
         "test/sql/types/numeric/numeric_type_arithmetic.test",
-        "test/sql/types/numeric/numeric_type_nested.test"
+        "test/sql/types/numeric/numeric_type_nested.test",
+        "test/sql/types/numeric/numeric_no_common_representation.test",
+        "test/sql/types/numeric/numeric_kernel_contract.test",
+        "test/sql/types/numeric/numeric_casts.test"
       ]
     },
     {

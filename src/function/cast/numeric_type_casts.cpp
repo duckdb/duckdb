@@ -1,6 +1,9 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/numeric_blob.hpp"
 #include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -22,27 +25,85 @@ static bool CastExactToNumeric(Vector &source, Vector &result, idx_t count, Cast
 	return true;
 }
 
-//! Text is parsed into the representation that holds every value of the vector
+//! Text is parsed into the representation that holds every number of the vector; rows that are not exact numbers
+//! fail on their own, and numbers with no common representation are kept as canonical values
 static bool CastTextToNumeric(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	if (count == 0) {
 		return true;
 	}
-	LogicalType type;
-	try {
-		type = NumericType::TextType(source, count);
-	} catch (ConversionException &ex) {
-		if (!parameters.error_message) {
-			throw;
+	UnifiedVectorFormat vdata;
+	source.ToUnifiedFormat(vdata);
+	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+	// the rows that are numbers, referencing the source text
+	Vector numbers(LogicalType::VARCHAR, count);
+	StringVector::AddHeapReference(numbers, source);
+	auto number_data = FlatVector::GetDataMutable<string_t>(numbers);
+	auto &number_validity = FlatVector::ValidityMutable(numbers);
+	idx_t integer_digits = 0;
+	idx_t fractional_digits = 0;
+	bool found = false;
+	bool success = true;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (!vdata.validity.RowIsValid(idx)) {
+			number_validity.SetInvalid(i);
+			continue;
 		}
-		HandleCastError::AssignError(ex.what(), parameters);
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, count_t(count));
-		return false;
+		auto &text = data[idx];
+		idx_t value_integer_digits, value_fractional_digits;
+		if (!NumericType::TryCountDigits(text.GetData(), text.GetSize(), value_integer_digits,
+		                                 value_fractional_digits)) {
+			HandleCastError::AssignError(
+			    StringUtil::Format("Cannot convert '%s' to NUMERIC: not an exact number", text.GetString()),
+			    parameters);
+			number_validity.SetInvalid(i);
+			success = false;
+			continue;
+		}
+		if (value_integer_digits + value_fractional_digits > Decimal::MAX_WIDTH_DECIMAL) {
+			HandleCastError::AssignError(
+			    StringUtil::Format("NUMERIC value needs %d digits, more than the maximum of %d",
+			                       value_integer_digits + value_fractional_digits, Decimal::MAX_WIDTH_DECIMAL),
+			    parameters);
+			number_validity.SetInvalid(i);
+			success = false;
+			continue;
+		}
+		if (NumericType::HasExponent(text.GetData(), text.GetSize())) {
+			// the decimal casts do not take every exponent: plain decimal notation
+			auto plain = NumericType::ExpandExponent(text.GetData(), text.GetSize());
+			number_data[i] = StringVector::AddString(numbers, plain);
+		} else {
+			number_data[i] = text;
+		}
+		integer_digits = MaxValue(integer_digits, value_integer_digits);
+		fractional_digits = MaxValue(fractional_digits, value_fractional_digits);
+		found = true;
+	}
+	LogicalType type = NumericType::DefaultType();
+	if (found && !NumericType::TryForDigits(integer_digits, fractional_digits, type)) {
+		// no representation holds every number: canonical values
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		auto writer = FlatVector::Writer<string_t>(result, count);
+		string blob;
+		for (idx_t i = 0; i < count; i++) {
+			if (!number_validity.RowIsValid(i)) {
+				writer.WriteNull();
+				continue;
+			}
+			if (!NumericBlob::TryEncode(number_data[i].GetData(), number_data[i].GetSize(), blob)) {
+				throw InternalException("Number '%s' does not encode as NUMERIC", number_data[i].GetString());
+			}
+			writer.WriteValue(StringVector::AddStringOrBlob(result, blob.c_str(), blob.size()));
+		}
+		return success;
 	}
 	Vector typed(type, count);
-	VectorOperations::DefaultCast(source, typed, count, false);
+	if (!VectorOperations::DefaultTryCast(numbers, typed, count, parameters.error_message, parameters.strict)) {
+		success = false;
+	}
 	result.Shred(typed, count);
-	return true;
+	return success;
 }
 
 //! Floating point values take their shortest round-trip decimal text (NaN and infinities are not exact numbers)
@@ -224,10 +285,46 @@ static bool CastNumericToTyped(Vector &source, Vector &result, idx_t count, Cast
 	if (NumericType::IsExact(result.GetType()) && NumericBlob::TryDecode(source, count, result)) {
 		return true;
 	}
-	// otherwise through their decimal text, which reports the values that do not fit
-	Vector text(LogicalType::VARCHAR, count);
-	CastNumericToVarchar(source, text, count, parameters);
-	return VectorOperations::DefaultTryCast(text, result, count, parameters.error_message, parameters.strict);
+	// otherwise through the representation that holds them, so that the conversion follows the numeric cast
+	// semantics and reports the values that do not fit
+	LogicalType type;
+	if (NumericBlob::TryRangeType(source, count, type)) {
+		Vector typed(type, count);
+		NumericBlob::Decode(source, count, typed);
+		return VectorOperations::DefaultTryCast(typed, result, count, parameters.error_message, parameters.strict);
+	}
+	// values with no common representation convert one at a time
+	UnifiedVectorFormat vdata;
+	source.ToUnifiedFormat(vdata);
+	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto &target = result.GetType();
+	bool success = true;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (!vdata.validity.RowIsValid(idx)) {
+			FlatVector::SetNull(result, i, true);
+			continue;
+		}
+		auto text = NumericBlob::ToText(data[idx]);
+		Value value;
+		if (!NumericType::TryParseLiteral(text, value)) {
+			throw InternalException("NUMERIC value '%s' does not parse", text);
+		}
+		string error;
+		auto cast = value.DefaultTryCastAs(target, &error, parameters.strict);
+		if (!cast) {
+			HandleCastError::AssignError(
+			    error.empty() ? StringUtil::Format("Cannot convert NUMERIC value %s to %s", text, target.ToString())
+			                  : error,
+			    parameters);
+			FlatVector::SetNull(result, i, true);
+			success = false;
+			continue;
+		}
+		result.SetValue(i, *cast);
+	}
+	return success;
 }
 
 BoundCastInfo DefaultCasts::FromNumericCastSwitch(BindCastInput &input, const LogicalType &source,

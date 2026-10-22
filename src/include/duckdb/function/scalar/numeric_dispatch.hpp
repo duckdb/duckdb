@@ -20,6 +20,10 @@ enum class NumericDispatchKind : uint8_t {
 	SUBTRACT,
 	//! The representation that holds every possible product of the operands
 	MULTIPLY,
+	//! The representation that holds every absolute value of the operand
+	ABS,
+	//! Rounding to whole numbers: a whole number is its own result, a decimal rounds in its representation
+	ROUND,
 	//! The representations of the operands as they are
 	GENERIC
 };
@@ -27,6 +31,11 @@ enum class NumericDispatchKind : uint8_t {
 //! NUMERIC overloads of existing functions: at execution the NUMERIC arguments are taken in their run-time
 //! representation, the typed overload of the function is bound for that signature (and cached) and executed, and an
 //! exact result becomes a NUMERIC vector in the narrowest representation that holds its values.
+//!
+//! The kernel contract: an overload returning NUMERIC must bind, for every representation, a kernel that computes the
+//! exact result (dispatch refuses inexact kernels), and the dispatch kind sizes the representation the kernel runs in
+//! so that no result can overflow it. Unsigned representations run their kernels in the signed representation that
+//! holds them.
 struct NumericDispatch {
 	DUCKDB_API static ScalarFunction GetFunction(const string &name, vector<LogicalType> arguments,
 	                                             LogicalType return_type, NumericDispatchKind kind);

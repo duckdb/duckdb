@@ -140,21 +140,31 @@ SELECT abs('-1.5'::DECIMAL(40,1)), abs('1.5'::DECIMAL(40,1))
 ----
 1.5	1.5
 
-# functions without a wide implementation compute through DOUBLE
+# rounding is exact, on the BIGNUM unscaled values
 query IIII
 SELECT round('1.555'::DECIMAL(40,3), 2), ceil('1.555'::DECIMAL(40,3)), floor('-1.555'::DECIMAL(40,3)), trunc('1.555'::DECIMAL(40,3))
 ----
-1.56	2.0	-2.0	1.0
+1.56	2	-2	1
 
 query IIII
 SELECT typeof(round('1.555'::DECIMAL(40,3), 2)), typeof(round('1.5'::DECIMAL(40,1))), typeof(ceil('1.5'::DECIMAL(40,1))), typeof(trunc('1.5'::DECIMAL(40,1), 0))
 ----
-DOUBLE	DOUBLE	DOUBLE	DOUBLE
+DECIMAL(40,2)	DECIMAL(40,0)	DECIMAL(40,0)	DECIMAL(40,0)
 
 query IIII
 SELECT round('1.5'::DECIMAL(40,1)), round_even('2.5'::DECIMAL(40,1), 0), trunc('-1.5'::DECIMAL(40,1), 0), round('1234.5'::DECIMAL(40,1), -2)
 ----
-2.0	2.0	-1.0	1200.0
+2	2	-1	1200
+
+query IIII
+SELECT round_even('3.5'::DECIMAL(40,1), 0), round('-2.5'::DECIMAL(40,1)), round('99'::DECIMAL(40,0), -2), typeof(round('99'::DECIMAL(40,0), -2))
+----
+4	-3	100	DECIMAL(41,0)
+
+query II
+SELECT round('12345678901234567890123456789012345678901234567890.125'::DECIMAL(53,3), 1), ceil('-0.001'::DECIMAL(40,3))
+----
+12345678901234567890123456789012345678901234567890.1	0
 
 query III
 SELECT avg(x), median(x), quantile_cont(x, 0.5) FROM (VALUES ('1'::DECIMAL(40,3)), ('2'::DECIMAL(40,3)), ('3'::DECIMAL(40,3))) t(x)
@@ -179,7 +189,7 @@ SELECT avg(x) FROM (VALUES ('123456789012345678901234567890123456789012345678901
 query I
 SELECT round('123456789012345678901234567890.5'::DECIMAL(40,1))
 ----
-1.2345678901234568e+29
+123456789012345678901234567891
 
 # discrete quantiles stay exact
 query II

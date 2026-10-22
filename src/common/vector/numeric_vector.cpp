@@ -52,7 +52,11 @@ bool NumericVector::TryNativePair(const Vector &left, const Vector &right, uniqu
 	if (!TryGetTyped(left, left_typed) || !TryGetTyped(right, right_typed)) {
 		return false;
 	}
-	auto common = NumericType::Widen(left_typed->GetType(), right_typed->GetType());
+	LogicalType common;
+	if (!NumericType::TryWiden(left_typed->GetType(), right_typed->GetType(), common)) {
+		// no representation holds both sides: they compare as canonical values
+		return false;
+	}
 	left_typed = CastTyped(std::move(left_typed), common);
 	right_typed = CastTyped(std::move(right_typed), common);
 	// a constant carries the row count of its partner

@@ -169,8 +169,54 @@ bool TryNegate(hugeint_t value, hugeint_t &result) {
 	return true;
 }
 
+bool IsArithmetic(NumericDispatchKind kind) {
+	switch (kind) {
+	case NumericDispatchKind::ADD:
+	case NumericDispatchKind::SUBTRACT:
+	case NumericDispatchKind::MULTIPLY:
+		return true;
+	default:
+		return false;
+	}
+}
+
+//! An operand in a signed representation: the kernels of the functions exist for those
+unique_ptr<Vector> SignedRepresentation(unique_ptr<Vector> operand, idx_t count) {
+	auto &type = operand->GetType();
+	if (!NumericType::IsExact(type) || !type.IsUnsigned()) {
+		return operand;
+	}
+	auto signed_type = NumericType::Widen(type, LogicalType::TINYINT);
+	auto result = make_uniq<Vector>(signed_type, count);
+	VectorOperations::DefaultCast(*operand, *result, count, true);
+	if (operand->GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+	return result;
+}
+
 //! The range of every possible result of the operation over the operand ranges; false beyond 128 bits
 bool TryResultRange(NumericDispatchKind kind, vector<ExactRange> ranges, ExactRange &result) {
+	if (kind == NumericDispatchKind::ABS) {
+		result.scale = ranges[0].scale;
+		auto &range = ranges[0];
+		if (range.min >= 0) {
+			result = range;
+			return true;
+		}
+		hugeint_t negated_min;
+		if (!TryNegate(range.min, negated_min)) {
+			return false;
+		}
+		if (range.max <= 0) {
+			result.min = -range.max;
+			result.max = negated_min;
+			return true;
+		}
+		result.min = 0;
+		result.max = MaxValue(negated_min, range.max);
+		return true;
+	}
 	if (ranges.size() == 1) {
 		result.scale = ranges[0].scale;
 		return TryNegate(ranges[0].max, result.min) && TryNegate(ranges[0].min, result.max);
@@ -208,6 +254,18 @@ bool TryResultRange(NumericDispatchKind kind, vector<ExactRange> ranges, ExactRa
 }
 
 //! The result representation sized by the digits of the operand representations (beyond 128 bits)
+//! A representation sized by digits is capped at the widest DECIMAL: the wide kernels then check every result for
+//! overflow, as the binder's own clamped wide decimal arithmetic does
+LogicalType ClampedForDigits(idx_t integer_digits, uint8_t scale) {
+	if (integer_digits + scale > Decimal::MAX_WIDTH_DECIMAL) {
+		if (scale >= Decimal::MAX_WIDTH_DECIMAL) {
+			throw OutOfRangeException("NUMERIC result needs more than %d digits", Decimal::MAX_WIDTH_DECIMAL);
+		}
+		integer_digits = Decimal::MAX_WIDTH_DECIMAL - scale;
+	}
+	return NumericType::ForDigits(integer_digits, scale);
+}
+
 LogicalType ResultTypeByDigits(NumericDispatchKind kind, vector<unique_ptr<Vector>> &typed) {
 	uint8_t left_digits, left_scale;
 	GetOperandDigits(typed[0]->GetType(), left_digits, left_scale);
@@ -221,9 +279,9 @@ LogicalType ResultTypeByDigits(NumericDispatchKind kind, vector<unique_ptr<Vecto
 		if (scale > Decimal::MAX_WIDTH_DECIMAL) {
 			throw OutOfRangeException("NUMERIC multiplication needs more than %d digits", Decimal::MAX_WIDTH_DECIMAL);
 		}
-		return NumericType::ForDigits(idx_t(left_digits) + right_digits, NumericCast<uint8_t>(scale));
+		return ClampedForDigits(idx_t(left_digits) + right_digits, NumericCast<uint8_t>(scale));
 	}
-	return NumericType::ForDigits(idx_t(MaxValue(left_digits, right_digits)) + 1, MaxValue(left_scale, right_scale));
+	return ClampedForDigits(idx_t(MaxValue(left_digits, right_digits)) + 1, MaxValue(left_scale, right_scale));
 }
 
 //! The representations the operands are cast to so that the typed operator of the result representation produces
@@ -367,7 +425,7 @@ struct NumericDispatchState : public FunctionLocalState {
 	vector<unique_ptr<NumericKernel>> kernels;
 
 	NumericKernel &Get(ClientContext &context, const Identifier &name, const vector<LogicalType> &types,
-	                   const vector<Value> &constants, bool is_operator) {
+	                   const vector<Value> &constants, bool is_operator, bool exact_result) {
 		for (auto &kernel : kernels) {
 			if (kernel->types == types && SameConstants(kernel->constants, constants)) {
 				return *kernel;
@@ -390,6 +448,17 @@ struct NumericDispatchState : public FunctionLocalState {
 		    binder.BindScalarFunction(Identifier(DEFAULT_SCHEMA), name, std::move(children), error, is_operator);
 		if (!kernel->expression) {
 			error.Throw();
+		}
+		if (exact_result && !NumericType::IsExact(kernel->expression->GetReturnType())) {
+			// an inexact kernel (e.g. a DOUBLE overload) cannot produce the exact NUMERIC result
+			string representations;
+			for (idx_t i = 0; i < types.size(); i++) {
+				representations += (i > 0 ? ", " : "") + types[i].ToString();
+			}
+			throw NotImplementedException("%s(%s) has no exact kernel for NUMERIC values in this representation (the "
+			                              "%s overload returns %s)",
+			                              name.GetIdentifierName(), representations, name.GetIdentifierName(),
+			                              kernel->expression->GetReturnType().ToString());
 		}
 		if (is_operator) {
 			DisableOverflowChecks(context, kernel->expression->Cast<BoundFunctionExpression>());
@@ -563,6 +632,87 @@ void FinishResult(const LogicalType &return_type, Vector &typed_result, idx_t co
 }
 
 template <NumericDispatchKind KIND>
+void NumericDispatchFunction(DataChunk &args, ExpressionState &state, Vector &result);
+
+//! Whether an argument holds canonical NUMERIC values (not a constant) that have no common representation
+bool HasNoCommonRepresentation(Vector &arg, idx_t count) {
+	if (arg.GetType().id() != LogicalTypeId::NUMERIC || arg.GetVectorType() == VectorType::SHREDDED_VECTOR ||
+	    arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		return false;
+	}
+	LogicalType type;
+	return !NumericBlob::TryRangeType(arg, count, type);
+}
+
+//! Values with no common representation are processed in groups of rows that have one, formed greedily in row order
+template <NumericDispatchKind KIND>
+void DispatchInGroups(DataChunk &args, ExpressionState &state, Vector &result) {
+	idx_t count = args.size();
+	auto column_count = args.ColumnCount();
+	vector<UnifiedVectorFormat> formats(column_count);
+	vector<bool> canonical(column_count, false);
+	for (idx_t c = 0; c < column_count; c++) {
+		auto &arg = args.data[c];
+		canonical[c] = arg.GetType().id() == LogicalTypeId::NUMERIC &&
+		               arg.GetVectorType() != VectorType::SHREDDED_VECTOR &&
+		               arg.GetVectorType() != VectorType::CONSTANT_VECTOR;
+		if (canonical[c]) {
+			arg.ToUnifiedFormat(formats[c]);
+		}
+	}
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	SelectionVector group(count);
+	idx_t group_size = 0;
+	idx_t group_integer_digits = 0;
+	idx_t group_fractional_digits = 0;
+	auto flush = [&]() {
+		if (group_size == 0) {
+			return;
+		}
+		DataChunk sliced;
+		sliced.InitializeEmpty(args.GetTypes());
+		sliced.Slice(args, group, group_size);
+		Vector group_result(result.GetType(), group_size);
+		NumericDispatchFunction<KIND>(sliced, state, group_result);
+		for (idx_t i = 0; i < group_size; i++) {
+			result.SetValue(group.get_index(i), group_result.GetValue(i));
+		}
+		group_size = 0;
+		group_integer_digits = 0;
+		group_fractional_digits = 0;
+	};
+	for (idx_t i = 0; i < count; i++) {
+		idx_t row_integer_digits = 0;
+		idx_t row_fractional_digits = 0;
+		for (idx_t c = 0; c < column_count; c++) {
+			if (!canonical[c]) {
+				continue;
+			}
+			auto idx = formats[c].sel->get_index(i);
+			if (!formats[c].validity.RowIsValid(idx)) {
+				continue;
+			}
+			idx_t integer_digits, fractional_digits;
+			NumericBlob::Digits(UnifiedVectorFormat::GetData<string_t>(formats[c])[idx], integer_digits,
+			                    fractional_digits);
+			row_integer_digits = MaxValue(row_integer_digits, integer_digits);
+			row_fractional_digits = MaxValue(row_fractional_digits, fractional_digits);
+		}
+		auto integer_digits = MaxValue(group_integer_digits, row_integer_digits);
+		auto fractional_digits = MaxValue(group_fractional_digits, row_fractional_digits);
+		if (group_size > 0 && integer_digits + fractional_digits > Decimal::MAX_WIDTH_DECIMAL) {
+			flush();
+			integer_digits = row_integer_digits;
+			fractional_digits = row_fractional_digits;
+		}
+		group.set_index(group_size++, i);
+		group_integer_digits = integer_digits;
+		group_fractional_digits = fractional_digits;
+	}
+	flush();
+}
+
+template <NumericDispatchKind KIND>
 void NumericDispatchFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &context = state.GetContext();
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
@@ -571,6 +721,10 @@ void NumericDispatchFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	vector<unique_ptr<Vector>> typed;
 	for (auto &arg : args.data) {
+		if (HasNoCommonRepresentation(arg, count)) {
+			DispatchInGroups<KIND>(args, state, result);
+			return;
+		}
 		typed.push_back(TypedArgument(arg, count));
 	}
 	vector<Value> constants(typed.size(), Value(LogicalType(LogicalTypeId::INVALID)));
@@ -586,7 +740,33 @@ void NumericDispatchFunction(DataChunk &args, ExpressionState &state, Vector &re
 		}
 	}
 	auto &name = func_expr.Function().GetName();
-	bool is_operator = KIND != NumericDispatchKind::GENERIC;
+	auto &return_type = func_expr.GetReturnType();
+	bool exact_result = return_type.id() == LogicalTypeId::NUMERIC;
+	bool is_operator = IsArithmetic(KIND);
+
+	if (KIND == NumericDispatchKind::ROUND && typed[0]->GetType().IsIntegral()) {
+		if (typed.size() == 1) {
+			// a whole number rounds to itself, in its own representation
+			result.Reference(args.data[0]);
+			return;
+		}
+		// rounding to a negative precision can carry into one more digit: the kernel runs one digit wider
+		uint8_t digits, scale;
+		NumericType::GetDigits(typed[0]->GetType(), digits, scale);
+		auto wider = NumericType::ForDigits(idx_t(digits) + 1, 0);
+		auto widened = make_uniq<Vector>(wider, count);
+		VectorOperations::DefaultCast(*typed[0], *widened, count, true);
+		if (typed[0]->GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			widened->SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
+		typed[0] = std::move(widened);
+	}
+	if (!is_operator) {
+		// the kernels of the functions exist for the signed representations
+		for (auto &operand : typed) {
+			operand = SignedRepresentation(std::move(operand), count);
+		}
+	}
 
 	vector<LogicalType> kernel_types;
 	for (auto &operand : typed) {
@@ -597,10 +777,10 @@ void NumericDispatchFunction(DataChunk &args, ExpressionState &state, Vector &re
 	bool resolved = false;
 	vector<ExactRange> ranges(typed.size());
 	bool have_ranges = false;
-	if (KIND == NumericDispatchKind::GENERIC) {
-		kernel = lstate.Get(context, name, kernel_types, constants, is_operator);
+	if (KIND == NumericDispatchKind::GENERIC || KIND == NumericDispatchKind::ROUND) {
+		kernel = lstate.Get(context, name, kernel_types, constants, is_operator, exact_result);
 	} else {
-		// size the kernel from the values the operands take: the operator of the operand representations when its
+		// size the kernel from the values the operands take: the kernel of the operand representations when its
 		// result holds every possible result, otherwise the operands are widened to the result representation
 		have_ranges = true;
 		bool have_nulls = false;
@@ -615,23 +795,26 @@ void NumericDispatchFunction(DataChunk &args, ExpressionState &state, Vector &re
 		if (resolved) {
 			result_type = NumericType::ForUnscaledRange(interval.min, interval.max, interval.scale);
 			if (!have_nulls) {
-				auto &candidate = lstate.Get(context, name, kernel_types, constants, is_operator);
+				auto &candidate = lstate.Get(context, name, kernel_types, constants, is_operator, exact_result);
 				if (RepresentationHolds(candidate.expression->GetReturnType(), interval)) {
 					kernel = &candidate;
 				}
 			}
+		} else if (KIND == NumericDispatchKind::ABS) {
+			// beyond 128 bits the absolute value stays within the representation
+			kernel = &lstate.Get(context, name, kernel_types, constants, is_operator, exact_result);
 		} else {
 			result_type = ResultTypeByDigits(KIND, typed);
 		}
 		if (!kernel) {
 			kernel_types = WidenedKernelTypes(KIND, typed, result_type, ranges, have_ranges);
-			kernel = lstate.Get(context, name, kernel_types, constants, is_operator);
+			kernel = lstate.Get(context, name, kernel_types, constants, is_operator, exact_result);
 		}
 		if (kernel->argument_types != kernel_types) {
 			// the binder casts the operands inside the kernel: convert them outside instead, where the ranges make the
 			// conversions plain, and run the kernel on its own argument types
 			kernel_types = kernel->argument_types;
-			kernel = lstate.Get(context, name, kernel_types, constants, is_operator);
+			kernel = lstate.Get(context, name, kernel_types, constants, is_operator, exact_result);
 		}
 	}
 
@@ -680,6 +863,12 @@ ScalarFunction NumericDispatch::GetFunction(const string &name, vector<LogicalTy
 		break;
 	case NumericDispatchKind::MULTIPLY:
 		function = NumericDispatchFunction<NumericDispatchKind::MULTIPLY>;
+		break;
+	case NumericDispatchKind::ABS:
+		function = NumericDispatchFunction<NumericDispatchKind::ABS>;
+		break;
+	case NumericDispatchKind::ROUND:
+		function = NumericDispatchFunction<NumericDispatchKind::ROUND>;
 		break;
 	default:
 		function = NumericDispatchFunction<NumericDispatchKind::GENERIC>;

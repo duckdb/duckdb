@@ -36,6 +36,8 @@ struct NumericBlob {
 	DUCKDB_API static void Digits(const string_t &blob, idx_t &integer_digits, idx_t &fractional_digits);
 	//! The narrowest representation that holds every value of a canonical NUMERIC vector
 	DUCKDB_API static LogicalType RangeType(Vector &canonical, idx_t count);
+	//! The narrowest representation holding every value of a canonical vector; false when there is none
+	DUCKDB_API static bool TryRangeType(Vector &canonical, idx_t count, LogicalType &type);
 	//! Encodes a vector of an exact representation into a flat canonical NUMERIC vector
 	DUCKDB_API static void Encode(Vector &typed, idx_t count, Vector &result);
 	//! Decodes a canonical NUMERIC vector into a vector of the given representation

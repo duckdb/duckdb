@@ -202,12 +202,13 @@ public:
 	idx_t FilterSelection(SelectionVector &sel, Vector &vector, idx_t scan_count,
 	                      idx_t &approved_tuple_count) override {
 		unique_ptr<Vector> typed;
-		if (constant.IsNull() || !NumericVector::TryGetTyped(vector, typed)) {
-			// canonical values compare as strings
+		LogicalType common;
+		if (constant.IsNull() || !NumericVector::TryGetTyped(vector, typed) ||
+		    !NumericType::TryWiden(typed->GetType(), typed_constant.type(), common)) {
+			// canonical values, or values with no common representation, compare as strings
 			return canonical_executor.FilterSelection(sel, vector, scan_count, approved_tuple_count);
 		}
 		// compare in a representation that holds the values of both sides
-		auto common = NumericType::Widen(typed->GetType(), typed_constant.type());
 		if (!typed_executor || common != executor_type) {
 			typed_executor = make_uniq<ComparisonFilterExecutor>(comparison_type, typed_constant.DefaultCastAs(common));
 			executor_type = common;

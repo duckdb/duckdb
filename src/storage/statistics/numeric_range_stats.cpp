@@ -1,5 +1,7 @@
 #include "duckdb/storage/statistics/numeric_range_stats.hpp"
 
+#include "duckdb/common/types/numeric_type.hpp"
+
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 
@@ -80,7 +82,9 @@ void NumericRangeStats::ToStruct(const BaseStatistics &stats, child_list_t<Value
 	if (!range) {
 		return;
 	}
-	children.emplace_back("representation", Value(range->ResolveType().ToString()));
+	auto representation = range->ResolveType();
+	children.emplace_back("representation",
+	                      Value(NumericType::IsExact(representation) ? representation.ToString() : "CANONICAL"));
 	if (range->HasValues()) {
 		children.emplace_back("exact_min", Value(range->Min().ToString()));
 		children.emplace_back("exact_max", Value(range->Max().ToString()));

@@ -17,67 +17,39 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Values
 //===--------------------------------------------------------------------===//
-//! The value as DECIMAL(width, scale) with the smallest width that holds it
-static Value Normalize(const Value &value, uint8_t scale) {
-	idx_t width = NumericType::IntegerDigits(value) + scale;
-	if (width > Decimal::MAX_WIDTH_DECIMAL) {
-		throw OutOfRangeException("NUMERIC value needs %d digits, more than the maximum of %d", width,
-		                          Decimal::MAX_WIDTH_DECIMAL);
+//! Exact values of any representation compare through their canonical encoding, which orders like the values; the
+//! endpoints keep their own representations, which need not have one in common
+static int CompareExact(const Value &left, const Value &right) {
+	auto left_blob = NumericBlob::Encode(left.ToString());
+	auto right_blob = NumericBlob::Encode(right.ToString());
+	auto common = MinValue(left_blob.size(), right_blob.size());
+	auto result = memcmp(left_blob.data(), right_blob.data(), common);
+	if (result != 0) {
+		return result < 0 ? -1 : 1;
 	}
-	if (width < 1) {
-		width = 1;
+	if (left_blob.size() == right_blob.size()) {
+		return 0;
 	}
-	auto target = LogicalType::DECIMAL(NumericCast<uint8_t>(width), scale);
-	if (value.type() == target) {
-		return value;
-	}
-	return value.DefaultCastAs(target);
-}
-
-//! Bring both values to the same DECIMAL type so they compare exactly
-static void Align(Value &left, Value &right) {
-	auto left_width = DecimalType::GetWidth(left.type());
-	auto right_width = DecimalType::GetWidth(right.type());
-	D_ASSERT(DecimalType::GetScale(left.type()) == DecimalType::GetScale(right.type()));
-	if (left_width == right_width) {
-		return;
-	}
-	auto target = LogicalType::DECIMAL(MaxValue(left_width, right_width), DecimalType::GetScale(left.type()));
-	if (left_width < right_width) {
-		left = left.DefaultCastAs(target);
-	} else {
-		right = right.DefaultCastAs(target);
-	}
+	return left_blob.size() < right_blob.size() ? -1 : 1;
 }
 
 void NumericRange::Merge(const NumericRange &other) {
+	scale = MaxValue(scale, other.scale);
 	if (!other.has_values) {
-		scale = MaxValue(scale, other.scale);
 		return;
 	}
-	auto new_scale = MaxValue(scale, other.scale);
-	auto other_min = Normalize(other.min, new_scale);
-	auto other_max = Normalize(other.max, new_scale);
 	if (!has_values) {
-		scale = new_scale;
-		min = std::move(other_min);
-		max = std::move(other_max);
+		min = other.min;
+		max = other.max;
 		has_values = true;
 		return;
 	}
-	auto new_min = Normalize(min, new_scale);
-	auto new_max = Normalize(max, new_scale);
-	Align(new_min, other_min);
-	if (ValueOperations::LessThan(other_min, new_min)) {
-		new_min = other_min;
+	if (CompareExact(other.min, min) < 0) {
+		min = other.min;
 	}
-	Align(new_max, other_max);
-	if (ValueOperations::GreaterThan(other_max, new_max)) {
-		new_max = other_max;
+	if (CompareExact(other.max, max) > 0) {
+		max = other.max;
 	}
-	scale = new_scale;
-	min = std::move(new_min);
-	max = std::move(new_max);
 }
 
 void NumericRange::Update(const Value &value) {
@@ -200,8 +172,42 @@ static bool UpdateTyped(UnifiedVectorFormat &vdata, idx_t count, const LogicalTy
 	return true;
 }
 
+void NumericRange::UpdateCanonical(const Vector &canonical, idx_t count) {
+	D_ASSERT(canonical.GetType().id() == LogicalTypeId::NUMERIC);
+	UnifiedVectorFormat vdata;
+	canonical.ToUnifiedFormat(vdata);
+	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
+	// the canonical encoding orders like the values
+	string_t lo, hi;
+	if (!FindMinMax<string_t>(vdata, count, lo, hi)) {
+		return;
+	}
+	uint8_t needed_scale = 0;
+	for (idx_t i = 0; i < count && needed_scale < Decimal::MAX_WIDTH_DECIMAL; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (!vdata.validity.RowIsValid(idx)) {
+			continue;
+		}
+		idx_t integer_digits, fractional_digits;
+		NumericBlob::Digits(data[idx], integer_digits, fractional_digits);
+		needed_scale = MaxValue(needed_scale, NumericCast<uint8_t>(fractional_digits));
+	}
+	NumericRange other;
+	other.has_values = true;
+	other.scale = needed_scale;
+	if (!NumericType::TryParseLiteral(NumericBlob::ToText(lo), other.min) ||
+	    !NumericType::TryParseLiteral(NumericBlob::ToText(hi), other.max)) {
+		throw InternalException("NumericRange::UpdateCanonical - canonical value does not parse");
+	}
+	Merge(other);
+}
+
 void NumericRange::Update(const Vector &vector, idx_t count) {
 	auto &type = vector.GetType();
+	if (type.id() == LogicalTypeId::NUMERIC) {
+		UpdateCanonical(vector, count);
+		return;
+	}
 	D_ASSERT(NumericType::IsExact(type));
 	UnifiedVectorFormat vdata;
 	vector.ToUnifiedFormat(vdata);
@@ -316,7 +322,7 @@ static bool TryGetUnscaledValue(const Value &value, hugeint_t &result) {
 
 bool NumericRange::TryGetUnscaled(const LogicalType &representation, ShreddedNumericRange &result) const {
 	result.valid = false;
-	if (!has_values) {
+	if (!has_values || !NumericType::IsExact(representation)) {
 		return false;
 	}
 	uint8_t target_scale = representation.id() == LogicalTypeId::DECIMAL ? DecimalType::GetScale(representation) : 0;
@@ -345,7 +351,12 @@ LogicalType NumericRange::ResolveType() const {
 	if (!has_values) {
 		return NumericType::DefaultType();
 	}
-	return NumericType::ForRange(min, max, scale);
+	LogicalType type;
+	if (!NumericType::TryForRange(min, max, scale, type)) {
+		// no representation holds every value: they are stored as canonical values
+		return NumericType::CanonicalStorageType();
+	}
+	return type;
 }
 
 //! Whether the value survives a round trip through the type, i.e. the type can hold it exactly
@@ -363,6 +374,10 @@ static bool TryExactCast(const Value &value, const LogicalType &type, Value &res
 }
 
 BaseStatistics NumericRange::ToTyped(const LogicalType &type) const {
+	if (!NumericType::IsExact(type)) {
+		// canonical storage: the string statistics of the blobs are not exact beyond their prefix
+		return BaseStatistics::CreateUnknown(type);
+	}
 	Value typed_min, typed_max;
 	if (has_values && (!TryExactCast(min, type, typed_min) || !TryExactCast(max, type, typed_max))) {
 		return BaseStatistics::CreateUnknown(type);

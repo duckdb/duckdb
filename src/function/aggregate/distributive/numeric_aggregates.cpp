@@ -78,7 +78,15 @@ int CompareValues(const NumericValueRef &left, const NumericValueRef &right) {
 
 //! A value held by an aggregate state: blobs live in the arena of the aggregate, re-using their allocation
 struct NumericStateValue : public NumericValueRef {
+	//! The arena allocation of the state, kept apart from the blob: an inlined value does not point into it
+	char *alloc_ptr;
 	idx_t alloc_size;
+
+	void Reset() {
+		wide = false;
+		alloc_ptr = nullptr;
+		alloc_size = 0;
+	}
 
 	void SetUnscaled(hugeint_t unscaled_p, uint8_t scale_p) {
 		wide = false;
@@ -93,15 +101,12 @@ struct NumericStateValue : public NumericValueRef {
 			return;
 		}
 		auto size = input.GetSize();
-		char *ptr;
-		if (alloc_size >= size) {
-			ptr = blob.GetDataWriteable();
-		} else {
+		if (alloc_size < size) {
 			alloc_size = NextPowerOfTwo(size);
-			ptr = char_ptr_cast(input_data.allocator.Allocate(alloc_size));
+			alloc_ptr = char_ptr_cast(input_data.allocator.Allocate(alloc_size));
 		}
-		memcpy(ptr, input.GetData(), size);
-		blob = string_t(ptr, UnsafeNumericCast<uint32_t>(size));
+		memcpy(alloc_ptr, input.GetData(), size);
+		blob = string_t(alloc_ptr, UnsafeNumericCast<uint32_t>(size));
 	}
 
 	void Set(const NumericValueRef &value, AggregateInputData &input_data) {
@@ -162,8 +167,9 @@ struct NumericInput {
 			canonical->ToUnifiedFormat(data);
 			return;
 		}
-		auto type = NumericBlob::RangeType(input, count);
-		if (!IsFixedRepresentation(type)) {
+		LogicalType type;
+		if (!NumericBlob::TryRangeType(input, count, type) || !IsFixedRepresentation(type)) {
+			// wide values, or values with no common representation: canonical blobs
 			input.ToUnifiedFormat(data);
 			return;
 		}
@@ -323,8 +329,7 @@ struct NumericMinMax {
 		for (idx_t i = 0; i < count; i++) {
 			auto &state = *reinterpret_cast<STATE *>(states[i]);
 			state.is_set = false;
-			state.value.wide = false;
-			state.value.alloc_size = 0;
+			state.value.Reset();
 		}
 	}
 
@@ -494,8 +499,7 @@ struct NumericFirst {
 			auto &state = *reinterpret_cast<STATE *>(states[i]);
 			state.is_set = false;
 			state.value_is_valid = false;
-			state.value.wide = false;
-			state.value.alloc_size = 0;
+			state.value.Reset();
 		}
 	}
 

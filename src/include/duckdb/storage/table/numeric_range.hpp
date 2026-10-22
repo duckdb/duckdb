@@ -39,14 +39,16 @@ public:
 
 	//! Widen the range with an exact value
 	void Update(const Value &value);
-	//! Widen the range with the values of a vector of an exact representation
-	void Update(const Vector &typed, idx_t count);
+	//! Widen the range with the values of a vector of an exact representation, or of canonical NUMERIC values
+	void Update(const Vector &vector, idx_t count);
+	void UpdateCanonical(const Vector &canonical, idx_t count);
 	//! Widen the range with statistics of an exact representation; false when they are not exact (wide decimal
 	//! statistics only keep prefixes)
 	bool TryUpdate(const BaseStatistics &typed_stats);
 	void Merge(const NumericRange &other);
 
-	//! The narrowest representation that holds every value (the default representation for an empty range)
+	//! The narrowest representation that holds every value (the default representation for an empty range), or the
+	//! canonical storage type when no representation holds them all
 	LogicalType ResolveType() const;
 	//! Statistics of the range in an exact representation: numeric statistics, or string statistics of the BIGNUM blobs
 	//! for wide decimals
