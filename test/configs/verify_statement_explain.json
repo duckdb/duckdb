@@ -19,6 +19,12 @@
       ]
     },
     {
+      "reason": "Binding the explained statement evaluates its table function arguments a second time",
+      "paths": [
+        "test/issues/general/test_26175_bind_once.test"
+      ]
+    },
+    {
       "reason": "Explain exceeds 300KB memory limit",
       "paths": [
         "test/issues/internal/test_5457.test"
