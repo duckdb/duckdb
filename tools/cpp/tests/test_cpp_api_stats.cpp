@@ -91,11 +91,11 @@ void ScalarStats(ScalarFunction::StatsInput &input) {
 }
 
 void RegisterScalar(Connection &conn, const std::string &name, const StatsMode &mode) {
-	const auto integer = conn.ParseType("INTEGER");
-	auto function = ScalarFunction::Create(conn);
+	const auto integer = conn.GetFactory().ParseType("INTEGER");
+	auto function = ScalarFunction::Create(conn.GetFactory());
 	function.SetName(name).SetExecCallback(SevenExec).SetStatsCallback(ScalarStats).SetUserData<StatsMode>(mode);
 	function.GetSignature().AddParameter("x", integer).SetReturnType(integer);
-	function.Register();
+	conn.Register(function);
 }
 
 // ---------------------------------------------------------------------------
@@ -128,10 +128,11 @@ void AggStats(AggregateFunction::StatsInput &input) {
 }
 
 void RegisterAggregate(Connection &conn, const std::string &name, const StatsMode &mode) {
-	auto function = AggregateFunction::Create(conn);
+	auto function = AggregateFunction::Create(conn.GetFactory());
 	function.SetName(name)
 	    .WithSignature([&](FunctionSignature &sig) {
-		    sig.AddParameter("x", conn.ParseType("INTEGER")).SetReturnType(conn.ParseType("BIGINT"));
+		    sig.AddParameter("x", conn.GetFactory().ParseType("INTEGER"))
+		        .SetReturnType(conn.GetFactory().ParseType("BIGINT"));
 	    })
 	    .SetSizeCallback(AggSize)
 	    .SetInitCallback(AggInit)
@@ -140,7 +141,7 @@ void RegisterAggregate(Connection &conn, const std::string &name, const StatsMod
 	    .SetFinalizeCallback(AggFinalize)
 	    .SetStatsCallback(AggStats)
 	    .SetUserData<StatsMode>(mode);
-	function.Register();
+	conn.Register(function);
 }
 
 // ---------------------------------------------------------------------------
@@ -153,7 +154,7 @@ struct PairGlobal {
 };
 
 void PairBind(TableFunction::BindInput &input) {
-	const auto integer = input.GetContext().ParseType("INTEGER");
+	const auto integer = input.GetContext().GetFactory().ParseType("INTEGER");
 	input.AddResultColumn("a", integer);
 	input.AddResultColumn("b", integer);
 }
@@ -187,14 +188,14 @@ void PairStats(TableFunction::StatsInput &input) {
 }
 
 void RegisterPair(Connection &conn, const std::string &name, const StatsMode &mode) {
-	auto function = TableFunction::Create(conn);
+	auto function = TableFunction::Create(conn.GetFactory());
 	function.SetName(name)
 	    .SetBindCallback(PairBind)
 	    .SetInitGlobalCallback(PairInitGlobal)
 	    .SetExecCallback(PairExec)
 	    .SetStatsCallback(PairStats)
 	    .SetUserData<StatsMode>(mode);
-	function.Register();
+	conn.Register(function);
 }
 
 // Tables whose column statistics the engine knows from storage: "t" has no NULLs, "tn" has one.
