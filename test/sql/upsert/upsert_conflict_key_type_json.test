@@ -22,9 +22,6 @@ SET search_path = 's,main';
 statement ok
 INSERT INTO t9 SELECT '1.4' ON CONFLICT DO NOTHING;
 
-statement ok
-RESET search_path;
-
 query I
 SELECT k FROM t9 ORDER BY k
 ----
