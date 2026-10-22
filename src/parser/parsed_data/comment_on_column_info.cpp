@@ -18,6 +18,13 @@ SetColumnCommentInfo::SetColumnCommentInfo(QualifiedName qualified_name, Identif
       comment_value(std::move(comment_value)) {
 }
 
+SetColumnCommentInfo::SetColumnCommentInfo(Identifier catalog, Identifier schema, Identifier name,
+                                           Identifier column_name, Value comment_value,
+                                           OnEntryNotFound if_not_found)
+    : SetColumnCommentInfo(QualifiedName(std::move(catalog), std::move(schema), std::move(name)),
+                           std::move(column_name), std::move(comment_value), if_not_found) {
+}
+
 unique_ptr<AlterInfo> SetColumnCommentInfo::Copy() const {
 	auto result = make_uniq<SetColumnCommentInfo>(GetQualifiedName(), column_name, comment_value, if_not_found);
 	result->type = type;

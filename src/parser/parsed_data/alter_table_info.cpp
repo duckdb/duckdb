@@ -59,6 +59,13 @@ SetCommentInfo::SetCommentInfo(CatalogType entry_catalog_type, QualifiedName qua
       entry_catalog_type(entry_catalog_type), comment_value(std::move(new_comment_value_p)) {
 }
 
+SetCommentInfo::SetCommentInfo(CatalogType entry_catalog_type, Identifier entry_catalog, Identifier entry_schema,
+                               Identifier entry_name, Value new_comment_value_p, OnEntryNotFound if_not_found)
+    : SetCommentInfo(entry_catalog_type,
+                     QualifiedName(std::move(entry_catalog), std::move(entry_schema), std::move(entry_name)),
+                     std::move(new_comment_value_p), if_not_found) {
+}
+
 CatalogType SetCommentInfo::GetCatalogType() const {
 	return entry_catalog_type;
 }

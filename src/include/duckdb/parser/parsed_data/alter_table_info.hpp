@@ -51,6 +51,10 @@ public:
 struct SetCommentInfo : public AlterInfo {
 	SetCommentInfo(CatalogType entry_catalog_type, QualifiedName qualified_name, Value new_comment_value_p,
 	               OnEntryNotFound if_not_found);
+	//! Compatibility overload for callers that build the qualification from separate parts (e.g. the legacy
+	//! parser extension); the qualification is stored as a three-component path.
+	SetCommentInfo(CatalogType entry_catalog_type, Identifier entry_catalog, Identifier entry_schema,
+	               Identifier entry_name, Value new_comment_value_p, OnEntryNotFound if_not_found);
 
 	CatalogType entry_catalog_type;
 	Value comment_value;
