@@ -3194,7 +3194,7 @@ struct ScalarFunctionInfo {
 	                   ScalarFunction::ExecCallback exec_callback, ScalarFunction::StatsCallback stats_callback,
 	                   detail::UserData user_data)
 	    : resolve_types_callback(resolve_types_callback), bind_callback(bind_callback), init_callback(init_callback),
-	      stats_callback(stats_callback), user_data(std::move(user_data)) {
+	      exec_callback(exec_callback), stats_callback(stats_callback), user_data(std::move(user_data)) {
 	}
 
 	bool operator==(const ScalarFunctionInfo &other) const {
