@@ -191,6 +191,11 @@ public:
 		lock_guard<std::mutex> guard(lock);
 		callback(root.get());
 	}
+	//! Provides access to the finalized metrics and query tree of the last profiled query, both null while a query is
+	//! running or when there are none, and ensures there are no concurrent modifications
+	DUCKDB_API void GetFinalizedProfileUnderLock(
+	    const std::function<void(optional_ptr<const GatheredMetrics>, optional_ptr<const ProfilingNode>)> &callback)
+	    const;
 
 private:
 	ClientContext &context;

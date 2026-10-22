@@ -21,7 +21,7 @@ static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, con
 					continue;
 				}
 				throw NotImplementedException(
-				    "Duplicate name \"%s\" in struct auto-detected in JSON, try ignore_errors=true", child_type.first);
+				    "Duplicate name %s in struct auto-detected in JSON, try ignore_errors=true", child_type.first);
 			} else {
 				child_types.emplace_back(child_type.first, RemoveDuplicateStructKeys(child_type.second, ignore_errors));
 			}

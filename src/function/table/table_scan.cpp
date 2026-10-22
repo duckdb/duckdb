@@ -178,6 +178,14 @@ public:
 	DuckIndexScanState(ClientContext &context, const FunctionData *bind_data_p, unsafe_vector<row_t> &&row_ids_p)
 	    : TableScanGlobalState(context, bind_data_p), next_batch_index(0), row_ids(std::move(row_ids_p)),
 	      finished_first_phase(row_ids.empty()), started_last_phase(false) {
+		// Tasks claim STANDARD_VECTOR_SIZE row IDs at a time, and one more task can scan the transaction-local rows.
+		auto &duck_table = bind_data_p->Cast<TableScanBindData>().table.Cast<DuckTableEntry>();
+		auto local_table = LocalStorage::Get(context, duck_table.catalog).GetStorage(duck_table.GetStorage());
+		idx_t useful_threads = (row_ids.size() + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+		if (local_table && local_table->GetCollection().GetTotalRows() > 0) {
+			useful_threads++;
+		}
+		max_threads = MinValue<idx_t>(max_threads, MaxValue<idx_t>(useful_threads, 1));
 	}
 
 	//! The batch index of the next Sink.
@@ -251,6 +259,8 @@ public:
 					// will be on again
 					started_last_phase = true;
 					l_state.in_charge_of_final_stretch = true;
+					// The local rows form their own batch after all row ID batches.
+					l_state.batch_index = next_batch_index;
 					phase_to_be_performed = ExecutionPhase::LOCAL_STORAGE;
 				} else if (l_state.in_charge_of_final_stretch) {
 					phase_to_be_performed = ExecutionPhase::LOCAL_STORAGE;

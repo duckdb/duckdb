@@ -488,6 +488,7 @@ public:
 	    DUCKDB_EXCLUDES(lock);
 	FileStateHandle FinalizeFileStateLocked(FileStateHandle file_state) DUCKDB_REQUIRES(lock);
 	void FinalizeFileState(FileStateHandle file_state) DUCKDB_EXCLUDES(lock);
+	void AbandonFileState(FileStateHandle file_state) noexcept DUCKDB_EXCLUDES(lock);
 
 	FileStateHandle TryFinalizeOwnedFileStateLocked() DUCKDB_REQUIRES(lock);
 	void TryFinalizeOwnedFileState() DUCKDB_EXCLUDES(lock);
@@ -551,6 +552,7 @@ class PartitionedCopyLocalState;
 class CopyToFileLocalState : public LocalSinkState {
 public:
 	CopyToFileLocalState(const PhysicalCopyToFile &op_p, ExecutionContext &context_p, CopyToFileGlobalState &gstate_p);
+	~CopyToFileLocalState() override;
 
 public:
 	const PhysicalCopyToFile &op;
@@ -3806,6 +3808,19 @@ void CopyToFileGlobalState::FinalizeFileState(FileStateHandle file_state) {
 	}
 }
 
+void CopyToFileGlobalState::AbandonFileState(FileStateHandle file_state) noexcept {
+	try {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		auto state = file_state.GetFileStatePtr();
+		auto prepare_state = prepare_global_state.load(std::memory_order_acquire);
+		if (state && prepare_state && RefersToSameObject(*prepare_state.get(), *state.get())) {
+			// concurrent prepares still use this state - keep it alive until the global state is destroyed
+			prepare_global_state_owned = std::move(file_state);
+		}
+	} catch (...) {
+	}
+}
+
 FileStateHandle CopyToFileGlobalState::TryFinalizeOwnedFileStateLocked() {
 	if (prepare_global_state_owned) {
 		prepare_global_state.store(nullptr, std::memory_order_release);
@@ -3836,6 +3851,12 @@ void CopyToFileGlobalState::MarkSuccessful() noexcept {
 //===--------------------------------------------------------------------===//
 // Copy Local State
 //===--------------------------------------------------------------------===//
+CopyToFileLocalState::~CopyToFileLocalState() {
+	if (global_file_state) {
+		gstate.AbandonFileState(std::move(global_file_state));
+	}
+}
+
 CopyToFileLocalState::CopyToFileLocalState(const PhysicalCopyToFile &op_p, ExecutionContext &context_p,
                                            CopyToFileGlobalState &gstate_p)
     : op(op_p), context(context_p), gstate(gstate_p) {
@@ -4229,14 +4250,19 @@ void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gst
 		annotated_unique_lock<annotated_mutex> file_guard(ready_file_state->lock);
 		if (PhysicalCopyRotateNow(*this, *ready_file_state)) {
 			// Global state must be rotated. Move to local scope, create an new one, and immediately release global lock
-			auto owned_file_state = std::move(file_state);
+			// If this is the file state all prepares run against, hand it over to the global state while we still hold
+			// the lock: creating the replacement below can throw (e.g. when another thread's error interrupts the
+			// query), and a handle that goes out of scope would free a file state other threads still prepare into
+			auto owned_file_state = gstate.FinalizeFileStateLocked(std::move(file_state));
 			file_guard.unlock();
 			global_guard.unlock();
 
 			gstate.EnsureFileStateReady(file_state, create_file_state_fun);
 
 			// Finalize this file!
-			gstate.FinalizeFileState(std::move(owned_file_state));
+			if (owned_file_state) {
+				gstate.FinalizeFileState(std::move(owned_file_state));
+			}
 		} else {
 			global_guard.unlock();
 			ready_file_state->num_batches++;

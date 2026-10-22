@@ -18,6 +18,10 @@ on:
       run_all:
         type: boolean
         default: true
+      extension_exclude_archs:
+        description: 'Extra extension archs to skip, separated by ";" (e.g. windows_amd64)'
+        type: string
+        default: ''
   push:
     branches-ignore:
       - 'main'
@@ -184,6 +188,7 @@ jobs:
         shell: bash
         env:
           CHANGED_KEYS: ${{ steps.changed.outputs.changed_keys }}
+          INPUT_EXCLUDE_ARCHS: ${{ github.event_name == 'workflow_dispatch' && inputs.extension_exclude_archs || '' }}
         run: |
           skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
           python3 scripts/ci/job_stages.py \
@@ -200,9 +205,12 @@ jobs:
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             extra_exclude_archs=
           elif [[ "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
-            extra_exclude_archs="windows_arm64;osx_amd64"
+            extra_exclude_archs="osx_amd64"
           else
             extra_exclude_archs="windows_arm64;osx_amd64;wasm_eh"
+          fi
+          if [[ -n "$INPUT_EXCLUDE_ARCHS" ]]; then
+            extra_exclude_archs="${extra_exclude_archs:+$extra_exclude_archs;}$INPUT_EXCLUDE_ARCHS"
           fi
 
           echo "extra_exclude_archs=$extra_exclude_archs" >> "$GITHUB_OUTPUT"
@@ -459,6 +467,10 @@ jobs:
           config: duckdb/.github/config/rust_based_extensions.cmake
           default_exclude_archs: wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64_mingw;linux_amd64_musl
           toolchain: rust
+        external:
+          config: duckdb/.github/config/external_extensions.cmake
+          default_exclude_archs: wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64_mingw;linux_amd64_musl
+          toolchain: rust
       extension_repository: duckdb/extension-template
       extension_ref: main
       ci_tools_repository: duckdb/extension-ci-tools
@@ -471,18 +483,7 @@ jobs:
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
       runners: ${{ needs.prepare.outputs.runners }}
-      prebuilt_duckdb: |
-        {
-          "linux_amd64": "duckdb-static-libs-linux-amd64.tar.gz",
-          "linux_arm64": "duckdb-static-libs-linux-arm64.tar.gz",
-          "linux_amd64_musl": "duckdb-static-libs-linux-amd64-musl.tar.gz",
-          "linux_arm64_musl": "duckdb-static-libs-linux-arm64-musl.tar.gz",
-          "osx_amd64": "duckdb-static-libs-osx-amd64.tar.gz",
-          "osx_arm64": "duckdb-static-libs-osx-arm64.tar.gz",
-          "windows_amd64": "duckdb-static-libs-windows-amd64.tar.gz",
-          "windows_arm64": "duckdb-static-libs-windows-arm64.tar.gz",
-          "windows_amd64_mingw": "duckdb-static-libs-windows-mingw.tar.gz"
-        }
+      prebuilt_source: workflow
 
  extensions-deploy:
     name: Deploy extensions
@@ -1437,7 +1438,7 @@ jobs:
           STAGED_VERSION: ${{ needs.prepare.outputs.staged_version }}
           RELEASE_STATUS_SUCCESS: ${{ steps.release-status.outputs.success || 'false' }}
           CURRENT_REF: ${{ github.ref }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          ALPHA_BRANCH: 'v2.0-cyanoptera'
         run: |
           is_release_event=false
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
@@ -1455,7 +1456,7 @@ jobs:
           fi
 
           is_default_branch=false
-          if [[ "$CURRENT_REF" == "refs/heads/$DEFAULT_BRANCH" ]]; then
+          if [[ "$CURRENT_REF" == "refs/heads/$ALPHA_BRANCH" ]]; then
             is_default_branch=true
           fi
 
@@ -1474,7 +1475,7 @@ jobs:
           echo "  run_release_dispatch=$run_release_dispatch"
           echo "  staged_version=$STAGED_VERSION"
           echo "  current_ref=$CURRENT_REF"
-          echo "  default_branch=$DEFAULT_BRANCH"
+          echo "  alpha_branch=$ALPHA_BRANCH"
           echo "  is_default_branch=$is_default_branch"
           echo "  publish_latest_alpha=$publish_latest_alpha"
 

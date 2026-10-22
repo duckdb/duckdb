@@ -2,10 +2,6 @@ if(NOT CLANG_TIDY)
   add_subdirectory(adbc)
 endif()
 
-if(${DISABLE_THREADS})
-  add_definitions(-DDUCKDB_NO_THREADS)
-endif()
-
 add_subdirectory(capi)
 add_subdirectory(cpp)
 
@@ -20,6 +16,7 @@ set(TEST_API_OBJECTS
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp
     test_config.cpp
+    test_os_util.cpp
     test_compression_select.cpp
     test_connection_secrets.cpp
     test_copy_output_lifecycle.cpp
