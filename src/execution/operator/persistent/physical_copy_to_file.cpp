@@ -2196,29 +2196,35 @@ public:
 		ColumnDataScanState state;
 	};
 
-	//! Walks the chunks of the materialized collection; rows are sized by scanning the chunk and computing the sizes
-	//! of its written columns
+	//! Walks the chunks of the materialized collection through the column data cursor; rows are sized by scanning
+	//! the chunk and computing the sizes of its written columns
 	class Cursor : public PartitionedCopyGroupCursor {
 	public:
-		explicit Cursor(const SortedBinGroup &group);
+		explicit Cursor(const SortedBinGroup &group) : group(group), cursor(*group.collection) {
+		}
 
 	public:
-		bool Next() override;
-		PartitionedCopyChunkPosition Position() const override {
-			return position;
+		bool Next() override {
+			return cursor.Next();
 		}
-		idx_t Count() const override;
-		idx_t ByteEstimate() const override;
+		PartitionedCopyChunkPosition Position() const override {
+			const auto &position = cursor.Position();
+			return {position.segment_index, position.chunk_index, position.row_offset};
+		}
+		idx_t Count() const override {
+			return cursor.Count();
+		}
+		idx_t ByteEstimate() const override {
+			return cursor.AllocationSize();
+		}
 		void PartitionBoundaries(vector<idx_t> &boundaries) const override {
-			group.PartitionBoundaries(position.row_offset, Count(), boundaries);
+			group.PartitionBoundaries(cursor.Position().row_offset, Count(), boundaries);
 		}
 		void RowSizes(vector<idx_t> &sizes) override;
 
 	private:
 		const SortedBinGroup &group;
-		const vector<unique_ptr<ColumnDataCollectionSegment>> &segments;
-		PartitionedCopyChunkPosition position;
-		bool started = false;
+		ColumnDataChunkCursor cursor;
 		//! The sizing state, created on first use
 		unique_ptr<CopyBatchSlicer> slicer;
 		DataChunk scan_chunk;
@@ -2256,6 +2262,8 @@ private:
 	void TakeMaterializedBins(ExecutionContext &context, OperatorSourceInput &source_input);
 	void Mask(idx_t begin_block, idx_t end_block);
 	void PartitionBoundaries(idx_t row_begin, idx_t chunk_rows, vector<idx_t> &boundaries) const;
+	//! The chunk holding a row
+	idx_t ChunkOf(idx_t row) const;
 
 private:
 	const SortStrategyInput &input;
@@ -2268,6 +2276,8 @@ private:
 	mutex collection_lock;
 	//! The materialized bins (set after MATERIALIZE)
 	unique_ptr<ColumnDataCollection> collection;
+	//! The row offset of every chunk: the chunks at bin boundaries of an overflow sort are not full
+	vector<idx_t> chunk_row_offsets;
 	//! The partition boundary mask (marks where the partition key changes within the group)
 	ValidityMask partition_mask;
 };
@@ -2424,16 +2434,12 @@ void SortedBinGroup::TakeMaterializedBins(ExecutionContext &context, OperatorSou
 		if (!bin_data) {
 			throw InternalException("Failed to materialize a sorted partition bin");
 		}
-		if (bins.size() == 1) {
-			collection = std::move(bin_data);
-			return;
-		}
-		// several bins (an overflow sort): pack them into one dense collection, as the mask addresses rows by block
 		if (!collection) {
-			collection = make_uniq<ColumnDataCollection>(input.partitioned_copy.context, bin_data->Types());
-		}
-		for (auto &chunk : bin_data->Chunks()) {
-			collection->Append(chunk);
+			collection = std::move(bin_data);
+		} else {
+			// several bins (an overflow sort): the segments move over; the chunks at the bin boundaries stay partial,
+			// which the cursor and the mask handle through the actual row offsets
+			collection->Combine(*bin_data);
 		}
 	}
 }
@@ -2443,22 +2449,40 @@ void SortedBinGroup::FinishPreparation(idx_t step) {
 		if (!collection || collection->Count() != count) {
 			throw InternalException("Failed to materialize a sorted partition bin");
 		}
+		chunk_row_offsets.clear();
+		ColumnDataChunkCursor cursor(*collection);
+		while (cursor.Next()) {
+			chunk_row_offsets.push_back(cursor.Position().row_offset);
+		}
 		partition_mask.Initialize(count);
 	}
+}
+
+idx_t SortedBinGroup::ChunkOf(idx_t row) const {
+	D_ASSERT(row < count);
+	auto entry = std::upper_bound(chunk_row_offsets.begin(), chunk_row_offsets.end(), row);
+	D_ASSERT(entry != chunk_row_offsets.begin());
+	return NumericCast<idx_t>(entry - chunk_row_offsets.begin()) - 1;
 }
 
 void SortedBinGroup::Mask(idx_t begin_block, idx_t end_block) {
 	D_ASSERT(collection);
 	D_ASSERT(partition_mask.IsMaskSet());
 
-	const auto begin_entry = partition_mask.EntryCount(begin_block * STANDARD_VECTOR_SIZE);
-	const auto end_entry = partition_mask.EntryCount(MinValue<idx_t>(end_block * STANDARD_VECTOR_SIZE, count));
-	if (begin_entry >= end_entry) {
+	// The task owns whole mask words: those whose first row lies in its block range, so that no two tasks write the
+	// same word. The rows of a word may straddle chunks (the overflow sort combines bins whose last chunks are not
+	// full), so the rows to mark and the chunks to compare come from the actual row offsets, not from block numbers.
+	constexpr auto word_bits = ValidityMask::BITS_PER_VALUE;
+	const auto row_begin = MinValue<idx_t>(begin_block * STANDARD_VECTOR_SIZE, count);
+	const auto row_end = MinValue<idx_t>(end_block * STANDARD_VECTOR_SIZE, count);
+	const auto owned_begin = MinValue<idx_t>(ValidityMask::EntryCount(row_begin) * word_bits, count);
+	const auto owned_end = MinValue<idx_t>(ValidityMask::EntryCount(row_end) * word_bits, count);
+	if (owned_begin >= owned_end) {
 		return;
 	}
 
-	partition_mask.SetRangeInvalid(count, begin_entry, end_entry);
-	if (!begin_block) {
+	partition_mask.SetRangeInvalid(count, owned_begin / word_bits, ValidityMask::EntryCount(owned_end));
+	if (owned_begin == 0) {
 		partition_mask.SetValidUnsafe(0);
 	}
 
@@ -2468,40 +2492,18 @@ void SortedBinGroup::Mask(idx_t begin_block, idx_t end_block) {
 		return;
 	}
 	auto &scan_cols = input.strategy->sort_ids;
-	WindowDeltaScanner(*collection, begin_block, end_block, scan_cols, key_count,
+	const auto chunk_begin = ChunkOf(owned_begin);
+	const auto chunk_end = ChunkOf(owned_end - 1) + 1;
+	WindowDeltaScanner(*collection, chunk_begin, chunk_end, scan_cols, key_count,
 	                   [&](const idx_t row_idx, DataChunk &, DataChunk &, const idx_t ndistinct,
 	                       const SelectionVector &distinct, const SelectionVector &) {
 		                   for (idx_t i = 0; i < ndistinct; i++) {
-			                   partition_mask.SetValidUnsafe(row_idx + distinct.get_index_unsafe(i));
+			                   const auto row = row_idx + distinct.get_index_unsafe(i);
+			                   if (row >= owned_begin && row < owned_end) {
+				                   partition_mask.SetValidUnsafe(row);
+			                   }
 		                   }
 	                   });
-}
-
-SortedBinGroup::Cursor::Cursor(const SortedBinGroup &group_p)
-    : group(group_p), segments(group_p.collection->GetSegments()) {
-}
-
-bool SortedBinGroup::Cursor::Next() {
-	if (started) {
-		position.row_offset += Count();
-		position.chunk_idx++;
-	} else {
-		started = true;
-	}
-	while (position.segment_idx < segments.size() &&
-	       position.chunk_idx >= segments[position.segment_idx]->ChunkCount()) {
-		position.segment_idx++;
-		position.chunk_idx = 0;
-	}
-	return position.segment_idx < segments.size();
-}
-
-idx_t SortedBinGroup::Cursor::Count() const {
-	return segments[position.segment_idx]->chunk_data[position.chunk_idx].count;
-}
-
-idx_t SortedBinGroup::Cursor::ByteEstimate() const {
-	return segments[position.segment_idx]->GetChunkAllocationSize(position.chunk_idx);
 }
 
 void SortedBinGroup::Cursor::RowSizes(vector<idx_t> &sizes) {
@@ -2511,7 +2513,7 @@ void SortedBinGroup::Cursor::RowSizes(vector<idx_t> &sizes) {
 		group.InitializeScanChunk(scan_chunk);
 		size_chunk.Initialize(partitioned_copy.context, partitioned_copy.write_types);
 	}
-	auto scan_state = group.InitializeScan(position);
+	auto scan_state = group.InitializeScan(Position());
 	if (!group.Scan(*scan_state, scan_chunk) || scan_chunk.size() != Count()) {
 		throw InternalException("Partitioned copy could not scan a chunk to size its rows");
 	}
@@ -2546,13 +2548,8 @@ void SortedBinGroup::PartitionBoundaries(idx_t row_begin, idx_t chunk_rows, vect
 unique_ptr<PartitionedCopyGroupScanState>
 SortedBinGroup::InitializeScan(const PartitionedCopyChunkPosition &position) const {
 	auto result = make_uniq<ScanState>();
-	auto &state = result->state;
-	collection->InitializeScan(state);
-	// the scan state's indices are where the next Scan reads
-	state.segment_index = position.segment_idx;
-	state.chunk_index = position.chunk_idx;
-	state.current_row_index = position.row_offset;
-	state.next_row_index = position.row_offset;
+	collection->InitializeScan(result->state);
+	collection->SeekScan(result->state, {position.segment_idx, position.chunk_idx, position.row_offset});
 	return std::move(result);
 }
 
