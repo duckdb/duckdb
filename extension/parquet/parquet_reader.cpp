@@ -443,7 +443,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 	}
 	if (s_ele.__isset.type_length) {
 		if (s_ele.type_length < 0) {
-			throw IOException("Invalid negative type_length %d for column \"%s\"", s_ele.type_length, s_ele.name);
+			throw IOException("Invalid negative type_length %d for column \"%s\"", s_ele.type_length, string(s_ele.name));
 		}
 		schema.type_length = NumericCast<uint32_t>(s_ele.type_length);
 	}
