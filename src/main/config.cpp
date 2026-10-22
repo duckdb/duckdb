@@ -364,6 +364,19 @@ optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const Identifi
 	return nullptr;
 }
 
+idx_t DBConfig::GetWriteBufferMemoryLimit() const {
+	std::lock_guard<std::recursive_mutex> guard(config_lock);
+	if (options.write_buffer_row_group_memory_limit.IsValid()) {
+		return options.write_buffer_row_group_memory_limit.GetIndex();
+	}
+	return options.maximum_memory / 5 / (options.maximum_threads + 1);
+}
+
+vector<string> DBConfig::GetExtensionDirectories() const {
+	std::lock_guard<std::recursive_mutex> guard(config_lock);
+	return options.extension_directories;
+}
+
 void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) {
 	SetOption(nullptr, option, value);
 }
@@ -410,7 +423,7 @@ void DBConfig::SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationO
 	if (!option.set_global) {
 		throw InvalidInputException("Could not set option \"%s\" as a global option", option.name);
 	}
-	lock_guard<mutex> guard(config_lock);
+	std::lock_guard<std::recursive_mutex> guard(config_lock);
 	D_ASSERT(option.reset_global);
 	option.set_global(db.get(), *this, input);
 }
@@ -424,7 +437,7 @@ void DBConfig::ResetOption(optional_ptr<DatabaseInstance> db, const Configuratio
 	if (!option.reset_global) {
 		throw InternalException("Could not reset option \"%s\" as a global option", option.name);
 	}
-	lock_guard<mutex> guard(config_lock);
+	std::lock_guard<std::recursive_mutex> guard(config_lock);
 	D_ASSERT(option.set_global);
 	option.reset_global(db.get(), *this);
 }
