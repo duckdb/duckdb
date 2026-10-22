@@ -4,6 +4,8 @@
 
 require noforcestorage
 
+require notwindows
+
 require no_alternative_verify
 
 require skip_reload
