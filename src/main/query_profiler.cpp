@@ -74,8 +74,8 @@ QueryProfileResult &QueryProfileResult::AppendList() {
 }
 
 QueryProfiler::QueryProfiler(ClientContext &context_p)
-    : context(context_p), running(false), query_requires_profiling(false), is_explain_analyze(false),
-      metrics_finalized(false) {
+    : context(context_p), running(false), query_started(false), query_requires_profiling(false),
+      is_explain_analyze(false), metrics_finalized(false) {
 }
 
 bool QueryProfiler::IsEnabled() const {
@@ -138,9 +138,12 @@ void QueryProfiler::Reset() {
 
 void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
 	lock_guard<std::mutex> guard(lock);
-	// Always reset byte counters at the start of each query so the progress bar shows per-query values
-	query_metrics.bytes_read = 0;
-	query_metrics.bytes_written = 0;
+	// the counters tracked without profiling hold per-query values: reset them once, as StartQuery is called
+	// several times for one query
+	if (!query_started) {
+		query_started = true;
+		query_metrics.ResetLiveMetrics();
+	}
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
 	}
@@ -218,12 +221,18 @@ bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type
 	}
 }
 
+void QueryProfiler::ResetQueryStart() {
+	lock_guard<std::mutex> guard(lock);
+	query_started = false;
+}
+
 void QueryProfiler::StartExplainAnalyze() {
 	is_explain_analyze = true;
 }
 
 void QueryProfiler::EndQuery() {
 	unique_lock<std::mutex> guard(lock);
+	query_started = false;
 	if (!running) {
 		return;
 	}
@@ -266,6 +275,12 @@ void QueryProfiler::EndQuery() {
 void QueryProfiler::FinalizeMetrics() {
 	lock_guard<std::mutex> guard(lock);
 	FinalizeMetricsInternal();
+}
+
+profiler_metrics_t QueryProfiler::GetLiveMetrics() const {
+	// StartQuery resets the counters under the lock, so a snapshot never mixes two queries
+	lock_guard<std::mutex> guard(lock);
+	return query_metrics.GetLiveMetrics();
 }
 
 void QueryProfiler::TrackBytesRead(const idx_t amount, const idx_t elapsed_us) {
