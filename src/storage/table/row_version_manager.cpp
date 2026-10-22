@@ -207,7 +207,8 @@ void RowVersionManager::CommitWrite(transaction_t old_id, transaction_t new_id, 
                                     bool is_delete) {
 	lock_guard<mutex> lock(version_lock);
 	needs_compression_check = true;
-	if (is_delete) {
+	if (is_delete && IsCommitted(new_id)) {
+		// a reverted commit (new_id is the transaction id again) changes nothing a checkpoint writes
 		if (!newest_uncheckpointed_delete_commit.IsValid() || new_id > newest_uncheckpointed_delete_commit.GetIndex()) {
 			newest_uncheckpointed_delete_commit = new_id;
 		}

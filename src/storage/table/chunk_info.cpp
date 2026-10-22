@@ -68,8 +68,13 @@ static string IdToString(transaction_t id) {
 	return IsUpdateMarker(id) ? "U" + to_string(GetWriter(id)) : to_string(id);
 }
 
-//! Whether a write of a row conflicts with its id: a delete or update by a transaction that the writer does not see
+//! Whether a write of a row conflicts with its id: a delete by another transaction, or an update that the writer does
+//! not see
 static bool IsConflictingId(TransactionData transaction, transaction_t id) {
+	if (IsDeleteId(id)) {
+		// a transaction never writes a row whose delete it sees, so only its own deletes do not conflict
+		return id != transaction.GetTransactionId();
+	}
 	return id != NOT_DELETED_ID && !transaction.view.Sees(GetWriter(id));
 }
 
@@ -437,8 +442,9 @@ idx_t ChunkVectorInfo::WriteRows(TransactionData transaction, const row_t ids[],
 	}
 	auto transaction_id = transaction.GetTransactionId();
 	auto id = is_update ? UpdateMarker(transaction_id) : transaction_id;
-	if (HasConstantDeleteId() && ConstantDeleteId() == id) {
-		// the transaction wrote all rows of the vector already
+	if (constant_delete_id == id) {
+		// the transaction wrote all rows outside of the mask (if any) already, and the mask holds its deletes
+		D_ASSERT(HasConstantDeleteId() || mask_delete_id == transaction_id);
 		return 0;
 	}
 	// the ids are not visible to all transactions yet - re-arm the compression check
@@ -544,21 +550,22 @@ void ChunkVectorInfo::RollbackWrite(const uint16_t rows[], idx_t count, const tr
 	auto previous_id = [&](transaction_t, idx_t i) {
 		return previous_id_count == 0 ? NOT_DELETED_ID : previous_ids[previous_id_count == 1 ? 0 : i];
 	};
-	if (previous_id_count <= 1 && count == STANDARD_VECTOR_SIZE) {
-		// all rows held the same id before
-		FreeDeleteData();
-		constant_delete_id = previous_id(0, 0);
-		return;
-	}
-	if (previous_id_count <= 1 && delete_state != DeleteIdState::ARRAY) {
+	if (previous_id_count <= 1) {
+		// the rows held the same id before
+		auto previous = previous_id(0, 0);
+		if (count == STANDARD_VECTOR_SIZE) {
+			FreeDeleteData();
+			constant_delete_id = previous;
+			return;
+		}
 		if (HasConstantDeleteId()) {
 			// the other rows keep the transaction's id - hold it in a mask
 			deleted_mask.Initialize(STANDARD_VECTOR_SIZE);
 			mask_delete_id = constant_delete_id;
-			constant_delete_id = previous_id(0, 0);
+			constant_delete_id = previous;
 			delete_state = DeleteIdState::MASKED;
 		}
-		if (constant_delete_id == previous_id(0, 0)) {
+		if (delete_state == DeleteIdState::MASKED && constant_delete_id == previous) {
 			// the rows of the mask fall back to the id of the other rows
 			for (idx_t i = 0; i < count; i++) {
 				deleted_mask.SetInvalid(rows ? rows[i] : i);
@@ -618,8 +625,9 @@ VersionCompressionResult ChunkVectorInfo::CompressVersionIds(VisibilityBound low
 	}
 	if (delete_state == DeleteIdState::MASKED) {
 		if (IsUpdateMarker(mask_delete_id)) {
-			if (GetWriter(mask_delete_id) < lowest_visibility_bound && constant_delete_id == NOT_DELETED_ID) {
-				// all transactions see the update - drop the markers
+			if (GetWriter(mask_delete_id) < lowest_visibility_bound) {
+				// all transactions see the update - drop the markers (the older id of the other rows is dropped above)
+				D_ASSERT(constant_delete_id == NOT_DELETED_ID);
 				FreeDeleteData();
 			} else {
 				pending = true;

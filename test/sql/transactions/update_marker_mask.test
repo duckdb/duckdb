@@ -41,6 +41,9 @@ CREATE TABLE t9 AS FROM t;
 statement ok
 CREATE TABLE t10 AS FROM t;
 
+statement ok
+CREATE TABLE t11 AS FROM t;
+
 # two updates of one transaction into the same vector, seen by an older snapshot
 statement ok con3
 BEGIN
@@ -471,3 +474,74 @@ query II
 SELECT COUNT(*), SUM(a) FROM t10
 ----
 3000	13
+
+# an update of all rows of a vector, a delete of some of them and another update of others in one transaction, rolled
+# back and committed
+statement ok con3
+BEGIN
+
+query I con3
+SELECT COUNT(*) FROM t11
+----
+3000
+
+statement ok con1
+BEGIN
+
+statement ok con1
+UPDATE t11 SET a = 1 WHERE id < 2048
+
+statement ok con1
+DELETE FROM t11 WHERE id < 2048 AND id % 10 = 0
+
+statement ok con1
+UPDATE t11 SET a = 2 WHERE id < 2048 AND id % 10 = 1
+
+query II con1
+SELECT COUNT(*), SUM(a) FROM t11
+----
+2795	2048
+
+statement ok con1
+ROLLBACK
+
+query II
+SELECT COUNT(*), SUM(a) FROM t11
+----
+3000	0
+
+statement ok con1
+BEGIN
+
+statement ok con1
+UPDATE t11 SET a = 1 WHERE id < 2048
+
+statement ok con1
+DELETE FROM t11 WHERE id < 2048 AND id % 10 = 0
+
+statement ok con1
+UPDATE t11 SET a = 2 WHERE id < 2048 AND id % 10 = 1
+
+statement ok con1
+COMMIT
+
+query II
+SELECT COUNT(*), SUM(a) FROM t11
+----
+2795	2048
+
+statement error con3
+UPDATE t11 SET a = 3 WHERE id = 1
+----
+Conflict on update
+
+statement ok con3
+ROLLBACK
+
+statement ok
+UPDATE t11 SET a = 3 WHERE id = 1
+
+query II
+SELECT COUNT(*), SUM(a) FROM t11
+----
+2795	2049
