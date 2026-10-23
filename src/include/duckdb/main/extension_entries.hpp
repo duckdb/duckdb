@@ -577,6 +577,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"json", "json", CatalogType::MACRO_ENTRY},
     {"json_array", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_array_length", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"json_build_object", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_contains", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_copy_strftime_if_date", "json", CatalogType::MACRO_ENTRY},
     {"json_copy_strftime_if_timestamp", "json", CatalogType::MACRO_ENTRY},
