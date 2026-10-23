@@ -50,3 +50,21 @@ FROM produce
   |> SELECT item, sales, doubled_sales;
 ----
 cashews	30	60
+
+# a SET active_grammar_extensions between the statements of one multi-statement string must reach
+# the later statements of that string (con2 is a fresh connection without the setting)
+statement ok con2
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_grammar_extension_demo.duckdb_extension'; SET active_grammar_extensions = ['pipe_query_syntax']; CREATE TABLE mid_string AS FROM range(3) t(i) |> EXTEND i * 2 AS d |> SELECT d;
+
+query I con2
+FROM mid_string |> ORDER BY d;
+----
+0
+2
+4
+
+# without the SET the grammar extension stays inactive on this connection
+statement error con3
+FROM range(3) t(i) |> EXTEND i * 2 AS d |> SELECT d;
+----
+Parser Error
