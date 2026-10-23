@@ -152,6 +152,10 @@ void CompressedStringScanState::InitializeDictionary(const ColumnSegment &segmen
 template <bool NEEDS_STRING_OFFSET_CHECK>
 void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count) {
 	D_ASSERT(NEEDS_STRING_OFFSET_CHECK || dictionary);
+	if (NEEDS_STRING_OFFSET_CHECK) {
+		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+		D_ASSERT(result_offset < FlatVector::GetCapacity(result));
+	}
 	// Handling non-bitpacking-group-aligned start values;
 	idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 
@@ -172,10 +176,6 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 	                                          layout.current_width);
 
 	auto result_data = FlatVector::Writer<string_t>(result, scan_count, result_offset);
-	if (NEEDS_STRING_OFFSET_CHECK) {
-		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-		D_ASSERT(result_offset < FlatVector::GetCapacity(result));
-	}
 
 	bool has_error = false;
 	for (idx_t i = 0; i < scan_count; i++) {

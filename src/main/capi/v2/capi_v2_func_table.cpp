@@ -627,7 +627,6 @@ static auto CV2TableExecBatch(ClientContext &context, TableFunctionInput &input,
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
 	CV2CallbackContext callback_context(context);
-	target.get().Flatten();
 	info.exec_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {

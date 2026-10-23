@@ -144,6 +144,7 @@ void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &resul
 		D_ASSERT(result_offset == 0);
 		Scan(state, scan_count, result);
 	} else {
+		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 		ScanPartial(state, scan_count, result, result_offset);
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	}
@@ -156,9 +157,10 @@ void ColumnSegment::Select(ColumnScanState &state, idx_t scan_count, Vector &res
 	}
 	if (scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR) {
 		D_ASSERT(result_offset == 0);
+	} else {
+		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	}
 	function.get().select(*this, state, scan_count, result, sel, sel_count, result_offset, scan_type);
-	D_ASSERT(scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR || result.GetVectorType() == VectorType::FLAT_VECTOR);
 }
 
 void ColumnSegment::Filter(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel,

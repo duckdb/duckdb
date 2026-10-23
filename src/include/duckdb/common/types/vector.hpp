@@ -76,7 +76,7 @@ public:
 	DUCKDB_API void ReferenceAndSetType(const Vector &other);
 
 	//! Resets a vector from a vector cache.
-	//! Empties the value without allocation; subsequent producers select the representation.
+	//! Returns the cached flat buffer, empty and without allocating its payload.
 	DUCKDB_API void ResetFromCache(const VectorCache &cache);
 
 	//! Creates a reference to a slice of the other vector
@@ -224,20 +224,6 @@ public:
 	void ConstReference(const Vector &other) const;
 
 private:
-	friend class DataChunk;
-	friend struct FlatVector;
-	friend struct ListVector;
-	friend struct StringVector;
-	//! Acquire output storage; representation access continues to use BufferMutable.
-	inline VectorBuffer &BufferForWrite() {
-		if (buffer->GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-			return DictionaryBufferForWrite();
-		}
-		return *buffer;
-	}
-	DUCKDB_API VectorBuffer &DictionaryBufferForWrite();
-	bool TryReuseDictionary(const Vector &source, const SelectionVector &sel, idx_t count,
-	                        optional_ptr<SelCache> cache = nullptr);
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValue(const Vector &v, idx_t index);
 	//! Returns the [index] element of the Vector as a Value.

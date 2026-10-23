@@ -67,11 +67,7 @@ DUCKDB_V2_ERROR duckdb_v2_data_chunk_copy(duckdb_v2_factory_handle factory, duck
 
 DUCKDB_V2_ERROR duckdb_v2_data_chunk_clear(duckdb_v2_data_chunk_handle chunk, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(chunk);
-	return WithErrorHandler(err, [&]() {
-		auto &data = *Convert(chunk);
-		data.Reset();
-		data.Flatten();
-	});
+	return WithErrorHandler(err, [&]() { Convert(chunk)->Reset(); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_data_chunk_destroy(duckdb_v2_data_chunk_handle *chunk) {

@@ -3,7 +3,6 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
@@ -185,22 +184,17 @@ TEST_CASE("Dictionary composition preserves shared selections and global entries
 		column.Dictionary(entry, original, 3);
 	}
 	output.Slice(input, select, 2);
-	auto wrapper = output.data[0].GetBufferRef().get();
 	duckdb::weak_ptr<VectorBuffer> retained = output.data[0].GetBufferRef();
 	for (idx_t iteration = 0; iteration < 3; iteration++) {
+		retained = output.data[0].GetBufferRef();
 		output.Reset();
-		REQUIRE(output.data[0].GetBufferRef().get() == wrapper);
+		REQUIRE(retained.expired());
 		REQUIRE(output.size() == 0);
-		REQUIRE(DictionaryVector::Child(output.data[0]).size() == 0);
-		REQUIRE_FALSE(DictionaryVector::DictionarySize(output.data[0]).IsValid());
-		REQUIRE_FALSE(DictionaryVector::IsGlobalDictionary(output.data[0]));
-		REQUIRE(DictionaryVector::DictionaryId(output.data[0]).empty());
+		REQUIRE(output.data[0].GetVectorType() == VectorType::FLAT_VECTOR);
 		REQUIRE(output.GetAllocationSize() == 0);
 		REQUIRE(output.data[0].Values<int64_t>().size() == 0);
 		output.data[0].Verify();
 		output.Slice(input, select, 2);
-		REQUIRE_FALSE(retained.expired());
-		REQUIRE(output.data[0].GetBufferRef().get() == wrapper);
 		REQUIRE(DictionaryVector::SelVector(output.data[0]).data() ==
 		        DictionaryVector::SelVector(output.data[1]).data());
 		REQUIRE(DictionaryVector::IsGlobalDictionary(output.data[0]));
@@ -211,16 +205,16 @@ TEST_CASE("Dictionary composition preserves shared selections and global entries
 		REQUIRE(original.get_index(0) == 2);
 	}
 	output.Reset();
-	REQUIRE(output.data[0].GetVectorType() == VectorType::DICTIONARY_VECTOR);
-	SECTION("Append prepares reset storage before checking capacity") {
+	REQUIRE(output.data[0].GetVectorType() == VectorType::FLAT_VECTOR);
+	SECTION("Append uses the cached capacity") {
 		output.Append(input, VectorAppendMode::ERROR_ON_NO_SPACE);
 		REQUIRE(output.GetValue(0, 2) == Value::BIGINT(20));
 	}
-	SECTION("Copy prepares reset storage before checking its representation") {
+	SECTION("Copy writes to the cached storage") {
 		input.Copy(output);
 		REQUIRE(output.GetValue(0, 2) == Value::BIGINT(20));
 	}
-	SECTION("Publishing cardinality selects writable storage") {
+	SECTION("Publishing cardinality allows writing") {
 		output.SetChildCardinality(1);
 		for (auto &column : output.data) {
 			auto writer = FlatVector::Writer<int64_t>(column, 1);
@@ -231,7 +225,7 @@ TEST_CASE("Dictionary composition preserves shared selections and global entries
 	REQUIRE(retained.expired());
 }
 
-TEST_CASE("Empty reset dictionaries preserve slicing ownership", "[lazy_vector]") {
+TEST_CASE("Empty lazy buffers preserve slicing ownership", "[lazy_vector]") {
 	auto state = make_uniq<LazyAllocationState>();
 	auto &allocations = *state;
 	Allocator allocator(LazyAllocationState::Allocate, LazyAllocationState::Free, LazyAllocationState::Reallocate,
@@ -245,9 +239,8 @@ TEST_CASE("Empty reset dictionaries preserve slicing ownership", "[lazy_vector]"
 	auto &source = chunk.data[0];
 	source.Slice(input, sel, 1);
 	chunk.Reset();
-	auto owned_buffer = DictionaryVector::Child(source).GetBufferRef();
-	REQUIRE(DictionaryVector::Child(source).GetType() == source.GetType());
-	REQUIRE_FALSE(DictionaryVector::SelVector(source).IsSet());
+	auto owned_buffer = source.GetBufferRef();
+	REQUIRE(source.GetVectorType() == VectorType::FLAT_VECTOR);
 	REQUIRE(allocations.allocations == 0);
 
 	SECTION("Range slicing creates a separate zero-capacity view") {
@@ -264,24 +257,7 @@ TEST_CASE("Empty reset dictionaries preserve slicing ownership", "[lazy_vector]"
 		result.Slice(sel, 0);
 		REQUIRE(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 		REQUIRE(result.GetBufferRef() != source.GetBufferRef());
-		REQUIRE(result.Buffer().Cast<DictionaryBuffer>().GetEntryPtr());
 		REQUIRE(result.size() == 0);
-		REQUIRE(allocations.allocations == 0);
-	}
-	SECTION("Cached slicing does not cache an empty reset selection") {
-		SelCache cache;
-		auto result = Vector::Ref(source);
-		result.Slice(sel, 0, cache);
-		REQUIRE(cache.cache.empty());
-		REQUIRE(result.Buffer().Cast<DictionaryBuffer>().GetEntryPtr());
-		REQUIRE(result.size() == 0);
-		REQUIRE(allocations.allocations == 0);
-	}
-	SECTION("Plain flatten takes the retained storage without allocating") {
-		auto result = Vector::Ref(source);
-		result.Flatten();
-		REQUIRE(result.GetBufferRef() == owned_buffer);
-		REQUIRE(FlatVector::GetCapacity(result) == 8);
 		REQUIRE(allocations.allocations == 0);
 	}
 	SECTION("Selected flatten produces independent writable storage") {
@@ -292,7 +268,7 @@ TEST_CASE("Empty reset dictionaries preserve slicing ownership", "[lazy_vector]"
 		REQUIRE(result.GetValue(0) == Value::BIGINT(42));
 		REQUIRE(owned_buffer->Size() == 0);
 	}
-	SECTION("Empty serialization needs neither an input entry nor payload") {
+	SECTION("Empty serialization needs no payload") {
 		MemoryStream stream(Allocator::DefaultAllocator());
 		BinarySerializer serializer(stream);
 		serializer.Begin();
@@ -346,7 +322,7 @@ TEST_CASE("Nested payloads remain lazy through empty reads and recover from allo
 	}
 }
 
-TEST_CASE("Nested dictionaries survive recursive reset and release their inputs", "[lazy_vector]") {
+TEST_CASE("Recursive reset releases nested dictionary inputs", "[lazy_vector]") {
 	auto state = make_uniq<LazyAllocationState>();
 	auto &allocations = *state;
 	Allocator allocator(LazyAllocationState::Allocate, LazyAllocationState::Free, LazyAllocationState::Reallocate,
@@ -373,21 +349,18 @@ TEST_CASE("Nested dictionaries survive recursive reset and release their inputs"
 		auto before = allocations.allocations;
 		elements.Slice(ListVector::GetChild(input), sel, 2);
 		lists.Slice(input, sel, 2);
-		duckdb::weak_ptr<VectorBuffer> list_wrapper = lists.GetBufferRef();
-		duckdb::weak_ptr<VectorBuffer> child_wrapper = elements.GetBufferRef();
 		for (idx_t iteration = 0; iteration < 3; iteration++) {
 			FlatVector::SetSize(column, type.InternalType() == PhysicalType::ARRAY ? 1 : 2);
 			column.Buffer().Verify(type);
-			duckdb::weak_ptr<DictionaryEntry> entry = lists.Buffer().Cast<DictionaryBuffer>().GetEntryPtr();
-			duckdb::weak_ptr<DictionaryEntry> child_entry = elements.Buffer().Cast<DictionaryBuffer>().GetEntryPtr();
+			duckdb::weak_ptr<DictionaryEntry> entry = lists.BufferMutable().Cast<DictionaryBuffer>().GetEntryPtr();
+			duckdb::weak_ptr<DictionaryEntry> child_entry =
+			    elements.BufferMutable().Cast<DictionaryBuffer>().GetEntryPtr();
 			auto entry_references = entry.use_count();
 			chunk.Reset();
 			REQUIRE(entry.use_count() == entry_references - 1);
 			REQUIRE(child_entry.expired());
-			REQUIRE_FALSE(list_wrapper.expired());
-			REQUIRE_FALSE(child_wrapper.expired());
-			REQUIRE(lists.GetBufferRef() == list_wrapper.lock());
-			REQUIRE(elements.GetBufferRef() == child_wrapper.lock());
+			REQUIRE(lists.GetVectorType() == VectorType::FLAT_VECTOR);
+			REQUIRE(elements.GetVectorType() == VectorType::FLAT_VECTOR);
 			REQUIRE(column.size() == 0);
 			REQUIRE(lists.size() == 0);
 			REQUIRE(elements.size() == 0);
@@ -396,14 +369,10 @@ TEST_CASE("Nested dictionaries survive recursive reset and release their inputs"
 			RecursiveUnifiedVectorFormat format;
 			Vector::RecursiveToUnifiedFormat(column, format);
 			column.Buffer().Verify(type);
-			REQUIRE(lists.GetBufferRef() == list_wrapper.lock());
-			REQUIRE(elements.GetBufferRef() == child_wrapper.lock());
 			REQUIRE(allocations.allocations == before);
 			elements.Slice(ListVector::GetChild(input), sel, 2);
-			// Exercise both flat-source reuse and dictionary composition.
+			// Exercise both flat inputs and dictionary composition.
 			lists.Slice(iteration % 2 ? dictionary : input, sel, 2);
-			REQUIRE(lists.GetBufferRef() == list_wrapper.lock());
-			REQUIRE(elements.GetBufferRef() == child_wrapper.lock());
 			REQUIRE(lists.GetValue(0) == (iteration % 2 ? value : Value::LIST(LogicalType::BIGINT, {})));
 		}
 		chunk.Reset();
@@ -413,8 +382,6 @@ TEST_CASE("Nested dictionaries survive recursive reset and release their inputs"
 		column.Buffer().Verify(type);
 		REQUIRE(lists.GetValue(0) == value);
 		REQUIRE(lists.GetValue(1) == value);
-		REQUIRE(list_wrapper.expired());
-		REQUIRE(child_wrapper.expired());
 		REQUIRE(input.GetValue(0) == value);
 		REQUIRE(dictionary.GetValue(1) == value);
 		chunk.Destroy();
@@ -422,7 +389,7 @@ TEST_CASE("Nested dictionaries survive recursive reset and release their inputs"
 	}
 }
 
-TEST_CASE("Nested reset dictionaries support shared list mutations and preserve grown capacity", "[lazy_vector]") {
+TEST_CASE("Nested reset buffers support list mutations and preserve grown capacity", "[lazy_vector]") {
 	auto state = make_uniq<LazyAllocationState>();
 	auto &allocations = *state;
 	Allocator allocator(LazyAllocationState::Allocate, LazyAllocationState::Free, LazyAllocationState::Reallocate,
@@ -441,21 +408,19 @@ TEST_CASE("Nested reset dictionaries support shared list mutations and preserve 
 	sel.set_index(1, 0);
 	children.Slice(input, sel, 2);
 	chunk.Reset();
-	duckdb::weak_ptr<VectorBuffer> wrapper = children.GetBufferRef();
 	REQUIRE(ListVector::GetListCapacity(lists) == 2);
-	REQUIRE_FALSE(wrapper.expired());
 
-	SECTION("Reserve prepares a retained child without changing its size") {
+	SECTION("Reserve grows a cached child without changing its size") {
 		ListVector::Reserve(lists, 6);
 		REQUIRE(children.size() == 0);
 		REQUIRE(ListVector::GetListCapacity(lists) >= 6);
 	}
-	SECTION("Publishing a child size prepares and grows retained storage") {
+	SECTION("Publishing a child size grows cached storage") {
 		ListVector::SetListSize(lists, 6);
 		REQUIRE(children.size() == 6);
 		REQUIRE(ListVector::GetListCapacity(lists) >= 6);
 	}
-	SECTION("Appending through the retained LIST parent prepares its own child") {
+	SECTION("Appending through the cached LIST parent grows its child") {
 		ListVector::Append(children, ListVector::GetChild(input), 1);
 		ListVector::Append(children, ListVector::GetChild(input), *FlatVector::IncrementalSelectionVector(), 1);
 		ListVector::PushBack(children, Value::BIGINT(9));
@@ -476,7 +441,6 @@ TEST_CASE("Nested reset dictionaries support shared list mutations and preserve 
 		allocations.fail = false;
 		ListVector::Reserve(lists, 6);
 	}
-	REQUIRE(wrapper.expired());
 	chunk.Reset();
 	ListVector::Reserve(lists, 6);
 	ListVector::Reserve(children, 12);
@@ -522,42 +486,6 @@ TEST_CASE("Reset retains grown STRUCT, ARRAY and LIST storage", "[lazy_vector]")
 	}
 	chunk.Destroy();
 	REQUIRE(allocations.live_bytes == 0);
-}
-
-TEST_CASE("Explicit flatten clears nested reset dictionaries without allocating payloads", "[lazy_vector]") {
-	auto state = make_uniq<LazyAllocationState>();
-	auto &allocations = *state;
-	Allocator allocator(LazyAllocationState::Allocate, LazyAllocationState::Free, LazyAllocationState::Reallocate,
-	                    std::move(state));
-	auto list = LogicalType::LIST(LogicalType::BIGINT);
-	Vector input(list, 2);
-	input.Append(Value::LIST(LogicalType::BIGINT, {Value::BIGINT(12), Value::BIGINT(34)}));
-	input.Append(Value(list));
-	SelectionVector sel(2);
-	sel.set_index(0, 1);
-	sel.set_index(1, 0);
-	DataChunk chunk;
-	chunk.Initialize(allocator, {list}, 2);
-	auto &column = chunk.data[0];
-	auto &child = ListVector::GetChildMutable(column);
-	child.Slice(ListVector::GetChild(input), sel, 2);
-	column.Slice(input, sel, 2);
-	chunk.Reset();
-	REQUIRE(column.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-	REQUIRE(child.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-	SECTION("A writer only selects flat storage for the vector being written") {
-		auto writer = FlatVector::Writer<list_entry_t>(column, 1);
-		writer.WriteValue({0, 0});
-		REQUIRE(child.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		REQUIRE(allocations.allocations == 1);
-	}
-	SECTION("Explicit flatten also selects flat storage for descendants") {
-		chunk.Flatten();
-		REQUIRE(column.GetVectorType() == VectorType::FLAT_VECTOR);
-		REQUIRE(child.GetVectorType() == VectorType::FLAT_VECTOR);
-		REQUIRE(allocations.allocations == 0);
-	}
-	column.Buffer().Verify(list);
 }
 
 TEST_CASE("Nested C API outputs allocate before raw pointer access", "[lazy_vector]") {
@@ -650,7 +578,7 @@ TEST_CASE("Nested C API inputs and fetched chunks prepare empty children", "[laz
 	}
 }
 
-TEST_CASE("Reset dictionaries retain the destination allocator and survive chunk destruction", "[lazy_vector]") {
+TEST_CASE("Cached buffers retain the destination allocator and survive chunk destruction", "[lazy_vector]") {
 	auto state = make_uniq<LazyAllocationState>();
 	auto &allocations = *state;
 	Allocator allocator(LazyAllocationState::Allocate, LazyAllocationState::Free, LazyAllocationState::Reallocate,
@@ -718,7 +646,7 @@ TEST_CASE("Lazy scalar buffers handle failed allocation and capacity growth", "[
 	REQUIRE(zero.data[0].Buffer().GetAllocator().get() == &allocator);
 }
 
-TEST_CASE("Reset dictionaries support flat mutation and empty reinterpretation", "[lazy_vector]") {
+TEST_CASE("Lazy buffers support flat mutation and empty reinterpretation", "[lazy_vector]") {
 	DataChunk chunk;
 	chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::BIGINT});
 	Vector input(Value::BIGINT(7), count_t(1));
@@ -730,7 +658,7 @@ TEST_CASE("Reset dictionaries support flat mutation and empty reinterpretation",
 	Vector reinterpreted(LogicalType::UBIGINT, nullptr);
 	reinterpreted.Reinterpret(chunk.data[0]);
 	REQUIRE(reinterpreted.size() == 0);
-	REQUIRE(chunk.data[0].GetVectorType() == VectorType::DICTIONARY_VECTOR);
+	REQUIRE(chunk.data[0].GetVectorType() == VectorType::FLAT_VECTOR);
 	FlatVector::SetNull(chunk.data[0], 0, true);
 	FlatVector::SetSize(chunk.data[0], 1);
 	REQUIRE(chunk.data[0].GetValue(0).IsNull());
@@ -883,21 +811,14 @@ TEST_CASE("Caching operators retain lazy output storage after slicing", "[lazy_v
 	auto &allocator = BufferAllocator::Get(*connection.context);
 	output.Initialize(allocator, {LogicalType::BIGINT});
 	auto owned_buffer = output.data[0].GetBufferRef();
-	duckdb::weak_ptr<VectorBuffer> wrapper;
 	const auto batch_count = MinValue<idx_t>(3, STANDARD_VECTOR_SIZE);
 	for (idx_t iteration = 0; iteration < batch_count; iteration++) {
 		REQUIRE(op.Execute(context, input, output, global, state) == OperatorResultType::NEED_MORE_INPUT);
 		REQUIRE(output.size() == 0);
-		REQUIRE(output.data[0].GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		auto &child = DictionaryVector::Child(output.data[0]);
-		REQUIRE(child.GetBufferRef() == owned_buffer);
-		REQUIRE(child.Buffer().GetAllocator().get() == &allocator);
-		REQUIRE(FlatVector::GetData(child) == nullptr);
-		if (iteration == 0) {
-			wrapper = output.data[0].GetBufferRef();
-		} else {
-			REQUIRE(wrapper.lock() == output.data[0].GetBufferRef());
-		}
+		REQUIRE(output.data[0].GetVectorType() == VectorType::FLAT_VECTOR);
+		REQUIRE(output.data[0].GetBufferRef() == owned_buffer);
+		REQUIRE(output.data[0].Buffer().GetAllocator().get() == &allocator);
+		REQUIRE(FlatVector::GetData(output.data[0]) == nullptr);
 		REQUIRE(state.cached_chunk->size() == iteration + 1);
 		REQUIRE(state.cached_chunk->GetValue(0, iteration) == Value::BIGINT(7));
 		REQUIRE(input.GetValue(0, 0) == Value::BIGINT(7));

@@ -736,8 +736,8 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		FSSTVector::Create(result, scan_state.duckdb_fsst_decoder, string_block_limit, scan_count);
 		result_data = FSSTVector::GetCompressedData(result);
 	} else {
-		result_data = FlatVector::GetDataMutable<string_t>(result);
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+		result_data = FlatVector::GetDataMutable<string_t>(result);
 	}
 
 	auto strings = scan_state.ValidateRange(start, scan_count);
@@ -774,11 +774,11 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 	D_ASSERT(start <= segment.count.load());
 	D_ASSERT(vector_count <= segment.count.load() - start);
 	D_ASSERT(sel_count <= vector_count);
+	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	auto &str_allocator = StringVector::GetStringAllocator(result);
 	auto strings = scan_state.ValidateRange(start, vector_count);
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	for (idx_t i = 0; i < sel_count; i++) {
 		idx_t index = sel.get_index(i);

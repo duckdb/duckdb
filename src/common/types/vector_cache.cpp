@@ -3,7 +3,6 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
-#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
@@ -78,12 +77,7 @@ public:
 		default:
 			break;
 		}
-		auto &active = result.GetBufferRef();
-		if (active && active.use_count() == 1 && active->GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-			active->Cast<DictionaryBuffer>().Reset(type, buffer);
-		} else {
-			result.SetBuffer(buffer);
-		}
+		result.SetBuffer(buffer);
 	}
 
 	const LogicalType &GetType() {

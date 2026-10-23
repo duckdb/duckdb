@@ -67,7 +67,6 @@ protected:
 
 protected:
 	friend struct FlatVector;
-	friend class VectorCacheEntry;
 
 	ValidityMask validity;
 	data_ptr_t data_ptr;
@@ -112,17 +111,15 @@ struct FlatVector {
 		return GetDataUnsafe(vector);
 	}
 	static inline data_ptr_t GetDataMutable(Vector &vector) {
-		if (!vector.GetBufferRef()) {
-			return nullptr;
-		}
-		auto &buffer = vector.BufferForWrite();
 		VerifyFlatOrConst(vector);
-		return buffer.GetDataMutable();
+		return GetDataMutableUnsafe(vector);
 	}
 	static inline const_data_ptr_t GetDataUnsafe(const Vector &vector) {
 		return vector.GetBufferRef() ? vector.GetBufferRef()->GetData() : nullptr;
 	}
-	DUCKDB_API static data_ptr_t GetDataMutableUnsafe(Vector &vector);
+	static inline data_ptr_t GetDataMutableUnsafe(Vector &vector) {
+		return vector.GetBufferRef() ? vector.BufferMutable().GetDataMutable() : nullptr;
+	}
 	template <class T>
 	static inline const T *GetData(const Vector &vector) {
 		ConstantVector::VerifyVectorType<T>(vector);
@@ -133,7 +130,17 @@ struct FlatVector {
 		ConstantVector::VerifyVectorType<T>(vector);
 		return GetDataMutableUnsafe<T>(vector);
 	}
-	DUCKDB_API static idx_t GetCapacity(const Vector &vector);
+	static inline idx_t GetCapacity(const Vector &vector) {
+		auto &buffer_ref = vector.GetBufferRef();
+		if (!buffer_ref) {
+			return 0;
+		}
+		auto &buffer = *buffer_ref;
+		if (buffer.GetVectorType() != VectorType::FLAT_VECTOR) {
+			throw InternalException("FlatVector::GetCapacity requires a flat vector buffer");
+		}
+		return buffer.Capacity();
+	}
 	static void SetSize(Vector &vector, idx_t new_size) {
 		auto &buffer_ref = vector.GetBufferRef();
 		if (!buffer_ref) {
@@ -142,8 +149,7 @@ struct FlatVector {
 			}
 			return;
 		}
-		auto &buffer = new_size ? vector.BufferForWrite() : vector.BufferMutable();
-		buffer.SetVectorSize(new_size);
+		buffer_ref->SetVectorSize(new_size);
 	}
 	template <class T>
 	static inline const T *GetDataUnsafe(const Vector &vector) {
@@ -163,11 +169,13 @@ struct FlatVector {
 		VerifyFlatVector(vector);
 		return vector.Buffer().GetValidityMask();
 	}
-	DUCKDB_API static ValidityMask &ValidityMutable(Vector &vector);
-	static inline void SetValidity(Vector &vector, const ValidityMask &new_validity) {
-		auto &buffer = vector.BufferForWrite();
+	static inline ValidityMask &ValidityMutable(Vector &vector) {
 		VerifyFlatVector(vector);
-		auto &validity = buffer.GetValidityMask();
+		return vector.BufferMutable().GetValidityMask();
+	}
+	static inline void SetValidity(Vector &vector, const ValidityMask &new_validity) {
+		VerifyFlatVector(vector);
+		auto &validity = vector.BufferMutable().GetValidityMask();
 		validity.Initialize(new_validity);
 	}
 	static void CopyValidity(Vector &vector, const Vector &source, idx_t count);

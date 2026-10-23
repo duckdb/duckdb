@@ -105,7 +105,7 @@ public:
 	//! Initializes a DataChunk with the given types and without any vector data allocation.
 	DUCKDB_API void InitializeEmpty(const vector<LogicalType> &types);
 
-	//! Initializes typed storage, allocating non-nested payloads on first mutable access.
+	//! Initializes typed storage, allocating payloads on first mutable access.
 	//! An initialize mask can leave individual columns without storage.
 	DUCKDB_API void Initialize(ClientContext &context, const vector<LogicalType> &types,
 	                           idx_t capacity = STANDARD_VECTOR_SIZE);
@@ -157,7 +157,7 @@ public:
 	//! Slice a DataChunk from "offset" to "offset + count"
 	DUCKDB_API void Slice(idx_t offset, idx_t count);
 
-	//! Clears the batch and restores owned storage, retaining reusable allocations and private dictionary wrappers.
+	//! Clears the batch and restores owned storage, retaining reusable allocations.
 	DUCKDB_API void Reset();
 
 	DUCKDB_API void Serialize(Serializer &serializer, bool compressed_serialization = true) const;

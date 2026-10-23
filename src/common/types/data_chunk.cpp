@@ -165,11 +165,18 @@ void DataChunk::CheckCardinality(idx_t count_p) {
 
 void DataChunk::SetChildCardinality(idx_t count_p) {
 	for (auto &v : data) {
-		// InitializeEmpty placeholders have no size to update.
+		// null-buffer placeholders (InitializeEmpty) and non-flat/constant vectors cannot be resized
 		if (!v.GetBufferRef()) {
 			continue;
 		}
-		FlatVector::SetSize(v, count_p);
+		auto vtype = v.GetVectorType();
+		if (vtype == VectorType::FLAT_VECTOR || vtype == VectorType::CONSTANT_VECTOR) {
+			FlatVector::SetSize(v, count_p);
+		} else if (v.size() != count_p) {
+			throw InternalException("DataChunk::SetChildCardinality - vector has size %d but expected size %d - and "
+			                        "cannot change vector size because it is not a flat or constant vector",
+			                        v.size(), count_p);
+		}
 	}
 	this->count = count_p;
 }
@@ -195,8 +202,8 @@ void DataChunk::Copy(DataChunk &other, idx_t offset) const {
 
 	const idx_t target_count = size() - offset;
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		VectorOperations::Copy(data[i], other.data[i], size(), offset, 0);
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
+		VectorOperations::Copy(data[i], other.data[i], size(), offset, 0);
 		FlatVector::SetSize(other.data[i], target_count);
 	}
 	other.count = optional_idx();
@@ -209,8 +216,8 @@ void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t s
 
 	const idx_t target_count = source_count - offset;
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		VectorOperations::Copy(data[i], other.data[i], sel, source_count, offset, 0);
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
+		VectorOperations::Copy(data[i], other.data[i], sel, source_count, offset, 0);
 		FlatVector::SetSize(other.data[i], target_count);
 	}
 	other.count = optional_idx();
@@ -381,9 +388,6 @@ void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t 
 	D_ASSERT(other.ColumnCount() <= col_offset + ColumnCount());
 	SelCache merge_cache;
 	for (idx_t c = 0; c < other.ColumnCount(); c++) {
-		if (data[col_offset + c].TryReuseDictionary(other.data[c], sel, count_p, merge_cache)) {
-			continue;
-		}
 		if (other.data[c].GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 			// already a dictionary! merge the dictionaries
 			data[col_offset + c].Reference(other.data[c]);

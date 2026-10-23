@@ -11,8 +11,6 @@
 #include "duckdb/common/once_flag.hpp"
 #include "duckdb/common/types/vector.hpp"
 
-#include <variant>
-
 namespace duckdb {
 
 //! The DictionaryEntry holds a child Vector for dictionary-encoded vectors
@@ -55,50 +53,31 @@ public:
 	void SetSelVector(const SelectionVector &vector) {
 		this->sel_vector.Initialize(vector);
 	}
-	bool IsReset() const {
-		return std::holds_alternative<Vector>(storage);
-	}
-	void Reset(const LogicalType &type, const buffer_ptr<VectorBuffer> &flat_buffer);
-	Vector &GetChild() {
-		return IsReset() ? GetResetVector() : GetEntry().data;
-	}
-	const Vector &GetChild() const {
-		return IsReset() ? GetResetVector() : GetEntry().data;
-	}
-	void Rebind(buffer_ptr<DictionaryEntry> entry_p, const SelectionVector &sel, idx_t count);
 	optional_idx GetDictionarySize() const {
-		if (IsReset()) {
-			return optional_idx();
-		}
-		auto &entry = GetDictionaryEntry();
-		if (!entry || entry->data.size() == 0) {
+		if (entry->data.size() == 0) {
 			// FIXME: we should be directly returning entry->data.size(), this should not be an optional_idx
 			return optional_idx();
 		}
 		return entry->data.size();
 	}
 	void SetDictionaryId(string id) {
-		GetEntry().id = std::move(id);
+		entry->id = std::move(id);
 	}
 	const string &GetDictionaryId() const {
-		if (IsReset() || !GetDictionaryEntry()) {
-			static const string empty;
-			return empty;
-		}
-		return GetEntry().id;
+		return entry->id;
 	}
 
 	DictionaryEntry &GetEntry() {
-		return *GetDictionaryEntry();
+		return *entry;
 	}
 	const DictionaryEntry &GetEntry() const {
-		return *GetDictionaryEntry();
+		return *entry;
 	}
-	buffer_ptr<DictionaryEntry> GetEntryPtr() const {
-		return IsReset() ? nullptr : GetDictionaryEntry();
+	buffer_ptr<DictionaryEntry> GetEntryPtr() {
+		return entry;
 	}
 	void SetEntry(buffer_ptr<DictionaryEntry> entry_p) {
-		storage.emplace<buffer_ptr<DictionaryEntry>>(std::move(entry_p));
+		entry = std::move(entry_p);
 	}
 
 public:
@@ -120,23 +99,8 @@ protected:
 	void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 private:
-	//! The active dictionary input and its shared metadata; may be null before an entry is attached.
-	const buffer_ptr<DictionaryEntry> &GetDictionaryEntry() const {
-		return std::get<buffer_ptr<DictionaryEntry>>(storage);
-	}
-	//! The chunk's empty flat vector while reset, preserving type, capacity, allocator and reusable storage.
-	//! Its buffer reference keeps storage available without retaining the previous dictionary input.
-	Vector &GetResetVector() {
-		return std::get<Vector>(storage);
-	}
-	const Vector &GetResetVector() const {
-		return std::get<Vector>(storage);
-	}
-
-private:
 	SelectionVector sel_vector;
-	//! An input entry or the chunk's typed, empty storage between reset and the next producer.
-	std::variant<buffer_ptr<DictionaryEntry>, Vector> storage;
+	buffer_ptr<DictionaryEntry> entry;
 };
 
 class SelectionDataHolder : public AuxiliaryDataHolder {
@@ -170,11 +134,11 @@ struct DictionaryVector {
 	}
 	static inline const Vector &Child(const Vector &vector) {
 		VerifyDictionary(vector);
-		return vector.Buffer().Cast<DictionaryBuffer>().GetChild();
+		return vector.Buffer().Cast<DictionaryBuffer>().GetEntry().data;
 	}
 	static inline Vector &Child(Vector &vector) {
 		VerifyDictionary(vector);
-		return vector.BufferMutable().Cast<DictionaryBuffer>().GetChild();
+		return vector.BufferMutable().Cast<DictionaryBuffer>().GetEntry().data;
 	}
 	static inline optional_idx DictionarySize(const Vector &vector) {
 		VerifyDictionary(vector);
@@ -200,8 +164,7 @@ struct DictionaryVector {
 		if (vector.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
 			return false;
 		}
-		auto &buffer = vector.Buffer().Cast<DictionaryBuffer>();
-		return !buffer.IsReset() && buffer.GetEntry().global_dictionary;
+		return vector.Buffer().Cast<DictionaryBuffer>().GetEntry().global_dictionary;
 	}
 	static const Vector &GetCachedHashes(const Vector &input);
 };
