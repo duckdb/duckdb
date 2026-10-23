@@ -562,7 +562,10 @@
   {
     "class": "LogicalAnyJoin",
     "base": "LogicalOperator",
-    "enum": "LOGICAL_ANY_JOIN",
+    "enum": [
+      "LOGICAL_ANY_JOIN",
+      "LOGICAL_WITHIN_JOIN"
+    ],
     "members": [
       {
         "id": 200,

@@ -23,6 +23,7 @@ enum class JoinRefType : uint8_t {
 	ASOF,       // AsOf conditions
 	DEPENDENT,  // Dependent join conditions
 	NEAREST,    // Nearest-neighbour (top-k per left row) conditions
+	WITHIN,     // Distance/radius range join (all RHS rows within threshold)
 };
 
 const char *ToString(JoinRefType value);

@@ -55,6 +55,9 @@ string JoinRef::ToString() const {
 	case JoinRefType::NEAREST:
 		result += EnumUtil::ToString(type) + " JOIN ";
 		break;
+	case JoinRefType::WITHIN:
+		result += EnumUtil::ToString(type) + " JOIN ";
+		break;
 	}
 	result += right->ToString();
 	if (ref_type == JoinRefType::NEAREST) {

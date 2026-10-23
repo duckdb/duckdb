@@ -38,7 +38,8 @@ static vector<ColumnBinding> GetExpandedColumnBindings(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_WITHIN_JOIN: {
 		auto &join = op.Cast<LogicalJoin>();
 		auto left_bindings = GetExpandedColumnBindings(*op.children[0]);
 		if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
@@ -207,6 +208,7 @@ private:
 			break;
 		}
 		case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		case LogicalOperatorType::LOGICAL_WITHIN_JOIN:
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 			auto &join = op.Cast<LogicalJoin>();
 			if (join.join_type == JoinType::MARK) {
@@ -233,6 +235,7 @@ private:
 	void ConvertProjectionMaps(LogicalOperator &op) {
 		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		case LogicalOperatorType::LOGICAL_WITHIN_JOIN:
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 			auto &join = op.Cast<LogicalJoin>();
 			if (TYPE == ConversionType::TO_CANONICAL) {
@@ -656,6 +659,7 @@ private:
 		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		case LogicalOperatorType::LOGICAL_WITHIN_JOIN:
 		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
 		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
@@ -1218,6 +1222,7 @@ private:
 	static void ClearProjectionMaps(LogicalOperator &op) {
 		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		case LogicalOperatorType::LOGICAL_WITHIN_JOIN:
 		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 			auto &join = op.Cast<LogicalJoin>();

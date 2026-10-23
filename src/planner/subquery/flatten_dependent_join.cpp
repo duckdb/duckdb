@@ -597,6 +597,7 @@ vector<ColumnBinding> FlattenDependentJoins::CreateDelimCrossProduct(unique_ptr<
 static bool IsJoinWithProjectionMap(LogicalOperatorType type) {
 	switch (type) {
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_WITHIN_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
@@ -1560,6 +1561,7 @@ FlattenDependentJoins::PushDownCorrelatedNodeInternal(unique_ptr<LogicalOperator
 		return DecorrelateSubtree(plan, propagate_null_values, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_WITHIN_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		return PushDownJoin(plan, propagate_null_values, std::move(state));
