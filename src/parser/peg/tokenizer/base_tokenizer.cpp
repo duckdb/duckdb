@@ -441,8 +441,9 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 				last_pos = i + 1;
 				break;
 			}
-			if (CharacterIsInitialNumber(c)) {
-				// parse a numeric literal
+			// '.' starts a number only as a leading decimal (.5); a lone '.' is the qualifier operator (t.a)
+			if (CharacterIsInitialNumber(c) &&
+			    (c != '.' || (i + 1 < sql.size() && StringUtil::CharacterIsDigit(sql[i + 1])))) {
 				state = TokenizeState::NUMERIC;
 				last_pos = i;
 				break;
