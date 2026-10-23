@@ -34,6 +34,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
@@ -331,6 +332,31 @@ static bool BuildSideHasMultipleSources(const PhysicalOperator &op) {
 	return false;
 }
 
+//! Whether a column of the build side may arrive as a dictionary for some chunks only, e.g. when a projection computes
+//! it (CASE) or when it is a probe column of a hash join below. Its row-store slot can then not be narrowed
+static bool BuildColumnIsComputed(const PhysicalOperator &op, idx_t column_idx) {
+	switch (op.type) {
+	case PhysicalOperatorType::PROJECTION: {
+		auto &select_list = op.Cast<PhysicalProjection>().select_list;
+		if (column_idx >= select_list.size()) {
+			return true;
+		}
+		auto &expr = *select_list[column_idx];
+		if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF) {
+			return true;
+		}
+		return BuildColumnIsComputed(op.children[0].get(), expr.Cast<BoundReferenceExpression>().Index());
+	}
+	case PhysicalOperatorType::FILTER:
+		return BuildColumnIsComputed(op.children[0].get(), column_idx);
+	case PhysicalOperatorType::HASH_JOIN:
+		// a probe column is forwarded as it arrives, but read back from the row store when the probe side spills
+		return column_idx < op.Cast<PhysicalHashJoin>().lhs_output_columns.col_idxs.size();
+	default:
+		return false;
+	}
+}
+
 //! Synchronisation state for the first-chunk publication of the TupleDataLayout: the canonical layout
 //! shared by all per-thread JHTs, plus the per-column decision on whether to narrow the row-store slot.
 struct LayoutGate {
@@ -425,6 +451,9 @@ public:
 		can_use_perfect_hash = use_perfect_hash;
 		// Multiple build producers can change dictionaries after the layout has been published.
 		build_side_multi_source = BuildSideHasMultipleSources(op.children[1].get());
+		for (auto &column_idx : op.payload_columns.col_idxs) {
+			computed_build_columns.push_back(BuildColumnIsComputed(op.children[1].get(), column_idx));
+		}
 		// For external hash join
 		external = Settings::Get<DebugForceExternalSetting>(context);
 		// Set probe types
@@ -564,6 +593,8 @@ public:
 	//! True iff the build subtree funnels multiple producer pipelines into this sink (UNION ALL /
 	//! recursive CTE); disables dict-surviving because the first-chunk layout election is unsound there.
 	bool build_side_multi_source = false;
+	//! Per payload column: whether a projection on the build side computes it (see BuildColumnIsComputed)
+	vector<bool> computed_build_columns;
 };
 
 unique_ptr<JoinFilterLocalState> JoinFilterPushdownInfo::GetLocalState(JoinFilterGlobalState &gstate) const {
@@ -727,6 +758,9 @@ void HashJoinGlobalSinkState::PublishLayoutIfFirst(HashJoinLocalSinkState &lstat
 			DictSurvivingInfo info;
 			info.columns.resize(build_types.size());
 			for (idx_t col = 0; col < MinValue<idx_t>(build_types.size(), payload_chunk.ColumnCount()); col++) {
+				if (col < computed_build_columns.size() && computed_build_columns[col]) {
+					continue;
+				}
 				auto &incoming = payload_chunk.data[col];
 				const auto index_width = lstate.hash_table->GetDictSurvivingIndexWidth(col, incoming);
 				if (index_width != 0) {
@@ -1020,13 +1054,13 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 	gstate.total_size =
 	    ht.GetTotalSize(gstate.local_hash_tables, gstate.max_partition_size, gstate.max_partition_count);
 	gstate.probe_side_requirement =
-	    GetPartitioningSpaceRequirement(context, children[0].get().GetTypes(), ht.GetRadixBits(), gstate.num_threads);
+	    GetPartitioningSpaceRequirement(context, gstate.probe_types, ht.GetRadixBits(), gstate.num_threads);
 	const auto max_partition_ht_size =
 	    gstate.max_partition_size + gstate.hash_table->PointerTableSize(gstate.max_partition_count);
 	gstate.temporary_memory_state->SetMinimumReservation(max_partition_ht_size + gstate.probe_side_requirement);
 
 	bool all_constant;
-	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(children[0].get().GetTypes(), all_constant));
+	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(gstate.probe_types, all_constant));
 	gstate.temporary_memory_state->SetRemainingSize(gstate.total_size);
 }
 
@@ -2214,6 +2248,19 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	return std::move(state);
 }
 
+void PhysicalHashJoin::InitializeOutputChunk(Allocator &allocator, DataChunk &chunk) const {
+	if (join_type == JoinType::RIGHT_SEMI || join_type == JoinType::RIGHT_ANTI) {
+		PhysicalOperator::InitializeOutputChunk(allocator, chunk);
+		return;
+	}
+	// the probe-side output columns are always referenced or sliced from the probe input
+	vector<bool> initialize(types.size(), true);
+	for (idx_t i = 0; i < lhs_output_columns.col_idxs.size(); i++) {
+		initialize[i] = false;
+	}
+	chunk.Initialize(allocator, types, initialize);
+}
+
 OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                      GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = state_p.Cast<HashJoinOperatorState>();
@@ -2811,6 +2858,12 @@ SourceResultType PhysicalHashJoin::GetDataInternal(ExecutionContext &context, Da
 			annotated_lock_guard<annotated_mutex> guard(gstate.lock);
 			if (gstate.TryPrepareNextStage(sink) || gstate.global_stage == HashJoinSourceStage::DONE) {
 				gstate.UnblockTasks();
+			} else if (!sink.external && gstate.global_stage == HashJoinSourceStage::SCAN_HT) {
+				// Without spilling, scanning the hash table is the last stage and all of its tasks have been assigned,
+				// so there is nothing left for this task to do. Do not block until the other tasks finish: this task
+				// has already handed probe rows to the sink, which may in turn be waiting for this task
+				// (e.g., a partitioned COPY cannot flush until every producer has combined).
+				return SourceResultType::FINISHED;
 			} else {
 				return gstate.BlockSource(input.interrupt_state);
 			}

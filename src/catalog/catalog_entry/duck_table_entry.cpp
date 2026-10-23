@@ -81,10 +81,11 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 			}
 		} break;
 		case LogicalTypeId::TUPLE: {
-			// TUPLEs are stored as unnamed STRUCTs on disk, which older engines reject - gate them to v2.0.0+
+			// TUPLEs are stored as unnamed STRUCTs on disk, which older engines reject - gate creation to v2.0.0+
+			// existing unnamed STRUCTs (deserialized as TUPLE while loading an older file) must stay attachable
 			const auto storage_version = db.GetStorageManager().GetStorageVersion();
 
-			if (storage_version < StorageVersion::V2_0_0) {
+			if (storage_version < StorageVersion::V2_0_0 && db.GetStorageManager().IsLoaded()) {
 				auto required = GetStorageVersionName(StorageVersion::V2_0_0, false);
 				auto current = GetStorageVersionName(storage_version, false);
 
@@ -128,7 +129,25 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 	});
 }
 
-static void SetAlterDependencies(BoundCreateTableInfo &info, AlterInfo &alter_info) {
+static void SetAlterDependencies(ClientContext &context, BoundCreateTableInfo &info, AlterInfo &alter_info) {
+	// The foreign key dependency on the referenced parent table is registered when the table is created
+	// (DuckSchemaEntry::CreateTable), but it is not part of the stored create info - re-add it here,
+	// otherwise ALTER silently drops the dependency edge and allows the parent to be renamed or dropped.
+	for (auto &constraint : info.Base().constraints) {
+		if (constraint->type != ConstraintType::FOREIGN_KEY) {
+			continue;
+		}
+		auto &fk = constraint->Cast<ForeignKeyConstraint>();
+		if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+			continue;
+		}
+		// a foreign key can only reference a table in the same schema
+		auto txn = info.schema.catalog.GetCatalogTransaction(context);
+		auto parent = info.schema.GetEntry(txn, CatalogType::TABLE_ENTRY, fk.info.table);
+		if (parent) {
+			info.Base().dependencies.AddDependency(*parent);
+		}
+	}
 	alter_info.new_dependencies = make_uniq<LogicalDependencyList>(info.Base().dependencies);
 }
 
@@ -510,7 +529,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 			for (idx_t i = 0; i < columns.size(); i++) {
 				if (columns[i] == info.old_name) {
 					throw CatalogException(
-					    "Cannot rename column \"%s\" because this is involved in the foreign key constraint",
+					    "Cannot rename column %s because this is involved in the foreign key constraint",
 					    info.old_name);
 				}
 			}
@@ -523,7 +542,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 	}
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
-	SetAlterDependencies(*bound_create_info, info);
+	SetAlterDependencies(context, *bound_create_info, info);
 
 	// Update any UPDATE OF triggers whose column list references the renamed column.
 	// Also detect concurrent uncommitted (or recently-committed) triggers that reference the same
@@ -549,8 +568,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 		    auto &trig = concurrent_entry.Cast<TriggerCatalogEntry>();
 		    for (const auto &col : trig.columns) {
 			    if (col == info.old_name) {
-				    throw TransactionException("Catalog write-write conflict on alter with \"%s\": trigger \"%s\" "
-				                               "references column \"%s\" which is being renamed",
+				    throw TransactionException("Catalog write-write conflict on alter with %s: trigger %s "
+				                               "references column %s which is being renamed",
 				                               name, trig.name, info.old_name);
 			    }
 		    }
@@ -608,7 +627,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 		binder->BindDefaultValue(info.new_column, bound_defaults, catalog_name.GetIdentifierName(),
 		                         schema_name.GetIdentifierName());
 	}
-	SetAlterDependencies(*bound_create_info, info);
+	SetAlterDependencies(context, *bound_create_info, info);
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage, triggers);
 }
@@ -903,7 +922,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	                              dropped_column_is_generated);
 
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
-	SetAlterDependencies(*bound_create_info, info);
+	SetAlterDependencies(context, *bound_create_info, info);
 	if (columns.GetColumn(LogicalIndex(removed_index)).Generated()) {
 		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 	}
@@ -975,7 +994,7 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<Id
 	}
 
 	if (!found) {
-		result.error = ErrorData(CatalogException("Cannot drop field \"%s\" - it does not exist", dropped_entry));
+		result.error = ErrorData(CatalogException("Cannot drop field %s - it does not exist", dropped_entry));
 	} else {
 		result.mapping = Value::STRUCT(std::move(child_mapping));
 		result.new_type = LogicalType::ConstructNestedType(type, std::move(new_type_children));
@@ -1075,7 +1094,7 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 		new_type_children.emplace_back(field_name, type_value);
 	}
 	if (!found) {
-		result.error = ErrorData(CatalogException("Cannot rename field \"%s\" - it does not exist", rename_entry));
+		result.error = ErrorData(CatalogException("Cannot rename field %s - it does not exist", rename_entry));
 	} else {
 		result.mapping = Value::STRUCT(std::move(child_mapping));
 		result.new_type = LogicalType::ConstructNestedType(type, std::move(new_type_children));
@@ -1129,7 +1148,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetD
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
-	SetAlterDependencies(*bound_create_info, info);
+	SetAlterDependencies(context, *bound_create_info, info);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
@@ -1152,7 +1171,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetN
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
-	SetAlterDependencies(*bound_create_info, info);
+	SetAlterDependencies(context, *bound_create_info, info);
 
 	// Early return
 	if (has_not_null) {
@@ -1191,7 +1210,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
-	SetAlterDependencies(*bound_create_info, info);
+	SetAlterDependencies(context, *bound_create_info, info);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
@@ -1245,8 +1264,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 		// TODO: check if the generated_expression breaks, only delete it if it does
 		if (copy.Generated() && column_dependency_manager.IsDependencyOf(col.Logical(), change_idx)) {
 			throw BinderException(
-			    "This column is referenced by the generated column \"%s\", so its type can not be changed",
-			    copy.Name());
+			    "This column is referenced by the generated column %s, so its type can not be changed", copy.Name());
 		}
 		create_info->columns.AddColumn(std::move(copy));
 	}
@@ -1301,7 +1319,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	}
 
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
-	SetAlterDependencies(*bound_create_info, info);
+	SetAlterDependencies(context, *bound_create_info, info);
 
 	vector<StorageIndex> storage_oids;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
@@ -1382,7 +1400,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropForeignKeyConstraint(ClientContext 
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
-	SetAlterDependencies(*bound_create_info, info);
+	SetAlterDependencies(context, *bound_create_info, info);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
@@ -1455,12 +1473,30 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 		                              EnumUtil::ToString(info.constraint->type));
 	}
 
+	// The indexes of constraints must precede all other indexes. A concurrent CREATE INDEX is not visible as a
+	// dependency yet, but it has already registered its index with the storage.
+	idx_t constraint_index_count = 0;
+	for (const auto &constraint : GetConstraints()) {
+		if (constraint->type == ConstraintType::UNIQUE) {
+			constraint_index_count++;
+		} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
+			auto &fk = constraint->Cast<ForeignKeyConstraint>();
+			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
+			    fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+				constraint_index_count++;
+			}
+		}
+	}
+	if (storage->GetDataTableInfo()->GetIndexes().Count() > constraint_index_count) {
+		throw DependencyException("Cannot alter entry %s because there are entries that depend on it.", name);
+	}
+
 	// We create a physical table with a new constraint and a new unique index.
 	const auto binder = Binder::CreateBinder(context);
 	const auto bound_constraint =
 	    binder->BindConstraint(*info.constraint, table_info.GetTableName(), table_info.columns);
 	const auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
-	SetAlterDependencies(*bound_create_info, info);
+	SetAlterDependencies(context, *bound_create_info, info);
 
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, *bound_constraint);
 	auto new_entry = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage, triggers);

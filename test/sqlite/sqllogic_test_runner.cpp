@@ -147,6 +147,8 @@ void SQLLogicTestRunner::EmitBegin(const string &test_name) {
 	JSONWriter writer;
 	auto obj = writer.CreateObject();
 	obj.AddString("event", "begin");
+	// Version 2 distinguishes the test body from initialization and cleanup.
+	obj.Add("version", writer.CreateUnsignedInteger(2));
 	obj.AddString("name", test_name);
 	// Lets a consumer verify which invocation emitted this rather than inferring it from which
 	// subprocess it launched: under --temp-dir-root the prefix is what the driver passed in.
@@ -155,15 +157,40 @@ void SQLLogicTestRunner::EmitBegin(const string &test_name) {
 	SQLLogicTestLogger::EmitTestEvent(writer.ToString());
 }
 
-void SQLLogicTestRunner::EmitEnd(const string &test_name, const string &status, const string &data) {
+void SQLLogicTestRunner::EmitExecutionComplete(const string &test_name, const string &status, const string &data) {
+	if (execution_complete_emitted) {
+		return;
+	}
+	execution_complete_emitted = true;
+	EmitStatusEvent("execution-complete", test_name, status, data);
+}
+
+void SQLLogicTestRunner::EmitError(const string &test_name, const string &data) {
 	if (!EmitTestEventsEnabled()) {
 		return;
 	}
-	// One terminal per test: status in {ok, error, skip-requirement}, the statement tallies, and
-	// optional free-form data (skip reason / error text — multi-line safe via JSON escaping).
+	// Worker threads must report errors before joining, without reading the runner's mutable statistics.
 	JSONWriter writer;
 	auto obj = writer.CreateObject();
-	obj.AddString("event", "end");
+	obj.AddString("event", "error");
+	obj.AddString("name", test_name);
+	obj.AddString("data", data);
+	writer.SetRoot(obj);
+	SQLLogicTestLogger::EmitTestEvent(writer.ToString());
+}
+
+void SQLLogicTestRunner::EmitEnd(const string &test_name, const string &status, const string &data) {
+	EmitStatusEvent("end", test_name, status, data);
+}
+
+void SQLLogicTestRunner::EmitStatusEvent(const string &event, const string &test_name, const string &status,
+                                         const string &data) {
+	if (!EmitTestEventsEnabled()) {
+		return;
+	}
+	JSONWriter writer;
+	auto obj = writer.CreateObject();
+	obj.AddString("event", event);
 	obj.AddString("name", test_name);
 	obj.AddString("status", status);
 	obj.Add("passes", writer.CreateUnsignedInteger(test_stat_passes.load()));
@@ -852,8 +879,10 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 		ExecuteScript(init_parser, script);
 	}
 
+	EmitStatusEvent("execution-begin", script, "", "");
 	ExecuteScript(parser, script);
 
+	EmitExecutionComplete(script, test_skipped_requirement ? "skip-requirement" : "ok", test_skip_reason);
 	auto cleanup_sqllogic = test_config.GetCleanupSqllogic();
 	if (!cleanup_sqllogic.empty()) {
 		SQLLogicParser cleanup_parser;

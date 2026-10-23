@@ -392,6 +392,9 @@ static void SetVectorString(Vector &vector, idx_t size, char *cdata, const T *of
 		if (FlatVector::IsNull(vector, row_idx)) {
 			continue;
 		}
+		if (offsets[row_idx + 1] < offsets[row_idx]) {
+			throw ConversionException("Arrow string offsets must be non-decreasing");
+		}
 		auto cptr = cdata + offsets[row_idx];
 		auto str_len = offsets[row_idx + 1] - offsets[row_idx];
 		if (str_len > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START

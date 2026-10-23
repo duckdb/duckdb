@@ -20,7 +20,9 @@ set(TEST_API_OBJECTS
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp
     test_config.cpp
+    test_connect_prepare.cpp
     test_compression_select.cpp
+    test_os_util.cpp
     test_connection_secrets.cpp
     test_copy_output_lifecycle.cpp
     test_custom_allocator.cpp
@@ -67,6 +69,7 @@ set(TEST_API_OBJECTS
     test_passthrough_dialect.cpp
     test_passthrough_token_matcher.cpp
     test_progress_bar.cpp
+    test_live_query_metrics.cpp
     test_uuid.cpp
     test_insertion_order_preserving_map.cpp
     test_bignum.cpp

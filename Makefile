@@ -919,6 +919,8 @@ format-parser-grammar: $(FORMAT_SETUP_DEPS)
 		src/parser/peg/transformer/transform_generated_trampoline.cpp \
 		src/parser/peg/compiled_grammar.cpp \
 		src/parser/peg/matcher_factory.cpp \
+		src/parser/peg/peg_rule_id.cpp \
+		src/include/duckdb/parser/peg/peg_rule_id.hpp \
 		src/parser/peg/matcher.cpp | \
 		$(FORMAT_PYTHON) scripts/format.py --files-from - --fix --noconfirm
 

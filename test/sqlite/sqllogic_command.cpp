@@ -186,7 +186,7 @@ void Command::RestartDatabase(ExecuteContext &context, reference<Connection> &co
 	}
 	bool query_fail = false;
 	try {
-		connection.get().ExtractStatements(sql_query);
+		connection.get().ExtractStatements(sql_query, false);
 	} catch (...) {
 		query_fail = true;
 	}
@@ -259,7 +259,7 @@ unique_ptr<QueryResult> Command::ExecuteQuery(ExecuteContext &context, reference
 		// reports it with its location and type, and runs text that only parses after a LOAD
 		idx_t statement_count = 0;
 		try {
-			statement_count = connection.get().ExtractStatements(context.sql_query).size();
+			statement_count = connection.get().ExtractStatements(context.sql_query, false).size();
 		} catch (std::exception &) {
 		}
 		if (statement_count != 1) {
@@ -460,7 +460,7 @@ struct ParallelExecuteContext {
 	atomic<bool> success;
 	string error_message;
 	string error_file;
-	int error_line;
+	int error_line = 0;
 };
 
 static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
@@ -491,6 +491,13 @@ static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
 		execute_context->error_message = StringUtil::Format("Failure at %s:%d: Unknown error message",
 		                                                    execute_context->error_file, execute_context->error_line);
 		execute_context->success = false;
+	}
+	if (!execute_context->success) {
+		auto message = execute_context->error_message;
+		if (message.empty()) {
+			message = StringUtil::Format("Failure at %s:%d", execute_context->error_file, execute_context->error_line);
+		}
+		SQLLogicTestRunner::EmitError(execute_context->runner.file_name, message);
 	}
 }
 

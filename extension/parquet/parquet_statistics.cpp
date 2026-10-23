@@ -145,7 +145,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		if (stats.size() != sizeof(bool)) {
 			throw InvalidInputException("Incorrect stats size for type BOOLEAN");
 		}
-		return Value::BOOLEAN(Load<bool>(stats_data));
+		return Value::BOOLEAN(Load<uint8_t>(stats_data) != 0);
 	}
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
@@ -392,7 +392,7 @@ static void ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStat
 		return;
 	}
 	auto &input = *input_p;
-	D_ASSERT(input.GetType().id() == LogicalTypeId::BLOB);
+	D_ASSERT(input.GetType().id() == LogicalTypeId::BLOB || input.GetType().id() == LogicalTypeId::VARCHAR);
 	result.CopyValidity(input);
 
 	if (!result.CanHaveNoNull()) {
@@ -856,7 +856,7 @@ static optional<uint64_t> TryHashTime(const Value &constant, const ParquetColumn
 		}
 	}
 	case LogicalTypeId::TIME_TZ: {
-		auto value = Time::NormalizeTimeTZ(constant.GetValue<dtime_tz_t>()).value;
+		auto value = ParquetTimeTZToUTCMicros(constant.GetValue<dtime_tz_t>());
 		switch (schema.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
 			return ValueXH64FixedWidth(NumericCast<int32_t>(value / Interval::MICROS_PER_MSEC));

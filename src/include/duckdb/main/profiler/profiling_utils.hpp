@@ -104,13 +104,17 @@ public:
 		return string_counters;
 	}
 
+	//! Reset the counters that are tracked without profiling; Reset keeps them, so they outlive their query.
+	void ResetLiveMetrics() {
+		bytes_read = 0;
+		bytes_written = 0;
+		total_memory_allocated = 0;
+	}
+
 	void Reset() {
 		latency_timer.reset();
 		string_timings.clear();
 		string_counters.clear();
-		bytes_read = 0;
-		bytes_written = 0;
-		total_memory_allocated = 0;
 
 		query_sql = "";
 		system_peak_buffer_memory = 0;
@@ -121,6 +125,8 @@ public:
 
 	//! Write all query-level metrics into the given GatheredMetrics.
 	void FinalizeMetrics(GatheredMetrics &info);
+	//! The metrics backed by atomic counters, which can be read from any thread while the query runs
+	profiler_metrics_t GetLiveMetrics() const;
 
 	void Merge(const QueryMetrics &other) {
 		for (const auto &entry : other.string_timings) {

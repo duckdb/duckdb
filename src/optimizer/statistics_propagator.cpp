@@ -44,6 +44,25 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateChildren(LogicalOperat
 	return nullptr;
 }
 
+void StatisticsPropagator::ResetAdditiveStatistics(const vector<ColumnBinding> &bindings) {
+	// additive statistics (e.g. total_string_length) describe a fixed row population - an operator that can emit an
+	// input row more than once invalidates them for all pass-through columns
+	for (auto &binding : bindings) {
+		auto entry = statistics_map.find(binding);
+		if (entry != statistics_map.end() && entry->second) {
+			entry->second->ResetAdditiveStatistics();
+		}
+	}
+}
+
+void StatisticsPropagator::ResetAdditiveVerificationStats(Expression &expr) {
+	auto &stats = expr.GetVerificationStats();
+	if (stats) {
+		stats->ResetAdditiveStatistics();
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ResetAdditiveVerificationStats(child); });
+}
+
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOperator &node,
                                                                      unique_ptr<LogicalOperator> &node_ptr) {
 	propagation_path.emplace_back(node_ptr);
@@ -99,6 +118,11 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		break;
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		result = PropagateStatistics(node.Cast<LogicalWindow>(), node_ptr);
+		break;
+	case LogicalOperatorType::LOGICAL_UNNEST:
+		result = PropagateChildren(node, node_ptr);
+		// unnest emits its input row once per unnested entry
+		ResetAdditiveStatistics(node.children[0]->GetColumnBindings());
 		break;
 	default:
 		result = PropagateChildren(node, node_ptr);

@@ -139,7 +139,9 @@ public:
 	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count,
 	                       IndexRemovalType removal_type, optional_idx active_checkpoint = optional_idx());
 
-	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids, idx_t count);
+	//! Delete the given rows - optionally collects the ids of the rows that were deleted (excluding duplicates)
+	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids, idx_t count,
+	             optional_ptr<DeletedRowIds> deleted_ids = nullptr);
 	void Update(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids,
 	            const vector<PhysicalIndex> &column_ids, DataChunk &updates);
 	void UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, Vector &row_ids,

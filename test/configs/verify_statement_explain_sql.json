@@ -85,6 +85,7 @@
       "paths": [
         "test/sql/pragma/profiling/test_custom_profiling_using_groups.test",
         "test/sql/pragma/profiling/call_enable_profiling_function.test",
+        "test/sql/profiling/test_failed_query_profile.test",
         "test/sql/settings/lock_configuration_pragmas.test"
       ]
     },

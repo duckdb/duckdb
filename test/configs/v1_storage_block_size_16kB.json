@@ -13,6 +13,12 @@
   "inherit_skip_tests": "test/configs/force_storage.json",
   "skip_tests": [
     {
+      "reason": "The AT clause is only serialized with storage version v2.0.0 or higher.",
+      "paths": [
+        "test/sql/json/test_deserialize_at_clause.test"
+      ]
+    },
+    {
       "reason": "Keyword-only arguments cannot be serialized to v1.x storage.",
       "paths": [
         "test/extension/test_function_args_kwargs.test"
