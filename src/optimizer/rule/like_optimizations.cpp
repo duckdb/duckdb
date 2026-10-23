@@ -182,17 +182,18 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &expr, const Identifier &function_name,
                                                        string pattern, bool is_not_like,
                                                        PatternMatchType match_type) const {
-	// replace LIKE by an optimized function
-	auto result = BindBuiltinScalarFunction(GetContext(), function_name, std::move(expr.GetChildrenMutable()));
-
 	// removing wildcard from the pattern
 	char wildcard_any = match_type == PatternMatchType::GLOB ? '*' : '%';
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), wildcard_any), pattern.end());
 
-	result->GetChildrenMutable()[1] = make_uniq<BoundConstantExpression>(Value(std::move(pattern)));
+	// replace LIKE by an optimized function over the string and the pattern without wildcards
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(expr.GetChildrenMutable()[0]));
+	children.push_back(make_uniq<BoundConstantExpression>(Value(std::move(pattern))));
+	auto result = BindBuiltinScalarFunction(GetContext(), function_name, std::move(children));
 
 	if (!is_not_like) {
-		return std::move(result);
+		return result;
 	}
 
 	auto negation = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);

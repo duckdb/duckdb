@@ -54,8 +54,8 @@ shared_ptr<const WindowFunction> GetBuiltinWindowFunction(ClientContext &context
 	return entry.functions.GetFunctionByArguments(context, arguments);
 }
 
-unique_ptr<Expression> BindBuiltinScalarExpression(ClientContext &context, const Identifier &name,
-                                                   vector<unique_ptr<Expression>> children) {
+unique_ptr<Expression> BindBuiltinScalarFunction(ClientContext &context, const Identifier &name,
+                                                 vector<unique_ptr<Expression>> children) {
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, BuiltinName(catalog, name));
 
@@ -74,15 +74,6 @@ unique_ptr<Expression> BindBuiltinScalarExpression(ClientContext &context, const
 		error.Throw();
 	}
 	return expr;
-}
-
-unique_ptr<BoundFunctionExpression> BindBuiltinScalarFunction(ClientContext &context, const Identifier &name,
-                                                              vector<unique_ptr<Expression>> children) {
-	auto expr = BindBuiltinScalarExpression(context, name, std::move(children));
-	if (expr->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
-		throw InvalidInputException("BindBuiltinScalarFunction did not return a BoundFunctionExpression");
-	}
-	return unique_ptr_cast<Expression, BoundFunctionExpression>(std::move(expr));
 }
 
 } // namespace duckdb

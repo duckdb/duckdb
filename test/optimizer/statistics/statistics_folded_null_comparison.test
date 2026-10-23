@@ -1,0 +1,108 @@
+# name: test/optimizer/statistics/statistics_folded_null_comparison.test
+# description: Statistics propagation of a comparison whose side folds to a NULL constant
+# group: [statistics]
+
+statement ok
+PRAGMA enable_verification
+
+# A column that is NULL in every row: statistics prove it has no valid values
+statement ok
+CREATE TABLE products(version VARCHAR);
+
+statement ok
+INSERT INTO products VALUES (NULL), (NULL), (NULL);
+
+# split_part is a macro over CASE: version IS NOT NULL folds to false through the statistics, the CASE then folds to
+# NULL, and the comparison against the constant is rewritten into constant_or_null(true, NULL, '0'), which the bind
+# folds into a NULL constant
+query I
+SELECT count(*) FROM products WHERE split_part(version, '.', 1) <> '0';
+----
+0
+
+query I
+SELECT count(*) FROM products WHERE split_part(version, '.', 1) = '0';
+----
+0
+
+query I
+SELECT count(*) FROM products WHERE split_part(version, '.', 1) IS DISTINCT FROM '0';
+----
+3
+
+# The same shape without the macro
+query I
+SELECT count(*) FROM products WHERE (CASE WHEN version IS NOT NULL THEN 'a' END) <> '0';
+----
+0
+
+query I
+SELECT (CASE WHEN version IS NOT NULL THEN 'a' END) <> '0' FROM products;
+----
+NULL
+NULL
+NULL
+
+# A filter that folds to NULL passes no row: the scan is pruned to an empty result
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+query II
+EXPLAIN SELECT count(*) FROM products WHERE (CASE WHEN version IS NOT NULL THEN 'a' END) <> '0';
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT count(*) FROM products WHERE (CASE WHEN version IS NOT NULL THEN 'a' END) <> '0';
+----
+logical_opt	<!REGEX>:.*constant_or_null.*
+
+# In a projection the comparison becomes a NULL constant of the comparison's type
+query II
+EXPLAIN SELECT (CASE WHEN version IS NOT NULL THEN 'a' END) <> '0' FROM products;
+----
+logical_opt	<!REGEX>:.*constant_or_null.*
+
+query I
+SELECT typeof((CASE WHEN version IS NOT NULL THEN 'a' END) <> '0') FROM products LIMIT 1;
+----
+BOOLEAN
+
+# The NULL comparison combined with other predicates
+query I
+SELECT count(*) FROM products WHERE (CASE WHEN version IS NOT NULL THEN 'a' END) <> '0' AND version IS NULL;
+----
+0
+
+query I
+SELECT count(*) FROM products WHERE (CASE WHEN version IS NOT NULL THEN 'a' END) <> '0' OR version IS NULL;
+----
+3
+
+query I
+SELECT count(*) FROM products WHERE NOT ((CASE WHEN version IS NOT NULL THEN 'a' END) <> '0');
+----
+0
+
+# Once a single row is not NULL the statistics no longer prove the column all-NULL
+statement ok
+INSERT INTO products VALUES ('1.2.3');
+
+query I
+SELECT count(*) FROM products WHERE split_part(version, '.', 1) <> '0';
+----
+1
+
+query II
+EXPLAIN SELECT count(*) FROM products WHERE (CASE WHEN version IS NOT NULL THEN 'a' END) <> '0';
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# Binding a user-level call with a NULL argument still folds to a typed NULL constant
+query II
+SELECT split_part(NULL, '.', 1) IS NULL, typeof(upper(NULL));
+----
+true	VARCHAR
