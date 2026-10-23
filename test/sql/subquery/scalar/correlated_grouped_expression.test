@@ -347,3 +347,17 @@ FROM (SELECT 1 AS x, 2 AS y) t
 GROUP BY x, x + (SELECT y);
 ----
 101
+
+# a subquery hidden in a macro also resolves in the inner scope
+statement ok
+CREATE TABLE lookup AS SELECT 2 AS v;
+
+statement ok
+CREATE MACRO lookup_v() AS (SELECT v FROM lookup);
+
+query I
+SELECT (WITH lookup AS (SELECT 100 AS v) SELECT x + lookup_v())
+FROM (VALUES (1)) t(x)
+GROUP BY x, x + lookup_v();
+----
+101

@@ -52,14 +52,27 @@ bool BaseSelectBinder::HasCompoundGroups() {
 	return node.bind_state.has_compound_groups;
 }
 
-bool BaseSelectBinder::MatchesGroup(ParsedExpression &expr) {
+ProjectionIndex BaseSelectBinder::FindGroup(ParsedExpression &expr) {
 	if (node.bind_state.group_map.empty() && node.bind_state.group_alias_map.empty()) {
-		return false;
+		return ProjectionIndex();
 	}
 	// the groups are keyed by the qualified form, so qualify against this scope before matching
 	auto qualified = expr.Copy();
 	ExpressionBinder::QualifyColumnNames(binder, qualified);
-	return TryBindGroup(*qualified).IsValid();
+	return TryBindGroup(*qualified);
+}
+
+bool BaseSelectBinder::MatchesGroup(ParsedExpression &expr) {
+	return FindGroup(expr).IsValid();
+}
+
+bool BaseSelectBinder::MatchesGroupWithoutSubquery(ParsedExpression &expr) {
+	auto group_index = FindGroup(expr);
+	auto &groups = node.groups.group_expressions;
+	if (!group_index.IsValid() || group_index.GetIndex() >= groups.size()) {
+		return false;
+	}
+	return !groups[group_index]->HasSubquery();
 }
 
 ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {

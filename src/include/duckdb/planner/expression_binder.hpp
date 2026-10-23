@@ -154,6 +154,9 @@ public:
 
 	//! Whether this scope groups by the given expression, i.e. whether a reference to it resolves to a group
 	virtual bool MatchesGroup(ParsedExpression &expr);
+	//! Whether this scope groups by the given expression and the bound group contains no subquery - the scopes
+	//! a subquery resolves in are only known once bound, e.g. when it is hidden in a macro
+	virtual bool MatchesGroupWithoutSubquery(ParsedExpression &expr);
 	//! Whether this scope groups by an expression other than a plain column reference
 	virtual bool HasCompoundGroups();
 

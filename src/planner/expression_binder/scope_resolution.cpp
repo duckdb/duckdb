@@ -315,17 +315,14 @@ optional_idx ExpressionBinder::ResolveOuterGroupOwner(ParsedExpression &expr) {
 	if (!any_compound_groups) {
 		return optional_idx();
 	}
-	// the columns of a nested subquery can resolve in other scopes than the expression's own columns
-	if (expr.HasSubquery()) {
-		return optional_idx();
-	}
 	// the expression only refers to a group of the scope that owns all of its columns, so that e.g. a
 	// column of an inner scope that shadows the grouped one keeps the expression in the inner scope
 	auto owner = ResolveExpressionOwner(expr, 0);
 	if (!owner.IsValid() || owner.GetIndex() == 0) {
 		return optional_idx();
 	}
-	if (!ScopeAt(owner.GetIndex()).MatchesGroup(expr)) {
+	// the columns of a nested subquery can resolve in other scopes than the expression's own columns
+	if (!ScopeAt(owner.GetIndex()).MatchesGroupWithoutSubquery(expr)) {
 		return optional_idx();
 	}
 	return owner;
