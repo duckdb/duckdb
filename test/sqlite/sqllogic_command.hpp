@@ -64,8 +64,8 @@ public:
 public:
 	Connection &CommandConnection(ExecuteContext &context) const;
 
-	duckdb::unique_ptr<MaterializedQueryResult> ExecuteQuery(ExecuteContext &context, reference<Connection> connection,
-	                                                         string file_name, idx_t query_line) const;
+	duckdb::unique_ptr<QueryResult> ExecuteQuery(ExecuteContext &context, reference<Connection> connection,
+	                                             string file_name, idx_t query_line) const;
 
 	virtual void ExecuteInternal(ExecuteContext &context) const = 0;
 	void Execute(ExecuteContext &context) const;
@@ -198,12 +198,11 @@ public:
 
 public:
 	void ExecuteInternal(ExecuteContext &context) const override;
-
-	static SleepUnit ParseUnit(const string &unit);
-
 	bool SupportsConcurrent() const override {
 		return true;
 	}
+
+	static SleepUnit ParseUnit(const string &unit);
 
 private:
 	idx_t duration;

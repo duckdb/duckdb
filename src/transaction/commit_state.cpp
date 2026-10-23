@@ -39,8 +39,8 @@ void CommitDropState::DropBlock(block_id_t block_id) {
 	dropped_block_ids.push_back(block_id);
 }
 
-void CommitDropState::RemoveIndex(TableIndexList &indexes, Identifier name) {
-	pending_index_removals.push_back(PendingIndexRemoval {indexes, std::move(name)});
+void CommitDropState::RemoveIndex(TableIndexList &indexes, idx_t index_oid) {
+	pending_index_removals.push_back(PendingIndexRemoval {indexes, index_oid});
 }
 
 void CommitDropState::FinalizeCommit() {
@@ -53,7 +53,7 @@ void CommitDropState::FinalizeCommit() {
 	D_ASSERT(block_manager || dropped_block_ids.empty());
 
 	for (auto &removal : pending_index_removals) {
-		removal.indexes.get().RemoveIndex(removal.name);
+		removal.indexes.get().RemoveIndex(removal.index_oid);
 	}
 	dropped_block_ids.clear();
 	pending_index_removals.clear();
@@ -284,7 +284,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 			auto &old_storage = old_entry.Cast<DuckTableEntry>().GetStorage();
 			auto &new_storage = new_entry.Cast<DuckTableEntry>().GetStorage();
 			if (!RefersToSameObject(old_storage, new_storage) && old_storage.IsMainTable()) {
-				throw TransactionException("Failed to alter table \"%s\" because the underlying table state was "
+				throw TransactionException("Failed to alter table %s because the underlying table state was "
 				                           "reverted by a concurrent transaction",
 				                           old_entry.name);
 			}
@@ -329,8 +329,8 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 
 				// Case (A): a concurrent alter was committed while this trigger was binding
 				if (bound_table && current_table && !RefersToSameObject(*bound_table, *current_table)) {
-					throw TransactionException("Catalog write-write conflict on create with \"%s\": "
-					                           "table \"%s\" was altered by a concurrent transaction",
+					throw TransactionException("Catalog write-write conflict on create with %s: "
+					                           "table %s was altered by a concurrent transaction",
 					                           trig.name, trig.base_table->Table());
 				}
 
@@ -339,8 +339,8 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 				auto head_entry = table_set.GetHeadEntry(trig.base_table->Table());
 				if (head_entry && table_set.HasConflict(commit_txn, head_entry->timestamp) &&
 				    head_entry->type == CatalogType::TABLE_ENTRY && !head_entry->deleted) {
-					throw TransactionException("Catalog write-write conflict on create with \"%s\": "
-					                           "table \"%s\" is being altered by a concurrent transaction",
+					throw TransactionException("Catalog write-write conflict on create with %s: "
+					                           "table %s is being altered by a concurrent transaction",
 					                           trig.name, trig.base_table->Table());
 				}
 			}

@@ -6,6 +6,11 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/thread.hpp"
+
+#include <cstring>
 #include "duckdb/storage/storage_info.hpp"
 #include "test_helpers.hpp"
 
@@ -393,3 +398,146 @@ TEST_CASE("Test eviction queue: dead_nodes invariants hold under destroyable blo
 		REQUIRE(q.dead_nodes <= q.total_insertions);
 	}
 }
+
+TEST_CASE("Test buffer pool eviction: SetLimit evicts object cache", "[storage][buffer_pool]") {
+	DuckDB db;
+	Connection con(db);
+	auto &context = *con.context;
+	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
+	auto &cache = ObjectCache::GetObjectCache(context);
+	const idx_t initial_memory = buffer_pool.GetUsedMemory();
+
+	constexpr idx_t obj_size = 1024 * 1024; // 1 MiB
+	constexpr idx_t num_objects = 5;
+
+	for (idx_t idx = 0; idx < num_objects; ++idx) {
+		cache.Put(StringUtil::Format("obj%llu", idx), make_shared_ptr<EvictableTestObject>(idx, obj_size));
+	}
+	REQUIRE(cache.GetEntryCount() == num_objects);
+	REQUIRE(buffer_pool.GetUsedMemory() == initial_memory + num_objects * obj_size);
+
+	// Shrink limit to only accommodate 3 objects plus initial memory overhead
+	const idx_t target_limit = initial_memory + 3 * obj_size;
+	buffer_pool.SetLimit(target_limit, EXCEPTION_POSTSCRIPT);
+
+	REQUIRE(cache.GetEntryCount() == 3);
+	REQUIRE(buffer_pool.GetUsedMemory() <= target_limit);
+
+	vector<idx_t> evicted_entries;
+	for (idx_t idx = 0; idx < num_objects; ++idx) {
+		auto obj = cache.GetObject(StringUtil::Format("obj%llu", idx));
+		if (!obj) {
+			evicted_entries.emplace_back(idx);
+		}
+	}
+	REQUIRE(evicted_entries == vector<idx_t> {0, 1});
+}
+
+TEST_CASE("Temporary buffer cleanup after spill and destruction policy changes", "[storage][buffer_pool]") {
+	for (bool encrypted : {false, true}) {
+		for (idx_t size_multiplier : {1, 2}) {
+			CAPTURE(encrypted, size_multiplier);
+			DuckDB db;
+			Connection con(db);
+			if (encrypted) {
+				REQUIRE_NO_FAIL(con.Query("SET force_mbedtls_unsafe=true"));
+			}
+			REQUIRE_NO_FAIL(con.Query(encrypted ? "SET temp_file_encryption=true" : "SET temp_file_encryption=false"));
+			auto &bm = BufferManager::GetBufferManager(*db.instance);
+			bm.SetTemporaryDirectory(TestCreatePath("temporary_buffer_cleanup"));
+			const auto size = bm.GetBlockSize() * size_multiplier;
+
+			// Exercise discarded buffers both before the first spill and after all spills are cleaned up.
+			auto discard_buffer = [&]() {
+				auto pin = bm.Allocate(MemoryTag::EXTENSION, size, true);
+				auto block = pin.GetBlockHandle();
+				pin.Destroy();
+				auto lock = block->GetMemory().GetLock();
+				block->GetMemory().Unload(lock);
+			};
+			discard_buffer();
+			REQUIRE(bm.GetUsedSwap() == 0);
+			REQUIRE(bm.GetTemporaryFiles().empty());
+
+			auto pin = bm.Allocate(MemoryTag::EXTENSION, size, false);
+			auto block = pin.GetBlockHandle();
+			memset(pin.GetDataMutable(), 42, size);
+			pin.Destroy();
+			for (idx_t cycle = 0; cycle < 2; cycle++) {
+				{
+					auto lock = block->GetMemory().GetLock();
+					block->GetMemory().Unload(lock);
+				}
+				REQUIRE(bm.GetUsedSwap() > 0);
+				REQUIRE_FALSE(bm.GetTemporaryFiles().empty());
+				if (cycle == 0) {
+					// Reading consumes the backing file; the same buffer can spill again.
+					auto reloaded = bm.Pin(block);
+					const auto data = reloaded.Ptr();
+					idx_t mismatches = 0;
+					for (idx_t i = 0; i < size; i++) {
+						mismatches += data[i] != 42;
+					}
+					REQUIRE(mismatches == 0);
+				} else {
+					// Tuple/column allocators can mark an already-spilled block discardable.
+					block->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+					block.reset();
+				}
+				discard_buffer();
+				REQUIRE(bm.GetUsedSwap() == 0);
+				REQUIRE(bm.GetTemporaryFiles().empty());
+				for (const auto &info : bm.GetMemoryUsageInfo()) {
+					REQUIRE(info.evicted_data == 0);
+				}
+			}
+		}
+	}
+}
+
+#ifndef DUCKDB_NO_THREADS
+TEST_CASE("Concurrent first spills and temporary buffer cleanup", "[storage][buffer_pool]") {
+	DuckDB db;
+	auto &bm = BufferManager::GetBufferManager(*db.instance);
+	bm.SetTemporaryDirectory(TestCreatePath("concurrent_temporary_buffer_cleanup"));
+	atomic<idx_t> ready {0};
+	atomic<bool> failed {false};
+	vector<thread> workers;
+	constexpr idx_t worker_count = 8;
+	for (idx_t worker = 0; worker < worker_count; worker++) {
+		workers.emplace_back([&, worker]() {
+			ready++;
+			while (ready.load() != worker_count) {
+				std::this_thread::yield();
+			}
+			try {
+				for (idx_t i = 0; i < 16; i++) {
+					const auto size = bm.GetBlockSize() * (1 + worker % 2);
+					const bool discardable = (i + worker) % 3 == 0;
+					auto pin = bm.Allocate(MemoryTag::EXTENSION, size, discardable);
+					auto block = pin.GetBlockHandle();
+					memset(pin.GetDataMutable(), 42, size);
+					pin.Destroy();
+					{
+						auto lock = block->GetMemory().GetLock();
+						block->GetMemory().Unload(lock);
+					}
+					block->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+				}
+			} catch (...) {
+				failed = true;
+			}
+		});
+	}
+	for (auto &worker : workers) {
+		worker.join();
+	}
+	REQUIRE_FALSE(failed.load());
+	REQUIRE(bm.GetUsedSwap() == 0);
+	REQUIRE(bm.GetTemporaryFiles().empty());
+	for (const auto &info : bm.GetMemoryUsageInfo()) {
+		REQUIRE(info.evicted_data == 0);
+	}
+}
+
+#endif

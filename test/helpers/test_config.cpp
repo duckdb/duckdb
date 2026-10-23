@@ -934,6 +934,10 @@ idx_t FailureSummary::GetSummaryCounter() {
 	return ++summary.failures_summary_counter;
 }
 
+// don't log the same test failure many times:
+// e.g. log only the first failure in
+// `./build/debug/test/unittest --on-init "SET max_memory='400kb';"
+// test/fuzzer/pedro/concurrent_catalog_usage.test`
 bool FailureSummary::SkipLoggingSameError(const string &file_name) {
 	return Instance().SkipLoggingSameErrorInternal(file_name);
 }

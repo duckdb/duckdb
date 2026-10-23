@@ -690,6 +690,10 @@ DUCKDB_API bool TryCast::Operation(timestamp_ns_t input, timestamp_tz_ns_t &resu
 template <>
 DUCKDB_API bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_ns_t &result, bool strict);
 template <>
+DUCKDB_API bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_ms_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_sec_t &result, bool strict);
+template <>
 DUCKDB_API bool TryCast::Operation(timestamp_ms_t input, timestamp_sec_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(timestamp_ms_t input, timestamp_ns_t &result, bool strict);
@@ -909,14 +913,14 @@ struct CastFromBlob {
 template <>
 duckdb::string_t CastFromBlob::Operation(duckdb::string_t input, StringHeap &heap);
 
-struct CastFromBlobToBit {
-	template <class SRC>
-	static inline string_t Operation(SRC input, StringHeap &heap) {
+struct TryCastBlobToBit {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, Vector &result_vector, CastParameters &parameters) {
 		throw NotImplementedException("Cast from blob could not be performed!");
 	}
 };
 template <>
-string_t CastFromBlobToBit::Operation(string_t input, StringHeap &heap);
+bool TryCastBlobToBit::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters);
 
 struct TryCastToBlob {
 	template <class SRC, class DST>
