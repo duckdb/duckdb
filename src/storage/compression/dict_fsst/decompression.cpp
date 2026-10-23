@@ -84,6 +84,8 @@ string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t
 		if (string_len == 0) {
 			return string_t(nullptr, 0);
 		}
+		D_ASSERT(decoder);
+		D_ASSERT(string_len <= string_t::MAX_STRING_SIZE / 8);
 		if (all_values_inlined) {
 			return FSSTPrimitives::DecompressInlinedValue(decoder, str_ptr, string_len);
 		} else {
@@ -273,6 +275,12 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 
 void CompressedStringScanState::Select(Vector &result, idx_t result_offset, idx_t start, const SelectionVector &sel,
                                        idx_t sel_count) {
+	// The last selected row bounds the unpacked range, so selections must be ordered.
+#ifdef DEBUG
+	for (idx_t i = 1; i < sel_count; i++) {
+		D_ASSERT(sel.get_index(i - 1) <= sel.get_index(i));
+	}
+#endif
 	const auto scan_count = sel_count == 0 ? 0 : sel.get_index(sel_count - 1) + 1;
 	auto &selvec = GetSelVec(start, scan_count);
 
