@@ -110,7 +110,7 @@ bool ParseIterator::PeekInternal() {
 			exhausted = true;
 			return false;
 		}
-		current_statement = std::move((*overridden_statements)[override_cursor++]);
+		BufferStatement(std::move((*overridden_statements)[override_cursor++]));
 		return true;
 	}
 	if (!parser) {
@@ -156,7 +156,7 @@ bool ParseIterator::PeekInternal() {
 				auto &create = stmt->Cast<CreateStatement>();
 				create.info->sql = stmt->query;
 			}
-			current_statement = std::move(stmt);
+			BufferStatement(std::move(stmt));
 			return true;
 		}
 		if (token_iterator->AtEnd()) {
@@ -165,6 +165,17 @@ bool ParseIterator::PeekInternal() {
 		}
 		// separator-only TLS in the middle of the input — loop and try the next.
 	}
+}
+
+void ParseIterator::BufferStatement(unique_ptr<SQLStatement> statement) {
+	try {
+		PostParseExtension::CallPostParseFunctions(context, *statement);
+	} catch (...) {
+		// A rejected statement ends the input: nothing after it is parsed or yielded.
+		exhausted = true;
+		throw;
+	}
+	current_statement = std::move(statement);
 }
 
 void ParseIterator::EnsureTokenized() {
