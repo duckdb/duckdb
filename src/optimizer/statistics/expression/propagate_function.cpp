@@ -247,13 +247,22 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 	}
 	vector<BaseStatistics> stats;
 	stats.reserve(func.GetChildrenMutable().size());
-	for (idx_t i = 0; i < func.GetChildrenMutable().size(); i++) {
-		auto stat = PropagateExpression(func.GetChildrenMutable()[i]);
+	bool has_invalidated_parameter = false;
+	for (auto &child : func.GetChildrenMutable()) {
+		auto stat = PropagateExpression(child);
+		// an invalidated parameter has no statistics until it is rebound at execution
+		if (child->GetExpressionType() == ExpressionType::VALUE_PARAMETER &&
+		    child->GetReturnType().id() == LogicalTypeId::SQLNULL) {
+			has_invalidated_parameter = true;
+		}
 		if (!stat) {
-			stats.push_back(BaseStatistics::CreateUnknown(func.GetChildrenMutable()[i]->GetReturnType()));
+			stats.push_back(BaseStatistics::CreateUnknown(child->GetReturnType()));
 		} else {
 			stats.push_back(stat->Copy());
 		}
+	}
+	if (has_invalidated_parameter) {
+		return nullptr;
 	}
 	auto constant_stats = PropagateConstantInputs(context, func, stats);
 	if (constant_stats) {
