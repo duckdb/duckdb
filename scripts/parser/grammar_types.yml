@@ -188,6 +188,7 @@ CreateStatement:
     - CreateTableStmt
     - CreateIndexStmt
     - CreateMacroStmt
+    - CreateLanguageFunctionStmt
     - CreateTypeStmt
     - CreateViewStmt
     - CreateTriggerStmt
@@ -1269,12 +1270,14 @@ LogicalType:
   by_value: false
   rules:
     - Type
+    - ReturnsType
 
 LogicalTypeList:
   type: "vector<LogicalType>"
   by_value: false
   rules:
     - TypeList
+    - DropFunctionSignature
 
 TransactionModifierType:
   type: "TransactionModifierType"

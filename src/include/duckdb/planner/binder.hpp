@@ -70,6 +70,7 @@ class AtClause;
 class BoundAtClause;
 
 struct CreateInfo;
+struct CreateMacroInfo;
 struct CreateSchemaInfo;
 struct CreateTriggerInfo;
 struct QualifiedName;
@@ -310,6 +311,8 @@ public:
 	void BindCreateSchema(CreateSchemaInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
+	//! Reject macro entries with language members or declared RETURNS types in storage below v2.1.0
+	static void CheckLanguageMacroStorageVersion(Catalog &catalog, const CreateMacroInfo &info);
 	SchemaCatalogEntry &BindCreateTriggerInfo(CreateTriggerInfo &info);
 
 	unique_ptr<BoundPragmaInfo> BindPragma(PragmaInfo &info, QueryErrorContext error_context);

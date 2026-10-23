@@ -6,6 +6,7 @@
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/common/logical_type_info.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/function/table_macro_function.hpp"
@@ -294,10 +295,25 @@ void MacroFunction::CopyProperties(MacroFunction &other) const {
 		other.default_parameters[kv.first] = kv.second->Copy();
 	}
 	other.types = types;
+	other.return_type = return_type;
 }
 
 vector<unique_ptr<ParsedExpression>>
 MacroFunction::GetPositionalParametersForSerialization(Serializer &serializer) const {
+	// this runs at the start of member serialization: reject a definition the target storage
+	// version cannot represent instead of silently dropping its fields
+	if (!serializer.ShouldSerialize(StorageVersion::V2_1_0)) {
+		if (type == MacroType::LANGUAGE_MACRO) {
+			throw SerializationException(
+			    "Cannot write a LANGUAGE function for a storage version below v2.1.0. Re-attach "
+			    "with (STORAGE_VERSION 'v2.1.0') or drop the function");
+		}
+		if (return_type.id() != LogicalTypeId::UNKNOWN) {
+			throw SerializationException(
+			    "Cannot write a macro with a declared RETURNS type for a storage version below v2.1.0. Re-attach "
+			    "with (STORAGE_VERSION 'v2.1.0') or drop the macro");
+		}
+	}
 	vector<unique_ptr<ParsedExpression>> result;
 	if (serializer.ShouldSerialize(StorageVersion::V1_4_0)) {
 		// We serialize all positional parameters as-is
@@ -338,13 +354,91 @@ void MacroFunction::FinalizeDeserialization() {
 	}
 }
 
+bool MacroFunction::HasUntypedParameter() const {
+	if (types.size() < parameters.size()) {
+		return true;
+	}
+	for (auto &type : types) {
+		if (type.id() == LogicalTypeId::UNKNOWN) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool MacroFunction::MatchesSignature(const vector<LogicalType> &signature) const {
+	if (parameters.size() != signature.size() || HasUntypedParameter()) {
+		return false;
+	}
+	for (idx_t i = 0; i < signature.size(); i++) {
+		if (types[i] != signature[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool MacroFunction::ConflictsWith(const MacroFunction &other) const {
+	// a member occupies its default arity range: f(a) conflicts with f(a, b := 5). Only language
+	// overload sets reach this, plain macro members keep call-time selection
+	const auto shared_arity = MaxValue(parameters.size() - default_parameters.size(),
+	                                   other.parameters.size() - other.default_parameters.size());
+	if (shared_arity > MinValue(parameters.size(), other.parameters.size())) {
+		// the callable arity ranges are disjoint
+		return false;
+	}
+	if (HasUntypedParameter() || other.HasUntypedParameter()) {
+		// an untyped member occupies its whole arity range
+		return true;
+	}
+	// the smallest shared arity decides: a call with that many arguments could name either member
+	for (idx_t i = 0; i < shared_arity; i++) {
+		if (types[i] != other.types[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
+string MacroFunction::SignatureToString() const {
+	string result = "(";
+	for (idx_t i = 0; i < parameters.size(); i++) {
+		if (i > 0) {
+			result += ", ";
+		}
+		const auto &param_name = parameters[i]->Cast<ColumnRefExpression>().GetColumnName();
+		result += SQLIdentifier::ToString(param_name);
+		if (i < types.size() && types[i].id() != LogicalTypeId::UNKNOWN) {
+			result += " " + types[i].ToString();
+		}
+	}
+	result += ")";
+	return result;
+}
+
+static string MacroTypeToSQL(const LogicalType &type) {
+	// an aliased type (e.g. an extension-registered type) carries its own identity: render it as-is
+	if (type.HasAlias()) {
+		return type.ToString();
+	}
+	// render a top-level collation in the VARCHAR constructor form, which parses in type position
+	auto &type_info = type.GetTypeInfo();
+	if (type_info.type == LogicalTypeInfoType::STRING_TYPE_INFO) {
+		auto &string_info = type_info.Cast<StringTypeInfo>();
+		if (!string_info.collation.empty()) {
+			return "VARCHAR(" + SQLString::ToString(string_info.collation) + ")";
+		}
+	}
+	return type.ToString();
+}
+
 string MacroFunction::ToSQL() const {
 	vector<string> param_strings;
 	for (idx_t param_idx = 0; param_idx < parameters.size(); param_idx++) {
 		const auto &param_name = parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
 		auto param_string = SQLIdentifier::ToString(param_name);
 		if (types[param_idx] != LogicalType::UNKNOWN) {
-			param_string += " " + types[param_idx].ToString();
+			param_string += " " + MacroTypeToSQL(types[param_idx]);
 		}
 		auto it = default_parameters.find(param_name);
 		if (it != default_parameters.end()) {
@@ -352,7 +446,11 @@ string MacroFunction::ToSQL() const {
 		}
 		param_strings.emplace_back(std::move(param_string));
 	}
-	return StringUtil::Format("(%s) AS ", StringUtil::Join(param_strings, ", "));
+	string returns;
+	if (return_type.id() != LogicalTypeId::UNKNOWN) {
+		returns = " RETURNS " + MacroTypeToSQL(return_type);
+	}
+	return StringUtil::Format("(%s)%s AS ", StringUtil::Join(param_strings, ", "), returns);
 }
 
 } // namespace duckdb
