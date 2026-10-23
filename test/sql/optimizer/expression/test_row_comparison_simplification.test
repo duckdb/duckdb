@@ -34,11 +34,88 @@ SELECT count(*) FROM rows WHERE (a, b) = (c, d);
 ----
 3
 
-# Empty and expression-valued rows retain the original comparison implementation.
+# Row-vs-constant comparisons decompose as well: (a, b) = (1, 2) matches rows with a = 1 AND b = 2
+query I
+SELECT count(*) FROM rows WHERE (a, b) = (1, 2);
+----
+3
+
+# Constants containing NULLs decompose with IS NOT DISTINCT FROM: (a, b) = (1, NULL) matches rows
+# with a = 1 AND b IS NULL, which a decomposition into `=` would drop (b = NULL is NULL)
+query I
+SELECT count(*) FROM rows WHERE (a, b) = (1, NULL);
+----
+1
+
+# the constant may be on either side of the comparison
+query I
+SELECT count(*) FROM rows WHERE (1, NULL) = (a, b);
+----
+1
+
+# IS NOT DISTINCT FROM compares rows with the same per-field semantics
+query I
+SELECT count(*) FROM rows WHERE (a, b) IS NOT DISTINCT FROM (1, 2);
+----
+3
+
+# nested rows compare field-wise as well
+query I
+SELECT count(*) FROM rows WHERE ((a, b), c) = ((1, 2), 1);
+----
+2
+
+# NULLs inside a nested row compare equal, like NULLs in a flat row
+query I
+SELECT count(*) FROM rows WHERE ((a, b), c) = ((NULL, 2), NULL);
+----
+2
+
+query I rowsort
+SELECT ((a, b), c) IS NOT DISTINCT FROM ((NULL, 2), NULL) FROM rows;
+----
+0
+0
+0
+0
+0
+0
+1
+1
+
+# a NULL constant is not a row of NULL fields - both comparisons are never true. Unpacking would wrongly
+# match the two rows where a and c are both NULL.
+query I
+SELECT count(*) FROM rows WHERE (a, c) = NULL;
+----
+0
+
+query I
+SELECT count(*) FROM rows WHERE (a, c) IS NOT DISTINCT FROM NULL;
+----
+0
+
+# Empty rows are always equal, expression-valued rows compare field-wise as well.
 query II
 SELECT row() = row(), row(a + 1, b) = row(c + 1, d) FROM rows WHERE a = 1 AND b = 2 AND d = 2;
 ----
 1	1
+
+# Do not change the number of volatile function evaluations: unpacking the comparison would let a conjunction
+# skip the nextval() call for rows that already failed an earlier field
+statement ok
+CREATE SEQUENCE row_cmp_seq;
+
+query I
+SELECT count(*) FROM rows WHERE (a, nextval('row_cmp_seq')) = (99, 1);
+----
+0
+
+# nextval was evaluated once per row (8 rows)
+query I
+SELECT currval('row_cmp_seq');
+----
+8
 
 # Disabling the expression rewriter preserves identical results.
 statement ok
