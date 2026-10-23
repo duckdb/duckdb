@@ -10,10 +10,18 @@
 
 //	From https://www.vldb.org/pvldb/vol19/p3525-lindner.pdf §5 (Partition Analysis)
 //	Join push-down P,O,w,f references only A(r) and:
-// 	(9)  ⊞P,...(r)⋈︁r.b=s.x s ≡⊞P,...(r ⋈︁r.b=s.x s)  | FD P → b and x unique
-// 	(10) ⊞P,...(r)⋈︁r.b=s.x s ≡⊞P,...(r ⋈︁r.b=s.x s) | x unique (left join)
+// 	(9)  ⊞P,...(r)⋈︁r.b=s.x s ≡⊞P,...(r ⋈︁r.b=s.x s) | FD P → b and x unique
+// 	(10) ⊞P,...(r)⋈︁r.b=s.x s ≡⊞P,...(r ⋈︁r.b=s.x s) | FD P → b and x unique (left join)
 //  (11) ⊞P,...(r)⋉r.b=s.x s ≡⊞P,...(r ⋉r.b=s.x s) | FD P → b
 //	(12) ⊞P,...(r)⊲r.b=s.x s ≡⊞P,...(r ⊲r.b=s.x s) | FD P → b
+//
+//	Note that the table in the paper is incorrect: equivalence 10 in the table only requires x unique,
+//	but §5.2 argues:
+//	> Equivalences 7 and 9 to 12 require the FD P → b.
+//
+//	Note also that the uniqueness condition is at the end of that section:
+//	> Inner and outer joins (Equivalences 9 and 10) can expand it,
+//	> so an engine should push them only when the join does not grow the input it feeds the window.
 
 namespace duckdb {
 
@@ -66,29 +74,31 @@ bool WindowJoinPushdown::CanOptimize(const LogicalOperator &op) {
 	const auto &b = (window_idx == 0) ? condition.LeftReference() : condition.RightReference();
 
 	//	FD P → b
-	bool fd_p_b = true;
-	if (join.join_type != JoinType::LEFT) {
-		for (const auto &expr : window.expressions) {
-			const auto &wexpr = expr->Cast<BoundWindowExpression>();
-			vector<reference<Expression>> refs;
-			for (auto &p : wexpr.Partitions()) {
-				refs.emplace_back(*p);
-			}
-			if (refs.empty()) {
-				return false;
-			}
-			if (!BaseSelectBinder::IsFunctionallyDependent(b, refs)) {
-				fd_p_b = false;
-				break;
-			}
+	for (const auto &expr : window.expressions) {
+		const auto &wexpr = expr->Cast<BoundWindowExpression>();
+		vector<reference<Expression>> refs;
+		for (auto &p : wexpr.Partitions()) {
+			refs.emplace_back(*p);
 		}
+		if (refs.empty()) {
+			return false;
+		}
+		if (!BaseSelectBinder::IsFunctionallyDependent(b, refs)) {
+			return false;
+		}
+	}
+
+	switch (join.join_type) {
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+		return true;
+	default:
+		break;
 	}
 
 	//	x unique
 	const auto &x = (window_idx == 1) ? condition.GetLHS() : condition.GetRHS();
-	bool x_unique = false;
-	const bool needs_unique = (join.join_type == JoinType::INNER || join.join_type == JoinType::LEFT);
-	if (needs_unique && x.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+	if (x.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		//	Need a bound reference here
 		const auto &binding = x.Cast<BoundColumnRefExpression>().Binding();
 		auto &s = *join.children[1 - window_idx];
@@ -97,21 +107,8 @@ bool WindowJoinPushdown::CanOptimize(const LogicalOperator &op) {
 			if (ucc.size() != 1 || ucc.count(binding) == 0) {
 				continue;
 			}
-			x_unique = true;
-			break;
+			return true;
 		}
-	}
-
-	switch (join.join_type) {
-	case JoinType::INNER:
-		return fd_p_b && x_unique;
-	case JoinType::LEFT:
-		return x_unique;
-	case JoinType::SEMI:
-	case JoinType::ANTI:
-		return fd_p_b;
-	default:
-		break;
 	}
 
 	return false;

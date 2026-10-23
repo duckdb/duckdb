@@ -177,11 +177,26 @@ SELECT * FROM w LEFT JOIN s ON w.b = s.x ORDER BY id;
 5	NULL	500	1	1	NULL	NULL
 6	20	600	2	2	20	twenty
 
-# Left join does not need FD P → b
-query II
-EXPLAIN SELECT * FROM (SELECT r.*, row_number() OVER (PARTITION BY v ORDER BY id) AS rn FROM r) w2 LEFT JOIN s ON w2.b = s.x;
+# Left join on a window output column must not be pushed below the window
+statement ok
+CREATE TABLE s1 (x BIGINT PRIMARY KEY, name VARCHAR);
+
+statement ok
+INSERT INTO s1 VALUES (1, 'one'), (2, 'two');
+
+query IIIII
+SELECT id, b, rn, cnt, name 
+FROM w 
+LEFT JOIN s1 
+ON w.rn = s1.x 
+ORDER BY id;
 ----
-logical_opt	<REGEX>:.*WINDOW.*COMPARISON_JOIN.*
+1	10	1	2	one
+2	10	2	2	two
+3	20	1	2	one
+4	30	1	1	one
+5	NULL	1	1	one
+6	20	2	2	two
 
 query IIIIII
 SELECT * FROM (SELECT r.*, row_number() OVER (PARTITION BY v ORDER BY id) AS rn FROM r) w2 LEFT JOIN s ON w2.b = s.x ORDER BY id;
@@ -197,7 +212,7 @@ SELECT * FROM (SELECT r.*, row_number() OVER (PARTITION BY v ORDER BY id) AS rn 
 query II
 EXPLAIN SELECT * FROM (SELECT r.*, row_number() OVER (ORDER BY id) AS total FROM r) w2 LEFT JOIN s ON w2.b = s.x;
 ----
-logical_opt	<REGEX>:.*WINDOW.*COMPARISON_JOIN.*
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*WINDOW.*
 
 query IIIIII
 SELECT * FROM (SELECT r.*, row_number() OVER (ORDER BY id) AS total FROM r) w2 LEFT JOIN s ON w2.b = s.x ORDER BY id;
