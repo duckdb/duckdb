@@ -636,6 +636,16 @@ bool CachingFileHandle::TryGetNetworkThroughput(NetworkThroughputEstimate &resul
 	return throughput_estimator.TryEstimate(result);
 }
 
+idx_t CachingFileHandle::CountCachedBlocks(idx_t location, idx_t nr_bytes) {
+	if (nr_bytes == 0 || !external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path) ||
+	    !CanUseCache()) {
+		return 0;
+	}
+	auto current_cached_file = EnsureCachedFileCurrent();
+	return ExternalFileCache::CountSmallLoadedBlocks(*current_cached_file, location, nr_bytes,
+	                                                 external_file_cache.GetCacheMaxBlockSize(path.path));
+}
+
 void CachingFileHandle::ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location) {
 	auto handle = GetFileHandle();
 	if (handle->file_system.IsLocalFileSystem()) {

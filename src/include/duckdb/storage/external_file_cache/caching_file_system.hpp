@@ -82,6 +82,8 @@ public:
 	DUCKDB_API bool IsRemoteFile() const;
 	DUCKDB_API bool OnDiskFile();
 	DUCKDB_API bool TryGetNetworkThroughput(NetworkThroughputEstimate &result);
+	//! The number of small cached blocks of this file that overlap [location, location + nr_bytes); 0 without a cache
+	DUCKDB_API idx_t CountCachedBlocks(idx_t location, idx_t nr_bytes);
 	DUCKDB_API idx_t SeekPosition();
 	DUCKDB_API void Seek(idx_t location);
 
