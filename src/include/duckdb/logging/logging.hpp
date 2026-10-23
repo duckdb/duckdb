@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/logging/log_storage.hpp
+// duckdb/logging/logging.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -42,6 +42,8 @@ struct LogConfig {
 	LogConfig();
 
 	DUCKDB_API bool IsConsistent() const;
+	//! Whether this lowercased name is one of the log sinks DuckDB provides
+	DUCKDB_API static bool IsBuiltInLogSink(const string &sink_name);
 
 	bool enabled;
 	LogMode mode;
