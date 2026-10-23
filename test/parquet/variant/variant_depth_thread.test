@@ -6,15 +6,27 @@ require parquet
 
 require json
 
-# the deep JSON string lives in a table so the cast runs during execution: as a constant expression
-# it would be folded into a VARIANT Value on the client thread, and rendering that constant in debug
-# plan verification recurses per nesting level
+# the table source keeps the casts in the vector cast path at execution time: constant expressions
+# would be folded into a VARIANT Value on the client thread, and Value conversion as well as debug
+# plan verification recurse per nesting level outside the cast under test
 statement ok
-CREATE TABLE deep_thread_json AS SELECT repeat('[', 500) || '1' || repeat(']', 500) AS s;
+CREATE TABLE deep_thread_json AS SELECT
+	repeat('[', 500) || '1' || repeat(']', 500) AS deep,
+	repeat('[', 250) || '1' || repeat(']', 250) AS deepish;
 
 concurrentloop i 0 2
 
+# depth 500 does not fit the reduced thread stack with one recursive cast frame per level
+query I
+SELECT deep::JSON::VARIANT IS NOT NULL FROM deep_thread_json, range(3)
+----
+true
+true
+true
+
+# the parquet variant encoder still recurses once per nesting level, so the write stays at a depth
+# its frames can absorb on the reduced stack
 statement ok
-COPY (SELECT s::JSON::VARIANT AS v FROM deep_thread_json, range(3)) TO '{TEST_DIR}/variant_deep_array_{i}.parquet'
+COPY (SELECT deepish::JSON::VARIANT AS v FROM deep_thread_json, range(3)) TO '{TEST_DIR}/variant_deep_array_{i}.parquet'
 
 endloop
