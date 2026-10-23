@@ -2024,10 +2024,14 @@ void ParquetReader::PreparePageIndex(ClientContext &context, ParquetReaderScanSt
 		PreparePageIndexInternal(context, state);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
-		if (error.Type() == ExceptionType::INTERNAL) {
+		const auto type = error.Type();
+		if (type == ExceptionType::INTERNAL || type == ExceptionType::INTERRUPT ||
+		    type == ExceptionType::OUT_OF_MEMORY || Exception::InvalidatesDatabase(type)) {
 			throw;
 		}
-		// a page index that cannot be read or evaluated is ignored: the row group is read as if it had none
+		// a page index that cannot be read or evaluated is ignored: the row group is read as if it had none. Corrupt
+		// index bytes surface as Thrift protocol errors, invalid input or reads past the end of the file, so only the
+		// errors that do not come from the file itself are propagated
 		auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
 		trans.ClearPrefetch();
 		state.page_index.Reset();
