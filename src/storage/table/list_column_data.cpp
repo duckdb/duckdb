@@ -284,12 +284,10 @@ void ListColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_stat
 void ListColumnData::RevertAppend(row_t new_count) {
 	ColumnData::RevertAppend(new_count);
 	validity->RevertAppend(new_count);
+	// revert append in the child column, also when no list is left
 	auto column_count = GetMaxEntry();
-	if (column_count > 0) {
-		// revert append in the child column
-		auto list_offset = FetchListOffset(column_count - 1);
-		child_column->RevertAppend(UnsafeNumericCast<row_t>(list_offset));
-	}
+	auto list_offset = column_count > 0 ? FetchListOffset(column_count - 1) : 0;
+	child_column->RevertAppend(UnsafeNumericCast<row_t>(list_offset));
 }
 
 idx_t ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
