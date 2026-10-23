@@ -14,7 +14,7 @@ CREATE TABLE build AS SELECT 'key-' || (i % 7)::VARCHAR k, i FROM range(500000) 
 foreach threads 1 2 4 8
 
 statement ok
-SET threads=${threads}
+SET threads={threads}
 
 query II
 SELECT count(*), sum(b.i)
