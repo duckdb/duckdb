@@ -39,7 +39,11 @@ class CatalogEntry;
 class SimpleFunction;
 class HavingBinder;
 class ColumnAliasBinder;
+class LogicalOperator;
+class LogicalProjection;
+class LogicalAggregate;
 
+struct TrySubqueryPlanIndexes;
 struct DummyBinding;
 struct SelectBindState;
 
@@ -267,6 +271,21 @@ protected:
 	                                  vector<unique_ptr<Expression>> children);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
+	//! Bind TRY over a scalar subquery as an ordinary subquery, then lower the TRY onto its bound plan
+	BindResult BindTrySubquery(OperatorExpression &op, idx_t depth);
+	//! Check the parsed shape of a TRY subquery and push TRY into a select item that is itself a subquery.
+	//! Shapes whose error flag cannot be transported faithfully are rejected when the flag is exposed.
+	void PrepareTrySubquery(SubqueryExpression &subquery_expr, const ParsedExpression &location,
+	                        bool expose_error_flag);
+	//! Lower TRY onto the maskable positions of a bound subquery plan, before the subquery is flattened.
+	//! With expose_error_flag the output column becomes a struct of the masked value and the error flag,
+	//! so the use site can re-raise captured errors. Returns the resulting output type.
+	LogicalType LowerTrySubquery(const ParsedExpression &location, const TrySubqueryPlanIndexes &indexes,
+	                             LogicalOperator &root, bool expose_error_flag);
+	//! Wrap the inputs of the gated aggregates in TRY and aggregate HAS_ERROR probes over them.
+	//! Returns a column reference to the gate, or nullptr when the aggregates have no inputs.
+	unique_ptr<Expression> GateTryAggregates(const ParsedExpression &location, LogicalAggregate &aggregate,
+	                                         const vector<idx_t> &aggregate_positions);
 	BindResult BindPositionalReference(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression);
 
 	void TransformCapturedLambdaColumn(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
@@ -316,6 +335,8 @@ protected:
 	ClientContext &context;
 	vector<BoundColumnReferenceInfo> bound_columns;
 	bool inside_try = false;
+	//! Set while binding the subquery of a TRY, so the subquery binder knows TRY is lowered onto its plan
+	bool bind_try_subquery = false;
 
 	BindResult TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
 	                               const LambdaSyntaxType syntax_type);

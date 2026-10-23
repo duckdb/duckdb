@@ -60,13 +60,27 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 }
 
 BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t depth) {
+	// consume the one-shot marker BindTrySubquery sets for the subquery it is about to bind
+	const bool try_subquery = bind_try_subquery;
+	bind_try_subquery = false;
+	bool rethrow_try_errors = false;
 	if (inside_try) {
-		throw BinderException("TRY can not be used in combination with a scalar subquery");
+		if (expr.GetSubqueryType() != SubqueryType::SCALAR) {
+			throw BinderException("TRY can not be used in combination with EXISTS/IN/ANY/ALL subqueries");
+		}
+		// a scalar subquery nested deeper inside a TRY argument: lower TRY onto it like a direct TRY
+		// subquery, and re-raise captured errors at the use site where the enclosing TRY masks them
+		rethrow_try_errors = true;
+		PrepareTrySubquery(expr, expr, true);
 	}
 	// bind the subquery in its own binder
 	auto subquery_binder = Binder::CreateBinder(context, binder);
 	subquery_binder->SetCanContainNulls(true);
 	subquery_binder->SetInsideSubquery();
+	if (try_subquery || rethrow_try_errors) {
+		// TRY is lowered onto the bound plan of this subquery after binding
+		subquery_binder->SetBindingTrySubquery();
+	}
 
 	subquery_binder->BeginSubqueryBind(binder, *this);
 	auto bound_node = subquery_binder->BindNode(*expr.Subquery()->node);
@@ -126,6 +140,15 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	}
 	LogicalType return_type =
 	    expr.GetSubqueryType() == SubqueryType::SCALAR ? bound_node.types[0] : LogicalType(LogicalTypeId::BOOLEAN);
+	if (rethrow_try_errors && bound_node.plan) {
+		// lower TRY onto the plan and expose the error flag in a struct next to the masked value;
+		// the expression keeps the value type, the struct is unpacked again when the subquery is planned
+		auto &indexes = subquery_binder->GetTrySubqueryPlanIndexes();
+		if (!indexes.recorded) {
+			throw InternalException("TRY subquery: no plan indexes were recorded for the top select node");
+		}
+		bound_node.types[0] = LowerTrySubquery(expr, indexes, *bound_node.plan, true);
+	}
 	if (return_type.id() == LogicalTypeId::UNKNOWN) {
 		return_type = LogicalType::SQLNULL;
 	}
@@ -178,6 +201,9 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	result->SubqueryMutable() = std::move(bound_node);
 	result->SubqueryTypeMutable() = expr.GetSubqueryType();
 	result->ComparisonTypeMutable() = expr.GetComparisonType();
+	if (rethrow_try_errors) {
+		result->SetRethrowTryErrors();
+	}
 
 	return BindResult(std::move(result));
 }
