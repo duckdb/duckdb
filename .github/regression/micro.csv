@@ -46,3 +46,6 @@ benchmark/parquet/dlba_read-long-1000000.benchmark
 benchmark/micro/update/upsert_select_cast_key.benchmark
 benchmark/micro/update/upsert_enum_key.benchmark
 benchmark/micro/pushdown/view_filter_below_delim_join.benchmark
+benchmark/micro/insert/bulk_insert_commit_batch.benchmark
+benchmark/micro/insert/bulk_insert_commit_parallel.benchmark
+benchmark/micro/insert/bulk_insert_commit_in_memory.benchmark
