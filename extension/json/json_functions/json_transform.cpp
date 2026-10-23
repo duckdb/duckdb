@@ -305,6 +305,32 @@ static bool TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 	return success;
 }
 
+//! Casts the text of every value to the result type, numbers (read as raw text) and strings alike
+static bool TransformFromValueString(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
+                                     JSONTransformOptions &options) {
+	Vector string_vector(LogicalTypeId::VARCHAR, count);
+	auto data = FlatVector::GetDataMutable<string_t>(string_vector);
+	auto &validity = FlatVector::ValidityMutable(string_vector);
+	for (idx_t i = 0; i < count; i++) {
+		const auto &val = vals[i];
+		if (!val || unsafe_yyjson_is_null(val)) {
+			validity.SetInvalid(i);
+			continue;
+		}
+		GetValueString(val, alc, data[i], string_vector);
+	}
+
+	bool success = true;
+	if (!VectorOperations::DefaultTryCast(string_vector, result, count, &options.error_message) &&
+	    options.strict_cast) {
+		options.object_index = 0; // Can't get line number information here
+		options.error_message +=
+		    "\n If this error occurred during read_json, line/object number information is approximate";
+		success = false;
+	}
+	return success;
+}
+
 //! GEOMETRY accepts both WKT strings and GeoJSON geometry fragments. A JSON object is never valid WKT, so the two
 //! are unambiguous and no option is needed to tell them apart.
 static bool TransformGeometry(yyjson_val *vals[], Vector &result, const idx_t count, JSONTransformOptions &options) {
@@ -1122,6 +1148,9 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 			return TransformDecimal<int64_t>(vals, result, count, width, scale, options);
 		case PhysicalType::INT128:
 			return TransformDecimal<hugeint_t>(vals, result, count, width, scale, options);
+		case PhysicalType::VARCHAR:
+			// wide decimals are parsed from the text of the value
+			return TransformFromValueString(vals, alc, result, count, options);
 		default:
 			throw InternalException("Unimplemented physical type for decimal");
 		}

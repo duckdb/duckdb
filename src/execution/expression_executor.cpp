@@ -188,8 +188,11 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		}
 
 		// preserve the input vector type if it was constant - the cast roundtrip below would otherwise flatten it,
-		// breaking callers that rely on constant-value defaults staying constant (e.g. remap_struct)
-		const bool input_is_constant = vector.GetVectorType() == VectorType::CONSTANT_VECTOR;
+		// breaking callers that rely on constant-value defaults staying constant (e.g. remap_struct). A NUMERIC
+		// constant comes back as a shredded vector (the representation of its value), which cannot be made constant:
+		// it is round-tripped over every row instead
+		const bool input_is_constant = vector.GetVectorType() == VectorType::CONSTANT_VECTOR &&
+		                               !TypeVisitor::Contains(vector.GetType(), LogicalTypeId::NUMERIC);
 		const idx_t cast_count = input_is_constant ? 1 : count;
 
 		Vector intermediate(LogicalType::VARIANT(), cast_count);

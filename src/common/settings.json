@@ -322,6 +322,14 @@
         "is_debug": true
     },
     {
+        "name": "debug_decimal_as_numeric",
+        "description": "Declare the DECIMAL columns of new tables as NUMERIC (used to run the test suite over NUMERIC columns).",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false",
+        "is_debug": true
+    },
+    {
         "name": "debug_delta_only_variant_encoding_enabled",
         "description": "Enables the Parquet reader to identify a Variant structurally.",
         "type": "BOOLEAN",
@@ -1626,6 +1634,13 @@
         "on_callbacks": [
             "set"
         ]
+    },
+    {
+        "name": "wide_decimal_arithmetic",
+        "description": "Let arithmetic and comparisons on decimals of up to 38 digits produce results wider than 38 digits (stored as BIGNUM) instead of clamping the result to 38 digits",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "write_buffer_row_group_count",

@@ -151,21 +151,20 @@ static Value NumberToValue(const string &val) {
 	if (try_cast_as_decimal && decimal_position.IsValid() &&
 	    str_val.GetSize() - num_underscores < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
 		// figure out the width/scale based on the decimal position
-		auto width = NumericCast<uint8_t>(str_val.GetSize() - 1 - num_underscores);
+		idx_t width = str_val.GetSize() - 1 - num_underscores;
 		// a well-formed decimal has a single '.', so its position never sits past the width; a second (e.g. trailing)
 		// dot pushes decimal_position beyond width and would underflow the scale computation below
-		if (decimal_position.GetIndex() > NumericCast<idx_t>(width) + num_integer_underscores) {
+		if (decimal_position.GetIndex() > width + num_integer_underscores) {
 			throw ParserException("Could not convert string \"%s\" to a decimal value", val);
 		}
 		auto scale = NumericCast<uint8_t>(width - decimal_position.GetIndex() + num_integer_underscores);
 		if (val[0] == '-') {
 			width--;
 		}
-		if (width <= Decimal::MAX_WIDTH_DECIMAL) {
-			return Value(str_val).DefaultCastAs(LogicalType::DECIMAL(width, scale));
-		}
+		// literals wider than 38 digits become wide decimals, which keep every digit
+		return Value(str_val).DefaultCastAs(LogicalType::DECIMAL(NumericCast<uint8_t>(width), scale));
 	}
-	// there is an exponent, or the value is too wide for a decimal
+	// there is an exponent, or the value is too wide for any decimal
 	double dbl_value = Cast::Operation<string_t, double>(str_val);
 	return Value::DOUBLE(dbl_value);
 }

@@ -1,6 +1,8 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/common/types/numeric_type.hpp"
 #include "duckdb/planner/constraints/list.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -168,7 +170,7 @@ unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const Constraint
 	auto check_copy = check.expression->Copy();
 
 	// Bind the constraint and reset the original expression.
-	bound_check.expression = check_binder.Bind(check_copy);
+	bound_check.expression = check_binder.BindStoredExpression(check_copy, "CHECK constraints");
 	return std::move(bound_constraint);
 }
 
@@ -315,7 +317,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 
 		auto expression = col.GeneratedExpression().Copy();
 
-		auto bound_expression = expr_binder.Bind(expression);
+		auto bound_expression = expr_binder.BindStoredExpression(expression, "Generated columns");
 		D_ASSERT(bound_expression);
 		if (bound_expression->HasSubquery()) {
 			throw BinderException("Failed to bind generated column %s because the expression contains a subquery",
@@ -658,6 +660,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	type_binder->SetSearchPath(result->schema.catalog, result->schema.name);
 
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
+	// a test setting: every DECIMAL column of a DuckDB table is declared as NUMERIC
+	bool decimal_as_numeric = catalog.IsDuckCatalog() && Settings::Get<DebugDecimalAsNumericSetting>(context);
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
@@ -666,7 +670,12 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 
 		// construct the set of columns based on the names and types of the query
 		auto &names = query_obj.names;
-		auto &sql_types = query_obj.types;
+		auto sql_types = query_obj.types;
+		if (decimal_as_numeric) {
+			for (auto &type : sql_types) {
+				type = NumericType::DecimalsAsNumeric(type);
+			}
+		}
 		// e.g. create table (col1 ,col2) as QUERY
 		// col1 and col2 are the target_col_names
 		auto target_col_names = base.columns.GetColumnNames();
@@ -697,6 +706,9 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
 			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
 			type_binder->BindLogicalType(column.TypeMutable());
+			if (decimal_as_numeric) {
+				column.SetType(NumericType::DecimalsAsNumeric(column.Type()));
+			}
 		}
 
 	} else {
@@ -718,6 +730,9 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
 			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
 			type_binder->BindLogicalType(column.TypeMutable());
+			if (decimal_as_numeric) {
+				column.SetType(NumericType::DecimalsAsNumeric(column.Type()));
+			}
 		}
 
 		auto &config = DBConfig::Get(catalog.GetAttached());

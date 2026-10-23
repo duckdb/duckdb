@@ -1,5 +1,6 @@
 #include "duckdb/common/types/decimal.hpp"
 
+#include "duckdb/common/types/bignum_decimal.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 
 namespace duckdb {
@@ -30,6 +31,10 @@ string Decimal::ToString(hugeint_t value, uint8_t width, uint8_t scale) {
 	auto data = make_unsafe_uniq_array_uninitialized<char>(UnsafeNumericCast<size_t>(len + 1));
 	DecimalToString::FormatDecimal(value, width, scale, data.get(), UnsafeNumericCast<idx_t>(len));
 	return string(data.get(), UnsafeNumericCast<uint32_t>(len));
+}
+
+string Decimal::ToString(string_t value, uint8_t width, uint8_t scale) {
+	return BignumDecimal::ToString(value, scale);
 }
 
 } // namespace duckdb

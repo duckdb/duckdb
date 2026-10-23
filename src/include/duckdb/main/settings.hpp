@@ -623,6 +623,19 @@ struct DebugCheckpointSleepMsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugDecimalAsNumericSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_decimal_as_numeric";
+	static constexpr const char *Description =
+	    "Declare the DECIMAL columns of new tables as NUMERIC (used to run the test suite over NUMERIC columns).";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugDeltaOnlyVariantEncodingEnabledSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_delta_only_variant_encoding_enabled";
@@ -2651,6 +2664,20 @@ struct WarningsAsErrorsSetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct WideDecimalArithmeticSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "wide_decimal_arithmetic";
+	static constexpr const char *Description =
+	    "Let arithmetic and comparisons on decimals of up to 38 digits produce results wider than 38 digits (stored as "
+	    "BIGNUM) instead of clamping the result to 38 digits";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct WriteBufferRowGroupCountSetting {
