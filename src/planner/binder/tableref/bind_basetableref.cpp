@@ -62,8 +62,8 @@ BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTable
 
 	// Then the database-wide ones, including the built-in file scans
 	if (!replacement_function) {
-		for (const auto &scan : DBConfig::GetConfig(context).replacement_scans) {
-			if (auto result = scan.function(context, input, scan.data.get())) {
+		for (const auto &scan : DBConfig::GetConfig(context).replacement_scans.Snapshot()) {
+			if (auto result = scan->function(context, input, scan->data.get())) {
 				replacement_function = std::move(result);
 				break;
 			}
@@ -304,6 +304,11 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents
 		auto &view_catalog_entry = table_or_view->Cast<ViewCatalogEntry>();
+		if (!view_catalog_entry.ParentCatalog().IsSystemCatalog()) {
+			GetStatementProperties().RegisterDBRead(view_catalog_entry.ParentCatalog(), context);
+		}
+		// expanding nested views can take a long time, allow the query to be interrupted
+		context.InterruptCheck();
 		// We need to use a new binder for the view that doesn't reference any CTEs
 		// defined for this binder so there are no collisions between the CTEs defined
 		// for the view and for the current query

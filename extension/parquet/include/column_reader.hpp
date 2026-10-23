@@ -29,6 +29,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/assert.hpp"
@@ -167,7 +168,8 @@ public:
 	}
 
 	virtual idx_t FileOffset() const;
-	virtual uint64_t TotalCompressedSize();
+	//! Adds the indexes of the row group's column chunks this reader reads
+	virtual void GatherColumnChunks(unordered_set<idx_t> &column_chunks);
 	virtual idx_t GroupRowsAvailable();
 
 	// register the range this reader will touch for prefetching
@@ -275,8 +277,10 @@ private:
 		if (!HAS_DEFINES && !CHECKED && CONVERSION::PlainConstantSize() == sizeof(VALUE_TYPE)) {
 			// we can memcpy
 			idx_t copy_count = num_values * CONVERSION::PlainConstantSize();
-			memcpy(result_ptr + result_offset, plain_data.ptr, copy_count);
-			plain_data.unsafe_inc(copy_count);
+			if (copy_count > 0) {
+				memcpy(result_ptr + result_offset, plain_data.ptr, copy_count);
+				plain_data.unsafe_inc(copy_count);
+			}
 			return;
 		}
 		auto &result_mask = FlatVector::ValidityMutable(result);

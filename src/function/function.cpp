@@ -7,6 +7,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
@@ -325,7 +326,7 @@ void FunctionSignature::Verify() const {
 			found_default_value = true;
 		} else if (found_default_value) {
 			throw InvalidInputException(
-			    "Parameters with default values must be at the end of the parameter list. Parameter '%s' does not "
+			    "Parameters with default values must be at the end of the parameter list. Parameter %s does not "
 			    "have a default value but follows a parameter with a default value.",
 			    param.GetName());
 		}
@@ -386,7 +387,7 @@ void FunctionSignature::Verify() const {
 		// a named argument binds to a parameter of its name first, so an option of the same name is never reached
 		for (auto &param : parameters) {
 			if (param.AcceptsName() && typed_kwargs->Find(param.GetName())) {
-				throw InvalidInputException("Option '%s' has the same name as a parameter", param.GetName());
+				throw InvalidInputException("Option %s has the same name as a parameter", param.GetName());
 			}
 		}
 	}
@@ -459,6 +460,40 @@ idx_t BoundSimpleFunction::GetKwargsCount(const FunctionSignature &signature) co
 		}
 	}
 	return result;
+}
+
+void BoundSimpleFunction::SetCallArguments(const FunctionSignature &signature, const vector<Value> &parameters,
+                                           const named_argument_map_t &named_parameters) {
+	const auto positional_count = signature.GetPositionalParameterCount();
+	arguments.clear();
+	for (idx_t i = 0; i < positional_count; i++) {
+		arguments.push_back(signature.GetParameter(i).GetType());
+	}
+	auto args = signature.GetArgs();
+	for (idx_t i = positional_count; i < parameters.size(); i++) {
+		auto is_typed = args && args->GetType().id() != LogicalTypeId::ANY;
+		arguments.push_back(is_typed ? args->GetType() : parameters[i].type());
+	}
+	const auto positional_argument_count = arguments.size();
+
+	// only the options the signature receives by name, in the order they were passed
+	vector<Identifier> names;
+	for (auto &entry : named_parameters) {
+		auto param_idx = signature.GetParameterIndexByName(entry.first);
+		if (!param_idx.IsValid()) {
+			if (signature.GetKwargs()) {
+				names.push_back(entry.first);
+				arguments.push_back(entry.second.type());
+			}
+			continue;
+		}
+		auto &param = signature.GetParameter(param_idx.GetIndex());
+		if (!param.AcceptsPosition()) {
+			names.push_back(entry.first);
+			arguments.push_back(param.GetType());
+		}
+	}
+	SetNamedArguments(positional_argument_count, std::move(names));
 }
 
 FunctionParameterKind BoundSimpleFunction::GetArgumentParameterKind(const FunctionSignature &signature,
@@ -578,13 +613,25 @@ bool FunctionSignature::Equal(const FunctionSignature &other) const {
 //----------------------------------------------------------------------------------------------------------------------
 // Bind Function Input
 //----------------------------------------------------------------------------------------------------------------------
+//! An unresolved parameter or an as-yet-unknown type (e.g. a macro/prepared argument), possibly cast to the argument
+//! type of the function
+static bool IsUnresolvedArgument(const Expression &expr) {
+	if (expr.HasParameter() || expr.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+		return true;
+	}
+	if (BoundCastExpression::IsCast(expr)) {
+		return IsUnresolvedArgument(BoundCastExpression::Child(expr.Cast<BoundFunctionExpression>()));
+	}
+	return false;
+}
+
 Value BindFunctionInput::GetConstant(idx_t arg_idx, bool accept_null) const {
 	if (arg_idx >= arguments.size()) {
 		throw InternalException("%s: Argument index %llu is out of range", function.GetName(), arg_idx);
 	}
 	const auto &expr = *arguments[arg_idx];
-	// an unresolved parameter or an as-yet-unknown type (e.g. a macro/prepared argument) - defer binding
-	if (expr.HasParameter() || expr.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+	// defer binding until the argument is resolved
+	if (IsUnresolvedArgument(expr)) {
 		throw ParameterNotResolvedException();
 	}
 	// Use the argument name if available, otherwise use the argument index
@@ -600,7 +647,7 @@ Value BindFunctionInput::GetConstant(idx_t arg_idx, bool accept_null) const {
 	}
 	auto value = ExpressionExecutor::EvaluateScalar(context, expr);
 	if (!accept_null && value.IsNull()) {
-		throw BinderException(expr, "%s in function '%s' must not be NULL", argument_name, function.GetName());
+		throw BinderException(expr, "%s in function %s must not be NULL", argument_name, function.GetName());
 	}
 	return value;
 }
@@ -618,13 +665,17 @@ optional<Value> BindFunctionInput::TryGetConstant(idx_t arg_idx) const {
 		return {};
 	}
 	const auto &expr = *arguments[arg_idx];
-	if (expr.HasParameter() || expr.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+	if (IsUnresolvedArgument(expr)) {
 		return {};
 	}
 	if (!expr.IsFoldable()) {
 		return {};
 	}
-	return ExpressionExecutor::EvaluateScalar(context, expr);
+	Value result;
+	if (!ExpressionExecutor::TryEvaluateScalar(context, expr, result)) {
+		return {};
+	}
+	return result;
 }
 
 optional<Value> BindFunctionInput::TryGetConstant(const Identifier &name) const {
@@ -637,7 +688,7 @@ optional<Value> BindFunctionInput::TryGetConstant(const Identifier &name) const 
 
 optional_idx BindFunctionInput::GetArgumentIndex(const Identifier &name) const {
 	if (!argument_names) {
-		throw InternalException("Function '%s' was bound without argument names, cannot look up argument '%s' by name",
+		throw InternalException("Function %s was bound without argument names, cannot look up argument %s by name",
 		                        function.GetName(), name);
 	}
 	// The binder resolves every argument to a slot and reports its name: the signature parameter name for standard

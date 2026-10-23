@@ -13,6 +13,7 @@ add_library_unity(
   aggregate_rewrite.cpp
   aggregate_function_rewriter.cpp
   aggregate_reuse.cpp
+  apply_functional_dependencies.cpp
   materialized_aggregate_reuse.cpp
   aggregate_rewrite_helper.cpp
   build_probe_side_optimizer.cpp
@@ -49,6 +50,7 @@ add_library_unity(
   join_elimination.cpp
   regex_range_filter.cpp
   remove_duplicate_groups.cpp
+  remove_redundant_order.cpp
   remove_redundant_order_keys.cpp
   remove_unused_columns.cpp
   row_group_pruner.cpp
@@ -64,7 +66,8 @@ add_library_unity(
   scalar_fn_pushdown.cpp
   projection_pullup.cpp
   projection_placement.cpp
-  remote_pushdown_optimizer.cpp)
+  remote_pushdown_optimizer.cpp
+  disjunctive_join_rewriter.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer>
     PARENT_SCOPE)

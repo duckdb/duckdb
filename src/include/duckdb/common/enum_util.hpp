@@ -36,7 +36,11 @@ enum class ARTConflictType : uint8_t;
 
 enum class ARTScanNodeResult : uint8_t;
 
-enum class ARTScanResult : uint8_t;
+enum class ARTScanProgress : uint8_t;
+
+enum class ARTSearchResult : uint8_t;
+
+enum class ARTSerializationFormat : uint8_t;
 
 enum class AccessMode : uint8_t;
 
@@ -154,6 +158,10 @@ enum class CompressionValidity : uint8_t;
 
 enum class ConflictManagerMode : uint8_t;
 
+enum class ConnectionType : uint8_t;
+
+enum class ConstraintCheckMode : uint8_t;
+
 enum class ConstraintType : uint8_t;
 
 enum class CoordinateReferenceSystemType : uint8_t;
@@ -220,6 +228,8 @@ enum class ExponentType : uint8_t;
 
 enum class ExpressionClass : uint8_t;
 
+enum class ExpressionDepthKind : uint8_t;
+
 enum class ExpressionTailType : uint8_t;
 
 enum class ExpressionType : uint8_t;
@@ -235,6 +245,8 @@ enum class ExtensionRepositoryAccess : uint8_t;
 enum class ExtensionRepositoryType : uint8_t;
 
 enum class ExtensionUpdateResultTag : uint8_t;
+
+enum class ExternalFileCacheRequestSizing : uint8_t;
 
 enum class ExternalResourceOperation : uint8_t;
 
@@ -286,6 +298,8 @@ enum class HLLStorageType : uint8_t;
 
 enum class HTTPClientCachePolicy : uint8_t;
 
+enum class HTTPRetryOutcomeOwner : uint8_t;
+
 enum class HTTPStatusCode : uint16_t;
 
 enum class HTTPTransportReusePolicy : uint8_t;
@@ -295,6 +309,8 @@ enum class IdentifierCaseMode : uint8_t;
 enum class IndexAppendMode : uint8_t;
 
 enum class IndexBindState : uint8_t;
+
+enum class IndexCheckpointMode : uint8_t;
 
 enum class IndexConstraintType : uint8_t;
 
@@ -357,6 +373,14 @@ enum class MacroType : uint8_t;
 enum class MapInvalidReason : uint8_t;
 
 enum class MatchMode : uint8_t;
+
+enum class MatchRecognizeAfterMatch : uint8_t;
+
+enum class MatchRecognizeClauseKind : uint8_t;
+
+enum class MatchRecognizePatternType : uint8_t;
+
+enum class MatchRecognizeRows : uint8_t;
 
 enum class MemoryTag : uint8_t;
 
@@ -426,6 +450,10 @@ enum class PartitionedTupleDataType : uint8_t;
 
 enum class PatternMatchType : uint8_t;
 
+enum class PatternMemo : uint8_t;
+
+enum class PatternOp : uint8_t;
+
 enum class PhysicalOperatorType : uint8_t;
 
 enum class PhysicalTableScanExecutionStrategy : uint8_t;
@@ -472,6 +500,8 @@ enum class QueryResultState : uint8_t;
 
 enum class RecoveryMode : uint8_t;
 
+enum class RecursiveCTEMode : uint8_t;
+
 enum class RecursiveCTEPipelineMetricType : uint8_t;
 
 enum class RecursiveCTESourcePhase : uint8_t;
@@ -491,8 +521,6 @@ enum class RenderMode : uint8_t;
 enum class RequestSizing : uint8_t;
 
 enum class RequestType : uint8_t;
-
-enum class ResultEagerness : uint8_t;
 
 enum class ResultLifetime : uint8_t;
 
@@ -672,7 +700,13 @@ template<>
 const char* EnumUtil::ToChars<ARTScanNodeResult>(ARTScanNodeResult value);
 
 template<>
-const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
+const char* EnumUtil::ToChars<ARTScanProgress>(ARTScanProgress value);
+
+template<>
+const char* EnumUtil::ToChars<ARTSearchResult>(ARTSearchResult value);
+
+template<>
+const char* EnumUtil::ToChars<ARTSerializationFormat>(ARTSerializationFormat value);
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
@@ -849,6 +883,12 @@ template<>
 const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value);
 
 template<>
+const char* EnumUtil::ToChars<ConnectionType>(ConnectionType value);
+
+template<>
+const char* EnumUtil::ToChars<ConstraintCheckMode>(ConstraintCheckMode value);
+
+template<>
 const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
 
 template<>
@@ -948,6 +988,9 @@ template<>
 const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value);
 
 template<>
+const char* EnumUtil::ToChars<ExpressionDepthKind>(ExpressionDepthKind value);
+
+template<>
 const char* EnumUtil::ToChars<ExpressionTailType>(ExpressionTailType value);
 
 template<>
@@ -970,6 +1013,9 @@ const char* EnumUtil::ToChars<ExtensionRepositoryType>(ExtensionRepositoryType v
 
 template<>
 const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value);
+
+template<>
+const char* EnumUtil::ToChars<ExternalFileCacheRequestSizing>(ExternalFileCacheRequestSizing value);
 
 template<>
 const char* EnumUtil::ToChars<ExternalResourceOperation>(ExternalResourceOperation value);
@@ -1047,6 +1093,9 @@ template<>
 const char* EnumUtil::ToChars<HTTPClientCachePolicy>(HTTPClientCachePolicy value);
 
 template<>
+const char* EnumUtil::ToChars<HTTPRetryOutcomeOwner>(HTTPRetryOutcomeOwner value);
+
+template<>
 const char* EnumUtil::ToChars<HTTPStatusCode>(HTTPStatusCode value);
 
 template<>
@@ -1060,6 +1109,9 @@ const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value);
 
 template<>
 const char* EnumUtil::ToChars<IndexBindState>(IndexBindState value);
+
+template<>
+const char* EnumUtil::ToChars<IndexCheckpointMode>(IndexCheckpointMode value);
 
 template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
@@ -1153,6 +1205,18 @@ const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value);
 
 template<>
 const char* EnumUtil::ToChars<MatchMode>(MatchMode value);
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizeAfterMatch>(MatchRecognizeAfterMatch value);
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizeClauseKind>(MatchRecognizeClauseKind value);
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizePatternType>(MatchRecognizePatternType value);
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizeRows>(MatchRecognizeRows value);
 
 template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
@@ -1257,6 +1321,12 @@ template<>
 const char* EnumUtil::ToChars<PatternMatchType>(PatternMatchType value);
 
 template<>
+const char* EnumUtil::ToChars<PatternMemo>(PatternMemo value);
+
+template<>
+const char* EnumUtil::ToChars<PatternOp>(PatternOp value);
+
+template<>
 const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value);
 
 template<>
@@ -1326,6 +1396,9 @@ template<>
 const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
 
 template<>
+const char* EnumUtil::ToChars<RecursiveCTEMode>(RecursiveCTEMode value);
+
+template<>
 const char* EnumUtil::ToChars<RecursiveCTEPipelineMetricType>(RecursiveCTEPipelineMetricType value);
 
 template<>
@@ -1354,9 +1427,6 @@ const char* EnumUtil::ToChars<RequestSizing>(RequestSizing value);
 
 template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
-
-template<>
-const char* EnumUtil::ToChars<ResultEagerness>(ResultEagerness value);
 
 template<>
 const char* EnumUtil::ToChars<ResultLifetime>(ResultLifetime value);
@@ -1621,7 +1691,13 @@ template<>
 ARTScanNodeResult EnumUtil::FromString<ARTScanNodeResult>(const char *value);
 
 template<>
-ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
+ARTScanProgress EnumUtil::FromString<ARTScanProgress>(const char *value);
+
+template<>
+ARTSearchResult EnumUtil::FromString<ARTSearchResult>(const char *value);
+
+template<>
+ARTSerializationFormat EnumUtil::FromString<ARTSerializationFormat>(const char *value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
@@ -1798,6 +1874,12 @@ template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value);
 
 template<>
+ConnectionType EnumUtil::FromString<ConnectionType>(const char *value);
+
+template<>
+ConstraintCheckMode EnumUtil::FromString<ConstraintCheckMode>(const char *value);
+
+template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);
 
 template<>
@@ -1897,6 +1979,9 @@ template<>
 ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value);
 
 template<>
+ExpressionDepthKind EnumUtil::FromString<ExpressionDepthKind>(const char *value);
+
+template<>
 ExpressionTailType EnumUtil::FromString<ExpressionTailType>(const char *value);
 
 template<>
@@ -1919,6 +2004,9 @@ ExtensionRepositoryType EnumUtil::FromString<ExtensionRepositoryType>(const char
 
 template<>
 ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value);
+
+template<>
+ExternalFileCacheRequestSizing EnumUtil::FromString<ExternalFileCacheRequestSizing>(const char *value);
 
 template<>
 ExternalResourceOperation EnumUtil::FromString<ExternalResourceOperation>(const char *value);
@@ -1996,6 +2084,9 @@ template<>
 HTTPClientCachePolicy EnumUtil::FromString<HTTPClientCachePolicy>(const char *value);
 
 template<>
+HTTPRetryOutcomeOwner EnumUtil::FromString<HTTPRetryOutcomeOwner>(const char *value);
+
+template<>
 HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value);
 
 template<>
@@ -2009,6 +2100,9 @@ IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value);
 
 template<>
 IndexBindState EnumUtil::FromString<IndexBindState>(const char *value);
+
+template<>
+IndexCheckpointMode EnumUtil::FromString<IndexCheckpointMode>(const char *value);
 
 template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);
@@ -2102,6 +2196,18 @@ MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value);
 
 template<>
 MatchMode EnumUtil::FromString<MatchMode>(const char *value);
+
+template<>
+MatchRecognizeAfterMatch EnumUtil::FromString<MatchRecognizeAfterMatch>(const char *value);
+
+template<>
+MatchRecognizeClauseKind EnumUtil::FromString<MatchRecognizeClauseKind>(const char *value);
+
+template<>
+MatchRecognizePatternType EnumUtil::FromString<MatchRecognizePatternType>(const char *value);
+
+template<>
+MatchRecognizeRows EnumUtil::FromString<MatchRecognizeRows>(const char *value);
 
 template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);
@@ -2206,6 +2312,12 @@ template<>
 PatternMatchType EnumUtil::FromString<PatternMatchType>(const char *value);
 
 template<>
+PatternMemo EnumUtil::FromString<PatternMemo>(const char *value);
+
+template<>
+PatternOp EnumUtil::FromString<PatternOp>(const char *value);
+
+template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value);
 
 template<>
@@ -2275,6 +2387,9 @@ template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
 
 template<>
+RecursiveCTEMode EnumUtil::FromString<RecursiveCTEMode>(const char *value);
+
+template<>
 RecursiveCTEPipelineMetricType EnumUtil::FromString<RecursiveCTEPipelineMetricType>(const char *value);
 
 template<>
@@ -2303,9 +2418,6 @@ RequestSizing EnumUtil::FromString<RequestSizing>(const char *value);
 
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);
-
-template<>
-ResultEagerness EnumUtil::FromString<ResultEagerness>(const char *value);
 
 template<>
 ResultLifetime EnumUtil::FromString<ResultLifetime>(const char *value);

@@ -210,8 +210,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 					continue;
 				}
 
-				rdata[ridx] = gstate->GetWindowState().template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n,
-				                                                                                    result, quantile);
+				rdata[ridx] = gstate->GetWindowState().template WindowScalar<RESULT_TYPE, DISCRETE>(
+				    partition.context.client, data, frames, n, result, quantile);
 			}
 		} else {
 			auto &window_state = state.GetOrCreateWindowState();
@@ -228,8 +228,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 				window_state.UpdateSkip(data, frames, included);
 
 				// Find the position(s) needed
-				rdata[ridx] =
-				    window_state.template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n, result, quantile);
+				rdata[ridx] = window_state.template WindowScalar<RESULT_TYPE, DISCRETE>(partition.context.client, data,
+				                                                                        frames, n, result, quantile);
 
 				//	Save the previous state for next time
 				window_state.prevs = frames;
@@ -339,8 +339,8 @@ struct QuantileListOperation : QuantileOperation {
 					continue;
 				}
 
-				gstate->GetWindowState().template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx,
-				                                                                   bind_data);
+				gstate->GetWindowState().template WindowList<CHILD_TYPE, DISCRETE>(partition.context.client, data,
+				                                                                   frames, n, list, lidx, bind_data);
 			}
 		} else {
 			auto &window_state = state.GetOrCreateWindowState();
@@ -353,7 +353,8 @@ struct QuantileListOperation : QuantileOperation {
 				}
 
 				window_state.UpdateSkip(data, frames, included);
-				window_state.template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx, bind_data);
+				window_state.template WindowList<CHILD_TYPE, DISCRETE>(partition.context.client, data, frames, n, list,
+				                                                       lidx, bind_data);
 				window_state.prevs = frames;
 			}
 		}
@@ -405,6 +406,10 @@ struct QuantileListFallback : QuantileOperation {
 //===--------------------------------------------------------------------===//
 template <class OP>
 AggregateFunction GetDiscreteQuantileTemplated(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::TIME_TZ) {
+		// TIMETZ is ordered by its normalized time, not by its raw bits
+		return OP::template GetFunction<dtime_tz_t>(type);
+	}
 	switch (type.InternalType()) {
 #if !DUCKDB_SMALLER_BINARY(quantile_types)
 	case PhysicalType::INT8:
@@ -550,8 +555,10 @@ AggregateFunction GetContinuousQuantileTemplated(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 		return OP::template GetFunction<timestamp_t, timestamp_t>(type, type);
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		return OP::template GetFunction<dtime_t, dtime_t>(type, type);
+	case LogicalTypeId::TIME_TZ:
+		// TIMETZ is ordered and interpolated by its normalized time, not by its raw bits
+		return OP::template GetFunction<dtime_tz_t, dtime_tz_t>(type, type);
 	case LogicalTypeId::INTERVAL:
 		return OP::template GetFunction<interval_t, interval_t>(type, type);
 	default:

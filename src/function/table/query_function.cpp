@@ -49,7 +49,12 @@ static string TableReference(const string &input) {
 	if (IsFilePath(input)) {
 		return SQLString::ToString(input);
 	}
-	return QualifiedName::Parse(input).ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	QualifiedName qname;
+	string error;
+	if (!QualifiedName::TryParse(input, qname, error)) {
+		throw ParserException(error);
+	}
+	return qname.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 }
 
 static string UnionTablesQuery(TableFunctionBindInput &input) {
@@ -72,6 +77,11 @@ static string UnionTablesQuery(TableFunctionBindInput &input) {
 		if (children.empty()) {
 			throw InvalidInputException("Input list is empty");
 		}
+		for (auto &child : children) {
+			if (child.IsNull()) {
+				throw BinderException("Cannot use NULL as function argument");
+			}
+		}
 		result += "FROM " + TableReference(children[0].ToString());
 		for (size_t i = 1; i < children.size(); ++i) {
 			result += union_all_clause + TableReference(children[i].ToString());
@@ -83,6 +93,9 @@ static string UnionTablesQuery(TableFunctionBindInput &input) {
 }
 
 static unique_ptr<TableRef> QueryBindReplace(ClientContext &context, TableFunctionBindInput &input) {
+	if (input.inputs[0].IsNull()) {
+		throw BinderException("Cannot use NULL as function argument");
+	}
 	auto query = input.inputs[0].ToString();
 	auto subquery_ref = ParseSubquery(query, context, "Expected a single SELECT statement");
 	return std::move(subquery_ref);

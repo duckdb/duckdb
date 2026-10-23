@@ -1,5 +1,7 @@
 #if defined(_WIN32) || defined(WIN32)
 #include <io.h>
+#include <process.h>
+#define getpid _getpid
 #else
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -1246,7 +1248,7 @@ struct KeyPressEntry {
 bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 	if (BufferedKeyPresses::TryGetKeyPress(key_press)) {
 		// there are still characters left to consume
-		has_more_data = BufferedKeyPresses::HasMoreData();
+		has_more_data = BufferedKeyPresses::HasMoreData() || Terminal::HasMoreData(ifd);
 		return true;
 	}
 #if defined(_WIN32) || defined(WIN32)

@@ -5,6 +5,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
+#include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -230,10 +231,11 @@ idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBind
 template <class T>
 void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex table_idx, bool replace) {
 	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
-	idx_t offset = 0;
 	idx_t new_col_idx = 0;
+	// entries that are referred to are moved to the front of the list, the rest is erased at the end
+	idx_t kept_count = 0;
 	for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
-		auto current_binding = ColumnBinding(table_idx, ProjectionIndex(col_idx + offset));
+		auto current_binding = ColumnBinding(table_idx, ProjectionIndex(col_idx));
 		if (replace && !root.active_secure_views.empty()) {
 			root.secure_view_replacements[current_binding].clear();
 		}
@@ -243,16 +245,17 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex tab
 				root.projection_map_replacements[current_binding].clear();
 			}
 			// this entry is not referred to, erase it from the set of expressions
-			list.erase_at(col_idx);
-			offset++;
-			col_idx--;
 			continue;
 		}
+		if (kept_count != col_idx) {
+			list[kept_count] = std::move(list[col_idx]);
+		}
+		kept_count++;
 		if (!replace) {
 			continue;
 		}
 		bool should_replace = false;
-		if (col_idx + offset != new_col_idx) {
+		if (col_idx != new_col_idx) {
 			should_replace = true;
 		}
 		if (!entry->second.child_columns.empty() &&
@@ -279,6 +282,7 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex tab
 			new_col_idx++;
 		}
 	}
+	list.erase(list.begin() + NumericCast<int64_t>(kept_count), list.end());
 }
 
 enum class ProjectionBindingResolution : uint8_t { SELECTED, REPLACEMENT };
@@ -1115,22 +1119,28 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 	reference<const LogicalType> type_iter(struct_type);
 	reference<const ColumnIndex> path_iter(path);
 	while (true) {
-		auto child_index = path_iter.get().GetPrimaryIndex();
-		auto &child_types = StructType::GetChildTypes(type_iter.get());
-		D_ASSERT(child_index < child_types.size());
-		auto is_unnamed = StructType::IsUnnamed(type_iter.get());
-
-		type_iter = child_types[child_index].second;
-
 		vector<unique_ptr<Expression>> arguments(2);
 		arguments[0] = (std::move(target));
-		if (is_unnamed) {
-			arguments[1] = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_index + 1)));
+		if (type_iter.get().id() == LogicalTypeId::VARIANT) {
+			// a VARIANT field is addressed by key, and is itself a VARIANT
+			arguments[1] = make_uniq<BoundConstantExpression>(Value(path_iter.get().GetFieldName()));
+			target = BindBuiltinScalarFunction(context, VariantExtractFun::Name, std::move(arguments));
 		} else {
-			arguments[1] = make_uniq<BoundConstantExpression>(Value(child_types[child_index].first));
+			auto child_index = path_iter.get().GetPrimaryIndex();
+			auto &child_types = StructType::GetChildTypes(type_iter.get());
+			D_ASSERT(child_index < child_types.size());
+			auto is_unnamed = StructType::IsUnnamed(type_iter.get());
+
+			type_iter = child_types[child_index].second;
+
+			if (is_unnamed) {
+				arguments[1] = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_index + 1)));
+			} else {
+				arguments[1] = make_uniq<BoundConstantExpression>(Value(child_types[child_index].first));
+			}
+			// the constant argument selects the key or the index overload of struct_extract
+			target = BindBuiltinScalarFunction(context, StructExtractFun::Name, std::move(arguments));
 		}
-		// the struct_extract set holds both the key and the index overload, the constant argument selects between them
-		target = BindBuiltinScalarFunction(context, StructExtractFun::Name, std::move(arguments));
 		if (!path_iter.get().HasChildren()) {
 			break;
 		}
@@ -1661,6 +1671,15 @@ bool BaseColumnPruner::HandleExtractRecursive(unique_ptr<Expression> &expr_p,
 	}
 }
 
+//! A cast pushed into the scan of a shredded VARIANT is applied to the shredded value instead of the VARIANT. For a
+//! JSON target the two differ: a VARIANT serializes to JSON, a shredded VARCHAR would be parsed as JSON.
+static bool ExtractCastCanBePushedDown(const BoundColumnRefExpression &colref, const Expression &cast) {
+	if (colref.GetReturnType().id() != LogicalTypeId::VARIANT) {
+		return true;
+	}
+	return !cast.GetReturnType().IsJSONType();
+}
+
 bool BaseColumnPruner::HandleExtractExpression(unique_ptr<Expression> *expression,
                                                optional_ptr<unique_ptr<Expression>> cast_expression) {
 	optional_ptr<BoundColumnRefExpression> colref;
@@ -1670,6 +1689,10 @@ bool BaseColumnPruner::HandleExtractExpression(unique_ptr<Expression> *expressio
 	reference<ColumnIndex> path_ref(path);
 	if (!HandleExtractRecursive(*expression, colref, path_ref, expressions)) {
 		return false;
+	}
+	if (cast_expression && !ExtractCastCanBePushedDown(*colref, **cast_expression)) {
+		// the cast stays on top of the pushed-down extract
+		cast_expression = nullptr;
 	}
 	if (cast_expression) {
 		auto &top_level = expressions.back();
@@ -1757,10 +1780,14 @@ void ReferencedColumn::AddPath(const ColumnIndex &path) {
 	}
 
 	//! No parent path exists, but child paths could already be added, remove them if they exist
+	//! A child is only removed if the new path matches it - a path with different type information does not
+	column_index_set new_path_set;
+	new_path_set.emplace(path);
 	auto it = unique_paths.begin();
 	for (; it != unique_paths.end();) {
 		auto &unique_path = *it;
-		if (unique_path.IsChildPathOf(path)) {
+		if (unique_path.IsChildPathOf(path) &&
+		    FindShortestMatchingPath(new_path_set, unique_path).first != new_path_set.end()) {
 			auto current = it;
 			it++;
 			unique_paths.erase(current);
@@ -1812,15 +1839,25 @@ static bool TryGetCastChild(unique_ptr<Expression> &expr, optional_ptr<unique_pt
 	if (BoundCastExpression::IsTryCast(cast)) {
 		return false;
 	}
-
 	child = BoundCastExpression::ChildMutable(cast);
 	return true;
 }
 
 void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
-	//! Check if this is a struct extract wrapped in a cast
+	if ((*expression)->GetExpressionType() == ExpressionType::OPERATOR_TRY) {
+		const auto was_inside_try = inside_try;
+		inside_try = true;
+		LogicalOperatorVisitor::VisitExpression(expression);
+		inside_try = was_inside_try;
+		return;
+	}
+
+	//! Check if this is a struct extract wrapped in a cast. TRY_CAST is already
+	//! skipped by TryGetCastChild. A throwing CAST under TRY must also stay put:
+	//! unused-columns would otherwise emit CAST(struct_extract) in a child
+	//! projection and leave TRY wrapping only the already-cast column (#25236).
 	optional_ptr<unique_ptr<Expression>> cast_child;
-	if (TryGetCastChild(*expression, cast_child)) {
+	if (!inside_try && TryGetCastChild(*expression, cast_child)) {
 		if (HandleExtractExpression(cast_child.get(), expression)) {
 			// already handled
 			return;

@@ -5,6 +5,7 @@
 
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -18,6 +19,7 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
@@ -653,6 +655,23 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::FinalizeDependentJo
 	for (auto &binding : output.right_payload) {
 		binding = outer_state.replacement_graph.Resolve(binding);
 	}
+	// Correlated aggregate rewrites reference marker columns that must survive the projection maps below
+	auto keep_rewrite_inputs = [&](vector<ColumnBinding> &payload) {
+		for (idx_t i = 0, count = payload.size(); i < count; i++) {
+			auto entry = replacement_map.find(payload[i]);
+			if (entry == replacement_map.end()) {
+				continue;
+			}
+			for (auto &extra : {entry->second.marker, entry->second.empty_result}) {
+				auto resolved = outer_state.replacement_graph.Resolve(extra);
+				if (std::find(payload.begin(), payload.end(), resolved) == payload.end()) {
+					payload.push_back(resolved);
+				}
+			}
+		}
+	};
+	keep_rewrite_inputs(output.left_payload);
+	keep_rewrite_inputs(output.right_payload);
 	for (auto &binding : outer_state.bindings) {
 		binding = outer_state.replacement_graph.Resolve(binding);
 	}
@@ -803,11 +822,45 @@ void FlattenDependentJoins::AddCorrelatedFirstAggregates(LogicalAggregate &aggr,
 	}
 }
 
+static bool
+ExpressionCanThrowOnNullInput(ClientContext &context, const Expression &expr,
+                              const std::function<bool(const BoundColumnRefExpression &)> &column_becomes_null) {
+	bool can_throw = false;
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+		if (can_throw || !child.CanThrow()) {
+			return;
+		}
+		// CanThrow is conservative for foldable children such as implicit constant casts.
+		Value constant_value;
+		if (child.IsConsistent() && child.IsFoldable() &&
+		    ExpressionExecutor::TryEvaluateScalar(context, child, constant_value)) {
+			return;
+		}
+		if (!ExpressionBecomesNull(child, column_becomes_null) ||
+		    ExpressionCanThrowOnNullInput(context, child, column_becomes_null)) {
+			// Independent children are evaluated before the parent can propagate NULL.
+			can_throw = true;
+		}
+	});
+	return can_throw;
+}
+
 FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownProjection(unique_ptr<LogicalOperator> &plan,
                                                                                 bool propagate_null_values,
                                                                                 vector<ColumnBinding> state) {
-	for (auto &expr : plan->expressions) {
-		propagate_null_values &= expr->PropagatesNullValues();
+	if (propagate_null_values) {
+		auto child_output = plan->children[0]->GetColumnBindings();
+		column_binding_set_t child_bindings(child_output.begin(), child_output.end());
+		auto column_becomes_null = [&](const BoundColumnRefExpression &column) {
+			return column.Depth() == 0 && child_bindings.find(column.Binding()) != child_bindings.end();
+		};
+		for (auto &expr : plan->expressions) {
+			if (expr->IsVolatile() || !ExpressionBecomesNull(*expr, column_becomes_null) ||
+			    ExpressionCanThrowOnNullInput(binder.context, *expr, column_becomes_null)) {
+				propagate_null_values = false;
+				break;
+			}
+		}
 	}
 
 	propagate_null_values &= plan->children[0]->type != LogicalOperatorType::LOGICAL_DEPENDENT_JOIN;
@@ -827,7 +880,8 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
                                                                                vector<ColumnBinding> state) {
 	auto &aggr = plan->Cast<LogicalAggregate>();
 	for (auto &expr : plan->expressions) {
-		propagate_null_values &= expr->PropagatesNullValues();
+		auto &aggr_expr = expr->Cast<BoundAggregateExpression>();
+		propagate_null_values &= !aggr_expr.IsVolatile() && aggr_expr.PropagatesNullValues();
 	}
 	auto result = PushDownChild(plan, propagate_null_values, std::move(state));
 
@@ -856,17 +910,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
 		return result;
 	}
 
-	JoinType join_type = JoinType::INNER;
-	if (any_join || !propagate_null_values) {
-		join_type = JoinType::LEFT;
-	}
-	for (auto &aggr_exp : aggr.expressions) {
-		auto &b_aggr_exp = aggr_exp->Cast<BoundAggregateExpression>();
-		if (!b_aggr_exp.PropagatesNullValues()) {
-			join_type = JoinType::LEFT;
-			break;
-		}
-	}
+	auto join_type = !any_join && propagate_null_values ? JoinType::INNER : JoinType::LEFT;
 
 	unique_ptr<LogicalComparisonJoin> join = make_uniq<LogicalComparisonJoin>(join_type);
 	auto left_index = binder.GenerateTableIndex();
@@ -1080,12 +1124,22 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownJoin(unique
 	}
 
 	if (join_type == JoinType::MARK) {
-		if (!left_requires_domain && right_requires_domain) {
+		if (right_requires_domain) {
 			auto right_state = PushDownChild(plan, propagate_null_values, state, false, 1);
 
 			auto left_state = PushDownChild(plan, propagate_null_values, right_state.bindings, false, 0);
 
-			AddCorrelatedJoinConditions(plan->Cast<LogicalJoin>(), left_state.bindings, right_state.bindings);
+			auto &comparison_join = plan->Cast<LogicalComparisonJoin>();
+			auto conditions = std::move(comparison_join.conditions);
+			comparison_join.conditions.clear();
+			AddCorrelatedJoinConditions(comparison_join, left_state.bindings, right_state.bindings);
+			// Keep the correlation keys before the IN predicate for per-group NULL and empty-set handling.
+			comparison_join.mark_types.insert(comparison_join.mark_types.begin(), delim_types.begin(),
+			                                  delim_types.end());
+			for (auto &condition : conditions) {
+				comparison_join.conditions.push_back(std::move(condition));
+			}
+			RewriteCorrelatedBindings(*plan, left_state.bindings);
 			left_state.replacement_graph.Merge(right_state.replacement_graph);
 			return left_state;
 		}
@@ -1480,8 +1534,16 @@ FlattenDependentJoins::PushDownCorrelatedNodeInternal(unique_ptr<LogicalOperator
 		return AttachDomainToIndependentSubtree(plan, propagate_null_values);
 	}
 	switch (plan->type) {
-	case LogicalOperatorType::LOGICAL_UNNEST:
 	case LogicalOperatorType::LOGICAL_FILTER: {
+		for (auto &expr : plan->expressions) {
+			if (expr->IsVolatile() || expr->CanThrow()) {
+				propagate_null_values = false;
+				break;
+			}
+		}
+		return PushDownChild(plan, propagate_null_values, std::move(state));
+	}
+	case LogicalOperatorType::LOGICAL_UNNEST: {
 		return PushDownChild(plan, propagate_null_values, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {

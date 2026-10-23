@@ -12,13 +12,17 @@ namespace duckdb {
 //! Deduplicate a name against the ones we already have: drop it if "ignore_errors", otherwise rename it with an
 //! incrementing suffix until it no longer collides. Returns whether the name should be kept.
 static bool ResolveDuplicateName(identifier_map_t<idx_t> &name_collision_count, Identifier &name,
-                                 const bool ignore_errors) {
+                                 const bool ignore_errors, const bool rename_duplicates = true) {
 	if (name_collision_count.find(name) == name_collision_count.end()) {
 		name_collision_count[name] = 0;
 		return true;
 	}
 	if (ignore_errors) {
 		return false;
+	}
+	if (!rename_duplicates) {
+		throw NotImplementedException("Duplicate name %s in struct auto-detected in JSON, try ignore_errors=true",
+		                              name);
 	}
 	while (name_collision_count.find(name) != name_collision_count.end()) {
 		name_collision_count[name] += 1;
@@ -28,25 +32,28 @@ static bool ResolveDuplicateName(identifier_map_t<idx_t> &name_collision_count, 
 	return true;
 }
 
-static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, const bool ignore_errors) {
+static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, const bool ignore_errors,
+                                                    const bool rename_duplicates = true) {
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT: {
 		identifier_map_t<idx_t> name_collision_count;
 		child_list_t<LogicalType> child_types;
 		for (auto &child_type : StructType::GetChildTypes(type)) {
 			auto child_name = child_type.first;
-			if (!ResolveDuplicateName(name_collision_count, child_name, ignore_errors)) {
+			if (!ResolveDuplicateName(name_collision_count, child_name, ignore_errors, rename_duplicates)) {
 				continue;
 			}
-			child_types.emplace_back(child_name, RemoveDuplicateStructKeys(child_type.second, ignore_errors));
+			child_types.emplace_back(child_name,
+			                         RemoveDuplicateStructKeys(child_type.second, ignore_errors, rename_duplicates));
 		}
 		return LogicalType::STRUCT(child_types);
 	}
 	case LogicalTypeId::MAP:
-		return LogicalType::MAP(RemoveDuplicateStructKeys(MapType::KeyType(type), ignore_errors),
-		                        RemoveDuplicateStructKeys(MapType::ValueType(type), ignore_errors));
+		return LogicalType::MAP(RemoveDuplicateStructKeys(MapType::KeyType(type), ignore_errors, false),
+		                        RemoveDuplicateStructKeys(MapType::ValueType(type), ignore_errors, false));
 	case LogicalTypeId::LIST:
-		return LogicalType::LIST(RemoveDuplicateStructKeys(ListType::GetChildType(type), ignore_errors));
+		return LogicalType::LIST(
+		    RemoveDuplicateStructKeys(ListType::GetChildType(type), ignore_errors, rename_duplicates));
 	default:
 		return type;
 	}
@@ -124,7 +131,8 @@ public:
 		auto &reader = *json_reader;
 		auto_detect_state.sampled_readers[file_idx] = std::move(json_reader);
 
-		auto &global_allocator = Allocator::Get(context);
+		// the sampled readers keep their first buffer for the scan, so it has to count against the memory limit
+		auto &global_allocator = BufferAllocator::Get(context);
 		idx_t buffer_capacity = json_data.options.maximum_object_size * 2;
 		JSONReaderScanState scan_state(context, global_allocator, buffer_capacity);
 		auto &options = json_data.options;
@@ -287,8 +295,8 @@ unique_ptr<JSONStructureNode> JSONScan::DetectStructure(ClientContext &context, 
                                                         const vector<OpenFileInfo> &files,
                                                         vector<shared_ptr<JSONReader>> &sampled_readers) {
 	MutableDateFormatMap date_format_map(*json_data.date_format_map);
-	auto node = make_uniq<JSONStructureNode>();
 	auto &options = json_data.options;
+	auto node = make_uniq<JSONStructureNode>(options.case_insensitive_keys);
 	auto file_count = MinValue<idx_t>(options.maximum_sample_files, files.size());
 	sampled_readers.resize(files.empty() ? 0 : files.size());
 
@@ -296,7 +304,11 @@ unique_ptr<JSONStructureNode> JSONScan::DetectStructure(ClientContext &context, 
 	const auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	const auto files_per_task = (file_count + num_threads - 1) / num_threads;
 	const auto num_tasks = (file_count + files_per_task - 1) / files_per_task;
-	vector<JSONStructureNode> task_nodes(num_tasks);
+	vector<JSONStructureNode> task_nodes;
+	task_nodes.reserve(num_tasks);
+	for (idx_t task_idx = 0; task_idx < num_tasks; task_idx++) {
+		task_nodes.emplace_back(options.case_insensitive_keys);
+	}
 
 	// Same idea as in union_by_name.hpp
 	TaskExecutor executor(context);

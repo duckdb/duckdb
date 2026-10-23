@@ -38,8 +38,9 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 	transformer.Clear();
 
 	// Calculate location and length cleanly
-	if (stmt_pr.offset.IsValid()) {
-		auto start = stmt_pr.offset.GetIndex();
+	auto offset = stmt_pr.GetOffset();
+	if (offset.IsValid()) {
+		auto start = offset.GetIndex();
 		idx_t end_index = terminator_offset.IsValid() ? terminator_offset.GetIndex() : token_iterator.EndOffset();
 		stmt->stmt_location = QueryLocation(start, end_index - start);
 	}
@@ -55,9 +56,11 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	}
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_result_allocator;
-	ParserPackratCache packrat_cache;
 	idx_t max_token_index = token_iterator.Position();
+	// the packrat cache outlives the match processes, so they need separate arenas
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	ArenaAllocator packrat_allocator(Allocator::DefaultAllocator());
+	ParserPackratCache packrat_cache(packrat_allocator, token_iterator.Position(), token_iterator.Size());
 	MatchContext match_context(suggestions, parse_result_allocator, process_allocator, max_token_index,
 	                           MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, &packrat_cache);
 	MatchState state(token_iterator, match_context);
@@ -101,7 +104,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	if (term_inner.type != ParseResultType::END_OF_INPUT) {
 		auto semi_children = term_inner.Cast<RepeatParseResult>().GetChildren();
 		if (!semi_children.empty()) {
-			terminator_offset = semi_children[0].get().offset;
+			terminator_offset = semi_children[0].get().GetOffset();
 		}
 	}
 
@@ -131,6 +134,7 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 	collapsible_rules.insert("OtherOperatorExpression");
 	collapsible_rules.insert("InfixOtherOperatorExpression");
 	collapsible_rules.insert("BitwiseExpression");
+	collapsible_rules.insert("TildeExpression");
 	collapsible_rules.insert("AdditiveExpression");
 	collapsible_rules.insert("MultiplicativeExpression");
 	collapsible_rules.insert("ExponentiationExpression");
@@ -149,11 +153,39 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 		auto process_info = entry.second;
 		grammar.SetTransformProcess(
 		    entry.first,
-		    [process_info](PEGTransformer &transformer, ParseResult &parse_result) -> unique_ptr<TransformProcess> {
-			    return make_uniq<GeneratedTransformProcess>(transformer, TransformInput {parse_result}, *process_info);
+		    [process_info](PEGTransformer &transformer, ParseResult &parse_result) -> arena_ptr<TransformProcess> {
+			    return transformer.MakeProcess<GeneratedTransformProcess>(transformer, TransformInput {parse_result},
+			                                                              *process_info);
 		    },
 		    collapsible_rules.count(entry.first) > 0);
 	}
+	//===--------------------------------------------------------------------===//
+	// START GENERATED EXPRESSION DEPTH RULES
+	//===--------------------------------------------------------------------===//
+	grammar.SetExpressionDepth("SingleExpression", ExpressionDepthKind::NESTING);
+	grammar.SetExpressionDepth("Type", ExpressionDepthKind::NESTING);
+	grammar.SetExpressionDepth("NestedType", ExpressionDepthKind::NESTING);
+	grammar.SetExpressionDepth("SubqueryReference", ExpressionDepthKind::NESTING);
+	grammar.SetExpressionDepth("CustomPrefixExpression", ExpressionDepthKind::NESTING);
+	grammar.SetExpressionDepth("LambdaArrowExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("NotExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("IsExpressionContinuation", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("IsDistinctFromExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("ComparisonExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("BetweenInLikeExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("InfixOtherOperatorExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("BitwiseExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("TildeExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("AdditiveExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("MultiplicativeExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("ExponentiationExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("CollateExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("AtTimeZoneExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("PrefixExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("IndirectionList", ExpressionDepthKind::CHAIN);
+	//===--------------------------------------------------------------------===//
+	// END GENERATED EXPRESSION DEPTH RULES
+	//===--------------------------------------------------------------------===//
 }
 
 void PEGTransformerFactory::RegisterDefaultTransforms(ParsedGrammar &grammar) {

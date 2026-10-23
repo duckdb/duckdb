@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb::capiv2 {
 
@@ -137,6 +138,28 @@ static auto Convert(CV2AggregateDestroyInfo *info) -> duckdb_v2_aggregate_functi
 	return reinterpret_cast<duckdb_v2_aggregate_function_destroy_info_handle>(info);
 }
 
+class CV2AggregateStatsInfo {
+public:
+	CV2AggregateStatsInfo(const BoundAggregateFunction &function, BaseStatistics &result)
+	    : function(function), result_stats(CV2Stats::Writable(result)) {
+	}
+
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+
+	//! Tells the four parts of the argument list apart
+	const BoundAggregateFunction &function;
+	vector<CV2Stats> arg_stats;
+	CV2Stats result_stats;
+};
+
+static auto Convert(duckdb_v2_aggregate_function_stats_info_handle info) -> CV2AggregateStatsInfo * {
+	return reinterpret_cast<CV2AggregateStatsInfo *>(info);
+}
+static auto Convert(CV2AggregateStatsInfo *info) -> duckdb_v2_aggregate_function_stats_info_handle {
+	return reinterpret_cast<duckdb_v2_aggregate_function_stats_info_handle>(info);
+}
+
 class CV2AggregateFunctionInfo : public AggregateFunctionInfo {
 public:
 	duckdb_v2_aggregate_function_bind_callback_fn bind_cb = nullptr;
@@ -146,6 +169,7 @@ public:
 	duckdb_v2_aggregate_function_combine_callback_fn combine_cb = nullptr;
 	duckdb_v2_aggregate_function_finalize_callback_fn finalize_cb = nullptr;
 	duckdb_v2_aggregate_function_destroy_callback_fn destroy_cb = nullptr;
+	duckdb_v2_aggregate_function_stats_callback_fn stats_cb = nullptr;
 	shared_ptr<CV2UserData> user_data = nullptr;
 };
 
@@ -167,7 +191,8 @@ static auto CV2AggregateBind(BindAggregateFunctionInput &input) -> unique_ptr<Fu
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.bind_cb(Convert(&bind_info), Convert(&result_info), Convert(&input.GetClientContext()), &err_ptr);
+	CV2CallbackContext callback_context(input.GetClientContext());
+	info.bind_cb(Convert(&bind_info), Convert(&result_info), Convert(&callback_context), &err_ptr);
 
 	unique_ptr<FunctionData> result = nullptr;
 	if (bind_info.out_bind_data) {
@@ -310,15 +335,43 @@ static auto CV2AggregateDestroy(Vector &state, AggregateInputData &aggr_input_da
 	// The destructor path may not throw: an error reported through the slot is dropped.
 }
 
+static auto CV2AggregateStats(ClientContext &context, BoundAggregateExpression &expr, AggregateStatisticsInput &input)
+    -> unique_ptr<BaseStatistics> {
+	const auto &function = expr.Function();
+	const auto &info = function.GetExtraFunctionInfo().Cast<CV2AggregateFunctionInfo>();
+
+	auto result = BaseStatistics::CreateUnknown(expr.GetReturnType());
+	CV2AggregateStatsInfo args(function, result);
+	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
+	args.in_bind_data = GetUserBindData(input.bind_data.get());
+	args.arg_stats.reserve(input.child_stats.size());
+	for (const auto &child_stats : input.child_stats) {
+		args.arg_stats.emplace_back(child_stats);
+	}
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	CV2CallbackContext callback_context(context);
+	info.stats_cb(Convert(&args), Convert(&callback_context), &err_ptr);
+
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+
+	return result.ToUnique();
+}
+
 class CV2AggregateFunction {
 public:
-	CV2AggregateFunction() {
+	explicit CV2AggregateFunction(DatabaseInstance &db) : db(db) {
 		// The callbacks' error slots make failure part of the API contract, so the function defaults to fallible:
 		// a non-fallible function turns any execution error reported through the slot into an internal error.
 		properties.SetFallible();
 	}
 
-	void Register() {
+	//! Validates the configuration and builds the aggregate function to register on `target`.
+	AggregateFunction Build(DatabaseInstance &target) {
+		CheckRegistrationTarget(db, target, "aggregate function");
 		if (name.empty()) {
 			throw InvalidInputException("Function name cannot be empty.");
 		}
@@ -369,53 +422,22 @@ public:
 		if (info.destroy_cb) {
 			function.SetStateDestructorCallback(CV2AggregateDestroy);
 		}
+		if (info.stats_cb) {
+			function.SetStatisticsCallback(CV2AggregateStats);
+		}
 		function.SetExtraFunctionInfo<CV2AggregateFunctionInfo>(std::move(info));
 
-		// Call the implementation to register
-		RegisterToCatalog(std::move(function));
+		return function;
 	}
 
-	virtual ~CV2AggregateFunction() = default;
-	virtual void RegisterToCatalog(AggregateFunction function) = 0;
-
 public:
+	//! The database it was created for: the only one it can be registered on.
+	DatabaseInstance &db;
 	FunctionSignature signature;
+	CV2FunctionDocs docs;
 	CV2AggregateFunctionInfo info;
 	Identifier name;
 	AggregateFunctionProperties properties;
-};
-
-class CV2ConnectionAggregateFunction : public CV2AggregateFunction {
-public:
-	explicit CV2ConnectionAggregateFunction(Connection &connection) : connection(connection) {
-	}
-
-	void RegisterToCatalog(AggregateFunction function) override {
-		auto &context = *connection.context;
-
-		context.RunFunctionInTransaction([&]() {
-			auto &catalog = Catalog::GetSystemCatalog(context);
-			CreateAggregateFunctionInfo af_info(std::move(function));
-			af_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
-			catalog.CreateFunction(context, af_info);
-		});
-	}
-
-private:
-	Connection &connection;
-};
-
-class CV2ExtensionAggregateFunction : public CV2AggregateFunction {
-public:
-	explicit CV2ExtensionAggregateFunction(ExtensionLoader &loader) : loader(loader) {
-	}
-
-	void RegisterToCatalog(AggregateFunction function) override {
-		loader.RegisterFunction(std::move(function));
-	}
-
-private:
-	ExtensionLoader &loader;
 };
 
 static auto Convert(duckdb_v2_aggregate_function_handle func) -> CV2AggregateFunction * {
@@ -433,29 +455,15 @@ static auto Convert(CV2AggregateFunction *func) -> duckdb_v2_aggregate_function_
 
 using namespace duckdb::capiv2;
 
-DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create_with_connection(duckdb_v2_connection_handle connection,
-                                                                    duckdb_v2_aggregate_function_handle *out_function,
-                                                                    duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(connection);
-	DUCKDB_CHECK_ARG(out_function);
-	*out_function = nullptr;
+DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create(duckdb_v2_factory_handle factory,
+                                                    duckdb_v2_aggregate_function_handle *function,
+                                                    duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(factory);
+	DUCKDB_CHECK_ARG(function);
+	*function = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &conn = *Convert(connection);
-		auto function = duckdb::make_uniq<CV2ConnectionAggregateFunction>(conn);
-		*out_function = Convert(function.release());
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create_with_extension(duckdb_v2_extension_handle extension,
-                                                                   duckdb_v2_aggregate_function_handle *out_function,
-                                                                   duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(extension);
-	DUCKDB_CHECK_ARG(out_function);
-	*out_function = nullptr;
-	return WithErrorHandler(err, [&]() {
-		auto &loader = GetExtensionLoader(extension);
-		auto function = duckdb::make_uniq<CV2ExtensionAggregateFunction>(loader);
-		*out_function = Convert(function.release());
+		auto result = duckdb::make_uniq<CV2AggregateFunction>(Convert(factory)->GetDatabase());
+		*function = Convert(result.release());
 	});
 }
 
@@ -464,6 +472,14 @@ DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_name(duckdb_v2_aggregate_functi
 	DUCKDB_CHECK_ARG(function);
 	DUCKDB_CHECK_ARG(name);
 	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(name)); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_aggregate_function_get_docs(duckdb_v2_aggregate_function_handle function,
+                                                      duckdb_v2_function_docs_handle *docs,
+                                                      duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	DUCKDB_CHECK_ARG(docs);
+	return WithErrorHandler(err, [&]() { *docs = Convert(&Convert(function)->docs); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_aggregate_function_get_signature(duckdb_v2_aggregate_function_handle function,
@@ -544,6 +560,13 @@ duckdb_v2_aggregate_function_set_destroy_callback(duckdb_v2_aggregate_function_h
                                                   duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(function);
 	return WithErrorHandler(err, [&]() { Convert(function)->info.destroy_cb = callback; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_stats_callback(duckdb_v2_aggregate_function_handle function,
+                                                                duckdb_v2_aggregate_function_stats_callback_fn callback,
+                                                                duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { Convert(function)->info.stats_cb = callback; });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_set_return_type(duckdb_v2_aggregate_function_bind_info_handle info,
@@ -786,10 +809,96 @@ DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy_get_states(duckdb_v2_aggreg
 	return WithErrorHandler(err, [&]() { *states = Convert(info)->states; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_aggregate_function_register(duckdb_v2_aggregate_function_handle function,
-                                                      duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_aggregate_function_stats_get_user_data(duckdb_v2_aggregate_function_stats_info_handle info,
+                                                                 void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_aggregate_function_stats_get_bind_data(duckdb_v2_aggregate_function_stats_info_handle info,
+                                                                 void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_aggregate_function_stats_get_arg_count(duckdb_v2_aggregate_function_stats_info_handle info,
+                                                                 idx_t *positional_fixed, idx_t *positional_variadic,
+                                                                 idx_t *named_fixed, idx_t *named_variadic,
+                                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	return WithErrorHandler(err, [&]() {
+		auto &function = Convert(info)->function;
+		if (positional_fixed) {
+			*positional_fixed = function.GetStandardArgumentCount();
+		}
+		if (positional_variadic) {
+			*positional_variadic = function.GetVarArgsCount();
+		}
+		if (named_fixed) {
+			*named_fixed = function.GetKeywordOnlyArgumentCount();
+		}
+		if (named_variadic) {
+			*named_variadic = function.GetKwargsCount();
+		}
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_aggregate_function_stats_get_arg_stats(duckdb_v2_aggregate_function_stats_info_handle info,
+                                                                 idx_t index, duckdb_v2_stats_handle *stats,
+                                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(stats);
+	return WithErrorHandler(err, [&]() {
+		auto &stats_info = *Convert(info);
+		if (index >= stats_info.arg_stats.size()) {
+			throw duckdb::InvalidInputException(
+			    "Index out of bounds in duckdb_v2_aggregate_function_stats_get_arg_stats");
+		}
+		*stats = Convert(&stats_info.arg_stats[index]);
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_aggregate_function_stats_get_result_stats(duckdb_v2_aggregate_function_stats_info_handle info,
+                                                                    duckdb_v2_stats_handle *stats,
+                                                                    duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(stats);
+	return WithErrorHandler(err, [&]() { *stats = Convert(&Convert(info)->result_stats); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_connection_register_aggregate_function(duckdb_v2_connection_handle conn,
+                                                                 duckdb_v2_aggregate_function_handle function,
+                                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(conn);
 	DUCKDB_CHECK_ARG(function);
-	return WithErrorHandler(err, [&]() { Convert(function)->Register(); });
+	return WithErrorHandler(err, [&]() {
+		auto &context = *Convert(conn)->context;
+		context.RunFunctionInTransaction([&]() {
+			auto &self = *Convert(function);
+			auto info = duckdb::CreateAggregateFunctionInfo(self.Build(*context.db));
+			self.docs.AddTo(self.signature, info);
+			info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+			auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
+			catalog.CreateFunction(context, info);
+		});
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_extension_register_aggregate_function(duckdb_v2_extension_handle extension,
+                                                                duckdb_v2_aggregate_function_handle function,
+                                                                duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(extension);
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() {
+		auto &self = *Convert(function);
+		auto &loader = GetExtensionLoader(extension);
+		duckdb::CreateAggregateFunctionInfo info(self.Build(loader.GetDatabaseInstance()));
+		self.docs.AddTo(self.signature, info);
+		info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+		loader.RegisterFunction(std::move(info));
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy(duckdb_v2_aggregate_function_handle *function) {

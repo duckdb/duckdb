@@ -60,6 +60,8 @@ public:
 
 	//! Extract the set of relations referred to inside an expression
 	bool ExtractBindings(const Expression &expression, unordered_set<RelationIndex> &bindings);
+	//! Like ExtractBindings, but returns whether the filter can be moved off its operator
+	bool ExtractFilterBindings(const Expression &expression, unordered_set<RelationIndex> &bindings);
 	bool TryNormalizeBinding(ColumnBinding binding, ColumnBinding &normalized) const;
 	bool HasCompleteStats() const;
 	bool AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, const RelationStats &stats);
