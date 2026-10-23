@@ -263,7 +263,7 @@ void ArrayColumnData::FetchRows(TransactionData transaction, ColumnFetchState &s
 	for (idx_t idx = 0; idx < fetch_count; idx++) {
 		// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
 		ColumnScanState child_state(nullptr);
-		child_state.Initialize(state.context, child_type, nullptr);
+		child_state.Initialize(state.context, child_type);
 
 		const auto row_id = offsets[sel.get_index(idx)];
 		const auto child_offset = row_id * array_size;

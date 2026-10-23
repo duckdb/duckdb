@@ -33,11 +33,6 @@ WHERE column_name IN ('single_run', 'repeated_run', 'single_null', 'repeated_nul
 ----
 4
 
-foreach fetch false true
-
-statement ok
-SET debug_force_fetch_row = {fetch}
-
 query I
 SELECT count(*) FROM test
 WHERE single_run IS DISTINCT FROM (i % 2048 < 16)
@@ -46,8 +41,6 @@ WHERE single_run IS DISTINCT FROM (i % 2048 < 16)
    OR repeated_null IS DISTINCT FROM CASE WHEN i % 64 < 16 THEN i ELSE NULL END
 ----
 0
-
-endloop
 
 statement ok
 DROP TABLE test

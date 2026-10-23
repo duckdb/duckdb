@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/zstd/zstd_corrupt_count.test
-# description: An inflated Zstd row count must fail safely during scan and fetch
+# description: An inflated Zstd row count must fail safely during a scan
 # group: [zstd]
 
 require vector_size 2048
@@ -23,16 +23,3 @@ statement error
 SELECT sum(length(s)) FROM t;
 ----
 Out of Memory Error: failed to allocate data of size 256.0 GiB
-
-restart
-
-statement ok
-SET memory_limit='256MB';
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT sum(length(s)) FROM t;
-----
-Data Corruption Error: ZSTD Decompression failed: Unknown frame descriptor

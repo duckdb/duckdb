@@ -20,16 +20,3 @@ statement error
 SELECT sum(a) FROM t;
 ----
 Data Corruption Error
-
-restart
-
-statement ok
-USE chimp_corrupt_leading_zero_block_count;
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT sum(a) FROM t;
-----
-Data Corruption Error

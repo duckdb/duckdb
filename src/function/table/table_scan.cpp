@@ -210,7 +210,6 @@ public:
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}
-		l_state->scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context.client);
 
 		// Initialize the local storage scan.
 		auto &bind_data = input.bind_data->Cast<TableScanBindData>();
@@ -392,7 +391,6 @@ public:
 			    make_uniq<RowGroupReorderer>(*bind_data.order_options, TransactionData(tx));
 		}
 		scan_state.Initialize(storage_ids, context, filters, sample_options, total_rows);
-		scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context);
 	}
 
 	unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
@@ -560,7 +558,6 @@ public:
 
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
-		l_state.scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context);
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 		{

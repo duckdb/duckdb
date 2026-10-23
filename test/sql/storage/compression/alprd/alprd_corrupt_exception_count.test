@@ -19,13 +19,3 @@ statement error
 SELECT * FROM t LIMIT 1;
 ----
 Data Corruption Error: Corrupted ALPRD segment: exception count 4100 exceeds vector size 1024
-
-restart
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT * FROM t LIMIT 1;
-----
-Data Corruption Error: Corrupted ALPRD segment: exception count 4100 exceeds vector size 1024

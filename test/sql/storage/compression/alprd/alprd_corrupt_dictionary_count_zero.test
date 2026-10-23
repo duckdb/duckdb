@@ -21,13 +21,3 @@ query I
 SELECT sum(a) IS NOT NULL FROM t;
 ----
 true
-
-restart
-
-statement ok
-SET debug_force_fetch_row=true;
-
-query I
-SELECT sum(a) IS NOT NULL FROM t;
-----
-true

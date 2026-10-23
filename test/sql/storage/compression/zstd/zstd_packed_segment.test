@@ -37,11 +37,3 @@ query I
 SELECT SUM(strlen(s)) FROM t;
 ----
 16000
-
-statement ok
-SET debug_force_fetch_row=true;
-
-query I
-SELECT SUM(strlen(s)) FROM t;
-----
-16000

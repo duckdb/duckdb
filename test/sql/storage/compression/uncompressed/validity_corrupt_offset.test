@@ -19,12 +19,3 @@ Uncompressed
 statement error
 SELECT sum(b) FROM t;
 ----
-
-restart
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT sum(b) FROM t;
-----

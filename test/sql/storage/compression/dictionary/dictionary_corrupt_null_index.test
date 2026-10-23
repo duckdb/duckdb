@@ -26,11 +26,3 @@ query II
 SELECT count(s), sum(length(s)) FROM t;
 ----
 80	553
-
-statement ok
-SET debug_force_fetch_row=true;
-
-query II
-SELECT count(s), sum(length(s)) FROM t;
-----
-80	553

@@ -20,13 +20,3 @@ statement error
 SELECT * FROM two_alp LIMIT 1;
 ----
 Data Corruption Error: Corrupted ALPRD segment: exception position 60000 is outside vector size 1024
-
-restart
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT * FROM two_alp LIMIT 1;
-----
-Data Corruption Error: Corrupted ALPRD segment: exception position 60000 is outside vector size 1024

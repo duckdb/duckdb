@@ -44,9 +44,6 @@ SELECT v['a']::INTEGER FROM tbl WHERE i=42;
 ----
 42
 
-statement ok
-SET debug_force_fetch_row=true;
-
 query I
 select v from tbl WHERE i < 10
 ----

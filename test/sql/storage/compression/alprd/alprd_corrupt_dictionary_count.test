@@ -20,13 +20,3 @@ statement error
 SELECT sum(a) FROM t;
 ----
 Data Corruption Error: Corrupt database file: ALPRD dictionary size exceeds maximum
-
-restart
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT sum(a) FROM t;
-----
-Data Corruption Error: Corrupt database file: ALPRD dictionary size exceeds maximum

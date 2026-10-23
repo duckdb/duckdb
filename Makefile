@@ -573,7 +573,6 @@ TEST_CONFIGS_EXECUTION := \
 	test/configs/internal_vector_serialization.json \
 	test/configs/internal_vector_verification.json \
 	test/configs/force_external.json \
-	test/configs/verify_fetch_row.json \
 	test/configs/disable_caching_operators.json \
 	test/configs/variant_vector.json \
 	test/configs/verify_aggregate_state_export.json \

@@ -20,16 +20,3 @@ statement error
 SELECT sum(a) FROM t;
 ----
 Data Corruption Error: Corrupted Patas segment: group data is outside the data region
-
-restart
-
-statement ok
-USE patas_corrupt_data_offset_high;
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT sum(a) FROM t;
-----
-Data Corruption Error: Corrupted Patas segment: group data is outside the data region

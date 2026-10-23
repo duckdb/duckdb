@@ -20,13 +20,3 @@ statement error
 SELECT sum(b) FROM t;
 ----
 Data Corruption Error: Corrupted ALP segment: vector offsets do not describe a data range
-
-restart
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT sum(b) FROM t;
-----
-Data Corruption Error: Corrupted ALP segment: vector offsets do not describe a data range

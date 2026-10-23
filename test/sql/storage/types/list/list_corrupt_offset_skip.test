@@ -16,13 +16,3 @@ statement error
 SELECT a FROM t WHERE id = 7000;
 ----
 Data Corruption Error: Corrupted LIST column: later offset is smaller than the preceding offset
-
-restart
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT a FROM t WHERE id = 7000;
-----
-Data Corruption Error: Corrupted LIST column: later offset is smaller than the preceding offset

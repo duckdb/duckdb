@@ -33,19 +33,3 @@ statement error
 SELECT array_value(a) FROM t
 ----
 Data Corruption Error: Failed to decompress FSST string - escape code has no following byte
-
-restart
-
-statement ok
-USE fsst_corrupt_escape_symbol_index
-
-statement ok
-SET enable_fsst_vectors = false
-
-statement ok
-SET debug_force_fetch_row = true
-
-statement error
-SELECT a FROM t
-----
-Data Corruption Error: Failed to decompress FSST string - escape code has no following byte

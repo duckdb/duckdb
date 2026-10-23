@@ -23,16 +23,3 @@ statement error
 SELECT sum(length(s)) FROM t;
 ----
 Data Corruption Error: Corrupted ZSTD vector: frame ended before producing the requested bytes
-
-restart
-
-statement ok
-SET memory_limit='1GB';
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT sum(length(s)) FROM t;
-----
-Data Corruption Error: Corrupted ZSTD vector: frame ended before producing the requested bytes

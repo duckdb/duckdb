@@ -20,16 +20,3 @@ statement error
 SELECT sum(a) FROM t;
 ----
 Data Corruption Error: Corrupted Patas segment: metadata table exceeds the segment
-
-restart
-
-statement ok
-USE patas_corrupt_group_count;
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT sum(a) FROM t;
-----
-Data Corruption Error: Corrupted Patas segment: metadata table exceeds the segment

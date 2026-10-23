@@ -735,18 +735,6 @@ struct DebugForceExternalSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct DebugForceFetchRowSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "debug_force_fetch_row";
-	static constexpr const char *Description = "Force per-row fetching during scans.";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr bool IsDebug = true;
-	static constexpr bool IsDeprecated = false;
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
 struct ForceMbedtlsUnsafeSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_force_mbedtls_unsafe";

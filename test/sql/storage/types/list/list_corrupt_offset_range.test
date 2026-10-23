@@ -15,13 +15,3 @@ statement error
 SELECT count(*) FROM (SELECT unnest(a) FROM t);
 ----
 Data Corruption Error: Corrupted LIST column: offset exceeds the child column count
-
-restart
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT count(*) FROM (SELECT unnest(a) FROM t);
-----
-Data Corruption Error: Corrupted LIST column: offset exceeds the child column count
