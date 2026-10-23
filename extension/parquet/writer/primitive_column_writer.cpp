@@ -145,7 +145,10 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 			}
 			if (validity.RowIsValid(vector_index)) {
 				page_info.estimated_page_size += GetRowSize(vector, vector_index, state);
-				if (page_info.estimated_page_size >= page_size_limit && vector_can_span_multiple_pages) {
+				// a vector that cannot span pages splits after its first value, unless the page index made it start
+				// on a fresh page above
+				if (page_info.estimated_page_size >= page_size_limit &&
+				    (vector_can_span_multiple_pages || (i == 0 && !writer.WritePageIndex()))) {
 					PageInformation new_info;
 					new_info.offset = page_info.offset + page_info.row_count;
 					state.page_info.push_back(new_info);
