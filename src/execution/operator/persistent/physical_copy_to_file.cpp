@@ -1932,7 +1932,7 @@ PendingFileState CopyOutputFileRegistry::ReserveFile(string output_path,
 	PendingFileState result;
 	result.output_path = std::move(output_path);
 
-	if (op.return_type != CopyFunctionReturnType::CHANGED_ROWS) {
+	if (GetCopyFunctionBaseReturnType(op.return_type) != CopyFunctionReturnType::CHANGED_ROWS) {
 		result.written_file_info = AddFile(result.output_path);
 	}
 
@@ -1962,7 +1962,7 @@ void CopyOutputFileRegistry::PublishCreatedPath(PendingFileState &pending_file_s
 
 optional_ptr<CopyToFileInfo> CopyOutputFileRegistry::AddFile(const string &file_name) {
 	auto file_info = make_uniq<CopyToFileInfo>(file_name);
-	if (op.return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
+	if (GetCopyFunctionBaseReturnType(op.return_type) == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
 		file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
 	}
 	auto result = file_info.get();
@@ -4820,6 +4820,24 @@ string PhysicalCopyToFile::GetNonTmpFile(ClientContext &context, const string &t
 	return StringUtil::ReplaceFileName(tmp_file_path, base);
 }
 
+void PhysicalCopyToFile::ReturnColumnTypes(DataChunk &chunk, const vector<Identifier> &query_names,
+                                           const vector<LogicalType> &query_types) {
+	D_ASSERT(query_names.size() == query_types.size());
+	auto &result = chunk.data.back();
+	vector<Value> columns;
+	for (idx_t column_index = 0; column_index < query_types.size(); column_index++) {
+		child_list_t<Value> column;
+		column.emplace_back("name", Value(query_names[column_index].GetIdentifierName()));
+		column.emplace_back("type", Value::TYPE(query_types[column_index]));
+		columns.push_back(Value::STRUCT(std::move(column)));
+	}
+	auto column_types = Value::LIST(ListType::GetChildType(result.GetType()), std::move(columns));
+	auto row_count = chunk.data[0].size();
+	for (idx_t row = 0; row < row_count; row++) {
+		result.Append(column_types);
+	}
+}
+
 void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, CopyToFileInfo &info) {
 	auto &file_stats = *info.file_stats;
 
@@ -4849,6 +4867,19 @@ void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, CopyToFileInfo &info
 	}
 	chunk.data[6].Append(
 	    Value::MAP(LogicalType::VARCHAR, LogicalType::VARIANT(), std::move(extra_keys), std::move(extra_values)));
+}
+
+void PhysicalCopyToFile::ReturnNoFileStatistics(DataChunk &chunk) {
+	// filename VARCHAR
+	chunk.data[0].Append(Value(LogicalType::VARCHAR));
+	// count BIGINT
+	chunk.data[1].Append(Value::UBIGINT(0));
+	// file size bytes, footer size bytes, column statistics, partition keys and extra info are NULL
+	auto statistics_column_count =
+	    GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType::WRITTEN_FILE_STATISTICS).size();
+	for (idx_t col_idx = 2; col_idx < statistics_column_count; col_idx++) {
+		chunk.data[col_idx].Append(Value(chunk.data[col_idx].GetType()));
+	}
 }
 
 bool PhysicalCopyToFile::Rotate() const {
@@ -5217,7 +5248,9 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 	auto &gstate = sink_state->Cast<CopyToFileGlobalState>();
 	gstate.WaitForLifecycleTasks();
 	annotated_lock_guard<annotated_mutex> global_guard(gstate.lock);
-	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
+	auto base_return_type = GetCopyFunctionBaseReturnType(return_type);
+	auto return_column_types = CopyFunctionReturnsColumnTypes(return_type);
+	if (base_return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
 		auto &source_state = input.global_state.Cast<CopyToFileGlobalSourceState>();
 		idx_t next_end =
 		    MinValue<idx_t>(source_state.offset + STANDARD_VECTOR_SIZE, gstate.output_files.WrittenFileCount());
@@ -5229,12 +5262,19 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 			}
 			ReturnStatistics(chunk, file_entry);
 		}
+		if (return_column_types) {
+			if (gstate.output_files.WrittenFileCount() == 0) {
+				// WRITE_EMPTY_FILE false, or PARTITION_BY without rows, writes no file
+				ReturnNoFileStatistics(chunk);
+			}
+			ReturnColumnTypes(chunk, query_names, query_types);
+		}
 		source_state.offset += count;
 		return source_state.offset < gstate.output_files.WrittenFileCount() ? SourceResultType::HAVE_MORE_OUTPUT
 		                                                                    : SourceResultType::FINISHED;
 	}
 
-	switch (return_type) {
+	switch (base_return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(gstate.rows_copied.load())));
 		break;
@@ -5255,6 +5295,9 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 		throw NotImplementedException("Unknown CopyFunctionReturnType");
 	}
 
+	if (return_column_types) {
+		ReturnColumnTypes(chunk, query_names, query_types);
+	}
 	return SourceResultType::FINISHED;
 }
 

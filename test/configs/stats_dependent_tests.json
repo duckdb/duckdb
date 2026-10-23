@@ -4,6 +4,7 @@
       "reason": "Statistics are not set without optimizers.",
       "paths": [
         "test/optimizer/statistics/statistics_numeric.test",
+        "test/optimizer/statistics/statistics_monotone_infinity.test",
         "test/optimizer/statistics/statistics_additive_duplication.test",
         "test/optimizer/joins/always_true_scan_filter_estimate.test",
         "test/sql/optimizer/power_zonemap_pruning.test",
@@ -64,6 +65,7 @@
         "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
         "test/sql/copy/parquet/parquet_hive.test",
         "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
+        "test/sql/pragma/profiling/test_profiling_bytes_scanned.test",
         "test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test",
         "test/sql/copy/parquet/parquet_prefetch_strategy_option.test",
         "test/sql/copy/parquet/read_ahead/readahead_depth_learning.test",

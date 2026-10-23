@@ -63,6 +63,9 @@ public:
 
 	vector<Identifier> names;
 	vector<LogicalType> expected_types;
+	//! The names and types of the copied query before the copy function changes them, for RETURN_COLUMN_TYPES
+	vector<Identifier> query_names;
+	vector<LogicalType> query_types;
 
 public:
 	LogicalPlanSQLExportResult ToSQL(LogicalPlanSQLExportContext &context,
