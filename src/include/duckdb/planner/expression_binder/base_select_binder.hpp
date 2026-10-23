@@ -51,12 +51,14 @@ protected:
 	bool MatchesGroup(ParsedExpression &expr) override;
 	bool ClaimsAlias(ColumnRefExpression &colref) override;
 	BindResult BindGroup(ParsedExpression &expr, idx_t depth, ProjectionIndex group_index);
+	BindResult TryBindGeneratedColumn(ColumnRefExpression &expr, idx_t depth);
 
 protected:
 	bool inside_window = false;
 	bool inside_aggregate = false;
 	bool bound_aggregate = false;
 	bool inside_aggregate_filter = false;
+	bool reconstructing_generated_column = false;
 
 	BoundSelectNode &node;
 };
