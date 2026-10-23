@@ -1,0 +1,27 @@
+# name: test/sql/storage/bc/test_constant_null_stats_v1_5.test
+# description: NULL-accepting filters on constant segments stored by v1.5, which record has_null only in the validity stats
+# group: [bc]
+
+# data/storage/constant_null_stats_v1_5.db.gz was written by DuckDB v1.5.6:
+# CREATE TABLE t AS SELECT CASE WHEN i % 4 = 0 THEN 2 END::BIGINT AS end_snapshot FROM range(6000) r(i);
+require vector_size 2048
+
+unzip data/storage/constant_null_stats_v1_5.db.gz {TEST_DIR}/constant_null_stats_v1_5.db
+
+statement ok
+ATTACH '{TEST_DIR}/constant_null_stats_v1_5.db' AS old (READ_ONLY)
+
+query I
+SELECT count(*) FROM old.t WHERE end_snapshot IS NULL OR end_snapshot > 1000000
+----
+4500
+
+query I
+SELECT count(*) FROM old.t WHERE coalesce(end_snapshot, 1000001) > 1000000
+----
+4500
+
+query I
+SELECT count(*) FROM old.t WHERE end_snapshot IS DISTINCT FROM 2
+----
+4500
