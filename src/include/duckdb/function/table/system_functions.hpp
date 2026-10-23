@@ -173,6 +173,10 @@ struct DuckDBExternalFileCacheFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBExternalFileCacheStatsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBMetricsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
