@@ -627,6 +627,23 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		storage_manager = StorageManager::Get(catalog);
 	}
 
+	if (!base.query) {
+		// the type binder below takes this callback over, so the table depends on the types of its columns
+		SetCatalogLookupCallback([&dependencies, &schema](CatalogEntry &entry) {
+			if (&schema.ParentCatalog() != &entry.ParentCatalog()) {
+				// Don't register dependencies between catalogs
+				return;
+			}
+
+			if (entry.type == CatalogType::TYPE_ENTRY && entry.internal) {
+				// Don't register dependencies on internal types
+				return;
+			}
+
+			dependencies.AddDependency(entry);
+		});
+	}
+
 	// Bind all types by first looking into the same catalog/schema as the table
 	auto type_binder = Binder::CreateBinder(context, *this);
 	type_binder->SetSearchPath(result->schema.catalog, result->schema.name);
@@ -674,20 +691,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		}
 
 	} else {
-		SetCatalogLookupCallback([&dependencies, &schema](CatalogEntry &entry) {
-			if (&schema.ParentCatalog() != &entry.ParentCatalog()) {
-				// Don't register dependencies between catalogs
-				return;
-			}
-
-			if (entry.type == CatalogType::TYPE_ENTRY && entry.internal) {
-				// Don't register dependencies on internal types
-				return;
-			}
-
-			dependencies.AddDependency(entry);
-		});
-
 		// Bind all physical column types
 		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
 			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
