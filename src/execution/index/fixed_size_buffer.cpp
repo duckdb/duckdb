@@ -102,7 +102,7 @@ shared_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partia
 	D_ASSERT(new_block_pointer);
 	// Checkpoint metadata is collected before shared partial blocks are flushed.
 	result->block_pointer = *new_block_pointer;
-	result->block_handle = block_manager.RegisterBlock(new_block_pointer->block_id);
+	result->block_handle = block_manager.RegisterBlock(new_block_pointer->block_id, MemoryTag::ART_INDEX);
 	return result;
 }
 
