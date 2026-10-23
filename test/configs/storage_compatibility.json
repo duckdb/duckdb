@@ -12,6 +12,7 @@
     "Aggregate state columns are not supported in storage versions prior to v2.0.0",
     "TUPLE columns are not supported in storage versions prior to v2.0.0",
     "VARIANT columns are not supported in storage versions prior to v1.5.0",
+    "Typed macro parameters are only supported for storage versions v1.4.0 and higher",
     "CREATE SECURE VIEW is only supported for storage versions v2.0.0 and higher"
   ],
   "skip_compiled": "true",
@@ -182,6 +183,9 @@
         "test/sql/aggregate/aggregates/test_combine_aggr.test",
         "test/sql/aggregate/aggregate_state_export/test_covar_export_state.test",
         "test/sql/aggregate/aggregate_state_export/test_state_export_opaque.test",
+        "test/sql/aggregate/aggregate_state_export/avg_timestamp_export_state.test",
+        "test/optimizer/statistics/statistics_cast_infinity.test",
+        "test/optimizer/statistics/statistics_monotone_infinity.test",
         "test/sql/types/struct/empty_struct.test",
         "test/optimizer/pushdown/cte_domain_join_filter.test",
         "test/sql/subquery/lateral/lateral_domain_join_filter_semantics.test",

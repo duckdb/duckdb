@@ -883,6 +883,9 @@ static void ParquetWriteInitializeOperator(GlobalFunctionData &gstate, const Phy
 // Prepare Batch
 //===--------------------------------------------------------------------===//
 struct ParquetWriteBatchData : public PreparedBatchData {
+	explicit ParquetWriteBatchData(Allocator &allocator) : prepared_row_group(allocator) {
+	}
+
 	PreparedRowGroup prepared_row_group;
 };
 
@@ -890,7 +893,7 @@ static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &con
                                                               GlobalFunctionData &gstate,
                                                               unique_ptr<ColumnDataCollection> collection) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
-	auto result = make_uniq<ParquetWriteBatchData>();
+	auto result = make_uniq<ParquetWriteBatchData>(BufferAllocator::Get(context));
 	unique_ptr<ParquetWriteTransformData> transform_data;
 	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group, transform_data);
 	return std::move(result);
