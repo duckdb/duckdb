@@ -2545,6 +2545,20 @@ struct TempFileEncryptionSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct TempFileIoModeSetting {
+	using RETURN_TYPE = FileIOMode;
+	static constexpr const char *Name = "temp_file_io_mode";
+	static constexpr const char *Description = "The IO_MODE used for temporary files (BUFFERED_IO or DIRECT_IO). "
+	                                           "DIRECT_IO bypasses the operating system's page cache.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "BUFFERED_IO";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct ThreadsSetting {
 	using RETURN_TYPE = int64_t;
 	static constexpr const char *Name = "threads";

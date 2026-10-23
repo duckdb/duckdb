@@ -1559,6 +1559,16 @@
         ]
     },
     {
+        "name": "temp_file_io_mode",
+        "description": "The IO_MODE used for temporary files (BUFFERED_IO or DIRECT_IO). DIRECT_IO bypasses the operating system's page cache.",
+        "type": "ENUM<FileIOMode>",
+        "scope": "global",
+        "default_value": "BUFFERED_IO",
+        "custom_implementation": [
+            "set"
+        ]
+    },
+    {
         "name": "threads",
         "description": "The number of total background threads used by the system.",
         "type": "BIGINT",

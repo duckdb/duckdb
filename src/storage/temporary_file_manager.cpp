@@ -9,6 +9,7 @@
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/storage/storage_options.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "zstd.h"
 
@@ -349,6 +350,9 @@ void TemporaryFileHandle::CreateFileIfNotExists(TemporaryFileLock &) {
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto open_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
+	if (Settings::Get<TempFileIoModeSetting>(db) == FileIOMode::DIRECT_IO) {
+		open_flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+	}
 	handle = fs.OpenFile(path, open_flags);
 }
 

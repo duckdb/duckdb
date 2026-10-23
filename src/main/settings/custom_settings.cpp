@@ -43,6 +43,7 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/storage_options.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -1697,6 +1698,24 @@ void TempFileEncryptionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (buffer_manager.HasFilesInTemporaryDirectory()) {
 		throw PermissionException("Existing temporary files found: Modifying the temp_file_encryption setting "
 		                          "while there are existing temporary files is disabled.");
+	}
+}
+
+//===----------------------------------------------------------------------===//
+// Temp File IO Mode
+//===----------------------------------------------------------------------===//
+void TempFileIoModeSetting::OnSet(SettingCallbackInfo &, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("temp_file_io_mode setting cannot be NULL");
+	}
+	auto io_mode = EnumUtil::FromString<FileIOMode>(StringValue::Get(input));
+	switch (io_mode) {
+	case FileIOMode::BUFFERED_IO:
+	case FileIOMode::DIRECT_IO:
+		break;
+	default:
+		throw InvalidInputException("temp_file_io_mode %s is not supported, expected BUFFERED_IO or DIRECT_IO",
+		                            EnumUtil::ToString(io_mode));
 	}
 }
 
