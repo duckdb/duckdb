@@ -1021,6 +1021,9 @@ TEST_CASE("Test C-API Arrow rejects non-monotonic string offsets", "[capi][arrow
 }
 
 TEST_CASE("Test C-API Arrow round trip of timestamps below the first midnight of the range", "[capi][arrow]") {
+	if (STANDARD_VECTOR_SIZE < 3) {
+		return;
+	}
 	CAPITester tester;
 	REQUIRE(tester.OpenDatabase(nullptr));
 	REQUIRE_NO_FAIL(
