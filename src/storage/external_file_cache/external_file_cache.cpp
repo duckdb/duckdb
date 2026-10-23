@@ -109,16 +109,46 @@ bool ExternalFileCache::ShouldCacheFile(const string &path) const {
 	return Settings::Get<CacheLocalFilesSetting>(db);
 }
 
+//! A read whose range already holds this many small cached blocks re-fetches all of them
+static constexpr idx_t ABSORB_ALL_SMALL_BLOCKS_FROM = 4;
+
+static idx_t CountSmallLoadedBlocksLocked(const map<idx_t, shared_ptr<CacheBlock>> &blocks, idx_t location, idx_t end,
+                                          idx_t max_block_size) {
+	idx_t count = 0;
+	auto it = blocks.upper_bound(location);
+	if (it != blocks.begin()) {
+		--it;
+	}
+	for (; it != blocks.end() && it->first < end; ++it) {
+		auto &block = *it->second;
+		if (it->first + block.size > location && block.size < max_block_size && IsLoadedBlock(block)) {
+			count++;
+		}
+	}
+	return count;
+}
+
+idx_t ExternalFileCache::CountSmallLoadedBlocks(CachedFile &cached_file, idx_t location, idx_t nr_bytes,
+                                                idx_t max_block_size) {
+	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
+	return CountSmallLoadedBlocksLocked(cached_file.blocks, location, location + nr_bytes, max_block_size);
+}
+
 vector<shared_ptr<CacheBlock>> ExternalFileCache::AcquireBlocks(CachedFile &cached_file, idx_t location, idx_t nr_bytes,
                                                                 idx_t max_block_size) {
 	D_ASSERT(nr_bytes > 0);
 	D_ASSERT(max_block_size > 0);
 	const idx_t end = location + nr_bytes;
-	// smaller cached blocks between two gaps are re-fetched with them when that saves a request
-	const idx_t absorb_size = max_block_size / 8;
 
 	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
 	auto &blocks = cached_file.blocks;
+	// smaller cached blocks between two gaps are re-fetched with them when that saves a request; a range that is
+	// already covered by many small blocks (pages of earlier point lookups) re-fetches all of them, so the read sends
+	// about as many requests as on a cold cache instead of one per gap between the blocks
+	idx_t absorb_size = max_block_size / 8;
+	if (CountSmallLoadedBlocksLocked(blocks, location, end, max_block_size) >= ABSORB_ALL_SMALL_BLOCKS_FROM) {
+		absorb_size = max_block_size;
+	}
 	// start at the block that covers `location`, if any
 	auto it = blocks.upper_bound(location);
 	if (it != blocks.begin()) {

@@ -151,6 +151,9 @@ const ParquetReader &ColumnReader::Reader() {
 	return reader;
 }
 
+//! A column chunk with at least this many small cached blocks is read whole instead of page by page
+static constexpr idx_t PAGE_INDEX_WHOLE_CHUNK_AFTER_CACHED_BLOCKS = 4;
+
 idx_t ColumnReader::PrefetchOffset() const {
 	return prefetch_offset.IsValid() ? prefetch_offset.GetIndex() : FileOffset();
 }
@@ -167,6 +170,13 @@ void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_m
 			return;
 		}
 		transport.RegisterPrefetch(FileOffset(), size, allow_merge);
+		return;
+	}
+	// a chunk the cache already holds several small pieces of is being probed repeatedly: fetch it whole, so this and
+	// every later read of it is served from the cache, as it would be without the page index
+	if (transport.GetCachingFileHandle().CountCachedBlocks(FileOffset(), chunk->meta_data.total_compressed_size) >=
+	    PAGE_INDEX_WHOLE_CHUNK_AFTER_CACHED_BLOCKS) {
+		transport.RegisterPrefetch(FileOffset(), chunk->meta_data.total_compressed_size, allow_merge);
 		return;
 	}
 	// the page index tells which pages hold rows that may match: fetch the dictionary page (and anything else in

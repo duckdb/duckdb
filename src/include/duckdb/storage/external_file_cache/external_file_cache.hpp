@@ -112,6 +112,8 @@ public:
 	//! Drop all blocks of a file, e.g. because the file changed. Readers keep the blocks they hold.
 	void DropBlocks(CachedFile &cached_file);
 	idx_t GetContentGeneration(CachedFile &cached_file);
+	//! The number of loaded cached blocks smaller than max_block_size that overlap [location, location + nr_bytes)
+	static idx_t CountSmallLoadedBlocks(CachedFile &cached_file, idx_t location, idx_t nr_bytes, idx_t max_block_size);
 
 	BufferManager &GetBufferManager() const;
 	//! Gets the shared cached file for the given path, creating it if not yet present.
