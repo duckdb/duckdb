@@ -119,7 +119,7 @@ static string CandidatesToString(const vector<reference<const SimpleFunction>> &
 	auto listed = functions.size() <= MAX_LISTED_CANDIDATES + 1 ? functions.size() : MAX_LISTED_CANDIDATES;
 	string result;
 	for (idx_t i = 0; i < listed; i++) {
-		result += "\n    '" + functions[i].get().ToString() + "'";
+		result += "\n    " + functions[i].get().ToString();
 	}
 	if (listed < functions.size()) {
 		result += StringUtil::Format("\n    ... and %llu more", functions.size() - listed);

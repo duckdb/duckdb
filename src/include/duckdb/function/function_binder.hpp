@@ -453,7 +453,7 @@ public:
 	                                                     ErrorData &error, bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
 
-	DUCKDB_API unique_ptr<Expression> BindScalarFunction(shared_ptr<const ScalarFunction> function,
+	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const shared_ptr<const ScalarFunction> &function,
 	                                                     vector<unique_ptr<Expression>> children,
 	                                                     vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
 	                                                     bool is_operator = false,
@@ -477,7 +477,7 @@ public:
 	                      AggregateType aggr_type = AggregateType::NON_DISTINCT);
 
 	DUCKDB_API unique_ptr<BoundAggregateExpression>
-	BindAggregateFunction(shared_ptr<const AggregateFunction> function, vector<unique_ptr<Expression>> children,
+	BindAggregateFunction(const shared_ptr<const AggregateFunction> &function, vector<unique_ptr<Expression>> children,
 	                      vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, unique_ptr<Expression> filter,
 	                      AggregateType aggr_type);
 
@@ -517,7 +517,7 @@ public:
 	                         const vector<SortedAggregateStateOrder> &orders, idx_t argument_count);
 
 	DUCKDB_API unique_ptr<BoundWindowExpression>
-	BindWindowFunction(shared_ptr<const WindowFunction> function, vector<unique_ptr<Expression>> children,
+	BindWindowFunction(const shared_ptr<const WindowFunction> &function, vector<unique_ptr<Expression>> children,
 	                   vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, vector<LogicalType> &order_types,
 	                   vector<LogicalType> &arg_order_types);
 

@@ -138,7 +138,7 @@ TEST_CASE("A call no overload matches records why each overload fails", "[api][f
 	REQUIRE(failed[1].GetDistance() == failed[2].GetDistance());
 	REQUIRE(failed[0].Cast<FunctionMismatch::IncompatibleArgument>().parameter_type == LogicalType::VARCHAR);
 	REQUIRE(selection.GetError().Cast<FunctionBindError::NoMatch>().GetClosest()->GetOverloadIndex() == 2);
-	REQUIRE(StringUtil::Contains(message, "Candidates:\n    'g(a VARCHAR) -> INTEGER'\n        Argument 1 of type DATE "
+	REQUIRE(StringUtil::Contains(message, "Candidates:\n    g(a VARCHAR) -> INTEGER\n        Argument 1 of type DATE "
 	                                      "cannot be implicitly cast to VARCHAR"));
 
 	// too many arguments, and a name no overload has
@@ -161,7 +161,7 @@ TEST_CASE("A call no overload matches records why each overload fails", "[api][f
 	REQUIRE(GetMismatches(selection)[0].GetType() == FunctionMismatch::Type::UNKNOWN_NAMED_ARGUMENT);
 	REQUIRE(GetMismatches(selection)[0].Cast<FunctionMismatch::UnknownNamedArgument>().argument == 1);
 	message = GetErrorMessage(selection);
-	REQUIRE(StringUtil::Contains(message, "    'h(a VARCHAR, b INTEGER := 0) -> INTEGER'\n        Has no parameter "
+	REQUIRE(StringUtil::Contains(message, "    h(a VARCHAR, b INTEGER := 0) -> INTEGER\n        Has no parameter "
 	                                      "named \"c\""));
 }
 

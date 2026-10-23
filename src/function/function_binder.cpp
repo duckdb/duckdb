@@ -1475,7 +1475,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &
 	                          is_operator, binder);
 }
 
-unique_ptr<Expression> FunctionBinder::BindScalarFunction(shared_ptr<const ScalarFunction> function,
+unique_ptr<Expression> FunctionBinder::BindScalarFunction(const shared_ptr<const ScalarFunction> &function,
                                                           vector<unique_ptr<Expression>> children,
                                                           vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
                                                           bool is_operator, optional_ptr<Binder> binder) {
@@ -1566,7 +1566,7 @@ FunctionBinder::BindAggregateFunction(const AggregateFunction &function, vector<
 }
 
 unique_ptr<BoundAggregateExpression>
-FunctionBinder::BindAggregateFunction(shared_ptr<const AggregateFunction> function,
+FunctionBinder::BindAggregateFunction(const shared_ptr<const AggregateFunction> &function,
                                       vector<unique_ptr<Expression>> children,
                                       vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
                                       unique_ptr<Expression> filter, AggregateType aggr_type) {
@@ -1671,7 +1671,8 @@ FunctionBinder::ResolveWindowFunction(const FunctionBinding &binding, vector<uni
 }
 
 unique_ptr<BoundWindowExpression>
-FunctionBinder::BindWindowFunction(shared_ptr<const WindowFunction> function, vector<unique_ptr<Expression>> children,
+FunctionBinder::BindWindowFunction(const shared_ptr<const WindowFunction> &function,
+                                   vector<unique_ptr<Expression>> children,
                                    vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
                                    vector<LogicalType> &order_types, vector<LogicalType> &arg_order_types) {
 	auto binding = MatchFunction(function, children, keyword_args);

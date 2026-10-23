@@ -436,9 +436,18 @@ public:
 					children.resize(positional_count);
 				}
 
+				// The bind callback may have changed the argument types, so the selected overload is bound to the
+				// arguments it is called with
+				std::decay_t<decltype(functions)> overload(functions.name);
+				overload.AddFunction(function);
+				auto rebind = FunctionBinder::SelectFunction(context, overload, {children, keyword_args}, true);
+				if (!rebind) {
+					rebind.GetError().Throw();
+				}
+
 				// Resolve function
 				auto [bound_function, bound_data] =
-				    ResolveFunction<FUNC>(binder, func_idx.GetBinding(), children, keyword_args);
+				    ResolveFunction<FUNC>(binder, rebind.GetBinding(), children, keyword_args);
 
 				if (TypeRequiresAssignment(bound_function.GetReturnType())) {
 					bound_function.SetReturnType(std::move(return_type));
