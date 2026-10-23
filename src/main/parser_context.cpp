@@ -1,3 +1,4 @@
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/dialect_extension.hpp"
@@ -17,6 +18,24 @@ Parser::Parser(ClientContext &context, IdentifierCaseMode identifier_case_mode) 
 	options.identifier_case_mode = identifier_case_mode;
 }
 
+//! The grammar extensions a session parses with: the default-active registered extensions (sorted by
+//! name, the registry map is unordered) followed by the explicitly activated list in user order.
+//! An explicitly listed default-active grammar takes its explicit position, so the explicit order
+//! alone decides override precedence among the listed grammars
+static vector<string> ComposeSessionGrammarNames(const ExtensionCallbackManager &callback_manager,
+                                                 const vector<string> &explicit_names) {
+	case_insensitive_set_t explicitly_named(explicit_names.begin(), explicit_names.end());
+	vector<string> result;
+	for (auto &entry : callback_manager.GrammarExtensions()) {
+		if (entry.second->ActiveByDefault() && !explicitly_named.count(entry.second->Name())) {
+			result.push_back(entry.second->Name());
+		}
+	}
+	std::sort(result.begin(), result.end());
+	result.insert(result.end(), explicit_names.begin(), explicit_names.end());
+	return result;
+}
+
 shared_ptr<CompiledGrammar> CompiledGrammar::Get(ClientContext &context) {
 	auto &client_config = ClientConfig::GetConfig(context);
 	auto &callback_manager = ExtensionCallbackManager::Get(context);
@@ -32,10 +51,29 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Get(ClientContext &context) {
 		}
 		return dialect_extension->GetCompiledGrammar(context);
 	}
-	if (client_config.cached_grammar) {
-		return client_config.cached_grammar;
+	auto registry_version = callback_manager.GrammarRegistryVersion();
+	auto selection = client_config.active_grammar_extensions.atomic_load();
+	auto cached = client_config.cached_grammar.atomic_load();
+	if (cached && cached->registry_version == registry_version && cached->selection == selection) {
+		return cached->grammar;
 	}
-	return DatabaseInstance::GetDatabase(context).GetParserCache().GetMatcher();
+	// recompose: either nothing is cached yet, a grammar extension registered since (e.g. a LOAD
+	// between two statements of this session), or the explicit selection was replaced by a SET
+	auto grammar = ComposeSessionGrammar(context, selection ? *selection : vector<string>());
+	client_config.cached_grammar.atomic_store(
+	    make_shared_ptr<CachedSessionGrammar>(CachedSessionGrammar {grammar, registry_version, std::move(selection)}));
+	return grammar;
+}
+
+shared_ptr<CompiledGrammar> CompiledGrammar::ComposeSessionGrammar(ClientContext &context,
+                                                                   const vector<string> &explicit_names) {
+	auto &callback_manager = ExtensionCallbackManager::Get(context);
+	auto &parser_cache = DatabaseInstance::GetDatabase(context).GetParserCache();
+	auto extension_names = ComposeSessionGrammarNames(callback_manager, explicit_names);
+	if (extension_names.empty()) {
+		return parser_cache.GetMatcher();
+	}
+	return parser_cache.GetMatcher(context, extension_names);
 }
 
 shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context,

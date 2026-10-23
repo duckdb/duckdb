@@ -6,6 +6,7 @@
 #include "test_helpers.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/main/parse_iterator.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
@@ -1204,6 +1205,215 @@ TEST_CASE("Grammars for active grammar extensions are compiled once and outlive 
 	REQUIRE_NO_FAIL(*con.Query("RESET active_grammar_extensions"));
 	RequireSeven(shared_con);
 	REQUIRE(compilations == 1);
+}
+
+//! Declares itself active in every session once registered, like the grammar of a language extension
+class DefaultActiveSevenGrammarExtension final : public GrammarExtension {
+public:
+	explicit DefaultActiveSevenGrammarExtension(const string &name)
+	    : GrammarExtension(name, "DefaultActiveSevenGrammarExtension") {
+	}
+
+	bool ActiveByDefault() const override {
+		return true;
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::SetTransformProcess("AdditiveExpression", StartConstantSevenTransform, false));
+		return changes;
+	}
+};
+
+//! The rendered constant of the single select-list expression of a parsed SELECT
+static string ParsedSelectConstant(const SQLStatement &statement) {
+	auto &select = statement.Cast<SelectStatement>().node->Cast<SelectNode>();
+	REQUIRE(select.select_list[0]->GetExpressionClass() == ExpressionClass::CONSTANT);
+	return select.select_list[0]->ToString();
+}
+
+TEST_CASE("A default-active grammar registered mid-session reaches the next statement", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	// a session with an empty explicit list that already parsed with the base grammar
+	Connection empty_con(db);
+	auto result = empty_con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(1));
+	auto base_grammar = CompiledGrammar::Get(*con.context);
+	// an explicitly activated grammar, registered and SET before the default-active one exists
+	RegisterGrammarExtensionTestSyntax(*db.instance);
+	ActivateGrammarExtensionTestSyntax(con);
+	CheckGrammarExtensionTestSyntax(con);
+
+	// one iterator across the registration, like LOAD inside a multi-statement string: the second
+	// statement must be parsed with the grammar registered after the first was consumed
+	ParseIterator iterator(*empty_con.context, "SELECT 1; SELECT 1", false, nullptr);
+	REQUIRE(iterator.Peek());
+	auto first = iterator.GetStatement();
+	REQUIRE(ParsedSelectConstant(*first) == "1");
+
+	// mid-session registration (what a LOAD does): the next statement parses with the grammar, no SET
+	// needed, and the default-active grammar composes with the explicitly activated ones: ANSWER still
+	// parses (its atom transform bypasses AdditiveExpression) and ordinary expressions are rewritten
+	GrammarExtension::Register(*db.instance, make_shared_ptr<DefaultActiveSevenGrammarExtension>("default_seven"));
+	REQUIRE(iterator.Peek());
+	auto second = iterator.GetStatement();
+	REQUIRE(ParsedSelectConstant(*second) == "7");
+	CheckGrammarExtensionTestSyntax(con);
+	RequireSeven(con);
+	REQUIRE(CompiledGrammar::Get(*con.context) != base_grammar);
+	// the session that never SET anything sees it on its next statement as well
+	RequireSeven(empty_con);
+
+	// connections opened after the registration parse with it without any SET
+	Connection later(db);
+	RequireSeven(later);
+
+	// clearing the explicit list drops ANSWER but does not deactivate the default-active grammar
+	REQUIRE_NO_FAIL(*con.Query("RESET active_grammar_extensions"));
+	RequireSeven(con);
+	REQUIRE_FAIL(con.Query("ANSWER"));
+}
+
+class ConstantEightTransformProcess final : public TransformProcess {
+public:
+	explicit ConstantEightTransformProcess(PEGTransformer &transformer_p) : transformer(transformer_p) {
+	}
+
+	TransformStep Resume(arena_ptr<TransformResultValue> child_result) override {
+		D_ASSERT(!child_result);
+		return TransformStep::Complete(
+		    transformer.MakeResult<unique_ptr<ParsedExpression>>(ConstantExpression::Integer(8)));
+	}
+
+private:
+	PEGTransformer &transformer;
+};
+
+static arena_ptr<TransformProcess> StartConstantEightTransform(PEGTransformer &transformer, ParseResult &) {
+	return transformer.MakeProcess<ConstantEightTransformProcess>(transformer);
+}
+
+//! Overrides the same rule as DefaultActiveSevenGrammarExtension, but is opt-in and yields 8
+class OverrideAdditiveExpressionEight final : public GrammarExtension {
+public:
+	explicit OverrideAdditiveExpressionEight(const string &name)
+	    : GrammarExtension(name, "OverrideAdditiveExpressionEight") {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::SetTransformProcess("AdditiveExpression", StartConstantEightTransform, false));
+		return changes;
+	}
+};
+
+static void RequireEight(Connection &con) {
+	auto result = con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(8));
+}
+
+//! SET through the C++ setting entry: the seven/eight transforms rewrite every parsed expression,
+//! so a SQL SET statement's own list value could not survive parsing
+static void SetActiveGrammarExtensions(Connection &con, const vector<Value> &names) {
+	ActiveGrammarExtensionsSetting::SetLocal(*con.context, Value::LIST(LogicalType::VARCHAR, names));
+}
+
+TEST_CASE("An explicitly listed default-active grammar takes its explicit position", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	GrammarExtension::Register(*db.instance, make_shared_ptr<DefaultActiveSevenGrammarExtension>("default_seven"));
+	GrammarExtension::Register(*db.instance, make_shared_ptr<OverrideAdditiveExpressionEight>("explicit_eight"));
+	Connection con(db);
+	// the default-active grammar alone
+	RequireSeven(con);
+	// unlisted default-active grammars precede the explicit list: the explicit override wins
+	SetActiveGrammarExtensions(con, {Value("explicit_eight")});
+	RequireEight(con);
+	// listing the default-active grammar last repositions it after the explicit override
+	SetActiveGrammarExtensions(con, {Value("explicit_eight"), Value("DEFAULT_SEVEN")});
+	RequireSeven(con);
+	// and listing it first restores the explicit override's precedence
+	SetActiveGrammarExtensions(con, {Value("default_seven"), Value("explicit_eight")});
+	RequireEight(con);
+}
+
+//! Default-active variant of the eight override, for default-vs-default ordering
+class DefaultActiveEightGrammarExtension final : public GrammarExtension {
+public:
+	explicit DefaultActiveEightGrammarExtension(const string &name)
+	    : GrammarExtension(name, "DefaultActiveEightGrammarExtension") {
+	}
+
+	bool ActiveByDefault() const override {
+		return true;
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::SetTransformProcess("AdditiveExpression", StartConstantEightTransform, false));
+		return changes;
+	}
+};
+
+TEST_CASE("Default-active grammars compose in sorted name order", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	// registered in reverse name order; the composition sorts by name, the later grammar wins
+	GrammarExtension::Register(*db.instance, make_shared_ptr<DefaultActiveSevenGrammarExtension>("b_seven"));
+	GrammarExtension::Register(*db.instance, make_shared_ptr<DefaultActiveEightGrammarExtension>("a_eight"));
+	Connection con(db);
+	RequireSeven(con);
+}
+
+//! Opt-in grammar adding a rule a default-active grammar can reference
+class ProvidingGrammarExtension final : public GrammarExtension {
+public:
+	ProvidingGrammarExtension() : GrammarExtension("providing_grammar", "ProvidingGrammarExtension") {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddRule("ProvidedTestRule <- 'PROVIDEDTESTTOKEN'"));
+		return changes;
+	}
+};
+
+//! Default-active grammar that only compiles together with the providing grammar
+class DependentDefaultGrammarExtension final : public GrammarExtension {
+public:
+	DependentDefaultGrammarExtension()
+	    : GrammarExtension("dependent_default_grammar", "DependentDefaultGrammarExtension") {
+	}
+
+	bool ActiveByDefault() const override {
+		return true;
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddRule("DependentTestRule <- ProvidedTestRule"));
+		return changes;
+	}
+};
+
+TEST_CASE("Clearing the explicit selection validates the default-only composition eagerly",
+          "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	GrammarExtension::Register(*db.instance, make_shared_ptr<ProvidingGrammarExtension>());
+	Connection con(db);
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['providing_grammar']"));
+	// the default-active grammar compiles only together with the explicitly selected one
+	GrammarExtension::Register(*db.instance, make_shared_ptr<DependentDefaultGrammarExtension>());
+	REQUIRE_NO_FAIL(*con.Query("SELECT 1"));
+	// every way of clearing the selection composes the default-only grammar eagerly, fails, and
+	// leaves the selection and the working grammar unchanged
+	REQUIRE_FAIL(con.Query("SET active_grammar_extensions = []"));
+	REQUIRE_FAIL(con.Query("SET active_grammar_extensions = NULL"));
+	REQUIRE_FAIL(con.Query("RESET active_grammar_extensions"));
+	REQUIRE_NO_FAIL(*con.Query("SELECT 1"));
+	auto setting = con.Query("SELECT current_setting('active_grammar_extensions')")->Collection().GetValue(0, 0);
+	REQUIRE(ListValue::GetChildren(setting).size() == 1);
 }
 
 TEST_CASE("The least recently used grammar for active grammar extensions is evicted", "[api][grammar_extension]") {

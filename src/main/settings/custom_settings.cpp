@@ -1934,6 +1934,19 @@ Value CurrentDialectSetting::GetSetting(const ClientContext &context) {
 	return Value();
 }
 
+//! Clear the explicit selection. The default-only grammar is composed eagerly, so a failing
+//! default-active grammar errors here and leaves the selection and grammar unchanged, like a SET
+static void ClearActiveGrammarExtensions(ClientContext &context, ClientConfig &client_config) {
+	auto &callback_manager = DatabaseInstance::GetDatabase(context).config.GetCallbackManager();
+	auto registry_version = callback_manager.GrammarRegistryVersion();
+	auto compiled_grammar = CompiledGrammar::ComposeSessionGrammar(context, vector<string>());
+	// allocate before publishing either field, so an allocation failure leaves both unchanged
+	auto snapshot = make_shared_ptr<CachedSessionGrammar>(
+	    CachedSessionGrammar {std::move(compiled_grammar), registry_version, nullptr});
+	client_config.active_grammar_extensions.atomic_store(shared_ptr<const vector<string>>());
+	client_config.cached_grammar.atomic_store(snapshot);
+}
+
 void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Value &input) {
 	if (!OnLocalSet(context, input)) {
 		return;
@@ -1941,8 +1954,7 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 	auto &client_config = ClientConfig::GetConfig(context);
 
 	if (input.IsNull()) {
-		client_config.active_grammar_extensions.clear();
-		client_config.cached_grammar.reset();
+		ClearActiveGrammarExtensions(context, client_config);
 		return;
 	}
 
@@ -1979,16 +1991,14 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 		throw InvalidInputException("Can't set 'active_grammar_extensions', the following extensions don't exist: %s",
 		                            missing_list);
 	}
-	if (selected_extensions.empty()) {
-		client_config.active_grammar_extensions.clear();
-		client_config.cached_grammar.reset();
-		return;
-	}
-
-	auto compiled_grammar =
-	    DatabaseInstance::GetDatabase(context).GetParserCache().GetMatcher(context, selected_extensions);
-	client_config.active_grammar_extensions = std::move(selected_extensions);
-	client_config.cached_grammar = std::move(compiled_grammar);
+	// compose eagerly: a grammar that fails to compile errors at SET time, leaving the setting unchanged
+	auto registry_version = callback_manager.GrammarRegistryVersion();
+	auto compiled_grammar = CompiledGrammar::ComposeSessionGrammar(context, selected_extensions);
+	auto selection = make_shared_ptr<const vector<string>>(std::move(selected_extensions));
+	auto snapshot = make_shared_ptr<CachedSessionGrammar>(
+	    CachedSessionGrammar {std::move(compiled_grammar), registry_version, selection});
+	client_config.active_grammar_extensions.atomic_store(selection);
+	client_config.cached_grammar.atomic_store(snapshot);
 }
 
 void ActiveGrammarExtensionsSetting::ResetLocal(ClientContext &context) {
@@ -1996,8 +2006,7 @@ void ActiveGrammarExtensionsSetting::ResetLocal(ClientContext &context) {
 		return;
 	}
 	auto &client_config = ClientConfig::GetConfig(context);
-	client_config.active_grammar_extensions.clear();
-	client_config.cached_grammar.reset();
+	ClearActiveGrammarExtensions(context, client_config);
 }
 
 bool ActiveGrammarExtensionsSetting::OnLocalSet(ClientContext &context, const Value &input) {
@@ -2010,10 +2019,12 @@ bool ActiveGrammarExtensionsSetting::OnLocalReset(ClientContext &context) {
 
 Value ActiveGrammarExtensionsSetting::GetSetting(const ClientContext &context) {
 	auto &client_config = ClientConfig::GetConfig(context);
-	auto &active_extensions = client_config.active_grammar_extensions;
+	auto active_extensions = client_config.active_grammar_extensions.atomic_load();
 	vector<Value> values;
-	for (auto &extension : active_extensions) {
-		values.push_back(extension);
+	if (active_extensions) {
+		for (auto &extension : *active_extensions) {
+			values.push_back(extension);
+		}
 	}
 	return Value::LIST(LogicalType::VARCHAR, std::move(values));
 }
