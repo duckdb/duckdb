@@ -31,17 +31,17 @@ static LogicalTypeId MaxNumericType(const LogicalTypeId &a, const LogicalTypeId 
 	return LogicalTypeId::BIGINT;
 }
 
-JSONStructureNode::JSONStructureNode() : count(0), null_count(0) {
+JSONStructureNode::JSONStructureNode(const bool case_insensitive_keys_p)
+    : count(0), null_count(0), case_insensitive_keys(case_insensitive_keys_p) {
 }
 
-JSONStructureNode::JSONStructureNode(const char *key_ptr, const size_t key_len) : JSONStructureNode() {
+JSONStructureNode::JSONStructureNode(const char *key_ptr, const size_t key_len, const bool case_insensitive_keys_p)
+    : JSONStructureNode(case_insensitive_keys_p) {
 	key = make_uniq<string>(key_ptr, key_len);
 }
 
-JSONStructureNode::JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p, const bool ignore_errors,
-                                     const bool detect_geojson)
-    : JSONStructureNode(unsafe_yyjson_get_str(key_p), unsafe_yyjson_get_len(key_p)) {
-	JSONStructure::ExtractStructure(val_p, *this, ignore_errors, detect_geojson);
+JSONStructureNode JSONStructureNode::EmptyLike(const JSONStructureNode &parent) {
+	return JSONStructureNode(parent.case_insensitive_keys);
 }
 
 static void SwapJSONStructureNode(JSONStructureNode &a, JSONStructureNode &b) noexcept {
@@ -50,6 +50,7 @@ static void SwapJSONStructureNode(JSONStructureNode &a, JSONStructureNode &b) no
 	std::swap(a.descriptions, b.descriptions);
 	std::swap(a.count, b.count);
 	std::swap(a.null_count, b.null_count);
+	std::swap(a.case_insensitive_keys, b.case_insensitive_keys);
 }
 
 JSONStructureNode::JSONStructureNode(JSONStructureNode &&other) noexcept {
@@ -64,7 +65,7 @@ JSONStructureNode &JSONStructureNode::operator=(JSONStructureNode &&other) noexc
 JSONStructureDescription &JSONStructureNode::GetOrCreateDescription(const LogicalTypeId type) {
 	if (descriptions.empty()) {
 		// Empty, just put this type in there
-		descriptions.emplace_back(type);
+		descriptions.emplace_back(type, case_insensitive_keys);
 		return descriptions.back();
 	}
 
@@ -91,7 +92,7 @@ JSONStructureDescription &JSONStructureNode::GetOrCreateDescription(const Logica
 		}
 	}
 	// Type was not there, create a new description
-	descriptions.emplace_back(type);
+	descriptions.emplace_back(type, case_insensitive_keys);
 	return descriptions.back();
 }
 
@@ -472,7 +473,9 @@ bool JSONStructureNode::EliminateCandidateFormats(const idx_t vec_count, Vector 
 	return false;
 }
 
-JSONStructureDescription::JSONStructureDescription(const LogicalTypeId type_p) : type(type_p) {
+JSONStructureDescription::JSONStructureDescription(const LogicalTypeId type_p, const bool case_insensitive_keys)
+    : type(type_p),
+      key_map(0, JSONKeyOptionalCaseHash {case_insensitive_keys}, JSONKeyOptionalCaseEquality {case_insensitive_keys}) {
 }
 
 static void SwapJSONStructureDescription(JSONStructureDescription &a, JSONStructureDescription &b) noexcept {
@@ -496,7 +499,7 @@ JSONStructureDescription &JSONStructureDescription::operator=(JSONStructureDescr
 JSONStructureNode &JSONStructureDescription::GetOrCreateChild() {
 	D_ASSERT(type == LogicalTypeId::LIST);
 	if (children.empty()) {
-		children.emplace_back();
+		children.emplace_back(key_map.hash_function().case_insensitive);
 	}
 	D_ASSERT(children.size() == 1);
 	return children.back();
@@ -510,8 +513,8 @@ JSONStructureNode &JSONStructureDescription::GetOrCreateChild(const char *key_pt
 		return children[it->second]; // Found it
 	}
 
-	// Didn't find, create a new child
-	children.emplace_back(key_ptr, key_size);
+	// Didn't find, create a new child (the first spelling of a key names it when keys are case-insensitive)
+	children.emplace_back(key_ptr, key_size, key_map.hash_function().case_insensitive);
 	const auto &persistent_key_string = *children.back().key;
 	JSONKey new_key {persistent_key_string.c_str(), persistent_key_string.length()};
 	key_map.emplace(new_key, children.size() - 1);
@@ -605,7 +608,7 @@ void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, c
 }
 
 JSONStructureNode ExtractStructureInternal(yyjson_val *val, const bool ignore_errors) {
-	JSONStructureNode node;
+	JSONStructureNode node(false);
 	JSONStructure::ExtractStructure(val, node, ignore_errors, false);
 	return node;
 }
@@ -677,8 +680,8 @@ static void GetStructureFunctionInternal(ScalarFunctionSet &set, const LogicalTy
 ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 	ScalarFunctionSet set("json_structure");
 	GetStructureFunctionInternal(set, LogicalType::VARCHAR);
-	set.SetFallible();
 	GetStructureFunctionInternal(set, LogicalType::JSON());
+	set.SetFallible();
 	return set;
 }
 
@@ -870,7 +873,7 @@ static LogicalType GetMergedType(ClientContext &context, const JSONStructureNode
                                  const idx_t depth, const LogicalType &null_type) {
 	D_ASSERT(node.descriptions.size() == 1);
 	auto &desc = node.descriptions[0];
-	JSONStructureNode merged;
+	auto merged = JSONStructureNode::EmptyLike(node);
 	for (const auto &child : desc.children) {
 		JSONStructure::MergeNodes(merged, child);
 	}

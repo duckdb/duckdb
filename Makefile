@@ -598,7 +598,6 @@ TEST_CONFIGS_STORAGE_ENGINE := \
 	test/configs/block_verification_latest.json \
 	test/configs/block_size_16kB.json \
 	test/configs/latest_storage_block_size_16kB.json \
-	test/configs/block_allocator_100mib.json \
 	test/configs/compressed_in_memory.json \
 	test/configs/prefetch_all_storage.json \
 	test/configs/force_storage_mmap.json
@@ -919,6 +918,8 @@ format-parser-grammar: $(FORMAT_SETUP_DEPS)
 		src/parser/peg/transformer/transform_generated_trampoline.cpp \
 		src/parser/peg/compiled_grammar.cpp \
 		src/parser/peg/matcher_factory.cpp \
+		src/parser/peg/peg_rule_id.cpp \
+		src/include/duckdb/parser/peg/peg_rule_id.hpp \
 		src/parser/peg/matcher.cpp | \
 		$(FORMAT_PYTHON) scripts/format.py --files-from - --fix --noconfirm
 

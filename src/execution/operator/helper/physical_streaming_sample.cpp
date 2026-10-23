@@ -114,6 +114,11 @@ bool PhysicalStreamingSample::ParallelOperator() const {
 	return !sample_options->repeatable;
 }
 
+void PhysicalStreamingSample::InitializeOutputChunk(Allocator &allocator, DataChunk &chunk) const {
+	// every output column only references or slices the input
+	chunk.Initialize(allocator, types, vector<bool>(types.size(), false));
+}
+
 unique_ptr<OperatorState> PhysicalStreamingSample::GetOperatorState(ExecutionContext &context) const {
 	if (!ParallelOperator()) {
 		// Repeatable single thread: use the specified seed for deterministic results

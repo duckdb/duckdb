@@ -145,7 +145,7 @@ Identifier ViewCatalogEntry::ResolveColumnName(const Identifier &column_name) co
 
 void ViewCatalogEntry::BindView(ClientContext &context, BindViewAction action) {
 	if (bind_state == ViewBindState::BINDING && bind_thread == ThreadUtil::GetThreadId()) {
-		throw InvalidInputException("View \"%s\" was requested to be bound but this thread is already binding that "
+		throw InvalidInputException("View %s was requested to be bound but this thread is already binding that "
 		                            "view - this likely means the view was attempted to be bound recursively",
 		                            name);
 	}
