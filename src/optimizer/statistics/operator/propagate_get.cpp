@@ -216,7 +216,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 			removed_expressions = true;
 			break;
 		case FilterPropagateResult::FILTER_TRUE_OR_NULL: {
-			auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "StatisticsPropagator::PropagateStatistics");
+			auto &expr_filter =
+			    ExpressionFilter::GetExpressionFilter(filter, "StatisticsPropagator::PropagateStatistics");
 			if (!IsNullOnlyForNullColumn(*expr_filter.expr)) {
 				break;
 			}
