@@ -53,6 +53,8 @@ public:
 
 	virtual bool IsVolatile() const;
 	virtual bool IsConsistent() const;
+	//! Whether any function in the expression observed its binding environment in a way that affects the result
+	virtual bool ObservesBindingContext() const;
 	virtual bool PropagatesNullValues() const;
 	virtual bool IsFoldable() const;
 	virtual bool CanThrow() const;
