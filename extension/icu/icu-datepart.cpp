@@ -14,6 +14,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -580,6 +581,9 @@ struct ICUDatePart : public ICUDateFunc {
 		    GetUnaryPartCodeFunction<timestamp_tz_ns_t, RESULT_TYPE>(LogicalType::TIMESTAMP_TZ_NS, result_type));
 		set.SetFallible();
 		set.SetUnaryArgProperties(unary_arg0_props);
+		if (IsKnownMonotonic(unary_arg0_props.monotonicity)) {
+			set.SetStatisticsCallback(StatisticsPropagator::PropagateFiniteMonotoneBounds);
+		}
 		loader.RegisterFunction(set);
 	}
 

@@ -655,6 +655,23 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::FinalizeDependentJo
 	for (auto &binding : output.right_payload) {
 		binding = outer_state.replacement_graph.Resolve(binding);
 	}
+	// Correlated aggregate rewrites reference marker columns that must survive the projection maps below
+	auto keep_rewrite_inputs = [&](vector<ColumnBinding> &payload) {
+		for (idx_t i = 0, count = payload.size(); i < count; i++) {
+			auto entry = replacement_map.find(payload[i]);
+			if (entry == replacement_map.end()) {
+				continue;
+			}
+			for (auto &extra : {entry->second.marker, entry->second.empty_result}) {
+				auto resolved = outer_state.replacement_graph.Resolve(extra);
+				if (std::find(payload.begin(), payload.end(), resolved) == payload.end()) {
+					payload.push_back(resolved);
+				}
+			}
+		}
+	};
+	keep_rewrite_inputs(output.left_payload);
+	keep_rewrite_inputs(output.right_payload);
 	for (auto &binding : outer_state.bindings) {
 		binding = outer_state.replacement_graph.Resolve(binding);
 	}

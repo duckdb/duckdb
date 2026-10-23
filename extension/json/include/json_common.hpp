@@ -50,6 +50,46 @@ template <typename T>
 using json_key_map_t = unordered_map<JSONKey, T, JSONKeyHash, JSONKeyEquality>;
 using json_key_set_t = unordered_set<JSONKey, JSONKeyHash, JSONKeyEquality>;
 
+//! Case-insensitive counterparts of JSONKeyHash / JSONKeyEquality for json_key_ci_map_t: keys that differ only in
+//! the case of ASCII letters (A-Z / a-z) are the same key
+struct JSONKeyCaseInsensitiveHash {
+	inline std::size_t operator()(const JSONKey &k) const {
+		// JSONKeyHash is the key's (last 8) raw bytes: setting bit 5 of every byte maps 'A'-'Z' to 'a'-'z'. Other
+		// bytes may collide (e.g. '@' and '`'), which equality sorts out
+		return JSONKeyHash()(k) | static_cast<size_t>(0x2020202020202020ULL);
+	}
+};
+
+struct JSONKeyCaseInsensitiveEquality {
+	inline bool operator()(const JSONKey &a, const JSONKey &b) const {
+		return StringUtil::CIEquals(a.ptr, a.len, b.ptr, b.len);
+	}
+};
+
+template <typename T>
+using json_key_ci_map_t = unordered_map<JSONKey, T, JSONKeyCaseInsensitiveHash, JSONKeyCaseInsensitiveEquality>;
+
+//! JSONKeyHash / JSONKeyEquality, or their case-insensitive counterparts if case_insensitive is set: for maps that
+//! are only used while detecting the schema, where a runtime choice is cheap enough
+struct JSONKeyOptionalCaseHash {
+	bool case_insensitive = false;
+
+	inline std::size_t operator()(const JSONKey &k) const {
+		return case_insensitive ? JSONKeyCaseInsensitiveHash()(k) : JSONKeyHash()(k);
+	}
+};
+
+struct JSONKeyOptionalCaseEquality {
+	bool case_insensitive = false;
+
+	inline bool operator()(const JSONKey &a, const JSONKey &b) const {
+		return case_insensitive ? JSONKeyCaseInsensitiveEquality()(a, b) : JSONKeyEquality()(a, b);
+	}
+};
+
+template <typename T>
+using json_key_optional_case_map_t = unordered_map<JSONKey, T, JSONKeyOptionalCaseHash, JSONKeyOptionalCaseEquality>;
+
 //! The type of a single element of a JSON path
 enum class JSONPathElementType : uint8_t {
 	//! Object key ($.key)
