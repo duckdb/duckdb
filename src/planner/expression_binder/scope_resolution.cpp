@@ -190,7 +190,7 @@ static void CollectResolvableColumns(ParsedExpression &expr, vector<identifier_s
 		auto &col_ref = expr.Cast<ColumnRefExpression>();
 		// a lambda parameter is always a bare name, so a qualified reference is a column even when its
 		// last component happens to match one - `t.x` inside `lambda x: ...` names the table's column
-		if (!col_ref.IsQualified() && LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName())) {
+		if (!col_ref.IsQualified() && LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetColumnName())) {
 			return;
 		}
 		result.push_back(col_ref);
