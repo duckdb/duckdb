@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/setting_info.hpp"
@@ -20,9 +21,12 @@ class ClientContext;
 class HTTPUtil;
 class Value;
 class Logger;
+class FileCredentials;
 
 struct FileOpenerInfo {
 	string file_path;
+	//! When set, the secret for this open comes from these credentials, and none is looked up for `file_path`
+	shared_ptr<FileCredentials> credentials;
 };
 
 //! Abstract type that provide client-specific context to FileSystem.
