@@ -95,6 +95,7 @@ void UnnestRewriterPlanUpdater::VisitExpression(unique_ptr<Expression> *expressi
 }
 
 unique_ptr<LogicalOperator> UnnestRewriter::Optimize(unique_ptr<LogicalOperator> op) {
+	changed = false;
 	UnnestRewriterPlanUpdater updater;
 	vector<reference<unique_ptr<LogicalOperator>>> candidates;
 	FindCandidates(op, op, candidates);
@@ -103,6 +104,7 @@ unique_ptr<LogicalOperator> UnnestRewriter::Optimize(unique_ptr<LogicalOperator>
 	for (auto &candidate : candidates) {
 		// rearrange the logical operators
 		if (RewriteCandidate(candidate)) {
+			changed = true;
 			updater.overwritten_tbl_idx = overwritten_tbl_idx;
 			// update the bindings of the BOUND_UNNEST expression
 			UpdateBoundUnnestBindings(updater, candidate);
@@ -114,7 +116,7 @@ unique_ptr<LogicalOperator> UnnestRewriter::Optimize(unique_ptr<LogicalOperator>
 		}
 	}
 
-	RewriteCTECandidates(op, op, updater);
+	changed = RewriteCTECandidates(op, op, updater) || changed;
 	return op;
 }
 

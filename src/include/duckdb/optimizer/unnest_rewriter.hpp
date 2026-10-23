@@ -58,6 +58,10 @@ public:
 	}
 	//! Rewrite duplicate eliminated joins with UNNESTs
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
+	//! Whether the last Optimize call rewrote the plan
+	bool WasChanged() const {
+		return changed;
+	}
 
 private:
 	ClientContext &context;
@@ -94,6 +98,8 @@ private:
 	TableIndex overwritten_tbl_idx;
 	//! The number of distinct columns to unnest
 	idx_t distinct_unnest_count;
+	//! Whether the plan was rewritten
+	bool changed = false;
 };
 
 } // namespace duckdb

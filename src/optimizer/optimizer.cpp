@@ -235,6 +235,21 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = filter_pullup.Rewrite(std::move(plan));
 	});
 
+	// rewrites UNNESTs in DelimJoins by moving them to the projection
+	bool unnest_rewritten = false;
+	RunOptimizer(OptimizerType::UNNEST_REWRITER, [&]() {
+		UnnestRewriter unnest_rewriter(context);
+		plan = unnest_rewriter.Optimize(std::move(plan));
+		unnest_rewritten = unnest_rewriter.WasChanged();
+	});
+	if (unnest_rewritten) {
+		// Remove windows made unused by UNNEST rewriting before filter pushdown.
+		RunOptimizer(OptimizerType::UNUSED_COLUMNS, [&]() {
+			RemoveUnusedColumns unused(*this);
+			unused.VisitOperator(plan);
+		});
+	}
+
 	// perform filter pushdown
 	RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
 		FilterPushdown filter_pushdown(*this);
@@ -347,12 +362,6 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::REDUNDANT_ORDER_KEYS, [&]() {
 		RemoveRedundantOrderKeys remove_redundant_order_keys;
 		remove_redundant_order_keys.Optimize(*plan);
-	});
-
-	// rewrites UNNESTs in DelimJoins by moving them to the projection
-	RunOptimizer(OptimizerType::UNNEST_REWRITER, [&]() {
-		UnnestRewriter unnest_rewriter(context);
-		plan = unnest_rewriter.Optimize(std::move(plan));
 	});
 
 	// removes unused columns
