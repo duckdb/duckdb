@@ -226,6 +226,7 @@ public:
 private:
 	friend class DataChunk;
 	friend struct FlatVector;
+	friend struct ListVector;
 	friend struct StringVector;
 	//! Acquire output storage; representation access continues to use BufferMutable.
 	inline VectorBuffer &BufferForWrite() {

@@ -300,12 +300,13 @@ Vector &ListVector::GetEntry(Vector &vector) {
 }
 
 void ListVector::Reserve(Vector &vector, idx_t required_capacity) {
+	auto &buffer = vector.BufferForWrite();
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST || vector.GetType().id() == LogicalTypeId::MAP);
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.GetBufferRef());
 	D_ASSERT(vector.Buffer().GetBufferType() == VectorBufferType::LIST_BUFFER);
-	auto &child_buffer = vector.BufferMutable().Cast<VectorListBuffer>();
+	auto &child_buffer = buffer.Cast<VectorListBuffer>();
 	child_buffer.Reserve(required_capacity);
 }
 
@@ -319,24 +320,22 @@ idx_t ListVector::GetListSize(const Vector &vec) {
 }
 
 idx_t ListVector::GetListCapacity(const Vector &vec) {
-	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		throw InternalException("ListVector::GetListCapacity called on dictionary vector");
-	}
-	D_ASSERT(vec.GetBufferRef());
-	return vec.Buffer().Cast<VectorListBuffer>().GetChildCapacity();
+	return FlatVector::GetCapacity(GetChild(vec));
 }
 
 void ListVector::SetListSize(Vector &vec, idx_t size) {
-	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+	auto &buffer = vec.BufferForWrite();
+	if (buffer.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		throw InternalException("ListVector::SetListSize called on dictionary vector");
 	}
-	auto &list_buffer = vec.BufferMutable().Cast<VectorListBuffer>();
+	auto &list_buffer = buffer.Cast<VectorListBuffer>();
 	// ensure the child has enough capacity before setting its size (if the child is a flat/constant buffer)
-	auto &child_buffer = list_buffer.GetChild().GetBufferRef();
-	if (child_buffer) {
-		auto vtype = child_buffer->GetVectorType();
+	auto &child = list_buffer.GetChild();
+	if (child.GetBufferRef()) {
+		auto &child_buffer = child.BufferForWrite();
+		auto vtype = child_buffer.GetVectorType();
 		if ((vtype == VectorType::FLAT_VECTOR || vtype == VectorType::CONSTANT_VECTOR) &&
-		    size > child_buffer->Capacity() && size > child_buffer->Size()) {
+		    size > child_buffer.Capacity() && size > child_buffer.Size()) {
 			list_buffer.Reserve(size);
 		}
 	}
@@ -348,7 +347,7 @@ void ListVector::Append(Vector &target, const Vector &source, idx_t source_size)
 		//! Nothing to add
 		return;
 	}
-	auto &target_buffer = target.BufferMutable().Cast<VectorListBuffer>();
+	auto &target_buffer = target.BufferForWrite().Cast<VectorListBuffer>();
 	target_buffer.AppendToChild(source, source_size);
 }
 
@@ -357,12 +356,12 @@ void ListVector::Append(Vector &target, const Vector &source, const SelectionVec
 		//! Nothing to add
 		return;
 	}
-	auto &target_buffer = target.BufferMutable().Cast<VectorListBuffer>();
+	auto &target_buffer = target.BufferForWrite().Cast<VectorListBuffer>();
 	target_buffer.AppendToChild(source, sel, source_size);
 }
 
 void ListVector::PushBack(Vector &target, const Value &insert) {
-	auto &target_buffer = target.BufferMutable().Cast<VectorListBuffer>();
+	auto &target_buffer = target.BufferForWrite().Cast<VectorListBuffer>();
 	target_buffer.PushBack(insert);
 }
 

@@ -52,59 +52,38 @@ public:
 		}
 	}
 
-	void ResetFromCache(Vector &result, bool keep_representation = true) {
+	void ResetFromCache(Vector &result) {
 		D_ASSERT(type == result.GetType());
 		auto internal_type = type.InternalType();
 		buffer->ClearAuxiliaryData();
-		if (keep_representation && !type.IsNested()) {
-			buffer->ResetCapacity(buffer->Capacity());
-			buffer->SetVectorTypeOnly(VectorType::FLAT_VECTOR);
-			buffer->SetVectorSizeOnly(0);
-			auto &active = result.GetBufferRef();
-			if (active && active.use_count() == 1 && active->GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-				active->Cast<DictionaryBuffer>().Reset(type, buffer);
-			} else {
-				result.SetBuffer(buffer);
-			}
-			return;
-		}
-		result.SetBuffer(buffer_ptr<VectorBuffer>(buffer));
-		result.BufferMutable().ResetCapacity(capacity);
-		result.BufferMutable().SetVectorTypeOnly(VectorType::FLAT_VECTOR);
+		buffer->ResetCapacity(buffer->Capacity());
+		buffer->SetVectorTypeOnly(VectorType::FLAT_VECTOR);
+		buffer->SetVectorSizeOnly(0);
 		switch (internal_type) {
 		case PhysicalType::LIST: {
-			// reinitialize the VectorListBuffer
-			// propagate through child
-			auto &child_cache = *child_caches[0];
-			auto &list_buffer = result.BufferMutable().Cast<VectorListBuffer>();
-
-			auto &list_child = list_buffer.GetChild();
-			child_cache.ResetFromCache(list_child, false);
-			list_buffer.SetChildSize(0);
+			child_caches[0]->ResetFromCache(buffer->Cast<VectorListBuffer>().GetChild());
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			// reinitialize the VectorArrayBuffer
-			// propagate through child
-			auto &child_cache = *child_caches[0];
-			auto &array_child = result.BufferMutable().Cast<VectorArrayBuffer>().GetChild();
-			child_cache.ResetFromCache(array_child, false);
+			child_caches[0]->ResetFromCache(buffer->Cast<VectorArrayBuffer>().GetChild());
 			break;
 		}
 		case PhysicalType::STRUCT: {
-			// reinitialize the VectorStructBuffer
-			// propagate through children
-			auto &children = result.BufferMutable().Cast<VectorStructBuffer>().GetChildren();
+			auto &children = buffer->Cast<VectorStructBuffer>().GetChildren();
 			for (idx_t i = 0; i < children.size(); i++) {
-				auto &child_cache = *child_caches[i];
-				child_cache.ResetFromCache(children[i], false);
+				child_caches[i]->ResetFromCache(children[i]);
 			}
 			break;
 		}
 		default:
 			break;
 		}
-		result.BufferMutable().SetVectorSize(0ULL);
+		auto &active = result.GetBufferRef();
+		if (active && active.use_count() == 1 && active->GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			active->Cast<DictionaryBuffer>().Reset(type, buffer);
+		} else {
+			result.SetBuffer(buffer);
+		}
 	}
 
 	const LogicalType &GetType() {

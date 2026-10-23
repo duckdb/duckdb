@@ -1,5 +1,6 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
@@ -535,6 +536,24 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data, count_t count) {
 	vector.BufferMutable().GetValidityMask() = std::move(old_validity);
 	// set the size of the new buffer so child->size() works for list parents using GetChildSize()
 	vector.BufferMutable().SetVectorSize(count);
+}
+
+idx_t FlatVector::GetCapacity(const Vector &vector) {
+	auto &buffer_ref = vector.GetBufferRef();
+	if (!buffer_ref) {
+		return 0;
+	}
+	auto &buffer = *buffer_ref;
+	if (buffer.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &dictionary = buffer.Cast<DictionaryBuffer>();
+		if (dictionary.IsReset()) {
+			return GetCapacity(dictionary.GetChild());
+		}
+	}
+	if (buffer.GetVectorType() != VectorType::FLAT_VECTOR) {
+		throw InternalException("FlatVector::GetCapacity requires a flat vector buffer");
+	}
+	return buffer.Capacity();
 }
 
 void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {

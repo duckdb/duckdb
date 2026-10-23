@@ -170,6 +170,7 @@ Value DictionaryBuffer::GetValue(const LogicalType &type, idx_t index) const {
 
 buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type) const {
 	if (IsReset()) {
+		GetChild().Flatten();
 		return GetChild().GetBufferRef();
 	}
 	// flatten the child based on the selection vector stored in the dictionary

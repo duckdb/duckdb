@@ -133,17 +133,7 @@ struct FlatVector {
 		ConstantVector::VerifyVectorType<T>(vector);
 		return GetDataMutableUnsafe<T>(vector);
 	}
-	static inline idx_t GetCapacity(const Vector &vector) {
-		auto &buffer_ref = vector.GetBufferRef();
-		if (!buffer_ref) {
-			return 0;
-		}
-		auto &buffer = *buffer_ref;
-		if (buffer.GetVectorType() != VectorType::FLAT_VECTOR) {
-			throw InternalException("FlatVector::GetCapacity requires a flat vector buffer");
-		}
-		return buffer.Capacity();
-	}
+	DUCKDB_API static idx_t GetCapacity(const Vector &vector);
 	static void SetSize(Vector &vector, idx_t new_size) {
 		auto &buffer_ref = vector.GetBufferRef();
 		if (!buffer_ref) {

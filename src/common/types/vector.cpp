@@ -213,7 +213,7 @@ void Vector::ResetFromCache(const VectorCache &cache) {
 VectorBuffer &Vector::DictionaryBufferForWrite() {
 	auto &dictionary = buffer->Cast<DictionaryBuffer>();
 	if (dictionary.IsReset()) {
-		auto flat_buffer = dictionary.Flatten(GetType());
+		auto flat_buffer = dictionary.GetChild().GetBufferRef();
 		buffer = std::move(flat_buffer);
 	}
 	return *buffer;
@@ -222,7 +222,7 @@ VectorBuffer &Vector::DictionaryBufferForWrite() {
 bool Vector::TryReuseDictionary(const Vector &source, const SelectionVector &sel, idx_t count,
                                 optional_ptr<SelCache> cache) {
 	if (!buffer || buffer.use_count() != 1 || GetVectorType() != VectorType::DICTIONARY_VECTOR || !sel.IsSet() ||
-	    !source.GetBufferRef() || GetType().IsNested() || GetType() != source.GetType()) {
+	    !source.GetBufferRef() || GetType() != source.GetType()) {
 		return false;
 	}
 	auto &dictionary = buffer->Cast<DictionaryBuffer>();
@@ -252,7 +252,8 @@ bool Vector::TryReuseDictionary(const Vector &source, const SelectionVector &sel
 	}
 	if (source.GetVectorType() != VectorType::FLAT_VECTOR ||
 	    (source.Buffer().GetBufferType() != VectorBufferType::STANDARD_BUFFER &&
-	     source.Buffer().GetBufferType() != VectorBufferType::STRING_BUFFER)) {
+	     source.Buffer().GetBufferType() != VectorBufferType::STRING_BUFFER &&
+	     source.Buffer().GetBufferType() != VectorBufferType::LIST_BUFFER)) {
 		return false;
 	}
 	dictionary.Rebind(make_buffer<DictionaryEntry>(Vector::Ref(source)), sel, count);

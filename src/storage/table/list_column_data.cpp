@@ -133,11 +133,11 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	Vector offset_vector(LogicalType::UBIGINT, count);
 	idx_t scan_count = ScanVector(state, offset_vector, count, ScanVectorType::SCAN_FLAT_VECTOR);
 	D_ASSERT(scan_count > 0);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, scan_count);
 	validity->ScanCount(state.child_states[0], result, count);
 
 	auto data = offset_vector.Values<uint64_t>();
 	// shift all offsets so they are 0 at the first entry
-	auto result_data = FlatVector::Writer<list_entry_t>(result, scan_count);
 	auto previous_offset = state.last_offset;
 	idx_t current_offset = 0;
 	auto child_count = child_column->GetMaxEntry();
