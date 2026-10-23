@@ -111,6 +111,10 @@ double StringUtil::ToDouble(const string &str) {
 	return std::stod(str);
 }
 
+string StringUtil::ToString(double value) {
+	return StringUtil::Format("%f", value);
+}
+
 void StringUtil::LTrim(string &str) {
 	auto it = str.begin();
 	while (it != str.end() && CharacterIsSpace(*it)) {
@@ -818,7 +822,7 @@ static string JSONValueToString(const string &json, JSONValue value) {
 		return to_string(value.GetSignedInteger());
 	case JSONValueType::DOUBLE:
 	case JSONValueType::RAW:
-		return to_string(value.GetDouble());
+		return StringUtil::ToString(value.GetDouble());
 	case JSONValueType::JSON_NULL:
 		return "null";
 	case JSONValueType::OBJECT:

@@ -185,6 +185,8 @@ public:
 	DUCKDB_API static idx_t ToUnsigned(const string &str);
 	DUCKDB_API static int64_t ToSigned(const string &str);
 	DUCKDB_API static double ToDouble(const string &str);
+	//! Format a double like printf "%f", independent of the C++ standard library
+	DUCKDB_API static string ToString(double value);
 
 	template <class T>
 	static string ToString(const vector<T> &input, const string &separator) {
