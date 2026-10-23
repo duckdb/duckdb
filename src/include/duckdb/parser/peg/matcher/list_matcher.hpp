@@ -4,6 +4,7 @@
 
 namespace duckdb {
 class ListMatcher;
+class ChoiceMatcher;
 
 //! A prepared, uniquely linked group. Members and FIRST data belong to the same matcher allocator.
 struct ListMatchChain {
@@ -35,6 +36,10 @@ public:
 		auto &list = static_cast<const ListMatcher &>(child);
 		D_ASSERT(!list.suppress_suggestions);
 		return list;
+	}
+
+	optional_ptr<const ChoiceMatcher> GetFirstChoice() const {
+		return first_choice;
 	}
 
 	optional_ptr<const ListMatchChain> GetPreparedChain() const {
@@ -78,6 +83,7 @@ public:
 private:
 	friend class MatcherAllocator;
 	bool first_child_is_chainable = false;
+	optional_ptr<const ChoiceMatcher> first_choice;
 	optional_ptr<const ListMatchChain> prepared_chain;
 	idx_t prepared_chain_index = 0;
 };

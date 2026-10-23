@@ -1,5 +1,6 @@
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/matcher/list_matcher.hpp"
+#include "duckdb/parser/peg/matcher/choice_matcher.hpp"
 
 namespace duckdb {
 
@@ -47,12 +48,18 @@ arena_ptr<MatchProcess> AtomicMatcher::StartMatch(MatchState &state) const {
 
 void ListMatcher::InitializeListChain() {
 	first_child_is_chainable = false;
+	first_choice = nullptr;
 	prepared_chain = nullptr;
 	prepared_chain_index = 0;
 	if (!IsStructural() || suppress_suggestions || matchers.empty()) {
 		return;
 	}
+
 	auto &first = matchers[0].get();
+	if (first.IsStructural() && first.Type() == MatcherType::CHOICE && !first.IsPackratMemoized() &&
+	    first.Cast<ChoiceMatcher>().PreservesSelectionState()) {
+		first_choice = first.Cast<ChoiceMatcher>();
+	}
 	if (!first.IsStructural() || first.Type() != MatcherType::LIST || first.IsPackratMemoized()) {
 		return;
 	}

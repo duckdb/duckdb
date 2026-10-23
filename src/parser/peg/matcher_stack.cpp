@@ -37,11 +37,36 @@ namespace {
 enum class ListStep : uint8_t {
 	//! a child to match is in `next`
 	DISPATCH_CHILD,
+	//! the frame switched to another list (a choice region entered or resumed): step it again
+	RESUME,
+	//! the leading choice produced the first child result: continue with the children
+	CHILDREN,
 	//! every child of the current member matched
 	MEMBER_MATCHED,
 	//! `completed` holds the list's result
 	COMPLETE
 };
+
+static idx_t FindChoiceChild(const ChoiceMatcher &matcher, MatchState &state, idx_t index, bool single_child) {
+	if (!single_child && state.BuildParseResult()) {
+		while (index < matcher.matchers.size()) {
+			auto &child = matcher.matchers[index].get();
+			if (!child.IsStructural() || child.first_set.MightMatch(state)) {
+				break;
+			}
+			index++;
+		}
+	}
+	return index;
+}
+
+static MatcherResult MakeChoiceResult(MatchState &state, const MatcherResult &child, idx_t index,
+                                      optional_idx start_offset) {
+	if (!child.HasParseResult()) {
+		return MatcherResult::Success();
+	}
+	return state.AllocateParseResult<ChoiceParseResult>(*child.GetParseResult(), index, start_offset);
+}
 
 class ListMatchFrame final : public MatchStackFrame {
 public:
@@ -51,6 +76,20 @@ public:
 
 		const ListMatcher &matcher;
 		optional_ptr<PendingList> parent;
+	};
+
+	struct PendingChoice {
+		PendingChoice(const ListMatcher &matcher, optional_ptr<PendingList> lists, optional_ptr<PendingChoice> parent,
+		              idx_t index, bool single, ArenaAllocator::Position mark)
+		    : matcher(matcher), lists(lists), parent(parent), index(index), single(single), mark(mark) {
+		}
+
+		const ListMatcher &matcher;
+		optional_ptr<PendingList> lists;
+		optional_ptr<PendingChoice> parent;
+		idx_t index;
+		bool single;
+		ArenaAllocator::Position mark;
 	};
 
 public:
@@ -63,6 +102,12 @@ public:
 		if (current) {
 			start_offset = optional_idx(current->offset);
 		}
+		InitializeListChain();
+	}
+
+public:
+	void InitializeListChain() {
+		auto current = list_state.token_iterator.Current();
 		if (state.BuildParseResult() && (!current || current->type != TokenType::END_OF_INPUT_AUTOCOMPLETE)) {
 			while (true) {
 				auto chain = matcher.get().GetPreparedChain();
@@ -85,7 +130,61 @@ public:
 		}
 	}
 
-public:
+	bool HasPendingParent() const {
+		return pending || choice_regions;
+	}
+
+	void EnterChoiceList(const ListMatcher &child) {
+		D_ASSERT(first_choice && !child.IsPackratMemoized() && !child.suppress_suggestions);
+		D_ASSERT(child_index == 0 && result_count == 0 && !results);
+		D_ASSERT(list_state.token_iterator.Position() == state.token_iterator.Position());
+		auto &arena = state.context.process_allocator;
+		auto mark = arena.GetPosition();
+		choice_regions =
+		    arena.Make<PendingChoice>(matcher.get(), pending, choice_regions, choice_index, single_choice, mark);
+		matcher = child;
+		pending = nullptr;
+		first_choice = nullptr;
+		awaiting_child = false;
+		list_state.added_suggestions.reset();
+		list_state.rule = child.GetRule();
+		InitializeListChain();
+		InitializeFirstChoice();
+	}
+
+	void ResumeChoiceList() {
+		D_ASSERT(choice_regions);
+		// All ancestors entered before consuming their first child, so they share the frame's entry cursor.
+		auto region = *choice_regions;
+		matcher = region.matcher;
+		pending = region.lists;
+		choice_regions = region.parent;
+		first_choice = matcher.get().GetFirstChoice();
+		choice_index = region.index;
+		single_choice = region.single;
+		results = nullptr;
+		result_count = 0;
+		child_index = 0;
+		awaiting_child = true;
+		list_state.added_suggestions.reset();
+		state.context.process_allocator.Rewind(region.mark);
+	}
+
+	void InitializeFirstChoice() {
+		auto choice = matcher.get().GetFirstChoice();
+		auto current = list_state.token_iterator.Current();
+		if (!choice || !state.BuildParseResult() ||
+		    (current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) ||
+		    !choice->first_set.MightMatch(list_state)) {
+			return;
+		}
+		first_choice = choice;
+		list_state.rule = choice->GetRule();
+		auto selected = choice->SelectChild(list_state);
+		single_choice = selected.IsValid();
+		choice_index = single_choice ? selected.GetIndex() : 0;
+	}
+
 	static bool IsEmptyOptional(ParseResult &result) {
 		return result.type == ParseResultType::OPTIONAL && !result.Cast<OptionalParseResult>().HasResult();
 	}
@@ -122,6 +221,47 @@ public:
 		return true;
 	}
 
+	//! Steps the leading choice: its alternative's result becomes the first child result
+	ListStep StepFirstChoice(bool single_step, optional<MatcherResult> &child_result, optional<MatchInput> &next,
+	                         MatcherResult &completed) {
+		if (child_result) {
+			awaiting_child = false;
+			// Restore the choice's entry state after destroying the alternative's private state.
+			list_state.added_suggestions.reset();
+			list_state.rule = first_choice->GetRule();
+			if (child_result->IsSuccess()) {
+				child_result = MakeChoiceResult(list_state, *child_result, choice_index, start_offset);
+				first_choice = nullptr;
+				return ListStep::CHILDREN;
+			}
+			if (single_choice) {
+				DiscardSuggestions();
+				completed = MatcherResult::Failure();
+				return ListStep::COMPLETE;
+			}
+			choice_index++;
+			list_state.token_iterator.SetPosition(state.token_iterator);
+			child_result.reset();
+		}
+		choice_index = FindChoiceChild(*first_choice, list_state, choice_index, single_choice);
+		if (choice_index >= first_choice->matchers.size()) {
+			DiscardSuggestions();
+			completed = MatcherResult::Failure();
+			return ListStep::COMPLETE;
+		}
+		auto &alternative = first_choice->matchers[choice_index].get();
+		if (!single_step && alternative.IsStructural() && alternative.Type() == MatcherType::LIST &&
+		    !alternative.IsPackratMemoized() && !alternative.Cast<ListMatcher>().suppress_suggestions &&
+		    (!single_choice || alternative.first_set.MightMatch(list_state))) {
+			EnterChoiceList(alternative.Cast<ListMatcher>());
+			child_result.reset();
+			return ListStep::RESUME;
+		}
+		awaiting_child = true;
+		next.emplace(MatchInput {alternative, list_state});
+		return ListStep::DISPATCH_CHILD;
+	}
+
 	//! Dispatches the next child of the current member; at the autocomplete cursor the member ends instead
 	ListStep StepNextChild(optional<MatchInput> &next, MatcherResult &completed) {
 		auto &current_matcher = matcher.get();
@@ -143,7 +283,7 @@ public:
 				child_index++;
 				continue;
 			}
-			if (!pending) {
+			if (!HasPendingParent()) {
 				state.token_iterator.SetPosition(list_state.token_iterator);
 			}
 			completed = MatcherResult::Failure();
@@ -160,7 +300,7 @@ public:
 		if (collapsed_tail) {
 			D_ASSERT(result_count == 0);
 			awaiting_child = false;
-			if (!pending) {
+			if (!HasPendingParent()) {
 				state.token_iterator.SetPosition(list_state.token_iterator);
 			}
 			DiscardSuggestions();
@@ -184,7 +324,7 @@ public:
 		if (step != ListStep::MEMBER_MATCHED) {
 			return step;
 		}
-		if (!pending) {
+		if (!HasPendingParent()) {
 			state.token_iterator.SetPosition(list_state.token_iterator);
 		}
 		completed = CompleteList();
@@ -247,8 +387,8 @@ public:
 				return MatcherResult::Success(collapsible);
 			}
 		}
-		auto &result_state = pending ? list_state : state;
-		if (pending) {
+		auto &result_state = HasPendingParent() ? list_state : state;
+		if (HasPendingParent()) {
 			result_state.rule = current_matcher.GetRule();
 		}
 		auto named_matcher = current_matcher.HasName() ? &current_matcher : nullptr;
@@ -304,8 +444,14 @@ public:
 	idx_t result_count = 0;
 	//! First-child ancestors share this cursor until their tails are reached.
 	optional_ptr<PendingList> pending;
+	//! Ordered-choice ancestors retain alternatives, but need no second cursor or result buffer.
+	optional_ptr<PendingChoice> choice_regions;
 	idx_t child_index = 0;
 	idx_t saved_suggestion_size = 0;
+	//! Before the first child commits, a prepared choice uses this list's speculative cursor.
+	optional_ptr<const ChoiceMatcher> first_choice;
+	idx_t choice_index = 0;
+	bool single_choice = false;
 	optional_idx start_offset;
 	bool awaiting_child = false;
 };
@@ -450,6 +596,7 @@ optional<MatcherResult> MatchStack::PushFrame(MatchInput input) {
 		case MatcherType::LIST:
 			owned = arena_ptr<MatchStackFrame>(
 			    arena.Make<ListMatchFrame>(input.matcher.Cast<ListMatcher>(), input.state, mark, packrat));
+			static_cast<ListMatchFrame &>(*owned).InitializeFirstChoice();
 			break;
 
 		case MatcherType::CHOICE:
@@ -504,7 +651,21 @@ MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStack
 		case MatcherType::LIST: {
 			auto &f = static_cast<ListMatchFrame &>(frame);
 			D_ASSERT(f.awaiting_child == child_result.has_value());
-			has_child = f.StepChildren(child_result, next, completed) == ListStep::DISPATCH_CHILD;
+			auto step = ListStep::RESUME;
+			while (step == ListStep::RESUME) {
+				step = f.first_choice ? f.StepFirstChoice(SINGLE_STEP, child_result, next, completed)
+				                      : ListStep::CHILDREN;
+				if (step == ListStep::CHILDREN) {
+					step = f.StepChildren(child_result, next, completed);
+				}
+				if (step == ListStep::COMPLETE && f.choice_regions) {
+					// the alternative of a leading choice completed: the list continues with the choice's result
+					f.ResumeChoiceList();
+					child_result = completed;
+					step = ListStep::RESUME;
+				}
+			}
+			has_child = step == ListStep::DISPATCH_CHILD;
 			break;
 		}
 		case MatcherType::CHOICE: {
@@ -517,12 +678,7 @@ MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStack
 				}
 				if (child_result->IsSuccess()) {
 					f.state.token_iterator.SetPosition(f.child_state->token_iterator);
-					if (child_result->HasParseResult()) {
-						completed = f.state.AllocateParseResult<ChoiceParseResult>(*child_result->GetParseResult(),
-						                                                           f.child_index, f.start_offset);
-					} else {
-						completed = MatcherResult::Success();
-					}
+					completed = MakeChoiceResult(f.state, *child_result, f.child_index, f.start_offset);
 					break;
 				}
 				if (f.single_child) {
@@ -531,15 +687,7 @@ MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStack
 				f.child_index++;
 				f.child_state.reset();
 			}
-			if (!f.single_child && f.state.BuildParseResult()) {
-				while (f.child_index < f.matcher.matchers.size()) {
-					auto &child = f.matcher.matchers[f.child_index].get();
-					if (!child.IsStructural() || child.first_set.MightMatch(f.state)) {
-						break;
-					}
-					f.child_index++;
-				}
-			}
+			f.child_index = FindChoiceChild(f.matcher, f.state, f.child_index, f.single_child);
 			if (f.child_index >= f.matcher.matchers.size()) {
 				break;
 			}
