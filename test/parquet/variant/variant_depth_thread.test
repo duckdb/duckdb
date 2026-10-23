@@ -1,0 +1,14 @@
+# name: test/parquet/variant/variant_depth_thread.test
+# description: Run the deep JSON -> VARIANT cast on scheduler worker threads, which use the reduced --thread-stack-size
+# group: [variant]
+
+require parquet
+
+require json
+
+concurrentloop i 0 2
+
+statement ok
+COPY (SELECT (repeat('[', 500) || '1' || repeat(']', 500))::JSON::VARIANT AS v FROM range(3)) TO '{TEST_DIR}/variant_deep_array_{i}.parquet'
+
+endloop
