@@ -59,7 +59,7 @@ unique_ptr<Filter> CreateAuxiliaryFilter(const Expression &partition, const Filt
 
 	//	It must preserve ordering
 	const auto arg_props = partition_func.Function().GetArgProperties(0);
-	if (!IsKnownMonotonic(arg_props.monotonicity)) {
+	if (!IsMonotonicIncreasing(arg_props.monotonicity)) {
 		return nullptr;
 	}
 
@@ -196,6 +196,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 
 	op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
 	filters = std::move(leftover_filters);
-	return FinishPushdown(std::move(op));
+	return PushFinalFilters(std::move(op));
 }
 } // namespace duckdb

@@ -94,6 +94,9 @@ public:
 	const LogicalType &GetType() {
 		return type;
 	}
+	idx_t GetCapacity() const {
+		return capacity;
+	}
 
 private:
 	//! The type of the vector cache
@@ -126,6 +129,8 @@ VectorCache &VectorCache::operator=(VectorCache &&other) noexcept {
 
 void VectorCache::ResetFromCache(Vector &result) const {
 	if (!cache_entry) {
+		// uninitialized column: drop the last reference so it does not keep a stale size
+		result.SetBuffer(nullptr);
 		return;
 	}
 	cache_entry->ResetFromCache(result);
@@ -133,6 +138,13 @@ void VectorCache::ResetFromCache(Vector &result) const {
 
 const LogicalType &VectorCache::GetType() const {
 	return cache_entry->GetType();
+}
+
+optional_idx VectorCache::GetCapacity() const {
+	if (!cache_entry) {
+		return optional_idx();
+	}
+	return optional_idx(cache_entry->GetCapacity());
 }
 
 } // namespace duckdb

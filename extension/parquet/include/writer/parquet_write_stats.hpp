@@ -24,6 +24,7 @@ public:
 	virtual string GetMaxValue();
 	virtual bool CanHaveNaN();
 	virtual bool HasNaN();
+	virtual idx_t GetNaNCount();
 	virtual bool MinIsExact();
 	virtual bool MaxIsExact();
 
@@ -75,14 +76,17 @@ public:
 template <class SRC, class T, class OP>
 class FloatingPointStatisticsState : public NumericStatisticsState<SRC, T, OP> {
 public:
-	bool has_nan = false;
+	idx_t nan_count = 0;
 
 public:
 	bool CanHaveNaN() override {
 		return true;
 	}
 	bool HasNaN() override {
-		return has_nan;
+		return nan_count != 0;
+	}
+	idx_t GetNaNCount() override {
+		return nan_count;
 	}
 };
 
@@ -303,7 +307,8 @@ public:
 		}
 
 		stats.__isset.geospatial_types = true;
-		stats.geospatial_types = types.ToWKBList();
+		auto wkb_types = types.ToWKBList();
+		stats.geospatial_types.assign(wkb_types.begin(), wkb_types.end());
 	}
 };
 

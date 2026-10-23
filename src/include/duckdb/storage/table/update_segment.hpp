@@ -104,11 +104,11 @@ private:
 	shared_ptr<StringHeap> heap;
 
 public:
-	typedef void (*initialize_update_function_t)(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
-	                                             UnifiedVectorFormat &update, const SelectionVector &sel);
-	typedef void (*merge_update_function_t)(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
-	                                        UnifiedVectorFormat &update, row_t *ids, idx_t count,
-	                                        const SelectionVector &sel, idx_t row_group_start);
+	typedef void (*merge_update_function_t)(UpdateInfo &info, UnifiedVectorFormat &update, row_t *ids, idx_t count,
+	                                        const SelectionVector &sel, idx_t vector_offset);
+	typedef void (*save_undo_function_t)(UpdateInfo &source, UpdateInfo &root, row_t *ids, idx_t count,
+	                                     const SelectionVector &sel, idx_t vector_offset, UpdateInfo &target);
+	typedef void (*rollback_update_function_t)(UpdateInfo &root, UpdateInfo &rollback_info);
 	typedef void (*fetch_update_function_t)(const SnapshotView &view, UpdateInfo &info, Vector &result);
 	typedef void (*fetch_committed_function_t)(UpdateInfo &info, Vector &result);
 	typedef void (*fetch_committed_range_function_t)(const SnapshotView &view, UpdateInfo &info, idx_t start, idx_t end,
@@ -116,20 +116,19 @@ public:
 	typedef void (*fetch_rows_function_t)(const SnapshotView &view, UpdateInfo &info, const idx_t *offsets,
 	                                      const SelectionVector &sel, idx_t fetch_offset, idx_t count,
 	                                      idx_t vector_offset, Vector &result, idx_t result_offset);
-	typedef void (*rollback_update_function_t)(UpdateInfo &base_info, UpdateInfo &rollback_info);
 	typedef void (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats,
 	                                             UnifiedVectorFormat &update, idx_t count);
 	typedef idx_t (*get_effective_updates_t)(UnifiedVectorFormat &update_format, row_t *ids, idx_t count,
 	                                         SelectionVector &sel, Vector &base_data, idx_t id_offset);
 
 private:
-	initialize_update_function_t initialize_update_function;
 	merge_update_function_t merge_update_function;
+	save_undo_function_t save_undo_function;
+	rollback_update_function_t rollback_update_function;
 	fetch_update_function_t fetch_update_function;
 	fetch_committed_function_t fetch_committed_function;
 	fetch_committed_range_function_t fetch_committed_range;
 	fetch_rows_function_t fetch_rows_function;
-	rollback_update_function_t rollback_update_function;
 	statistics_update_function_t statistics_update_function;
 	get_effective_updates_t get_effective_updates;
 
@@ -138,11 +137,7 @@ private:
 	bool IsUnused(StorageLockKey &lock) const;
 	//! Keeps the string heap alive for as long as the result holds strings from it
 	void AddHeapReference(Vector &result);
-	//! Copies the old values of an update into the heap
-	friend struct UpdateSelectElement;
 	void InitializeUpdateInfo(idx_t vector_idx);
-	void InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const SelectionVector &sel, idx_t count, idx_t vector_index,
-	                          idx_t vector_offset);
 	void ReallocateRootInfoIfNeeded(UpdateInfo &current_info, idx_t update_count, idx_t vector_index);
 };
 

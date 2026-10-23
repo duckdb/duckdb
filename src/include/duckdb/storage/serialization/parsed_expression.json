@@ -5,6 +5,9 @@
     "set_parameters": [
       "type"
     ],
+    "finalize_deserialization": [
+      "result->VerifyDeserialized();"
+    ],
     "includes": [
       "duckdb/parser/expression/list.hpp"
     ],
@@ -349,6 +352,7 @@
     "class": "OperatorExpression",
     "base": "ParsedExpression",
     "enum": "OPERATOR",
+    "custom_implementation": true,
     "members": [
       {
         "id": 200,

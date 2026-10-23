@@ -108,9 +108,9 @@
       },
       {
         "id": 203,
-        "name": "timing",
-        "type": "ConstraintTiming",
-        "default": "ConstraintTiming::DEFAULT",
+        "name": "check_mode",
+        "type": "ConstraintCheckMode",
+        "default": "ConstraintCheckMode::DEFAULT",
         "version": "v2.0.0"
       }
     ]

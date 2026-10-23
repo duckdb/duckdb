@@ -92,11 +92,8 @@ void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_group
 		// we don't need to flush based on the amount of row groups - but we still might need to flush based on the
 		// amount of
 		auto &config = DBConfig::GetConfig(context);
-		auto memory_limit = config.options.write_buffer_row_group_memory_limit;
-		if (!memory_limit.IsValid()) {
-			memory_limit = config.options.maximum_memory / 5 / (config.options.maximum_threads + 1);
-		}
-		if (row_groups.unflushed_data_size >= memory_limit.GetIndex()) {
+		auto memory_limit = config.GetWriteBufferMemoryLimit();
+		if (row_groups.unflushed_data_size >= memory_limit) {
 			// we exhausted our memory available for buffering - flush
 			need_to_flush = true;
 		}
@@ -119,6 +116,13 @@ void OptimisticWriteCollection::FinalizeFlush() {
 	flushed_row_groups.insert(unflushed_row_groups.begin(), unflushed_row_groups.end());
 	unflushed_row_groups.clear();
 	unflushed_data_size = 0;
+}
+
+void OptimisticWriteCollection::ResetCollectionAccounting() {
+	prev_allocated_size = 0;
+	unflushed_data_size = 0;
+	unflushed_row_groups.clear();
+	flushed_row_groups.clear();
 }
 
 void OptimisticDataWriter::WriteUnflushedRowGroups(OptimisticWriteCollection &row_groups) {

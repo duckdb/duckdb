@@ -3,6 +3,7 @@
 #include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/operator/logical_merge_into.hpp"
@@ -185,6 +186,39 @@ void RewriteMergeBindings(unique_ptr<Expression> &expr, const vector<ColumnBindi
 	    });
 }
 
+static bool ContainsOperator(LogicalOperator &op, LogicalOperator &target) {
+	if (RefersToSameObject(op, target)) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (ContainsOperator(*child, target)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+//! Finds the join between the source and the target, subqueries in the join condition add other joins on top of it
+static optional_ptr<LogicalOperator> FindMergeJoin(LogicalOperator &op, LogicalOperator &source,
+                                                   LogicalOperator &target, idx_t &source_idx) {
+	if (op.children.size() == 2) {
+		for (idx_t child_idx = 0; child_idx < 2; child_idx++) {
+			if (ContainsOperator(*op.children[child_idx], source) &&
+			    ContainsOperator(*op.children[1 - child_idx], target)) {
+				source_idx = child_idx;
+				return op;
+			}
+		}
+	}
+	for (auto &child : op.children) {
+		auto result = FindMergeJoin(*child, source, target, source_idx);
+		if (result) {
+			return result;
+		}
+	}
+	return nullptr;
+}
+
 void RewriteMergeBindings(LogicalOperator &op, const vector<ColumnBinding> &source_bindings,
                           TableIndex new_table_index) {
 	LogicalOperatorVisitor::EnumerateExpressions(
@@ -231,30 +265,26 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		throw NotImplementedException("MERGE INTO is not supported on tables with triggers");
 	}
 
-	if (!table.temporary) {
-		// update of persistent table: not read only!
-		auto &properties = GetStatementProperties();
-		// modification type depends on actions
-		DatabaseModificationType modification;
-		for (auto &action_condition : node.actions) {
-			for (auto &action : action_condition.second) {
-				switch (action->action_type) {
-				case MergeActionType::MERGE_UPDATE:
-					modification |= DatabaseModificationType::UPDATE_DATA;
-					break;
-				case MergeActionType::MERGE_DELETE:
-					modification |= DatabaseModificationType::DELETE_DATA;
-					break;
-				case MergeActionType::MERGE_INSERT:
-					modification |= DatabaseModificationType::INSERT_DATA;
-					break;
-				default:
-					break;
-				}
+	// modification type depends on actions
+	DatabaseModificationType modification;
+	for (auto &action_condition : node.actions) {
+		for (auto &action : action_condition.second) {
+			switch (action->action_type) {
+			case MergeActionType::MERGE_UPDATE:
+				modification |= DatabaseModificationType::UPDATE_DATA;
+				break;
+			case MergeActionType::MERGE_DELETE:
+				modification |= DatabaseModificationType::DELETE_DATA;
+				break;
+			case MergeActionType::MERGE_INSERT:
+				modification |= DatabaseModificationType::INSERT_DATA;
+				break;
+			default:
+				break;
 			}
 		}
-		properties.RegisterDBModify(table.catalog, context, modification);
 	}
+	GetStatementProperties().RegisterDBModify(table.catalog, context, modification);
 
 	// bind the source
 	auto source_binder = Binder::CreateBinder(context, this);
@@ -274,6 +304,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	// bind the WHEN NOT MATCHED BY SOURCE / TARGET merge actions
 	auto &get = bound_table.plan->Cast<LogicalGet>();
 	auto merge_into = make_uniq<LogicalMergeInto>(table);
+	merge_into->return_chunk = !node.returning_list.empty();
 	merge_into->table_index = GenerateTableIndex();
 	auto proj_index = GenerateTableIndex();
 	vector<unique_ptr<Expression>> projection_expressions;
@@ -319,6 +350,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	} else {
 		join.type = JoinType::INNER;
 	}
+	auto &source_op = *source_binding.plan;
 	join.left = make_uniq<BoundRefWrapper>(std::move(source_binding), std::move(source_binder));
 	join.right = make_uniq<BoundRefWrapper>(std::move(bound_table), std::move(target_binder));
 	if (node.join_condition) {
@@ -329,21 +361,15 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	auto bound_join_node = Bind(join);
 
 	auto root = std::move(bound_join_node.plan);
-	auto join_ref = reference<LogicalOperator>(*root);
-	while (join_ref.get().children.size() == 1) {
-		join_ref = *join_ref.get().children[0];
+	idx_t source_idx = 0;
+	auto merge_join = FindMergeJoin(*root, source_op, get, source_idx);
+	if (!merge_join) {
+		throw NotImplementedException("Expected a join after binding a join operator - but got a %s", root->type);
 	}
-	if (join_ref.get().children.size() != 2) {
-		throw NotImplementedException("Expected a join after binding a join operator - but got a %s",
-		                              join_ref.get().type);
-	}
-	// kind of hacky, CreatePlan turns a RIGHT join into a LEFT join so the children get reversed from what we need
-	bool inverted = join.type == JoinType::RIGHT;
+	auto join_ref = reference<LogicalOperator>(*merge_join);
+	// CreatePlan can turn a RIGHT join into a LEFT join - in that case the children are reversed
+	bool inverted = source_idx == 1;
 	auto &source = join_ref.get().children[inverted ? 1 : 0];
-
-	if (!node.returning_list.empty()) {
-		merge_into->return_chunk = true;
-	}
 
 	// bind WHEN_MATCHED merge actions (can contain references to both source and target)
 	for (auto &entry : node.actions) {
@@ -368,24 +394,15 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		// if we have "has_not_matched_by_source" we need to push an extra marker into the source
 		// this marker tells us if we have found a source match or not
 		auto new_proj_index = GenerateTableIndex();
-
-		source->ResolveOperatorTypes();
 		auto source_bindings = source->GetColumnBindings();
-		vector<unique_ptr<Expression>> select_list;
-		for (idx_t c = 0; c < source_bindings.size(); c++) {
-			select_list.push_back(make_uniq<BoundColumnRefExpression>(source->types[c], source_bindings[c]));
-		}
+		auto proj = LogicalProjection::CreateIdentity(new_proj_index, std::move(source));
 
 		// insert the source marker
 		auto marker = make_uniq<BoundConstantExpression>(Value::INTEGER(42));
 		marker->SetAlias("source_marker");
 		ColumnBinding source_marker;
-		auto source_marker_idx = ColumnBinding::PushExpression(select_list, std::move(marker));
+		auto source_marker_idx = ColumnBinding::PushExpression(proj->expressions, std::move(marker));
 		source_marker = ColumnBinding(new_proj_index, source_marker_idx);
-
-		// construct the new projection
-		auto proj = make_uniq<LogicalProjection>(new_proj_index, std::move(select_list));
-		proj->children.push_back(std::move(source));
 		source = std::move(proj);
 
 		// rewrite "column_bindings" in the join to refer to the new projection we have just pushed
@@ -463,7 +480,6 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	result.types = {LogicalType::BIGINT};
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

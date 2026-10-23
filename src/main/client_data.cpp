@@ -148,7 +148,7 @@ public:
 		return result;
 	}
 
-	Allocator &GetBufferAllocator() override {
+	BufferAllocator &GetBufferAllocator() override {
 		return buffer_manager.GetBufferAllocator();
 	}
 	void ReserveMemory(idx_t size) override {
@@ -234,6 +234,7 @@ private:
 ClientData::ClientData(ClientContext &context) : catalog_search_path(make_uniq<CatalogSearchPath>(context)) {
 	auto &db = DatabaseInstance::GetDatabase(context);
 
+	default_database = DatabaseManager::Get(db).GetDefaultDatabase();
 	profiler = make_shared_ptr<QueryProfiler>(context);
 	temporary_objects = make_shared_ptr<AttachedDatabase>(db, AttachedDatabaseType::TEMP_DATABASE);
 	temporary_objects->oid = DatabaseManager::Get(db).NextOid();

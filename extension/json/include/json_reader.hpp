@@ -26,7 +26,7 @@ class JSONReader;
 
 struct JSONBufferHandle {
 public:
-	JSONBufferHandle(JSONReader &reader, idx_t buffer_index, idx_t readers, AllocatedData &&buffer, idx_t buffer_size,
+	JSONBufferHandle(JSONReader &reader, idx_t buffer_index, idx_t readers, AllocatedData buffer, idx_t buffer_size,
 	                 idx_t buffer_start);
 
 public:
@@ -58,6 +58,8 @@ public:
 
 	idx_t FileSize() const;
 	idx_t Remaining() const;
+	//! The fraction of the file that has been read, in [0, 1]
+	double GetProgress() const;
 
 	bool CanSeek() const;
 	bool IsPipe() const;
@@ -84,6 +86,8 @@ private:
 	//! File properties
 	const bool can_seek;
 	const idx_t file_size;
+	//! Whether the file is compressed - the read position then refers to the decompressed data
+	const bool compressed;
 
 	//! Read properties
 	atomic<idx_t> read_position;
@@ -247,7 +251,7 @@ private:
 	void FinalizeBuffer(JSONReaderScanState &scan_state);
 
 	//! Insert/get/remove buffer (grabs the lock)
-	void InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> &&buffer);
+	void InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> buffer);
 	optional_ptr<JSONBufferHandle> GetBuffer(idx_t buffer_idx);
 	AllocatedData RemoveBuffer(JSONBufferHandle &handle);
 

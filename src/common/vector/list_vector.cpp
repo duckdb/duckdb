@@ -144,9 +144,11 @@ buffer_ptr<VectorBuffer> VectorListBuffer::SliceInternal(const LogicalType &type
 }
 
 buffer_ptr<VectorBuffer> VectorListBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
-	auto result = make_buffer<VectorListBuffer>(data_ptr, count, *child);
+	// a constant has one physical entry - the logical count is tracked separately from the physical capacity
+	auto result = make_buffer<VectorListBuffer>(data_ptr, count_t(1ULL), *child);
 	result->GetValidityMask().Set(0, validity.RowIsValid(0));
 	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	result->SetVectorSize(count);
 	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
 	return result;
 }
@@ -329,7 +331,7 @@ void ListVector::SetListSize(Vector &vec, idx_t size) {
 	if (child_buffer) {
 		auto vtype = child_buffer->GetVectorType();
 		if ((vtype == VectorType::FLAT_VECTOR || vtype == VectorType::CONSTANT_VECTOR) &&
-		    size > child_buffer->Capacity()) {
+		    size > child_buffer->Capacity() && size > child_buffer->Size()) {
 			list_buffer.Reserve(size);
 		}
 	}
