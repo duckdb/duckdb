@@ -445,41 +445,58 @@ public:
 		temporary_memory_state->SetRemainingSize(minimum_reservation);
 		temporary_memory_state->UpdateReservation(context);
 
-		// For perfect hash join
-		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
-		auto use_perfect_hash = CanUsePerfectHashJoin(op, *perfect_join_executor);
-		can_use_perfect_hash = use_perfect_hash;
 		// Multiple build producers can change dictionaries after the layout has been published.
 		build_side_multi_source = BuildSideHasMultipleSources(op.children[1].get());
 		for (auto &column_idx : op.payload_columns.col_idxs) {
 			computed_build_columns.push_back(BuildColumnIsComputed(op.children[1].get(), column_idx));
 		}
-		// For external hash join
-		external = Settings::Get<DebugForceExternalSetting>(context);
 		// Set probe types
 		probe_types = op.children[0].get().GetTypes();
 		probe_types.emplace_back(LogicalType::HASH);
 
+		InitializePerExecutionState(context);
+	}
+
+	//! Establishes the per-execution decisions, both at construction and at a recursive iteration reset:
+	//! the perfect-hash candidate, filter-pushdown participation, and the sink bloom filter.
+	void InitializePerExecutionState(ClientContext &context, shared_ptr<BloomFilter> recycled_filter = nullptr) {
+		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
+		can_use_perfect_hash = CanUsePerfectHashJoin(op, *perfect_join_executor);
+		external = Settings::Get<DebugForceExternalSetting>(context);
+		skip_filter_pushdown = false;
+		global_filter_state.reset();
 		if (op.filter_pushdown) {
-			if (op.filter_pushdown->probe_info.empty() && use_perfect_hash) {
+			if (op.filter_pushdown->probe_info.empty() && can_use_perfect_hash) {
 				// Only computing min/max to check for perfect HJ, but we already can
 				skip_filter_pushdown = true;
 			}
 			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
 		}
-		InitializeBloomFilter();
+		InitializeBloomFilter(std::move(recycled_filter));
 	}
 
-	//! Creates the bloom filter that every thread-local hash table inserts into during Sink
-	void InitializeBloomFilter() {
+	//! Creates the bloom filter that every thread-local hash table inserts into during Sink.
+	//! A filter recycled from the previous recursive iteration is reused unless it was published.
+	void InitializeBloomFilter(shared_ptr<BloomFilter> recycled_filter = nullptr) {
+		// a published filter is shared with probe-side scans and immutable, so it cannot be reused
+		if (recycled_filter && recycled_filter->IsPublished()) {
+			recycled_filter.reset();
+		}
 		// a perfect hash join publishes its own exact filter, so a bloom filter would never leave the sink
 		if (skip_filter_pushdown || can_use_perfect_hash || !ShouldBuildBloomFilterInSink(context, op)) {
 			hash_table->SetBloomFilter(nullptr);
+			// an in-memory join builds its filter during finalize, which can still reuse the allocation;
+			// an iteration without a filter must not clear a slot that finalize has not consumed yet
+			if (recycled_filter) {
+				hash_table->SetRecycledBloomFilter(std::move(recycled_filter));
+			}
 			return;
 		}
-		auto filter = make_shared_ptr<BloomFilter>();
-		filter->Initialize(context, MaxValue<idx_t>(op.children[1].get().estimated_cardinality, 1));
-		hash_table->SetBloomFilter(std::move(filter));
+		if (!recycled_filter) {
+			recycled_filter = make_shared_ptr<BloomFilter>();
+		}
+		recycled_filter->Initialize(context, MaxValue<idx_t>(op.children[1].get().estimated_cardinality, 1));
+		hash_table->SetBloomFilter(std::move(recycled_filter));
 	}
 
 	~HashJoinGlobalSinkState() override {
@@ -500,14 +517,12 @@ public:
 	}
 
 	void Reset(ClientContext &context) override {
+		// Keep the previous iteration's bloom filter so its allocation can be reused.
+		auto recycled_bloom_filter = hash_table->GetBloomFilter();
 		// Use single-partition mode on subsequent iterations to avoid 16-partition overhead for small joins.
 		hash_table->ResetForNewIterationSinglePartition();
-		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
-		auto use_perfect_hash = CanUsePerfectHashJoin(op, *perfect_join_executor);
-		can_use_perfect_hash = use_perfect_hash;
 		finalized = false;
 		active_local_states = 0;
-		external = Settings::Get<DebugForceExternalSetting>(context);
 		total_size = 0;
 		max_partition_size = 0;
 		max_partition_count = 0;
@@ -517,17 +532,9 @@ public:
 		probe_spill.reset();
 		scanned_data = false;
 		preserve_build_for_reuse = false;
-		skip_filter_pushdown = false;
-		global_filter_state.reset();
 		temporary_memory_state->SetZero();
 		keep_local_hash_tables = true;
-		if (op.filter_pushdown) {
-			if (op.filter_pushdown->probe_info.empty() && use_perfect_hash) {
-				skip_filter_pushdown = true;
-			}
-			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
-		}
-		InitializeBloomFilter();
+		InitializePerExecutionState(context, std::move(recycled_bloom_filter));
 		// The next iteration's first chunk publishes the layout afresh: the rerun build may deliver a different
 		// dictionary (or none), so neither a narrowed slot nor the dictionary it indexes into can be carried over.
 		// ResetForNewIterationSinglePartition returned the global JHT to the unpublished state accordingly.
@@ -657,17 +664,16 @@ public:
 		auto &gstate = gstate_p.Cast<HashJoinGlobalSinkState>();
 		join_keys.Reset();
 		payload_chunk.Reset();
-		if (hash_table && append_state_initialised) {
+		if (hash_table) {
 			// Drop the row data and the layout: the next iteration's first chunk republishes it, and Sink then
 			// reruns the lazy per-thread setup (FinishInitWithLayout + InitializeAppendState) against it.
 			hash_table->ResetForNewIterationSinglePartition();
-			append_state_initialised = false;
 		} else {
-			// HT was moved into gstate during Combine, or never had a layout published. Rebuild against the global
-			// radix_bits so partition counts stay consistent in PrepareFinalize.
+			// HT was moved into gstate during a Combine that did not keep local hash tables. Rebuild against the
+			// global radix_bits so partition counts stay consistent in PrepareFinalize.
 			hash_table = op.InitializeHashTable(context.client, gstate.hash_table->GetRadixBits());
-			append_state_initialised = false;
 		}
+		append_state_initialised = false;
 		// the global state resets before any local one, so the filter this picks up is always a fresh one
 		D_ASSERT(!gstate.hash_table->GetBloomFilter() || !gstate.hash_table->GetBloomFilter()->IsSealed());
 		hash_table->SetBloomFilter(gstate.hash_table->GetBloomFilter());
@@ -1054,13 +1060,13 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 	gstate.total_size =
 	    ht.GetTotalSize(gstate.local_hash_tables, gstate.max_partition_size, gstate.max_partition_count);
 	gstate.probe_side_requirement =
-	    GetPartitioningSpaceRequirement(context, children[0].get().GetTypes(), ht.GetRadixBits(), gstate.num_threads);
+	    GetPartitioningSpaceRequirement(context, gstate.probe_types, ht.GetRadixBits(), gstate.num_threads);
 	const auto max_partition_ht_size =
 	    gstate.max_partition_size + gstate.hash_table->PointerTableSize(gstate.max_partition_count);
 	gstate.temporary_memory_state->SetMinimumReservation(max_partition_ht_size + gstate.probe_side_requirement);
 
 	bool all_constant;
-	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(children[0].get().GetTypes(), all_constant));
+	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(gstate.probe_types, all_constant));
 	gstate.temporary_memory_state->SetRemainingSize(gstate.total_size);
 }
 
@@ -1666,6 +1672,8 @@ static unique_ptr<Expression> CreateRuntimeFilterExpression(ClientContext &conte
 			return nullptr;
 		}
 		auto bloom_filter = ht.GetBloomFilter();
+		// the filter escapes to probe-side scans here, so a later recursive iteration must not reuse it
+		bloom_filter->MarkPublished();
 		filter_expr = make_uniq<BoundFunctionExpression>(
 		    BoundScalarFunction(BloomFilterScalarFun::GetFunction(filter_input_type)), std::move(children),
 		    make_uniq<BloomFilterFunctionData>(std::move(bloom_filter), filters_null_values, key_name, key_type,
@@ -2246,6 +2254,19 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	}
 
 	return std::move(state);
+}
+
+void PhysicalHashJoin::InitializeOutputChunk(Allocator &allocator, DataChunk &chunk) const {
+	if (join_type == JoinType::RIGHT_SEMI || join_type == JoinType::RIGHT_ANTI) {
+		PhysicalOperator::InitializeOutputChunk(allocator, chunk);
+		return;
+	}
+	// the probe-side output columns are always referenced or sliced from the probe input
+	vector<bool> initialize(types.size(), true);
+	for (idx_t i = 0; i < lhs_output_columns.col_idxs.size(); i++) {
+		initialize[i] = false;
+	}
+	chunk.Initialize(allocator, types, initialize);
 }
 
 OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -2845,6 +2866,12 @@ SourceResultType PhysicalHashJoin::GetDataInternal(ExecutionContext &context, Da
 			annotated_lock_guard<annotated_mutex> guard(gstate.lock);
 			if (gstate.TryPrepareNextStage(sink) || gstate.global_stage == HashJoinSourceStage::DONE) {
 				gstate.UnblockTasks();
+			} else if (!sink.external && gstate.global_stage == HashJoinSourceStage::SCAN_HT) {
+				// Without spilling, scanning the hash table is the last stage and all of its tasks have been assigned,
+				// so there is nothing left for this task to do. Do not block until the other tasks finish: this task
+				// has already handed probe rows to the sink, which may in turn be waiting for this task
+				// (e.g., a partitioned COPY cannot flush until every producer has combined).
+				return SourceResultType::FINISHED;
 			} else {
 				return gstate.BlockSource(input.interrupt_state);
 			}

@@ -107,6 +107,10 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 		break;
 	}
 
+	if (static_cast<idx_t>(dict_count) > segment.GetBlockSize()) {
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - dict_count was out of range. Database file appears to be corrupted.");
+	}
 	// scans build the dictionary on first use
 	build_dictionary = initialize_dictionary && mode != DictFSSTMode::FSST_ONLY;
 }
@@ -115,7 +119,10 @@ void CompressedStringScanState::LoadStringLengths() {
 	if (!string_lengths.empty()) {
 		return;
 	}
-	string_lengths.resize(AlignValue<uint32_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(dict_count));
+	// Compute the aligned count in a 64-bit type: dict_count is read directly from the file and can be
+	// close to UINT32_MAX, which would overflow the uint32_t arithmetic AlignValue<uint32_t> performs.
+	string_lengths.resize(
+	    AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(static_cast<idx_t>(dict_count)));
 	BitpackingPrimitives::UnPackBuffer<uint32_t>(data_ptr_cast(string_lengths.data()),
 	                                             data_ptr_cast(string_lengths_ptr), dict_count, string_lengths_width);
 }

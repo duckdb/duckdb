@@ -343,10 +343,10 @@ bool VariantShreddingState::ValueIsShredded(UnifiedVariantVectorData &variant, i
 		return false;
 	}
 	if (type_id == VariantLogicalType::DECIMAL) {
-		auto physical_type = type.InternalType();
+		// the shredded column stores the unscaled value, so it only holds decimals of its scale that fit its width
 		auto decimal_data = VariantUtils::DecodeDecimalData(variant, row, values_index);
-		auto decimal_physical_type = decimal_data.GetPhysicalType();
-		return physical_type == decimal_physical_type;
+		return type.InternalType() == decimal_data.GetPhysicalType() &&
+		       decimal_data.scale == DecimalType::GetScale(type) && decimal_data.width <= DecimalType::GetWidth(type);
 	}
 	return true;
 }

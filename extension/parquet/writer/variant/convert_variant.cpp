@@ -53,7 +53,7 @@ static void MarkTypedValueShreddingGroupsRequired(ColumnWriter &typed_value) {
 	}
 }
 
-idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+idx_t VariantColumnWriter::FinalizeSchema(duckdb_parquet::SchemaElementList &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = Schema();
@@ -70,7 +70,8 @@ idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> 
 	}
 
 	// variant group
-	duckdb_parquet::SchemaElement top_element;
+	schemas.emplace_back();
+	auto &top_element = schemas.back();
 	top_element.repetition_type = repetition_type;
 	top_element.num_children = NumericCast<int32_t>(child_writers.size());
 	top_element.logicalType.__isset.VARIANT = true;
@@ -84,7 +85,6 @@ idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> 
 		top_element.__isset.field_id = true;
 		top_element.field_id = NumericCast<int32_t>(field_id.GetIndex());
 	}
-	schemas.push_back(std::move(top_element));
 
 	idx_t unique_columns = 0;
 	for (auto &child_writer : child_writers) {
