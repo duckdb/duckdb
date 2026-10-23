@@ -126,6 +126,8 @@ enum class CacheValidationMode : uint8_t;
 
 enum class CachingMode : uint8_t;
 
+enum class CallerParticipation : uint8_t;
+
 enum class CanUnloadResult : uint8_t;
 
 enum class CatalogLookupBehavior : uint8_t;
@@ -833,6 +835,9 @@ const char* EnumUtil::ToChars<CacheValidationMode>(CacheValidationMode value);
 
 template<>
 const char* EnumUtil::ToChars<CachingMode>(CachingMode value);
+
+template<>
+const char* EnumUtil::ToChars<CallerParticipation>(CallerParticipation value);
 
 template<>
 const char* EnumUtil::ToChars<CanUnloadResult>(CanUnloadResult value);
@@ -1824,6 +1829,9 @@ CacheValidationMode EnumUtil::FromString<CacheValidationMode>(const char *value)
 
 template<>
 CachingMode EnumUtil::FromString<CachingMode>(const char *value);
+
+template<>
+CallerParticipation EnumUtil::FromString<CallerParticipation>(const char *value);
 
 template<>
 CanUnloadResult EnumUtil::FromString<CanUnloadResult>(const char *value);

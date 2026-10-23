@@ -9,10 +9,12 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/caller_participation.hpp"
 #include "duckdb/common/enums/query_result_state.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/execution/progress_data.hpp"
@@ -45,7 +47,7 @@ public:
 	static constexpr idx_t WAIT_TIME = 20;
 
 public:
-	explicit Executor(ClientContext &context);
+	Executor(ClientContext &context, CallerParticipation caller_participation);
 	~Executor();
 
 	ClientContext &context;
@@ -90,6 +92,8 @@ public:
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);
 
+	//! Schedule tasks of this query, leaving one to the caller when it schedules them itself with nothing queued
+	void ScheduleTasks(vector<shared_ptr<Task>> &tasks);
 	//! Reschedules a task that was blocked
 	void RescheduleTask(shared_ptr<Task> &task);
 
@@ -216,6 +220,9 @@ private:
 
 	//! Currently alive executor tasks
 	atomic<idx_t> executor_tasks;
+	const CallerParticipation caller_participation;
+	//! The submitting thread, which drives the query in CallerParticipation::DRIVES_TO_COMPLETION
+	const thread_id caller_thread;
 	//! Leaf lock for the result buffer slot. It must not share executor_lock, which is held while
 	//! readiness is checked
 	mutex result_buffer_lock;

@@ -28,7 +28,9 @@
 
 namespace duckdb {
 
-Executor::Executor(ClientContext &context) : context(context), executor_tasks(0), blocked_thread_time(0) {
+Executor::Executor(ClientContext &context, CallerParticipation caller_participation)
+    : context(context), executor_tasks(0), caller_participation(caller_participation),
+      caller_thread(ThreadUtil::GetThreadId()), blocked_thread_time(0) {
 }
 
 Executor::~Executor() {
@@ -371,6 +373,18 @@ void Executor::UnregisterTask() {
 #endif
 }
 
+void Executor::ScheduleTasks(vector<shared_ptr<Task>> &tasks) {
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+	auto threads_to_wake = tasks.size();
+	auto queued_tasks = scheduler.EnqueueTasks(GetToken(), tasks);
+	// the caller is about to take a task when it schedules on its own thread, unless it has queued tasks already
+	if (caller_participation == CallerParticipation::DRIVES_TO_COMPLETION && queued_tasks == 0 &&
+	    ThreadUtil::GetThreadId() == caller_thread) {
+		threads_to_wake--;
+	}
+	scheduler.Signal(threads_to_wake);
+}
+
 void Executor::WaitForTask() {
 #ifndef DUCKDB_NO_THREADS
 	static constexpr std::chrono::microseconds WAIT_TIME_MS = std::chrono::microseconds(WAIT_TIME * 1000);
@@ -444,6 +458,9 @@ bool Executor::ExecutionIsFinished() {
 QueryResultState Executor::ExecuteTask() {
 	// Only executor should return NO_TASKS_AVAILABLE
 	D_ASSERT(execution_result != QueryResultState::NO_TASKS_AVAILABLE);
+	// ScheduleTasks leaves a task to the submitting thread, so no other thread may drive this query
+	D_ASSERT(caller_participation != CallerParticipation::DRIVES_TO_COMPLETION ||
+	         ThreadUtil::GetThreadId() == caller_thread);
 	if (execution_result != QueryResultState::NOT_READY && ExecutionIsFinished()) {
 		return execution_result;
 	}
