@@ -98,23 +98,13 @@ void DuckTransaction::PushAttach(AttachedDatabase &db) {
 	Store<CatalogEntry *>(&db, ptr);
 }
 
-void DuckTransaction::PushDelete(DuckTableEntry &table_entry, RowVersionManager &info, idx_t vector_idx, row_t rows[],
-                                 idx_t count, idx_t base_row) {
-	bool is_consecutive = true;
-	// check if the rows are consecutive
-	for (idx_t i = 0; i < count; i++) {
-		if (rows[i] != row_t(i)) {
-			is_consecutive = false;
-			break;
-		}
-	}
-	idx_t alloc_size = sizeof(DeleteInfo);
-	if (!is_consecutive) {
-		// if rows are not consecutive we need to allocate row identifiers
-		alloc_size += sizeof(uint16_t) * count;
-	}
+void DuckTransaction::PushWrite(UndoFlags type, DuckTableEntry &table_entry, RowVersionManager &info, idx_t vector_idx,
+                                const uint16_t rows[], idx_t count, idx_t base_row, const transaction_t previous_ids[],
+                                idx_t previous_id_count) {
+	auto is_consecutive = !rows;
+	auto alloc_size = DeleteInfo::GetAllocationSize(count, is_consecutive, previous_id_count);
 
-	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, alloc_size);
+	auto undo_entry = undo_buffer.CreateEntry(type, alloc_size);
 	auto delete_info = reinterpret_cast<DeleteInfo *>(undo_entry.GetDataMutable());
 	delete_info->version_info = &info;
 	delete_info->vector_idx = vector_idx;
@@ -122,12 +112,17 @@ void DuckTransaction::PushDelete(DuckTableEntry &table_entry, RowVersionManager 
 	delete_info->count = count;
 	delete_info->base_row = base_row;
 	delete_info->is_consecutive = is_consecutive;
+	delete_info->previous_id_count = previous_id_count;
 	if (!is_consecutive) {
 		// if rows are not consecutive
 		auto delete_rows = delete_info->GetRows();
 		for (idx_t i = 0; i < count; i++) {
-			delete_rows[i] = NumericCast<uint16_t>(rows[i]);
+			delete_rows[i] = rows[i];
 		}
+	}
+	auto stored_ids = delete_info->GetPreviousIds();
+	for (idx_t i = 0; i < previous_id_count; i++) {
+		stored_ids[i] = previous_ids[i];
 	}
 }
 
