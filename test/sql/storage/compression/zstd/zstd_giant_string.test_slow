@@ -1,7 +1,8 @@
 # name: test/sql/storage/compression/zstd/zstd_giant_string.test_slow
 # group: [zstd]
 
-require ram 16gb
+# Peaks around 15gb of RSS. With 16gb total the oomkiller gets hungry.
+require ram 20gb
 
 statement ok
 ATTACH '{TEST_DIR}/zstd_giant_string.db' (STORAGE_VERSION 'v1.3.2');
