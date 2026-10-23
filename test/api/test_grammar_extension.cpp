@@ -981,6 +981,44 @@ TEST_CASE("Grammar extensions apply in registration order", "[api][grammar_exten
 	CheckGrammarExtensionTestSyntax(con);
 }
 
+TEST_CASE("add_grammar_extension appends to the active grammar extensions", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	RegisterGrammarExtensionTestSyntax(*db.instance);
+	Connection set_con(db);
+	ActivateGrammarExtensionTestSyntax(set_con);
+
+	// adding the extensions one by one compiles the same grammar as setting them at once
+	Connection con(db);
+	auto base = CompiledGrammar::Get(*con.context);
+	REQUIRE_NO_FAIL(*con.Query("CALL add_grammar_extension('extension_test_value')"));
+	REQUIRE(CompiledGrammar::Get(*con.context) != base);
+	REQUIRE_NO_FAIL(*con.Query("CALL add_grammar_extension('extension_test_atom')"));
+	REQUIRE(CompiledGrammar::Get(*con.context) == CompiledGrammar::Get(*set_con.context));
+	CheckGrammarExtensionTestSyntax(con);
+
+	// the active extensions are reported by the setting and by duckdb_grammar_extensions
+	auto result = con.Query("SELECT current_setting('active_grammar_extensions')");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0).ToString() == "[extension_test_value, extension_test_atom]");
+	result = con.Query("SELECT name FROM duckdb_grammar_extensions() WHERE active ORDER BY name");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->RowCount() == 2);
+
+	// removing one keeps the other active
+	REQUIRE_NO_FAIL(*con.Query("CALL remove_grammar_extension('extension_test_atom')"));
+	Connection value_con(db);
+	REQUIRE_NO_FAIL(*value_con.Query("SET active_grammar_extensions = ['extension_test_value']"));
+	REQUIRE(CompiledGrammar::Get(*con.context) == CompiledGrammar::Get(*value_con.context));
+	REQUIRE_FAIL(con.Query("ANSWER"));
+
+	// removing the last one falls back to the default grammar
+	REQUIRE_NO_FAIL(*con.Query("CALL remove_grammar_extension('extension_test_value')"));
+	REQUIRE(CompiledGrammar::Get(*con.context) == base);
+	result = con.Query("SELECT count(*) FROM duckdb_grammar_extensions() WHERE active");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::BIGINT(0));
+}
+
 class ConstantSevenTransformProcess final : public TransformProcess {
 public:
 	explicit ConstantSevenTransformProcess(PEGTransformer &transformer_p) : transformer(transformer_p) {
