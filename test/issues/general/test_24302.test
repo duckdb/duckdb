@@ -1,0 +1,71 @@
+# name: test/issues/general/test_24302.test
+# description: Issue 24302 - Window self-joins must not duplicate volatile filters
+# group: [general]
+
+statement ok
+CREATE SEQUENCE filter_seq;
+
+# This is the reported nested-window shape with a deterministic volatile filter.
+# Re-evaluating the filter in a copied self-join subtree advances the sequence twice and changes the input relation.
+query IIII
+SELECT count(*) AS rows,
+       count(*) FILTER (WHERE s = actual_sum) AS matching_rows,
+       any_value(s) AS observed_window_sum,
+       actual_sum AS expected_sum
+FROM (
+    SELECT i, s, sum(i) OVER () AS actual_sum
+    FROM (
+        SELECT i, sum(i) OVER (PARTITION BY g) AS s
+        FROM (
+            SELECT 1 AS g, i
+            FROM range(6) t(i)
+            WHERE nextval('filter_seq') <= 6
+        )
+    )
+)
+GROUP BY actual_sum;
+----
+6	6	15	15
+
+query I
+SELECT currval('filter_seq');
+----
+6
+
+# Disabling only the responsible optimizer must use the same single-evaluation semantics.
+statement ok
+DROP SEQUENCE filter_seq;
+
+statement ok
+CREATE SEQUENCE filter_seq;
+
+statement ok
+SET disabled_optimizers = 'window_self_join';
+
+query IIII
+SELECT count(*) AS rows,
+       count(*) FILTER (WHERE s = actual_sum) AS matching_rows,
+       any_value(s) AS observed_window_sum,
+       actual_sum AS expected_sum
+FROM (
+    SELECT i, s, sum(i) OVER () AS actual_sum
+    FROM (
+        SELECT i, sum(i) OVER (PARTITION BY g) AS s
+        FROM (
+            SELECT 1 AS g, i
+            FROM range(6) t(i)
+            WHERE nextval('filter_seq') <= 6
+        )
+    )
+)
+GROUP BY actual_sum;
+----
+6	6	15	15
+
+query I
+SELECT currval('filter_seq');
+----
+6
+
+statement ok
+SET disabled_optimizers = '';
