@@ -371,8 +371,14 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 			// decoding sets the validity of every child row again
 			broadcast_validity();
 		} else {
+			// a nested list or array sets its validity again, so it takes the broadcast NULLs as its parent mask
+			ValidityMask child_parent_mask;
+			if (array_mask.CanHaveNull()) {
+				child_parent_mask.Copy(FlatVector::Validity(child_vector), child_count);
+			}
 			ArrowToDuckDBConversion::ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state,
-			                                             child_count, child_type, NumericCast<int64_t>(child_offset));
+			                                             child_count, child_type, NumericCast<int64_t>(child_offset),
+			                                             array_mask.CanHaveNull() ? &child_parent_mask : nullptr);
 		}
 	}
 }
