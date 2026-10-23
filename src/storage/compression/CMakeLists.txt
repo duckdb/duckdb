@@ -22,6 +22,7 @@ add_library_unity(
   alprd.cpp
   fsst.cpp
   dict_fsst.cpp
+  numeric_string.cpp
   empty_validity.cpp
   standard_compression_state.cpp)
 set(ALL_OBJECT_FILES
