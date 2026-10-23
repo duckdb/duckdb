@@ -286,6 +286,8 @@ public:
 
 	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
 	RowVersionManager &GetOrCreateVersionInfo();
+	//! Loads the columns and deletes, which are otherwise read from metadata when first needed
+	void LoadMetadata();
 
 	// Serialization
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer, bool supports_per_column_writes);
