@@ -1455,10 +1455,10 @@ FunctionBinder::ResolveScalarFunction(const FunctionBinding &binding, vector<uni
 	return {std::move(bound_function), std::move(bind_info)};
 }
 
-unique_ptr<Expression> FunctionBinder::BindScalarFunction(shared_ptr<const ScalarFunction> function,
+unique_ptr<Expression> FunctionBinder::BindScalarFunction(const shared_ptr<const ScalarFunction> &function,
                                                           vector<unique_ptr<Expression>> children, bool is_operator,
                                                           optional_ptr<Binder> binder) {
-	return BindScalarFunction(std::move(function), std::move(children), {}, is_operator, binder);
+	return BindScalarFunction(function, std::move(children), {}, is_operator, binder);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &function,
@@ -1542,11 +1542,11 @@ FunctionBinder::ResolveAggregateFunction(const FunctionBinding &binding, vector<
 	return {std::move(bound_function), std::move(bind_info)};
 }
 
-unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(shared_ptr<const AggregateFunction> function,
-                                                                           vector<unique_ptr<Expression>> children,
-                                                                           unique_ptr<Expression> filter,
-                                                                           AggregateType aggr_type) {
-	return BindAggregateFunction(std::move(function), std::move(children), {}, std::move(filter), aggr_type);
+unique_ptr<BoundAggregateExpression>
+FunctionBinder::BindAggregateFunction(const shared_ptr<const AggregateFunction> &function,
+                                      vector<unique_ptr<Expression>> children, unique_ptr<Expression> filter,
+                                      AggregateType aggr_type) {
+	return BindAggregateFunction(function, std::move(children), {}, std::move(filter), aggr_type);
 }
 
 unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(const AggregateFunction &function,
