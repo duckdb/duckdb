@@ -711,6 +711,22 @@ static PushdownExtractMapping GetPushdownExtractMapping(ClientContext &context,
 	return GetPushdownExtractMapping(context, child_column, child_index, local_column.children, *nested_mapper, false);
 }
 
+//! The type that the field a pushed-down extract selects has in the global schema, before any cast pushed into it
+static LogicalType GetExtractedFieldType(const LogicalType &type, const ColumnIndex &global_index) {
+	reference<const LogicalType> field_type(type);
+	reference<const ColumnIndex> current(global_index);
+	while (current.get().IsPushdownExtract()) {
+		auto &child = current.get().GetChildIndex(0);
+		if (!child.HasPrimaryIndex()) {
+			// a field of a VARIANT is a VARIANT
+			return field_type.get();
+		}
+		field_type = StructType::GetChildType(field_type.get(), child.GetPrimaryIndex());
+		current = child;
+	}
+	return field_type.get();
+}
+
 //! Apply a pushed-down extract to an expression that produces the whole column
 static unique_ptr<Expression> ApplyPushdownExtract(ClientContext &context, unique_ptr<Expression> expr,
                                                    const ColumnIndex &global_index) {
@@ -917,10 +933,21 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 		auto &local_type = local_columns[local_id].type;
 		auto global_column_type = global_id.HasType() ? global_id.GetScanType() : global_column.type;
 		auto local_column_type = local_index->HasType() ? local_index->GetScanType() : local_type;
-		auto expr =
-		    ConstructMapExpression(context, local_idx, column_map, global_column_type, local_column_type, trivial_map);
+		auto map_type = global_column_type;
+		if (global_id.IsPushdownExtract() && local_column_type.IsNested()) {
+			// a nested field is read with its type in the file, so map it to its global type before a pushed cast
+			map_type = GetExtractedFieldType(global_column.type, global_id);
+		}
+		auto expr = ConstructMapExpression(context, local_idx, column_map, map_type, local_column_type, trivial_map);
+		if (map_type != global_column_type) {
+			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column_type);
+		}
 		reader_data.expressions.push_back(std::move(expr));
 		auto filter_conversion = trivial_map ? FilterConversionType::COPY_DIRECTLY : FilterConversionType::CAST_FILTER;
+		if (map_type != global_column_type) {
+			// the filter is on the cast value, so it is evaluated after the mapping and the cast
+			filter_conversion = FilterConversionType::CANNOT_CONVERT;
+		}
 
 		MultiFileColumnMap index_mapping(std::move(*column_map.mapping), local_column_type, global_column_type,
 		                                 filter_conversion);
