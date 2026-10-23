@@ -68,7 +68,7 @@ idx_t PartialBlock::UseCount() const {
 }
 
 bool PartialBlock::CanReuseBuffer(const BufferHandle &source) {
-	auto source_handle = source.GetBlockHandle();
+	const auto &source_handle = source.GetBlockHandle();
 	if (source_handle->BlockId() < MAXIMUM_BLOCK) {
 		// if the buffer has a backing disk block, we might overwrite other segments in the block when growing the
 		// buffer for the partial block manager.
