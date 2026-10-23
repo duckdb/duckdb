@@ -222,5 +222,25 @@ FROM lm_test WHERE grp = 1 AND ts >= TIMESTAMP '2024-03-01' ORDER BY ts LIMIT 3
 86500	1	2024-03-01 01:40:00
 86600	1	2024-03-01 03:20:00
 
+# ─────────────────────────────────────────────────────────────
+# Test: WHERE on the rowid virtual column
+# The rowid filter must be copied to the LHS like any other table filter.
+# ─────────────────────────────────────────────────────────────
+
+statement ok
+SET late_materialization_max_rows = 100;
+
+query II
+EXPLAIN SELECT id, grp, ts, payload1
+FROM lm_test WHERE rowid = 5 ORDER BY ts LIMIT 1;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*SEMI.*SEQ_SCAN.*optional.*rowid.*
+
+query III
+SELECT id, grp, ts
+FROM lm_test WHERE rowid = 5 ORDER BY ts LIMIT 1;
+----
+6	7	2024-01-01 00:06:00
+
 statement ok
 DROP TABLE lm_test;
