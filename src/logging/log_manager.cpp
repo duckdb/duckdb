@@ -34,6 +34,7 @@ RegisteredLoggingContext LogManager::RegisterLoggingContext(LoggingContext &cont
 }
 
 bool LogManager::RegisterLogStorage(const string &name, shared_ptr<LogStorage> &storage) {
+	unique_lock<mutex> lck(lock);
 	if (registered_log_storages.find(name) != registered_log_storages.end()) {
 		return false;
 	}
@@ -285,6 +286,7 @@ void LogManager::RegisterDefaultLogTypes() {
 	RegisterLogType(make_uniq<ParquetPrefetchLogType>());
 	RegisterLogType(make_uniq<AsyncTaskScheduleLogType>());
 	RegisterLogType(make_uniq<ExternalResourceLogType>());
+	RegisterLogType(make_uniq<ProgressVerificationLogType>());
 }
 
 } // namespace duckdb

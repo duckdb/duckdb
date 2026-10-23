@@ -42,6 +42,9 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	// names are picked from the LHS, unless aliases are explicitly specified
 	result.names = left.names;
 	for (idx_t i = 0; i < statement.aliases.size() && i < result.names.size(); i++) {
+		if (statement.aliases[i].empty()) {
+			throw BinderException("column alias cannot be empty");
+		}
 		result.names[i] = statement.aliases[i];
 	}
 
@@ -133,7 +136,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				auto names_iter = find(result.names.begin(), result.names.end(), func_expr.GetAlias());
 				if (names_iter == result.names.end()) {
 					throw BinderException(expr->GetQueryLocation(),
-					                      "Could not find column with name '%s' to bind aggregate to.",
+					                      "Could not find column with name %s to bind aggregate to.",
 					                      func_expr.GetAlias());
 				}
 				aggregate_idx = ProjectionIndex(NumericCast<idx_t>(std::distance(result.names.begin(), names_iter)));
@@ -161,14 +164,14 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			if (payload_references.find(aggregate_idx) != payload_references.end()) {
 				throw BinderException(func_expr.GetQueryLocation(),
-				                      "Column '%s' referenced multiple times in USING KEY clause.\n"
+				                      "Column %s referenced multiple times in USING KEY clause.\n"
 				                      "Try using an alias for one of the aggregates.",
 				                      result.names[aggregate_idx]);
 			}
 
 			if (key_references.find(aggregate_idx) != key_references.end()) {
 				throw BinderException(func_expr.GetQueryLocation(),
-				                      "Column '%s' cannot be used as both key and aggregate in USING KEY clause.\n"
+				                      "Column %s cannot be used as both key and aggregate in USING KEY clause.\n"
 				                      "Try using an alias for the aggregation.",
 				                      result.names[aggregate_idx]);
 			}

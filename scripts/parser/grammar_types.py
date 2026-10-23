@@ -14,7 +14,7 @@ class GrammarTypeInfo:
     cpp_type: str
     by_value: bool = False  # True for unique_ptr<T>, vector<unique_ptr<T>> (non-copyable)
     default_initializer: str = ""  # Optional enum member/full C++ initializer for Optional(...) values
-    pass_location: bool = False  # Pass parse_result.offset to the hand-written body
+    pass_location: bool = False  # Pass the parse result's offset to the hand-written body
 
 
 def load_grammar_types_yaml(types_file):
@@ -118,6 +118,9 @@ def load_grammar_types(types_file):
             "excluded_rules",
             "matcher_rule_overrides",
             "packrat_memoized_rules",
+            "collapsible_rules",
+            "expression_depth_nesting_rules",
+            "expression_depth_chain_rules",
             "additional_transform_result_types",
         ):
             continue
@@ -165,13 +168,13 @@ def load_matcher_rule_overrides(types_file):
     return overrides
 
 
-def load_packrat_memoized_rules(types_file, known_rules=None):
-    """Load packrat_memoized_rules from grammar_types.yml."""
+def load_rule_name_list(types_file, key, known_rules=None):
+    """Load a list of grammar rule names from grammar_types.yml."""
     data = load_grammar_types_yaml(types_file)
 
-    rules = data.get("packrat_memoized_rules", [])
+    rules = data.get(key, [])
     if not isinstance(rules, list):
-        print(f"Error: packrat_memoized_rules in {types_file} must be a list.", file=sys.stderr)
+        print(f"Error: {key} in {types_file} must be a list.", file=sys.stderr)
         sys.exit(1)
     rules = [str(rule) for rule in rules]
 
@@ -179,9 +182,27 @@ def load_packrat_memoized_rules(types_file, known_rules=None):
         known_rules = set(known_rules)
         missing_rules = sorted(rule for rule in rules if rule not in known_rules)
         if missing_rules:
-            print(f"Error: packrat_memoized_rules in {types_file} contains unknown grammar rules:", file=sys.stderr)
+            print(f"Error: {key} in {types_file} contains unknown grammar rules:", file=sys.stderr)
             for rule in missing_rules:
                 print(f"  - {rule}", file=sys.stderr)
             sys.exit(1)
 
     return rules
+
+
+def load_packrat_memoized_rules(types_file, known_rules=None):
+    """Load packrat_memoized_rules from grammar_types.yml."""
+    return load_rule_name_list(types_file, "packrat_memoized_rules", known_rules)
+
+
+def load_expression_depth_rules(types_file, known_rules=None):
+    """Load expression_depth_nesting_rules and expression_depth_chain_rules from grammar_types.yml."""
+    return (
+        load_rule_name_list(types_file, "expression_depth_nesting_rules", known_rules),
+        load_rule_name_list(types_file, "expression_depth_chain_rules", known_rules),
+    )
+
+
+def load_collapsible_rules(types_file, known_rules=None):
+    """Load collapsible_rules from grammar_types.yml."""
+    return load_rule_name_list(types_file, "collapsible_rules", known_rules)

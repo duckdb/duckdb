@@ -5,6 +5,7 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/sorting/sorted_run_merger.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/function/create_sort_key.hpp"
@@ -73,14 +74,20 @@ Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orde
 	vector<LogicalType> payload_types;
 	for (idx_t output_col_idx = 0; output_col_idx < projection_map.size(); output_col_idx++) {
 		const auto &input_col_idx = projection_map[output_col_idx];
+		const auto &input_col_type = input_types[input_col_idx];
 		const auto it = input_column_to_key.find(input_col_idx);
-		if (it != input_column_to_key.end()) {
+		//! The sort key encoding for FLOAT/DOUBLE is not injective around zero (-0.0 and 0.0 encode
+		//! identically, since they must compare equal), so re-decoding the key would turn -0.0 into 0.0.
+		//! Route such columns through the payload instead, where the original bits are preserved.
+		const bool key_encoding_is_lossy = TypeVisitor::Contains(input_col_type, LogicalTypeId::FLOAT) ||
+		                                   TypeVisitor::Contains(input_col_type, LogicalTypeId::DOUBLE);
+		if (it != input_column_to_key.end() && !key_encoding_is_lossy) {
 			// Projected column also appears as a key, just reference it
 			output_projection_columns.push_back({false, it->second, output_col_idx});
 		} else {
 			// Projected column does not appear as a key, add to payload layout
 			output_projection_columns.push_back({true, payload_types.size(), output_col_idx});
-			payload_types.push_back(input_types[input_col_idx]);
+			payload_types.push_back(input_col_type);
 			input_projection_map.push_back(input_col_idx);
 		}
 	}
@@ -134,8 +141,8 @@ public:
 	explicit SortGlobalSinkState(ClientContext &context)
 	    : num_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), sorted_tuples(0),
-	      external(Settings::Get<DebugForceExternalSetting>(context)), any_combined(false), total_count(0),
-	      partition_size(0) {
+	      sunk_tuples(0), external(Settings::Get<DebugForceExternalSetting>(context)), any_combined(false),
+	      total_count(0), partition_size(0) {
 	}
 
 public:
@@ -157,7 +164,7 @@ public:
 		}
 
 		// Double until it fits
-		auto required = num_threads * lstate.sorted_run->SizeInBytes();
+		auto required = num_threads * lstate.sorted_run->SizeInBytesForSorting();
 		if (is_index_sort) {
 			required *= 4; // Index creation is pretty intense, so we are very conservative here
 		}
@@ -192,9 +199,13 @@ public:
 	vector<unique_ptr<SortedRun>> sorted_runs;
 	//! Sorted tuple count (for progress)
 	atomic<idx_t> sorted_tuples;
+	//! Sunk tuple count (for progress)
+	atomic<idx_t> sunk_tuples;
+	//! Keeps the sink progress monotonic
+	MonotonicProgress sink_progress;
 
 	//! Whether this is an external sort
-	bool external;
+	atomic<bool> external;
 	//! Whether any thread has called Combine yet
 	bool any_combined;
 
@@ -214,8 +225,8 @@ unique_ptr<GlobalSinkState> Sort::GetGlobalSinkState(ClientContext &context) con
 
 //! Returns true if the Sink call is done (either because run size is small or because run was finalized)
 static bool TryFinishSink(SortGlobalSinkState &gstate, SortLocalSinkState &lstate, unique_lock<mutex> &guard) {
-	// Check if we exceed the limit
-	const auto sorted_run_size = lstate.sorted_run->SizeInBytes();
+	// Check if we exceed the limit (sorting the run needs a merge buffer on top of the run itself)
+	const auto sorted_run_size = lstate.sorted_run->SizeInBytesForSorting();
 	if (sorted_run_size < lstate.maximum_run_size) {
 		return true; // Sink is done
 	}
@@ -251,6 +262,7 @@ SinkResultType Sort::Sink(ExecutionContext &context, DataChunk &chunk, OperatorS
 	lstate.key_executor.Execute(chunk, lstate.key);
 	lstate.payload.ReferenceColumns(chunk, input_projection_map);
 	lstate.sorted_run->Sink(lstate.key, lstate.payload);
+	gstate.sunk_tuples.fetch_add(chunk.size(), std::memory_order_relaxed);
 
 	// Try to finish this call to Sink
 	unique_lock<mutex> guard;
@@ -322,13 +334,33 @@ SinkFinalizeType Sort::Finalize(ClientContext &context, OperatorSinkFinalizeInpu
 ProgressData Sort::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate_p,
                                    const ProgressData source_progress) const {
 	auto &gstate = gstate_p.Cast<SortGlobalSinkState>();
-	// Estimate that half of the Sink effort is sorting
+	return GetSinkProgress(source_progress, gstate.sorted_tuples, gstate.sunk_tuples, gstate.sink_progress);
+}
+
+idx_t Sort::GetSortedCount(GlobalSinkState &gstate) const {
+	return gstate.Cast<SortGlobalSinkState>().sorted_tuples;
+}
+
+ProgressData Sort::GetSinkProgress(const ProgressData &source_progress, idx_t sorted_count, idx_t sunk_count,
+                                   MonotonicProgress &monotonic_progress) {
 	ProgressData res;
-	const auto sorted_tuples = static_cast<double>(gstate.sorted_tuples);
-	res.done = source_progress.done / 2 + sorted_tuples / 2;
 	res.total = source_progress.total;
 	res.invalid = source_progress.invalid;
-	return res;
+	if (source_progress.total <= 0) {
+		return res;
+	}
+	const auto source_fraction = MinValue<double>(source_progress.done / source_progress.total, 1.0);
+	// the total number of tuples is unknown - relate the sorted tuples to the tuples sunk so far
+	double sorted_fraction;
+	if (sunk_count == 0) {
+		// there is nothing to sort if the source finished without producing any tuples
+		sorted_fraction = source_fraction >= 1.0 ? 1.0 : 0.0;
+	} else {
+		sorted_fraction = MinValue<double>(static_cast<double>(sorted_count) / static_cast<double>(sunk_count), 1.0);
+	}
+	res.done = source_progress.total * source_fraction * (1.0 + sorted_fraction) / 2;
+	// the sorted fraction drops when tuples are sunk faster than they are sorted
+	return monotonic_progress.Update(res);
 }
 
 //===--------------------------------------------------------------------===//
@@ -477,8 +509,7 @@ SourceResultType Sort::MaterializeColumnData(ExecutionContext &context, Operator
 	input.local_state.Cast<SortLocalSourceState>().merger_local_state.reset();
 
 	// Return type indicates whether materialization is done
-	const auto progress_data = GetProgress(context.client, input.global_state);
-	if (progress_data.done == progress_data.total) {
+	if (gstate.merger.total_count == 0 || gstate.merger.IsFinished(*gstate.merger_global_state)) {
 		// Destroy global state before returning
 		gstate.Destroy();
 		return SourceResultType::FINISHED;

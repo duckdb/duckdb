@@ -42,7 +42,8 @@ struct FlattenedQuantileValues : FunctionLocalState {
 			// (re-)allocate the cached chunk
 			values.capacity = NextPowerOfTwo(required_capacity);
 			values.chunk.Destroy();
-			values.chunk.Initialize(Allocator::DefaultAllocator(), {type}, values.capacity);
+			// the flattened group can be the whole input, so it is allocated through the (tracked) base allocator
+			values.chunk.Initialize(finalize_data.input.allocator.GetUnderlyingAllocator(), {type}, values.capacity);
 		} else {
 			// re-use the allocated chunk - resetting clears the string heap of the previously flattened state
 			values.chunk.Reset();
@@ -236,11 +237,11 @@ struct WindowQuantileState {
 	}
 
 	template <typename RESULT_TYPE, bool DISCRETE>
-	RESULT_TYPE WindowScalar(CursorType &data, const SubFrames &frames, const idx_t n, Vector &result,
-	                         const QuantileValue &q) const {
+	RESULT_TYPE WindowScalar(ClientContext &context, CursorType &data, const SubFrames &frames, const idx_t n,
+	                         Vector &result, const QuantileValue &q) const {
 		D_ASSERT(n > 0);
 		if (qst) {
-			return qst->WindowScalar<INPUT_TYPE, RESULT_TYPE, DISCRETE>(data, frames, n, result, q);
+			return qst->WindowScalar<INPUT_TYPE, RESULT_TYPE, DISCRETE>(context, data, frames, n, result, q);
 		} else if (s) {
 			// Find the position(s) needed
 			try {
@@ -264,8 +265,8 @@ struct WindowQuantileState {
 	}
 
 	template <typename CHILD_TYPE, bool DISCRETE>
-	void WindowList(CursorType &data, const SubFrames &frames, const idx_t n, Vector &list, const idx_t lidx,
-	                const QuantileBindData &bind_data) const {
+	void WindowList(ClientContext &context, CursorType &data, const SubFrames &frames, const idx_t n, Vector &list,
+	                const idx_t lidx, const QuantileBindData &bind_data) const {
 		D_ASSERT(n > 0);
 		// Result is a constant LIST<CHILD_TYPE> with a fixed length
 		auto ldata = FlatVector::GetDataMutable<list_entry_t>(list);
@@ -280,7 +281,7 @@ struct WindowQuantileState {
 
 		for (const auto &q : bind_data.order) {
 			const auto &quantile = bind_data.quantiles[q];
-			rdata[lentry.offset + q] = WindowScalar<CHILD_TYPE, DISCRETE>(data, frames, n, result, quantile);
+			rdata[lentry.offset + q] = WindowScalar<CHILD_TYPE, DISCRETE>(context, data, frames, n, result, quantile);
 		}
 	}
 };
@@ -393,6 +394,8 @@ AggregateStateLayout QuantileStateLayout(AggregateLayoutInput &input) {
 	}
 	layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
 	layout.field = BuildStateField<STATE_FIELD>();
+	// NULL inputs are never buffered, so the finalize assumes all values are valid
+	layout.field.reject_null_elements = true;
 	AggregateStateField::PopulateListFunctions(layout.type, layout.field);
 	if (function.GetArguments().size() == 2) {
 		// the quantile parameter must be a constant at bind time (BindQuantile folds it into the bind data) -
