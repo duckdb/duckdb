@@ -197,10 +197,12 @@ ChunkVectorInfo &RowVersionManager::GetVectorInfo(idx_t vector_idx) {
 }
 
 idx_t RowVersionManager::WriteRows(idx_t vector_idx, TransactionData transaction, const row_t ids[], idx_t count,
-                                   row_t offset, bool is_update, uint16_t rows[], transaction_t previous_ids[]) {
+                                   row_t offset, bool is_update, uint16_t rows[], transaction_t previous_ids[],
+                                   bool &is_consecutive, idx_t &previous_id_count) {
 	lock_guard<mutex> lock(version_lock);
 	needs_compression_check = true;
-	return GetVectorInfo(vector_idx).WriteRows(transaction, ids, count, offset, is_update, rows, previous_ids);
+	return GetVectorInfo(vector_idx)
+	    .WriteRows(transaction, ids, count, offset, is_update, rows, previous_ids, is_consecutive, previous_id_count);
 }
 
 void RowVersionManager::CommitWrite(transaction_t old_id, transaction_t new_id, const DeleteInfo &info,

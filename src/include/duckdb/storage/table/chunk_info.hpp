@@ -76,9 +76,10 @@ public:
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
 
-	//! Writes the delete id or update marker into the rows (ids[i] - offset); outputs the written rows and old ids
+	//! Writes the delete id or update marker into the rows (ids[i] - offset); outputs the written rows and old ids,
+	//! whether the rows are consecutive and how many old ids the undo entry stores (see DeleteInfo)
 	idx_t WriteRows(TransactionData transaction, const row_t ids[], idx_t count, row_t offset, bool is_update,
-	                uint16_t rows[], transaction_t previous_ids[]);
+	                uint16_t rows[], transaction_t previous_ids[], bool &is_consecutive, idx_t &previous_id_count);
 	//! Replaces the delete id and update marker of old_id on the rows by those of new_id (on commit and revert)
 	void CommitWrite(transaction_t old_id, transaction_t new_id, const uint16_t rows[], idx_t count);
 	//! Rolls back a write: the rows get back the ids they held before (NOT_DELETED_ID if none are stored)
@@ -126,7 +127,7 @@ private:
 	bool HasConflictingWrite(TransactionData transaction, const row_t ids[], idx_t count, row_t offset) const;
 	//! Writes id into the rows of a vector whose other rows share one id, keeping them in deleted_mask
 	idx_t WriteMask(transaction_t id, const row_t ids[], idx_t count, row_t offset, uint16_t rows[],
-	                transaction_t previous_ids[]);
+	                transaction_t previous_ids[], bool &is_consecutive, idx_t &previous_id_count);
 	//! Sets the ids of the rows to new_id(id, i), compressing them into a constant if all rows end up with the same one
 	template <class F>
 	void SetIds(const uint16_t rows[], idx_t count, F &&new_id);

@@ -40,7 +40,8 @@ public:
 
 	//! Writes a delete or an update into the rows of the vector (see ChunkVectorInfo::WriteRows)
 	idx_t WriteRows(idx_t vector_idx, TransactionData transaction, const row_t ids[], idx_t count, row_t offset,
-	                bool is_update, uint16_t rows[], transaction_t previous_ids[]);
+	                bool is_update, uint16_t rows[], transaction_t previous_ids[], bool &is_consecutive,
+	                idx_t &previous_id_count);
 	//! Replaces the ids of old_id on the rows of a write by those of new_id (see ChunkVectorInfo::CommitWrite)
 	void CommitWrite(transaction_t old_id, transaction_t new_id, const DeleteInfo &info, bool is_delete);
 	//! Rolls back a write (see ChunkVectorInfo::RollbackWrite)

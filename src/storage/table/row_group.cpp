@@ -2183,17 +2183,19 @@ idx_t RowGroup::WriteRows(TransactionData transaction, DuckTableEntry &table_ent
                           const row_t ids[], idx_t count, row_t offset, bool is_update, uint16_t rows[]) {
 	auto &version_info = GetOrCreateVersionInfo();
 	transaction_t previous_ids[STANDARD_VECTOR_SIZE];
-	auto written = version_info.WriteRows(vector_idx, transaction, ids, count, offset, is_update, rows, previous_ids);
+	bool is_consecutive;
+	idx_t previous_id_count;
+	auto written = version_info.WriteRows(vector_idx, transaction, ids, count, offset, is_update, rows, previous_ids,
+	                                      is_consecutive, previous_id_count);
 	if (transaction.transaction && written > 0) {
+		auto written_rows = is_consecutive ? nullptr : rows;
 		try {
 			transaction.transaction->PushWrite(is_update ? UndoFlags::UPDATE_ROWS : UndoFlags::DELETE_TUPLE,
-			                                   table_entry, version_info, vector_idx, rows, written, base_row,
-			                                   previous_ids);
+			                                   table_entry, version_info, vector_idx, written_rows, written, base_row,
+			                                   previous_ids, previous_id_count);
 		} catch (...) {
 			// without an undo entry, nothing would restore the ids - restore them as the entry would have
-			auto is_consecutive = DeleteInfo::IsConsecutive(rows, written);
-			version_info.RollbackWrite(vector_idx, is_consecutive ? nullptr : rows, written, previous_ids,
-			                           DeleteInfo::GetPreviousIdCount(previous_ids, written));
+			version_info.RollbackWrite(vector_idx, written_rows, written, previous_ids, previous_id_count);
 			throw;
 		}
 	}

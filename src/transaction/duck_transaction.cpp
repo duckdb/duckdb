@@ -99,10 +99,9 @@ void DuckTransaction::PushAttach(AttachedDatabase &db) {
 }
 
 void DuckTransaction::PushWrite(UndoFlags type, DuckTableEntry &table_entry, RowVersionManager &info, idx_t vector_idx,
-                                const uint16_t rows[], idx_t count, idx_t base_row,
-                                const transaction_t previous_ids[]) {
-	auto is_consecutive = DeleteInfo::IsConsecutive(rows, count);
-	auto previous_id_count = DeleteInfo::GetPreviousIdCount(previous_ids, count);
+                                const uint16_t rows[], idx_t count, idx_t base_row, const transaction_t previous_ids[],
+                                idx_t previous_id_count) {
+	auto is_consecutive = !rows;
 	auto alloc_size = DeleteInfo::GetAllocationSize(count, is_consecutive, previous_id_count);
 
 	auto undo_entry = undo_buffer.CreateEntry(type, alloc_size);
