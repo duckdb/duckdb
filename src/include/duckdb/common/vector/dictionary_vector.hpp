@@ -60,17 +60,17 @@ public:
 	}
 	void Reset(const LogicalType &type, const buffer_ptr<VectorBuffer> &flat_buffer);
 	Vector &GetChild() {
-		return IsReset() ? std::get<Vector>(storage) : GetEntry().data;
+		return IsReset() ? GetResetVector() : GetEntry().data;
 	}
 	const Vector &GetChild() const {
-		return IsReset() ? std::get<Vector>(storage) : GetEntry().data;
+		return IsReset() ? GetResetVector() : GetEntry().data;
 	}
 	void Rebind(buffer_ptr<DictionaryEntry> entry_p, const SelectionVector &sel, idx_t count);
 	optional_idx GetDictionarySize() const {
 		if (IsReset()) {
 			return optional_idx();
 		}
-		auto &entry = std::get<buffer_ptr<DictionaryEntry>>(storage);
+		auto &entry = GetDictionaryEntry();
 		if (!entry || entry->data.size() == 0) {
 			// FIXME: we should be directly returning entry->data.size(), this should not be an optional_idx
 			return optional_idx();
@@ -81,7 +81,7 @@ public:
 		GetEntry().id = std::move(id);
 	}
 	const string &GetDictionaryId() const {
-		if (IsReset() || !std::get<buffer_ptr<DictionaryEntry>>(storage)) {
+		if (IsReset() || !GetDictionaryEntry()) {
 			static const string empty;
 			return empty;
 		}
@@ -89,13 +89,13 @@ public:
 	}
 
 	DictionaryEntry &GetEntry() {
-		return *std::get<buffer_ptr<DictionaryEntry>>(storage);
+		return *GetDictionaryEntry();
 	}
 	const DictionaryEntry &GetEntry() const {
-		return *std::get<buffer_ptr<DictionaryEntry>>(storage);
+		return *GetDictionaryEntry();
 	}
 	buffer_ptr<DictionaryEntry> GetEntryPtr() const {
-		return IsReset() ? nullptr : std::get<buffer_ptr<DictionaryEntry>>(storage);
+		return IsReset() ? nullptr : GetDictionaryEntry();
 	}
 	void SetEntry(buffer_ptr<DictionaryEntry> entry_p) {
 		storage.emplace<buffer_ptr<DictionaryEntry>>(std::move(entry_p));
@@ -118,6 +118,20 @@ protected:
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
 	void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+
+private:
+	//! The active dictionary input and its shared metadata; may be null before an entry is attached.
+	const buffer_ptr<DictionaryEntry> &GetDictionaryEntry() const {
+		return std::get<buffer_ptr<DictionaryEntry>>(storage);
+	}
+	//! The chunk's empty flat vector while reset, preserving type, capacity, allocator and reusable storage.
+	//! Its buffer reference keeps storage available without retaining the previous dictionary input.
+	Vector &GetResetVector() {
+		return std::get<Vector>(storage);
+	}
+	const Vector &GetResetVector() const {
+		return std::get<Vector>(storage);
+	}
 
 private:
 	SelectionVector sel_vector;
