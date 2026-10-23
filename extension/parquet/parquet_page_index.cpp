@@ -50,17 +50,32 @@ void ParquetPageIndexUtils::ReadOffsetIndex(duckdb_apache::thrift::protocol::TPr
 }
 
 bool ParquetPageIndexUtils::OffsetIndexIsValid(const duckdb_parquet::OffsetIndex &offset_index,
-                                               idx_t row_group_num_rows, idx_t file_size) {
+                                               idx_t row_group_num_rows, idx_t file_size,
+                                               const duckdb_parquet::ColumnChunk &column_chunk) {
 	auto &locations = offset_index.page_locations;
-	if (locations.empty() || locations[0].first_row_index != 0) {
+	if (locations.empty() || locations[0].first_row_index != 0 || !column_chunk.__isset.meta_data) {
 		return false;
 	}
+	// every page has to lie inside the byte range of its own column chunk
+	auto &meta = column_chunk.meta_data;
+	int64_t chunk_begin = meta.data_page_offset;
+	if (meta.__isset.dictionary_page_offset && meta.dictionary_page_offset >= 4) {
+		chunk_begin = MinValue(chunk_begin, meta.dictionary_page_offset);
+	}
+	if (chunk_begin < 0 || meta.total_compressed_size < 0) {
+		return false;
+	}
+	const auto chunk_end = NumericCast<idx_t>(chunk_begin) + NumericCast<idx_t>(meta.total_compressed_size);
 	for (idx_t page_idx = 0; page_idx < locations.size(); page_idx++) {
 		auto &location = locations[page_idx];
 		if (location.offset <= 0 || location.compressed_page_size <= 0 || location.first_row_index < 0) {
 			return false;
 		}
 		if (NumericCast<idx_t>(location.offset) + NumericCast<idx_t>(location.compressed_page_size) > file_size) {
+			return false;
+		}
+		if (NumericCast<idx_t>(location.offset) < NumericCast<idx_t>(chunk_begin) ||
+		    NumericCast<idx_t>(location.offset) + NumericCast<idx_t>(location.compressed_page_size) > chunk_end) {
 			return false;
 		}
 		if (NumericCast<idx_t>(location.first_row_index) >= row_group_num_rows) {

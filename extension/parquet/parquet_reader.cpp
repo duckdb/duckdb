@@ -2150,7 +2150,7 @@ void ParquetReader::PreparePageIndexInternal(ClientContext &context, ParquetRead
 		}
 		auto offset_index = make_uniq<duckdb_parquet::OffsetIndex>();
 		ParquetPageIndexUtils::ReadOffsetIndex(*state.thrift_file_proto, column_chunk, *offset_index);
-		if (!ParquetPageIndexUtils::OffsetIndexIsValid(*offset_index, row_group_num_rows, file_size)) {
+		if (!ParquetPageIndexUtils::OffsetIndexIsValid(*offset_index, row_group_num_rows, file_size, column_chunk)) {
 			continue;
 		}
 		state.page_index.offset_indexes[column_chunk_idx] = std::move(offset_index);
