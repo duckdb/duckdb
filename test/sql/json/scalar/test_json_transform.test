@@ -292,7 +292,12 @@ select json_transform('42', '"JSON"')
 query T
 select json_transform('42', '"BLOB"')
 ----
-42
+NULL
+
+query T
+select json_transform('"\\x42"', '"BLOB"')
+----
+B
 
 query T
 select json_transform('-42', '"VARCHAR"')
