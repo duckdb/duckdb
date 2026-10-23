@@ -123,6 +123,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"progress_bar_time", {0}},
 	    {"regex_match_operator_semantics", {"full"}},
 	    {"temp_directory", {"tmp"}},
+	    {"temp_file_io_mode", {"DIRECT_IO"}},
 	    {"wal_autocheckpoint", {"4.0 GiB"}},
 	    {"force_bitpacking_mode", {"constant"}},
 	    {"http_proxy", {"localhost:80"}},
