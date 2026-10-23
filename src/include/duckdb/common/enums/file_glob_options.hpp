@@ -9,8 +9,10 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
+class FileCredentials;
 
 enum class FileGlobOptions : uint8_t { DISALLOW_EMPTY = 0, ALLOW_EMPTY = 1, FALLBACK_GLOB = 2 };
 
@@ -29,6 +31,8 @@ struct FileGlobInput {
 	FileGlobOptions behavior;
 	bool allow_empty;
 	string extension;
+	//! The credentials to list with; every file the glob lists carries them
+	shared_ptr<FileCredentials> credentials;
 };
 
 } // namespace duckdb

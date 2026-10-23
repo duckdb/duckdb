@@ -1463,7 +1463,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 	// or if this file has cached metadata
 	// or if the cached version already expired
 	if (!metadata_p) {
-		if (!MetadataCacheEnabled(context_p)) {
+		if (!MetadataCacheEnabled(context_p) || file.HasCredentials()) {
 			metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
 			                        encryption_util, footer_size);
 		} else {
@@ -1514,6 +1514,9 @@ bool ParquetReader::MetadataCacheEnabled(ClientContext &context) {
 
 shared_ptr<ParquetFileMetadataCache> ParquetReader::GetMetadataCacheEntry(ClientContext &context,
                                                                           const OpenFileInfo &file) {
+	if (file.HasCredentials()) {
+		return nullptr;
+	}
 	return ObjectCache::GetObjectCache(context).GetWithTypePrefix<ParquetFileMetadataCache>(file.path);
 }
 

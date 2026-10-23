@@ -149,4 +149,15 @@ bool ExtendedOpenFileInfo::TryGetOption(const string &name, timestamp_t &result)
 	return true;
 }
 
+OpenFileInfo OpenFileInfo::WithCredentials(const shared_ptr<FileCredentials> &credentials) const {
+	if (!credentials || HasCredentials()) {
+		return *this;
+	}
+	OpenFileInfo result(*this);
+	result.extended_info =
+	    extended_info ? make_shared_ptr<ExtendedOpenFileInfo>(*extended_info) : make_shared_ptr<ExtendedOpenFileInfo>();
+	result.extended_info->credentials = credentials;
+	return result;
+}
+
 } // namespace duckdb
