@@ -29,6 +29,8 @@ constexpr const char *TEST_TYPE = "file_credentials_test";
 constexpr const char *OTHER_TYPE = "file_credentials_test_other";
 //! What a read records when no secret and no setting give a key
 constexpr const char *NO_KEY = "<none>";
+//! The sum of column i over the two files CredentialsFixture::WriteFiles writes
+constexpr const char *SAME_FILES_SUM = "999000";
 
 duckdb::unique_ptr<BaseSecret> CreateTestSecret(ClientContext &context, CreateSecretInput &input) {
 	auto secret = make_uniq<KeyValueSecret>(input.scope, input.type, input.provider, input.name);
@@ -83,12 +85,13 @@ struct MemoryFileHandle : public FileHandle {
 
 //! Serves files from memory under mem://, and records every open, read and glob with the key id of the secret the
 //! secret reader chose for it. A glob lists the files under the pattern's prefix, each with the glob's credentials,
-//! or once with each of `listing_credentials` when that is set
+//! or with the ones `listing_credentials` gives its pattern, as a catalog lists a table
 class MemoryFileSystem : public FileSystem {
 public:
 	duckdb::map<string, string> files;
 	bool listing_metadata = false;
-	duckdb::vector<shared_ptr<FileCredentials>> listing_credentials;
+	//! By glob pattern; "" for every pattern
+	duckdb::map<string, shared_ptr<FileCredentials>> listing_credentials;
 	duckdb::mutex lock;
 	duckdb::vector<Access> accesses;
 
@@ -201,6 +204,11 @@ protected:
 		string region;
 		ReadSecret(opener, info, key_id, region);
 		Record("glob", pattern, key_id, region);
+		auto credentials = input.credentials;
+		auto listed_with = listing_credentials.find(listing_credentials.count(pattern) ? pattern : "");
+		if (listed_with != listing_credentials.end()) {
+			credentials = listed_with->second;
+		}
 		auto star = pattern.find('*');
 		auto listed_prefix = pattern.substr(0, star);
 		auto suffix = star == string::npos ? string() : pattern.substr(pattern.rfind('*') + 1);
@@ -213,21 +221,14 @@ protected:
 			if (!matches) {
 				continue;
 			}
-			auto all_credentials = listing_credentials;
-			if (all_credentials.empty()) {
-				all_credentials.push_back(input.credentials);
+			OpenFileInfo listed(path);
+			listed.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+			listed.extended_info->credentials = credentials;
+			if (listing_metadata) {
+				listed.extended_info->options["last_modified"] = Value::TIMESTAMP(Timestamp::FromEpochSeconds(1000));
+				listed.extended_info->options["etag"] = Value("v1");
 			}
-			for (auto &credentials : all_credentials) {
-				OpenFileInfo listed(path);
-				listed.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-				listed.extended_info->credentials = credentials;
-				if (listing_metadata) {
-					listed.extended_info->options["last_modified"] =
-					    Value::TIMESTAMP(Timestamp::FromEpochSeconds(1000));
-					listed.extended_info->options["etag"] = Value("v1");
-				}
-				result.push_back(std::move(listed));
-			}
+			result.push_back(std::move(listed));
 		}
 		return make_uniq<SimpleMultiFileList>(std::move(result));
 	}
@@ -277,12 +278,16 @@ struct CredentialsFixture {
 	ClientContext &Context() {
 		return *con.context;
 	}
-	//! Credentials for mem://bucket/table/ whose vends return `key_id` and count in `vends`
-	shared_ptr<FileCredentials> Credentials(const string &key_id, const char *type = TEST_TYPE) {
-		return FileCredentials::Create(Context(), "mem://bucket/table/", [this, key_id, type](ClientContext &) {
+	//! Credentials of `context` for mem://bucket/table/ whose vends return `key_id` and count in `vends`
+	shared_ptr<FileCredentials> Credentials(ClientContext &context, const string &key_id,
+	                                        const char *type = TEST_TYPE) {
+		return FileCredentials::Create(context, "mem://bucket/table/", [this, key_id, type](ClientContext &) {
 			vends++;
 			return TestSecret(key_id, type);
 		});
+	}
+	shared_ptr<FileCredentials> Credentials(const string &key_id, const char *type = TEST_TYPE) {
+		return Credentials(Context(), key_id, type);
 	}
 	static OpenFileInfo File(const string &path, const shared_ptr<FileCredentials> &credentials) {
 		return OpenFileInfo(path).WithCredentials(credentials);
@@ -297,7 +302,7 @@ struct CredentialsFixture {
 	idx_t ScanWith(const string &scan, const string &key_id = "table-key") {
 		REQUIRE_NO_FAIL(con.Query("SET enable_external_file_cache = true"));
 		con.BeginTransaction();
-		fs->listing_credentials = {Credentials(key_id)};
+		fs->listing_credentials = {{"", Credentials(key_id)}};
 		fs->ClearAccesses();
 		auto result = con.Query(scan);
 		fs->listing_credentials.clear();
@@ -309,6 +314,68 @@ struct CredentialsFixture {
 		auto result = con.Query("SELECT count(*) FROM duckdb_external_file_cache() WHERE path = '" + path + "'");
 		REQUIRE_NO_FAIL(*result);
 		return NumericCast<idx_t>(result->Fetch()->GetValue(0, 0).GetValue<int64_t>());
+	}
+	bool MetadataCached(const string &path) {
+		return ObjectCache::GetObjectCache(Context()).GetObject("parquet_metadata-" + path) != nullptr;
+	}
+	//! Turns on, for `c`, the caches that reads by path fill and are served from
+	void EnableCaches(Connection &c) {
+		REQUIRE_NO_FAIL(c.Query("SET enable_external_file_cache = true"));
+		REQUIRE_NO_FAIL(c.Query("SET cache_local_files = true"));
+		if (db.ExtensionIsLoaded("parquet")) {
+			REQUIRE_NO_FAIL(c.Query("SET parquet_metadata_cache = true"));
+		}
+		REQUIRE_NO_FAIL(c.Query("SET threads = 1"));
+	}
+	//! csv, and json and parquet when they are loaded
+	duckdb::vector<string> Formats() {
+		duckdb::vector<string> result {"csv"};
+		for (auto format : {"json", "parquet"}) {
+			if (db.ExtensionIsLoaded(format)) {
+				result.push_back(format);
+			}
+		}
+		return result;
+	}
+	//! Writes mem://bucket/table/t1.<format> and t2.<format>, each with a column i of 0 to 999
+	void WriteFiles(const string &format) {
+		string data = format == "csv" ? "i\n" : "";
+		if (format == "parquet") {
+			auto local = TestCreatePath("file_credentials_same_files.parquet");
+			REQUIRE_NO_FAIL(con.Query("COPY (SELECT range AS i FROM range(1000)) TO '" + local + "' (FORMAT parquet)"));
+			data = ReadLocalFile(local);
+		}
+		for (idx_t i = 0; format != "parquet" && i < 1000; i++) {
+			data += format == "csv" ? to_string(i) + "\n" : "{\"i\": " + to_string(i) + "}\n";
+		}
+		fs->files["mem://bucket/table/t1." + format] = data;
+		fs->files["mem://bucket/table/t2." + format] = data;
+	}
+	//! mem://bucket/table/<prefix>*.<format>: with "" and with "t" it lists the files WriteFiles wrote
+	static string Glob(const string &format, const string &prefix) {
+		return "mem://bucket/table/" + prefix + "*." + format;
+	}
+	static string Scan(const string &format, const string &glob) {
+		return "SELECT sum(i) FROM read_" + format + "('" + glob + "')";
+	}
+	//! Runs the scan of `glob` on `c`, its files listed with credentials of `c` for `key_id`; returns how often it
+	//! opened and read them
+	std::pair<idx_t, idx_t> ScanAlone(Connection &c, const string &format, const string &glob, const string &key_id) {
+		c.BeginTransaction();
+		fs->listing_credentials = {{glob, Credentials(*c.context, key_id)}};
+		fs->ClearAccesses();
+		auto result = c.Query(Scan(format, glob));
+		fs->listing_credentials.clear();
+		c.Rollback();
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(result->Collection().GetValue(0, 0).ToString() == SAME_FILES_SUM);
+		return {fs->CountKey("open", key_id), fs->CountKey("read", key_id)};
+	}
+	//! Requires `key_id` to have opened files `opens` times and read them `reads` times since the accesses were cleared
+	void RequireUses(const string &key_id, idx_t opens, idx_t reads) {
+		INFO(key_id);
+		REQUIRE(fs->CountKey("open", key_id) == opens);
+		REQUIRE(fs->CountKey("read", key_id) == reads);
 	}
 
 	DuckDB db;
@@ -524,6 +591,104 @@ TEST_CASE("Credentials serve only their client and their scope, until their tran
 	f.con.Rollback();
 	// they are created only in a transaction
 	RequireThrowsWith([&]() { f.Credentials("table-key"); }, "an active transaction");
+}
+
+TEST_CASE("Opens of one path with two credentials each use their own, also between opens by path",
+          "[file_credentials]") {
+	CredentialsFixture f;
+	f.con.BeginTransaction();
+	auto a = f.Credentials("key-a");
+	auto b = f.Credentials("key-b");
+	const string path = "mem://bucket/table/a.bin";
+	REQUIRE(f.OpenKey(CredentialsFixture::File(path, a)) == "key-a");
+	REQUIRE(f.OpenKey(CredentialsFixture::File(path, b)) == "key-b");
+	REQUIRE(f.OpenKey(OpenFileInfo(path)) == "path-key");
+	REQUIRE(f.OpenKey(CredentialsFixture::File(path, a)) == "key-a");
+	REQUIRE(f.OpenKey(CredentialsFixture::File(path, b)) == "key-b");
+	f.con.Rollback();
+}
+
+TEST_CASE("Two scans of the same files in one query each read them with their own credentials", "[file_credentials]") {
+	CredentialsFixture f;
+	f.EnableCaches(f.con);
+	for (auto &format : f.Formats()) {
+		INFO(format);
+		f.WriteFiles(format);
+		auto glob_a = CredentialsFixture::Glob(format, "");
+		auto glob_b = CredentialsFixture::Glob(format, "t");
+		auto alone_a = f.ScanAlone(f.con, format, glob_a, "key-a");
+		auto alone_b = f.ScanAlone(f.con, format, glob_b, "key-b");
+		REQUIRE(alone_a.second > 0);
+		f.con.BeginTransaction();
+		f.fs->listing_credentials = {{glob_a, f.Credentials("key-a")}, {glob_b, f.Credentials("key-b")}};
+		f.fs->ClearAccesses();
+		auto result = f.con.Query("SELECT (" + CredentialsFixture::Scan(format, glob_a) + "), (" +
+		                          CredentialsFixture::Scan(format, glob_b) + ")");
+		f.fs->listing_credentials.clear();
+		f.con.Rollback();
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(result->Collection().GetValue(0, 0).ToString() == SAME_FILES_SUM);
+		REQUIRE(result->Collection().GetValue(1, 0).ToString() == SAME_FILES_SUM);
+		// each scan opens and reads every file itself, as often as alone, and nothing reads by path
+		f.RequireUses("key-a", alone_a.first, alone_a.second);
+		f.RequireUses("key-b", alone_b.first, alone_b.second);
+		REQUIRE(f.fs->Accesses("open").size() == alone_a.first + alone_b.first);
+		REQUIRE(f.fs->Accesses("read").size() == alone_a.second + alone_b.second);
+		for (auto &file : {"t1.", "t2."}) {
+			auto path = "mem://bucket/table/" + string(file) + format;
+			REQUIRE(f.CachedEntries(path) == 0);
+			REQUIRE_FALSE(f.MetadataCached(path));
+		}
+	}
+}
+
+TEST_CASE("Two connections reading the same files at once each read them with their own credentials",
+          "[file_credentials]") {
+	CredentialsFixture f;
+	Connection other(f.db);
+	f.EnableCaches(f.con);
+	f.EnableCaches(other);
+	constexpr idx_t RUNS = 5;
+	for (auto &format : f.Formats()) {
+		INFO(format);
+		f.WriteFiles(format);
+		auto scan_a = CredentialsFixture::Scan(format, CredentialsFixture::Glob(format, ""));
+		auto scan_b = CredentialsFixture::Scan(format, CredentialsFixture::Glob(format, "t"));
+		auto alone_a = f.ScanAlone(f.con, format, CredentialsFixture::Glob(format, ""), "key-a");
+		auto alone_b = f.ScanAlone(other, format, CredentialsFixture::Glob(format, "t"), "key-b");
+		f.con.BeginTransaction();
+		other.BeginTransaction();
+		f.fs->listing_credentials = {{CredentialsFixture::Glob(format, ""), f.Credentials("key-a")},
+		                             {CredentialsFixture::Glob(format, "t"), f.Credentials(*other.context, "key-b")}};
+		f.fs->ClearAccesses();
+		duckdb::vector<duckdb::unique_ptr<QueryResult>> results_a;
+		duckdb::vector<duckdb::unique_ptr<QueryResult>> results_b;
+		std::thread thread_a([&]() {
+			for (idx_t i = 0; i < RUNS; i++) {
+				results_a.push_back(f.con.Query(scan_a));
+			}
+		});
+		std::thread thread_b([&]() {
+			for (idx_t i = 0; i < RUNS; i++) {
+				results_b.push_back(other.Query(scan_b));
+			}
+		});
+		thread_a.join();
+		thread_b.join();
+		f.fs->listing_credentials.clear();
+		f.con.Rollback();
+		other.Rollback();
+		for (auto results : {&results_a, &results_b}) {
+			for (auto &result : *results) {
+				REQUIRE_NO_FAIL(*result);
+				REQUIRE(result->Collection().GetValue(0, 0).ToString() == SAME_FILES_SUM);
+			}
+		}
+		// a read that took the other connection's credentials would fail; one that lost its own would read by path
+		f.RequireUses("key-a", alone_a.first * RUNS, alone_a.second * RUNS);
+		f.RequireUses("key-b", alone_b.first * RUNS, alone_b.second * RUNS);
+		f.RequireUses("path-key", 0, 0);
+	}
 }
 
 TEST_CASE("Credentials vend on first use, once, also when several threads use them first", "[file_credentials]") {
