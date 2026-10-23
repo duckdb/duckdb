@@ -235,8 +235,8 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 	idx_t keys_to_compare_count = 0;
 
 	for (idx_t i = 0; i < count; i++) {
-		ht_entry_t::Prefetch(i, count,
-		                     [&](idx_t next_idx) { return &entries.get()[hashes_dense[next_idx] & bitmask]; });
+		PrefetchHashTableEntry(i, count,
+		                       [&](idx_t next_idx) { return &entries.get()[hashes_dense[next_idx] & bitmask]; });
 		auto row_hash = hashes_dense[i]; // hashes have been flattened before -> always access dense
 		auto row_ht_offset = row_hash & bitmask;
 
@@ -940,7 +940,7 @@ static void InsertHashesLoop(unsafe_optional_ptr<atomic<ht_entry_t>> entries, Ve
 
 		// iterate over each entry to find out whether it belongs to an existing list or will start a new list
 		for (idx_t i = 0; i < remaining_count; i++) {
-			ht_entry_t::Prefetch(i, remaining_count, [&](idx_t next_idx) {
+			PrefetchHashTableEntry(i, remaining_count, [&](idx_t next_idx) {
 				return &entries.get()[ht_offsets[remaining_sel->get_index(next_idx)]];
 			});
 			const idx_t row_index = remaining_sel->get_index(i);
