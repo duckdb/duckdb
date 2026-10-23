@@ -937,22 +937,14 @@ struct MergeByteSample {
 	}
 };
 
-template <SortKeyType SORT_KEY_TYPE>
-optional_idx SortedRunMerger::TemplatedFindSkewedPartitionSplit() const {
-	const auto &merger = *this;
-	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
-	using SAMPLE = MergeByteSample<SORT_KEY>;
-	static_assert(std::is_trivially_destructible<SAMPLE>::value, "Merge byte samples must not own resources");
-	D_ASSERT(SORT_KEY::CONSTANT_SIZE && SORT_KEY::HAS_PAYLOAD);
-
+template <class SORT_KEY>
+static idx_t CollectMergeByteSamples(const SortedRunMerger &merger, const TupleDataLayout &payload_layout,
+                                     unsafe_array_ptr<MergeByteSample<SORT_KEY>> samples) {
 	static constexpr idx_t NEIGHBORS = 32;
 	auto &context = merger.sort.client_context;
-	const auto &payload_layout = *merger.sort.payload_layout;
 	const auto row_width = payload_layout.GetRowWidth();
 	const auto heap_size_offset = payload_layout.GetHeapSizeOffset();
 
-	auto sample_buffer = BufferAllocator::Get(context).Allocate(MAX_BYTE_SAMPLES * sizeof(SAMPLE));
-	unsafe_array_ptr<SAMPLE> samples(reinterpret_cast<SAMPLE *>(sample_buffer.get()), MAX_BYTE_SAMPLES);
 	idx_t sample_count = 0;
 	const auto run_count = merger.sorted_runs.size();
 
@@ -996,51 +988,58 @@ optional_idx SortedRunMerger::TemplatedFindSkewedPartitionSplit() const {
 			}
 
 			key.SetPayload(nullptr);
-			new (&samples[sample_count]) SAMPLE {key, width, sizeof(SORT_KEY) + payload_bytes, sample_count};
+			new (&samples[sample_count])
+			    MergeByteSample<SORT_KEY> {key, width, sizeof(SORT_KEY) + payload_bytes, sample_count};
 			sample_count++;
 			begin = end;
 		}
 		D_ASSERT(begin == count);
 	}
 
-	std::sort(samples.data(), samples.data() + sample_count);
+	return sample_count;
+}
 
+struct MergePartitionByteEstimate {
+	idx_t largest_partition;
+	double largest_bytes;
+	double total_bytes;
+};
+
+template <class SORT_KEY>
+static MergePartitionByteEstimate
+EstimateLargestMergePartition(unsafe_array_ptr<const MergeByteSample<SORT_KEY>> samples, idx_t partition_size,
+                              idx_t total_count) {
 	// Use the weighted samples in key order to estimate bytes in each existing row partition.
 	idx_t rank = 0;
-	idx_t largest_partition = 0;
 	double partition_bytes = 0;
-	double largest_bytes = 0;
-	double total_bytes = 0;
+	MergePartitionByteEstimate estimate {0, 0, 0};
 
-	for (idx_t i = 0; i < sample_count; i++) {
+	for (idx_t i = 0; i < samples.size(); i++) {
 		const auto &sample = samples[i];
 		auto remaining = sample.rows;
-		total_bytes += sample.bytes_per_row * sample.rows;
+		estimate.total_bytes += sample.bytes_per_row * sample.rows;
 		while (remaining != 0) {
-			const auto take = MinValue(remaining, merger.partition_size - rank % merger.partition_size);
+			const auto take = MinValue(remaining, partition_size - rank % partition_size);
 			partition_bytes += sample.bytes_per_row * take;
 			rank += take;
 			remaining -= take;
-			if (rank % merger.partition_size == 0 || rank == merger.total_count) {
-				if (partition_bytes > largest_bytes) {
-					largest_bytes = partition_bytes;
-					largest_partition = (rank - 1) / merger.partition_size;
+			if (rank % partition_size == 0 || rank == total_count) {
+				if (partition_bytes > estimate.largest_bytes) {
+					estimate.largest_bytes = partition_bytes;
+					estimate.largest_partition = (rank - 1) / partition_size;
 				}
 				partition_bytes = 0;
 			}
 		}
 	}
-	D_ASSERT(rank == merger.total_count);
+	D_ASSERT(rank == total_count);
 
-	// Only split when one partition is estimated to hold more than twice the average bytes.
-	if (largest_bytes <= 2 * (total_bytes / static_cast<double>(RowPartitionCount(merger)))) {
-		return optional_idx();
-	}
+	return estimate;
+}
 
-	const auto partition_begin = largest_partition * merger.partition_size;
-	const auto partition_end = largest_partition == RowPartitionCount(merger) - 1
-	                               ? merger.total_count
-	                               : partition_begin + merger.partition_size;
+template <class SORT_KEY>
+static optional_idx FindMergePartitionByteMidpoint(unsafe_array_ptr<const MergeByteSample<SORT_KEY>> samples,
+                                                   idx_t partition_begin, idx_t partition_end, double partition_bytes) {
 	if (partition_end - partition_begin <= STANDARD_VECTOR_SIZE) {
 		return optional_idx();
 	}
@@ -1048,9 +1047,9 @@ optional_idx SortedRunMerger::TemplatedFindSkewedPartitionSplit() const {
 	const auto last_interior = ((partition_end - 1) / STANDARD_VECTOR_SIZE) * STANDARD_VECTOR_SIZE;
 
 	// Add one interior vector-aligned boundary near the heavy partition's byte midpoint.
-	auto median_bytes = largest_bytes / 2;
-	rank = 0;
-	for (idx_t i = 0; i < sample_count; i++) {
+	auto median_bytes = partition_bytes / 2;
+	idx_t rank = 0;
+	for (idx_t i = 0; i < samples.size(); i++) {
 		const auto &sample = samples[i];
 		const auto begin = MaxValue(rank, partition_begin);
 		const auto end = MinValue(rank + sample.rows, partition_end);
@@ -1071,6 +1070,33 @@ optional_idx SortedRunMerger::TemplatedFindSkewedPartitionSplit() const {
 		return MinValue(MaxValue(aligned, first_interior), last_interior);
 	}
 	return optional_idx();
+}
+
+template <SortKeyType SORT_KEY_TYPE>
+optional_idx SortedRunMerger::TemplatedFindSkewedPartitionSplit() const {
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	using SAMPLE = MergeByteSample<SORT_KEY>;
+	static_assert(std::is_trivially_destructible<SAMPLE>::value, "Merge byte samples must not own resources");
+	D_ASSERT(SORT_KEY::CONSTANT_SIZE && SORT_KEY::HAS_PAYLOAD);
+
+	auto sample_buffer = BufferAllocator::Get(sort.client_context).Allocate(MAX_BYTE_SAMPLES * sizeof(SAMPLE));
+	unsafe_array_ptr<SAMPLE> samples(reinterpret_cast<SAMPLE *>(sample_buffer.get()), MAX_BYTE_SAMPLES);
+	const auto sample_count = CollectMergeByteSamples(*this, *sort.payload_layout, samples);
+	std::sort(samples.data(), samples.data() + sample_count);
+	const unsafe_array_ptr<const SAMPLE> sorted_samples(samples.data(), sample_count);
+
+	const auto estimate = EstimateLargestMergePartition(sorted_samples, partition_size, total_count);
+	const auto partition_count = RowPartitionCount(*this);
+
+	// Only split when one partition is estimated to hold more than twice the average bytes.
+	if (estimate.largest_bytes <= 2 * (estimate.total_bytes / static_cast<double>(partition_count))) {
+		return optional_idx();
+	}
+
+	const auto partition_begin = estimate.largest_partition * partition_size;
+	const auto partition_end =
+	    estimate.largest_partition == partition_count - 1 ? total_count : partition_begin + partition_size;
+	return FindMergePartitionByteMidpoint(sorted_samples, partition_begin, partition_end, estimate.largest_bytes);
 }
 
 optional_idx SortedRunMerger::FindSkewedPartitionSplit() const {
