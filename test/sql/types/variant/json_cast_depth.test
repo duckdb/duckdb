@@ -1,0 +1,44 @@
+# name: test/sql/types/variant/json_cast_depth.test
+# description: The JSON -> VARIANT cast uses an explicit stack, so the nesting depth is not bounded by the thread stack
+# group: [variant]
+
+require json
+
+# deeply nested array, far deeper than any thread stack could fit with one frame per level
+query I
+SELECT (repeat('[', 50000) || '1' || repeat(']', 50000))::JSON::VARIANT IS NOT NULL
+----
+true
+
+# deeply nested object
+query I
+SELECT (repeat('{"k":', 50000) || '1' || repeat('}', 50000))::JSON::VARIANT IS NOT NULL
+----
+true
+
+# moderately deep values survive the roundtrip through VARIANT unchanged
+query I
+SELECT v::JSON::VARCHAR = repeat('[', 200) || '1' || repeat(']', 200)
+FROM (SELECT (repeat('[', 200) || '1' || repeat(']', 200))::JSON::VARIANT v)
+----
+true
+
+query I
+SELECT v::JSON::VARCHAR = repeat('{"k":', 200) || '1' || repeat('}', 200)
+FROM (SELECT (repeat('{"k":', 200) || '1' || repeat('}', 200))::JSON::VARIANT v)
+----
+true
+
+# alternating arrays and objects
+query I
+SELECT v::JSON::VARCHAR = repeat('{"k":[', 100) || '1' || repeat(']}', 100)
+FROM (SELECT (repeat('{"k":[', 100) || '1' || repeat(']}', 100))::JSON::VARIANT v)
+----
+true
+
+# siblings next to a deep value are converted correctly
+query III
+SELECT v.a::INTEGER, v.b::VARCHAR, v.c IS NOT NULL
+FROM (SELECT ('{"a": 1, "b": "x", "c": ' || repeat('[', 50000) || '1' || repeat(']', 50000) || '}')::JSON::VARIANT v)
+----
+1	x	true
