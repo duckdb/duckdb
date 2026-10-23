@@ -270,6 +270,8 @@ private:
 	OpenFileInfo file;
 	ClientContext &context;
 	JSONReaderOptions options;
+	//! The flags documents are parsed with: numbers are kept as text when a column is or contains a DECIMAL
+	yyjson_read_flag read_flag;
 
 	//! File handle
 	unique_ptr<JSONFileHandle> file_handle;
