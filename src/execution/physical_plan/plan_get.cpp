@@ -115,6 +115,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	// (see LogicalGet::ResolveTypes).
 	const bool scan_emits_all_columns = !op.function.projection_pushdown;
 	const bool scan_emits_column_ids = !scan_emits_all_columns && projection_ids.empty();
+	// the columns of the get, before those that only a filter reads are added to the scan
+	const auto returned_column_count = projection_ids.size();
 
 	if (table_filters && op.function.supports_pushdown_type) {
 		vector<unique_ptr<Expression>> select_list;
@@ -249,11 +251,23 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	    std::move(op.parameters), std::move(op.virtual_columns));
 	auto &cast_table_scan = table_scan.Cast<PhysicalTableScan>();
 	cast_table_scan.dynamic_filters = op.dynamic_filters;
-	if (filter) {
-		filter->children.push_back(table_scan);
+	if (!filter) {
+		return table_scan;
+	}
+	filter->children.push_back(table_scan);
+	if (projection_ids.size() == returned_column_count) {
 		return *filter;
 	}
-	return table_scan;
+	// drop the columns that only the filter reads
+	vector<LogicalType> types;
+	vector<unique_ptr<Expression>> expressions;
+	for (idx_t i = 0; i < returned_column_count; i++) {
+		types.push_back(filter->types[i]);
+		expressions.push_back(make_uniq<BoundReferenceExpression>(filter->types[i], i));
+	}
+	auto &proj = Make<PhysicalProjection>(std::move(types), std::move(expressions), op.estimated_cardinality);
+	proj.children.push_back(*filter);
+	return proj;
 }
 
 } // namespace duckdb
