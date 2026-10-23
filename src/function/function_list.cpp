@@ -173,6 +173,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(FinalizeFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(FirstFun),
 	DUCKDB_WINDOW_FUNCTION(FirstValueFun),
+	DUCKDB_SCALAR_FUNCTION_SET(FmodFun),
 	DUCKDB_SCALAR_FUNCTION(GetVariableFun),
 	DUCKDB_SCALAR_FUNCTION(HivePartitionComponentFun),
 	DUCKDB_SCALAR_FUNCTION(IlikeEscapeFun),
