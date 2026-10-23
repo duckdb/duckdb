@@ -669,33 +669,46 @@ static unique_ptr<Expression> ConstructMapExpression(ClientContext &context, Mul
 	return BindBuiltinScalarFunction(context, RemapStructFun::Name, std::move(children));
 }
 
-//! Whether a pushed-down extract has to be applied to the whole column, because the file lacks the column, or a field
-//! on the extract path whose default is not NULL (where the parent struct is NULL, the field is NULL, not the default)
-static bool ExtractNeedsWholeColumn(ClientContext &context, const MultiFileColumnDefinition &global_column,
-                                    const ColumnIndex &global_index,
-                                    const vector<MultiFileColumnDefinition> &local_columns, const ColumnMapper &mapper,
-                                    bool is_root) {
+//! How a file maps onto a pushed-down extract
+enum class PushdownExtractMapping {
+	//! the file has every field on the extract path
+	PUSHDOWN,
+	//! the file lacks a field on the path whose default is NULL, so the extracted field is NULL in every row
+	NULL_VALUE,
+	//! the file lacks the column, or a field on the path whose default is not NULL but is NULL where the parent struct
+	//! is NULL, so the whole column has to be read
+	WHOLE_COLUMN
+};
+
+static PushdownExtractMapping GetPushdownExtractMapping(ClientContext &context,
+                                                        const MultiFileColumnDefinition &global_column,
+                                                        const ColumnIndex &global_index,
+                                                        const vector<MultiFileColumnDefinition> &local_columns,
+                                                        const ColumnMapper &mapper, bool is_root) {
 	auto local_idx = mapper.Find(global_column);
 	if (!local_idx.IsValid()) {
 		if (is_root) {
-			return true;
+			return PushdownExtractMapping::WHOLE_COLUMN;
 		}
 		auto default_expr = mapper.GetDefaultExpression(context, global_column, false);
-		return default_expr->GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
-		       !default_expr->Cast<BoundConstantExpression>().GetValue().IsNull();
+		if (default_expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT &&
+		    default_expr->Cast<BoundConstantExpression>().GetValue().IsNull()) {
+			return PushdownExtractMapping::NULL_VALUE;
+		}
+		return PushdownExtractMapping::WHOLE_COLUMN;
 	}
 	auto &local_column = local_columns[local_idx];
 	if (!global_index.IsPushdownExtract() || global_column.type.id() != LogicalTypeId::STRUCT ||
 	    local_column.type.id() != LogicalTypeId::STRUCT) {
-		return false;
+		return PushdownExtractMapping::PUSHDOWN;
 	}
 	auto &child_index = global_index.GetChildIndex(0);
 	if (child_index.GetPrimaryIndex() >= global_column.children.size()) {
-		return false;
+		return PushdownExtractMapping::PUSHDOWN;
 	}
 	auto &child_column = global_column.children[child_index.GetPrimaryIndex()];
 	auto nested_mapper = mapper.Create(local_column.children);
-	return ExtractNeedsWholeColumn(context, child_column, child_index, local_column.children, *nested_mapper, false);
+	return GetPushdownExtractMapping(context, child_column, child_index, local_column.children, *nested_mapper, false);
 }
 
 //! Apply a pushed-down extract to an expression that produces the whole column
@@ -861,8 +874,15 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 			continue;
 		}
 
-		if (global_id.IsPushdownExtract() &&
-		    ExtractNeedsWholeColumn(context, global_column, global_id, local_columns, mapper, true)) {
+		auto extract_mapping =
+		    global_id.IsPushdownExtract()
+		        ? GetPushdownExtractMapping(context, global_column, global_id, local_columns, mapper, true)
+		        : PushdownExtractMapping::PUSHDOWN;
+		if (extract_mapping == PushdownExtractMapping::NULL_VALUE) {
+			reader_data.expressions.push_back(make_uniq<BoundConstantExpression>(Value(global_id.GetScanType())));
+			continue;
+		}
+		if (extract_mapping == PushdownExtractMapping::WHOLE_COLUMN) {
 			// map the whole column and extract from it, so the defaults are the same as when the whole column is read
 			ColumnIndex root_index(global_column_id);
 			auto root_map = MapColumn(context, global_column, root_index, local_columns, mapper, local_idx);
