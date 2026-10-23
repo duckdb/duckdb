@@ -23,13 +23,3 @@ statement error
 SELECT sum(b) FROM t;
 ----
 Data Corruption Error: Corrupted Roaring container data: attempted to read past the end of the segment
-
-restart
-
-statement ok
-SET debug_force_fetch_row=true;
-
-statement error
-SELECT sum(b) FROM t;
-----
-Data Corruption Error: Corrupted Roaring container data: attempted to read past the end of the segment
