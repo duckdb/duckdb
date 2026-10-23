@@ -54,9 +54,9 @@ public:
 	void ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks, TaskSchedulerType pool_type);
 	//! Helpers for regular tasks
 	void ScheduleTask(ProducerToken &producer, shared_ptr<Task> task);
-	//! Enqueue regular tasks without waking threads for them: follow up with Signal.
-	//! Returns how many tasks of the producer were queued before them
-	idx_t EnqueueTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks);
+	void ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks);
+	//! Schedule regular tasks, waking at most `threads_to_wake` threads for them
+	void ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks, idx_t threads_to_wake);
 	//! Fetches a task from a specific producer, returns true if successful or false if no tasks were available
 	bool GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task);
 	//! Fetches a task from a specific producer, returns whether a task was found and assigned to `task`.

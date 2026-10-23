@@ -28,8 +28,8 @@
 
 namespace duckdb {
 
-Executor::Executor(ClientContext &context, CallerParticipation caller_participation)
-    : context(context), executor_tasks(0), caller_participation(caller_participation),
+Executor::Executor(ClientContext &context, bool caller_completes_query)
+    : context(context), executor_tasks(0), caller_completes_query(caller_completes_query),
       caller_thread(ThreadUtil::GetThreadId()), blocked_thread_time(0) {
 }
 
@@ -376,13 +376,12 @@ void Executor::UnregisterTask() {
 void Executor::ScheduleTasks(vector<shared_ptr<Task>> &tasks) {
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	auto threads_to_wake = tasks.size();
-	auto queued_tasks = scheduler.EnqueueTasks(GetToken(), tasks);
-	// the caller is about to take a task when it schedules on its own thread, unless it has queued tasks already
-	if (caller_participation == CallerParticipation::DRIVES_TO_COMPLETION && queued_tasks == 0 &&
-	    ThreadUtil::GetThreadId() == caller_thread) {
+	// the caller takes the next queued task once it returns to its loop, so wake no thread for that one
+	if (caller_completes_query && ThreadUtil::GetThreadId() == caller_thread &&
+	    scheduler.GetTaskCountForProducer(GetToken()) == 0) {
 		threads_to_wake--;
 	}
-	scheduler.Signal(threads_to_wake);
+	scheduler.ScheduleTasks(GetToken(), tasks, threads_to_wake);
 }
 
 void Executor::WaitForTask() {
@@ -458,9 +457,6 @@ bool Executor::ExecutionIsFinished() {
 QueryResultState Executor::ExecuteTask() {
 	// Only executor should return NO_TASKS_AVAILABLE
 	D_ASSERT(execution_result != QueryResultState::NO_TASKS_AVAILABLE);
-	// ScheduleTasks leaves a task to the submitting thread, so no other thread may drive this query
-	D_ASSERT(caller_participation != CallerParticipation::DRIVES_TO_COMPLETION ||
-	         ThreadUtil::GetThreadId() == caller_thread);
 	if (execution_result != QueryResultState::NOT_READY && ExecutionIsFinished()) {
 		return execution_result;
 	}

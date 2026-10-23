@@ -54,8 +54,6 @@ private:
 
 	//! Dequeues a task enqueued by this producer, return whether a was found and assigned to `task`.
 	bool DequeueFromProducerLocked(ProducerToken &token, shared_ptr<Task> &task) DUCKDB_REQUIRES(token.producer_lock);
-	void EnqueueBulkLocked(ProducerToken &token, vector<shared_ptr<Task>> &tasks) DUCKDB_REQUIRES(token.producer_lock);
-	idx_t GetTaskCountForProducerLocked(ProducerToken &token) const DUCKDB_REQUIRES(token.producer_lock);
 
 	const TaskSchedulerType pool_type;
 #ifndef DUCKDB_NO_THREADS

@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/caller_participation.hpp"
 #include "duckdb/common/enums/query_result_state.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
@@ -47,7 +46,7 @@ public:
 	static constexpr idx_t WAIT_TIME = 20;
 
 public:
-	Executor(ClientContext &context, CallerParticipation caller_participation);
+	Executor(ClientContext &context, bool caller_completes_query);
 	~Executor();
 
 	ClientContext &context;
@@ -92,7 +91,7 @@ public:
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);
 
-	//! Schedule tasks of this query, leaving one to the caller when it schedules them itself with nothing queued
+	//! Schedule tasks of this query, leaving one to a caller that completes the query and schedules them itself
 	void ScheduleTasks(vector<shared_ptr<Task>> &tasks);
 	//! Reschedules a task that was blocked
 	void RescheduleTask(shared_ptr<Task> &task);
@@ -220,8 +219,9 @@ private:
 
 	//! Currently alive executor tasks
 	atomic<idx_t> executor_tasks;
-	const CallerParticipation caller_participation;
-	//! The submitting thread, which drives the query in CallerParticipation::DRIVES_TO_COMPLETION
+	//! Whether the submitting call executes tasks until the query completes before it returns
+	const bool caller_completes_query;
+	//! The submitting thread
 	const thread_id caller_thread;
 	//! Leaf lock for the result buffer slot. It must not share executor_lock, which is held while
 	//! readiness is checked

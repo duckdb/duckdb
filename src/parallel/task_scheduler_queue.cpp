@@ -58,10 +58,6 @@ void TaskSchedulerQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 
 void TaskSchedulerQueue::EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>> &tasks) {
 	const annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
-	EnqueueBulkLocked(token, tasks);
-}
-
-void TaskSchedulerQueue::EnqueueBulkLocked(ProducerToken &token, vector<shared_ptr<Task>> &tasks) {
 	for (auto &task : tasks) {
 		task->token = token;
 	}
@@ -107,10 +103,6 @@ idx_t TaskSchedulerQueue::GetProducerCount() const {
 
 idx_t TaskSchedulerQueue::GetTaskCountForProducer(ProducerToken &token) const {
 	const annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
-	return GetTaskCountForProducerLocked(token);
-}
-
-idx_t TaskSchedulerQueue::GetTaskCountForProducerLocked(ProducerToken &token) const {
 	return queue->q.size_producer_approx(token.GetQueueProducerToken(pool_type).token);
 }
 
@@ -152,10 +144,6 @@ void TaskSchedulerQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 
 void TaskSchedulerQueue::EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>> &tasks) {
 	const annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
-	EnqueueBulkLocked(token, tasks);
-}
-
-void TaskSchedulerQueue::EnqueueBulkLocked(ProducerToken &token, vector<shared_ptr<Task>> &tasks) {
 	lock_guard<mutex> lock(qlock);
 	for (auto &task : tasks) {
 		task->token = token;
@@ -206,11 +194,6 @@ idx_t TaskSchedulerQueue::GetProducerCount() const {
 }
 
 idx_t TaskSchedulerQueue::GetTaskCountForProducer(ProducerToken &token) const {
-	const annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
-	return GetTaskCountForProducerLocked(token);
-}
-
-idx_t TaskSchedulerQueue::GetTaskCountForProducerLocked(ProducerToken &token) const {
 	lock_guard<mutex> lock(qlock);
 	const auto it = q.find(token.GetQueueProducerToken(pool_type));
 	if (it == q.end()) {

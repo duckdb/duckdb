@@ -65,6 +65,15 @@ void TaskScheduler::ScheduleTask(ProducerToken &token, shared_ptr<Task> task) {
 	ScheduleTask(token, std::move(task), TaskSchedulerType::REGULAR);
 }
 
+void TaskScheduler::ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks) {
+	ScheduleTasks(producer, tasks, TaskSchedulerType::REGULAR);
+}
+
+void TaskScheduler::ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks, idx_t threads_to_wake) {
+	GetQueue(TaskSchedulerType::REGULAR).EnqueueBulk(producer, tasks);
+	SignalForTaskType(TaskSchedulerType::REGULAR, threads_to_wake);
+}
+
 bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
 	const annotated_lock_guard<annotated_mutex> lock(token.producer_lock);
 	return GetTaskFromProducerLocked(token, task);
@@ -100,16 +109,6 @@ void TaskScheduler::ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Tas
                                   TaskSchedulerType pool_type) {
 	GetQueue(pool_type).EnqueueBulk(producer, tasks);
 	SignalForTaskType(pool_type, tasks.size());
-}
-
-idx_t TaskScheduler::EnqueueTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks) {
-	const annotated_lock_guard<annotated_mutex> lock(producer.producer_lock);
-	idx_t queued_tasks = 0;
-	for (auto &queue : queues) {
-		queued_tasks += queue->GetTaskCountForProducerLocked(producer);
-	}
-	GetQueue(TaskSchedulerType::REGULAR).EnqueueBulkLocked(producer, tasks);
-	return queued_tasks;
 }
 
 bool TaskScheduler::GetTaskInternal(ConsumerToken &consumer, shared_ptr<Task> &task) {

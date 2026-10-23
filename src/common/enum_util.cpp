@@ -21,7 +21,6 @@
 #include "duckdb/common/enums/allow_parser_override.hpp"
 #include "duckdb/common/enums/arrow_format_version.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
-#include "duckdb/common/enums/caller_participation.hpp"
 #include "duckdb/common/enums/catalog_lookup_behavior.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
@@ -1184,24 +1183,6 @@ const char* EnumUtil::ToChars<CachingMode>(CachingMode value) {
 template<>
 CachingMode EnumUtil::FromString<CachingMode>(const char *value) {
 	return static_cast<CachingMode>(StringUtil::StringToEnum(GetCachingModeValues(), 3, "CachingMode", value));
-}
-
-const StringUtil::EnumStringLiteral *GetCallerParticipationValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(CallerParticipation::MAY_DETACH), "MAY_DETACH" },
-		{ static_cast<uint32_t>(CallerParticipation::DRIVES_TO_COMPLETION), "DRIVES_TO_COMPLETION" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<CallerParticipation>(CallerParticipation value) {
-	return StringUtil::EnumToString(GetCallerParticipationValues(), 2, "CallerParticipation", static_cast<uint32_t>(value));
-}
-
-template<>
-CallerParticipation EnumUtil::FromString<CallerParticipation>(const char *value) {
-	return static_cast<CallerParticipation>(StringUtil::StringToEnum(GetCallerParticipationValues(), 2, "CallerParticipation", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCanUnloadResultValues() {

@@ -47,7 +47,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, PreprocessedStat
 	if (retention == Retention::RETAINED_AT_SUBMISSION) {
 		// the submission is completed by the same call, which executes the tasks itself
 		active_query->retention = ResultLifetime::RETAINED;
-		active_query->caller_participation = CallerParticipation::DRIVES_TO_COMPLETION;
+		active_query->caller_completes_query = true;
 	}
 	if (transaction.IsAutoCommit() && !transaction.HasActiveTransaction()) {
 		transaction.BeginTransaction();
@@ -242,7 +242,7 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	active_query->prepared = std::move(statement_data_p);
 
 	// Create the query executor.
-	active_query->executor = make_uniq<Executor>(*this, active_query->caller_participation);
+	active_query->executor = make_uniq<Executor>(*this, active_query->caller_completes_query);
 	auto &executor = *active_query->executor;
 
 	if (config.enable_progress_bar) {
