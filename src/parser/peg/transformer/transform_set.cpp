@@ -5,9 +5,29 @@
 
 namespace duckdb {
 
-// ResetStatement <- 'RESET' SetVariableOrSetting
+static SetScope GetSettingScope(const optional<SetScope> &setting_scope) {
+	return setting_scope ? *setting_scope : SetScope::AUTOMATIC;
+}
+
+// ResetStatement <- 'RESET' ResetTarget
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformResetStatement(PEGTransformer &transformer,
-                                                                        const SettingInfo &set_variable_or_setting) {
+                                                                        unique_ptr<SQLStatement> reset_target) {
+	return reset_target;
+}
+
+// ResetTimeZone <- SettingScope? 'TIME' 'ZONE'
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformResetTimeZone(PEGTransformer &transformer,
+                                                                       const optional<SetScope> &setting_scope) {
+	if (setting_scope && *setting_scope == SetScope::LOCAL) {
+		throw NotImplementedException("RESET LOCAL is not implemented.");
+	}
+	return make_uniq<ResetVariableStatement>("timezone", GetSettingScope(setting_scope));
+}
+
+// ResetVariableOrSetting <- SetVariableOrSetting
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformResetVariableOrSetting(PEGTransformer &transformer,
+                                                       const SettingInfo &set_variable_or_setting) {
 	if (set_variable_or_setting.scope == SetScope::LOCAL) {
 		throw NotImplementedException("RESET LOCAL is not implemented.");
 	}
@@ -40,11 +60,15 @@ PEGTransformerFactory::TransformSetStatement(PEGTransformer &transformer,
 	return std::move(set_assignment_or_time_zone);
 }
 
-// SetSchema <- 'SCHEMA' StringLiteral
+// SetSchema <- SettingScope? 'SCHEMA' StringLiteral
 unique_ptr<SetStatement> PEGTransformerFactory::TransformSetSchema(PEGTransformer &transformer,
+                                                                   const optional<SetScope> &setting_scope,
                                                                    const string &string_literal) {
+	if (setting_scope && *setting_scope == SetScope::LOCAL) {
+		throw NotImplementedException("SET LOCAL is not implemented.");
+	}
 	auto value = ConstantExpression::String(string_literal);
-	return make_uniq<SetVariableStatement>("schema", std::move(value), SetScope::AUTOMATIC);
+	return make_uniq<SetVariableStatement>("schema", std::move(value), GetSettingScope(setting_scope));
 }
 
 // ZoneLocal <- 'LOCAL'
@@ -69,13 +93,18 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneIdentifier(PEGT
 	return ConstantExpression::String(identifier.GetIdentifierName());
 }
 
-// SetTimeZone <- 'TIME' 'ZONE' ZoneValue
+// SetTimeZone <- SettingScope? 'TIME' 'ZONE' ZoneValue
 unique_ptr<SetStatement> PEGTransformerFactory::TransformSetTimeZone(PEGTransformer &transformer,
+                                                                     const optional<SetScope> &setting_scope,
                                                                      unique_ptr<ParsedExpression> zone_value) {
-	if (zone_value->GetExpressionClass() == ExpressionClass::DEFAULT) {
-		return make_uniq<ResetVariableStatement>("timezone", SetScope::AUTOMATIC);
+	if (setting_scope && *setting_scope == SetScope::LOCAL) {
+		throw NotImplementedException("SET LOCAL is not implemented.");
 	}
-	return make_uniq<SetVariableStatement>("timezone", std::move(zone_value), SetScope::AUTOMATIC);
+	auto scope = GetSettingScope(setting_scope);
+	if (zone_value->GetExpressionClass() == ExpressionClass::DEFAULT) {
+		return make_uniq<ResetVariableStatement>("timezone", scope);
+	}
+	return make_uniq<SetVariableStatement>("timezone", std::move(zone_value), scope);
 }
 
 // SetVariable <- VariableScope Identifier
@@ -102,7 +131,11 @@ PEGTransformerFactory::TransformStandardAssignment(PEGTransformer &transformer,
 	if (value->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		// SET value cannot be a column reference
 		auto &col_ref = value->Cast<ColumnRefExpression>();
-		value = ConstantExpression::String(col_ref.GetColumnName().GetIdentifierName());
+		if (col_ref.IsQualified()) {
+			value = ConstantExpression::String(col_ref.ToString());
+		} else {
+			value = ConstantExpression::String(col_ref.GetColumnName().GetIdentifierName());
+		}
 	} else if (value->GetExpressionClass() == ExpressionClass::DEFAULT) {
 		return make_uniq<ResetVariableStatement>(set_variable_or_setting.name, set_variable_or_setting.scope);
 	}

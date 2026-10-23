@@ -405,7 +405,8 @@ public:
 		}
 
 		stats.__isset.geospatial_types = true;
-		stats.geospatial_types = types.ToWKBList();
+		auto wkb_types = types.ToWKBList();
+		stats.geospatial_types.assign(wkb_types.begin(), wkb_types.end());
 	}
 };
 

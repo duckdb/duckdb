@@ -16,6 +16,10 @@ public:
 	}
 
 	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state) const override;
+	//! Restrict matching to one child; matchers.size() means none, invalid means ordered choice.
+	virtual optional_idx SelectChild(MatchState &) const {
+		return optional_idx();
+	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		for (auto &child_matcher : matchers) {

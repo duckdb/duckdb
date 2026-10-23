@@ -72,11 +72,20 @@ class PhysicalOperator;
 enum class GeoParquetVersion : uint8_t;
 
 struct PreparedParquetLayout {
-	vector<duckdb_parquet::SchemaElement> schema;
+	explicit PreparedParquetLayout(ArenaAllocator &arena) : schema(arena) {
+	}
+
+	duckdb_parquet::SchemaElementList schema;
 	ShreddingType shredding_types;
 };
 
 struct PreparedRowGroup {
+	explicit PreparedRowGroup(Allocator &allocator)
+	    : arena(make_uniq<ArenaAllocator>(allocator)), row_group(*arena), layout(*arena) {
+	}
+
+	//! Backs the Thrift metadata of this row group - must outlive it
+	unique_ptr<ArenaAllocator> arena;
 	duckdb_parquet::RowGroup row_group;
 	vector<unique_ptr<ColumnWriterState>> states;
 	PreparedParquetLayout layout;
@@ -90,6 +99,9 @@ struct ParquetBloomFilterEntry {
 
 //! The page index of one column chunk, buffered until the footer is written
 struct ParquetPageIndexEntry {
+	explicit ParquetPageIndexEntry(ArenaAllocator &arena) : column_index(arena), offset_index(arena) {
+	}
+
 	idx_t row_group_idx = 0;
 	idx_t column_idx = 0;
 	//! The ColumnIndex is only written when every page has (or needs no) min/max statistics
@@ -297,6 +309,10 @@ public:
 
 	void BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter);
 	void BufferPageIndex(idx_t col_idx, ParquetPageIndexEntry page_index);
+	//! The arena that backs the Thrift metadata of the file, including the page indexes
+	ArenaAllocator &GetMetadataArena() {
+		return metadata_arena;
+	}
 	void SetWrittenStatistics(CopyFunctionFileStatistics &written_stats);
 	void FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk &chunk,
 	                      optional_ptr<ColumnWriterStatistics> writer_stats);
@@ -311,7 +327,7 @@ private:
 	void InitializeSchemaFromPreparedRowGroup(const PreparedRowGroup &prepared);
 	void InitializeColumnWriters();
 	idx_t InitializeColumnWriterSchemaIndices();
-	PreparedParquetLayout ExportPreparedLayout() const;
+	PreparedParquetLayout ExportPreparedLayout(ArenaAllocator &arena) const;
 
 	void VerifyPreparedRowGroup(const PreparedRowGroup &prepared) const;
 #ifdef DEBUG
@@ -325,6 +341,8 @@ private:
 
 	unique_ptr<AsyncFileWriter> writer;
 	std::shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
+	//! Backs the Thrift metadata of the file - must outlive it
+	ArenaAllocator metadata_arena;
 	duckdb_parquet::FileMetaData file_meta_data;
 	std::mutex lock;
 

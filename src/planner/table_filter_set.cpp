@@ -208,7 +208,7 @@ static unique_ptr<TableFilter> SerializeInternalFunctionToLegacyFilter(const Bou
 	if (func_name == BloomFilterScalarFun::NAME || func_name == PrefixRangeScalarFun::NAME) {
 		return make_uniq<LegacyOptionalFilter>();
 	}
-	throw SerializationException("Unsupported internal tablefilter function \"%s\" during serialization", func_name);
+	throw SerializationException("Unsupported internal tablefilter function %s during serialization", func_name);
 }
 
 static unique_ptr<TableFilter> SerializeConjunctionToLegacyFilter(const BoundConjunctionExpression &conjunction) {

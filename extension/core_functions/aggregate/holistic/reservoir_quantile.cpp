@@ -54,6 +54,8 @@ struct ReservoirQuantileState {
 			D_ASSERT(r_samp->next_index_to_sample >= r_samp->num_entries_to_skip_b4_next_sample);
 			if (r_samp->next_index_to_sample == r_samp->num_entries_to_skip_b4_next_sample) {
 				ReplaceElement(element);
+			} else {
+				r_samp->num_entries_to_skip_b4_next_sample++;
 			}
 		}
 	}

@@ -339,22 +339,11 @@ bool TableIndexList::HasBufferedReplays() const {
 	return false;
 }
 
-shared_ptr<IndexEntry> TableIndexList::FindEntry(const Identifier &name) const {
-	annotated_lock_guard lock(index_entries_lock);
-	for (const auto &entry : index_entries) {
-		if (entry->GetName() != name) {
-			continue;
-		}
-		if (entry->GetBindState() != IndexBindState::BOUND) {
-			throw InternalException("TableIndexList::FindEntry cannot return an unbound index");
-		}
-		return entry;
-	}
-	return nullptr;
+shared_ptr<IndexEntry> TableIndexList::FindEntry(const IndexEntry &index) const {
+	return FindEntry(index.GetIndexOid());
 }
 
-shared_ptr<IndexEntry> TableIndexList::FindEntry(const IndexEntry &index) const {
-	auto index_oid = index.GetIndexOid();
+shared_ptr<IndexEntry> TableIndexList::FindEntry(idx_t index_oid) const {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		if (entry->GetIndexOid() != index_oid) {

@@ -81,6 +81,11 @@ struct ParquetMetadataFilePaths {
 
 struct ParquetMetaDataBindData : public TableFunctionData {
 	unique_ptr<ParquetMetadataFilePaths> file_paths;
+
+	//! The file list is consumed by the first execution
+	bool SupportStatementCache() const override {
+		return false;
+	}
 };
 
 struct ParquetBloomProbeBindData : public ParquetMetaDataBindData {
@@ -508,7 +513,8 @@ void ParquetRowGroupMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 	// num_values
 	output[7].get().Append(Value::BIGINT(col_meta.num_values));
 	// path_in_schema
-	output[8].get().Append(StringUtil::Join(col_meta.path_in_schema, ", "));
+	output[8].get().Append(StringUtil::Join(col_meta.path_in_schema, ", ",
+	                                        [](const duckdb_parquet::ParquetString &part) { return string(part); }));
 	// type
 	output[9].get().Append(ConvertParquetElementToString(col_meta.type));
 	// stats_min
@@ -546,8 +552,8 @@ void ParquetRowGroupMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 	// key_value_metadata
 	vector<Value> map_keys, map_values;
 	for (auto &entry : col_meta.key_value_metadata) {
-		map_keys.push_back(Value::BLOB_RAW(entry.key));
-		map_values.push_back(Value::BLOB_RAW(entry.value));
+		map_keys.push_back(Value::BLOB_RAW(string(entry.key)));
+		map_values.push_back(Value::BLOB_RAW(string(entry.value)));
 	}
 	output[23].get().Append(
 	    Value::MAP(LogicalType::BLOB, LogicalType::BLOB, std::move(map_keys), std::move(map_values)));
@@ -724,7 +730,7 @@ void ParquetSchemaProcessor::ReadRow(vector<reference<Vector>> &output, idx_t ro
 	// file_name
 	output[0].get().Append(reader.file.path);
 	// name
-	output[1].get().Append(column.name);
+	output[1].get().Append(string(column.name));
 	// type
 	output[2].get().Append(ParquetElementString(column.type, column.__isset.type));
 	// type_length
@@ -782,8 +788,8 @@ void ParquetKeyValueMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 	auto &entry = meta_data->key_value_metadata[row_idx];
 
 	output[0].get().Append(Value(reader.file.path));
-	output[1].get().Append(Value::BLOB_RAW(entry.key));
-	output[2].get().Append(Value::BLOB_RAW(entry.value));
+	output[1].get().Append(Value::BLOB_RAW(string(entry.key)));
+	output[2].get().Append(Value::BLOB_RAW(string(entry.value)));
 }
 
 //===--------------------------------------------------------------------===//
@@ -978,9 +984,14 @@ private:
 		duckdb_parquet::ColumnIndex column_index;
 		bool has_offset_index = false;
 		duckdb_parquet::OffsetIndex offset_index;
+
+		explicit ColumnChunkPageIndex(ArenaAllocator &arena) : column_index(arena), offset_index(arena) {
+		}
 	};
 
 	vector<ParquetColumnSchema> column_schemas;
+	//! Backs the Thrift page index objects of the file
+	ArenaAllocator arena {Allocator::DefaultAllocator()};
 	//! The column chunks that have a page index, in file order
 	vector<ColumnChunkPageIndex> chunks;
 	idx_t total_rows = 0;
@@ -1084,7 +1095,7 @@ void ParquetPageIndexProcessor::InitializeInternal(ClientContext &context, Parqu
 		trans.Prefetch(index_begin, index_end - index_begin);
 		for (idx_t column_idx = 0; column_idx < row_group.columns.size(); column_idx++) {
 			auto &column = row_group.columns[column_idx];
-			ColumnChunkPageIndex chunk;
+			ColumnChunkPageIndex chunk(arena);
 			chunk.row_group_idx = row_group_idx;
 			chunk.column_idx = column_idx;
 			chunk.first_row = total_rows;
@@ -1134,7 +1145,9 @@ void ParquetPageIndexProcessor::ReadRow(vector<reference<Vector>> &output, idx_t
 	// column_id
 	output[2].get().Append(Value::BIGINT(NumericCast<int64_t>(chunk.column_idx)));
 	// path_in_schema
-	output[3].get().Append(Value(StringUtil::Join(column.meta_data.path_in_schema, ", ")));
+	output[3].get().Append(
+	    Value(StringUtil::Join(column.meta_data.path_in_schema, ", ",
+	                           [](const duckdb_parquet::ParquetString &part) { return string(part); })));
 	// page_id
 	output[4].get().Append(Value::BIGINT(NumericCast<int64_t>(page_idx)));
 

@@ -27,6 +27,11 @@ namespace duckdb {
 struct MultiFileReaderInterface {
 	virtual ~MultiFileReaderInterface();
 
+	//! Whether the scans of this reader report operator.bytes_scanned
+	virtual bool ReportsBytesScanned() const {
+		return false;
+	}
+
 	virtual void InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list);
 	//! Set the default multi-file options of this reader - called before any option is parsed
 	virtual void InitializeFileOptions(MultiFileOptions &file_options);
@@ -156,6 +161,13 @@ public:
 		bool bound_on_first_file = true;
 		if (result->multi_file_reader->Bind(result->file_options, *result->file_list, result->types, result->names,
 		                                    result->reader_bind)) {
+			// with the 'schema' option, hive partitioning is asked for (hive_partitioning or hive_types) rather than
+			// detected; the keys' types still are. Readers that bind a schema of their own skip this
+			if (!result->file_options.schema.empty() &&
+			    (result->file_options.hive_partitioning || !result->file_options.hive_types_schema.empty())) {
+				result->file_options.AutoDetectHivePartitioning(*result->file_list, context,
+				                                                /* detect_partitioning = */ false);
+			}
 			result->multi_file_reader->BindOptions(result->file_options, *result->file_list, result->types,
 			                                       result->names, result->reader_bind);
 			bound_on_first_file = false;
@@ -437,11 +449,15 @@ public:
 
 	//! Open a file on the read-ahead async pool. Runs off the operator thread; records errors instead of throwing.
 	static void OpenMarkedFileAsync(ClientContext &context, const MultiFileBindData &bind_data,
-	                                MultiFileGlobalState &gstate, MultiFileReaderData &reader_data, idx_t file_index) {
+	                                MultiFileGlobalState &gstate, MultiFileReaderData &reader_data, idx_t file_index,
+	                                const shared_ptr<ReadAheadOpenFile> &open_file) {
 		// OpenMarkedFile expects the parallel lock unlocked on entry and locks it before it returns
 		unique_lock<mutex> parallel_lock(gstate.lock, std::defer_lock);
 		try {
-			OpenMarkedFile(context, bind_data, gstate, reader_data, file_index, parallel_lock);
+			if (OpenMarkedFile(context, bind_data, gstate, reader_data, file_index, parallel_lock)) {
+				// keep the file counted while jobs retain the reader
+				reader_data.reader->read_ahead_open_file = open_file;
+			}
 		} catch (std::exception &ex) {
 			if (!parallel_lock.owns_lock()) {
 				parallel_lock.lock();
@@ -462,8 +478,9 @@ public:
 	                              MultiFileGlobalState &gstate, unique_lock<mutex> &parallel_lock) {
 		auto &read_ahead = *gstate.read_ahead;
 		idx_t file_index = gstate.file_index;
+		idx_t files_ahead = 0;
 		bool progress_guaranteed = false;
-		while (!progress_guaranteed || read_ahead.CanScheduleOpen()) {
+		while (!progress_guaranteed || read_ahead.CanScheduleOpen(files_ahead)) {
 			const bool has_file_to_read = file_index < gstate.readers.size();
 			if (!has_file_to_read && !TryGetNextFile(gstate, parallel_lock)) {
 				return;
@@ -478,9 +495,10 @@ public:
 				reader_data.file_state = MultiFileFileState::OPENING;
 				{
 					MultiFileReaderData *reader_ptr = &reader_data;
+					auto open_file = make_shared_ptr<ReadAheadOpenFile>();
 					read_ahead.ScheduleFileOpen(
-					    [&context, &bind_data, &gstate, reader_ptr, current_file_index]() {
-						    OpenMarkedFileAsync(context, bind_data, gstate, *reader_ptr, current_file_index);
+					    [&context, &bind_data, &gstate, reader_ptr, current_file_index, open_file]() {
+						    OpenMarkedFileAsync(context, bind_data, gstate, *reader_ptr, current_file_index, open_file);
 					    },
 					    [&gstate]() {
 						    // the reader stays in OPENING, so tell every waiter to stop instead of polling forever
@@ -488,11 +506,13 @@ public:
 						    gstate.async_open_settled.notify_all();
 					    });
 				}
+				files_ahead++;
 				progress_guaranteed = true;
 				break;
 			case MultiFileFileState::OPENING:
 			case MultiFileFileState::OPEN:
 				// the front file is already being/been opened - forward progress is guaranteed
+				files_ahead++;
 				progress_guaranteed = true;
 				break;
 			default:
@@ -1023,6 +1043,10 @@ public:
 			lstate.job_state = MultiFileJobState::DECODE;
 			return ScanReadAheadAcquire::ACQUIRED;
 		}
+		if (!read_ahead.CanScheduleOpen(0)) {
+			// the open file budget is full and the finished job may hold the last reference to its reader
+			lstate.job.reset();
+		}
 		unique_ptr<ScanReadAheadJob> claimed;
 		auto acquired = read_ahead.AcquireJob(
 		    context, data_p,
@@ -1351,6 +1375,9 @@ public:
 		if (input.local_state) {
 			auto &local = input.local_state->Cast<MultiFileLocalState>();
 			input.operator_metrics.rows_scanned = local.rows_scanned;
+		}
+		if (input.bind_data && input.bind_data->Cast<MultiFileBindData>().interface->ReportsBytesScanned()) {
+			input.operator_metrics.bytes_scanned_reported = true;
 		}
 		auto files_loaded = gstate.files_opened.load();
 		input.operator_metrics.AddExtraInfo("Total Files Read", std::to_string(files_loaded));

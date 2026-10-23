@@ -97,6 +97,9 @@ SQLStatement:
     - PragmaFunction
     - PrepareStatement
     - ResetStatement
+    - ResetTarget
+    - ResetTimeZone
+    - ResetVariableOrSetting
     - SelectStatement
     - SetStatement
     - TransactionStatement
@@ -393,6 +396,8 @@ Expression:
     - ColDefAndExpressionTail
     - LogicalNotExpression
     - IsExpression
+    - ComparisonOperand
+    - NotComparisonOperand
     - IsTest
     - IsLiteral
     - NotNull
@@ -425,6 +430,7 @@ Expression:
     - CollateExpressionTail
     - AtTimeZoneExpression
     - AtTimeZoneExpressionTail
+    - UnaryExpression
     - PrefixExpression
     - ConstantLiteral
     - ColumnReference
@@ -778,6 +784,7 @@ GenericCopyOptionList:
     - CopyOptions
     - CopyOptionList
     - SpecializedOptionList
+    - ExportOptions
     - ExplainOptionList
 
 WindowBoundaryExpressionList:
@@ -1677,7 +1684,7 @@ overrides:
   # expression.gram
   NotExpression:
     type: "vector<bool>"
-    by_value: true
+    by_value: false
   IsDistinctFromTail:
     type: "IsDistinctFromTail"
     by_value: true
@@ -1700,6 +1707,9 @@ overrides:
     type: "IsExpressionTail"
     by_value: true
   IsOtherOperatorTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsCastTail:
     type: "IsExpressionTail"
     by_value: true
   BetweenLikeOp:
@@ -1889,11 +1899,11 @@ expression_depth_nesting_rules:
   - SingleExpression
   - Type
   - NestedType
+  - SubqueryReference
+  - CustomPrefixExpression
 
 expression_depth_chain_rules:
   - LambdaArrowExpression
-  - LogicalOrExpression
-  - LogicalAndExpression
   - NotExpression
   - IsExpressionContinuation
   - IsDistinctFromExpression
@@ -1930,6 +1940,7 @@ collapsible_rules:
   - OtherOperatorExpression
   - InfixOtherOperatorExpression
   - BitwiseExpression
+  - TildeExpression
   - AdditiveExpression
   - MultiplicativeExpression
   - ExponentiationExpression
@@ -1960,6 +1971,8 @@ excluded_rules:
   - ExternalResourceKeyword
   # Syntax only: OVERRIDING {USER|SYSTEM} VALUE is accepted and ignored.
   - OverridingClause
+  # Syntax only: CREATE INDEX CONCURRENTLY is accepted and ignored.
+  - IndexConcurrently
   # Suggestion-only: exists so autocomplete offers the special SHOW forms as keywords; parsing of e.g.
   # "SHOW databases" resolves through ShowSettingName (the identifier), which the transformer special-cases.
   - ShowSpecialForm
