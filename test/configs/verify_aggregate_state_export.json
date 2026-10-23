@@ -83,6 +83,7 @@
         "test/sql/aggregate/aggregates/test_ordered_aggregates.test",
         "test/sql/aggregate/aggregates/test_reservoir_quantile_decimal.test",
         "test/sql/aggregate/aggregates/test_reservoir_quantile_sampling.test",
+        "test/sql/aggregate/group/aggregate_combine_grow_arena.test",
         "test/sql/function/list/aggregates/histogram_decimal.test",
         "test/sql/pivot/pivot_operator_expression.test",
         "test/sql/prepared/prepared_statistics_optimization.test",
