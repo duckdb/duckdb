@@ -1,15 +1,15 @@
 # name: test/sql/logging/enable_logging_file_no_path.test
-# description: Selecting file log storage without a usable path must fail cleanly instead of poisoning the log storage
+# description: Selecting the file log sink without a usable path must fail cleanly instead of poisoning the log sink
 # group: [logging]
 
 require noforcestorage
 
 # Normalize to in-memory storage
 statement ok
-CALL enable_logging(storage='memory')
+CALL enable_logging(sink='memory')
 
 query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+SELECT value FROM duckdb_settings() WHERE name = 'logging_sink';
 ----
 memory
 
@@ -17,23 +17,23 @@ memory
 
 # 1) file storage without a path must fail cleanly (no crash on the following flush / on exit)
 statement error
-CALL enable_logging('QueryLog', storage=file);
+CALL enable_logging('QueryLog', sink=file);
 ----
-Cannot enable 'file' log storage without a valid path
+Cannot enable the 'file' log sink without a valid path
 
 # The failed call must not have switched the active storage...
 query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+SELECT value FROM duckdb_settings() WHERE name = 'logging_sink';
 ----
 memory
 
 # 2) ...and it must not have poisoned the storage: the same call WITH a path now succeeds.
 #    Before the fix this also failed with "path wasn't set", and DuckDB aborted on exit.
 statement ok
-CALL enable_logging('QueryLog', storage=file, storage_path='{TEST_DIR}/issue9144.csv')
+CALL enable_logging('QueryLog', sink=file, sink_path='{TEST_DIR}/issue9144.csv')
 
 query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+SELECT value FROM duckdb_settings() WHERE name = 'logging_sink';
 ----
 file
 
@@ -46,7 +46,7 @@ statement ok
 CALL enable_logging()
 
 query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+SELECT value FROM duckdb_settings() WHERE name = 'logging_sink';
 ----
 file
 
@@ -54,55 +54,55 @@ statement ok
 CALL disable_logging()
 
 statement ok
-CALL enable_logging(storage='memory')
+CALL enable_logging(sink='memory')
 
 # --- Other unusable paths must fail the same way, leaving storage untouched ---
 
 # Empty-string path
 statement error
-CALL enable_logging(storage='file', storage_path='');
+CALL enable_logging(sink='file', sink_path='');
 ----
-Cannot enable 'file' log storage without a valid path
+Cannot enable the 'file' log sink without a valid path
 
 # NULL path
 statement error
-CALL enable_logging(storage='file', storage_path=NULL);
+CALL enable_logging(sink='file', sink_path=NULL);
 ----
-Cannot enable 'file' log storage without a valid path
+Cannot enable the 'file' log sink without a valid path
 
-# Inferred file storage via storage_config={path:...} with an empty path
+# Inferred file sink via sink_config={path:...} with an empty path
 statement error
-CALL enable_logging(storage_config:={path:''});
+CALL enable_logging(sink_config:={path:''});
 ----
-Cannot enable 'file' log storage without a valid path
+Cannot enable the 'file' log sink without a valid path
 
 query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+SELECT value FROM duckdb_settings() WHERE name = 'logging_sink';
 ----
 memory
 
 statement ok
 SELECT 42
 
-# --- SET logging_storage='file' cannot supply a path: clean error, storage unchanged ---
+# --- SET logging_sink='file' cannot supply a path: clean error, storage unchanged ---
 statement error
-SET logging_storage='file';
+SET logging_sink='file';
 ----
-Cannot select 'file' log storage
+Cannot select 'file' log sink
 
 query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+SELECT value FROM duckdb_settings() WHERE name = 'logging_sink';
 ----
 memory
 
 # Case-insensitive: an upper-cased value must be caught too (must not bypass the guard)
 statement error
-SET logging_storage='FILE';
+SET logging_sink='FILE';
 ----
-Cannot select 'file' log storage
+Cannot select 'file' log sink
 
 query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+SELECT value FROM duckdb_settings() WHERE name = 'logging_sink';
 ----
 memory
 
