@@ -69,6 +69,11 @@ void TaskScheduler::ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Tas
 	ScheduleTasks(producer, tasks, TaskSchedulerType::REGULAR);
 }
 
+void TaskScheduler::ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks, idx_t threads_to_wake) {
+	GetQueue(TaskSchedulerType::REGULAR).EnqueueBulk(producer, tasks);
+	SignalForTaskType(TaskSchedulerType::REGULAR, threads_to_wake);
+}
+
 bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
 	const annotated_lock_guard<annotated_mutex> lock(token.producer_lock);
 	return GetTaskFromProducerLocked(token, task);
