@@ -1,0 +1,134 @@
+# name: test/sql/filter/test_not_distinct_from_pushdown.test
+# description: Filter pushdown through IS NOT DISTINCT FROM join conditions
+# group: [filter]
+
+statement ok
+CREATE TABLE big AS
+	SELECT i AS id, i % 1000 AS bk
+	FROM range(100000) t(i);
+
+statement ok
+CREATE TABLE mid AS
+	SELECT i AS mk
+	FROM range(10000) t(i);
+
+statement ok
+CREATE TABLE tiny AS
+	SELECT i AS tk
+	FROM range(10) t(i);
+
+# a filter on a table connected to the big table through an IS NOT DISTINCT FROM
+# join should be pushed down to the big table scan
+query II
+EXPLAIN
+SELECT count(*)
+FROM big b
+JOIN mid m ON b.bk IS NOT DISTINCT FROM m.mk
+JOIN tiny t ON m.mk = t.tk
+WHERE t.tk = 7;
+----
+physical_plan	<REGEX>:(?s).*Filters: bk = 7.*
+
+query I
+SELECT count(*)
+FROM big b
+JOIN mid m ON b.bk IS NOT DISTINCT FROM m.mk
+JOIN tiny t ON m.mk = t.tk
+WHERE t.tk = 7;
+----
+100
+
+# the reverse chain (equality first, IS NOT DISTINCT FROM second): the constant
+# filter on the table connected through the NDF join is pushed down as well
+query II
+EXPLAIN
+SELECT count(*)
+FROM big b
+JOIN mid m ON b.bk = m.mk
+JOIN tiny t ON m.mk IS NOT DISTINCT FROM t.tk
+WHERE t.tk = 7;
+----
+physical_plan	<REGEX>:(?s).*Filters: bk = 7.*
+
+query I
+SELECT count(*)
+FROM big b
+JOIN mid m ON b.bk = m.mk
+JOIN tiny t ON m.mk IS NOT DISTINCT FROM t.tk
+WHERE t.tk = 7;
+----
+100
+
+# IS NOT DISTINCT FROM is transitive: x and z are only connected through y, so
+# their pair must be regenerated as IS NOT DISTINCT FROM - an equality would
+# drop the (NULL, NULL, NULL) row
+statement ok
+CREATE TABLE ndf_t (x INTEGER, y INTEGER, z INTEGER);
+
+statement ok
+INSERT INTO ndf_t VALUES (1, 1, 1), (NULL, NULL, NULL), (2, 2, 1);
+
+query I
+SELECT count(*)
+FROM ndf_t
+WHERE x IS NOT DISTINCT FROM y AND y IS NOT DISTINCT FROM z;
+----
+2
+
+# an explicit equality on a NDF pair is the stronger condition: the pair is
+# regenerated as equality, excluding the (NULL, NULL, NULL) row
+query I
+SELECT count(*)
+FROM ndf_t
+WHERE x IS NOT DISTINCT FROM y AND x = y;
+----
+2
+
+# for a non-column expression the comparison reaches the filter combiner,
+# which must not prune the branch as unsatisfiable
+query I
+SELECT count(*)
+FROM ndf_t
+WHERE (x + y) IS NOT DISTINCT FROM NULL;
+----
+1
+
+statement ok
+CREATE TABLE ndf_mixed AS
+	SELECT * FROM (VALUES (1, 1, 1, 1), (NULL, NULL, NULL, NULL), (2, 3, 2, 2)) t(a, b, c, d);
+
+# multi-hop chain: a NDF b, b = c, c NDF d - the equality in the middle forces
+# all members non-NULL, only the (1, 1, 1, 1) row survives
+query I
+SELECT count(*)
+FROM ndf_mixed t1
+JOIN ndf_mixed t2 ON t1.a IS NOT DISTINCT FROM t2.b
+JOIN ndf_mixed t3 ON t2.b = t3.c
+JOIN ndf_mixed t4 ON t3.c IS NOT DISTINCT FROM t4.d;
+----
+1
+
+# a non-NULL constant on one side folds to equality, which the combiner can push
+# down as a table filter
+query II
+EXPLAIN SELECT count(*) FROM ndf_t WHERE x IS NOT DISTINCT FROM 1;
+----
+physical_plan	<REGEX>:.*Filters: x = 1.*
+
+query I
+SELECT count(*) FROM ndf_t WHERE x IS NOT DISTINCT FROM 1;
+----
+1
+
+# a constant on one side of an IS NOT DISTINCT FROM pair propagates to the other
+# side; the pair itself is regenerated as equality because the constant makes all
+# members non-NULL
+query II
+EXPLAIN SELECT count(*) FROM ndf_t WHERE x IS NOT DISTINCT FROM y AND x = 1;
+----
+physical_plan	<REGEX>:(?s).*Expression: x = y.*Filters: x = 1, y = 1.*
+
+query I
+SELECT count(*) FROM ndf_t WHERE x IS NOT DISTINCT FROM y AND x = 1;
+----
+1
