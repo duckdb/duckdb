@@ -93,9 +93,8 @@ public:
 	//! Revert an append made to this segment
 	void RevertAppend(idx_t new_count);
 
-	//! Convert a transient in-memory segment to a persistent segment backed by an on-disk block.
-	//! Only used during checkpointing.
-	void ConvertToPersistent(QueryContext context, optional_ptr<BlockManager> block_manager, const block_id_t block_id);
+	//! Convert a transient constant segment to a persistent segment without an on-disk block.
+	void ConvertToPersistentConstant();
 	//! Updates pointers to refer to the given block and offset. This is only used
 	//! when sharing a block among segments. This is invoked only AFTER the block is written.
 	void MarkAsPersistent(shared_ptr<BlockHandle> block, uint32_t offset_in_block);

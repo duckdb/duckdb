@@ -67,7 +67,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 
 	if (segment->GetStats().IsConstant()) {
 		// Constant block.
-		segment->ConvertToPersistent(partial_block_manager.GetClientContext(), nullptr, INVALID_BLOCK);
+		segment->ConvertToPersistentConstant();
 	} else if (segment_size != 0) {
 		// Non-constant block with data that has to go to disk.
 		auto &db = original_column.GetDatabase();
