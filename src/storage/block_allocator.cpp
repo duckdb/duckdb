@@ -329,6 +329,9 @@ private:
 			if (now >= next_decay_check) {
 				next_decay_check = now + BlockAllocatorConfig::ACTIVE_DECAY_INTERVAL_MS;
 				try {
+					block_allocator->FlushAllocationCache(BlockAllocatorConfig::MAX_FLUSH_BLOCKS *
+					                                          block_allocator->block_size,
+					                                      BlockAllocator::ReclaimMode::OPPORTUNISTIC);
 					block_allocator->FreeInternal(optional_idx(), BlockAllocatorConfig::MAX_FLUSH_BLOCKS,
 					                              BlockAllocator::ReclaimMode::OPPORTUNISTIC);
 				} catch (...) {
@@ -942,9 +945,16 @@ bool BlockAllocator::HasPendingCacheDecay() const {
 }
 
 idx_t BlockAllocator::FlushAllocationCache(idx_t byte_limit, ReclaimMode mode) const noexcept {
-	annotated_lock_guard<annotated_mutex> guard(flush_lock);
+	annotated_unique_lock<annotated_mutex> guard(flush_lock, std::defer_lock);
+	if (mode == ReclaimMode::OPPORTUNISTIC) {
+		if (!guard.try_lock()) {
+			return 0;
+		}
+	} else {
+		guard.lock();
+	}
 	const auto freed = allocation_cache->Flush(
-	    byte_limit, mode == ReclaimMode::DECAY ? optional_idx(AllocationCacheIdleCutoff()) : optional_idx());
+	    byte_limit, mode != ReclaimMode::FORCE ? optional_idx(AllocationCacheIdleCutoff()) : optional_idx());
 	estimated_unflushed_memory.fetch_add(freed, std::memory_order_relaxed);
 	return freed;
 }

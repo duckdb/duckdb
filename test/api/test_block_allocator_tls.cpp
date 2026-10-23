@@ -2159,3 +2159,45 @@ TEST_CASE("BlockAllocator destruction is safe before thread exit and during allo
 	}
 }
 #endif
+
+TEST_CASE("Active pool reuse expires old allocation classes and preserves fresh classes", "[api][allocation_cache]") {
+	if (sizeof(void *) != 8) {
+		return;
+	}
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t BLOCK_COUNT = 32;
+	constexpr idx_t OLD_SIZE = 512 * 1024;
+	constexpr idx_t FRESH_SIZE = 1024 * 1024;
+	atomic<idx_t> live_bytes {0};
+	Allocator fallback(CacheTestAllocate, CacheTestFree, CacheTestReallocate,
+	                   make_uniq<AllocationCacheTestData>(live_bytes));
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_COUNT * BLOCK_SIZE);
+	vector<data_ptr_t> blocks;
+	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+		auto block = allocator.AllocateData(BLOCK_SIZE);
+		block[0] = 42;
+		blocks.push_back(block);
+	}
+	for (auto block : blocks) {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+	allocator.ThreadFlush(false, 0, 1);
+	blocks.clear();
+	for (idx_t i = 0; i < 4; i++) {
+		blocks.push_back(allocator.AllocateData(OLD_SIZE));
+	}
+	for (auto block : blocks) {
+		allocator.FreeData(block, OLD_SIZE);
+	}
+	REQUIRE(live_bytes.load() == 4 * OLD_SIZE);
+	std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+	auto fresh = allocator.AllocateData(FRESH_SIZE);
+	allocator.FreeData(fresh, FRESH_SIZE);
+	REQUIRE(live_bytes.load() == 4 * OLD_SIZE + FRESH_SIZE);
+	auto reused = allocator.AllocateData(BLOCK_SIZE);
+	CHECK(reused[0] == 42);
+	CHECK(live_bytes.load() == FRESH_SIZE);
+	allocator.FreeData(reused, BLOCK_SIZE);
+	allocator.FlushAll();
+	CHECK(live_bytes.load() == 0);
+}
