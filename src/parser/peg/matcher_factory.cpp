@@ -271,14 +271,14 @@ unique_ptr<KeywordMatcher> MatcherFactory::CreateKeyword(const string &keyword, 
 }
 
 template <class T, class... ARGS>
-static unique_ptr<T> MakeStructural(ARGS &&...args) {
+static unique_ptr<T> MakeStructural(ARGS &&... args) {
 	auto result = make_uniq<T>(std::forward<ARGS>(args)...);
 	result->SetStructural();
 	return result;
 }
 
 template <class T, class... ARGS>
-static unique_ptr<T> MakeChoice(ARGS &&...args) {
+static unique_ptr<T> MakeChoice(ARGS &&... args) {
 	auto result = MakeStructural<T>(std::forward<ARGS>(args)...);
 	// This helper creates only the built-in selectors below, not factory overrides.
 	result->SetSelectionStatePreserving();

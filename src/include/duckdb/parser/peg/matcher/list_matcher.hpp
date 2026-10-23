@@ -10,6 +10,8 @@ class ChoiceMatcher;
 struct ListMatchChain {
 	vector<reference<const ListMatcher>> lists;
 	MatcherFirstSet tail_first_set;
+	MatcherFirstSet prefix_first_set;
+	bool has_optional_prefix = false;
 };
 
 class ListMatcher : public Matcher {
@@ -27,15 +29,19 @@ public:
 	DUCKDB_API void InitializeListChain();
 
 	optional_ptr<const ListMatcher> GetChainChild() const {
-		if (!first_child_is_chainable) {
+		if (!chain_child_index.IsValid()) {
 			return nullptr;
 		}
 		D_ASSERT(IsStructural() && !suppress_suggestions && !matchers.empty());
-		auto &child = matchers[0].get();
+		auto &child = matchers[chain_child_index.GetIndex()].get();
 		D_ASSERT(child.IsStructural() && child.Type() == MatcherType::LIST && !child.IsPackratMemoized());
 		auto &list = static_cast<const ListMatcher &>(child);
 		D_ASSERT(!list.suppress_suggestions);
 		return list;
+	}
+
+	idx_t GetChainChildIndex() const {
+		return chain_child_index.GetIndex();
 	}
 
 	optional_ptr<const ChoiceMatcher> GetFirstChoice() const {
@@ -82,7 +88,7 @@ public:
 
 private:
 	friend class MatcherAllocator;
-	bool first_child_is_chainable = false;
+	optional_idx chain_child_index;
 	optional_ptr<const ChoiceMatcher> first_choice;
 	optional_ptr<const ListMatchChain> prepared_chain;
 	idx_t prepared_chain_index = 0;

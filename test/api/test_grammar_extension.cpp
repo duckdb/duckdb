@@ -3012,6 +3012,64 @@ TEST_CASE("Prepared list groups preserve entry boundaries, fallbacks and allocat
 	}
 }
 
+TEST_CASE("Prepared list groups do not collapse to a present named prefix", "[api][grammar_extension]") {
+	// Program <- Middle 'WHERE'?   Middle <- 'NOT'? Inner   Inner <- Atom 'FROM'?   Atom <- 'SELECT'
+	CompiledGrammarRule atom_rule("Atom", nullptr), prefix_rule("Prefix", nullptr), inner_rule("Inner", nullptr),
+	    middle_rule("Middle", nullptr), outer_rule("Program", nullptr);
+	GroupKeywordTestMatcher atom("SELECT"), not_keyword("NOT"), from_keyword("FROM"), where_keyword("WHERE");
+	atom.SetRule(atom_rule);
+	OptionalMatcher optional_not(not_keyword), optional_from(from_keyword), optional_where(where_keyword);
+	for (auto optional : {&optional_not, &optional_from, &optional_where}) {
+		optional->SetStructural();
+	}
+	// the prefix carries a rule, so its result passes the named-result guard of the collapse
+	optional_not.SetRule(prefix_rule);
+	MatcherAllocator allocator;
+	auto &inner = allocator.Allocate(make_uniq<ListMatcher>()).Cast<ListMatcher>();
+	auto &middle = allocator.Allocate(make_uniq<ListMatcher>()).Cast<ListMatcher>();
+	auto &outer = allocator.Allocate(make_uniq<ListMatcher>()).Cast<ListMatcher>();
+	inner.SetRule(inner_rule);
+	middle.SetRule(middle_rule);
+	outer.SetRule(outer_rule);
+	vector<reference<ListMatcher>> lists {inner, middle, outer};
+	for (auto &list : lists) {
+		list.get().SetStructural();
+		list.get().SetCollapsible();
+	}
+	inner.matchers = {atom, optional_from};
+	middle.matchers = {optional_not, inner};
+	outer.matchers = {middle, optional_where};
+	auto grammar = CompiledGrammar::DefaultGrammar();
+	auto &table = grammar->GetKeywordHelper().GetLiteralTable();
+	ComputeFirstSets(outer, table);
+	auto snapshots = [&]() {
+		vector<vector<string>> result;
+		for (auto &entry : lists) {
+			for (auto mode : {MatchMode::BUILD_PARSE_RESULT, MatchMode::RECOGNIZE_ONLY}) {
+				for (auto cursor : {false, true}) {
+					for (auto single_step : {false, true}) {
+						for (auto &text :
+						     vector<string> {"", "SELECT", "NOT SELECT", "NOT SELECT FROM", "NOT SELECT WHERE",
+						                     "NOT SELECT FROM WHERE", "NOT", "NOT X", "SELECT FROM WHERE", "X"}) {
+							result.push_back(MatchSingleStepTest(entry, mode, text, cursor, single_step));
+						}
+					}
+				}
+			}
+		}
+		return result;
+	};
+	auto expected = snapshots();
+	allocator.InitializeListChains();
+	REQUIRE(outer.GetPreparedChain());
+	REQUIRE(outer.GetPreparedChain()->lists.size() == 3);
+	REQUIRE(middle.GetChainChildIndex() == 1);
+	// the present prefix must not stand in for the group: both tokens are consumed
+	auto prepared = MatchSingleStepTest(outer, MatchMode::BUILD_PARSE_RESULT, "NOT SELECT", false, false);
+	REQUIRE(prepared[0] == "1:2:2");
+	REQUIRE(snapshots() == expected);
+}
+
 TEST_CASE("Deep prepared list groups keep success and exception state on the heap", "[api][grammar_extension]") {
 	CompiledGrammarRule rule("GroupLeaf", nullptr);
 	GroupKeywordTestMatcher atom("SELECT");

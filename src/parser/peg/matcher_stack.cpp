@@ -94,7 +94,7 @@ public:
 
 public:
 	ListMatchFrame(const ListMatcher &matcher_p, MatchState &state_p, ArenaAllocator::Position mark = {},
-	               const PackratMatchState &packrat = {})
+	               const PackratMatchState &packrat = {}, bool allow_empty_prefix = false)
 	    : MatchStackFrame(MatcherType::LIST, {matcher_p, state_p}, mark, packrat), matcher(matcher_p),
 	      list_state(state_p) {
 		saved_suggestion_size = matcher_p.suppress_suggestions ? list_state.context.suggestions.size() : 0;
@@ -102,16 +102,18 @@ public:
 		if (current) {
 			start_offset = optional_idx(current->offset);
 		}
-		InitializeListChain();
+		InitializeListChain(allow_empty_prefix);
 	}
 
 public:
-	void InitializeListChain() {
+	void InitializeListChain(bool allow_empty_prefix) {
 		auto current = list_state.token_iterator.Current();
 		if (state.BuildParseResult() && (!current || current->type != TokenType::END_OF_INPUT_AUTOCOMPLETE)) {
 			while (true) {
 				auto chain = matcher.get().GetPreparedChain();
-				if (chain && matcher.get().GetPreparedChainIndex() + 1 < chain->lists.size()) {
+				if (chain && matcher.get().GetPreparedChainIndex() + 1 < chain->lists.size() &&
+				    (!chain->has_optional_prefix ||
+				     (allow_empty_prefix && !chain->prefix_first_set.MightMatch(list_state)))) {
 					auto &last = chain->lists.back().get();
 					if (!last.first_set.MightMatch(list_state)) {
 						break;
@@ -120,7 +122,14 @@ public:
 					matcher = last;
 					continue;
 				}
+
 				auto child = matcher.get().GetChainChild();
+				if (child && matcher.get().GetChainChildIndex() != 0 &&
+				    (!allow_empty_prefix ||
+				     matcher.get().matchers[0].get().Cast<OptionalMatcher>().GetChildMatcher().first_set.MightMatch(
+				         list_state))) {
+					break;
+				}
 				if (!child || !child->first_set.MightMatch(list_state)) {
 					break;
 				}
@@ -148,7 +157,7 @@ public:
 		awaiting_child = false;
 		list_state.added_suggestions.reset();
 		list_state.rule = child.GetRule();
-		InitializeListChain();
+		InitializeListChain(true);
 		InitializeFirstChoice();
 	}
 
@@ -198,6 +207,16 @@ public:
 		auto current = list_state.token_iterator.Current();
 		if (current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
 			return false;
+		}
+
+		// only the chain child's result can stand in for the rule: a present prefix's result never does
+		if (matcher.get().GetChainChild() && child_index != matcher.get().GetChainChildIndex()) {
+			return false;
+		}
+		if (child_index != 0) {
+			// Resuming a final child after its known-empty optional prefix. No prefix result was materialized.
+			D_ASSERT(result_count == 0);
+			return child_index + 1 == matcher.get().matchers.size();
 		}
 		auto chain = matcher.get().GetPreparedChain();
 		if (chain && pending && pending->matcher.GetPreparedChain() == chain &&
@@ -296,7 +315,7 @@ public:
 	ListStep StepMember(optional<MatcherResult> &child_result, optional<MatchInput> &next, MatcherResult &completed) {
 		// a collapsed group tail moves the frame to the group's root first
 		auto collapsed_tail = child_result && child_result->IsSuccess() && child_result->HasParseResult() &&
-		                      child_index == 0 && TryCollapseEmptyTail(*child_result->GetParseResult());
+		                      result_count == 0 && TryCollapseEmptyTail(*child_result->GetParseResult());
 		if (collapsed_tail) {
 			D_ASSERT(result_count == 0);
 			awaiting_child = false;
@@ -349,12 +368,11 @@ public:
 		// Completed inner lists retain their spans; ancestors need independent storage.
 		results = nullptr;
 		result_count = 0;
-		child_index = 0;
+		child_index = matcher.get().GetChainChildIndex();
 	}
 
 	//! Steps the children of the current member and feeds completed members to their pending ancestors
-	ListStep StepChildren(optional<MatcherResult> &child_result, optional<MatchInput> &next,
-	                      MatcherResult &completed) {
+	ListStep StepChildren(optional<MatcherResult> &child_result, optional<MatchInput> &next, MatcherResult &completed) {
 		while (true) {
 			auto step = StepMember(child_result, next, completed);
 			if (step != ListStep::MEMBER_MATCHED) {
@@ -595,7 +613,7 @@ optional<MatcherResult> MatchStack::PushFrame(MatchInput input) {
 		switch (kind) {
 		case MatcherType::LIST:
 			owned = arena_ptr<MatchStackFrame>(
-			    arena.Make<ListMatchFrame>(input.matcher.Cast<ListMatcher>(), input.state, mark, packrat));
+			    arena.Make<ListMatchFrame>(input.matcher.Cast<ListMatcher>(), input.state, mark, packrat, true));
 			static_cast<ListMatchFrame &>(*owned).InitializeFirstChoice();
 			break;
 
@@ -653,8 +671,8 @@ MatchStep MatchStack::ExecuteInternal(optional_ptr<MatchStack> stack, MatchStack
 			D_ASSERT(f.awaiting_child == child_result.has_value());
 			auto step = ListStep::RESUME;
 			while (step == ListStep::RESUME) {
-				step = f.first_choice ? f.StepFirstChoice(SINGLE_STEP, child_result, next, completed)
-				                      : ListStep::CHILDREN;
+				step =
+				    f.first_choice ? f.StepFirstChoice(SINGLE_STEP, child_result, next, completed) : ListStep::CHILDREN;
 				if (step == ListStep::CHILDREN) {
 					step = f.StepChildren(child_result, next, completed);
 				}

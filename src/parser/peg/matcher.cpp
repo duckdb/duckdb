@@ -71,7 +71,13 @@ static bool CanGroupList(const ListMatcher &list) {
 	    list.first_set.nullable || !list.first_set.table) {
 		return false;
 	}
-	for (idx_t i = 1; i < list.matchers.size(); i++) {
+
+	const auto chain_child = list.GetChainChild();
+	const idx_t child_index = chain_child ? list.GetChainChildIndex() : 0;
+	for (idx_t i = 0; i < list.matchers.size(); i++) {
+		if (i == child_index) {
+			continue;
+		}
 		auto &child = list.matchers[i].get();
 		if (!child.IsStructural() || child.Type() != MatcherType::OPTIONAL) {
 			return false;
@@ -119,7 +125,7 @@ void MatcherAllocator::InitializeListChains() {
 		}
 		auto child_id = child->GetPackratId().GetIndex();
 		if (child_id >= matchers.size() || matchers[child_id].get() != child.get() || !eligible[child_id] ||
-		    !SameFirstPredicate(list.first_set, child->first_set)) {
+		    (list.GetChainChildIndex() == 0 && !SameFirstPredicate(list.first_set, child->first_set))) {
 			continue;
 		}
 		next[i] = optional_idx(child_id);
@@ -141,12 +147,25 @@ void MatcherAllocator::InitializeListChains() {
 		auto chain = make_uniq<ListMatchChain>();
 		chain->tail_first_set.computed = true;
 		chain->tail_first_set.table = matchers[i]->first_set.table;
+		chain->prefix_first_set.computed = true;
+		chain->prefix_first_set.table = matchers[i]->first_set.table;
 		for (auto member : members) {
 			auto &list = matchers[member]->Cast<ListMatcher>();
 			chain->lists.push_back(list);
-			for (idx_t child = 1; child < list.matchers.size(); child++) {
-				chain->tail_first_set.Merge(
-				    list.matchers[child].get().Cast<OptionalMatcher>().GetChildMatcher().first_set);
+
+			const auto chain_child = list.GetChainChild();
+			const idx_t child_index = chain_child ? list.GetChainChildIndex() : 0;
+			for (idx_t child = 0; child < list.matchers.size(); child++) {
+				if (child == child_index) {
+					continue;
+				}
+				auto &first = list.matchers[child].get().Cast<OptionalMatcher>().GetChildMatcher().first_set;
+				if (child < child_index) {
+					chain->has_optional_prefix = true;
+					chain->prefix_first_set.Merge(first);
+				} else {
+					chain->tail_first_set.Merge(first);
+				}
 			}
 		}
 		// Publish the owner before installing borrowed pointers: vector growth can throw.
