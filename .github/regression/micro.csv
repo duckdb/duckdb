@@ -46,3 +46,4 @@ benchmark/parquet/dlba_read-long-1000000.benchmark
 benchmark/micro/update/upsert_select_cast_key.benchmark
 benchmark/micro/update/upsert_enum_key.benchmark
 benchmark/micro/pushdown/view_filter_below_delim_join.benchmark
+benchmark/micro/optimizer/union_all_subquery_planning.benchmark
