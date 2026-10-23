@@ -1,0 +1,51 @@
+# name: test/sql/join/hash_join/test_perfect_membership_join.test
+# description: Test perfect hash membership joins
+# group: [hash_join]
+
+statement ok
+CREATE TABLE membership_probe(i INTEGER, payload VARCHAR);
+
+statement ok
+INSERT INTO membership_probe VALUES (1, 'one'), (2, 'two'), (2000000, 'large'), (NULL, 'null');
+
+statement ok
+CREATE TABLE membership_build(i INTEGER);
+
+statement ok
+INSERT INTO membership_build VALUES (1), (1), (2000000), (NULL);
+
+query IT
+SELECT i, payload
+FROM membership_probe SEMI JOIN membership_build USING (i)
+ORDER BY i NULLS LAST;
+----
+1	one
+2000000	large
+
+query IT
+SELECT i, payload
+FROM membership_probe ANTI JOIN membership_build USING (i)
+ORDER BY i NULLS LAST;
+----
+2	two
+NULL	null
+
+query IT
+SELECT probe.i, probe.payload
+FROM membership_probe probe
+SEMI JOIN membership_build build
+ON probe.i IS NOT DISTINCT FROM build.i
+ORDER BY probe.i NULLS LAST;
+----
+1	one
+2000000	large
+NULL	null
+
+query IT
+SELECT probe.i, probe.payload
+FROM membership_probe probe
+ANTI JOIN membership_build build
+ON probe.i IS NOT DISTINCT FROM build.i
+ORDER BY probe.i NULLS LAST;
+----
+2	two

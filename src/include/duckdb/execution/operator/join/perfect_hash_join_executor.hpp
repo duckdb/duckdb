@@ -39,19 +39,21 @@ public:
 
 	const LogicalType &GetKeyType() const;
 	bool BuildPerfectHashTable();
+	bool IsMembershipJoin() const;
 
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context);
 	OperatorResultType ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &lhs_output_columns,
 	                                         DataChunk &chunk, OperatorState &state);
 
 	void FillSelectionVectorSwitchProbe(const Vector &source, const idx_t &count, SelectionVector &probe_sel_vec,
-	                                    idx_t &probe_sel_count, optional_ptr<SelectionVector> build_sel_vec) const;
+	                                    idx_t &probe_sel_count, optional_ptr<SelectionVector> build_sel_vec,
+	                                    bool select_matches = true) const;
 
 private:
-	template <bool BUILD_SEL_VEC>
+	template <bool BUILD_SEL_VEC, bool SELECT_MATCHES>
 	void FillSelectionVectorSwitchProbe(const Vector &source, const idx_t &count, SelectionVector &probe_sel_vec,
 	                                    idx_t &probe_sel_count, SelectionVector *build_sel_vec) const;
-	template <typename T, bool BUILD_SEL_VEC>
+	template <typename T, bool BUILD_SEL_VEC, bool SELECT_MATCHES>
 	void TemplatedFillSelectionVectorProbe(const Vector &source, const idx_t &count, SelectionVector &probe_sel_vec,
 	                                       idx_t &probe_sel_count, SelectionVector *build_sel_vec) const;
 
@@ -73,6 +75,8 @@ private:
 	ValidityMask bitmap_build_idx;
 	//! Stores the number of unique keys in the build side
 	idx_t unique_keys = 0;
+	//! Whether a null-safe membership join has a NULL build key
+	bool membership_has_null = false;
 };
 
 } // namespace duckdb
