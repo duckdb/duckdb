@@ -158,11 +158,8 @@ bool Pipeline::TryGetMaxThreads(idx_t &max_threads) {
 	if (sink) {
 		lock_guard<mutex> guard(sink->lock);
 		if (sink->sink_state) {
-			max_threads = sink->sink_state->MaxThreads(max_threads);
+			max_threads = MinValue<idx_t>(max_threads, sink->sink_state->MaxThreads(max_threads));
 		}
-	}
-	if (max_threads > active_threads) {
-		max_threads = active_threads;
 	}
 
 	return true;
