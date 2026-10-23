@@ -363,7 +363,8 @@ void TemporaryFileHandle::CreateFileIfNotExists(TemporaryFileLock &) {
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto open_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
-#if !defined(__sun) || !defined(__SVR4)
+// Experimental direct I/O requires an explicit compiler definition.
+#if defined(DUCKDB_TEMPORARY_FILE_DIRECT_IO) && (!defined(__sun) || !defined(__SVR4))
 	if (!IsEncrypted()) {
 		try {
 			handle = fs.OpenFile(path, open_flags | FileFlags::FILE_FLAGS_DIRECT_IO);
