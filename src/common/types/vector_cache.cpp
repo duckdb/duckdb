@@ -19,25 +19,27 @@ public:
 		case PhysicalType::LIST: {
 			// child data of the list
 			auto &child_type = ListType::GetChildType(type);
-			child_caches.push_back(CreateNestedChild(allocator, child_type, capacity));
+			child_caches.push_back(make_uniq<VectorCacheEntry>(allocator, child_type, capacity));
 			auto child_vector = make_uniq<Vector>(child_type, nullptr);
-			buffer = make_buffer<VectorListBuffer>(allocator, capacity, std::move(child_vector));
+			buffer = make_buffer<VectorListBuffer>(AllocatedData(allocator), capacity, std::move(child_vector));
 			break;
 		}
 		case PhysicalType::ARRAY: {
 			auto &child_type = ArrayType::GetChildType(type);
 			auto array_size = ArrayType::GetSize(type);
-			child_caches.push_back(CreateNestedChild(allocator, child_type, array_size * capacity));
-			auto child_vector = make_uniq<Vector>(child_type, array_size * capacity);
+			child_caches.push_back(make_uniq<VectorCacheEntry>(allocator, child_type, array_size * capacity));
+			auto child_vector = make_uniq<Vector>(child_type, nullptr);
 			buffer = make_shared_ptr<VectorArrayBuffer>(std::move(child_vector), array_size, capacity);
 			break;
 		}
 		case PhysicalType::STRUCT: {
 			auto &child_types = StructType::GetChildTypes(type);
+			vector<Vector> children;
 			for (auto &child_type : child_types) {
-				child_caches.push_back(CreateNestedChild(allocator, child_type.second, capacity));
+				child_caches.push_back(make_uniq<VectorCacheEntry>(allocator, child_type.second, capacity));
+				children.emplace_back(child_type.second, nullptr);
 			}
-			buffer = make_buffer<VectorStructBuffer>(type);
+			buffer = make_buffer<VectorStructBuffer>(std::move(children), capacity);
 			break;
 		}
 		case PhysicalType::VARCHAR:
@@ -110,16 +112,6 @@ public:
 	}
 	idx_t GetCapacity() const {
 		return capacity;
-	}
-
-private:
-	static unique_ptr<VectorCacheEntry> CreateNestedChild(Allocator &allocator, const LogicalType &type,
-	                                                      idx_t capacity) {
-		auto child = make_uniq<VectorCacheEntry>(allocator, type, capacity);
-		if (!type.IsNested()) {
-			child->buffer->Cast<StandardVectorBuffer>().EnsureDataAllocated();
-		}
-		return child;
 	}
 
 private:

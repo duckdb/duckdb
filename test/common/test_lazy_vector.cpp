@@ -4,6 +4,7 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
+#include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
@@ -13,6 +14,7 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
@@ -49,6 +51,49 @@ struct LazyAllocationState : PrivateAllocatorData {
 		return result;
 	}
 };
+
+void RequireLazyNestedStorage(const Vector &vec, Allocator &allocator, idx_t capacity) {
+	REQUIRE(vec.size() == 0);
+	REQUIRE(vec.Buffer().Capacity() == capacity);
+	switch (vec.GetType().InternalType()) {
+	case PhysicalType::STRUCT:
+		for (auto &child : StructVector::GetEntries(vec)) {
+			RequireLazyNestedStorage(child, allocator, capacity);
+		}
+		return;
+	case PhysicalType::ARRAY:
+		RequireLazyNestedStorage(ArrayVector::GetChild(vec), allocator, capacity * ArrayType::GetSize(vec.GetType()));
+		return;
+	case PhysicalType::LIST:
+		RequireLazyNestedStorage(ListVector::GetChild(vec), allocator, capacity);
+		break;
+	default:
+		break;
+	}
+	REQUIRE(FlatVector::GetData(vec) == nullptr);
+	REQUIRE(vec.Buffer().GetAllocator().get() == &allocator);
+}
+
+void CheckLazyCAPIInput(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
+	auto &allocations = *static_cast<LazyAllocationState *>(duckdb_scalar_function_get_extra_info(info));
+	auto child = duckdb_list_vector_get_child(duckdb_data_chunk_get_vector(input, 0));
+	allocations.fail = true;
+	try {
+		if (!duckdb_vector_get_data(child)) {
+			throw InternalException("C API input child has no payload");
+		}
+	} catch (std::exception &ex) {
+		allocations.fail = false;
+		duckdb_scalar_function_set_error(info, ex.what());
+		return;
+	}
+	allocations.fail = false;
+	auto count = duckdb_data_chunk_get_size(input);
+	auto writer = FlatVector::Writer<int64_t>(*reinterpret_cast<Vector *>(output), count);
+	for (idx_t i = 0; i < count; i++) {
+		writer.WriteValue(1);
+	}
+}
 } // namespace
 
 TEST_CASE("Chunk payload allocation is lazy by default", "[lazy_vector]") {
@@ -301,22 +346,27 @@ TEST_CASE("Empty reset dictionaries preserve slicing ownership", "[lazy_vector]"
 	REQUIRE(owned_buffer->Size() == 0);
 }
 
-TEST_CASE("Nested cache children remain eager and reusable with direct child writers", "[lazy_vector]") {
+TEST_CASE("Nested cache children allocate lazily and remain reusable with direct child writers", "[lazy_vector]") {
+	auto state = make_uniq<LazyAllocationState>();
+	auto &allocations = *state;
+	Allocator allocator(LazyAllocationState::Allocate, LazyAllocationState::Free, LazyAllocationState::Reallocate,
+	                    std::move(state));
 	auto structure = LogicalType::STRUCT({{"number", LogicalType::BIGINT}, {"text", LogicalType::VARCHAR}});
 	DataChunk chunk;
-	chunk.Initialize(Allocator::DefaultAllocator(), {structure, LogicalType::LIST(LogicalType::BIGINT)}, 8);
+	chunk.Initialize(allocator, {structure, LogicalType::LIST(LogicalType::BIGINT)}, 8);
 	auto &fields = StructVector::GetEntries(chunk.data[0]);
 	auto &elements = ListVector::GetChildMutable(chunk.data[1]);
-	REQUIRE(FlatVector::GetData(fields[0]) != nullptr);
-	REQUIRE(FlatVector::GetData(fields[1]) != nullptr);
-	REQUIRE(FlatVector::GetData(elements) != nullptr);
+	for (auto &column : chunk.data) {
+		RequireLazyNestedStorage(column, allocator, 8);
+	}
+	REQUIRE(allocations.allocations == 0);
 	for (idx_t iteration = 0; iteration < 2; iteration++) {
 		chunk.Reset();
 		{
 			auto writer = FlatVector::Writer<VectorStructType<int64_t, string_t>>(chunk.data[0], 1);
 			writer.WriteValue([&](auto &number, auto &text) {
 				number.WriteValue(42);
-				text.WriteValue(string_t("a string longer than the inline storage"));
+				text.WriteValue(string_t("inline"));
 			});
 			auto lists = FlatVector::Writer<VectorListType<int64_t>>(chunk.data[1], 1);
 			for (auto &child : lists.WriteList(2)) {
@@ -325,9 +375,166 @@ TEST_CASE("Nested cache children remain eager and reusable with direct child wri
 		}
 		REQUIRE(chunk.size() == 1);
 		REQUIRE(fields[0].GetValue(0) == Value::BIGINT(42));
-		REQUIRE(fields[1].GetValue(0) == Value("a string longer than the inline storage"));
+		REQUIRE(fields[1].GetValue(0) == Value("inline"));
 		REQUIRE(elements.size() == 2);
 		REQUIRE(elements.GetValue(1) == Value::BIGINT(7));
+		REQUIRE(allocations.allocations == 4);
+	}
+	chunk.Destroy();
+	REQUIRE(allocations.live_bytes == 0);
+}
+
+TEST_CASE("Lazy nested payloads support empty reads, append, copy and child growth", "[lazy_vector]") {
+	auto state = make_uniq<LazyAllocationState>();
+	auto &allocations = *state;
+	Allocator allocator(LazyAllocationState::Allocate, LazyAllocationState::Free, LazyAllocationState::Reallocate,
+	                    std::move(state));
+	auto empty_list = Value::LIST(LogicalType::BIGINT, {});
+	duckdb::vector<Value> numbers;
+	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE + 1; i++) {
+		numbers.push_back(Value::BIGINT(NumericCast<int64_t>(i)));
+	}
+	auto large_list = Value::LIST(LogicalType::BIGINT, std::move(numbers));
+	auto string_array = Value::ARRAY(LogicalType::VARCHAR, {Value(string(64, 'x')), Value(LogicalType::VARCHAR)});
+	auto structure = Value::STRUCT({{"items", large_list}, {"strings", string_array}});
+	duckdb::vector<Value> values {empty_list,
+	                              large_list,
+	                              string_array,
+	                              structure,
+	                              Value::ARRAY(empty_list.type(), {large_list, empty_list}),
+	                              Value::LIST(structure.type(), {structure, Value(structure.type())})};
+	for (auto &value : values) {
+		INFO(value.type().ToString());
+		for (idx_t capacity : {idx_t(0), idx_t(2)}) {
+			DataChunk chunk;
+			auto initial_allocations = allocations.allocations;
+			chunk.Initialize(allocator, {value.type()}, capacity);
+			auto &column = chunk.data[0];
+			for (idx_t iteration = 0; iteration < 2; iteration++) {
+				RequireLazyNestedStorage(column, allocator, capacity);
+				RecursiveUnifiedVectorFormat format;
+				Vector::RecursiveToUnifiedFormat(column, format);
+				Vector empty(column, 0, 0);
+				REQUIRE(empty.size() == 0);
+				column.Buffer().Verify(column.GetType());
+				chunk.Reset();
+			}
+			REQUIRE(allocations.allocations == initial_allocations);
+			allocations.fail = true;
+			REQUIRE_THROWS_AS(column.Append(value, VectorAppendMode::ALLOW_RESIZE), OutOfMemoryException);
+			chunk.Reset();
+			allocations.fail = false;
+			for (idx_t iteration = 0; iteration < 2; iteration++) {
+				auto before_reset = allocations.allocations;
+				chunk.Reset();
+				REQUIRE(allocations.allocations == before_reset);
+				column.Append(value, VectorAppendMode::ALLOW_RESIZE);
+				column.Append(Value(value.type()), VectorAppendMode::ALLOW_RESIZE);
+				REQUIRE(column.GetValue(0) == value);
+				REQUIRE(column.GetValue(1).IsNull());
+				column.Buffer().Verify(column.GetType());
+
+				DataChunk copied;
+				copied.Initialize(allocator, {value.type()}, 2);
+				RequireLazyNestedStorage(copied.data[0], allocator, 2);
+				copied.Append(chunk);
+				REQUIRE(copied.GetValue(0, 0) == value);
+				REQUIRE(copied.GetValue(0, 1).IsNull());
+				copied.data[0].Buffer().Verify(value.type());
+			}
+			chunk.Destroy();
+			REQUIRE(allocations.live_bytes == 0);
+		}
+	}
+}
+
+TEST_CASE("Nested C API outputs allocate before raw pointer access", "[lazy_vector]") {
+	auto state = make_uniq<LazyAllocationState>();
+	auto &allocations = *state;
+	Allocator allocator(LazyAllocationState::Allocate, LazyAllocationState::Free, LazyAllocationState::Reallocate,
+	                    std::move(state));
+	auto structure =
+	    LogicalType::STRUCT({{"numbers", LogicalType::ARRAY(LogicalType::BIGINT, 2)}, {"text", LogicalType::VARCHAR}});
+	DataChunk chunk;
+	chunk.Initialize(allocator, {LogicalType::LIST(structure)}, 2);
+	allocations.fail = true;
+	REQUIRE_THROWS_AS(PrepareCAPIVector(chunk.data[0]), OutOfMemoryException);
+	allocations.fail = false;
+	PrepareCAPIVector(chunk.data[0]);
+	REQUIRE(allocations.allocations == 3);
+
+	allocations.fail = true;
+	for (idx_t iteration = 0; iteration < 2; iteration++) {
+		chunk.Reset();
+		PrepareCAPIVector(chunk.data[0]);
+		auto lists = reinterpret_cast<duckdb_vector>(&chunk.data[0]);
+		auto structs = duckdb_list_vector_get_child(lists);
+		auto arrays = duckdb_struct_vector_get_child(structs, 0);
+		auto numbers = duckdb_array_vector_get_child(arrays);
+		auto strings = duckdb_struct_vector_get_child(structs, 1);
+		for (auto vec : {lists, numbers, strings}) {
+			REQUIRE(duckdb_vector_get_data(vec) != nullptr);
+			REQUIRE_NOTHROW(duckdb_vector_get_validity(vec));
+		}
+		REQUIRE(allocations.allocations == 3);
+	}
+	chunk.Destroy();
+	REQUIRE(allocations.live_bytes == 0);
+}
+
+TEST_CASE("Nested C API inputs and fetched chunks prepare empty children", "[lazy_vector]") {
+	auto state = make_uniq<LazyAllocationState>();
+	auto &allocations = *state;
+	DBConfig config;
+	config.allocator = make_uniq<Allocator>(LazyAllocationState::Allocate, LazyAllocationState::Free,
+	                                        LazyAllocationState::Reallocate, std::move(state));
+	DuckDB db(nullptr, &config);
+	Connection connection(db);
+	auto c_connection = reinterpret_cast<duckdb_connection>(&connection);
+	auto function = duckdb_create_scalar_function();
+	auto bigint = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	auto list = duckdb_create_list_type(bigint);
+	duckdb_scalar_function_set_name(function, "check_lazy_input");
+	duckdb_scalar_function_add_parameter(function, list);
+	duckdb_scalar_function_set_return_type(function, bigint);
+	duckdb_scalar_function_set_extra_info(function, &allocations, nullptr);
+	duckdb_scalar_function_set_function(function, CheckLazyCAPIInput);
+	REQUIRE(duckdb_register_scalar_function(c_connection, function) == DuckDBSuccess);
+	duckdb_destroy_scalar_function(&function);
+	duckdb_destroy_logical_type(&list);
+	duckdb_destroy_logical_type(&bigint);
+
+	auto checked =
+	    connection.Query("SELECT sum(check_lazy_input(list_filter([i], lambda x: false))) FROM range(40) t(i)");
+	REQUIRE_NO_FAIL(*checked);
+	REQUIRE(checked->Collection().GetValue(0, 0).GetValue<int64_t>() == 40);
+
+	const auto query = "SELECT list_filter([i], lambda x: false) FROM range(40) t(i)";
+	for (const string mode : {"indexed", "fetch", "streaming"}) {
+		INFO(mode);
+		duckdb_result result {};
+		duckdb_prepared_statement prepared = nullptr;
+		if (mode == "streaming") {
+			REQUIRE(duckdb_prepare(c_connection, query, &prepared) == DuckDBSuccess);
+			REQUIRE(duckdb_execute_prepared_streaming(prepared, &result) == DuckDBSuccess);
+		} else {
+			REQUIRE(duckdb_query(c_connection, query, &result) == DuckDBSuccess);
+		}
+		auto chunk = mode == "indexed" ? duckdb_result_get_chunk(result, 0) : duckdb_fetch_chunk(result);
+		REQUIRE(chunk != nullptr);
+		auto child = duckdb_list_vector_get_child(duckdb_data_chunk_get_vector(chunk, 0));
+		auto &vector = *reinterpret_cast<Vector *>(child);
+		REQUIRE(vector.size() == 0);
+		auto data = FlatVector::GetData(vector);
+		REQUIRE(data != nullptr);
+		auto allocation_size = vector.GetAllocationSize();
+		allocations.fail = true;
+		REQUIRE(duckdb_vector_get_data(child) == data);
+		allocations.fail = false;
+		REQUIRE(vector.GetAllocationSize() == allocation_size);
+		duckdb_destroy_data_chunk(&chunk);
+		duckdb_destroy_result(&result);
+		duckdb_destroy_prepare(&prepared);
 	}
 }
 

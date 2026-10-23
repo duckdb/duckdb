@@ -161,7 +161,7 @@ unique_ptr<NodeStatistics> CTableFunctionCardinality(ClientContext &context, con
 
 void CTableFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	for (auto &vector : output.data) {
-		PrepareCAPIResult(vector);
+		PrepareCAPIVector(vector);
 	}
 	auto &bind_data = data_p.bind_data->Cast<CTableBindData>();
 	auto &global_data = data_p.global_state->Cast<CTableGlobalInitData>();
