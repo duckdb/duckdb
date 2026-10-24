@@ -12,6 +12,19 @@ void PhysicalSet::SetGenericVariable(ClientContext &context, idx_t setting_index
 	Settings::Set(context, setting_index, scope, std::move(target_value));
 }
 
+void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, SetScope scope,
+                                       const Value &value) {
+	Identifier name;
+	for (auto &entry : DBConfig::GetConfig(context).GetExtensionSettings()) {
+		if (entry.second.setting_index.GetIndex() == extension_option.setting_index.GetIndex()) {
+			name = entry.first;
+			break;
+		}
+	}
+	D_ASSERT(!name.GetIdentifierName().empty());
+	SetExtensionVariable(context, name, extension_option, scope, value);
+}
+
 void PhysicalSet::SetExtensionVariable(ClientContext &context, const Identifier &name,
                                        ExtensionOption &extension_option, SetScope scope, const Value &value) {
 	auto &target_type = extension_option.type;
