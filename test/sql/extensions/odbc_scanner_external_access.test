@@ -1,0 +1,32 @@
+# name: test/sql/extensions/odbc_scanner_external_access.test
+# description: The ODBC scanner cannot be loaded when external access is disabled
+# group: [extensions]
+
+statement ok
+SET enable_external_access=FALSE
+
+statement error
+LOAD odbc_scanner
+----
+Permission Error: Cannot load extension 'odbc_scanner': this extension cannot be used when external access is disabled
+
+statement error
+LOAD odbc
+----
+Permission Error: Cannot load extension 'odbc_scanner': this extension cannot be used when external access is disabled
+
+statement error
+LOAD ODBC_Scanner
+----
+Permission Error: Cannot load extension 'odbc_scanner': this extension cannot be used when external access is disabled
+
+statement error
+LOAD '/some/path/odbc_scanner.duckdb_extension'
+----
+Permission Error: Cannot load extension 'odbc_scanner': this extension cannot be used when external access is disabled
+
+# other extensions keep the generic error
+statement error
+LOAD 'nonexistent_extension'
+----
+Loading external extensions is disabled through configuration

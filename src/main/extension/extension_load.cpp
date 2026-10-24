@@ -764,8 +764,23 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 	return ExtensionHelper::ApplyExtensionAlias(splits.front());
 }
 
+void ExtensionHelper::CheckExternalAccessForExtension(DatabaseInstance &db, const string &extension) {
+	if (Settings::Get<EnableExternalAccessSetting>(db)) {
+		return;
+	}
+	auto extension_name = GetExtensionName(extension);
+	if (extension_name == "odbc_scanner") {
+		throw PermissionException("Cannot load extension '%s': this extension cannot be used when external access "
+		                          "is disabled (enable_external_access = false)",
+		                          extension_name);
+	}
+}
+
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options,
                                             optional_ptr<ClientContext> context) {
+	// checked before the static shortcut, so linked extensions are rejected as well
+	CheckExternalAccessForExtension(db, options.extension_name);
+
 	// Loading a second copy of an extension that is already linked into this binary is an ODR
 	// violation, so ask the registry of extensions linked into this binary first.
 	// Statically linked extensions are inherently core-trusted, so only take this shortcut for a bare

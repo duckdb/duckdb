@@ -185,6 +185,7 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 		return true;
 	}
 	try {
+		CheckExternalAccessForExtension(*context.db, extension_name);
 		if (Settings::Get<AutoinstallKnownExtensionsSetting>(context)) {
 			auto autoinstall_repo = GetAutoinstallRepository(*context.db);
 			ExtensionInstallOptions options;
@@ -215,6 +216,7 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 		return true;
 	}
 	try {
+		CheckExternalAccessForExtension(instance, extension_name);
 		auto &fs = FileSystem::GetFileSystem(instance);
 		if (Settings::Get<AutoinstallKnownExtensionsSetting>(instance)) {
 			auto autoinstall_repo = GetAutoinstallRepository(instance);
@@ -384,6 +386,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 		return;
 	}
 	try {
+		CheckExternalAccessForExtension(db, extension_name);
 		auto &fs = FileSystem::GetLocal(db);
 #ifndef DUCKDB_WASM
 		if (Settings::Get<AutoinstallKnownExtensionsSetting>(db)) {

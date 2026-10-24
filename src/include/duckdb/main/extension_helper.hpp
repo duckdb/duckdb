@@ -113,6 +113,8 @@ public:
 	static void LoadExternalExtension(ClientContext &context, const ExtensionLoadOptions &options);
 	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options,
 	                                  optional_ptr<ClientContext> context = nullptr);
+	//! Throws when the extension may not be loaded because external access is disabled
+	static void CheckExternalAccessForExtension(DatabaseInstance &db, const string &extension);
 
 	//! Autoload an extension (depending on config, potentially a nop. Throws when installation fails)
 	static void AutoLoadExtension(ClientContext &context, const string &extension_name);
