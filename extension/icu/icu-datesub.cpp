@@ -4,6 +4,7 @@
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -30,16 +31,25 @@ struct ICUCalendarSub : public ICUDateFunc {
 		return SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(end_date.value, start_date.value);
 	}
 
+	template <int64_t MICROS_PER_UNIT>
+	static int64_t SubtractUnits(timestamp_tz_t start_date, timestamp_tz_t end_date) {
+		int64_t delta_us;
+		if (TrySubtractOperator::Operation(end_date.value, start_date.value, delta_us)) {
+			return delta_us / MICROS_PER_UNIT;
+		}
+		return Interval::GetDifferenceInUnits(start_date.value, end_date.value, MICROS_PER_UNIT);
+	}
+
 	static int64_t SubtractMillisecond(Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
-		return SubtractMicrosecond(calendar, start_date, end_date) / Interval::MICROS_PER_MSEC;
+		return SubtractUnits<Interval::MICROS_PER_MSEC>(start_date, end_date);
 	}
 
 	static int64_t SubtractSecond(Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
-		return SubtractMicrosecond(calendar, start_date, end_date) / Interval::MICROS_PER_SEC;
+		return SubtractUnits<Interval::MICROS_PER_SEC>(start_date, end_date);
 	}
 
 	static int64_t SubtractMinute(Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
-		return SubtractMicrosecond(calendar, start_date, end_date) / Interval::MICROS_PER_MINUTE;
+		return SubtractUnits<Interval::MICROS_PER_MINUTE>(start_date, end_date);
 	}
 
 	static int64_t SubtractHour(Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
@@ -159,6 +169,7 @@ struct ICUCalendarSub : public ICUDateFunc {
 		set.SetFallible();
 		set.SetArgProperties(1, ArgProperties().NonIncreasing());
 		set.SetArgProperties(2, ArgProperties().NonDecreasing());
+		set.SetStatisticsCallback(StatisticsPropagator::PropagateFiniteMonotoneBounds);
 		loader.RegisterFunction(set);
 	}
 };
@@ -343,6 +354,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 		set.SetFallible();
 		set.SetArgProperties(1, ArgProperties().NonIncreasing());
 		set.SetArgProperties(2, ArgProperties().NonDecreasing());
+		set.SetStatisticsCallback(StatisticsPropagator::PropagateFiniteMonotoneBounds);
 		loader.RegisterFunction(set);
 	}
 };

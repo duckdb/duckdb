@@ -98,7 +98,7 @@ unique_ptr<FunctionData> WriteLogBind(BindScalarFunctionInput &input) {
 			result->output_col = i;
 			bound_function.SetReturnType(result->return_type);
 		} else {
-			throw BinderException(StringUtil::Format("write_log: Unknown argument '%s'", names[i]));
+			throw BinderException(StringUtil::Format("write_log: Unknown argument %s", names[i]));
 		}
 	}
 

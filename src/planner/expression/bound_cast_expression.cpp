@@ -168,6 +168,9 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 	if (source_type.IsNested() || target_type.IsNested()) {
 		return NestedCastIsInvertible(source_type, target_type);
 	}
+	if (source_type.id() == LogicalTypeId::ENUM && target_type.id() == LogicalTypeId::ENUM) {
+		return false;
+	}
 	if (source_type.id() == LogicalTypeId::DECIMAL || target_type.id() == LogicalTypeId::DECIMAL) {
 		uint8_t source_width, target_width;
 		uint8_t source_scale, target_scale;
@@ -350,6 +353,10 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	// Every value has a string representation, so casting to VARCHAR never throws. VARCHAR is not the maximum
 	// of the coercion lattice (you do not implicitly widen to it), so the max-type check below would miss this.
 	if (target_type.id() == LogicalTypeId::VARCHAR) {
+		return false;
+	}
+	// A geometry -> geometry cast only changes CRS metadata (incompatible CRSs are rejected at bind time)
+	if (source_type.id() == LogicalTypeId::GEOMETRY && target_type.id() == LogicalTypeId::GEOMETRY) {
 		return false;
 	}
 	// Casting from a string requires parsing it, which throws whenever the string is not a valid representation of

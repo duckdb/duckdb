@@ -225,18 +225,17 @@ public:
 			return;
 		}
 
-		// Compute average number of tuples per partition to destroy
+		// Estimate the number of tuples eligible for destruction
 		const auto total_tuples_to_destroy = (end_partition_idx - destroy_partition_idx) * merger.partition_size;
-		const auto tuples_to_destroy_per_partition = total_tuples_to_destroy / num_partitions;
 
 		// Compute max tuples per block
 		const auto &run = *merger.sorted_runs[0];
 		const auto tuples_per_block =
 		    run.payload_data ? run.payload_data->TuplesPerBlock() : run.key_data->TuplesPerBlock();
 
-		// Compute number of blocks we can destroy per partition
-		const auto blocks_to_destroy_per_partition = tuples_to_destroy_per_partition / tuples_per_block;
-		if (blocks_to_destroy_per_partition == 0) {
+		// Batch destruction across input runs, capped by the number of output partitions
+		const auto batching_divisor = MinValue(num_runs, num_partitions);
+		if (total_tuples_to_destroy / batching_divisor < tuples_per_block) {
 			return;
 		}
 

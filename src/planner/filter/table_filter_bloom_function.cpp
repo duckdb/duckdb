@@ -39,6 +39,8 @@ static_assert(BITS_PER_SECTOR == sizeof(uint64_t) * 8, "a bloom filter sector mu
 static constexpr idx_t MAX_MEMORY_FRACTION = 64;
 
 void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
+	// a published filter is shared with probe-side consumers and must stay immutable
+	D_ASSERT(!published);
 	BufferManager &buffer_manager = BufferManager::GetBufferManager(context_p);
 
 	// a capped filter stays complete - fewer sectors only raise the false positive rate, and Seal drops a
@@ -49,13 +51,17 @@ void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 	num_sectors = MinValue(GetNumberOfSectors(number_of_rows), budget_sectors);
 	bitmask = num_sectors - 1;
 
-	buf_ = buffer_manager.GetBufferAllocator().Allocate(64 + num_sectors * sizeof(uint64_t));
-	// make sure blocks is a 64-byte aligned pointer, i.e., cache-line aligned
-	bf = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
+	if (allocated_sectors < num_sectors) {
+		buf_ = buffer_manager.GetBufferAllocator().Allocate(64 + num_sectors * sizeof(uint64_t));
+		// make sure blocks is a 64-byte aligned pointer, i.e., cache-line aligned
+		bf = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
+		allocated_sectors = num_sectors;
+	}
 	std::fill_n(bf, num_sectors, 0);
 
 	initialized = true;
 	sealed = false;
+	useful = false;
 }
 
 void BloomFilter::Fold(idx_t new_num_sectors) {
@@ -119,6 +125,7 @@ void BloomFilter::Seal(ClientContext &context) {
 			std::copy_n(bf, num_sectors, compacted_bf);
 			buf_ = std::move(compacted_buf);
 			bf = compacted_bf;
+			allocated_sectors = num_sectors;
 		}
 	}
 	sealed = true;
