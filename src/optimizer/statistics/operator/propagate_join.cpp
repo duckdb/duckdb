@@ -1,3 +1,4 @@
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
@@ -274,13 +275,25 @@ void StatisticsPropagator::MultiplyCardinalities(unique_ptr<NodeStatistics> &sta
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin &join,
                                                                      unique_ptr<LogicalOperator> &node_ptr) {
 	// first propagate through the children of the join
-	node_stats = PropagateStatistics(join.children[0]);
+	auto join_stats = PropagateStatistics(join.children[0]);
+	// node_stats = PropagateStatistics(join.children[0]);
+	const bool keep_left = join.join_type == JoinType::LEFT || join.join_type == JoinType::SINGLE || join.join_type == JoinType::OUTER; 
+	const bool keep_right = join.join_type == JoinType::RIGHT ||  join.join_type == JoinType::OUTER;
+	const bool left_empty = !join_stats || (join_stats->has_max_cardinality && join_stats->max_cardinality == 0);
 	for (idx_t child_idx = 1; child_idx < join.children.size(); child_idx++) {
 		auto child_stats = PropagateStatistics(join.children[child_idx]);
+		const bool right_empty = !child_stats || (child_stats->has_max_cardinality && child_stats->max_cardinality == 0);
+		if (keep_left && right_empty) {
+			continue;
+		}
+		if (keep_right && left_empty) {
+			join_stats = std::move(child_stats);
+			continue;
+		}
 		if (!child_stats) {
-			node_stats = nullptr;
-		} else if (node_stats) {
-			MultiplyCardinalities(node_stats, *child_stats);
+			join_stats = nullptr;
+		} else if (join_stats) {
+			MultiplyCardinalities(join_stats, *child_stats);
 		}
 	}
 
@@ -342,7 +355,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 			}
 		}
 	}
-	return std::move(node_stats);
+	return join_stats;
 }
 
 static void MaxCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats) {
