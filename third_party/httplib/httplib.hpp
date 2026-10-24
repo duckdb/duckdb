@@ -115,8 +115,9 @@
 #define CPPHTTPLIB_REQUEST_URI_MAX_LENGTH 8192
 #endif
 
+// DuckDB: 64 KiB instead of 8 KiB; github.com sends a content-security-policy line of over 9 KiB
 #ifndef CPPHTTPLIB_HEADER_MAX_LENGTH
-#define CPPHTTPLIB_HEADER_MAX_LENGTH 8192
+#define CPPHTTPLIB_HEADER_MAX_LENGTH 65536
 #endif
 
 #ifndef CPPHTTPLIB_HEADER_MAX_COUNT
