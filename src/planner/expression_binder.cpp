@@ -286,7 +286,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 				result = BoundCastExpression::AddCastToType(context, std::move(result), exchanged_type);
 			}
 		}
-		if (result->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+		if (ContainsType(result->GetReturnType(), LogicalTypeId::UNKNOWN)) {
 			throw ParameterNotResolvedException();
 		}
 	}

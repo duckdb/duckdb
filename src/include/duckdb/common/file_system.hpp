@@ -301,6 +301,10 @@ public:
 	//! The space available for new files in the file system holding path; invalid if it cannot be determined
 	DUCKDB_API virtual optional_idx GetAvailableDiskSpace(const string &path,
 	                                                      optional_ptr<FileOpener> opener = nullptr);
+	//! Returns the soft limit on open file descriptors, or an invalid index when it is unlimited or unknown.
+	DUCKDB_API static optional_idx GetFileDescriptorLimit();
+	//! Returns the share of the file descriptor limit that one consumer of descriptors may hold open.
+	DUCKDB_API static idx_t GetFileDescriptorShare(idx_t file_descriptor_limit);
 	//! Path separator for path
 	DUCKDB_API virtual string PathSeparator(const string &path);
 	//! Checks if path is is an absolute path

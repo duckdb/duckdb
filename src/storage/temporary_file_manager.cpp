@@ -228,8 +228,7 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(QueryContext con
                                                                 const TemporaryFileIndex &index_in_file,
                                                                 unique_ptr<FileBuffer> buffer) const {
 	auto block_index = index_in_file.block_index.GetIndex();
-	auto block_header_size = index_in_file.block_header_size.GetIndex();
-	D_ASSERT(buffer->GetHeaderSize() == block_header_size);
+	D_ASSERT(buffer->GetHeaderSize() == index_in_file.block_header_size.GetIndex());
 	AllocatedData compressed_buffer;
 	data_ptr_t read_buffer;
 	idx_t read_size;
