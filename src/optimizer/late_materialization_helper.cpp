@@ -20,8 +20,13 @@ unique_ptr<LogicalGet> LateMaterializationHelper::CreateLHSGet(const LogicalGet 
 		if (ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME)) {
 			continue;
 		}
-		auto col_idx = column_ids[filter_entry.GetIndex()].GetPrimaryIndex();
-		auto &col_type = rhs.returned_types[col_idx];
+		auto &column_index = column_ids[filter_entry.GetIndex()];
+		if (column_index.IsVirtualColumn()) {
+			// virtual columns (e.g. filename) are not part of returned_types - their filters remain
+			// applied on the original get, which resolves virtual column types separately
+			continue;
+		}
+		auto &col_type = rhs.returned_types[column_index.GetPrimaryIndex()];
 		auto optional_expr = CreateOptionalFilterExpression(expr_filter.expr->Copy(), col_type);
 		new_get->table_filters.PushFilter(filter_entry.GetIndex(),
 		                                  make_uniq<ExpressionFilter>(std::move(optional_expr)));
