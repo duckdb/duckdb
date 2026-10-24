@@ -276,7 +276,6 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
                                                                      unique_ptr<LogicalOperator> &node_ptr) {
 	// first propagate through the children of the join
 	auto join_stats = PropagateStatistics(join.children[0]);
-	// node_stats = PropagateStatistics(join.children[0]);
 	const bool keep_left = join.join_type == JoinType::LEFT || join.join_type == JoinType::SINGLE || join.join_type == JoinType::OUTER; 
 	const bool keep_right = join.join_type == JoinType::RIGHT ||  join.join_type == JoinType::OUTER;
 	const bool left_empty = !join_stats || (join_stats->has_max_cardinality && join_stats->max_cardinality == 0);
