@@ -30,3 +30,9 @@ SELECT * FROM read_parquet('{TEST_DIR}/lm_virtual_filter.parquet') ORDER BY j DE
 99	100	101	-99
 98	99	100	-98
 97	98	99	-97
+
+# combining the virtual column filter with a regular filter and an aggregate
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/lm_virtual_filter.parquet') WHERE filename LIKE '%lm_virtual_filter%' AND j <= 3
+----
+3
