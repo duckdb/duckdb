@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/http/http_util.hpp"
+#include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/common/local_file_system.hpp"
 
 #include <set>
@@ -279,6 +280,15 @@ TEST_CASE("Test deprecated extension options warn when set", "[api]") {
 	                             "The 'my_deprecated_option' setting is deprecated and will be removed"));
 	REQUIRE_NO_FAIL(con.Query("RESET my_deprecated_option"));
 	REQUIRE_NO_FAIL(con.Query("SET my_option=true"));
+
+	// setting the option directly, as ducklake does, warns as well
+	ExtensionOption option;
+	REQUIRE(config.TryGetExtensionOption(Identifier("my_deprecated_option"), option));
+	REQUIRE_THROWS_WITH(PhysicalSet::SetExtensionVariable(*con.context, option, SetScope::SESSION, Value(true)),
+	                    Catch::Contains("is deprecated"));
+	option = ExtensionOption();
+	REQUIRE(config.TryGetExtensionOption(Identifier("my_option"), option));
+	REQUIRE_NOTHROW(PhysicalSet::SetExtensionVariable(*con.context, option, SetScope::SESSION, Value(true)));
 
 	result = con.Query("SELECT count(*) FROM duckdb_settings() WHERE name = 'my_deprecated_option'");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
