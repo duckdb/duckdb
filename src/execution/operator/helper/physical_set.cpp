@@ -12,11 +12,6 @@ void PhysicalSet::SetGenericVariable(ClientContext &context, idx_t setting_index
 	Settings::Set(context, setting_index, scope, std::move(target_value));
 }
 
-void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, SetScope scope,
-                                       const Value &value) {
-	SetExtensionVariable(context, Identifier(), extension_option, scope, value);
-}
-
 void PhysicalSet::SetExtensionVariable(ClientContext &context, const Identifier &name,
                                        ExtensionOption &extension_option, SetScope scope, const Value &value) {
 	auto &target_type = extension_option.type;
@@ -27,6 +22,10 @@ void PhysicalSet::SetExtensionVariable(ClientContext &context, const Identifier 
 	}
 	if (extension_option.info) {
 		extension_option.info->OnSet(context, resolved_scope, target_value, false);
+	}
+	// after the callbacks, which may still refuse the value
+	if (extension_option.is_deprecated) {
+		SettingCallbackInfo(context, resolved_scope).WarnDeprecated(name.GetIdentifierName());
 	}
 	scope = resolved_scope;
 	auto setting_index = extension_option.setting_index.GetIndex();
@@ -85,9 +84,13 @@ void PhysicalSet::SetVariable(ClientContext &context, const Identifier &name, Se
 
 	Value input_val = value.CastAs(context, DBConfig::ParseLogicalType(option->parameter_type));
 	if (option->default_value) {
+		SettingCallbackInfo info(context, variable_scope);
 		if (option->set_callback) {
-			SettingCallbackInfo info(context, variable_scope);
 			option->set_callback(info, input_val);
+		}
+		// after the callback, which may still refuse the value
+		if (option->is_deprecated) {
+			info.WarnDeprecated(option->name);
 		}
 		auto setting_index = option->setting_idx.GetIndex();
 		SetGenericVariable(context, setting_index, variable_scope, std::move(input_val));
