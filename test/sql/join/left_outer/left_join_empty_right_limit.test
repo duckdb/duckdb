@@ -1,0 +1,35 @@
+# name: test/sql/join/left_outer/left_join_empty_right_limit.test
+# description: LEFT JOIN onto an empty table must keep LIMIT 1 / EXISTS (issue #27803)
+# group: [left_outer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+CREATE TABLE s(a INTEGER);
+
+statement ok
+INSERT INTO s VALUES (1), (1);
+
+statement ok
+CREATE TABLE b(a INTEGER, c INTEGER);
+
+query I
+SELECT count(*) FROM s LEFT JOIN b ON b.a = s.a WHERE s.a = 1 AND b.c IS NULL
+----
+2
+
+query I
+SELECT 1 FROM s LEFT JOIN b ON b.a = s.a WHERE s.a = 1 AND b.c IS NULL LIMIT 1
+----
+1
+
+query I
+SELECT EXISTS (SELECT 1 FROM s LEFT JOIN b ON b.a = s.a WHERE s.a = 1 AND b.c IS NULL)
+----
+true
+
+query II
+EXPLAIN SELECT 1 FROM s LEFT JOIN b ON b.a = s.a WHERE s.a = 1 AND b.c IS NULL LIMIT 1
+----
+physical_plan	<REGEX>:.*STREAMING_LIMIT.*
