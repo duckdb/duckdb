@@ -276,18 +276,18 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
                                                                      unique_ptr<LogicalOperator> &node_ptr) {
 	// first propagate through the children of the join
 	auto join_stats = PropagateStatistics(join.children[0]);
-	const bool match_required = join.join_type == JoinType::INNER || join.join_type == JoinType::SEMI ||
-	                            join.join_type == JoinType::RIGHT_SEMI;
+	auto join_type = join.join_type;
+	const bool keep_left = IsLeftOuterJoin(join_type) || join_type == JoinType::SINGLE ||
+	                       join_type == JoinType::ANTI || join_type == JoinType::MARK;
+	const bool keep_right = IsRightOuterJoin(join_type) || join_type == JoinType::RIGHT_ANTI;
 	const bool left_empty = join_stats && join_stats->has_max_cardinality && join_stats->max_cardinality == 0;
 	for (idx_t child_idx = 1; child_idx < join.children.size(); child_idx++) {
 		auto child_stats = PropagateStatistics(join.children[child_idx]);
 		const bool right_empty = child_stats && child_stats->has_max_cardinality && child_stats->max_cardinality == 0;
-		if (!match_required && right_empty) {
-			// still emit unmatched left rows
+		if (keep_left && right_empty) {
 			continue;
 		}
-		if (!match_required && left_empty) {
-			// emit right 
+		if (keep_right && left_empty) {
 			join_stats = std::move(child_stats);
 			continue;
 		}
@@ -298,7 +298,6 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 		}
 	}
 
-	auto join_type = join.join_type;
 	// depending on the join type, we might need to alter the statistics
 	// LEFT, FULL, RIGHT OUTER and SINGLE joins can introduce null values
 	// this requires us to alter the statistics after this point in the query plan
