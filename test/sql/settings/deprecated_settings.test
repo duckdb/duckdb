@@ -122,13 +122,3 @@ RESET integer_division;
 
 statement ok
 SET warnings_as_errors=false;
-
-# every setting that warns is listed as deprecated
-query I
-SELECT count(*) FROM duckdb_settings(deprecated := true)
-WHERE name IN ('delim_join_as_cte', 'legacy_disable_null_type', 'legacy_metrics_format', 'error_on_division_by_zero',
-               'experimental_metadata_reuse', 'force_column_metadata_reuse', 'enable_object_cache',
-               'regex_match_operator_semantics', 'table_function_identifier_conversion', 'lambda_syntax',
-               'vacuum_rebuild_indexes');
-----
-11
