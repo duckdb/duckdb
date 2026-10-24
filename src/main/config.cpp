@@ -317,6 +317,7 @@ void SettingCallbackInfo::WarnDeprecated(const string &name) const {
 	} else if (db) {
 		DUCKDB_LOG_WARNING(*db, message);
 	}
+	// a setting in the startup config has no database to log to yet
 }
 
 idx_t DBConfig::GetOptionCount() {
@@ -427,6 +428,7 @@ void DBConfig::SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationO
 		if (option.set_callback) {
 			option.set_callback(info, input);
 		}
+		// after the callback, which may still refuse the value
 		if (option.is_deprecated) {
 			info.WarnDeprecated(option.name);
 		}

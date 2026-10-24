@@ -41,8 +41,6 @@ public:
 		return true;
 	}
 
-	static void SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, SetScope scope,
-	                                 const Value &value);
 	static void SetExtensionVariable(ClientContext &context, const Identifier &name, ExtensionOption &extension_option,
 	                                 SetScope scope, const Value &value);
 

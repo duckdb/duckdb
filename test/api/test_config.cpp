@@ -285,3 +285,34 @@ TEST_CASE("Test deprecated extension options warn when set", "[api]") {
 	result = con.Query("SELECT count(*) FROM duckdb_settings(deprecated := true) WHERE name = 'my_deprecated_option'");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
+
+TEST_CASE("Test every deprecated setting warns when set", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET enable_logging=true"));
+	REQUIRE_NO_FAIL(con.Query("SET warnings_as_errors=true"));
+	// profiling_mode only has a value while profiling is on
+	REQUIRE_NO_FAIL(con.Query("SET enable_profiling='no_output'"));
+
+	auto settings = con.Query("SELECT name, value FROM duckdb_settings(deprecated := true) ORDER BY name");
+	REQUIRE_NO_FAIL(*settings);
+	idx_t checked = 0;
+	while (auto chunk = settings->Fetch()) {
+		for (idx_t i = 0; i < chunk->size(); i++) {
+			auto name = chunk->GetValue(0, i).ToString();
+			auto value = chunk->GetValue(1, i).ToSQLString();
+			INFO(name);
+			// setting a deprecated setting to its current value warns, which warnings_as_errors turns into an error
+			auto result = con.Query(StringUtil::Format("SET %s = %s", name, value));
+			REQUIRE(result->HasError());
+			if (name == "vacuum_rebuild_indexes") {
+				// only settable in the startup config, so it never reaches the warning
+				REQUIRE(StringUtil::Contains(result->GetError(), "while database is running"));
+			} else {
+				REQUIRE(StringUtil::Contains(result->GetError(), "deprecated"));
+			}
+			checked++;
+		}
+	}
+	REQUIRE(checked > 0);
+}
