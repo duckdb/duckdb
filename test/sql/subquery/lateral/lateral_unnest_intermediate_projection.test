@@ -157,8 +157,8 @@ ORDER BY a;
 
 # mixed payload widths: the intermediate projection carries two payload columns
 query II
-SELECT i, xs[j] + twice AS a FROM (SELECT [1,2,3]::INTEGER[] AS xs, 1 AS i) s
-CROSS JOIN (SELECT j, twice FROM (SELECT elem AS j, elem * 2 AS twice FROM (SELECT unnest(range(i+1, 4)) AS elem) b) r) e
+SELECT i, a FROM (SELECT [1,2,3]::INTEGER[] AS xs, 1 AS i) s
+CROSS JOIN (SELECT xs[j] + twice AS a FROM (SELECT elem AS j, elem * 2 AS twice FROM (SELECT unnest(range(i+1, 4)) AS elem) b) r) e
 ORDER BY a;
 ----
 1	6
