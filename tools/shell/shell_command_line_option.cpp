@@ -1,6 +1,7 @@
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
 #include "terminal.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb_shell {
 
@@ -339,6 +340,11 @@ MetadataResult FormatFile(ShellState &state, const vector<string> &args) {
 	state.Print(PrintOutput::STDOUT, sql);
 	return MetadataResult::SUCCESS;
 }
+
+static constexpr auto CLI_DEFAULT_STORAGE_VERSION = duckdb::StorageVersion::V2_0_0;
+
+static_assert(CLI_DEFAULT_STORAGE_VERSION == duckdb::StorageVersionInfo::GetStorageVersionDefault(),
+              "CLI help default storage version must match the actual storage default");
 
 static const CommandLineOption command_line_options[] = {
     {"agent", 0, "", SetAgentMode<OptionType::ON>, nullptr,
