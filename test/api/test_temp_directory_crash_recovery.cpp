@@ -42,12 +42,18 @@ TEST_CASE("Orphaned temp files from a crashed process are cleaned up on startup"
 	auto con = make_uniq<Connection>(*db);
 	REQUIRE_NO_FAIL(con->Query("SET temp_directory='" + temp_dir + "'"));
 	REQUIRE_NO_FAIL(con->Query("SET memory_limit='4MB'"));
-	REQUIRE_NO_FAIL(con->Query("CREATE OR REPLACE TABLE t2 AS SELECT random() FROM range(200000)"));
+	REQUIRE_NO_FAIL(con->Query("CREATE TEMP TABLE t2 AS SELECT random() FROM range(200000)"));
+
+	string listing;
+	fs->ListFiles(temp_dir, [&](const string &path, bool isdir) {
+		listing += (isdir ? "[dir] " : "") + path + "\n";
+	});
+	INFO("temp_dir contents after spill:\n" + listing);
 
 	// The unlocked ownership marker identifies this group as belonging to a dead instance.
-	REQUIRE_FALSE(fs->FileExists(orphan_lock));
-	REQUIRE_FALSE(fs->FileExists(orphan1));
-	REQUIRE_FALSE(fs->FileExists(orphan2));
+	CHECK_FALSE(fs->FileExists(orphan_lock));
+	CHECK_FALSE(fs->FileExists(orphan1));
+	CHECK_FALSE(fs->FileExists(orphan2));
 	// but anything not matching the prefix must be left alone
 	REQUIRE(fs->FileExists(unrelated));
 
