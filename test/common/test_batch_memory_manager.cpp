@@ -55,3 +55,23 @@ TEST_CASE("BatchMemoryManager reserves memory when a sink runs out without sched
 	REQUIRE(temporary_memory_manager.GetTotalReservation() == 0);
 }
 #endif
+
+TEST_CASE("Batch insert in a CTE releases its reservation before the query ends", "[storage][batch_memory_manager]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &temporary_memory_manager = TemporaryMemoryManager::Get(*con.context);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE src AS SELECT i, i::VARCHAR AS s FROM range(1000000) t(i)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE dst (i BIGINT, s VARCHAR)"));
+
+	// the CTE runs the batch insert to completion before the main query streams its first chunk
+	auto stream = OpenStream(con, "WITH ins AS (INSERT INTO dst FROM src) SELECT * FROM range(100000)");
+	auto chunk = stream->Fetch();
+	REQUIRE(chunk);
+	REQUIRE(temporary_memory_manager.GetActiveStateCount() == 0);
+	REQUIRE(temporary_memory_manager.GetTotalReservation() == 0);
+	while (stream->Fetch()) {
+	}
+
+	auto result = con.Query("SELECT count(*) FROM dst");
+	REQUIRE(CHECK_COLUMN(result, 0, {1000000}));
+}

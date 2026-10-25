@@ -580,6 +580,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		optimistic_writer.Merge(*writer);
 		optimistic_writer.FinalFlush();
 		memory_manager.FinalCheck();
+		memory_manager.Release();
 		return SinkFinalizeType::READY;
 	}
 
@@ -605,6 +606,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 	g_state.collections.clear();
 	data_table.FinalizeLocalAppend(append_state);
 	memory_manager.FinalCheck();
+	memory_manager.Release();
 	return SinkFinalizeType::READY;
 }
 
