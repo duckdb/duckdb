@@ -260,7 +260,7 @@ private:
 			                                result_validity, adapter);
 			return;
 		default:
-			throw InternalException("Invalid nullable generic scalar executor selection profile");
+			InternalException::Throw("Invalid nullable generic scalar executor selection profile");
 		}
 	}
 
@@ -322,7 +322,7 @@ private:
 			                              adapter);
 			return;
 		default:
-			throw InternalException("Invalid non-null generic scalar executor selection profile");
+			InternalException::Throw("Invalid non-null generic scalar executor selection profile");
 		}
 	}
 
@@ -440,7 +440,7 @@ private:
 					}
 					break;
 				default:
-					throw InternalException("Invalid flat/constant scalar executor profile");
+					InternalException::Throw("Invalid flat/constant scalar executor profile");
 				}
 			}
 		}
@@ -843,7 +843,7 @@ public:
 	static idx_t Select(const std::array<VectorRef, sizeof...(ARGS)> &inputs, const SelectionVector *sel, idx_t count,
 	                    SelectionVector *true_sel, SelectionVector *false_sel, ADAPTER &adapter) {
 		if (!true_sel && !false_sel) {
-			throw InternalException("Either true or false sel must be set");
+			InternalException::Throw("Either true or false sel must be set");
 		}
 		if (!sel) {
 			sel = FlatVector::IncrementalSelectionVector();
