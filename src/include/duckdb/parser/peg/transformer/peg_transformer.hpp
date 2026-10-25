@@ -414,35 +414,38 @@ public:
 
 	template <class T>
 	T TakeResult(idx_t slot) {
-		if (slot >= child_results.size() || !child_results[slot]) {
-			throw InternalException("Missing transformer result for slot %llu in rule '%s'", slot, info.name);
-		}
-		auto *result_value = TryGetTransformResult<T>(*child_results[slot]);
+		auto *result_value =
+		    reinterpret_cast<T *>(TryGetChildValue(slot, TransformResultTypeHash<T>(), TransformResultTypeName<T>()));
 		if (!result_value) {
 			auto bridged = TryBridgeTransformResultValue<T>(*child_results[slot]);
 			if (bridged) {
 				auto bridged_result = std::move(bridged->value);
-				child_results[slot].reset();
+				ReleaseChildResult(slot);
 				return bridged_result;
 			}
 			throw InternalException("Unexpected transformer result type for slot %llu in rule '%s'", slot, info.name);
 		}
 		auto result = std::move(*result_value);
-		child_results[slot].reset();
+		ReleaseChildResult(slot);
 		return result;
 	}
 
 	template <class T>
 	T &GetResult(idx_t slot) {
-		if (slot >= child_results.size() || !child_results[slot]) {
-			throw InternalException("Missing transformer result for slot %llu in rule '%s'", slot, info.name);
-		}
-		auto *result_value = TryGetTransformResult<T>(*child_results[slot]);
+		auto *result_value =
+		    reinterpret_cast<T *>(TryGetChildValue(slot, TransformResultTypeHash<T>(), TransformResultTypeName<T>()));
 		if (!result_value) {
 			throw InternalException("Unexpected transformer result type for slot %llu in rule '%s'", slot, info.name);
 		}
 		return *result_value;
 	}
+
+	//! The value in a slot when it has the given type, else nullptr; throws for an empty slot
+	void *TryGetChildValue(idx_t slot, uint64_t type_hash, const char *type_name);
+	//! Releases a slot after its value was taken
+	void ReleaseChildResult(idx_t slot);
+	[[noreturn]] void ThrowMissingResult(idx_t slot) const;
+	[[noreturn]] void ThrowUnexpectedResultType(idx_t slot) const;
 
 	ParseResult &parse_result;
 	const TransformFrameOps &info;
