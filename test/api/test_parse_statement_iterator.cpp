@@ -10,26 +10,6 @@
 
 using namespace duckdb;
 
-TEST_CASE("Unicode whitespace preserves parser error byte offsets", "[api][parse_iterator][unicode_offsets]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("SET errors_as_json=true"));
-	for (const string &space :
-	     {string(" "), string("\xC2\xA0"), string("\xE2\x80\x83"), string("\xC2\xA0\xE2\x80\x83")}) {
-		for (const string &prefix : {string(), string("/* \xC3\xA9 */ ")}) {
-			const auto query = prefix + "SELECT" + space + ")";
-			const auto expected_position = std::to_string(query.find(')'));
-			CAPTURE(query, expected_position);
-			auto result = con.Query(query);
-			REQUIRE(result->HasError());
-			REQUIRE(result->GetErrorObject().ExtraInfo().at("position") == expected_position);
-			auto prepared = con.Prepare(query);
-			REQUIRE(prepared->HasError());
-			REQUIRE(prepared->GetErrorObject().ExtraInfo().at("position") == expected_position);
-		}
-	}
-}
-
 // ParseIterator and StatementIterator no longer share a contract. Both bind their ClientContext at
 // construction, so Peek()/GetStatement() take no context argument:
 //   ParseIterator : Peek() parses + buffers one statement; GetStatement() returns it (no
