@@ -55,7 +55,7 @@ vector<unique_ptr<ParsedExpression>> SelectNode::GetSelectListForSerialization(S
 	result.reserve(select_list.size());
 	for (auto &expression : select_list) {
 		auto copy = expression->Copy();
-		if (!serializer.ShouldSerialize(StorageVersion::V2_0_0) && !expression->HasAlias() &&
+		if (!serializer.ShouldSerialize(StorageVersion::V2_1_0) && !expression->HasAlias() &&
 		    !IsDynamicProjection(*expression) && ContainsSimpleCase(*expression)) {
 			copy->SetAlias(expression->GetName());
 		}

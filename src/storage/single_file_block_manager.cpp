@@ -294,7 +294,8 @@ void DatabaseHeader::SetStorageVersionInDatabaseHeader(DatabaseHeader &header, S
 		// From v2.0.0 onwards, we use and store only the storage version number
 		switch (read_version) {
 		case StorageVersion::V2_0_0:
-			header.storage_compatibility = StorageVersion::V2_0_0;
+		case StorageVersion::V2_1_0:
+			header.storage_compatibility = read_version;
 			break;
 		case StorageVersion::V2_1_0:
 			header.storage_compatibility = StorageVersion::V2_1_0;

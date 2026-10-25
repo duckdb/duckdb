@@ -1,0 +1,81 @@
+# name: test/sql/projection/test_simple_case_storage.test
+# description: Simple CASE persistence uses v2.1.0 and preserves legacy column names
+# group: [projection]
+
+load {TEST_DIR}/case_latest.db readwrite v2.1.0
+
+statement ok
+CREATE SEQUENCE stored_case_seq
+
+statement ok
+CREATE VIEW stored_case AS SELECT CASE nextval('stored_case_seq') % 3
+    WHEN 0 THEN 'a' WHEN 1 THEN 'b' WHEN 2 THEN 'c' ELSE 'other' END AS result FROM range(10000)
+
+statement ok
+CREATE MACRO stored_case_macro() AS CASE nextval('stored_case_seq') % 3
+    WHEN 0 THEN 'a' WHEN 1 THEN 'b' WHEN 2 THEN 'c' ELSE 'other' END
+
+statement ok
+CREATE VIEW stored_case_name AS SELECT CASE 2 WHEN 1 THEN 42 WHEN 2 THEN 84 ELSE 999 END
+
+statement ok
+CREATE VIEW stored_case_dependent AS SELECT "CASE (2) WHEN (1) THEN (42) WHEN (2) THEN (84) ELSE 999 END" AS result
+FROM stored_case_name
+
+restart
+
+query I
+SELECT count(*) FROM stored_case WHERE result = 'other'
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT stored_case_macro() AS result FROM range(10000)) WHERE result = 'other'
+----
+0
+
+query I
+SELECT * FROM stored_case_dependent
+----
+84
+
+# Released formats keep the old representation, including its evaluation limitations.
+statement ok
+ATTACH '{TEST_DIR}/case_v200.db' AS legacy (STORAGE_VERSION 'v2.0.0')
+
+statement ok
+CREATE VIEW legacy.case_name AS SELECT CASE 2 WHEN 1 THEN 42 WHEN 2 THEN 84 ELSE 999 END
+
+statement ok
+CREATE VIEW legacy.case_dependent AS SELECT "CASE (2) WHEN (1) THEN (42) WHEN (2) THEN (84) ELSE 999 END" AS result
+FROM legacy.case_name
+
+statement ok
+CREATE MACRO legacy.case_macro(x) AS CASE x WHEN 1 THEN 42 WHEN 2 THEN 84 ELSE 999 END
+
+statement ok
+CREATE SEQUENCE legacy.case_seq START 2
+
+statement ok
+CREATE VIEW legacy.case_volatile AS SELECT CASE nextval('legacy.case_seq') WHEN 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END AS result
+
+statement ok
+DETACH legacy
+
+statement ok
+ATTACH '{TEST_DIR}/case_v200.db' AS legacy
+
+query I
+SELECT * FROM legacy.case_dependent
+----
+84
+
+query I
+SELECT legacy.case_macro(2)
+----
+84
+
+query T
+SELECT * FROM legacy.case_volatile
+----
+c

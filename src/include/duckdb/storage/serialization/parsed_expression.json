@@ -105,13 +105,13 @@
         "id": 202,
         "name": "case_operand",
         "type": "ParsedExpression*",
-        "version": "v2.0.0",
+        "version": "v2.1.0",
         "accessor_mut": "CaseOperandMutable()",
         "accessor": "CaseOperand()",
         "nullable": true
       }
     ],
-    "use_legacy_serialization": "v2.0.0"
+    "use_legacy_serialization": "v2.1.0"
   },
   {
     "class": "CastExpression",
