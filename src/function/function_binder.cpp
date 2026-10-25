@@ -550,7 +550,7 @@ template <class T>
 static void PlaceArguments(ClientContext &context, const T &function,
                            vector<unique_ptr<Expression>> &positional_arguments,
                            vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, vector<Value> &parameters,
-                           named_argument_map_t &named_parameters) {
+                           named_argument_map_t &named_parameters, bool positional_input_columns = false) {
 	auto &signature = function.GetSignature();
 	const auto positional_count = signature.GetPositionalParameterCount();
 	const auto passed_count = positional_arguments.size();
@@ -617,6 +617,12 @@ static void PlaceArguments(ClientContext &context, const T &function,
 		named_slots[param_idx.GetIndex()] = *named_argument.second;
 	}
 
+	if (positional_input_columns) {
+		// Correlated in-out arguments remain columns in their input subquery.
+		// Only scalar keyword options are evaluated during this placement pass.
+		signature.FillNamedDefaults(context, named_parameters);
+		return;
+	}
 	for (idx_t i = 0; i < positional_count; i++) {
 		auto &param = signature.GetParameter(i);
 		if (i < passed_count) {
@@ -658,8 +664,33 @@ optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFun
 }
 
 optional_idx FunctionBinder::BindTableInOutFunction(const Identifier &name, const TableFunctionSet &functions,
-                                                    const vector<LogicalType> &input_types, ErrorData &error) {
-	return BindFunctionFromArguments(name, functions, input_types, {}, error);
+                                                    const vector<LogicalType> &input_types,
+                                                    vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+                                                    named_argument_map_t &named_parameters, ErrorData &error) {
+	VerifyNamedArgumentsAccepted(name, functions, named_arguments);
+	vector<pair<Identifier, LogicalType>> named_types;
+	for (const auto &argument : named_arguments) {
+		named_types.emplace_back(argument.first, ExpressionBinder::GetExpressionReturnType(*argument.second));
+	}
+	auto entry = BindFunctionFromArguments(name, functions, input_types, named_types, error);
+	if (!entry.IsValid()) {
+		return entry;
+	}
+	auto &function = *functions.GetFunctionByOffset(entry.GetIndex());
+	for (const auto &argument : named_arguments) {
+		auto parameter = function.GetSignature().GetParameterIndexByName(argument.first);
+		if (parameter.IsValid() && function.GetSignature().GetParameter(parameter.GetIndex()).AcceptsPosition()) {
+			throw BinderException("Table in-out function input columns must be passed positionally: %s",
+			                      argument.first);
+		}
+	}
+	// Reuse ordinary keyword validation, casting and defaults without evaluating
+	// or invoking casts for input columns, which remain in the bound subquery.
+	vector<unique_ptr<Expression>> no_positional_arguments;
+	vector<Value> ignored_parameters;
+	PlaceArguments(context, function, no_positional_arguments, named_arguments, ignored_parameters, named_parameters,
+	               true);
+	return entry;
 }
 
 optional_idx FunctionBinder::BindFunction(const Identifier &name, const PragmaFunctionSet &functions,
