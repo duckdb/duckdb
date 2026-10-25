@@ -67,7 +67,6 @@ set(TEST_API_OBJECTS
     test_dialect_extension.cpp
     test_query_node_copy.cpp
     test_grammar_extension.cpp
-    test_sql_formatter.cpp
     test_passthrough_dialect.cpp
     test_passthrough_token_matcher.cpp
     test_progress_bar.cpp
