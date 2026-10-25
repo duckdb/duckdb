@@ -57,3 +57,12 @@ SELECT minute(t), millisecond(t) FROM tsnsec ORDER BY t
 32	6999
 32	6999
 59	59999
+
+# epoch conversions keep the full precision and floor to microseconds
+query II
+SELECT epoch_ns(t), epoch_us(t) FROM tsnsec ORDER BY t
+----
+-1	-1
+1782898326999999499	1782898326999999
+1782898326999999533	1782898326999999
+1782899999999999533	1782899999999999
