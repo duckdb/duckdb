@@ -703,6 +703,26 @@ string SQLFormatter::FormatMultiline(const string &sql, const vector<MatcherToke
 			continue;
 		}
 
+		// A parameter is one lexical unit for formatting. In particular, a keyword
+		// used as its name must not become a clause or have its case changed.
+		if (tok.type == TokenType::OPERATOR && tok.text == "$" && i + 1 < tokens.size() &&
+		    (tokens[i + 1].type == TokenType::IDENTIFIER || tokens[i + 1].type == TokenType::KEYWORD ||
+		     tokens[i + 1].type == TokenType::NUMBER_LITERAL)) {
+			if (after_clause) {
+				write_newline();
+				write_indent(content_indent());
+				after_clause = false;
+			} else {
+				write_space();
+			}
+			result += "$" + tokens[i + 1].text;
+			at_line_start = false;
+			prev_was_keyword = false;
+			prev_keyword.clear();
+			i += 2;
+			continue;
+		}
+
 		if (tok.type == TokenType::KEYWORD) {
 			string compound_text;
 			string original_text;
