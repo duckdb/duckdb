@@ -1,6 +1,8 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types.hpp"
@@ -23,6 +25,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/storage_index.hpp"
@@ -171,13 +174,66 @@ bool GroupingSetCanIntroduceNull(const LogicalAggregate &aggr, idx_t group_idx) 
 	return false;
 }
 
+enum class PartitionAction : uint8_t { PRECOMPUTE, SCAN, PRUNE };
+
+struct AggregateValues {
+	vector<Value> min_max_values;
+	idx_t count = 0;
+};
+
 struct PartitionAggregateEligibility {
 	LogicalGet *get = nullptr;
 	vector<idx_t> count_star_idxs;
+	vector<idx_t> min_max_expression_idxs;
 	vector<MinMaxColumnInfo> min_max_columns;
 	vector<unique_ptr<ValueComparator>> comparators;
 	vector<StorageIndex> min_max_storage_indexes;
+	map<StorageIndex, reference<TableFilter>> filters;
 };
+
+PartitionAction ClassifyPartition(ClientContext &context, const PartitionStatistics &stats,
+                                  const PartitionAggregateEligibility &eligibility, AggregateValues &result) {
+	auto &row_group = stats.partition_row_group;
+	if (!eligibility.filters.empty() && !row_group) {
+		return PartitionAction::SCAN;
+	}
+	bool partial_match = false;
+	for (auto &[storage_index, filter] : eligibility.filters) {
+		auto column_stats = row_group->GetColumnStatistics(storage_index);
+		if (!column_stats || !row_group->MinMaxIsExact(storage_index) || row_group->HasPendingWrites()) {
+			partial_match = true;
+			continue;
+		}
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter.get(), "ClassifyPartition");
+		switch (expr_filter.CheckStatistics(context, *column_stats)) {
+		case FilterPropagateResult::FILTER_ALWAYS_FALSE:
+			return PartitionAction::PRUNE;
+		case FilterPropagateResult::FILTER_ALWAYS_TRUE:
+			break;
+		default:
+			partial_match = true;
+			break;
+		}
+	}
+	if (partial_match) {
+		return PartitionAction::SCAN;
+	}
+	if (!eligibility.count_star_idxs.empty()) {
+		if (stats.count_type != CountType::COUNT_EXACT) {
+			return PartitionAction::SCAN;
+		}
+		result.count = stats.count;
+	}
+	for (idx_t i = 0; i < eligibility.min_max_storage_indexes.size(); i++) {
+		Value value;
+		if (!TryGetValueFromStats(stats, eligibility.min_max_storage_indexes[i], *eligibility.comparators[i],
+		                          eligibility.min_max_columns[i].result_type, value)) {
+			return PartitionAction::SCAN;
+		}
+		result.min_max_values.push_back(std::move(value));
+	}
+	return PartitionAction::PRECOMPUTE;
+}
 
 bool TryGetPartitionAggregateEligibility(LogicalAggregate &aggr, PartitionAggregateEligibility &eligibility) {
 	if (!aggr.groups.empty()) {
@@ -212,6 +268,7 @@ bool TryGetPartitionAggregateEligibility(LogicalAggregate &aggr, PartitionAggreg
 				return false;
 			}
 			min_max_columns.push_back(column_info);
+			eligibility.min_max_expression_idxs.push_back(i);
 			auto comparator = GetComparator(fun_name, column_info.input_type);
 			if (!comparator) {
 				return false;
@@ -263,6 +320,16 @@ bool TryGetPartitionAggregateEligibility(LogicalAggregate &aggr, PartitionAggreg
 		}
 	}
 
+	auto &filters = eligibility.filters;
+	for (auto &entry : get.table_filters) {
+		auto &column_index = get.GetColumnIndex(entry.GetIndex());
+		StorageIndex storage_index;
+		if (!get.TryGetStorageIndex(column_index, storage_index)) {
+			return false;
+		}
+		filters.emplace(storage_index, entry.Filter());
+	}
+
 	eligibility.get = &get;
 	return true;
 }
@@ -279,8 +346,8 @@ void StatisticsPropagator::ReplaceWithPartialPrecompute(LogicalAggregate &aggr, 
 		auto &aggr_expr = aggr.expressions[i]->Cast<BoundAggregateExpression>();
 		auto &fun_name = aggr_expr.Function().GetName();
 
-		auto agg_col_ref = make_uniq<BoundColumnRefExpression>(
-		    aggr_expr.GetReturnType(), ColumnBinding(aggr.aggregate_index, ProjectionIndex(i)));
+		auto agg_col_ref = make_uniq<BoundColumnRefExpression>(aggr_expr.GetReturnType(),
+		                                                       ColumnBinding(aggr.aggregate_index, ProjectionIndex(i)));
 
 		if (fun_name == "count_star") {
 			auto &pre_count_expr = aggr_results[i];
@@ -318,8 +385,7 @@ void StatisticsPropagator::ReplaceWithPartialPrecompute(LogicalAggregate &aggr, 
 
 void StatisticsPropagator::ReplaceWithFullPrecompute(LogicalAggregate &aggr,
                                                      vector<unique_ptr<Expression>> aggr_results,
-                                                     vector<LogicalType> types,
-                                                     unique_ptr<LogicalOperator> &node_ptr) {
+                                                     vector<LogicalType> types, unique_ptr<LogicalOperator> &node_ptr) {
 	for (idx_t expr_idx = 0; expr_idx < aggr_results.size(); expr_idx++) {
 		aggr_results[expr_idx]->SetAlias(aggr.expressions[expr_idx]->GetAlias());
 	}
@@ -338,10 +404,6 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		return;
 	}
 	auto &get = *eligibility.get;
-	auto &count_star_idxs = eligibility.count_star_idxs;
-	auto &min_max_columns = eligibility.min_max_columns;
-	auto &comparators = eligibility.comparators;
-	auto &min_max_storage_indexes = eligibility.min_max_storage_indexes;
 
 	GetPartitionStatsInput input(get.function, get.bind_data.get());
 	auto partition_stats = get.function.get_partition_stats(context, input);
@@ -349,140 +411,62 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		return;
 	}
 
-	vector<LogicalType> types;
-	vector<unique_ptr<Expression>> agg_results;
-	bool need_to_scan = false;
+	idx_t precompute_count = 0;
+	idx_t total_count = 0;
+	vector<Value> min_max_values;
+	for (auto &column_info : eligibility.min_max_columns) {
+		min_max_values.emplace_back(column_info.result_type);
+	}
 	vector<idx_t> scan_partition_indices;
-	// we can keep execute eager aggregate if all partitions could be either filtered entirely or remained entirely
-	if (get.table_filters.HasFilters()) {
-		map<StorageIndex, reference<TableFilter>> filter_storage_index_map;
-		for (auto &entry : get.table_filters) {
-			auto filter_idx = entry.GetIndex();
-			auto &filter = entry.Filter();
-			auto &column_index = get.GetColumnIndex(filter_idx);
-			StorageIndex storage_index;
-			if (!get.TryGetStorageIndex(column_index, storage_index)) {
-				return;
+
+	for (idx_t partition_idx = 0; partition_idx < partition_stats.size(); partition_idx++) {
+		AggregateValues values;
+		switch (ClassifyPartition(context, partition_stats[partition_idx], eligibility, values)) {
+		case PartitionAction::PRECOMPUTE:
+			precompute_count++;
+			total_count += values.count;
+			for (idx_t i = 0; i < min_max_values.size(); i++) {
+				if (min_max_values[i].IsNull() ||
+				    !eligibility.comparators[i]->Compare(min_max_values[i], values.min_max_values[i])) {
+					min_max_values[i] = values.min_max_values[i];
+				}
 			}
-			filter_storage_index_map.emplace(storage_index, filter);
+			break;
+		case PartitionAction::SCAN:
+			scan_partition_indices.push_back(partition_idx);
+			break;
+		case PartitionAction::PRUNE:
+			break;
 		}
-		vector<PartitionStatistics> precomputed_partition_stats;
-		for (idx_t partition_idx = 0; partition_idx < partition_stats.size(); partition_idx++) {
-			auto &stats = partition_stats[partition_idx];
-			if (!stats.partition_row_group) {
-				return;
-			}
-			auto filter_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
-			for (auto &entry : filter_storage_index_map) {
-				auto &storage_index = entry.first;
-				auto &filter = entry.second;
-				auto prg = stats.partition_row_group;
-				if (!prg) {
-					return;
-				}
-				auto column_stats = prg->GetColumnStatistics(storage_index);
-				if (!column_stats) {
-					return;
-				}
-				if (!prg->MinMaxIsExact(storage_index) || prg->HasPendingWrites()) {
-					filter_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-					break;
-				}
-				auto &expr_filter =
-				    ExpressionFilter::GetExpressionFilter(filter.get(), "AggregateStats::CheckPartitionFilters");
-				auto col_filter_result = expr_filter.CheckStatistics(context, *column_stats);
-				if (col_filter_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-					// all data in this partition is filtered out, remove this partition entirely
-					filter_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
-					break;
-				}
-				if (col_filter_result != FilterPropagateResult::FILTER_ALWAYS_TRUE) {
-					filter_result = col_filter_result;
-				}
-			}
-			switch (filter_result) {
-			case FilterPropagateResult::FILTER_ALWAYS_TRUE:
-				precomputed_partition_stats.push_back(std::move(stats));
-				break;
-			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
-				break;
-			default:
-				need_to_scan = true;
-				scan_partition_indices.push_back(partition_idx);
-				break;
-			}
-		}
-		if (precomputed_partition_stats.empty()) {
-			// no partitions can be pre-computed
-			return;
-		}
-		partition_stats = std::move(precomputed_partition_stats);
 	}
 
-	if (partition_stats.empty()) {
-		// no partitions can be pre-computed
+	if (precompute_count == 0) {
+		return;
+	}
+	const bool need_to_scan = !scan_partition_indices.empty();
+	if (need_to_scan && !get.function.set_partitions_to_scan) {
 		return;
 	}
 
-	if (!min_max_columns.empty()) {
-		// Execute min/max aggregates on partition statistics
-		for (idx_t agg_idx = 0; agg_idx < min_max_storage_indexes.size(); agg_idx++) {
-			const auto &storage_index = min_max_storage_indexes[agg_idx];
-			const auto &result_type = min_max_columns[agg_idx].result_type;
-			auto &comparator = comparators[agg_idx];
-
-			Value agg_result;
-			if (!TryGetValueFromStats(partition_stats[0], storage_index, *comparator, result_type, agg_result)) {
-				return;
-			}
-			for (idx_t partition_idx = 1; partition_idx < partition_stats.size(); partition_idx++) {
-				Value rhs;
-				if (!TryGetValueFromStats(partition_stats[partition_idx], storage_index, *comparator, result_type,
-				                          rhs)) {
-					return;
-				}
-				if (!comparator->Compare(agg_result, rhs)) {
-					agg_result = rhs;
-				}
-			}
-			types.push_back(agg_result.type());
-			auto expr = make_uniq<BoundConstantExpression>(agg_result);
-			agg_results.push_back(std::move(expr));
-		}
+	vector<unique_ptr<Expression>> aggr_results(aggr.expressions.size());
+	for (idx_t i = 0; i < eligibility.min_max_expression_idxs.size(); i++) {
+		aggr_results[eligibility.min_max_expression_idxs[i]] = make_uniq<BoundConstantExpression>(min_max_values[i]);
 	}
-	if (!count_star_idxs.empty()) {
-		// Execute count_star aggregates on partition statistics
-		idx_t count = 0;
-		for (const auto &stats : partition_stats) {
-			if (stats.count_type == CountType::COUNT_APPROXIMATE) {
-				// we cannot get an exact count
-				return;
-			}
-			count += stats.count;
-		}
-		for (const auto count_star_idx : count_star_idxs) {
-			auto count_result = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(count)));
-			agg_results.emplace(agg_results.begin() + NumericCast<int64_t>(count_star_idx), std::move(count_result));
-			types.insert(types.begin() + NumericCast<int64_t>(count_star_idx), LogicalType::BIGINT);
-		}
+	for (const auto count_idx : eligibility.count_star_idxs) {
+		aggr_results[count_idx] = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(total_count)));
 	}
 
 	if (need_to_scan) {
-		// Partial precomputation combines plan-time partition statistics with an execution-time scan that
-		// skips partitions by their index in the row-group list. That list can change in between
-		// (concurrent appends, checkpoints), in which case a skipped partition is scanned again and its
-		// rows are counted twice. Only the full precomputation (no scan) is safe.
-		return;
-	}
-	if (need_to_scan) {
-		if (!get.function.set_partitions_to_scan) {
-			return;
-		}
-		ReplaceWithPartialPrecompute(aggr, get, std::move(agg_results), std::move(scan_partition_indices), node_ptr);
+		ReplaceWithPartialPrecompute(aggr, get, std::move(aggr_results), std::move(scan_partition_indices), node_ptr);
 		return;
 	}
 
-	ReplaceWithFullPrecompute(aggr, std::move(agg_results), std::move(types), node_ptr);
+	vector<LogicalType> types;
+	types.reserve(aggr_results.size());
+	for (auto &expr : aggr_results) {
+		types.push_back(expr->GetReturnType());
+	}
+	ReplaceWithFullPrecompute(aggr, std::move(aggr_results), std::move(types), node_ptr);
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggregate &aggr,
