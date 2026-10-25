@@ -36,3 +36,11 @@ query I
 SELECT count(*) FROM read_parquet('{TEST_DIR}/lm_virtual_filter.parquet') WHERE filename LIKE '%lm_virtual_filter%' AND j <= 3
 ----
 3
+
+# a filter on the file_row_number virtual column takes the same path
+query II
+SELECT file_row_number, j FROM read_parquet('{TEST_DIR}/lm_virtual_filter.parquet', file_row_number=true) WHERE file_row_number >= 95 ORDER BY j DESC LIMIT 3
+----
+99	100
+98	99
+97	98
