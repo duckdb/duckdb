@@ -92,4 +92,3 @@ statement error
 PREPARE p AS /* é */ SELECT  );
 ----
 "position":"33"
-
