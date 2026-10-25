@@ -171,61 +171,59 @@ bool GroupingSetCanIntroduceNull(const LogicalAggregate &aggr, idx_t group_idx) 
 	return false;
 }
 
-} // namespace
-
-void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_ptr<LogicalOperator> &node_ptr) {
-	if (!aggr.groups.empty()) {
-		// not possible with groups
-		return;
-	}
-	if (aggr.expressions.empty()) {
-		return;
-	}
-	// check if all aggregates are COUNT(*), MIN or MAX
+struct PartitionAggregateEligibility {
+	LogicalGet *get = nullptr;
 	vector<idx_t> count_star_idxs;
 	vector<MinMaxColumnInfo> min_max_columns;
 	vector<unique_ptr<ValueComparator>> comparators;
+	vector<StorageIndex> min_max_storage_indexes;
+};
+
+bool TryGetPartitionAggregateEligibility(LogicalAggregate &aggr, PartitionAggregateEligibility &eligibility) {
+	if (!aggr.groups.empty()) {
+		return false;
+	}
+	if (aggr.expressions.empty()) {
+		return false;
+	}
+	auto &count_star_idxs = eligibility.count_star_idxs;
+	auto &min_max_columns = eligibility.min_max_columns;
+	auto &comparators = eligibility.comparators;
 
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 		auto &aggr_ref = aggr.expressions[i];
 		if (aggr_ref->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
-			// not an aggregate
-			return;
+			return false;
 		}
 		auto &aggr_expr = aggr_ref->Cast<BoundAggregateExpression>();
 		if (aggr_expr.GetFilter()) {
-			// aggregate has a filter - bail
-			return;
+			return false;
 		}
 		if (aggr_expr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
-			// aggregate is in state export mode - cannot replace with a constant
-			return;
+			return false;
 		}
 		auto &fun_name = aggr_expr.Function().GetName();
 		if (fun_name == "min" || fun_name == "max") {
 			if (aggr_expr.GetChildren().size() != 1) {
-				return;
+				return false;
 			}
 			MinMaxColumnInfo column_info;
 			if (!TryGetMinMaxColumnInfo(*aggr_expr.GetChildren()[0], column_info)) {
-				return;
+				return false;
 			}
 			min_max_columns.push_back(column_info);
 			auto comparator = GetComparator(fun_name, column_info.input_type);
 			if (!comparator) {
-				// Type has no min max statistics
-				return;
+				return false;
 			}
 			comparators.push_back(std::move(comparator));
 		} else if (fun_name == "count_star") {
 			count_star_idxs.push_back(i);
 		} else {
-			// aggregate is not count star, min or max - bail
-			return;
+			return false;
 		}
 	}
 
-	// skip any projections
 	reference<LogicalOperator> child_ref = *aggr.children[0];
 	while (child_ref.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		for (auto &column_info : min_max_columns) {
@@ -233,10 +231,10 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			auto &expr = proj.GetExpression(column_info.binding);
 			MinMaxColumnInfo projection_info;
 			if (!TryGetMinMaxColumnInfo(expr, projection_info)) {
-				return;
+				return false;
 			}
 			if (!IsSafeMinMaxCast(projection_info.result_type, column_info.input_type)) {
-				return;
+				return false;
 			}
 			column_info.binding = projection_info.binding;
 			column_info.input_type = projection_info.input_type;
@@ -245,36 +243,110 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	}
 
 	if (child_ref.get().type != LogicalOperatorType::LOGICAL_GET) {
-		// child must be a LOGICAL_GET
-		return;
+		return false;
 	}
 	auto &get = child_ref.get().Cast<LogicalGet>();
 	if (!get.function.get_partition_stats) {
-		// GET does not support getting the partition stats
-		return;
+		return false;
 	}
 	if (get.extra_info.sample_options) {
-		// only use row group statistics if we query the whole table
-		return;
+		return false;
 	}
 
-	// we can do the rewrite! get the stats
-	GetPartitionStatsInput input(get.function, get.bind_data.get());
-	auto partition_stats = get.function.get_partition_stats(context, input);
-	if (partition_stats.empty()) {
-		// no partition stats found
-		return;
-	}
-
-	vector<StorageIndex> min_max_storage_indexes(min_max_columns.size());
+	auto &min_max_storage_indexes = eligibility.min_max_storage_indexes;
+	min_max_storage_indexes.resize(min_max_columns.size());
 	for (idx_t i = 0; i < min_max_columns.size(); i++) {
 		auto &binding = min_max_columns[i].binding;
 		auto &column_index = get.GetColumnIndex(binding);
 		if (!get.TryGetStorageIndex(column_index, min_max_storage_indexes[i])) {
-			//! Can't get a storage index for this column, so it doesn't have stats we can use
-			//! This happens when we're dealing with a generated column for example
-			return;
+			return false;
 		}
+	}
+
+	eligibility.get = &get;
+	return true;
+}
+
+} // namespace
+
+void StatisticsPropagator::ReplaceWithPartialPrecompute(LogicalAggregate &aggr, LogicalGet &get,
+                                                        vector<unique_ptr<Expression>> aggr_results,
+                                                        vector<idx_t> scan_partition_indices,
+                                                        unique_ptr<LogicalOperator> &node_ptr) {
+	auto proj_index = optimizer.binder.GenerateTableIndex();
+	vector<unique_ptr<Expression>> proj_expressions;
+	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
+		auto &aggr_expr = aggr.expressions[i]->Cast<BoundAggregateExpression>();
+		auto &fun_name = aggr_expr.Function().GetName();
+
+		auto agg_col_ref = make_uniq<BoundColumnRefExpression>(
+		    aggr_expr.GetReturnType(), ColumnBinding(aggr.aggregate_index, ProjectionIndex(i)));
+
+		if (fun_name == "count_star") {
+			auto &pre_count_expr = aggr_results[i];
+			auto add_expr = optimizer.BindScalarFunction("+", pre_count_expr->Copy(), std::move(agg_col_ref));
+			add_expr->SetAlias(aggr.expressions[i]->GetAlias());
+			proj_expressions.push_back(std::move(add_expr));
+		} else if (fun_name == "min" || fun_name == "max") {
+			auto &pre_val_expr = aggr_results[i];
+			Identifier merge_func((fun_name == "min") ? "least" : "greatest");
+			auto merged = optimizer.BindScalarFunction(merge_func, pre_val_expr->Copy(), std::move(agg_col_ref));
+			auto coalesce =
+			    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, aggr_expr.GetReturnType());
+			coalesce->GetChildrenMutable().push_back(std::move(merged));
+			coalesce->GetChildrenMutable().push_back(pre_val_expr->Copy());
+			coalesce->SetAlias(aggr.expressions[i]->GetAlias());
+			proj_expressions.push_back(std::move(coalesce));
+		}
+	}
+
+	get.SetPartitionsToScan(std::move(scan_partition_indices));
+
+	auto projection = make_uniq<LogicalProjection>(proj_index, std::move(proj_expressions));
+	projection->children.push_back(std::move(node_ptr));
+
+	ColumnBindingReplacer replacer;
+	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
+		replacer.replacement_bindings.emplace_back(ColumnBinding(aggr.aggregate_index, ProjectionIndex(i)),
+		                                           ColumnBinding(proj_index, ProjectionIndex(i)));
+	}
+
+	replacer.stop_operator = projection.get();
+	node_ptr = std::move(projection);
+	replacer.VisitOperator(*root);
+}
+
+void StatisticsPropagator::ReplaceWithFullPrecompute(LogicalAggregate &aggr,
+                                                     vector<unique_ptr<Expression>> aggr_results,
+                                                     vector<LogicalType> types,
+                                                     unique_ptr<LogicalOperator> &node_ptr) {
+	for (idx_t expr_idx = 0; expr_idx < aggr_results.size(); expr_idx++) {
+		aggr_results[expr_idx]->SetAlias(aggr.expressions[expr_idx]->GetAlias());
+	}
+
+	vector<vector<unique_ptr<Expression>>> expressions;
+	expressions.push_back(std::move(aggr_results));
+	auto expression_get =
+	    make_uniq<LogicalExpressionGet>(aggr.aggregate_index, std::move(types), std::move(expressions));
+	expression_get->children.push_back(make_uniq<LogicalDummyScan>(aggr.group_index));
+	node_ptr = std::move(expression_get);
+}
+
+void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_ptr<LogicalOperator> &node_ptr) {
+	PartitionAggregateEligibility eligibility;
+	if (!TryGetPartitionAggregateEligibility(aggr, eligibility)) {
+		return;
+	}
+	auto &get = *eligibility.get;
+	auto &count_star_idxs = eligibility.count_star_idxs;
+	auto &min_max_columns = eligibility.min_max_columns;
+	auto &comparators = eligibility.comparators;
+	auto &min_max_storage_indexes = eligibility.min_max_storage_indexes;
+
+	GetPartitionStatsInput input(get.function, get.bind_data.get());
+	auto partition_stats = get.function.get_partition_stats(context, input);
+	if (partition_stats.empty()) {
+		return;
 	}
 
 	vector<LogicalType> types;
@@ -403,76 +475,14 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		return;
 	}
 	if (need_to_scan) {
-		// Partial precomputation: some partitions need scanning
-		// Insert a LogicalProjection above the aggregate that combines pre-computed constants with scan results
 		if (!get.function.set_partitions_to_scan) {
-			// scan does not support partition filtering - bail out
 			return;
 		}
-
-		// Build projection expressions that merge pre-computed values with aggregate results
-		auto proj_index = optimizer.binder.GenerateTableIndex();
-		vector<unique_ptr<Expression>> proj_expressions;
-		for (idx_t i = 0; i < aggr.expressions.size(); i++) {
-			auto &aggr_expr = aggr.expressions[i]->Cast<BoundAggregateExpression>();
-			auto &fun_name = aggr_expr.Function().GetName();
-
-			// Reference to the aggregate output column
-			auto agg_col_ref = make_uniq<BoundColumnRefExpression>(
-			    aggr_expr.GetReturnType(), ColumnBinding(aggr.aggregate_index, ProjectionIndex(i)));
-
-			if (fun_name == "count_star") {
-				// pre_count + count_star_from_scan
-				auto &pre_count_expr = agg_results[i];
-				auto add_expr = optimizer.BindScalarFunction("+", pre_count_expr->Copy(), std::move(agg_col_ref));
-				add_expr->SetAlias(aggr.expressions[i]->GetAlias());
-				proj_expressions.push_back(std::move(add_expr));
-			} else if (fun_name == "min" || fun_name == "max") {
-				// For min: COALESCE(least(pre_min, agg_min), pre_min)
-				// For max: COALESCE(greatest(pre_max, agg_max), pre_max)
-				auto &pre_val_expr = agg_results[i];
-				Identifier merge_func((fun_name == "min") ? "least" : "greatest");
-				auto merged = optimizer.BindScalarFunction(merge_func, pre_val_expr->Copy(), std::move(agg_col_ref));
-				auto coalesce =
-				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, aggr_expr.GetReturnType());
-				coalesce->GetChildrenMutable().push_back(std::move(merged));
-				coalesce->GetChildrenMutable().push_back(pre_val_expr->Copy());
-				coalesce->SetAlias(aggr.expressions[i]->GetAlias());
-				proj_expressions.push_back(std::move(coalesce));
-			}
-		}
-
-		// Tell the scan to only scan partitions whose aggregates were NOT pre-computed
-		get.SetPartitionsToScan(std::move(scan_partition_indices));
-
-		// Create LogicalProjection above the aggregate
-		auto projection = make_uniq<LogicalProjection>(proj_index, std::move(proj_expressions));
-		projection->children.push_back(std::move(node_ptr));
-
-		ColumnBindingReplacer replacer;
-		for (idx_t i = 0; i < aggr.expressions.size(); i++) {
-			auto old_binding = ColumnBinding(aggr.aggregate_index, ProjectionIndex(i));
-			auto new_binding = ColumnBinding(proj_index, ProjectionIndex(i));
-			replacer.replacement_bindings.emplace_back(old_binding, new_binding);
-		}
-
-		replacer.stop_operator = projection.get();
-		node_ptr = std::move(projection);
-		replacer.VisitOperator(*root);
+		ReplaceWithPartialPrecompute(aggr, get, std::move(agg_results), std::move(scan_partition_indices), node_ptr);
 		return;
 	}
 
-	// Set column names
-	for (idx_t expr_idx = 0; expr_idx < agg_results.size(); expr_idx++) {
-		agg_results[expr_idx]->SetAlias(aggr.expressions[expr_idx]->GetAlias());
-	}
-
-	vector<vector<unique_ptr<Expression>>> expressions;
-	expressions.push_back(std::move(agg_results));
-	auto expression_get =
-	    make_uniq<LogicalExpressionGet>(aggr.aggregate_index, std::move(types), std::move(expressions));
-	expression_get->children.push_back(make_uniq<LogicalDummyScan>(aggr.group_index));
-	node_ptr = std::move(expression_get);
+	ReplaceWithFullPrecompute(aggr, std::move(agg_results), std::move(types), node_ptr);
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggregate &aggr,
