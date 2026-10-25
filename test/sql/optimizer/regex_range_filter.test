@@ -30,3 +30,26 @@ query T
 SELECT s FROM regex_values WHERE regexp_full_match(s, 'foo');
 ----
 foo
+
+# the derived BLOB range pushed into a VARCHAR scan must not be checked against the VARCHAR zonemap
+statement ok
+CREATE TABLE t0(a INT, c VARCHAR);
+
+statement ok
+INSERT INTO t0 VALUES (1, 'a'), (2, 'b');
+
+statement ok
+CREATE TABLE t1(a INT);
+
+statement ok
+INSERT INTO t1 VALUES (1);
+
+query ITI
+SELECT * FROM t1 JOIN t0 USING (a) FULL JOIN t1 x ON t0.a <> x.a WHERE t0.c SIMILAR TO 'a';
+----
+1	a	NULL
+
+query ITI
+SELECT * FROM t1 JOIN t0 USING (a) FULL JOIN t1 x ON t0.a <> x.a WHERE regexp_full_match(t0.c, 'a.*');
+----
+1	a	NULL
