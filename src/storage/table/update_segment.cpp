@@ -21,6 +21,7 @@ static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(Physi
 static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_rows_function_t GetFetchRowsFunction(PhysicalType type);
 static UpdateSegment::get_effective_updates_t GetEffectiveUpdatesFunction(PhysicalType type);
+static UpdateSegment::store_base_values_function_t GetStoreBaseValuesFunction(PhysicalType type);
 
 UpdateSegment::UpdateSegment(ColumnData &column_data)
     : type(column_data.type), buffer_manager(column_data.block_manager.buffer_manager),
@@ -47,6 +48,7 @@ UpdateSegment::UpdateSegment(ColumnData &column_data)
 	this->rollback_update_function = GetRollbackUpdateFunction(physical_type);
 	this->statistics_update_function = GetStatisticsUpdateFunction(physical_type);
 	this->get_effective_updates = GetEffectiveUpdatesFunction(physical_type);
+	this->store_base_values_function = GetStoreBaseValuesFunction(physical_type);
 }
 
 UpdateSegment::~UpdateSegment() {
@@ -895,6 +897,12 @@ void UpdateSegment::CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo
 void UpdateSegment::CleanupUpdate(UpdateInfo &info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
+	if (!info.HasPrev() && info.HasNext()) {
+		// a checkpoint replaced this update info by a copy with its base values: clean up the copy
+		auto copy_pin = info.next.Pin();
+		CleanupUpdateInternal(*lock_handle, UpdateInfo::Get(copy_pin));
+		return;
+	}
 	CleanupUpdateInternal(*lock_handle, info);
 }
 
@@ -1840,6 +1848,167 @@ bool UpdateSegment::HasUpdates(idx_t start_row_index, idx_t end_row_index) {
 		}
 	}
 	return false;
+}
+
+//===--------------------------------------------------------------------===//
+// Store base values
+//===--------------------------------------------------------------------===//
+//! Copies the update info, with the base value for every tuple that has no stored value
+template <class T, class GET_BASE>
+static void CopyWithBaseValues(UpdateInfo &source, UpdateInfo &target, GET_BASE &&get_base) {
+	auto source_tuples = source.GetTuples();
+	auto source_data = source.GetData<T>();
+	auto source_mask = source.GetValueMask();
+	auto target_tuples = target.GetTuples();
+	auto target_data = target.GetData<T>();
+	ValidityAppender mask_appender(target.GetValueMask().GetData());
+	idx_t value_idx = 0;
+	for (idx_t i = 0; i < source.N; i++) {
+		target_tuples[i] = source_tuples[i];
+		target_data[i] = source_mask.RowIsValid(i) ? source_data[value_idx++] : get_base(source_tuples[i]);
+		mask_appender.Append(true);
+	}
+	mask_appender.Finalize();
+	target.N = source.N;
+}
+
+template <class T>
+static T CopyBaseValue(StringHeap &heap, T value) {
+	return value;
+}
+
+template <>
+string_t CopyBaseValue(StringHeap &heap, string_t value) {
+	// the string lives in the blocks of the column that the rewrite replaces
+	return heap.AddBlob(value);
+}
+
+static void StoreBaseValidity(UpdateInfo &source, Vector &base_data, StringHeap &heap, UpdateInfo &target) {
+	auto &base_validity = FlatVector::Validity(base_data);
+	CopyWithBaseValues<bool>(source, target, [&](sel_t tuple) { return base_validity.RowIsValid(tuple); });
+}
+
+template <class T>
+static void TemplatedStoreBaseValues(UpdateInfo &source, Vector &base_data, StringHeap &heap, UpdateInfo &target) {
+	auto base_values = FlatVector::GetData<T>(base_data);
+	auto &base_validity = FlatVector::Validity(base_data);
+	CopyWithBaseValues<T>(source, target, [&](sel_t tuple) {
+		return base_validity.RowIsValid(tuple) ? CopyBaseValue<T>(heap, base_values[tuple]) : GetUpdateNullPadding<T>();
+	});
+}
+
+static UpdateSegment::store_base_values_function_t GetStoreBaseValuesFunction(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::BIT:
+		return StoreBaseValidity;
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		return TemplatedStoreBaseValues<int8_t>;
+	case PhysicalType::INT16:
+		return TemplatedStoreBaseValues<int16_t>;
+	case PhysicalType::INT32:
+		return TemplatedStoreBaseValues<int32_t>;
+	case PhysicalType::INT64:
+		return TemplatedStoreBaseValues<int64_t>;
+	case PhysicalType::UINT8:
+		return TemplatedStoreBaseValues<uint8_t>;
+	case PhysicalType::UINT16:
+		return TemplatedStoreBaseValues<uint16_t>;
+	case PhysicalType::UINT32:
+		return TemplatedStoreBaseValues<uint32_t>;
+	case PhysicalType::UINT64:
+		return TemplatedStoreBaseValues<uint64_t>;
+	case PhysicalType::INT128:
+		return TemplatedStoreBaseValues<hugeint_t>;
+	case PhysicalType::UINT128:
+		return TemplatedStoreBaseValues<uhugeint_t>;
+	case PhysicalType::FLOAT:
+		return TemplatedStoreBaseValues<float>;
+	case PhysicalType::DOUBLE:
+		return TemplatedStoreBaseValues<double>;
+	case PhysicalType::INTERVAL:
+		return TemplatedStoreBaseValues<interval_t>;
+	case PhysicalType::VARCHAR:
+		return TemplatedStoreBaseValues<string_t>;
+	default:
+		throw NotImplementedException("Unimplemented type for update segment");
+	}
+}
+
+//! Whether a committed update takes old values from base data that a rewrite as of the bound replaces
+static bool ReadsReplacedBase(UpdateInfo &info, VisibilityBound visibility_bound) {
+	return info.version_number.load() < visibility_bound && !info.GetValueMask().CheckAllValid(info.N);
+}
+
+vector<idx_t> UpdateSegment::GetVectorsReadingBase(VisibilityBound visibility_bound) {
+	vector<idx_t> result;
+	auto read_lock = lock.GetSharedLock();
+	if (!root) {
+		return result;
+	}
+	for (idx_t vector_idx = 0; vector_idx < root->info.size(); vector_idx++) {
+		auto entry = GetUpdateNode(*read_lock, vector_idx);
+		if (!entry.IsSet()) {
+			continue;
+		}
+		auto root_pin = entry.Pin();
+		auto next = UpdateInfo::Get(root_pin).next;
+		while (next.IsSet()) {
+			auto pin = next.Pin();
+			auto &info = UpdateInfo::Get(pin);
+			if (ReadsReplacedBase(info, visibility_bound)) {
+				result.push_back(vector_idx);
+				break;
+			}
+			next = info.next;
+		}
+	}
+	return result;
+}
+
+void UpdateSegment::StoreBaseValues(VisibilityBound visibility_bound, idx_t vector_index, Vector &base_data) {
+	auto write_lock = lock.GetExclusiveLock();
+	auto entry = GetUpdateNode(*write_lock, vector_index);
+	if (!entry.IsSet()) {
+		return;
+	}
+	auto root_pin = entry.Pin();
+	auto next = UpdateInfo::Get(root_pin).next;
+	while (next.IsSet()) {
+		auto pin = next.Pin();
+		auto &info = UpdateInfo::Get(pin);
+		next = info.next;
+		if (!ReadsReplacedBase(info, visibility_bound)) {
+			continue;
+		}
+		// the copy lives in the segment: the undo buffer of the transaction only has room for the original
+		auto handle = root->allocator.Allocate(UpdateInfo::GetAllocSize(type_size, info.N, info.N));
+		auto &copy = UpdateInfo::Get(handle);
+		UpdateInfo::Initialize(copy, *info.table, info.version_number.load(), info.row_group_start, info.N, info.N);
+		copy.segment = this;
+		copy.vector_index = info.vector_index;
+		copy.column_index = info.column_index;
+		store_base_values_function(info, base_data, *heap, copy);
+		copy.Verify();
+
+		// replace the original in the chain - pin both neighbours before modifying either, as Pin can throw
+		auto copy_pointer = handle.GetBufferPointer();
+		copy.prev = info.prev;
+		copy.next = info.next;
+		auto prev_pin = copy.prev.Pin();
+		UndoBufferReference next_pin;
+		if (copy.next.IsSet()) {
+			next_pin = copy.next.Pin();
+		}
+		UpdateInfo::Get(prev_pin).next = copy_pointer;
+		if (next_pin.IsSet()) {
+			UpdateInfo::Get(next_pin).prev = copy_pointer;
+		}
+		// the cleanup of the transaction follows the original to the copy
+		info.N = 0;
+		info.prev = UndoBufferPointer();
+		info.next = copy_pointer;
+	}
 }
 
 //===--------------------------------------------------------------------===//

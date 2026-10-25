@@ -64,6 +64,10 @@ public:
 	void ClearIfUnused();
 	void MarkCommitted(transaction_t commit_id);
 	void MarkCheckpointed(VisibilityBound visibility_bound);
+	//! The vectors with updates committed below the bound that take some of their old values from the base data
+	vector<idx_t> GetVectorsReadingBase(VisibilityBound visibility_bound);
+	//! Copies those updates with the old values from the base data, which a rewrite replaces
+	void StoreBaseValues(VisibilityBound visibility_bound, idx_t vector_index, Vector &base_data);
 
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result);
 	void FetchCommitted(idx_t vector_index, Vector &result);
@@ -120,6 +124,8 @@ public:
 	                                             UnifiedVectorFormat &update, idx_t count);
 	typedef idx_t (*get_effective_updates_t)(UnifiedVectorFormat &update_format, row_t *ids, idx_t count,
 	                                         SelectionVector &sel, Vector &base_data, idx_t id_offset);
+	typedef void (*store_base_values_function_t)(UpdateInfo &source, Vector &base_data, StringHeap &heap,
+	                                             UpdateInfo &target);
 
 private:
 	merge_update_function_t merge_update_function;
@@ -131,6 +137,7 @@ private:
 	fetch_rows_function_t fetch_rows_function;
 	statistics_update_function_t statistics_update_function;
 	get_effective_updates_t get_effective_updates;
+	store_base_values_function_t store_base_values_function;
 
 private:
 	UndoBufferPointer GetUpdateNode(StorageLockKey &lock, idx_t vector_idx) const;

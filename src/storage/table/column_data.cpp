@@ -112,6 +112,16 @@ optional_ptr<UpdateSegment> ColumnData::GetUpdates() const {
 
 void ColumnData::CheckpointUpdates(ColumnData &target, VisibilityBound visibility_bound, BaseStatistics &target_stats,
                                    const BaseStatistics &old_stats) {
+	auto update_segment = GetUpdates();
+	if (update_segment && &target != this) {
+		// the target's base data has newer values: updates that read their old values from the base keep this column's
+		for (auto vector_index : update_segment->GetVectorsReadingBase(visibility_bound)) {
+			Vector base_data(type);
+			ColumnScanState state(nullptr);
+			Fetch(state, UnsafeNumericCast<row_t>(vector_index * STANDARD_VECTOR_SIZE), base_data);
+			update_segment->StoreBaseValues(visibility_bound, vector_index, base_data);
+		}
+	}
 	unique_lock<mutex> guard(updates->lock);
 	if (&target != this) {
 		// nobody but the checkpoint can reach the target yet
