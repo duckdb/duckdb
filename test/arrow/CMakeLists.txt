@@ -10,7 +10,8 @@ add_library_unity(
   arrow_list_view_nested_offset.cpp
   arrow_output_version_buffers.cpp
   arrow_run_end_encoded.cpp
-  arrow_union_offset.cpp)
+  arrow_union_offset.cpp
+  arrow_union_type_ids.cpp)
 set(UNITTEST_OBJECT_FILES
     ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_arrow_roundtrip>
     PARENT_SCOPE)
