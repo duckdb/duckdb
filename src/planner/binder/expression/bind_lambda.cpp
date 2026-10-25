@@ -111,7 +111,8 @@ static unique_ptr<ParsedExpression> RestructureArrowChain(LambdaExpression &expr
 BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
                                             const vector<LogicalType> &function_child_types,
                                             optional_ptr<bind_lambda_function_t> bind_lambda_function,
-                                            optional_ptr<BindLambdaContext> bind_lambda_context) {
+                                            optional_ptr<BindLambdaContext> bind_lambda_context,
+                                            bool internal_parameters) {
 	if (expr.GetLambdaSyntaxType() == LambdaSyntaxType::LAMBDA_KEYWORD && !bind_lambda_function) {
 		return BindResult("invalid lambda expression");
 	}
@@ -160,6 +161,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 
 	// create a lambda binding and push it to the lambda bindings vector
 	DummyBinding new_lambda_binding(column_types, column_names, table_alias);
+	new_lambda_binding.internal_parameters = internal_parameters;
 	LambdaBindingGuard lambda_binding_guard(lambda_bindings, std::move(new_lambda_binding));
 
 	if (expr.CopiedExprMutable()) {

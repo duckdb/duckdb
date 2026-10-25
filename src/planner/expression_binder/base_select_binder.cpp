@@ -2,6 +2,7 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -26,6 +27,23 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 		return BindGroup(expr, depth, group_index);
 	}
 	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::CASE: {
+		auto &case_expr = expr.Cast<CaseExpression>();
+		if (!inside_aggregate && !node.bind_state.group_map.empty() && case_expr.CaseOperand()) {
+			auto legacy_case = case_expr.GetLegacyCaseExpression();
+			bool grouped_checks = true;
+			for (auto &check : legacy_case->CaseChecks()) {
+				if (!node.bind_state.TryBindCaseGroup(*check.when_expr).IsValid()) {
+					grouped_checks = false;
+					break;
+				}
+			}
+			if (grouped_checks) {
+				return ExpressionBinder::BindExpression(*legacy_case, depth);
+			}
+		}
+		return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
+	}
 	case ExpressionClass::COLUMN_REF:
 		if (inside_aggregate) {
 			return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
@@ -104,7 +122,7 @@ ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 		D_ASSERT(!expr.Equals(map_entry.first.get()));
 	}
 #endif
-	return ProjectionIndex();
+	return node.bind_state.TryBindCaseGroup(expr);
 }
 
 BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {

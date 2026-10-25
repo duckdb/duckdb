@@ -636,6 +636,9 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 				throw BinderException("UNNEST of struct cannot be used in GROUP BY clause");
 			}
 			D_ASSERT(bound_expr->GetReturnType().id() != LogicalTypeId::INVALID);
+			if (!bound_expr->IsVolatile()) {
+				bind_state.AddCaseGroup(*bind_state.unbound_groups[i], ProjectionIndex(i));
+			}
 
 			// the group and the first(x) aggregate below are separate expression trees, so we need our own
 			// copy - it must be made before pushing the collation, which can replace the expression

@@ -455,7 +455,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 }
 
 BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func,
-                                                idx_t depth, vector<unique_ptr<Expression>> bound_children) {
+                                                idx_t depth, vector<unique_ptr<Expression>> bound_children,
+                                                bool internal_parameters) {
 	// get the callback function for the lambda parameter types
 	auto &scalar_function = *func.functions.functions.front();
 	auto bind_lambda_function = scalar_function.GetBindLambdaCallback();
@@ -525,7 +526,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	BindResult bind_lambda_result =
-	    BindExpression(lambda_expr, depth, function_child_types, &bind_lambda_function, nullptr);
+	    BindExpression(lambda_expr, depth, function_child_types, &bind_lambda_function, nullptr, internal_parameters);
 	bind_lambda_function_t override_bind_lambda_storage = nullptr;
 	optional_ptr<bind_lambda_function_t> capture_bind_lambda = &bind_lambda_function;
 	unique_ptr<BindLambdaContext> override_bind_lambda_context;

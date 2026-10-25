@@ -1,0 +1,88 @@
+# name: test/sql/projection/test_simple_case_groups.test
+# description: Deterministic simple and searched CASE expressions match grouped expressions
+# group: [projection]
+
+query TI
+SELECT CASE x WHEN 1 THEN 'a' ELSE 'b' END AS k, count(*) FROM range(3) t(x)
+GROUP BY CASE WHEN x = 1 THEN 'a' ELSE 'b' END ORDER BY k
+----
+a	1
+b	2
+
+query TI
+SELECT CASE WHEN x = 1 THEN 'a' ELSE 'b' END AS k, count(*) FROM range(3) t(x)
+GROUP BY CASE x WHEN 1 THEN 'a' ELSE 'b' END ORDER BY k
+----
+a	1
+b	2
+
+query TI
+SELECT CASE x WHEN 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END AS k, count(*) FROM range(3) t(x)
+GROUP BY CASE WHEN x = 1 THEN 'a' WHEN x = 2 THEN 'b' ELSE 'c' END ORDER BY k
+----
+a	1
+b	1
+c	1
+
+query T
+SELECT CASE x WHEN 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END AS k FROM range(3) t(x)
+GROUP BY x = 1, x = 2 ORDER BY k
+----
+a
+b
+c
+
+query I
+SELECT CASE x WHEN 1 THEN 42 ELSE 0 END AS k FROM range(3) t(x) GROUP BY x = 1 ORDER BY k
+----
+0
+42
+
+query II
+SELECT 1 + CASE x WHEN 1 THEN 42 ELSE 0 END AS k, count(*) FROM range(3) t(x)
+GROUP BY 1 + CASE WHEN x = 1 THEN 42 ELSE 0 END ORDER BY k
+----
+1	2
+43	1
+
+query TI
+SELECT CASE x WHEN 'a' THEN 'hit' ELSE 'miss' END AS k, count(*) FROM (VALUES ('a'), ('A'), ('b')) t(x)
+GROUP BY CASE WHEN x = 'a' THEN 'hit' ELSE 'miss' END ORDER BY k
+----
+hit	1
+miss	2
+
+query T
+SELECT CASE x WHEN 1 THEN 'a' ELSE 'b' END AS k FROM range(3) t(x)
+GROUP BY CASE WHEN x = 1 THEN 'a' ELSE 'b' END
+HAVING CASE x WHEN 1 THEN 'a' ELSE 'b' END = 'a'
+----
+a
+
+statement error
+SELECT CASE x WHEN 1 THEN x ELSE 0 END FROM range(3) t(x) GROUP BY x = 1
+----
+must appear in the GROUP BY clause
+
+# Volatile grouped comparisons cannot stand in for a single operand evaluation.
+statement error
+SELECT CASE x + random() * 0 WHEN 0 THEN 42 WHEN 1 THEN 8 ELSE 9 END FROM range(3) t(x)
+GROUP BY x + random() * 0 = 0, x + random() * 0 = 1
+----
+must appear in the GROUP BY clause
+
+statement ok
+CREATE SEQUENCE grouped_case_seq
+
+query TI rowsort
+SELECT CASE nextval('grouped_case_seq') WHEN 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END, count(*)
+FROM range(3) t(x) GROUP BY x
+----
+a	1
+b	1
+c	1
+
+query I
+SELECT currval('grouped_case_seq')
+----
+3

@@ -1,7 +1,72 @@
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 
 namespace duckdb {
+
+static void NormalizeCaseGroups(unique_ptr<ParsedExpression> &expr) {
+	if (expr->GetExpressionClass() == ExpressionClass::CASE) {
+		auto &case_expr = expr->Cast<CaseExpression>();
+		if (case_expr.CaseOperand()) {
+			expr = case_expr.GetLegacyCaseExpression();
+		}
+	}
+	for (auto &child : expr->ChildrenMutable()) {
+		NormalizeCaseGroups(child);
+	}
+}
+
+static bool ContainsLambdaReference(const ParsedExpression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::LAMBDA_REF) {
+		return true;
+	}
+	for (auto &child : expr.Children()) {
+		if (ContainsLambdaReference(child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool ContainsSimpleCase(const ParsedExpression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::CASE && expr.Cast<CaseExpression>().CaseOperand()) {
+		return true;
+	}
+	for (auto &child : expr.Children()) {
+		if (ContainsSimpleCase(child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void SelectBindState::AddCaseGroup(const ParsedExpression &expr, ProjectionIndex index) {
+	if (!ContainsSimpleCase(expr)) {
+		case_group_map.emplace(expr, index);
+		return;
+	}
+	auto normalized = expr.Copy();
+	NormalizeCaseGroups(normalized);
+	case_group_map.emplace(*normalized, index);
+	case_group_expressions.push_back(std::move(normalized));
+}
+
+ProjectionIndex SelectBindState::TryBindCaseGroup(const ParsedExpression &expr) const {
+	if (case_group_map.empty() || ContainsLambdaReference(expr)) {
+		return ProjectionIndex();
+	}
+	auto entry = case_group_map.find(expr);
+	if (entry != case_group_map.end()) {
+		return entry->second;
+	}
+	if (!ContainsSimpleCase(expr)) {
+		return ProjectionIndex();
+	}
+	auto normalized = expr.Copy();
+	NormalizeCaseGroups(normalized);
+	entry = case_group_map.find(*normalized);
+	return entry == case_group_map.end() ? ProjectionIndex() : entry->second;
+}
 
 unique_ptr<ParsedExpression> SelectBindState::BindAlias(idx_t index) {
 	if (volatile_expressions.find(index) != volatile_expressions.end()) {
