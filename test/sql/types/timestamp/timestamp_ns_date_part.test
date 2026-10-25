@@ -49,3 +49,11 @@ SELECT nanosecond(t) FROM tsnsec ORDER BY t
 6999999499
 6999999533
 59999999533
+
+query II
+SELECT minute(t), millisecond(t) FROM tsnsec ORDER BY t
+----
+59	59999
+32	6999
+32	6999
+59	59999
