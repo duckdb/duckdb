@@ -34,6 +34,7 @@ public:
 		                           Skip, InitSegment);
 		result.filter = Filter;
 		result.select = Select;
+		result.supports_null_block = true;
 		return result;
 	}
 
