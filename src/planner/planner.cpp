@@ -198,6 +198,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	bool parameters_resolved = true;
 	try {
 		auto binding_timer = profiler.StartTimer<MetricPlannerBindingTime>();
+		Catalog::PrefetchStatementEntries(context, statement);
 		binder->SetParameters(bound_parameters);
 		auto bound_statement = binder->Bind(statement);
 		binding_timer.EndTimer();
