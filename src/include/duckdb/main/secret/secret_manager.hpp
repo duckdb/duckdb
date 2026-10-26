@@ -141,6 +141,18 @@ public:
 	//! List all secrets from all secret storages
 	DUCKDB_API vector<SecretEntry> AllSecrets(CatalogTransaction transaction);
 
+	//! Registers a file secret in the current transaction of `context` and returns its name: the secret `vend` returns
+	//! on first use, and again on a refresh, for reading the files under `scope` that name it
+	//! (ExtendedOpenFileInfo::file_secret). No lookup by path, listing of secrets or lookup by name sees it, so no SQL
+	//! statement can use it, and it serves only that transaction
+	DUCKDB_API string RegisterFileSecret(ClientContext &context, string scope, file_secret_vend_t vend);
+	//! The file secret `name` for reading `path`; throws when the current transaction of `context` has no such secret,
+	//! or when `path` is outside its scope
+	DUCKDB_API shared_ptr<const KeyValueSecret> GetFileSecret(ClientContext &context, const string &name,
+	                                                          const string &path);
+	//! Vends the file secret `name` again, after the store rejected it as expired; false when there is no such secret
+	DUCKDB_API bool RefreshFileSecret(ClientContext &context, const string &name);
+
 	//! List all secret types
 	DUCKDB_API vector<SecretType> AllSecretTypes();
 	//! List all secret functions
@@ -197,8 +209,8 @@ private:
 	//! Thread-safe accessors for secret_storages
 	vector<reference<SecretStorage>> GetSecretStorages();
 	optional_ptr<SecretStorage> GetSecretStorage(const Identifier &name);
-	optional_ptr<SecretStorage> GetTransactionSecretStorage(CatalogTransaction transaction);
-	SecretStorage &GetOrCreateTransactionSecretStorage(CatalogTransaction transaction);
+	optional_ptr<TransactionSecretStorage> GetTransactionSecretStorage(CatalogTransaction transaction);
+	TransactionSecretStorage &GetOrCreateTransactionSecretStorage(CatalogTransaction transaction);
 
 	//! Throw an exception if the secret manager is initialized
 	void ThrowOnSettingChangeIfInitialized();

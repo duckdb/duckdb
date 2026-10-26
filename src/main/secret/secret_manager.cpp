@@ -560,6 +560,38 @@ vector<SecretEntry> SecretManager::AllSecrets(CatalogTransaction transaction) {
 	return result;
 }
 
+string SecretManager::RegisterFileSecret(ClientContext &context, string scope, file_secret_vend_t vend) {
+	if (scope.empty() || !vend || !context.transaction.HasActiveTransaction()) {
+		throw InternalException("A file secret needs a scope, a vend function and an active transaction");
+	}
+	auto &storage = GetOrCreateTransactionSecretStorage(CatalogTransaction::GetSystemCatalogTransaction(context));
+	return storage.RegisterFileSecret(std::move(scope), std::move(vend));
+}
+
+shared_ptr<const KeyValueSecret> SecretManager::GetFileSecret(ClientContext &context, const string &name,
+                                                              const string &path) {
+	shared_ptr<const KeyValueSecret> secret;
+	if (context.transaction.HasActiveTransaction()) {
+		auto storage = GetTransactionSecretStorage(CatalogTransaction::GetSystemCatalogTransaction(context));
+		if (storage) {
+			secret = storage->GetFileSecret(context, name, path);
+		}
+	}
+	if (!secret) {
+		throw InvalidConfigurationException(
+		    "The file secret for '%s' is not available: it serves only the transaction that registered it", path);
+	}
+	return secret;
+}
+
+bool SecretManager::RefreshFileSecret(ClientContext &context, const string &name) {
+	if (!context.transaction.HasActiveTransaction()) {
+		return false;
+	}
+	auto storage = GetTransactionSecretStorage(CatalogTransaction::GetSystemCatalogTransaction(context));
+	return storage && storage->RefreshFileSecret(context, name);
+}
+
 vector<SecretType> SecretManager::AllSecretTypes() {
 	unique_lock<mutex> lck(manager_lock);
 	vector<SecretType> result;
@@ -723,7 +755,7 @@ optional_ptr<SecretStorage> SecretManager::GetSecretStorage(const Identifier &na
 	return nullptr;
 }
 
-optional_ptr<SecretStorage> SecretManager::GetTransactionSecretStorage(CatalogTransaction transaction) {
+optional_ptr<TransactionSecretStorage> SecretManager::GetTransactionSecretStorage(CatalogTransaction transaction) {
 	if (!transaction.HasContext()) {
 		return nullptr;
 	}
@@ -732,7 +764,7 @@ optional_ptr<SecretStorage> SecretManager::GetTransactionSecretStorage(CatalogTr
 	return meta_transaction.transaction_secret_storage.get();
 }
 
-SecretStorage &SecretManager::GetOrCreateTransactionSecretStorage(CatalogTransaction transaction) {
+TransactionSecretStorage &SecretManager::GetOrCreateTransactionSecretStorage(CatalogTransaction transaction) {
 	if (!transaction.HasContext()) {
 		throw InvalidInputException("Transaction secrets require an active client transaction");
 	}

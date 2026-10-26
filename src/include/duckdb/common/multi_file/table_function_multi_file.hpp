@@ -42,8 +42,8 @@ struct TableFunctionFileBindInput {
 	//! (Optional) The bind data an earlier bind of this same file produced, when it was bound before to determine
 	//! the schema of the scan. The bind can take whatever it read from the file from there again
 	optional_ptr<const FunctionData> file_bind_data;
-	//! (Optional) The credentials of the file, which a file struct cannot hold: GetFile puts them on the file
-	shared_ptr<FileCredentials> credentials;
+	//! (Optional) The file secret of the file, which a file struct cannot hold: GetFile puts it on the file
+	string file_secret;
 
 	bool HasExpectedSchema() const {
 		return expected_names && expected_types;
@@ -55,7 +55,7 @@ struct TableFunctionFileBindInput {
 	}
 	//! The file a single-file function reads: its first input, which is the path of the file or a file struct
 	//! that also holds the options to open the file with (e.g. its size or encryption key) - see
-	//! OpenFileInfo::FromValue. A multi-file scan passes every file it reads this way, and its credentials beside it
+	//! OpenFileInfo::FromValue. A multi-file scan passes every file it reads this way, and its file secret beside it
 	static OpenFileInfo GetFile(const TableFunctionBindInput &input) {
 		auto &file = input.inputs[0];
 		auto type = file.type().id();
@@ -63,7 +63,7 @@ struct TableFunctionFileBindInput {
 			throw BinderException("%s reads a single file - given as a VARCHAR path or as a file struct, not as %s",
 			                      input.table_function.GetName(), file.type().ToString());
 		}
-		return OpenFileInfo::FromValue(file, input.table_function.GetName()).WithCredentials(Get(input).credentials);
+		return OpenFileInfo::FromValue(file, input.table_function.GetName()).WithFileSecret(Get(input).file_secret);
 	}
 };
 

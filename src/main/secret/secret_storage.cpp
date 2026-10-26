@@ -100,6 +100,66 @@ unique_ptr<SecretEntry> TransactionSecretStorage::GetSecretByName(const string &
 	return make_uniq<SecretEntry>(*entry->second);
 }
 
+namespace {
+
+//! Whether `path` has a ".." segment, which a server may resolve to a path outside a file secret's scope
+bool HasParentSegment(const string &path) {
+	return StringUtil::Contains("/" + StringUtil::Replace(path, "\\", "/") + "/", "/../");
+}
+
+} // namespace
+
+string TransactionSecretStorage::RegisterFileSecret(string scope, file_secret_vend_t vend) {
+	auto file_secret = make_uniq<FileSecret>();
+	file_secret->scope = std::move(scope);
+	file_secret->vend = std::move(vend);
+	// random, so that a name kept past its transaction never names a later transaction's file secret
+	auto name = UUID::ToString(UUID::GenerateRandomUUID());
+	lock_guard<mutex> guard(lock);
+	file_secrets.emplace(name, std::move(file_secret));
+	return name;
+}
+
+optional_ptr<TransactionSecretStorage::FileSecret> TransactionSecretStorage::FindFileSecret(const string &name) {
+	lock_guard<mutex> guard(lock);
+	auto entry = file_secrets.find(name);
+	if (entry == file_secrets.end()) {
+		return nullptr;
+	}
+	return entry->second.get();
+}
+
+shared_ptr<const KeyValueSecret> TransactionSecretStorage::GetFileSecret(ClientContext &context, const string &name,
+                                                                         const string &path) {
+	auto file_secret = FindFileSecret(name);
+	if (!file_secret) {
+		return nullptr;
+	}
+	if (!StringUtil::StartsWith(path, file_secret->scope) || HasParentSegment(path)) {
+		throw InvalidConfigurationException("The file secret of '%s' cannot be used for '%s'", file_secret->scope,
+		                                    path);
+	}
+	lock_guard<mutex> guard(file_secret->lock);
+	if (!file_secret->secret) {
+		file_secret->secret = file_secret->vend(context);
+	}
+	if (!file_secret->secret) {
+		throw InternalException("The file secret of '%s' vended no secret", file_secret->scope);
+	}
+	return file_secret->secret;
+}
+
+bool TransactionSecretStorage::RefreshFileSecret(ClientContext &context, const string &name) {
+	auto file_secret = FindFileSecret(name);
+	if (!file_secret) {
+		return false;
+	}
+	lock_guard<mutex> guard(file_secret->lock);
+	// a vend that throws keeps the current secret
+	file_secret->secret = file_secret->vend(context);
+	return true;
+}
+
 SecretMatch SecretStorage::SelectBestMatch(SecretEntry &secret_entry, const string &path, int64_t offset,
                                            SecretMatch &current_best) {
 	// Get secret match score

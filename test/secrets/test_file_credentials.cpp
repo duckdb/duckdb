@@ -1,15 +1,16 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb.hpp"
+#include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/main/client_context_file_opener.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/main/extension_manager.hpp"
-#include "duckdb/main/secret/file_credentials.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/storage/object_cache.hpp"
@@ -84,14 +85,14 @@ struct MemoryFileHandle : public FileHandle {
 };
 
 //! Serves files from memory under mem://, and records every open, read and glob with the key id of the secret the
-//! secret reader chose for it. A glob lists the files under the pattern's prefix, each with the glob's credentials,
-//! or with the ones `listing_credentials` gives its pattern, as a catalog lists a table
+//! secret reader chose for it. A glob lists the files under the pattern's prefix, each with the glob's file secret,
+//! or with the one `listing_secrets` gives its pattern, as a catalog lists a table
 class MemoryFileSystem : public FileSystem {
 public:
 	duckdb::map<string, string> files;
 	bool listing_metadata = false;
 	//! By glob pattern; "" for every pattern
-	duckdb::map<string, shared_ptr<FileCredentials>> listing_credentials;
+	duckdb::map<string, string> listing_secrets;
 	duckdb::mutex lock;
 	duckdb::vector<Access> accesses;
 
@@ -183,7 +184,7 @@ protected:
 	                                        optional_ptr<FileOpener> opener) override {
 		FileOpenerInfo info {file.path};
 		if (file.extended_info) {
-			info.credentials = file.extended_info->credentials;
+			info.file_secret = file.extended_info->file_secret;
 		}
 		string key_id;
 		string region;
@@ -199,15 +200,15 @@ protected:
 	}
 	unique_ptr<MultiFileList> GlobFilesExtended(const string &pattern, const FileGlobInput &input,
 	                                            optional_ptr<FileOpener> opener) override {
-		FileOpenerInfo info {pattern, input.credentials};
+		FileOpenerInfo info {pattern, input.file_secret};
 		string key_id;
 		string region;
 		ReadSecret(opener, info, key_id, region);
 		Record("glob", pattern, key_id, region);
-		auto credentials = input.credentials;
-		auto listed_with = listing_credentials.find(listing_credentials.count(pattern) ? pattern : "");
-		if (listed_with != listing_credentials.end()) {
-			credentials = listed_with->second;
+		auto file_secret = input.file_secret;
+		auto listed_with = listing_secrets.find(listing_secrets.count(pattern) ? pattern : "");
+		if (listed_with != listing_secrets.end()) {
+			file_secret = listed_with->second;
 		}
 		auto star = pattern.find('*');
 		auto listed_prefix = pattern.substr(0, star);
@@ -223,7 +224,7 @@ protected:
 			}
 			OpenFileInfo listed(path);
 			listed.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-			listed.extended_info->credentials = credentials;
+			listed.extended_info->file_secret = file_secret;
 			if (listing_metadata) {
 				listed.extended_info->options["last_modified"] = Value::TIMESTAMP(Timestamp::FromEpochSeconds(1000));
 				listed.extended_info->options["etag"] = Value("v1");
@@ -263,7 +264,7 @@ string ReadLocalFile(const string &path) {
 }
 
 //! A database with the test secret type, mem:// files, and a secret matched to every mem:// path, which a read that
-//! loses a file's credentials would use
+//! loses a file's file secret would use
 struct CredentialsFixture {
 	CredentialsFixture() : db(nullptr), con(db) {
 		RegisterTestSecretType(*db.instance);
@@ -278,34 +279,42 @@ struct CredentialsFixture {
 	ClientContext &Context() {
 		return *con.context;
 	}
-	//! Credentials of `context` for mem://bucket/table/ whose vends return `key_id` and count in `vends`
-	shared_ptr<FileCredentials> Credentials(ClientContext &context, const string &key_id,
-	                                        const char *type = TEST_TYPE) {
-		return FileCredentials::Create(context, "mem://bucket/table/", [this, key_id, type](ClientContext &) {
-			vends++;
-			return TestSecret(key_id, type);
-		});
+	//! Registers a file secret for mem://bucket/table/ in the transaction of `context`, whose vends return `key_id`
+	//! and count in `vends`; returns its name
+	string FileSecret(ClientContext &context, const string &key_id, const char *type = TEST_TYPE) {
+		return SecretManager::Get(context).RegisterFileSecret(context, "mem://bucket/table/",
+		                                                      [this, key_id, type](ClientContext &) {
+			                                                      vends++;
+			                                                      return TestSecret(key_id, type);
+		                                                      });
 	}
-	shared_ptr<FileCredentials> Credentials(const string &key_id, const char *type = TEST_TYPE) {
-		return Credentials(Context(), key_id, type);
+	string FileSecret(const string &key_id, const char *type = TEST_TYPE) {
+		return FileSecret(Context(), key_id, type);
 	}
-	static OpenFileInfo File(const string &path, const shared_ptr<FileCredentials> &credentials) {
-		return OpenFileInfo(path).WithCredentials(credentials);
+	static shared_ptr<const KeyValueSecret> GetFileSecret(ClientContext &context, const string &name,
+	                                                      const string &path) {
+		return SecretManager::Get(context).GetFileSecret(context, name, path);
+	}
+	static string KeyOf(const shared_ptr<const KeyValueSecret> &secret) {
+		return secret->TryGetValue("key_id").ToString();
+	}
+	static OpenFileInfo File(const string &path, const string &name) {
+		return OpenFileInfo(path).WithFileSecret(name);
 	}
 	//! Open `file` through the client's file system and return the key id the open used
 	string OpenKey(const OpenFileInfo &file) {
 		auto handle = FileSystem::GetFileSystem(Context()).OpenFile(file, FileFlags::FILE_FLAGS_READ);
 		return handle->Cast<MemoryFileHandle>().key_id;
 	}
-	//! Runs `scan` in a transaction with credentials of key `key_id` on every listed file, and the external file cache
-	//! on; returns the row count
+	//! Runs `scan` in a transaction with a file secret of key `key_id` on every listed file, and the external file
+	//! cache on; returns the row count
 	idx_t ScanWith(const string &scan, const string &key_id = "table-key") {
 		REQUIRE_NO_FAIL(con.Query("SET enable_external_file_cache = true"));
 		con.BeginTransaction();
-		fs->listing_credentials = {{"", Credentials(key_id)}};
+		fs->listing_secrets = {{"", FileSecret(key_id)}};
 		fs->ClearAccesses();
 		auto result = con.Query(scan);
-		fs->listing_credentials.clear();
+		fs->listing_secrets.clear();
 		con.Rollback();
 		REQUIRE_NO_FAIL(*result);
 		return result->RowCount();
@@ -358,14 +367,14 @@ struct CredentialsFixture {
 	static string Scan(const string &format, const string &glob) {
 		return "SELECT sum(i) FROM read_" + format + "('" + glob + "')";
 	}
-	//! Runs the scan of `glob` on `c`, its files listed with credentials of `c` for `key_id`; returns how often it
+	//! Runs the scan of `glob` on `c`, its files listed with a file secret of `c` for `key_id`; returns how often it
 	//! opened and read them
 	std::pair<idx_t, idx_t> ScanAlone(Connection &c, const string &format, const string &glob, const string &key_id) {
 		c.BeginTransaction();
-		fs->listing_credentials = {{glob, Credentials(*c.context, key_id)}};
+		fs->listing_secrets = {{glob, FileSecret(*c.context, key_id)}};
 		fs->ClearAccesses();
 		auto result = c.Query(Scan(format, glob));
-		fs->listing_credentials.clear();
+		fs->listing_secrets.clear();
 		c.Rollback();
 		REQUIRE_NO_FAIL(*result);
 		REQUIRE(result->Collection().GetValue(0, 0).ToString() == SAME_FILES_SUM);
@@ -398,62 +407,64 @@ void RequireThrowsWith(const std::function<void()> &call, const string &message)
 
 } // namespace
 
-TEST_CASE("An open with credentials uses their secret, and no secret or setting chosen by path", "[file_credentials]") {
+TEST_CASE("An open with a file secret uses it, and no secret or setting chosen by path", "[file_credentials]") {
 	CredentialsFixture f;
 	REQUIRE_NO_FAIL(f.con.Query("SET file_credentials_test_region = 'setting-region'"));
 	f.con.BeginTransaction();
-	auto credentials = f.Credentials("table-key");
-	REQUIRE(f.OpenKey(CredentialsFixture::File("mem://bucket/table/a.bin", credentials)) == "table-key");
-	// their secret sets no region: neither the secret matched to the path nor the setting fills it
+	auto name = f.FileSecret("table-key");
+	REQUIRE(f.OpenKey(CredentialsFixture::File("mem://bucket/table/a.bin", name)) == "table-key");
+	// the file secret sets no region: neither the secret matched to the path nor the setting fills it
 	REQUIRE(f.fs->Accesses("open")[0].region == NO_KEY);
-	// the same path without credentials reads with the secret matched to it
+	// the same path without a file secret reads with the secret matched to it
 	REQUIRE(f.OpenKey(OpenFileInfo("mem://bucket/table/a.bin")) == "path-key");
 	REQUIRE(f.fs->Accesses("open")[1].region == "path-region");
 	f.con.Rollback();
 }
 
-TEST_CASE("Credentials of another type fail the read, and a reader of several types takes any of them",
+TEST_CASE("A file secret of another type fails the read, and a reader of several types takes any of them",
           "[file_credentials]") {
 	CredentialsFixture f;
 	f.con.BeginTransaction();
-	auto credentials = f.Credentials("other-key", OTHER_TYPE);
-	RequireThrowsWith([&]() { f.OpenKey(CredentialsFixture::File("mem://bucket/table/a.bin", credentials)); },
-	                  "are a secret of type \"file_credentials_test_other\", which this read does not take");
+	auto name = f.FileSecret("other-key", OTHER_TYPE);
+	RequireThrowsWith([&]() { f.OpenKey(CredentialsFixture::File("mem://bucket/table/a.bin", name)); },
+	                  "is a secret of type \"file_credentials_test_other\", which this read does not take");
 	ClientContextFileOpener opener(f.Context());
-	FileOpenerInfo info {"mem://bucket/table/a.bin", credentials};
+	FileOpenerInfo info {"mem://bucket/table/a.bin", name};
 	const char *with_other[] = {TEST_TYPE, "FILE_CREDENTIALS_TEST_OTHER"};
 	KeyValueSecretReader reader(opener, &info, with_other, 2);
 	REQUIRE(reader.GetSecretKey("key_id").ToString() == "other-key");
+	f.con.Rollback();
 }
 
-TEST_CASE("A glob with credentials lists with them, and each file it lists carries them", "[file_credentials]") {
+TEST_CASE("A glob with a file secret lists with it, and each file it lists carries it", "[file_credentials]") {
 	CredentialsFixture f;
 	f.fs->files["mem://bucket/table/dir/x.parquet"] = "x";
 	f.con.BeginTransaction();
-	auto credentials = f.Credentials("table-key");
+	auto name = f.FileSecret("table-key");
 	auto &client_fs = FileSystem::GetFileSystem(f.Context());
 	FileGlobInput input(FileGlobOptions::DISALLOW_EMPTY);
-	input.credentials = credentials;
+	input.file_secret = name;
 	auto files = client_fs.GlobFiles("mem://bucket/table/*.bin", input);
 	REQUIRE(files.size() == 2);
 	REQUIRE(f.fs->Accesses("glob")[0].key_id == "table-key");
 	for (auto &file : files) {
-		REQUIRE(file.extended_info->credentials == credentials);
+		REQUIRE(file.extended_info->file_secret == name);
 		REQUIRE(f.OpenKey(file) == "table-key");
 	}
-	// WithCredentials copies the extended information, and keeps credentials a file has
-	auto own = f.Credentials("own-key");
+	// WithFileSecret copies the extended information, and keeps the file secret a file has
+	auto own = f.FileSecret("own-key");
 	OpenFileInfo given("mem://bucket/table/a.bin");
 	given.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
 	given.extended_info->options["file_size"] = Value::UBIGINT(3);
-	auto with = given.WithCredentials(credentials);
+	auto with = given.WithFileSecret(name);
 	REQUIRE(with.extended_info->options.count("file_size") == 1);
-	REQUIRE_FALSE(given.extended_info->credentials);
-	REQUIRE(with.WithCredentials(own).extended_info->credentials == credentials);
-	REQUIRE_FALSE(OpenFileInfo("mem://bucket/table/a.bin").WithCredentials(nullptr).extended_info);
+	REQUIRE(given.extended_info->file_secret.empty());
+	REQUIRE(with.WithFileSecret(own).extended_info->file_secret == name);
+	REQUIRE_FALSE(OpenFileInfo("mem://bucket/table/a.bin").WithFileSecret("").extended_info);
+	f.con.Rollback();
 }
 
-TEST_CASE("A read with credentials neither fills nor is served from the external file cache or the Parquet "
+TEST_CASE("A read with a file secret neither fills nor is served from the external file cache or the Parquet "
           "metadata cache",
           "[file_credentials]") {
 	CredentialsFixture f;
@@ -487,7 +498,7 @@ TEST_CASE("A read with credentials neither fills nor is served from the external
 	f.fs->ClearAccesses();
 	REQUIRE_NO_FAIL(f.con.Query(scan));
 	REQUIRE(f.fs->CountKey("read", "path-key") == 0);
-	// a read with credentials reads the files itself, as often as when nothing was cached
+	// a read with a file secret reads the files itself, as often as when nothing was cached
 	f.ScanWith(scan);
 	REQUIRE(f.fs->CountKey("read", "table-key") == uncached_reads);
 	REQUIRE(f.fs->CountKey("read", "path-key") == 0);
@@ -497,7 +508,7 @@ TEST_CASE("A read with credentials neither fills nor is served from the external
 	REQUIRE(f.fs->CountKey("read", "path-key") == 0);
 }
 
-TEST_CASE("read_csv, read_json and read_parquet open and read every listed file with its credentials",
+TEST_CASE("read_csv, read_json and read_parquet open and read every listed file with its file secret",
           "[file_credentials]") {
 	CredentialsFixture f;
 	string csv = "i\n";
@@ -549,11 +560,9 @@ TEST_CASE("read_csv, read_json and read_parquet open and read every listed file 
 	REQUIRE(f.CachedEntries("mem://bucket/table/t1.csv") == 0);
 }
 
-TEST_CASE("Credentials serve only their client and their scope, until their transaction ends", "[file_credentials]") {
+TEST_CASE("A file secret serves only its client and its scope, until its transaction ends", "[file_credentials]") {
 	CredentialsFixture f;
-	ClientContextFileOpener opener(f.Context());
 	Connection other(f.db);
-	ClientContextFileOpener other_opener(*other.context);
 	string outcome;
 	SECTION("commit") {
 		outcome = "COMMIT";
@@ -564,41 +573,76 @@ TEST_CASE("Credentials serve only their client and their scope, until their tran
 	SECTION("failed statement") {
 		outcome = "SELECT error('fails')";
 	}
+	const string path = "mem://bucket/table/a.bin";
+	auto &context = f.Context();
 	REQUIRE_NO_FAIL(f.con.Query("BEGIN"));
-	auto credentials = f.Credentials("table-key");
-	REQUIRE(credentials->GetSecret(&opener, "mem://bucket/table/a.bin"));
-	for (auto &path : {"mem://bucket/other/c.bin", "mem://bucket/table", "mem://bucket/table_archive/a.bin",
-	                   "mem://bucket/table/../other/c.bin", "mem://bucket/table/x/..", "mem://bucket/table/..\\c"}) {
-		INFO(path);
-		RequireThrowsWith([&]() { credentials->GetSecret(&opener, path); }, "cannot be used for");
+	auto name = f.FileSecret("table-key");
+	REQUIRE(CredentialsFixture::GetFileSecret(context, name, path));
+	for (auto &outside : {"mem://bucket/other/c.bin", "mem://bucket/table", "mem://bucket/table_archive/a.bin",
+	                      "mem://bucket/table/../other/c.bin", "mem://bucket/table/x/..", "mem://bucket/table/..\\c"}) {
+		INFO(outside);
+		RequireThrowsWith([&]() { CredentialsFixture::GetFileSecret(context, name, outside); }, "cannot be used for");
 	}
-	// another connection of the database, and an opener without a client
-	RequireThrowsWith([&]() { credentials->GetSecret(&other_opener, "mem://bucket/table/a.bin"); },
-	                  "serve only the connection that created them");
-	RequireThrowsWith([&]() { credentials->GetSecret(nullptr, "mem://bucket/table/a.bin"); },
-	                  "serve only the connection that created them");
+	// another connection of the database, outside a transaction and in one with file secrets of its own
+	auto open_on_other = [&]() {
+		FileSystem::GetFileSystem(*other.context)
+		    .OpenFile(CredentialsFixture::File(path, name), FileFlags::FILE_FLAGS_READ);
+	};
+	RequireThrowsWith(open_on_other, "is not available");
+	other.BeginTransaction();
+	f.FileSecret(*other.context, "other-key");
+	RequireThrowsWith(open_on_other, "is not available");
+	other.Rollback();
+	// an opener without a client
+	DatabaseFileOpener database_opener(*f.db.instance);
+	FileOpenerInfo info {path, name};
+	RequireThrowsWith([&]() { KeyValueSecretReader reader(database_opener, &info, TEST_TYPE); }, "without a client");
 	f.con.Query(outcome);
-	if (f.Context().transaction.HasActiveTransaction()) {
+	if (context.transaction.HasActiveTransaction()) {
 		REQUIRE_NO_FAIL(f.con.Query("ROLLBACK"));
 	}
-	RequireThrowsWith([&]() { credentials->GetSecret(&opener, "mem://bucket/table/a.bin"); },
-	                  "ended with the transaction that created them");
-	REQUIRE_FALSE(credentials->Refresh(&opener));
-	// an open that carries them fails rather than falling back to the secret matched to the path
+	RequireThrowsWith([&]() { CredentialsFixture::GetFileSecret(context, name, path); }, "is not available");
+	REQUIRE_FALSE(SecretManager::Get(context).RefreshFileSecret(context, name));
+	// an open that names it in a later transaction fails rather than falling back to the secret matched to the path
 	f.con.BeginTransaction();
-	RequireThrowsWith([&]() { f.OpenKey(CredentialsFixture::File("mem://bucket/table/a.bin", credentials)); },
-	                  "ended with the transaction");
+	RequireThrowsWith([&]() { f.OpenKey(CredentialsFixture::File(path, name)); }, "is not available");
 	f.con.Rollback();
-	// they are created only in a transaction
-	RequireThrowsWith([&]() { f.Credentials("table-key"); }, "an active transaction");
+	// file secrets are registered only in a transaction
+	RequireThrowsWith([&]() { f.FileSecret("table-key"); }, "an active transaction");
 }
 
-TEST_CASE("Opens of one path with two credentials each use their own, also between opens by path",
+TEST_CASE("No SQL statement can match, list, read with or drop a file secret", "[file_credentials]") {
+	CredentialsFixture f;
+	f.fs->files["mem://bucket/table/t1.csv"] = "i\n1\n";
+	auto &context = f.Context();
+	f.con.BeginTransaction();
+	auto name = f.FileSecret("table-key");
+	REQUIRE(CredentialsFixture::GetFileSecret(context, name, "mem://bucket/table/t1.csv"));
+	auto result = f.con.Query("SELECT name FROM which_secret('mem://bucket/table/t1.csv', 'file_credentials_test')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"by_path"}));
+	result = f.con.Query("SELECT string_agg(name, ',') FROM duckdb_secrets()");
+	REQUIRE(CHECK_COLUMN(result, 0, {"by_path"}));
+	REQUIRE_FALSE(
+	    SecretManager::Get(context).GetSecretByName(CatalogTransaction::GetSystemCatalogTransaction(context), name));
+	// a file struct can hold an option of that name, which is not the file secret of the file
+	f.fs->ClearAccesses();
+	result = f.con.Query("SELECT i FROM read_csv([{'filename': 'mem://bucket/table/t1.csv', 'file_secret': '" + name +
+	                     "'}])");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(f.fs->Accesses("open").size() > 0);
+	REQUIRE(f.fs->CountKey("open", "path-key") == f.fs->Accesses("open").size());
+	// last: the failure aborts the transaction
+	RequireThrowsWith([&]() { f.con.Query("DROP SECRET \"" + name + "\" FROM transaction")->ThrowError(); },
+	                  "non-existent transaction secret");
+	f.con.Rollback();
+}
+
+TEST_CASE("Opens of one path with two file secrets each use their own, also between opens by path",
           "[file_credentials]") {
 	CredentialsFixture f;
 	f.con.BeginTransaction();
-	auto a = f.Credentials("key-a");
-	auto b = f.Credentials("key-b");
+	auto a = f.FileSecret("key-a");
+	auto b = f.FileSecret("key-b");
 	const string path = "mem://bucket/table/a.bin";
 	REQUIRE(f.OpenKey(CredentialsFixture::File(path, a)) == "key-a");
 	REQUIRE(f.OpenKey(CredentialsFixture::File(path, b)) == "key-b");
@@ -608,7 +652,7 @@ TEST_CASE("Opens of one path with two credentials each use their own, also betwe
 	f.con.Rollback();
 }
 
-TEST_CASE("Two scans of the same files in one query each read them with their own credentials", "[file_credentials]") {
+TEST_CASE("Two scans of the same files in one query each read them with their own file secret", "[file_credentials]") {
 	CredentialsFixture f;
 	f.EnableCaches(f.con);
 	for (auto &format : f.Formats()) {
@@ -620,11 +664,11 @@ TEST_CASE("Two scans of the same files in one query each read them with their ow
 		auto alone_b = f.ScanAlone(f.con, format, glob_b, "key-b");
 		REQUIRE(alone_a.second > 0);
 		f.con.BeginTransaction();
-		f.fs->listing_credentials = {{glob_a, f.Credentials("key-a")}, {glob_b, f.Credentials("key-b")}};
+		f.fs->listing_secrets = {{glob_a, f.FileSecret("key-a")}, {glob_b, f.FileSecret("key-b")}};
 		f.fs->ClearAccesses();
 		auto result = f.con.Query("SELECT (" + CredentialsFixture::Scan(format, glob_a) + "), (" +
 		                          CredentialsFixture::Scan(format, glob_b) + ")");
-		f.fs->listing_credentials.clear();
+		f.fs->listing_secrets.clear();
 		f.con.Rollback();
 		REQUIRE_NO_FAIL(*result);
 		REQUIRE(result->Collection().GetValue(0, 0).ToString() == SAME_FILES_SUM);
@@ -642,7 +686,7 @@ TEST_CASE("Two scans of the same files in one query each read them with their ow
 	}
 }
 
-TEST_CASE("Two connections reading the same files at once each read them with their own credentials",
+TEST_CASE("Two connections reading the same files at once each read them with their own file secret",
           "[file_credentials]") {
 	CredentialsFixture f;
 	Connection other(f.db);
@@ -658,8 +702,8 @@ TEST_CASE("Two connections reading the same files at once each read them with th
 		auto alone_b = f.ScanAlone(other, format, CredentialsFixture::Glob(format, "t"), "key-b");
 		f.con.BeginTransaction();
 		other.BeginTransaction();
-		f.fs->listing_credentials = {{CredentialsFixture::Glob(format, ""), f.Credentials("key-a")},
-		                             {CredentialsFixture::Glob(format, "t"), f.Credentials(*other.context, "key-b")}};
+		f.fs->listing_secrets = {{CredentialsFixture::Glob(format, ""), f.FileSecret("key-a")},
+		                         {CredentialsFixture::Glob(format, "t"), f.FileSecret(*other.context, "key-b")}};
 		f.fs->ClearAccesses();
 		duckdb::vector<duckdb::unique_ptr<QueryResult>> results_a;
 		duckdb::vector<duckdb::unique_ptr<QueryResult>> results_b;
@@ -675,7 +719,7 @@ TEST_CASE("Two connections reading the same files at once each read them with th
 		});
 		thread_a.join();
 		thread_b.join();
-		f.fs->listing_credentials.clear();
+		f.fs->listing_secrets.clear();
 		f.con.Rollback();
 		other.Rollback();
 		for (auto results : {&results_a, &results_b}) {
@@ -684,18 +728,18 @@ TEST_CASE("Two connections reading the same files at once each read them with th
 				REQUIRE(result->Collection().GetValue(0, 0).ToString() == SAME_FILES_SUM);
 			}
 		}
-		// a read that took the other connection's credentials would fail; one that lost its own would read by path
+		// a read that took the other connection's file secret would fail; one that lost its own would read by path
 		f.RequireUses("key-a", alone_a.first * RUNS, alone_a.second * RUNS);
 		f.RequireUses("key-b", alone_b.first * RUNS, alone_b.second * RUNS);
 		f.RequireUses("path-key", 0, 0);
 	}
 }
 
-TEST_CASE("Credentials vend on first use, once, also when several threads use them first", "[file_credentials]") {
+TEST_CASE("A file secret vends on first use, once, also when several threads use it first", "[file_credentials]") {
 	CredentialsFixture f;
+	auto &context = f.Context();
 	f.con.BeginTransaction();
-	ClientContextFileOpener opener(f.Context());
-	auto credentials = FileCredentials::Create(f.Context(), "mem://bucket/table/", [&](ClientContext &) {
+	auto name = SecretManager::Get(context).RegisterFileSecret(context, "mem://bucket/table/", [&](ClientContext &) {
 		f.vends++;
 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 		return TestSecret("table-key");
@@ -705,8 +749,8 @@ TEST_CASE("Credentials vend on first use, once, also when several threads use th
 	std::atomic<idx_t> served {0};
 	for (idx_t i = 0; i < 8; i++) {
 		threads.emplace_back([&]() {
-			if (credentials->GetSecret(&opener, "mem://bucket/table/a.bin")->TryGetValue("key_id").ToString() ==
-			    "table-key") {
+			if (CredentialsFixture::KeyOf(
+			        CredentialsFixture::GetFileSecret(context, name, "mem://bucket/table/a.bin")) == "table-key") {
 				served++;
 			}
 		});
@@ -722,10 +766,10 @@ TEST_CASE("Credentials vend on first use, once, also when several threads use th
 TEST_CASE("A failed vend throws and the next use vends again; a refresh replaces the secret, a failed one keeps it",
           "[file_credentials]") {
 	CredentialsFixture f;
+	auto &context = f.Context();
 	f.con.BeginTransaction();
-	ClientContextFileOpener opener(f.Context());
 	bool fail = true;
-	auto credentials = FileCredentials::Create(f.Context(), "mem://bucket/table/", [&](ClientContext &) {
+	auto name = SecretManager::Get(context).RegisterFileSecret(context, "mem://bucket/table/", [&](ClientContext &) {
 		auto vend = ++f.vends;
 		if (fail) {
 			throw IOException("the vend failed");
@@ -733,15 +777,18 @@ TEST_CASE("A failed vend throws and the next use vends again; a refresh replaces
 		return TestSecret("table-key#" + to_string(vend));
 	});
 	auto key = [&]() {
-		return credentials->GetSecret(&opener, "mem://bucket/table/a.bin")->TryGetValue("key_id").ToString();
+		return CredentialsFixture::KeyOf(CredentialsFixture::GetFileSecret(context, name, "mem://bucket/table/a.bin"));
+	};
+	auto refresh = [&]() {
+		return SecretManager::Get(context).RefreshFileSecret(context, name);
 	};
 	REQUIRE_THROWS_AS(key(), IOException);
 	fail = false;
 	REQUIRE(key() == "table-key#2");
-	REQUIRE(credentials->Refresh(&opener));
+	REQUIRE(refresh());
 	REQUIRE(key() == "table-key#3");
 	fail = true;
-	REQUIRE_THROWS_AS(credentials->Refresh(&opener), IOException);
+	REQUIRE_THROWS_AS(refresh(), IOException);
 	REQUIRE(key() == "table-key#3");
 	f.con.Rollback();
 }

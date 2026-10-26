@@ -4,7 +4,6 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/secret/file_credentials.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -213,18 +212,21 @@ KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<Fi
 	if (info) {
 		path = info->file_path;
 	}
-	if (info && info->credentials) {
+	if (info && !info->file_secret.empty()) {
 		// the open names its secret: look up none by path
-		credentials_secret = info->credentials->GetSecret(&opener_p, path);
+		if (!context) {
+			throw InvalidConfigurationException("The file secret for '%s' is not available without a client", path);
+		}
+		file_secret = SecretManager::Get(*context).GetFileSecret(*context, info->file_secret, path);
 		for (idx_t i = 0; i < secret_types_len; i++) {
-			if (StringUtil::CIEquals(credentials_secret->GetType().GetIdentifierName(), secret_types[i])) {
-				secret = *credentials_secret;
+			if (StringUtil::CIEquals(file_secret->GetType().GetIdentifierName(), secret_types[i])) {
+				secret = *file_secret;
 				return;
 			}
 		}
 		throw InvalidConfigurationException(
-		    "The credentials of '%s' are a secret of type %s, which this read does not take", path,
-		    credentials_secret->GetType());
+		    "The file secret for '%s' is a secret of type %s, which this read does not take", path,
+		    file_secret->GetType());
 	}
 
 	Initialize(secret_types, secret_types_len);
@@ -245,7 +247,7 @@ SettingLookupResult KeyValueSecretReader::TryGetSecretKeyOrSetting(const Identif
 	if (secret && secret->TryGetValue(secret_key, result)) {
 		return SettingLookupResult(SettingScope::SECRET);
 	}
-	if (credentials_secret) {
+	if (file_secret) {
 		// a setting is something the query's caller can change
 		return SettingLookupResult();
 	}

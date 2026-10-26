@@ -149,14 +149,14 @@ bool ExtendedOpenFileInfo::TryGetOption(const string &name, timestamp_t &result)
 	return true;
 }
 
-OpenFileInfo OpenFileInfo::WithCredentials(const shared_ptr<FileCredentials> &credentials) const {
-	if (!credentials || HasCredentials()) {
+OpenFileInfo OpenFileInfo::WithFileSecret(const string &name) const {
+	if (name.empty() || HasFileSecret()) {
 		return *this;
 	}
 	OpenFileInfo result(*this);
 	result.extended_info =
 	    extended_info ? make_shared_ptr<ExtendedOpenFileInfo>(*extended_info) : make_shared_ptr<ExtendedOpenFileInfo>();
-	result.extended_info->credentials = credentials;
+	result.extended_info->file_secret = name;
 	return result;
 }
 

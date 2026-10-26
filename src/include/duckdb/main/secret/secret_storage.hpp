@@ -17,16 +17,23 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 
+#include <functional>
+
 namespace duckdb {
 
 class BaseSecret;
 class Catalog;
 class CatalogSet;
 struct CatalogTransaction;
+class ClientContext;
 class DatabaseInstance;
+class KeyValueSecret;
 struct SecretMatch;
 struct SecretEntry;
 class SecretManager;
+
+//! Returns the secret of a file secret (SecretManager::RegisterFileSecret): on first use, and again on a refresh
+using file_secret_vend_t = std::function<shared_ptr<const KeyValueSecret>(ClientContext &context)>;
 
 //! Base class for SecretStorage API
 class SecretStorage {
@@ -90,7 +97,8 @@ protected:
 	bool persistent;
 };
 
-//! In-memory secret storage owned by a single transaction
+//! In-memory secret storage owned by a single transaction. It also keeps the transaction's file secrets
+//! (SecretManager::RegisterFileSecret), apart from its secrets, so that none of the lookups below sees them
 class TransactionSecretStorage : public SecretStorage {
 public:
 	explicit TransactionSecretStorage(const string &name_p);
@@ -107,9 +115,28 @@ public:
 	unique_ptr<SecretEntry> GetSecretByName(const string &name,
 	                                        optional_ptr<CatalogTransaction> transaction = nullptr) override;
 
+	//! Registers a file secret for the paths under `scope`; returns its name
+	string RegisterFileSecret(string scope, file_secret_vend_t vend);
+	//! The file secret `name` for reading `path`, vended on first use; nullptr when there is none. Throws when `path`
+	//! is outside its scope
+	shared_ptr<const KeyValueSecret> GetFileSecret(ClientContext &context, const string &name, const string &path);
+	//! Vends the file secret `name` again; false when there is none
+	bool RefreshFileSecret(ClientContext &context, const string &name);
+
 private:
+	struct FileSecret {
+		string scope;
+		file_secret_vend_t vend;
+		//! Held while vending, so that concurrent first uses share one vend
+		mutex lock;
+		shared_ptr<const KeyValueSecret> secret;
+	};
+	optional_ptr<FileSecret> FindFileSecret(const string &name);
+
 	mutex lock;
 	identifier_map_t<unique_ptr<SecretEntry>> secrets;
+	//! The file secrets by name. Entries are never removed, so a FileSecret outlives its lookups
+	unordered_map<string, unique_ptr<FileSecret>> file_secrets;
 };
 
 //! Wrapper struct around a SecretEntry to allow storing it

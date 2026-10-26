@@ -14,13 +14,13 @@
 #include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
-class FileCredentials;
 
 struct ExtendedOpenFileInfo {
 	unordered_map<string, Value> options;
-	//! The credentials to open the file with. A typed field rather than an option, so that nothing that writes the
-	//! options (file options a query wrote, a listing response) can set it
-	shared_ptr<FileCredentials> credentials;
+	//! The name of the file secret to open the file with (SecretManager::RegisterFileSecret). A typed field rather
+	//! than an option, so that nothing that writes the options (file options a query wrote, a listing response) can
+	//! set it
+	string file_secret;
 
 public:
 	//! Read an option as a T - returns false when the option is not set, throws when it is set to a value
@@ -61,14 +61,13 @@ public:
 	DUCKDB_API static OpenFileInfo FromValue(const Value &input, const Identifier &function_name);
 	//! The inverse of FromValue: the path as a VARCHAR when there are no options, a file struct otherwise
 	DUCKDB_API Value ToValue() const;
-	//! Whether the file is opened with credentials of its own. Reads of such a file use no cache that reads of its path
-	//! share
-	bool HasCredentials() const {
-		return extended_info && extended_info->credentials;
+	//! Whether the file is opened with a file secret. Reads of such a file use no cache that reads of its path share
+	bool HasFileSecret() const {
+		return extended_info && !extended_info->file_secret.empty();
 	}
-	//! This file with `credentials` when it has none. The extended information is copied, because copies of an
-	//! OpenFileInfo share it
-	DUCKDB_API OpenFileInfo WithCredentials(const shared_ptr<FileCredentials> &credentials) const;
+	//! This file with the file secret `name` when it has none. The extended information is copied, because copies of
+	//! an OpenFileInfo share it
+	DUCKDB_API OpenFileInfo WithFileSecret(const string &name) const;
 
 	bool operator<(const OpenFileInfo &rhs) const {
 		return path < rhs.path;
