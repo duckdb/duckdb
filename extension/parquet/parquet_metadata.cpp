@@ -80,6 +80,11 @@ struct ParquetMetadataFilePaths {
 
 struct ParquetMetaDataBindData : public TableFunctionData {
 	unique_ptr<ParquetMetadataFilePaths> file_paths;
+
+	//! The file list is consumed by the first execution
+	bool SupportStatementCache() const override {
+		return false;
+	}
 };
 
 struct ParquetBloomProbeBindData : public ParquetMetaDataBindData {
@@ -494,7 +499,8 @@ void ParquetRowGroupMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 	// num_values
 	output[7].get().Append(Value::BIGINT(col_meta.num_values));
 	// path_in_schema
-	output[8].get().Append(StringUtil::Join(col_meta.path_in_schema, ", "));
+	output[8].get().Append(StringUtil::Join(col_meta.path_in_schema, ", ",
+	                                        [](const duckdb_parquet::ParquetString &part) { return string(part); }));
 	// type
 	output[9].get().Append(ConvertParquetElementToString(col_meta.type));
 	// stats_min
@@ -532,8 +538,8 @@ void ParquetRowGroupMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 	// key_value_metadata
 	vector<Value> map_keys, map_values;
 	for (auto &entry : col_meta.key_value_metadata) {
-		map_keys.push_back(Value::BLOB_RAW(entry.key));
-		map_values.push_back(Value::BLOB_RAW(entry.value));
+		map_keys.push_back(Value::BLOB_RAW(string(entry.key)));
+		map_values.push_back(Value::BLOB_RAW(string(entry.value)));
 	}
 	output[23].get().Append(
 	    Value::MAP(LogicalType::BLOB, LogicalType::BLOB, std::move(map_keys), std::move(map_values)));
@@ -566,8 +572,12 @@ void ParquetRowGroupMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 
 class ParquetSchemaProcessor : public ParquetMetadataFileProcessor {
 public:
+	void InitializeInternal(ClientContext &context, ParquetReader &reader) override;
 	idx_t TotalRowCount(ParquetReader &reader) override;
 	void ReadRow(vector<reference<Vector>> &output, idx_t row_idx, ParquetReader &reader) override;
+
+private:
+	vector<Value> element_types;
 };
 
 template <>
@@ -668,6 +678,25 @@ static Value ParquetLogicalTypeToString(const duckdb_parquet::LogicalType &type,
 	return Value();
 }
 
+static void CollectElementTypes(const ParquetColumnSchema &schema, vector<Value> &element_types) {
+	// a group collapsed into its only child has the type of that child
+	for (auto &index : {schema.parent_schema_index, schema.schema_index}) {
+		if (index.IsValid() && index.GetIndex() < element_types.size() && element_types[index.GetIndex()].IsNull()) {
+			element_types[index.GetIndex()] = Value(schema.type.ToString());
+		}
+	}
+	for (auto &child : schema.children) {
+		CollectElementTypes(child, element_types);
+	}
+}
+
+void ParquetSchemaProcessor::InitializeInternal(ClientContext &context, ParquetReader &reader) {
+	element_types.assign(reader.GetFileMetadata()->schema.size(), Value());
+	for (auto &column : reader.root_schema->children) {
+		CollectElementTypes(column, element_types);
+	}
+}
+
 idx_t ParquetSchemaProcessor::TotalRowCount(ParquetReader &reader) {
 	return reader.GetFileMetadata()->schema.size();
 }
@@ -679,7 +708,7 @@ void ParquetSchemaProcessor::ReadRow(vector<reference<Vector>> &output, idx_t ro
 	// file_name
 	output[0].get().Append(reader.file.path);
 	// name
-	output[1].get().Append(column.name);
+	output[1].get().Append(string(column.name));
 	// type
 	output[2].get().Append(ParquetElementString(column.type, column.__isset.type));
 	// type_length
@@ -699,12 +728,7 @@ void ParquetSchemaProcessor::ReadRow(vector<reference<Vector>> &output, idx_t ro
 	// logical_type
 	output[10].get().Append(ParquetLogicalTypeToString(column.logicalType, column.__isset.logicalType));
 	// duckdb_type
-	ParquetColumnSchema column_schema;
-	Value duckdb_type;
-	if (column.__isset.type) {
-		duckdb_type = reader.DeriveLogicalType(column, column_schema).ToString();
-	}
-	output[11].get().Append(duckdb_type);
+	output[11].get().Append(element_types[row_idx]);
 	// column_id
 	output[12].get().Append(Value::BIGINT(UnsafeNumericCast<int64_t>(row_idx)));
 }
@@ -742,8 +766,8 @@ void ParquetKeyValueMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 	auto &entry = meta_data->key_value_metadata[row_idx];
 
 	output[0].get().Append(Value(reader.file.path));
-	output[1].get().Append(Value::BLOB_RAW(entry.key));
-	output[2].get().Append(Value::BLOB_RAW(entry.value));
+	output[1].get().Append(Value::BLOB_RAW(string(entry.key)));
+	output[2].get().Append(Value::BLOB_RAW(string(entry.value)));
 }
 
 //===--------------------------------------------------------------------===//

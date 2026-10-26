@@ -1,7 +1,7 @@
 #include "json_structure.hpp"
 
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/logical_type_info.hpp"
 #include "json_executors.hpp"
 #include "json_geojson.hpp"
 #include "json_scan.hpp"
@@ -31,17 +31,17 @@ static LogicalTypeId MaxNumericType(const LogicalTypeId &a, const LogicalTypeId 
 	return LogicalTypeId::BIGINT;
 }
 
-JSONStructureNode::JSONStructureNode() : count(0), null_count(0) {
+JSONStructureNode::JSONStructureNode(const bool case_insensitive_keys_p)
+    : count(0), null_count(0), case_insensitive_keys(case_insensitive_keys_p) {
 }
 
-JSONStructureNode::JSONStructureNode(const char *key_ptr, const size_t key_len) : JSONStructureNode() {
+JSONStructureNode::JSONStructureNode(const char *key_ptr, const size_t key_len, const bool case_insensitive_keys_p)
+    : JSONStructureNode(case_insensitive_keys_p) {
 	key = make_uniq<string>(key_ptr, key_len);
 }
 
-JSONStructureNode::JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p, const bool ignore_errors,
-                                     const bool detect_geojson)
-    : JSONStructureNode(unsafe_yyjson_get_str(key_p), unsafe_yyjson_get_len(key_p)) {
-	JSONStructure::ExtractStructure(val_p, *this, ignore_errors, detect_geojson);
+JSONStructureNode JSONStructureNode::EmptyLike(const JSONStructureNode &parent) {
+	return JSONStructureNode(parent.case_insensitive_keys);
 }
 
 static void SwapJSONStructureNode(JSONStructureNode &a, JSONStructureNode &b) noexcept {
@@ -50,6 +50,7 @@ static void SwapJSONStructureNode(JSONStructureNode &a, JSONStructureNode &b) no
 	std::swap(a.descriptions, b.descriptions);
 	std::swap(a.count, b.count);
 	std::swap(a.null_count, b.null_count);
+	std::swap(a.case_insensitive_keys, b.case_insensitive_keys);
 }
 
 JSONStructureNode::JSONStructureNode(JSONStructureNode &&other) noexcept {
@@ -64,7 +65,7 @@ JSONStructureNode &JSONStructureNode::operator=(JSONStructureNode &&other) noexc
 JSONStructureDescription &JSONStructureNode::GetOrCreateDescription(const LogicalTypeId type) {
 	if (descriptions.empty()) {
 		// Empty, just put this type in there
-		descriptions.emplace_back(type);
+		descriptions.emplace_back(type, case_insensitive_keys);
 		return descriptions.back();
 	}
 
@@ -91,7 +92,7 @@ JSONStructureDescription &JSONStructureNode::GetOrCreateDescription(const Logica
 		}
 	}
 	// Type was not there, create a new description
-	descriptions.emplace_back(type);
+	descriptions.emplace_back(type, case_insensitive_keys);
 	return descriptions.back();
 }
 
@@ -472,7 +473,9 @@ bool JSONStructureNode::EliminateCandidateFormats(const idx_t vec_count, Vector 
 	return false;
 }
 
-JSONStructureDescription::JSONStructureDescription(const LogicalTypeId type_p) : type(type_p) {
+JSONStructureDescription::JSONStructureDescription(const LogicalTypeId type_p, const bool case_insensitive_keys)
+    : type(type_p),
+      key_map(0, JSONKeyOptionalCaseHash {case_insensitive_keys}, JSONKeyOptionalCaseEquality {case_insensitive_keys}) {
 }
 
 static void SwapJSONStructureDescription(JSONStructureDescription &a, JSONStructureDescription &b) noexcept {
@@ -496,7 +499,7 @@ JSONStructureDescription &JSONStructureDescription::operator=(JSONStructureDescr
 JSONStructureNode &JSONStructureDescription::GetOrCreateChild() {
 	D_ASSERT(type == LogicalTypeId::LIST);
 	if (children.empty()) {
-		children.emplace_back();
+		children.emplace_back(key_map.hash_function().case_insensitive);
 	}
 	D_ASSERT(children.size() == 1);
 	return children.back();
@@ -510,8 +513,8 @@ JSONStructureNode &JSONStructureDescription::GetOrCreateChild(const char *key_pt
 		return children[it->second]; // Found it
 	}
 
-	// Didn't find, create a new child
-	children.emplace_back(key_ptr, key_size);
+	// Didn't find, create a new child (the first spelling of a key names it when keys are case-insensitive)
+	children.emplace_back(key_ptr, key_size, key_map.hash_function().case_insensitive);
 	const auto &persistent_key_string = *children.back().key;
 	JSONKey new_key {persistent_key_string.c_str(), persistent_key_string.length()};
 	key_map.emplace(new_key, children.size() - 1);
@@ -519,15 +522,16 @@ JSONStructureNode &JSONStructureDescription::GetOrCreateChild(const char *key_pt
 }
 
 JSONStructureNode &JSONStructureDescription::GetOrCreateChild(yyjson_val *key, yyjson_val *val,
-                                                              const bool ignore_errors, const bool detect_geojson) {
+                                                              const bool ignore_errors, const bool detect_geojson,
+                                                              const idx_t depth) {
 	D_ASSERT(yyjson_is_str(key));
 	auto &child = GetOrCreateChild(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
-	JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson);
+	JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson, depth);
 	return child;
 }
 
 static void ExtractStructureArray(yyjson_val *arr, JSONStructureNode &node, const bool ignore_errors,
-                                  const bool detect_geojson) {
+                                  const bool detect_geojson, const idx_t depth) {
 	D_ASSERT(yyjson_is_arr(arr));
 	auto &description = node.GetOrCreateDescription(LogicalTypeId::LIST);
 	auto &child = description.GetOrCreateChild();
@@ -535,12 +539,12 @@ static void ExtractStructureArray(yyjson_val *arr, JSONStructureNode &node, cons
 	size_t idx, max;
 	yyjson_val *val;
 	yyjson_arr_foreach(arr, idx, max, val) {
-		JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson);
+		JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson, depth + 1);
 	}
 }
 
 static void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &node, const bool ignore_errors,
-                                   const bool detect_geojson) {
+                                   const bool detect_geojson, const idx_t depth) {
 	D_ASSERT(yyjson_is_obj(obj));
 	auto &description = node.GetOrCreateDescription(LogicalTypeId::STRUCT);
 
@@ -562,7 +566,7 @@ static void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &node, con
 			                                    *insert_result.first + "\" in object %s",
 			                                obj);
 		}
-		description.GetOrCreateChild(key, val, ignore_errors, detect_geojson);
+		description.GetOrCreateChild(key, val, ignore_errors, detect_geojson, depth + 1);
 	}
 }
 
@@ -577,7 +581,10 @@ static void ExtractStructureVal(yyjson_val *val, JSONStructureNode &node) {
 }
 
 void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, const bool ignore_errors,
-                                     const bool detect_geojson) {
+                                     const bool detect_geojson, const idx_t depth) {
+	if (depth >= JSONCommon::MAX_RECURSION_DEPTH) {
+		throw InvalidInputException("JSON exceeds maximum recursion depth of %d", JSONCommon::MAX_RECURSION_DEPTH);
+	}
 	node.count++;
 	const auto tag = yyjson_get_tag(val);
 	if (tag == (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE)) {
@@ -586,7 +593,7 @@ void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, c
 
 	switch (tag) {
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
-		return ExtractStructureArray(val, node, ignore_errors, detect_geojson);
+		return ExtractStructureArray(val, node, ignore_errors, detect_geojson, depth);
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
 		// A GeoJSON geometry is a leaf: it becomes GEOMETRY rather than a struct of type/coordinates. Detecting it
 		// here (rather than on the finished tree) means geometries of different kinds still merge into one type.
@@ -594,14 +601,14 @@ void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, c
 			node.GetOrCreateDescription(LogicalTypeId::GEOMETRY);
 			return;
 		}
-		return ExtractStructureObject(val, node, ignore_errors, detect_geojson);
+		return ExtractStructureObject(val, node, ignore_errors, detect_geojson, depth);
 	default:
 		return ExtractStructureVal(val, node);
 	}
 }
 
 JSONStructureNode ExtractStructureInternal(yyjson_val *val, const bool ignore_errors) {
-	JSONStructureNode node;
+	JSONStructureNode node(false);
 	JSONStructure::ExtractStructure(val, node, ignore_errors, false);
 	return node;
 }
@@ -673,8 +680,8 @@ static void GetStructureFunctionInternal(ScalarFunctionSet &set, const LogicalTy
 ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 	ScalarFunctionSet set("json_structure");
 	GetStructureFunctionInternal(set, LogicalType::VARCHAR);
-	set.SetFallible();
 	GetStructureFunctionInternal(set, LogicalType::JSON());
+	set.SetFallible();
 	return set;
 }
 
@@ -866,7 +873,7 @@ static LogicalType GetMergedType(ClientContext &context, const JSONStructureNode
                                  const idx_t depth, const LogicalType &null_type) {
 	D_ASSERT(node.descriptions.size() == 1);
 	auto &desc = node.descriptions[0];
-	JSONStructureNode merged;
+	auto merged = JSONStructureNode::EmptyLike(node);
 	for (const auto &child : desc.children) {
 		JSONStructure::MergeNodes(merged, child);
 	}
@@ -890,9 +897,19 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 		}
 	}
 
+	// An empty key can't be a STRUCT member name, so such objects can only be a MAP or JSON
+	bool has_empty_key = false;
+	for (auto &child : desc.children) {
+		D_ASSERT(child.key);
+		has_empty_key = has_empty_key || child.key->empty();
+	}
+	if (has_empty_key && map_inference_threshold == DConstants::INVALID_INDEX) {
+		return LogicalType::JSON();
+	}
+
 	// If it's an inconsistent object we also just do MAP with the best-possible, recursively-merged value type
-	if (map_inference_threshold != DConstants::INVALID_INDEX &&
-	    IsStructureInconsistent(desc, node.count, node.null_count, field_appearance_threshold)) {
+	if (has_empty_key || (map_inference_threshold != DConstants::INVALID_INDEX &&
+	                      IsStructureInconsistent(desc, node.count, node.null_count, field_appearance_threshold))) {
 		return LogicalType::MAP(LogicalType::VARCHAR,
 		                        GetMergedType(context, node, max_depth, field_appearance_threshold,
 		                                      map_inference_threshold, depth + 1, null_type));

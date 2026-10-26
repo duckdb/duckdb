@@ -148,7 +148,7 @@ public:
 		return result;
 	}
 
-	Allocator &GetBufferAllocator() override {
+	BufferAllocator &GetBufferAllocator() override {
 		return buffer_manager.GetBufferAllocator();
 	}
 	void ReserveMemory(idx_t size) override {

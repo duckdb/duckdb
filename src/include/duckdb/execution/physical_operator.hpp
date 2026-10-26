@@ -91,6 +91,11 @@ public:
 		return false;
 	}
 
+	//! Initialize the vectors this operator uses for its output
+	virtual void InitializeOutputChunk(Allocator &allocator, DataChunk &chunk) const {
+		chunk.Initialize(allocator, types);
+	}
+
 	//! Functions to help decide how to set up pipeline dependencies
 	idx_t EstimatedThreadCount() const;
 	bool CanSaturateThreads(ClientContext &context) const;

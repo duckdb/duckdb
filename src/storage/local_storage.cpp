@@ -1,4 +1,5 @@
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
@@ -9,6 +10,7 @@
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -283,7 +285,7 @@ void LocalTableStorage::Rollback() {
 //===--------------------------------------------------------------------===//
 // LocalTableManager
 //===--------------------------------------------------------------------===//
-optional_ptr<LocalTableStorage> LocalTableManager::GetStorage(DataTable &table) const {
+optional_ptr<LocalTableStorage> LocalTableManager::GetStorage(const DataTable &table) const {
 	lock_guard<mutex> l(table_storage_lock);
 	auto entry = table_storage.find(table);
 	return entry == table_storage.end() ? nullptr : entry->second.get();
@@ -295,7 +297,7 @@ LocalTableStorage &LocalTableManager::GetOrCreateStorage(ClientContext &context,
 	if (entry == table_storage.end()) {
 		auto new_storage = make_shared_ptr<LocalTableStorage>(context, table);
 		auto storage = new_storage.get();
-		table_storage.insert(make_pair(reference<DataTable>(table), std::move(new_storage)));
+		table_storage.insert(make_pair(reference<const DataTable>(table), std::move(new_storage)));
 		return *storage;
 	} else {
 		return *entry->second.get();
@@ -318,7 +320,7 @@ shared_ptr<LocalTableStorage> LocalTableManager::MoveEntry(DataTable &table) {
 	return storage_entry;
 }
 
-reference_map_t<DataTable, shared_ptr<LocalTableStorage>> LocalTableManager::MoveEntries() {
+reference_map_t<const DataTable, shared_ptr<LocalTableStorage>> LocalTableManager::MoveEntries() {
 	lock_guard<mutex> l(table_storage_lock);
 	return std::move(table_storage);
 }
@@ -539,15 +541,36 @@ idx_t LocalStorage::Delete(DataTable &table, DuckTableEntry &table_entry, Vector
 	auto storage = table_manager.GetStorage(table);
 	D_ASSERT(storage);
 
-	// delete from unique indices (if any)
-	if (!storage->append_indexes.Empty()) {
+	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
+	if (storage->append_indexes.Empty()) {
+		idx_t delete_count = storage->GetCollection().Delete(TransactionData::Unversioned(), table_entry, ids, count);
+		storage->deleted_rows += delete_count;
+		return delete_count;
+	}
+	// a row can be matched multiple times (e.g. DELETE ... USING) - only remove the rows that were deleted now from
+	// the unique indices
+	DeletedRowIds deleted_ids(ids);
+	idx_t delete_count =
+	    storage->GetCollection().Delete(TransactionData::Unversioned(), table_entry, ids, count, deleted_ids);
+	storage->deleted_rows += delete_count;
+	if (!deleted_ids.has_skipped_rows) {
+		// all rows were deleted
 		storage->GetCollection().RemoveFromIndexes(context, storage->append_indexes, row_ids, count,
 		                                           IndexRemovalType::MAIN_INDEX_ONLY);
+		return delete_count;
 	}
-
-	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
-	idx_t delete_count = storage->GetCollection().Delete(TransactionData::Unversioned(), table_entry, ids, count);
-	storage->deleted_rows += delete_count;
+	auto &deleted_row_ids = deleted_ids.row_ids;
+	if (!deleted_row_ids.empty()) {
+		Vector deleted_row_id_vector(LogicalType::ROW_TYPE, deleted_row_ids.size());
+		{
+			auto writer = FlatVector::Writer<row_t>(deleted_row_id_vector, deleted_row_ids.size());
+			for (auto &row_id : deleted_row_ids) {
+				writer.WriteValue(row_id);
+			}
+		}
+		storage->GetCollection().RemoveFromIndexes(context, storage->append_indexes, deleted_row_id_vector,
+		                                           deleted_row_ids.size(), IndexRemovalType::MAIN_INDEX_ONLY);
+	}
 	return delete_count;
 }
 
@@ -624,7 +647,7 @@ void LocalStorage::FlushBulkAppendBlocksAndSync(AttachedDatabase &db) {
 	if (requires_sync) {
 		// the WAL will reference the flushed row groups (flushed just now or already during the
 		// statement, e.g. by batch inserts) - persist them now so that the commit does not have
-		// to FileSync while holding the WAL lock
+		// to FileSync while holding the commit lock
 		db.GetStorageManager().GetBlockManager().FileSync();
 		synced_flushed_blocks = true;
 	}
@@ -636,9 +659,9 @@ void LocalStorage::Commit(optional_ptr<StorageCommitState> commit_state) {
 	// after this, the local storage is no longer required and can be cleared
 	auto table_storage = table_manager.MoveEntries();
 	for (auto &entry : table_storage) {
-		auto table = entry.first;
 		auto storage = entry.second.get();
-		Flush(table, *storage, commit_state);
+		D_ASSERT(RefersToSameObject(entry.first, storage->table_ref));
+		Flush(storage->table_ref, *storage, commit_state);
 		entry.second.reset();
 	}
 }
@@ -747,7 +770,7 @@ TableIndexList &LocalStorage::GetIndexes(ClientContext &context, DataTable &tabl
 	return storage.append_indexes;
 }
 
-optional_ptr<LocalTableStorage> LocalStorage::GetStorage(DataTable &table) {
+optional_ptr<LocalTableStorage> LocalStorage::GetStorage(const DataTable &table) {
 	return table_manager.GetStorage(table);
 }
 

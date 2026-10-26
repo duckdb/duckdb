@@ -149,7 +149,8 @@ void JSONScan::AddReadJSONParameters(TableFunction &table_function) {
 		    .Add("timestamp_format", LogicalType::VARCHAR)
 		    .Add("records", LogicalType::ANY)
 		    .Add("array", LogicalType::BOOLEAN)
-		    .Add("maximum_sample_files", LogicalType::BIGINT);
+		    .Add("maximum_sample_files", LogicalType::BIGINT)
+		    .Add("case_insensitive_keys", LogicalType::BOOLEAN);
 	});
 }
 
@@ -315,8 +316,16 @@ bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const 
 	if (key == "records") {
 		// records is tri-state: 'auto', 'true' or 'false'. Accept a boolean for the latter two, since
 		// records = false reads more naturally than records = 'false'.
-		auto arg = value.type().id() == LogicalTypeId::BOOLEAN ? string(BooleanValue::Get(value) ? "true" : "false")
-		                                                       : StringValue::Get(value);
+		string arg;
+		if (value.type().id() == LogicalTypeId::BOOLEAN) {
+			arg = BooleanValue::Get(value) ? "true" : "false";
+		} else if (value.type().id() == LogicalTypeId::VARCHAR) {
+			arg = StringValue::Get(value);
+		} else {
+			throw BinderException("read_json \"records\" parameter must be a string ('auto', 'true' or 'false') or "
+			                      "a boolean, not %s",
+			                      value.type().ToString());
+		}
 		if (arg == "auto") {
 			options.record_type = JSONRecordType::AUTO_DETECT;
 		} else if (arg == "true") {
@@ -344,6 +353,10 @@ bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const 
 	}
 	if (key == "convert_strings_to_integers") {
 		options.convert_strings_to_integers = BooleanValue::Get(value);
+		return true;
+	}
+	if (key == "case_insensitive_keys") {
+		options.case_insensitive_keys = BooleanValue::Get(value);
 		return true;
 	}
 	return false;
@@ -411,6 +424,7 @@ void JSONScan::FinalizeBind(JSONScanData &json_data, vector<Identifier> &names) 
 	transform_options.error_duplicate_key = !options.ignore_errors;
 	transform_options.error_missing_key = false;
 	transform_options.error_unknown_key = options.auto_detect && !options.ignore_errors;
+	transform_options.key_match = options.case_insensitive_keys ? JSONKeyMatch::CASE_INSENSITIVE : JSONKeyMatch::EXACT;
 	transform_options.date_format_map = json_data.date_format_map.get();
 	transform_options.delay_error = true;
 

@@ -160,6 +160,7 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["binary_as_string"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
 	copy_options["file_row_number"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
 	copy_options["can_have_nan"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["int96_as"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
 	copy_options["geoparquet_version"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 	copy_options["shredding"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["write_timestamp_as_int96"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
@@ -244,8 +245,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				const auto &struct_children = StructValue::GetChildren(shredding_types_value);
 				D_ASSERT(StructType::GetChildTypes(struct_type).size() == struct_children.size());
 				for (idx_t i = 0; i < struct_children.size(); i++) {
-					const auto &col_name =
-					    StringUtil::Lower(StructType::GetChildName(struct_type, i).GetIdentifierName());
+					const auto &col_name = StructType::GetChildName(struct_type, i).GetIdentifierName();
 					auto it = variant_names.find(Identifier(col_name));
 					if (it == variant_names.end()) {
 						string names;
@@ -268,8 +268,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 						}
 					}
 					const auto &child_value = struct_children[i];
-					bind_data->shredding_types.AddChild(Identifier(col_name),
-					                                    ShreddingType::GetShreddingTypes(child_value, context));
+					bind_data->shredding_types.AddChild(*it, ShreddingType::GetShreddingTypes(child_value, context));
 				}
 			}
 		} else if (option_name == "kv_metadata") {
@@ -282,6 +281,9 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			for (idx_t i = 0; i < values.size(); i++) {
 				auto &value = values[i];
 				auto key = StructType::GetChildName(kv_struct_type, i);
+				if (value.IsNull()) {
+					throw BinderException("kv_metadata value for key %s cannot be NULL", key);
+				}
 				// If the value is a blob, write the raw blob bytes
 				// otherwise, cast to string
 				if (value.type().id() == LogicalTypeId::BLOB) {
@@ -321,8 +323,8 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			bind_data->enable_bloom_filters = BooleanValue::Get(option_values[0].DefaultCastAs(LogicalType::BOOLEAN));
 		} else if (option_name == "bloom_filter_false_positive_ratio") {
 			auto val = option_values[0].GetValue<double>();
-			if (val <= 0) {
-				throw BinderException("bloom_filter_false_positive_ratio must be greater than 0");
+			if (!(val > 0 && val <= 1)) {
+				throw BinderException("bloom_filter_false_positive_ratio must be greater than 0 and at most 1");
 			}
 			bind_data->bloom_filter_false_positive_ratio = val;
 		} else if (option_name == "compression_level") {
@@ -609,6 +611,34 @@ ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption
 }
 
 template <>
+const char *EnumUtil::ToChars<ParquetInt96AsOption>(ParquetInt96AsOption value) {
+	switch (value) {
+	case ParquetInt96AsOption::TIMESTAMP:
+		return "TIMESTAMP";
+	case ParquetInt96AsOption::TIMESTAMP_NS:
+		return "TIMESTAMP_NS";
+	case ParquetInt96AsOption::STRUCT:
+		return "STRUCT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
+}
+
+template <>
+ParquetInt96AsOption EnumUtil::FromString<ParquetInt96AsOption>(const char *value) {
+	if (StringUtil::Equals(value, "TIMESTAMP")) {
+		return ParquetInt96AsOption::TIMESTAMP;
+	}
+	if (StringUtil::Equals(value, "TIMESTAMP_NS")) {
+		return ParquetInt96AsOption::TIMESTAMP_NS;
+	}
+	if (StringUtil::Equals(value, "STRUCT")) {
+		return ParquetInt96AsOption::STRUCT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template <>
 const char *
 EnumUtil::ToChars<StringColumnReader::Utf8ValidationOption>(StringColumnReader::Utf8ValidationOption value) {
 	switch (value) {
@@ -853,6 +883,9 @@ static void ParquetWriteInitializeOperator(GlobalFunctionData &gstate, const Phy
 // Prepare Batch
 //===--------------------------------------------------------------------===//
 struct ParquetWriteBatchData : public PreparedBatchData {
+	explicit ParquetWriteBatchData(Allocator &allocator) : prepared_row_group(allocator) {
+	}
+
 	PreparedRowGroup prepared_row_group;
 };
 
@@ -860,7 +893,7 @@ static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &con
                                                               GlobalFunctionData &gstate,
                                                               unique_ptr<ColumnDataCollection> collection) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
-	auto result = make_uniq<ParquetWriteBatchData>();
+	auto result = make_uniq<ParquetWriteBatchData>(BufferAllocator::Get(context));
 	unique_ptr<ParquetWriteTransformData> transform_data;
 	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group, transform_data);
 	return std::move(result);
@@ -1057,6 +1090,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(MultiFileReader::CreateFunctionSet(full_meta_fun));
 
 	// variant_to_parquet_variant
+	loader.RegisterType("PARQUET_VARIANT", VariantColumnWriter::GetParquetVariantType());
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
 
 	// bytes_to_variant

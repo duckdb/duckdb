@@ -3,6 +3,10 @@ include_directories(../third_party/sqlite/include)
 include_directories(include)
 include_directories(extension/debug_fs/include)
 
+if(${DISABLE_THREADS})
+  add_definitions(-DDUCKDB_NO_THREADS)
+endif()
+
 add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
 add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
 add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
@@ -105,8 +109,14 @@ endif()
 if(TARGET duckdb AND NOT WIN32)
   # Some tests reference internal third-party symbols (e.g. re2/mbedtls) that
   # are linked into duckdb but not exported from the shared library.
-  target_link_libraries(unittest duckdb test_helpers duckdb_re2 duckdb_mbedtls
-                        duckdb_cpp_api)
+  target_link_libraries(
+    unittest
+    duckdb
+    test_helpers
+    duckdb_re2
+    duckdb_mbedtls
+    duckdb_fsst
+    duckdb_cpp_api)
 else()
   # On Windows, tests require internal DuckDB symbols that are not DLL-exported.
   target_link_libraries(unittest duckdb_static test_helpers duckdb_cpp_api)

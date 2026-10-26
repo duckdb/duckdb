@@ -7,6 +7,7 @@
 #include "parquet_crypto.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "parquet_shredding.hpp"
+#include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/serializer/async_file_writer.hpp"
@@ -478,7 +479,14 @@ struct ColumnStatsUnifier {
 
 class ParquetStatsAccumulator {
 public:
+	struct NestedColumnStats {
+		string column_name;
+		idx_t null_count = 0;
+		idx_t num_values = 0;
+	};
+
 	vector<unique_ptr<ColumnStatsUnifier>> stats_unifiers;
+	map<idx_t, NestedColumnStats> nested_stats;
 };
 
 ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, const vector<LogicalType> &types,
@@ -507,7 +515,8 @@ ColumnDataCollection &ParquetWriteTransformData::ApplyTransform(ColumnDataCollec
 
 ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWriterOptions &&options_p,
                              const vector<pair<string, string>> &kv_metadata)
-    : context(context), options(std::move(options_p)) {
+    : context(context), options(std::move(options_p)), metadata_arena(BufferAllocator::Get(context)),
+      file_meta_data(metadata_arena) {
 	// initialize the file writer
 	writer = make_uniq<AsyncFileWriter>(context, fs, options.file_name.c_str(), options.open_flags);
 
@@ -534,10 +543,10 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWrit
 	    StringUtil::Format("DuckDB version %s (build %s)", DuckDB::LibraryVersion(), DuckDB::SourceID());
 
 	for (auto &kv_pair : kv_metadata) {
-		duckdb_parquet::KeyValue kv;
+		file_meta_data.key_value_metadata.emplace_back();
+		auto &kv = file_meta_data.key_value_metadata.back();
 		kv.__set_key(kv_pair.first);
 		kv.__set_value(kv_pair.second);
-		file_meta_data.key_value_metadata.push_back(kv);
 		file_meta_data.__isset.key_value_metadata = true;
 	}
 
@@ -546,11 +555,11 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWrit
 			if (!TypeVisitor::Contains(type, LogicalTypeId::INTERVAL)) {
 				continue;
 			}
-			duckdb_parquet::KeyValue kv;
+			file_meta_data.key_value_metadata.emplace_back();
+			auto &kv = file_meta_data.key_value_metadata.back();
 			kv.__set_key(ParquetStatisticsUtils::INTERVAL_BLOOM_FILTER_KEY);
 			kv.__set_value(ParquetStatisticsUtils::INTERVAL_BLOOM_FILTER_VALUE);
 			// Readers require this capability before probing the additional normalized hashes.
-			file_meta_data.key_value_metadata.push_back(std::move(kv));
 			file_meta_data.__isset.key_value_metadata = true;
 			break;
 		}
@@ -628,8 +637,8 @@ void ParquetWriter::AnalyzeSchema(ColumnDataCollection &buffer, vector<unique_pt
 	}
 }
 
-PreparedParquetLayout ParquetWriter::ExportPreparedLayout() const {
-	PreparedParquetLayout result;
+PreparedParquetLayout ParquetWriter::ExportPreparedLayout(ArenaAllocator &arena) const {
+	PreparedParquetLayout result(arena);
 	result.schema = file_meta_data.schema;
 	for (auto &column_writer : column_writers) {
 		ShreddingType column_shredding_type;
@@ -732,7 +741,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRo
 	InitializeSchemaElements();
 	{
 		lock_guard<mutex> glock(lock);
-		result.layout = ExportPreparedLayout();
+		result.layout = ExportPreparedLayout(*result.arena);
 	}
 
 	auto &states = result.states;
@@ -880,7 +889,7 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteT
 		return;
 	}
 
-	PreparedRowGroup prepared_row_group;
+	PreparedRowGroup prepared_row_group(BufferAllocator::Get(context));
 	PrepareRowGroup(buffer, prepared_row_group, transform_data);
 	buffer.Reset();
 
@@ -923,6 +932,15 @@ struct NumericStatsUnifier : public BaseNumericStatsUnifier<T> {
 			return string();
 		}
 		return Value::CreateValue<T>(Load<T>(const_data_ptr_cast(stats.data()))).ToString();
+	}
+};
+
+struct TimeTZStatsUnifier : public BaseNumericStatsUnifier<int64_t> {
+	string StatsToString(const string &stats) override {
+		if (stats.empty()) {
+			return string();
+		}
+		return Value::TIMETZ(ParquetIntToTimeTZ(Load<int64_t>(const_data_ptr_cast(stats.data())))).ToString();
 	}
 };
 
@@ -1124,7 +1142,7 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 	case LogicalTypeId::TIMESTAMP_NS:
 		return make_uniq<NumericStatsUnifier<timestamp_ns_t>>();
 	case LogicalTypeId::TIME_TZ:
-		return make_uniq<NumericStatsUnifier<dtime_tz_t>>();
+		return make_uniq<TimeTZStatsUnifier>();
 	case LogicalTypeId::UINTEGER:
 		return make_uniq<NumericStatsUnifier<uint32_t>>();
 	case LogicalTypeId::UBIGINT:
@@ -1179,7 +1197,7 @@ static bool IsVariantMetadataField(const ColumnWriter &writer) {
 	return name == "metadata";
 }
 
-static void GetStatsUnifier(const ColumnWriter &column_writer, vector<unique_ptr<ColumnStatsUnifier>> &unifiers,
+static void GetStatsUnifier(const ColumnWriter &column_writer, ParquetStatsAccumulator &accumulator,
                             string base_name = string()) {
 	auto &schema = column_writer.Schema();
 	if (schema.repetition_type != duckdb_parquet::FieldRepetitionType::REPEATED) {
@@ -1199,11 +1217,25 @@ static void GetStatsUnifier(const ColumnWriter &column_writer, vector<unique_ptr
 			auto &variant_writer = column_writer.parent->Cast<VariantColumnWriter>();
 			unifier->variant_type = variant_writer.TransformedType().ToString();
 		}
-		unifiers.push_back(std::move(unifier));
+		accumulator.stats_unifiers.push_back(std::move(unifier));
 		return;
 	}
+	if (schema.repetition_type != duckdb_parquet::FieldRepetitionType::REPEATED) {
+		accumulator.nested_stats[column_writer.SchemaIndex()].column_name = base_name;
+	}
 	for (auto &child_writer : children) {
-		GetStatsUnifier(*child_writer, unifiers, base_name);
+		GetStatsUnifier(*child_writer, accumulator, base_name);
+	}
+}
+
+void ParquetWriter::FlushNestedColumnStats(idx_t schema_idx, idx_t null_count, idx_t num_values) {
+	if (!written_stats) {
+		return;
+	}
+	auto entry = stats_accumulator->nested_stats.find(schema_idx);
+	if (entry != stats_accumulator->nested_stats.end()) {
+		entry->second.null_count += null_count;
+		entry->second.num_values += num_values;
 	}
 }
 
@@ -1256,6 +1288,14 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 
 void ParquetWriter::GatherWrittenStatistics() {
 	written_stats->row_count = file_meta_data.num_rows;
+
+	for (auto &entry : stats_accumulator->nested_stats) {
+		auto &stats = entry.second;
+		case_insensitive_map_t<Value> column_stats;
+		column_stats["null_count"] = Value::UBIGINT(stats.null_count);
+		column_stats["num_values"] = Value::UBIGINT(stats.num_values);
+		written_stats->column_statistics.emplace(stats.column_name, std::move(column_stats));
+	}
 
 	// finalize the min/max values and write to column stats
 	for (idx_t c = 0; c < stats_accumulator->stats_unifiers.size(); c++) {
@@ -1360,7 +1400,7 @@ void ParquetWriter::InitializeStatsUnifiers() {
 		return;
 	}
 	for (auto &column_writer : column_writers) {
-		GetStatsUnifier(*column_writer, stats_accumulator->stats_unifiers);
+		GetStatsUnifier(*column_writer, *stats_accumulator);
 	}
 }
 
@@ -1421,9 +1461,9 @@ void ParquetWriter::Finalize() {
 	const auto metadata_start_offset = writer->GetTotalWritten();
 	if (options.encryption_config) {
 		// Crypto metadata is written unencrypted
-		FileCryptoMetaData crypto_metadata;
-		duckdb_parquet::AesGcmV1 aes_gcm_v1;
-		duckdb_parquet::EncryptionAlgorithm alg;
+		FileCryptoMetaData crypto_metadata(metadata_arena);
+		duckdb_parquet::AesGcmV1 aes_gcm_v1(metadata_arena);
+		duckdb_parquet::EncryptionAlgorithm alg(metadata_arena);
 		alg.__set_AES_GCM_V1(aes_gcm_v1);
 		crypto_metadata.__set_encryption_algorithm(alg);
 		crypto_metadata.write(protocol.get());

@@ -190,11 +190,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 		get = &root->Cast<LogicalGet>();
 	}
 
-	if (!table.temporary) {
-		// update of persistent table: not read only!
-		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::UPDATE_DATA);
-	}
+	GetStatementProperties().RegisterDBModify(table.catalog, context, DatabaseModificationType::UPDATE_DATA);
 	auto update = make_uniq<LogicalUpdate>(table);
 
 	// Trigger expansion flags its generated base UPDATE for OLD capture via scoped binder state (keyed by node
@@ -285,7 +281,6 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	result.plan = std::move(update);
 
 	auto &properties = GetStatementProperties();
-	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

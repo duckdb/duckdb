@@ -3,7 +3,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
+#include "duckdb/execution/operator/set/physical_recursive_cte_keyed_state.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
@@ -152,7 +152,7 @@ static void CopySelectedAddresses(const Vector &source, const SelectionVector &s
 	FlatVector::SetSize(target, count);
 }
 
-void RecursiveCTEState::AppendPreviousUsingKeyDeltaRows(Vector &addresses, idx_t count) {
+void RecursiveCTEKeyedState::AppendPreviousUsingKeyDeltaRows(Vector &addresses, idx_t count) {
 	D_ASSERT(key_delta);
 	auto &delta = *key_delta;
 	delta.PrepareCollections();
@@ -165,7 +165,7 @@ void RecursiveCTEState::AppendPreviousUsingKeyDeltaRows(Vector &addresses, idx_t
 	delta.previous_rows.Append(delta.previous_append_state, delta.previous_state_rows);
 }
 
-void RecursiveCTEState::SnapshotExistingUsingKeyDeltaAddresses(Vector &addresses, idx_t count, bool defer_append) {
+void RecursiveCTEKeyedState::SnapshotExistingUsingKeyDeltaAddresses(Vector &addresses, idx_t count, bool defer_append) {
 	D_ASSERT(key_delta);
 	auto &delta = *key_delta;
 	if (count == 0) {
@@ -181,12 +181,12 @@ void RecursiveCTEState::SnapshotExistingUsingKeyDeltaAddresses(Vector &addresses
 	AppendPreviousUsingKeyDeltaRows(addresses, count);
 }
 
-void RecursiveCTEState::SnapshotUsingKeyDelta(const Vector &group_addresses, const SelectionVector &new_groups,
-                                              idx_t new_group_count, idx_t row_count, bool allow_candidate_reuse) {
+void RecursiveCTEKeyedState::SnapshotUsingKeyDelta(const Vector &group_addresses, const SelectionVector &new_groups,
+                                                   idx_t new_group_count, idx_t row_count, bool allow_candidate_reuse) {
 	D_ASSERT(key_delta);
 	auto &delta = *key_delta;
 	const auto candidate_count = intermediate_table.Count();
-	const auto skip_new_group_addresses = allow_candidate_reuse && can_reuse_new_group_candidates &&
+	const auto skip_new_group_addresses = allow_candidate_reuse && op.keyed.can_reuse_new_group_candidates &&
 	                                      partial_key_indexes.empty() && new_group_count == candidate_count &&
 	                                      row_count == candidate_count;
 	if (skip_new_group_addresses) {
@@ -195,7 +195,7 @@ void RecursiveCTEState::SnapshotUsingKeyDelta(const Vector &group_addresses, con
 		delta.touched_count += new_group_count;
 		return;
 	}
-	if (allow_candidate_reuse && can_reuse_new_group_candidates) {
+	if (allow_candidate_reuse && op.keyed.can_reuse_new_group_candidates) {
 		delta.new_group_addresses.reserve(candidate_count);
 	}
 
@@ -257,12 +257,12 @@ void RecursiveCTEState::SnapshotUsingKeyDelta(const Vector &group_addresses, con
 	delta.touched_count += matched_count;
 	FlatVector::SetSize(delta.matched_addresses, matched_count);
 	// Keep prior values vector-local while direct candidate reuse remains possible.
-	const auto defer_append = allow_candidate_reuse && can_reuse_changed_group_candidates &&
+	const auto defer_append = allow_candidate_reuse && op.keyed.can_reuse_changed_group_candidates &&
 	                          row_count == candidate_count && new_group_count == 0 && matched_count == row_count;
 	SnapshotExistingUsingKeyDeltaAddresses(delta.matched_addresses, matched_count, defer_append);
 }
 
-void RecursiveCTEState::ValidateDeferredUsingKeyCandidateReuse(DataChunk &candidates) {
+void RecursiveCTEKeyedState::ValidateDeferredUsingKeyCandidateReuse(DataChunk &candidates) {
 	D_ASSERT(key_delta);
 	auto &delta = *key_delta;
 	D_ASSERT(delta.deferred_previous_rows && delta.deferred_count == candidates.size());
@@ -301,7 +301,7 @@ void RecursiveCTEState::ValidateDeferredUsingKeyCandidateReuse(DataChunk &candid
 	delta.deferred_candidate_reuse = true;
 }
 
-void RecursiveCTEState::SnapshotPreaggregatedUsingKeyDeltaGroups(DataChunk &keys) {
+void RecursiveCTEKeyedState::SnapshotPreaggregatedUsingKeyDeltaGroups(DataChunk &keys) {
 	D_ASSERT(key_delta);
 	auto &delta = *key_delta;
 	delta.PrepareCollections();
@@ -357,7 +357,7 @@ void RecursiveCTEState::SnapshotPreaggregatedUsingKeyDeltaGroups(DataChunk &keys
 	}
 }
 
-bool RecursiveCTEState::TryReuseChangedGroupCandidates(idx_t candidate_count) {
+bool RecursiveCTEKeyedState::TryReuseChangedGroupCandidates(idx_t candidate_count) {
 	D_ASSERT(key_delta);
 	auto &delta = *key_delta;
 	if (delta.deferred_candidate_reuse) {
@@ -365,8 +365,8 @@ bool RecursiveCTEState::TryReuseChangedGroupCandidates(idx_t candidate_count) {
 		         delta.changed_count == candidate_count);
 		return true;
 	}
-	if (!can_reuse_changed_group_candidates || delta.new_count != 0 || delta.touched_count != candidate_count ||
-	    delta.previous_rows.Count() != candidate_count) {
+	if (!op.keyed.can_reuse_changed_group_candidates || delta.new_count != 0 ||
+	    delta.touched_count != candidate_count || delta.previous_rows.Count() != candidate_count) {
 		return false;
 	}
 
@@ -417,7 +417,7 @@ bool RecursiveCTEState::TryReuseChangedGroupCandidates(idx_t candidate_count) {
 	return true;
 }
 
-idx_t RecursiveCTEState::FinalizeUsingKeyDelta(bool update_partial_indexes, bool collect_metrics) {
+idx_t RecursiveCTEKeyedState::FinalizeUsingKeyDelta(bool update_partial_indexes, bool collect_metrics) {
 	D_ASSERT(key_delta);
 	auto &delta = *key_delta;
 	ColumnDataScanState previous_scan_state;
@@ -434,7 +434,7 @@ idx_t RecursiveCTEState::FinalizeUsingKeyDelta(bool update_partial_indexes, bool
 		FinalizeStateRows(delta.row_state, delta.finalize_addresses, delta.key_scan_rows, delta.aggregate_rows,
 		                  delta.result_rows);
 		const idx_t previous_payload_offset = 1;
-		if (has_payload_comparison_executors) {
+		if (op.keyed.has_payload_comparisons) {
 			delta.comparison_rows.Reset();
 			for (idx_t payload_idx = 0; payload_idx < op.payload_idx.size(); payload_idx++) {
 				delta.comparison_rows.data[payload_idx].Reference(

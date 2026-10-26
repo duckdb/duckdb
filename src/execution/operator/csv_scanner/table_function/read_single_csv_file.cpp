@@ -123,6 +123,9 @@ static unique_ptr<FunctionData> ReadSingleCSVFileBind(ClientContext &context, Ta
 		throw BinderException("read_single_csv_file requires a non-NULL file name");
 	}
 	result->file = TableFunctionFileBindInput::GetFile(input);
+	if (result->file.path.empty()) {
+		throw BinderException("read_single_csv_file requires a non-empty file name");
+	}
 
 	// the options of the scan this file is part of steer the sniffer - the file list is this single file
 	MultiFileOptions file_options;
@@ -383,8 +386,11 @@ static bool ReadSingleCSVFileClaimBatch(ClientContext &context, TableFunctionInp
 }
 
 //! The CSV scanner can be read ahead when the buffers of the file can be addressed individually
-static bool ReadSingleCSVFileSupportsReadAhead(const FunctionData &bind_data) {
-	auto &csv_data = bind_data.Cast<ReadSingleCSVFileData>();
+static bool ReadSingleCSVFileSupportsReadAhead(optional_ptr<const FunctionData> bind_data) {
+	if (!bind_data) {
+		return false;
+	}
+	auto &csv_data = bind_data->Cast<ReadSingleCSVFileData>();
 	return csv_data.buffer_manager && csv_data.buffer_manager->file_handle &&
 	       csv_data.buffer_manager->file_handle->HasKnownBufferRanges();
 }
@@ -463,14 +469,20 @@ static unique_ptr<NodeStatistics> ReadSingleCSVFileCardinality(ClientContext &co
 	// determined through the scientific method as the average amount of rows in a CSV file
 	idx_t per_file_cardinality = 42;
 	if (csv_data.buffer_manager && csv_data.buffer_manager->file_handle) {
+		auto &file_handle = *csv_data.buffer_manager->file_handle;
 		auto estimated_row_width = csv_data.csv_types.size() * 5;
-		per_file_cardinality = csv_data.buffer_manager->file_handle->FileSize() / estimated_row_width;
+		auto file_size = file_handle.FileSize();
+		if (file_handle.IsPipe()) {
+			// a pipe has no size, the bytes the sniffer read are a lower bound for it
+			file_size = MaxValue<idx_t>(file_size, file_handle.UncompressedBytesRead());
+		}
+		per_file_cardinality = file_size / estimated_row_width;
 	}
 	return make_uniq<NodeStatistics>(per_file_cardinality);
 }
 
 TableFunction ReadCSVTableFunction::GetSingleFileFunction() {
-	TableFunction read_csv("read_single_csv_file", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+	TableFunction read_csv("read_single_csv_file", FunctionSignature().AddPositionalOnly("file", LogicalType::ANY),
 	                       ReadSingleCSVFileFunction, ReadSingleCSVFileBind, ReadSingleCSVFileInitGlobal,
 	                       ReadSingleCSVFileInitLocal);
 	read_csv.table_scan_progress = ReadSingleCSVFileProgress;

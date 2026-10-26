@@ -14,7 +14,7 @@ class GrammarTypeInfo:
     cpp_type: str
     by_value: bool = False  # True for unique_ptr<T>, vector<unique_ptr<T>> (non-copyable)
     default_initializer: str = ""  # Optional enum member/full C++ initializer for Optional(...) values
-    pass_location: bool = False  # Pass parse_result.offset to the hand-written body
+    pass_location: bool = False  # Pass the parse result's offset to the hand-written body
 
 
 def load_grammar_types_yaml(types_file):
@@ -119,6 +119,8 @@ def load_grammar_types(types_file):
             "matcher_rule_overrides",
             "packrat_memoized_rules",
             "collapsible_rules",
+            "expression_depth_nesting_rules",
+            "expression_depth_chain_rules",
             "additional_transform_result_types",
         ):
             continue
@@ -191,6 +193,14 @@ def load_rule_name_list(types_file, key, known_rules=None):
 def load_packrat_memoized_rules(types_file, known_rules=None):
     """Load packrat_memoized_rules from grammar_types.yml."""
     return load_rule_name_list(types_file, "packrat_memoized_rules", known_rules)
+
+
+def load_expression_depth_rules(types_file, known_rules=None):
+    """Load expression_depth_nesting_rules and expression_depth_chain_rules from grammar_types.yml."""
+    return (
+        load_rule_name_list(types_file, "expression_depth_nesting_rules", known_rules),
+        load_rule_name_list(types_file, "expression_depth_chain_rules", known_rules),
+    )
 
 
 def load_collapsible_rules(types_file, known_rules=None):

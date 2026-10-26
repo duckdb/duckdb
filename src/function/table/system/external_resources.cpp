@@ -241,6 +241,9 @@ static unique_ptr<FunctionData> RegisterExternalResourceBind(ClientContext &cont
 	if (input.inputs[0].IsNull() || input.inputs[1].IsNull()) {
 		throw InvalidInputException("register_external_resource: the type and name must not be NULL");
 	}
+	if (input.inputs[2].IsNull()) {
+		throw InvalidInputException("register_external_resource: the handle must not be NULL");
+	}
 	resource.type = StringValue::Get(input.inputs[0]);
 	resource.name = StringValue::Get(input.inputs[1]);
 	// The handle is the durable identity and doubles as the deleter payload.

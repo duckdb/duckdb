@@ -30,6 +30,7 @@ add_library_unity(
   connection.cpp
   database.cpp
   parse_iterator.cpp
+  parser_context.cpp
   statement_iterator.cpp
   database_file_path_manager.cpp
   database_path_and_type.cpp
@@ -42,6 +43,7 @@ add_library_unity(
   extension_callback_manager.cpp
   extension_install_info.cpp
   extension_manager.cpp
+  os_util.cpp
   prepared_statement.cpp
   prepared_statement_data.cpp
   relation.cpp

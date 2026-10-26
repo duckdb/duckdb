@@ -2,6 +2,7 @@
 #include "duckdb/parser/peg/matcher_stack.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/matcher_factory.hpp"
+#include "duckdb/parser/peg/matcher/list_matcher.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
@@ -37,7 +38,7 @@ SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 	return AddSuggestionInternal(state);
 }
 
-string Matcher::GetName() const {
+string Matcher::GetPrintName() const {
 	if (name.empty()) {
 		return ToString();
 	}
@@ -59,10 +60,17 @@ Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
 	return result;
 }
 
-optional_ptr<ParseResult> ParseResultAllocator::Allocate(unique_ptr<ParseResult> parse_result) {
-	auto result_ptr = parse_result.get();
-	parse_results.push_back(std::move(parse_result));
-	return optional_ptr<ParseResult>(result_ptr);
+void MatcherAllocator::InitializeListChains() {
+	for (auto &matcher : matchers) {
+		if (matcher->IsStructural() && matcher->Type() == MatcherType::LIST) {
+			matcher->Cast<ListMatcher>().InitializeListChain();
+		}
+	}
 }
+
+ParseResultAllocator::ParseResultAllocator() : arena(Allocator::DefaultAllocator()), pending_destructors(arena) {
+}
+
+ParseResultAllocator::~ParseResultAllocator() = default;
 
 } // namespace duckdb
