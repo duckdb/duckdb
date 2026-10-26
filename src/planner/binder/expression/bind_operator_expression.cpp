@@ -108,14 +108,22 @@ BindResult ExpressionBinder::BindOperatorAsFunction(OperatorExpression &op, cons
 	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
-	// the backing function of operator syntax is a system concept: resolve it in the system catalog first, so
-	// session objects cannot redirect operators (a shadowing macro could never be invoked here anyway)
-	EntryLookupInfo system_lookup(
-	    CatalogType::SCALAR_FUNCTION_ENTRY,
-	    QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), function_name));
-	auto system_func = GetCatalogEntry(system_lookup, OnEntryNotFound::RETURN_NULL);
-	optional_ptr<CatalogEntry> resolved = system_func;
+	// resolve the backing name as a written call would, so caller-registered scalar functions keep winning.
+	// when that resolution is not a scalar function (operator syntax rejects macros, it cannot hand them
+	// already-bound children), retry the system catalog so session objects cannot break operators
+	EntryLookupInfo caller_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(function_name));
+	auto resolved = GetCatalogEntry(caller_lookup, OnEntryNotFound::RETURN_NULL);
+	if (!resolved || resolved->type != CatalogType::SCALAR_FUNCTION_ENTRY) {
+		EntryLookupInfo system_lookup(
+		    CatalogType::SCALAR_FUNCTION_ENTRY,
+		    QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), function_name));
+		auto system_func = GetCatalogEntry(system_lookup, OnEntryNotFound::RETURN_NULL);
+		if (system_func && system_func->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
+			resolved = system_func;
+		}
+	}
 	if (!resolved) {
+		// preserve the original missing-entry errors
 		FunctionExpression lookup(function_name, vector<unique_ptr<ParsedExpression>>());
 		lookup.SetQueryLocation(op.GetQueryLocation());
 		resolved = &BindFunction(lookup);

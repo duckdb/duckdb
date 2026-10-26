@@ -78,10 +78,14 @@ SELECT bin, count FROM histogram_values(hist_t, v) ORDER BY bin LIMIT 3;
 20	10
 30	10
 
-query I
-SELECT count(*) FROM histogram_values(hist_t, v, technique := 'equi-height');
+# equi-height quantile positions come from the shadowed generate_series, assert values
+
+query II
+SELECT bin, count FROM histogram_values(hist_t, v, technique := 'equi-height') ORDER BY bin LIMIT 3;
 ----
-10
+9	10
+19	10
+29	10
 
 # window nodes stored inside a default table-macro body (histogram uses row_number/lag/max OVER)
 
