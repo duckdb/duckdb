@@ -749,6 +749,83 @@ TEST_CASE("Test C-API Arrow conversion of unaligned buffers", "[capi][arrow]") {
 	duckdb_destroy_arrow_converted_schema(&converted_schema);
 }
 
+TEST_CASE("Test C-API appending an Arrow chunk larger than the vector size with casts", "[capi][arrow]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	constexpr idx_t ROWS = 10000;
+	vector<int64_t> values(ROWS);
+	for (idx_t i = 0; i < ROWS; i++) {
+		values[i] = static_cast<int64_t>(i);
+	}
+
+	constexpr idx_t COLUMNS = 3;
+	const void *buffers[2] = {nullptr, values.data()};
+	const char *names[COLUMNS] = {"same", "narrow", "text"};
+	ArrowSchema child_schemas[COLUMNS];
+	ArrowSchema *child_schema_ptrs[COLUMNS];
+	ArrowArray child_arrays[COLUMNS];
+	ArrowArray *child_array_ptrs[COLUMNS];
+	for (idx_t i = 0; i < COLUMNS; i++) {
+		child_schemas[i] = ArrowSchema();
+		child_schemas[i].format = "l";
+		child_schemas[i].name = names[i];
+		child_schemas[i].flags = ARROW_FLAG_NULLABLE;
+		child_schemas[i].release = ReleaseUnalignedSchema;
+		child_schema_ptrs[i] = &child_schemas[i];
+
+		child_arrays[i] = ArrowArray();
+		child_arrays[i].length = ROWS;
+		child_arrays[i].n_buffers = 2;
+		child_arrays[i].buffers = buffers;
+		child_arrays[i].release = ReleaseUnalignedArray;
+		child_array_ptrs[i] = &child_arrays[i];
+	}
+
+	ArrowSchema schema = ArrowSchema();
+	schema.format = "+s";
+	schema.name = "";
+	schema.n_children = COLUMNS;
+	schema.children = child_schema_ptrs;
+	schema.release = ReleaseUnalignedSchema;
+
+	const void *struct_buffers[1] = {nullptr};
+	ArrowArray array = ArrowArray();
+	array.length = ROWS;
+	array.n_buffers = 1;
+	array.buffers = struct_buffers;
+	array.n_children = COLUMNS;
+	array.children = child_array_ptrs;
+	array.release = ReleaseUnalignedArray;
+
+	duckdb_arrow_converted_schema converted_schema = nullptr;
+	auto err = duckdb_schema_from_arrow(tester.connection, &schema, &converted_schema);
+	REQUIRE(err == nullptr);
+	duckdb_data_chunk chunk = nullptr;
+	err = duckdb_data_chunk_from_arrow(tester.connection, &array, converted_schema, &chunk);
+	REQUIRE(err == nullptr);
+	REQUIRE(duckdb_data_chunk_get_size(chunk) == ROWS);
+
+	// "same" needs no cast, "narrow" and "text" are cast by the appender
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE large_cast(same BIGINT, narrow INTEGER, text VARCHAR)"));
+	duckdb_appender appender;
+	REQUIRE(duckdb_appender_create(tester.connection, nullptr, "large_cast", &appender) == DuckDBSuccess);
+	REQUIRE(duckdb_append_data_chunk(appender, chunk) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+
+	auto result = tester.Query("SELECT COUNT(*), SUM(same), SUM(narrow), SUM(text::BIGINT), "
+	                           "COUNT(*) FILTER (WHERE same <> narrow OR same::VARCHAR <> text) FROM large_cast");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == ROWS);
+	REQUIRE(result->Fetch<int64_t>(1, 0) == 49995000);
+	REQUIRE(result->Fetch<int64_t>(2, 0) == 49995000);
+	REQUIRE(result->Fetch<int64_t>(3, 0) == 49995000);
+	REQUIRE(result->Fetch<int64_t>(4, 0) == 0);
+
+	duckdb_destroy_data_chunk(&chunk);
+	duckdb_destroy_arrow_converted_schema(&converted_schema);
+}
+
 TEST_CASE("Test C-API Arrow string views retain data after aligned scratch is released", "[capi][arrow]") {
 	CAPITester tester;
 	REQUIRE(tester.OpenDatabase(nullptr));

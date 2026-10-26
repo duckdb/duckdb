@@ -114,6 +114,11 @@ public:
 	DUCKDB_API void TrackBytesWritten(idx_t amount, idx_t elapsed_us);
 	//! Track bytes spilled to the temporary directory (always tracked, even when profiling disabled).
 	DUCKDB_API void TrackBytesSpilled(idx_t amount);
+	//! Track the compressed size of column data scanned (always tracked, even when profiling disabled). Unlike
+	//! query.total_bytes_scanned, the running total includes scans inside secure views
+	DUCKDB_API void TrackBytesScanned(idx_t amount);
+	//! Zero the running total of bytes scanned, at the start of every statement
+	void ResetBytesScanned();
 	//! Track memory allocated (thread-safe; always tracked).
 	DUCKDB_API void TrackTotalMemoryAllocated(idx_t amount);
 	//! Add to a metric counter (profiling-only).
@@ -172,6 +177,7 @@ public:
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;
 	DUCKDB_API idx_t GetBytesRead() const;
 	DUCKDB_API idx_t GetBytesWritten() const;
+	DUCKDB_API idx_t GetBytesScanned() const;
 
 	//! Return the result tree (generating it if it does not yet exist)
 	QueryProfileResult &GetResult();
@@ -185,8 +191,9 @@ private:
 	//! case. Used for the programmatic / string paths.
 	string RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
 	//! Print the profiler output directly via the renderer's print sink (nullptr prints nothing), handling the
-	//! disabled case. Only used on the terminal-print paths.
-	void PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
+	//! disabled case, followed by `trailer`. Only used on the terminal-print paths; everything they print goes
+	//! through the sink, so a renderer whose sink keeps or discards the output decides what is printed.
+	void PrintProfilerOutput(optional_ptr<TreeRenderer> renderer, const string &trailer = "") const;
 
 public:
 	//! Provides access to the root of the query tree, but ensures there are no concurrent modifications
