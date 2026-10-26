@@ -20,4 +20,4 @@ Dictionary
 statement error
 SELECT * FROM t LIMIT 1;
 ----
-<REGEX>:.*Data Corruption Error: Failed to scan dictionary string - dictionary (offset|index) was out of range.*
+Data Corruption Error: Failed to scan dictionary string - dictionary offset was out of range. Database file appears to be corrupted.

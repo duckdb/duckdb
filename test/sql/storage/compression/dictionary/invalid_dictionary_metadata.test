@@ -28,7 +28,7 @@ SELECT count(*) FROM pragma_storage_info('tbl') WHERE compression='Dictionary'
 statement error
 SELECT sum(length(STREET)) FROM tbl
 ----
-<REGEX>:.*Data Corruption Error: Failed to scan dictionary string - dictionary (offset|index) was out of range.*
+Data Corruption Error: Failed to scan dictionary string - dictionary offset was out of range. Database file appears to be corrupted.
 
 load {TEST_DIR}/dictionary_invalid_index.db readonly
 

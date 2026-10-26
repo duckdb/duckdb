@@ -7,6 +7,16 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Dictionary Validation
 //===--------------------------------------------------------------------===//
+[[noreturn]] static void ThrowDictionaryIndexOutOfRange() {
+	throw DataCorruptionException("Failed to scan dictionary string - dictionary index was out of range. Database file "
+	                              "appears to be corrupted.");
+}
+
+[[noreturn]] static void ThrowDictionaryOffsetOutOfRange() {
+	throw DataCorruptionException("Failed to scan dictionary string - dictionary offset was out of range. Database "
+	                              "file appears to be corrupted.");
+}
+
 void CompressedStringScanState::ValidateDictionaryIndices(const SelectionVector &sel, const idx_t start_offset,
                                                           const idx_t scan_count) const {
 	D_ASSERT(sel.IsSet());
@@ -19,9 +29,7 @@ void CompressedStringScanState::ValidateDictionaryIndices(const SelectionVector 
 	}
 
 	if (has_error) {
-		throw DataCorruptionException(
-		    "Failed to scan dictionary string - dictionary index was out of range. Database file appears "
-		    "to be corrupted.");
+		ThrowDictionaryIndexOutOfRange();
 	}
 }
 
@@ -35,9 +43,7 @@ void CompressedStringScanState::ValidateIndexBuffer() const {
 	has_error |= layout.index_buffer[layout.index_buffer.size() - 1] > layout.dictionary_reader.Size();
 
 	if (has_error) {
-		throw DataCorruptionException(
-		    "Failed to scan dictionary string - dictionary offset was out of range. Database file appears "
-		    "to be corrupted.");
+		ThrowDictionaryOffsetOutOfRange();
 	}
 }
 
@@ -178,25 +184,27 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 
 	auto result_data = FlatVector::Writer<string_t>(result, scan_count, result_offset);
 
-	bool has_error = false;
+	bool has_index_error = false;
+	bool has_offset_error = false;
 	for (idx_t i = 0; i < scan_count; i++) {
 		// Lookup dict offset in index buffer
 		auto string_dict_index = sel_vec->get_index(i + start_offset);
 
-		bool elem_error = string_dict_index >= layout.index_buffer.size();
-		string_dict_index = elem_error ? 0 : string_dict_index;
+		const bool index_error = string_dict_index >= layout.index_buffer.size();
+		has_index_error |= index_error;
+		string_dict_index = index_error ? 0 : string_dict_index;
 		auto str_dict_offset = layout.index_buffer[string_dict_index];
 
 		if (NEEDS_STRING_OFFSET_CHECK) {
-			elem_error |= str_dict_offset > layout.dictionary_reader.Size();
+			bool offset_error = str_dict_offset > layout.dictionary_reader.Size();
 			if (string_dict_index > 0) {
-				elem_error |= str_dict_offset < layout.index_buffer[string_dict_index - 1];
+				offset_error |= str_dict_offset < layout.index_buffer[string_dict_index - 1];
 			}
+			has_offset_error |= offset_error;
 			// On error, fall back to index/offset 0 so the fetch below stays in bounds.
-			string_dict_index = elem_error ? 0 : string_dict_index;
-			str_dict_offset = elem_error ? 0 : str_dict_offset;
+			string_dict_index = offset_error ? 0 : string_dict_index;
+			str_dict_offset = offset_error ? 0 : str_dict_offset;
 		}
-		has_error |= elem_error;
 
 		const auto str_len = GetStringLength(string_dict_index);
 		auto str = FetchStringFromDict(str_dict_offset, str_len);
@@ -207,10 +215,12 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		}
 	}
 
-	if (has_error) {
-		throw DataCorruptionException(
-		    "Failed to scan dictionary string - dictionary index was out of range. Database file appears "
-		    "to be corrupted.");
+	// offsets first, as scans validate the whole index buffer before the indices
+	if (has_offset_error) {
+		ThrowDictionaryOffsetOutOfRange();
+	}
+	if (has_index_error) {
+		ThrowDictionaryIndexOutOfRange();
 	}
 }
 
