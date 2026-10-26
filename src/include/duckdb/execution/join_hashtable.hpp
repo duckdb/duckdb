@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
@@ -461,9 +462,9 @@ public:
 	//! Whether or not to perform deduplication based on join_keys when building ht
 	bool insert_duplicate_keys = true;
 	//! Number of probe matches, isolated from immutable probe metadata.
-	alignas(64) atomic<idx_t> total_probe_matches {0};
+	PaddedAtomic<idx_t> total_probe_matches {0};
 	//! Residual predicate to evaluate during probing
-	alignas(64) optional_ptr<Expression> residual_predicate;
+	optional_ptr<Expression> residual_predicate;
 	//! Residual predicate mapping info
 	unique_ptr<ResidualPredicateInfo> residual_info;
 	//! Mapping from lhs_output_columns positions to lhs_probe_data positions
