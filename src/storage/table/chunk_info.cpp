@@ -72,10 +72,19 @@ static string IdToString(transaction_t id) {
 	return IsUpdateMarker(id) ? "U" + to_string(GetWriter(id)) : to_string(id);
 }
 
-//! Whether a write of a row conflicts with its id: a delete or an update by a transaction that the writer does not see
-//! (a writer never writes a row whose delete it sees, which WriteRows asserts)
-static bool IsConflictingId(TransactionData transaction, transaction_t id) {
-	return id != NOT_DELETED_ID && !transaction.view.Sees(GetWriter(id));
+//! Whether writing new_id into a row conflicts with its id: a write by a transaction that the writer does not see
+static bool IsConflictingId(TransactionData transaction, transaction_t id, transaction_t new_id) {
+	if (id == NOT_DELETED_ID || id == new_id) {
+		return false;
+	}
+	if (!transaction.view.Sees(GetWriter(id))) {
+		return true;
+	}
+	if (IsDeleteId(id)) {
+		// a transaction cannot see a row whose delete it sees, so it never writes it
+		throw InternalException("ChunkVectorInfo: write of a row whose delete the transaction sees");
+	}
+	return false;
 }
 
 ChunkVectorInfo::ChunkVectorInfo(FixedSizeAllocator &allocator_p, idx_t start, transaction_t insert_id_p)
@@ -134,8 +143,7 @@ idx_t ChunkVectorInfo::TemplatedGetSelVector(const SnapshotView &view, optional_
 		return count;
 	}
 	case DeleteIdState::MASKED: {
-		// every deleted row shares mask_delete_id and the other rows are not deleted, so the delete decision is a
-		// single constant for the whole vector
+		// the rows outside of the mask are not deleted, so mask_delete_id decides for the whole vector
 		const bool masked_deleted = DELETE_OP::IsDeleted(view, mask_delete_id);
 		if (HasConstantInsertionId()) {
 			if (!INSERT_OP::UseInsertedVersion(view, ConstantInsertId())) {
@@ -306,26 +314,30 @@ bool ChunkVectorInfo::Fetch(TransactionData transaction, row_t row) {
 	return UseVersion(transaction, fetch_insert_id) && !UseVersion(transaction, fetch_deleted_id);
 }
 
-bool ChunkVectorInfo::HasConflictingWrite(TransactionData transaction, const row_t ids[], idx_t count,
-                                          row_t offset) const {
+bool ChunkVectorInfo::HasConflictingWrite(TransactionData transaction, transaction_t new_id, const row_t ids[],
+                                          idx_t count, row_t offset) const {
 	switch (delete_state) {
 	case DeleteIdState::CONSTANT:
-		return IsConflictingId(transaction, ConstantDeleteId());
+		return IsConflictingId(transaction, ConstantDeleteId(), new_id);
 	case DeleteIdState::MASKED: {
-		auto mask_conflicts = IsConflictingId(transaction, mask_delete_id);
-		auto others_conflict = IsConflictingId(transaction, constant_delete_id);
+		// only the ids of the written rows count: the mask can hold deletes that the writer sees
+		bool writes_mask = false;
+		bool writes_others = false;
 		for (idx_t i = 0; i < count; i++) {
-			if (deleted_mask.RowIsValid(NumericCast<idx_t>(ids[i] - offset)) ? mask_conflicts : others_conflict) {
-				return true;
+			if (deleted_mask.RowIsValid(NumericCast<idx_t>(ids[i] - offset))) {
+				writes_mask = true;
+			} else {
+				writes_others = true;
 			}
 		}
-		return false;
+		return (writes_mask && IsConflictingId(transaction, mask_delete_id, new_id)) ||
+		       (writes_others && IsConflictingId(transaction, constant_delete_id, new_id));
 	}
 	case DeleteIdState::ARRAY: {
 		auto segment = allocator.GetHandle(GetDeletedPointer());
 		auto deleted = segment.GetPtr<transaction_t>();
 		for (idx_t i = 0; i < count; i++) {
-			if (IsConflictingId(transaction, deleted[ids[i] - offset])) {
+			if (IsConflictingId(transaction, deleted[ids[i] - offset], new_id)) {
 				return true;
 			}
 		}
@@ -366,6 +378,36 @@ IndexPointer ChunkVectorInfo::GetInitializedInsertedPointer() {
 	return inserted_data;
 }
 
+bool ChunkVectorInfo::RowsAreAllOutsideMask(const uint16_t rows[], idx_t count) const {
+	if (count != STANDARD_VECTOR_SIZE - deleted_mask.CountValid(STANDARD_VECTOR_SIZE)) {
+		return false;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		if (deleted_mask.RowIsValid(rows ? rows[i] : i)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+template <class F>
+IndexPointer ChunkVectorInfo::NewDeletedData(F &&row_id) {
+	auto data = allocator.New();
+	data.SetMetadata(1);
+	try {
+		auto segment = allocator.GetHandle(data);
+		auto deleted = segment.GetPtr<transaction_t>();
+		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+			deleted[i] = row_id(i);
+		}
+	} catch (...) {
+		// pinning the new segment can fail now that the buffers are unpinned
+		allocator.Free(data);
+		throw;
+	}
+	return data;
+}
+
 IndexPointer ChunkVectorInfo::GetInitializedDeletedPointer() {
 	if (delete_state == DeleteIdState::MASKED) {
 		// re-materialize the per-row array so callers can write into it
@@ -373,14 +415,7 @@ IndexPointer ChunkVectorInfo::GetInitializedDeletedPointer() {
 	}
 	if (HasConstantDeleteId()) {
 		transaction_t constant_id = ConstantDeleteId();
-
-		deleted_data = allocator.New();
-		deleted_data.SetMetadata(1);
-		auto segment = allocator.GetHandle(deleted_data);
-		auto deleted = segment.GetPtr<transaction_t>();
-		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-			deleted[i] = constant_id;
-		}
+		deleted_data = NewDeletedData([&](idx_t) { return constant_id; });
 		constant_delete_id = NOT_DELETED_ID;
 		delete_state = DeleteIdState::ARRAY;
 	}
@@ -420,34 +455,44 @@ void ChunkVectorInfo::CompressDeleteToMask(transaction_t mask_id) {
 void ChunkVectorInfo::DecompressDeleteMask() {
 	D_ASSERT(delete_state == DeleteIdState::MASKED);
 	// re-materialize the per-row array: the rows of the mask hold mask_delete_id, the others constant_delete_id
-	deleted_data = allocator.New();
-	deleted_data.SetMetadata(1);
-	{
-		auto segment = allocator.GetHandle(deleted_data);
-		auto deleted = segment.GetPtr<transaction_t>();
-		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-			deleted[i] = deleted_mask.RowIsValid(i) ? mask_delete_id : constant_delete_id;
-		}
-	}
+	deleted_data =
+	    NewDeletedData([&](idx_t row) { return deleted_mask.RowIsValid(row) ? mask_delete_id : constant_delete_id; });
 	deleted_mask.Reset();
 	constant_delete_id = NOT_DELETED_ID;
 	delete_state = DeleteIdState::ARRAY;
 	recheck_compression = true;
 }
 
+//! Whether the ids are the rows outside of the mask, in order
+static bool IdsAreRowsOutsideMask(const ValidityMask &mask, const row_t ids[], idx_t count, row_t offset) {
+	if (count != STANDARD_VECTOR_SIZE - mask.CountValid(STANDARD_VECTOR_SIZE)) {
+		return false;
+	}
+	idx_t row = 0;
+	for (idx_t i = 0; i < count; i++, row++) {
+		while (mask.RowIsValid(row)) {
+			row++;
+		}
+		if (ids[i] != offset + UnsafeNumericCast<row_t>(row)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void ChunkVectorInfo::WriteRows(TransactionData transaction, const row_t ids[], idx_t count, row_t offset,
                                 bool is_update, WrittenRows &written) {
-	if (HasConflictingWrite(transaction, ids, count, offset)) {
+	auto transaction_id = transaction.GetTransactionId();
+	auto id = is_update ? UpdateMarker(transaction_id) : transaction_id;
+	if (HasConflictingWrite(transaction, id, ids, count, offset)) {
 		throw TransactionException(is_update ? "Conflict on update!" : "Conflict on tuple deletion!");
 	}
 	written.count = 0;
 	written.is_consecutive = true;
 	written.previous_id_count = 0;
-	auto transaction_id = transaction.GetTransactionId();
-	auto id = is_update ? UpdateMarker(transaction_id) : transaction_id;
 	if (constant_delete_id == id) {
-		// the transaction wrote all rows outside of the mask (if any) already, and the mask holds its deletes
-		D_ASSERT(HasConstantDeleteId() || mask_delete_id == transaction_id);
+		// the transaction wrote all rows outside of the mask (if any) already, and the mask holds deletes
+		D_ASSERT(HasConstantDeleteId() || IsDeleteId(mask_delete_id));
 		return;
 	}
 	// the ids are not visible to all transactions yet - re-arm the compression check
@@ -455,6 +500,20 @@ void ChunkVectorInfo::WriteRows(TransactionData transaction, const row_t ids[], 
 	if (HasConstantDeleteId() || (delete_state == DeleteIdState::MASKED && mask_delete_id == id)) {
 		// the other rows share one id - keep the rows of the transaction in the mask
 		WriteMask(id, ids, count, offset, written);
+		return;
+	}
+	if (is_update && delete_state == DeleteIdState::MASKED && IsDeleteId(mask_delete_id) &&
+	    IdsAreRowsOutsideMask(deleted_mask, ids, count, offset)) {
+		// the update writes all rows that are not deleted, so they keep sharing one id
+		written.previous_ids[0] = constant_delete_id;
+		written.previous_id_count = constant_delete_id == NOT_DELETED_ID ? 0 : 1;
+		for (idx_t i = 0; i < count; i++) {
+			auto row = NumericCast<idx_t>(ids[i] - offset);
+			written.is_consecutive = written.is_consecutive && row == i;
+			written.rows[i] = NumericCast<uint16_t>(row);
+		}
+		written.count = count;
+		constant_delete_id = id;
 		return;
 	}
 	auto segment = allocator.GetHandle(GetInitializedDeletedPointer());
@@ -475,6 +534,8 @@ void ChunkVectorInfo::WriteRows(TransactionData transaction, const row_t ids[], 
 	}
 	if (written.count > 0) {
 		written.previous_id_count = DeleteInfo::GetPreviousIdCount(written.previous_ids, written.count);
+		// keep the ids in memory until the undo entry is pushed, so that they can be restored if that fails
+		written.pin = std::move(segment);
 	}
 }
 
@@ -598,6 +659,11 @@ void ChunkVectorInfo::RollbackWrite(const uint16_t rows[], idx_t count, const tr
 			if (deleted_mask.CheckAllInvalid(STANDARD_VECTOR_SIZE)) {
 				FreeDeleteData();
 			}
+			return;
+		}
+		if (delete_state == DeleteIdState::MASKED && RowsAreAllOutsideMask(rows, count)) {
+			// the write covered all rows outside of the mask, which fall back to the id they shared
+			constant_delete_id = previous;
 			return;
 		}
 	}

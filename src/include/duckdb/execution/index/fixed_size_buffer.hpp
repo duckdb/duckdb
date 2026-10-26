@@ -140,7 +140,9 @@ private:
 
 class SegmentHandle {
 public:
-	SegmentHandle() = delete;
+	//! A handle that holds no segment
+	SegmentHandle() : buffer_ptr(nullptr), ptr(nullptr) {
+	}
 	SegmentHandle(FixedSizeBuffer &buffer_p, const idx_t offset);
 
 	~SegmentHandle() {

@@ -284,8 +284,7 @@ public:
 
 	void NextVector(CollectionScanState &state);
 
-	//! Writes a delete or an update into the version info of the rows (ids[i] - offset) and pushes its undo entry;
-	//! outputs the rows that it wrote (within the vector)
+	//! Writes a delete or an update into the version info of the rows (ids[i] - offset) and pushes its undo entry
 	void WriteRows(TransactionData transaction, DuckTableEntry &table_entry, idx_t vector_idx, idx_t base_row,
 	               const row_t ids[], idx_t count, row_t offset, bool is_update, WrittenRows &written);
 	RowVersionManager &GetOrCreateVersionInfo();

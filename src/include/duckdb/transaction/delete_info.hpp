@@ -11,6 +11,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/execution/index/fixed_size_buffer.hpp"
 
 namespace duckdb {
 class DuckTableEntry;
@@ -42,11 +43,10 @@ struct DeleteInfo {
 		return rows;
 	}
 	const transaction_t *GetPreviousIds() const {
-		auto rows_end = reinterpret_cast<uintptr_t>(rows) + (is_consecutive ? 0 : count * sizeof(uint16_t));
-		return reinterpret_cast<const transaction_t *>(AlignValue<uintptr_t, sizeof(transaction_t)>(rows_end));
+		return reinterpret_cast<const transaction_t *>(GetPreviousIdsAddress());
 	}
 	transaction_t *GetPreviousIds() {
-		return const_cast<transaction_t *>(const_cast<const DeleteInfo *>(this)->GetPreviousIds());
+		return reinterpret_cast<transaction_t *>(GetPreviousIdsAddress());
 	}
 	//! How many of the previous ids an entry stores: none (all NOT_DELETED_ID), one (all equal), or all
 	static idx_t GetPreviousIdCount(const transaction_t previous_ids[], idx_t count) {
@@ -64,6 +64,12 @@ struct DeleteInfo {
 	}
 
 private:
+	//! The previous ids are stored after the rows, aligned
+	uintptr_t GetPreviousIdsAddress() const {
+		auto rows_end = reinterpret_cast<uintptr_t>(rows) + (is_consecutive ? 0 : count * sizeof(uint16_t));
+		return AlignValue<uintptr_t, sizeof(transaction_t)>(rows_end);
+	}
+
 	//! The per-vector row identifiers (actual row id is base_row + rows[x])
 	uint16_t rows[1];
 };
@@ -77,6 +83,8 @@ struct WrittenRows {
 	idx_t previous_id_count = 0;
 	uint16_t rows[STANDARD_VECTOR_SIZE];
 	transaction_t previous_ids[STANDARD_VECTOR_SIZE];
+	//! Keeps the vector's per-row ids in memory, if the write changed them
+	SegmentHandle pin;
 
 	//! The rows as an undo entry stores them: nullptr if they are consecutive
 	const uint16_t *GetStoredRows() const {

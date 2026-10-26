@@ -46,10 +46,9 @@ enum class VersionCompressionResult : uint8_t {
 };
 
 //! The storage state of the delete side of a ChunkVectorInfo. Exhaustive and mutually exclusive:
-//! CONSTANT - all rows share constant_delete_id (NOT_DELETED_ID, a single delete id or a single update marker)
-//! MASKED   - the rows in deleted_mask share one id (mask_delete_id), the other rows constant_delete_id
-//!            (NOT_DELETED_ID or an update marker); deleted_data freed
-//! ARRAY    - per-row delete ids materialized in deleted_data; constant_delete_id is NOT_DELETED_ID
+//! CONSTANT - all rows share constant_delete_id
+//! MASKED   - the rows in deleted_mask share mask_delete_id, the others constant_delete_id (never a delete)
+//! ARRAY    - per-row ids in deleted_data
 enum class DeleteIdState : uint8_t { CONSTANT, MASKED, ARRAY };
 
 class ChunkVectorInfo {
@@ -74,8 +73,7 @@ public:
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
 
-	//! Writes the delete id or update marker into the rows (ids[i] - offset); outputs the rows it wrote and the ids
-	//! they held before
+	//! Writes the delete id or update marker into the rows (ids[i] - offset), and outputs what it wrote
 	void WriteRows(TransactionData transaction, const row_t ids[], idx_t count, row_t offset, bool is_update,
 	               WrittenRows &written);
 	//! Replaces the delete id and update marker of old_id on the rows by those of new_id (on commit and revert)
@@ -121,8 +119,14 @@ private:
 	void CompressDeleteToMask(transaction_t mask_id);
 	//! MASKED -> ARRAY: re-materialize the per-row delete array from the bitmask
 	void DecompressDeleteMask();
-	//! Whether any of the rows (ids[i] - offset) was deleted by another transaction or updated by an unseen one
-	bool HasConflictingWrite(TransactionData transaction, const row_t ids[], idx_t count, row_t offset) const;
+	//! Whether writing new_id into the rows (ids[i] - offset) conflicts with a delete or update of another transaction
+	bool HasConflictingWrite(TransactionData transaction, transaction_t new_id, const row_t ids[], idx_t count,
+	                         row_t offset) const;
+	//! Whether the rows (0, 1, ..., count - 1 if rows is nullptr) are all rows outside of the mask
+	bool RowsAreAllOutsideMask(const uint16_t rows[], idx_t count) const;
+	//! Allocates per-row delete ids, set to row_id(row)
+	template <class F>
+	IndexPointer NewDeletedData(F &&row_id);
 	//! Writes id into the rows of a vector whose other rows share one id, keeping them in deleted_mask
 	void WriteMask(transaction_t id, const row_t ids[], idx_t count, row_t offset, WrittenRows &written);
 	//! Sets the ids of the rows to new_id(id, i), compressing them into a constant if all rows end up with the same one
@@ -143,10 +147,7 @@ private:
 	//! Bitmask used in the MASKED state: valid bit == the row holds mask_delete_id, invalid bit == constant_delete_id.
 	//! Matches the on-disk VECTOR_INFO orientation. Only meaningful when delete_state == DeleteIdState::MASKED.
 	ValidityMask deleted_mask;
-	//! The single id shared by the rows of the mask in the MASKED state. 0 means the deletes are visible to all
-	//! transactions (the value used when read from disk); a committed id means the mask was folded from one
-	//! committed transaction whose delete is not yet visible to every snapshot; otherwise it is the delete id or
-	//! update marker of the one transaction that wrote the rows. Only meaningful when delete_state == MASKED.
+	//! The id of the rows in the mask in the MASKED state (0 for deletes visible to all, as read from disk)
 	transaction_t mask_delete_id = 0;
 	//! The current delete-side storage state - the single source of truth for the delete side
 	DeleteIdState delete_state = DeleteIdState::CONSTANT;

@@ -2188,12 +2188,20 @@ void RowGroup::WriteRows(TransactionData transaction, DuckTableEntry &table_entr
 			transaction.transaction->PushWrite(is_update ? UndoFlags::UPDATE_ROWS : UndoFlags::DELETE_TUPLE,
 			                                   table_entry, version_info, vector_idx, base_row, written);
 		} catch (...) {
-			// without an undo entry, nothing would restore the ids - restore them as the entry would have
-			version_info.RollbackWrite(vector_idx, written.GetStoredRows(), written.count, written.previous_ids,
-			                           written.previous_id_count);
+			// the restore can free the per-row ids, so release them first: they are still loaded
+			written.pin = SegmentHandle();
+			try {
+				// without an undo entry, nothing would restore the ids - restore them as the entry would have
+				version_info.RollbackWrite(vector_idx, written.GetStoredRows(), written.count, written.previous_ids,
+				                           written.previous_id_count);
+			} catch (std::exception &ex) {
+				throw FatalException("Failed to restore the version info after failing to push its undo entry: %s",
+				                     ErrorData(ex).Message());
+			}
 			throw;
 		}
 	}
+	written.pin = SegmentHandle();
 }
 
 void VersionDeleteState::Delete(row_t row_id) {
