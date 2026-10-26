@@ -392,7 +392,7 @@ CREATE TABLE big AS SELECT i AS id FROM range(100000) t(i);
 statement ok
 CREATE MACRO big_scans() AS (
     SELECT count(*) FROM read_text('{TEST_DIR}/cte_domain_join_filter.json'), json_tree(content)
-    WHERE (value->'extra_info')->>'Table'='memory.main.big'
+    WHERE (value->'extra_info')->>'Table' LIKE '%.main.big'
 );
 
 statement ok
