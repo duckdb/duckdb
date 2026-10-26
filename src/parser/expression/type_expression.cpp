@@ -114,9 +114,9 @@ string TypeExpression::ToString() const {
 			           params.back()->GetAlias() == "collation") {
 				// the constructor form parses in every type position, a COLLATE clause only in column definitions
 				auto &collate_expr = params.back()->Cast<ConstantExpression>();
-				stack.push_back(StackItem {
-				    nullptr, StringUtil::Format("VARCHAR(%s)",
-				                                SQLString(collate_expr.GetLiteral().ToValue().ToString()))});
+				stack.push_back(
+				    StackItem {nullptr, StringUtil::Format("VARCHAR(%s)",
+				                                           SQLString(collate_expr.GetLiteral().ToValue().ToString()))});
 			} else if (qual.empty() && type_name == "INTERVAL" && !params.empty()) {
 				// We ignore interval types parameters.
 				stack.push_back(StackItem {nullptr, "INTERVAL"});
