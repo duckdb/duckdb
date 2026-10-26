@@ -308,7 +308,7 @@ unique_ptr<KeywordMatcher> MatcherFactory::CreateKeyword(const string &keyword, 
 }
 
 template <class T, class... ARGS>
-static unique_ptr<T> MakeStructural(ARGS &&...args) {
+static unique_ptr<T> MakeStructural(ARGS &&... args) {
 	auto result = make_uniq<T>(std::forward<ARGS>(args)...);
 	result->SetStructural();
 	return result;
