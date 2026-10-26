@@ -998,4 +998,23 @@ TEST_CASE("Scalar projections preserve replacement dummy cardinality",
 	connection.Rollback();
 }
 
+// Replacing the singleton input of a bound VALUES node also requires the source API.
+TEST_CASE("VALUES preserves replacement dummy cardinality", "[sql_export][logical_plan_sql_export][plan_views]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto plan = BindResolvedReplacementPlan(connection, "VALUES (42::INTEGER), (42::INTEGER)");
+	auto dummy = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_DUMMY_SCAN);
+	REQUIRE(dummy);
+	RequireReplacementResult(connection, *plan, {}, "VALUES (42::INTEGER), (42::INTEGER)");
+	for (auto count : {0, 1, 3}) {
+		auto rows = std::to_string(count);
+		vector<LogicalPlanSQLExportReplacement> replacements;
+		replacements.push_back(
+		    {*dummy, ReplacementRelation(connection, *dummy, "SELECT NULL::INTEGER FROM range(" + rows + ")")});
+		RequireReplacementResult(connection, *plan, replacements, "SELECT 42::INTEGER FROM range(" + rows + " * 2)");
+	}
+	connection.Rollback();
+}
+
 } // namespace logical_plan_sql_export_test
