@@ -144,7 +144,8 @@ public:
 	//! Registers a file secret in the current transaction of `context` and returns its name: the secret `vend` returns
 	//! on first use, and again on a refresh, for reading the files under `scope` that name it
 	//! (ExtendedOpenFileInfo::file_secret). No lookup by path, listing of secrets or lookup by name sees it, so no SQL
-	//! statement can use it, and it serves only that transaction
+	//! statement can use it. It serves only that transaction, which keeps it until it ends: register one per table and
+	//! transaction, and name it on every scan of the table
 	DUCKDB_API string RegisterFileSecret(ClientContext &context, string scope, file_secret_vend_t vend);
 	//! The file secret `name` for reading `path`; throws when the current transaction of `context` has no such secret,
 	//! or when `path` is outside its scope

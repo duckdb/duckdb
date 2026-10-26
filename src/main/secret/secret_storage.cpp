@@ -107,14 +107,20 @@ bool HasParentSegment(const string &path) {
 	return StringUtil::Contains("/" + StringUtil::Replace(path, "\\", "/") + "/", "/../");
 }
 
+//! Handed out in order, so a name kept past its transaction names no later file secret in this process. Short
+//! enough to be stored without an allocation
+string NextFileSecretName() {
+	static atomic<idx_t> next_name {0};
+	return to_string(++next_name);
+}
+
 } // namespace
 
 string TransactionSecretStorage::RegisterFileSecret(string scope, file_secret_vend_t vend) {
 	auto file_secret = make_uniq<FileSecret>();
 	file_secret->scope = std::move(scope);
 	file_secret->vend = std::move(vend);
-	// random, so that a name kept past its transaction never names a later transaction's file secret
-	auto name = UUID::ToString(UUID::GenerateRandomUUID());
+	auto name = NextFileSecretName();
 	lock_guard<mutex> guard(lock);
 	file_secrets.emplace(name, std::move(file_secret));
 	return name;

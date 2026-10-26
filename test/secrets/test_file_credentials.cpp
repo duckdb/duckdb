@@ -603,8 +603,10 @@ TEST_CASE("A file secret serves only its client and its scope, until its transac
 	}
 	RequireThrowsWith([&]() { CredentialsFixture::GetFileSecret(context, name, path); }, "is not available");
 	REQUIRE_FALSE(SecretManager::Get(context).RefreshFileSecret(context, name));
-	// an open that names it in a later transaction fails rather than falling back to the secret matched to the path
+	// a later transaction's file secrets take other names, and an open that names it fails rather than falling back
+	// to the secret matched to the path
 	f.con.BeginTransaction();
+	REQUIRE(f.FileSecret("later-key") != name);
 	RequireThrowsWith([&]() { f.OpenKey(CredentialsFixture::File(path, name)); }, "is not available");
 	f.con.Rollback();
 	// file secrets are registered only in a transaction
