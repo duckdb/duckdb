@@ -130,6 +130,40 @@ static bool Contains(const SelectionVector &sel, idx_t count, idx_t value) {
 
 } // namespace
 
+TEST_CASE("Boolean selection compacts bounded stable output", "[selection][scalar_executor]") {
+	constexpr sel_t SENTINEL = NumericLimits<sel_t>::Maximum();
+	for (idx_t count : {0, 1, 7, 8, 9, 63, 64, 65, 127, 129}) {
+		for (idx_t pattern = 0; pattern < 256; pattern++) {
+			duckdb::vector<uint8_t> matches(count);
+			duckdb::vector<sel_t> expected;
+			for (idx_t i = 0; i < count; i++) {
+				matches[i] = ((pattern + 17 * (i / 8)) >> (i % 8)) & 1;
+				if (matches[i]) {
+					expected.push_back(UnsafeNumericCast<sel_t>(97 + i));
+				}
+			}
+			duckdb::vector<sel_t> output(count + 2, SENTINEL);
+			array_ptr<sel_t> destination(output.data() + 1, count);
+			auto result_count = SelectionVector::SelectFromBoolean(matches.data(), count, destination, 97);
+			REQUIRE(result_count == expected.size());
+			for (idx_t i = 0; i < expected.size(); i++) {
+				REQUIRE(output[i + 1] == expected[i]);
+			}
+			REQUIRE(output.front() == SENTINEL);
+			REQUIRE(output.back() == SENTINEL);
+		}
+	}
+
+	// Even an empty selection needs scratch space for every input row.
+	uint8_t matches[8] {};
+	sel_t output[8];
+	std::fill(output, output + 8, SENTINEL);
+	REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean(matches, 8, array_ptr<sel_t>(output, 7)), InternalException);
+	for (auto entry : output) {
+		REQUIRE(entry == SENTINEL);
+	}
+}
+
 TEST_CASE("Scalar executor handles every ternary flat and constant profile", "[scalar_executor]") {
 	static constexpr idx_t COUNT = 131;
 	for (uint8_t constant_mask = 0; constant_mask < 8; constant_mask++) {
@@ -434,6 +468,67 @@ TEST_CASE("Unary dictionary execution respects error and reuse guards", "[scalar
 			RequireNull(optional_result, row);
 		} else {
 			RequireValue(optional_result, row, NumericCast<int64_t>((row % 3) + 1));
+		}
+	}
+}
+
+TEST_CASE("Dense integral selection handles validity words and mapped fallbacks", "[scalar_executor]") {
+	static constexpr idx_t COUNT = 193;
+	for (bool nullable : {false, true}) {
+		Vector base(LogicalType::INTEGER, COUNT);
+		{
+			auto writer = FlatVector::Writer<int32_t>(base, COUNT);
+			for (idx_t row = 0; row < COUNT; row++) {
+				if (nullable && ((row >= 64 && row < 128) || row == 132)) {
+					writer.WriteNull();
+				} else {
+					writer.WriteValue(NumericCast<int32_t>((row * 37) % 101) - 50);
+				}
+			}
+		}
+		SelectionVector dictionary_sel(COUNT);
+		SelectionVector labels(COUNT);
+		for (idx_t row = 0; row < COUNT; row++) {
+			dictionary_sel.set_index(row, (row * 17) % (COUNT / 2));
+			labels.set_index(row, 1000 + (COUNT - row) / 2);
+		}
+		Vector dictionary(base, dictionary_sel, COUNT);
+		Vector constant(Value::INTEGER(7), count_t(COUNT));
+		for (bool use_dictionary : {false, true}) {
+			auto &input = use_dictionary ? dictionary : base;
+			for (bool mapped : {false, true}) {
+				for (bool constant_left : {false, true}) {
+					for (idx_t output_mode = 0; output_mode < 3; output_mode++) {
+						SelectionVector true_sel(COUNT);
+						SelectionVector false_sel(COUNT);
+						auto true_ptr = output_mode == 1 ? nullptr : &true_sel;
+						auto false_ptr = output_mode == 0 ? nullptr : &false_sel;
+						auto count = BinaryExecutor::Select<int32_t, int32_t, LessThan>(
+						    constant_left ? constant : input, constant_left ? input : constant,
+						    mapped ? &labels : nullptr, COUNT, true_ptr, false_ptr);
+						idx_t true_count = 0;
+						idx_t false_count = 0;
+						for (idx_t row = 0; row < COUNT; row++) {
+							auto value = input.GetValue(row);
+							auto label = mapped ? labels.get_index(row) : row;
+							bool selected = !value.IsNull() && (constant_left ? 7 < value.GetValue<int32_t>()
+							                                                  : value.GetValue<int32_t>() < 7);
+							if (selected) {
+								if (true_ptr) {
+									REQUIRE(true_sel.get_index(true_count) == label);
+								}
+								true_count++;
+							} else {
+								if (false_ptr) {
+									REQUIRE(false_sel.get_index(false_count) == label);
+								}
+								false_count++;
+							}
+						}
+						REQUIRE(count == true_count);
+					}
+				}
+			}
 		}
 	}
 }

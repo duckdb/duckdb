@@ -3,6 +3,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/bswap.hpp"
 
 namespace duckdb {
 
@@ -17,6 +18,50 @@ SelectionData::SelectionData(idx_t count) {
 }
 
 SelectionData::~SelectionData() = default;
+
+namespace {
+struct BooleanSelectionTable {
+	sel_t positions[256][8] {};
+	uint8_t counts[256] {};
+
+	constexpr BooleanSelectionTable() {
+		for (idx_t mask = 0; mask < 256; mask++) {
+			for (idx_t bit = 0; bit < 8; bit++) {
+				if (mask & (1U << bit)) {
+					positions[mask][counts[mask]++] = static_cast<sel_t>(bit);
+				}
+			}
+		}
+	}
+};
+
+constexpr BooleanSelectionTable BOOLEAN_SELECTION_TABLE;
+} // namespace
+
+idx_t SelectionVector::SelectFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *result, idx_t offset) {
+#ifdef DEBUG
+	for (idx_t i = 0; i < count; i++) {
+		D_ASSERT(matches[i] <= 1);
+	}
+#endif
+	idx_t result_count = 0;
+	idx_t i = 0;
+	for (; i + 8 <= count; i += 8) {
+		// Pack eight 0/1 bytes into their corresponding bits.
+		const auto word = BSwapIfBE(Load<uint64_t>(matches + i));
+		const auto mask = static_cast<uint8_t>((word * UINT64_C(0x0102040810204080)) >> 56);
+		const auto base = UnsafeNumericCast<sel_t>(offset + i);
+		for (idx_t j = 0; j < 8; j++) {
+			result[result_count + j] = base + BOOLEAN_SELECTION_TABLE.positions[mask][j];
+		}
+		result_count += BOOLEAN_SELECTION_TABLE.counts[mask];
+	}
+	for (; i < count; i++) {
+		result[result_count] = UnsafeNumericCast<sel_t>(offset + i);
+		result_count += matches[i];
+	}
+	return result_count;
+}
 
 // LCOV_EXCL_START
 string SelectionVector::ToString(idx_t count) const {

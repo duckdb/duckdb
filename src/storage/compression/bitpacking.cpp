@@ -26,6 +26,10 @@ namespace duckdb {
 
 constexpr const idx_t BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 static constexpr const idx_t BITPACKING_METADATA_GROUP_SIZE = STANDARD_VECTOR_SIZE > 512 ? STANDARD_VECTOR_SIZE : 2048;
+//! Scan tuning limit in values, independent of the on-disk algorithm group size.
+static constexpr idx_t BITPACKING_SCAN_BATCH_SIZE = 128;
+static_assert(BITPACKING_SCAN_BATCH_SIZE % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0,
+              "Bitpacking scan batches must contain complete algorithm groups");
 
 typedef struct {
 	BitpackingMode mode;
@@ -726,29 +730,30 @@ public:
 			offset += advance_count;
 		}
 
-		//! Returns the packed algorithm group containing the current row offset.
-		unsafe_array_ptr<const uint8_t> GetAlgorithmGroup() const {
+		//! Unpack complete groups, starting with the group containing offset.
+		//! An unaligned offset only permits one group; its padding may extend beyond count.
+		void UnpackAlgorithmGroups(unsafe_array_ptr<T> target) const {
 			D_ASSERT(!AtEnd());
-			D_ASSERT(width > 0);
+			D_ASSERT(metadata.mode == BitpackingMode::FOR || metadata.mode == BitpackingMode::DELTA_FOR);
+			D_ASSERT(target.size() > 0);
+			D_ASSERT(target.size() % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0);
+			auto groups = target.size() / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+			auto algorithm_group_index = offset / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+			D_ASSERT(offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0 || groups == 1);
+			D_ASSERT(algorithm_group_index < algorithm_group_count);
+			D_ASSERT(groups <= algorithm_group_count - algorithm_group_index);
+			if (width == 0) {
+				std::fill(target.data(), target.data() + target.size(), T(0));
+				return;
+			}
 			if (!payload) {
 				throw InternalException("Bitpacking algorithm group has no payload");
 			}
-			auto algorithm_group_index = offset / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-			D_ASSERT(algorithm_group_index < algorithm_group_count);
 			auto algorithm_group_offset = algorithm_group_index * algorithm_group_size;
-			return payload->SubArray(algorithm_group_offset, algorithm_group_size);
-		}
-
-		//! Unpacks the algorithm group at the current row offset.
-		void UnpackAlgorithmGroup(T *target, bool skip_sign_extend) const {
-			D_ASSERT(metadata.mode == BitpackingMode::FOR || metadata.mode == BitpackingMode::DELTA_FOR);
-			if (width == 0) {
-				std::fill(target, target + BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, T(0));
-				return;
-			}
-			auto algorithm_group = GetAlgorithmGroup();
-			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(target), algorithm_group.data(), width,
-			                                     skip_sign_extend);
+			auto packed_groups = payload->SubArray(algorithm_group_offset, groups * algorithm_group_size);
+			// FOR residuals are non-negative, so they never need sign extension.
+			BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(target.data()), packed_groups.data(), target.size(),
+			                                      width, true);
 		}
 	};
 
@@ -922,8 +927,6 @@ public:
 	}
 
 	void Skip(idx_t skip_count) {
-		bool skip_sign_extend = true;
-
 		if (IsFinished()) {
 			if (skip_count > 0) {
 				ThrowBitpackingReadPastEnd();
@@ -995,7 +998,8 @@ public:
 				    MinValue(skip_count - skipped,
 				             BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - offset_in_compression_group);
 
-				current_group.UnpackAlgorithmGroup(decompression_buffer, skip_sign_extend);
+				current_group.UnpackAlgorithmGroups(
+				    unsafe_array_ptr<T>(decompression_buffer, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE));
 
 				unsafe_array_ptr<T_S> decompression_values(reinterpret_cast<T_S *>(decompression_buffer),
 				                                           BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
@@ -1039,9 +1043,6 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 	T *result_data = FlatVector::GetDataMutable<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-
-	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
-	bool skip_sign_extend = true;
 
 	if (scan_state.IsInitial()) {
 		scan_state.LoadGroup(0);
@@ -1091,17 +1092,20 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		D_ASSERT(current_group.metadata.mode == BitpackingMode::FOR ||
 		         current_group.metadata.mode == BitpackingMode::DELTA_FOR);
 
-		idx_t to_scan = MinValue<idx_t>(scan_count - scanned, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
-		                                                          offset_in_compression_group);
-		to_scan = MinValue(to_scan, current_group.Remaining());
+		idx_t to_scan = MinValue<idx_t>(scan_count - scanned, current_group.Remaining());
 		T *current_result_ptr = result_data + result_offset + scanned;
 
-		if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0) {
-			// Decompress directly into result vector
-			current_group.UnpackAlgorithmGroup(current_result_ptr, skip_sign_extend);
+		if (offset_in_compression_group == 0 && to_scan >= BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) {
+			// Decode complete algorithm groups together, then apply the frame once to the batch.
+			to_scan -= to_scan % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+			to_scan = MinValue<idx_t>(to_scan, BITPACKING_SCAN_BATCH_SIZE);
+			current_group.UnpackAlgorithmGroups(unsafe_array_ptr<T>(current_result_ptr, to_scan));
 		} else {
+			to_scan = MinValue<idx_t>(to_scan, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
+			                                       offset_in_compression_group);
 			// Decompress compression algorithm to buffer
-			current_group.UnpackAlgorithmGroup(scan_state.decompression_buffer, skip_sign_extend);
+			current_group.UnpackAlgorithmGroups(unsafe_array_ptr<T>(
+			    scan_state.decompression_buffer, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE));
 
 			memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
 			       to_scan * sizeof(T));
@@ -1176,10 +1180,8 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 
 	idx_t offset_in_compression_group = group.offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 
-	// FOR residuals are non-negative.
-	bool skip_sign_extend = true;
-
-	group.UnpackAlgorithmGroup(scan_state.decompression_buffer, skip_sign_extend);
+	group.UnpackAlgorithmGroups(
+	    unsafe_array_ptr<T>(scan_state.decompression_buffer, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE));
 
 	// Use unsigned arithmetic to avoid signed overflow on corrupt data.
 	T_U value = static_cast<T_U>(scan_state.decompression_buffer[offset_in_compression_group]);

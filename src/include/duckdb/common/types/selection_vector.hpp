@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/array_ptr.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types.hpp"
@@ -172,6 +173,21 @@ public:
 	void Verify(idx_t count, idx_t vector_size) const;
 	void Sort(idx_t count);
 	idx_t GetAllocationSize() const;
+
+	//! Compact count bytes (each 0 or 1) into stable row indices starting at offset.
+	//! The destination must have room for count entries, including scratch past the returned selected count.
+	//! Input and output must not overlap.
+	static idx_t SelectFromBoolean(const uint8_t *matches, idx_t count, array_ptr<sel_t> destination,
+	                               idx_t offset = 0) {
+		if (DUCKDB_UNLIKELY(count > destination.size())) {
+			ThrowArrayPtrSubArrayOutOfBounds(0, count, destination.size());
+		}
+		return SelectFromBooleanInternal(matches, count, destination.data(), offset);
+	}
+
+private:
+	//! Bounds are checked by the public wrapper, keeping the compaction kernel independent of error handling.
+	DUCKDB_API static idx_t SelectFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *result, idx_t offset);
 
 private:
 	sel_t *sel_vector;
