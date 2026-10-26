@@ -12,7 +12,6 @@
 #include "duckdb/parser/parsed_data/create_coordinate_system_info.hpp"
 
 namespace duckdb {
-class MacroCatalogEntry;
 
 class MacroCatalogEntry;
 struct CreateLanguageInfo;
