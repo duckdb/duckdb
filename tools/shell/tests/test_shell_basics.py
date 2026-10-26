@@ -1497,6 +1497,7 @@ def test_a_select_that_writes_keeps_its_rows_when_the_output_pipe_closes(shell, 
         # stop reading after the header, as `| head -1` would, then let the closed pipe stop the shell
         assert reader.stdout.readline().strip() == "i"
         reader.stdout.close()
+        reader.stdout = None
         _, stderr = reader.communicate(timeout=120)
     finally:
         reader.kill()
