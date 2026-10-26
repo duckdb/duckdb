@@ -166,7 +166,7 @@ INSERT INTO union_r VALUES (1,union_value(i:=NULL));
 statement error
 EXPLAIN (SQL) SELECT x=ANY(SELECT y FROM union_r r WHERE r.g=l.g) FROM union_l l;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK join requires its group-specific NULL semantics.*
 
 statement ok
 CREATE TABLE list_l(g INTEGER,x INTEGER[]);

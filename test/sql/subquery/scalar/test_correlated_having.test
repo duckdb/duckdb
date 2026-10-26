@@ -100,7 +100,7 @@ WHERE outer_values.i = 2;
 Could not convert string
 
 statement ok
-SET disabled_optimizers='deliminator';
+SET disabled_optimizers='deliminator,statistics_propagation';
 
 statement ok
 SET explain_output='optimized_only';
