@@ -2,7 +2,7 @@
 # description: Rolling back COMMENT ON INDEX keeps the index, rolling back CREATE INDEX removes it
 # group: [index]
 
-load __TEST_DIR__/rollback_comment_on_index.db
+load {TEST_DIR}/rollback_comment_on_index.db
 
 statement ok
 CREATE TABLE t (i INTEGER, j INTEGER)
