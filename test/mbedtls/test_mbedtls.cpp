@@ -55,3 +55,49 @@ TEST_CASE("Test that we can verify a signature", "[mbedtls]") {
 	// seems all right!
 	REQUIRE(MbedTlsWrapper::IsValidSha256Signature(pubkey, signature, hash));
 }
+
+TEST_CASE("Test that we can verify an RSA-3072 (384-byte) signature", "[mbedtls]") {
+	// those files are created with the create_files.sh script (3072-bit key, 384-byte PKCS#1 v1.5 SHA-256 signature)
+	auto file_content = file_to_string("test/mbedtls/dummy_file");
+	auto signature_3072 = file_to_string("test/mbedtls/dummy_file.signature_3072");
+	auto pubkey_3072 = file_to_string("test/mbedtls/public_3072.pem");
+
+	// the 3072 signature is exactly 384 bytes (3072 / 8)
+	REQUIRE(signature_3072.size() == 384);
+
+	auto hash = MbedTlsWrapper::ComputeSha256Hash(file_content);
+
+	// (a) a valid RSA-3072 signature + matching 3072 key verifies TRUE
+	REQUIRE(MbedTlsWrapper::IsValidSha256Signature(pubkey_3072, signature_3072, hash));
+
+	// (b) regression: the existing RSA-2048 (256-byte) case still verifies TRUE
+	auto signature_2048 = file_to_string("test/mbedtls/dummy_file.signature");
+	auto pubkey_2048 = file_to_string("test/mbedtls/public.pem");
+	REQUIRE(signature_2048.size() == 256);
+	REQUIRE(MbedTlsWrapper::IsValidSha256Signature(pubkey_2048, signature_2048, hash));
+
+	// (c) a tampered 3072 signature (still 384 bytes) verifies FALSE
+	auto borked_signature_3072 = signature_3072;
+	borked_signature_3072[10]++;
+	REQUIRE(!MbedTlsWrapper::IsValidSha256Signature(pubkey_3072, borked_signature_3072, hash));
+
+	// a 3072 signature against a file whose hash changed verifies FALSE
+	auto borked_file = file_content;
+	borked_file[10]++;
+	auto borked_hash = MbedTlsWrapper::ComputeSha256Hash(borked_file);
+	REQUIRE(!MbedTlsWrapper::IsValidSha256Signature(pubkey_3072, signature_3072, borked_hash));
+
+	// (d) wrong-size rejection: a truncated 3072 signature (not 256 or 384) is rejected by the length guard (throws)
+	auto truncated_signature = signature_3072.substr(0, 300);
+	REQUIRE_THROWS(MbedTlsWrapper::IsValidSha256Signature(pubkey_3072, truncated_signature, hash));
+
+	// defense-in-depth: a 384-byte signature presented against a 2048-bit key is rejected (modulus mismatch), FALSE
+	REQUIRE(!MbedTlsWrapper::IsValidSha256Signature(pubkey_2048, signature_3072, hash));
+	// and a 256-byte signature presented against a 3072-bit key is rejected (modulus mismatch), FALSE
+	REQUIRE(!MbedTlsWrapper::IsValidSha256Signature(pubkey_3072, signature_2048, hash));
+
+	// a 3072-bit public key is accepted as a valid RSA signing key
+	REQUIRE(MbedTlsWrapper::IsValidRSAPublicKey(pubkey_3072));
+	// as is the legacy 2048-bit key
+	REQUIRE(MbedTlsWrapper::IsValidRSAPublicKey(pubkey_2048));
+}
