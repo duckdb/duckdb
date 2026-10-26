@@ -189,7 +189,7 @@ struct ParquetLoggerPrefetchMetrics {
 
 	//! Build a prefetch group
 	void GeneratePrefetchGroup(ThriftFileTransport &trans, vector<ParquetPrefetchColumn> &requested_columns,
-	                           const vector<duckdb_parquet::ColumnChunk> &all_chunks);
+	                           const duckdb_parquet::ColumnChunkList &all_chunks);
 };
 
 struct ParquetPrefetchMetrics {
