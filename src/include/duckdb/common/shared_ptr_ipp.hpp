@@ -16,7 +16,7 @@ public:
 	using original = std::shared_ptr<T>;
 	using element_type = typename original::element_type;
 	using weak_type = weak_ptr<T, SAFE>;
-#if defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 170000
+#if defined(_LIBCPP_VERSION)
 	// libc++ relocates elements of this type with memcpy when the typedef names the class itself
 	using __trivially_relocatable = shared_ptr; // NOLINT: libc++ extension point
 #endif
