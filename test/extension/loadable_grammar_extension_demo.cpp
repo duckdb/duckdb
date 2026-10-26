@@ -175,6 +175,7 @@ public:
 	vector<GrammarChange> GetChanges() const override {
 		vector<GrammarChange> changes;
 		changes.push_back(GrammarChange::AddChoice("ReservedKeyword", "'EXTEND'"));
+		changes.push_back(GrammarChange::AddChoice("ReservedKeyword", "'AGGREGATE'"));
 		changes.push_back(
 		    GrammarChange::AddRule("PipeSelectAtom <- PipeSource PipeStage+", StartPipeSelectAtomTransform));
 		changes.push_back(GrammarChange::AddRule("PipeSource <- FromClause / SelectStatementType / SelectParens"));
