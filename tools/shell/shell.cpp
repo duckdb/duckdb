@@ -2558,7 +2558,8 @@ LIMIT 5)");
 		if (!style.layout_on.empty()) {
 			style.layout_off = ShellHighlight::ResetTerminalCode();
 		}
-		if (linenoiseGetTerminalColorMode() == LINENOISE_LIGHT_MODE) {
+		DetectDarkLightMode();
+		if (highlight_mode == HighlightMode::LIGHT_MODE) {
 			style.heading_on = ShellHighlight::TerminalCode(PrintColor::BLACK, PrintIntensity::BOLD);
 			style.path_on = ShellHighlight::TerminalCode(PrintColor::BLACK, PrintIntensity::STANDARD);
 		} else {
@@ -3958,8 +3959,6 @@ int RunShell(int argc, const char **argv) {
 		data.PrintAgentHelp(PrintOutput::STDERR, true);
 	}
 
-	data.DetectDarkLightMode();
-
 	/* Make a second pass through the command-line argument and set
 	** options.  This second pass is delayed until after the initialization
 	** file is processed so that the command-line arguments will override
@@ -4004,6 +4003,8 @@ int RunShell(int argc, const char **argv) {
 		if (data.stdin_is_interactive) {
 			string zHome;
 			const char *zHistory;
+			// only query the terminal colors once we know we are starting an interactive session
+			data.DetectDarkLightMode();
 			ShellHighlight highlight(data);
 
 			auto startup_version = StringUtil::Format("DuckDB %s (%s", duckdb::DuckDB::LibraryVersion(),

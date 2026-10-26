@@ -74,4 +74,39 @@ def test_deprecated_highlight_constant(shell):
     result.check_stderr(".constant has been split into numeric_constant and string_constant")
     result.check_stderr(".highlight_colors numeric_constant brightred and .highlight_colors string_constant brightred")
 
+@pytest.mark.skipif(os.name == 'nt', reason="requires a POSIX pseudo-terminal")
+@pytest.mark.parametrize("arguments", [
+    ['-version'],
+    ['-help'],
+    ['-json', '-c', 'SELECT 42'],
+    ['-dark-mode', '-manual', 'list_contains'],
+])
+def test_exiting_commands_skip_color_probe(shell, arguments):
+    import pty
+
+    # nothing answers the background color query on this pseudo-terminal
+    master, slave = pty.openpty()
+    try:
+        process = subprocess.Popen(
+            [shell, '-no-init', *arguments],
+            stdin=slave,
+            stdout=slave,
+            stderr=slave,
+            env=ShellTest(shell).get_environment(),
+        )
+    finally:
+        os.close(slave)
+    output = bytearray()
+    while True:
+        try:
+            chunk = os.read(master, 4096)
+        except OSError:
+            break
+        if not chunk:
+            break
+        output.extend(chunk)
+    os.close(master)
+    assert process.wait(timeout=30) == 0, output.decode('utf8', 'replace')
+    assert b'Timeout trying to read terminal background color' not in output
+
 # fmt: on
