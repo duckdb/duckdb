@@ -1873,8 +1873,14 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data, D
 
 	// create the selection vector from the matches that were found
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	auto result_count = SelectionVector::SelectFromBoolean<MATCH>(found_match.get(), keys.size(),
-	                                                              array_ptr<sel_t>(sel.data(), sel.Capacity()));
+	optional<array_ptr<sel_t>> true_sel, false_sel;
+	if (MATCH) {
+		true_sel = array_ptr<sel_t>(sel.data(), sel.Capacity());
+	} else {
+		false_sel = array_ptr<sel_t>(sel.data(), sel.Capacity());
+	}
+	auto true_count = SelectionVector::SelectFromBoolean(found_match.get(), nullptr, keys.size(), true_sel, false_sel);
+	auto result_count = MATCH ? true_count : keys.size() - true_count;
 	// construct the final result
 	if (result_count > 0) {
 		// extract only OUTPUT columns from probe_data
@@ -2266,7 +2272,7 @@ void ScanStructure::NextUniqueLeftJoin(DataChunk &keys, DataChunk &probe_data, D
 	// Build result_sel from found_match so we know which positions to gather RHS data from.
 	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
 	const idx_t probe_size = probe_data.size();
-	auto result_count = SelectionVector::SelectFromBoolean(found_match.get(), probe_size,
+	auto result_count = SelectionVector::SelectFromBoolean(found_match.get(), nullptr, probe_size,
 	                                                       array_ptr<sel_t>(result_sel.data(), result_sel.Capacity()));
 
 	// Reference the columns of the left side from the result (zero-copy).

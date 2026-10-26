@@ -58,8 +58,14 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 	D_ASSERT(left.ColumnCount() == result.ColumnCount());
 	// create the selection vector from the matches that were found
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	auto result_count = SelectionVector::SelectFromBoolean<MATCH>(found_match, left.size(),
-	                                                              array_ptr<sel_t>(sel.data(), sel.Capacity()));
+	optional<array_ptr<sel_t>> true_sel, false_sel;
+	if (MATCH) {
+		true_sel = array_ptr<sel_t>(sel.data(), sel.Capacity());
+	} else {
+		false_sel = array_ptr<sel_t>(sel.data(), sel.Capacity());
+	}
+	auto true_count = SelectionVector::SelectFromBoolean(found_match, nullptr, left.size(), true_sel, false_sel);
+	auto result_count = MATCH ? true_count : left.size() - true_count;
 	// construct the final result
 	if (result_count > 0) {
 		// we only return the columns on the left side

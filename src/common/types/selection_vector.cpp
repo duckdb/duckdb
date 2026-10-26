@@ -49,10 +49,6 @@ struct SelectedBooleanValues {
 	}
 };
 
-uint64_t BooleanSelectionWord(const uint8_t *matches) {
-	return BSwapIfBE(Load<uint64_t>(matches));
-}
-
 template <class T>
 uint64_t BooleanSelectionWord(T matches) {
 	// Pack values without depending on bool's object representation.
@@ -88,37 +84,9 @@ idx_t SelectFromBooleanLoop(T matches, idx_t count, sel_t *result, idx_t offset)
 	}
 	return result_count;
 }
-} // namespace
 
-idx_t SelectionVector::SelectFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *result, idx_t offset) {
-#ifdef DEBUG
-	for (idx_t i = 0; i < count; i++) {
-		D_ASSERT(matches[i] <= 1);
-	}
-#endif
-	return SelectFromBooleanLoop<const uint8_t *, true>(matches, count, result, offset);
-}
-
-idx_t SelectionVector::SelectFromBooleanInternal(const bool *matches, idx_t count, sel_t *result, idx_t offset,
-                                                 bool match) {
-	if (match) {
-		return SelectFromBooleanLoop<const bool *, true>(matches, count, result, offset);
-	}
-	return SelectFromBooleanLoop<const bool *, false>(matches, count, result, offset);
-}
-
-idx_t SelectionVector::SelectFromBooleanInternal(const bool *matches, const sel_t *match_sel, idx_t count,
-                                                 sel_t *result, idx_t offset) {
-	return SelectFromBooleanLoop<SelectedBooleanValues, true>({matches, match_sel}, count, result, offset);
-}
-
-idx_t SelectionVector::PartitionFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *true_result,
-                                                    sel_t *false_result, idx_t offset) {
-#ifdef DEBUG
-	for (idx_t i = 0; i < count; i++) {
-		D_ASSERT(matches[i] <= 1);
-	}
-#endif
+template <class T>
+idx_t PartitionFromBooleanLoop(T matches, idx_t count, sel_t *true_result, sel_t *false_result, idx_t offset) {
 	idx_t true_count = 0;
 	idx_t i = 0;
 	for (; i + 8 <= count; i += 8) {
@@ -139,6 +107,46 @@ idx_t SelectionVector::PartitionFromBooleanInternal(const uint8_t *matches, idx_
 		true_count += matches[i];
 	}
 	return true_count;
+}
+
+template <class T>
+idx_t SelectFromBooleanInternal(T matches, idx_t count, sel_t *true_result, sel_t *false_result, idx_t offset) {
+	if (!false_result) {
+		return SelectFromBooleanLoop<T, true>(matches, count, true_result, offset);
+	}
+	if (!true_result) {
+		return count - SelectFromBooleanLoop<T, false>(matches, count, false_result, offset);
+	}
+	return PartitionFromBooleanLoop(matches, count, true_result, false_result, offset);
+}
+} // namespace
+
+idx_t SelectionVector::SelectFromBoolean(const bool *matches, optional_ptr<const SelectionVector> match_sel,
+                                         idx_t count, optional<array_ptr<sel_t>> true_sel,
+                                         optional<array_ptr<sel_t>> false_sel, idx_t offset) {
+	if (true_sel && DUCKDB_UNLIKELY(count > true_sel->size())) {
+		ThrowArrayPtrSubArrayOutOfBounds(0, count, true_sel->size());
+	}
+	if (false_sel && DUCKDB_UNLIKELY(count > false_sel->size())) {
+		ThrowArrayPtrSubArrayOutOfBounds(0, count, false_sel->size());
+	}
+	const auto indexed = match_sel && match_sel->IsSet();
+	if (indexed && DUCKDB_UNLIKELY(count > match_sel->Capacity())) {
+		ThrowArrayPtrSubArrayOutOfBounds(0, count, match_sel->Capacity());
+	}
+	if (count == 0) {
+		return 0;
+	}
+	if (DUCKDB_UNLIKELY(!true_sel && !false_sel)) {
+		throw InternalException("SelectFromBoolean requires at least one output selection");
+	}
+	auto true_result = true_sel ? true_sel->data() : nullptr;
+	auto false_result = false_sel ? false_sel->data() : nullptr;
+	if (indexed) {
+		return SelectFromBooleanInternal(SelectedBooleanValues {matches, match_sel->data()}, count, true_result,
+		                                 false_result, offset);
+	}
+	return SelectFromBooleanInternal(matches, count, true_result, false_result, offset);
 }
 
 // LCOV_EXCL_START

@@ -478,7 +478,7 @@ private:
 			return HAS_TRUE_SELECTION;
 		}
 
-		inline void AppendBatch(const uint8_t *matches, idx_t count, idx_t offset) {
+		inline void AppendBatch(const bool *matches, idx_t count, idx_t offset) {
 			D_ASSERT(CanAppendBatch());
 			D_ASSERT(true_count <= true_capacity);
 			array_ptr<sel_t> destination(true_selection + true_count, true_capacity - true_count);
@@ -486,11 +486,11 @@ private:
 				D_ASSERT(false_count <= false_capacity);
 				array_ptr<sel_t> false_destination(false_selection + false_count, false_capacity - false_count);
 				auto selected =
-				    SelectionVector::SelectFromBoolean(matches, count, destination, false_destination, offset);
+				    SelectionVector::SelectFromBoolean(matches, nullptr, count, destination, false_destination, offset);
 				true_count += selected;
 				false_count += count - selected;
 			} else {
-				true_count += SelectionVector::SelectFromBoolean(matches, count, destination, offset);
+				true_count += SelectionVector::SelectFromBoolean(matches, nullptr, count, destination, {}, offset);
 			}
 		}
 
@@ -554,7 +554,7 @@ private:
 			return true_selection;
 		}
 
-		inline void AppendBatch(const uint8_t *matches, idx_t count, idx_t offset) {
+		inline void AppendBatch(const bool *matches, idx_t count, idx_t offset) {
 			D_ASSERT(CanAppendBatch());
 			D_ASSERT(true_count <= true_selection->Capacity());
 			array_ptr<sel_t> destination(true_selection->data() + true_count, true_selection->Capacity() - true_count);
@@ -563,11 +563,11 @@ private:
 				array_ptr<sel_t> false_destination(false_selection->data() + false_count,
 				                                   false_selection->Capacity() - false_count);
 				auto selected =
-				    SelectionVector::SelectFromBoolean(matches, count, destination, false_destination, offset);
+				    SelectionVector::SelectFromBoolean(matches, nullptr, count, destination, false_destination, offset);
 				true_count += selected;
 				false_count += count - selected;
 			} else {
-				true_count += SelectionVector::SelectFromBoolean(matches, count, destination, offset);
+				true_count += SelectionVector::SelectFromBoolean(matches, nullptr, count, destination, {}, offset);
 			}
 		}
 
@@ -636,7 +636,7 @@ private:
 				if constexpr (UseBooleanSelectionBatch<ARGS...>()) {
 					if (local_sink.CanAppendBatch() && !sel.IsSet() &&
 					    next - base_idx == ValidityMask::BITS_PER_VALUE) {
-						uint8_t matches[ValidityMask::BITS_PER_VALUE];
+						bool matches[ValidityMask::BITS_PER_VALUE];
 						for (idx_t i = 0; i < ValidityMask::BITS_PER_VALUE; i++) {
 							const bool comparison_result = adapter.Operation(
 							    std::get<Is>(input_data)[InputIndex<Is, CONSTANT_MASK>(base_idx + i)]...);

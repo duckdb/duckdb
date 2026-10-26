@@ -192,7 +192,7 @@ void DictionaryDecoder::Filter(uint8_t *defines, const idx_t read_count, Vector 
 	SelectionVector new_sel(valid_count);
 	if (valid_count == read_count) {
 		approved_tuple_count =
-		    SelectionVector::SelectFromBoolean(filter_result.get(), dictionary_selection_vector, read_count,
+		    SelectionVector::SelectFromBoolean(filter_result.get(), &dictionary_selection_vector, read_count,
 		                                       array_ptr<sel_t>(new_sel.data(), new_sel.Capacity()));
 	} else {
 		auto offsets = reinterpret_cast<uint32_t *>(offset_buffer.ptr);

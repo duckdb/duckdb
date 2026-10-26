@@ -12,6 +12,8 @@
 #include "duckdb/common/array_ptr.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector_size.hpp"
 
@@ -174,64 +176,11 @@ public:
 	void Sort(idx_t count);
 	idx_t GetAllocationSize() const;
 
-	//! Compact count bytes (each 0 or 1) into stable row indices starting at offset.
-	//! The destination must have room for count entries, including scratch past the returned selected count.
-	//! Input and output must not overlap.
-	static idx_t SelectFromBoolean(const uint8_t *matches, idx_t count, array_ptr<sel_t> destination,
-	                               idx_t offset = 0) {
-		if (DUCKDB_UNLIKELY(count > destination.size())) {
-			ThrowArrayPtrSubArrayOutOfBounds(0, count, destination.size());
-		}
-		return SelectFromBooleanInternal(matches, count, destination.data(), offset);
-	}
-
-	//! Select Boolean values equal to MATCH, with the same bounds and disjoint-buffer contract.
-	template <bool MATCH = true>
-	static idx_t SelectFromBoolean(const bool *matches, idx_t count, array_ptr<sel_t> destination, idx_t offset = 0) {
-		if (DUCKDB_UNLIKELY(count > destination.size())) {
-			ThrowArrayPtrSubArrayOutOfBounds(0, count, destination.size());
-		}
-		return SelectFromBooleanInternal(matches, count, destination.data(), offset, MATCH);
-	}
-
-	//! Select positions i where matches[match_sel[i]] is true, emitting i + offset.
-	//! Referenced matches must be initialized; both inputs and the destination must be disjoint.
-	static idx_t SelectFromBoolean(const bool *matches, const SelectionVector &match_sel, idx_t count,
-	                               array_ptr<sel_t> destination, idx_t offset = 0) {
-		if (DUCKDB_UNLIKELY(count > destination.size())) {
-			ThrowArrayPtrSubArrayOutOfBounds(0, count, destination.size());
-		}
-		if (!match_sel.IsSet()) {
-			return SelectFromBoolean(matches, count, destination, offset);
-		}
-		if (DUCKDB_UNLIKELY(count > match_sel.Capacity())) {
-			ThrowArrayPtrSubArrayOutOfBounds(0, count, match_sel.Capacity());
-		}
-		return SelectFromBooleanInternal(matches, match_sel.data(), count, destination.data(), offset);
-	}
-
-	//! Partition 0/1 bytes into stable true/false row indices; return the true count.
-	//! Both destinations need count entries, including scratch, and all three buffers must be disjoint.
-	static idx_t SelectFromBoolean(const uint8_t *matches, idx_t count, array_ptr<sel_t> true_destination,
-	                               array_ptr<sel_t> false_destination, idx_t offset = 0) {
-		if (DUCKDB_UNLIKELY(count > true_destination.size())) {
-			ThrowArrayPtrSubArrayOutOfBounds(0, count, true_destination.size());
-		}
-		if (DUCKDB_UNLIKELY(count > false_destination.size())) {
-			ThrowArrayPtrSubArrayOutOfBounds(0, count, false_destination.size());
-		}
-		return PartitionFromBooleanInternal(matches, count, true_destination.data(), false_destination.data(), offset);
-	}
-
-private:
-	//! Bounds are checked by the public wrapper, keeping the compaction kernel independent of error handling.
-	DUCKDB_API static idx_t SelectFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *result, idx_t offset);
-	DUCKDB_API static idx_t SelectFromBooleanInternal(const bool *matches, idx_t count, sel_t *result, idx_t offset,
-	                                                  bool match);
-	DUCKDB_API static idx_t SelectFromBooleanInternal(const bool *matches, const sel_t *match_sel, idx_t count,
-	                                                  sel_t *result, idx_t offset);
-	DUCKDB_API static idx_t PartitionFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *true_result,
-	                                                     sel_t *false_result, idx_t offset);
+	//! Select stable i + offset positions from optionally mapped matches; return the true count.
+	//! Outputs need count entries, including scratch; all buffers must be disjoint.
+	DUCKDB_API static idx_t SelectFromBoolean(const bool *matches, optional_ptr<const SelectionVector> match_sel,
+	                                          idx_t count, optional<array_ptr<sel_t>> true_sel,
+	                                          optional<array_ptr<sel_t>> false_sel = {}, idx_t offset = 0);
 
 private:
 	sel_t *sel_vector;

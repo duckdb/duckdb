@@ -99,12 +99,12 @@ private:
 			if (!sel.IsSet() && !vdata.sel->IsSet()) {
 				array_ptr<sel_t> output(result_sel.data(), result_sel.Capacity());
 				for (; i + 64 <= approved_tuple_count; i += 64) {
-					uint8_t matches[64];
+					bool matches[64];
 					for (idx_t j = 0; j < 64; j++) {
 						matches[j] = OP::Operation(data[i + j], predicate);
 					}
 					auto destination = output.SubArray(result_count, 64);
-					result_count += SelectionVector::SelectFromBoolean(matches, 64, destination, i);
+					result_count += SelectionVector::SelectFromBoolean(matches, nullptr, 64, destination, {}, i);
 				}
 			}
 		}
