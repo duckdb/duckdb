@@ -185,6 +185,15 @@ public:
 		return SelectFromBooleanInternal(matches, count, destination.data(), offset);
 	}
 
+	//! Select Boolean values equal to MATCH, with the same bounds and disjoint-buffer contract.
+	template <bool MATCH = true>
+	static idx_t SelectFromBoolean(const bool *matches, idx_t count, array_ptr<sel_t> destination, idx_t offset = 0) {
+		if (DUCKDB_UNLIKELY(count > destination.size())) {
+			ThrowArrayPtrSubArrayOutOfBounds(0, count, destination.size());
+		}
+		return SelectFromBooleanInternal(matches, count, destination.data(), offset, MATCH);
+	}
+
 	//! Partition 0/1 bytes into stable true/false row indices; return the true count.
 	//! Both destinations need count entries, including scratch, and all three buffers must be disjoint.
 	static idx_t SelectFromBoolean(const uint8_t *matches, idx_t count, array_ptr<sel_t> true_destination,
@@ -201,6 +210,8 @@ public:
 private:
 	//! Bounds are checked by the public wrapper, keeping the compaction kernel independent of error handling.
 	DUCKDB_API static idx_t SelectFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *result, idx_t offset);
+	DUCKDB_API static idx_t SelectFromBooleanInternal(const bool *matches, idx_t count, sel_t *result, idx_t offset,
+	                                                  bool match);
 	DUCKDB_API static idx_t PartitionFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *true_result,
 	                                                     sel_t *false_result, idx_t offset);
 

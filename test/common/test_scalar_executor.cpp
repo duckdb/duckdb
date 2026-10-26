@@ -135,10 +135,12 @@ TEST_CASE("Boolean selection compacts bounded stable output", "[selection][scala
 	for (idx_t count : {0, 1, 7, 8, 9, 63, 64, 65, 127, 129}) {
 		for (idx_t pattern = 0; pattern < 258; pattern++) {
 			duckdb::vector<uint8_t> matches(count);
+			auto boolean_matches = make_unsafe_uniq_array<bool>(count);
 			duckdb::vector<sel_t> expected;
 			duckdb::vector<sel_t> expected_false;
 			for (idx_t i = 0; i < count; i++) {
 				matches[i] = pattern >= 256 ? pattern - 256 : ((pattern + 17 * (i / 8)) >> (i % 8)) & 1;
+				boolean_matches[i] = matches[i] != 0;
 				if (matches[i]) {
 					expected.push_back(UnsafeNumericCast<sel_t>(97 + i));
 				} else {
@@ -170,6 +172,20 @@ TEST_CASE("Boolean selection compacts bounded stable output", "[selection][scala
 			REQUIRE(output.back() == SENTINEL);
 			REQUIRE(false_output.front() == SENTINEL);
 			REQUIRE(false_output.back() == SENTINEL);
+
+			for (bool match : {false, true}) {
+				std::fill(output.begin(), output.end(), SENTINEL);
+				result_count =
+				    match ? SelectionVector::SelectFromBoolean(boolean_matches.get(), count, destination, 97)
+				          : SelectionVector::SelectFromBoolean<false>(boolean_matches.get(), count, destination, 97);
+				auto &expected_selection = match ? expected : expected_false;
+				REQUIRE(result_count == expected_selection.size());
+				for (idx_t i = 0; i < expected_selection.size(); i++) {
+					REQUIRE(output[i + 1] == expected_selection[i]);
+				}
+				REQUIRE(output.front() == SENTINEL);
+				REQUIRE(output.back() == SENTINEL);
+			}
 		}
 	}
 
@@ -178,6 +194,14 @@ TEST_CASE("Boolean selection compacts bounded stable output", "[selection][scala
 	sel_t output[8];
 	std::fill(output, output + 8, SENTINEL);
 	REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean(matches, 8, array_ptr<sel_t>(output, 7)), InternalException);
+	for (auto entry : output) {
+		REQUIRE(entry == SENTINEL);
+	}
+	bool boolean_matches[8] {};
+	REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean(boolean_matches, 8, array_ptr<sel_t>(output, 7)),
+	                  InternalException);
+	REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean<false>(boolean_matches, 8, array_ptr<sel_t>(output, 7)),
+	                  InternalException);
 	for (auto entry : output) {
 		REQUIRE(entry == SENTINEL);
 	}

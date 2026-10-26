@@ -37,10 +37,43 @@ struct BooleanSelectionTable {
 
 constexpr BooleanSelectionTable BOOLEAN_SELECTION_TABLE;
 
-uint8_t BooleanSelectionMask(const uint8_t *matches) {
+uint64_t BooleanSelectionWord(const uint8_t *matches) {
+	return BSwapIfBE(Load<uint64_t>(matches));
+}
+
+uint64_t BooleanSelectionWord(const bool *matches) {
+	// Pack values without depending on bool's object representation.
+	uint8_t bytes[8];
+	for (idx_t i = 0; i < 8; i++) {
+		bytes[i] = matches[i];
+	}
+	return BooleanSelectionWord(bytes);
+}
+
+template <class T>
+uint8_t BooleanSelectionMask(const T *matches) {
 	// Pack eight 0/1 bytes into their corresponding bits.
-	const auto word = BSwapIfBE(Load<uint64_t>(matches));
+	const auto word = BooleanSelectionWord(matches);
 	return static_cast<uint8_t>((word * UINT64_C(0x0102040810204080)) >> 56);
+}
+
+template <class T, bool MATCH>
+idx_t SelectFromBooleanLoop(const T *matches, idx_t count, sel_t *result, idx_t offset) {
+	idx_t result_count = 0;
+	idx_t i = 0;
+	for (; i + 8 <= count; i += 8) {
+		const auto mask = BooleanSelectionMask(matches + i) ^ (MATCH ? 0 : 255);
+		const auto base = UnsafeNumericCast<sel_t>(offset + i);
+		for (idx_t j = 0; j < 8; j++) {
+			result[result_count + j] = base + BOOLEAN_SELECTION_TABLE.positions[mask][j];
+		}
+		result_count += BOOLEAN_SELECTION_TABLE.counts[mask];
+	}
+	for (; i < count; i++) {
+		result[result_count] = UnsafeNumericCast<sel_t>(offset + i);
+		result_count += MATCH ? matches[i] : !matches[i];
+	}
+	return result_count;
 }
 } // namespace
 
@@ -50,21 +83,15 @@ idx_t SelectionVector::SelectFromBooleanInternal(const uint8_t *matches, idx_t c
 		D_ASSERT(matches[i] <= 1);
 	}
 #endif
-	idx_t result_count = 0;
-	idx_t i = 0;
-	for (; i + 8 <= count; i += 8) {
-		const auto mask = BooleanSelectionMask(matches + i);
-		const auto base = UnsafeNumericCast<sel_t>(offset + i);
-		for (idx_t j = 0; j < 8; j++) {
-			result[result_count + j] = base + BOOLEAN_SELECTION_TABLE.positions[mask][j];
-		}
-		result_count += BOOLEAN_SELECTION_TABLE.counts[mask];
+	return SelectFromBooleanLoop<uint8_t, true>(matches, count, result, offset);
+}
+
+idx_t SelectionVector::SelectFromBooleanInternal(const bool *matches, idx_t count, sel_t *result, idx_t offset,
+                                                 bool match) {
+	if (match) {
+		return SelectFromBooleanLoop<bool, true>(matches, count, result, offset);
 	}
-	for (; i < count; i++) {
-		result[result_count] = UnsafeNumericCast<sel_t>(offset + i);
-		result_count += matches[i];
-	}
-	return result_count;
+	return SelectFromBooleanLoop<bool, false>(matches, count, result, offset);
 }
 
 idx_t SelectionVector::PartitionFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *true_result,

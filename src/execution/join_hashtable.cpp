@@ -1873,13 +1873,8 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data, D
 
 	// create the selection vector from the matches that were found
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	idx_t result_count = 0;
-	for (idx_t i = 0; i < keys.size(); i++) {
-		if (found_match[i] == MATCH) {
-			// part of the result
-			sel.set_index(result_count++, i);
-		}
-	}
+	auto result_count = SelectionVector::SelectFromBoolean<MATCH>(found_match.get(), keys.size(),
+	                                                              array_ptr<sel_t>(sel.data(), sel.Capacity()));
 	// construct the final result
 	if (result_count > 0) {
 		// extract only OUTPUT columns from probe_data
@@ -2269,14 +2264,10 @@ void ScanStructure::NextUniqueLeftJoin(DataChunk &keys, DataChunk &probe_data, D
 	D_ASSERT(this->count == 0);
 
 	// Build result_sel from found_match so we know which positions to gather RHS data from.
-	// Use a predicated increment to avoid branch mispredictions.
-	idx_t result_count = 0;
 	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
 	const idx_t probe_size = probe_data.size();
-	for (idx_t j = 0; j < probe_size; j++) {
-		result_sel.set_index(result_count, j);
-		result_count += found_match[j];
-	}
+	auto result_count = SelectionVector::SelectFromBoolean(found_match.get(), probe_size,
+	                                                       array_ptr<sel_t>(result_sel.data(), result_sel.Capacity()));
 
 	// Reference the columns of the left side from the result (zero-copy).
 	D_ASSERT(ht.lhs_output_in_probe.size() > 0);
