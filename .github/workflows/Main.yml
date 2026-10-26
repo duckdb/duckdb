@@ -59,6 +59,7 @@ jobs:
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-slim;job.priority=1' || 'ubuntu-latest' }}
     outputs:
       duckdb_commit: ${{ steps.version.outputs.duckdb_commit }}
+      runner_linux_slim: ${{ fromJSON(steps.config.outputs.runners).linux_slim }}
       runner_linux_small: ${{ fromJSON(steps.config.outputs.runners).linux_small }}
       runner_linux_x64: ${{ fromJSON(steps.config.outputs.runners).linux_x64 }}
       runner_linux_22_x64: ${{ fromJSON(steps.config.outputs.runners).linux_22_x64 }}
@@ -1385,7 +1386,9 @@ jobs:
  summary:
     name: Summary
     if: ${{ always() }}
-    runs-on: ${{ fromJSON(needs.prepare.outputs.runners).linux_slim }}
+    # No fromJSON here: when prepare is skipped (draft PRs, non-member synchronize) its outputs are
+    # empty and fromJSON('') makes the whole run fail with every job skipped.
+    runs-on: ${{ needs.prepare.outputs.runner_linux_slim || 'ubuntu-slim' }}
     needs:
       - prepare
       - linux-relassert
