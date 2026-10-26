@@ -28,6 +28,9 @@ constexpr const idx_t Allocator::MAXIMUM_ALLOC_SIZE;
 AllocatedData::AllocatedData() : allocator(nullptr), pointer(nullptr), allocated_size(0) {
 }
 
+AllocatedData::AllocatedData(Allocator &allocator) : allocator(allocator), pointer(nullptr), allocated_size(0) {
+}
+
 AllocatedData::AllocatedData(Allocator &allocator, data_ptr_t pointer, idx_t allocated_size)
     : allocator(&allocator), pointer(pointer), allocated_size(allocated_size) {
 	if (!pointer) {
