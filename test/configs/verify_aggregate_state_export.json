@@ -90,7 +90,8 @@
         "test/sql/types/timestamp/test_infinite_time.test",
         "test/sql/variant/variant_comparator.test",
         "test/sql/window/test_window_agg_stats_propagation.test",
-        "test/sql/sql_export/call_values.test"
+        "test/sql/sql_export/call_values.test",
+        "test/sql/sql_export/quantile_constant_arguments.test"
       ]
     },
     {

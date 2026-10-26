@@ -56,7 +56,8 @@ static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<
 	idx_t prev = 0;
 	for (auto &usp : unicode_spaces) {
 		new_query += query.substr(prev, usp.pos - prev);
-		new_query += " ";
+		// Keep byte offsets aligned with the original query for diagnostics.
+		new_query.append(usp.bytes, ' ');
 		prev = usp.pos + usp.bytes;
 	}
 	new_query += query.substr(prev, query.size() - prev);

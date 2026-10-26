@@ -646,7 +646,6 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::FinalizeDependentJo
 	for (idx_t i = 0; i < op.correlated_columns.size(); i++) {
 		auto &col = op.correlated_columns[i];
 		duplicate_eliminated_columns.push_back(make_uniq<BoundColumnRefExpression>(col.type, col.binding));
-		mark_types.push_back(col.type);
 	}
 	outer_state.replacement_graph.Merge(right_state.replacement_graph);
 	for (auto &binding : output.left_payload) {
@@ -718,6 +717,9 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::FinalizeDependentJo
 
 	vector<JoinCondition> conditions;
 	CreateDelimJoinConditions(conditions, op.correlated_columns, right_state.bindings, op.perform_delim);
+	for (auto &condition : conditions) {
+		mark_types.push_back(condition.GetLHS().GetReturnType());
+	}
 	if (op.condition) {
 		if (op.any_join) {
 			D_ASSERT(BoundComparisonExpression::IsComparison(*op.condition));
