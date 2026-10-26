@@ -201,6 +201,16 @@ idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_
 	return GetVectorInfo(vector_idx).Delete(transaction_id, rows, count);
 }
 
+bool RowVersionManager::HasConflictingDeletes(TransactionData transaction, idx_t vector_idx, const row_t ids[],
+                                              idx_t count, row_t vector_start) {
+	lock_guard<mutex> lock(version_lock);
+	auto chunk_info = GetChunkInfo(vector_idx);
+	if (!chunk_info) {
+		return false;
+	}
+	return chunk_info->HasConflictingDelete(transaction, ids, count, vector_start);
+}
+
 void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info) {
 	lock_guard<mutex> lock(version_lock);
 	needs_compression_check = true;

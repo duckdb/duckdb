@@ -233,7 +233,8 @@ public:
 	//! Delete the given set of rows in the version manager - optionally collects the ids of the rows that were deleted
 	//! (input_offset is the position of row_ids in the row ids passed to the collection delete)
 	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *row_ids, idx_t count,
-	             idx_t row_group_start, optional_ptr<DeletedRowIds> deleted_ids = nullptr, idx_t input_offset = 0);
+	             idx_t row_group_start, optional_ptr<DeletedRowIds> deleted_ids = nullptr, idx_t input_offset = 0,
+	             bool check_update_conflicts = false);
 
 	static vector<RowGroupWriteData> WriteToDisk(RowGroupWriteInfo &info,
 	                                             const vector<const_reference<RowGroup>> &row_groups);
@@ -285,6 +286,8 @@ public:
 	void NextVector(CollectionScanState &state);
 
 	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
+	//! Whether any of the rows (offsets within the vector) were updated by a transaction not visible to "transaction"
+	bool HasConflictingUpdates(TransactionData transaction, idx_t vector_idx, const row_t rows[], idx_t count);
 	RowVersionManager &GetOrCreateVersionInfo();
 
 	// Serialization

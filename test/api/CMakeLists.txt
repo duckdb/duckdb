@@ -80,6 +80,7 @@ set(TEST_API_OBJECTS
     test_buffer_pool_eviction.cpp
     test_block_allocator_tls.cpp
     test_group_commit_bound.cpp
+    test_update_delete_conflict.cpp
     test_data_table_scan_without_row_groups.cpp)
 
 if(NOT WIN32)
