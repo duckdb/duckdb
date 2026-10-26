@@ -186,6 +186,58 @@ static void PushdownAggregateColumns(LogicalAggregate &aggr, const vector<JoinFi
 	}
 }
 
+struct FilterColumnHash {
+	hash_t operator()(const JoinFilterPushdownColumn &column) const {
+		auto result = CombineHash(Hash(column.join_filter_idx), ColumnBindingHashFunction()(column.probe_column_index));
+		result = CombineHash(result, column.storage_type.Hash());
+		result = CombineHash(result, Hash(uint8_t(column.mode)));
+		for (auto &cast : column.runtime_filter_casts) {
+			result = CombineHash(result, CombineHash(cast.target_type.Hash(), Hash(uint8_t(cast.mode))));
+		}
+		return result;
+	}
+};
+
+struct FilterColumnEquality {
+	bool operator()(const JoinFilterPushdownColumn &a, const JoinFilterPushdownColumn &b) const {
+		if (a.join_filter_idx != b.join_filter_idx || a.probe_column_index != b.probe_column_index ||
+		    a.storage_type != b.storage_type || a.mode != b.mode ||
+		    a.runtime_filter_casts.size() != b.runtime_filter_casts.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < a.runtime_filter_casts.size(); i++) {
+			if (a.runtime_filter_casts[i].target_type != b.runtime_filter_casts[i].target_type ||
+			    a.runtime_filter_casts[i].mode != b.runtime_filter_casts[i].mode) {
+				return false;
+			}
+		}
+		return true;
+	}
+};
+
+using filter_column_set_t = unordered_set<JoinFilterPushdownColumn, FilterColumnHash, FilterColumnEquality>;
+using filter_equality_graph_t = column_binding_map_t<vector<ColumnBinding>>;
+
+static void AddFilterEquality(filter_equality_graph_t &equalities, ColumnBinding lhs, ColumnBinding rhs) {
+	equalities[lhs].push_back(rhs);
+	equalities[rhs].push_back(lhs);
+}
+
+static void CollectJoinFilterEqualities(const LogicalComparisonJoin &join, filter_equality_graph_t &equalities) {
+	for (auto &condition : join.conditions) {
+		if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL ||
+		    condition.GetLHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    condition.GetRHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			continue;
+		}
+		auto &lhs = condition.GetLHS().Cast<BoundColumnRefExpression>();
+		auto &rhs = condition.GetRHS().Cast<BoundColumnRefExpression>();
+		if (lhs.Depth() == 0 && rhs.Depth() == 0 && lhs.GetReturnType() == rhs.GetReturnType()) {
+			AddFilterEquality(equalities, lhs.Binding(), rhs.Binding());
+		}
+	}
+}
+
 static void FindScanFilterTargets(LogicalGet &get, vector<JoinFilterPushdownColumn> columns,
                                   vector<PushdownFilterTarget> &targets) {
 	if (!get.function.filter_pushdown || get.ordinality_idx.IsValid()) {
@@ -194,6 +246,7 @@ static void FindScanFilterTargets(LogicalGet &get, vector<JoinFilterPushdownColu
 	get.ResolveOperatorTypes();
 	const auto bindings = get.GetColumnBindings();
 	vector<JoinFilterPushdownColumn> accepted_columns;
+	filter_column_set_t seen;
 	for (auto &filter : columns) {
 		if (filter.probe_column_index.table_index != get.table_index) {
 			continue;
@@ -218,7 +271,9 @@ static void FindScanFilterTargets(LogicalGet &get, vector<JoinFilterPushdownColu
 		    reconstructed_type.id() == LogicalTypeId::VARIANT) {
 			continue;
 		}
-		accepted_columns.push_back(std::move(filter));
+		if (seen.insert(filter).second) {
+			accepted_columns.push_back(std::move(filter));
+		}
 	}
 	if (!accepted_columns.empty()) {
 		targets.emplace_back(get, std::move(accepted_columns));
@@ -234,6 +289,23 @@ static bool OperatorHasVolatileExpressions(const LogicalOperator &op) {
 
 class FilterTargetContext {
 public:
+	explicit FilterTargetContext(EqualityPropagation equality_propagation)
+	    : equality_propagation(equality_propagation) {
+	}
+
+	EqualityPropagation equality_propagation;
+
+public:
+	const filter_equality_graph_t &GetEqualities(const LogicalOperator &op) {
+		auto entry = equality_graphs.find(op);
+		if (entry != equality_graphs.end()) {
+			return *entry->second;
+		}
+		auto graph = make_shared_ptr<filter_equality_graph_t>();
+		CollectEqualities(op, graph);
+		return *graph;
+	}
+
 	bool CanSkipSubtree(const LogicalOperator &op) {
 		auto entry = skippable_subtrees.find(op);
 		if (entry != skippable_subtrees.end()) {
@@ -247,12 +319,52 @@ public:
 private:
 	bool CanSkipSubtreeInternal(const LogicalOperator &op);
 
+	void CollectEqualities(const LogicalOperator &op, const shared_ptr<filter_equality_graph_t> &graph) {
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+			auto &join = op.Cast<LogicalComparisonJoin>();
+			if (join.join_type != JoinType::INNER) {
+				return;
+			}
+			CollectJoinFilterEqualities(join, *graph);
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+			break;
+		case LogicalOperatorType::LOGICAL_PROJECTION: {
+			auto &projection = op.Cast<LogicalProjection>();
+			for (idx_t i = 0; i < projection.expressions.size(); i++) {
+				auto &expr = *projection.expressions[i];
+				if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+					continue;
+				}
+				auto &column = expr.Cast<BoundColumnRefExpression>();
+				if (column.Depth() == 0) {
+					AddFilterEquality(*graph, ColumnBinding(projection.table_index, ProjectionIndex(i)),
+					                  column.Binding());
+				}
+			}
+			break;
+		}
+		default:
+			return;
+		}
+		equality_graphs.emplace(op, graph);
+		for (auto &child : op.children) {
+			CollectEqualities(*child, graph);
+		}
+	}
+
 private:
 	reference_map_t<const LogicalOperator, bool> skippable_subtrees;
+	reference_map_t<const LogicalOperator, shared_ptr<filter_equality_graph_t>> equality_graphs;
 };
 
+enum class FilterColumnExpansion { REQUIRED, COMPLETE };
+
 static void FindFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
-                              vector<PushdownFilterTarget> &targets, FilterTargetContext &context);
+                              vector<PushdownFilterTarget> &targets, FilterTargetContext &context,
+                              FilterColumnExpansion expansion = FilterColumnExpansion::REQUIRED);
 
 static void FindSetOperationFilterTargets(LogicalSetOperation &setop, const vector<JoinFilterPushdownColumn> &columns,
                                           vector<PushdownFilterTarget> &targets, FilterTargetContext &context) {
@@ -313,8 +425,37 @@ bool FilterTargetContext::CanSkipSubtreeInternal(const LogicalOperator &op) {
 	return true;
 }
 
+static vector<JoinFilterPushdownColumn> ExpandEquivalentFilterColumns(const filter_equality_graph_t &equalities,
+                                                                      vector<JoinFilterPushdownColumn> columns) {
+	if (equalities.empty()) {
+		return columns;
+	}
+	vector<JoinFilterPushdownColumn> result;
+	filter_column_set_t seen;
+	for (auto &column : columns) {
+		if (seen.insert(column).second) {
+			result.push_back(std::move(column));
+		}
+	}
+	for (idx_t i = 0; i < result.size(); i++) {
+		auto entry = equalities.find(result[i].probe_column_index);
+		if (entry == equalities.end()) {
+			continue;
+		}
+		for (auto &binding : entry->second) {
+			auto inferred = result[i];
+			inferred.probe_column_index = binding;
+			if (seen.insert(inferred).second) {
+				result.push_back(std::move(inferred));
+			}
+		}
+	}
+	return result;
+}
+
 static void FindJoinFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
-                                  vector<PushdownFilterTarget> &targets, FilterTargetContext &context) {
+                                  vector<PushdownFilterTarget> &targets, FilterTargetContext &context,
+                                  FilterColumnExpansion expansion) {
 	if (OperatorHasVolatileExpressions(op)) {
 		return;
 	}
@@ -323,12 +464,18 @@ static void FindJoinFilterTargets(LogicalOperator &op, vector<JoinFilterPushdown
 	if (!inner && !FilterTargetPreservesLeftInput(op.Cast<LogicalComparisonJoin>().join_type)) {
 		return;
 	}
-	FindFilterTargets(*op.children[0], columns, targets, context);
+	const auto propagate = inner && context.equality_propagation == EqualityPropagation::ENABLED;
+	if (propagate && expansion == FilterColumnExpansion::REQUIRED) {
+		columns = ExpandEquivalentFilterColumns(context.GetEqualities(op), std::move(columns));
+	}
+	// Unchanged columns already carry the region's closure; remapping operators expand their new states.
+	const auto child_expansion = propagate ? FilterColumnExpansion::COMPLETE : FilterColumnExpansion::REQUIRED;
+	FindFilterTargets(*op.children[0], columns, targets, context, child_expansion);
 	if (!inner) {
 		return;
 	}
 	vector<PushdownFilterTarget> right_targets;
-	FindFilterTargets(*op.children[1], std::move(columns), right_targets, context);
+	FindFilterTargets(*op.children[1], std::move(columns), right_targets, context, child_expansion);
 	// An empty build can skip the probe input, including expressions outside the filtered branch.
 	if (!right_targets.empty() && context.CanSkipSubtree(*op.children[0])) {
 		for (auto &target : right_targets) {
@@ -361,7 +508,8 @@ static void FindWindowFilterTargets(LogicalWindow &window, vector<JoinFilterPush
 }
 
 static void FindFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
-                              vector<PushdownFilterTarget> &targets, FilterTargetContext &context) {
+                              vector<PushdownFilterTarget> &targets, FilterTargetContext &context,
+                              FilterColumnExpansion expansion) {
 	if (columns.empty() || OperatorHasVolatileExpressions(op)) {
 		return;
 	}
@@ -412,7 +560,7 @@ static void FindFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColu
 		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-		FindJoinFilterTargets(op, std::move(columns), targets, context);
+		FindJoinFilterTargets(op, std::move(columns), targets, context, expansion);
 		break;
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		FindWindowFilterTargets(op.Cast<LogicalWindow>(), std::move(columns), targets, context);
@@ -433,8 +581,9 @@ static void FindFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColu
 
 void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
                                                            vector<JoinFilterPushdownColumn> columns,
-                                                           vector<PushdownFilterTarget> &targets) {
-	FilterTargetContext context;
+                                                           vector<PushdownFilterTarget> &targets,
+                                                           EqualityPropagation equality_propagation) {
+	FilterTargetContext context(equality_propagation);
 	FindFilterTargets(op, std::move(columns), targets, context);
 }
 
@@ -507,7 +656,8 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	}
 	// recurse the query tree to find the LogicalGets in which we can push the filter info
 	vector<PushdownFilterTarget> pushdown_filter_targets;
-	GetPushdownFilterTargets(*join.children[0], pushdown_columns, pushdown_filter_targets);
+	GetPushdownFilterTargets(*join.children[0], pushdown_columns, pushdown_filter_targets,
+	                         EqualityPropagation::ENABLED);
 	for (auto &target : pushdown_filter_targets) {
 		vector<JoinFilterPushdownColumn> get_columns;
 		for (auto &column : target.columns) {
