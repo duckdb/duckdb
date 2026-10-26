@@ -180,45 +180,6 @@ static bool MakeCTEJoinKey(const Expression &expr, CTEJoinFilterCollector::CTEJo
 	return true;
 }
 
-//! Equality conditions of an inner join equate key columns of both children, so a key of one child
-//! can be tracked further as the equivalent column of the other child
-static bool TranslateCTEJoinKeys(LogicalComparisonJoin &join, LogicalOperator &child,
-                                 vector<CTEJoinFilterCollector::CTEJoinKey> &keys) {
-	D_ASSERT(join.join_type == JoinType::INNER);
-	auto child_bindings = child.GetColumnBindings();
-	for (auto &key : keys) {
-		if (std::find(child_bindings.begin(), child_bindings.end(), key.binding) != child_bindings.end()) {
-			continue;
-		}
-		bool translated = false;
-		for (auto &condition : join.conditions) {
-			if (!condition.IsComparison() ||
-			    (condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL &&
-			     condition.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) ||
-			    condition.GetLHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
-			    condition.GetRHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-				continue;
-			}
-			auto lhs = condition.GetLHS().Cast<BoundColumnRefExpression>().Binding();
-			auto rhs = condition.GetRHS().Cast<BoundColumnRefExpression>().Binding();
-			if (lhs != key.binding && rhs != key.binding) {
-				continue;
-			}
-			auto other = lhs == key.binding ? rhs : lhs;
-			if (std::find(child_bindings.begin(), child_bindings.end(), other) == child_bindings.end()) {
-				continue;
-			}
-			key.binding = other;
-			translated = true;
-			break;
-		}
-		if (!translated) {
-			return false;
-		}
-	}
-	return true;
-}
-
 //! Row-deterministic, side-effect free subtrees that can be re-executed as a copy
 static bool CanCopyCTEJoinSource(LogicalOperator &op) {
 	switch (op.type) {
@@ -244,76 +205,15 @@ static bool CanCopyCTEJoinSource(LogicalOperator &op) {
 	return true;
 }
 
-//! Narrow a source to the largest subtree that provides (a superset of) the key values and can be copied
-static bool NarrowCTEJoinSource(optional_ptr<LogicalOperator> &parent, idx_t &child_index,
-                                vector<CTEJoinFilterCollector::CTEJoinKey> &keys) {
-	for (;;) {
-		auto &op = *parent->children[child_index];
-		if (!ContainsCTEJoinKeys(op, keys)) {
-			return false;
-		}
-		if (CanCopyCTEJoinSource(op)) {
-			return true;
-		}
-		idx_t next_child = 0;
-		switch (op.type) {
-		case LogicalOperatorType::LOGICAL_PROJECTION:
-			if (!MapCTEJoinProjection(op.Cast<LogicalProjection>(), keys)) {
-				return false;
-			}
-			break;
-		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-			if (!MapCTEJoinAggregate(op.Cast<LogicalAggregate>(), keys)) {
-				return false;
-			}
-			break;
-		case LogicalOperatorType::LOGICAL_DISTINCT:
-			if (op.Cast<LogicalDistinct>().distinct_type != DistinctType::DISTINCT) {
-				return false;
-			}
-			break;
-		case LogicalOperatorType::LOGICAL_FILTER:
-		case LogicalOperatorType::LOGICAL_ORDER_BY:
-			break;
-		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		case LogicalOperatorType::LOGICAL_ANY_JOIN:
-		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-			// Join outputs draw key values from their children, so a child is a superset domain.
-			// Right sides of outer joins are excluded: null padding adds values the child lacks.
-			auto join_type = op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT ? JoinType::INNER
-			                                                                       : op.Cast<LogicalJoin>().join_type;
-			bool allow_right = join_type == JoinType::INNER;
-			bool allow_left = allow_right || join_type == JoinType::LEFT || join_type == JoinType::SEMI ||
-			                  join_type == JoinType::ANTI || join_type == JoinType::MARK;
-			if (allow_left && ContainsCTEJoinKeys(*op.children[0], keys)) {
-				next_child = 0;
-			} else if (allow_right && op.children.size() > 1 && ContainsCTEJoinKeys(*op.children[1], keys)) {
-				next_child = 1;
-			} else {
-				return false;
-			}
-			break;
-		}
-		default:
-			return false;
-		}
-		parent = &op;
-		child_index = next_child;
-	}
-}
-
 void CTEJoinFilterCollector::VisitOperator(LogicalOperator &op) {
 	for (auto &child : op.children) {
 		VisitOperator(*child);
 	}
-	if (op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN || !CanPassCTEJoinFilter(op)) {
+	if (op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+	    op.Cast<LogicalComparisonJoin>().join_type != JoinType::INNER || !CanPassCTEJoinFilter(op)) {
 		return;
 	}
 	auto &join = op.Cast<LogicalComparisonJoin>();
-	// Semi joins restrict in both directions like inner joins; a left join only restricts its right side
-	if (join.join_type != JoinType::INNER && join.join_type != JoinType::SEMI && join.join_type != JoinType::LEFT) {
-		return;
-	}
 	vector<CTEJoinKey> left_keys, right_keys;
 	vector<ExpressionType> comparisons;
 	for (auto &condition : join.conditions) {
@@ -333,9 +233,6 @@ void CTEJoinFilterCollector::VisitOperator(LogicalOperator &op) {
 		return;
 	}
 	for (idx_t side = 0; side < 2; side++) {
-		if (side == 1 && join.join_type == JoinType::LEFT) {
-			break;
-		}
 		auto source_keys = CopyCTEJoinKeys(side == 0 ? left_keys : right_keys);
 		auto source_ref = FindCTEJoinSource(*op.children[side], source_keys);
 		if (source_ref) {
@@ -344,14 +241,12 @@ void CTEJoinFilterCollector::VisitOperator(LogicalOperator &op) {
 			           comparisons);
 			continue;
 		}
-		source_keys = CopyCTEJoinKeys(side == 0 ? left_keys : right_keys);
-		optional_ptr<LogicalOperator> source_parent = op;
-		idx_t source_child = side;
-		if (!NarrowCTEJoinSource(source_parent, source_child, source_keys)) {
+		if (!CanCopyCTEJoinSource(*op.children[side])) {
 			continue;
 		}
 		// Rebind the keys to output positions of the copyable subtree
-		auto child_bindings = source_parent->children[source_child]->GetColumnBindings();
+		source_keys = CopyCTEJoinKeys(side == 0 ? left_keys : right_keys);
+		auto child_bindings = op.children[side]->GetColumnBindings();
 		bool found_keys = true;
 		for (auto &key : source_keys) {
 			auto entry = std::find(child_bindings.begin(), child_bindings.end(), key.binding);
@@ -365,7 +260,7 @@ void CTEJoinFilterCollector::VisitOperator(LogicalOperator &op) {
 		if (!found_keys) {
 			continue;
 		}
-		CTEJoinSource source {nullptr, source_parent, source_child};
+		CTEJoinSource source {nullptr, &op, side};
 		PushFilter(*op.children[1 - side], source, source_keys, CopyCTEJoinKeys(side == 0 ? right_keys : left_keys),
 		           comparisons);
 	}
@@ -422,17 +317,11 @@ void CTEJoinFilterCollector::PushFilter(LogicalOperator &op, const CTEJoinSource
 		    join.join_type != JoinType::ANTI && join.join_type != JoinType::MARK) {
 			return;
 		}
-		for (idx_t child_idx = 0; child_idx < 2; child_idx++) {
-			if (child_idx == 1 && join.join_type != JoinType::INNER) {
-				break;
-			}
-			auto child_keys = CopyCTEJoinKeys(target_keys);
-			if (ContainsCTEJoinKeys(*op.children[child_idx], child_keys)) {
-				PushFilter(*op.children[child_idx], source, source_keys, std::move(child_keys), comparisons);
-			} else if (join.join_type == JoinType::INNER &&
-			           TranslateCTEJoinKeys(join, *op.children[child_idx], child_keys)) {
-				PushFilter(*op.children[child_idx], source, source_keys, std::move(child_keys), comparisons);
-			}
+		if (ContainsCTEJoinKeys(*op.children[0], target_keys)) {
+			PushFilter(*op.children[0], source, source_keys, CopyCTEJoinKeys(target_keys), comparisons);
+		}
+		if (join.join_type == JoinType::INNER && ContainsCTEJoinKeys(*op.children[1], target_keys)) {
+			PushFilter(*op.children[1], source, source_keys, std::move(target_keys), comparisons);
 		}
 		return;
 	}

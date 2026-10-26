@@ -7,12 +7,29 @@
 #include "duckdb/planner/logical_operator_deep_copy.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_prepare.hpp"
 
 #include <cmath>
 
 namespace duckdb {
+
+static bool CanAffordCTEJoinSource(ClientContext &context, LogicalOperator &op, idx_t target_cardinality) {
+	if (op.type == LogicalOperatorType::LOGICAL_FILTER || op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		return op.children.size() == 1 && CanAffordCTEJoinSource(context, *op.children[0], target_cardinality);
+	}
+	if (op.type != LogicalOperatorType::LOGICAL_GET || !op.children.empty()) {
+		return false;
+	}
+	auto &get = op.Cast<LogicalGet>();
+	if (!get.function.cardinality || !get.bind_data) {
+		return false;
+	}
+	// Bound the copied scan before filters; its output cardinality only bounds the hash build.
+	auto stats = get.function.cardinality(context, get.bind_data.get());
+	return stats && stats->has_estimated_cardinality && stats->estimated_cardinality <= target_cardinality;
+}
 
 CTEJoinFilterPusher::CTEJoinFilterPusher(Optimizer &optimizer) : optimizer(optimizer) {
 }
@@ -48,7 +65,7 @@ void CTEJoinFilterPusher::FindCandidates(LogicalOperator &op) {
 }
 
 void CTEJoinFilterPusher::Optimize(LogicalOperator &op) {
-	// Bound the extra scan/hash-build cost and require a substantial reduction in retained keys.
+	// Bound the hash build and require a substantial reduction in retained keys.
 	static constexpr double MAX_SOURCE_RATIO = 0.25;
 	static constexpr double MAX_KEY_RATIO = 0.5;
 	if (op.type == LogicalOperatorType::LOGICAL_PREPARE) {
@@ -106,7 +123,11 @@ void CTEJoinFilterPusher::Optimize(LogicalOperator &op) {
 			optional_ptr<const RelationStats> source_stats;
 			if (filter.source_parent) {
 				// A copyable source subtree only reads base tables, so it is valid in any CTE definition.
-				source_stats = extractor.Extract(*filter.source_parent->children[filter.source_child]);
+				auto &source = *filter.source_parent->children[filter.source_child];
+				if (!CanAffordCTEJoinSource(optimizer.context, source, target_stats->cardinality)) {
+					continue;
+				}
+				source_stats = extractor.Extract(source);
 			} else {
 				if (std::find(info.ancestors.begin(), info.ancestors.end(), filter.source) == info.ancestors.end()) {
 					continue;
@@ -120,7 +141,7 @@ void CTEJoinFilterPusher::Optimize(LogicalOperator &op) {
 				source_stats =
 				    cached == restricted_stats.end() ? extractor.Extract(*source_cte.children[0]) : &cached->second;
 			}
-			// An extra scan and hash build should be small relative to the input being restricted.
+			// The hash build should be small relative to the input being restricted.
 			if (!source_stats || static_cast<double>(source_stats->cardinality) >
 			                         static_cast<double>(target_stats->cardinality) * MAX_SOURCE_RATIO) {
 				continue;

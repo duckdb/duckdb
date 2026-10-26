@@ -269,7 +269,7 @@ SELECT recursive_rows(), semi_joins();
 ----
 3	1
 
-# Selective keys propagate transitively through nested lateral joins
+# Transitive restriction through nested lateral joins is deferred to cost-based domain placement
 
 statement ok
 PRAGMA enable_profiling='json';
@@ -290,12 +290,14 @@ SELECT max(q.x) FROM person o, LATERAL (
 statement ok
 PRAGMA disable_profiling;
 
+# Cost-based domain placement (duckdb/duckdb#24561, duckdb/duckdb#27426) should bring this back to 3.
+
 query I
 SELECT recursive_rows();
 ----
-3
+3000
 
-# Two independent recursive laterals are both restricted
+# Only the lateral joined directly with the selective scan is restricted
 
 statement ok
 PRAGMA enable_profiling='json';
@@ -320,12 +322,14 @@ SELECT max(a.x), max(b.y) FROM person o, LATERAL (
 statement ok
 PRAGMA disable_profiling;
 
+# Cost-based domain placement (duckdb/duckdb#24561, duckdb/duckdb#27426) should bring this back to 7.
+
 query I
 SELECT recursive_rows();
 ----
-7
+4003
 
-# Semi joins restrict the partitions of correlated EXISTS subqueries
+# Restriction of correlated EXISTS subqueries is deferred to cost-based domain placement
 
 statement ok
 PRAGMA enable_profiling='json';
@@ -344,10 +348,12 @@ SELECT count(*) FROM person o WHERE o.id=3 AND EXISTS (
 statement ok
 PRAGMA disable_profiling;
 
+# Cost-based domain placement (duckdb/duckdb#24561, duckdb/duckdb#27426) should bring this back to 3.
+
 query I
 SELECT recursive_rows();
 ----
-3
+3000
 
 # Prepared statement parameters survive copying the key domain
 
@@ -377,6 +383,39 @@ query I
 SELECT recursive_rows();
 ----
 3
+
+# A filtered scan of a large table is not copied as a key domain, even when the filter is selective
+
+statement ok
+CREATE TABLE big AS SELECT i AS id FROM range(100000) t(i);
+
+statement ok
+CREATE MACRO big_scans() AS (
+    SELECT count(*) FROM read_text('{TEST_DIR}/cte_domain_join_filter.json'), json_tree(content)
+    WHERE (value->'extra_info')->>'Table'='memory.main.big'
+);
+
+statement ok
+PRAGMA enable_profiling='json';
+
+query I
+SELECT max(q.x) FROM big o, LATERAL (
+    SELECT r.x FROM person i, LATERAL (
+        WITH RECURSIVE walk(x) AS (
+            SELECT i.id UNION ALL SELECT x+1 FROM walk WHERE x < i.id+2
+        ) SELECT x FROM walk
+    ) r WHERE i.id = o.id
+) q WHERE o.id=3;
+----
+5
+
+statement ok
+PRAGMA disable_profiling;
+
+query II
+SELECT big_scans(), semi_joins();
+----
+1	0
 
 # Disabling the coordinating pass must retain all recursive partitions.
 statement ok
