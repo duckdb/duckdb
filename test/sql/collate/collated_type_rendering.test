@@ -178,3 +178,31 @@ query I
 SELECT columns FROM reject_scans
 ----
 {'s': 'VARCHAR(''nocase'')','i': 'INTEGER'}
+
+# file paths and column names containing quotes stay escaped in the generated CSV SQL text
+statement ok
+COPY (SELECT 'a' AS s) TO '{TEST_DIR}/collated''prompt.csv' (HEADER true);
+
+statement ok
+SET VARIABLE quoted_prompt = (SELECT Prompt FROM sniff_csv('{TEST_DIR}/collated''prompt.csv', columns = {'s': 'VARCHAR(''nocase'')'}, header = true));
+
+query I
+SELECT s = 'A' FROM query(getvariable('quoted_prompt'))
+----
+true
+
+statement ok
+COPY (SELECT 'a' AS x, 'b' AS y, 'c' AS z) TO '{TEST_DIR}/collated_three_columns.csv' (HEADER false);
+
+statement error
+SELECT * FROM sniff_csv('{TEST_DIR}/collated_three_columns.csv', delim = ',', header = false, columns = {'s''name': 'VARCHAR(''nocase'')'});
+----
+<REGEX>:.*columns = \{ 's''name' : 'VARCHAR\(''nocase''\)'\}.*
+
+statement ok
+COPY (SELECT CASE WHEN i = 10000 THEN 'bad' ELSE i::VARCHAR END AS "a'b" FROM range(10001) r(i) ORDER BY i) TO '{TEST_DIR}/collated_cast_error.csv' (HEADER true);
+
+statement error
+SELECT sum("a'b") FROM read_csv('{TEST_DIR}/collated_cast_error.csv', header = true, sample_size = 1, auto_type_candidates = ['BIGINT'], parallel = false);
+----
+<REGEX>:.*types=\{'a''b': 'VARCHAR'\}.*
