@@ -1,0 +1,75 @@
+# name: test/sql/collate/collated_type_rendering.test
+# description: A collated VARCHAR renders in the constructor form wherever its type is rendered, so SQL round-trips keep the collation
+# group: [collate]
+
+# top-level, chained, and nested collations are part of the rendered type
+query III
+SELECT typeof('a'::VARCHAR('nocase')), typeof('a'::VARCHAR('nocase.noaccent')), typeof('a'::VARCHAR)
+----
+VARCHAR('nocase')	VARCHAR('nocase.noaccent')	VARCHAR
+
+query II
+SELECT typeof(['a'::VARCHAR('nocase')]), typeof({'k': 'a'::VARCHAR('nocase')})
+----
+VARCHAR('nocase')[]	STRUCT(k VARCHAR('nocase'))
+
+statement ok
+CREATE TABLE t(s VARCHAR COLLATE nocase, c VARCHAR COLLATE nocase.noaccent, l VARCHAR('nocase')[], st STRUCT(k VARCHAR('nocase')), p VARCHAR);
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE t) ORDER BY ALL
+----
+c	VARCHAR('nocase.noaccent')
+l	VARCHAR('nocase')[]
+p	VARCHAR
+s	VARCHAR('nocase')
+st	STRUCT(k VARCHAR('nocase'))
+
+query I
+SELECT sql FROM duckdb_tables() WHERE table_name = 't'
+----
+CREATE TABLE t(s VARCHAR('nocase'), c VARCHAR('nocase.noaccent'), l VARCHAR('nocase')[], st STRUCT(k VARCHAR('nocase')), p VARCHAR);
+
+statement ok
+INSERT INTO t VALUES ('a', 'ä', ['a'], {'k': 'a'}, 'a');
+
+# the rendered definition re-creates the same collations through EXPORT and IMPORT, nested ones included
+statement ok
+EXPORT DATABASE '{TEST_DIR}/collated_type_rendering';
+
+statement ok
+DROP TABLE t;
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/collated_type_rendering';
+
+query IIII
+SELECT s = 'A', c = 'a', st.k = 'A', p = 'A' FROM t
+----
+true	true	true	false
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE t) WHERE column_name IN ('s', 'st') ORDER BY ALL
+----
+s	VARCHAR('nocase')
+st	STRUCT(k VARCHAR('nocase'))
+
+# ALTER ... TYPE renders the collation once, through the type
+statement ok
+ALTER TABLE t ALTER COLUMN p TYPE VARCHAR COLLATE nocase;
+
+query I
+SELECT p = 'A' FROM t
+----
+true
+
+query I
+SELECT column_type FROM (DESCRIBE t) WHERE column_name = 'p'
+----
+VARCHAR('nocase')
+
+# the rendered form is valid in cast position
+query I
+SELECT 'a'::VARCHAR('nocase') = 'A'
+----
+true
