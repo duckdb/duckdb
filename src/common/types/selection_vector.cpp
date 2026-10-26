@@ -66,6 +66,15 @@ uint8_t BooleanSelectionMask(T matches) {
 	return static_cast<uint8_t>((word * UINT64_C(0x0102040810204080)) >> 56);
 }
 
+void WriteBooleanSelection(sel_t *result, sel_t base, uint8_t mask) {
+	// Stage the positions so the compiler can vectorize the writes.
+	sel_t positions[8];
+	for (idx_t j = 0; j < 8; j++) {
+		positions[j] = base + BOOLEAN_SELECTION_TABLE.positions[mask][j];
+	}
+	memcpy(result, positions, sizeof(positions));
+}
+
 template <class T, bool MATCH>
 idx_t SelectFromBooleanLoop(T matches, idx_t count, sel_t *result, idx_t offset) {
 	idx_t result_count = 0;
@@ -73,9 +82,7 @@ idx_t SelectFromBooleanLoop(T matches, idx_t count, sel_t *result, idx_t offset)
 	for (; i + 8 <= count; i += 8) {
 		const auto mask = BooleanSelectionMask(matches + i) ^ (MATCH ? 0 : 255);
 		const auto base = UnsafeNumericCast<sel_t>(offset + i);
-		for (idx_t j = 0; j < 8; j++) {
-			result[result_count + j] = base + BOOLEAN_SELECTION_TABLE.positions[mask][j];
-		}
+		WriteBooleanSelection(result + result_count, base, mask);
 		result_count += BOOLEAN_SELECTION_TABLE.counts[mask];
 	}
 	for (; i < count; i++) {
@@ -93,12 +100,8 @@ idx_t PartitionFromBooleanLoop(T matches, idx_t count, sel_t *true_result, sel_t
 		const auto mask = BooleanSelectionMask(matches + i);
 		const auto base = UnsafeNumericCast<sel_t>(offset + i);
 		const auto false_count = i - true_count;
-		for (idx_t j = 0; j < 8; j++) {
-			true_result[true_count + j] = base + BOOLEAN_SELECTION_TABLE.positions[mask][j];
-		}
-		for (idx_t j = 0; j < 8; j++) {
-			false_result[false_count + j] = base + BOOLEAN_SELECTION_TABLE.positions[mask ^ 255][j];
-		}
+		WriteBooleanSelection(true_result + true_count, base, mask);
+		WriteBooleanSelection(false_result + false_count, base, mask ^ 255);
 		true_count += BOOLEAN_SELECTION_TABLE.counts[mask];
 	}
 	for (; i < count; i++) {
