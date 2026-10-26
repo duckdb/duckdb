@@ -168,6 +168,10 @@ class ChildPath:
         return f"{{{self.parens}, {nested_child}, {self.nested_parens}}}"
 
 
+class RuleNotPlannable(Exception):
+    """The generator has no plan for this rule: it is reported as unsupported, and --write fails on it."""
+
+
 def planned_path(expr, base_re):
     """Split a generated parse expression into its base match and the TransformChildPath that follows it."""
     expr, trailing_parens = _strip_parens(expr)
@@ -181,7 +185,7 @@ def planned_path(expr, base_re):
         path.parens = trailing_parens
     match = base_re.match(expr)
     if not match:
-        raise NotImplementedError(f"parse expression '{expr}' cannot be planned")
+        raise RuleNotPlannable(f"parse expression '{expr}' cannot be planned")
     return match, path
 
 
@@ -518,9 +522,13 @@ class UseGramPreviewEmitter:
             if rule_name not in self.matcher_overrides:
                 ast = tokens_to_ast(self.rules[rule_name].tokens)
             config = self.rule_config_entry(rule_name)
+            plan = None
             if config is None or not config.init:
-                self.frame_plans[rule_name] = self.frame_plan(rule_name, ast)
-            if config is None or not config.finalize:
+                plan = self.frame_plan(rule_name, ast)
+                self.frame_plans[rule_name] = plan
+            # FinalizePassthroughTrampoline reads the result slot from the plan, so a rule with a configured
+            # initializer (and therefore no plan) keeps its generated finalizer even when it forwards one child
+            if plan is not None and (config is None or not config.finalize):
                 slot = self.passthrough_slot(rule_name, ast)
                 if slot is not None:
                     self.passthrough_slots[rule_name] = slot
@@ -552,7 +560,7 @@ class UseGramPreviewEmitter:
             return self.sequence_frame_plan(rule_name, ast)
         if isinstance(ast, (ReferenceNode, ParensNode, ListMacroNode, RepeatNode, OptionalNode)):
             return self.sequence_frame_plan(rule_name, SequenceNode([ast]))
-        raise NotImplementedError(f"unsupported preview shape for {rule_name}: {type(ast).__name__}")
+        raise RuleNotPlannable(f"unsupported preview shape for {rule_name}: {type(ast).__name__}")
 
     def sequence_frame_plan(self, rule_name, ast):
         plan = plan_trampoline_sequence_rule_with_terminals(
@@ -563,7 +571,7 @@ class UseGramPreviewEmitter:
             allow_top_level_repeat=True,
         )
         if plan.trailing_optional_stack_child is not None:
-            raise NotImplementedError("trailing optional stack child cannot be planned")
+            raise RuleNotPlannable("trailing optional stack child cannot be planned")
         frame_children = [arg for arg in plan.finalize_args if isinstance(arg, (StackChild, OptionalStackChild))]
         fixed_slots = max([arg.slot_idx + 1 for arg in frame_children], default=0)
         dynamic_child = self.dynamic_child(plan)
@@ -764,7 +772,7 @@ class UseGramPreviewEmitter:
         if rule_name in self.matcher_overrides and rule_name in self.rule_types:
             try:
                 self.emit_matcher_override_rule(rule_name)
-            except NotImplementedError as e:
+            except RuleNotPlannable as e:
                 return RuleCapability(rule_name, RuleCapabilityStatus.UNSUPPORTED, str(e))
             return RuleCapability(
                 rule_name,
@@ -799,7 +807,7 @@ class UseGramPreviewEmitter:
         if self.is_manual_finalize_rule(rule_name):
             try:
                 self.frame_plan(rule_name, ast)
-            except NotImplementedError as e:
+            except RuleNotPlannable as e:
                 return RuleCapability(
                     rule_name,
                     RuleCapabilityStatus.UNSUPPORTED,
@@ -818,7 +826,7 @@ class UseGramPreviewEmitter:
                 f"child rule '{e.args[0]}' is missing from grammar_types.yml",
                 ast,
             )
-        except NotImplementedError as e:
+        except RuleNotPlannable as e:
             return RuleCapability(rule_name, RuleCapabilityStatus.UNSUPPORTED, str(e), ast)
         return RuleCapability(rule_name, RuleCapabilityStatus.GENERATED, ast=ast)
 
@@ -852,6 +860,23 @@ class UseGramPreviewEmitter:
                 continue
             result.append(capability)
         return result
+
+    def unsupported_rules(self):
+        return [c for c in self.rule_capabilities.values() if c.status == RuleCapabilityStatus.UNSUPPORTED]
+
+    def validate_all_supported(self):
+        """Every rule must be generated, provided, excluded or configured; an unsupported one fails the generation."""
+        unsupported = self.unsupported_rules()
+        if not unsupported:
+            return
+        print("Error: the generator cannot plan these rules:", file=sys.stderr)
+        for capability in unsupported:
+            print(f"  {capability.rule_name}: {capability.reason}", file=sys.stderr)
+        print(
+            "Extend the generator, configure the rule in transformer_trampoline.yml or exclude it in grammar_types.yml.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     def validate_grammar_types(self):
         missing = self.missing_grammar_type_errors()
@@ -1018,7 +1043,7 @@ class UseGramPreviewEmitter:
             return self.emit_syntax_only_rule(rule_name, ast)
         if isinstance(ast, ChoiceNode):
             if self.is_manual_finalize_rule(rule_name):
-                raise NotImplementedError("manual_finalize choice rules are not currently supported")
+                raise RuleNotPlannable("manual_finalize choice rules are not currently supported")
             return self.emit_choice_rule(rule_name, ast)
         if isinstance(ast, SequenceNode):
             return self.emit_sequence_rule(rule_name, ast)
@@ -1032,7 +1057,7 @@ class UseGramPreviewEmitter:
             return self.emit_sequence_rule(rule_name, SequenceNode([ast]))
         if isinstance(ast, OptionalNode):
             return self.emit_sequence_rule(rule_name, SequenceNode([ast]))
-        raise NotImplementedError(f"unsupported preview shape for {rule_name}: {type(ast).__name__}")
+        raise RuleNotPlannable(f"unsupported preview shape for {rule_name}: {type(ast).__name__}")
 
     def emit_matcher_override_rule(self, rule_name):
         result_expr = self.matcher_transform_expr(rule_name, "process.parse_result")
@@ -1185,7 +1210,7 @@ class UseGramPreviewEmitter:
         )
         child_arg = self.sequence_forward_child(rule_name, plan)
         if child_arg is None:
-            raise NotImplementedError("forward rules must have exactly one stack child")
+            raise RuleNotPlannable("forward rules must have exactly one stack child")
         if self.passthrough_slot(rule_name, ast) is not None:
             return []
 
@@ -1539,7 +1564,7 @@ class UseGramPreviewEmitter:
                 lines.append("\t}")
                 arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
             else:
-                raise NotImplementedError(f"unsupported finalize argument: {type(arg).__name__}")
+                raise RuleNotPlannable(f"unsupported finalize argument: {type(arg).__name__}")
         transform_args = ["transformer"] + arg_names
         if self.rule_types[rule_name].pass_location:
             transform_args.append("process.parse_result.GetOffset()")
@@ -1558,7 +1583,7 @@ class UseGramPreviewEmitter:
             return f"{parse_expr}.Cast<OperatorParseResult>().operator_token"
         if matcher in ("identifier", "identifier_string"):
             return f"{parse_expr}.Cast<IdentifierParseResult>().identifier.GetIdentifierName()"
-        raise NotImplementedError(f"unsupported matcher override: {matcher}")
+        raise RuleNotPlannable(f"unsupported matcher override: {matcher}")
 
 
 def matcher_override_expr(rule_name, override):
@@ -1768,6 +1793,7 @@ def main():
     if args.write:
         if args.grammar is not None:
             arg_parser.error("--write always generates all statement grammar files")
+        emitter.validate_all_supported()
         additional_result_types = load_additional_transform_result_types(grammar_types_file)
         result_types = generate_transform_result_types(rule_types, additional_result_types)
         write_hpp(emitter.emit_header_declarations(), result_types)
