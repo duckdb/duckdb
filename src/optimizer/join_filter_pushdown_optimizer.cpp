@@ -351,6 +351,18 @@ bool JoinFilterPushdownOptimizer::IsFiltering(const unique_ptr<LogicalOperator> 
 	}
 }
 
+static bool IsDirectScanFilterPath(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_GET:
+		return true;
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_FILTER:
+		return IsDirectScanFilterPath(*op.children[0]);
+	default:
+		return false;
+	}
+}
+
 void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &join) {
 	if (!JoinFilterPushdownUtil::JoinTypeIsSupported(join.join_type)) {
 		return;
@@ -379,8 +391,10 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 			break;
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			// TODO: Need OR predicates
-			continue;
+			if (!IsDirectScanFilterPath(*join.children[0])) {
+				continue;
+			}
+			break;
 		default:
 			continue;
 		}
@@ -402,6 +416,19 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	vector<PushdownFilterTarget> pushdown_filter_targets;
 	GetPushdownFilterTargets(*join.children[0], pushdown_columns, pushdown_filter_targets);
 	for (auto &target : pushdown_filter_targets) {
+		vector<JoinFilterPushdownColumn> get_columns;
+		for (auto &column : target.columns) {
+			const auto comparison =
+			    join.conditions[pushdown_info->join_condition[column.join_filter_idx]].GetComparisonType();
+			if (comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM &&
+			    column.mode != JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION) {
+				continue;
+			}
+			get_columns.push_back(std::move(column));
+		}
+		if (get_columns.empty()) {
+			continue;
+		}
 		auto &get = target.get;
 		// pushdown info can be applied to this LogicalGet - push the dynamic table filter set
 		if (!get.dynamic_filters) {
@@ -410,7 +437,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 
 		JoinFilterPushdownFilter get_filter;
 		get_filter.dynamic_filters = get.dynamic_filters;
-		get_filter.columns = std::move(target.columns);
+		get_filter.columns = std::move(get_columns);
 		if (get.has_estimated_cardinality) {
 			get_filter.estimated_scan_cardinality = get.estimated_cardinality;
 		}
