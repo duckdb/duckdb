@@ -203,6 +203,23 @@ TEST_CASE("A reduced reservation does not prevent external aggregation", "[radix
 	REQUIRE(fixture.ScanGroupCount() == STANDARD_VECTOR_SIZE);
 }
 
+TEST_CASE("Aggregate reservations without temporary storage cover the current usage", "[radix_ht_sink]") {
+	RadixSinkFixture fixture("128MiB");
+	REQUIRE_NO_FAIL(fixture.con.Query("SET temp_directory=''"));
+	constexpr idx_t group_count = 16384;
+	for (idx_t offset = 0; offset < group_count; offset += STANDARD_VECTOR_SIZE) {
+		fixture.Keys(offset, group_count, 2048);
+		fixture.Sink();
+	}
+	auto &global = fixture.Global();
+	auto &local = fixture.Local();
+	REQUIRE_FALSE(global.external);
+	REQUIRE_FALSE(local.spilling);
+	REQUIRE(local.ht->Count() == group_count);
+	fixture.Combine(0);
+	REQUIRE(fixture.ScanGroupCount() == group_count);
+}
+
 TEST_CASE("Finished aggregate sources release their local hash tables", "[radix_ht_sink]") {
 	RadixSinkFixture fixture("128MB");
 	fixture.Keys(0, STANDARD_VECTOR_SIZE);

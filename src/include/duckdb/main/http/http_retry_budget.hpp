@@ -75,7 +75,7 @@ public:
 	//! Refund for a request that succeeded without retrying.
 	static constexpr int64_t NO_RETRY_REFUND = 1;
 	//! A quota untouched for this long is full again when it is next used.
-	static constexpr int64_t IDLE_RESET_MS = 60 * 1000;
+	static constexpr int64_t IDLE_RESET_MS = int64_t(60) * 1000;
 
 public:
 	//! Take `cost` tokens; false (and nothing taken) when fewer are available.

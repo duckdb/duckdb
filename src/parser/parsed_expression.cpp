@@ -151,6 +151,9 @@ void ParsedExpression::VerifyDeserialized() {
 		if (!Cast<FunctionExpression>().OrderBy()) {
 			throw invalid("missing ORDER BY modifier");
 		}
+		if (Cast<FunctionExpression>().IsOperator() && Cast<FunctionExpression>().Distinct()) {
+			throw invalid("an operator cannot be DISTINCT");
+		}
 		break;
 	case ExpressionClass::SUBQUERY: {
 		auto &subquery = Cast<SubqueryExpression>();
@@ -162,6 +165,36 @@ void ParsedExpression::VerifyDeserialized() {
 		}
 		if (subquery.GetSubqueryType() == SubqueryType::INVALID) {
 			throw invalid("invalid subquery type");
+		}
+		break;
+	}
+	case ExpressionClass::WINDOW: {
+		auto &window = Cast<WindowExpression>();
+		auto needs_expression = [](WindowBoundary boundary) {
+			switch (boundary) {
+			case WindowBoundary::EXPR_PRECEDING_ROWS:
+			case WindowBoundary::EXPR_PRECEDING_RANGE:
+			case WindowBoundary::EXPR_PRECEDING_GROUPS:
+			case WindowBoundary::EXPR_FOLLOWING_ROWS:
+			case WindowBoundary::EXPR_FOLLOWING_RANGE:
+			case WindowBoundary::EXPR_FOLLOWING_GROUPS:
+				return true;
+			default:
+				return false;
+			}
+		};
+		if (window.WindowStart() == WindowBoundary::INVALID ||
+		    window.WindowStart() == WindowBoundary::UNBOUNDED_FOLLOWING) {
+			throw invalid("invalid frame start boundary");
+		}
+		if (window.WindowEnd() == WindowBoundary::INVALID) {
+			throw invalid("invalid frame end boundary");
+		}
+		if (needs_expression(window.WindowStart()) && !window.StartExpr()) {
+			throw invalid("missing frame start expression");
+		}
+		if (needs_expression(window.WindowEnd()) && !window.EndExpr()) {
+			throw invalid("missing frame end expression");
 		}
 		break;
 	}
