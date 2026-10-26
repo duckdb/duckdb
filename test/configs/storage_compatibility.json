@@ -109,6 +109,8 @@
     {
       "reason": "Expected forwards compatibility failure.",
       "paths": [
+        "test/sql/catalog/function/default_macro_shadowing.test",
+        "test/sql/catalog/function/default_table_macro_shadowing.test",
         "test/fuzzer/pedro/view_not_rebound_error_no_view_dependencies.test",
         "test/issues/rigger/assertion_scale.test",
         "test/issues/general/test_16662.test",

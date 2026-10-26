@@ -66,37 +66,6 @@ SELECT round(geomean(v) OVER (), 3) AS r FROM win_t LIMIT 1;
 ----
 2.213
 
-# a default table macro: its body uses generate_series (shadowed above), assert actual bin values
-
-statement ok
-CREATE TABLE hist_t AS SELECT range AS v FROM range(100);
-
-query II
-SELECT bin, count FROM histogram_values(hist_t, v) ORDER BY bin LIMIT 3;
-----
-10	11
-20	10
-30	10
-
-# equi-height quantile positions come from the shadowed generate_series, assert values
-
-query II
-SELECT bin, count FROM histogram_values(hist_t, v, technique := 'equi-height') ORDER BY bin LIMIT 3;
-----
-9	10
-19	10
-29	10
-
-# window nodes stored inside a default table-macro body (histogram uses row_number/lag/max OVER)
-
-statement ok
-CREATE MACRO row_number() AS 0;
-
-query I
-SELECT count(*) FROM system.main.histogram('hist_t', v);
-----
-10
-
 # schema-only references inside a default body anchor to the system catalog
 
 statement ok
