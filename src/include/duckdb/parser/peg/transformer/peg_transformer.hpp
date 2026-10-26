@@ -423,7 +423,7 @@ public:
 				ReleaseChildResult(slot);
 				return bridged_result;
 			}
-			throw InternalException("Unexpected transformer result type for slot %llu in rule '%s'", slot, info.name);
+			ThrowUnexpectedResultType(slot);
 		}
 		auto result = std::move(*result_value);
 		ReleaseChildResult(slot);
@@ -435,7 +435,7 @@ public:
 		auto *result_value =
 		    reinterpret_cast<T *>(TryGetChildValue(slot, TransformResultTypeHash<T>(), TransformResultTypeName<T>()));
 		if (!result_value) {
-			throw InternalException("Unexpected transformer result type for slot %llu in rule '%s'", slot, info.name);
+			ThrowUnexpectedResultType(slot);
 		}
 		return *result_value;
 	}
@@ -2588,8 +2588,10 @@ public:
 	                                                                      GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeValuesExpressionsTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
-	static arena_ptr<TransformResultValue> FinalizeSetStatementTrampoline(PEGTransformer &transformer,
-	                                                                      GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeSetKeywordStatementTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeVariableAssignmentTrampoline(PEGTransformer &transformer,
+	                                                                            GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeResetStatementTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeResetTimeZoneTrampoline(PEGTransformer &transformer,
@@ -4434,8 +4436,11 @@ public:
 	TransformValuesClause(PEGTransformer &transformer, vector<vector<unique_ptr<ParsedExpression>>> values_expressions);
 	static vector<unique_ptr<ParsedExpression>>
 	TransformValuesExpressions(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> expression);
-	static unique_ptr<SQLStatement> TransformSetStatement(PEGTransformer &transformer,
-	                                                      unique_ptr<SetStatement> set_assignment_or_time_zone);
+	static unique_ptr<SQLStatement> TransformSetKeywordStatement(PEGTransformer &transformer,
+	                                                             unique_ptr<SetStatement> set_assignment_or_time_zone);
+	static unique_ptr<SQLStatement> TransformVariableAssignment(PEGTransformer &transformer,
+	                                                            const Identifier &identifier,
+	                                                            unique_ptr<ParsedExpression> expression);
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer,
 	                                                        unique_ptr<SQLStatement> reset_target);
 	static unique_ptr<SQLStatement> TransformResetTimeZone(PEGTransformer &transformer,
