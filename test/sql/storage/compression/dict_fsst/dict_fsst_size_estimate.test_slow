@@ -72,3 +72,24 @@ query II
 SELECT count(*), count(DISTINCT v) FROM db.small_dict
 ----
 20000	4
+
+# 5000 distinct values of 32 bytes over 300000 rows: a dictionary that fits a block but has more distinct values
+# than the analyze set starts out with, so the set has to grow while the block is simulated.
+statement ok
+ATTACH '{TEMP_DIR}/dict_fsst_size_estimate_mid.db' AS db_mid (BLOCK_SIZE 262144);
+
+statement ok
+CREATE TABLE db_mid.mid_dict AS SELECT md5((i % 5000)::VARCHAR) AS v FROM range(300000) t(i);
+
+statement ok
+CHECKPOINT db_mid
+
+query I
+SELECT compression FROM pragma_storage_info('db_mid.mid_dict') WHERE segment_type = 'VARCHAR' LIMIT 1
+----
+DICT_FSST
+
+query II
+SELECT count(*), count(DISTINCT v) FROM db_mid.mid_dict
+----
+300000	5000

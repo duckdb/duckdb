@@ -14,6 +14,10 @@ namespace dict_fsst {
 //===--------------------------------------------------------------------===//
 struct DictFSSTAnalyzeState : public AnalyzeState {
 public:
+	//! Distinct values the set of a simulated block starts out with
+	static constexpr idx_t INITIAL_SET_SIZE = 1024;
+
+public:
 	explicit DictFSSTAnalyzeState(BlockManager &block_manager);
 
 public:
@@ -30,6 +34,8 @@ public:
 private:
 	bool FitsInBlock(idx_t tuple_count, idx_t unique_count, idx_t dict_size, idx_t max_string_length) const;
 	void FlushSimulatedBlock();
+	unique_ptr<PrimitiveDictionary<string_t>> MakeSet(idx_t size) const;
+	void GrowSet();
 
 public:
 	idx_t max_string_length = 0;
@@ -53,8 +59,12 @@ public:
 	//! Whether a simulated block ever held the same value twice. A segment holds one block worth of values, so
 	//! this is also whether FSST_ONLY - which requires every value in a segment to be unique - is reachable.
 	bool block_had_repeated_value = false;
-	//! Fixed-size linear probing set of the distinct values in the current simulated block
-	PrimitiveDictionary<string_t> current_set;
+	//! Set of the distinct values in the current simulated block, doubled when it fills up
+	unique_ptr<PrimitiveDictionary<string_t>> current_set;
+	//! Number of values 'current_set' was created for
+	idx_t current_set_size = 0;
+	//! Most distinct strings a block can hold, where 'current_set' stops growing
+	idx_t max_set_size = 0;
 	//! Owns the memory of the strings in 'current_set'; reset per simulated block to bound memory usage
 	StringHeap heap;
 };

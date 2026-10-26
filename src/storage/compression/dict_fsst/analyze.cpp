@@ -44,14 +44,31 @@ static idx_t GetStringSizeLimit(const idx_t available_space, const bool fsst_enc
 	return MinValue(DictFSSTCompression::STRING_SIZE_LIMIT, max_string_size + 1);
 }
 
-DictFSSTAnalyzeState::DictFSSTAnalyzeState(BlockManager &block_manager)
-    : AnalyzeState(block_manager),
-      // a block cannot hold more distinct strings than half its size in bytes, matching the compression state
-      current_set(block_manager.buffer_manager.GetBufferAllocator(), block_manager.GetBlockSize() / 2, 1) {
+DictFSSTAnalyzeState::DictFSSTAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager) {
 	const auto block_size = info.GetBlockSize();
 
 	string_size_limit = GetStringSizeLimit(block_size, false);
 	fsst_string_size_limit = GetStringSizeLimit(block_size, true);
+
+	// a block cannot hold more distinct strings than half its size in bytes, matching the compression state
+	max_set_size = block_size / 2;
+	// most blocks hold few distinct values, so start small and grow the set only when it runs out of room
+	current_set_size = MinValue(INITIAL_SET_SIZE, max_set_size);
+	current_set = MakeSet(current_set_size);
+}
+
+unique_ptr<PrimitiveDictionary<string_t>> DictFSSTAnalyzeState::MakeSet(idx_t size) const {
+	auto &allocator = info.GetBlockManager().buffer_manager.GetBufferAllocator();
+	return make_uniq<PrimitiveDictionary<string_t>>(allocator, size, 1);
+}
+
+void DictFSSTAnalyzeState::GrowSet() {
+	D_ASSERT(current_set_size < max_set_size);
+	current_set_size = MinValue(current_set_size * 2, max_set_size);
+	auto grown = MakeSet(current_set_size);
+	// the strings live in 'heap', so the entries carry over as they are
+	current_set->IterateValues([&](const string_t &value, const string_t &) { grown->Insert(value); });
+	current_set = std::move(grown);
 }
 
 idx_t DictFSSTAnalyzeState::RequiredSpace(idx_t tuple_count, idx_t unique_count, idx_t dict_size,
@@ -84,7 +101,7 @@ void DictFSSTAnalyzeState::FlushSimulatedBlock() {
 	current_unique_count = 0;
 	current_dict_size = 0;
 	current_max_string_length = 0;
-	current_set.Clear();
+	current_set->Clear();
 	// the strings are only referenced by 'current_set', which we just cleared
 	heap.Destroy();
 }
@@ -117,7 +134,7 @@ bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 			disable_fsst = true;
 		}
 
-		bool new_string = current_set.Lookup(str).IsEmpty();
+		bool new_string = current_set->Lookup(str).IsEmpty();
 		if (!new_string) {
 			block_had_repeated_value = true;
 		}
@@ -139,8 +156,12 @@ bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 		current_dict_size = next_dict_size;
 		current_max_string_length = next_max_length;
 		if (new_string) {
-			current_set.Insert(heap.AddBlob(str));
-			D_ASSERT(!current_set.IsFull());
+			if (current_set->GetSize() == current_set_size) {
+				GrowSet();
+			}
+			current_set->Insert(heap.AddBlob(str));
+			// FitsInBlock keeps the distinct count below what the largest set holds
+			D_ASSERT(!current_set->IsFull());
 		}
 	}
 	total_count += input.size();
@@ -175,6 +196,10 @@ idx_t DictFSSTAnalyzeState::FSSTOnlyEstimate() const {
 }
 
 idx_t DictFSSTAnalyzeState::FinalAnalyze() {
+	// the simulation is complete, free its set before the compression state allocates a dictionary of its own
+	current_set.reset();
+	heap.Destroy();
+
 	if (!total_count) {
 		return 0;
 	}
