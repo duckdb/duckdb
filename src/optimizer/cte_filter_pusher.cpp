@@ -1,8 +1,9 @@
 #include "duckdb/optimizer/cte_filter_pusher.hpp"
+#include "duckdb/optimizer/cte_join_filter_pusher.hpp"
 
-#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
@@ -21,6 +22,13 @@ CTEFilterPusher::CTEFilterPusher(Optimizer &optimizer_p) : optimizer(optimizer_p
 
 unique_ptr<LogicalOperator> CTEFilterPusher::Optimize(unique_ptr<LogicalOperator> op) {
 	FindCandidates(*op);
+	if (cte_info_map.empty()) {
+		return op;
+	}
+	// Scalar producer pushdown must preserve markers referenced by CTE consumers.
+	FilterPushdown pushdown(optimizer);
+	unordered_set<TableIndex> referenced_bindings;
+	pushdown.CheckMarkToSemi(*op, referenced_bindings);
 	auto ctes = std::move(cte_info_map);
 
 	// Iterate once over all materialized CTEs
@@ -40,6 +48,8 @@ unique_ptr<LogicalOperator> CTEFilterPusher::Optimize(unique_ptr<LogicalOperator
 			PushFilterIntoCTE(info);
 		}
 	}
+	CTEJoinFilterPusher join_pusher(optimizer);
+	join_pusher.Optimize(*op);
 	return op;
 }
 
@@ -56,20 +66,18 @@ bool CTEFilterPusher::CanPushFilter(const MaterializedCTEInfo &info) {
 	if (info.all_cte_refs_are_filtered) {
 		return true;
 	}
-	auto &cte = info.materialized_cte.Cast<LogicalMaterializedCTE>();
-	if (!cte.filter_dependency || info.references.size() != 2 || info.filters.size() != 1) {
+	if (info.filters.size() != 1 || !HasValidDependency(info)) {
 		return false;
 	}
-	auto &dependency = *cte.filter_dependency;
-	idx_t row_scans = 0;
-	idx_t domain_scans = 0;
-	for (auto &ref : info.references) {
-		row_scans += ref.get().table_index == dependency.row_scan;
-		domain_scans += ref.get().table_index == dependency.domain_scan;
-	}
+	auto &cte = info.materialized_cte.Cast<LogicalMaterializedCTE>();
 	D_ASSERT(info.filters[0].get().children[0]->type == LogicalOperatorType::LOGICAL_CTE_REF);
 	auto &filtered_ref = info.filters[0].get().children[0]->Cast<LogicalCTERef>();
-	return row_scans == 1 && domain_scans == 1 && filtered_ref.table_index == dependency.row_scan;
+	return filtered_ref.table_index == cte.filter_dependency->row_scan;
+}
+
+bool CTEFilterPusher::HasValidDependency(const MaterializedCTEInfo &info) {
+	auto &cte = info.materialized_cte.Cast<LogicalMaterializedCTE>();
+	return cte.filter_dependency && cte.filter_dependency->MatchesConsumers(info.references);
 }
 
 void CTEFilterPusher::FindCandidates(LogicalOperator &op) {

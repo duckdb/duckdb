@@ -13,6 +13,10 @@ namespace duckdb {
 
 struct GlobFunctionBindData : public TableFunctionData {
 	shared_ptr<MultiFileList> file_list;
+
+	bool SupportStatementCache() const override {
+		return false;
+	}
 };
 
 static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFunctionBindInput &input,
@@ -83,7 +87,8 @@ static double GlobFunctionProgress(ClientContext &context, const FunctionData *b
 }
 
 void GlobTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction glob_function("glob", {LogicalType::VARCHAR}, GlobFunction, GlobFunctionBind, GlobFunctionInit);
+	TableFunction glob_function("glob", FunctionSignature().AddPositionalOnly("pattern", LogicalType::VARCHAR),
+	                            GlobFunction, GlobFunctionBind, GlobFunctionInit);
 	glob_function.table_scan_progress = GlobFunctionProgress;
 	set.AddFunction(MultiFileReader::CreateFunctionSet(glob_function));
 }

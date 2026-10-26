@@ -30,12 +30,7 @@ unique_ptr<Expression> RewriteOrderedFirst(AggregateRewriteInput &input) {
 	}
 	aggregate->GetOrderBysMutable().reset();
 
-	ErrorData error;
-	auto sort_key =
-	    binder.BindScalarFunction(Identifier::DefaultSchema(), "create_sort_key", std::move(sort_children), error);
-	if (!sort_key) {
-		error.Throw();
-	}
+	auto sort_key = binder.BindScalarFunction(Identifier::DefaultSchema(), "create_sort_key", std::move(sort_children));
 
 	auto children = std::move(aggregate->GetChildrenMutable());
 	children.emplace_back(std::move(sort_key));

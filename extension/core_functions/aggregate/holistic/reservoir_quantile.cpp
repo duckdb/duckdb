@@ -54,6 +54,8 @@ struct ReservoirQuantileState {
 			D_ASSERT(r_samp->next_index_to_sample >= r_samp->num_entries_to_skip_b4_next_sample);
 			if (r_samp->next_index_to_sample == r_samp->num_entries_to_skip_b4_next_sample) {
 				ReplaceElement(element);
+			} else {
+				r_samp->num_entries_to_skip_b4_next_sample++;
 			}
 		}
 	}
@@ -307,6 +309,9 @@ double CheckReservoirQuantile(const Value &quantile_val) {
 		throw BinderException("RESERVOIR_QUANTILE QUANTILE parameter cannot be NULL");
 	}
 	auto quantile = quantile_val.GetValue<double>();
+	if (Value::IsNan(quantile)) {
+		throw BinderException("RESERVOIR_QUANTILE parameter cannot be NaN");
+	}
 	if (quantile < 0 || quantile > 1) {
 		throw BinderException("RESERVOIR_QUANTILE can only take parameters in the range [0, 1]");
 	}

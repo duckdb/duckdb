@@ -46,12 +46,7 @@ static unique_ptr<BoundAggregateExpression> BindAggregate(ClientContext &context
 static unique_ptr<Expression> BindScalar(ClientContext &context, const char *name,
                                          vector<unique_ptr<Expression>> children) {
 	FunctionBinder function_binder(context);
-	ErrorData error;
-	auto result = function_binder.BindScalarFunction(Identifier::DefaultSchema(), name, std::move(children), error);
-	if (!result) {
-		error.Throw();
-	}
-	return result;
+	return function_binder.BindScalarFunction(Identifier::DefaultSchema(), name, std::move(children));
 }
 
 static unique_ptr<Expression> BindScalar(ClientContext &context, const char *name, unique_ptr<Expression> child) {
@@ -569,6 +564,7 @@ AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
 	                       AggregateFunction::StateVoidFinalize<STATE, OP>, FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                       AggregateFunction::NoClusterUpdate());
 	aggr.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
+	aggr.SetIsHolistic(true);
 	return aggr;
 }
 
@@ -579,6 +575,7 @@ AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	auto func = AggregateFunction::UnaryAggregate<STATE, INPUT_TYPE, INPUT_TYPE, OP, AggregateDestructorType::LEGACY>(
 	    type, type);
 	func.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, INPUT_TYPE>);
+	func.SetIsHolistic(true);
 	return func;
 }
 

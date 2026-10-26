@@ -34,6 +34,11 @@ static unique_ptr<FunctionData> StructInsertBind(BindScalarFunctionInput &input)
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto &names = *input.GetArgumentNames();
+	for (auto &argument : arguments) {
+		if (argument->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		}
+	}
 	if (LogicalTypeId::STRUCT != arguments[0]->GetReturnType().id()) {
 		throw InvalidInputException("The first argument to struct_insert must be a STRUCT");
 	}
@@ -54,7 +59,7 @@ static unique_ptr<FunctionData> StructInsertBind(BindScalarFunctionInput &input)
 	// Loop through the fields that are inserted
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		if (name_collision_set.find(names[i]) != name_collision_set.end()) {
-			throw BinderException("Duplicate struct entry name \"%s\"", names[i]);
+			throw BinderException("Duplicate struct entry name %s", names[i]);
 		}
 		name_collision_set.insert(names[i]);
 		new_children.emplace_back(make_pair(names[i], arguments[i]->GetReturnType()));
@@ -108,7 +113,7 @@ static unique_ptr<ParsedExpression> StructInsertUnbind(FunctionUnbindInput &inpu
 ScalarFunction StructInsertFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, StructInsertStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.GetSignature().AddParameter("struct", LogicalType::ANY).AddKwargsParameter("kwargs", LogicalType::ANY);
+	fun.GetSignature().AddParameter("struct", LogicalType::ANY).AddKwargs("kwargs", LogicalType::ANY);
 	fun.GetProperties().SetRequiresExpressionNames(true);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);

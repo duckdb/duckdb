@@ -23,6 +23,7 @@ set(PARQUET_EXTENSION_FILES
     parquet_file_metadata_cache.cpp
     parquet_float16.cpp
     parquet_multi_file_info.cpp
+    read_single_parquet_file.cpp
     parquet_metadata.cpp
     parquet_prefetch_cost_model.cpp
     parquet_reader.cpp
@@ -33,6 +34,7 @@ set(PARQUET_EXTENSION_FILES
     parquet_shredding.cpp
     parquet_column_schema.cpp
     parquet_geometry.cpp
+    parquet_int96.cpp
     serialize_parquet.cpp
     zstd_file_system.cpp)
 

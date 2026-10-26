@@ -18,6 +18,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -60,7 +61,9 @@ class LogicalVacuum;
 
 class ColumnList;
 class ExternalDependency;
+class FunctionSignature;
 class TableFunction;
+class BoundTableFunction;
 class TableStorageInfo;
 class BoundConstraint;
 class AtClause;
@@ -275,6 +278,7 @@ public:
 	                                           const ColumnList &columns);
 	unique_ptr<BoundConstraint> BindUniqueConstraint(const Constraint &constraint, const Identifier &table,
 	                                                 const ColumnList &columns);
+	static void VerifyConstraintCheckModeStorageVersion(const Constraint &constraint, Catalog &catalog, bool temporary);
 
 	BoundStatement BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry, unique_ptr<AlterInfo> alter_info);
 
@@ -308,9 +312,6 @@ public:
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateTriggerInfo(CreateTriggerInfo &info);
 
-	//! Check usage, and cast named parameters to their types
-	void BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
-	                         QueryErrorContext &error_context, const Identifier &func_name);
 	unique_ptr<BoundPragmaInfo> BindPragma(PragmaInfo &info, QueryErrorContext error_context);
 
 	BoundStatement Bind(TableRef &ref);
@@ -328,6 +329,7 @@ public:
 
 	//! Add the view to the set of currently bound views - used for detecting recursive view definitions
 	void AddBoundView(ViewCatalogEntry &view);
+	void AddBoundTableMacro(CatalogEntry &table_macro);
 
 	void BeginSubqueryBind(Binder &parent, ExpressionBinder &binder);
 	//! The innermost enclosing scope
@@ -407,7 +409,8 @@ public:
 	static string ReplaceColumnsAlias(const string &alias, const string &column_name,
 	                                  optional_ptr<duckdb_re2::RE2> regex);
 
-	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
+	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes, idx_t column_count = 1,
+	                                           TableIndex table_index = TableIndex());
 
 	void SetSearchPath(Catalog &catalog, const Identifier &schema);
 
@@ -433,6 +436,8 @@ private:
 	bool inside_subquery = false;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
+	//! The table macros that are being expanded by this binder
+	reference_set_t<CatalogEntry> bound_table_macros;
 	//! Used to retrieve CatalogEntry's
 	CatalogEntryRetriever entry_retriever;
 	//! Unnamed subquery index
@@ -572,6 +577,7 @@ private:
 	BoundStatement Bind(BaseTableRef &ref);
 	BoundStatement Bind(BoundRefWrapper &ref);
 	BoundStatement Bind(JoinRef &ref);
+	BoundStatement Bind(MatchRecognizeRef &ref);
 	//! Rewrites a NEAREST BY join into a lateral join over a top-k subquery and binds the result
 	BoundStatement BindNearestJoin(JoinRef &ref);
 	BoundStatement Bind(SubqueryRef &ref);
@@ -594,13 +600,14 @@ private:
 	unique_ptr<BoundAtClause> BindAtClause(optional_ptr<AtClause> at_clause);
 
 	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
-	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
-	                                 vector<Value> &parameters, named_parameter_map_t &named_parameters,
-	                                 BoundStatement &subquery, ErrorData &error);
+	                                 vector<unique_ptr<ParsedExpression>> &expressions,
+	                                 vector<unique_ptr<Expression>> &positional_arguments,
+	                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+	                                 BoundStatement &subquery, bool &table_in_out, ErrorData &error);
 	void BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions, BoundStatement &subquery);
 	BoundStatement BindTableFunction(TableFunction &function, vector<Value> parameters);
-	BoundStatement BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
-	                                         vector<Value> parameters, named_parameter_map_t named_parameters,
+	BoundStatement BindTableFunctionInternal(BoundTableFunction &table_function, const TableFunctionRef &ref,
+	                                         vector<Value> parameters, named_argument_map_t named_parameters,
 	                                         vector<LogicalType> input_table_types,
 	                                         vector<Identifier> input_table_names,
 	                                         optional_ptr<unique_ptr<LogicalOperator>> input_plan);
@@ -609,7 +616,8 @@ private:
 
 	BoundStatement BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type);
 	BoundStatement BindCopyFrom(CopyStatement &stmt, const CopyFunction &function);
-	void BindCopyOptions(CopyInfo &info);
+	void BindCopyFormat(CopyInfo &info);
+	void BindCopyOptions(CopyInfo &info, const CopyFunction &function);
 	identifier_map_t<CopyOption> GetFullCopyOptionsList(const CopyFunction &function, CopyOptionMode mode);
 
 	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);

@@ -91,6 +91,11 @@ public:
 		return false;
 	}
 
+	//! Initialize the vectors this operator uses for its output
+	virtual void InitializeOutputChunk(Allocator &allocator, DataChunk &chunk) const {
+		chunk.Initialize(allocator, types);
+	}
+
 	//! Functions to help decide how to set up pipeline dependencies
 	idx_t EstimatedThreadCount() const;
 	bool CanSaturateThreads(ClientContext &context) const;
@@ -257,7 +262,7 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
-			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
+			InternalException::Throw("Failed to cast physical operator to type - physical operator type mismatch");
 		}
 		return reinterpret_cast<TARGET &>(*this);
 	}
@@ -265,7 +270,7 @@ public:
 	template <class TARGET>
 	const TARGET &Cast() const {
 		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
-			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
+			InternalException::Throw("Failed to cast physical operator to type - physical operator type mismatch");
 		}
 		return reinterpret_cast<const TARGET &>(*this);
 	}

@@ -142,9 +142,9 @@ Value FunctionStabilityToValue(FunctionStability stability) {
 
 //! The legacy "varargs" column cannot tell "*args" and "**kwargs" apart - report whichever the function has
 Value VariadicTypeValue(const FunctionSignature &signature) {
-	auto variadic = signature.GetArgsParameter();
+	auto variadic = signature.GetArgs();
 	if (!variadic) {
-		variadic = signature.GetKwargsParameter();
+		variadic = signature.GetKwargs();
 	}
 	return variadic ? Value(variadic->GetType().ToString()) : Value();
 }
@@ -465,6 +465,17 @@ struct TableMacroExtractor {
 	}
 };
 
+//! The options a "**kwargs" parameter declares are listed after the parameters, as they are passed by name like them
+static void AddOptions(const FunctionSignature &signature, vector<Value> &results, bool types) {
+	auto option_schema = signature.GetTypedKwargs();
+	if (!option_schema) {
+		return;
+	}
+	for (auto &option : option_schema->GetOptions()) {
+		results.emplace_back(types ? Value(option.type.ToString()) : Value(option.name));
+	}
+}
+
 struct TableFunctionExtractor {
 	static idx_t FunctionCount(TableFunctionCatalogEntry &entry) {
 		return entry.functions.Size();
@@ -481,12 +492,13 @@ struct TableFunctionExtractor {
 	static vector<Value> GetParameters(TableFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
-		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
-			results.emplace_back("col" + to_string(i));
+		// the variadic parameters are reported in the "varargs" column instead
+		for (auto &param : fun.GetSignature().GetParameters()) {
+			if (!param.IsVariadic()) {
+				results.emplace_back(param.GetName());
+			}
 		}
-		for (auto &param : fun.named_parameters) {
-			results.emplace_back(param.first);
-		}
+		AddOptions(fun.GetSignature(), results, false);
 		return results;
 	}
 
@@ -494,23 +506,28 @@ struct TableFunctionExtractor {
 		vector<Value> results;
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 
-		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
-			results.emplace_back(fun.GetArguments()[i].ToString());
+		for (auto &param : fun.GetSignature().GetParameters()) {
+			if (!param.IsVariadic()) {
+				results.emplace_back(param.GetType().ToString());
+			}
 		}
-		for (auto &param : fun.named_parameters) {
-			results.emplace_back(param.second.ToString());
-		}
+		AddOptions(fun.GetSignature(), results, true);
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
 
 	static vector<LogicalType> GetParameterLogicalTypes(TableFunctionCatalogEntry &entry, idx_t offset) {
-		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
-		return fun.GetArguments();
+		const auto &signature = entry.functions.GetFunctionByOffset(offset)->GetSignature();
+		vector<LogicalType> result;
+		for (idx_t i = 0; i < signature.GetPositionalParameterCount(); i++) {
+			result.push_back(signature.GetParameter(i).GetType());
+		}
+		return result;
 	}
 
 	static Value GetVarArgs(TableFunctionCatalogEntry &entry, idx_t offset) {
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
-		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
+		auto args = fun.GetSignature().GetArgs();
+		return args ? Value(args->GetType().ToString()) : Value();
 	}
 
 	static Value GetMacroDefinition(TableFunctionCatalogEntry &entry, idx_t offset) {
@@ -542,13 +559,13 @@ struct PragmaFunctionExtractor {
 	static vector<Value> GetParameters(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
-
-		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
-			results.emplace_back("col" + to_string(i));
+		// the variadic parameters are reported in the "varargs" column instead
+		for (auto &param : fun.GetSignature().GetParameters()) {
+			if (!param.IsVariadic()) {
+				results.emplace_back(param.GetName());
+			}
 		}
-		for (auto &param : fun.named_parameters) {
-			results.emplace_back(param.first);
-		}
+		AddOptions(fun.GetSignature(), results, false);
 		return results;
 	}
 
@@ -556,23 +573,29 @@ struct PragmaFunctionExtractor {
 		vector<Value> results;
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 
-		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
-			results.emplace_back(fun.GetArguments()[i].ToString());
+		for (auto &param : fun.GetSignature().GetParameters()) {
+			if (!param.IsVariadic()) {
+				results.emplace_back(param.GetType().ToString());
+			}
 		}
-		for (auto &param : fun.named_parameters) {
-			results.emplace_back(param.second.ToString());
-		}
+		AddOptions(fun.GetSignature(), results, true);
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
 
 	static vector<LogicalType> GetParameterLogicalTypes(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
-		return fun.GetArguments();
+		const auto &signature = fun.GetSignature();
+		vector<LogicalType> result;
+		for (idx_t i = 0; i < signature.GetPositionalParameterCount(); i++) {
+			result.push_back(signature.GetParameter(i).GetType());
+		}
+		return result;
 	}
 
 	static Value GetVarArgs(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
-		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
+		auto args = fun.GetSignature().GetArgs();
+		return args ? Value(args->GetType().ToString()) : Value();
 	}
 
 	static Value GetMacroDefinition(PragmaFunctionCatalogEntry &entry, idx_t offset) {

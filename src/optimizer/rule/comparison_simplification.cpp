@@ -16,7 +16,11 @@ static bool DateTimestampComparisonIsInvertible(ClientContext &context, BoundFun
                                                 BoundFunctionExpression &cast_expression, const Value &constant_value,
                                                 Value &cast_constant, bool column_ref_left,
                                                 unique_ptr<Expression> &replacement) {
-	if (Timestamp::GetTime(constant_value.GetValue<timestamp_t>()) == dtime_t(0)) {
+	auto timestamp = constant_value.GetValue<timestamp_t>();
+	if (!timestamp.IsFinite()) {
+		return false;
+	}
+	if (Timestamp::GetTime(timestamp) == dtime_t(0)) {
 		return true; // it's midnight: no replacement needed
 	}
 	auto op = expr.GetExpressionType();
@@ -113,6 +117,12 @@ static bool ConstantCastIsInvertible(ClientContext &context, BoundFunctionExpres
 	}
 	// The constant must survive the integral round-trip exactly; the column side is checked by the caller.
 	if (IsLosslessIntegralToFloatingCast(target_type, cast_expression.GetReturnType())) {
+		string error_message;
+		auto roundtrip = cast_constant.TryCastAs(context, cast_expression.GetReturnType(), &error_message, true);
+		return roundtrip && *roundtrip == constant_value;
+	}
+	if (target_type.id() == LogicalTypeId::DECIMAL && cast_expression.GetReturnType().id() == LogicalTypeId::DECIMAL) {
+		// a narrowing decimal cast of the constant is fine if the constant round-trips exactly
 		string error_message;
 		auto roundtrip = cast_constant.TryCastAs(context, cast_expression.GetReturnType(), &error_message, true);
 		return roundtrip && *roundtrip == constant_value;

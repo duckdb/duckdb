@@ -20,20 +20,10 @@ struct ICUTableRange {
 		      calendar(other.calendar->Copy()), cardinality(other.cardinality) {
 		}
 
-		explicit ICURangeBindData(ClientContext &context, const vector<Value> &inputs) {
-			Value tz_value;
-			if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
-				tz_setting = tz_value.ToString();
-			}
+		explicit ICURangeBindData(ClientContext &context, const vector<Value> &inputs) : cal_setting("gregorian") {
+			context.TryGetCurrentSetting("TimeZone", tz_setting);
+			context.TryGetCurrentSetting("Calendar", cal_setting);
 			auto tz = TimeZone::TryCreate(tz_setting);
-
-			Value cal_value;
-			if (context.TryGetCurrentSetting("Calendar", cal_value)) {
-				cal_setting = cal_value.ToString();
-			} else {
-				cal_setting = "gregorian";
-			}
-
 			calendar = Calendar::TryCreate(cal_setting, tz ? std::move(tz) : TimeZone::TryCreate("UTC"));
 			if (!calendar) {
 				throw InternalException("Unable to create calendar.");
@@ -265,9 +255,12 @@ struct ICUTableRange {
 	}
 
 	static void AddICUTableRangeFunction(ExtensionLoader &loader) {
+		const auto timestamps = FunctionSignature()
+		                            .AddPositionalOnly("start", LogicalType::TIMESTAMP_TZ)
+		                            .AddPositionalOnly("stop", LogicalType::TIMESTAMP_TZ)
+		                            .AddPositionalOnly("step", LogicalType::INTERVAL);
 		TableFunctionSet range("range");
-		TableFunction range_function({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
-		                             nullptr, Bind<false>, RangeDateTimeGlobalInit, RangeDateTimeLocalInit);
+		TableFunction range_function(timestamps, nullptr, Bind<false>, RangeDateTimeGlobalInit, RangeDateTimeLocalInit);
 		range_function.in_out_function = ICUTableRangeFunction<false>;
 		range_function.table_scan_progress = Progress;
 		range_function.cardinality = Cardinality;
@@ -278,9 +271,8 @@ struct ICUTableRange {
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		TableFunctionSet generate_series("generate_series");
-		TableFunction generate_series_function(
-		    {LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL}, nullptr, Bind<true>,
-		    RangeDateTimeGlobalInit, RangeDateTimeLocalInit);
+		TableFunction generate_series_function(timestamps, nullptr, Bind<true>, RangeDateTimeGlobalInit,
+		                                       RangeDateTimeLocalInit);
 		generate_series_function.in_out_function = ICUTableRangeFunction<true>;
 		generate_series_function.table_scan_progress = Progress;
 		generate_series_function.cardinality = Cardinality;

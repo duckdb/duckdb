@@ -262,7 +262,8 @@ struct RangeDateTimeBindData : public TableFunctionData {
 			return;
 		}
 
-		cardinality = idx_t(delta / increment);
+		// a step pointing away from the end produces an empty range
+		cardinality = delta / increment < 0 ? 0 : idx_t(delta / increment);
 	}
 
 	idx_t cardinality;
@@ -454,8 +455,11 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 			}
 			result_data[size] = state.current_state;
 			size++;
-			state.current_state =
-			    AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(state.current_state, state.increment);
+			if (!TryAddOperator::Operation<timestamp_t, interval_t, timestamp_t>(state.current_state, state.increment,
+			                                                                     state.current_state)) {
+				// the next value is outside of the timestamp range: the series ends here
+				state.current_state = state.greater_than_check ? timestamp_t::infinity() : timestamp_t::ninfinity();
+			}
 		}
 		if (size == 0) {
 			// move to next row
@@ -478,7 +482,18 @@ static bool RangeIsRepeatable(optional_ptr<const FunctionData>) {
 void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet range("range");
 
-	TableFunction range_function({LogicalType::BIGINT}, nullptr, RangeFunctionBind<false>, RangeFunctionGlobalInit,
+	const auto stop_only = FunctionSignature().AddPositionalOnly("stop", LogicalType::BIGINT);
+	const auto start_stop = FunctionSignature()
+	                            .AddPositionalOnly("start", LogicalType::BIGINT)
+	                            .AddPositionalOnly("stop", LogicalType::BIGINT);
+	auto start_stop_step = start_stop;
+	start_stop_step.AddPositionalOnly("step", LogicalType::BIGINT);
+	const auto timestamps = FunctionSignature()
+	                            .AddPositionalOnly("start", LogicalType::TIMESTAMP)
+	                            .AddPositionalOnly("stop", LogicalType::TIMESTAMP)
+	                            .AddPositionalOnly("step", LogicalType::INTERVAL);
+
+	TableFunction range_function(stop_only, nullptr, RangeFunctionBind<false>, RangeFunctionGlobalInit,
 	                             RangeFunctionLocalInit);
 	range_function.table_scan_progress = RangeFunctionProgress;
 	range_function.in_out_function = RangeFunction<false>;
@@ -490,13 +505,13 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	// single argument range: (end) - implicit start = 0 and increment = 1
 	range.AddFunction(range_function);
 	// two arguments range: (start, end) - implicit increment = 1
-	range_function.GetArguments() = {LogicalType::BIGINT, LogicalType::BIGINT};
+	range_function.GetSignature() = start_stop;
 	range.AddFunction(range_function);
 	// three arguments range: (start, end, increment)
-	range_function.GetArguments() = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
+	range_function.GetSignature() = start_stop_step;
 	range.AddFunction(range_function);
-	TableFunction range_in_out({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL}, nullptr,
-	                           RangeDateTimeBind<false>, RangeDateTimeGlobalInit, RangeDateTimeLocalInit);
+	TableFunction range_in_out(timestamps, nullptr, RangeDateTimeBind<false>, RangeDateTimeGlobalInit,
+	                           RangeDateTimeLocalInit);
 	range_in_out.table_scan_progress = RangeDateTimeProgress;
 	range_in_out.in_out_function = RangeDateTimeFunction<false>;
 	range_in_out.cardinality = RangeDateTimeCardinality;
@@ -510,14 +525,13 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	range_function.bind = RangeFunctionBind<true>;
 	range_function.in_out_function = RangeFunction<true>;
 	range_function.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
-	range_function.GetArguments() = {LogicalType::BIGINT};
+	range_function.GetSignature() = stop_only;
 	generate_series.AddFunction(range_function);
-	range_function.GetArguments() = {LogicalType::BIGINT, LogicalType::BIGINT};
+	range_function.GetSignature() = start_stop;
 	generate_series.AddFunction(range_function);
-	range_function.GetArguments() = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
+	range_function.GetSignature() = start_stop_step;
 	generate_series.AddFunction(range_function);
-	TableFunction generate_series_in_out({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
-	                                     nullptr, RangeDateTimeBind<true>, RangeDateTimeGlobalInit,
+	TableFunction generate_series_in_out(timestamps, nullptr, RangeDateTimeBind<true>, RangeDateTimeGlobalInit,
 	                                     RangeDateTimeLocalInit);
 	generate_series_in_out.table_scan_progress = RangeDateTimeProgress;
 	generate_series_in_out.in_out_function = RangeDateTimeFunction<true>;
