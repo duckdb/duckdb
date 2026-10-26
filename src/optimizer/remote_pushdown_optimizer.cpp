@@ -1251,12 +1251,7 @@ ExpressionPushdownResult RemotePushdownOptimizer::RewriteExpression(unique_ptr<P
 	}
 	// this expression is not foldable - fold the (maximal) foldable children now
 	for (auto &child : foldable_children) {
-		// a generated alias on a nested expression would be read as a named argument - keep only user aliases
-		bool user_aliased = !child.get()->GetAlias().empty();
 		result = Merge(std::move(result), FoldExpression(child.get()));
-		if (!user_aliased) {
-			child.get()->ClearAlias();
-		}
 	}
 	result = Merge(std::move(result), std::move(state.result));
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
