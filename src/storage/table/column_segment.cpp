@@ -42,6 +42,10 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 
 	auto &type = statistics.GetType();
 	auto function = config.GetCompressionFunction(compression_type, type.InternalType());
+	if (block_id == INVALID_BLOCK && !function.get().supports_null_block) {
+		throw DataCorruptionException("Persistent %s segment is missing its data block",
+		                              CompressionTypeToString(compression_type));
+	}
 	if (block_id != INVALID_BLOCK) {
 		block = block_manager.RegisterBlock(block_id);
 	}
