@@ -2422,7 +2422,9 @@ ExpressionOptIdentifier <- Expression BareColLabel?
 ValuesClause <- 'VALUES' List(ValuesExpressions)
 ValuesExpressions <- Parens(List(Expression))
 
-SetStatement <- 'SET' SetAssignmentOrTimeZone
+SetStatement <- SetKeywordStatement / VariableAssignment
+SetKeywordStatement <- 'SET' SetAssignmentOrTimeZone
+VariableAssignment <- '$' Identifier ':=' Expression
 SetAssignmentOrTimeZone <- SetSchema / StandardAssignment / SetTimeZone
 
 ResetStatement <- 'RESET' ResetTarget
