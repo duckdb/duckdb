@@ -13,6 +13,12 @@
     {
       "reason": "Explicit constraint check mode requires storage version v2.0.0 or higher.",
       "paths": [
+        "test/optimizer/remove_redundant_order_keys_deferred.test"
+      ]
+    },
+    {
+      "reason": "Explicit constraint check mode requires storage version v2.0.0 or higher.",
+      "paths": [
         "test/sql/constraints/deferred/test_alter_constraint_check_mode.test",
         "test/sql/constraints/deferred/test_deferred_alter.test",
         "test/sql/constraints/deferred/test_deferred_checkpoint.test_slow",
