@@ -26,6 +26,9 @@ public:
 	//! Returns a STRUCT_PACK function expression
 	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &col_ref);
 
+	//! Returns the SQL value function name a bare column name converts to, or an empty identifier
+	static Identifier SQLValueFunctionName(const Identifier &column_name);
+
 	//! Returns a qualified column reference from a column name
 	unique_ptr<ParsedExpression> QualifyColumnName(const ParsedExpression &expr, const Identifier &column_name,
 	                                               ErrorData &error);

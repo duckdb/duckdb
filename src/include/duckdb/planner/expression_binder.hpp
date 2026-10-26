@@ -241,6 +241,13 @@ public:
 	//! vector.
 	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<identifier_set_t> &lambda_params);
 
+	//! Recursively qualifies function references in a system macro body with the defining (system) context, so the
+	//! body's meaning does not depend on the caller's name resolution. Macro parameters and lambda parameters are
+	//! left untouched.
+	void QualifySystemMacroReferences(unique_ptr<ParsedExpression> &expr, const Identifier &macro_schema,
+	                                  const identifier_set_t &macro_parameters,
+	                                  vector<identifier_set_t> &lambda_params);
+
 	static LogicalType GetExpressionReturnType(const Expression &expr);
 
 	virtual unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error);
@@ -313,7 +320,12 @@ protected:
 	virtual BindResult BindMacro(FunctionExpression &expr, ScalarMacroCatalogEntry &macro, idx_t depth,
 	                             unique_ptr<ParsedExpression> &expr_ptr);
 	void FindAggregateExprs(unique_ptr<ParsedExpression> &expr, vector<reference<unique_ptr<ParsedExpression>>> &exprs);
-	void UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> &expr, ScalarMacroFunction &macro_def);
+	void UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> &expr, ScalarMacroFunction &macro_def,
+	                                 ScalarMacroCatalogEntry &macro_func);
+	void QualifySystemMacroReferencesInLambda(FunctionExpression &function, const Identifier &macro_schema,
+	                                          const identifier_set_t &macro_parameters,
+	                                          vector<identifier_set_t> &lambda_params);
+	bool FindSystemFunctionSchema(const Identifier &name, const Identifier &macro_schema, Identifier &result_schema);
 	void UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
 	                           unique_ptr<ParsedExpression> &expr, idx_t depth);
 
