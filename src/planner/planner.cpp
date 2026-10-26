@@ -179,6 +179,15 @@ static bool VerifyPlannedExpressions(const LogicalOperator &plan) {
 }
 #endif
 
+static void RunPreBindExtensions(ClientContext &context, Binder &binder, SQLStatement &statement) {
+	for (auto &planner_extension : PlannerExtension::Iterate(context)) {
+		if (planner_extension.pre_bind_function) {
+			PlannerExtensionInput input {context, binder, planner_extension.planner_info.get()};
+			planner_extension.pre_bind_function(input, statement);
+		}
+	}
+}
+
 static void RunPostBindExtensions(ClientContext &context, Binder &binder, BoundStatement &statement) {
 	for (auto &planner_extension : PlannerExtension::Iterate(context)) {
 		if (planner_extension.post_bind_function) {
@@ -198,8 +207,8 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	bool parameters_resolved = true;
 	try {
 		auto binding_timer = profiler.StartTimer<MetricPlannerBindingTime>();
-		Catalog::PrefetchStatementEntries(context, statement);
 		binder->SetParameters(bound_parameters);
+		RunPreBindExtensions(context, *binder, statement);
 		auto bound_statement = binder->Bind(statement);
 		binding_timer.EndTimer();
 
