@@ -145,7 +145,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		if (stats.size() != sizeof(bool)) {
 			throw InvalidInputException("Incorrect stats size for type BOOLEAN");
 		}
-		return Value::BOOLEAN(Load<bool>(stats_data));
+		return Value::BOOLEAN(Load<uint8_t>(stats_data) != 0);
 	}
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
@@ -392,7 +392,7 @@ static void ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStat
 		return;
 	}
 	auto &input = *input_p;
-	D_ASSERT(input.GetType().id() == LogicalTypeId::BLOB);
+	D_ASSERT(input.GetType().id() == LogicalTypeId::BLOB || input.GetType().id() == LogicalTypeId::VARCHAR);
 	result.CopyValidity(input);
 
 	if (!result.CanHaveNoNull()) {
@@ -616,9 +616,9 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 	return unknown_stats.ToUnique();
 }
 
-unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &schema,
-                                                                             const vector<ColumnChunk> &columns,
-                                                                             bool can_have_nan) {
+unique_ptr<BaseStatistics>
+ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &schema,
+                                                  const duckdb_parquet::ColumnChunkList &columns, bool can_have_nan) {
 	// Not supported types
 	auto &type = schema.type;
 	if (type.id() == LogicalTypeId::ARRAY) {

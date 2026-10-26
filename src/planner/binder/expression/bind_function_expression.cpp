@@ -212,7 +212,8 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 
 	auto setting = Settings::Get<LambdaSyntaxSetting>(context);
 	bool invalid_syntax = setting != LambdaSyntax::ENABLE_SINGLE_ARROW && syntax_type == LambdaSyntaxType::SINGLE_ARROW;
-	bool warn_deprecated_syntax = setting == LambdaSyntax::DEFAULT && syntax_type == LambdaSyntaxType::SINGLE_ARROW;
+	// only arrow lambdas reach this point
+	bool warn_deprecated_syntax = setting == LambdaSyntax::DEFAULT;
 	const string msg = "Deprecated lambda arrow (->) detected. Please transition to the new lambda syntax, "
 	                   "i.e.., lambda x, i: x + i, before DuckDB's next release.\n"
 	                   "Use SET lambda_syntax='ENABLE_SINGLE_ARROW' to revert to the deprecated behavior.\n"
@@ -377,6 +378,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	// The positional/named split (and, for capturing functions, the alias capture) is resolved later per candidate
 	// overload.
 	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
+	// for legacy calls with names: fallback arguments that keep the names, used if binding positionally fails
+	vector<pair<Identifier, unique_ptr<Expression>>> named_arguments;
 	arguments.reserve(function.GetArguments().size());
 	for (idx_t i = 0; i < function.GetArgumentsMutable().size(); i++) {
 		auto &arg = function.GetArgumentsMutable()[i];
@@ -391,6 +394,13 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 			bound_arg->SetAlias(arg.GetName());
 		}
 		if (function.IsLegacyFunctionCall()) {
+			if (!named_arguments.empty() || !arg.GetName().empty()) {
+				// first named argument: copy the unnamed arguments bound so far
+				for (idx_t prev = named_arguments.size(); prev < arguments.size(); prev++) {
+					named_arguments.emplace_back(Identifier(), arguments[prev].second->Copy());
+				}
+				named_arguments.emplace_back(arg.GetName(), bound_arg->Copy());
+			}
 			arguments.emplace_back(string(), std::move(bound_arg));
 		} else {
 			arguments.emplace_back(arg.GetName(), std::move(bound_arg));
@@ -399,6 +409,12 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 	FunctionBinder function_binder(binder);
 	auto result = function_binder.BindScalarFunction(func, std::move(arguments), error, function.IsOperator(), &binder);
+	if (!result && !named_arguments.empty()) {
+		// a legacy call that does not bind positionally may use names the function declares (e.g. **kwargs)
+		ErrorData named_error;
+		result = function_binder.BindScalarFunction(func, std::move(named_arguments), named_error,
+		                                            function.IsOperator(), &binder);
+	}
 	if (!result) {
 		error.AddQueryLocation(function);
 		error.Throw();

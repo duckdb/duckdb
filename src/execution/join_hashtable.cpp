@@ -1074,7 +1074,7 @@ void JoinHashTable::AllocatePointerTable() {
 
 	if (should_build_bloom_filter && (!bloom_filter || bloom_filter->IsSealed())) {
 		// (re)create the finalize-built filter now that the actual build count is known
-		bloom_filter = make_shared_ptr<BloomFilter>();
+		bloom_filter = recycled_bloom_filter ? std::move(recycled_bloom_filter) : make_shared_ptr<BloomFilter>();
 		bloom_filter->Initialize(context, MaxValue<idx_t>(Count(), 1));
 	}
 
@@ -1083,14 +1083,14 @@ void JoinHashTable::AllocatePointerTable() {
 		auto current_capacity = hash_map.GetSize() / sizeof(ht_entry_t);
 		if (capacity > current_capacity) {
 			// Need more space
-			hash_map = buffer_manager.GetBufferAllocator().TryAllocateHuge(capacity * sizeof(ht_entry_t));
+			hash_map = buffer_manager.GetBufferAllocator().AllocateHuge(capacity * sizeof(ht_entry_t));
 		} else {
 			// Just use the current hash map
 			capacity = current_capacity;
 		}
 	} else {
 		// Allocate a hash map
-		hash_map = buffer_manager.GetBufferAllocator().TryAllocateHuge(capacity * sizeof(ht_entry_t));
+		hash_map = buffer_manager.GetBufferAllocator().AllocateHuge(capacity * sizeof(ht_entry_t));
 	}
 	D_ASSERT(hash_map.GetSize() == capacity * sizeof(ht_entry_t));
 
@@ -2350,6 +2350,8 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 
 	// gather the values from the RHS
 	GatherRHS(addresses, sel_vector, found_entries, result, left_column_count);
+	// the result may have no columns, so set the count explicitly
+	result.SetChildCardinality(found_entries);
 }
 
 idx_t JoinHashTable::FillWithHTOffsets(JoinHTScanState &state, Vector &addresses) {
@@ -2555,6 +2557,11 @@ static void ResetMarkJoinInfo(JoinHashTable &ht) {
 }
 
 void JoinHashTable::ResetForNewIterationSinglePartition() {
+	// Always use a single partition (radix_bits=0) to avoid per-iteration overhead of resetting
+	// and re-creating many radix partitions when only one thread builds the hash table. This also
+	// keeps an unpublished shell consistent with the global radix bits when it is recycled.
+	radix_bits = 0;
+	InitializePartitionMasks();
 	if (!layout_ptr) {
 		// layout was never published (no Sink chunk last iteration); the next first chunk will publish
 		return;
@@ -2566,11 +2573,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	layout_ptr.reset();
 	dict_info.reset();
 	data_collection.reset();
-	// Always use a single partition (radix_bits=0) to avoid per-iteration overhead of resetting
-	// and re-creating many radix partitions when only one thread builds the hash table.
-	radix_bits = 0;
 	sink_collection.reset();
-	InitializePartitionMasks();
 	capacity = DConstants::INVALID_INDEX;
 	bitmask = DConstants::INVALID_INDEX;
 	finalized = false;

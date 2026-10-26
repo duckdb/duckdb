@@ -42,6 +42,10 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 
 	auto &type = statistics.GetType();
 	auto function = config.GetCompressionFunction(compression_type, type.InternalType());
+	if (block_id == INVALID_BLOCK && !function.get().supports_null_block) {
+		throw DataCorruptionException("Persistent %s segment is missing its data block",
+		                              CompressionTypeToString(compression_type));
+	}
 	if (block_id != INVALID_BLOCK) {
 		block = block_manager.RegisterBlock(block_id);
 	}
@@ -266,7 +270,9 @@ void ColumnSegment::ConvertToPersistent(QueryContext context, optional_ptr<Block
 		// Non-constant block: write the block to disk.
 		// The block data already exists in memory, so we alter the metadata,
 		// which ensures that the buffer points to an on-disk block.
-		block = block_manager->ConvertToPersistent(context, block_id, std::move(block));
+		// transient segments are tagged IN_MEMORY_TABLE, once written they are part of the base table
+		block = block_manager->ConvertToPersistent(context, block_id, std::move(block),
+		                                           ConvertToPersistentMode::DESTRUCTIVE, MemoryTag::BASE_TABLE);
 		return;
 	}
 

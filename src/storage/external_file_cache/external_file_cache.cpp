@@ -52,7 +52,8 @@ bool CacheValidationInfo::IsExpired() const {
 class ExternalFileCache::ExternalFileCacheObjectCacheEntry : public ObjectCacheEntry {
 public:
 	ExternalFileCacheObjectCacheEntry(ExternalFileCache &cache_p, string path_p, idx_t generation_p)
-	    : cache(cache_p), cached_file(make_shared_ptr<CachedFile>(std::move(path_p), generation_p)) {
+	    : cache(cache_p), cached_file(make_shared_ptr<CachedFile>(std::move(path_p), generation_p,
+	                                                              cache_p.GetBufferManager().GetBufferPool())) {
 		cache.InsertCachedFileKey(cached_file->path);
 	}
 
@@ -69,18 +70,9 @@ public:
 	}
 
 	optional_idx GetEstimatedCacheMemory() const override {
-		idx_t file_size = 0;
-		{
-			const annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
-			file_size = cached_file->validation_info.file_size;
-		}
-		const idx_t block_size = cache.GetCacheMaxBlockSize(cached_file->path);
-		const idx_t num_blocks = (file_size + block_size - 1) / block_size;
-		// Estimated memory consumption for each block metadata.
-		static constexpr idx_t BLOCK_METADATA_SIZE = sizeof(CacheBlock);
 		// Filepath is stored at two places: in the object cache key and in the cached file object.
-		// We do over-estimation on memory consumption, which assumes the whole file is cached.
-		return cached_file->path.size() * 2 + num_blocks * BLOCK_METADATA_SIZE;
+		// Block metadata is reserved separately by the cached file as blocks are added and dropped.
+		return cached_file->path.size() * 2 + sizeof(CachedFile);
 	}
 
 	shared_ptr<CachedFile> GetCachedFile() const {
@@ -175,6 +167,7 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::AcquireBlocks(CachedFile &cach
 			pos += size;
 		}
 	}
+	cached_file.UpdateBlockReservation();
 	return result;
 }
 
@@ -182,6 +175,7 @@ void ExternalFileCache::DropBlocks(CachedFile &cached_file) {
 	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
 	cached_file.blocks.clear();
 	cached_file.content_generation++;
+	cached_file.UpdateBlockReservation();
 }
 
 idx_t ExternalFileCache::GetContentGeneration(CachedFile &cached_file) {
@@ -189,8 +183,15 @@ idx_t ExternalFileCache::GetContentGeneration(CachedFile &cached_file) {
 	return cached_file.content_generation;
 }
 
-ExternalFileCache::CachedFile::CachedFile(string path_p, idx_t generation_p)
-    : path(std::move(path_p)), generation(generation_p) {
+ExternalFileCache::CachedFile::CachedFile(string path_p, idx_t generation_p, BufferPool &buffer_pool)
+    : path(std::move(path_p)), generation(generation_p), block_reservation(MemoryTag::OBJECT_CACHE, buffer_pool, 0) {
+}
+
+void ExternalFileCache::CachedFile::UpdateBlockReservation() {
+	// The block handle is only present once a block is loaded, so this over-estimates in-flight blocks.
+	static constexpr idx_t BLOCK_METADATA_SIZE = sizeof(CacheBlock) + sizeof(BlockHandle) + sizeof(BlockMemory) +
+	                                             sizeof(std::pair<const idx_t, shared_ptr<CacheBlock>>);
+	block_reservation.Resize(blocks.size() * BLOCK_METADATA_SIZE);
 }
 
 bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
@@ -355,7 +356,7 @@ shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFi
 	while (true) {
 		const auto current_generation = generation.load();
 		if (!enable) {
-			return make_shared_ptr<CachedFile>(path, current_generation);
+			return make_shared_ptr<CachedFile>(path, current_generation, buffer_manager.GetBufferPool());
 		}
 
 		auto entry = object_cache.GetOrCreateWithTypePrefix<ExternalFileCacheObjectCacheEntry>(path, *this, path,
@@ -364,7 +365,7 @@ shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFi
 
 		if (!enable) {
 			object_cache.DeleteWithTypePrefix<ExternalFileCacheObjectCacheEntry>(path);
-			return make_shared_ptr<CachedFile>(path, current_generation);
+			return make_shared_ptr<CachedFile>(path, current_generation, buffer_manager.GetBufferPool());
 		}
 		if (cached_file->generation != current_generation) {
 			object_cache.DeleteWithTypePrefix<ExternalFileCacheObjectCacheEntry>(path);

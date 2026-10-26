@@ -178,6 +178,9 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		// not possible with groups
 		return;
 	}
+	if (aggr.expressions.empty()) {
+		return;
+	}
 	// check if all aggregates are COUNT(*), MIN or MAX
 	vector<idx_t> count_star_idxs;
 	vector<MinMaxColumnInfo> min_max_columns;
@@ -479,10 +482,15 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 
 	// handle the groups: simply propagate statistics and assign the stats to the group binding
 	aggr.group_stats.resize(aggr.groups.size());
+	// with multiple grouping sets a key appearing in several sets is emitted once per set
+	const bool group_rows_can_repeat = aggr.grouping_sets.size() > 1;
 	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
 		auto stats = PropagateExpression(aggr.groups[group_idx]);
 		if (stats && GroupingSetCanIntroduceNull(aggr, group_idx)) {
 			stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+		}
+		if (stats && group_rows_can_repeat) {
+			stats->ResetAdditiveStatistics();
 		}
 		aggr.group_stats[group_idx] = stats ? stats->ToUnique() : nullptr;
 		if (!stats) {
@@ -539,6 +547,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 
 	if (is_ungrouped) {
 		// Ungrouped aggregate always returns exactly one row, even over empty input
+		// node_stats holds the input cardinality: do not leak it to the parent operator
+		node_stats.reset();
 		return make_uniq<NodeStatistics>(1U, 1U);
 	}
 	// the max cardinality of an aggregate is the max cardinality of the input (i.e. when every row is a unique

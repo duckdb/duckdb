@@ -299,7 +299,7 @@ public:
 
 	//! Match and construct the parse result
 	MatcherResult MatchParseResult(MatchState &state) const;
-	//! Create matcher-local state with state.Make<PROCESS>() for either execution driver.
+	//! Create matcher-local state with state.Make<PROCESS>() for incremental execution.
 	virtual arena_ptr<MatchProcess> StartMatch(MatchState &state) const = 0;
 	virtual bool IsAtomic() const {
 		return false;
@@ -359,7 +359,7 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		if (type != TARGET::TYPE) {
-			throw InternalException("Failed to cast matcher to type - matcher type mismatch");
+			InternalException::Throw("Failed to cast matcher to type - matcher type mismatch");
 		}
 		return reinterpret_cast<TARGET &>(*this);
 	}
@@ -367,7 +367,7 @@ public:
 	template <class TARGET>
 	const TARGET &Cast() const {
 		if (type != TARGET::TYPE) {
-			throw InternalException("Failed to cast matcher to type - matcher type mismatch");
+			InternalException::Throw("Failed to cast matcher to type - matcher type mismatch");
 		}
 		return reinterpret_cast<const TARGET &>(*this);
 	}
@@ -421,6 +421,7 @@ public:
 class MatcherAllocator {
 public:
 	Matcher &Allocate(unique_ptr<Matcher> matcher);
+	void InitializeListChains();
 
 private:
 	vector<unique_ptr<Matcher>> matchers;

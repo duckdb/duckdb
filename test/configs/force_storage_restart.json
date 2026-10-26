@@ -31,7 +31,8 @@
         "test/sql/json/table/read_json.test",
         "test/sql/storage/external_file_cache/external_file_cache_validate.test",
         "test/sql/storage/external_file_cache/external_file_cache_parquet.test_slow",
-        "test/sql/storage/external_file_cache/external_file_cache_block_size.test"
+        "test/sql/storage/external_file_cache/external_file_cache_block_size.test",
+        "test/sql/storage/external_file_cache/external_file_cache_metadata_memory.test"
       ]
     },
     {
@@ -53,6 +54,7 @@
         "test/logging/offset_order_warning.test",
         "test/sql/types/decimal/decimal_values_warning.test",
         "test/sql/settings/deprecated_settings.test",
+        "test/sql/settings/pragma_assignment_deprecated.test",
         "test/sql/copy/copy_column_identifier_conversion.test",
         "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
         "test/sql/copy/parquet/parquet_prefetch_first_group_cost.test",
@@ -66,6 +68,7 @@
         "test/sql/copy/parquet/parquet_expression_filter_pruning.test",
         "test/sql/copy/parquet/read_ahead/readahead_depth_learning.test",
         "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test",
+        "test/sql/copy/parquet/read_ahead/readahead_dynamic_pruning.test_slow",
         "test/sql/copy/parquet/read_ahead/readahead_io_budget.test_slow",
         "test/sql/parallelism/async_task_schedule_pool.test",
         "test/sql/storage/prefetch/async_native_scan_pool.test",
@@ -125,6 +128,12 @@
         "test/sql/storage/metadata/partial_column_metadata_reuse.test",
         "test/sql/storage/metadata/partial_column_metadata_reuse_v7.test",
         "test/sql/storage/metadata/full_table_metadata_reuse_v7.test"
+      ]
+    },
+    {
+      "reason": "Test checks which blocks stay loaded between statements",
+      "paths": [
+        "test/sql/storage/test_persistent_block_memory_tags.test"
       ]
     },
     {

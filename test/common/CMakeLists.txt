@@ -2,6 +2,7 @@ add_library_unity(
   test_common
   OBJECT
   caching_test_utils.cpp
+  test_arena_allocator.cpp
   test_async_file_writer.cpp
   test_managed_async_task_queue.cpp
   test_bloom_filter.cpp
@@ -20,6 +21,7 @@ add_library_unity(
   test_hugeint_constexpr.cpp
   test_http_transport_manager.cpp
   test_http_retry_budget.cpp
+  test_httplib_header_length.cpp
   test_httplib_sigpipe.cpp
   test_literal.cpp
   test_lru_cache.cpp
@@ -55,6 +57,8 @@ add_library_unity(
   test_value_to_sql_string.cpp
   test_value_to_expression.cpp
   test_variant_size.cpp
+  test_vector_buffer_validity.cpp
+  test_lazy_vector.cpp
   test_musl_stack_size.cpp)
 
 set(UNITTEST_OBJECT_FILES
