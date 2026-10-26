@@ -68,6 +68,55 @@ struct DictChild {
 	ArrowArray array {};
 };
 
+// "red", "green", "blue" as an Arrow utf8 array
+const int32_t STRING_DICT_OFFSETS[4] = {0, 3, 8, 12};
+const char STRING_DICT_DATA[] = "redgreenblue";
+
+// Dict-encoded string child with uint8 indices: slot j holds the (j % 3)th string, NULL at the given slots.
+struct StringDictChild {
+	StringDictChild(idx_t len, const std::vector<idx_t> &null_slots)
+	    : indices(len), validity((len + 7) / 8 + 2, 0xFF) {
+		for (idx_t j = 0; j < len; j++) {
+			indices[j] = uint8_t(j % 3);
+		}
+		for (auto slot : null_slots) {
+			validity[slot / 8] &= uint8_t(~(1u << (slot % 8)));
+		}
+		dict_schema.format = "u";
+		dict_schema.release = ReleaseSchema;
+		schema.format = "C";
+		schema.name = "item";
+		schema.flags = 2; // ARROW_FLAG_NULLABLE
+		schema.dictionary = &dict_schema;
+		schema.release = ReleaseSchema;
+		dict_buffers[0] = nullptr;
+		dict_buffers[1] = STRING_DICT_OFFSETS;
+		dict_buffers[2] = STRING_DICT_DATA;
+		dict_array.length = 3;
+		dict_array.n_buffers = 3;
+		dict_array.buffers = dict_buffers;
+		dict_array.release = ReleaseArray;
+		buffers[0] = validity.data();
+		buffers[1] = indices.data();
+		array.length = int64_t(len);
+		array.null_count = int64_t(null_slots.size());
+		array.n_buffers = 2;
+		array.buffers = buffers;
+		array.dictionary = &dict_array;
+		array.release = ReleaseArray;
+	}
+	StringDictChild(const StringDictChild &) = delete;
+
+	std::vector<uint8_t> indices;
+	std::vector<uint8_t> validity;
+	const void *dict_buffers[3];
+	const void *buffers[2];
+	ArrowSchema dict_schema {};
+	ArrowSchema schema {};
+	ArrowArray dict_array {};
+	ArrowArray array {};
+};
+
 // LIST column with offsets[0] == gap: row r covers child slots gap + r * list_len onward.
 struct ListColumn {
 	ListColumn(DictChild &child, idx_t rows, idx_t gap, idx_t list_len = 1, bool wrap_struct = false)
@@ -126,6 +175,24 @@ struct ListColumn {
 // ARRAY(k) column: row r element e covers child slot (array_offset + r) * k + e.
 struct FixedArrayColumn {
 	FixedArrayColumn(DictChild &child, idx_t k, idx_t array_offset, idx_t rows) : fmt("+w:" + std::to_string(k)) {
+		schema_children[0] = &child.schema;
+		schema.format = fmt.c_str();
+		schema.name = "a";
+		schema.flags = 2;
+		schema.n_children = 1;
+		schema.children = schema_children;
+		schema.release = ReleaseSchema;
+		buffers[0] = nullptr;
+		array_children[0] = &child.array;
+		array.length = int64_t(rows);
+		array.offset = int64_t(array_offset);
+		array.n_buffers = 1;
+		array.buffers = buffers;
+		array.n_children = 1;
+		array.children = array_children;
+		array.release = ReleaseArray;
+	}
+	FixedArrayColumn(StringDictChild &child, idx_t k, idx_t array_offset, idx_t rows) : fmt("+w:" + std::to_string(k)) {
 		schema_children[0] = &child.schema;
 		schema.format = fmt.c_str();
 		schema.name = "a";
@@ -236,3 +303,21 @@ TEST_CASE("Arrow scan of fixed-size ARRAY(dict int32) with nonzero array offset"
 	                    "SELECT (CASE WHEN r = 0 THEN [NULL, 20, 30] ELSE [10, 20, 30] END)::INT[3] "
 	                    "FROM range(4) t(r)"));
 }
+
+TEST_CASE("Arrow scan of fixed-size ARRAY(dict string, uint8 indices) binds the dictionary value type", "[arrow]") {
+	// array.offset = 2 shifts the child window by 2 * 3 slots; slot 6 is row 0 element 0
+	StringDictChild child(18, {0, 6});
+	FixedArrayColumn col(child, 3, 2, 4);
+	REQUIRE(ScanMatches(col.schema, col.array,
+	                    "SELECT (CASE WHEN r = 0 THEN [NULL, 'green', 'blue'] ELSE ['red', 'green', 'blue'] END)::VARCHAR[3] "
+	                    "FROM range(4) t(r)"));
+}
+
+TEST_CASE("Arrow scan of fixed-size ARRAY(dict string, uint8 indices) without offset", "[arrow]") {
+	StringDictChild child(12, {1});
+	FixedArrayColumn col(child, 3, 0, 4);
+	REQUIRE(ScanMatches(col.schema, col.array,
+	                    "SELECT (CASE WHEN r = 0 THEN ['red', NULL, 'blue'] ELSE ['red', 'green', 'blue'] END)::VARCHAR[3] "
+	                    "FROM range(4) t(r)"));
+}
+
