@@ -257,11 +257,10 @@ bool TryResultRange(NumericDispatchKind kind, vector<ExactRange> ranges, ExactRa
 //! A representation sized by digits is capped at the widest DECIMAL: the wide kernels then check every result for
 //! overflow, as the binder's own clamped wide decimal arithmetic does
 LogicalType ClampedForDigits(idx_t integer_digits, uint8_t scale) {
+	// scale never exceeds the widest DECIMAL (callers that sum scales check that first), so a full-width scale leaves
+	// no room for integer digits: cap them and let the wide kernel check the result for overflow at run time
 	if (integer_digits + scale > Decimal::MAX_WIDTH_DECIMAL) {
-		if (scale >= Decimal::MAX_WIDTH_DECIMAL) {
-			throw OutOfRangeException("NUMERIC result needs more than %d digits", Decimal::MAX_WIDTH_DECIMAL);
-		}
-		integer_digits = Decimal::MAX_WIDTH_DECIMAL - scale;
+		integer_digits = idx_t(Decimal::MAX_WIDTH_DECIMAL) - scale;
 	}
 	return NumericType::ForDigits(integer_digits, scale);
 }
@@ -800,10 +799,12 @@ void NumericDispatchFunction(DataChunk &args, ExpressionState &state, Vector &re
 					kernel = &candidate;
 				}
 			}
-		} else if (KIND == NumericDispatchKind::ABS) {
-			// beyond 128 bits the absolute value stays within the representation
+		} else if (KIND == NumericDispatchKind::ABS && !have_ranges) {
+			// a wide decimal representation is symmetric: beyond 128 bits the absolute value stays within it
 			kernel = &lstate.Get(context, name, kernel_types, constants, is_operator, exact_result);
 		} else {
+			// the interval calc failed although the range is known: only the minimum HUGEINT negates past its own
+			// representation, so size the result by digits to a representation that holds the positive result
 			result_type = ResultTypeByDigits(KIND, typed);
 		}
 		if (!kernel) {

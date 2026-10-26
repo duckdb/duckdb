@@ -582,7 +582,9 @@ optional_ptr<ClientContext> GetBignumContext(ExpressionState &state) {
 template <WideRoundingMode MODE>
 string_t WideDecimalRoundDigits(StringHeap &heap, BignumArithmeticState &arithmetic_state, bignum_t value, idx_t drop,
                                 idx_t restore) {
-	// no wide decimal has more digits than the widest DECIMAL: a larger power leaves only the remainder
+	// no wide decimal has more digits than the widest DECIMAL: a larger power leaves the whole value as the remainder
+	// and a zero quotient, but its half-way threshold stays beyond any wide decimal value
+	const bool beyond_width = drop > Decimal::MAX_WIDTH_DECIMAL;
 	drop = MinValue<idx_t>(drop, Decimal::MAX_WIDTH_DECIMAL);
 	const BignumIntermediate dividend(value);
 	const bignum_t power_blob(string_t(BignumDecimal::PowerOfTen(drop)));
@@ -601,6 +603,10 @@ string_t WideDecimalRoundDigits(StringHeap &heap, BignumArithmeticState &arithme
 			break;
 		case WideRoundingMode::HALF_AWAY_FROM_ZERO:
 		case WideRoundingMode::HALF_TO_EVEN: {
+			if (beyond_width) {
+				// 2*|value| < 10^drop: the value stays below the half-way threshold and rounds toward zero
+				break;
+			}
 			const bignum_t remainder_value(remainder_blob);
 			const BignumIntermediate remainder(remainder_value);
 			auto twice_blob = BignumIntermediate::Add(heap, remainder, remainder);

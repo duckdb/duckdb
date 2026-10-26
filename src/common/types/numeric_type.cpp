@@ -404,15 +404,29 @@ static bool CountDigits(const char *text, idx_t size, idx_t &begin, idx_t &end, 
 	int64_t exponent = 0;
 	bool seen_point = false;
 	bool leading_zeros = true;
+	idx_t integer_count = 0; // the digits before the decimal point, including leading zeros
+	idx_t first_nonzero = 0; // index (within the digit sequence) of the most significant nonzero digit
+	idx_t last_nonzero = 0;  // index of the least significant nonzero digit
+	bool has_nonzero = false;
 	for (; pos < end; pos++) {
 		auto c = text[pos];
 		if (StringUtil::CharacterIsDigit(c)) {
+			if (c != '0') {
+				if (!has_nonzero) {
+					first_nonzero = digits;
+					has_nonzero = true;
+				}
+				last_nonzero = digits;
+			}
 			digits++;
 			if (seen_point) {
 				fractional_digits++;
-			} else if (c != '0' || !leading_zeros) {
-				leading_zeros = false;
-				integer_digits++;
+			} else {
+				integer_count++;
+				if (c != '0' || !leading_zeros) {
+					leading_zeros = false;
+					integer_digits++;
+				}
 			}
 		} else if (c == '.' && !seen_point) {
 			seen_point = true;
@@ -428,15 +442,19 @@ static bool CountDigits(const char *text, idx_t size, idx_t &begin, idx_t &end, 
 	if (digits == 0) {
 		return false;
 	}
-	// the exponent moves the decimal point: a digit count that may exceed the digits of the value is harmless
-	if (exponent > 0) {
-		auto shift = idx_t(exponent);
-		fractional_digits -= MinValue(fractional_digits, shift);
-		integer_digits += shift;
-	} else if (exponent < 0) {
-		auto shift = idx_t(-exponent);
-		integer_digits -= MinValue(integer_digits, shift);
-		fractional_digits += shift;
+	if (exponent != 0) {
+		// the exponent moves the decimal point: count the digits the resulting value needs from the positions of its
+		// most and least significant nonzero digits, so zeros created by the shift are not counted
+		if (!has_nonzero) {
+			integer_digits = 0;
+			fractional_digits = 0;
+		} else {
+			int64_t point = NumericCast<int64_t>(integer_count) + exponent;
+			int64_t msd_power = point - 1 - NumericCast<int64_t>(first_nonzero);
+			int64_t lsd_power = point - 1 - NumericCast<int64_t>(last_nonzero);
+			integer_digits = msd_power >= 0 ? idx_t(msd_power + 1) : 0;
+			fractional_digits = lsd_power < 0 ? idx_t(-lsd_power) : 0;
+		}
 	}
 	return true;
 }

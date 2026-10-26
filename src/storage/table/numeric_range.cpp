@@ -320,25 +320,34 @@ static bool TryGetUnscaledValue(const Value &value, hugeint_t &result) {
 	}
 }
 
+//! The unscaled value of an endpoint at `target_scale`, rescaled from the endpoint's own representation: the endpoints
+//! need not share a scale, so each is rescaled from its own type rather than the range's combined scale
+static bool TryGetUnscaledAt(const Value &value, uint8_t target_scale, hugeint_t &result) {
+	uint8_t own_scale = value.type().id() == LogicalTypeId::DECIMAL ? DecimalType::GetScale(value.type()) : 0;
+	if (target_scale < own_scale || target_scale - own_scale >= Hugeint::CACHED_POWERS_OF_TEN) {
+		return false;
+	}
+	if (!TryGetUnscaledValue(value, result)) {
+		return false;
+	}
+	if (target_scale > own_scale) {
+		auto &factor = Hugeint::POWERS_OF_TEN[target_scale - own_scale];
+		if (!Hugeint::TryMultiply(result, factor, result)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool NumericRange::TryGetUnscaled(const LogicalType &representation, ShreddedNumericRange &result) const {
 	result.valid = false;
 	if (!has_values || !NumericType::IsExact(representation)) {
 		return false;
 	}
 	uint8_t target_scale = representation.id() == LogicalTypeId::DECIMAL ? DecimalType::GetScale(representation) : 0;
-	if (target_scale < scale || target_scale - scale >= Hugeint::CACHED_POWERS_OF_TEN) {
-		return false;
-	}
 	hugeint_t unscaled_min, unscaled_max;
-	if (!TryGetUnscaledValue(min, unscaled_min) || !TryGetUnscaledValue(max, unscaled_max)) {
+	if (!TryGetUnscaledAt(min, target_scale, unscaled_min) || !TryGetUnscaledAt(max, target_scale, unscaled_max)) {
 		return false;
-	}
-	if (target_scale > scale) {
-		auto &factor = Hugeint::POWERS_OF_TEN[target_scale - scale];
-		if (!Hugeint::TryMultiply(unscaled_min, factor, unscaled_min) ||
-		    !Hugeint::TryMultiply(unscaled_max, factor, unscaled_max)) {
-			return false;
-		}
 	}
 	result.valid = true;
 	result.scale = target_scale;
