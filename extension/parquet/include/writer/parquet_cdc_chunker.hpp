@@ -150,15 +150,6 @@ public:
 		return false;
 	}
 
-	//! A page ended for a reason other than a boundary - DuckDB's own hard page size limit, say. The byte counter
-	//! starts over from the new page, because what it answers is "how much have I seen since this page began"; the
-	//! hash and the run are kept, since neither of them is about the page that just closed. Note that this counter
-	//! is the unit min and max are given in, and that it deliberately counts the definition-level bytes it hashes
-	//! as well, like Arrow's ChunkedArrayImpl.
-	void PageCut() {
-		chunk_size = 0;
-	}
-
 	//! Start over. This is the one place the port departs from Arrow on purpose: Arrow keeps one
 	//! chunker per leaf column for the whole file and never resets, so its state crosses row groups
 	//! and the first page of row group N depends on the tail of row group N-1. DuckDB flushes row

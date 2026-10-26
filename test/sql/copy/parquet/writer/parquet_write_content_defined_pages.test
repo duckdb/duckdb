@@ -151,6 +151,19 @@ select cdc_pages('s', '{TEST_DIR}/pin_s_no_floor.parquet');
 ----
 156
 
+# data_page_size_limit cuts on top of the content boundaries without moving them, like Arrow's data_pagesize:
+# even below min_chunk_size, the content cuts are kept in addition to the size cuts
+statement ok
+copy (select range i, repeat(md5(range::varchar), 4) s from range(50_000)) to '{TEST_DIR}/pin_s_size_limited.parquet' (format parquet, compression uncompressed, row_group_size 10_000_000, data_page_size_limit 40000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+statement ok
+copy (select range i, repeat(md5(range::varchar), 4) s from range(50_000)) to '{TEST_DIR}/size_limited.parquet' (format parquet, compression uncompressed, row_group_size 10_000_000, data_page_size_limit 40000);
+
+query II
+select cdc_pages('s', '{TEST_DIR}/pin_s_size_limited.parquet'), cdc_pages('s', '{TEST_DIR}/size_limited.parquet');
+----
+193	165
+
 # a column under a list keeps size-based page cuts: its values are interleaved with the parent's levels,
 # and a page there can only be cut at a record boundary
 statement ok

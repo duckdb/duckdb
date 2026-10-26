@@ -185,7 +185,6 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 				new_info.offset = page_info_ref.get().offset + page_info_ref.get().row_count;
 				state.page_info.push_back(new_info);
 				page_info_ref = state.page_info.back();
-				state.cdc_chunker.PageCut();
 			}
 			auto &page_info = page_info_ref.get();
 			page_info.row_count++;
@@ -194,7 +193,7 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 				page_info.estimated_page_size += GetRowSize(vector, vector_index, state);
 				// DuckDB's own page size limit, which closes a page after the value that overflowed it - a
 				// different convention from the boundary above on purpose, because this is not a boundary, it is
-				// an overflow. It only bites when data_page_size_limit is set below the content sizes.
+				// an overflow. It leaves the chunker alone, like Arrow's data_pagesize, so content boundaries stay put.
 				cut_after = page_info.estimated_page_size >= page_size_limit;
 			} else {
 				page_info.null_count++;
@@ -204,9 +203,6 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 				new_info.offset = page_info.offset + page_info.row_count;
 				state.page_info.push_back(new_info);
 				page_info_ref = state.page_info.back();
-				if (cut_by_content) {
-					state.cdc_chunker.PageCut();
-				}
 			}
 			vector_index++;
 		}
