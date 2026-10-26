@@ -102,6 +102,8 @@ SQLStatement:
     - ResetVariableOrSetting
     - SelectStatement
     - SetStatement
+    - SetKeywordStatement
+    - VariableAssignment
     - TransactionStatement
     - BeginTransaction
     - CommitTransaction
