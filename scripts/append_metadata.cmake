@@ -14,28 +14,43 @@ set(ABI_TYPE "" CACHE STRING "Metadata field: the ABI type of the extension")
 set(META6 "" CACHE STRING "Metadata field")
 set(META7 "" CACHE STRING "Metadata field")
 set(META8 "" CACHE STRING "Metadata field")
+set(SIGNATURE_SIZE "256" CACHE STRING "Size in bytes of the trailing signature slot: 256 for RSA-2048, 384 for RSA-3072")
+
+if(NOT SIGNATURE_SIZE STREQUAL "256" AND NOT SIGNATURE_SIZE STREQUAL "384")
+  message(FATAL_ERROR "SIGNATURE_SIZE must be 256 (RSA-2048) or 384 (RSA-3072), got '${SIGNATURE_SIZE}'")
+endif()
+
+# "384" marker in reserved field index 6 (reader numbering = the METADATA7 slot) selects RSA-3072; empty/"256" keeps
+# the legacy RSA-2048 layout byte-for-byte identical. The marker is inside the signed region.
+# META7 is reserved for this marker: it may only be empty or equal to SIGNATURE_SIZE.
+if(NOT META7 STREQUAL "" AND NOT META7 STREQUAL "${SIGNATURE_SIZE}")
+  message(FATAL_ERROR "META7 is reserved for the signature-size marker; it must be empty or '${SIGNATURE_SIZE}', got '${META7}'")
+endif()
+if(SIGNATURE_SIZE STREQUAL "384")
+  set(META7 "384")
+endif()
 
 # null.txt should contain exactly 1 byte of value \x00
 file(READ "${NULL_FILE}" EMPTY_BYTE)
 
 string(REPEAT "${EMPTY_BYTE}" 32 EMPTY_32)
-string(REPEAT "${EMPTY_BYTE}" 256 EMPTY_256)
+string(REPEAT "${EMPTY_BYTE}" ${SIGNATURE_SIZE} EMPTY_SIGNATURE)
+
+# WASM custom-section LEB128 lengths: outer = 1+16+2+8x32+SIGNATURE_SIZE (531->659), inner = 8x32+SIGNATURE_SIZE
+# (512->640). Low bytes (147, 128) are invariant; only the shared high byte (= value >> 7, same bucket for both) grows.
+math(EXPR SIGNATURE_LEB_HIGH "(256 + ${SIGNATURE_SIZE}) >> 7")
 
 # 0 for custom section
 string(APPEND CUSTOM_SECTION "${EMPTY_BYTE}")
-# 213 in hex = 531 in decimal, total length of what follows (1 + 16 + 2 + 8x32 + 256)
-# [1(continuation) + 0010011(payload) = \x93 -> 147, 0(continuation) + 10(payload) = \x04 -> 4]
-# 10 in hex = 16 in decimal, length of name, 1 byte
-string(ASCII 147 4 16 CUSTOM_SECTION_2)
+# Outer section length (LEB128 low byte 147, high byte above), then 16 = length of the name.
+string(ASCII 147 ${SIGNATURE_LEB_HIGH} 16 CUSTOM_SECTION_2)
 string(APPEND CUSTOM_SECTION "${CUSTOM_SECTION_2}")
 
 # the name of the WebAssembly custom section, 16 bytes
 string(APPEND CUSTOM_SECTION "duckdb_signature")
 
-# 1000 in hex, 512 in decimal
-# [1(continuation) + 0000000(payload) = -> 128, 0(continuation) + 100(payload) -> 4],
-# for a grand total of 2 bytes
-string(ASCII 128 4 CUSTOM_SECTION_3)
+# Inner footer size (LEB128): low byte 128, high byte (256 + SIGNATURE_SIZE) >> 7, for a grand total of 2 bytes.
+string(ASCII 128 ${SIGNATURE_LEB_HIGH} CUSTOM_SECTION_3)
 string(APPEND CUSTOM_SECTION "${CUSTOM_SECTION_3}")
 
 # Second metadata-field is special, since content comes from a file
@@ -62,7 +77,7 @@ string(APPEND CUSTOM_SECTION "${METADATA2}")
 string(APPEND CUSTOM_SECTION "${METADATA1}")
 
 # Append signature (yet to be computed)
-string(APPEND CUSTOM_SECTION "${EMPTY_256}")
+string(APPEND CUSTOM_SECTION "${EMPTY_SIGNATURE}")
 
 # Append generated custom section to the extension
 file(APPEND "${EXTENSION}" "${CUSTOM_SECTION}")

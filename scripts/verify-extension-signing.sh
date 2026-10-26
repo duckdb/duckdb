@@ -10,6 +10,7 @@ fi
 signed_extensions_dir="$1"
 public_key_file="$2"
 script_dir="$(dirname "$(readlink -f "$0")")"
+# Minimum footer size; the real per-file signature size is detected from the footer marker (detect_signature_size).
 signature_size=256
 
 get_file_size() {
@@ -66,6 +67,37 @@ cat "$file_list" | xargs -0 -n 1 -P "${CI_CPU_COUNT:-1}" bash -c '
 		fi
 	}
 
+	# Signature size is detected from the file, not assumed: the marker in reader field 6 (the FIELD7 slot, block
+	# offset 32) is located via a legacy-first, magic-keyed dual probe mirroring the engine verifier.
+	field_at() {
+		# field_at <file> <block_start> <field_index_from_block_start> -> trimmed ASCII field value.
+		dd if="$1" bs=1 skip=$(( $2 + $3 * 32 )) count=32 status=none | LC_ALL=C tr -d '\''\000'\'' | sed '\''s/[[:space:]]*$//'\''
+	}
+
+	detect_signature_size() {
+		local file="$1" size="$2" block_2048 block_3072 magic marker
+		if [ "$size" -ge 512 ]; then
+			block_2048=$(( size - 512 ))
+			magic=$(field_at "$file" "$block_2048" 7)
+			if [ "$magic" = "4" ]; then
+				marker=$(field_at "$file" "$block_2048" 1)
+				if [ -z "$marker" ] || [ "$marker" = "256" ]; then echo 256; return 0; fi
+				echo "unrecognized signature-size marker '\''$marker'\'' (legacy offset)"; return 1
+			fi
+		fi
+		if [ "$size" -ge 640 ]; then
+			block_3072=$(( size - 640 ))
+			magic=$(field_at "$file" "$block_3072" 7)
+			if [ "$magic" = "4" ]; then
+				marker=$(field_at "$file" "$block_3072" 1)
+				if [ "$marker" = "384" ]; then echo 384; return 0; fi
+				echo "unrecognized signature-size marker '\''$marker'\'' (rsa-3072 offset)"; return 1
+			fi
+		fi
+		echo "could not locate extension metadata magic at either signature offset"
+		return 1
+	}
+
 	relative_path="${signed_extension#"$signed_extensions_dir"/}"
 	job_dir=$(mktemp -d "$work_dir/job.XXXXXX") || exit 1
 	log_file=$(mktemp "$work_dir/log.XXXXXX") || exit 1
@@ -75,23 +107,30 @@ cat "$file_list" | xargs -0 -n 1 -P "${CI_CPU_COUNT:-1}" bash -c '
 	signature_file="$job_dir/extension.signature"
 	hash_file="$job_dir/extension.hash"
 
-	if ! {
+	# Subshell so a failed step aborts only this file and its log is still printed by the handler below.
+	if ! (
 		file_size=$(get_file_size "$signed_extension")
 		if [ "$file_size" -lt "$signature_size" ]; then
 			echo "Signed extension '\''$signed_extension'\'' is smaller than the signature footer"
 			exit 1
 		fi
 
+		if ! detected=$(detect_signature_size "$signed_extension" "$file_size"); then
+			echo "Failed to detect signature size for '\''$signed_extension'\'': $detected"
+			exit 1
+		fi
+		signature_size="$detected"
+
 		unsigned_size=$((file_size - signature_size))
 		head -c "$unsigned_size" "$signed_extension" > "$unsigned_extension"
 		tail -c "$signature_size" "$signed_extension" > "$signature_file"
 
-		"$script_dir/compute-extension-hash.sh" "$unsigned_extension" > "$hash_file"
+		"$script_dir/compute-extension-hash.sh" "$unsigned_extension" > "$hash_file" || exit 1
 		openssl pkeyutl -verify -pubin -inkey "$public_key_file" -sigfile "$signature_file" -in "$hash_file" \
-			-pkeyopt digest:sha256 >/dev/null
+			-pkeyopt digest:sha256 >/dev/null || exit 1
 
 		echo "Verified signature: $relative_path"
-	} >"$log_file" 2>&1; then
+	) >"$log_file" 2>&1; then
 		cat "$log_file"
 		exit 1
 	fi

@@ -39,21 +39,80 @@ cleanup() {
 
 trap cleanup EXIT
 
-# calculate SHA256 hash of extension binary
-cat "$ext" > "$ext.append"
+get_file_size() {
+	if stat -c%s "$1" >/dev/null 2>&1; then stat -c%s "$1"; else stat -f%z "$1"; fi
+}
 
-( command -v truncate >/dev/null 2>&1 && truncate -s -256 "$ext.append" ) || \
-	( command -v gtruncate >/dev/null 2>&1 && gtruncate -s -256 "$ext.append" ) || exit 1
+# Read 32-byte metadata field $3 (0-based from block start $2); strip trailing NUL then trailing spaces.
+field_at() {
+	dd if="$1" bs=1 skip=$(( $2 + $3 * 32 )) count=32 status=none | LC_ALL=C tr -d '\000' | sed 's/[[:space:]]*$//'
+}
 
-# (Optionally) Sign binary
+# The empty signature slot was sized by append_metadata, so the size to strip comes from the file, not the key.
+# Mirror the engine verifier's legacy-first, magic-keyed dual probe: metadata block (256 bytes) at file_size-512 then
+# file_size-640; marker is field index 6 (reader numbering = FIELD7, block offset 32), magic is field 0 (FIELD1).
+detect_signature_size() {
+	local file="$1" size marker
+	size=$(get_file_size "$file")
+	if [ "$size" -ge 512 ] && [ "$(field_at "$file" $(( size - 512 )) 7)" = "4" ]; then
+		marker=$(field_at "$file" $(( size - 512 )) 1)
+		if [ -z "$marker" ] || [ "$marker" = "256" ]; then echo 256; return 0; fi
+		echo "unrecognized signature-size marker '$marker' (legacy offset) in '$file'" >&2; return 1
+	fi
+	if [ "$size" -ge 640 ] && [ "$(field_at "$file" $(( size - 640 )) 7)" = "4" ]; then
+		marker=$(field_at "$file" $(( size - 640 )) 1)
+		if [ "$marker" = "384" ]; then echo 384; return 0; fi
+		echo "unrecognized signature-size marker '$marker' (rsa-3072 offset) in '$file'" >&2; return 1
+	fi
+	echo "could not determine signature slot size from extension footer of '$file'" >&2
+	return 1
+}
+
+# RSA PKCS#1 v1.5 signature length equals the key modulus (2048 bit -> 256, 3072 bit -> 384).
+key_signature_size() {
+	local bits
+	bits=$(openssl pkey -in "$1" -noout -text 2>/dev/null | grep -oE '\(([0-9]+) bit' | grep -oE '[0-9]+' | head -n1) || true
+	case "$bits" in
+		2048) echo 256 ;;
+		3072) echo 384 ;;
+		*) echo "unsupported signing key size '${bits:-unknown}' bits: only 2048 (RSA-2048) and 3072 (RSA-3072) are supported" >&2; return 1 ;;
+	esac
+}
+
+# The slot size baked into the artifact is authoritative for how many bytes to strip and re-append.
+signature_size=$(detect_signature_size "$ext") || exit 1
+
 if [ -n "${DUCKDB_EXTENSION_SIGNING_PK:-}" ]; then
 	private_key_file=$(mktemp "${TMPDIR:-/tmp}/duckdb-extension-signing.XXXXXX.pem")
 	printf '%s\n' "$DUCKDB_EXTENSION_SIGNING_PK" > "$private_key_file"
+	key_size=$(key_signature_size "$private_key_file") || exit 1
+	# The key must match the slot the build produced, otherwise signing would corrupt the footer.
+	if [ "$key_size" != "$signature_size" ]; then
+		echo "Signing key produces a ${key_size}-byte signature but the extension footer has a ${signature_size}-byte slot; rebuild the extension with a matching signature size"
+		exit 1
+	fi
+fi
+
+# calculate SHA256 hash of extension binary
+cat "$ext" > "$ext.append"
+
+( command -v truncate >/dev/null 2>&1 && truncate -s -"$signature_size" "$ext.append" ) || \
+	( command -v gtruncate >/dev/null 2>&1 && gtruncate -s -"$signature_size" "$ext.append" ) || exit 1
+
+# (Optionally) Sign binary
+if [ -n "${DUCKDB_EXTENSION_SIGNING_PK:-}" ]; then
 	"$script_dir/compute-extension-hash.sh" "$ext.append" > "$ext.hash"
 	openssl pkeyutl -sign -in "$ext.hash" -inkey "$private_key_file" -pkeyopt digest:sha256 -out "$ext.sign"
+	# Guard against a key that passed the bit check but emits a different-length signature (e.g. non-RSA).
+	actual_sig_size=$(get_file_size "$ext.sign")
+	if [ "$actual_sig_size" != "$signature_size" ]; then
+		echo "Produced signature is ${actual_sig_size} bytes but the footer slot is ${signature_size} bytes"
+		rm -f "$ext.sign" "$ext.hash" "$ext.append"
+		exit 1
+	fi
 else
-	# Default to 256 zeros
-	dd if=/dev/zero of="$ext.sign" bs=256 count=1 status=none
+	# Default to signature_size zeros
+	dd if=/dev/zero of="$ext.sign" bs="$signature_size" count=1 status=none
 fi
 
 # append signature to extension binary
