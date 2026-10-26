@@ -406,6 +406,14 @@ public:
 	virtual bool SupportsMultipleDMLCTEs() const {
 		return false;
 	}
+	//! Called before a statement is bound, with the fully qualified names of the tables it references that may resolve
+	//! to this catalog. Binding looks tables up one at a time, so a catalog with expensive lookups (e.g. a remote one)
+	//! can use this to start loading them together. Names that turn out not to be tables of this catalog are allowed.
+	virtual void PrefetchEntries(ClientContext &context, const vector<QualifiedName> &tables) {
+	}
+	//! Collect the base tables `statement` references and pass them to PrefetchEntries of the catalogs they may resolve
+	//! to, following the same search path resolution as a lookup
+	DUCKDB_API static void PrefetchStatementEntries(ClientContext &context, SQLStatement &statement);
 	virtual bool IsEncrypted() const {
 		return false;
 	}
