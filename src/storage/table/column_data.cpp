@@ -230,7 +230,11 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		idx_t scan_count = MinValue<idx_t>(remaining, current_start + current.count - state.offset_in_column);
 		idx_t result_offset = base_result_offset + initial_remaining - remaining;
 		if (scan_count > 0) {
-			current.Scan(state, scan_count, result, result_offset, scan_type);
+			if (state.scan_options && state.scan_options->force_fetch_row) {
+				FetchScannedRows(state, *FlatVector::IncrementalSelectionVector(), scan_count, result, result_offset);
+			} else {
+				current.Scan(state, scan_count, result, result_offset, scan_type);
+			}
 
 			state.offset_in_column += scan_count;
 			remaining -= scan_count;
@@ -289,8 +293,12 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 				}
 				segment_sel = rebased_sel;
 			}
-			current.Select(state, scan_count, result, segment_sel.get(), segment_sel_count, result_offset + sel_offset,
-			               scan_type);
+			if (state.scan_options && state.scan_options->force_fetch_row) {
+				FetchScannedRows(state, segment_sel.get(), segment_sel_count, result, result_offset + sel_offset);
+			} else {
+				current.Select(state, scan_count, result, segment_sel.get(), segment_sel_count,
+				               result_offset + sel_offset, scan_type);
+			}
 			segment_internal_index = state.offset_in_column + scan_count;
 		}
 		sel_offset += segment_sel_count;
@@ -797,12 +805,32 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 	if (fetch_count == 0) {
 		return;
 	}
+	FetchBaseRows(state.context, offsets, sel, fetch_count, result, result_offset);
+	{
+		const lock_guard<mutex> update_guard(update_lock);
+		if (updates) {
+			updates->FetchRows(transaction, offsets, sel, fetch_count, result, result_offset);
+		}
+	}
+}
 
+void ColumnData::FetchScannedRows(ColumnScanState &state, const SelectionVector &sel, idx_t count, Vector &result,
+                                  idx_t result_offset) {
+	vector<idx_t> offsets(count);
+	for (idx_t i = 0; i < count; i++) {
+		offsets[i] = state.offset_in_column + sel.get_index(i);
+	}
+	FetchBaseRows(state.context, offsets.data(), *FlatVector::IncrementalSelectionVector(), count, result,
+	              result_offset);
+}
+
+void ColumnData::FetchBaseRows(const QueryContext &context, const idx_t *offsets, const SelectionVector &sel,
+                               idx_t fetch_count, Vector &result, idx_t result_offset) {
 	optional_ptr<SegmentNode<ColumnSegment>> current_segment;
 	idx_t segment_start = 0;
 	idx_t segment_end = 0;
 	ColumnScanState scan_state(nullptr);
-	scan_state.context = state.context;
+	scan_state.context = context;
 	scan_state.string_scan_type = StringScanType::COPY_STRINGS;
 	SelectionVector window_sel;
 	idx_t idx = 0;
@@ -862,12 +890,6 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 		VerifyStringsCopied(segment, result, result_offset + idx, window_count);
 #endif
 		idx += window_count;
-	}
-	{
-		const lock_guard<mutex> update_guard(update_lock);
-		if (updates) {
-			updates->FetchRows(transaction, offsets, sel, fetch_count, result, result_offset);
-		}
 	}
 }
 

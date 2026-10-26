@@ -86,7 +86,8 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	auto target_count = GetVectorCount(vector_index);
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
-	if (!has_filter || !validity_has_filter || !scan_entire_vector || filter_state.can_throw) {
+	bool verify_fetch_row = state.scan_options && state.scan_options->force_fetch_row;
+	if (!has_filter || !validity_has_filter || !scan_entire_vector || verify_fetch_row || filter_state.can_throw) {
 		// we are not scanning an entire vector - this can have several causes (updates, etc)
 		// a filter that can throw is excluded as well: the compression-level filters evaluate it over the distinct
 		// values of the segment (e.g. the dictionary, or the RLE runs), which includes values of rows that another
@@ -147,6 +148,7 @@ idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &re
 	// fetch validity mask
 	if (state.child_states.empty()) {
 		ColumnScanState child_state(state.parent);
+		child_state.scan_options = state.scan_options;
 		state.child_states.push_back(std::move(child_state));
 	}
 	auto scan_count = ColumnData::Fetch(state, row_id, result);

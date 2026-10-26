@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/zstd/zstd_corrupt_count.test
-# description: An inflated Zstd row count must fail safely during a scan
+# description: An inflated Zstd row count must fail safely during scan and fetch
 # group: [zstd]
 
 require vector_size 2048
@@ -18,6 +18,19 @@ ZSTD
 
 statement ok
 SET memory_limit='256MB';
+
+statement error
+SELECT sum(length(s)) FROM t;
+----
+Out of Memory Error: failed to allocate data of size 256.0 GiB
+
+restart
+
+statement ok
+SET memory_limit='256MB';
+
+statement ok
+SET debug_force_fetch_row=true;
 
 statement error
 SELECT sum(length(s)) FROM t;

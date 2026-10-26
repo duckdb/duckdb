@@ -269,9 +269,11 @@ void ColumnScanState::PushDownCast(const LogicalType &original_type, const Logic
 	expression_state->expression = std::move(cast_expression);
 }
 
-void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type,
-                                 const StorageIndex &column_id) {
+void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type, const StorageIndex &column_id,
+                                 optional_ptr<TableScanOptions> options) {
 	auto &children = column_id.GetChildIndexes();
+	// Register the options in the state
+	scan_options = options;
 	context = context_p;
 	storage_index = column_id;
 
@@ -308,7 +310,7 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 			// scan all struct children
 			scan_child_column.resize(struct_children.size(), true);
 			for (idx_t i = 0; i < struct_children.size(); i++) {
-				child_states[i + 1].Initialize(context, struct_children[i].second);
+				child_states[i + 1].Initialize(context, struct_children[i].second, options);
 			}
 		} else {
 			if (storage_index.IsPushdownExtract()) {
@@ -321,7 +323,7 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 				if (!child.HasChildren() && child_type != child.GetType()) {
 					PushDownCast(child_type, child.GetType());
 				}
-				child_states[1].Initialize(context, struct_children[child_index].second, child);
+				child_states[1].Initialize(context, struct_children[child_index].second, child, options);
 			} else {
 				// only scan the specified subset of columns
 				scan_child_column.resize(struct_children.size(), false);
@@ -329,31 +331,36 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 					auto &child = children[i];
 					auto index = child.GetPrimaryIndex();
 					scan_child_column[index] = true;
-					child_states[index + 1].Initialize(context, struct_children[index].second, child);
+					child_states[index + 1].Initialize(context, struct_children[index].second, child, options);
 				}
 			}
 		}
+		child_states[0].scan_options = options;
 	} else if (type.InternalType() == PhysicalType::LIST) {
 		// validity + list child
 		for (idx_t i = 0; i < 2; i++) {
 			child_states.emplace_back(parent);
 		}
-		child_states[1].Initialize(context, ListType::GetChildType(type));
+		child_states[1].Initialize(context, ListType::GetChildType(type), options);
+		child_states[0].scan_options = options;
 	} else if (type.InternalType() == PhysicalType::ARRAY) {
 		// validity + array child
 		for (idx_t i = 0; i < 2; i++) {
 			child_states.emplace_back(parent);
 		}
-		child_states[1].Initialize(context, ArrayType::GetChildType(type));
+		child_states[0].scan_options = options;
+		child_states[1].Initialize(context, ArrayType::GetChildType(type), options);
 	} else {
 		// validity
 		child_states.emplace_back(parent);
+		child_states[0].scan_options = options;
 	}
 }
 
-void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type) {
+void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type,
+                                 optional_ptr<TableScanOptions> options) {
 	auto column_id = StorageIndex(0);
-	Initialize(context_p, type, column_id);
+	Initialize(context_p, type, column_id, options);
 }
 
 void CollectionScanState::Initialize(const QueryContext &context_p, const vector<LogicalType> &types) {
@@ -370,7 +377,7 @@ void CollectionScanState::Initialize(const QueryContext &context_p, const vector
 		}
 		auto index = column_ids[i].GetPrimaryIndex();
 		auto &type = types[index];
-		column_scans[i].Initialize(context, type, column_ids[i]);
+		column_scans[i].Initialize(context, type, column_ids[i], &GetOptions());
 	}
 }
 
@@ -416,6 +423,7 @@ void RowGroup::InitializeColumnScans(CollectionScanState &state) {
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto &column_data = GetColumn(column_ids[i]);
 		column_data.InitializeScanWithOffset(state.column_scans[i], row_number);
+		state.column_scans[i].scan_options = &state.GetOptions();
 	}
 	state.column_scans_pending = false;
 }
@@ -428,6 +436,7 @@ bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> 
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto &column_data = GetColumn(column_ids[i]);
 		column_data.InitializeScan(state.column_scans[i]);
+		state.column_scans[i].scan_options = &state.GetOptions();
 	}
 	return true;
 }

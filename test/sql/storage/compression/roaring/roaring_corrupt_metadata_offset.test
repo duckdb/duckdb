@@ -22,3 +22,13 @@ statement error
 SELECT sum(a) FROM t;
 ----
 Data Corruption Error: Corrupted Roaring segment body: offset is outside the segment
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted Roaring segment body: offset is outside the segment

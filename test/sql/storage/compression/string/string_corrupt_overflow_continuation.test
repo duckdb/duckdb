@@ -20,3 +20,13 @@ statement error
 SELECT sum(length(a)) FROM t;
 ----
 Data Corruption Error
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(length(a)) FROM t;
+----
+Data Corruption Error

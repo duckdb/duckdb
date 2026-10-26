@@ -20,3 +20,13 @@ statement error
 SELECT sum(a) FROM t;
 ----
 Data Corruption Error: Corrupted ALPRD vector: attempted to read past the end of the segment
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALPRD vector: attempted to read past the end of the segment

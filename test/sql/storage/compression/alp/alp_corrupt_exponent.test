@@ -20,3 +20,13 @@ statement error
 SELECT sum(a) FROM t;
 ----
 Data Corruption Error: Corrupted ALP segment: exponent 100 exceeds the maximum 18
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALP segment: exponent 100 exceeds the maximum 18

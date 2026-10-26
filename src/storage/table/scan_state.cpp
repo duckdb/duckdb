@@ -214,6 +214,10 @@ ScanSamplingInfo &CollectionScanState::GetSamplingInfo() {
 	return parent.GetSamplingInfo();
 }
 
+TableScanOptions &CollectionScanState::GetOptions() {
+	return parent.options;
+}
+
 ParallelCollectionScanState::ParallelCollectionScanState()
     : collection(nullptr), current_row_group(nullptr), skipped_rows(0) {
 }

@@ -20,3 +20,13 @@ statement error
 SELECT sum(a) FROM t;
 ----
 Data Corruption Error: Corrupted ALP segment: requested range extends past the end of the segment
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted ALP segment: requested range extends past the end of the segment

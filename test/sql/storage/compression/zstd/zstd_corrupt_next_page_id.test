@@ -20,3 +20,13 @@ statement error
 SELECT sum(length(s)) FROM t;
 ----
 Data Corruption Error: Corrupted uncompressed string segment: overflow string block is not owned by the segment
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(length(s)) FROM t;
+----
+Data Corruption Error: Corrupted uncompressed string segment: overflow string block is not owned by the segment
