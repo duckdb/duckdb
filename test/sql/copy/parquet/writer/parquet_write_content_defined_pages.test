@@ -106,8 +106,8 @@ create macro cdc_pages(path, file) as
 # of a boundary a value lands on fails here instead of quietly moving every boundary after it. They are
 # not arbitrary numbers: parquet-cpp cuts the same pages from the same data, which is what
 # scripts/cdc_conformance.py of the hf extension checks (it compares per-page value counts, not just how
-# many there are). Everything here is written into one row group, because the chunker starts over per row
-# group and the counts would otherwise move with the row group size.
+# many there are). Most of these are written into one row group, so that the counts do not move with the row
+# group size.
 statement ok
 copy (select range i from range(200_000)) to '{TEST_DIR}/pin_i.parquet' (format parquet, compression uncompressed, row_group_size 10_000_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
 
@@ -163,6 +163,18 @@ query II
 select cdc_pages('s', '{TEST_DIR}/pin_s_size_limited.parquet'), cdc_pages('s', '{TEST_DIR}/size_limited.parquet');
 ----
 193	165
+
+# the chunker state carries over from one row group to the next, as in Arrow: row group boundaries add page
+# boundaries without moving the content ones, so this is the 61 pages above plus one per extra row group
+# (a fresh chunker per row group would give 64)
+statement ok
+copy (select range i, repeat(md5(range::varchar), 4) s from range(50_000)) to '{TEST_DIR}/pin_s_row_groups.parquet' (format parquet, compression uncompressed, row_group_size 10_000, content_defined_chunking {min_chunk_size: 65536, max_chunk_size: 131072});
+
+query II
+select count(*), cdc_pages('s', '{TEST_DIR}/pin_s_row_groups.parquet')
+from parquet_metadata('{TEST_DIR}/pin_s_row_groups.parquet') where path_in_schema = 's';
+----
+5	65
 
 # a column under a list keeps size-based page cuts: its values are interleaved with the parent's levels,
 # and a page there can only be cut at a record boundary

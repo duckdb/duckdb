@@ -27,7 +27,7 @@ namespace duckdb {
 //! parquet/chunker_internal.cc), kept close on purpose: same tables, same 64-bit gear hash, same mask
 //! arithmetic, same eight-table run, same minimum-size window. A column written here and the same
 //! column written by arrow-cpp or arrow-rs with the same sizes therefore cut between the same
-//! values. The one deliberate departure is the lifetime of the state, see RowGroupStarted.
+//! values. Like Arrow's, the state lives for the whole file and carries over from one row group to the next.
 //!
 //! The hash is fed the column's values in Arrow's canonical form - the value's bytes, plus the two
 //! bytes of its definition level when the column is nullable - so a null is content too, exactly as
@@ -92,11 +92,14 @@ public:
 		return ~uint64_t(0) << (64 - uint64_t(effective_bits));
 	}
 
-	//! Start a fresh run at the given sizes. Called once per row group per column.
+	//! Start a fresh run at the given sizes. Called once per column per file.
 	void Reset(const Options &options_p) {
 		options = options_p;
 		rolling_hash_mask = CalculateMask(options.min_chunk_size, options.max_chunk_size, options.norm_level);
-		RowGroupStarted();
+		rolling_hash = 0;
+		chunk_size = 0;
+		nth_run = 0;
+		has_matched = false;
 	}
 
 	//! Arrow's ContentDefinedChunker::Impl::Roll, byte for byte: the bytes of a value count before
@@ -148,22 +151,6 @@ public:
 			return true;
 		}
 		return false;
-	}
-
-	//! Start over. This is the one place the port departs from Arrow on purpose: Arrow keeps one
-	//! chunker per leaf column for the whole file and never resets, so its state crosses row groups
-	//! and the first page of row group N depends on the tail of row group N-1. DuckDB flushes row
-	//! groups concurrently through a ColumnWriter shared by all of them, so state that outlives a
-	//! row group is state that races; the only place it can live is the row group's own state.
-	//! Consequence worth stating out loud: boundaries agree with arrow-cpp and arrow-rs inside the
-	//! first row group, and after that they are a DuckDB run of the same algorithm with the same
-	//! statistics - not the same boundaries. Note that the hash carries no history anyway (a gear
-	//! hash forgets its input after ~64 bytes), it is the byte counter and the run that are lost.
-	void RowGroupStarted() {
-		rolling_hash = 0;
-		chunk_size = 0;
-		nth_run = 0;
-		has_matched = false;
 	}
 
 private:

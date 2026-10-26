@@ -75,21 +75,16 @@ PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, ParquetColum
                                              vector<Identifier> schema_path)
     : ColumnWriter(writer, std::move(column_schema), std::move(schema_path)) {
 	cdc_cut_pages = writer.ContentDefinedChunking();
-}
-
-void PrimitiveColumnWriterState::ConfigureCdcChunker() {
-	if (!writer.ContentDefinedChunking()) {
-		return;
+	if (cdc_cut_pages) {
+		ParquetContentDefinedChunker::Options options;
+		options.min_chunk_size = writer.CdcMinChunkSize();
+		options.max_chunk_size = writer.CdcMaxChunkSize();
+		options.norm_level = writer.CdcNormLevel();
+		cdc_chunker.Reset(options);
 	}
-	ParquetContentDefinedChunker::Options options;
-	options.min_chunk_size = writer.CdcMinChunkSize();
-	options.max_chunk_size = writer.CdcMaxChunkSize();
-	options.norm_level = writer.CdcNormLevel();
-	cdc_chunker.Reset(options);
 }
 
 unique_ptr<ColumnWriterState> PrimitiveColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
-	// the content-defined run is configured by the state itself, see PrimitiveColumnWriterState::ConfigureCdcChunker
 	auto result = make_uniq<PrimitiveColumnWriterState>(writer, row_group, row_group.columns.size());
 	RegisterToRowGroup(row_group);
 	return std::move(result);
@@ -166,14 +161,14 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 			bool cut_before = false;
 			if (cut_by_content) {
 				if (feed_levels) {
-					state.cdc_chunker.RollLevel(state.definition_levels[parent_index + i]);
+					cdc_chunker.RollLevel(state.definition_levels[parent_index + i]);
 				}
 				if (is_valid) {
-					ParquetCdcHashValue(state.cdc_chunker, vector, vector_index);
+					ParquetCdcHashValue(cdc_chunker, vector, vector_index);
 				}
 				// the minimum is enforced inside the chunker, where the bytes are counted, and the maximum is its
 				// hard stop for the case where no boundary is hit at all - a long run of identical values, say
-				cut_before = state.cdc_chunker.NeedNewChunk();
+				cut_before = cdc_chunker.NeedNewChunk();
 			}
 			// a vector that cannot span multiple pages stays on the page it started on, and a page that is still
 			// empty is already at a boundary: the writer erases an empty page only at the end of the row group, so

@@ -1018,6 +1018,8 @@ static void ParquetWriteInitializeOperator(GlobalFunctionData &gstate, const Phy
 //===--------------------------------------------------------------------===//
 struct ParquetWriteBatchData : public PreparedBatchData {
 	PreparedRowGroup prepared_row_group;
+	//! With content-defined chunking the batch is prepared when it is flushed, in file order
+	unique_ptr<ColumnDataCollection> collection;
 };
 
 static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &context, FunctionData &bind_data,
@@ -1025,6 +1027,10 @@ static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &con
                                                               unique_ptr<ColumnDataCollection> collection) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto result = make_uniq<ParquetWriteBatchData>();
+	if (global_state.writer->ContentDefinedChunking()) {
+		result->collection = std::move(collection);
+		return std::move(result);
+	}
 	unique_ptr<ParquetWriteTransformData> transform_data;
 	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group, transform_data);
 	return std::move(result);
@@ -1037,6 +1043,11 @@ static void ParquetWriteFlushBatch(ClientContext &context, FunctionData &bind_da
                                    PreparedBatchData &batch_p) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto &batch = batch_p.Cast<ParquetWriteBatchData>();
+	if (batch.collection) {
+		unique_ptr<ParquetWriteTransformData> transform_data;
+		global_state.writer->Flush(*batch.collection, transform_data);
+		return;
+	}
 	global_state.writer->FlushRowGroup(batch.prepared_row_group);
 }
 
