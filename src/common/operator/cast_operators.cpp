@@ -36,6 +36,10 @@
 
 namespace duckdb {
 
+void TryCast::ThrowUnimplemented(PhysicalType source, PhysicalType target, optional_ptr<CastParameters> parameters) {
+	throw UnimplementedErrorMessage(source, target, parameters);
+}
+
 ConversionException TryCast::UnimplementedErrorMessage(PhysicalType source, PhysicalType target,
                                                        optional_ptr<CastParameters> parameters) {
 	QueryLocation query_location;
