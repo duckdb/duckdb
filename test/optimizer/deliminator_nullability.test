@@ -163,6 +163,10 @@ ORDER BY id;
 1	5	true
 2	NULL	false
 
+# Inspect the deliminator rewrite before statistics simplify its null-safe comparisons.
+statement ok
+SET disabled_optimizers='statistics_propagation';
+
 # Explicit null rejection above an outer join still permits the null-safe MARK rewrite.
 query II
 EXPLAIN
@@ -193,6 +197,9 @@ FROM ids
 JOIN nn ON ids.id = nn.k;
 ----
 logical_opt	<REGEX>:.*Join Type: MARK.*wh IS DISTINCT FROM wh.*
+
+statement ok
+RESET disabled_optimizers;
 
 # Nested equality follows PostgreSQL composite semantics: NULL children compare equal.
 # Delimiter join elimination must preserve those semantics.
