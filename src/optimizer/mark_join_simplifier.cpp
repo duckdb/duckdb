@@ -93,6 +93,7 @@ static bool CanChangeChildBindings(const LogicalOperator &op, idx_t child_idx) {
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_DELETE:
 		return true;
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 		return child_idx == 1;
