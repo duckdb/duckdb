@@ -170,9 +170,8 @@ void ExpressionBinder::QualifySystemMacroReferences(unique_ptr<ParsedExpression>
 		if (!FindSystemFunctionSchema(value_function, macro_schema, schema)) {
 			return;
 		}
-		auto function =
-		    make_uniq<FunctionExpression>(QualifiedName(Identifier::SystemCatalog(), schema, value_function),
-		                                  vector<unique_ptr<ParsedExpression>>());
+		auto function = make_uniq<FunctionExpression>(
+		    QualifiedName(Identifier::SystemCatalog(), schema, value_function), vector<unique_ptr<ParsedExpression>>());
 		function->SetQueryLocation(col_ref.GetQueryLocation());
 		if (!expr->GetAlias().empty()) {
 			function->SetAlias(expr->GetAlias());
@@ -189,9 +188,8 @@ void ExpressionBinder::QualifySystemMacroReferences(unique_ptr<ParsedExpression>
 				                       QualifiedName(Identifier::SystemCatalog(), function.GetQualifiedName().Schema(),
 				                                     function.FunctionName()));
 				if (GetCatalogEntry(lookup, OnEntryNotFound::RETURN_NULL)) {
-					function.SetQualifiedName(QualifiedName(Identifier::SystemCatalog(),
-					                                        function.GetQualifiedName().Schema(),
-					                                        function.FunctionName()));
+					function.SetQualifiedName(QualifiedName(
+					    Identifier::SystemCatalog(), function.GetQualifiedName().Schema(), function.FunctionName()));
 				}
 			} else {
 				Identifier schema;
@@ -269,8 +267,7 @@ void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> 
 		// lookup and the transferred window name cannot be redirected by session objects
 		auto macro_parameters = MacroParameterNames(macro_def);
 		vector<identifier_set_t> body_lambda_params;
-		QualifySystemMacroReferences(macro_copy, macro_func.ParentSchema().name, macro_parameters,
-		                             body_lambda_params);
+		QualifySystemMacroReferences(macro_copy, macro_func.ParentSchema().name, macro_parameters, body_lambda_params);
 	}
 	vector<reference<unique_ptr<ParsedExpression>>> aggregate_exprs;
 	FindAggregateExprs(macro_copy, aggregate_exprs);
@@ -342,8 +339,7 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 			// caller's name resolution, while the caller's argument expressions (spliced in below) must
 			auto macro_parameters = MacroParameterNames(macro_def);
 			vector<identifier_set_t> body_lambda_params;
-			QualifySystemMacroReferences(expr, macro_func.ParentSchema().name, macro_parameters,
-			                             body_lambda_params);
+			QualifySystemMacroReferences(expr, macro_func.ParentSchema().name, macro_parameters, body_lambda_params);
 		}
 	}
 
