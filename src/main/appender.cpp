@@ -109,7 +109,7 @@ void BaseAppender::AppendDecimalValueInternal(Vector &col, SRC input) {
 		return;
 	}
 	default:
-		throw InternalException("Type not implemented for AppenderType");
+		InternalException::Throw("Type not implemented for AppenderType");
 	}
 }
 
@@ -174,7 +174,7 @@ void BaseAppender::AppendValueInternal(T input) {
 			AppendDecimalValueInternal<T, hugeint_t>(col, input);
 			break;
 		default:
-			throw InternalException("Internal type not recognized for Decimal");
+			InternalException::Throw("Internal type not recognized for Decimal");
 		}
 		break;
 	case LogicalTypeId::DATE:
@@ -368,7 +368,8 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 	// We try to cast the chunk.
 	auto size = chunk_p.size();
 	DataChunk cast_chunk;
-	cast_chunk.Initialize(allocator, appender_types);
+	// Chunks converted from Arrow can hold more than STANDARD_VECTOR_SIZE rows
+	cast_chunk.Initialize(allocator, appender_types, MaxValue<idx_t>(size, STANDARD_VECTOR_SIZE));
 	cast_chunk.SetChildCardinality(size);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -651,7 +652,7 @@ Value Appender::GetDefaultValue(idx_t column) {
 	if (it == default_values.end()) {
 		auto &name = description->columns[index].Name();
 		throw NotImplementedException(
-		    "AppendDefault is not supported for column \"%s\": not a foldable default expressions.", name);
+		    "AppendDefault is not supported for column %s: not a foldable default expressions.", name);
 	}
 	return it->second;
 }

@@ -17,8 +17,6 @@
 #include "duckdb/common/bignum.hpp"
 
 namespace duckdb {
-using digit_t = uint32_t;
-using twodigit_t = uint64_t;
 
 struct BoundCastInfo;
 struct CastParameters;
@@ -80,6 +78,11 @@ public:
 	DUCKDB_API static bool BignumToDouble(const bignum_t &blob, double &result, bool &strict);
 	template <class T>
 	static bool BignumToInt(const bignum_t &blob, T &result, bool &strict) {
+		if (blob.data.GetSize() < BIGNUM_HEADER_SIZE + 1) {
+			throw DataCorruptionException("Invalid BIGNUM blob: size %llu is smaller than the minimum of %llu bytes",
+			                              static_cast<uint64_t>(blob.data.GetSize()),
+			                              static_cast<uint64_t>(BIGNUM_HEADER_SIZE + 1));
+		}
 		auto data_byte_size = blob.data.GetSize() - BIGNUM_HEADER_SIZE;
 		auto data = blob.data.GetData();
 		bool is_negative = (data[0] & 0x80) == 0;

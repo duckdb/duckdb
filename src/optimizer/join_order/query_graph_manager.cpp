@@ -486,8 +486,7 @@ void QueryGraphManager::ClearExtractedExpressions() {
 		vector<unique_ptr<Expression>> remaining_expressions;
 		for (auto &expression : op.expressions) {
 			unordered_set<RelationIndex> bindings;
-			relation_manager.ExtractBindings(*expression, bindings);
-			if (bindings.empty()) {
+			if (!relation_manager.ExtractFilterBindings(*expression, bindings)) {
 				remaining_expressions.push_back(std::move(expression));
 			}
 		}

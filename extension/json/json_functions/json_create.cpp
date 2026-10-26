@@ -313,7 +313,7 @@ static unique_ptr<FunctionData> JSONCreateBindParams(BoundScalarFunction &bound_
 			throw ParameterNotResolvedException();
 		} else if (object && i % 2 == 0) {
 			if (type != LogicalType::VARCHAR) {
-				throw BinderException("json_object() keys must be VARCHAR, add an explicit cast to argument \"%s\"",
+				throw BinderException("json_object() keys must be VARCHAR, add an explicit cast to argument %s",
 				                      arguments[i]->GetName());
 			}
 			bound_arguments.push_back(LogicalType::VARCHAR);
@@ -1307,9 +1307,15 @@ static void JSONCopyToGeoJSONFunction(DataChunk &args, ExpressionState &state, V
 //! The column-selecting options are three-state: a NULL argument means the option was not given (use the default
 //! behavior), an empty string means it was explicitly unset, and anything else names a column
 static bool TryGetGeoJSONColumnOption(ClientContext &context, const Expression &argument, string &result) {
+	if (!argument.IsFoldable()) {
+		throw BinderException("%s column options must be constants", JSON_COPY_TO_GEOJSON_INTERNAL_NAME);
+	}
 	const auto value = ExpressionExecutor::EvaluateScalar(context, argument);
 	if (value.IsNull()) {
 		return false;
+	}
+	if (value.type().id() != LogicalTypeId::VARCHAR) {
+		throw BinderException("%s column options must be VARCHAR or NULL", JSON_COPY_TO_GEOJSON_INTERNAL_NAME);
 	}
 	result = StringValue::Get(value);
 	return true;

@@ -136,7 +136,8 @@ const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 ColumnReader::ColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema_p)
     : column_schema(schema_p), reader(reader), page_rows_available(0), dictionary_decoder(*this),
       delta_binary_packed_decoder(*this), rle_decoder(*this), delta_length_byte_array_decoder(*this),
-      delta_byte_array_decoder(*this), byte_stream_split_decoder(*this), aad_crypto_metadata(reader.allocator) {
+      delta_byte_array_decoder(*this), byte_stream_split_decoder(*this), aad_crypto_metadata(reader.allocator),
+      page_header_arena(reader.allocator) {
 }
 
 ColumnReader::~ColumnReader() {
@@ -153,11 +154,15 @@ const ParquetReader &ColumnReader::Reader() {
 void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
 	if (chunk) {
 		uint64_t size = chunk->meta_data.total_compressed_size;
+		if (size == 0) {
+			// nothing to prefetch
+			return;
+		}
 		transport.RegisterPrefetch(FileOffset(), size, allow_merge);
 	}
 }
 
-unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
+unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const duckdb_parquet::ColumnChunkList &columns) {
 	return Schema().Stats(*reader.GetFileMetadata(), reader.parquet_options, row_group_idx_p, columns);
 }
 
@@ -244,8 +249,8 @@ void ColumnReader::PlainSelect(shared_ptr<ResizeableBuffer> &plain_data, uint8_t
 	throw NotImplementedException("PlainSelect not implemented");
 }
 
-void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows, const vector<ColumnChunk> &columns,
-                                  TProtocol &protocol_p) {
+void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
+                                  const duckdb_parquet::ColumnChunkList &columns, TProtocol &protocol_p) {
 	D_ASSERT(ColumnIndex() < columns.size());
 	chunk = &columns[ColumnIndex()];
 	protocol = &protocol_p;
@@ -253,7 +258,10 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_row
 	if (chunk->__isset.crypto_metadata && !reader.metadata->crypto_metadata) {
 		throw InvalidInputException("File is encrypted but no file crypto metadata is set");
 	}
-	D_ASSERT(chunk->__isset.meta_data);
+	if (!chunk->__isset.meta_data) {
+		throw InvalidInputException("Failed to read file \"%s\": column chunk is missing its metadata",
+		                            Reader().GetFileName());
+	}
 
 	if (chunk->__isset.file_path) {
 		throw InvalidInputException("Failed to read file \"%s\": Only inlined data files are supported (no references)",
@@ -362,7 +370,8 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 	defined_decoder.reset();
 	page_is_filtered_out = false;
 	block.reset();
-	PageHeader page_hdr;
+	page_header_arena.Reset();
+	PageHeader page_hdr(page_header_arena);
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 
 	if (trans.HasPrefetch()) {
@@ -429,7 +438,7 @@ void ColumnReader::ResetPage() {
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
 
-	AllocateBlock(page_hdr.uncompressed_page_size + 1);
+	AllocateBlock(NumericCast<idx_t>(page_hdr.uncompressed_page_size) + 1);
 	bool uncompressed = false;
 	if (page_hdr.data_page_header_v2.__isset.is_compressed && !page_hdr.data_page_header_v2.is_compressed) {
 		uncompressed = true;
@@ -515,7 +524,7 @@ void ColumnReader::AllocateBlock(idx_t size) {
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
-	AllocateBlock(page_hdr.uncompressed_page_size + 1);
+	AllocateBlock(NumericCast<idx_t>(page_hdr.uncompressed_page_size) + 1);
 	uint32_t compressed_page_size = page_hdr.compressed_page_size;
 
 	if (chunk->__isset.crypto_metadata) {
@@ -657,11 +666,11 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 
 		auto res = duckdb_brotli::BrotliDecoderDecompressStream(state, &src_size_size_t, &src, &dst_size_size_t, &dst,
 		                                                        &total_out);
+		duckdb_brotli::BrotliDecoderDestroyInstance(state);
 		if (res != duckdb_brotli::BROTLI_DECODER_RESULT_SUCCESS) {
 			throw InvalidInputException("Failed to read file \"%s\": Brotli Decompression failure",
 			                            Reader().GetFileName());
 		}
-		duckdb_brotli::BrotliDecoderDestroyInstance(state);
 		break;
 	}
 
