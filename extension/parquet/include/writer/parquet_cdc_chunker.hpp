@@ -24,7 +24,7 @@ namespace duckdb {
 //! chunks by content that is the difference between rewriting a row group and rewriting nothing.
 //!
 //! This is a port of parquet::internal::ContentDefinedChunker from Apache Arrow C++ (cpp/src/
-//! parquet/chunker.cc), kept close on purpose: same tables, same 64-bit gear hash, same mask
+//! parquet/chunker_internal.cc), kept close on purpose: same tables, same 64-bit gear hash, same mask
 //! arithmetic, same eight-table run, same minimum-size window. A column written here and the same
 //! column written by arrow-cpp or arrow-rs with the same sizes therefore cut between the same
 //! values. The one deliberate departure is the lifetime of the state, see RowGroupStarted.

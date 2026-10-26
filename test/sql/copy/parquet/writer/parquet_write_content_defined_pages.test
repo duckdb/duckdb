@@ -145,7 +145,7 @@ select cdc_pages('s', '{TEST_DIR}/pin_s_null.parquet');
 ----
 61
 
-# no minimum at all: every position where the mask hits cuts, which is 156 pages instead of 61
+# no minimum at all: the hash runs from the first byte of every page, which is 156 pages instead of 61
 query I
 select cdc_pages('s', '{TEST_DIR}/pin_s_no_floor.parquet');
 ----
