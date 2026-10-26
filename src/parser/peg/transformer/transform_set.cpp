@@ -53,11 +53,18 @@ SettingInfo PEGTransformerFactory::TransformSetSetting(PEGTransformer &transform
 	return result;
 }
 
-// SetStatement <- 'SET' SetAssignmentOrTimeZone
+// SetKeywordStatement <- 'SET' SetAssignmentOrTimeZone
 unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformSetStatement(PEGTransformer &transformer,
-                                             unique_ptr<SetStatement> set_assignment_or_time_zone) {
+PEGTransformerFactory::TransformSetKeywordStatement(PEGTransformer &transformer,
+                                                    unique_ptr<SetStatement> set_assignment_or_time_zone) {
 	return std::move(set_assignment_or_time_zone);
+}
+
+// VariableAssignment <- '$' Identifier ':=' Expression
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformVariableAssignment(PEGTransformer &transformer,
+                                                                            const Identifier &identifier,
+                                                                            unique_ptr<ParsedExpression> expression) {
+	return make_uniq<SetVariableStatement>(identifier, std::move(expression), SetScope::VARIABLE);
 }
 
 // SetSchema <- SettingScope? 'SCHEMA' StringLiteral
@@ -131,7 +138,11 @@ PEGTransformerFactory::TransformStandardAssignment(PEGTransformer &transformer,
 	if (value->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		// SET value cannot be a column reference
 		auto &col_ref = value->Cast<ColumnRefExpression>();
-		value = ConstantExpression::String(col_ref.GetColumnName().GetIdentifierName());
+		if (col_ref.IsQualified()) {
+			value = ConstantExpression::String(col_ref.ToString());
+		} else {
+			value = ConstantExpression::String(col_ref.GetColumnName().GetIdentifierName());
+		}
 	} else if (value->GetExpressionClass() == ExpressionClass::DEFAULT) {
 		return make_uniq<ResetVariableStatement>(set_variable_or_setting.name, set_variable_or_setting.scope);
 	}

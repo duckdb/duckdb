@@ -427,9 +427,8 @@ unique_ptr<SegmentScanState> RLEInitScan(const QueryContext &context, ColumnSegm
 //===--------------------------------------------------------------------===//
 template <class T>
 void RLESkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
-	auto end = state.GetPositionInSegment();
-	D_ASSERT(end <= segment.count);
-	D_ASSERT(skip_count <= end);
+	D_ASSERT(state.GetPositionInSegment() <= segment.count);
+	D_ASSERT(skip_count <= state.GetPositionInSegment());
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 	scan_state.Skip(segment, skip_count);
 }
@@ -466,8 +465,8 @@ static void RLEScanConstant(RLEScanState<T> &scan_state, const typename RLEScanS
 template <class T, bool ENTIRE_VECTOR>
 void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                             idx_t result_offset) {
-	auto start = state.GetPositionInSegment();
-	D_ASSERT(start <= segment.count && scan_count <= segment.count - start);
+	D_ASSERT(state.GetPositionInSegment() <= segment.count);
+	D_ASSERT(scan_count <= segment.count - state.GetPositionInSegment());
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	// If we are scanning an entire Vector and it contains only a single run

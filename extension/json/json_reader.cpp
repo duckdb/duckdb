@@ -1171,6 +1171,16 @@ void JSONReader::PrepareForReadInternal(JSONReaderScanState &scan_state) {
 	if (!scan_state.read_buffer.IsSet()) {
 		scan_state.read_buffer = scan_state.global_allocator.Allocate(scan_state.buffer_capacity);
 		scan_state.buffer_ptr = char_ptr_cast(scan_state.read_buffer.get());
+	} else if (scan_state.read_buffer.GetSize() < scan_state.buffer_capacity) {
+		// the retained auto-detect buffer only holds what was read from the file - it cannot take a full read
+		auto buffer = scan_state.global_allocator.Allocate(scan_state.buffer_capacity);
+		if (scan_state.file_read_type == JSONFileReadType::SCAN_ENTIRE_FILE) {
+			memcpy(buffer.get(), scan_state.buffer_ptr + scan_state.prev_buffer_offset,
+			       scan_state.prev_buffer_remainder);
+		}
+		scan_state.read_buffer = std::move(buffer);
+		scan_state.buffer_ptr = char_ptr_cast(scan_state.read_buffer.get());
+		return;
 	}
 	if (scan_state.file_read_type == JSONFileReadType::SCAN_ENTIRE_FILE) {
 		// Copy last bit of previous buffer to the beginning if we are doing a single-threaded read
@@ -1256,6 +1266,7 @@ void JSONReader::ReadNextBufferSeek(JSONReaderScanState &scan_state) {
 		}
 
 		// Now read the file lock-free!
+		D_ASSERT(read_offset + scan_state.read_size + YYJSON_PADDING_SIZE <= scan_state.read_buffer.GetSize());
 		file_handle.ReadAtPosition(scan_state.buffer_ptr + read_offset, scan_state.read_size, scan_state.read_position,
 		                           scan_state.thread_local_filehandle);
 	}
@@ -1284,6 +1295,7 @@ bool JSONReader::ReadNextBufferNoSeek(JSONReaderScanState &scan_state) {
 	}
 	scan_state.buffer_index = GetBufferIndex();
 	PrepareForReadInternal(scan_state);
+	D_ASSERT(read_offset + request_size + YYJSON_PADDING_SIZE <= scan_state.read_buffer.GetSize());
 	if (!file_handle.Read(scan_state.buffer_ptr + read_offset, read_size, request_size)) {
 		return false; // Couldn't read anything
 	}

@@ -204,6 +204,7 @@ bool Exception::IsExecutionError(ExceptionType type) {
 	case ExceptionType::INVALID_INPUT:
 	case ExceptionType::OUT_OF_RANGE:
 	case ExceptionType::CONVERSION:
+	case ExceptionType::PARAMETER_NOT_ALLOWED:
 		return true;
 	default:
 		return false;
@@ -352,6 +353,10 @@ InterruptException::InterruptException(const string &message) : Exception(Except
 
 FatalException::FatalException(ExceptionType type, const string &msg) : Exception(type, msg) {
 	// FIXME: Make any log context available to add error logging.
+}
+
+void InternalException::Throw(const char *message) {
+	throw InternalException(message);
 }
 
 InternalException::InternalException(const string &msg) : Exception(ExceptionType::INTERNAL, msg) {

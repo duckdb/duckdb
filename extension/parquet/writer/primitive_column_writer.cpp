@@ -55,8 +55,9 @@ private:
 	AllocatedData compressed_buf;
 };
 
-static PageWriteInformation CreateDictionaryPageWriteInformation(idx_t uncompressed_size, idx_t row_count) {
-	PageWriteInformation write_info;
+static PageWriteInformation CreateDictionaryPageWriteInformation(PrimitiveColumnWriterState &state,
+                                                                 idx_t uncompressed_size, idx_t row_count) {
+	PageWriteInformation write_info(state.row_group.columns.get_allocator());
 	auto &hdr = write_info.page_header;
 	hdr.uncompressed_page_size = UnsafeNumericCast<int32_t>(uncompressed_size);
 	hdr.type = PageType::DICTIONARY_PAGE;
@@ -83,13 +84,15 @@ unique_ptr<ColumnWriterState> PrimitiveColumnWriter::InitializeWriteState(duckdb
 }
 
 void PrimitiveColumnWriter::RegisterToRowGroup(duckdb_parquet::RowGroup &row_group) {
-	duckdb_parquet::ColumnChunk column_chunk;
+	row_group.columns.emplace_back();
+	auto &column_chunk = row_group.columns.back();
 	column_chunk.__isset.meta_data = true;
 	column_chunk.meta_data.codec = writer.GetCodec();
-	column_chunk.meta_data.path_in_schema = IdentifiersToStrings(schema_path);
+	for (auto &path_part : IdentifiersToStrings(schema_path)) {
+		column_chunk.meta_data.path_in_schema.emplace_back().assign(path_part.data(), path_part.size());
+	}
 	column_chunk.meta_data.num_values = 0;
 	column_chunk.meta_data.type = writer.GetType(SchemaIndex());
-	row_group.columns.push_back(std::move(column_chunk));
 }
 
 unique_ptr<ColumnWriterPageState> PrimitiveColumnWriter::InitializePageState(PrimitiveColumnWriterState &state,
@@ -164,7 +167,7 @@ void PrimitiveColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 			state.page_info.erase_at(page_idx);
 			break;
 		}
-		PageWriteInformation write_info;
+		PageWriteInformation write_info(state.row_group.columns.get_allocator());
 		// set up the header
 		auto &hdr = write_info.page_header;
 		hdr.compressed_page_size = 0;
@@ -278,8 +281,6 @@ void PrimitiveColumnWriter::FlushPage(PrimitiveColumnWriterState &state) {
 	// compress the data
 	CompressPage(temp_writer, write_info.compressed_size, write_info.compressed_data, write_info.compressed_buf);
 	hdr.compressed_page_size = UnsafeNumericCast<int32_t>(write_info.compressed_size);
-	D_ASSERT(hdr.uncompressed_page_size > 0);
-	D_ASSERT(hdr.compressed_page_size > 0);
 
 	if (write_info.compressed_buf.IsSet()) {
 		// if the data has been compressed, we no longer need the uncompressed data
@@ -341,11 +342,11 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 				return;
 			}
 		}
-		duckdb_parquet::PageEncodingStats stat;
+		column_chunk.meta_data.encoding_stats.emplace_back();
+		auto &stat = column_chunk.meta_data.encoding_stats.back();
 		stat.page_type = page_type;
 		stat.encoding = encoding;
 		stat.count = 1;
-		column_chunk.meta_data.encoding_stats.push_back(stat);
 	};
 
 	for (const auto &write_info : state.write_info) {
@@ -453,7 +454,6 @@ void PrimitiveColumnWriter::PrepareWrite(ColumnWriterState &state_p) {
 	}
 
 	for (auto &write_info : state.write_info) {
-		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		D_ASSERT(!write_info.prepared_header);
 		D_ASSERT(!write_info.prepared_payload);
 
@@ -489,7 +489,6 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 		                                                     write_info.page_header.type == PageType::DATA_PAGE_V2)) {
 			column_chunk.meta_data.data_page_offset = UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten());
 		}
-		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		D_ASSERT(write_info.prepared_header);
 		D_ASSERT(write_info.prepared_payload);
 		// total uncompressed size in the column chunk includes the header size (!)
@@ -521,9 +520,8 @@ idx_t PrimitiveColumnWriter::DictionarySize(PrimitiveColumnWriterState &state) {
 void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, unique_ptr<MemoryStream> temp_writer,
                                             idx_t row_count) {
 	D_ASSERT(temp_writer);
-	D_ASSERT(temp_writer->GetPosition() > 0);
 
-	auto write_info = CreateDictionaryPageWriteInformation(temp_writer->GetPosition(), row_count);
+	auto write_info = CreateDictionaryPageWriteInformation(state, temp_writer->GetPosition(), row_count);
 	write_info.temp_writer = std::move(temp_writer);
 
 	// compress the contents of the dictionary page
@@ -546,7 +544,7 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state,
 	D_ASSERT(target_data.data.IsSet());
 	D_ASSERT(target_data.size > 0);
 
-	auto write_info = CreateDictionaryPageWriteInformation(target_data.size, row_count);
+	auto write_info = CreateDictionaryPageWriteInformation(state, target_data.size, row_count);
 
 	// compress the contents of the dictionary page
 	MemoryStream temp_writer(target_data.data.get(), target_data.data.GetSize());
@@ -563,7 +561,7 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state,
 	state.write_info.insert(state.write_info.begin(), std::move(write_info));
 }
 
-idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+idx_t PrimitiveColumnWriter::FinalizeSchema(duckdb_parquet::SchemaElementList &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = column_schema;
@@ -575,7 +573,8 @@ idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement
 	auto &type = schema.type;
 	auto allow_geometry = schema.allow_geometry;
 
-	duckdb_parquet::SchemaElement schema_element;
+	schemas.emplace_back();
+	auto &schema_element = schemas.back();
 	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type, writer.WriteTimestampAsInt96());
 	schema_element.repetition_type = repetition_type;
 	schema_element.__isset.num_children = false;
@@ -588,7 +587,6 @@ idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement
 	}
 	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry, writer.GetContext(),
 	                                   writer.WriteTimestampAsInt96(), writer.TimestampIsAdjustedToUTC());
-	schemas.push_back(std::move(schema_element));
 
 	D_ASSERT(child_writers.empty());
 	return 1;
