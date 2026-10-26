@@ -194,6 +194,22 @@ public:
 		return SelectFromBooleanInternal(matches, count, destination.data(), offset, MATCH);
 	}
 
+	//! Select positions i where matches[match_sel[i]] is true, emitting i + offset.
+	//! Referenced matches must be initialized; both inputs and the destination must be disjoint.
+	static idx_t SelectFromBoolean(const bool *matches, const SelectionVector &match_sel, idx_t count,
+	                               array_ptr<sel_t> destination, idx_t offset = 0) {
+		if (DUCKDB_UNLIKELY(count > destination.size())) {
+			ThrowArrayPtrSubArrayOutOfBounds(0, count, destination.size());
+		}
+		if (!match_sel.IsSet()) {
+			return SelectFromBoolean(matches, count, destination, offset);
+		}
+		if (DUCKDB_UNLIKELY(count > match_sel.Capacity())) {
+			ThrowArrayPtrSubArrayOutOfBounds(0, count, match_sel.Capacity());
+		}
+		return SelectFromBooleanInternal(matches, match_sel.data(), count, destination.data(), offset);
+	}
+
 	//! Partition 0/1 bytes into stable true/false row indices; return the true count.
 	//! Both destinations need count entries, including scratch, and all three buffers must be disjoint.
 	static idx_t SelectFromBoolean(const uint8_t *matches, idx_t count, array_ptr<sel_t> true_destination,
@@ -212,6 +228,8 @@ private:
 	DUCKDB_API static idx_t SelectFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *result, idx_t offset);
 	DUCKDB_API static idx_t SelectFromBooleanInternal(const bool *matches, idx_t count, sel_t *result, idx_t offset,
 	                                                  bool match);
+	DUCKDB_API static idx_t SelectFromBooleanInternal(const bool *matches, const sel_t *match_sel, idx_t count,
+	                                                  sel_t *result, idx_t offset);
 	DUCKDB_API static idx_t PartitionFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *true_result,
 	                                                     sel_t *false_result, idx_t offset);
 

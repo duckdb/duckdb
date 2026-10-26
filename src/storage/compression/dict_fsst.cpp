@@ -204,12 +204,9 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 		SelectionVector new_sel(sel_count);
 		idx_t approved_tuple_count = 0;
 		if (!sel.IsSet() && (scan_state.null_filter_result_initialized || !segment.GetStats().CanHaveNull())) {
-			bool matches[STANDARD_VECTOR_SIZE];
-			for (idx_t idx = 0; idx < sel_count; idx++) {
-				matches[idx] = scan_state.filter_result[dict_sel.get_index(idx)];
-			}
-			approved_tuple_count = SelectionVector::SelectFromBoolean(
-			    matches, sel_count, array_ptr<sel_t>(new_sel.data(), new_sel.Capacity()));
+			approved_tuple_count =
+			    SelectionVector::SelectFromBoolean(scan_state.filter_result.get(), dict_sel, sel_count,
+			                                       array_ptr<sel_t>(new_sel.data(), new_sel.Capacity()));
 		} else {
 			for (idx_t idx = 0; idx < sel_count; idx++) {
 				auto row_idx = sel.get_index(idx);

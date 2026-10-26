@@ -37,28 +37,41 @@ struct BooleanSelectionTable {
 
 constexpr BooleanSelectionTable BOOLEAN_SELECTION_TABLE;
 
+struct SelectedBooleanValues {
+	const bool *matches;
+	const sel_t *selection;
+
+	bool operator[](idx_t index) const {
+		return matches[selection[index]];
+	}
+	SelectedBooleanValues operator+(idx_t offset) const {
+		return {matches, selection + offset};
+	}
+};
+
 uint64_t BooleanSelectionWord(const uint8_t *matches) {
 	return BSwapIfBE(Load<uint64_t>(matches));
 }
 
-uint64_t BooleanSelectionWord(const bool *matches) {
+template <class T>
+uint64_t BooleanSelectionWord(T matches) {
 	// Pack values without depending on bool's object representation.
 	uint8_t bytes[8];
 	for (idx_t i = 0; i < 8; i++) {
 		bytes[i] = matches[i];
 	}
-	return BooleanSelectionWord(bytes);
+	return BSwapIfBE(Load<uint64_t>(bytes));
 }
 
 template <class T>
-uint8_t BooleanSelectionMask(const T *matches) {
+uint8_t BooleanSelectionMask(T matches) {
 	// Pack eight 0/1 bytes into their corresponding bits.
 	const auto word = BooleanSelectionWord(matches);
 	return static_cast<uint8_t>((word * UINT64_C(0x0102040810204080)) >> 56);
 }
 
 template <class T, bool MATCH>
-idx_t SelectFromBooleanLoop(const T *matches, idx_t count, sel_t *result, idx_t offset) {
+idx_t SelectFromBooleanLoop(T matches, idx_t count, sel_t *result, idx_t offset) {
 	idx_t result_count = 0;
 	idx_t i = 0;
 	for (; i + 8 <= count; i += 8) {
@@ -83,15 +96,20 @@ idx_t SelectionVector::SelectFromBooleanInternal(const uint8_t *matches, idx_t c
 		D_ASSERT(matches[i] <= 1);
 	}
 #endif
-	return SelectFromBooleanLoop<uint8_t, true>(matches, count, result, offset);
+	return SelectFromBooleanLoop<const uint8_t *, true>(matches, count, result, offset);
 }
 
 idx_t SelectionVector::SelectFromBooleanInternal(const bool *matches, idx_t count, sel_t *result, idx_t offset,
                                                  bool match) {
 	if (match) {
-		return SelectFromBooleanLoop<bool, true>(matches, count, result, offset);
+		return SelectFromBooleanLoop<const bool *, true>(matches, count, result, offset);
 	}
-	return SelectFromBooleanLoop<bool, false>(matches, count, result, offset);
+	return SelectFromBooleanLoop<const bool *, false>(matches, count, result, offset);
+}
+
+idx_t SelectionVector::SelectFromBooleanInternal(const bool *matches, const sel_t *match_sel, idx_t count,
+                                                 sel_t *result, idx_t offset) {
+	return SelectFromBooleanLoop<SelectedBooleanValues, true>({matches, match_sel}, count, result, offset);
 }
 
 idx_t SelectionVector::PartitionFromBooleanInternal(const uint8_t *matches, idx_t count, sel_t *true_result,

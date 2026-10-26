@@ -218,6 +218,57 @@ TEST_CASE("Boolean selection compacts bounded stable output", "[selection][scala
 	}
 }
 
+TEST_CASE("Boolean selection reads mapped matches and emits logical positions", "[selection][scalar_executor]") {
+	bool matches[257];
+	for (idx_t i = 0; i < 257; i++) {
+		matches[i] = i % 7 < 3;
+	}
+	const sel_t canary = 999999;
+	for (idx_t count : {0, 1, 7, 8, 9, 63, 64, 65, 2048, 4099}) {
+		SelectionVector match_sel(count);
+		duckdb::vector<sel_t> expected;
+		for (idx_t i = 0; i < count; i++) {
+			auto index = (i * 97 + i / 5) % 257;
+			match_sel.set_index(i, index);
+			if (matches[index]) {
+				expected.push_back(NumericCast<sel_t>(i + 13));
+			}
+		}
+		duckdb::vector<sel_t> output(count + 2, canary);
+		auto selected = SelectionVector::SelectFromBoolean(matches, match_sel, count,
+		                                                   array_ptr<sel_t>(output.data() + 1, count), 13);
+		REQUIRE(selected == expected.size());
+		for (idx_t i = 0; i < selected; i++) {
+			REQUIRE(output[i + 1] == expected[i]);
+		}
+		REQUIRE(output.front() == canary);
+		REQUIRE(output.back() == canary);
+	}
+
+	SelectionVector identity;
+	sel_t output[257];
+	auto selected = SelectionVector::SelectFromBoolean(matches, identity, 257, array_ptr<sel_t>(output, 257));
+	idx_t expected_count = 0;
+	for (idx_t i = 0; i < 257; i++) {
+		if (matches[i]) {
+			REQUIRE(output[expected_count++] == i);
+		}
+	}
+	REQUIRE(selected == expected_count);
+
+	SelectionVector short_selection(7);
+	for (auto &entry : output) {
+		entry = canary;
+	}
+	REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean(matches, short_selection, 8, array_ptr<sel_t>(output, 257)),
+	                  InternalException);
+	REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean(matches, identity, 8, array_ptr<sel_t>(output, 7)),
+	                  InternalException);
+	for (auto entry : output) {
+		REQUIRE(entry == canary);
+	}
+}
+
 TEST_CASE("Scalar executor handles every ternary flat and constant profile", "[scalar_executor]") {
 	static constexpr idx_t COUNT = 131;
 	for (uint8_t constant_mask = 0; constant_mask < 8; constant_mask++) {
