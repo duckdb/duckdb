@@ -199,10 +199,6 @@ FilterPropagateResult ExpressionFilter::CheckStatistics(ClientContext &context, 
 static FilterPropagateResult CheckZonemapAgainstConstants(const BaseStatistics &stats, ExpressionType comparison_type,
                                                           array_ptr<const Value> values) {
 	D_ASSERT(values.size() > 0);
-	if (values[0].type() != stats.GetType()) {
-		// e.g. a VARCHAR column compared with the BLOB bounds derived from a regex
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
 	switch (values[0].type().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::UINT8:
