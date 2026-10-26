@@ -54,4 +54,4 @@ SELECT count(*) FROM probe p JOIN build b ON p.k IS NOT DISTINCT FROM b.k WHERE 
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM probe p JOIN build b ON p.k IS NOT DISTINCT FROM b.k WHERE selected;
 ----
-analyzed_plan	<!REGEX>:.*Dynamic.*Filters:.*
+analyzed_plan	<REGEX>:.*Conditions:.*k IS NOT DISTINCT FROM k.*
