@@ -69,13 +69,9 @@ static string IdToString(transaction_t id) {
 	return IsUpdateMarker(id) ? "U" + to_string(GetWriter(id)) : to_string(id);
 }
 
-//! Whether a write of a row conflicts with its id: a delete by another transaction, or an update that the writer does
-//! not see
+//! Whether a write of a row conflicts with its id: a delete or an update by a transaction that the writer does not see
+//! (a writer never writes a row whose delete it sees, which WriteRows asserts)
 static bool IsConflictingId(TransactionData transaction, transaction_t id) {
-	if (IsDeleteId(id)) {
-		// a transaction never writes a row whose delete it sees, so only its own deletes do not conflict
-		return id != transaction.GetTransactionId();
-	}
 	return id != NOT_DELETED_ID && !transaction.view.Sees(GetWriter(id));
 }
 
