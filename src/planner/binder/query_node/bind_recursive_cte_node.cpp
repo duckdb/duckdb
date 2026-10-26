@@ -201,8 +201,8 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 					// Create a last aggregate for the newly bound column reference
 					auto last_fun = GetBuiltinAggregateFunction(context, LastFun::Name, {result.types[i]});
-					auto first_aggregate = function_binder.BindAggregateFunction(
-					    std::move(last_fun), std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
+					auto first_aggregate = function_binder.BindAggregateFunction(last_fun, std::move(first_children),
+					                                                             nullptr, AggregateType::NON_DISTINCT);
 
 					payload_aggregates.push_back(std::move(first_aggregate));
 				} else {
@@ -281,7 +281,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				first_children.push_back(std::move(uncollated_group));
 				FunctionBinder function_binder(*this);
 				auto first_fun = GetBuiltinAggregateFunction(context, FirstFun::Name, {group_type});
-				auto first = function_binder.BindAggregateFunction(std::move(first_fun), std::move(first_children));
+				auto first = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
 				first->SetAlias("__collated_group");
 				collated_group_bindings[column_index] = ProjectionIndex(payload_aggregates.size());
 				payload_aggregates.push_back(std::move(first));

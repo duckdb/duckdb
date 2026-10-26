@@ -100,8 +100,8 @@ static unique_ptr<Expression> PlanExtremumRewrite(Binder &binder, BoundSubqueryE
 
 	auto extremum_fun = GetBuiltinAggregateFunction(binder.context, is_min ? MinFun::Name : MaxFun::Name,
 	                                                {min_max_children[0]->GetReturnType()});
-	auto extremum_aggr = function_binder.BindAggregateFunction(std::move(extremum_fun), std::move(min_max_children),
-	                                                           nullptr, AggregateType::NON_DISTINCT);
+	auto extremum_aggr = function_binder.BindAggregateFunction(extremum_fun, std::move(min_max_children), nullptr,
+	                                                           AggregateType::NON_DISTINCT);
 	auto extremum_type = extremum_aggr->GetReturnType();
 	aggregate_list.push_back(std::move(extremum_aggr));
 
@@ -115,8 +115,8 @@ static unique_ptr<Expression> PlanExtremumRewrite(Binder &binder, BoundSubqueryE
 	count_child_children.push_back(bound_colref->Copy());
 	auto count_fun =
 	    GetBuiltinAggregateFunction(binder.context, CountFun::Name, {count_child_children[0]->GetReturnType()});
-	auto count_child_aggr = function_binder.BindAggregateFunction(std::move(count_fun), std::move(count_child_children),
-	                                                              nullptr, AggregateType::NON_DISTINCT);
+	auto count_child_aggr = function_binder.BindAggregateFunction(count_fun, std::move(count_child_children), nullptr,
+	                                                              AggregateType::NON_DISTINCT);
 	aggregate_list.push_back(std::move(count_child_aggr));
 
 	auto aggr_index = binder.GenerateTableIndex();
@@ -228,7 +228,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		FunctionBinder function_binder(binder);
 		auto count_star =
-		    function_binder.BindAggregateFunction(std::move(count_star_fun), {}, nullptr, AggregateType::NON_DISTINCT);
+		    function_binder.BindAggregateFunction(count_star_fun, {}, nullptr, AggregateType::NON_DISTINCT);
 		auto idx_type = count_star->GetReturnType();
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(std::move(count_star));
@@ -284,7 +284,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		FunctionBinder function_binder(binder);
 		auto first_fun = GetBuiltinAggregateFunction(binder.context, FirstFun::Name, {expr.GetReturnType()});
-		auto first_agg = function_binder.BindAggregateFunction(std::move(first_fun), std::move(first_children), nullptr,
+		auto first_agg = function_binder.BindAggregateFunction(first_fun, std::move(first_children), nullptr,
 		                                                       AggregateType::NON_DISTINCT);
 
 		expressions.push_back(std::move(first_agg));
