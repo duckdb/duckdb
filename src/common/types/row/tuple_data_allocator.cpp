@@ -411,6 +411,13 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 		auto &part = part_ref.get();
 		const auto next = part.count;
 
+		// A merge fragment only needs overlapping parts; heap relocation still updates each whole part.
+		if (sort_key_payload_state &&
+		    (offset + next <= sort_key_payload_state->begin || offset >= sort_key_payload_state->end)) {
+			offset += next;
+			continue;
+		}
+
 		// Set up row locations for the scan
 		const auto row_width = layout.GetRowWidth();
 		const auto base_row_ptr = GetRowPointer(pin_state, part);
@@ -523,9 +530,7 @@ void SortKeyRecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &
 			const auto &old_heap_ptr = old_heap_locations[idx];
 			const auto &new_heap_ptr = new_heap_locations[idx];
 
-			auto &sort_key = *sort_keys[idx];
-			const auto diff = sort_key.GetData() - old_heap_ptr;
-			sort_keys[idx]->SetData(new_heap_ptr + diff);
+			sort_keys[idx]->RelocateHeapPointer(old_heap_ptr, new_heap_ptr);
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
@@ -533,9 +538,7 @@ void SortKeyRecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &
 			const auto &old_heap_ptr = old_heap_locations[old_heap_sel.get_index(idx)];
 			const auto &new_heap_ptr = new_heap_locations[new_heap_sel.get_index(idx)];
 
-			auto &sort_key = *sort_keys[idx];
-			const auto diff = sort_key.GetData() - old_heap_ptr;
-			sort_keys[idx]->SetData(new_heap_ptr + diff);
+			sort_keys[idx]->RelocateHeapPointer(old_heap_ptr, new_heap_ptr);
 		}
 	}
 }
