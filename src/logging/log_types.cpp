@@ -128,6 +128,9 @@ static const case_insensitive_set_t &HTTPRequestHeaderAllowList() {
 
 	    // S3 session authorization (https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateSession.html).
 	    // "x-amz-s3session-token", // Contains S3 Express session credentials.
+
+	    // AWS JSON protocol (https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html), e.g. AWS Glue.
+	    "x-amz-target", // Service and operation name, e.g. AWSGlue.GetTable.
 	};
 	return allow_list;
 }
