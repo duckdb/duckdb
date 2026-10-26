@@ -66,23 +66,87 @@ SELECT round(geomean(v) OVER (), 3) AS r FROM win_t LIMIT 1;
 ----
 2.213
 
-# a default table macro, including the list-comprehension (lambda) path in its body
-
-statement ok
-CREATE MACRO floor(x) AS 'evil';
+# a default table macro: its body uses generate_series (shadowed above), assert actual bin values
 
 statement ok
 CREATE TABLE hist_t AS SELECT range AS v FROM range(100);
 
-query I
-SELECT count(*) FROM histogram_values(hist_t, v);
+query II
+SELECT bin, count FROM histogram_values(hist_t, v) ORDER BY bin LIMIT 3;
 ----
-10
+10	11
+20	10
+30	10
 
 query I
 SELECT count(*) FROM histogram_values(hist_t, v, technique := 'equi-height');
 ----
 10
+
+# window nodes stored inside a default table-macro body (histogram uses row_number/lag/max OVER)
+
+statement ok
+CREATE MACRO row_number() AS 0;
+
+query I
+SELECT count(*) FROM system.main.histogram('hist_t', v);
+----
+10
+
+# schema-only references inside a default body anchor to the system catalog
+
+statement ok
+CREATE MACRO main.current_database() AS '__shadow__';
+
+query I
+SELECT system.main.current_catalog() = system.main.current_database() AS ok;
+----
+true
+
+# operators lowered to backing-function lookups resolve in the system catalog
+
+statement ok
+CREATE MACRO array_slice(a, b, c) AS a;
+
+query I
+SELECT system.main.array_pop_front([10, 20, 30]);
+----
+[20, 30]
+
+statement ok
+CREATE MACRO array_extract(a, b) AS a;
+
+query I
+SELECT system.main.split_part('a,b', ',', 2);
+----
+b
+
+# operator syntax in user queries also keeps its backing function under a shadowing macro
+
+query I
+SELECT ([1, 2, 3])[2:];
+----
+[2, 3]
+
+# a default macro calling another default macro
+
+statement ok
+CREATE MACRO list_append(a, b) AS [999];
+
+query I
+SELECT array_append([1], 2);
+----
+[1, 2]
+
+# caller argument expressions keep caller-context resolution through a pinned body
+
+statement ok
+CREATE MACRO abs(x) AS 'caller';
+
+query I
+SELECT pg_typeof(abs(-1));
+----
+varchar
 
 # protection: shadowing the default macro itself still wins for unqualified calls
 

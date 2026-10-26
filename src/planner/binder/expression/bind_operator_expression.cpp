@@ -1,3 +1,4 @@
+#include "duckdb/catalog/entry_lookup_info.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -107,9 +108,19 @@ BindResult ExpressionBinder::BindOperatorAsFunction(OperatorExpression &op, cons
 	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
-	FunctionExpression lookup(function_name, vector<unique_ptr<ParsedExpression>>());
-	lookup.SetQueryLocation(op.GetQueryLocation());
-	auto &func = BindFunction(lookup);
+	// the backing function of operator syntax is a system concept: resolve it in the system catalog first, so
+	// session objects cannot redirect operators (a shadowing macro could never be invoked here anyway)
+	EntryLookupInfo system_lookup(
+	    CatalogType::SCALAR_FUNCTION_ENTRY,
+	    QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), function_name));
+	auto system_func = GetCatalogEntry(system_lookup, OnEntryNotFound::RETURN_NULL);
+	optional_ptr<CatalogEntry> resolved = system_func;
+	if (!resolved) {
+		FunctionExpression lookup(function_name, vector<unique_ptr<ParsedExpression>>());
+		lookup.SetQueryLocation(op.GetQueryLocation());
+		resolved = &BindFunction(lookup);
+	}
+	auto &func = *resolved;
 	if (func.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
 		throw BinderException(op, "%s is not a scalar function", function_name.GetIdentifierName());
 	}

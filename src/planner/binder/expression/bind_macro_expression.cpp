@@ -182,16 +182,39 @@ void ExpressionBinder::QualifySystemMacroReferences(unique_ptr<ParsedExpression>
 	}
 	case ExpressionClass::FUNCTION: {
 		auto &function = expr->Cast<FunctionExpression>();
-		if (function.GetQualifiedName().Catalog().empty() && function.GetQualifiedName().Schema().empty() &&
-		    !IsUnnestFunction(function.FunctionName())) {
-			Identifier schema;
-			if (FindSystemFunctionSchema(function.FunctionName(), macro_schema, schema)) {
-				function.SetQualifiedName(
-				    QualifiedName(Identifier::SystemCatalog(), schema, function.FunctionName()));
+		if (function.GetQualifiedName().Catalog().empty() && !IsUnnestFunction(function.FunctionName())) {
+			if (!function.GetQualifiedName().Schema().empty()) {
+				// a schema-only reference still resolves its catalog under the caller: anchor it
+				EntryLookupInfo lookup(CatalogType::SCALAR_FUNCTION_ENTRY,
+				                       QualifiedName(Identifier::SystemCatalog(), function.GetQualifiedName().Schema(),
+				                                     function.FunctionName()));
+				if (GetCatalogEntry(lookup, OnEntryNotFound::RETURN_NULL)) {
+					function.SetQualifiedName(QualifiedName(Identifier::SystemCatalog(),
+					                                        function.GetQualifiedName().Schema(),
+					                                        function.FunctionName()));
+				}
+			} else {
+				Identifier schema;
+				if (FindSystemFunctionSchema(function.FunctionName(), macro_schema, schema)) {
+					function.SetQualifiedName(
+					    QualifiedName(Identifier::SystemCatalog(), schema, function.FunctionName()));
+				}
 			}
 		}
 		if (function.IsLambdaFunction()) {
 			return QualifySystemMacroReferencesInLambda(function, macro_schema, macro_parameters, lambda_params);
+		}
+		break;
+	}
+	case ExpressionClass::WINDOW: {
+		// window nodes stored in a body carry their own function name
+		auto &window = expr->Cast<WindowExpression>();
+		auto &window_name = window.GetQualifiedName();
+		if (window_name.Catalog().empty() && window_name.Schema().empty() && !window_name.Name().empty()) {
+			Identifier schema;
+			if (FindSystemFunctionSchema(window_name.Name(), macro_schema, schema)) {
+				window.SetQualifiedName(QualifiedName(Identifier::SystemCatalog(), schema, window_name.Name()));
+			}
 		}
 		break;
 	}
