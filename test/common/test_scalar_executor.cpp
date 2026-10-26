@@ -176,6 +176,7 @@ TEST_CASE("Boolean selection compacts bounded stable output", "[selection][scala
 	}
 
 	REQUIRE(SelectionVector::SelectFromBoolean(nullptr, nullptr, 0, {}) == 0);
+#ifndef DUCKDB_CRASH_ON_ASSERT
 	bool matches[8] {};
 	REQUIRE_THROWS_AS(SelectionVector::SelectFromBoolean(matches, nullptr, 8, {}), InternalException);
 	// Even an empty selection needs scratch space for every input row.
@@ -199,6 +200,7 @@ TEST_CASE("Boolean selection compacts bounded stable output", "[selection][scala
 			REQUIRE(false_output[i] == SENTINEL);
 		}
 	}
+#endif
 }
 
 TEST_CASE("Boolean selection reads mapped matches and emits logical positions", "[selection][scalar_executor]") {
@@ -263,6 +265,7 @@ TEST_CASE("Boolean selection reads mapped matches and emits logical positions", 
 	}
 	REQUIRE(selected == expected_count);
 
+#ifndef DUCKDB_CRASH_ON_ASSERT
 	SelectionVector short_selection(7);
 	std::fill(output, output + 257, canary);
 	std::fill(false_output, false_output + 257, canary);
@@ -284,6 +287,7 @@ TEST_CASE("Boolean selection reads mapped matches and emits logical positions", 
 		REQUIRE(output[i] == canary);
 		REQUIRE(false_output[i] == canary);
 	}
+#endif
 }
 
 TEST_CASE("Scalar executor handles every ternary flat and constant profile", "[scalar_executor]") {
