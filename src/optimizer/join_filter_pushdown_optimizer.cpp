@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
@@ -11,6 +12,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -19,6 +21,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_unnest.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 
 namespace duckdb {
 
@@ -222,8 +225,37 @@ static void FindScanFilterTargets(LogicalGet &get, vector<JoinFilterPushdownColu
 	}
 }
 
+static bool OperatorHasVolatileExpressions(const LogicalOperator &op) {
+	bool result = false;
+	LogicalOperatorVisitor::EnumerateExpressions(
+	    op, [&](const unique_ptr<Expression> *expr) { result |= (*expr)->IsVolatile(); });
+	return result;
+}
+
+class FilterTargetContext {
+public:
+	bool CanSkipSubtree(const LogicalOperator &op) {
+		auto entry = skippable_subtrees.find(op);
+		if (entry != skippable_subtrees.end()) {
+			return entry->second;
+		}
+		const auto result = CanSkipSubtreeInternal(op);
+		skippable_subtrees.emplace(op, result);
+		return result;
+	}
+
+private:
+	bool CanSkipSubtreeInternal(const LogicalOperator &op);
+
+private:
+	reference_map_t<const LogicalOperator, bool> skippable_subtrees;
+};
+
+static void FindFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
+                              vector<PushdownFilterTarget> &targets, FilterTargetContext &context);
+
 static void FindSetOperationFilterTargets(LogicalSetOperation &setop, const vector<JoinFilterPushdownColumn> &columns,
-                                          vector<PushdownFilterTarget> &targets) {
+                                          vector<PushdownFilterTarget> &targets, FilterTargetContext &context) {
 	for (auto &child : setop.children) {
 		vector<JoinFilterPushdownColumn> child_columns;
 		const auto child_bindings = child->GetColumnBindings();
@@ -235,7 +267,7 @@ static void FindSetOperationFilterTargets(LogicalSetOperation &setop, const vect
 			candidate.probe_column_index = child_bindings[filter.probe_column_index.column_index];
 			child_columns.push_back(std::move(candidate));
 		}
-		JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*child, std::move(child_columns), targets);
+		FindFilterTargets(*child, std::move(child_columns), targets, context);
 		if (setop.type == LogicalOperatorType::LOGICAL_EXCEPT) {
 			break;
 		}
@@ -257,16 +289,80 @@ static bool FilterTargetPreservesLeftInput(JoinType type) {
 	}
 }
 
-void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
-                                                           vector<JoinFilterPushdownColumn> columns,
-                                                           vector<PushdownFilterTarget> &targets) {
-	if (columns.empty()) {
+bool FilterTargetContext::CanSkipSubtreeInternal(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE:
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
+	case LogicalOperatorType::LOGICAL_CTE_REF:
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+		return false;
+	default:
+		break;
+	}
+	if (OperatorHasVolatileExpressions(op)) {
+		return false;
+	}
+	for (auto &child : op.children) {
+		if (!CanSkipSubtree(*child)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static void FindJoinFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
+                                  vector<PushdownFilterTarget> &targets, FilterTargetContext &context) {
+	if (OperatorHasVolatileExpressions(op)) {
 		return;
 	}
-	bool is_volatile = false;
-	LogicalOperatorVisitor::EnumerateExpressions(
-	    op, [&](unique_ptr<Expression> *expr) { is_volatile |= (*expr)->IsVolatile(); });
-	if (is_volatile) {
+	const auto inner = op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT ||
+	                   op.Cast<LogicalComparisonJoin>().join_type == JoinType::INNER;
+	if (!inner && !FilterTargetPreservesLeftInput(op.Cast<LogicalComparisonJoin>().join_type)) {
+		return;
+	}
+	FindFilterTargets(*op.children[0], columns, targets, context);
+	if (!inner) {
+		return;
+	}
+	vector<PushdownFilterTarget> right_targets;
+	FindFilterTargets(*op.children[1], std::move(columns), right_targets, context);
+	// An empty build can skip the probe input, including expressions outside the filtered branch.
+	if (!right_targets.empty() && context.CanSkipSubtree(*op.children[0])) {
+		for (auto &target : right_targets) {
+			targets.push_back(std::move(target));
+		}
+	}
+}
+
+static void FindWindowFilterTargets(LogicalWindow &window, vector<JoinFilterPushdownColumn> columns,
+                                    vector<PushdownFilterTarget> &targets, FilterTargetContext &context) {
+	vector<JoinFilterPushdownColumn> partition_columns;
+	for (auto &filter : columns) {
+		bool shared_partition = filter.probe_column_index.table_index != window.window_index;
+		for (auto &expr : window.expressions) {
+			bool found = false;
+			for (auto &partition : expr->Cast<BoundWindowExpression>().Partitions()) {
+				if (partition->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+					continue;
+				}
+				auto &column = partition->Cast<BoundColumnRefExpression>();
+				found |= column.Depth() == 0 && column.Binding() == filter.probe_column_index;
+			}
+			shared_partition &= found;
+		}
+		if (shared_partition) {
+			partition_columns.push_back(std::move(filter));
+		}
+	}
+	FindFilterTargets(*window.children[0], std::move(partition_columns), targets, context);
+}
+
+static void FindFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
+                              vector<PushdownFilterTarget> &targets, FilterTargetContext &context) {
+	if (columns.empty() || OperatorHasVolatileExpressions(op)) {
 		return;
 	}
 	switch (op.type) {
@@ -276,22 +372,22 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		vector<JoinFilterPushdownColumn> projected_columns;
 		PushdownProjectionColumns(op.Cast<LogicalProjection>(), columns, projected_columns);
-		GetPushdownFilterTargets(*op.children[0], std::move(projected_columns), targets);
+		FindFilterTargets(*op.children[0], std::move(projected_columns), targets, context);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		vector<JoinFilterPushdownColumn> group_columns;
 		PushdownAggregateColumns(op.Cast<LogicalAggregate>(), columns, group_columns);
-		GetPushdownFilterTargets(*op.children[0], std::move(group_columns), targets);
+		FindFilterTargets(*op.children[0], std::move(group_columns), targets, context);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 		auto &join = op.Cast<LogicalAnyJoin>();
-		// Filtering a NULL-generating input can create new unmatched rows.
-		if (join.join_type != JoinType::INNER) {
+		// Only remove left rows where that cannot introduce null-extended rows or change volatile predicates.
+		if (join.join_type != JoinType::INNER || join.condition->IsVolatile()) {
 			break;
 		}
-		GetPushdownFilterTargets(*join.children[0], std::move(columns), targets);
+		FindFilterTargets(*join.children[0], std::move(columns), targets, context);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_UNNEST: {
@@ -301,32 +397,45 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 				input_columns.push_back(std::move(filter));
 			}
 		}
-		GetPushdownFilterTargets(*op.children[0], std::move(input_columns), targets);
+		FindFilterTargets(*op.children[0], std::move(input_columns), targets, context);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_UNION:
-		FindSetOperationFilterTargets(op.Cast<LogicalSetOperation>(), columns, targets);
+		FindSetOperationFilterTargets(op.Cast<LogicalSetOperation>(), columns, targets, context);
 		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 		if (op.Cast<LogicalDistinct>().distinct_type == DistinctType::DISTINCT) {
-			GetPushdownFilterTargets(*op.children[0], std::move(columns), targets);
+			FindFilterTargets(*op.children[0], std::move(columns), targets, context);
 		}
 		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		if (FilterTargetPreservesLeftInput(op.Cast<LogicalComparisonJoin>().join_type)) {
-			GetPushdownFilterTargets(*op.children[0], std::move(columns), targets);
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+		FindJoinFilterTargets(op, std::move(columns), targets, context);
+		break;
+	case LogicalOperatorType::LOGICAL_WINDOW:
+		FindWindowFilterTargets(op.Cast<LogicalWindow>(), std::move(columns), targets, context);
+		break;
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		if (context.CanSkipSubtree(*op.children[0])) {
+			FindFilterTargets(*op.children[1], std::move(columns), targets, context);
 		}
 		break;
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 	case LogicalOperatorType::LOGICAL_FILTER:
-	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-		GetPushdownFilterTargets(*op.children[0], std::move(columns), targets);
+		FindFilterTargets(*op.children[0], std::move(columns), targets, context);
 		break;
 	default:
 		break;
 	}
+}
+
+void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
+                                                           vector<JoinFilterPushdownColumn> columns,
+                                                           vector<PushdownFilterTarget> &targets) {
+	FilterTargetContext context;
+	FindFilterTargets(op, std::move(columns), targets, context);
 }
 
 bool JoinFilterPushdownOptimizer::IsFiltering(const unique_ptr<LogicalOperator> &op) {
@@ -347,18 +456,6 @@ bool JoinFilterPushdownOptimizer::IsFiltering(const unique_ptr<LogicalOperator> 
 				return true;
 			}
 		}
-		return false;
-	}
-}
-
-static bool IsDirectScanFilterPath(const LogicalOperator &op) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_GET:
-		return true;
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-	case LogicalOperatorType::LOGICAL_FILTER:
-		return IsDirectScanFilterPath(*op.children[0]);
-	default:
 		return false;
 	}
 }
@@ -389,11 +486,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		case ExpressionType::COMPARE_GREATERTHAN:
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			break;
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			if (!IsDirectScanFilterPath(*join.children[0])) {
-				continue;
-			}
 			break;
 		default:
 			continue;
@@ -484,6 +577,11 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 }
 
 void JoinFilterPushdownOptimizer::VisitOperator(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+		// Runtime filters disable build-side reuse across recursive iterations.
+		VisitOperator(*op.children[0]);
+		return;
+	}
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		// comparison join - try to generate join filters (if possible)
 		GenerateJoinFilters(op.Cast<LogicalComparisonJoin>());
