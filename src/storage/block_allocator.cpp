@@ -1061,6 +1061,9 @@ idx_t BlockAllocator::FreeInternal(const optional_idx block_limit, const optiona
 				guard.lock();
 			}
 			const auto eligible = MinValue(task_remaining, GetReclaimableBlockCount(mode, cache_limit));
+			if (eligible == 0) {
+				return 0;
+			}
 			count = touched->q.try_dequeue_bulk(to_free_buffer.begin(), MinValue(eligible, batch_size));
 			reclaiming_blocks += count;
 		}
