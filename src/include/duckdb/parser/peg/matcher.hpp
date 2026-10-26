@@ -451,6 +451,14 @@ public:
 		return optional_ptr<ParseResult>(result);
 	}
 
+	//! Uninitialized child storage owned by the result arena.
+	unsafe_array_ptr<reference<ParseResult>> AllocateChildren(idx_t capacity) {
+		arena.AlignNext();
+		return unsafe_array_ptr<reference<ParseResult>>(
+		    reinterpret_cast<reference<ParseResult> *>(arena.Allocate(capacity * sizeof(reference<ParseResult>))),
+		    capacity);
+	}
+
 	//! Copy a collected set of children into the arena, where it lives as long as the results it belongs to
 	unsafe_array_ptr<reference<ParseResult>> MakeChildren(const arena_vector<reference<ParseResult>> &children) {
 		auto count = children.size();

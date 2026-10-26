@@ -6270,6 +6270,7 @@ public:
 	static string TransformIdentifierOrKeyword(PEGTransformer &transformer, ParseResult &parse_result);
 
 private:
+	static idx_t CountParseResultsFromList(ParseResult &parse_result);
 	explicit PEGTransformerFactory(ParsedGrammar &grammar_p);
 	ParsedGrammar &grammar;
 };

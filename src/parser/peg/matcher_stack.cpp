@@ -57,7 +57,7 @@ public:
 	ListMatchFrame(const ListMatcher &matcher_p, MatchState &state_p, ArenaAllocator::Position mark = {},
 	               const PackratMatchState &packrat = {})
 	    : MatchStackFrame(MatcherType::LIST, {matcher_p, state_p}, mark, packrat), matcher(matcher_p),
-	      list_state(state_p), results(state_p.context.process_allocator) {
+	      list_state(state_p) {
 		saved_suggestion_size = matcher_p.suppress_suggestions ? list_state.context.suggestions.size() : 0;
 		auto current = list_state.token_iterator.Current();
 		if (current) {
@@ -158,7 +158,7 @@ public:
 		auto collapsed_tail = child_result && child_result->IsSuccess() && child_result->HasParseResult() &&
 		                      child_index == 0 && TryCollapseEmptyTail(*child_result->GetParseResult());
 		if (collapsed_tail) {
-			D_ASSERT(results.empty());
+			D_ASSERT(result_count == 0);
 			awaiting_child = false;
 			if (!pending) {
 				state.token_iterator.SetPosition(list_state.token_iterator);
@@ -176,10 +176,7 @@ public:
 				return ListStep::COMPLETE;
 			}
 			if (child_result->HasParseResult()) {
-				if (results.empty()) {
-					ReserveResults();
-				}
-				results.emplace_back(*child_result->GetParseResult());
+				AppendResult(*child_result->GetParseResult());
 			}
 			child_index++;
 		}
@@ -209,7 +206,9 @@ public:
 		if (&matcher.get() == &pending->matcher) {
 			pending = pending->parent;
 		}
-		results.clear();
+		// Completed inner lists retain their spans; ancestors need independent storage.
+		results = nullptr;
+		result_count = 0;
 		child_index = 0;
 	}
 
@@ -229,10 +228,13 @@ public:
 		}
 	}
 
-	void ReserveResults() {
-		if (state.BuildParseResult()) {
-			results.reserve(matcher.get().matchers.size());
+	void AppendResult(ParseResult &result) {
+		if (!results) {
+			results = state.context.allocator.AllocateChildren(matcher.get().matchers.size()).data();
 		}
+		D_ASSERT(result_count < matcher.get().matchers.size());
+		new (results.get() + result_count) reference<ParseResult>(result);
+		result_count++;
 	}
 
 	MatcherResult CompleteList() {
@@ -250,15 +252,18 @@ public:
 			result_state.rule = current_matcher.GetRule();
 		}
 		auto named_matcher = current_matcher.HasName() ? &current_matcher : nullptr;
-		return result_state.AllocateParseResult<ListParseResult>(state.context.allocator.MakeChildren(results),
-		                                                         named_matcher, start_offset);
+		if (!results) {
+			results = state.context.allocator.AllocateChildren(0).data();
+		}
+		return result_state.AllocateParseResult<ListParseResult>(
+		    unsafe_array_ptr<reference<ParseResult>>(results.get(), result_count), named_matcher, start_offset);
 	}
 
 	//! The child that can stand in for this rule's own result, or nullptr when the rule has to build one
 	optional_ptr<ParseResult> FindCollapsibleResult() const {
 		optional_ptr<ParseResult> collapsible;
-		for (auto &child : results) {
-			auto &child_result = child.get();
+		for (idx_t i = 0; i < result_count; i++) {
+			auto &child_result = results.get()[i].get();
 			// an optional that matched nothing carries no value, so it does not stop the rule from collapsing
 			if (IsEmptyOptional(child_result)) {
 				continue;
@@ -294,7 +299,9 @@ public:
 public:
 	reference<const ListMatcher> matcher;
 	MatchState list_state;
-	arena_vector<reference<ParseResult>> results;
+	//! Borrowed storage in the result arena, with at most one slot per grammar element.
+	optional_ptr<reference<ParseResult>> results;
+	idx_t result_count = 0;
 	//! First-child ancestors share this cursor until their tails are reached.
 	optional_ptr<PendingList> pending;
 	idx_t child_index = 0;

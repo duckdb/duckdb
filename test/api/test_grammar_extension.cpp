@@ -3061,3 +3061,67 @@ TEST_CASE("Deep prepared list groups keep success and exception state on the hea
 		REQUIRE(guard == 0x123456789abcdef0);
 	}
 }
+
+TEST_CASE("Generated list finalization validates its tree before consuming child results", "[api][grammar_extension]") {
+	static const TransformFrameOps ops {"NameListValidation", [](PEGTransformer &, GeneratedTransformProcess &) {},
+	                                    PEGTransformerFactory::FinalizeNameListTrampoline};
+	auto grammar = CompiledGrammar::DefaultGrammar();
+	auto options = ParserOptions::Builtin();
+	vector<MatcherToken> tokens;
+	TokenIterator iterator(tokens);
+	ArenaAllocator transform_results(Allocator::DefaultAllocator());
+	PEGTransformer transformer(transform_results, iterator, options, *grammar);
+#ifdef DUCKDB_CRASH_ON_ASSERT
+	// Malformed trees intentionally raise InternalException, which aborts in this mode.
+	constexpr idx_t shape_count = 2;
+#else
+	constexpr idx_t shape_count = 6;
+#endif
+	for (idx_t shape = 0; shape < shape_count; shape++) {
+		INFO("List shape: " << shape);
+		ParseResultAllocator results;
+		ArenaAllocator temporary(Allocator::DefaultAllocator());
+		auto children = [&](std::initializer_list<reference<ParseResult>> input) {
+			arena_vector<reference<ParseResult>> collected(temporary);
+			for (auto &child : input) {
+				collected.push_back(child);
+			}
+			return results.MakeChildren(collected);
+		};
+		auto list = [&](std::initializer_list<reference<ParseResult>> input) -> ParseResult & {
+			return *results.Make<ListParseResult>(children(input), nullptr, optional_idx());
+		};
+		IdentifierParseResult first("alpha", optional_idx()), second("beta", optional_idx());
+		KeywordParseResult punctuation(",", optional_idx());
+		OptionalParseResult absent;
+		auto &pair = shape == 3 ? list({punctuation}) : list({punctuation, second});
+		auto repeated_child = shape == 2 ? reference<ParseResult>(second) : reference<ParseResult>(pair);
+		auto repeat = results.Make<RepeatParseResult>(children({repeated_child}), optional_idx());
+		OptionalParseResult tail(repeat, optional_idx());
+		auto &body = shape == 4   ? list({first})
+		             : shape == 5 ? list({first, second})
+		             : shape == 0 ? list({first, absent})
+		                          : list({first, tail});
+		auto &parens = list({punctuation, body, punctuation});
+		auto &root = list({parens});
+		GeneratedTransformProcess process(transformer, {root}, ops);
+		process.ReserveChildSlots(2);
+		process.SetChildResult(0, transformer.MakeResult<Identifier>("alpha"));
+		process.SetChildResult(1, transformer.MakeResult<Identifier>("beta"));
+		if (shape >= 2) {
+			REQUIRE_THROWS_AS(PEGTransformerFactory::FinalizeNameListTrampoline(transformer, process),
+			                  InternalException);
+			REQUIRE(process.GetResult<Identifier>(0) == Identifier("alpha"));
+			REQUIRE(process.GetResult<Identifier>(1) == Identifier("beta"));
+		} else {
+			auto finalized = PEGTransformerFactory::FinalizeNameListTrampoline(transformer, process);
+			auto values = TryGetTransformResult<vector<string>>(*finalized);
+			REQUIRE(values);
+			vector<string> expected {"alpha"};
+			if (shape == 1) {
+				expected.push_back("beta");
+			}
+			REQUIRE(*values == expected);
+		}
+	}
+}
