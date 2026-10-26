@@ -5,10 +5,12 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
-static unique_ptr<SubqueryRef> ParseSubquery(const string &query, ClientContext &context, const string &err_msg) {
+static unique_ptr<SubqueryRef> ParseSubquery(const string &query, TableFunctionBindInput &input, ClientContext &context,
+                                             const string &err_msg) {
 	Parser parser(context);
 	parser.ParseQuery(query);
 	if (parser.statements.size() != 1) {
@@ -16,6 +18,11 @@ static unique_ptr<SubqueryRef> ParseSubquery(const string &query, ClientContext 
 	}
 
 	auto &stmt = parser.statements[0];
+	// the prepared statement cannot see parameters inside the string, so they would never receive a value
+	if (!stmt->named_param_map.empty() && input.binder && input.binder->GetBindingMode() == BindingMode::PREPARE) {
+		throw BinderException(
+		    "Prepared statement parameters are not supported inside query(): use getvariable() to read a variable");
+	}
 
 	if (stmt->type == StatementType::SELECT_STATEMENT) {
 		// Regular SELECT statement
@@ -97,13 +104,13 @@ static unique_ptr<TableRef> QueryBindReplace(ClientContext &context, TableFuncti
 		throw BinderException("Cannot use NULL as function argument");
 	}
 	auto query = input.inputs[0].ToString();
-	auto subquery_ref = ParseSubquery(query, context, "Expected a single SELECT statement");
+	auto subquery_ref = ParseSubquery(query, input, context, "Expected a single SELECT statement");
 	return std::move(subquery_ref);
 }
 
 static unique_ptr<TableRef> TableBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	auto query = UnionTablesQuery(input);
-	auto subquery_ref = ParseSubquery(query, context, "Expected a table or a list with tables as input");
+	auto subquery_ref = ParseSubquery(query, input, context, "Expected a table or a list with tables as input");
 	return std::move(subquery_ref);
 }
 
