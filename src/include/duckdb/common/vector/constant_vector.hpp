@@ -19,11 +19,11 @@ struct ConstantVector {
 		D_ASSERT(StorageTypeCompatible<T>(vector.GetType().InternalType()));
 #else
 		if (!StorageTypeCompatible<T>(vector.GetType().InternalType())) {
-			throw InternalException("Expected vector of type %s, but found vector of type %s", GetTypeId<T>(),
-			                        vector.GetType().InternalType());
+			ThrowVectorTypeMismatch(GetTypeId<T>(), vector.GetType().InternalType());
 		}
 #endif
 	}
+	[[noreturn]] DUCKDB_API static void ThrowVectorTypeMismatch(PhysicalType expected, PhysicalType found);
 
 	static void VerifyConstantVector(const Vector &vector) {
 #ifdef DUCKDB_DEBUG_NO_SAFETY

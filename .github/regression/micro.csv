@@ -6,7 +6,6 @@ benchmark/micro/cast/cast_string_int.benchmark
 benchmark/micro/cast/cast_timestamp_string.benchmark
 benchmark/micro/copy/to_parquet_partition_by_few.benchmark
 benchmark/micro/copy/to_parquet_partition_by_many.benchmark
-benchmark/micro/join/blockwise_nl_join_global_dictionary.benchmark
 benchmark/micro/limit/parallel_limit.benchmark
 benchmark/micro/filter/parallel_complex_filter.benchmark
 benchmark/micro/catalog/add_column_empty.benchmark
@@ -46,4 +45,7 @@ benchmark/micro/result_collection/stream_materialize.benchmark
 benchmark/parquet/dlba_read-long-1000000.benchmark
 benchmark/micro/update/upsert_select_cast_key.benchmark
 benchmark/micro/update/upsert_enum_key.benchmark
+benchmark/micro/aggregate/min_double.benchmark
+benchmark/micro/aggregate/max_double.benchmark
+
 benchmark/micro/table_function/lateral_generate_series.benchmark
