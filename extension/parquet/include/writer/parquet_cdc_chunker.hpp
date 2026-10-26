@@ -41,7 +41,7 @@ static constexpr idx_t PARQUET_CDC_DEFAULT_MAX_CHUNK_SIZE = 1024ULL * 1024ULL;
 //! Default normalisation level, matching Arrow's default. Raising it makes boundaries rarer and
 //! pages more uniform; Arrow recommends leaving it alone on spinning disk, raising it to 1-3 on
 //! systems that read many files concurrently.
-static constexpr int64_t PARQUET_CDC_DEFAULT_NORM_LEVEL = 0;
+static constexpr int32_t PARQUET_CDC_DEFAULT_NORM_LEVEL = 0;
 
 //! The boundary half of Arrow's content defined chunker: rolling hash, mask, eight table run. The
 //! other half there - remembering which value index each chunk starts at - is what the
@@ -52,7 +52,7 @@ public:
 	struct Options {
 		idx_t min_chunk_size = PARQUET_CDC_DEFAULT_MIN_CHUNK_SIZE;
 		idx_t max_chunk_size = PARQUET_CDC_DEFAULT_MAX_CHUNK_SIZE;
-		int64_t norm_level = PARQUET_CDC_DEFAULT_NORM_LEVEL;
+		int32_t norm_level = PARQUET_CDC_DEFAULT_NORM_LEVEL;
 	};
 
 	//! floor(log2(value)), and 0 for value 0 - which is what Arrow's bit_width(target) - 1 comes out to.
@@ -67,7 +67,7 @@ public:
 
 	//! The arithmetic behind CalculateMask, constexpr so it can be asserted against Arrow's numbers. Assumes
 	//! max_chunk_size > min_chunk_size, which CalculateMask checks before calling.
-	static constexpr int64_t MaskBitsFor(idx_t min_chunk_size, idx_t max_chunk_size, int64_t norm_level) {
+	static constexpr int64_t MaskBitsFor(idx_t min_chunk_size, idx_t max_chunk_size, int32_t norm_level) {
 		idx_t avg_chunk_size = (min_chunk_size + max_chunk_size) / 2;
 		idx_t target_chunk_size = (avg_chunk_size - min_chunk_size) / PARQUET_CDC_NUM_GEAR_TABLES;
 		return static_cast<int64_t>(FloorLog2(target_chunk_size)) - norm_level;
@@ -77,7 +77,7 @@ public:
 	//! low bits off the mask. With the defaults this leaves the top 15 bits of 64, i.e. a hit every 32768
 	//! hashed bytes per table. Throws if the numbers cannot be turned into a usable mask; Arrow throws the
 	//! same way.
-	static uint64_t CalculateMask(idx_t min_chunk_size, idx_t max_chunk_size, int64_t norm_level) {
+	static uint64_t CalculateMask(idx_t min_chunk_size, idx_t max_chunk_size, int32_t norm_level) {
 		if (max_chunk_size <= min_chunk_size) {
 			throw BinderException("content_defined_chunking: max_chunk_size (%llu) must be greater than "
 			                      "min_chunk_size (%llu)",

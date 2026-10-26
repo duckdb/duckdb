@@ -117,7 +117,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	idx_t cdc_max_chunk_size = PARQUET_CDC_DEFAULT_MAX_CHUNK_SIZE;
 	//! How many bits are taken off the boundary mask on top of what min and max imply. 0 is Arrow's default and
 	//! the recommendation for anything not reading many files at once.
-	int64_t cdc_norm_level = PARQUET_CDC_DEFAULT_NORM_LEVEL;
+	int32_t cdc_norm_level = PARQUET_CDC_DEFAULT_NORM_LEVEL;
 
 	bool enable_bloom_filters = true;
 	//! What false positive rate are we willing to accept for bloom filters
@@ -394,7 +394,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				// message - and the acceptance - is the same one Arrow gives for the same numbers.
 				auto &children = StructValue::GetChildren(value);
 				optional_idx min_chunk_size, max_chunk_size;
-				int64_t norm_level = PARQUET_CDC_DEFAULT_NORM_LEVEL;
+				int32_t norm_level = PARQUET_CDC_DEFAULT_NORM_LEVEL;
 				for (idx_t i = 0; i < children.size(); i++) {
 					const auto &name = StructType::GetChildName(value.type(), i).GetIdentifierName();
 					if (name == "min_chunk_size") {
@@ -405,7 +405,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 						if (children[i].IsNull()) {
 							throw BinderException("content_defined_chunking: 'norm_level' cannot be NULL");
 						}
-						norm_level = children[i].DefaultCastAs(LogicalType::BIGINT).GetValue<int64_t>();
+						norm_level = children[i].DefaultCastAs(LogicalType::INTEGER).GetValue<int32_t>();
 					} else {
 						throw BinderException("content_defined_chunking: unknown field '%s', the fields are "
 						                      "'min_chunk_size', 'max_chunk_size' and 'norm_level'",
