@@ -67,6 +67,22 @@ static unique_ptr<CommonTableExpressionInfo> MakeTriggerValidationCTE(const Tabl
 	return alias_cte;
 }
 
+//! CREATE VIEW strips the view's own catalog from the references in the stored view definition (see
+//! BindCreateViewInfo), so "db.db.t" is stored as "db.t". While the body of that view is bound, a qualifier that names
+//! a schema of the view's catalog is therefore that schema - even if an attached database has the same name. Returns
+//! the view's catalog when this applies, and an empty identifier otherwise.
+static Identifier ViewCatalogForSchema(CatalogEntryRetriever &retriever, const Identifier &schema) {
+	auto &view_catalog = retriever.GetViewCatalog();
+	if (view_catalog.empty()) {
+		return Identifier();
+	}
+	auto catalog = Catalog::GetCatalogEntry(retriever, view_catalog);
+	if (!catalog || !catalog->CheckAmbiguousCatalogOrSchema(retriever.GetContext(), schema)) {
+		return Identifier();
+	}
+	return view_catalog;
+}
+
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &catalog, Identifier &schema) {
 	auto &context = retriever.GetContext();
 	if (schema.empty()) {
@@ -84,6 +100,12 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &c
 		return;
 	}
 	// we have a database with this name
+	auto view_catalog = ViewCatalogForSchema(retriever, schema);
+	if (!view_catalog.empty()) {
+		// inside a view body: the name refers to a schema of the view's own catalog
+		catalog = std::move(view_catalog);
+		return;
+	}
 	// check if there is a schema
 	auto &search_path = retriever.GetSearchPath();
 	auto catalog_names = search_path.GetCatalogsForSchema(schema);
@@ -115,7 +137,10 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, Identifier &catalog, Id
 }
 
 void Binder::BindSchemaOrCatalog(Identifier &catalog, Identifier &schema) {
-	BindSchemaOrCatalog(context, catalog, schema);
+	// resolved against the client's search path, but inside a view body the view's catalog takes precedence
+	CatalogEntryRetriever retriever(context);
+	retriever.SetViewCatalog(entry_retriever.GetViewCatalog());
+	BindSchemaOrCatalog(retriever, catalog, schema);
 }
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName &qualified_name) {
@@ -137,7 +162,9 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, QualifiedName &qualifie
 }
 
 void Binder::BindSchemaOrCatalog(QualifiedName &qualified_name) {
-	BindSchemaOrCatalog(context, qualified_name);
+	CatalogEntryRetriever retriever(context);
+	retriever.SetViewCatalog(entry_retriever.GetViewCatalog());
+	BindSchemaOrCatalog(retriever, qualified_name);
 }
 
 Identifier Binder::BindCatalog(const Identifier &catalog) {
@@ -224,7 +251,10 @@ QualifiedName Binder::ResolveCatalog(CatalogEntryRetriever &retriever, const Qua
 		BindSchemaOrCatalog(retriever, candidate, first);
 		if (!candidate.empty()) {
 			catalog = std::move(candidate);
-			path.erase(path.begin());
+			if (first.empty()) {
+				// the qualifier was promoted to a catalog
+				path.erase(path.begin());
+			}
 		}
 	} else if (path.size() > 1) {
 		// multiple qualifiers ("cat.schema.name" or a nested "s1.s2.name"): the leading component is the catalog when
@@ -273,6 +303,7 @@ QualifiedName Binder::BindTableName(CatalogEntryRetriever &retriever, const Qual
 
 QualifiedName Binder::BindTableName(const QualifiedName &name) {
 	CatalogEntryRetriever retriever(context);
+	retriever.SetViewCatalog(entry_retriever.GetViewCatalog());
 	return BindTableName(retriever, name);
 }
 
@@ -355,6 +386,7 @@ void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const
 
 	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name, true);
 	view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
+	view_binder->entry_retriever.SetViewCatalog(catalog.GetName());
 
 	auto copy = stmt.Copy();
 	auto query_node = view_binder->Bind(*copy);

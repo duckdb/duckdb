@@ -89,6 +89,15 @@ void CatalogEntryRetriever::Inherit(const CatalogEntryRetriever &parent) {
 	this->callback = parent.callback;
 	this->search_path = parent.search_path;
 	this->at_clause = parent.at_clause;
+	this->view_catalog = parent.view_catalog;
+}
+
+const Identifier &CatalogEntryRetriever::GetViewCatalog() const {
+	return view_catalog;
+}
+
+void CatalogEntryRetriever::SetViewCatalog(Identifier catalog) {
+	view_catalog = std::move(catalog);
 }
 
 const CatalogSearchPath &CatalogEntryRetriever::GetSearchPath() const {
