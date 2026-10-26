@@ -326,3 +326,14 @@ TEST_CASE("Test every deprecated setting warns when set", "[api]") {
 	}
 	REQUIRE(checked > 0);
 }
+
+TEST_CASE("Test warnings_as_errors in the startup config", "[api]") {
+	DBConfig config;
+	REQUIRE_NOTHROW(config.SetOptionByName("warnings_as_errors", Value::BOOLEAN(false)));
+	REQUIRE_THROWS_WITH(config.SetOptionByName("warnings_as_errors", Value::BOOLEAN(true)),
+	                    Catch::Contains("startup config"));
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	auto result = con.Query("SELECT current_setting('warnings_as_errors')");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+}
