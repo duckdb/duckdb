@@ -463,6 +463,7 @@ enum class PEGRuleId : uint32_t {
 	DropTable,
 	DropTableFunction,
 	DropFunction,
+	DropFunctionSignature,
 	DropSchema,
 	DropIndex,
 	QualifiedIndexName,
