@@ -66,7 +66,7 @@ public:
 	}
 
 	//! The arithmetic behind CalculateMask, constexpr so it can be asserted against Arrow's numbers. Assumes
-	//! max_chunk_size >= min_chunk_size, which CalculateMask checks before calling.
+	//! max_chunk_size > min_chunk_size, which CalculateMask checks before calling.
 	static constexpr int64_t MaskBitsFor(idx_t min_chunk_size, idx_t max_chunk_size, int64_t norm_level) {
 		idx_t avg_chunk_size = (min_chunk_size + max_chunk_size) / 2;
 		idx_t target_chunk_size = (avg_chunk_size - min_chunk_size) / PARQUET_CDC_NUM_GEAR_TABLES;
@@ -78,7 +78,7 @@ public:
 	//! hashed bytes per table. Throws if the numbers cannot be turned into a usable mask; Arrow throws the
 	//! same way.
 	static uint64_t CalculateMask(idx_t min_chunk_size, idx_t max_chunk_size, int64_t norm_level) {
-		if (min_chunk_size > max_chunk_size) {
+		if (max_chunk_size <= min_chunk_size) {
 			throw BinderException("content_defined_chunking: max_chunk_size (%llu) must be greater than "
 			                      "min_chunk_size (%llu)",
 			                      max_chunk_size, min_chunk_size);

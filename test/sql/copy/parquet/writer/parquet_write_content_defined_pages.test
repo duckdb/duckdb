@@ -252,11 +252,16 @@ copy (select 42 i) to '{TEST_DIR}/max_too_small.parquet' (format parquet, conten
 ----
 at least 1 byte
 
-# a minimum equal to the maximum leaves no room for a mask: the target chunk size would need 0 bits
+# a minimum equal to the maximum is refused like in Arrow, even when a negative norm_level would leave a usable mask
 statement error
 copy (select 42 i) to '{TEST_DIR}/equal_sizes.parquet' (format parquet, content_defined_chunking {min_chunk_size: 100, max_chunk_size: 100});
 ----
-must be between 1 and 63
+must be greater than
+
+statement error
+copy (select 42 i) to '{TEST_DIR}/equal_sizes_norm.parquet' (format parquet, content_defined_chunking {min_chunk_size: 100, max_chunk_size: 100, norm_level: -1});
+----
+must be greater than
 
 statement error
 copy (select 42 i) to '{TEST_DIR}/far_norm.parquet' (format parquet, content_defined_chunking {min_chunk_size: '1MB', max_chunk_size: '2MB', norm_level: 40});
