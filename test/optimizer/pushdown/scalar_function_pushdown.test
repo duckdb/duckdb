@@ -342,7 +342,7 @@ ORDER BY strlen(str);
 # This also tests functions with multiple arguments using "str" inside
 query I
 SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet'
-WHERE prefix("str", 'H') > 0
+WHERE prefix("str", 'H')::INTEGER > 0
 ORDER BY strlen(str);
 ----
 2
@@ -351,7 +351,7 @@ ORDER BY strlen(str);
 
 query I
 SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet'
-WHERE suffix(concat("str", 'y'), 'y') > 0
+WHERE suffix(concat("str", 'y'), 'y')::INTEGER > 0
 ORDER BY strlen(str);
 ----
 2
@@ -360,7 +360,7 @@ ORDER BY strlen(str);
 
 # explain: prefix()/suffix() in WHERE are multi-arg uses of str, no pushdown
 query II
-EXPLAIN SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet' WHERE prefix("str", 'H') > 0;
+EXPLAIN SELECT strlen(str) FROM '{TEST_DIR}/pe-pushdown.parquet' WHERE prefix("str", 'H')::INTEGER > 0;
 ----
 physical_plan	<REGEX>:.*PROJECTION.*
 

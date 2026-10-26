@@ -173,18 +173,24 @@ SELECT list_sort(list_intersect(range(1, 1000), [100, 200, 300]));
 ----
 [100, 200, 300]
 
-query I
+# BOOLEAN and INTEGER have no common type
+statement error
 SELECT list_sort(list_intersect([true, false], [1, 0]));
 ----
-[0, 1]
+Cannot deduce template type
 
-query I
+statement error
 SELECT list_sort(list_intersect([1, 0], [true, false]));
 ----
-[0, 1]
+Cannot deduce template type
+
+statement error
+SELECT list_sort(list_intersect([true, false, 1], [1, 0, 1, 1, 1, 1, 1]));
+----
+Cannot deduce template type
 
 query I
-SELECT list_sort(list_intersect([true, false, 1], [1, 0, 1, 1, 1, 1, 1]));
+SELECT list_sort(list_intersect([true, false]::INT[], [1, 0]));
 ----
 [0, 1]
 

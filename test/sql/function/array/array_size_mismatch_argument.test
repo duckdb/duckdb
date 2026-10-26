@@ -1,33 +1,43 @@
 # name: test/sql/function/array/array_size_mismatch_argument.test
-# description: Function arguments with ARRAY types of different sizes are cast
+# description: Function arguments with ARRAY types of different sizes are combined as lists
 # group: [array]
 
-statement error
-SELECT list_concat([[1,2,3]::INT[3]], [[5]::INT[1]]);
+query II
+SELECT list_concat([[1,2,3]::INT[3]], [[5]::INT[1]]) r, typeof(r);
 ----
-<REGEX>:.*Conversion Error.*
+[[1, 2, 3], [5]]	INTEGER[][]
 
-statement error
-SELECT list_append([[1]::INT[1]], [9,8]::INT[2]);
+query II
+SELECT list_append([[1]::INT[1]], [9,8]::INT[2]) r, typeof(r);
 ----
-<REGEX>:.*Conversion Error.*
+[[1], [9, 8]]	INTEGER[][]
 
-statement error
-SELECT greatest([5,9]::INT[2], [1,2,3]::INT[3]);
+query II
+SELECT greatest([5,9]::INT[2], [1,2,3]::INT[3]) r, typeof(r);
 ----
-<REGEX>:.*Conversion Error.*
+[5, 9]	INTEGER[]
 
 query I
 SELECT list_concat([[1,2]::INT[2]], [[5,6]::INT[2]]);
 ----
 [[1, 2], [5, 6]]
 
-statement error
+query II
 UNPIVOT (SELECT [[1,2],[7,8]]::INT[2][] a, [[3,4,5]]::INT[3][] b) ON a, b INTO NAME n VALUE v;
 ----
-<REGEX>:.*Conversion Error.*
+a	[[1, 2], [7, 8]]
+b	[[3, 4, 5]]
+
+query II
+UNPIVOT (SELECT [1,2]::INT[2] a, [3,4,5]::INT[3] b) ON a, b INTO NAME n VALUE v;
+----
+a	[1, 2]
+b	[3, 4, 5]
+
+statement ok
+SET old_type_unification = true;
 
 statement error
-UNPIVOT (SELECT [1,2]::INT[2] a, [3,4,5]::INT[3] b) ON a, b INTO NAME n VALUE v;
+SELECT list_concat([[1,2,3]::INT[3]], [[5]::INT[1]]);
 ----
 <REGEX>:.*Conversion Error.*

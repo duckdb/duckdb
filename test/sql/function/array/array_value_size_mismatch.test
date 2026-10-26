@@ -1,17 +1,30 @@
 # name: test/sql/function/array/array_value_size_mismatch.test
-# description: array_value over arrays of different sizes raises a regular error
+# description: array_value over arrays of different sizes combines them as lists
 # group: [array]
 
-statement error
-SELECT array_value(array_value(1, 2), array_value(3, 4, 3));
+query II
+SELECT array_value(array_value(1, 2), array_value(3, 4, 3)) r, typeof(r);
 ----
-Cannot cast array of size 2 to array of size 3
+[[1, 2], [3, 4, 3]]	INTEGER[][2]
 
 statement ok
 CREATE TABLE t(a INT[2], b INT[3]);
 
 statement ok
 INSERT INTO t VALUES ([1, 2], [3, 4, 5]);
+
+query I
+SELECT array_value(a, b) FROM t;
+----
+[[1, 2], [3, 4, 5]]
+
+query I
+SELECT array_value(b, b) FROM t;
+----
+[[3, 4, 5], [3, 4, 5]]
+
+statement ok
+SET old_type_unification = true;
 
 statement error
 SELECT array_value(a, b) FROM t;
@@ -22,13 +35,3 @@ query I
 SELECT TRY(array_value(a, b)) FROM t;
 ----
 NULL
-
-query I
-SELECT array_value(b, b) FROM t;
-----
-[[3, 4, 5], [3, 4, 5]]
-
-query I
-SELECT 42;
-----
-42

@@ -1053,6 +1053,12 @@ LogicalType LogicalType::NormalizeType(const LogicalType &type) {
 
 static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
                                          const LogicalType &right, LogicalType &result);
+static idx_t GetLogicalTypeScore(const LogicalType &type);
+
+LogicalTypeResolver::LogicalTypeResolver(optional_ptr<ClientContext> context_p)
+    : context(context_p),
+      legacy_type_unification(context_p ? Settings::Get<OldTypeUnificationSetting>(*context_p) : false) {
+}
 
 class ForceLogicalTypeResolver : public LogicalTypeResolver {
 public:
@@ -1065,14 +1071,47 @@ public:
 	}
 };
 
+#ifdef D_ASSERT_IS_ENABLED
+static bool IsImplicitlyCastable(LogicalTypeResolver &logical_type_resolver, const LogicalType &source,
+                                 const LogicalType &target) {
+	if (source == target) {
+		return true;
+	}
+	auto cost = logical_type_resolver.context
+	                ? CastFunctionSet::ImplicitCastCost(*logical_type_resolver.context, source, target)
+	                : CastRules::ImplicitCast(source, target);
+	return cost >= 0;
+}
+#endif
+
 class TryGetLogicalTypeResolver : public LogicalTypeResolver {
 public:
 	using LogicalTypeResolver::LogicalTypeResolver;
 
 	bool Operation(const LogicalType &left, const LogicalType &right, LogicalType &result) override {
-		return TryGetMaxLogicalTypeInternal(*this, left, right, result);
+		if (!TryGetMaxLogicalTypeInternal(*this, left, right, result)) {
+			return false;
+		}
+#ifdef D_ASSERT_IS_ENABLED
+		// both inputs must be implicitly castable to the combined type
+		if (!legacy_type_unification) {
+			D_ASSERT(IsImplicitlyCastable(*this, left, result));
+			D_ASSERT(IsImplicitlyCastable(*this, right, result));
+		}
+#endif
+		return true;
 	}
 };
+
+//! Order-independent choice between two distinct types that are equally good candidates
+static bool PreferLeftType(const LogicalType &left, const LogicalType &right) {
+	auto left_score = GetLogicalTypeScore(left);
+	auto right_score = GetLogicalTypeScore(right);
+	if (left_score != right_score) {
+		return left_score > right_score;
+	}
+	return left.ToString() >= right.ToString();
+}
 
 // Generic combine engine: try the implicit cast rules in both directions and keep the cheaper one. With a
 // context we go through CastFunctionSet so that any registered casts are honored; without a context we
@@ -1085,37 +1124,36 @@ static bool TryCombineViaImplicitCast(LogicalTypeResolver &logical_type_resolver
 	auto right_to_left_cost = logical_type_resolver.context
 	                              ? CastFunctionSet::ImplicitCastCost(*logical_type_resolver.context, right, left)
 	                              : CastRules::ImplicitCast(right, left);
+	bool cast_to_right;
 	if (left_to_right_cost >= 0 && (left_to_right_cost < right_to_left_cost || right_to_left_cost < 0)) {
-		// we can implicitly cast left to right, return right
-		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
-		if (right.id() == LogicalTypeId::DECIMAL) {
-			if (left.id() == LogicalTypeId::VARIANT) {
-				//! Prefer VARIANT always
-				result = left;
-			} else {
-				result = DecimalSizeCheck(left, right);
-			}
-		} else {
-			result = right;
-		}
-		return true;
+		cast_to_right = true;
+	} else if (right_to_left_cost >= 0 && (right_to_left_cost < left_to_right_cost || left_to_right_cost < 0)) {
+		cast_to_right = false;
+	} else if (left_to_right_cost >= 0) {
+		// both directions have the same cost
+		cast_to_right = logical_type_resolver.legacy_type_unification ? false : !PreferLeftType(left, right);
+	} else {
+		return false;
 	}
-	if (right_to_left_cost >= 0) {
-		// we can implicitly cast right to left, return left
-		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
-		if (left.id() == LogicalTypeId::DECIMAL) {
-			if (right.id() == LogicalTypeId::VARIANT) {
-				//! Prefer VARIANT always
-				result = right;
-			} else {
-				result = DecimalSizeCheck(right, left);
-			}
+	auto &source = cast_to_right ? left : right;
+	auto &target = cast_to_right ? right : left;
+	//! Depending on the type, we might need to grow the `width` of the DECIMAL type
+	if (target.id() == LogicalTypeId::DECIMAL && source.id() != LogicalTypeId::DECIMAL) {
+		if (source.id() == LogicalTypeId::VARIANT) {
+			//! Prefer VARIANT always
+			result = source;
 		} else {
-			result = left;
+			result = DecimalSizeCheck(source, target);
 		}
-		return true;
+	} else {
+		result = target;
 	}
-	return false;
+	return true;
+}
+
+bool LogicalTypeResolver::TryCombineViaImplicitCast(const LogicalType &left, const LogicalType &right,
+                                                    LogicalType &result) {
+	return duckdb::TryCombineViaImplicitCast(*this, left, right, result);
 }
 
 static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
@@ -1147,9 +1185,19 @@ static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resol
 		}
 		// for unsigned/signed comparisons we have a few fallbacks
 		if (left.IsNumeric() && right.IsNumeric()) {
+			if (!logical_type_resolver.legacy_type_unification &&
+			    (left.id() == LogicalTypeId::UHUGEINT || right.id() == LogicalTypeId::UHUGEINT)) {
+				// no integer type fits both UHUGEINT and a signed integer
+				result = LogicalType::DOUBLE;
+				return true;
+			}
 			result = CombineNumericTypes(left, right);
 			return true;
 		}
+		if (!logical_type_resolver.legacy_type_unification) {
+			return false;
+		}
+		// legacy: BOOLEAN combines with integers, even though BOOLEAN cannot be implicitly cast to them
 		if (left.id() == LogicalTypeId::BOOLEAN && right.IsIntegral()) {
 			result = right;
 			return true;
@@ -1161,8 +1209,12 @@ static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resol
 		return false;
 	}
 	// equal types fallthrough
-	result = left;
-	return true;
+	if (logical_type_resolver.legacy_type_unification || left == right) {
+		result = left;
+		return true;
+	}
+	// same type id, but different type info - combine through the implicit cast rules
+	return TryCombineViaImplicitCast(logical_type_resolver, left, right, result);
 }
 
 bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right,
@@ -1177,13 +1229,13 @@ bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType
 bool LogicalType::TryGetMaxLogicalTypeUnchecked(ClientContext &context, const LogicalType &left,
                                                 const LogicalType &right, LogicalType &result) {
 	TryGetLogicalTypeResolver logical_type_resolver(&context);
-	return TryGetMaxLogicalTypeInternal(logical_type_resolver, left, right, result);
+	return logical_type_resolver.Operation(left, right, result);
 }
 
 bool LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(const LogicalType &left, const LogicalType &right,
                                                        LogicalType &result) {
 	TryGetLogicalTypeResolver logical_type_resolver(nullptr);
-	return TryGetMaxLogicalTypeInternal(logical_type_resolver, left, right, result);
+	return logical_type_resolver.Operation(left, right, result);
 }
 
 static idx_t GetLogicalTypeScore(const LogicalType &type) {
@@ -1294,6 +1346,9 @@ static LogicalType ForceMaxLogicalTypeInternal(optional_ptr<ClientContext> conte
 	ForceLogicalTypeResolver logical_type_resolver(context);
 	if (TryGetMaxLogicalTypeInternal(logical_type_resolver, left, right, result)) {
 		return result;
+	}
+	if (!logical_type_resolver.legacy_type_unification) {
+		return PreferLeftType(left, right) ? left : right;
 	}
 	// we prefer the type with the highest score
 	auto left_score = GetLogicalTypeScore(left);

@@ -2093,6 +2093,20 @@ struct OldImplicitCastingSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct OldTypeUnificationSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "old_type_unification";
+	static constexpr const char *Description =
+	    "Use the legacy rules for finding the common type of two types (e.g. in UNION, CASE or list constructors), "
+	    "which are not commutative and may produce types the inputs cannot be implicitly cast to.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct OperatorMemoryLimitSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "operator_memory_limit";

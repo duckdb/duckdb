@@ -13,7 +13,7 @@ SET profiling_renderer_settings = MAP {'expand_all': NULL};
 cannot be NULL
 
 statement error
-SET profiling_renderer_settings = MAP {'max_extra_lines': 3, 'expand_all': NULL::BOOLEAN};
+SET profiling_renderer_settings = MAP {'max_extra_lines': 3, 'expand_all': NULL::INTEGER};
 ----
 cannot be NULL
 

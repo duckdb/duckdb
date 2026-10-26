@@ -57,10 +57,11 @@ false
 # ==========================================================
 # cast to max logical type
 # ==========================================================
+# BOOLEAN cannot be compared with INTEGER, so it never matches
 query I
 SELECT struct_contains(ROW(1, 2, 3), TRUE);
 ----
-true
+false
 
 query I
 SELECT struct_contains(ROW(1, 2, 3), 1.0);

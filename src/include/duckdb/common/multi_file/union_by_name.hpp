@@ -21,6 +21,10 @@ struct MultiFileReaderInterface;
 
 class UnionByName {
 public:
+	static void CombineUnionTypes(ClientContext &context, const vector<string> &new_names,
+	                              const vector<LogicalType> &new_types, vector<LogicalType> &union_col_types,
+	                              vector<Identifier> &union_col_names, identifier_map_t<idx_t> &union_names_map);
+	//! Variant without a ClientContext - uses only the built-in type combination rules
 	static void CombineUnionTypes(const vector<string> &new_names, const vector<LogicalType> &new_types,
 	                              vector<LogicalType> &union_col_types, vector<Identifier> &union_col_names,
 	                              identifier_map_t<idx_t> &union_names_map);

@@ -15,14 +15,17 @@ class ClientContext;
 
 class LogicalTypeResolver {
 public:
-	explicit LogicalTypeResolver(optional_ptr<ClientContext> context_p) : context(context_p) {
-	}
+	explicit LogicalTypeResolver(optional_ptr<ClientContext> context_p);
 	virtual ~LogicalTypeResolver() = default;
 
 	virtual bool Operation(const LogicalType &left, const LogicalType &right, LogicalType &result) = 0;
+	//! Combine two types into the one the other can be implicitly cast to (if any)
+	bool TryCombineViaImplicitCast(const LogicalType &left, const LogicalType &right, LogicalType &result);
 
 public:
 	optional_ptr<ClientContext> context;
+	//! Whether to use the legacy (non-commutative) type unification rules, see the old_type_unification setting
+	bool legacy_type_unification;
 };
 
 typedef bool (*combine_types_rule_function_t)(LogicalTypeResolver &resolver, const LogicalType &left,

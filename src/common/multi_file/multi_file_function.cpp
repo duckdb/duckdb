@@ -51,7 +51,7 @@ void MultiFileReaderInterface::CombineSchemas(ClientContext &context,
                                               vector<LogicalType> &return_types, vector<Identifier> &names) {
 	identifier_map_t<idx_t> union_names_map;
 	for (auto &data : union_data) {
-		UnionByName::CombineUnionTypes(data->names, data->types, return_types, names, union_names_map);
+		UnionByName::CombineUnionTypes(context, data->names, data->types, return_types, names, union_names_map);
 	}
 }
 

@@ -60,7 +60,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 			auto file_csv_options = csv_options;
 			file_csv_options.file_path = file.path;
 			CSVFileScan file_scan(*context, file, file_csv_options, file_options);
-			UnionByName::CombineUnionTypes(file_scan.GetNames(), file_scan.GetTypes(), types, names, union_names_map);
+			UnionByName::CombineUnionTypes(*context, file_scan.GetNames(), file_scan.GetTypes(), types, names, union_names_map);
 		}
 		if (!csv_options.sql_types_per_column.empty()) {
 			const auto exception = CSVError::ColumnTypesError(csv_options.sql_types_per_column, names);

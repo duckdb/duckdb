@@ -1250,9 +1250,9 @@ void MultiFileOptions::AddBatchInfo(BindInfo &bind_info) const {
 	bind_info.InsertOption("file_row_number", Value::BOOLEAN(file_row_number));
 }
 
-void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types,
-                                    vector<LogicalType> &union_col_types, vector<Identifier> &union_col_names,
-                                    identifier_map_t<idx_t> &union_names_map) {
+static void CombineUnionTypesInternal(optional_ptr<ClientContext> context, const vector<string> &col_names,
+                                      const vector<LogicalType> &sql_types, vector<LogicalType> &union_col_types,
+                                      vector<Identifier> &union_col_names, identifier_map_t<idx_t> &union_names_map) {
 	D_ASSERT(col_names.size() == sql_types.size());
 
 	for (idx_t col = 0; col < col_names.size(); ++col) {
@@ -1262,7 +1262,8 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 		if (union_find != union_names_map.end()) {
 			// given same name , union_col's type must compatible with col's type
 			auto &current_type = union_col_types[union_find->second];
-			auto compatible_type = LogicalType::DefaultForceMaxLogicalType(current_type, sql_types[col]);
+			auto compatible_type = context ? LogicalType::ForceMaxLogicalType(*context, current_type, sql_types[col])
+			                               : LogicalType::DefaultForceMaxLogicalType(current_type, sql_types[col]);
 			union_col_types[union_find->second] = compatible_type;
 		} else {
 			union_names_map[col_name] = union_col_names.size();
@@ -1270,6 +1271,18 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 			union_col_types.emplace_back(sql_types[col]);
 		}
 	}
+}
+
+void UnionByName::CombineUnionTypes(ClientContext &context, const vector<string> &col_names,
+                                    const vector<LogicalType> &sql_types, vector<LogicalType> &union_col_types,
+                                    vector<Identifier> &union_col_names, identifier_map_t<idx_t> &union_names_map) {
+	CombineUnionTypesInternal(&context, col_names, sql_types, union_col_types, union_col_names, union_names_map);
+}
+
+void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types,
+                                    vector<LogicalType> &union_col_types, vector<Identifier> &union_col_names,
+                                    identifier_map_t<idx_t> &union_names_map) {
+	CombineUnionTypesInternal(nullptr, col_names, sql_types, union_col_types, union_col_names, union_names_map);
 }
 
 bool MultiFileOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context) {

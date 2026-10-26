@@ -3,8 +3,13 @@
 # group: [pedro]
 
 query I nosort
+SELECT 1 WHERE (1 IS DISTINCT FROM 1)::INTEGER > ANY(SELECT 2);
+----
+
+statement error
 SELECT 1 WHERE (1 IS DISTINCT FROM 1) > ANY(SELECT 2);
 ----
+Cannot compare values of type BOOLEAN and INTEGER
 
 query I nosort
 SELECT 1 WHERE (1 IS DISTINCT FROM 1) IS NULL;
