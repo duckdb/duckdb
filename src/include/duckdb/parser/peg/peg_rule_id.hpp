@@ -1140,6 +1140,8 @@ enum class PEGRuleId : uint32_t {
 	ValuesClause,
 	ValuesExpressions,
 	SetStatement,
+	SetKeywordStatement,
+	VariableAssignment,
 	SetAssignmentOrTimeZone,
 	ResetStatement,
 	ResetTarget,
