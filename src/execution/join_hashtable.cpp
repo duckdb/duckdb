@@ -2326,17 +2326,18 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	const auto row_locations = iterator.GetRowLocations();
 	do {
 		const auto count = iterator.GetCurrentChunkCount();
-		for (idx_t i = state.offset_in_chunk; i < count; i++) {
-			auto found_match = Load<bool>(row_locations[i] + tuple_size);
-			if (found_match == match_propagation_value) {
-				key_locations[found_entries++] = row_locations[i];
-				if (found_entries == STANDARD_VECTOR_SIZE) {
-					state.offset_in_chunk = i + 1;
-					break;
-				}
+		idx_t i = state.offset_in_chunk;
+		while (i < count && found_entries < STANDARD_VECTOR_SIZE) {
+			// Leave room for a scratch write even when every scanned row matches.
+			const auto end = MinValue(count, i + STANDARD_VECTOR_SIZE - found_entries);
+			for (; i < end; i++) {
+				const auto row = row_locations[i];
+				key_locations[found_entries] = row;
+				found_entries += Load<bool>(row + tuple_size) == match_propagation_value;
 			}
 		}
 		if (found_entries == STANDARD_VECTOR_SIZE) {
+			state.offset_in_chunk = i;
 			break;
 		}
 		state.offset_in_chunk = 0;
