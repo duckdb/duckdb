@@ -73,3 +73,108 @@ query I
 SELECT 'a'::VARCHAR('nocase') = 'A'
 ----
 true
+
+# list, array, map, and union children keep their collations through EXPORT and IMPORT
+query I
+SELECT l[1] = 'A' FROM t
+----
+true
+
+statement ok
+DROP TABLE t;
+
+statement ok
+CREATE TABLE nested(a VARCHAR('nocase')[2], m MAP(INTEGER, VARCHAR('nocase')), u UNION(s VARCHAR('nocase'), i INTEGER));
+
+statement ok
+INSERT INTO nested VALUES (['a', 'b'], MAP {1: 'a'}, 'a'::VARCHAR('nocase'));
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/collated_type_rendering_nested';
+
+statement ok
+DROP TABLE nested;
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/collated_type_rendering_nested';
+
+query III
+SELECT a[1] = 'A', m[1] = 'A', u.s = 'A' FROM nested
+----
+true	true	true
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE nested) ORDER BY ALL
+----
+a	VARCHAR('nocase')[2]
+m	MAP(INTEGER, VARCHAR('nocase'))
+u	UNION(s VARCHAR('nocase'), i INTEGER)
+
+# a generated column over a collated column round-trips without a COLLATE clause
+statement ok
+DROP TABLE nested;
+
+statement ok
+CREATE TABLE g(s VARCHAR COLLATE nocase, v AS (s));
+
+statement ok
+INSERT INTO g VALUES ('a');
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/collated_type_rendering_generated';
+
+statement ok
+DROP TABLE g;
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/collated_type_rendering_generated';
+
+query II
+SELECT s = 'A', v = 'A' FROM g
+----
+true	true
+
+# a typed macro with a nested collated parameter keeps the collated parameter type
+statement ok
+DROP TABLE g;
+
+statement ok
+CREATE MACRO nested_m(p STRUCT(k VARCHAR('nocase'))) AS p.k;
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/collated_type_rendering_macro';
+
+statement ok
+DROP MACRO nested_m;
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/collated_type_rendering_macro';
+
+query I
+SELECT parameter_types FROM duckdb_functions() WHERE function_name = 'nested_m'
+----
+['STRUCT(k VARCHAR(\'nocase\'))']
+
+# the CSV sniffer prompt escapes the rendered type and replays to the same collation
+statement ok
+COPY (SELECT 'a' AS s) TO '{TEST_DIR}/collated_prompt.csv' (HEADER true);
+
+statement ok
+SET VARIABLE csv_prompt = (SELECT Prompt FROM sniff_csv('{TEST_DIR}/collated_prompt.csv', columns = {'s': 'VARCHAR(''nocase'')'}, header = true));
+
+query I
+SELECT s = 'A' FROM query(getvariable('csv_prompt'))
+----
+true
+
+# the rejects table renders the declared column types as an escaped literal
+statement ok
+COPY (SELECT 'a' AS s, 'bad' AS i) TO '{TEST_DIR}/collated_reject.csv' (HEADER true);
+
+statement ok
+FROM read_csv('{TEST_DIR}/collated_reject.csv', auto_detect = false, header = true, store_rejects = true, columns = {'s': 'VARCHAR(''nocase'')', 'i': 'INTEGER'});
+
+query I
+SELECT columns FROM reject_scans
+----
+{'s': 'VARCHAR(''nocase'')','i': 'INTEGER'}
