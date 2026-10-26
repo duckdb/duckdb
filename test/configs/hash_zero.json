@@ -100,7 +100,8 @@
         "test/sql/sql_export/empty_aggregate_state.test",
         "test/sql/storage/distinct_statistics_sample.test",
         "test/optimizer/statistics/statistics_early_join_range.test",
-        "test/optimizer/joins/left_join_reordering/left_join_composite_domain.test"
+        "test/optimizer/joins/left_join_reordering/left_join_composite_domain.test",
+        "test/optimizer/joins/not_equal_join_cardinality_estimation.test"
       ]
     },
     {
