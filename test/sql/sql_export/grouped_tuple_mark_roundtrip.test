@@ -2,17 +2,25 @@
 # description: SQL export preserves grouped tuple equality, nested NULLs and empty groups
 # group: [sql_export]
 
+# Construct tuples in views so the expression-export test also runs on storage versions
+# that cannot persist TUPLE columns. Keep NULL tuples distinct from tuples containing NULL.
 statement ok
-CREATE TABLE probes(id INTEGER,g INTEGER,v TUPLE(INTEGER,INTEGER));
+CREATE TABLE probe_values(id INTEGER,g INTEGER,is_null BOOLEAN,a INTEGER,b INTEGER);
 
 statement ok
-CREATE TABLE candidates(g INTEGER,v TUPLE(INTEGER,INTEGER));
+CREATE TABLE candidate_values(g INTEGER,is_null BOOLEAN,a INTEGER,b INTEGER);
 
 statement ok
-INSERT INTO probes VALUES(0,0,NULL),(1,1,row(1,2)),(2,1,row(9,9)),(3,1,NULL),(4,2,row(1,2)),(5,2,row(2,2)),(6,2,NULL),(7,3,row(1,2)),(8,3,NULL),(9,NULL,row(1,2)),(10,4,row(1,NULL)),(11,4,row(1,2));
+CREATE VIEW probes AS SELECT id,g,CASE WHEN is_null THEN NULL::TUPLE(INTEGER,INTEGER) ELSE row(a,b) END AS v FROM probe_values;
 
 statement ok
-INSERT INTO candidates VALUES(1,row(1,2)),(1,row(1,2)),(1,NULL),(2,row(2,2)),(NULL,row(1,2)),(4,row(1,NULL));
+CREATE VIEW candidates AS SELECT g,CASE WHEN is_null THEN NULL::TUPLE(INTEGER,INTEGER) ELSE row(a,b) END AS v FROM candidate_values;
+
+statement ok
+INSERT INTO probe_values VALUES(0,0,true,NULL,NULL),(1,1,false,1,2),(2,1,false,9,9),(3,1,true,NULL,NULL),(4,2,false,1,2),(5,2,false,2,2),(6,2,true,NULL,NULL),(7,3,false,1,2),(8,3,true,NULL,NULL),(9,NULL,false,1,2),(10,4,false,1,NULL),(11,4,false,1,2);
+
+statement ok
+INSERT INTO candidate_values VALUES(1,false,1,2),(1,false,1,2),(1,true,NULL,NULL),(2,false,2,2),(NULL,false,1,2),(4,false,1,NULL);
 
 statement ok
 SET debug_verify_statement='explain_sql_strict';
@@ -75,7 +83,7 @@ SELECT __mark_join_marker FROM probes p JOIN BY(TYPE MARK) candidates c ON p.g I
 Unsupported explicit MARK join conditions
 
 statement ok
-INSERT INTO candidates SELECT 2,row(2,2) FROM range(4096);
+INSERT INTO candidate_values SELECT 2,false,2,2 FROM range(4096);
 
 query T
 SELECT list(marker ORDER BY id) FROM (SELECT id,v IN(SELECT c.v FROM candidates c WHERE c.g=p.g) marker FROM probes p);
@@ -83,7 +91,7 @@ SELECT list(marker ORDER BY id) FROM (SELECT id,v IN(SELECT c.v FROM candidates 
 [false, true, NULL, NULL, false, true, NULL, false, false, false, true, false]
 
 statement ok
-DELETE FROM candidates;
+DELETE FROM candidate_values;
 
 query T
 SELECT list(marker ORDER BY id) FROM (SELECT id,v IN(SELECT c.v FROM candidates c WHERE c.g=p.g) marker FROM probes p);
