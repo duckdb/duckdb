@@ -650,6 +650,12 @@ public:
 		current_group_offset = 0;
 		current_group = DecodeMeta(reinterpret_cast<bitpacking_metadata_encoded_t *>(bitpacking_metadata_ptr));
 
+		if (current_group.offset >= current_segment.GetBlockSize()) {
+			throw IOException(
+			    "Corrupted bitpacking segment: stored group offset (%d) exceeds the segment's block size (%d)",
+			    current_group.offset, current_segment.GetBlockSize());
+		}
+
 		bitpacking_metadata_ptr -= sizeof(bitpacking_metadata_encoded_t);
 		current_group_ptr = GetPtr(current_group);
 
