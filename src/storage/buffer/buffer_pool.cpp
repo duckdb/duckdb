@@ -503,7 +503,11 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 	for (;;) {
 		// get a block to unpin from the queue
 		BufferEvictionNode node;
-		if (!q.try_dequeue(node)) {
+		// Purge parks older live entries in its own producer. Tokenless dequeue can
+		// keep selecting newer producers while that queue is non-empty.
+		const bool from_purged =
+		    purge_producer_token.valid() && q.try_dequeue_from_producer(purge_producer_token, node);
+		if (!from_purged && !q.try_dequeue(node)) {
 			// we could not dequeue any eviction node, so we try one more time,
 			// but more aggressively
 			if (!TryDequeueWithLock(node)) {

@@ -606,6 +606,51 @@ TEST_CASE("Temporary buffer cleanup after spill and destruction policy changes",
 }
 
 #ifndef DUCKDB_NO_THREADS
+TEST_CASE("Eviction consumes purge survivors before recently unpinned buffers", "[storage][buffer_pool]") {
+	DuckDB db;
+	auto &manager = BufferManager::GetBufferManager(*db.instance);
+	auto &pool = manager.GetBufferPool();
+	const idx_t size = 64 * 1024;
+	auto old_pin = manager.Allocate(MemoryTag::EXTENSION, size, true);
+	auto old_block = old_pin.GetBlockHandle();
+	old_pin.Destroy();
+
+	// Move the old live entry into the purge producer's queue among dead entries.
+	for (idx_t i = 0; i < 40000; i++) {
+		auto transient = manager.Allocate(MemoryTag::EXTENSION, size, true);
+	}
+	REQUIRE(SumApproxSize(pool.GetEvictionQueueInfo()) < 40000);
+
+	constexpr idx_t worker_count = 3;
+	vector<BufferHandle> recent_pins;
+	vector<shared_ptr<BlockHandle>> recent_blocks;
+	for (idx_t i = 0; i < worker_count; i++) {
+		recent_pins.emplace_back(manager.Allocate(MemoryTag::EXTENSION, size, true));
+		recent_blocks.emplace_back(recent_pins.back().GetBlockHandle());
+	}
+	atomic<idx_t> ready {0};
+	vector<thread> workers;
+	for (idx_t i = 0; i < worker_count; i++) {
+		workers.emplace_back([&, i]() {
+			recent_pins[i].Destroy();
+			ready++;
+			// Keep the producers distinct until every worker has enqueued its buffer.
+			while (ready.load() != worker_count) {
+				std::this_thread::yield();
+			}
+		});
+	}
+	for (auto &worker : workers) {
+		worker.join();
+	}
+
+	pool.SetLimit(pool.GetUsedMemory() - old_block->GetMemory().GetMemoryUsage(), EXCEPTION_POSTSCRIPT);
+	REQUIRE(old_block->GetMemory().GetState() == BlockState::BLOCK_UNLOADED);
+	for (const auto &block : recent_blocks) {
+		REQUIRE(block->GetMemory().GetState() == BlockState::BLOCK_LOADED);
+	}
+}
+
 TEST_CASE("Concurrent first spills and temporary buffer cleanup", "[storage][buffer_pool]") {
 	DuckDB db;
 	auto &bm = BufferManager::GetBufferManager(*db.instance);
