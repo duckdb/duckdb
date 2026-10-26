@@ -1509,8 +1509,8 @@ static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resol
 		}
 		if (!success) {
 			// FIXME: see TryGetMaxLogicalTypeFromInputs
-			if (!legacy && TryGetMaxLogicalTypeFromInputs(logical_type_resolver,
-			                                              type_set_t(types.begin(), types.end()), result)) {
+			if (!legacy &&
+			    TryGetMaxLogicalTypeFromInputs(logical_type_resolver, type_set_t(types.begin(), types.end()), result)) {
 				break;
 			}
 			if (conflict_index) {
